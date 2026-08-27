@@ -267,3 +267,68 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     assert not any(
         panel.list.item(index).text() == "PLA Weiß" for index in range(panel.list.count())
     )
+
+
+def test_a_filament_without_a_colour_is_never_shown_blank(qt_app: QApplication) -> None:
+    """Jedes Filament hat eine Farbe im Bild — auch vor der ersten Wahl.
+
+    Der Viewport ging diese Kette schon (eigene Farbe → Grauleiter →
+    Körperfarbe für Slot 0), die Oberfläche daneben brach nach dem ersten
+    Glied ab: Wo im Dokument keine Farbe stand, blieb das Kästchen leer —
+    im Wähler neben dem Text „Ohne Filament — Farbe des Teils" und im Panel.
+    Ein leeres Kästchen sagt „keine Farbe", und das ist hier nie der Fall
+    (Robert, 27.08.2026).
+    """
+    from app.ui.filament_picker import UNPAINTED_COLOUR, shown_colour
+    from app.ui.theme import slot_colour
+
+    assert shown_colour(0) == UNPAINTED_COLOUR, "Slot 0 ist das Teil, und das ist grau"
+    assert shown_colour(1) == slot_colour(1), "die Grauleiter, bevor jemand wählt"
+    assert shown_colour(1, (1.0, 0.0, 0.0)) == "#ff0000", "eine eigene Farbe schlägt beides"
+    assert all(shown_colour(index) for index in range(8)), "keiner bleibt leer"
+
+
+def test_the_default_slot_carries_its_grey_in_the_picker(qt_app: QApplication) -> None:
+    """Und der vorgewählte Eintrag zeigt es auch.
+
+    ``paint_slot`` beginnt bei Filament 1 — der Eintrag, den jeder sieht, der
+    zum ersten Mal eine Fläche färbt. Er stand mit leerem Kästchen da; jetzt
+    trägt er die Farbe, die er nach dem Klick im Bild hat.
+    """
+    from app.ui.filament_picker import SWATCH_PIXELS, FilamentField, shown_colour
+
+    field = FilamentField(1)
+    position = field.findData(1)
+
+    assert position >= 0, "Filament 1 steht zur Wahl"
+    assert field.currentIndex() == position, "und ist vorgewählt"
+
+    # Am Bild gemessen und nicht am Vorhandensein eines Symbols: Ein leeres
+    # ``QIcon`` ist auch „nicht null", und genau das stand vorher dort.
+    bild = field.itemIcon(position).pixmap(SWATCH_PIXELS, SWATCH_PIXELS).toImage()
+    mitte = bild.pixelColor(SWATCH_PIXELS // 2, SWATCH_PIXELS // 2)
+    assert mitte.alpha() == 255, "das Feld ist gefüllt, nicht durchsichtig"
+    assert mitte.name() == shown_colour(1), f"und trägt die Grauleiter: {mitte.name()}"
+
+
+def test_a_body_without_a_slot_still_shows_up(qt_app: QApplication, tmp_path, monkeypatch) -> None:
+    """Der Normalfall nach jedem STL-Import steht im Panel.
+
+    Ein frisch eingelesenes Modell hat keine Materialslots — und die
+    Projekthälfte war damit leer, während im Bild ein Körper stand, der sehr
+    wohl in einer Farbe gedruckt wird.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import filaments
+    from app.core.types import SceneObject
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    panel = FilamentPanel()
+    panel.show_scene([SceneObject(id="A", name="A", mesh=box)])
+
+    zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
+    assert any("Ohne Filament" in zeile and "1 Körper" in zeile for zeile in zeilen), zeilen

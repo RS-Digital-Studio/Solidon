@@ -51,7 +51,7 @@ from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
 from app.i18n import tr
 from app.ui.style import TIGHT, set_level
-from app.ui.theme import slot_colour
+from app.ui.theme import slot_colour, viewport_colours
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
 #:
@@ -62,6 +62,16 @@ SWATCH_PIXELS = 14
 #: Der Wert, unter dem „Neues Filament …" in der Liste steht. Kein gültiger
 #: Slot: Die Auswahl springt sofort zurück, sobald der Dialog geschlossen ist.
 NEW_FILAMENT = -1
+
+#: Die Farbe des unbemalten Teils — Slot 0 in einer Liste von Filamenten.
+#:
+#: Aus dem Thema geholt und nicht danebengeschrieben: Es ist die Farbe, die
+#: ein Körper in der Ansicht ohnehin trägt (``viewport_colours(...)["object"]``,
+#: dieselbe Quelle wie ``Viewport.set_theme``). Genommen wird die des dunklen
+#: Themas, weil ein Farbfeld von vierzehn Bildpunkten den Unterschied zum
+#: hellen nicht trägt — beide sind dasselbe Grau in zwei Helligkeiten — und
+#: eine Themenverdrahtung durch jeden Operationsdialog dafür zu teuer wäre.
+UNPAINTED_COLOUR = viewport_colours("dark")["object"]
 
 
 def hex_of(colour: tuple[float, float, float] | None) -> str:
@@ -75,6 +85,32 @@ def hex_of(colour: tuple[float, float, float] | None) -> str:
     if colour is None:
         return ""
     return "#" + "".join(f"{max(0, min(255, round(channel * 255))):02x}" for channel in colour)
+
+
+def shown_colour(index: int, colour: tuple[float, float, float] | None = None) -> str:
+    """Die Farbe, in der ein Filament erscheint — **nie leer**.
+
+    Drei Quellen in dieser Reihenfolge, und es ist dieselbe Kette, die der
+    Viewport für seine Farbtabelle geht (``Viewport._slot_colours``):
+
+    1. die eigene Farbe des Slots, wenn er eine hat,
+    2. sonst die Grauleiter (:func:`theme.slot_colour`) — der Stand vor der
+       ersten Farbwahl,
+    3. für Slot 0 die **Körperfarbe**: Er ist das unbemalte Teil, und das ist
+       genau die Farbe, die es in der Ansicht schon hat.
+
+    Vorher endete die Kette in der Oberfläche nach Schritt 1: Wo keine Farbe
+    im Dokument stand, blieb das Feld **leer** — im Filamentwähler, der
+    daneben „Ohne Filament — Farbe des Teils" schrieb, und im Panel. Ein
+    leeres Kästchen ist aber keine Auskunft über eine Farbe, sondern über
+    ihre Abwesenheit, und die gibt es hier nicht: Jedes Filament hat eine
+    Farbe im Bild, auch bevor jemand eine wählt (Robert, 27.08.2026). Der
+    Viewport hatte diese Kette schon; die Oberfläche daneben nicht.
+    """
+    own = hex_of(colour)
+    if own:
+        return own
+    return slot_colour(index) or UNPAINTED_COLOUR
 
 
 def swatch(colour: str | None) -> QIcon:
@@ -189,7 +225,7 @@ class FilamentField(QComboBox):
             taken.add(index)
             # ``str(entry.name)`` und nicht der rohe Name: Ein Slotname darf
             # ein ``TranslatableText`` sein, und Qt nimmt nur Zeichenketten.
-            shown = hex_of(entry.colour) or (slot_colour(index) or "")
+            shown = shown_colour(index, entry.colour)
             self.addItem(swatch(shown), self._label(index, str(entry.name)), index)
             self.setItemData(self.count() - 1, shown, _COLOUR_ROLE)
             self.setItemData(self.count() - 1, str(entry.name), _NAME_ROLE)
@@ -214,7 +250,10 @@ class FilamentField(QComboBox):
         for index in range(self._limit):
             if index in taken:
                 continue
-            self.addItem(swatch(None), self._label(index, ""), index)
+            # **Mit der Farbe, die es bekommen wird**, nicht mit einem leeren
+            # Kästchen: „Filament 1 — noch keines" ist per Vorgabe gewählt,
+            # sobald jemand eine Fläche färbt, und stand bis jetzt farblos da.
+            self.addItem(swatch(shown_colour(index)), self._label(index, ""), index)
 
         self.addItem(tr("Neues Filament …"), NEW_FILAMENT)
 
@@ -358,11 +397,22 @@ class FilamentPanel(QWidget):
         Zusammengelegt über Name **und** Farbe — derselbe Schlüssel, über den
         auch der Export die Extruder bildet (``threemf.merge_slots``). Zwei
         Körper in derselben Farbe sind eine Spule, nicht zwei.
+
+        **Ein Körper ohne Slot steht mit dabei**, als „Ohne Filament — Farbe
+        des Teils" in der Körperfarbe. Er ist der Normalfall nach jedem
+        STL-Import, und ohne ihn zeigte das Panel bei einem frisch geöffneten
+        Modell eine leere Projekthälfte — während im Bild ein Körper stand,
+        der sehr wohl in einer Farbe gedruckt wird (Robert, 27.08.2026).
         """
         used: dict[tuple[str, str], int] = {}
         for entry in objects:
-            for slot in getattr(entry, "material_slots", ()) or ():
-                key = (str(slot.name), hex_of(slot.colour))
+            slots = getattr(entry, "material_slots", ()) or ()
+            if not slots:
+                key = (str(tr("Ohne Filament — Farbe des Teils")), UNPAINTED_COLOUR)
+                used[key] = used.get(key, 0) + 1
+                continue
+            for slot in slots:
+                key = (str(slot.name), shown_colour(int(slot.index), slot.colour))
                 used[key] = used.get(key, 0) + 1
         self._used = tuple((name, colour, count) for (name, colour), count in sorted(used.items()))
         self._fill()
