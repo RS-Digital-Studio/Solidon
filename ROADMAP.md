@@ -10275,16 +10275,54 @@ Aus den elf Durchgängen über die Commits seit 0.1.5 (Befundliste in
 Zugeteilte behoben; ein Fund entstand erst beim Schließen der Testlücken
 und braucht einen Umbau statt eines Tests.
 
-- [ ] **Regel 17 endet an der Auswertungsgrenze — zu prüfen, wie viel die
-  Familie schon deckt.** Ein Fehler, der die Kette anhält, erreicht den
-  Prüfbericht ohne seine spezifischen Auswege: `Finding` hat kein
-  `suggestions`-Feld, `_finding_from` (`scene/evaluate.py:1224`) lässt sie
-  fallen. `FINDING_ACTIONS` (`ui/panels.py`) und die
-  `edit_operation`-Handlung der `op.*`-Familie fangen einen Teil generisch —
-  was fehlt, sind die fallgenauen Vorschläge wie `split_model` neben
-  `correct_input` bei „Anzahl oder Abstand verringern". Erst messen, welche
-  Befund-Familien heute ohne tragende Handlung ankommen, dann entscheiden:
-  Feld am `Finding` samt Durchreichung, oder Familien-Einträge ergänzen.
+- [ ] **Regel 17 endet an der Auswertungsgrenze — gemessen am 27.08.2026,
+  zehn von sechzehn Fehlerklassen verlieren ihre Auswege.** Ein Fehler, der
+  die Kette anhält, erreicht den Prüfbericht ohne seine spezifischen
+  Handlungen: `Finding` hat kein solches Feld, und `_finding_from` in
+  `scene/evaluate.py` baut es aus Code, Meldung, Objekt und Werten — die
+  `suggestions` des Fehlers stehen dort nicht.
+
+  **Was danach noch ankommt**, ist genau eine Handlung: `panels.actions_for`
+  gibt jedem Befund, dessen Code mit `op.` beginnt und der eine `op_id` hat,
+  pauschal `CORRECT_INPUT`. `FINDING_ACTIONS` daneben kennt 16 Codes
+  namentlich, **keinen einzigen davon aus der `op.*`-Familie**.
+
+  **Die Messung** (Klassenvorgaben `default_suggestions` in `errors.py`, nicht
+  nur die einzeln mitgegebenen — die überschreiben nur):
+
+  | Klasse | verliert |
+  |---|---|
+  | `NotManifoldError`, `GeometryError` | `repair_and_retry`, `show_locations` |
+  | `BooleanFailedError` | `repair_and_retry`, `use_voxel_stage`, `show_locations` |
+  | `OutOfBuildVolume` | `split_model`, `scale_to_fit`, `choose_printer` |
+  | `AmbiguityError` | `choose` |
+  | `ExternalToolError` | `install`, `retry` |
+  | `FileWriteError` | `retry`, `save_elsewhere` |
+  | `LicenceRequired` | `enter_licence_key`, `buy_licence` |
+  | `InstallationDamaged` | `open_download_page`, `report_error` |
+  | `InternalError` | `report_error`, `show_details` |
+
+  Sechs Klassen verlieren nichts, weil ihre Vorgaben `CORRECT_INPUT`/`CANCEL`
+  ohnehin nicht übersteigen: `AppError`, `UserError`, `ValidationError`,
+  `NeedsSolidError`, `SketchConflictError`, `UnitUnknownError`. **Das ist die
+  gute Nachricht** — die häufigste Klasse in einer Operation ist
+  `ValidationError`, und die ist gedeckt.
+
+  **Die schwerste Lücke sind die drei Geometrieklassen.** Sie verlieren
+  `repair_and_retry` und `show_locations` — die zwei Handlungen, die bei einem
+  kaputten Netz überhaupt weiterhelfen. Der Kunde bekommt stattdessen
+  „Eingabe korrigieren", und an der Eingabe liegt es nicht.
+
+  **Entscheidung, die noch aussteht** — und die Messung spricht für das Feld:
+  Familien-Einträge in `FINDING_ACTIONS` müssten `op.<operation>.<klasse>`
+  abdecken, und das sind 90 mal 16 Zeilen. Der Kommentar über
+  `actions_for` nennt dieses Argument selbst („das sind 86 mal n Zeilen, die
+  alle dasselbe sagen würden") — er zieht daraus nur den Schluss, pauschal
+  `CORRECT_INPUT` zu geben, statt das Feld durchzureichen. Ein
+  `suggestions`-Feld am `Finding` ist einmal Arbeit und trägt alle sechzehn
+  Klassen; es berührt `types.Finding`, `scene/evaluate._finding_from` und
+  `ui/panels.actions_for`.
+
   Gefunden beim Testlücken-Schließen am 26.08.2026, belegt an
   `scene/ops.py:361`.
 
