@@ -360,7 +360,7 @@ def test_the_cache_does_not_tidy_up_in_its_neighbours_folders(tmp_path: Path) ->
     """`trim` und `clear` dürfen nur den eigenen Ordner anfassen.
 
     Vorher stand `DiskCache.directory` per Vorgabe auf der Cache-**Wurzel**, und
-    dort wohnen die OpenSCAD-Sandbox, die heruntergeladenen Update-Pakete und
+    dort wohnen die heruntergeladenen Update-Pakete und
     der Stil-Cache. Ein `trim` hätte fremde Ordner gelöscht, um sein Budget zu
     halten, und `clear` hätte die Wurzel mitgenommen — samt einem Update-Paket,
     das gerade geprüft werden sollte.
@@ -565,7 +565,7 @@ def test_a_built_package_needs_no_source_stamp(monkeypatch: pytest.MonkeyPatch) 
 def test_nobody_writes_into_the_shared_cache_root() -> None:
     """Die Wurzel des Cache-Ordners gehört niemandem allein.
 
-    Dort wohnen die OpenSCAD-Sandbox, die Update-Pakete, der Stil-Cache und die
+    Dort wohnen die Update-Pakete, der Stil-Cache und die
     Ergebnisse — und jeder von ihnen räumt in seinem eigenen Unterordner auf.
     Der Ergebnis-Cache tat es einmal in der Wurzel, mit ``rmtree``; das ist
     behoben, aber die Regel dahinter stand nur in einem Docstring. Hier steht

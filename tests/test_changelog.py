@@ -80,15 +80,34 @@ def test_every_language_carries_the_same_groups(language: str) -> None:
             assert not untitled, f"{language}: Gruppe(n) ohne Überschrift an {untitled}"
 
 
+#: Ab dieser Fassung tragen die Abschnitte ``###``-Gruppen.
+FIRST_GROUPED = (0, 2, 0)
+
+
+def _as_numbers(version: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in version.split(".") if part.isdigit())
+
+
 def test_an_old_section_still_reads_as_one_list() -> None:
     """Die Fassungen vor 0.2.0 tragen keine Gruppen und bleiben gültig.
 
     Ihre Punkte stehen in genau einer Gruppe ohne Titel — so rendert der
     Dialog sie wie eh und je als eine Liste unter der Versionszeile.
+
+    **Geprüft wird „vor 0.2.0", nicht „nicht die aktuelle".** Hier stand der
+    zweite Filter, und solange 0.2.0 die aktuelle Fassung war, kam dasselbe
+    heraus. Mit 0.2.1 wurde der gegliederte 0.2.0-Abschnitt zur „älteren
+    Fassung", und der Test schlug an, obwohl sich an ihm nichts geändert
+    hatte — ein Test, der den nächsten Versionssprung verhindert, prüft die
+    falsche Sache.
     """
     from app.core import changes
 
-    older = [entry for entry in changes.history(SOURCE_LANGUAGE) if entry.version != APP_VERSION]
+    older = [
+        entry
+        for entry in changes.history(SOURCE_LANGUAGE)
+        if _as_numbers(entry.version) < FIRST_GROUPED
+    ]
     assert older, "es gibt keine ältere Fassung zum Prüfen"
     for entry in older:
         assert len(entry.groups) == 1 and entry.groups[0].title == "", (

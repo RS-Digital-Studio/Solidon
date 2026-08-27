@@ -65,6 +65,20 @@ class Outcome:
     def good(self) -> bool:
         if self.error:
             return False
+        # **Was ein Fall verbietet, verbietet er auch einem sonst guten Zug.**
+        # ``forbids_ops`` stand seit je am Fall und wurde hier nie gelesen:
+        # ``tests/test_agent_suite.py`` prüft, dass das Feld *dasteht*, und die
+        # Auswertung sah es nicht an. Gesetzt ist es auf genau einem Fall, und
+        # zwar auf ``create_from_scad`` — der Operation, die fremden Quelltext
+        # ausführt (§32). Ein Modell, das das erwartete Werkzeug **und**
+        # zusätzlich diese Operation rief, zählte als Treffer: Die Quote
+        # schützte den Wächter nicht, für den es sie gibt.
+        #
+        # Als frühes Veto, noch vor der Mehrdeutigkeit: Fragen und *dann*
+        # Verbotenes rufen ist kein Erfolg. Gefunden von 3d-druck-46 beim
+        # Gegenlesen der Bewertung, bevor der erste Modelllauf sie benutzt hat.
+        if self.case.forbids_ops and set(self.case.forbids_ops) & set(self.operations):
+            return False
         if self.case.ambiguous:
             return self.asked
         if self.case.expects_target and not self.target:
@@ -80,11 +94,39 @@ class Outcome:
             word in self.answer for word in self.case.expects_mention
         ):
             return False
-        if self.case.expects_parameter:
-            return self.parameters > 0
+        # **Ein Veto, kein Freispruch.** Hier stand ``return self.parameters > 0``
+        # — und das beendete die Prüfung. Der Fall ``bracket`` erwartet drei
+        # Operationen *und* einen Parameter; geprüft wurde nur der Parameter,
+        # die Operationen sah niemand an. Ausgerechnet der komplexeste Fall der
+        # Suite hing damit an „irgendein Parameter ist entstanden".
+        #
+        # Dieselbe Bauart wie ``expects_target`` und ``expects_reading``
+        # darüber, die als Veto geschrieben sind und weiterfallen lassen. Die
+        # beiden reinen Parameterfälle (``parameter``, ``parameterise``) haben
+        # ``expects_ops=()``; für sie ist die Op-Prüfung danach die leere
+        # Teilmenge und damit erfüllt — sie verlieren nichts.
+        if self.case.expects_parameter and self.parameters <= 0:
+            return False
         if self.case.expects_answer_only:
             return not self.operations
-        return bool(set(self.case.expects_ops) & set(self.operations))
+        # **Alle erwarteten Arten, nicht irgendeine.** Hier stand eine
+        # Schnittmenge, und die ist grün, sobald *ein* erwarteter Op dabei ist.
+        # Auf den zehn mehrteiligen Fällen — durchweg „Grundkörper plus
+        # Baustein", von ``bracket`` bis ``pocket_plate`` — hieß das: Wer den
+        # Quader anlegt und die Schraubenlöcher vergisst, zählt als Treffer.
+        #
+        # Das ist die gefährlichere Hälfte derselben Lockerheit, die auch
+        # Zusätzliches durchlässt: Eine Verschlechterung des Werkzeugsatzes
+        # zeigt sich zuerst als **Teilarbeit** — der Grundkörper ist leicht zu
+        # finden, der Baustein steht unter hundert anderen. Genau die maskierte
+        # der Vergleich, mit dem gemessen werden soll, ob eine Kürzung schadet.
+        #
+        # Teilmenge und nicht Gleichheit: Der mechanische Test daneben
+        # (``tests/test_agent_suite.py``) verlangt die exakte Liste, hier zählt,
+        # dass keine erwartete **Art** fehlt. Wie oft eine Art vorkommt — zwei
+        # Schraubenlöcher statt einem — ist eine eigene Frage.
+        # Gefunden von 3d-druck-46 beim Gegenlesen, vor dem ersten Modelllauf.
+        return set(self.case.expects_ops) <= set(self.operations)
 
 
 def project_with_plate() -> Project:
