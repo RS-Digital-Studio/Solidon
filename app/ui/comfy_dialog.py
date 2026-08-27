@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
 from app.core.backends import comfy_setup
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import set_level
 
@@ -270,9 +271,7 @@ class ComfySetupDialog(QDialog):
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
         self._idle()
         _log.warning("comfy setup crashed: %s", detail)
-        self.state.setText(
-            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
-        )
+        self.state.setText(f"{UNEXPECTED_CRASH!s} {detail}")
         set_level(self.state, "warning")
 
     def _idle(self) -> None:

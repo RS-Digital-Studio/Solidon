@@ -46,7 +46,7 @@ from app.core.errors import (
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
-from app.ui.labels import NumberSpin, deadline_date, value_line
+from app.ui.labels import UNEXPECTED_CRASH, NumberSpin, deadline_date, value_line
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.style import make_primary, set_level
 
@@ -925,9 +925,7 @@ class KeyDialog(QDialog):
         self.pull_button.setText(tr("Modell holen"))
         self.service_button.setEnabled(True)
         self.probe_button.setEnabled(True)
-        self.probe_result.setText(
-            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
-        )
+        self.probe_result.setText(f"{UNEXPECTED_CRASH!s} {detail}")
         set_level(self.probe_result, "warning")
 
     def _worker_finished(self, worker: object) -> None:

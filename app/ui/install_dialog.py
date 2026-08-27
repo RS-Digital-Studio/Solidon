@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 from app.core import discover, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import TIGHT
 
@@ -474,7 +475,7 @@ class InstallDialog(QDialog):
         self._queue.clear()
         self._broke = True
         _log.warning("install dialog worker crashed: %s", detail)
-        self.state.setText(tr("Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat."))
+        self.state.setText(str(UNEXPECTED_CRASH))
         self._details = f"{self._details}\n{detail}" if self._details else detail
         self.details_button.setVisible(True)
 

@@ -40,7 +40,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.labels import volume
+from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 
@@ -559,9 +559,7 @@ class GenerateDialog(QDialog):
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
         _log.warning("generation crashed: %s", detail)
-        self._on_failed(
-            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
-        )
+        self._on_failed(f"{UNEXPECTED_CRASH!s} {detail}")
 
     def _on_failed(self, problem: object) -> None:
         """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).

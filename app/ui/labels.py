@@ -399,6 +399,14 @@ _HUES: tuple[tuple[int, TranslatableText], ...] = (
     (360, _("Rot")),
 )
 
+#: Was vier Dialoge sagen, wenn ein Arbeiter im Hintergrund abstürzt:
+#: ComfyUI einrichten, Modell prüfen, Erzeugen, Installieren. Der Satz
+#: stand viermal wortgleich im Quelltext — vier Stellen, an denen er sich
+#: ändern kann, und der Kunde bekäme je nach Dialog eine andere
+#: Formulierung für denselben Fall.
+UNEXPECTED_CRASH = _("Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.")
+
+
 _BLACK = _("Schwarz")
 _WHITE = _("Weiß")
 _GREY = _("Grau")
