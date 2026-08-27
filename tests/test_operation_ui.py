@@ -1834,11 +1834,22 @@ def test_a_required_feature_offers_no_empty_choice(qt_app: QApplication) -> None
 
     load_operations()
 
-    # Die drei Operationen, die ohne Merkmal ablehnen, sagen es jetzt.
-    for name in ("paint_slot", "create_lid", "screw_lid"):
-        spec = next(s for s in REGISTRY.all() if s.name == name)
-        feature = next(p for p in spec.params.spec() if str(p.kind) == "feature")
-        assert feature.required, f"{name} braucht sein Merkmal und muss das sagen"
+    # **Genau eine** Operation lehnt ohne Merkmal ab, und sie sagt es.
+    spec = next(s for s in REGISTRY.all() if s.name == "paint_slot")
+    feature = next(p for p in spec.params.spec() if str(p.kind) == "feature")
+    assert feature.required, "paint_slot braucht seine Fläche und muss das sagen"
+
+    # **Und die Deckel gehören ausdrücklich nicht dazu** — hier stand das
+    # einmal anders, und drei Tests fielen: Beide nutzen ``plane_of``, das bei
+    # leerem Namen auf die Zahl zurückfällt, und das ausgelieferte Beispiel
+    # lässt das Merkmal leer. Hergeleitet war der Irrtum daraus, dass die
+    # Datei ``ValidationError`` zu ``at_feature`` wirft — sie wirft aber für
+    # ein **untaugliches** Merkmal, nicht für ein fehlendes. Ein Muster im
+    # Text ist keine Aussage über das Verhalten.
+    for name in ("create_lid", "screw_lid"):
+        andere = next(s for s in REGISTRY.all() if s.name == name)
+        feld = next(p for p in andere.params.spec() if str(p.kind) == "feature")
+        assert not feld.required, f"{name} kommt ohne Merkmal aus (plane_of fällt zurück)"
 
     # Und die übrigen kommen weiterhin ohne aus — der leere Eintrag bleibt
     # dort richtig, sonst nähme man dem Kunden eine gültige Wahl.

@@ -347,11 +347,14 @@ class LidParams(BaseParams):
         title=_("An Fläche"),
         kind="feature",
         default="",
-        # Pflicht trotz Vorgabe: Der leere Wert ist die Vorbelegung, die
-        # der Klick füllt (§21.3), und keine gültige Wahl — ohne Merkmal
-        # lehnt die Operation ab. Stand das nicht hier, bot der Dialog
-        # „— keines —" als vorausgewählte Möglichkeit an.
-        required=True,
+        # **Kein ``required``, und das ist gemessen**: ``plane_of`` fällt
+        # bei leerem Namen auf die Zahl zurück (``return stated or`` die
+        # Oberkante), der Deckel entsteht also auch ohne Fläche. Am
+        # 27.08.2026 stand hier einmal ``required=True`` — hergeleitet
+        # daraus, dass die Datei ``ValidationError`` zu ``at_feature``
+        # wirft. Sie wirft aber für ein **untaugliches** Merkmal, nicht
+        # für ein fehlendes. Das ausgelieferte Beispiel mit dem Deckel
+        # lässt es leer, und die Auswertung hielt daraufhin an.
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
@@ -568,11 +571,14 @@ class ScrewLidParams(BaseParams):
         title=_("An Fläche"),
         kind="feature",
         default="",
-        # Pflicht trotz Vorgabe: Der leere Wert ist die Vorbelegung, die
-        # der Klick füllt (§21.3), und keine gültige Wahl — ohne Merkmal
-        # lehnt die Operation ab. Stand das nicht hier, bot der Dialog
-        # „— keines —" als vorausgewählte Möglichkeit an.
-        required=True,
+        # **Kein ``required``, und das ist gemessen**: ``plane_of`` fällt
+        # bei leerem Namen auf die Zahl zurück (``return stated or`` die
+        # Oberkante), der Deckel entsteht also auch ohne Fläche. Am
+        # 27.08.2026 stand hier einmal ``required=True`` — hergeleitet
+        # daraus, dass die Datei ``ValidationError`` zu ``at_feature``
+        # wirft. Sie wirft aber für ein **untaugliches** Merkmal, nicht
+        # für ein fehlendes. Das ausgelieferte Beispiel mit dem Deckel
+        # lässt es leer, und die Auswertung hielt daraufhin an.
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
