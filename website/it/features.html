@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funzioni: modificare STL e verificare la stampa — Solidon3D</title>
+<meta name="description" content="Tutte le funzioni di Solidon3D con immagini: agente IA, schizzi con vincoli, rapporto di verifica, analisi degli strati, blocchi, divisione automatica, motivi superficiali.">
+<link rel="canonical" href="https://solidon3d.de/it/features.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
+<link rel="alternate" hreflang="es" href="https://solidon3d.de/es/features.html">
+<link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/features.html">
+<link rel="alternate" hreflang="it" href="https://solidon3d.de/it/features.html">
+<link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/features.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/funktionen.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="it_IT">
+<meta property="og:locale:alternate" content="de_DE">
+<meta property="og:locale:alternate" content="en_GB">
+<meta property="og:url" content="https://solidon3d.de/it/features.html">
+<meta property="og:title" content="Funzioni: modificare STL e verificare la stampa — Solidon3D">
+<meta property="og:description" content="Tutte le funzioni di Solidon3D con immagini: agente IA, schizzi con vincoli, rapporto di verifica, analisi degli strati, blocchi, divisione automatica, motivi superficiali.">
+<meta property="og:image" content="https://solidon3d.de/handbuch/it/catalog.png">
+<meta property="og:image:alt" content="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css?v=c1a16e11">
+</head>
+<body>
+<a class="skip" href="#content">Vai al contenuto</a>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/it/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/it/#ways">Le quattro vie</a>
+      <a class="hide-tiny" href="/it/ai-models.html">Modelli IA</a>
+      <a href="/it/manual.html">Manuale</a>
+      <details class="langs">
+        <summary aria-label="Scegli la lingua">IT</summary>
+        <ul>
+          <li><a href="/funktionen.html" hreflang="de" lang="de">Deutsch</a></li>
+          <li><a href="/en/features.html" hreflang="en" lang="en">English</a></li>
+          <li><a href="/es/features.html" hreflang="es" lang="es">Español</a></li>
+          <li><a href="/fr/features.html" hreflang="fr" lang="fr">Français</a></li>
+          <li><a href="/it/features.html" hreflang="it" lang="it" aria-current="page">Italiano</a></li>
+          <li><a href="/pt/features.html" hreflang="pt" lang="pt">Português</a></li>
+        </ul>
+      </details>
+      <a class="cta" href="/it/#pricing">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main id="content">
+
+  <section id="anfang">
+    <div class="wrap">
+      <div class="hero">
+        <div class="hero-text">
+        <h1>Cosa sa fare Solidon3D</h1>
+        <p class="lead">Ogni funzione con un'immagine dall'applicazione in esecuzione o con un disegno che mostra esattamente cosa fa. Se preferisci sapere prima il prezzo: <a href="/it/#pricing">demo e prezzo</a>.</p>
+        </div>
+
+        <div class="shot">
+          <div class="stage">
+            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+            <a href="../bilder/beleg-fenster-it.png?v=2818f14f">
+              <img src="../bilder/beleg-fenster-it.png?v=2818f14f" width="1400" height="860" fetchpriority="high"
+                   alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica">
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="uebersicht" class="tint">
+    <div class="wrap">
+      <h2>In sintesi</h2>
+      <nav class="toc" aria-label="In sintesi">
+        <ol>
+          <li><a href="#ai-agent">Agente IA</a></li>
+          <li><a href="#sketches-with-constraints">Schizzi con vincoli</a></li>
+          <li><a href="#inspection-report">Rapporto di verifica</a></li>
+          <li><a href="#parametric">Parametrico</a></li>
+          <li><a href="#building-blocks">Blocchi</a></li>
+          <li><a href="#your-own-blocks">Blocchi tuoi</a></li>
+          <li><a href="#surfaces">Superfici</a></li>
+          <li><a href="#layer-analysis">Analisi degli strati</a></li>
+          <li><a href="#auto-split">Dividere e divisione automatica</a></li>
+          <li><a href="#every-number-a-formula">Ogni numero una formula</a></li>
+          <li><a href="#first-launch">Primo avvio</a></li>
+          <li><a href="#inside">Cos'altro c'è dentro</a></li>
+        </ol>
+      </nav>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="showcase" id="ai-agent">
+        <div>
+          <span class="kicker">Agente IA</span>
+          <h3>Una frase in chat, una proposta, un Annulla</h3>
+          <p>L'agente usa le stesse operazioni dei menu — non esiste una
+          scorciatoia che aggiri la geometria. Ogni proposta mostra cosa
+          farà prima di farlo, e viene applicata come un tutto: esattamente
+          una transazione, che un solo Annulla ritira per intero.</p>
+          <p class="note">La geometria la calcola il codice, mai il modello
+          linguistico. <b>Ogni quota nella proposta è esatta — niente è
+          «generato all'incirca».</b></p>
+          <p class="note">Ed è misurato, non promesso: una suite di
+          <b>39 richieste di riferimento</b> gira prima e dopo ogni modifica
+          alla regolamentazione dell'agente. All'8 agosto 2026, con un
+          modello locale da 14 miliardi
+          di parametri e senza alcun cloud: 28 su 39 risposte bene, il 98%
+          delle chiamate agli strumenti valide al primo tentativo — e ogni
+          richiesta ambigua è finita in una domanda di ritorno, non in una
+          supposizione.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un disegno: in un campo di chat si scrive da sé «Svasa le quattro viti — M4, a filo.»; l'agente risponde con una proposta di tre operazioni, nella sezione accanto il foro si allarga a 4,5 millimetri e riceve una svasatura a 90 gradi, sotto c'è scritto: applicata — una transazione, un Annulla ritira tutto.">
+            <text class="ink" x="24" y="30" font-weight="600">Una frase — tre operazioni</text>
+
+            <text class="dim" x="24" y="64">Tu</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Svasa le quattro viti — M4, a filo.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agente</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Proposta — 3 operazioni</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Adatta il foro: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Svasatura 90°, ø 8,6 mm — a filo</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Applicata a tutti e quattro i fori</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Sezione</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Applicata — una transazione. Un Annulla ritira tutto.</text>
+            </g>
+          </svg>
+          <figcaption>La proposta non cambia nulla finché non è applicata — e allora come un tutto.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="sketches-with-constraints">
+        <div>
+          <span class="kicker">Schizzi con vincoli</span>
+          <h3>Disegna, quota — e ogni quota può essere un parametro</h3>
+          <p>Linea, cerchio, arco, spline e contorni pronti come asola,
+          cerchio di fori o griglia di fori. Dieci vincoli tengono insieme il
+          disegno — orizzontale, perpendicolare, tangente, simmetrico,
+          distanza —, e in basso c'è scritto in ogni momento cosa è ancora
+          libero. Cosa diventa il contorno lo decidi solo dopo: estruderlo,
+          inciderlo come tasca, farlo ruotare attorno a un asse, guidarlo
+          lungo un arco o tenderlo tra due contorni.</p>
+          <p class="note">Il contorno entra nel kernel B-rep come curva
+          esatta. <b>Un cerchio disegnato diventa un cilindro rotondo, non un
+          poligono con tanti angoli.</b></p>
+          <p>La griglia mostra a cosa si aggancia il magnete, e il suo passo
+          si può digitare. La quota sta accanto al puntatore, e la barra
+          sotto indica la faccia su cui si sta disegnando. Una linea ausiliaria
+          resta ausiliaria — anche dopo tagliare, prolungare, spostare e
+          specchiare.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-skizze-it.png?v=501a15f8"><img src="../bilder/beleg-skizze-it.png?v=501a15f8" width="1400" height="860" loading="lazy" decoding="async"
+                 alt="La modalità schizzo nella finestra principale: si disegna nella vista stessa, la griglia sta sopra il modello con un rettangolo quotato e un cerchio; in basso la barra flottante con gli strumenti di disegno, il passo della griglia, la riga «Piano di disegno: faccia su Insegna — 2247 mm²» e i pulsanti dei vincoli; a destra la scheda con i tredici vincoli del disegno"></a>
+          </div>
+          <figcaption>Si disegna nella vista — sulla faccia su cui hai fatto clic.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="inspection-report">
+        <div>
+          <span class="kicker">Rapporto di verifica</span>
+          <h3>Sai prima della stampa cosa andrà storto</h3>
+          <p>Ogni file aperto riceve un rapporto: punti aperti, triangoli
+          orientati male, pareti sotto i due cordoni di estrusione, unità
+          mancanti. Ordinato in errori, avvisi e note — e ogni voce salta nel
+          modello al punto di cui parla.</p>
+          <p class="note">Ogni rilievo porta con sé un'azione proposta.
+          <b>Qui un errore non finisce mai con «operazione non
+          riuscita».</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/it/report.png?v=166c299f"><img src="../handbuch/it/report.png?v=166c299f" width="620" height="270" loading="lazy" decoding="async"
+                 alt="Il rapporto di verifica: zero errori, due avvisi e due note, tra cui «Il modello è aperto in tre punti» e «Una parete è più sottile di due cordoni di estrusione»"></a>
+          </div>
+          <figcaption>Il rapporto di verifica di un file esterno importato.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="parametric">
+        <div>
+          <span class="kicker">Parametrico</span>
+          <h3>Cambiare un numero — non ricostruire il modello</h3>
+          <p>La cronologia è non distruttiva: ogni passo resta modificabile,
+          ogni numero si può girare anche dopo. Spessore di parete da 2,40 a
+          3,60? Svuotatura, coperchio, fori e accoppiamenti si ricalcolano —
+          nello stesso ordine, con lo stesso risultato.</p>
+          <p class="note">Parametri di progetto con un nome invece di numeri
+          sparsi: <b>una modifica in un punto, non in sette.</b></p>
+          <p>I limiti si possono cambiare in seguito, anche dopo che il
+          parametro esiste già. Nella cronologia si selezionano più passi
+          insieme — per cancellarli o spostarli in blocco, invece che uno
+          alla volta.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un disegno: il campo «spessore di parete» passa da 2,40 a 3,60 millimetri, la sezione della scatola riceve pareti e fondo più spessi, la cronologia sotto resta invariata.">
+            <text class="ink" x="24" y="30" font-weight="600">Girare il numero</text>
+
+            <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
+            <text class="dim" x="38" y="76">Spessore di parete</text>
+            <text class="value anim fig-value-thin" x="222" y="76" text-anchor="end">2,40 mm</text>
+            <text class="value anim fig-value-thick" x="222" y="76" text-anchor="end">3,60 mm</text>
+
+            <text class="dim" x="24" y="122">Cronologia — invariata</text>
+            <g class="rule" stroke-linecap="round">
+              <line x1="26" y1="140" x2="26" y2="212"/>
+            </g>
+            <circle class="hot" cx="26" cy="146" r="4"/>
+            <circle class="hot" cx="26" cy="176" r="4"/>
+            <circle class="hot" cx="26" cy="206" r="4"/>
+            <text class="ink" x="42" y="151" font-size="12">Corpo</text>
+            <text class="ink" x="42" y="181" font-size="12">Svuota</text>
+            <text class="ink" x="42" y="211" font-size="12">Crea coperchio</text>
+
+            <text class="dim" x="300" y="42">Sezione</text>
+            <rect class="body" x="300" y="60" width="230" height="140"/>
+            <rect class="anim fig-cavity" x="316" y="60" width="198" height="124" fill="#16181c"/>
+            <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
+            <text class="dim" x="300" y="238">Spessore di parete</text>
+          </svg>
+          <figcaption>Spessore girato — la cronologia resta la stessa.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="building-blocks">
+        <div>
+          <span class="kicker">Blocchi</span>
+          <h3>Una sede per dado in quattro clic, non in quattro mezz'ore</h3>
+          <p>La faccia cliccata conta: un blocco si posa dove hai indicato
+          nel modello — prima ogni operazione su una faccia costava due
+          clic. Il menu contestuale di una faccia offre ora anche supporto a
+          parete, nervatura, linguetta e scanalatura, dente di scatto,
+          aggancio a scatto e cerniera a film.</p>
+          <p>Blocchi verificati in sei gruppi — foro per vite con svasatura,
+          sede per dado, inserto a caldo, filettatura, spina, occhiello di
+          cerniera, cerniera a film, aggancio a scatto, tasca per magnete, e
+          poi supporto a parete, gancio per pannello forato, clip per cavi,
+          squadretta e piede. Le quote vengono da una tabella dei componenti
+          normalizzati, non dall'istinto.</p>
+          <p class="note">Ogni blocco è testato su tutto il suo intervallo di
+          parametri: <b>a tenuta stagna, spessore minimo di parete, nessuna
+          autointersezione.</b></p>
+          <p>Chi sceglie un blocco prima di indicare un punto viene
+          interpellato da Solidon3D, invece di vederlo piazzato all'origine.
+          Anche il catalogo si apre senza un modello caricato — inserire un
+          blocco è allora bloccato, con il motivo indicato.</p>
+          <p>L'albero degli oggetti mostra cosa porta con sé un blocco: le
+          sue caratteristiche compaiono come voci proprie sotto di esso, e il
+          nodo propone di modificare esattamente quel passo.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-bausteine-it.png?v=fcbf9073"><img src="../bilder/beleg-bausteine-it.png?v=fcbf9073" width="1220" height="757" loading="lazy" decoding="async"
+                 alt="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure"></a>
+          </div>
+          <figcaption>Il catalogo — ogni anteprima è renderizzata, non disegnata.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Blocchi tuoi</span>
+          <h3>Costruito una volta, nel catalogo per sempre</h3>
+          <p>Il supporto per il banco da lavoro è costato una serata — la
+          prossima volta dev'essere una voce. Costruisci il pezzo una volta,
+          crea i parametri per le sue quote e scegli nel catalogo <b>Salva la
+          selezione come blocco</b>: da quel momento sta accanto ai
+          blocchi forniti, con anteprima e campi, e decidi tu per ogni quota
+          fino a dove si può regolare.</p>
+          <p>Creare calcola, non si limita a salvare: il blocco viene
+          costruito una volta a ogni angolo del suo intervallo — se da qualche
+          parte non esce un corpo utilizzabile, sta scritto sulla voce prima
+          che si veda in stampa.</p>
+          <p class="note">È tuo, resta sul tuo computer — e <b>viaggia come
+          ricetta in ogni file di progetto</b> che lo usa: un elenco di passi
+          e valori, non un programma. Chi riceve il file può calcolare e
+          modificare senza installare nulla.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/it/own-part.png?v=4fe8a098"><img src="../handbuch/it/own-part.png?v=4fe8a098" width="520" height="836" loading="lazy" decoding="async"
+                 alt="La finestra «Salva la selezione come blocco»: in alto nome, gruppo e descrizione, sotto per ogni parametro l'etichetta, l'unità, il valore minimo e massimo, il valore predefinito e il suo posto nella finestra, poi i punti selezionabili con i loro nomi nella ricetta — in basso il pulsante «Crea blocco»"></a>
+          </div>
+          <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="surfaces">
+        <div>
+          <span class="kicker">Superfici</span>
+          <h3>Otto motivi, e tutti verificati per la stampabilità</h3>
+          <p>Nervatura, onda, zigrinatura dritta e incrociata, nido d'ape,
+          bugne, Voronoi e rumore — come <b>geometria vera</b> e come
+          reticolo esatto, non come campo di altezze campionato. Altrimenti
+          una zigrinatura stampa poltiglia arrotondata invece di rombi
+          netti.</p>
+          <p class="note">Prima di calcolare, la domanda se il motivo su
+          questa macchina può nascere del tutto: <b>creste più strette
+          dell'ugello e goffrature più basse di uno strato vengono
+          respinte</b>, non calcolate.</p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="../handbuch/it/textures-dark.svg" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="../handbuch/it/textures.svg?v=afcec6e1" width="454" height="274" loading="lazy" decoding="async"
+                 alt="Otto tessere di motivo su due righe: nervatura come strisce parallele, onda come strisce ondulate, zigrinatura dritta e incrociata come strisce oblique e rombi, nido d'ape come esagoni, bugne come griglia di punti, Voronoi come celle irregolari e rumore come chiazze sparse.">
+          </picture>
+          <figcaption>Gli stessi contorni che poi vengono stampati — l'anteprima è calcolata, non dipinta.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="layer-analysis">
+        <div>
+          <span class="kicker">Analisi degli strati</span>
+          <h3>Vedere ciò che vedrà la stampante</h3>
+          <p>Solidon3D taglia il modello in strati e misura cosa ne segue:
+          angoli di sbalzo, isole sospese, pareti sotto i due cordoni,
+          campate dei ponti e volume dei supporti. La ricerca
+          dell'orientamento propone la posizione che ne genera di meno.</p>
+          <p class="note">Nessuno slicer proprio — e nessun numero mescolato:
+          <b>cosa viene dall'analisi e cosa dal G-code, sta scritto
+          accanto.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un disegno: una linea di analisi sale dal piano di stampa attraverso un pezzo; uno dopo l'altro compaiono tre rilievi — sbalzo di 78 gradi, isola sospesa e una parete sotto i due cordoni.">
+            <text class="ink" x="24" y="30" font-weight="600">Analisi degli strati</text>
+
+            <rect class="body" x="60" y="80" width="48" height="120"/>
+            <rect class="body" x="108" y="80" width="120" height="28"/>
+            <rect class="body" x="252" y="140" width="48" height="20"/>
+            <rect class="body" x="225" y="180" width="6" height="20"/>
+            <line class="rule" x1="40" y1="200" x2="320" y2="200" stroke-width="2.5" stroke-linecap="round"/>
+            <text class="dim" x="40" y="220">Piano di stampa</text>
+
+            <g class="anim fig-scan">
+              <line class="hot-stroke" x1="44" y1="196" x2="316" y2="196" stroke-dasharray="5 4"/>
+              <path class="hot" d="M44 196 l-8 -5 v10 z"/>
+            </g>
+
+            <g class="anim fig-find-1">
+              <path class="warn" d="M368 88 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="103" font-size="12">Sbalzo 90°</text>
+            </g>
+            <g class="anim fig-find-2">
+              <path class="warn" d="M368 128 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="143" font-size="12">Isola, senza appoggio</text>
+            </g>
+            <g class="anim fig-find-3">
+              <path class="warn" d="M368 168 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="183" font-size="12">Parete &lt; 2 cordoni</text>
+            </g>
+          </svg>
+          <figcaption>Tre rilievi che lo slicer conosce solo dopo lo slicing.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="auto-split">
+        <div>
+          <span class="kicker">Dividere e divisione automatica</span>
+          <h3>«Troppo grande per il piatto» non è più un motivo per lasciar perdere</h3>
+          <p><b>Indicare invece di calcolare:</b> due clic sul pezzo
+          tracciano una linea, e si divide fra i due — dritto dentro lo
+          schermo. Chi vede dove deve stare la giuntura non deve più
+          tradurre quel punto in una coordinata.</p>
+          <p>Le metà vengono già preparate per l'incastro: le spine in una,
+          i fori corrispondenti nell'altra. Tondo, esagonale, coda di
+          rondine o scatto — quelli spigolosi bloccano la torsione, la coda
+          di rondine anche la trazione, e lo scatto si aggancia e tiene
+          senza colla. Il gioco fra le parti viene dal profilo del
+          materiale: niente lima e niente secondo tentativo. L'accoppiamento
+          resta nel progetto come relazione e viene riverificato a ogni
+          modifica successiva.</p>
+          <p>Chi non vuole neppure guardare usa <b>Dividi
+          automaticamente</b>: Solidon3D cerca da sé il piano di taglio e
+          taglia finché ogni pezzo non entra.</p>
+          <p class="note">Il volume di stampa viene dal profilo della
+          stampante. <b>Sedici sono inclusi di serie</b>, e se ne possono
+          creare di propri.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un disegno: un pezzo largo 320 millimetri sporge da un volume di stampa di 220 millimetri; si divide in due metà da 160 millimetri ciascuna, fra le quali diventano visibili tre spine e i loro fori.">
+            <text class="ink" x="24" y="30" font-weight="600">Troppo largo per il piatto</text>
+
+            <g class="anim fig-verdict-no">
+              <rect x="170" y="66" width="220" height="118" rx="4" fill="none"
+                    stroke="#575e69" stroke-width="1.4" stroke-dasharray="6 5"/>
+              <text class="dim" x="280" y="58" text-anchor="middle">Volume di stampa 220 mm</text>
+            </g>
+
+            <g class="anim fig-half-left">
+              <rect class="body" x="120" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect class="hot" x="276" y="108" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="122" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="136" width="30" height="8" rx="2"/>
+                <text class="dim" x="199" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+            <g class="anim fig-half-right">
+              <rect class="body" x="282" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect x="284" y="108" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="122" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="136" width="30" height="8" rx="2" fill="#16181c"/>
+                <text class="dim" x="361" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+
+            <g class="anim fig-verdict-no">
+              <path class="warn" d="M186 200 l9 16 h-18 z"/>
+              <text class="ink" x="204" y="215" font-size="12">320 mm &gt; 220 mm — non entra</text>
+            </g>
+            <g class="anim fig-verdict-yes">
+              <path class="hot" d="m178 209 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="204" y="215" font-size="12">2 × 160 mm — entra, con le spine</text>
+            </g>
+          </svg>
+          <figcaption>Diviso e con le spine — il gioco viene dal profilo del materiale.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="every-number-a-formula">
+        <div>
+          <span class="kicker">Ogni numero una formula</span>
+          <h3>Dialoghi che fanno i conti</h3>
+          <p>Dietro ogni campo numerico c'è un <b>fx</b>: invece di 4,20 lì
+          può stare <code>vite_m4 + gioco</code>. Le tolleranze prendono il
+          loro valore dal profilo del materiale, invece di sparire nel
+          modello come costante. Davanti stanno i due o tre valori che si
+          cambiano davvero — il resto vive sotto «Altre impostazioni».</p>
+          <p class="note">91 operazioni, tutte sullo stesso schema:
+          <b>menu, menu contestuale, riga di comando e chat leggono la
+          stessa dichiarazione.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/it/op-dialog.png?v=43843913"><img src="../handbuch/it/op-dialog.png?v=43843913" width="520" height="195" loading="lazy" decoding="async"
+                 alt="Il dialogo «Pratica un foro» con diametro e posizione X, un pulsante fx dietro ogni campo numerico e la sezione chiusa «Altre impostazioni»"></a>
+          </div>
+          <figcaption>Il dialogo di un'operazione — davanti i due o tre
+          valori che si cambiano davvero, dietro tutto il resto.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="first-launch">
+        <div>
+          <span class="kicker">Primo avvio</span>
+          <h3>Non parti da zero</h3>
+          <p>Nove progetti di esempio pronti sono inclusi — uno per via, più
+          blocchi, scritta a due colori, calibrazione, preparazione di
+          stampa e una scatola con coperchio dove tutto si incontra. Ognuno
+          è un progetto vero con la sua cronologia, non un'immagine in un
+          manuale.</p>
+          <p class="note">E un manuale che spiega i primi quindici minuti —
+          <b>nella stessa lingua dell'interfaccia.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-start-it.png?v=32597344"><img src="../bilder/beleg-start-it.png?v=32597344" width="1400" height="1000" loading="lazy" decoding="async"
+                 alt="La schermata iniziale: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto quattro progetti di esempio — uno per via — con anteprima e descrizione, e sotto la sezione chiusa «Cos'altro c'è?»"></a>
+          </div>
+          <figcaption>La schermata iniziale con quattro dei nove esempi — gli
+          altri cinque stanno dietro «Cos'altro c'è?».</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="inside">
+    <div class="wrap">
+      <h2>Cos'altro c'è dentro</h2>
+      <ul class="features">
+        <li><b>Spigoli esatti.</b> Kernel B-rep per smussi, raccordi e STEP
+        che regge andata e ritorno.</li>
+        <li><b>Velocità.</b> Gli stessi calcoli girano fino a sessanta volte
+        più veloci di quando si è cominciato — e l'indicatore di
+        avanzamento resta fermo finché il risultato non è davvero
+        pronto.</li>
+        <li><b>Due colori senza un secondo programma.</b> Scritte in rilievo,
+        in incavo o come cambio colore in un unico file 3MF.</li>
+        <li><b>Consegna al tuo slicer.</b> Diretta, con le impostazioni
+        adatte — e il suo G-code torna indietro come controllo.</li>
+        <li><b>Calibrare invece di indovinare.</b> Scala delle tolleranze,
+        scala degli spessori di parete e ventaglio degli sbalzi su un solo
+        piatto; i valori misurati vanno nel profilo del materiale.</li>
+        <li><b>Catena di riparazione per i file altrui.</b> Chiudere i
+        buchi, raddrizzare le normali, togliere triangoli degeneri e
+        schegge — prima che si calcoli qualsiasi cosa.</li>
+        <li><b>Misura, sezione, esplosione.</b> Strumenti nella vista, senza
+        toccare la geometria.</li>
+        <li><b>IA in locale o con la propria chiave.</b> Ollama sul proprio
+        computer o una chiave API — e senza né l'uno né l'altra funziona
+        tutto tranne la chat.</li>
+        <li><b>Comandabile da remoto via MCP — anche da Claude Code.</b> Un
+        secondo programma richiama le stesse operazioni dei menu: spento di
+        serie, solo sul proprio computer, e ogni chiamata remota è una
+        transazione che un Annulla ritira.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="tint">
+    <div class="wrap">
+      <div class="closing">
+        <h2>Il prossimo pezzo che combacia</h2>
+        <p>La demo è qui e gira fino al 30 ottobre 2026 — gratuita e
+        completa.</p>
+        <a class="btn" href="/it/#pricing">Alla demo</a>
+        <a class="btn ghost" href="/it/manual.html">Prima leggi il manuale</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/it/">Pagina iniziale</a> ·
+    <a href="/it/#ways">Le quattro vie</a> ·
+    <a href="/it/ai-models.html">Modelli IA</a> ·
+    <a href="/it/manual.html">Manuale</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Note legali</a> ·
+    <a href="/datenschutz.html">Privacy</a>
+    <em>(testi legali in tedesco — fa fede la versione tedesca)</em> ·
+    <a href="/">Deutsch</a> ·
+    <a href="/en/">English</a> ·
+    <a href="/es/">Español</a> ·
+    <a href="/fr/">Français</a> ·
+    <a href="/pt/">Português</a>
+  </div>
+</footer>
+
+<script src="/site.js?v=5f78a99a" defer></script>
+
+</body>
+</html>

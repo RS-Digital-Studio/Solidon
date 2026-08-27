@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Modèles IA imprimables : réparer GLB et STL — Solidon3D</title>
+<meta name="description" content="Un modèle sorti d'un générateur d'IA est une surface, pas une pièce. Solidon3D le répare, vérifie épaisseurs de paroi et surplombs, le découpe et le goupille — avant le slicing.">
+<link rel="canonical" href="https://solidon3d.de/fr/ai-models.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html">
+<link rel="alternate" hreflang="es" href="https://solidon3d.de/es/ai-models.html">
+<link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/ai-models.html">
+<link rel="alternate" hreflang="it" href="https://solidon3d.de/it/ai-models.html">
+<link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/ai-models.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:url" content="https://solidon3d.de/fr/ai-models.html">
+<meta property="og:title" content="Modèles IA imprimables : réparer GLB et STL — Solidon3D">
+<meta property="og:description" content="Un modèle sorti d'un générateur d'IA est une surface, pas une pièce. Solidon3D le répare, vérifie épaisseurs de paroi et surplombs, le découpe et le goupille — avant le slicing.">
+<meta property="og:image" content="https://solidon3d.de/handbuch/fr/report.png">
+<meta property="og:image:alt" content="Le rapport de contrôle&nbsp;: zéro erreur, deux avertissements et deux remarques, dont «&nbsp;Le modèle est ouvert à trois endroits&nbsp;» et «&nbsp;Une paroi est plus mince que deux cordons d'extrusion&nbsp;»">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css?v=c1a16e11">
+</head>
+<body>
+<a class="skip" href="#content">Aller au contenu</a>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/fr/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/fr/features.html">Fonctions</a>
+      <a class="hide-tiny" href="/fr/#ways">Quatre voies</a>
+      <a href="/fr/manual.html">Manuel</a>
+      <details class="langs">
+        <summary aria-label="Choisir la langue">FR</summary>
+        <ul>
+          <li><a href="/ki-modelle.html" hreflang="de" lang="de">Deutsch</a></li>
+          <li><a href="/en/ai-models.html" hreflang="en" lang="en">English</a></li>
+          <li><a href="/es/ai-models.html" hreflang="es" lang="es">Español</a></li>
+          <li><a href="/fr/ai-models.html" hreflang="fr" lang="fr" aria-current="page">Français</a></li>
+          <li><a href="/it/ai-models.html" hreflang="it" lang="it">Italiano</a></li>
+          <li><a href="/pt/ai-models.html" hreflang="pt" lang="pt">Português</a></li>
+        </ul>
+      </details>
+      <a class="cta" href="/fr/#pricing">Démo</a>
+    </nav>
+  </div>
+</header>
+
+<main id="content">
+
+  <section id="anfang">
+    <div class="wrap">
+      <div class="hero">
+        <div class="hero-text">
+        <h1>Quand le modèle sort d'une IA</h1>
+        <p class="lead">Les générateurs font d'une phrase une forme. Ce qu'ils n'en font pas, c'est une pièce qui s'ajuste. C'est exactement là que Solidon3D commence.</p>
+        </div>
+
+        <div class="shot">
+          <div class="stage">
+            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+            <a href="../bilder/beleg-erzeugt-fr.png?v=e53f191d">
+              <img src="../bilder/beleg-erzeugt-fr.png?v=e53f191d" width="1400" height="860" fetchpriority="high"
+                   alt="Solidon3D avec une chouette générée à partir d'une phrase : à gauche l'historique avec « Charger le modèle », « Mettre à la cote » et « Poser sur le plateau », au centre la figurine sur le plateau, à droite le rapport">
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="generated">
+    <div class="wrap">
+      <ol class="chain">
+        <li><b>Glisser un GLB ou un STL.</b> Même texturé — les couleurs
+        survivent à l'import.</li>
+        <li><b>Chaîne de réparation et rapport de contrôle.</b> Trous,
+        normales retournées, triangles dégénérés&nbsp;; ensuite, il est écrit
+        noir sur blanc ce qui tournera mal à l'impression.</li>
+        <li><b>Ramener les couleurs à vos filaments.</b> Au nombre réellement
+        chargé dans la machine — pas à un maximum.</li>
+        <li><b>Découper, goupiller, disposer.</b> Des goupilles avec le jeu
+        du profil de matériau, pour que les moitiés se retrouvent.</li>
+        <li><b>Un 3MF avec groupes de matériaux, droit au slicer.</b></li>
+      </ol>
+
+      <h3>Ce que vérifie un contrôle d'imprimabilité</h3>
+      <p class="sub">À gauche, ce à quoi répond le contrôle d'un générateur.
+      À droite, ce qui peut encore mal tourner avant l'impression. État au
+      12&nbsp;août 2026, d'après la documentation publique d'un générateur
+      très répandu.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Vérifié</th><th>Générateur</th><th>Solidon3D</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Étanchéité, trous, arêtes ouvertes</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Arêtes non manifold, faces dégénérées</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Volume</td><td><span class="yes">✓ oui</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Épaisseur de paroi contre la buse de cette imprimante</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Angle de surplomb couche par couche</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Îlots&nbsp;: de la matière sans lien vers le bas</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Portées de pont, passage le plus étroit</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Besoin de supports et meilleure orientation</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Tient-il sur votre plateau d'impression</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+          <tr><td>Ajustements contre le profil de matériau</td><td><span class="no">— non</span></td><td><span class="yes">✓ oui</span></td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">La réparation seule se trouve aujourd'hui
+      gratuitement dans un navigateur, et c'est très bien — un maillage fermé
+      n'est toujours pas une pièce qui s'ajuste. La différence se joue après
+      la réparation&nbsp;: la cote, l'ajustement, l'analyse des couches, et
+      un historique où chaque chiffre peut encore changer plus tard.</p>
+
+      <h3>Si vous n'avez aucun générateur</h3>
+      <p class="sub">Solidon3D apporte le troisième chemin avec lui : une phrase ou une image devient un corps, et celui-ci arrive dans le même historique que tout le reste. Le calcul se fait dans un <b>ComfyUI</b> local — sur votre machine, sans compte et sans envoi.</p>
+      <p class="sub">Le modèle derrière est <b>TripoSG</b> et porte la <b>licence MIT</b>. Ce n'est pas un détail de juriste : le modèle le plus répandu de ce genre, Hunyuan3D, exclut expressément l'Union européenne dans sa licence. Ici la question ne se pose pas.</p>
+      <table class="compare">
+        <thead>
+          <tr><th>Mesuré</th><th>Résultat</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fermé et d'un seul tenant</td><td><span class="yes">✓ tous les six ci-dessous</span></td></tr>
+          <tr><td>Arêtes ouvertes</td><td><span class="yes">✓ aucune</span></td></tr>
+          <tr><td>À partir d'une phrase, sans image</td><td>une vingtaine de secondes</td></tr>
+          <tr><td>À partir d'une image à vous</td><td>une treizaine de secondes</td></tr>
+          <tr><td>Mise en place après l'installation de ComfyUI</td><td>une commande</td></tr>
+        </tbody>
+      </table>
+      <p class="footnote">Les temps sont mesurés sur une carte NVIDIA
+      de 8&nbsp;Go. Sur les cartes Intel et AMD, les chemins locaux
+      tournent plus lentement ou entièrement sur le processeur : le
+      chat local y charge son prompt système à 7,8 tokens par seconde
+      — 41 minutes avant le début d'une réponse. Des contournements
+      existent (IPEX-LLM, ROCm, OpenVINO) ; nous ne les livrons pas et
+      ne les avons pas testés. Ce qui fonctionne là, c'est une clé
+      API — l'application le mesure elle-même et vous le dit avant
+      que vous n'attendiez.</p>
+
+      <h3>Six phrases, six corps</h3>
+      <p class="sub">Chaque pièce ici est une seule phrase que Solidon3D a donnée au générateur — sans retouche, sans deuxième essai, sans choisir parmi dix résultats. Elles ont été retenues pour ce qui fait échouer ces modèles : appendices fins, parois ajourées, contre-dépouilles, répétition fine.</p>
+      <ul class="schau">
+        <li><figure>
+          <img src="../bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
+               alt="Une gargouille gothique sur un socle, ailes repliées, griffes et gueule ouverte">
+          <figcaption><b>Gargouille</b>Appendices fins et contre-dépouilles</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
+               alt="Une lanterne octogonale aux panneaux ajourés et à l'anneau de suspension">
+          <figcaption><b>Lanterne</b>Paroi ajourée</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
+               alt="Un crâne de dragon aux cornes recourbées, orbites et rangées de dents">
+          <figcaption><b>Crâne de dragon</b>Cavités et dents fines</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-hand.webp?v=77a6fab7" width="720" height="720" loading="lazy"
+               alt="Une main robotique mécanique aux doigts articulés et aux jointures visibles">
+          <figcaption><b>Main robotique</b>De nombreux membres séparés</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-knight.webp?v=a7bba326" width="720" height="720" loading="lazy"
+               alt="Un cavalier d'échecs : une tête de cheval sculptée sur un socle rond">
+          <figcaption><b>Cavalier d'échecs</b>Transitions douces, silhouette nette</figcaption>
+        </figure></li>
+        <li><figure>
+          <img src="../bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
+               alt="Une vanne industrielle avec volant, brides boulonnées et raccords de tuyau">
+          <figcaption><b>Vanne industrielle</b>Faces rondes et répétition</figcaption>
+        </figure></li>
+      </ul>
+
+      <h3>Et c'est là que le travail commence</h3>
+      <p class="sub">Le générateur a livré une forme. Ce qui en fait une pièce imprimable, ce sont trois étapes dans Solidon3D — chacune dans l'historique, chacune avec un chiffre qui peut encore changer ensuite.</p>
+      <div class="weg">
+        <figure>
+          <img src="../bilder/weg-1-erzeugt.webp?v=63d1b19b" width="720" height="720" loading="lazy"
+               alt="La gargouille générée comme corps fermé, vue de trois quarts avant">
+          <figcaption><b>Générée et réparée.</b> Une vingtaine de secondes, fermée et d'un seul tenant ensuite. Ramenée à 80 mm, cela fait <b>44,7 cm³</b> de matière — imprimée pleine.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/weg-2-schnitt.webp?v=ae4be5f7" width="720" height="720" loading="lazy"
+               alt="La même gargouille coupée : une paroi mince et régulière, creuse à l'intérieur, la surface de coupe mise en couleur">
+          <figcaption><b>Évidée, paroi de 2 mm.</b> Il reste <b>23,6 cm³</b> — <b>47 % de moins</b> de filament et d'autant moins de temps d'impression. L'épaisseur de paroi ne vient pas d'une intuition mais de la buse de cette imprimante.</figcaption>
+        </figure>
+      </div>
+      <p class="footnote">Ensuite vient ce qui figure en haut de cette page : rapport, surplombs, îlots, supports, meilleure orientation — et si cela ne tient pas sur le plateau, découper et goupiller. Générer est la partie la plus rapide du travail. Le reste est celle qui décide du résultat.</p>
+
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="closing">
+        <h2>Faire de la forme une pièce</h2>
+        <p>La démo est là et court jusqu'au
+        30&nbsp;octobre 2026 — gratuite et complète.</p>
+        <a class="btn" href="/fr/#pricing">Vers la démo</a>
+        <a class="btn ghost" href="/fr/features.html">Toutes les fonctions</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/fr/">Accueil</a> ·
+    <a href="/fr/manual.html">Manuel</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Mentions légales</a> ·
+    <a href="/datenschutz.html">Confidentialité</a>
+    <em>(textes juridiques en allemand — seule version faisant foi)</em> ·
+    <a href="/">Deutsch</a> ·
+    <a href="/en/">English</a> ·
+    <a href="/es/">Español</a> ·
+    <a href="/it/">Italiano</a> ·
+    <a href="/pt/">Português</a>
+  </div>
+</footer>
+
+<script src="/site.js?v=5f78a99a" defer></script>
+</body>
+</html>

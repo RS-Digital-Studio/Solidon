@@ -1,0 +1,629 @@
+# Automatische Bauläufe für alle Zielplattformen (Bauplan §37.2).
+#
+# Drei Jobs. Die ersten zwei tragen eine Reihenfolge: zuerst läuft die Suite,
+# auf jeder Plattform, und nur was grün ist, wird paketiert. Ein Installer aus
+# einer roten Suite ist schlimmer als gar keiner. Beide bauen gegen
+# `constraints.txt`, damit ein Lauf heute dasselbe installiert wie einer in
+# drei Monaten.
+#
+# Der dritte steht daneben und läuft wöchentlich: er lässt die Versionen frei
+# auflösen und meldet, wenn eine neue etwas bricht. Ohne ihn erfährt man davon
+# erst beim nächsten frischen Klon — und dann mitten in einer anderen Arbeit.
+#
+# Die Signierung braucht ein Zertifikat, das nicht in diesem Repository liegt.
+# Der Schritt steht hier und überspringt sich, wenn das Secret fehlt — ein
+# Fork baut dann unsigniert, statt zu scheitern.
+#
+# Der tägliche Push läuft nur auf Ubuntu; die volle Drei-Plattform-Matrix und
+# die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch), also
+# genau dann, wenn veröffentlicht wird.
+#
+# Die Begründung dafür hat sich am 14.08.2026 geändert. Hier stand, das
+# Repository sei privat und private Minuten seien gezählt — macOS zehnfach,
+# Windows doppelt. Es ist seit der Umbenennung auf `Solidon` öffentlich, und
+# damit kosten die Standard-Runner nichts mehr. Was bleibt, ist die
+# Rückmeldezeit: der Ubuntu-Lauf allein braucht schon über zwölf Minuten.
+# Wer die Matrix trotzdem auf jeden Push erweitert, tut das mit einem echten
+# Grund — plattformabhängige Fehler fallen sonst erst am Tag der
+# Veröffentlichung auf, und genau das ist hier schon passiert.
+
+name: Bauen
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  schedule:
+    # Montags früh: ein Lauf die Woche findet eine gebrochene Version, bevor
+    # sie jemandem im Weg steht.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+
+jobs:
+  suite:
+    name: Suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Qt-Systembibliotheken (Linux)
+        # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
+        # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim
+        # Testschritt.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libdbus-1-3 xvfb \
+            libgl1-mesa-dri \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
+
+      - name: Abhängigkeiten
+        # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
+        # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit
+        # dieser Lauf denselben Satz installiert wie der letzte grüne.
+        run: python -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Konturverkettung übersetzen
+        # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
+        # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
+        # übersetzte Weg noch dasselbe rechnet wie der über GEOS. Einen
+        # Compiler haben alle drei Runner.
+        run: python tools/build_slice_core.py
+
+      - name: Stil und Typen
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy
+
+      - name: Tests
+        # Offscreen: die Runner haben keinen Bildschirm, und der Viewport sagt
+        # das, statt den Prozess mitzunehmen. Ohne die Leistungstests: §31
+        # misst eine Referenzmaschine, geteilte Runner streuen zu stark —
+        # das Budget prüft der lokale Lauf.
+        #
+        # **Unter Xvfb, nicht offscreen** — und das ist die Antwort auf eine
+        # Woche Abstürze. Vom 06. bis zum 12.08.2026 starb jeder Lauf hier mit
+        # einem Segmentierungsfehler: erst in `HistoryPanel.show_document`,
+        # nach der Reparatur dieser Stelle beim Aufbau des nächsten Fensters,
+        # in `render_window_interactor.initialize`. Der Absturz wanderte, hing
+        # also an keinem Test.
+        #
+        # Was reparierbar war, ist repariert (`tests/conftest.py`: die Sitzung
+        # ruft nicht mehr in weggeräumte Widgets). Der Rest ist VTK: es will
+        # einen GL-Kontext, und Qts Offscreen-Plattform gibt ihm keinen — auf
+        # einem Runner ohne Anzeige rechnet es sich einen aus Software zurecht,
+        # bis eine Grenze reißt. Xvfb ist die Anzeige, die es sucht; es ist
+        # zugleich der Weg, den pyvista selbst für CI empfiehlt.
+        #
+        # `QT_QPA_PLATFORM` bleibt ungesetzt: unter Xvfb läuft Qt normal, und
+        # `tests/conftest.py` setzt offscreen nur, wenn nichts anderes dasteht.
+        #
+        # **Und je Fensterdatei ein eigener Prozess.** Xvfb allein hat den
+        # Absturz nur nach vorn geholt: er hängt an der Zahl der VTK-Fenster,
+        # die ein Prozess nacheinander aufbaut, und die Suite baut siebenhundert.
+        # Die Liste wird nicht gepflegt, sondern gesucht — wer eine neue
+        # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
+        # etwas zu ändern.
+        #
+        # **Gesucht wird nach dem Aufbau, nicht nach der Erwähnung.** Nach
+        # `MainWindow` allein fehlten zwei Dateien, die einen `Viewport` bauen,
+        # ohne das Fenster zu nennen: `tests/test_cursors.py` mit acht Aufbauten
+        # und `tests/test_plates.py` mit einem. Neun VTK-Fenster mehr im großen
+        # Stapel, ohne dass es auffiel — bei einem Absturz, der genau an dieser
+        # Zahl hängt.
+        #
+        # Nach `Viewport(` mit Klammer und nicht nach dem nackten Namen: sieben
+        # weitere Dateien *erwähnen* ihn oder `pyvista` nur, in einem Import,
+        # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
+        # sonst einen eigenen Prozess für nichts.
+        #
+        # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
+        # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
+        # `window`-Fixture von `test_analysis_ui.py` (`QThread.__init__`,
+        # Exit 139). Dieselbe Datei allein: dreimal grün, 103 Tests. Je
+        # Fensterdatei ein Prozess: 4021 Tests grün, kein Absturz. Es ist die
+        # Zahl der Fenster und nichts an einem einzelnen Test.
+        #
+        # **`shell: bash` ist keine Formalie.** Ohne die Zeile führt Windows
+        # dieses Skript in PowerShell aus, und die zerbricht an der ersten
+        # Ersetzung: „$(subexpression) is missing the closing ')'". Der Schritt
+        # endete dort nach zwei Minuten mit einem ParserError — auf Windows lief
+        # seit der Umstellung auf Xvfb **kein einziger Test**, und weil
+        # `package` an dieser Suite hängt, wurde auch nie etwas paketiert. Auf
+        # macOS scheiterte derselbe Aufruf an `xvfb-run`, das es dort nicht
+        # gibt. Beides fiel nicht auf, weil die Matrix nur bei Tags und beim
+        # Handstart über eine Plattform hinausgeht.
+        shell: bash
+        env:
+          # Unter Xvfb läuft Qt normal; wo es keinen X-Server gibt, muss
+          # offscreen stehen. Hier stand „xcb" für alle drei — eine Plattform,
+          # die es außerhalb von Linux nicht gibt.
+          QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'xcb' || 'offscreen' }}
+          # **Software-Rendering, ausdrücklich.** Kein Runner hat eine
+          # Grafikkarte; VTK sucht trotzdem einen echten GL-Kontext und
+          # bekommt einen halb emulierten. Dabei stirbt es mit SIGSEGV — auf
+          # Linux im geforkten Test, auf Windows ohne Fork, in beiden Fällen
+          # wandernd und lokal nie: `test_chat_ui.py` läuft hier in sieben
+          # Sekunden mit fünfundzwanzig grünen Tests durch.
+          #
+          # Mesa ausdrücklich zu verlangen ist der Weg, den pyvista für CI
+          # nennt, und er nimmt die Zufälligkeit heraus: langsamer, aber
+          # derselbe Kontext auf jedem Lauf.
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          set -e
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
+          ignores=""
+          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          # Xvfb nur, wo es eines gibt.
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          else
+            run() { python -m pytest -q "$@"; }
+          fi
+          # `--forked` gibt es auf POSIX, aber **nur Linux verträgt es.**
+          #
+          # Auf macOS zerlegt es den Lauf: `fork()` ohne anschließendes
+          # `exec()` ist in einem Prozess, der CoreFoundation geladen hat,
+          # von Apple nicht vorgesehen — und Qt lädt sie beim Import. Das
+          # Kind stirbt beim ersten Zugriff, nicht am Testinhalt.
+          #
+          # Gemessen am 20.08.2026 im ersten Lauf, der macOS überhaupt bis
+          # hierher brachte: derselbe Hauptblock ohne Fork **3 770 Tests
+          # grün in 387 s**, danach `test_analysis_ui.py` mit `--forked`
+          # **80 von 110 gescheitert in 10 s** — und im zweiten Anlauf
+          # dieselben 80. Ein Testfehler sieht anders aus als achtzig
+          # Segmentierungsfehler in zehn Sekunden.
+          #
+          # Ohne Fork tut es der eigene Prozess je Datei, wie unter Windows:
+          # der Absturz hängt an der Zahl der VTK-Fenster in *einem* Prozess,
+          # und die bleibt so ebenfalls klein.
+          if [ "$RUNNER_OS" = "Linux" ]; then forked="--forked"; else forked=""; fi
+
+          # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
+          # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK stirbt auf
+          # den Runnern gelegentlich mit SIGSEGV — am 20.08.2026 einmal in
+          # `test_header.py` unter Linux (fünf andere Tests derselben Datei
+          # grün, lokal dreimal grün) und einmal im Dateilauf unter Windows.
+          # Der Absturz wandert, hängt an keinem Test und ist seit Wochen als
+          # offener Punkt notiert.
+          #
+          # Was er anrichtet, ist unverhältnismäßig: Der Paketier-Job hängt an
+          # dieser Suite, also verhindert ein zufälliger Absturz die
+          # Auslieferung aller vier Plattformen. Ein zweiter Anlauf trennt den
+          # Zufall vom Befund — was zweimal an derselben Stelle stirbt, ist
+          # keiner, und der Lauf wird rot wie vorher.
+          attempt() {
+            run "$@" || {
+              echo "::warning::Zweiter Anlauf für: $*"
+              run "$@"
+            }
+          }
+          attempt -m "not performance" $ignores
+
+          # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
+          # Entscheidung mit Datum: 20.08.2026.
+          #
+          # Kein Runner hat eine Grafikkarte. VTK sucht trotzdem einen echten
+          # GL-Kontext, bekommt einen emulierten und stirbt darin mit SIGSEGV —
+          # auf Linux im geforkten Test, auf Windows ohne Fork, mit und ohne
+          # LIBGL_ALWAYS_SOFTWARE, mal in `test_header`, mal in `test_chat_ui`,
+          # mal in `pyvistaqt/plotting.py` selbst. Der Absturz wandert, hängt an
+          # keinem Test und ist lokal nicht zu sehen: dieselben Dateien laufen
+          # auf einer Maschine mit GL in Sekunden grün durch, 4021 Tests.
+          #
+          # Was das anrichtete, war unverhältnismäßig: Der Paketier-Job hängt an
+          # dieser Suite, also verhinderte ein Fremdcode-Absturz in einer
+          # Umgebung, die niemand benutzt, die Auslieferung aller vier
+          # Plattformen. Wochenlang.
+          #
+          # Also prüft die CI, was sie prüfen kann — Kern, Geometrie, Agent,
+          # Website, Paketierung —, und die Fenster prüft, wer einen Bildschirm
+          # hat. **Das ist eine Lücke und keine Lösung**: Wer eine Ansicht
+          # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
+          # Sie schließt sich, sobald VTK dort läuft oder die Runner GL
+          # bekommen; bis dahin steht sie in ROADMAP.md.
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+
+  package:
+    name: Paket (${{ matrix.os }})
+    needs: suite
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Zwei Macs, keine Doppelung: `macos-26-intel` läuft auf Intel,
+        # `macos-latest` auf Apple Silicon. PyInstaller packt, was unter ihm
+        # liegt — ein auf arm64 gebautes Paket startet auf einem Intel-Mac
+        # nicht, und das betrifft jedes Gerät vor 2020.
+        #
+        # **Drei der vier Labels enden auf `-latest`, und das ist der Punkt.**
+        # Ein `-latest` wandert mit; eine feste Nummer veraltet und stirbt
+        # irgendwann. Hier stand `macos-13`, seit dem 04.12.2025 abgeschaltet,
+        # und ein Job mit einem toten Label wird nicht abgelehnt — er wird
+        # **angenommen und nie zugeteilt.** Am 20.08.2026 stand er
+        # siebenundzwanzig Minuten in der Warteschlange und wäre nach dem
+        # Sechs-Stunden-Timeout gestorben. Von außen sieht das aus wie ein
+        # langsamer Lauf, nicht wie ein Fehler. Aufgefallen ist es erst, als
+        # die Suite zum ersten Mal seit Wochen grün war und der Paketier-Job
+        # überhaupt so weit kam.
+        #
+        # Für Intel gibt es kein `-latest`: `macos-latest` ist arm64, und
+        # x64 gibt es nur unter seiner Nummer. Diese eine Zeile veraltet also
+        # zwangsläufig und ist die einzige, die **nachgesehen werden muss** —
+        # aktuell ist `macos-26-intel` (GA seit 26.02.2026).
+        #
+        # Und sie hat ein Ablaufdatum: Apple hat x86_64 aufgegeben, GitHub
+        # trägt Intel bis zur Ausmusterung des 26er-Images. Fällt es weg,
+        # fällt die Intel-Version — dann sagt die Website das, statt eine
+        # Version anzubieten, die niemand mehr baut.
+        os: [windows-latest, ubuntu-latest, macos-26-intel, macos-latest]
+    env:
+      # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
+      # im eigenen `if` lesen, und sein eigenes `env` dort auch nicht. Dies ist
+      # die eine Stelle, die die Bedingung unten sieht.
+      SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
+      SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Qt-Systembibliotheken (Linux)
+        # Auch hier: die Beispielprojekte und die PyInstaller-Analyse
+        # importieren Module, die ihre Grafikbibliothek beim Laden ziehen.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      - name: Abhängigkeiten
+        # Derselbe Satz wie in der Suite: was geprüft wurde, wird paketiert.
+        run: |
+          python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
+          python -m pip install pyinstaller
+
+      - name: Beispielprojekte erzeugen
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python tools/make_examples.py
+
+      - name: Prüfmodul kompilieren und Manifest signieren
+        # V4c (Konzept §2 I H4/H5): das Prüfmodul reist als Maschinencode,
+        # das Manifest deckt die vier Grenzdateien. Cython und setuptools
+        # sind reine Bau-Abhängigkeiten und landen nicht im Paket.
+        run: |
+          python -m pip install -c constraints.txt cython setuptools
+          python tools/build_licence_module.py
+
+      - name: Bauen
+        run: pyinstaller packaging/solidon3d.spec --noconfirm
+
+      - name: Ohne Signatur bauen (Windows)
+        # Kein stummer Übersprung: die Demo geht unsigniert hinaus, und das
+        # gehört ins Protokoll, damit niemand ein signiertes Paket vermutet.
+        #
+        # Der Weg darunter ist ohnehin einer von gestern: seit Juni 2023 geben
+        # die Zertifizierungsstellen keine exportierbaren Code-Signing-Schlüssel
+        # mehr heraus — ein PFX in einem Secret ist für ein neu gekauftes
+        # Zertifikat kein möglicher Weg. Wenn signiert wird, dann über Azure
+        # Trusted Signing, und dann wird dieser Schritt ersetzt, nicht gefüllt.
+        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE == ''
+        shell: pwsh
+        run: |
+          Write-Host "::warning::Unsigniert gebaut - SmartScreen warnt beim ersten Start."
+
+      - name: Signieren (Windows)
+        # Erst die Anwendung, dann unten der Installer — was in die Setup-Datei
+        # wandert, muss vorher signiert sein.
+        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+          # Der Name kommt aus app/branding.py, nicht aus dieser Datei — hier
+          # stand er zweimal und war nach der Umbenennung zweimal falsch.
+          $name = python -c "from app.branding import APP_NAME; print(APP_NAME)"
+          & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            "dist/$name/$name.exe"
+
+      - name: Inno Setup sicherstellen (Windows)
+        # Auf den GitHub-Runnern vorinstalliert; die Prüfung hält den Lauf
+        # auch auf einem Runner am Leben, der es nicht mitbringt.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ISCC -ErrorAction SilentlyContinue) -and
+              -not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
+            choco install innosetup --no-progress -y
+          }
+
+      - name: Installer bauen (Windows)
+        if: runner.os == 'Windows'
+        run: python tools/make_installer.py
+
+      - name: Installer signieren (Windows)
+        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
+        shell: pwsh
+        run: |
+          $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          [IO.File]::WriteAllBytes($pfx, $bytes)
+          $setup = Get-ChildItem dist -Filter "*-Setup-*.exe" | Select-Object -First 1
+          & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
+            /tr http://timestamp.digicert.com /td SHA256 `
+            $setup.FullName
+
+      - name: Archiv packen (Linux)
+        # Als tar.gz, nicht als roher Ordner: der Artefakt-Upload verliert die
+        # Ausführungsrechte, das Archiv behält sie — und das Archiv trägt jetzt
+        # ein `install.sh`, das ohne sie nicht startet.
+        #
+        # Der `tar`-Aufruf, der hier stand, packte genau den Bau. Wer ihn
+        # auspackte, hatte ein Programm ohne Menüeintrag, ohne Symbol und ohne
+        # gelesenen Lizenzvertrag; das Werkzeug legt beides daneben.
+        if: runner.os == 'Linux'
+        run: python tools/make_linux_packages.py --tarball
+
+      - name: Paketierwerkzeuge holen (Linux)
+        # appimagetool kommt als AppImage und wird selbst nicht installiert;
+        # flatpak-builder liegt in jeder Distribution. Beide sind externe
+        # Programme — Solidon liefert keines mit (§36).
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          sudo curl -fsSL -o /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/appimagetool
+          flatpak remote-add --if-not-exists --user flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y flathub \
+            org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
+
+      - name: AppImage und Flatpak bauen (Linux)
+        # Ein Fehlschlag hält den Lauf nicht auf: Das tar.gz ist da, und ein
+        # fehlendes Linux-Paket ist kein Grund, die Setup-Datei für Windows
+        # wegzuwerfen. Was fehlt, sagt der Schritt — die Download-Seite nimmt
+        # nur, was hochgeladen wurde.
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          # appimagetool ist selbst ein AppImage und braucht sonst FUSE 2, das
+          # Ubuntu seit 24.04 nicht mehr mitbringt. Mit dieser Variable packt
+          # es sich vorher aus, statt sich einzuhängen — der Fehler wäre sonst
+          # „dlopen(): error loading libfuse.so.2", und der sagt niemandem,
+          # dass eine Variable fehlt.
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: python tools/make_linux_packages.py --appimage --flatpak
+
+      - name: Bundle prüfen (macOS)
+        # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
+        # stillschweigend einen Ordner. Auf einem Mac ist das kein Programm,
+        # sondern eine Enttäuschung beim Doppelklick, und sie fiele erst dem
+        # ersten Nutzer auf.
+        if: runner.os == 'macOS'
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          test -d "dist/${name}.app" || { echo "::error::dist/${name}.app fehlt — BUNDLE hat nicht gegriffen."; exit 1; }
+          test -x "dist/${name}.app/Contents/MacOS/${name}" || { echo "::error::Im Bundle fehlt die ausführbare Datei."; exit 1; }
+          plutil -lint "dist/${name}.app/Contents/Info.plist"
+
+      - name: Ohne Signatur bauen (macOS)
+        # Wie bei Windows kein stummer Übersprung. Auf dem Mac wiegt es
+        # schwerer: Gatekeeper lässt eine unsignierte Anwendung aus dem Netz
+        # gar nicht erst starten, der Nutzer muss sie über das Kontextmenü
+        # öffnen. Das gehört auf die Download-Seite, nicht in eine Fußnote.
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
+        run: |
+          echo "::warning::Unsigniert gebaut - Gatekeeper blockiert den ersten Start (Rechtsklick, Oeffnen)."
+
+      - name: Signieren (macOS)
+        # Ad-hoc genügt nicht: signiert wird mit einer Developer-ID, sonst
+        # nützt die Signatur außerhalb des eigenen Rechners nichts. Die
+        # Notarisierung ist ein eigener Schritt und braucht ein Apple-Konto —
+        # sie kommt dazu, sobald es eines gibt.
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          keychain="$RUNNER_TEMP/build.keychain"
+          security create-keychain -p "" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "" "$keychain"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$APPLE_SIGN_IDENTITY" "dist/${name}.app"
+          codesign --verify --deep --strict --verbose=2 "dist/${name}.app"
+
+      - name: Archiv packen (macOS)
+        # `ditto`, nicht `zip`: ein Bundle trägt Symlinks und erweiterte
+        # Attribute, und ein gewöhnliches zip macht daraus Kopien und verliert
+        # die Signatur. `ditto` ist der Weg, den Apple selbst dafür vorsieht.
+        if: runner.os == 'macOS'
+        run: |
+          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
+          version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/${name}.app" "dist/${name}-${version}-macos-$(uname -m).zip"
+
+      - name: Installationspaket bauen (macOS)
+        # Das .zip daneben bleibt: es trägt die Signatur des Bundles unverändert
+        # und ist der kürzere Weg für alle, die ihn kennen. Die .pkg ist für die
+        # anderen — sie zeigt den Lizenzvertrag und lässt den Ort wählen, genau
+        # wie die Setup-Datei unter Windows.
+        #
+        # `APPLE_INSTALLER_IDENTITY` ist ein *anderes* Zertifikat als
+        # `APPLE_SIGN_IDENTITY`: „Developer ID Installer" signiert Pakete,
+        # „Developer ID Application" signiert Programme. Fehlt es, entsteht ein
+        # unsigniertes Paket — der Schlusstext des Installers erklärt dann den
+        # ersten Start.
+        if: runner.os == 'macOS'
+        env:
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: python tools/make_macos_package.py --sign "${APPLE_INSTALLER_IDENTITY:-}"
+
+      - name: Prüfsummen (Windows)
+        # Sie stehen auf der Download-Seite neben der Datei — bei einem
+        # unsignierten Paket ist das die einzige Möglichkeit, die Herkunft zu
+        # prüfen. Als Datei neben dem Artefakt und im Protokoll: das eine holt
+        # man mit, das andere liest man ohne Download.
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Get-ChildItem dist -Filter "*-Setup-*.exe" | ForEach-Object {
+            $sum = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$sum  $($_.Name)" | Tee-Object -FilePath "dist/$($_.Name).sha256"
+          }
+
+      - name: Prüfsummen (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd dist
+          # Auch für die beiden Pakete, und mit ``|| true`` je Muster: Wer nur
+          # das tar.gz hat, weil ein Paketierschritt scheiterte, soll dessen
+          # Prüfsumme trotzdem bekommen.
+          for pattern in "*-linux-x86_64.tar.gz" "*.AppImage" "*.flatpak"; do
+            for archive in $pattern; do
+              test -f "$archive" || continue
+              sha256sum "$archive" | tee "$archive.sha256"
+            done
+          done
+
+      - name: Prüfsummen (macOS)
+        # `shasum -a 256`, weil macOS kein `sha256sum` mitbringt.
+        if: runner.os == 'macOS'
+        run: |
+          cd dist
+          for archive in *-macos-*.zip *-macos-*.pkg; do
+            test -f "$archive" || continue
+            shasum -a 256 "$archive" | tee "$archive.sha256"
+          done
+
+      - name: Installer hochladen (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidon3d-setup-windows
+          path: |
+            dist/*-Setup-*.exe
+            dist/*-Setup-*.exe.sha256
+          # Der private Speicher fasst 500 MB, ein Paket rund 250 — was
+          # veröffentlicht wird, liegt danach auf der Website, nicht hier.
+          retention-days: 7
+
+      - name: Archiv hochladen (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidon3d-linux
+          path: |
+            dist/*-linux-x86_64.tar.gz
+            dist/*-linux-x86_64.tar.gz.sha256
+            dist/*.AppImage
+            dist/*.AppImage.sha256
+            dist/*.flatpak
+            dist/*.flatpak.sha256
+          # Fehlt eines der Muster, warnt der Upload und lädt den Rest — ohne
+          # das bricht er ab, und dann wäre ein gescheiterter Paketierschritt
+          # der Grund, warum auch das tar.gz nicht ankommt.
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Archiv hochladen (macOS)
+        # Der Name trägt die Architektur, sonst überschreibt der zweite Mac
+        # das Artefakt des ersten und übrig bliebe eines von beiden — ohne
+        # dass jemand sähe, welches.
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidon3d-macos-${{ runner.arch }}
+          path: |
+            dist/*-macos-*.pkg
+            dist/*-macos-*.pkg.sha256
+            dist/*-macos-*.zip
+            dist/*-macos-*.zip.sha256
+          if-no-files-found: warn
+          retention-days: 7
+
+  latest:
+    name: Neueste Versionen
+    # Die Frühwarnung: ohne `constraints.txt`, also alles frisch aufgelöst.
+    # Wird dieser Job rot, während `suite` grün bleibt, liegt es an einer neuen
+    # Version und nicht am Code — und im Protokoll steht, an welcher.
+    #
+    # Nur Ubuntu und nur wöchentlich: private Minuten sind gezählt, und für
+    # diese Frage genügt eine Plattform. Er hängt an keinem anderen Job und
+    # blockiert nichts — er meldet.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Qt-Systembibliotheken
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3
+
+      - name: Abhängigkeiten ohne Constraints
+        run: python -m pip install -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Installierte Versionen
+        # Gehört ins Protokoll: nach einem roten Lauf sieht man hier, was sich
+        # gegenüber `constraints.txt` bewegt hat.
+        run: python -m pip freeze --exclude-editable
+
+      - name: Stil und Typen
+        run: |
+          python -m ruff check .
+          python -m ruff format --check .
+          python -m mypy
+
+      - name: Tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+        # **Dieselbe Auslassung wie in der Suite**, und aus demselben Grund:
+        # VTK stirbt auf einem Runner ohne Grafikkarte mit SIGSEGV. Ohne sie
+        # war dieser Job am 20.08.2026 rot, obwohl er nichts gefunden hatte —
+        # der `union-attr`-Fund davor war echt und ist behoben, dahinter kam
+        # der Absturz zum Vorschein.
+        #
+        # Ein Wächter, der immer schreit, warnt vor nichts mehr: Dieser Job
+        # existiert, um zu melden, wenn eine neue Paketversion etwas bricht.
+        # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
+        # geht unter — er prüft deshalb, was er hier prüfen kann.
+        run: |
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
+          ignores=""
+          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          python -m pytest -q -m "not performance" $ignores

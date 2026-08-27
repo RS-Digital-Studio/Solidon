@@ -1,0 +1,160 @@
+"""Die Materialslots durch eine Operation hindurch behalten (Bauplan §20).
+
+„Boolesche Operationen dürfen die Slot-Zuweisung nicht verlieren." Sie
+verlieren sie aber — eine Boolesche Op baut die Dreiecke neu, und die, die
+herauskommen, sind nicht die, die hineingingen. Also wird die Zuweisung
+übertragen: jedes neue Dreieck fragt, auf welchem der alten es sitzt, und nimmt
+dessen Slot.
+
+Nächste Fläche, nicht nächster Eckpunkt: ein Dreieck sitzt auf einer
+Oberfläche, und die Oberfläche ist es, die die Farbe trägt. Neue Schnittflächen
+gehören zu keiner der alten Oberflächen — sie bekommen den Slot, den die
+Operation ihnen zuweisen soll, und per Vorgabe ist das der des Körpers, der
+geschnitten wird.
+
+Welche Oberflächen als „alt" zählen, entscheidet der Aufrufer, und das zählt:
+ein Körper, den die Operation entfernt hat, ist keine Farbquelle — wie nah
+seine ehemalige Haut auch an der neuen liegt.
+
+**Nach der Voxelstufe läuft die Übertragung immer** (§20). Diese Stufe ersetzt
+die Vernetzung vollständig — alles von vorher Behaltene wäre Unsinn, der
+zufällig die richtige Länge hat.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+
+from app.core.geom.mesh import MeshData
+from app.core.log import get_logger
+
+_log = get_logger(__name__)
+
+#: Wie weit ein neues Dreieck von einer alten Oberfläche sitzen darf und noch
+#: als auf ihr liegend zählt, relativ zur Modelldiagonale. Darüber hinaus ist
+#: es eine Schnittfläche.
+NEAR_LIMIT = 0.002
+
+#: Slot, den eine Fläche bekommt, die zu keiner Oberfläche der Eingaben
+#: gehört.
+DEFAULT_CUT_SLOT = 0
+
+
+def transfer(
+    result: MeshData,
+    sources: list[MeshData],
+    *,
+    cut_slot: int = DEFAULT_CUT_SLOT,
+    tolerance: float | None = None,
+) -> MeshData:
+    """Gibt jedem Dreieck von ``result`` den Slot der Oberfläche, auf der es liegt.
+
+    Ohne Slots irgendwo in den Eingaben wird nichts übertragen und nichts
+    erfunden: ein Körper mit einem Material bleibt ein Körper mit einem
+    Material.
+
+    ``tolerance`` ist, wie weit ein Dreieck von einer alten Oberfläche sitzen
+    darf und noch als auf ihr liegend zählt. Sie muss der Stufe folgen, die das
+    Netz erzeugt hat: ein Voxel-Ergebnis ist überall um einen halben Voxel
+    getreppt, und mit der Toleranz einer exakten Booleschen Op gemessen verlöre
+    es seine Farbe an die eigene Treppe.
+    """
+    if not any(mesh.slots for mesh in sources):
+        return result
+    body = result.raw
+    if not len(body.faces):
+        return result
+
+    centres = np.asarray(body.triangles_center, dtype=float)
+    slots = np.full(len(centres), cut_slot, dtype=np.int32)
+    distance = np.full(len(centres), np.inf)
+    limit = tolerance if tolerance is not None else max(result.bounds.diagonal, 1.0) * NEAR_LIMIT
+
+    index = _candidates(sources, centres, limit, cut_slot)
+    if index.size:
+        points = centres[index]
+        for mesh in sources:
+            if not mesh.slots:
+                continue
+            found, offset = _nearest(mesh, points)
+            closer = offset < distance[index]
+            slots[index[closer]] = found[closer]
+            distance[index[closer]] = offset[closer]
+
+    slots[distance > limit] = cut_slot
+
+    carried = int(np.count_nonzero(distance <= limit))
+    _log.info("carried %d of %d face slots", carried, len(slots))
+    return MeshData(raw=body, slots=tuple(int(entry) for entry in slots))
+
+
+def _candidates(
+    sources: list[MeshData], centres: np.ndarray, limit: float, cut_slot: int
+) -> np.ndarray:
+    """Die Dreiecke, für die sich die Suche überhaupt lohnen kann.
+
+    Ein Dreieck bekommt am Ende entweder den Slot seiner nächsten Quelle oder
+    — wenn keine innerhalb ``limit`` liegt — den Schnittslot. Liegt es zu
+    keiner Quelle nah, die einen *anderen* Slot als den Schnittslot trägt,
+    steht sein Ergebnis damit schon fest: der Schnittslot. Ob eine Quelle,
+    die ohnehin nur den Schnittslot trägt, näher liegt oder nicht, ändert
+    daran nichts.
+
+    Das ist keine Näherung, sondern derselbe Wert auf kürzerem Weg — und der
+    kürzere Weg ist hier der ganze Unterschied. ``limit`` sind zwei Tausendstel
+    der Modelldiagonale, bei der Dose aus dem Beispielprojekt also zwei Zehntel
+    Millimeter; die Beschriftung darauf sind sechshundert Dreiecke neben
+    vierzigtausend. Gesucht wurde trotzdem für alle vierzigtausend, gegen beide
+    Quellen: sechseinhalb der siebeneinhalb Sekunden, die eine Auswertung
+    kostete, und einhundertdreizehntausend Anfragen an einen ``rtree``-Index,
+    der auf dieser Maschine in etwa jedem zwanzigsten Lauf danebengriff —
+    inzwischen ist er ganz ersetzt (:func:`app.core.geom.mesh.on_surface`),
+    und der Vorfilter bleibt trotzdem: weniger fragen ist weiter schneller.
+
+    Gemessen wird gegen den Hüllquader der Quelle und nicht gegen ihre
+    Oberfläche: das ist genau die Frage, die ohne Index zu beantworten ist,
+    und sie schließt nie etwas aus, das die Oberfläche noch erreichen würde.
+    """
+    coloured = [mesh for mesh in sources if mesh.slots and set(mesh.slots) != {int(cut_slot)}]
+    if not coloured:
+        return np.empty(0, dtype=np.intp)
+
+    near = np.zeros(len(centres), dtype=bool)
+    for mesh in coloured:
+        low, high = np.asarray(mesh.raw.bounds, dtype=float)
+        gap = np.maximum(np.maximum(low - centres, centres - high), 0.0)
+        near |= np.sqrt((gap * gap).sum(axis=1)) <= limit
+    return np.flatnonzero(near)
+
+
+def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Für jeden Punkt: der Slot des nächsten Dreiecks, und wie weit es weg war.
+
+    Abstand zur *Oberfläche*, nicht zum nächsten Dreiecksmittelpunkt. Eine
+    Boolesche Op teilt eine große Fläche in viele kleine, und deren Mittelpunkte
+    landen weit von dem der Fläche entfernt, aus der sie kamen — so gemessen
+    verlöre ein Körper seine Farbe an die eigene Neuvernetzung.
+    """
+    from app.core.geom.mesh import on_surface
+
+    slots = np.asarray(mesh.slots, dtype=np.int32)
+    _closest, distance, triangle = on_surface(mesh.raw, points)
+    return slots[triangle], distance
+
+
+def with_slot(mesh: MeshData, slot: int) -> MeshData:
+    """Ein Slot für den ganzen Körper — wo eine Farbe von Hand zugewiesen wird."""
+    return MeshData(raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)))
+
+
+def counts(mesh: MeshData) -> dict[int, int]:
+    """Wie viele Dreiecke in welchem Slot sitzen. Liest der Prüfbericht und
+    der Export."""
+    if not mesh.slots:
+        return {0: len(mesh.raw.faces)}
+    values, amounts = np.unique(np.asarray(mesh.slots), return_counts=True)
+    return {int(value): int(amount) for value, amount in zip(values, amounts, strict=True)}
+
+
+def used_slots(mesh: MeshData) -> tuple[int, ...]:
+    return tuple(sorted(counts(mesh)))

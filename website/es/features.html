@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Funciones: editar STL y comprobar imprimibilidad — Solidon3D</title>
+<meta name="description" content="Todas las funciones de Solidon3D con imágenes: agente de IA, bocetos con restricciones, informe de comprobación, análisis de capas, bloques, división automática, patrones de superficie.">
+<link rel="canonical" href="https://solidon3d.de/es/features.html">
+<link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
+<link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
+<link rel="alternate" hreflang="es" href="https://solidon3d.de/es/features.html">
+<link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/features.html">
+<link rel="alternate" hreflang="it" href="https://solidon3d.de/it/features.html">
+<link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/features.html">
+<link rel="alternate" hreflang="x-default" href="https://solidon3d.de/funktionen.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Solidon3D">
+<meta property="og:locale" content="es_ES">
+<meta property="og:url" content="https://solidon3d.de/es/features.html">
+<meta property="og:title" content="Funciones: editar STL y comprobar imprimibilidad — Solidon3D">
+<meta property="og:description" content="Todas las funciones de Solidon3D con imágenes: agente de IA, bocetos con restricciones, informe de comprobación, análisis de capas, bloques, división automática, patrones de superficie.">
+<meta property="og:image" content="https://solidon3d.de/handbuch/es/catalog.png">
+<meta property="og:image:alt" content="El catálogo de bloques con los grupos uniones y mecánica: inserto termofijado, alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, ojal de bisagra, pestaña de retención, bisagra de película, conector a presión y unión de encaje, además de pie, colgador de ojo de cerradura, bolsillo para imán, gancho para panel perforado y soporte de pared, cada uno con vista previa y sus medidas">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
+<link rel="stylesheet" href="../style.css?v=c1a16e11">
+</head>
+<body>
+<a class="skip" href="#content">Saltar al contenido</a>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="/es/">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+        <path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/>
+        <path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/>
+      </svg>
+      Solidon<span>3D</span>
+    </a>
+    <nav class="lang">
+      <a class="hide-small" href="/es/#ways">Cuatro caminos</a>
+      <a class="hide-tiny" href="/es/ai-models.html">Modelos de IA</a>
+      <a href="/es/manual.html">Manual</a>
+      <details class="langs">
+        <summary aria-label="Elegir idioma">ES</summary>
+        <ul>
+          <li><a href="/funktionen.html" hreflang="de" lang="de">Deutsch</a></li>
+          <li><a href="/en/features.html" hreflang="en" lang="en">English</a></li>
+          <li><a href="/es/features.html" hreflang="es" lang="es" aria-current="page">Español</a></li>
+          <li><a href="/fr/features.html" hreflang="fr" lang="fr">Français</a></li>
+          <li><a href="/it/features.html" hreflang="it" lang="it">Italiano</a></li>
+          <li><a href="/pt/features.html" hreflang="pt" lang="pt">Português</a></li>
+        </ul>
+      </details>
+      <a class="cta" href="/es/#pricing">Demo</a>
+    </nav>
+  </div>
+</header>
+
+<main id="content">
+
+  <section id="anfang">
+    <div class="wrap">
+      <div class="hero">
+        <div class="hero-text">
+        <h1>Lo que Solidon3D sabe hacer</h1>
+        <p class="lead">Cada función con una imagen de la aplicación en marcha o un dibujo que enseña exactamente lo que hace. Si prefieres saber antes el precio: <a href="/es/#pricing">demo y precio</a>.</p>
+        </div>
+
+        <div class="shot">
+          <div class="stage">
+            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+            <a href="../bilder/beleg-fenster-es.png?v=e974f75f">
+              <img src="../bilder/beleg-fenster-es.png?v=e974f75f" width="1400" height="860" fetchpriority="high"
+                   alt="La ventana principal de Solidon3D: a la izquierda el árbol de objetos con parámetros e historial, en el centro la vista 3D, a la derecha el informe de comprobación">
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="uebersicht" class="tint">
+    <div class="wrap">
+      <h2>De un vistazo</h2>
+      <nav class="toc" aria-label="De un vistazo">
+        <ol>
+          <li><a href="#ai-agent">Agente de IA</a></li>
+          <li><a href="#sketches-with-constraints">Bocetos con restricciones</a></li>
+          <li><a href="#inspection-report">Informe de comprobación</a></li>
+          <li><a href="#parametric">Paramétrico</a></li>
+          <li><a href="#building-blocks">Bloques</a></li>
+          <li><a href="#your-own-blocks">Bloques propios</a></li>
+          <li><a href="#surfaces">Superficies</a></li>
+          <li><a href="#layer-analysis">Análisis de capas</a></li>
+          <li><a href="#auto-split">Dividir y división automática</a></li>
+          <li><a href="#every-number-a-formula">Cada número una fórmula</a></li>
+          <li><a href="#first-launch">Primer arranque</a></li>
+          <li><a href="#inside">Qué más lleva dentro</a></li>
+        </ol>
+      </nav>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="showcase" id="ai-agent">
+        <div>
+          <span class="kicker">Agente de IA</span>
+          <h3>Una frase en el chat, una propuesta, un deshacer</h3>
+          <p>El agente maneja las mismas operaciones que los menús — no hay
+          atajo que esquive la geometría. Cada propuesta enseña lo que va a
+          hacer antes de hacerlo y se aplica como un todo: exactamente una
+          transacción, que un solo deshacer retira por completo.</p>
+          <p class="note">La geometría la calcula el código, nunca el modelo
+          de lenguaje. <b>Cada cota de la propuesta es exacta — nada está
+          «generado aproximadamente».</b></p>
+          <p class="note">Y eso está medido, no prometido: una batería de
+          <b>39 peticiones de referencia</b> se ejecuta antes y después de
+          cada cambio en el conjunto de reglas del agente. A fecha de
+          08/08/2026, con un modelo local de
+          14 000 millones de parámetros y sin nube alguna: 28 de 39 bien
+          respondidas, el 98 % de las llamadas a herramientas válidas al
+          primer intento — y cada petición ambigua terminó en una pregunta
+          de vuelta, no en una suposición.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un dibujo: en un campo de chat se escribe «Avellana los cuatro tornillos — M4, a ras.»; el agente responde con una propuesta de tres operaciones, en la sección de al lado el taladro se ensancha a 4,5 milímetros y recibe un avellanado de 90 grados, y debajo se lee: aplicado — una transacción, un deshacer lo retira todo.">
+            <text class="ink" x="24" y="30" font-weight="600">Una frase — tres operaciones</text>
+
+            <text class="dim" x="24" y="64">Tú</text>
+            <rect class="field" x="76" y="44" width="280" height="30" rx="8"/>
+            <text class="ink anim fig-chat-msg" x="90" y="64" font-size="12">Avellana los cuatro tornillos — M4, a ras.</text>
+
+            <g class="anim fig-chat-card">
+              <text class="dim" x="24" y="110">Agente</text>
+              <rect class="field" x="76" y="90" width="280" height="112" rx="8"/>
+              <text class="value" x="90" y="112">Propuesta — 3 operaciones</text>
+            </g>
+            <g class="anim fig-chat-op-1">
+              <path class="hot" d="m90 126 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="136" font-size="12">Ajustar taladro: ø 4,2 → 4,5 mm</text>
+            </g>
+            <g class="anim fig-chat-op-2">
+              <path class="hot" d="m90 150 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="160" font-size="12">Avellanado 90°, ø 8,6 mm — a ras</text>
+            </g>
+            <g class="anim fig-chat-op-3">
+              <path class="hot" d="m90 174 4 5 8 -10 2.5 2.5 -10.5 13 -6.5 -8z"/>
+              <text class="ink" x="112" y="184" font-size="12">Aplicado a los cuatro taladros</text>
+            </g>
+
+            <text class="dim" x="380" y="64">Sección</text>
+            <rect class="body" x="380" y="96" width="150" height="53"/>
+            <rect class="anim fig-hole-wide" x="441" y="96" width="28" height="53" fill="#16181c"/>
+            <path class="anim fig-counterbore" fill="#16181c" d="M426.5 96 L483.5 96 L470 109.7 L440 109.7 Z"/>
+            <text class="dim anim fig-chat-op-2" x="490" y="88">90°</text>
+            <text class="value anim fig-hole-42" x="455" y="172" text-anchor="middle">ø 4,2 mm</text>
+            <text class="value anim fig-hole-45" x="455" y="172" text-anchor="middle">ø 4,5 mm</text>
+
+            <g class="anim fig-chat-done">
+              <path class="hot" d="m24 246 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="48" y="258" font-size="12">Aplicado — una transacción. Un deshacer lo retira todo.</text>
+            </g>
+          </svg>
+          <figcaption>La propuesta no cambia nada hasta que se aplica — y entonces, como un todo.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="sketches-with-constraints">
+        <div>
+          <span class="kicker">Bocetos con restricciones</span>
+          <h3>Dibujar, acotar — y cada cota puede ser un parámetro</h3>
+          <p>Línea, círculo, arco, spline y contornos acabados como la
+          ranura, el círculo de agujeros o la rejilla de agujeros. Diez
+          restricciones mantienen unido el dibujo — horizontal,
+          perpendicular, tangente, simétrica, distancia —, y abajo se lee en
+          todo momento qué sigue libre. Qué sale del contorno lo decides
+          después: extruirlo, cortarlo como bolsillo, revolucionarlo,
+          barrerlo a lo largo de un arco o tenderlo entre dos contornos.</p>
+          <p class="note">El contorno entra en el núcleo B-Rep como curva
+          exacta. <b>Un círculo dibujado se convierte en un cilindro
+          redondo, no en un polígono de muchos vértices.</b></p>
+          <p>La cuadrícula muestra a qué se ajusta el imán, y su paso se
+          puede escribir. La cota aparece junto al puntero, y la barra de
+          abajo nombra la cara sobre la que se dibuja. Una línea auxiliar
+          sigue siendo auxiliar — también tras recortar, alargar,
+          desplazar y reflejar.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-skizze-es.png?v=60dcb859"><img src="../bilder/beleg-skizze-es.png?v=60dcb859" width="1400" height="860" loading="lazy" decoding="async"
+                 alt="El modo boceto en la ventana principal: se dibuja en la propia vista, la cuadrícula queda sobre el modelo con un rectángulo acotado y un círculo; abajo, la barra flotante con las herramientas de dibujo, el paso de la cuadrícula, la línea «Plano de dibujo: cara en Letrero — 2247 mm²» y los botones de restricciones; a la derecha, la pestaña con las trece restricciones del dibujo"></a>
+          </div>
+          <figcaption>Se dibuja en la vista — sobre la cara en la que has hecho clic.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="inspection-report">
+        <div>
+          <span class="kicker">Informe de comprobación</span>
+          <h3>Antes de imprimir ya sabes qué va a salir mal</h3>
+          <p>Cada archivo abierto recibe un informe: zonas abiertas,
+          triángulos mal orientados, paredes por debajo de dos cordones de
+          extrusión, unidades ausentes. Ordenado en errores, advertencias y
+          avisos — y cada entrada salta en el modelo al lugar al que se
+          refiere.</p>
+          <p class="note">Cada hallazgo lleva una propuesta de acción.
+          <b>Aquí un error nunca termina en «falló».</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/es/report.png?v=aa3048ac"><img src="../handbuch/es/report.png?v=aa3048ac" width="620" height="270" loading="lazy" decoding="async"
+                 alt="El informe de comprobación: cero errores, dos advertencias y dos avisos, entre ellos «El modelo está abierto en tres sitios» y «Una pared es más fina que dos cordones de extrusión»"></a>
+          </div>
+          <figcaption>El informe de comprobación de un archivo ajeno importado.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="parametric">
+        <div>
+          <span class="kicker">Paramétrico</span>
+          <h3>Cambiar un número — no reconstruir el modelo</h3>
+          <p>El historial es no destructivo: cada paso sigue siendo
+          modificable, cada número se puede mover después. ¿Espesor de pared
+          de 2,40 a 3,60? El vaciado, la tapa, los taladros y los ajustes se
+          recalculan — en el mismo orden, con el mismo resultado.</p>
+          <p class="note">Parámetros de proyecto con nombre en lugar de
+          números sueltos: <b>un cambio en un sitio, no en siete.</b></p>
+          <p>Los límites de una cota se pueden cambiar después, incluso una
+          vez creado el parámetro. En el historial se marcan varios pasos a
+          la vez — para borrarlos o moverlos juntos, en vez de uno por
+          uno.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un dibujo: el campo «espesor de pared» cambia de 2,40 a 3,60 milímetros, la sección de la caja gana paredes más gruesas y un fondo más grueso, y el historial de debajo permanece sin cambios.">
+            <text class="ink" x="24" y="30" font-weight="600">Mover el número</text>
+
+            <rect class="field" x="24" y="52" width="216" height="38" rx="4"/>
+            <text class="dim" x="38" y="76">Espesor de pared</text>
+            <text class="value anim fig-value-thin" x="222" y="76" text-anchor="end">2,40 mm</text>
+            <text class="value anim fig-value-thick" x="222" y="76" text-anchor="end">3,60 mm</text>
+
+            <text class="dim" x="24" y="122">Historial — sin cambios</text>
+            <g class="rule" stroke-linecap="round">
+              <line x1="26" y1="140" x2="26" y2="212"/>
+            </g>
+            <circle class="hot" cx="26" cy="146" r="4"/>
+            <circle class="hot" cx="26" cy="176" r="4"/>
+            <circle class="hot" cx="26" cy="206" r="4"/>
+            <text class="ink" x="42" y="151" font-size="12">Cuerpo</text>
+            <text class="ink" x="42" y="181" font-size="12">Vaciar</text>
+            <text class="ink" x="42" y="211" font-size="12">Generar tapa</text>
+
+            <text class="dim" x="300" y="42">Sección</text>
+            <rect class="body" x="300" y="60" width="230" height="140"/>
+            <rect class="anim fig-cavity" x="316" y="60" width="198" height="124" fill="#16181c"/>
+            <rect class="hot anim fig-wall-bar" x="300" y="212" width="16" height="5" rx="2"/>
+            <text class="dim" x="300" y="238">Espesor de pared</text>
+          </svg>
+          <figcaption>El espesor de pared, cambiado — el historial sigue siendo el mismo.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="building-blocks">
+        <div>
+          <span class="kicker">Bloques</span>
+          <h3>Un alojamiento de tuerca en cuatro clics, no en cuatro medias horas</h3>
+          <p>La cara en la que haces clic es la que cuenta: un bloque
+          aparece donde has señalado en el modelo — antes, cada operación
+          sobre una cara costaba dos clics. El menú contextual de una cara
+          ofrece ahora también soporte de pared, nervadura, lengüeta y
+          ranura, pestaña de retención, unión de encaje y bisagra de
+          película.</p>
+          <p>Bloques probados en seis grupos — agujero para tornillo con
+          avellanado, alojamiento de tuerca, inserto termofijado, rosca,
+          pasador, ojal de bisagra, bisagra de película, unión de encaje,
+          bolsillo para imán, además de soporte de pared, gancho para panel
+          perforado, clip de cable, escuadra y pie. Las medidas salen de una
+          tabla de piezas normalizadas, no de la intuición.</p>
+          <p class="note">Cada bloque está probado en todo su rango de
+          parámetros: <b>estanco, espesor de pared mínimo, sin
+          autointersecciones.</b></p>
+          <p>Si eliges un bloque antes de señalar un punto, Solidon3D
+          pregunta, en vez de colocarlo en el origen. El catálogo también se
+          puede ver sin ningún modelo abierto — colocar un bloque queda
+          entonces bloqueado, con el motivo indicado.</p>
+          <p>El árbol de objetos muestra qué trae consigo un bloque: sus
+          características aparecen como entradas propias debajo, y el nodo
+          ofrece cambiar exactamente ese paso.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-bausteine-es.png?v=04fe1662"><img src="../bilder/beleg-bausteine-es.png?v=04fe1662" width="1220" height="757" loading="lazy" decoding="async"
+                 alt="El catálogo de bloques con los grupos uniones y mecánica: inserto termofijado, alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, ojal de bisagra, pestaña de retención, bisagra de película, conector a presión y unión de encaje, además de pie, colgador de ojo de cerradura, bolsillo para imán, gancho para panel perforado y soporte de pared, cada uno con vista previa y sus medidas"></a>
+          </div>
+          <figcaption>El catálogo — cada vista previa está renderizada, no dibujada.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Bloques propios</span>
+          <h3>Construido una vez, para siempre en el catálogo</h3>
+          <p>El soporte para el banco de trabajo costó una tarde — la próxima
+          vez debería ser una entrada. Construye la pieza una vez, crea
+          parámetros para sus medidas y elige en el catálogo <b>Guardar la
+          selección como bloque</b>: desde entonces figura junto a los bloques
+          incluidos, con vista previa y campos, y tú decides por cada medida
+          hasta dónde se puede ajustar.</p>
+          <p>Al crearlo se calcula, no solo se guarda: el bloque se construye
+          una vez en cada esquina de su rango — si en algún punto no sale un
+          cuerpo utilizable, queda escrito en la entrada antes de que se note
+          en una impresión.</p>
+          <p class="note">Es tuyo, se queda en tu equipo — y <b>viaja como
+          receta dentro de cada archivo de proyecto</b> que lo usa: una lista
+          de pasos y valores, no un programa. Quien recibe el archivo puede
+          calcular y cambiar sin instalar nada.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/es/own-part.png?v=6e78770f"><img src="../handbuch/es/own-part.png?v=6e78770f" width="520" height="836" loading="lazy" decoding="async"
+                 alt="El diálogo «Guardar la selección como bloque»: arriba nombre, grupo y descripción, debajo por cada parámetro la etiqueta, la unidad, el valor mínimo y máximo, el valor por defecto y su lugar en el diálogo, después los puntos seleccionables con sus nombres en la receta — abajo el botón «Crear bloque»"></a>
+          </div>
+          <figcaption>El diálogo pregunta cinco cosas — y calcula todo el rango antes de guardar.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="surfaces">
+        <div>
+          <span class="kicker">Superficies</span>
+          <h3>Ocho patrones, y todos comprobados para imprimir</h3>
+          <p>Nervadura, onda, moleteado recto y cruzado, panal, hoyuelos,
+          Voronoi y ruido — como <b>geometría real</b> y como retícula
+          exacta, no como campo de alturas muestreado. Si no, un moleteado
+          imprime papilla redondeada en lugar de rombos afilados.</p>
+          <p class="note">Antes de calcular, la pregunta de si el patrón
+          puede llegar a existir en esta máquina: <b>los nervios más
+          estrechos que la boquilla y los relieves menos profundos que una
+          capa se rechazan</b>, no se calculan.</p>
+        </div>
+        <figure class="shot">
+          <picture>
+            <source srcset="../handbuch/es/textures-dark.svg" media="(prefers-color-scheme: dark)">
+            <img class="figure" src="../handbuch/es/textures.svg?v=56585040" width="454" height="274" loading="lazy" decoding="async"
+                 alt="Ocho teselas de patrón en dos filas: nervadura como franjas paralelas, onda como franjas onduladas, moleteado recto y cruzado como franjas inclinadas y rombos respectivamente, panal como hexágonos, hoyuelos como retícula de puntos, Voronoi como celdas irregulares y ruido como manchas dispersas.">
+          </picture>
+          <figcaption>Los mismos contornos que luego se imprimen — la vista previa está calculada, no pintada.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="layer-analysis">
+        <div>
+          <span class="kicker">Análisis de capas</span>
+          <h3>Ver lo que verá la impresora</h3>
+          <p>Solidon3D corta el modelo en capas y mide lo que se sigue de
+          ello: ángulos de voladizo, islas en el aire, paredes por debajo de
+          dos cordones, luces de puente y el volumen de soportes. La
+          búsqueda de orientación propone la posición que menos genera de
+          todo ello.</p>
+          <p class="note">Sin slicer propio — y sin números mezclados:
+          <b>lo que viene del análisis y lo que viene del G-code, siempre
+          indicado.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un dibujo: una línea de análisis sube desde la placa de impresión atravesando una pieza; uno tras otro aparecen tres hallazgos — voladizo de 78 grados, isla en el aire y una pared por debajo de dos cordones.">
+            <text class="ink" x="24" y="30" font-weight="600">Análisis de capas</text>
+
+            <rect class="body" x="60" y="80" width="48" height="120"/>
+            <rect class="body" x="108" y="80" width="120" height="28"/>
+            <rect class="body" x="252" y="140" width="48" height="20"/>
+            <rect class="body" x="225" y="180" width="6" height="20"/>
+            <line class="rule" x1="40" y1="200" x2="320" y2="200" stroke-width="2.5" stroke-linecap="round"/>
+            <text class="dim" x="40" y="220">Placa de impresión</text>
+
+            <g class="anim fig-scan">
+              <line class="hot-stroke" x1="44" y1="196" x2="316" y2="196" stroke-dasharray="5 4"/>
+              <path class="hot" d="M44 196 l-8 -5 v10 z"/>
+            </g>
+
+            <g class="anim fig-find-1">
+              <path class="warn" d="M368 88 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="103" font-size="12">Voladizo 90°</text>
+            </g>
+            <g class="anim fig-find-2">
+              <path class="warn" d="M368 128 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="143" font-size="12">Isla, sin conexión</text>
+            </g>
+            <g class="anim fig-find-3">
+              <path class="warn" d="M368 168 l9 16 h-18 z"/>
+              <text class="ink" x="386" y="183" font-size="12">Pared &lt; 2 cordones</text>
+            </g>
+          </svg>
+          <figcaption>Tres hallazgos que el slicer solo conoce después de laminar.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="auto-split">
+        <div>
+          <span class="kicker">Dividir y división automática</span>
+          <h3>Demasiado grande para la cama ya no es motivo para dejarlo</h3>
+          <p><b>Señalar en vez de calcular:</b> dos clics sobre la pieza
+          trazan una línea, y el corte pasa entre ellos — recto hacia dentro
+          de la pantalla. Quien ve dónde debe ir la junta ya no tiene que
+          traducir ese punto a una coordenada.</p>
+          <p>Las mitades quedan a la vez preparadas para encajarse:
+          pasadores en una, los agujeros a juego en la otra. Redondo,
+          hexagonal, cola de milano o clip — los angulosos aseguran contra
+          el giro, la cola de milano también contra la separación, y el clip
+          encaja y aguanta sin pegamento. La holgura entre ellos sale del
+          perfil de material: nada de limar ni segundo intento. El ajuste
+          queda como relación en el proyecto y se vuelve a comprobar en cada
+          cambio posterior.</p>
+          <p>Quien no quiera ni mirar usa <b>Dividir automáticamente</b>:
+          Solidon3D busca por sí solo el plano de corte y corta hasta que
+          cada trozo cabe.</p>
+          <p class="note">El volumen de impresión sale del perfil de
+          impresora. <b>Dieciséis vienen de fábrica</b>, y se pueden crear
+          propios.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 250" role="img"
+               aria-label="Un dibujo: una pieza de 320 milímetros de ancho sobresale de un volumen de impresión de 220 milímetros; se divide en dos mitades de 160 milímetros cada una, entre las que se ven tres pasadores y sus taladros.">
+            <text class="ink" x="24" y="30" font-weight="600">Demasiado ancho para la cama</text>
+
+            <g class="anim fig-verdict-no">
+              <rect x="170" y="66" width="220" height="118" rx="4" fill="none"
+                    stroke="#575e69" stroke-width="1.4" stroke-dasharray="6 5"/>
+              <text class="dim" x="280" y="58" text-anchor="middle">Volumen de impresión 220 mm</text>
+            </g>
+
+            <g class="anim fig-half-left">
+              <rect class="body" x="120" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect class="hot" x="276" y="108" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="122" width="30" height="8" rx="2"/>
+                <rect class="hot" x="276" y="136" width="30" height="8" rx="2"/>
+                <text class="dim" x="199" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+            <g class="anim fig-half-right">
+              <rect class="body" x="282" y="100" width="158" height="52" rx="2"/>
+              <g class="anim fig-pins">
+                <rect x="284" y="108" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="122" width="30" height="8" rx="2" fill="#16181c"/>
+                <rect x="284" y="136" width="30" height="8" rx="2" fill="#16181c"/>
+                <text class="dim" x="361" y="172" text-anchor="middle">160 mm</text>
+              </g>
+            </g>
+
+            <g class="anim fig-verdict-no">
+              <path class="warn" d="M186 200 l9 16 h-18 z"/>
+              <text class="ink" x="204" y="215" font-size="12">320 mm &gt; 220 mm — no cabe</text>
+            </g>
+            <g class="anim fig-verdict-yes">
+              <path class="hot" d="m178 209 5 6 10 -13 3 3 -13 16 -8 -9z"/>
+              <text class="ink" x="204" y="215" font-size="12">2 × 160 mm — cabe, con pasadores</text>
+            </g>
+          </svg>
+          <figcaption>Dividido y con pasadores — la holgura sale del perfil de material.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="every-number-a-formula">
+        <div>
+          <span class="kicker">Cada número una fórmula</span>
+          <h3>Diálogos que calculan contigo</h3>
+          <p>Detrás de cada campo numérico hay un <b>fx</b>: en lugar de
+          4,20 puede poner <code>tornillo_m4 + holgura</code>. Las
+          tolerancias toman su valor del perfil de material en vez de
+          desaparecer en el modelo como constantes. Delante están los dos o
+          tres valores que de verdad se cambian — el resto vive bajo «Más
+          ajustes».</p>
+          <p class="note">91 operaciones, todas con el mismo patrón:
+          <b>menú, menú contextual, línea de comandos y chat leen la misma
+          declaración.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../handbuch/es/op-dialog.png?v=9a58ecf0"><img src="../handbuch/es/op-dialog.png?v=9a58ecf0" width="520" height="195" loading="lazy" decoding="async"
+                 alt="El diálogo «Hacer un taladro» con diámetro y posición X, un botón fx detrás de cada campo numérico y la sección plegada «Más ajustes»"></a>
+          </div>
+          <figcaption>El diálogo de una operación — delante los dos o tres
+          valores que de verdad se cambian, detrás todo lo demás.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="first-launch">
+        <div>
+          <span class="kicker">Primer arranque</span>
+          <h3>No empiezas de cero</h3>
+          <p>Se incluyen nueve proyectos de ejemplo terminados — uno por
+          camino, más bloques, rotulación a dos colores, calibración,
+          preparación de la impresión y una caja con tapa donde todo
+          confluye. Cada uno es un proyecto de verdad con historial, no una
+          imagen en un manual.</p>
+          <p class="note">Y un manual que explica los primeros quince
+          minutos — <b>en el mismo idioma que la interfaz.</b></p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <a href="../bilder/beleg-start-es.png?v=734c57cb"><img src="../bilder/beleg-start-es.png?v=734c57cb" width="1400" height="1000" loading="lazy" decoding="async"
+                 alt="La pantalla de inicio: un campo donde soltar modelos y proyectos, los botones «Nuevo proyecto» y «Abrir proyecto», y debajo cuatro proyectos de ejemplo — uno por camino — con vista previa y descripción, y debajo el apartado plegado «¿Qué más hay?»"></a>
+          </div>
+          <figcaption>La pantalla de inicio con cuatro de los nueve ejemplos
+          — los otros cinco están tras «¿Qué más hay?».</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="inside">
+    <div class="wrap">
+      <h2>Qué más lleva dentro</h2>
+      <ul class="features">
+        <li><b>Aristas exactas.</b> Núcleo B-Rep para chaflanes, redondeos y
+        STEP de ida y vuelta.</li>
+        <li><b>Velocidad.</b> Los mismos cálculos corren hasta sesenta veces
+        más rápido que al principio — y el indicador de progreso no se
+        detiene hasta que el resultado está de verdad terminado.</li>
+        <li><b>Dos colores sin segundo programa.</b> Rotulación en relieve,
+        rehundida o como cambio de color en un único archivo 3MF.</li>
+        <li><b>Entrega a tu slicer.</b> Directa, con los ajustes adecuados —
+        y su G-code vuelve como contraprueba.</li>
+        <li><b>Calibrar en vez de adivinar.</b> Escalera de tolerancias,
+        escalera de espesores de pared y abanico de voladizos en una placa;
+        los valores medidos van al perfil de material.</li>
+        <li><b>Cadena de reparación para archivos ajenos.</b> Cerrar
+        agujeros, corregir normales, eliminar triángulos degenerados y
+        astillas — antes de calcular nada.</li>
+        <li><b>Medir, seccionar, despiece.</b> Herramientas en la vista, sin
+        tocar la geometría.</li>
+        <li><b>IA en local o con clave propia.</b> Ollama en el propio
+        ordenador o una clave de API — y sin ninguno de los dos funciona
+        todo salvo el chat.</li>
+        <li><b>Manejable a distancia por MCP — también desde Claude Code.</b>
+        Un segundo programa llama a las mismas operaciones que los menús:
+        desactivado de serie, solo en el propio ordenador, y cada llamada
+        remota es una transacción que un deshacer retira.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="tint">
+    <div class="wrap">
+      <div class="closing">
+        <h2>La próxima pieza que encaja</h2>
+        <p>La demo ya está aquí y funciona hasta el 30 de octubre de 2026 —
+        gratuita y completa.</p>
+        <a class="btn" href="/es/#pricing">A la demo</a>
+        <a class="btn ghost" href="/es/manual.html">Leer antes el manual</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital ·
+    <a href="/es/">Inicio</a> ·
+    <a href="/es/#ways">Cuatro caminos</a> ·
+    <a href="/es/ai-models.html">Modelos de IA</a> ·
+    <a href="/es/manual.html">Manual</a> ·
+    <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/impressum.html">Aviso legal</a> ·
+    <a href="/datenschutz.html">Privacidad</a>
+    <em>(textos legales en alemán — única versión vinculante)</em> ·
+    <a href="/">Deutsch</a> ·
+    <a href="/en/">English</a> ·
+    <a href="/fr/">Français</a> ·
+    <a href="/it/">Italiano</a> ·
+    <a href="/pt/">Português</a>
+  </div>
+</footer>
+
+<script src="/site.js?v=5f78a99a" defer></script>
+
+</body>
+</html>

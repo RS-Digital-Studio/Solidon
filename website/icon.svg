@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Das Anwendungssymbol: ein isometrischer Körper in der Markenfarbe,
+       mit einer Bohrung auf der Deckfläche (die Operation) und Schichtlinien
+       an der linken Flanke (der Druck). Eine gestaltete Form, von Hand —
+       gerastert wird sie von tools/make_icon.py, nie von Hand gepflegt. -->
+  <!-- Deckfläche -->
+  <polygon points="64,18 104,41 64,64 24,41" fill="#e08b4e" />
+  <!-- linke Flanke, mit Schichtlinien -->
+  <polygon points="24,41 64,64 64,110 24,87" fill="#b96428" />
+  <path d="M24 52.5 64 75.5 M24 64 64 87 M24 75.5 64 98.5"
+        stroke="#96491a" stroke-width="2.5" fill="none" />
+  <!-- rechte Flanke -->
+  <polygon points="104,41 64,64 64,110 104,87" fill="#7c3a10" />
+  <!-- Bohrung: isometrisch projizierter Kreis auf der Deckfläche -->
+  <ellipse cx="64" cy="41" rx="17" ry="9.8" fill="#3a1c06" />
+</svg>

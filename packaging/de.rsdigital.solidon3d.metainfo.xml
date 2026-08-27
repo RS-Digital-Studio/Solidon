@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Erzeugt von tools/make_linux_packages.py — Werte aus app/branding.py. -->
+<component type="desktop-application">
+  <id>de.rsdigital.solidon3d</id>
+  <name>Solidon3D</name>
+  <summary>3D-Modelle konstruieren, erzeugen und druckfertig machen</summary>
+  <developer id="de.rsdigital">
+    <name>RS Digital</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <launchable type="desktop-id">de.rsdigital.solidon3d.desktop</launchable>
+  <url type="homepage">https://solidon3d.de/</url>
+  <description>
+    <p>
+      Solidon3D konstruiert, erzeugt und bereitet 3D-Modelle für den
+      Druck vor. Der Operationsstapel ist non-destruktiv: Jeder Schritt
+      bleibt änderbar, und eine geänderte Zahl baut das Modell neu.
+    </p>
+    <p>
+      Ohne Netz, ohne Konto und ohne KI bleibt alles außer dem Chat
+      benutzbar.
+    </p>
+  </description>
+  <releases>
+    <release version="0.2.1" />
+  </releases>
+</component>

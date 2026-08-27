@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Nach jedem Commit sofort pushen.
+#
+# Warum: An diesem Projekt wird auf drei Maschinen gearbeitet (zwei Rechner, ein
+# Laptop). Ein Commit, der liegen bleibt, ist auf den anderen zweien nicht da —
+# und man merkt es erst, wenn man dort sitzt und weiterarbeiten will. Am
+# 22.08.2026 lagen dreizehn Commits eines ganzen Arbeitstages ungepusht.
+#
+# Was dieser Hook **nicht** tut: Er holt nichts, er rebasiert nichts und er
+# räumt nichts auf. Ist die Gegenstelle weitergewandert, scheitert der Push und
+# sagt es — das Zusammenführen ist eine Entscheidung und gehört keinem Hook.
+#
+# Ein post-commit-Hook kann den Commit nicht mehr verhindern; sein Rückgabewert
+# wird von Git verworfen. Deshalb endet dieser hier immer mit 0 und macht sich
+# stattdessen bemerkbar, indem er schreibt, was er getan oder nicht getan hat.
+
+set -u
+
+# Nur auf einem Zweig, nie aus einem abgekoppelten HEAD. Die Prüfläufe dieses
+# Projekts legen Arbeitsbäume mit `git worktree add --detach` an; dort ist ein
+# Push nie gemeint.
+zweig=$(git symbolic-ref --quiet --short HEAD) || {
+  echo "post-commit: abgekoppelter HEAD, kein Push." >&2
+  exit 0
+}
+
+# Ohne Gegenstelle gibt es nichts zu tun — ein frischer Klon ohne `origin`
+# soll nicht bei jedem Commit eine Fehlermeldung werfen.
+git remote get-url origin >/dev/null 2>&1 || {
+  echo "post-commit: keine Gegenstelle 'origin', kein Push." >&2
+  exit 0
+}
+
+# `SOLIDON_KEIN_PUSH=1 git commit …` schaltet ihn für einen Lauf ab — für den
+# Fall, dass jemand bewusst mehrere Commits sammeln will, bevor sie hinausgehen.
+if [ "${SOLIDON_KEIN_PUSH:-}" = "1" ]; then
+  echo "post-commit: SOLIDON_KEIN_PUSH=1, kein Push." >&2
+  exit 0
+fi
+
+echo "post-commit: pushe $zweig nach origin …" >&2
+if git push --quiet origin "$zweig" 2>&1; then
+  echo "post-commit: $zweig ist auf der Gegenstelle." >&2
+else
+  # Der häufigste Grund ist, dass eine andere Maschine oder eine parallele
+  # Sitzung schneller war. Der Commit ist da, er liegt nur noch hier.
+  echo "post-commit: PUSH GESCHEITERT — der Commit liegt lokal." >&2
+  echo "post-commit: meist ist die Gegenstelle weiter. Erst holen, dann" >&2
+  echo "post-commit: zusammenführen, dann von Hand pushen:" >&2
+  echo "post-commit:   git pull --rebase origin $zweig && git push origin $zweig" >&2
+fi
+
+exit 0

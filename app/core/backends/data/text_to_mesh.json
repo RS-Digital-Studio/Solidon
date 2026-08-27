@@ -1,0 +1,147 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "{model:image}"
+    }
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "{prompt}, single complete object, centered, full object visible, three-quarter view, even studio lighting, plain white background, product photo, sharp focus",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, multiple objects, cropped, cut off, close-up, text, watermark, hands, person, shadow, reflection, busy background",
+      "clip": [
+        "1",
+        1
+      ]
+    }
+  },
+  "4": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    }
+  },
+  "5": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "positive": [
+        "2",
+        0
+      ],
+      "negative": [
+        "3",
+        0
+      ],
+      "latent_image": [
+        "4",
+        0
+      ],
+      "seed": "{seed}",
+      "steps": 25,
+      "cfg": 6.0,
+      "sampler_name": "dpmpp_2m",
+      "scheduler": "karras",
+      "denoise": 1.0
+    }
+  },
+  "6": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "5",
+        0
+      ],
+      "vae": [
+        "1",
+        2
+      ]
+    }
+  },
+  "7": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "12",
+        0
+      ],
+      "image": [
+        "6",
+        0
+      ]
+    }
+  },
+  "8": {
+    "class_type": "TripoSGLoader",
+    "inputs": {
+      "model": "{model:shape}",
+      "precision": "float16"
+    }
+  },
+  "9": {
+    "class_type": "TripoSGImageToMesh",
+    "inputs": {
+      "pipeline": [
+        "8",
+        0
+      ],
+      "image": [
+        "6",
+        0
+      ],
+      "mask": [
+        "7",
+        0
+      ],
+      "steps": 50,
+      "guidance_scale": 7.0,
+      "seed": "{seed}",
+      "octree_depth": 8,
+      "crop_margin": 0.1
+    }
+  },
+  "10": {
+    "class_type": "TripoSGPostprocess",
+    "inputs": {
+      "mesh": [
+        "9",
+        0
+      ],
+      "keep_largest_only": true,
+      "remove_degenerate": true,
+      "target_faces": 0
+    }
+  },
+  "11": {
+    "class_type": "TripoSGExportMesh",
+    "inputs": {
+      "mesh": [
+        "10",
+        0
+      ],
+      "filename_prefix": "solidon/text",
+      "file_format": "glb"
+    }
+  },
+  "12": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "{model:background}"
+    }
+  }
+}

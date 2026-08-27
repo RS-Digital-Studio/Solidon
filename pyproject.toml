@@ -1,0 +1,313 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "solidon3d"
+version = "0.2.1"
+description = "Desktop application for building, generating and editing printable models"
+requires-python = ">=3.13"
+license = { file = "LICENSE" }
+authors = [{ name = "RS Digital" }]
+dependencies = []
+
+[project.optional-dependencies]
+# Geometriekerne und Netz-Ein-/Ausgabe. Die Lizenzprüfung läuft gegen §36.
+geom = [
+  "numpy>=1.26",
+  # trimesh braucht einen Graphen für Wasserdichtheit und Komponenten; scipy
+  # bringt zudem den Zuordnungslöser für das Feature-Matching aus §21.2 mit.
+  "scipy>=1.13",
+  # Der Sprung auf 5 ist am 14.08.2026 gemacht. Er kostete zwei Zeilen: Zwei
+  # Stellen riefen ``trimesh.util.concatenate`` direkt auf, statt die
+  # Engführung ``mesh.concatenated`` zu nehmen, die es dafür gibt. Bezahlt
+  # hat er sich beim gleichmäßigen Vernetzen — dieselbe Lochplatte, dieselbe
+  # Kantenlänge, 22 636 Dreiecke statt 815 104.
+  "trimesh>=5.0",
+  # Nicht ``>=2.5``, wie es hier bis zum 14.08.2026 stand: ``mesh_ops`` baut den
+  # Körper über ``Mesh64`` (erst 3.0 — die einfache ``Mesh`` nimmt ``float32``
+  # und verstieße gegen Regel 6) und räumt mit ``Manifold.simplify`` auf, das
+  # es erst ab 3.1 gibt. Unter der alten Angabe war eine Version erlaubt, in
+  # der ``remesh_uniform`` mit einem AttributeError abbricht — geprüft hat das
+  # nie jemand, weil ``constraints.txt`` längst 3.5 festschreibt.
+  "manifold3d>=3.1",
+  # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
+  "shapely>=2.0",
+  # Konturhierarchie für denselben Schnitt: ohne den Graphen lässt sich ein
+  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3. rtree stand
+  # hier bis zum 24.08.2026 daneben — es griff in fremde Seiten und ist durch
+  # app/core/geom/enclosure.py ersetzt (shapely/GEOS liefert die Kandidaten).
+  "networkx>=3.0",
+  # Marching Cubes für die Voxelstufe der Booleschen Rückfallkette (§17.2). BSD-3.
+  "scikit-image>=0.24",
+  # 3MF ist das Format, das Slicer bevorzugen, und es braucht einen
+  # XML-Schreiber (§29). BSD-3.
+  "lxml>=5.0",
+  # V-HACD sagt dem Auto Split, wo ein Körper von selbst auseinanderfällt
+  # (§22.3). Zur Laufzeit optional: ohne es antwortet die Ebenensuche allein. BSD-3.
+  "vhacdx>=0.0.8",
+  # Dezimierung für generierte Netze (§25, „Netz"). MIT.
+  "fast-simplification>=0.1.9",
+  # SVG-Pfade hinter dem Zeichnungsimport (§25). MIT; DXF liest trimesh selbst.
+  "svg.path>=6.3",
+]
+# Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
+ui = [
+  "PySide6>=6.7",
+  "pyvista>=0.44",
+  "pyvistaqt>=0.11",
+]
+# Der Agent braucht einen Ort für den Schlüssel des Nutzers (§27). Ohne dieses
+# Extra läuft die Anwendung; nur der Chat bleibt aus.
+agent = ["keyring>=25.0"]
+# Der zweite Konstruktionskern (§30): echte Kanten, und damit exakte
+# Verrundungen, Fasen und STEP. Optional — ohne ihn sagen diese Operationen das
+# in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist
+# Apache-2.0, der Kern darunter LGPL-2.1 mit der OCCT-Linking-Ausnahme, also
+# wird er wie PySide6 als dynamisch gelinkte Bibliothek benutzt (§36). „novtk",
+# weil pyvista VTK schon mitbringt; zwei Kopien in einem Prozess sind eine zu
+# viel.
+brep = ["cadquery-ocp-novtk>=7.8"]
+dev = [
+  "pytest>=8.0",
+  # Jeder Test in einem eigenen Fork (`--forked`, nur POSIX). Gebraucht in
+  # der CI für die Dateien, die Fenster bauen: ein VTK-Fenster darf weder
+  # sterben noch bleiben — zerstören nimmt VTKs Zustand mit, ansammeln
+  # füllt den Speicher des Runners. Ein Fork löst beides, weil er mit dem
+  # Test endet. MIT, reine Testabhängigkeit.
+  "pytest-forked>=1.6",
+  # Verteilt den Rest der Suite auf mehrere Prozesse (`-n`). Gebraucht von
+  # `.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, das
+  # alles ohne Qt in einem Zug fährt — seriell 175 s, mit acht Prozessen 66 s.
+  # Die Fenstergruppe bekommt es ausdrücklich nicht: dort stirbt ein Worker und
+  # reißt den ganzen Lauf mit einem `INTERNALERROR` ab.
+  #
+  # Stand hier bis zum 24.08.2026 nicht, obwohl das Skript es seit Langem ruft.
+  # Wer es nicht zufällig installiert hatte, bekam `unrecognized arguments: -n`
+  # — und das Tor zählte den ausgefallenen Lauf als *einen* Fehlschlag unter
+  # dreien, statt zu sagen, dass 3554 Tests gar nicht erst liefen. MIT, reine
+  # Testabhängigkeit; zieht execnet nach (ebenfalls MIT).
+  "pytest-xdist>=3.6",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  # Wertet Umgebungsmarker für die Lizenzprüfung aus.
+  "packaging>=24.0",
+  # Legt Kopf- und Fußzeilen auf das gedruckte Handbuch (tools/make_manual.py).
+  # Chromium setzt CSS Paged Media nicht um, kennt also keine Seitenzahl; die
+  # Lage darüber entsteht mit Qt und wird hiermit aufgelegt. BSD-3, und nur ein
+  # Werkzeug — in der Anwendung steckt es nicht (§36).
+  "pypdf>=5.0",
+  # Übersetzt das Prüfmodul für die Auslieferung nach C (Konzept §2 I H5,
+  # tools/build_licence_module.py). Bau-, keine Laufzeitabhängigkeit: die
+  # Anwendung und die Suite laufen gegen die Python-Quellen. Apache-2.0/MIT.
+  "cython>=3.0",
+  "setuptools>=75",
+]
+
+[project.scripts]
+solidon3d = "app.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.core.knowledge" = ["data/*.toml"]
+# Die ComfyUI-Workflows sind Daten, kein Code (§27): ein anderer Generator
+# heißt eine andere Datei, kein Patch.
+"app.core.backends" = ["data/*.json"]
+"app.core.knowledge.parts" = ["LICENSE"]
+"app.i18n" = ["locales/*.json"]
+# Die drei Beispielprojekte reisen mit: Dokumentation, Abnahmetest und
+# Startbildschirm-Inhalt zugleich (§37.2). Die Handbuchbilder dazu — die
+# gezeichneten und gerenderten entstehen im Lauf, die Bildschirmfotos nicht,
+# also reisen sie als Dateien (ein Ordner je Sprache).
+"app" = ["examples/*.p3d", "images/manual/*/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "error",
+  # numpy 2.5 hat `arr.shape = ...` als veraltet markiert; VTK 9.6 und
+  # scikit-image 0.26 benutzen es noch, beides Fremdcode. Der eigene Kern kommt
+  # ohne diese Zuweisung aus, deshalb eng auf die zwei Module begrenzt statt
+  # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
+  # einer alten Version fest. Fällt weg, sobald beide nachgezogen haben; der
+  # wöchentliche Lauf gegen die neuesten Versionen meldet es.
+  'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:vtkmodules\..*',
+  'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
+]
+markers = [
+  "performance: misst gegen das Budget aus Bauplan §31",
+  "slow: dauert spürbar länger als ein Unit-Test",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+# Der Sitzungszustand wird nicht geprüft.
+#
+# Seit „Der Sitzungszustand reist mit" (`a92b0bc`) liegen die Messskripte
+# vergangener Durchsichten im Repository, damit drei Maschinen denselben Stand
+# sehen. Es sind Wegwerfwerkzeuge — sie haben ihre Zahl geliefert und werden
+# nicht mehr angefasst. Ruff fand darin 41 Verstöße und wollte 15 Dateien
+# umformatieren; das Tor wäre damit rot gewesen, ohne dass sich an der
+# Anwendung etwas geändert hat.
+#
+# Sie mitzuformatieren wäre schlimmer als sie auszunehmen: Ein Messskript, das
+# umgeschrieben wurde, belegt seine Zahl nicht mehr. mypy trifft es nicht, das
+# läuft ohnehin nur über `files = ["app"]`.
+#
+# Und die Druckprojekte werden es auch nicht.
+#
+# „3D Drucker/" enthält Roberts physische Druckprojekte — parametrische Skripte
+# für Teile, die auf dem Elegoo laufen, kein Programmcode. Sie liegen seit dem
+# 22.08.2026 bewusst **im** Repository (`.gitignore` trägt die Begründung: Es
+# wird auf drei Maschinen gearbeitet, und ein Projekt, das nur auf einer liegt,
+# ist auf den anderen zweien nicht vorhanden). Versioniert werden sie deshalb
+# weiter — geprüft werden sie nicht: Ruff fand darin 367 Verstöße und wollte 17
+# Dateien umformatieren, und damit war das Tor rot, ohne dass an der Anwendung
+# irgendetwas anders war. Es ist dieselbe Falle wie die drei in `CLAUDE.md`,
+# nur eine neue Gestalt: nicht die Pipeline und nicht die Schlusszeile, sondern
+# ein fremder Ordner im Prüfpfad.
+extend-exclude = [".claude/.state/", "3D Drucker/"]
+
+[tool.ruff.lint]
+# Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im
+# ganzen Baum: A (ein Name, der einen eingebauten überdeckt), C4 (Umwege über
+# Generatoren), FURB und PIE (Modernisierung), ICN (Importname) und PTH
+# (`pathlib` statt `os.path` — der Rest des Projekts rechnet ohnehin in
+# `Path`).
+#
+# Zwei stehen bewusst **nicht** hier. `PERF` fände neunzehnmal dieselbe
+# Schleife, die eine Comprehension werden könnte — ohne sicheren Autofix, und
+# der Bestand ist an diesen Stellen mit Kommentaren darin lesbarer.
+# `DTZ` fände sieben naive Zeitstempel, fünf davon in der Freischaltung: Das
+# ist eine Verhaltensänderung an der Lizenzgrenze und kein Aufräumen.
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN", "PIE", "PTH"]
+
+[tool.ruff.lint.per-file-ignores]
+# Bauplan §33.1 legt die Ausnahmenamen fest. OutOfBuildVolume und
+# OperationCancelled sind Teil des Vertrags, keine Stilfrage.
+"app/core/errors.py" = ["N818"]
+# MapTooLarge ist ein Ablaufsignal innerhalb der Karten, kein gemeldeter Fehler.
+"app/core/perceive/maps.py" = ["N818"]
+# BackendUnavailable liest sich als Zustand, und ist einer — §33.1 legt die
+# Namen fest.
+"app/core/backends/llm.py" = ["N818"]
+# GenerationFailed sagt, was passiert ist — und das liest der Nutzer (§33.1).
+"app/core/backends/mesh.py" = ["N818"]
+# SendFailed steht in derselben Reihe: was passiert ist, nicht wie es heißt.
+"app/core/support.py" = ["N818"]
+# BRepUnavailable ist ein Zustand wie die beiden oben, §33.1 legt die Namen fest.
+"app/core/brep/kernel.py" = ["N818"]
+# SetupFailed sagt wie GenerationFailed, was passiert ist, und der Satz daneben
+# sagt, was jetzt hilft — dasselbe Muster, dieselbe Ausnahme.
+"app/core/backends/comfy_setup.py" = ["N818"]
+# Die ComfyUI-Knoten stehen nicht unter unserer Formvorschrift, sondern unter
+# der von ComfyUI: Ordner mit Bindestrich (N999), ``INPUT_TYPES`` in
+# Großbuchstaben (N802), und der Modell-Cache am Knoten ist Absicht (RUF012).
+# Wer das umbenennt, hat Knoten, die ComfyUI nicht mehr findet. Sie liegen
+# unter den Daten des Kerns und nicht mehr in ``tools/``: von dort erreicht
+# sie das gebaute Paket nicht, und die Anwendung soll die Einrichtung selbst
+# können statt auf ein Skript zu verweisen, das der Kunde nicht hat.
+"app/core/backends/data/comfyui/*" = ["N999", "N802", "RUF012"]
+# Die Suite muss die Nutzerverzeichnisse umbiegen, bevor irgendetwas sie liest,
+# also kommen diese beiden Importe nach dem Setzen der Umgebung (§38).
+"tests/conftest.py" = ["E402"]
+# Qt-Signale sind per Konvention camelCase, und „20 × 20 mm" ist die deutsche
+# Schreibweise eines Maßes — beides ist in der Oberfläche Absicht.
+"app/ui/*" = ["N815", "RUF001"]
+# ``log_message(self, format, *args)`` überschreibt eine Methode von
+# ``BaseHTTPRequestHandler``. Der Name kommt aus der Standardbibliothek; ihn zu
+# ändern hieße, die Methode nicht mehr zu überschreiben.
+"app/ui/remote_server.py" = ["A002", "N815", "RUF001"]
+# Den Steckbrief lesen Menschen und das Modell; „20 × 20 mm" ist das richtige
+# Zeichen.
+"app/core/perceive/digest.py" = ["RUF001"]
+# Das Handbuch ist Fließtext für Leser: Bauräume stehen dort als „256 × 256 ×
+# 256", mit dem Zeichen, das ein Setzer nähme, nicht mit einem kleinen x.
+"app/core/manual.py" = ["RUF001"]
+# Die Einheitenrückfrage zeigt, wie groß das Modell mit jeder Antwort wäre —
+# „40,0 × 20,0 × 2,5 mm" liest ein Mensch, und der nimmt dasselbe Zeichen wie
+# im Steckbrief.
+"app/core/ingest/ops.py" = ["RUF001"]
+"tests/*" = ["RUF001", "RUF002"]
+
+[tool.mypy]
+python_version = "3.13"
+files = ["app"]
+strict = true
+warn_unreachable = true
+# Die ComfyUI-Knoten sind kein Modul dieser Anwendung, sondern eine Datei, die
+# in eine fremde Installation kopiert wird. Ihr Ordnername trägt den
+# Bindestrich, den ComfyUI verlangt, und mypy hält das für ein kaputtes Paket:
+# „contains __init__.py but is not a valid Python package name". Umbenennen
+# heißt Knoten, die ComfyUI nicht mehr findet.
+exclude = "app/core/backends/data/comfyui/"
+
+[[tool.mypy.overrides]]
+# trimesh stand hier bis zum 14.08.2026 mit dabei. Seit 5.0 liefert es ein
+# `py.typed` und damit echte Typen — die Zeile hätte von da an nur noch
+# verdeckt, wenn ein Import daneben greift.
+module = [
+  "manifold3d.*",
+  "networkx.*",
+  "pyvista.*",
+  "scipy.*",
+  "skimage.*",
+  "shapely.*",
+  # Die OpenCASCADE-Anbindung ist eine kompilierte Erweiterung ohne Stubs (§30).
+  "OCP.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Plattformzweige sind auf jeder Plattform außer einer unerreichbar — genau
+# dafür sind sie da. Bei OpenSCAD ist es die Speichergrenze aus §32: RLIMIT_AS
+# auf POSIX, ein Job-Objekt auf Windows.
+module = [
+  "app.core.paths",
+  "app.core.discover",
+  "app.core.backends.openscad",
+  # Und beim Update: welches Paket dieser Rechner braucht, entscheidet
+  # dieselbe Abfrage (§37.2).
+  "app.core.updates",
+]
+warn_unreachable = false
+
+[[tool.mypy.overrides]]
+# trimesh 5 ist typisiert, seine älteren Untermodule sind es nicht:
+# `transformations`, `grouping`, `remesh`, `repair`, `smoothing`, `proximity`
+# und `exchange` tragen weiter keine Signaturen, `skimage.measure` ebenso
+# wenig. Ein Aufruf dorthin lässt sich von hier aus nicht typisieren.
+#
+# Bis zum 14.08.2026 standen hier **sieben Paketbäume**. Gemessen betrifft es
+# 31 Aufrufe in diesen 18 Dateien — und `app.core.brep.*` gar nicht mehr, weil
+# `OCP.*` oben ohnehin als `Any` ankommt. Namentlich statt mit `*`, damit eine
+# **neue** Datei, die untypisiert in eine fremde Bibliothek ruft, auffällt statt
+# stillschweigend mitgedeckt zu werden. Genau diese Sorte Fehler hat die
+# konvexe Zerlegung zwei Phasen lang getragen (siehe `errors.PROGRAMMING_ERRORS`).
+#
+# Wer hier eine Zeile hinzufügt, prüft erst, ob eine typisierte Engführung
+# besser passt — `geom.mesh.concatenated` ist das Muster dafür.
+module = [
+  "app.core.export.writer",
+  "app.core.geom.autosplit",
+  "app.core.geom.blend",
+  "app.core.geom.label_ops",
+  "app.core.geom.lattice",
+  "app.core.geom.mesh",
+  "app.core.geom.mesh_ops",
+  "app.core.geom.orient",
+  "app.core.geom.prepare",
+  "app.core.geom.repair",
+  "app.core.geom.transform",
+  "app.core.ingest.loader",
+  "app.core.ingest.outline",
+  "app.core.knowledge.parts.shapes",
+  "app.core.knowledge.parts.testbodies",
+  "app.core.perceive.features",
+  "app.core.perceive.maps",
+  "app.core.slice.orientation",
+]
+disallow_untyped_calls = false

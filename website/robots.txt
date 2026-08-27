@@ -1,0 +1,10 @@
+# Solidon3D — solidon3d.de
+# Die Seite hat nichts zu verbergen: kein Konto, keine Ansicht, die
+# nur für angemeldete Besucher gilt. Gezählt wird auf dem eigenen
+# Server und ohne Cookie; was dabei entsteht, steht in der
+# Datenschutzerklärung.
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://solidon3d.de/sitemap.xml

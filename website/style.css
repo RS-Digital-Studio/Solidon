@@ -1,0 +1,2215 @@
+/* Solidon3D — statische Website. Keine externen Ressourcen. Das einzige
+   Skript ist `site.js` von dieser Seite, und es markiert nur die Sprungliste.
+   Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
+   scroll-gesteuerte Zeitachsen beim Lesen. Wo der Browser die Zeitachse nicht
+   kennt, steht alles sichtbar da — eine Seite, die ohne Animation leer ist,
+   ist eine kaputte Seite. */
+
+:root {
+  --bg: #f7f6f3;
+  --bg-alt: #f1efea;
+  --fg: #1c1b1a;
+  --muted: #5f5b55;
+  --accent: #a4551e;
+
+  /* Trägt den Kicker und die Einführungsmarke — beides kleiner, fetter Text
+     in ``--accent``. Bei #f4e4d5 kam das auf 4,34:1 und blieb damit knapp
+     unter den 4,5:1, die WCAG für Text unter 18,66 px verlangt; heller
+     gemischt sind es 4,71. */
+  --accent-soft: #faefe4;
+  --card: #ffffff;
+  --line: #e0ddd7;
+  --shadow: 0 1px 2px rgb(28 27 26 / 6%), 0 8px 24px -12px rgb(28 27 26 / 18%);
+  --shadow-lift: 0 2px 4px rgb(28 27 26 / 8%), 0 18px 40px -16px rgb(28 27 26 / 28%);
+
+  /* Die Bühne trägt die Bildschirmfotos. Sie ist immer dunkel, in beiden
+     Modi — die Anwendung selbst ist dunkel, und ein dunkles Fenster auf
+     hellem Grund sieht aus wie ein Loch. Auf dunklem Grund sieht es aus wie
+     ein Bildschirm. */
+  --stage: #16181c;
+  --stage-line: #2c3038;
+
+  --step: 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #171614;
+    --bg-alt: #1c1b18;
+    --fg: #ece9e4;
+    --muted: #a39e96;
+    --accent: #e08b4e;
+    --accent-soft: #33261a;
+    --card: #201e1b;
+    --line: #35322d;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+    --shadow-lift: 0 2px 4px rgb(0 0 0 / 45%), 0 18px 40px -16px rgb(0 0 0 / 70%);
+    --stage: #101215;
+    --stage-line: #2a2e35;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* Die Kopfzeile steht und ist rund 66 px hoch. Ohne das Polster landet jede
+   Sprungmarke — „Funktionen“, „Preis“ — mit ihrer Überschrift genau
+   darunter, und es sieht aus, als wäre der Sprung danebengegangen. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5.5rem;
+
+  /* Und hier, nicht nur am body: der Rollbereich der Seite gehört dem
+     Wurzelelement. Ein `clip` allein am body sieht richtig aus und wirkt
+     nicht — gemessen ließ sich die Startseite bei 1440 px trotzdem um
+     111 Pixel nach rechts schieben, das Handbuch auf dem Telefon um 270
+     von 375. `clip` und nicht `hidden`, aus demselben Grund wie unten. */
+  overflow-x: clip;
+}
+
+/* Der Browser-Standardring verschwindet auf den Knöpfen, die selbst einen
+   Hintergrund tragen. Wer mit der Tastatur bedient, sieht sonst nicht, wo er
+   steht. ``:focus-visible`` heißt: nur bei Tastatur, nicht bei jedem Klick. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 0.3rem;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  line-height: 1.6;
+  font-size: 1.05rem;
+  -webkit-font-smoothing: antialiased;
+
+  /* Der Schein hinter dem Aufmacher greift absichtlich über beide Ränder
+     hinaus und erzeugte damit einen waagerechten Rollbalken über die ganze
+     Seite. ``clip`` schneidet ihn ab — ``hidden`` täte das auch, würde aber
+     die stehende Kopfzeile lösen, weil es einen Rollbereich erzeugt.
+     Die Zeile allein genügt nicht; sie steht auch am ``html`` darüber. */
+  overflow-x: clip;
+}
+
+code {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--accent-soft);
+  border-radius: 0.3rem;
+  padding: 0.1em 0.35em;
+}
+
+/* Der Sprung an den Inhalt — die erste Sprungmarke jeder Seite (WCAG 2.4.1).
+   Wer mit der Tastatur bedient, kam vorher an jeder Seite zuerst durch elf
+   Bedienelemente der Kopfzeile: Logo, drei Verweise, das Sprachfeld mit sechs
+   Sprachen darin, den Demo-Knopf. Auf jeder Seite neu, und ohne jede
+   Möglichkeit, sie zu überspringen — `<main>` allein hilft dem Vorleser,
+   nicht der Tabulatortaste.
+
+   Sichtbar wird er nur, wenn er den Fokus hat. Nicht `display: none` und
+   nicht `visibility: hidden`: beides nimmt ihn auch aus der Tabulatorfolge,
+   und dann wäre er ein Verweis, den niemand erreicht. */
+.skip {
+  position: absolute;
+  left: 1.25rem;
+  top: -4rem;
+  z-index: 20;
+  padding: 0.6rem 1rem;
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top var(--step);
+}
+
+.skip:focus { top: 0.75rem; }
+
+/* 76rem sind 1216 px. Bei 62rem blieben auf einem 1920er Bildschirm 464 px
+   Rand je Seite stehen, und der Hero-Text nutzte 32 % der Breite — die
+   häufigste Auflösung sah eine Seite, die für ein Notebook gebaut war.
+   Fließtext bleibt trotzdem schmal; begrenzt wird er dort, wo er steht. */
+.wrap {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+/* ── Kopfzeile ─────────────────────────────────────────────────────────── */
+
+/* Sie bleibt stehen, weil der Kaufgrund am Ende der Seite steht und der
+   Kaufknopf am Anfang. Wer unten überzeugt ist, soll nicht zurückscrollen
+   müssen. */
+header.site {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 0;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+
+header.site .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* Kein ``gap`` hier, und das ist der Punkt: in einem Flex-Container wird jeder
+   Textknoten zu einem eigenen Element. „Solidon" und ``<span>3D</span>`` waren
+   damit zwei davon, und der Abstand dazwischen schrieb den Markennamen als
+   „Solidon 3D" — mit Lücke, gegen Fenstertitel, Domain und branding.py. Der
+   Abstand gehört an das Symbol, nicht zwischen die Silben. */
+.brand {
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.brand span { color: var(--accent); }
+
+.brand svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-right: 0.5rem;
+  transition: transform 0.5s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.brand:hover svg { transform: rotate(-20deg); }
+
+nav.lang {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-size: 0.95rem;
+}
+
+nav.lang a {
+  color: var(--muted);
+  text-decoration: none;
+  position: relative;
+  padding: 0.15rem 0;
+}
+
+/* Der Sprachwechsel: ein Aufklappmenü statt sechs Kürzeln — die Reihe machte
+   die Kopfzeile voll, ohne zu sagen, was ES oder PT bedeutet. Zu sehen ist
+   das eigene Kürzel mit Pfeil; offen stehen die Sprachen ausgeschrieben.
+   ``details`` braucht kein Skript und funktioniert mit Tastatur und Finger.
+   Die eigene Sprache steht fett und heller da, nicht nur andersfarbig
+   (Regel 18 gilt auch hier). */
+nav.lang details.langs {
+  position: relative;
+}
+
+/* Zugeklappt muss man ihm ansehen, dass er sich öffnet: eine schmale Pille
+   mit Rahmen statt bloßem Text — „DE" allein las sich als Beschriftung,
+   nicht als Knopf. */
+nav.lang details.langs summary {
+  list-style: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: border-color var(--step), color var(--step);
+}
+
+nav.lang details.langs summary:hover,
+nav.lang details.langs[open] summary {
+  border-color: var(--accent);
+}
+
+nav.lang details.langs summary::-webkit-details-marker { display: none; }
+
+/* Der Pfeil ist gezeichnet, kein Schriftzeichen — er dreht beim Öffnen. */
+nav.lang details.langs summary::after {
+  content: "";
+  width: 0.4em;
+  height: 0.4em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-25%);
+  transition: transform var(--step);
+}
+
+nav.lang details.langs[open] summary::after {
+  transform: rotate(225deg) translateY(15%);
+}
+
+nav.lang details.langs summary:hover { color: var(--accent); }
+
+nav.lang details.langs ul {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.6rem);
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  box-shadow: var(--shadow-lift);
+  min-width: 9.5rem;
+  z-index: 20;
+}
+
+nav.lang details.langs li a {
+  display: block;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.4rem;
+  font-size: 0.9rem;
+}
+
+nav.lang details.langs li a::after { display: none; }
+
+nav.lang details.langs li a:hover {
+  background: var(--accent-soft);
+}
+
+nav.lang details.langs li a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+nav.lang a[aria-current="page"] {
+  color: var(--fg);
+}
+
+nav.lang a[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* Der Strich wächst aus der Mitte, statt zu erscheinen. Zwei Bildpunkte
+   Bewegung sind genug, damit ein Zeiger sich bestätigt fühlt. */
+nav.lang a::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.15rem;
+  height: 2px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transition: transform var(--step);
+}
+
+nav.lang a:hover { color: var(--accent); }
+nav.lang a:hover::after { transform: scaleX(1); }
+
+nav.lang a.cta {
+  color: var(--bg);
+  background: var(--accent);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  transition: transform var(--step), box-shadow var(--step);
+}
+
+nav.lang a.cta::after { display: none; }
+
+nav.lang a.cta:hover {
+  color: var(--bg);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Was auf einem schmalen Gerät zuerst weicht, ist eine Reihenfolge und keine
+   Menge: „Funktionen“ steht ausführlich weiter unten auf derselben Seite, der
+   Preis ist die erste Frage eines Interessenten. Er bleibt deshalb, bis es
+   wirklich eng wird — darunter führt der Demo-Knopf ohnehin auf denselben
+   Abschnitt. */
+@media (max-width: 44rem) {
+  nav.lang .hide-small { display: none; }
+}
+
+@media (max-width: 30rem) {
+  nav.lang .hide-tiny { display: none; }
+}
+
+/* ── Aufmacher ─────────────────────────────────────────────────────────── */
+
+.hero {
+  padding: 4rem 0 3rem;
+  position: relative;
+}
+
+/* Ein weicher Schein in der Akzentfarbe hinter dem Aufmacher. Er trägt keine
+   Bedeutung, er nimmt der Seite nur die Kälte einer Textwüste — und liegt
+   deshalb hinter allem und ohne Ereignisse. */
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -6rem -20% auto -20%;
+  height: 42rem;
+  background:
+    radial-gradient(60% 55% at 22% 28%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
+    radial-gradient(50% 50% at 82% 12%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 72%);
+  pointer-events: none;
+}
+
+/* Millimeterpapier unter dem Aufmacher. Es sagt „Konstruktion", bevor der
+   erste Satz gelesen ist — und es sagt es leise: fünf Prozent Deckkraft,
+   nach unten und außen ausgeblendet, damit es Grund bleibt und nie Muster
+   wird. Ohne ``mask-image`` fehlt nur das Auslaufen, nicht das Raster. */
+.hero::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -3rem -12% auto -12%;
+  height: 34rem;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--fg) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--fg) 5%, transparent) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+  -webkit-mask-image: radial-gradient(75% 85% at 35% 20%, #000 30%, transparent 80%);
+  mask-image: radial-gradient(75% 85% at 35% 20%, #000 30%, transparent 80%);
+  pointer-events: none;
+}
+
+.hero h1 {
+  font-size: clamp(1.9rem, 4.5vw, 3rem);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0 0 1rem;
+  max-width: 20ch;
+}
+
+.hero p.lead {
+  font-size: 1.2rem;
+  color: var(--muted);
+  max-width: 40ch;
+  margin: 0 0 1.75rem;
+}
+
+/* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
+   dem Preiskasten: auf 1920 × 1080 begann es bei 770 px und war an der
+   Bildschirmkante abgeschnitten — das beste Verkaufsargument lag unter der
+   Falz. Nebeneinander steht beides über ihr. */
+@media (min-width: 68rem) {
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(21rem, 0.85fr) minmax(0, 1.25fr);
+    gap: 3rem;
+    align-items: center;
+  }
+
+  /* In der Spalte begrenzt die Spalte. Eine zusätzliche Zeichenbreite
+     bräche die Überschrift ein zweites Mal um — vier Zeilen aus vier
+     Wörtern lesen sich wie eine Liste. */
+  .hero h1 {
+    font-size: clamp(2rem, 2.6vw, 2.9rem);
+    max-width: none;
+  }
+
+  .hero p.lead { max-width: none; }
+
+  .hero .stage { margin-top: 0; }
+}
+
+.download {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 34rem;
+  box-shadow: var(--shadow);
+}
+
+.download strong { font-size: 1.1rem; }
+
+.download p { margin: 0.5rem 0 0; color: var(--muted); }
+
+.download b { color: var(--fg); }
+
+/* Der Zähler bis zur Demo. Er steht unter dem Termin, nicht an seiner Stelle:
+   der Satz darüber nennt Tag und Uhrzeit auch dann, wenn kein Skript läuft,
+   und dann bleibt dieser Absatz schlicht verborgen.
+
+   ``tabular-nums`` ist hier kein Feinschliff, sondern der Unterschied
+   zwischen einer Zeile und einem Zappeln: ohne das ändert jede wechselnde
+   Sekunde die Breite der Ziffer, und der halbe Kasten rückt im Sekundentakt
+   hin und her. */
+.download .countdown {
+  margin: 0.4rem 0 0;
+  color: var(--accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.1rem;
+  padding: 0.7rem 1.35rem;
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+  position: relative;
+  overflow: hidden;
+  transition: transform var(--step), box-shadow var(--step), filter var(--step);
+}
+
+/* Ein Streiflicht, das beim Zeigen einmal über den Knopf läuft — dieselbe
+   Geste wie auf der Bühne der Bildschirmfotos, nur kleiner. Der Geisterknopf
+   hat keinen Grund, auf dem Licht liegen könnte; er bleibt still. */
+.btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgb(255 255 255 / 22%) 50%, transparent 60%);
+  transform: translateX(-130%);
+  transition: transform 0.55s cubic-bezier(0.45, 0, 0.3, 1);
+  pointer-events: none;
+}
+
+.btn:hover::after { transform: translateX(130%); }
+
+.btn.ghost::after { display: none; }
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+  filter: saturate(115%);
+}
+
+.btn:active { transform: translateY(0); }
+
+.btn svg { width: 1.05em; height: 1.05em; }
+
+.btn.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--line);
+  margin-left: 0.5rem;
+}
+
+/* Vier Zusagen in einer Zeile, direkt unter dem Preis. Sie beantworten die
+   Fragen, die ein Käufer sonst erst im Kleingedruckten sucht. */
+.assure {
+  list-style: none;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.assure li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.assure svg {
+  width: 0.95em;
+  height: 0.95em;
+  color: var(--accent);
+  flex: none;
+}
+
+/* ── Bühne für Bildschirmfotos ─────────────────────────────────────────── */
+
+.stage {
+  position: relative;
+  background: var(--stage);
+  border: 1px solid var(--stage-line);
+  border-radius: 0.9rem;
+  padding: 0.55rem;
+  margin-top: 2.5rem;
+  box-shadow: var(--shadow-lift);
+  overflow: hidden;
+}
+
+/* **Antippen öffnet das Bild.** Ein Bildschirmfoto von 1400 px steht auf
+   einem 375er Schirm 327 px breit — 23 Prozent, und eine Beschriftung, die
+   im Original 14 px hoch war, ist dort noch 3,3. Das lässt sich nicht
+   wegregeln: Die Bühne misst dort bereits 341 bis 353 px, ein Ausbruch aus
+   dem Textrahmen brächte 29 Bildpunkte und aus 3,3 px Schrift 3,6.
+
+   Der Verweis zeigt auf dieselbe Datei, der Browser zoomt von selbst — kein
+   JavaScript, keine Lightbox. Der Weg ist von `235d7050` übernommen, wo er
+   fürs Handbuch gebaut wurde; die Entscheidung, es dabei zu belassen und
+   keine eigenen Handyfassungen zu zeichnen, ist Roberts (27.08.2026).
+
+   Am Bildschirm ändert sich dadurch nichts: kein Unterstrich, keine
+   Linkfarbe, und `display: block` verhindert die Zeilenlücke, die ein
+   Inline-Element unter einem Bild hinterlässt. Der Zeiger sagt es
+   stattdessen — `zoom-in` ist die eine Stelle, an der ein Wort überflüssig
+   ist, weil das Zeichen selbst die Handlung nennt. */
+.stage a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: zoom-in;
+}
+
+/* Die Fensterleiste macht aus einem Bildausschnitt ein Programm. Drei
+   Kreise sind dekorativ und deshalb ohne Text — die Bedeutung des Bildes
+   steht in seinem alt-Text. */
+.stage .chrome {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.15rem 0.35rem 0.5rem;
+}
+
+.stage .chrome i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--stage-line);
+}
+
+.stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.45rem;
+}
+
+/* Ein Streiflicht, das einmal über die Bühne wandert, sobald sie ins Bild
+   kommt. Kein Dauerlauf: eine Bewegung, die nicht aufhört, wird zum
+   Flimmern am Rand des Blickfelds. */
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 38%, rgb(255 255 255 / 7%) 46%, transparent 54%);
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+
+.stage.wide { max-width: none; }
+
+/* ── Zahlenleiste ──────────────────────────────────────────────────────── */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin: 0;
+}
+
+.stats div {
+  background: var(--card);
+  padding: 1.2rem 1.25rem;
+  transition: background var(--step);
+}
+
+.stats div:hover { background: var(--accent-soft); }
+
+.stats b {
+  display: block;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats span {
+  display: block;
+  font-size: 0.92rem;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+
+/* ── Abschnitte ────────────────────────────────────────────────────────── */
+
+section {
+  padding: 3.5rem 0;
+  border-top: 1px solid var(--line);
+}
+
+section.tint {
+  background: var(--bg-alt);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+section.tint + section { border-top: none; }
+
+section h2 {
+  font-size: clamp(1.5rem, 2.6vw, 2rem);
+  letter-spacing: -0.015em;
+  margin: 0 0 0.5rem;
+}
+
+/* Eine Überschrift bricht dort um, wo die Zeile voll ist — und die letzte
+   trägt dann, was übrig blieb. Auf dem Handy stand „Das heruntergeladene
+   Teil passt nicht. Mach es passend." in drei Zeilen, deren dritte ein
+   einziges Wort führte: 120 Bildpunkte unter zwei vollen Zeilen.
+
+   `text-wrap: balance` verteilt die Wörter gleichmäßig auf die Zeilen, die
+   ohnehin gebraucht werden. Gemessen bei 390 px: weiter drei Zeilen, die
+   letzte aber 241 statt 120 Bildpunkte breit. Die Schrift zu verkleinern
+   half nicht — dieselben drei Zeilen, die letzte sogar kürzer (107 px).
+
+   Browser begrenzen das Verfahren von sich aus auf wenige Zeilen; auf einem
+   Fließtextabsatz täte es deshalb nichts, und dort ist es auch nicht
+   gemeint. Wo es fehlt, bricht die Überschrift wie bisher — ein Zuwachs,
+   kein Erfordernis. */
+:is(h1, h2, h3) { text-wrap: balance; }
+
+/* Eine Unterseite führt ihre Überschrift als h1 dort, wo die Startseite eine
+   h2 hätte — eine Stufe größer, sonst gleich. Ohne diese Regel bliebe sie auf
+   der Browservorgabe stehen: die gilt nur für `.hero h1` und `main.legal h1`. */
+section h1 {
+  font-size: clamp(1.9rem, 3.2vw, 2.5rem);
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+}
+
+section > .wrap > :is(h1, h2) + p.sub {
+  margin: 0 0 2rem;
+  color: var(--muted);
+  max-width: 56ch;
+  font-size: 1.08rem;
+}
+
+section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
+
+/* ── Schmerzpunkte: was der Nutzer kennt, und was daraus wird ──────────── */
+
+.pains {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.pains li {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.35rem;
+  transition: transform var(--step), box-shadow var(--step), border-color var(--step);
+}
+
+.pains li:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lift);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+.pains q {
+  display: block;
+  font-size: 1.02rem;
+  font-style: italic;
+  color: var(--muted);
+  margin-bottom: 0.7rem;
+}
+
+/* Die Anführungszeichen setzt der Browser selbst — er kennt die Sprache aus
+   dem ``lang`` des Dokuments und nimmt „…“ für Deutsch und “…” für Englisch.
+   Fest eingetragen standen hier vorher die deutschen, auch auf der
+   englischen Seite. */
+
+.pains p {
+  margin: 0;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--line);
+}
+
+.pains p b { color: var(--accent); }
+
+/* ── Erste Schritte: drei Schritte, ein Beleg ──────────────────────────── */
+
+/* Der Einstieg als Weg, nicht als Behauptung: links drei nummerierte
+   Schritte, rechts der Startbildschirm, der sie belegt. Beides über
+   Variablen, damit hell und dunkel dieselbe Aussage zeigen. */
+.steps {
+  display: grid;
+  gap: 2.25rem;
+  align-items: center;
+}
+
+@media (min-width: 62rem) {
+  .steps {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 3.5rem;
+  }
+}
+
+ol.steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: steps;
+  display: grid;
+  gap: 1.4rem;
+}
+
+ol.steps-list li {
+  counter-increment: steps;
+  position: relative;
+  padding-left: 3.2rem;
+  color: var(--muted);
+}
+
+ol.steps-list li::before {
+  content: counter(steps);
+  position: absolute;
+  left: 0;
+  top: -0.05rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Die Linie verbindet die Nummern zu einem Weg. Sie endet an der letzten —
+   ein Weg, der weiterführt, wo nichts mehr kommt, verspricht zu viel. */
+ol.steps-list li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(1.1rem - 1px);
+  top: 2.5rem;
+  bottom: -1.15rem;
+  width: 2px;
+  background: var(--line);
+}
+
+ol.steps-list b {
+  display: block;
+  color: var(--fg);
+  font-size: 1.08rem;
+  margin-bottom: 0.15rem;
+}
+
+/* ── Die vier Wege ─────────────────────────────────────────────────────── */
+
+/* Zwei Karten je Zeile, nicht vier. Mit `minmax(16rem, …)` standen alle vier
+   nebeneinander: 279 px je Karte, davon 236 px für die Zeichnung, die bei
+   ihrem Seitenverhältnis von 320:140 dann 103 px hoch war — ein Achtel einer
+   Karte von rund 730 px. Die Vignette soll den Weg vorführen, bevor der Text
+   ihn erklärt, und dafür war sie zu klein.
+
+   Bei 34rem passen zwei Spalten in die 76rem des Rumpfes und drei nicht:
+   578 px je Karte, davon 533 px Bild — Rahmen und Polster gehen ab, und mit
+   `box-sizing: border-box` zählt der Rahmen zur Kartenbreite —, also
+   **233 px hoch**. Am Browser nachgemessen: 578 und 533 auf den Punkt, das
+   Bild 234 statt 233 (Chromium rundet anders auf).
+
+   **`min()` um das Mindestmaß, und daran hängt die ganze Regel.** `auto-fit`
+   nimmt Spalten weg, aber es macht die letzte nicht schmaler als ihr
+   Mindestmaß: Unter 544 px Fensterbreite stand *eine* Spalte da, und die war
+   weiter 544 px breit. `html` und `body` tragen `overflow-x: clip`, also
+   scrollte da nichts — auf einem 390er Telefon fehlten schlicht die rechten
+   150 px jeder Karte. Gerechnet war die Regel richtig und trotzdem falsch;
+   gesehen hat man es erst im laufenden Browser, und genau deshalb steht die
+   Messung hier und nicht nur die Rechnung.
+
+   `align-items: start` dazu: ohne das streckt das Raster jede Karte auf die
+   Höhe der längsten ihrer Zeile, und unter der kürzeren stand Leerraum, den
+   der Text der Nachbarin aufgemacht hat. Es ist derselbe Grund, aus dem die
+   Karten im Fenster keine Streckfaktoren haben. */
+.ways {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(34rem, 100%), 1fr));
+  align-items: start;
+  gap: 1.25rem;
+}
+
+.way {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  padding: 1.5rem 1.35rem 1.35rem;
+  overflow: hidden;
+  transition: transform var(--step), box-shadow var(--step), border-color var(--step);
+}
+
+/* Ein Streifen in der Akzentfarbe, der beim Zeigen von links einläuft. Er
+   ist die zweite Kodierung neben der Farbe: die Karte hebt sich außerdem. */
+.way::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.3s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.way:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lift);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+}
+
+.way:hover::before { transform: scaleY(1); }
+
+.way h3 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+
+.way .tag {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.way p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+
+/* Die Vignette über jedem Weg: eine kleine Zeichnung, die den Weg vorführt,
+   bevor der Text ihn erklärt. Sie erbt Bühne und Farben von ``.figure`` —
+   hier steht nur, was in der Karte anders ist. */
+.way .art {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 1rem;
+  border-radius: 0.5rem;
+  background: var(--stage);
+  border: 1px solid var(--stage-line);
+  box-shadow: none;
+}
+
+/* ── Beweiszeilen: Behauptung links, Bild rechts ───────────────────────── */
+
+.showcase {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+  padding: 2.75rem 0;
+  border-top: 1px dashed var(--line);
+}
+
+.showcase:first-of-type { border-top: none; padding-top: 0.5rem; }
+
+@media (min-width: 62rem) {
+  .showcase {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 3.5rem;
+  }
+
+  /* Jede zweite Zeile dreht sich um. Sonst entsteht eine Kante aus lauter
+     linksbündigen Bildern, und das Auge hört auf hinzusehen. */
+  .showcase.flip > .shot { order: -1; }
+}
+
+.showcase h3 {
+  font-size: 1.4rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.6rem;
+}
+
+.showcase .kicker {
+  display: inline-block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  margin-bottom: 0.85rem;
+}
+
+.showcase p { margin: 0 0 0.8rem; color: var(--muted); }
+
+.showcase .note {
+  font-size: 0.92rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid var(--accent);
+  color: var(--muted);
+}
+
+.showcase .note b { color: var(--fg); }
+
+/* ``figure`` bringt in jedem Browser 40 px Rand links und rechts mit. Ohne
+   das Zurücksetzen war die Spalte mit dem Bild 80 px schmaler als die mit
+   dem Text, und die Bildunterschrift stand eingerückt unter dem Bild. */
+.shot {
+  min-width: 0;
+  margin: 0;
+}
+
+.shot .stage { margin-top: 0; }
+
+.shot figcaption {
+  margin-top: 0.7rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+/* Hier stand ein Beschnitt für den Operationsdialog: Seine Aufnahme trug einen
+   breiten leeren Kopf, und `aspect-ratio` mit `object-fit: cover` schnitt ihn
+   auf der Seite weg. Der Kommentar sagte selbst, dass die Datei „beim nächsten
+   Lauf neu erzeugt" wird — der Lauf ist gelaufen (`fit_height=True`), und das
+   Bild ist 520 × 195 statt 520 × 460. Der Beschnitt hätte jetzt vom **richtigen**
+   Bild unten etwas abgeschnitten, also ist er weg. */
+
+/* ── Zeichnungen, die sich bewegen ─────────────────────────────────────── */
+
+/* Die drei erklärenden Zeichnungen sind eingebettet und nicht verlinkt: nur
+   so erben sie die Farben der Seite und funktionieren in hell wie dunkel.
+   Ihre Bewegung startet erst, wenn sie im Bild sind — eine Erklärung, die
+   abgelaufen ist, bevor jemand hinsieht, erklärt nichts. */
+.figure {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: var(--stage);
+  border: 1px solid var(--stage-line);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow);
+}
+
+.figure .body { fill: #cfd4db; stroke: #8b929b; stroke-width: 1.2; }
+.figure .body-soft { fill: #9aa2ad; stroke: none; }
+.figure .rule { stroke: #575e69; stroke-width: 1; }
+.figure .ink { fill: #e6e9ee; font-size: 12px; font-family: system-ui, "Segoe UI", sans-serif; }
+.figure .dim { fill: #98a0ab; font-size: 11px; font-family: system-ui, "Segoe UI", sans-serif; }
+.figure .hot { fill: #e08b4e; }
+.figure .hot-stroke { stroke: #e08b4e; fill: none; stroke-width: 1.6; }
+.figure .warn { fill: #e0b24e; }
+.figure .field {
+  fill: #22262c;
+  stroke: #3a4048;
+  stroke-width: 1;
+}
+.figure .value {
+  fill: #e08b4e;
+  font-size: 13px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-weight: 600;
+}
+
+/* ── Was drinsteckt ────────────────────────────────────────────────────── */
+
+ul.features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 1rem 2rem;
+}
+
+ul.features li {
+  padding-left: 1.4rem;
+  position: relative;
+}
+
+ul.features li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 2px;
+  background: var(--accent);
+  transition: transform var(--step);
+}
+
+ul.features li:hover::before { transform: rotate(45deg) scale(1.15); }
+
+ul.features b { display: inline; }
+
+/* ── Sprungliste der Funktionsseite ────────────────────────────────────── */
+
+/* Zwölf Blöcke sind fünf Bildschirme. Die Liste steht zwischen Aufmacher und
+   erstem Block und sagt, was kommt — als nummerierte Liste, weil die Zahl
+   allein schon den Umfang zeigt. `site.js` markiert darin den Block, der
+   gerade gelesen wird; ohne das Skript bleibt es eine Sprungliste. */
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: toc;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.15rem 1.75rem;
+}
+
+.toc li { counter-increment: toc; }
+
+.toc a {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+  transition: color var(--step);
+}
+
+.toc a::before {
+  content: counter(toc, decimal-leading-zero);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82em;
+  color: var(--accent);
+}
+
+.toc a:hover { color: var(--fg); }
+
+/* Der Block, der gerade gelesen wird. Nicht allein über Farbe: er trägt den
+   fetteren Schnitt und einen kräftigen Strich darunter (Regel 18). */
+.toc a[aria-current] {
+  color: var(--fg);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+
+/* ── Ehrlichkeitsblock ─────────────────────────────────────────────────── */
+
+/* Der einzige Block der Seite, der aus langen Sätzen besteht. Über die volle
+   Breite gezogen wären das Zeilen von 150 Zeichen — die Augen finden den
+   Zeilenanfang nicht wieder. */
+.honest {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  max-width: 58rem;
+  box-shadow: var(--shadow);
+}
+
+.honest ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+
+.honest li { margin: 0.45rem 0; }
+
+/* ── Preis ─────────────────────────────────────────────────────────────── */
+
+.price {
+  display: grid;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 56rem) {
+  .price { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 2.5rem; }
+}
+
+.price-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 0.75rem;
+  padding: 1.75rem;
+  box-shadow: var(--shadow);
+}
+
+.price-card .amount {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.25rem;
+}
+
+.price-card .amount b {
+  font-size: 3rem;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+
+.price-card .amount s {
+  color: var(--muted);
+  font-size: 1.2rem;
+  text-decoration-thickness: 2px;
+}
+
+.price-card .amount em {
+  font-style: normal;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+}
+
+.price-card .terms { color: var(--muted); margin: 0 0 0.5rem; }
+
+.price-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.price-list li {
+  display: grid;
+  grid-template-columns: 1.3rem 1fr;
+  gap: 0.6rem;
+  align-items: start;
+}
+
+.price-list svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--accent);
+  margin-top: 0.3rem;
+}
+
+/* ── Voraussetzungen ───────────────────────────────────────────────────── */
+
+table.req {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 48rem;
+}
+
+table.req td {
+  padding: 0.65rem 1rem 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.req tr { transition: background var(--step); }
+
+table.req tr:hover { background: var(--card); }
+
+table.req td:first-child {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── Fragen ────────────────────────────────────────────────────────────── */
+
+.faq {
+  max-width: 58rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.faq details {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0 1.15rem;
+  transition: border-color var(--step), box-shadow var(--step);
+}
+
+.faq details[open] {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  box-shadow: var(--shadow);
+}
+
+.faq summary {
+  cursor: pointer;
+  padding: 0.95rem 0;
+  font-weight: 600;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.faq summary::-webkit-details-marker { display: none; }
+
+/* Das Zeichen dreht sich, statt ausgetauscht zu werden — der Zustand ist
+   dann auch während des Wechsels ablesbar, nicht nur davor und danach. */
+.faq summary::after {
+  content: "";
+  flex: none;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-right: 2px solid var(--accent);
+  border-bottom: 2px solid var(--accent);
+  transform: rotate(45deg);
+  transition: transform var(--step);
+}
+
+.faq details[open] summary::after { transform: rotate(-135deg); }
+
+.faq details > *:not(summary) {
+  margin: 0 0 1rem;
+  color: var(--muted);
+}
+
+/* Die Antwort steigt beim Aufklappen ein Stück auf, statt zu erscheinen.
+   Zeitgesteuert, nicht scrollgesteuert — sie folgt dem Klick, nicht dem
+   Bildlauf. Zugeklappt rendert der Browser den Inhalt nicht, also feuert
+   die Animation genau einmal je Öffnen. */
+.faq details[open] > *:not(summary) {
+  animation: rise 0.3s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+
+/* ── Schluss ───────────────────────────────────────────────────────────── */
+
+.closing {
+  text-align: center;
+  padding: 4rem 1.5rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  box-shadow: var(--shadow);
+}
+
+.closing h2 { margin-bottom: 0.75rem; }
+
+.closing p {
+  color: var(--muted);
+  max-width: 46ch;
+  margin: 0 auto 1rem;
+}
+
+/* Zwei nebeneinanderstehende Knöpfe richten sich an der Grundlinie aus, und
+   der mit dem Symbol darin hat eine andere — sie standen um vier Bildpunkte
+   versetzt. */
+.closing .btn { vertical-align: middle; }
+
+footer.site {
+  border-top: 1px solid var(--line);
+  padding: 2rem 0 3rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+footer.site a { color: var(--muted); }
+
+footer.site a:hover { color: var(--accent); }
+
+/* ── Rechtstexte ───────────────────────────────────────────────────────── */
+
+/* Ohne das ``margin`` klebt eine Rechtstextseite am linken Rand — bei 76rem
+   Seitenbreite steht der Text dann in einem Drittel und zwei Drittel bleiben
+   leer. Die Breite selbst bleibt schmal: das sind lange Sätze. */
+main.legal { padding: 3rem 0; max-width: 46rem; margin: 0 auto; }
+
+main.legal h1 { font-size: 1.8rem; }
+
+main.legal h2 { font-size: 1.3rem; margin-top: 2.5rem; }
+
+main.legal h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+
+main.legal hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+
+main.legal blockquote {
+  margin: 1rem 0;
+  padding: 0.8rem 1.2rem;
+  background: var(--card);
+  border-left: 3px solid var(--line);
+  border-radius: 0.35rem;
+}
+
+main.legal blockquote p { margin: 0; }
+
+main.legal ol, main.legal ul { padding-left: 1.4rem; }
+
+main.legal li { margin: 0.35rem 0; }
+
+/* Die Leerzeilen des Widerrufsformulars — sie sind zum Ausfüllen da. */
+main.legal p.blank {
+  border-bottom: 1px solid var(--line);
+  margin: 0.2rem 0 1.4rem;
+}
+
+.draft {
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 2rem;
+}
+
+a { color: var(--accent); }
+
+/* ── Bewegung ──────────────────────────────────────────────────────────── */
+
+/* Alles ab hier ist Zugabe. Der Block steht bewusst am Ende und hinter einem
+   ``@supports``: kennt der Browser die scroll-gesteuerte Zeitachse nicht,
+   greift keine einzige Regel, und die Seite steht vollständig da. Nichts wird
+   über ``opacity: 0`` versteckt, was ohne Animation nie wieder auftaucht. */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(1.5rem); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes rise-tilt {
+  from { opacity: 0; transform: perspective(1400px) rotateX(7deg) translateY(2rem) scale(0.97); }
+  to { opacity: 1; transform: perspective(1400px) rotateX(0) translateY(0) scale(1); }
+}
+
+@keyframes sweep {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(120%); }
+}
+
+@keyframes draw {
+  from { stroke-dashoffset: var(--len, 300); }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Der Aufmacher steigt beim Laden auf — einmal, zeitgesteuert, gestaffelt.
+   Er steht beim Laden im Bild, eine Scroll-Zeitachse hätte an ihm nichts zu
+   messen. ``both`` mit Verzögerung hält die späteren Elemente zurück; wo
+   Animationen abgeschaltet sind, greift der Block am Dateiende und alles
+   steht sofort da. */
+@media (prefers-reduced-motion: no-preference) {
+  .hero-text > * {
+    animation: rise 0.55s cubic-bezier(0.33, 1, 0.68, 1) both;
+  }
+
+  .hero-text > :nth-child(2) { animation-delay: 0.09s; }
+  .hero-text > :nth-child(3) { animation-delay: 0.18s; }
+}
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+
+    /* ``both`` hält den Anfangszustand vor dem Eintritt und den Endzustand
+       danach. Ohne das blitzt jedes Element einmal in voller Deckkraft auf,
+       bevor die Zeitachse greift. */
+    .stats div,
+    .pains li,
+    ol.steps-list li,
+    .way,
+    .showcase > *,
+    .honest,
+    ul.features li,
+    .price-card,
+    .price > div,
+    table.req,
+    .faq details,
+    .closing {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 5% cover 22%;
+    }
+
+    /* Die Karten einer Reihe kommen nacheinander. Der Versatz steckt im
+       Bereich, nicht in einer Verzögerung — eine Verzögerung wäre an die
+       Zeit gebunden, der Bereich ist an den Bildlauf gebunden und läuft
+       deshalb auch rückwärts sauber. */
+    .pains li:nth-child(2),
+    ol.steps-list li:nth-child(2),
+    .way:nth-child(2),
+    ul.features li:nth-child(2n) { animation-range: entry 5% cover 27%; }
+
+    .pains li:nth-child(3),
+    ol.steps-list li:nth-child(3),
+    .way:nth-child(3) { animation-range: entry 5% cover 32%; }
+
+    .pains li:nth-child(4) { animation-range: entry 5% cover 37%; }
+
+    /* Die Zahlenleiste zählt sich Zelle für Zelle auf — sechs Werte, die
+       gleichzeitig erscheinen, liest niemand als sechs. */
+    .stats div:nth-child(2) { animation-range: entry 5% cover 25%; }
+    .stats div:nth-child(3) { animation-range: entry 5% cover 28%; }
+    .stats div:nth-child(4) { animation-range: entry 5% cover 31%; }
+    .stats div:nth-child(5) { animation-range: entry 5% cover 34%; }
+    .stats div:nth-child(6) { animation-range: entry 5% cover 37%; }
+
+    /* Das große Bildschirmfoto richtet sich beim Hereinkommen auf. Sieben
+       Grad sind wenig genug, dass niemand sie benennen kann, und genug,
+       dass die Seite sich anfühlt wie eine Vorführung. */
+    .shot .stage {
+      animation: rise-tilt linear both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 30%;
+      transform-origin: center top;
+    }
+
+    .stage::after {
+      animation: sweep 1.1s cubic-bezier(0.45, 0, 0.3, 1) both;
+      animation-timeline: view();
+      animation-range: entry 20% cover 35%;
+    }
+
+  }
+}
+
+/* ── Die Zeichnungen, die etwas vorführen ──────────────────────────────── */
+
+/* Sie hängen nicht am Bildlauf, sondern an der Zeit: eine Erklärung, die nur
+   vorankommt, solange jemand scrollt, erklärt nichts. Ein Durchlauf dauert
+   sieben Sekunden, davon sind gut vier Ruhe — der Endzustand steht lange
+   genug still, um gelesen zu werden. Die drei Vignetten über den Wegen
+   teilen sich den Takt, aber nicht die Phase: jede hat ihren Auftritt in
+   einem anderen Drittel, damit die Reihe nicht synchron zappelt.
+
+   Jede Zeichnung zeigt zwei Zustände übereinander, und welcher davon gilt,
+   entscheidet allein die Animation. Läuft keine, wären beide gleichzeitig
+   sichtbar: „2,40 mm“ über „3,60 mm“, „passt nicht“ über „passt“. Deshalb
+   steht der Anfangszustand hier auch ohne Animation fest — und der Block
+   für ``prefers-reduced-motion`` weiter unten setzt dann den *End*zustand,
+   denn der trägt die Aussage. Wer keine Bewegung will, sieht das Ergebnis,
+   nicht das Problem. */
+.figure .anim {
+  animation-duration: 7s;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  transform-box: fill-box;
+}
+
+.fig-value-thick,
+.fig-verdict-yes,
+.fig-pins,
+.fig-chat-card,
+.fig-chat-op-1,
+.fig-chat-op-2,
+.fig-chat-op-3,
+.fig-chat-done,
+.fig-hole-45,
+.fig-w1-cursor,
+.fig-w1-ring,
+.fig-w1-d52,
+.fig-w2-v110,
+.fig-w3-fixed,
+.fig-w4-shaped { opacity: 0; }
+
+/* Zeichnung 1 — an der Zahl drehen, das Modell folgt. */
+@keyframes fig-value-thin {
+  0%, 26% { opacity: 1; }
+  29%, 87% { opacity: 0; }
+  90%, 100% { opacity: 1; }
+}
+
+@keyframes fig-value-thick {
+  0%, 29% { opacity: 0; }
+  32%, 84% { opacity: 1; }
+  87%, 100% { opacity: 0; }
+}
+
+/* Der Hohlraum misst 198 × 124 und soll 182 × 116 werden — das sind die
+   16 auf 24 Bildpunkte Wand und Boden, die aus 2,40 mm bei 3,60 mm werden.
+   Die Faktoren sind gerechnet, nicht geschätzt: 182/198 und 116/124. Der
+   Ursprung liegt oben mittig, damit die Wand symmetrisch nach innen wächst
+   und der Boden nach oben. */
+@keyframes fig-cavity {
+  0%, 26% { transform: scale(1, 1); }
+  44%, 84% { transform: scale(0.9192, 0.9355); }
+  100% { transform: scale(1, 1); }
+}
+
+/* Derselbe Sprung als Balken unter der linken Wand: 16 → 24 ist Faktor 1,5. */
+@keyframes fig-wall-bar {
+  0%, 26% { transform: scaleX(1); }
+  44%, 84% { transform: scaleX(1.5); }
+  100% { transform: scaleX(1); }
+}
+
+.fig-value-thin { animation-name: fig-value-thin; }
+.fig-value-thick { animation-name: fig-value-thick; }
+.fig-cavity { animation-name: fig-cavity; transform-origin: center top; }
+.fig-wall-bar { animation-name: fig-wall-bar; transform-origin: left center; }
+
+/* Zeichnung 2 — die Schichtanalyse fährt durch das Teil. */
+@keyframes fig-scan {
+  0% { transform: translateY(0); opacity: 0; }
+  8% { opacity: 1; }
+  76%, 88% { transform: translateY(-112px); opacity: 1; }
+  100% { transform: translateY(-112px); opacity: 0; }
+}
+
+@keyframes fig-find-1 {
+  0%, 20% { opacity: 0; transform: scale(0.5); }
+  28%, 92% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+@keyframes fig-find-2 {
+  0%, 42% { opacity: 0; transform: scale(0.5); }
+  50%, 92% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+@keyframes fig-find-3 {
+  0%, 62% { opacity: 0; transform: scale(0.5); }
+  70%, 92% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5); }
+}
+
+.fig-scan { animation-name: fig-scan; }
+.fig-find-1 { animation-name: fig-find-1; transform-origin: center; }
+.fig-find-2 { animation-name: fig-find-2; transform-origin: center; }
+.fig-find-3 { animation-name: fig-find-3; transform-origin: center; }
+
+/* Zeichnung 3 — zu breit fürs Bett, also geteilt und verstiftet. */
+@keyframes fig-half-left {
+  0%, 18% { transform: translateX(0); }
+  44%, 86% { transform: translateX(-46px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes fig-half-right {
+  0%, 18% { transform: translateX(0); }
+  44%, 86% { transform: translateX(46px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes fig-pins {
+  0%, 26% { opacity: 0; }
+  46%, 86% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fig-verdict-no {
+  0%, 22% { opacity: 1; }
+  28%, 94% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fig-verdict-yes {
+  0%, 28% { opacity: 0; }
+  34%, 88% { opacity: 1; }
+  94%, 100% { opacity: 0; }
+}
+
+.fig-half-left { animation-name: fig-half-left; }
+.fig-half-right { animation-name: fig-half-right; }
+.fig-pins { animation-name: fig-pins; }
+.fig-verdict-no { animation-name: fig-verdict-no; }
+.fig-verdict-yes { animation-name: fig-verdict-yes; }
+
+/* Zeichnung 4 — ein Satz im Chat wird ein Vorschlag, der Vorschlag eine
+   Senkung. Der Satz schreibt sich über ``clip-path`` von links frei; der
+   Grundzustand bleibt ungeschnitten, damit er ohne Animation lesbar ist. */
+@keyframes fig-chat-msg {
+  0%, 2% { clip-path: inset(0 100% 0 0); opacity: 1; }
+  13%, 90% { clip-path: inset(0 0 0 0); opacity: 1; }
+  96%, 100% { clip-path: inset(0 0 0 0); opacity: 0; }
+}
+
+@keyframes fig-chat-card {
+  0%, 15% { opacity: 0; transform: translateY(8px); }
+  21%, 92% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes fig-chat-op-1 {
+  0%, 22% { opacity: 0; }
+  27%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fig-chat-op-2 {
+  0%, 31% { opacity: 0; }
+  36%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fig-chat-op-3 {
+  0%, 40% { opacity: 0; }
+  45%, 92% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Das Loch weitet sich von 4,2 auf 4,5 Millimeter — der Faktor ist
+   gerechnet: 4,5/4,2. Der Senkkegel wächst von oben nach unten ein, wie
+   der Senker eintaucht. */
+@keyframes fig-hole-wide {
+  0%, 27% { transform: scaleX(1); }
+  33%, 92% { transform: scaleX(1.0714); }
+  100% { transform: scaleX(1); }
+}
+
+@keyframes fig-hole-42 {
+  0%, 27% { opacity: 1; }
+  30%, 96% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fig-hole-45 {
+  0%, 30% { opacity: 0; }
+  33%, 92% { opacity: 1; }
+  96%, 100% { opacity: 0; }
+}
+
+@keyframes fig-counterbore {
+  0%, 38% { transform: scaleY(0); }
+  46%, 92% { transform: scaleY(1); }
+  100% { transform: scaleY(0); }
+}
+
+@keyframes fig-chat-done {
+  0%, 52% { opacity: 0; }
+  58%, 90% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fig-chat-msg { animation-name: fig-chat-msg; }
+.fig-chat-card { animation-name: fig-chat-card; }
+.fig-chat-op-1 { animation-name: fig-chat-op-1; }
+.fig-chat-op-2 { animation-name: fig-chat-op-2; }
+.fig-chat-op-3 { animation-name: fig-chat-op-3; }
+.fig-hole-wide { animation-name: fig-hole-wide; transform-origin: center; }
+.fig-hole-42 { animation-name: fig-hole-42; }
+.fig-hole-45 { animation-name: fig-hole-45; }
+.fig-counterbore { animation-name: fig-counterbore; transform-origin: center top; }
+.fig-chat-done { animation-name: fig-chat-done; }
+
+/* Vignette Weg 1 — anklicken, Maß ändern. Der Zeiger ist an seinem Ziel
+   gezeichnet und fährt im Anfangsbild davon weg; ohne Bewegung steht er
+   deshalb genau dort, wo geklickt wurde. Die Bohrung wächst um 5,2/5,0. */
+@keyframes fig-w1-cursor {
+  0%, 4% { transform: translate(84px, 34px); opacity: 0; }
+  9% { opacity: 1; }
+  20%, 88% { transform: translate(0, 0); opacity: 1; }
+  100% { transform: translate(84px, 34px); opacity: 0; }
+}
+
+@keyframes fig-w1-ring {
+  0%, 22% { opacity: 0; }
+  26%, 88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes fig-w1-d50 {
+  0%, 28% { opacity: 1; }
+  31%, 94% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fig-w1-d52 {
+  0%, 31% { opacity: 0; }
+  34%, 88% { opacity: 1; }
+  94%, 100% { opacity: 0; }
+}
+
+@keyframes fig-w1-hole {
+  0%, 28% { transform: scale(1); }
+  34%, 88% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.fig-w1-cursor { animation-name: fig-w1-cursor; }
+.fig-w1-ring { animation-name: fig-w1-ring; }
+.fig-w1-d50 { animation-name: fig-w1-d50; }
+.fig-w1-d52 { animation-name: fig-w1-d52; }
+.fig-w1-hole { animation-name: fig-w1-hole; transform-origin: center; }
+
+/* Vignette Weg 2 — am Parameter drehen, der Körper folgt. 80 auf 110
+   Millimeter ist Faktor 1,375; der Baustein liegt außerhalb der skalierten
+   Gruppe, sonst würde die Mutternfalle mitverzerrt. */
+@keyframes fig-w2-v80 {
+  0%, 34% { opacity: 1; }
+  37%, 94% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes fig-w2-v110 {
+  0%, 37% { opacity: 0; }
+  40%, 88% { opacity: 1; }
+  94%, 100% { opacity: 0; }
+}
+
+@keyframes fig-w2-grow {
+  0%, 34% { transform: scaleX(1); }
+  44%, 88% { transform: scaleX(1.375); }
+  100% { transform: scaleX(1); }
+}
+
+.fig-w2-v80 { animation-name: fig-w2-v80; }
+.fig-w2-v110 { animation-name: fig-w2-v110; }
+.fig-w2-grow { animation-name: fig-w2-grow; transform-origin: left center; }
+
+/* Vignette Weg 3 — aus dem generierten Krakel wird ein geprüftes Teil. */
+@keyframes fig-w3-fixed {
+  0%, 46% { opacity: 0; }
+  54%, 88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fig-w3-fixed { animation-name: fig-w3-fixed; }
+
+/* Vignette Weg 4 — aus den Grundkörpern wird eine geformte Figur. Derselbe
+   Takt wie bei Weg 3: Die vier Karten stehen nebeneinander, und vier
+   Einblendungen zu vier verschiedenen Zeiten wären Unruhe statt Auskunft. */
+@keyframes fig-w4-shaped {
+  0%, 46% { opacity: 0; }
+  54%, 88% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.fig-w4-shaped { animation-name: fig-w4-shaped; }
+
+/* ── Papier ────────────────────────────────────────────────────────────── */
+
+/* Die Widerrufsbelehrung und die AGB sind Dokumente, die jemand ausdruckt.
+   Seit die Kopfzeile steht, gehört sie auf Papier gelöst — sonst klebt sie
+   im besten Fall oben auf der ersten Seite und wiederholt sich im
+   schlechtesten auf jeder. Flächen und Schatten kosten nur Toner. */
+@media print {
+  header.site {
+    position: static;
+    backdrop-filter: none;
+    background: none;
+  }
+
+  nav.lang,
+  .stage::after { display: none; }
+
+  body { background: #fff; color: #000; }
+
+  .download,
+  .price-card,
+  .closing,
+  .honest,
+  .faq details,
+  .way,
+  .pains li {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+
+  .faq details { border: 1px solid #ccc; }
+
+  a { text-decoration: underline; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Ohne Animation entscheidet nichts mehr, welcher der beiden Zustände in
+     einer Zeichnung gilt. Hier wird er von Hand gesetzt, und zwar auf den
+     Endzustand: die dickere Wand, das geteilte und verstiftete Teil, die
+     gefundenen Befunde, der übernommene Vorschlag. Die Analyselinie fällt
+     weg — sie hat ohne Fahrt keine Aussage. */
+  .fig-value-thin,
+  .fig-verdict-no,
+  .fig-scan,
+  .fig-hole-42,
+  .fig-w1-d50,
+  .fig-w2-v80 { opacity: 0; }
+
+  .fig-value-thick,
+  .fig-verdict-yes,
+  .fig-pins,
+  .fig-chat-card,
+  .fig-chat-op-1,
+  .fig-chat-op-2,
+  .fig-chat-op-3,
+  .fig-chat-done,
+  .fig-hole-45,
+  .fig-w1-cursor,
+  .fig-w1-ring,
+  .fig-w1-d52,
+  .fig-w2-v110,
+  .fig-w3-fixed,
+  .fig-w4-shaped { opacity: 1; }
+
+  .fig-cavity { transform: scale(0.9192, 0.9355); }
+  .fig-wall-bar { transform: scaleX(1.5); }
+  .fig-half-left { transform: translateX(-46px); }
+  .fig-half-right { transform: translateX(46px); }
+  .fig-hole-wide { transform: scaleX(1.0714); }
+  .fig-counterbore { transform: scaleY(1); }
+  .fig-w1-hole { transform: scale(1.04); }
+  .fig-w2-grow { transform: scaleX(1.375); }
+}
+
+/* Der Sprachhinweis auf den Rechtstextseiten. Zurückhaltender als der
+   Entwurfsbanner: er warnt nicht, er ordnet ein. */
+main.legal p.lang-note {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 0.8rem 1.1rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin-bottom: 2rem;
+}
+
+main.legal p.lang-note b { color: var(--fg); }
+
+/* --- Der Weg vom erzeugten Netz zum Druck ---------------------------------
+   Nummeriert, weil es eine Reihenfolge ist und keine Aufzählung: Wer bei der
+   Farbumrechnung anfängt, hat ein Netz mit Löchern bunt gemacht. */
+ol.chain {
+  counter-reset: chain;
+  list-style: none;
+  margin: 2rem 0 3rem;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 46rem;
+}
+
+ol.chain li {
+  counter-increment: chain;
+  position: relative;
+  padding-left: 2.9rem;
+  color: var(--muted);
+}
+
+ol.chain li::before {
+  content: counter(chain);
+  position: absolute;
+  left: 0;
+  top: -0.1rem;
+  width: 1.9rem;
+  height: 1.9rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 650;
+  font-size: 0.9rem;
+}
+
+ol.chain li b { color: var(--fg); }
+
+/* --- Die Vergleichstabelle ------------------------------------------------
+   Häkchen und Strich tragen ihr Wort mit sich: Wer die Farbe nicht sieht,
+   liest „ja" und „nein" — dieselbe Regel, nach der die Anwendung selbst
+   gebaut ist. */
+table.compare {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 46rem;
+  margin: 1.4rem 0 1.2rem;
+  font-size: 0.97rem;
+}
+
+table.compare th {
+  text-align: left;
+  padding: 0 1rem 0.6rem 0;
+  border-bottom: 2px solid var(--line);
+  font-size: 0.86rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+table.compare th:not(:first-child),
+table.compare td:not(:first-child) { width: 8.5rem; }
+
+table.compare td {
+  padding: 0.6rem 1rem 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.compare tr:hover td { background: var(--card); }
+
+table.compare .yes { color: var(--accent); font-weight: 600; white-space: nowrap; }
+table.compare .no { color: var(--muted); white-space: nowrap; }
+
+p.footnote {
+  max-width: 44rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  border-left: 2px solid var(--line);
+  padding-left: 1.1rem;
+}
+
+#generiert h3 {
+  margin-top: 2.6rem;
+  font-size: 1.25rem;
+}
+
+/* --- Schaustücke: die Galerie erzeugter Körper und der Weg dorthin ---------
+   Die Bilder sind freigestellt und tragen keinen eigenen Hintergrund, damit
+   sie im hellen wie im dunklen Modus auf dem Papier der Seite liegen. Ein
+   Rahmen würde diesen Zweck wieder aufheben — deshalb steht hier keiner. */
+
+.schau {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1.75rem 1.5rem;
+}
+
+/* Sechs Stücke gehen in sechs, drei oder zwei Spalten glatt auf — in vier
+   oder fünf nicht, und dann steht das letzte allein da wie ein Nachzügler.
+   `auto-fit` kennt diesen Unterschied nicht und füllt die Zeile, so weit sie
+   reicht. Also werden die Teiler von sechs gesetzt, statt die Breite zu
+   deckeln: auf einem breiten Schirm stehen alle sechs nebeneinander. */
+@media (min-width: 58rem) {
+  .schau:not(.tight) { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 92rem) {
+  .schau:not(.tight) { grid-template-columns: repeat(6, 1fr); gap: 1.5rem 1.25rem; }
+}
+
+.schau figure { margin: 0; }
+
+.schau img {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* Ein leichter Schatten trägt den Körper, ohne ihm eine Fläche zu geben. */
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.16));
+}
+
+.schau figcaption {
+  margin-top: 0.5rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--muted);
+  text-align: center;
+}
+
+.schau figcaption b {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Der Weg vom erzeugten Körper zum Teil: zwei Bilder nebeneinander, das
+   zweite aufgeschnitten. Nebeneinander und nicht untereinander, weil der
+   Vergleich die Aussage ist. */
+.weg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1.5rem;
+  align-items: end;
+  margin-top: 2rem;
+}
+
+.weg figure { margin: 0; }
+
+.weg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 6px 14px rgb(0 0 0 / 0.16));
+}
+
+.weg figcaption {
+  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.weg figcaption b { color: var(--ink); }
+
+@media (prefers-color-scheme: dark) {
+  .schau img,
+  .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
+}
+
+/* Die gedrängte Version der Galerie: auf der Startseite steht sie als Beleg
+   neben dem Text, nicht als eigenes Kapitel. Kleinere Kacheln, knappere
+   Beschriftung, und vier davon passen auf eine Reihe. */
+.schau.tight {
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1.25rem 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.schau.tight figcaption {
+  margin-top: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* Belege im Funktionsabschnitt: zwei Bildschirmfotos neben sechs Sätzen.
+   Der Abschnitt trug bis dahin nur Text — die stärksten Argumente der Seite
+   ohne ein einziges Bild, das sie zeigt. */
+.beleg {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  gap: 1.75rem;
+  margin: 2rem 0 2.5rem;
+  align-items: start;
+}
+
+.beleg figure {
+  margin: 0;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  overflow: hidden;
+}
+
+.beleg img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.beleg figcaption {
+  padding: 0.85rem 1.1rem 1rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.beleg figcaption b { color: var(--ink); }
+
+/* Die Dateiliste im Download-Kasten. Sie erscheint erst, wenn
+   tools/make_download.py Pakete eingetragen hat — vorher steht dort die
+   Warteliste. */
+.dateien {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.9rem;
+  align-items: flex-start;
+}
+
+.dateien .btn { margin: 0; }
+
+/* Ein Knopf je Plattform, und wo es mehrere Dateien gibt, führt er in diesen
+   Dialog. Hier stand einmal eine Prüfsummenzeile unter jedem Knopf — bei acht
+   Paketen waren das acht Knöpfe und acht mal vierundsechzig Zeichen, und der
+   Kasten war nicht mehr zu lesen. */
+.auswahl {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  padding: 1.4rem 1.5rem 1.2rem;
+  max-width: 27rem;
+  width: calc(100% - 2rem);
+  box-shadow: 0 18px 50px rgb(0 0 0 / 28%);
+}
+
+.auswahl::backdrop {
+  background: rgb(0 0 0 / 45%);
+  backdrop-filter: blur(2px);
+}
+
+.auswahl h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.auswahl .hinweis {
+  margin: 0 0 1rem;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Jede Wahl auf eigener Zeile und über die volle Breite: Die Namen sind
+   verschieden lang, und nebeneinander läge „Flatpak" halb so breit wie
+   „Archiv mit Installationsskript". */
+.auswahl .btn {
+  display: flex;
+  width: 100%;
+  margin: 0 0 0.5rem;
+  justify-content: flex-start;
+}
+
+.auswahl form {
+  margin: 0.9rem 0 0;
+  text-align: right;
+}
+
+.auswahl form .btn { display: inline-flex; width: auto; margin: 0; }
+
+.pruefhinweis {
+  margin: 0.4rem 0 0;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Welche Version dort liegt und seit wann — von `make_download.py` geschrieben,
+   direkt unter den Ladeknöpfen. Leiser als die Knöpfe und lauter als ein
+   Hinweis: Sie ist keine Warnung, sondern die Auskunft, die jemand sucht, der
+   schon einmal da war. Etwas mehr Abstand nach oben als der Prüfhinweis, damit
+   sie nicht an den Knöpfen klebt. */
+.version {
+  margin: 0.75rem 0 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+}
+
+/* `hidden` muss stärker sein als jede Anzeigeart.
+   Das Attribut bringt vom Browser nur `display: none` mit, und diese Regel
+   verliert gegen jede Klasse, die selbst eine Anzeigeart setzt — `.btn` tut
+   das mit `inline-flex`. Der Wartelisten-Knopf blieb deshalb neben den
+   Ladeknöpfen stehen, obwohl er längst als versteckt markiert war: im DOM
+   verschwunden, auf dem Schirm noch da. */
+[hidden] { display: none !important; }
+
+/* ── Auf dem Handy zählt jeder Bildpunkt Breite ────────────────────────── */
+
+/* Robert am 27.08.2026, mit einem Bild von seinem Gerät: „breiter kannst du
+   die Handyvariante machen, haben mehr Platz in der Breite". Gemessen bei
+   360 px Fensterbreite, je Kasten der Rand zwischen Text und Fensterkante:
+
+     .download    189 px Rand,  171 px Text — mehr Rand als Inhalt
+     td (Technik) 173 px Rand,  187 px Text
+     .honest      112 px Rand,  248 px Text
+     .price-card   98 px Rand,  262 px Text
+     .closing      90 px Rand,  270 px Text
+     .way          85 px Rand,  275 px Text
+     nur .wrap     40 px Rand,  320 px Text
+
+   Die Werte sind für die Desktopansicht richtig: 48 px in einem 1216 px
+   breiten Rahmen sind vier Prozent. Auf 360 px sind dieselben 48 px plus die
+   40 des Rahmens ein Viertel der Breite, und der Text bricht nach drei
+   Wörtern um. Sie schrumpfen deshalb hier — nicht weil enger schöner wäre,
+   sondern weil ein Innenabstand ein Anteil ist und keine Länge.
+
+   Der Block steht am Dateiende, weil `.price-card` (Z. 1092) und `.closing`
+   (Z. 1238) später kommen als die Breakpoints oben; bei gleicher Spezifität
+   gewinnt die letzte Regel, und weiter vorn hätte dieser Block nichts
+   bewirkt. */
+@media (max-width: 30rem) {
+  .wrap { padding: 0 0.9rem; }
+
+  .download { padding: 1rem; }
+  .price-card { padding: 1.1rem; }
+  .honest { padding: 1rem; }
+  .closing { padding: 2.5rem 1rem; }
+  .way { padding: 1.1rem 1rem 1rem; }
+  .faq details { padding: 0.9rem 1rem; }
+
+  /* Die Zeilenlänge des Aufmachers ist der zweite Hebel, und der größere:
+     Der Rand bringt gemessen ein Zeichen je Zeile, die Schriftgröße fünf.
+     1,2 rem sind 19,2 px — auf einem Gerät, das 320 px Text zeigt, sind das
+     30 Zeichen je Zeile. Lesbar wird es ab 45; ganz erreicht der Aufmacher
+     das auf einem Handy nie, aber 36 sind keine 30. */
+  .hero p.lead { font-size: 1.05rem; }
+
+  /* 20ch sind auf dem Handy schmaler als der Rahmen: Die Überschrift brach
+     in vier Zeilen, wo drei gereicht hätten. Die Grenze ist für breite
+     Schirme gedacht, wo eine Überschrift sonst über die halbe Seite läuft. */
+  .hero h1 { max-width: none; }
+}

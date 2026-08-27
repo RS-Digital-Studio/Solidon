@@ -1,0 +1,39 @@
+# Erzeugt von tools/make_linux_packages.py — Werte aus app/branding.py.
+# Von Hand geänderte Zeilen verliert der nächste Lauf.
+id: de.rsdigital.solidon3d
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: Solidon3D
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: solidon3d
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/lib/solidon3d
+      - cp -r Solidon3D/* /app/lib/solidon3d/
+      - mkdir -p /app/bin
+      - ln -s /app/lib/solidon3d/Solidon3D /app/bin/Solidon3D
+      - install -Dm644 solidon3d.desktop /app/share/applications/de.rsdigital.solidon3d.desktop
+      - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/de.rsdigital.solidon3d.svg
+      - install -Dm644 de.rsdigital.solidon3d.metainfo.xml /app/share/metainfo/de.rsdigital.solidon3d.metainfo.xml
+      - install -Dm644 de.rsdigital.solidon3d.xml /app/share/mime/packages/de.rsdigital.solidon3d.xml
+    sources:
+      - type: dir
+        path: ../dist/Solidon3D
+        dest: Solidon3D
+      - type: file
+        path: solidon3d.desktop
+      - type: file
+        path: de.rsdigital.solidon3d.metainfo.xml
+      - type: file
+        path: de.rsdigital.solidon3d.xml
+      - type: file
+        path: ../app/images/icon/solidon3d.svg
+        dest-filename: icon.svg

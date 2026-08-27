@@ -1,0 +1,310 @@
+# Die Regelsammlung (Bauplan §39).
+#
+# Laut Plan das eigentliche Produkt, also wird sie wie eines behandelt: mit
+# Version, mit Änderungsverlauf, und mit dem Suite-Ergebnis vor und nach jeder
+# Änderung. Verschlechtert sich die Quote, wird die Regel zurückgenommen oder
+# umformuliert — nicht dazugeschrieben.
+#
+# Der Systemprompt nennt die Version, jede Transaktion hält sie fest (§26.4).
+# So lässt sich später sagen, unter welcher Regel eine Op entstanden ist.
+#
+# Was sich als Baustein fassen lässt, gehört nicht hierher, sondern in die
+# Bibliothek (§24): eine eingehaltene Regel ist besser als eine beschriebene.
+#
+# ``title_<sprache>`` und ``text_<sprache>`` (en, es, fr, it, pt) sind fürs
+# Handbuch da, nicht für den Agenten: der liest weiter die deutschen
+# Versionen, damit es nicht zwei Wahrheiten gibt, an denen eine Messung
+# hängen könnte. Eine Übersetzung ändert keine Regel, deshalb bleibt die
+# Version, wo sie ist.
+#
+# Version 3 (26.08.2026) streicht zwei Regeln, ohne eine zu ersetzen:
+# „OpenSCAD-Auflösung" und „Eigener Kern vor OpenSCAD". Beide beschrieben den
+# Umgang mit einem Weg, den es seit dem OpenSCAD-Ausbau nicht mehr gibt — die
+# erste riet zu einer Einstellung in einem Programm, das gar nicht mehr
+# gerufen wird, die zweite wog den eigenen Kern gegen eine Alternative ab, die
+# weggefallen ist. Eine Regel, die vor etwas warnt, das niemand mehr tun kann,
+# ist nicht harmlos: Sie kostet Platz im Auftrag und lehrt eine Unterscheidung
+# ohne Gegenstand. Was „Eigener Kern vor OpenSCAD" inhaltlich schützte — nimm
+# das Genaue, nicht das Nachgebaute —, sagt „Bausteine vor Primitiven" weiter.
+
+version = "3"
+
+[[rules]]
+id = "min_wall"
+title = "Mindestwandstärke"
+text = """
+Keine Wand dünner als zwei Extrusionsbreiten. Der Wert steht im Druckerprofil
+und wird nie als Zahl in die Op geschrieben."""
+title_en = "Minimum wall thickness"
+text_en = """
+No wall thinner than two extrusion widths. The value lives in the printer
+profile and is never written into the operation as a number."""
+title_es = "Espesor de pared mínimo"
+text_es = """
+Ninguna pared más fina que dos anchos de extrusión. El valor está en el
+perfil de impresora y nunca se escribe como número en la operación."""
+title_fr = "Épaisseur de paroi minimale"
+text_fr = """
+Aucune paroi plus fine que deux largeurs d'extrusion. La valeur vit dans le
+profil d'imprimante et ne s'écrit jamais en chiffres dans l'opération."""
+title_it = "Spessore di parete minimo"
+text_it = """
+Nessuna parete più sottile di due larghezze di estrusione. Il valore sta nel
+profilo della stampante e non si scrive mai come numero nell'operazione."""
+title_pt = "Espessura de parede mínima"
+text_pt = """
+Nenhuma parede mais fina do que duas larguras de extrusão. O valor está no
+perfil da impressora e nunca se escreve como número na operação."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "chamfer_over_overhang"
+title = "Fasen statt Überhängen"
+text = """
+Über 45 Grad Überhang eine Fase setzen statt Stützen in Kauf zu nehmen. Die
+Schichtanalyse sagt, wo der Überhang liegt."""
+title_en = "Chamfers instead of overhangs"
+text_en = """
+Beyond 45 degrees of overhang, add a chamfer rather than accepting supports.
+The layer analysis says where the overhang is."""
+title_es = "Chaflanes en vez de voladizos"
+text_es = """
+Por encima de 45 grados de voladizo, poner un chaflán en lugar de aceptar
+soportes. El análisis de capas dice dónde está el voladizo."""
+title_fr = "Des chanfreins plutôt que des surplombs"
+text_fr = """
+Au-delà de 45 degrés de surplomb, poser un chanfrein plutôt que d'accepter
+des supports. L'analyse des couches dit où se trouve le surplomb."""
+title_it = "Smussi invece di sbalzi"
+text_it = """
+Oltre i 45 gradi di sbalzo, applicare uno smusso invece di accettare i
+supporti. L'analisi degli strati dice dove sta lo sbalzo."""
+title_pt = "Chanfros em vez de saliências"
+text_pt = """
+Acima de 45 graus de saliência, aplicar um chanfro em vez de aceitar
+suportes. A análise de camadas diz onde está a saliência."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "tolerance_from_profile"
+title = "Toleranzen aus dem Materialprofil"
+text = """
+Passungen als Passungspaar anlegen und die Toleranz als auto:<material>
+angeben. Eine feste Zahl überlebt keine Kalibrierung."""
+title_en = "Tolerances from the material profile"
+text_en = """
+Create fits as a pair and state the tolerance as auto:<material>. A fixed
+number does not survive a calibration."""
+title_es = "Tolerancias del perfil de material"
+text_es = """
+Crear los ajustes como par de ajuste e indicar la tolerancia como
+auto:<material>. Un número fijo no sobrevive a ninguna calibración."""
+title_fr = "Les tolérances viennent du profil de matériau"
+text_fr = """
+Créer les ajustements par paires et indiquer la tolérance comme
+auto:<material>. Un nombre figé ne survit à aucun étalonnage."""
+title_it = "Tolleranze dal profilo del materiale"
+text_it = """
+Creare gli accoppiamenti come coppia e indicare la tolleranza come
+auto:<material>. Un numero fisso non sopravvive a nessuna calibrazione."""
+title_pt = "Tolerâncias do perfil do material"
+text_pt = """
+Criar os ajustes como par de ajuste e indicar a tolerância como
+auto:<material>. Um número fixo não sobrevive a nenhuma calibração."""
+applies_to = ["fits"]
+
+[[rules]]
+id = "parameters_not_numbers"
+title = "Hauptmaße als Parameter"
+text = """
+Jede Abmessung, die der Nutzer später ändern könnte, wird ein Projektparameter
+mit sprechendem Namen. Streuzahlen in Ops sind eine Sackgasse."""
+title_en = "Main dimensions as parameters"
+text_en = """
+Every dimension the user might later change becomes a project parameter with
+a telling name. Stray numbers inside operations are a dead end."""
+title_es = "Las medidas principales como parámetros"
+text_es = """
+Cada dimensión que el usuario pueda cambiar más adelante se convierte en un
+parámetro de proyecto con un nombre elocuente. Los números sueltos en las
+operaciones son un callejón sin salida."""
+title_fr = "Les cotes principales en paramètres"
+text_fr = """
+Chaque dimension que l'utilisateur pourrait changer plus tard devient un
+paramètre de projet au nom parlant. Les nombres épars dans les opérations
+sont une impasse."""
+title_it = "Le misure principali come parametri"
+text_it = """
+Ogni dimensione che l'utente potrebbe cambiare in seguito diventa un
+parametro di progetto con un nome parlante. I numeri sparsi nelle operazioni
+sono un vicolo cieco."""
+title_pt = "As medidas principais como parâmetros"
+text_pt = """
+Cada dimensão que o utilizador possa vir a alterar torna-se um parâmetro de
+projeto com um nome eloquente. Números soltos nas operações são um beco sem
+saída."""
+applies_to = ["parameters"]
+
+[[rules]]
+id = "boolean_overlap"
+title = "Überlappung bei Booleschen Ops"
+text = """
+Bei Vereinigung und Differenz immer 0,01 mm Überlappung vorsehen. Koinzidente
+Flächen sind die häufigste Ursache für kaputte Ergebnisse."""
+title_en = "Overlap for boolean operations"
+text_en = """
+Always allow 0.01 mm of overlap for unions and differences. Coincident faces
+are the most common cause of broken results."""
+title_es = "Solapamiento en las operaciones booleanas"
+text_es = """
+En uniones y diferencias, prever siempre 0,01 mm de solapamiento. Las caras
+coincidentes son la causa más frecuente de resultados rotos."""
+title_fr = "Du recouvrement pour les opérations booléennes"
+text_fr = """
+Pour les unions et les différences, prévoir toujours 0,01 mm de
+recouvrement. Les faces coïncidentes sont la cause la plus fréquente de
+résultats cassés."""
+title_it = "Sovrapposizione nelle operazioni booleane"
+text_it = """
+Per unioni e differenze prevedere sempre 0,01 mm di sovrapposizione. Le
+facce coincidenti sono la causa più frequente di risultati rotti."""
+title_pt = "Sobreposição nas operações booleanas"
+text_pt = """
+Em uniões e diferenças, prever sempre 0,01 mm de sobreposição. Faces
+coincidentes são a causa mais frequente de resultados estragados."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "holes_oversize"
+title = "Löcher größer als Nennmaß"
+text = """
+FDM druckt Löcher enger als geplant. Die Bohrung um den Kompensationswert aus
+dem Materialprofil vergrößern, nicht um eine geratene Zahl."""
+title_en = "Holes larger than nominal"
+text_en = """
+FDM prints holes tighter than planned. Enlarge the bore by the compensation
+value from the material profile, not by a guessed number."""
+title_es = "Agujeros mayores que la medida nominal"
+text_es = """
+El FDM imprime los agujeros más estrechos de lo previsto. Agrandar el
+taladro con el valor de compensación del perfil de material, no con un
+número adivinado."""
+title_fr = "Des trous plus grands que la cote nominale"
+text_fr = """
+Le FDM imprime les trous plus étroits que prévu. Agrandir le perçage de la
+valeur de compensation du profil de matériau, pas d'un nombre deviné."""
+title_it = "Fori più grandi della misura nominale"
+text_it = """
+L'FDM stampa i fori più stretti del previsto. Allargare il foro del valore
+di compensazione dal profilo del materiale, non di un numero indovinato."""
+title_pt = "Furos maiores do que a medida nominal"
+text_pt = """
+O FDM imprime os furos mais apertados do que o planeado. Alargar o furo com
+o valor de compensação do perfil do material, não com um número
+adivinhado."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "elephant_foot"
+title = "Erste Schicht"
+text = """
+Den Elefantenfuß aus dem Materialprofil einkalkulieren, wenn die erste Schicht
+maßhaltig sein muss."""
+title_en = "First layer"
+text_en = """
+Account for the elephant foot from the material profile whenever the first
+layer has to hold its dimension."""
+title_es = "La primera capa"
+text_es = """
+Tener en cuenta la pata de elefante del perfil de material cuando la primera
+capa deba mantener la medida."""
+title_fr = "La première couche"
+text_fr = """
+Prendre en compte le pied d'éléphant du profil de matériau dès que la
+première couche doit tenir sa cote."""
+title_it = "Il primo strato"
+text_it = """
+Mettere in conto il piede d'elefante dal profilo del materiale quando il
+primo strato deve tenere la misura."""
+title_pt = "A primeira camada"
+text_pt = """
+Contar com o pé de elefante do perfil do material sempre que a primeira
+camada tenha de manter a medida."""
+applies_to = ["geometry"]
+
+[[rules]]
+id = "parts_first"
+title = "Bausteine vor Primitiven"
+text = """
+Erst in der Bausteinbibliothek suchen, dann selbst konstruieren. Ein Baustein
+bringt seine Merkmale, seine Grenzen und seine Tests mit."""
+title_en = "Parts before primitives"
+text_en = """
+Search the parts library first, construct second. A part brings its features,
+its limits and its tests along."""
+title_es = "Bloques antes que primitivas"
+text_es = """
+Buscar primero en la biblioteca de bloques y construir después. Un bloque
+trae consigo sus características, sus límites y sus pruebas."""
+title_fr = "Les blocs avant les primitives"
+text_fr = """
+Chercher d'abord dans la bibliothèque de blocs, construire ensuite. Un bloc
+apporte ses caractéristiques, ses limites et ses tests."""
+title_it = "I blocchi prima delle primitive"
+text_it = """
+Cercare prima nella libreria dei blocchi, poi costruire da sé. Un blocco
+porta con sé le sue caratteristiche, i suoi limiti e i suoi test."""
+title_pt = "Blocos antes de primitivas"
+text_pt = """
+Pesquisar primeiro na biblioteca de blocos, construir depois. Um bloco traz
+consigo as suas características, os seus limites e os seus testes."""
+applies_to = ["approach"]
+
+[[rules]]
+id = "ask_over_guess"
+title = "Fragen vor Raten"
+text = """
+Bei mehrdeutigen Anfragen ask_user benutzen. Eine Rückfrage kostet einen Klick,
+eine falsche Annahme kostet einen Druck."""
+title_en = "Ask before guessing"
+text_en = """
+Use ask_user for ambiguous requests. A question costs one click, a wrong
+assumption costs a print."""
+title_es = "Preguntar antes que adivinar"
+text_es = """
+Con peticiones ambiguas, usar ask_user. Una pregunta cuesta un clic; una
+suposición equivocada cuesta una impresión."""
+title_fr = "Demander plutôt que deviner"
+text_fr = """
+Pour les demandes ambiguës, utiliser ask_user. Une question coûte un clic,
+une hypothèse fausse coûte une impression."""
+title_it = "Chiedere prima di indovinare"
+text_it = """
+Con richieste ambigue usare ask_user. Una domanda costa un clic, un'ipotesi
+sbagliata costa una stampa."""
+title_pt = "Perguntar antes de adivinhar"
+text_pt = """
+Com pedidos ambíguos, usar ask_user. Uma pergunta custa um clique; uma
+suposição errada custa uma impressão."""
+applies_to = ["approach"]
+
+# --- Änderungsverlauf ------------------------------------------------------------
+#
+# Jede Änderung mit Datum, Anlass und Suite-Ergebnis vorher/nachher (§39).
+
+[[changes]]
+version = "1"
+date = "2026-07-28"
+reason = "Erste Version, übernommen aus dem Bauplan §39."
+suite_before = ""
+suite_after = ""
+
+[[changes]]
+version = "3"
+date = "2026-07-28"
+reason = """
+Regel exact_before_script ergänzt: seit P12 gibt es einen B-Rep-Kern, und was
+der kann, muss nicht als OpenSCAD-Quelltext an einen Unterprozess gehen —
+genauer, im Verlauf änderbar, ohne installiertes Programm."""
+suite_before = "15/15"
+suite_after = "15/15"

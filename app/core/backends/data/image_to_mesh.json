@@ -1,0 +1,80 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{image}",
+      "upload": "image"
+    }
+  },
+  "2": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "{model:background}"
+    }
+  },
+  "3": {
+    "class_type": "RemoveBackground",
+    "inputs": {
+      "bg_removal_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "TripoSGLoader",
+    "inputs": {
+      "model": "{model:shape}",
+      "precision": "float16"
+    }
+  },
+  "5": {
+    "class_type": "TripoSGImageToMesh",
+    "inputs": {
+      "pipeline": [
+        "4",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ],
+      "mask": [
+        "3",
+        0
+      ],
+      "steps": 50,
+      "guidance_scale": 7.0,
+      "seed": "{seed}",
+      "octree_depth": 8,
+      "crop_margin": 0.1
+    }
+  },
+  "6": {
+    "class_type": "TripoSGPostprocess",
+    "inputs": {
+      "mesh": [
+        "5",
+        0
+      ],
+      "keep_largest_only": true,
+      "remove_degenerate": true,
+      "target_faces": 0
+    }
+  },
+  "7": {
+    "class_type": "TripoSGExportMesh",
+    "inputs": {
+      "mesh": [
+        "6",
+        0
+      ],
+      "filename_prefix": "solidon/image",
+      "file_format": "glb"
+    }
+  }
+}
