@@ -1282,7 +1282,13 @@ def feature_measure(feature: Feature) -> str:
         steigung = float(params.get("pitch", 0.0))
         durchmesser = length(float(params.get("diameter", 0.0)))
         return f"Ø{durchmesser} × {length(steigung)}" if steigung else f"Ø{durchmesser}"
-    return ""
+    # Wie bei ``feature_name`` oben: Seit alle neun Arten ein Maß haben,
+    # hält mypy diese Zeile für unerreichbar — und **das ist die
+    # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt
+    # trotzdem, weil ``kind`` aus einer Projektdatei kommt und eine
+    # fremde Fassung eine Art tragen kann, die dieser Bestand nicht
+    # kennt. Eine leere Spalte ist besser als ein Absturz beim Öffnen.
+    return ""  # type: ignore[unreachable]
 
 
 def feature_label(feature_id: FeatureId, feature: Feature) -> str:
