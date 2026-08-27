@@ -116,7 +116,19 @@ def test_decimation_does_not_tear_an_unwelded_body_apart(target: int) -> None:
         process=False,
     )
     soup = MeshData.of(loose)
-    assert soup.component_count == soup.triangle_count, "die Suppe ist keine Suppe"
+    # **Gefragt wird die Speicherform, nicht das Teil.** Hier stand
+    # ``component_count == triangle_count`` — bis zum 27.08.2026 traf das zu,
+    # weil die Komponentenzählung die gespeicherte Nachbarschaft las und in
+    # einer Suppe jedes Dreieck für sich stand. Seither zählt sie über den Ort
+    # mit und sagt richtig **1**: Die Kugel *ist* ein Teil, gleich wie sie
+    # abgelegt ist. Die Zusicherung, die dieser Test braucht, ist eine andere —
+    # dass keine Kante zwei Dreiecke verbindet, denn genau daran zieht die
+    # Dezimierung. Gefragt wird sie mit derselben Kennzahl, an der auch
+    # ``_welded_for_simplify`` entscheidet.
+    assert len(loose.face_adjacency) == 0, "die Suppe ist keine Suppe"
+    assert len(loose.vertices) / len(loose.faces) > mesh_ops.LOOSE_VERTEX_RATIO, (
+        "und zwar nach demselben Maß, das die Vereinfachung anlegt"
+    )
 
     after = mesh_ops.decimate(soup, target)
 
