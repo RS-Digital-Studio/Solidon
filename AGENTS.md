@@ -98,6 +98,10 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 | Oberflächentexte | Deutsche Quelle, je Sprache ein Katalog über `tr()` |
 | Doku und Bauplan | Deutsch |
 
+**Deutsch heißt echte Umlaute** — ä ö ü ß, nie `ae`/`oe`/`ue`/`ss` als Ersatz.
+Das gilt für jeden deutschen Text hier: Docstrings, Kommentare,
+Commit-Meldungen, Doku und die deutsche Quelle der Oberflächentexte.
+
 Eine **weitere Sprache** ist eine Datei in `app/i18n/locales/` und sonst
 nichts: Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
 Verzeichnis (`available_languages()`). Unvollständig eingecheckt wird keine —

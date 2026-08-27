@@ -35,21 +35,10 @@ nach, wenn es stimmt.
 
 ## Sprache — die wichtigste Falle
 
-Die Sprachregelung steht verbindlich in `AGENTS.md`; hier die Kurzform:
+Die Sprachregelung steht verbindlich in `AGENTS.md` und lädt über `@AGENTS.md`
+in jeder Sitzung mit — Bezeichner, Docstrings, Oberflächentexte, Kataloge und
+die kuratierte Stammliste stehen dort vollständig. Hier nur, was dort fehlt:
 
-- **Bezeichner, Dateinamen, Modulnamen: Englisch** — in `app/` und `tools/`.
-  Der Grund ist die Auslieferung: Dort steht Code, den jemand liest, der das
-  Projekt nicht kennt. **In `tests/` gilt der Bestand der Datei**, wie bei den
-  Assert-Meldungen (`AGENTS.md`). `tests/test_language_rules.py` prüft genau
-  diese beiden Verzeichnisse, und seine `GERMAN_STEMS` sind eine **kuratierte
-  Liste**: Wer ein deutsches Wort in einem Bezeichner findet, trägt den Stamm
-  dort ein.
-- **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28),
-  der Bestand ist vollständig nachgezogen. Neues wird deutsch geschrieben.
-- **Oberflächentexte: über `tr()`**, deutsche Quelle und je ein Katalog in
-  `app/i18n/locales/` — derzeit `en`, `es`, `fr`, `it`, `pt`. Keine feste
-  Zeichenkette in der Oberfläche.
-- **Doku, Bauplan, Roadmap, Commit-Meldungen: Deutsch**, mit echten Umlauten.
 - **Gespräch mit Robert: Deutsch.**
 
 Commit-Meldungen dieses Projekts sind eine Aussage, kein Etikett: „Hohle
@@ -297,6 +286,7 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
 - **Bei zwei Sitzungen im selben Arbeitsbaum**: vorher sagen, welche Dateien
   man anfasst, und mit privatem Index committen (`GIT_INDEX_FILE`,
   `git commit -o -- <pfade>`). Sonst nimmt der eigene Commit fremde Arbeit
-  mit — dreimal passiert am 19./20.08.2026.
+  mit — dreimal passiert am 19./20.08.2026. Die Fallen dabei — der alternde
+  Haupt-Index, `-o` und der Dateistand — stehen im `liefern`-Skill.
 - **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
   nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.
