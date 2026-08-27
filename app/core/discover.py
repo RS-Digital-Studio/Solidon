@@ -20,7 +20,17 @@ Ein Programm wird deshalb an fünf Stellen gesucht, die billigste zuerst:
    PATH;
 5. die üblichen Installationsordner, zwei Ebenen tief, unter macOS auch in
    ``Contents/MacOS`` — dort liegen die Dateien auch dann, wenn sich nichts
-   angemeldet hat.
+   angemeldet hat;
+6. der PATH **des Rechners**, gefragt über ``flatpak-spawn --host`` — nur
+   wenn Solidon selbst in einem Flatpak läuft, und dort der einzige Weg, der
+   überhaupt etwas finden kann.
+
+**Punkt 6 kam am 27.08.2026 dazu, und er ist eine Selbstkorrektur.** Dieses
+Modul beschreibt seit je, wie man einen Slicer findet, der als Flatpak
+installiert ist — und übersah, dass die eigene Linux-Auslieferung eines ist.
+Aus einem Sandkasten heraus ist **keiner** der Wege 3 bis 5 gültig: Es sind
+Host-Pfade, und der Sandkasten sieht sie nicht. Die Slicer-Übergabe (§29) war
+im Linux-Paket damit tot, ohne dass etwas abstürzt — sie fand einfach nichts.
 
 **Die Punkte 4 und 5 kamen dazu, als das Installieren dazukam.** Solange nur
 winget angesteuert wurde, reichte die Registry. Seit ein Knopf auch Homebrew
@@ -46,9 +56,10 @@ import json
 import os
 import shutil
 import socket
+import subprocess
 import sys
 import tempfile
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
@@ -264,7 +275,10 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
         return _cache[tool_id]
 
     found_path = (
-        _from_registry(candidates) or _from_flatpak(candidates) or _from_folders(candidates)
+        _from_registry(candidates)
+        or _from_flatpak(candidates)
+        or _from_folders(candidates)
+        or _from_host(candidates)
     )
     _cache[tool_id] = found_path
     if found_path is not None:
@@ -314,13 +328,87 @@ def _from_flatpak(names: tuple[str, ...]) -> Path | None:
     return None
 
 
+def in_flatpak() -> bool:
+    """Läuft **Solidon selbst** in einem Flatpak?
+
+    **Die Frage, die dieses Modul zwei Fassungen lang nicht gestellt hat.** Es
+    beschreibt sorgfältig, wie man einen Slicer findet, der als Flatpak
+    installiert ist — und übersah, dass die eigene Linux-Auslieferung eines
+    ist. Aus einem Sandkasten heraus ist **keiner** der fünf Suchwege gültig:
+    ``/opt``, ``/usr/local``, ``~/.local/share`` und die Flatpak-Exporte des
+    Rechners sind Host-Pfade, und der Sandkasten sieht sie nicht. Die
+    Slicer-Übergabe (§29) war im Linux-Paket damit tot, und niemand hat es
+    gemeldet, weil nichts abstürzt: Es findet einfach nichts.
+
+    Erkannt an ``/.flatpak-info`` — die Datei legt Flatpak in jedem Sandkasten
+    an, und sie ist die Auskunft, die auch ``flatpak-spawn`` selbst benutzt.
+    ``FLATPAK_ID`` steht daneben und wird mitgeprüft, weil eine Umgebung sie
+    setzen kann, ohne dass die Datei da ist.
+    """
+    return Path("/.flatpak-info").exists() or bool(os.environ.get("FLATPAK_ID"))
+
+
+def on_host(command: Sequence[str]) -> list[str]:
+    """Derselbe Befehl, aber auf dem Rechner statt im Sandkasten.
+
+    Aus einem Flatpak heraus startet ``subprocess`` im Sandkasten, und dort
+    gibt es keinen Slicer. ``flatpak-spawn --host`` reicht den Aufruf nach
+    draußen; es liegt im Runtime und braucht keine Installation, wohl aber die
+    Berechtigung ``--talk-name=org.freedesktop.Flatpak`` im Manifest.
+
+    Außerhalb eines Flatpak bleibt der Befehl, wie er ist — die Funktion darf
+    deshalb bedingungslos um jeden Start gelegt werden.
+    """
+    if not in_flatpak():
+        return list(command)
+    return ["flatpak-spawn", "--host", *command]
+
+
+def _from_host(names: tuple[str, ...]) -> Path | None:
+    """Was der Rechner draußen im PATH hat — die sechste Suchstufe.
+
+    Nur aus einem Flatpak heraus, und dort die einzige, die überhaupt etwas
+    finden kann. Der zurückgegebene Pfad ist ein **Host**-Pfad: Er existiert im
+    Sandkasten nicht, und ``is_file()`` darauf ist falsch. Startbar ist er
+    trotzdem — über :func:`on_host`.
+    """
+    if not in_flatpak():
+        return None
+    for name in names:
+        try:
+            # Fester Befehl, und die Namen kommen aus dem Register - keine
+            # Zeichenkette aus Nutzerhand, keine Shell.
+            answer = subprocess.run(
+                ["flatpak-spawn", "--host", "which", name],
+                capture_output=True,
+                text=True,
+                timeout=5.0,
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as problem:
+            _log.info("cannot ask the host for %s: %s", name, problem)
+            return None
+        found = answer.stdout.strip().splitlines()
+        if answer.returncode == 0 and found:
+            _log.info("found %s on the host: %s", name, found[0])
+            return Path(found[0])
+    return None
+
+
 def sandboxed(program: Path | str | None) -> bool:
     """Läuft dieses Programm in einer Sandbox, die unser ``/tmp`` nicht sieht?
 
     Wahr für die Startprogramme, die Flatpak exportiert. Der Wrapper selbst ist
     eine gewöhnliche Datei; was dahinter startet, sieht ein eigenes ``/tmp``
     und vom Rechner nur, was das Paket sich freigeben ließ.
+
+    **Und wahr, sobald Solidon selbst in einem Flatpak läuft** — dann ist es
+    unser ``/tmp``, das der andere nicht sieht, und die Richtung des Satzes
+    kehrt sich um. Das Ergebnis ist dasselbe: Der Arbeitsordner gehört unter
+    ``$HOME``, wo beide hinsehen können.
     """
+    if in_flatpak():
+        return True
     if program is None:
         return False
     text = Path(program).as_posix()

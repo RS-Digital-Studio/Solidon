@@ -1530,9 +1530,17 @@ def _run_slicer(
     Und abzubrechen gab es nichts: der Kindprozess lief, bis er fertig war,
     gleich was der Nutzer wollte.
     """
+    # **Aus einem Flatpak heraus startet der Slicer auf dem Rechner, nicht im
+    # Sandkasten.** Dort gibt es keinen — und keine der fünf Suchstufen von
+    # ``discover`` konnte je einen finden, weil sie alle Host-Pfade absuchen.
+    # Die Übergabe (§29) war im Linux-Paket damit tot, ohne dass etwas
+    # abstürzte. ``on_host`` legt ``flatpak-spawn --host`` davor, wenn es nötig
+    # ist, und lässt den Befehl sonst unverändert; der Arbeitsordner liegt
+    # schon im Nutzer-Cache, weil ``sandboxed`` den eigenen Fall jetzt mitzählt.
+    launched = discover.on_host(command)
     try:
         process = subprocess.Popen(
-            command, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            launched, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
     except OSError as problem:
         # Eine gewählte Datei kann `flavour_of` bestehen und trotzdem kein

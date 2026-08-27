@@ -584,3 +584,91 @@ def test_no_probe_asks_the_own_machine_for_an_address_that_has_no_host(
         assert llm.OllamaBackend(url=address).available is False, f"llm: {address}"
 
     assert attempts == [], f"es wurde trotzdem eine Verbindung versucht: {attempts}"
+
+
+# --- wenn Solidon selbst in einem Flatpak läuft ---------------------------------
+#
+# Die Frage, die dieses Modul zwei Fassungen lang nicht gestellt hat. Es
+# beschreibt sorgfältig, wie man einen Slicer findet, der als Flatpak
+# installiert ist — und übersah, dass die eigene Linux-Auslieferung eines ist.
+
+
+def test_the_own_flatpak_is_recognised(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Erkannt an ``/.flatpak-info`` oder an ``FLATPAK_ID``.
+
+    Zwei Wege, weil eine Umgebung die Variable setzen kann, ohne dass die
+    Datei da ist — und weil ein Test die Datei nicht anlegen soll.
+    """
+    monkeypatch.delenv("FLATPAK_ID", raising=False)
+    monkeypatch.setattr(discover.Path, "exists", lambda self: False)
+    assert not discover.in_flatpak(), "auf einem gewöhnlichen Rechner nicht"
+
+    monkeypatch.setenv("FLATPAK_ID", "de.rsdigital.solidon3d")
+    assert discover.in_flatpak()
+
+
+def test_a_command_goes_to_the_host_only_from_inside(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``flatpak-spawn --host`` kommt davor, wenn es nötig ist — sonst nichts.
+
+    Die Funktion darf deshalb bedingungslos um jeden Start gelegt werden; wer
+    sie an eine eigene Bedingung knüpft, baut die zweite Stelle, an der der
+    Fall vergessen werden kann.
+    """
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    assert discover.on_host(["slicer", "--export"]) == ["slicer", "--export"]
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    assert discover.on_host(["slicer", "--export"]) == [
+        "flatpak-spawn",
+        "--host",
+        "slicer",
+        "--export",
+    ]
+
+
+def test_the_workspace_leaves_tmp_when_we_are_the_sandbox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Läuft Solidon im Flatpak, sieht der Slicer **unser** ``/tmp`` nicht.
+
+    Die Richtung des Satzes kehrt sich um, das Ergebnis bleibt: Der
+    Arbeitsordner gehört unter ``$HOME``, wo beide hinsehen können. Ohne das
+    bekäme ein Host-Slicer einen Pfad, den es für ihn nicht gibt — „Can't open
+    input file", unmittelbar nach einem Klick auf *An den Slicer übergeben*.
+    """
+    from app.core import paths
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    # Ein gewöhnliches Programm auf dem Rechner, kein Flatpak-Wrapper.
+    assert discover.sandboxed(Path("/usr/bin/prusa-slicer")), (
+        "wenn wir der Sandkasten sind, zählt das Zielprogramm nicht mehr"
+    )
+    with discover.workspace_for(Path("/usr/bin/prusa-slicer"), "probe-") as workspace:
+        assert str(paths.user_cache_dir()) in str(workspace)
+
+
+def test_the_host_is_asked_last_and_only_from_inside(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die sechste Suchstufe fragt den Rechner — aber nur aus dem Sandkasten.
+
+    Und der Pfad, der zurückkommt, ist ein **Host**-Pfad: Er existiert im
+    Sandkasten nicht, ``is_file()`` darauf ist falsch. Startbar ist er über
+    :func:`discover.on_host`.
+    """
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    assert discover._from_host(("prusa-slicer",)) is None, "draußen wird niemand gefragt"
+
+    calls: list[list[str]] = []
+
+    class Answer:
+        returncode = 0
+        stdout = "/usr/bin/prusa-slicer\n"
+
+    def fake_run(command, **kwargs):  # type: ignore[no-untyped-def]
+        calls.append(list(command))
+        return Answer()
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover.subprocess, "run", fake_run)
+
+    assert discover._from_host(("prusa-slicer",)) == Path("/usr/bin/prusa-slicer")
+    assert calls == [["flatpak-spawn", "--host", "which", "prusa-slicer"]]

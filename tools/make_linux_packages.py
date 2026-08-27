@@ -404,6 +404,15 @@ def flatpak_manifest() -> str:
     * ``--share=network`` — Rückmeldung an den Support, Aktualisierungsprüfung,
       Chat gegen einen Dienst und das Holen eines Modells aus dem Netz. Siehe
       unten.
+    * ``--talk-name=org.freedesktop.Flatpak`` — **der Slicer läuft auf dem
+      Rechner, nicht im Sandkasten.** Ohne diese Zeile ist die Übergabe (§29)
+      im Linux-Paket tot, und zwar lautlos: ``discover`` sucht in ``/opt``,
+      ``/usr/local`` und den Flatpak-Exporten des Rechners, und aus einem
+      Sandkasten heraus ist keiner dieser Pfade sichtbar. Es stürzt nichts ab,
+      es findet nur nichts. Mit der Berechtigung fragt ``discover`` über
+      ``flatpak-spawn --host which`` und ``handover`` startet über denselben
+      Weg. Der Arbeitsordner liegt schon im Nutzer-Cache, weil
+      ``discover.sandboxed`` den eigenen Fall jetzt mitzählt.
     * ``--talk-name=org.fcitx.Fcitx5`` und ``--talk-name=org.freedesktop.portal.Fcitx``
       — die Eingabemethode. Derselbe Kunde meldete: „So muss ich diesen Text in
       einer anderen Anwendung schreiben und nach Solidon3D copypasten." Eine
@@ -450,6 +459,7 @@ def flatpak_manifest() -> str:
             "--device=dri",
             "--filesystem=home",
             "--talk-name=org.freedesktop.secrets",
+            "--talk-name=org.freedesktop.Flatpak",
             "--talk-name=org.fcitx.Fcitx5",
             "--talk-name=org.freedesktop.portal.Fcitx",
         )
