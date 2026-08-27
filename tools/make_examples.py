@@ -205,9 +205,12 @@ def way_four() -> Project:
         [
             OperationDraft(
                 op="remesh_uniform",
-                # Zwei Körper hinein, einer heraus: Das Verschmelzen verbraucht
-                # beide und legt einen neuen an.
-                inputs=("obj_3",),
+                # Zwei Körper hinein, einer heraus — aber der eine trägt die
+                # Kennung des ersten Eingangs weiter, statt eine frische zu
+                # bekommen. Hier stand ``obj_3``, und die gab es nie: Weder
+                # das Verschieben noch das Verschmelzen hebt die Wasserlinie,
+                # beide behalten die Kennung, die sie hereinbekommen haben.
+                inputs=("obj_1",),
                 params={"edge": 1.5, "deviation": 0.0},
             )
         ],
@@ -221,7 +224,7 @@ def way_four() -> Project:
     # ohnehin als Teil dieses Weges.
     history.apply(
         _("Auf das Bett setzen"),
-        [OperationDraft(op="place_on_bed", inputs=("obj_3",), params={})],
+        [OperationDraft(op="place_on_bed", inputs=("obj_1",), params={})],
     )
     return project
 

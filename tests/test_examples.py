@@ -311,6 +311,19 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # behoben, übrig ist der Fall, der nie einer war.
         "perceive.generated_lost": "das Aushöhlen nimmt die Deckfläche mit",
     },
+    "weg4-figur-formen": {
+        # **Derselbe Fall wie darüber, andere Operation.** Verloren geht auch
+        # hier ``face_top`` — die benannte Oberseite des Rumpfquaders, und das
+        # weiche Verschmelzen rundet sie weg. Wer einen Kopf auf einen Rumpf
+        # schmilzt, hat danach keine Rumpf-Oberseite mehr; das ist das
+        # Ergebnis, nicht sein Verlust.
+        #
+        # Aufgetaucht ist der Befund am 27.08.2026, und zwar nicht, weil sich
+        # etwas verschlechtert hätte: ``way_four`` verwies auf ``obj_3``, und
+        # die Kennung gab es nie. Die Kette lief also gar nicht bis hierher,
+        # und was sie am Ende sagt, hatte nie jemand gesehen.
+        "perceive.generated_lost": "das weiche Verschmelzen rundet die Oberseite weg",
+    },
 }
 
 
