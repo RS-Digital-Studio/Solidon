@@ -485,6 +485,45 @@ class ValueField(QWidget):
         self.hint.setText(f"= {value:g}{unit}")
 
 
+class MaterialField(QComboBox):
+    """Welches Material ein Teil ist — gewählt, nicht getippt.
+
+    Hier stand ein Textfeld, und der Kunde musste die **Kennung** erraten: Wer
+    „PETG" tippte — so steht es in der Kopfzeile, im Druckdialog und auf jeder
+    Spule — bekam „Dieses Materialprofil ist nicht bekannt.", denn intern heißt
+    es ``petg``. Ein Feld, das nur eine von sechs Zeichenketten annimmt und
+    keine davon nennt, ist eine Ratefrage (Robert, 27.08.2026).
+
+    **Gefüllt wird zur Laufzeit, nicht aus einer festen Liste.** Der Katalog
+    wächst: ``profiles.reload()`` trägt ausdrücklich „verwirft den Cache, etwa
+    nachdem der Nutzer ein Profil bearbeitet hat". Eine ``enum``-Aufzählung im
+    Schema wäre am Tag richtig, an dem sie geschrieben wird, und stumm falsch,
+    sobald jemand ein eigenes Material anlegt.
+
+    Sichtbar ist der Titel (PETG), Wert ist die Kennung (``petg``) — dieselbe
+    Trennung wie im Filamentwähler nebenan.
+    """
+
+    def __init__(self, start: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        from app.core.knowledge import profiles
+
+        # „Wie das Projekt" zuerst: Das ist die Vorgabe des Parameters (leer)
+        # und der häufigste Fall — ein Teil, das nicht abweicht.
+        self.addItem(tr("Wie das Projekt"), "")
+        for key, profile in sorted(
+            profiles.material_profiles().items(), key=lambda item: str(item[1].title)
+        ):
+            self.addItem(str(profile.title), key)
+        found = self.findData(start or "")
+        self.setCurrentIndex(max(found, 0))
+
+    def value(self) -> str:
+        """Die Kennung, nie der Titel — der ist übersetzt und wechselt."""
+        chosen = self.currentData()
+        return str(chosen) if chosen else ""
+
+
 class ImageSourceField(QWidget):
     """Eine Quelle wählen — oder eine neue von der Platte holen (§25, P16.7).
 
@@ -1247,6 +1286,8 @@ class OperationDialog(QDialog):
             editor = QCheckBox(self)
             editor.setChecked(bool(start))
             return editor
+        if entry.kind == "material":
+            return MaterialField(str(start or ""), self)
         if entry.kind == "filament":
             # Die Slotnummer bleibt der Wert (``currentData``), gewählt wird
             # aber ein Filament mit Farbe und Namen. Name und Farbe wandern
@@ -1551,7 +1592,12 @@ class OperationDialog(QDialog):
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, FilamentField):
+            if isinstance(editor, MaterialField):
+                # Vor dem Combo-Zweig: Der macht ``str(currentData())``
+                # aus allem. Bei einer Kennung ginge das zufällig gut,
+                # und genau solche Zufälle brechen beim nächsten Feld.
+                collected[entry.name] = editor.value()
+            elif isinstance(editor, FilamentField):
                 # **Vor dem Combo-Zweig, und als Zahl.** Der Wähler ist eine
                 # ``QComboBox``, und der Zweig darunter macht aus jedem
                 # ``currentData`` einen Text — eine Slotnummer als „3" hätte

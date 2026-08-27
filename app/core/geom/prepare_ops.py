@@ -569,8 +569,9 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
 class MaterialParams(BaseParams):
     material: str = param(
         title=_("Material"),
+        kind="material",
         default="",
-        doc=_("Kennung eines Materialprofils, etwa „tpu-95a“. Leer heißt: das des Projekts."),
+        doc=_("Welches Material dieses Teil ist. Leer heißt: das des Projekts."),
     )
 
 

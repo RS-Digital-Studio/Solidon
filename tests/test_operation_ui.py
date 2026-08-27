@@ -1760,3 +1760,57 @@ def test_the_source_field_offers_a_way_to_pick_a_file(qt_app: QApplication) -> N
         assert isinstance(editor, ImageSourceField), f"{name}: kein Weg zu einer Datei"
         assert not editor.button.isHidden(), f"{name}: der Knopf ist da, aber unsichtbar"
         assert "wählen" in editor.button.text(), f"{name}: {editor.button.text()!r}"
+
+
+def test_the_material_is_chosen_not_typed(qt_app: QApplication) -> None:
+    """Ein Feld, das nur sechs Zeichenketten annimmt, muss sie auch nennen.
+
+    Hier stand ein Textfeld, und der Kunde musste die **Kennung** erraten: Wer
+    „PETG" tippte — so steht es in der Kopfzeile, im Druckdialog und auf jeder
+    Spule — bekam „Dieses Materialprofil ist nicht bekannt.", denn intern
+    heißt es ``petg`` (Robert, 27.08.2026, am laufenden Fenster).
+
+    Gefüllt wird zur Laufzeit aus dem Katalog, nicht aus einer festen Liste im
+    Schema: ``profiles.reload()`` verwirft den Cache ausdrücklich, „etwa
+    nachdem der Nutzer ein Profil bearbeitet hat". Eine Aufzählung wäre am Tag
+    richtig, an dem sie geschrieben wird.
+    """
+    from app.core.knowledge import profiles
+    from app.ui.op_dialog import MaterialField
+
+    feld = MaterialField("")
+    kennungen = [feld.itemData(i) for i in range(feld.count())]
+
+    # Erst „wie das Projekt", dann jedes bekannte Material.
+    assert kennungen[0] == "", 'die Vorgabe steht oben und heißt nicht „abs"'
+    assert set(kennungen[1:]) == set(profiles.material_profiles()), (
+        "der Wähler zeigt den Katalog, nicht eine Auswahl daraus"
+    )
+
+    # Sichtbar der Titel, Wert die Kennung — sonst wandert ein übersetzter
+    # Text in die Projektdatei.
+    petg = kennungen.index("petg")
+    assert feld.itemText(petg) == "PETG"
+    assert MaterialField("petg").value() == "petg"
+
+    # Und was der Kunde nicht ändert, bleibt leer statt ein Material zu erfinden.
+    assert MaterialField("").value() == ""
+
+
+def test_the_material_kind_is_known_to_the_agent_schema() -> None:
+    """Jede Parameterart braucht **zwei** Einträge, nicht einen.
+
+    Der Dialog verzweigt über ``entry.kind``, und ``json_schema`` schlägt
+    dieselbe Art in einer Tabelle nach. Wer nur den Dialog bedient, bekommt
+    beim ersten Agentenaufruf ein ``KeyError`` — gemessen, bevor dieser Test
+    entstand. Der Hinweis darauf kam von der Sitzung, die dieselbe Falle beim
+    Filamentwähler hatte.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.registry.params import json_schema
+
+    load_operations()
+    spec = next(s for s in REGISTRY.all() if s.name == "set_material")
+    schema = json_schema(spec.params)
+    assert schema["properties"]["material"]["type"] == "string"

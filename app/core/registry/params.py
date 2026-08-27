@@ -324,6 +324,9 @@ _JSON_TYPE: dict[ParamKind, str] = {
     # Ein Filament ist für den Agenten die Slotnummer, die es immer war — der
     # Wähler mit Farbe und Namen ist Bedienung und keine andere Angabe.
     "filament": "integer",
+    # Ein Material ist für den Agenten die Kennung, die es immer war
+    # („petg"): Der Wähler zeigt den Titel, gemeint ist der Schlüssel.
+    "material": "string",
     "source": "string",
     "image": "string",
     "sketch": "string",

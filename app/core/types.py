@@ -909,6 +909,7 @@ ParamKind = Literal[
     "feature",
     "part",
     "filament",
+    "material",
     "source",
     "image",
     "sketch",
