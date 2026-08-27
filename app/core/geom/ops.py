@@ -159,7 +159,9 @@ def rotate_object(ctx: OpContext) -> OpResult:
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
     turned = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=turned)], transform=as_transform(matrix)
+        outputs=[dataclasses.replace(source, mesh=turned)],
+        transform=as_transform(matrix),
+        findings=_stood_still(matrix),
     )
 
 
