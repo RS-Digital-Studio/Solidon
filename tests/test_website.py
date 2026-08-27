@@ -19,11 +19,13 @@ Version 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import struct
 import tomllib
 from datetime import datetime
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -820,6 +822,114 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     schluss = text[text.index('<div class="closing">') :]
     assert "data-release-href" not in schluss.split("</div>")[0], (
         f"{page}: der Kontaktweg im Schlussabschnitt würde zum Ladeknopf"
+    )
+
+
+def test_no_two_values_share_a_spot_and_a_moment() -> None:
+    """Zwei Zahlen an derselben Stelle dürfen sich nicht überblenden.
+
+    Fünf Zeichnungen zeigen einen Wert, der sich ändert — Bohrungsmaß,
+    Wandstärke, Durchmesser, Höhe, Urteil. Beide Fassungen stehen auf
+    denselben SVG-Koordinaten, und beide wechselten ihre Deckkraft im
+    **selben** Zeitfenster: „ø 4,2 mm" und „ø 4,5 mm" lagen sechs Prozent der
+    Laufzeit übereinander, zweimal je Durchlauf. Ausgerechnet die Zahlen, um
+    die es in der Zeichnung geht, waren in diesem Moment Zeichensalat.
+
+    Der Test sucht die Paare **selbst**, statt eine Liste zu führen: Er liest
+    alle animierten `<text>`-Elemente aus den Verkaufsseiten, gruppiert sie
+    nach ihren Koordinaten und prüft für jede Stelle, an der mehr als eine
+    Beschriftung sitzt, ob deren Keyframes je gleichzeitig sichtbar werden.
+    Damit fällt auch ein Paar auf, das später jemand dazulegt.
+
+    Gemessen wird in halben Prozentschritten — ein Übergang von sechs Prozent
+    Breite rutscht durch ein gröberes Raster.
+    """
+    style = (WEBSITE / "style.css").read_text(encoding="utf-8")
+
+    # Die Deckkraftstufen je Keyframe-Satz
+    steps: dict[str, list[tuple[float, float]]] = {}
+    for block in re.finditer(r"@keyframes\s+([\w-]+)\s*\{(.*?)\n\}", style, re.DOTALL):
+        name, body = block.group(1), block.group(2)
+        found: list[tuple[float, float]] = []
+        for stage in re.finditer(r"([\d%,\s]+)\{([^}]*)\}", body):
+            opacity = re.search(r"opacity:\s*([\d.]+)", stage.group(2))
+            if opacity:
+                found += [
+                    (float(p), float(opacity.group(1)))
+                    for p in re.findall(r"([\d.]+)%", stage.group(1))
+                ]
+        if found:
+            steps[name] = sorted(found)
+
+    def visible(name: str, moment: float) -> float:
+        """Deckkraft zu einem Zeitpunkt, linear zwischen den Stufen."""
+        stages = steps[name]
+        before = [s for s in stages if s[0] <= moment]
+        after = [s for s in stages if s[0] >= moment]
+        if not before:
+            return after[0][1]
+        if not after:
+            return before[-1][1]
+        (start, low), (end, high) = before[-1], after[0]
+        return low if end == start else low + (high - low) * (moment - start) / (end - start)
+
+    # Animierte Beschriftungen je Seite und Ort einsammeln.
+    #
+    # **Mit einem Parser und nicht mit einem Muster.** Der erste Anlauf suchte
+    # `<g class="anim NAME">` und fand von den fünf bekannten Paaren **keines**:
+    # Sie hängen als `class="value anim fig-hole-42"` direkt am `<text>`. Der
+    # Test lief grün, auch gegen den Zustand, den er melden sollte — die
+    # Gegenprobe war der einzige Grund, warum das auffiel.
+    #
+    # Beide Formen zählen, und ein `<text>` in einer animierten Gruppe erbt
+    # deren Namen: Die Gruppe blendet ihren ganzen Inhalt aus.
+    class Labels(HTMLParser):
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.stack: list[list[str]] = []
+            self.found: list[tuple[str, str, tuple[str, ...]]] = []
+
+        @staticmethod
+        def _animations(attrs: list[tuple[str, str | None]]) -> list[str]:
+            classes = dict(attrs).get("class") or ""
+            return [part for part in classes.split() if part in steps]
+
+        def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+            if tag == "g":
+                self.stack.append(self._animations(attrs))
+                return
+            if tag != "text":
+                return
+            values = dict(attrs)
+            if not (values.get("x") and values.get("y")):
+                return
+            inherited = [name for level in self.stack for name in level]
+            names = tuple(sorted(set(inherited + self._animations(attrs))))
+            if names:
+                self.found.append((values["x"], values["y"], names))
+
+        def handle_endtag(self, tag: str) -> None:
+            if tag == "g" and self.stack:
+                self.stack.pop()
+
+    spots: dict[tuple[str, str, str], set[str]] = {}
+    for page in _sales_pages():
+        reader = Labels()
+        reader.feed((WEBSITE / page).read_text(encoding="utf-8"))
+        for x, y, names in reader.found:
+            spots.setdefault((page, x, y), set()).update(names)
+
+    moments = [step / 2 for step in range(201)]
+    clashes = []
+    for (page, x, y), names in sorted(spots.items()):
+        for first, second in itertools.combinations(sorted(names), 2):
+            worst = max(min(visible(first, m), visible(second, m)) for m in moments)
+            if worst > 0.15:
+                clashes.append(f"{page} bei x={x} y={y}: {first} und {second} zu {worst:.2f}")
+
+    assert not clashes, (
+        "Beschriftungen teilen sich eine Stelle und einen Moment — beide sind "
+        "dann unlesbar:\n" + "\n".join(clashes[:10])
     )
 
 

@@ -1500,14 +1500,14 @@ a { color: var(--accent); }
 /* Zeichnung 1 — an der Zahl drehen, das Modell folgt. */
 @keyframes fig-value-thin {
   0%, 26% { opacity: 1; }
-  32%, 84% { opacity: 0; }
+  29%, 87% { opacity: 0; }
   90%, 100% { opacity: 1; }
 }
 
 @keyframes fig-value-thick {
-  0%, 26% { opacity: 0; }
+  0%, 29% { opacity: 0; }
   32%, 84% { opacity: 1; }
-  90%, 100% { opacity: 0; }
+  87%, 100% { opacity: 0; }
 }
 
 /* Der Hohlraum misst 198 × 124 und soll 182 × 116 werden — das sind die
@@ -1585,14 +1585,14 @@ a { color: var(--accent); }
 
 @keyframes fig-verdict-no {
   0%, 22% { opacity: 1; }
-  34%, 88% { opacity: 0; }
+  28%, 94% { opacity: 0; }
   100% { opacity: 1; }
 }
 
 @keyframes fig-verdict-yes {
-  0%, 22% { opacity: 0; }
+  0%, 28% { opacity: 0; }
   34%, 88% { opacity: 1; }
-  100% { opacity: 0; }
+  94%, 100% { opacity: 0; }
 }
 
 .fig-half-left { animation-name: fig-half-left; }
@@ -1645,14 +1645,14 @@ a { color: var(--accent); }
 
 @keyframes fig-hole-42 {
   0%, 27% { opacity: 1; }
-  33%, 92% { opacity: 0; }
+  30%, 96% { opacity: 0; }
   100% { opacity: 1; }
 }
 
 @keyframes fig-hole-45 {
-  0%, 27% { opacity: 0; }
+  0%, 30% { opacity: 0; }
   33%, 92% { opacity: 1; }
-  100% { opacity: 0; }
+  96%, 100% { opacity: 0; }
 }
 
 @keyframes fig-counterbore {
@@ -1696,14 +1696,14 @@ a { color: var(--accent); }
 
 @keyframes fig-w1-d50 {
   0%, 28% { opacity: 1; }
-  34%, 88% { opacity: 0; }
+  31%, 94% { opacity: 0; }
   100% { opacity: 1; }
 }
 
 @keyframes fig-w1-d52 {
-  0%, 28% { opacity: 0; }
+  0%, 31% { opacity: 0; }
   34%, 88% { opacity: 1; }
-  100% { opacity: 0; }
+  94%, 100% { opacity: 0; }
 }
 
 @keyframes fig-w1-hole {
@@ -1723,14 +1723,14 @@ a { color: var(--accent); }
    Gruppe, sonst würde die Mutternfalle mitverzerrt. */
 @keyframes fig-w2-v80 {
   0%, 34% { opacity: 1; }
-  40%, 88% { opacity: 0; }
+  37%, 94% { opacity: 0; }
   100% { opacity: 1; }
 }
 
 @keyframes fig-w2-v110 {
-  0%, 34% { opacity: 0; }
+  0%, 37% { opacity: 0; }
   40%, 88% { opacity: 1; }
-  100% { opacity: 0; }
+  94%, 100% { opacity: 0; }
 }
 
 @keyframes fig-w2-grow {
