@@ -567,6 +567,44 @@ Zwei Sätze, die daraus folgen:
   `git show <commit> --numstat`. Alles davor prüft eine Absicht, nicht ein
   Ergebnis.
 
+#### Und ein Index, den es nicht gibt, löscht alles
+
+Der teuerste Fall dieser Familie, am 27.08.2026: Ein Commit auf `origin/main`
+löschte **1175 Dateien** — halbe Anwendung, `.claude/rules/`, Teile der Suite.
+Er stand zwei Minuten, dann war er repariert.
+
+Die Ursache ist eine Zeile, die richtig aussieht:
+
+```bash
+export GIT_INDEX_FILE="$PWD/.git/index-$$"   # NIE
+```
+
+**Jeder Bash-Aufruf ist eine eigene Shell mit eigener Prozessnummer.** Aufbau
+und Prüfung liefen in einem Aufruf und stimmten — 32 Dateien, keine fremde.
+Der Commit lief im nächsten und zeigte auf einen Namen, den niemand angelegt
+hatte. **Ein nicht existierender Index ist ein leerer**, ein leerer heißt
+„nichts ist verfolgt", und das heißt beim Committen „alles ist gelöscht".
+
+Die Prüfung war echt und galt für einen anderen Index als der Commit — genau
+das Muster aus „Was habe ich gerade gemessen?", nur mit dem größten möglichen
+Preis.
+
+Zwei Regeln, und die zweite ist die, die trägt:
+
+* **Fester Name, kein `$$`.** `index-27`, `index-d1` — irgendetwas, das über
+  Aufrufe hinweg dasselbe bedeutet.
+* **Aufbau, Prüfung und Commit in einem einzigen Aufruf.** Wer sie auf zwei
+  verteilt, hat zwischen ihnen eine Shell-Grenze, und über die reist keine
+  Umgebungsvariable. Muss es doch getrennt sein, ist die einzige gültige
+  Kontrolle `git show --stat HEAD` **danach**.
+
+**Der Schaden war klein, weil der Arbeitsbaum ihn nicht mitmacht.** Die
+Dateien lagen die ganze Zeit unversehrt auf der Platte; kaputt war allein
+HEAD. Wer in diesen zwei Minuten gepullt hätte, hätte sie verloren — für alle
+anderen war nichts zu tun. Das ist kein Trost, sondern der Grund, warum ein
+`git log --oneline -3` nach einer fremden Warnung genügt: Steht der
+Löschcommit ohne seine Reparatur darüber, fehlt die halbe Anwendung.
+
 **Der Handgriff dagegen kostet fünf Sekunden, und er hat drei Glieder:**
 
 1. **Die eigene Zahl ansagen, bevor man hinsieht** — „ich lösche zwei Zeilen,
