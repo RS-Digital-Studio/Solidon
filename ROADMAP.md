@@ -127,7 +127,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Der Ziehgriff hat kein Zeichen im Bild, und die Richtung entscheidet nichts | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **zwei Übernahmen aus Fusion, am laufenden Programm gesehen** (27.08.2026): Fusion legt einen blauen Pfeil in die Mitte des Profils, sobald die Extrusion offen ist — unser Griff ist der Umriss selbst und damit unsichtbar, bis der Zeiger darüber steht. Und Fusion springt selbst auf *Ausschneiden*, sobald die Tiefe negativ wird; wir sagen dort „andersherum ziehen", wo ein Zug in den Körper `sketch_pocket` sein könnte |
+| Der Ziehgriff hat kein Zeichen im Bild | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | einen Entwurf: ein Pfeil oder eine Marke auf dem Umriss, damit die Geste ohne Satz gefunden wird. Ein Pfeil in der Bildebene kann eine Richtung senkrecht dazu nicht zeigen — die Konvention dafür steht schon in dieser Datei (Punkt heißt heraus, Kreuz heißt hinein). Bedienlogik vor Code |
+| Ein Zug in den Körper könnte `sketch_pocket` sein | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Klärung von zwei Haken: Regel 21 verbietet den stillen Operationswechsel (Fusion tauscht sichtbar im Dialog), und es gibt vier gemessene Fälle, in denen `sketch_pocket` das Volumen unverändert lässt — die Absage bleibt als Rückfall |
+| Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet, und jede Erzeugungs- und Änderungsoperation liegt drei Klicks tief, weil *Erzeugen* und *Ändern* ausschließlich aus Untermenüs bestehen. Drei Wege stehen im Abschnitt: Tiefe kürzen (klein, ohne Schemafrage), ein benanntes Band (groß), oder ein Band, das der Auswahl folgt (über Fusion hinaus, `applies_to` trägt es schon) |
 | Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen Antwort | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Vorwahl wie in Fusion: Dort steht „1 Profil · Bereich 800,00 mm²" unten rechts, und der Extrusionsdialog hat das Profil schon. Bei einer eindeutigen Zeichnung kosten Frage und *Weiter* zwei Klicks für eine Auskunft, die die Anwendung hat |
 | Vier Kleinere aus dem Fusion-Vergleich | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | Ebenen im Bild statt im Auswahlfeld, zwei Maße in einer Tab-Kette mit Schloss, die Bedienfolge in jedem Werkzeughinweis, und die ruhige Zeile am Bildrand. Jedes einzeln klein, zusammen der Unterschied, den Robert „alles ab Klick 1" genannt hat — Einzelheiten im Abschnitt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
@@ -11697,13 +11699,36 @@ benutzbar") ausschließen.
 
 Offen daraus:
 
-- [ ] **Der Ziehgriff braucht ein Zeichen im Bild, und die Richtung sollte die
-      Operation entscheiden.** Beides aus Fusion, beides am Griff von heute:
-      ein Pfeil (oder eine Marke) auf dem Umriss, damit die Geste ohne Satz
-      gefunden wird — und ein Zug **in** den Körper als `sketch_pocket` statt
-      der Absage „andersherum ziehen". Das Zweite ist die größere Änderung: Der
-      Griff müsste wissen, ob unter der Zeichenebene Material liegt, und die
-      Übergabe müsste zwei Operationen kennen.
+- [ ] **Der Ziehgriff braucht ein Zeichen im Bild.** Ein Pfeil (oder eine
+      Marke) auf dem Umriss, damit die Geste ohne Satz gefunden wird; der Satz
+      in der Leiste ist eine Beschreibung und keine Affordanz im Bild.
+
+      **Und das Zeichen muss sagen, wohin.** Ein Pfeil in der Bildebene kann
+      eine Richtung senkrecht dazu nicht zeigen — dafür hat das Projekt längst
+      eine Konvention, und sie steht weiter oben im Register: **Punkt** heißt
+      „kommt heraus", **Kreuz** heißt „geht hinein" (Achsansichten, dieselbe
+      Datei). In der Querschau liegt die Aufzugsachse **in** der Bildebene,
+      dort trägt ein Pfeil; in jeder anderen Lage ist der Griff heute gar nicht
+      angeboten, und der Entwurf muss sagen, was das Zeichen dort tut, wenn er
+      die Lage öffnet. Das ist Bedienlogik vor Code (Einordnung der
+      Review-Sitzung, 27.08.2026).
+- [ ] **Ein Zug in den Körper könnte `sketch_pocket` sein statt einer Absage.**
+      Fusion stellt *Vorgang* selbst auf „Ausschneiden", sobald die Tiefe
+      negativ wird; wir sagen dort „andersherum ziehen". Aus der Absage würde
+      eine zweite Operation — die stärkere Übernahme, und die mit zwei Haken,
+      die vor der Umsetzung gehören:
+
+      * **Regel 21 verbietet den stillen Wechsel.** Fusion tauscht den Vorgang
+        **sichtbar** im Dialog; ein Operationswechsel mitten in der Geste, den
+        niemand ankündigt, wäre Raten über die Absicht. Es braucht eine
+        deutliche Anzeige mit zweiter Kodierung (Regel 18) — etwa die
+        Drahtform, die nach innen statt nach außen wächst, **und** ein
+        Wortwechsel an der Wertleiste.
+      * **Die Absage bleibt als Rückfall.** Es gibt vier gemessene Fälle, in
+        denen `sketch_pocket` das Volumen unverändert lässt (weiter oben in
+        dieser Datei, „Die Tasche schnitt daneben"); wo unter der Ebene nichts
+        zu schneiden ist, muss der Zug weiter eine Auskunft geben. Die
+        B5-Meldung wird ergänzt, nicht ersetzt.
 - [ ] **Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen
       Antwort.** Bei einer Zeichnung mit einem geschlossenen Umriss und ohne
       Körper darunter gibt es genau eine sinnvolle: aufziehen. Vorwählen und
@@ -11716,3 +11741,98 @@ Offen daraus:
       Werkzeughinweis statt nur an den Bedingungsknöpfen; und die ruhige Zeile
       am Bildrand, die sagt, was gewählt ist. Zusammen sind sie das, was Robert
       „alles ab Klick 1" genannt hat.
+
+
+### Die obere Bedienzone: drei Bänder, wo der Bauplan eines zeichnet (27.08.2026)
+
+Robert, nach dem Fusion-Lauf: „auch mit weniger klicks finde ich fusion in
+manchen punkten noch übersichtlicher, vor allem durch das ribbon menü oben, wir
+wollen alles perfekt und innovativ für anwender ohne cad kenntnisse."
+
+**Gemessen am gebauten Fenster**, weil der Eindruck sonst gegen einen Eindruck
+steht:
+
+| | Solidon heute | Fusion |
+|---|---|---|
+| Bänder über der Ansicht | **drei** — Menüleiste, obere Werkzeugleiste, Werkzeugzeile | **eines** |
+| Menüs / Reiter | 9 Menüs, 71 Zeilen zusammen | 7 Reiter, dazu ein Kontextreiter (*Skizze*) |
+| davon Untermenüs | **20** | keine |
+| Tiefe bis zu einer Erzeugungs-Operation | **3 Klicks** — *Erzeugen* besteht aus 4 Zeilen, und alle 4 sind Untermenüs | **1 Klick**, sobald der Reiter steht |
+| Tiefe bis zu einer Änderungs-Operation | **3 Klicks** — *Ändern*: 7 Zeilen, alle 7 Untermenüs | **1 Klick** |
+| Gruppennamen | erst beim Aufklappen zu sehen | **immer sichtbar** (ERSTELLEN, ÄNDERN, PRÜFEN …) |
+| Operationen im Register | 91 in 15 Kategorien, 14 mit Kürzel | — |
+| Symbole gleichzeitig im Band | 7 Umschalter unter der Ansicht | rund 30, **keines mit Wort** |
+
+**Das ist der Kern, und er ist nicht Geschmack:** Bei uns liegt jede Operation
+zum Erzeugen und Ändern **drei** Klicks tief, und wie die Gruppe heißt, erfährt
+man erst, wenn man aufklappt. Bei Fusion ist es einer, und die Verben stehen
+dauernd da. Genau das meint „schon alles ab Klick 1".
+
+**Was der Bauplan dazu sagt — und er sagt mehr, als erwartet.** §2.5 zeichnet
+**eine** Werkzeugleiste über den drei Zonen, nicht drei Bänder; wir haben drei.
+Das ist ein Fund und keine Auslegung. Gleichzeitig schließt §2.5 ausdrücklich
+aus, was Fusions Reiter sind: „Keine Betriebsarten, keine Umschaltung zwischen
+‚Bearbeiten' und ‚Konstruieren'" — und `AGENTS.md` führt
+„Betriebsarten-Umschaltung in der Oberfläche" unter *Was NICHT gebaut wird*.
+Fusions fünf Arbeitsbereichs-Reiter (Volumenkörper, Fläche, Netz, Blech,
+Kunststoff) sind damit **kein** Vorbild; sein **Kontextreiter** (*Skizze*
+erscheint im Skizzenmodus und verschwindet mit ihm) ist keine Betriebsart,
+sondern folgt dem Zustand — und der ist nach §2.5 die Szene.
+
+Dazu §2.6: Entdeckbarkeit läuft über Befehlspalette, Kontextmenü am Merkmal und
+Bausteinkatalog mit Bildern. Ein Band ist dort nicht genannt, aber auch nicht
+ausgeschlossen.
+
+**Und Fusions Band hat für unsere Zielgruppe eine harte Schwäche:** rund dreißig
+Symbole gleichzeitig, **keines mit einem Wort**. Wer die Symbole nicht kennt,
+muss jedes einzeln überfahren. Für „wenig CAD-Kenntnisse" ist das die falsche
+Hälfte des Vorbilds — übersichtlich ist dort die **Struktur** (ein Band,
+benannte Gruppen, eine Ebene), nicht die Dichte.
+
+Drei Wege, mit Kosten. Keiner ist gebaut, und keiner sollte ohne Entscheidung
+gebaut werden — §2.5 legt das Fensterschema fest, und
+`tests/test_interface_limits.py` kodiert die Zahlen.
+
+**A — Nur die Tiefe kürzen, Schema unberührt.** Untermenüs auflösen, wo eine
+Kategorie in die Zwölf-Zeilen-Grenze passt: *Erzeugen* und *Ändern* tragen
+zusammen 11 Untermenüs, und die meisten Kategorien haben weniger als zwölf
+Einträge (`parts` mit 26 ist die Ausnahme und bleibt ein Untermenü). Aus drei
+Klicks werden zwei. **Kosten:** klein, ein Tag; berührt `test_interface_limits`,
+das Handbuch (es verweist auf Menüwege) und die Tour. **Ändert nichts am
+Bauplan.**
+
+**B — Ein benanntes Band statt Menüleiste plus oberer Werkzeugleiste.** Was
+§2.5 ohnehin zeichnet: **eine** Leiste, Gruppen nach Verben, und — anders als
+Fusion — **mit Wörtern**, weil unsere Zielgruppe die Symbole nicht kennt. Ohne
+Arbeitsbereichs-Reiter, mit einem Kontextabschnitt, der wie Fusions
+*Skizze*-Reiter mit dem Zustand kommt und geht. **Kosten:** groß; berührt
+Menüleiste, Kopfleiste, Werkzeugzeile, `test_interface_limits`, Handbuch, Tour
+und jedes Bildschirmfoto. **Braucht einen Entwurf, bevor eine Zeile entsteht.**
+
+**C — Das Band folgt der Auswahl.** Die innovative Variante, und die einzige,
+die über Fusion hinausgeht: Fusions Band ist je Arbeitsbereich **statisch** — es
+zeigt immer alles, auch was gerade nicht geht. Unser Register weiß es besser:
+`applies_to` und `for_feature` beantworten schon heute, welche Operationen auf
+das Gewählte passen (§2.6 nutzt das im Kontextmenü, die Palette sortiert
+danach). Ein Band, das **vorn zeigt, was jetzt geht**, liest sich für einen
+Anfänger nicht als 91 Operationen, sondern als die fünf, die zur Bohrung unter
+dem Zeiger passen. **Kosten:** wie B, plus die Frage, die B nicht hat — ein
+Band, dessen Inhalt sich ändert, kostet Wiederfinden („wo ist es hin?"). Der
+Ausweg wäre ein fester Grundsatz plus eine wachsende Kontextgruppe, aber das ist
+Entwurfsarbeit und keine Zeile Code.
+
+**Meine Empfehlung, und die Entscheidung liegt bei Robert:** A ist unstrittig
+und sofort machbar — reine Tiefenreduktion, kein Schemabruch, messbarer Gewinn
+(drei Klicks auf zwei bei 47 der 91 Operationen). B und C gehören in **eine**
+Konzeptarbeit, denn B allein wäre ein Fusion-Abklatsch mit unseren Wörtern, und
+C ohne B hat keinen Ort. Was dabei ausdrücklich nicht übernommen wird: die
+Arbeitsbereichs-Reiter (§2.5) und die wortlose Symboldichte.
+
+Offen:
+
+- [ ] **Die Entscheidung über die obere Bedienzone.** Drei Wege stehen oben mit
+      ihren Kosten; A ist ohne Schemafrage machbar, B und C brauchen einen
+      Entwurf. Was fehlt, ist nicht die Messung — die steht — sondern die
+      Entscheidung, wie weit gegangen wird. Bis dahin wird nichts gebaut: §2.5
+      legt das Fensterschema fest, und wer es ändert, ändert Handbuch, Tour und
+      jedes Bildschirmfoto mit.
