@@ -66,9 +66,10 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import urlparse
 
+from app.branding import APP_NAME
 from app.core import errors
 from app.core.log import get_logger
-from app.core.paths import APP_NAME, ensure_dir, user_cache_dir, user_config_dir
+from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
