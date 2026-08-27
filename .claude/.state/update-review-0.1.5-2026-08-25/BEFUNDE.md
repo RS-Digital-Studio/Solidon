@@ -221,3 +221,78 @@ ganze App statt Diff). Überschneidungen sind gewollt und unten vermerkt.
 - Die im Register stehenden Robert-Punkte (EULA, §-Verweise, Paddle,
   Fördermodell, 3D-Drucker-Ordner-Sicherung, Flächenrückgewinnungs-Phase,
   P16.10, Intel/AMD-Weg, Tor-Umbau/Arbeitsbäume) — unverändert offen.
+
+---
+
+# Schlusskontrolle (26.08.2026) — geprüft gegen HEAD, nicht gegen Meldungen
+
+Ein lesender Durchgang hat jeden Befund dieser Liste am Code nachgeschlagen
+und die schwersten mit gezielten Testläufen belegt. Ergebnis in drei Teilen.
+
+## Belegt zu (Auszug der Belege)
+
+Alle sieben kritischen Befunde und alle mittleren außer 10:
+Gitter (`lattice.py:196` arange bis `high + EPS_GEOM`), Stopfen-Länge
+(`prepare.py:405` `* 2.0`), Rücknahme-Warnung (`chat.py:541` `_warnings`),
+Installer (`solidon3d.iss:82` sechs Präfixe), `to_main` (`--check-only`),
+Schlüsselloch (`mounting.py:454` `HEAD_CLEARANCE + play`, V7),
+Rezept-§32-Familie (`recipe.py:806` `_announced`, `foreign.py:74` rekursiv
+mit Zyklenwächter, `session.py:130` Prüfung vor der Auswertung),
+Senkungsmündung, `into_the_body` über die lokale Säule, `shifted()` mit
+Löchern, Werkzeug an der Bohrungsmündung, Lose-Stücke-Rat am Schema,
+Nummern-Wasserlinie, Beispiele mit `title_translatable` (9 von 9),
+G-Code-Fördermodus vor der ersten Bahn, dreizehn Injektionstüren im
+Steckbrief, gewichtetes Zugbudget (Test verlangt acht Schritte),
+Download-Platz an beiden Orten, Demo-Untergrenze, CLI-Installer-Sprache,
+Installations-Zeitgrenze, die sechs Fenster-Funde, drei der sechs
+Dialog-Funde, die drei ce-Funde.
+
+## Offen mit Kästchen (bewusst)
+
+- Befund 16, Schlüssel-Hälfte des Verweisfilters — `ROADMAP.md` P-Abschnitt.
+- Regel 17 an der Auswertungsgrenze — „Was das Update-Review liegen ließ".
+- Die Robert-Punkte der Übersichtstabelle (EULA-Folgearbeit, Fördermodell,
+  P16.10, Sicherung des Druckordners, Flächenrückgewinnung, Tor-Umbau).
+
+## Nicht belegt — bei der Schlusskontrolle neu aufgemacht
+
+Diese Punkte waren am 26.08.2026 **nicht** behoben und hatten kein Kästchen.
+Sie sind seither in Arbeit oder verteilt; der Stand steht im Abschlussbericht
+an Robert und in den Commit-Meldungen.
+
+1. **Befund 10 — der Stopfen ist enger als die Bohrung** (`prepare.py:411`
+   ohne `bore_diameter`-Kompensation; der vorhandene Test umgeht die Frage
+   mit `compensate=False`).
+2. **Drei Reste aus Befund 31:** `recipe_dialog.UNITS` und
+   `print_settings_dialog.FIELDS` frieren die Sprache beim Import ein;
+   Parametergrenzen sind anlegbar und nie änderbar; abgeleitete Parameter
+   werden im Rezeptdialog vorgehakt freigegeben und verlieren still ihre
+   Formel.
+4. **Fünf Kleinreste an Bausteinen:** OVERLAP-Kragen an drei abziehenden
+   Bausteinen, `MIN_RIB` unter der Mindestwandstärke, `MAGNET_LIP_GRIP` als
+   feste Toleranzzahl, `gusset_1` auf der Kante statt in der Flächenmitte,
+   Rezept rechnet immer in „fine".
+5. **`importorskip` fehlt** in `tests/test_recipe_dialog.py`.
+6. **Unlesbares Werkzeug-JSON** wird bei `consumes=0` zum stillen
+   Vorgabekörper (`llm.py:725`, Regel 21).
+
+**Und ein Fund über die Liste hinaus:** Der Arbeitsbaum trug 198 ungestagte
+Löschungen unter `.claude/.state/` (Durchsichtsarchiv, älter als diese
+Sitzung). Ein `git add -A` hätte sie mitcommittet. Gemeldet an alle
+Sitzungen, nicht angefasst — `suite-getrennt.sh` selbst ist unversehrt.
+
+## Was die Kontrolle über die eigene Liste hinaus fand
+
+Die Schwesterdurchsicht (`gesamtreview-2026-08-25b/`, ganzer Bestand statt
+Diff) führte **34 hohe Befunde**, von denen mehrere niemand hielt. Nach
+Abgleich mit 3d-druck-46 sind sie verteilt; aus dieser Ecke kamen dazu:
+flache Teile werden hochkant gestellt (behoben), die Kopffreiheit des
+Schraubenlochs liegt in der Luft, die OpenSCAD-Prüfung ist mit einem
+Kommentar umgehbar, ein Zukunftsdatum verbrennt die Demo-Frist, eine
+beschädigte Installation fordert den zahlenden Kunden zum Kauf auf, jede
+Absage der Gegenstelle heißt „nicht erreichbar", Auto Split lässt tote
+Passungen und liefert über die Bettgrenze.
+
+**Die Lehre des Tages:** Eine Befundliste beweist nichts über den Code. Erst
+der Blick in die Datei — und der zweite auf die Liste der Nachbarsitzung —
+sagt, ob etwas abgearbeitet ist.

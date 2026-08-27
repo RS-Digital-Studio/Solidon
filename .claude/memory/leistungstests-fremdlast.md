@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 4c47107c-d31c-406e-b4b0-401bb3afd6bb
-  modified: 2026-08-20T16:40:00.000Z
+  modified: 2026-08-27T10:11:10.206Z
 ---
 
 Auf Roberts Maschine (i9-13900K) läuft während der Sitzungen öfter ein Spiel
@@ -126,6 +126,22 @@ bloß, dass in dem Baum noch keine Marke stand.
 Brauchbar wird der Vergleich erst über die **absoluten** Zahlen: in beiden
 Ständen `.performance.json` löschen, je drei Läufe fahren, danach `best`
 auslesen. Die Alternative ist, die Marke des Hauptbaums mitzukopieren.
+
+**Die Umkehrung ist gefährlicher, weil sie nach einem Befund aussieht.** Ein
+Arbeitsbaum, der ein paar Tage steht, hat seine eigene Marke — und wenn dort
+einmal ein sehr ruhiger Lauf war, ist sie **schärfer** als die des
+Hauptbaums. Am 27.08.2026 meldete mein Torlauf im Arbeitsbaum
+`evaluate_unwelded_two_steps` als vierte Überschreitung, 59 bis 65 ms gegen
+25 ms; im Hauptbaum stand dieselbe Marke bei 62,3 ms mit null
+Überschreitungen. Derselbe Commit, dasselbe Verhalten, zwei Urteile. Ich hatte
+den Test schon zweimal allein gefahren und die Fremdlast ausgeschlossen — das
+war richtig und half nichts, weil die Frage nicht die Last war, sondern
+**gegen welche Zahl gemessen wird**.
+
+Deshalb gehört bei einem roten Leistungstest im Arbeitsbaum **beides**
+verglichen, bevor man ihn glaubt:
+
+    <baum>/tests/.performance.json   gegen   <hauptbaum>/tests/.performance.json
 
 **Und dieselbe Falle schnappt auf der Referenzseite zu.** So gemessen standen
 2005 gegen 2001 ms, und daraus wurde der Schluss „dann liegt es im

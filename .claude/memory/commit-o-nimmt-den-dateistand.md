@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-08-26T22:45:52.550Z
+  modified: 2026-08-27T07:36:42.182Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -44,6 +44,25 @@ weiter den alten Inhalt. Am 26.08.2026 zugeschnappt: Ein so committetes
 Löschen (`845e87a2`, toter Katalogschlüssel) kam beim nächsten Schreiben in
 dieselbe Datei zurück, weil das Skript den **Baum** las. Gefangen hat es die
 Ansage — vier Einfügungen statt der angesagten drei —, nicht der Zufall.
+
+**Und die Rettung, die man dagegen baut, ist mit `-o` wirkungslos** — gemessen
+von d1 am 27.08.2026, dreimal hintereinander vorbeigelaufen. Ein Blob, den man
+mit `update-index --cacheinfo` in den privaten Index legt, wird von
+`git commit -o` **überschrieben**: `--only` heißt „nimm den Stand genau dieser
+Pfade", und dieser Stand ist die Datei auf der Platte. Blob-Verfahren und `-o`
+schließen sich aus; wer beides kombiniert, glaubt sich doppelt gesichert und
+ist es gar nicht.
+
+Schlimmer war die Kontrolle davor: `git diff --cached HEAD --numstat` gab
+jedes Mal genau die angesagte Zahl — und stimmte auch, **für den Index**.
+Committet wurde der Baum. Eine Prüfung, die gegen die eigene Annahme läuft,
+bestätigt sie, statt sie zu prüfen ([[messwerkzeug-misst-sich-selbst]]).
+
+Der Weg, der hält: Blob in den privaten Index legen und `git commit` **ohne**
+`-o` — nach `git read-tree HEAD` steht der Index auf HEAD, was man
+hineinlegt, ist genau die eigene Änderung, und `git commit` nimmt den Index
+als Baum. Und die einzige Prüfung, die etwas taugt, ist die **nach** dem
+Commit: `git show <commit> --numstat`. Nicht `--cached`, nicht `diff HEAD`.
 
 Ist es passiert: History stehen lassen. Zuerst prüfen, ob eine halbe Einheit
 hinausgeritten ist — das ist dringender als die Zurechnung —, dann den
