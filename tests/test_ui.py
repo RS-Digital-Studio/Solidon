@@ -7792,3 +7792,44 @@ def test_the_status_line_speaks_on_the_day_the_trial_ends(
     assert zeile(2), "kurz davor schon"
     assert zeile(0), "und am Tag, an dem es zu ist, erst recht"
     assert "abgelaufen" in zeile(0)
+
+
+def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> None:
+    """Der Weg **zurück** aus dem exakten Kern hat dieselbe Sackgasse wie der
+    Weg hin — nur sperrt ihn niemand, und das ist richtig.
+
+    Gemessen von d1 am laufenden System: exakter Quader, darüber eine
+    Verrundung, dann den Haken abgewählt — die Auswertung hält bei der
+    Verrundung an, weil sie einen exakten Körper braucht. Der Satz des Kerns
+    ist gut und kommt **nach** dem Klick (Regel 19). ``_lock_twin_toggle``
+    fragt nur, ob der Zwilling auf der *Auswahl* kann, nicht ob darüber
+    liegende Schritte die Exaktheit brauchen.
+
+    Gesperrt wird trotzdem nicht: Zurückschalten ist eine legitime Absicht,
+    und ein Haken, den man nicht abwählen darf, wäre die schlechtere
+    Sackgasse. Was fehlte, ist die Auskunft davor.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft
+
+    load_operations()
+    document = window.session.project.document
+    history = History(document)
+    history.apply("Quader", [OperationDraft(op="create_brep_box", params={})])
+    box_step = document.ops[-1].id
+    history.apply(
+        "Verrunden",
+        [OperationDraft(op="fillet_edges", inputs=("obj_1",), params={"radius": 2.0})],
+    )
+
+    hint = window._twin_toggle_hint("Grundsatz.", box_step, exact_now=True)
+
+    assert "Grundsatz." in hint, "der Werbetext bleibt stehen"
+    assert "1" in hint, f"die Zahl der betroffenen Schritte fehlt: {hint!r}"
+
+    # Gegenprobe eins: ohne einen Schritt darüber gibt es nichts zu warnen.
+    assert window._twin_toggle_hint("Grundsatz.", document.ops[-1].id, exact_now=True) == (
+        "Grundsatz."
+    )
+    # Gegenprobe zwei: Wer den Haken **setzt**, nimmt niemandem etwas weg.
+    assert window._twin_toggle_hint("Grundsatz.", box_step, exact_now=False) == "Grundsatz."

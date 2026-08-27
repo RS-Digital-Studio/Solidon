@@ -382,6 +382,7 @@
   "Danke, dass Sie sich die Zeit nehmen. Kein Feld ist Pflicht — auch ein einziger Satz hilft. Die Antwort geht an {address}; gesendet wird nur, was unten steht.": "Merci de prendre le temps. Aucun champ n'est obligatoire — une seule phrase aide déjà. La réponse part vers {address} ; seul ce qui figure ci-dessous est envoyé.",
   "Darin steht kein Rechnername. Eine Adresse sieht aus wie http://localhost:11434 — der Name des Rechners, dann der Port.": "Aucun nom de machine n’y figure. Une adresse ressemble à http://localhost:11434 — le nom de la machine, puis le port.",
   "Darstellung": "Affichage",
+  "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. Ohne den Haken halten sie an.": "Au-dessus se trouvent {zahl} étapes qui exigent un corps exact. Sans la case, elles s'arrêteront.",
   "Das Backend hat keinen Auftrag angenommen.": "Le backend n'a accepté aucune tâche.",
   "Das Bild ist leer.": "L'image est vide.",
   "Das Bild wurde als Höhe auf die Oberfläche gelegt.": "L’image a été appliquée à la surface comme hauteur.",

@@ -382,6 +382,7 @@
   "Danke, dass Sie sich die Zeit nehmen. Kein Feld ist Pflicht — auch ein einziger Satz hilft. Die Antwort geht an {address}; gesendet wird nur, was unten steht.": "Grazie per il tempo che ci dedichi. Nessun campo è obbligatorio: basta anche una sola frase. La risposta va a {address}; viene inviato solo ciò che sta qui sotto.",
   "Darin steht kein Rechnername. Eine Adresse sieht aus wie http://localhost:11434 — der Name des Rechners, dann der Port.": "Non contiene alcun nome di computer. Un indirizzo è fatto così: http://localhost:11434 — il nome del computer e poi la porta.",
   "Darstellung": "Visualizzazione",
+  "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. Ohne den Haken halten sie an.": "Sopra ci sono {zahl} passaggi che richiedono un corpo esatto. Senza la spunta si fermeranno.",
   "Das Backend hat keinen Auftrag angenommen.": "Il backend non ha accettato alcun lavoro.",
   "Das Bild ist leer.": "L'immagine è vuota.",
   "Das Bild wurde als Höhe auf die Oberfläche gelegt.": "L’immagine è stata applicata alla superficie come altezza.",

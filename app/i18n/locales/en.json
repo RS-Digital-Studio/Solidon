@@ -382,6 +382,7 @@
   "Danke, dass Sie sich die Zeit nehmen. Kein Feld ist Pflicht — auch ein einziger Satz hilft. Die Antwort geht an {address}; gesendet wird nur, was unten steht.": "Thank you for taking the time. No field is required — even a single sentence helps. The answer goes to {address}; only what is shown below is sent.",
   "Darin steht kein Rechnername. Eine Adresse sieht aus wie http://localhost:11434 — der Name des Rechners, dann der Port.": "There is no machine name in it. An address looks like http://localhost:11434 — the name of the machine, then the port.",
   "Darstellung": "Display",
+  "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. Ohne den Haken halten sie an.": "There are {zahl} steps above that need an exact body. Without the tick they will stop.",
   "Das Backend hat keinen Auftrag angenommen.": "The backend accepted no job.",
   "Das Bild ist leer.": "The image is empty.",
   "Das Bild wurde als Höhe auf die Oberfläche gelegt.": "The image was laid onto the surface as height.",

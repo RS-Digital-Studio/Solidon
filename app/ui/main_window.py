@@ -2671,6 +2671,43 @@ class MainWindow(QMainWindow):
         toggle.setToolTip(reason)
         toggle.setStatusTip(reason)
 
+    def _twin_toggle_hint(self, hint: str, op_id: int, *, exact_now: bool) -> str:
+        """Der Satz am Umschalter — und was das Abwählen den Schritten darüber
+        kostet.
+
+        **Die Sperre daneben fragt die Auswahl, nicht die Zukunft.**
+        :meth:`_lock_twin_toggle` prüft, ob der Zwilling auf dem *gewählten*
+        Körper überhaupt kann, und schützt damit den Weg **zum** exakten Kern.
+        Der Weg zurück hat dieselbe Sackgasse spiegelbildlich: Ein exakter
+        Quader, darüber eine Verrundung, dann den Haken abgewählt — die
+        Auswertung hält bei der Verrundung an, weil sie einen exakten Körper
+        braucht. Der Satz des Kerns ist gut und kommt zu spät; er steht im
+        Prüfbericht, nachdem geklickt wurde (Regel 19).
+
+        **Gesperrt wird trotzdem nicht.** Zurückschalten ist eine legitime
+        Absicht — vielleicht will der Kunde die Verrundung ohnehin loswerden,
+        und ein Haken, den er nicht abwählen darf, wäre die schlechtere
+        Sackgasse. Was fehlte, ist die Auskunft davor: wie viele Schritte
+        darüber daran hängen. Die Zahl steht im Verlauf, die Bedingung im
+        Register.
+        """
+        if not exact_now:
+            # Der Haken ist aus: Setzen kostet nichts, was hier zu warnen wäre.
+            return hint
+        document = self.session.project.document
+        later = [
+            entry
+            for entry in document.ops
+            if entry.id > op_id and REGISTRY.get(entry.op).requires_kind == "brep"
+        ]
+        if not later:
+            return hint
+        warning = tr(
+            "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. "
+            "Ohne den Haken halten sie an."
+        ).format(zahl=len(later))
+        return f"{hint}\n\n{warning}"
+
     @staticmethod
     def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
         """Was am unbeschrifteten Knopf steht: Name, Kürzel, Zweck.
@@ -6535,7 +6572,11 @@ class MainWindow(QMainWindow):
         if hidden is not None and hidden in TWIN_TOGGLES:
             label, hint = TWIN_TOGGLES[hidden]
             exact = QCheckBox(str(label), self)
-            exact.setToolTip(str(hint))
+            exact.setToolTip(
+                self._twin_toggle_hint(str(hint), op_id, exact_now=spec.name == hidden)
+            )
+            exact.setStatusTip(exact.toolTip())
+            exact.setAccessibleDescription(exact.toolTip())
             exact.setChecked(spec.name == hidden)
 
         def chosen_spec() -> OperationSpec:

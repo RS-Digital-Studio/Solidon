@@ -382,6 +382,7 @@
   "Danke, dass Sie sich die Zeit nehmen. Kein Feld ist Pflicht — auch ein einziger Satz hilft. Die Antwort geht an {address}; gesendet wird nur, was unten steht.": "Gracias por tomarse el tiempo. Ningún campo es obligatorio: incluso una sola frase ayuda. La respuesta va a {address}; solo se envía lo que aparece abajo.",
   "Darin steht kein Rechnername. Eine Adresse sieht aus wie http://localhost:11434 — der Name des Rechners, dann der Port.": "No contiene ningún nombre de equipo. Una dirección se ve así: http://localhost:11434 — el nombre del equipo y luego el puerto.",
   "Darstellung": "Presentación",
+  "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. Ohne den Haken halten sie an.": "Encima hay {zahl} pasos que necesitan un cuerpo exacto. Sin la casilla se detendrán.",
   "Das Backend hat keinen Auftrag angenommen.": "El backend no aceptó ningún trabajo.",
   "Das Bild ist leer.": "La imagen está vacía.",
   "Das Bild wurde als Höhe auf die Oberfläche gelegt.": "La imagen se ha aplicado a la superficie como altura.",
