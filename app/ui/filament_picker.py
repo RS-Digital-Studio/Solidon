@@ -508,14 +508,14 @@ class FilamentPanel(QWidget):
         dialog = NewFilamentDialog(self, name=name, colour=colour)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        neu, neue_farbe = dialog.filament()
-        if not neu:
+        renamed, fresh_colour = dialog.filament()
+        if not renamed:
             return
         # Ein Filament ist sein Name: Wer ihn ändert, legt kein zweites an —
         # der alte Eintrag geht, der neue kommt.
-        if neu != name:
+        if renamed != name:
             filaments.forget(name)
-        filaments.remember(neu, neue_farbe)
+        filaments.remember(renamed, fresh_colour)
         self._fill()
 
     def _remove(self) -> None:

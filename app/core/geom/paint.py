@@ -196,8 +196,8 @@ def paint_slot(ctx: OpContext) -> OpResult:
     #
     # ``assign_slot`` nebenan tat es die ganze Zeit richtig; die
     # Funktion ist von dort und wird jetzt geteilt statt verdoppelt.
-    vorhanden = {entry.index: entry for entry in source.material_slots}.get(params.slot)
-    gewaehlt = colour_from(params.colour)
+    existing = {entry.index: entry for entry in source.material_slots}.get(params.slot)
+    chosen = colour_from(params.colour)
     slots = merged_slots(
         list(source.material_slots),
         [
@@ -207,11 +207,11 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 # Ein zweiter Strich in dasselbe Filament soll dessen
                 # Namen nicht löschen.
                 name=params.name
-                or (vorhanden.name if vorhanden is not None else "")
+                or (existing.name if existing is not None else "")
                 or f"{_('Filament').translate()} {params.slot}",
-                colour=gewaehlt
-                if gewaehlt is not None
-                else (vorhanden.colour if vorhanden is not None else None),
+                colour=chosen
+                if chosen is not None
+                else (existing.colour if existing is not None else None),
             )
         ],
     )
