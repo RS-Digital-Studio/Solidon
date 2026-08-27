@@ -49,6 +49,12 @@ TIMEOUT_SECONDS: Final = 60.0
 
 #: Wie viel am Stück gelesen wird. Klein genug, dass Fortschritt und Abbruch
 #: sich flüssig anfühlen, groß genug, dass es nicht bremst.
+#:
+#: **Gilt für jeden Netzstrom des Kerns, nicht nur für diesen.**
+#: ``updates.py`` führte dieselbe Zahl mit derselben Begründung noch einmal
+#: und verwies daneben im Kommentar auf diese Datei — ein Verweis ist keine
+#: geteilte Sache, er wandert beim nächsten Anfassen nicht mit. Sie wohnt
+#: hier, weil diese Datei das Holen im Namen trägt (27.08.2026).
 CHUNK_BYTES: Final = 256 * 1024
 
 #: Was außer den Netzformaten noch hereindarf — dieselbe Liste, die auch das

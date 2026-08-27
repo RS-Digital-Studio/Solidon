@@ -51,6 +51,7 @@ from app.core.errors import (
     ExternalToolError,
     FileWriteError,
 )
+from app.core.ingest.fetch import CHUNK_BYTES
 from app.core.install import packaged
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir
@@ -125,10 +126,6 @@ DOWNLOAD_TIMEOUT_SECONDS: Final = 60.0
 #: Größe, und mehr als das wird nicht gelesen — diese Grenze fängt den Fall,
 #: dass sie eine unsinnige Zahl nennt.
 MAX_PACKAGE_BYTES: Final = 2 * 1024 * 1024 * 1024
-
-#: In welchen Häppchen gelesen wird. Groß genug, dass der Fortschritt nicht
-#: teurer ist als das Lesen; klein genug, dass Abbrechen sich sofort anfühlt.
-CHUNK_BYTES: Final = 256 * 1024
 
 #: Wie viele Punkte aus dem Changelog gezeigt werden. Die Datei kommt von einem
 #: Server, und diese Zahl fängt den, der achthundert Zeilen schickt — das

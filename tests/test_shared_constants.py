@@ -23,8 +23,11 @@ genau einer Stelle definiert. Wer sie anderswo braucht, importiert sie.
 from __future__ import annotations
 
 import ast
+import operator
 from collections import defaultdict
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 CORE = Path(__file__).resolve().parent.parent / "app" / "core"
 
@@ -40,13 +43,58 @@ FLOOR = 300
 DELIBERATE: dict[str, str] = {}
 
 
+#: Rechenzeichen, die zwischen zwei Zahlen noch einen festen Wert ergeben.
+#:
+#: Kein ``eval`` (Regel 10): Aufgelöst wird ein Syntaxbaum aus Zahlen und
+#: diesen Zeichen, und ein Name darin bricht die Auswertung ab.
+ARITHMETIC: dict[type[ast.operator], Callable[[Any, Any], Any]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Pow: operator.pow,
+}
+
+
+def value_of(node: ast.expr) -> object | None:
+    """Der feste Wert hinter einem Ausdruck — Literal oder Rechnung darüber.
+
+    **``literal_eval`` allein reicht nicht, und das hat diesen Test blind
+    gemacht.** Eine Größenangabe schreibt niemand als ``65536``; sie steht als
+    ``64 * 1024``, und daran scheitert ``ast.literal_eval`` mit ``ValueError``
+    — die Konstante fiel damit aus der Erhebung, ohne dass jemand es merkte.
+    Gefunden wurde die Lücke am 27.08.2026 über einen Zwilling, den der Test
+    hätte melden müssen: ``MAX_ANSWER_BYTES`` stand in ``updates.py`` und
+    ``support.py``, beide Male ``64 * 1024``.
+
+    Das ist die Fehlerrichtung, vor der ``.claude/rules/tests.md`` warnt: Zu
+    wenig zu finden erzeugt die Gewissheit, es sei nichts da — und ein Prüfer,
+    der schweigt, sieht aus wie einer, der nichts findet.
+
+    Ein Aufruf (``math.tan(...)``) bleibt draußen, und das ist weiter richtig:
+    Er *ist* die Ableitung, um die es hier geht.
+    """
+    try:
+        return ast.literal_eval(node)
+    except (ValueError, SyntaxError, TypeError):
+        pass
+    if isinstance(node, ast.BinOp) and type(node.op) in ARITHMETIC:
+        left, right = value_of(node.left), value_of(node.right)
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            try:
+                return ARITHMETIC[type(node.op)](left, right)
+            except (ZeroDivisionError, OverflowError):
+                return None
+    return None
+
+
 def _constants() -> dict[str, list[tuple[str, object]]]:
     """Jede Konstante des Kerns mit den Dateien, die sie definieren.
 
     Gelesen werden Zuweisungen auf **Modulebene** mit einem Namen in
-    Großbuchstaben und einem Wert, der sich ohne Ausführung ermitteln lässt.
-    Ein abgeleiteter Wert (``math.tan(...)``) fällt damit heraus, und das ist
-    richtig: Er *ist* die Ableitung, um die es hier geht.
+    Großbuchstaben und einem Wert, den :func:`value_of` ohne Ausführung
+    ermitteln kann.
     """
     found: dict[str, list[tuple[str, object]]] = defaultdict(list)
     for path in sorted(CORE.rglob("*.py")):
@@ -63,10 +111,7 @@ def _constants() -> dict[str, list[tuple[str, object]]]:
             for name in targets:
                 if not (name.isupper() and len(name) > 3) or node.value is None:
                     continue
-                try:
-                    value = ast.literal_eval(node.value)
-                except (ValueError, SyntaxError):
-                    continue
+                value = value_of(node.value)
                 if isinstance(value, bool) or not isinstance(value, (int, float, str)):
                     continue
                 found[name].append((path.name, value))

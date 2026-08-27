@@ -10843,6 +10843,26 @@ stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
   hält der Kommentar in `boolean.py` die Abweichung sichtbar, statt sie
   stillschweigend anzugleichen.
 
+  **Fortschreibung 27.08.2026, und der Punkt ist dringlicher geworden:** Es
+  sind inzwischen **drei** Stellen, und zwei davon tragen denselben Namen mit
+  verschiedenen Zahlen —
+
+      geom/boolean.py         BOOLEAN_OVERLAP = 0.05   -> label_ops, texture_ops
+      geom/prepare.py         BOOLEAN_OVERLAP = 0.01   -> lid, knowledge/parts/ops
+      knowledge/parts/shapes.py   OVERLAP     = 0.01
+
+  Der mittlere kam am selben Tag dazu (`f934a422`, 15:38) und beruft sich im
+  Kommentar auf denselben §39 wie der obere. Damit hängt es am Importpfad,
+  welche Zugabe eine Operation bekommt: `from app.core.geom.boolean import
+  BOOLEAN_OVERLAP` gibt 0,05, `from app.core.geom.prepare import
+  BOOLEAN_OVERLAP` gibt 0,01. Wer den Namen liest, sieht den Unterschied
+  nicht.
+
+  Angeglichen wird trotzdem nichts, bevor gemessen ist — eine Zahl zu wählen,
+  weil sie öfter vorkommt, wäre dieselbe Vermutung wie vorher. Was **sofort**
+  gehört: verschiedene Namen für verschiedene Zahlen, damit niemand die
+  falsche importiert, ohne es zu merken.
+
 ---
 
 ## Die Auswahl wird gekürzt und niemand sagt es (27.08.2026)
