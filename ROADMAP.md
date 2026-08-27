@@ -122,7 +122,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 43 Texte stehen wortgleich in mehreren Dateien | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
-| Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | ein Angebot. `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen unter anderem mit einer Berufshaftpflicht — die in §11 und §13 nicht vorkommt. Gebraucht wird eine **Produkthaftpflicht mit Software-Einschluss**, nicht die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
 | Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
@@ -9309,12 +9308,38 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       die Sache am 24.08. „beantwortet" und berief sich auf ein Use-after-free,
       das am selben Tag zurückgezogen wurde.
 
-- [ ] **Zwei Downloadgrößen stehen im Text statt in der Message-ID.** Der
-      sauberere Weg ist bekannt und steht zwei Dutzend Zeilen daneben:
-      `NEEDED_GIGABYTES` wird mit `.format(noetig=…)` in den Satz gesetzt. Für
-      `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` kostet er fünf
-      Übersetzungen für zwei Sätze, und die kann keine Sitzung erfinden. Bis
-      dahin hält ein Test beide Stellen zusammen.
+- [x] **Zwei Downloadgrößen stehen im Text statt in der Message-ID** — und
+      das bleibt so, aus einem anderen Grund als dem hier notierten.
+      (Entschieden 27.08.2026, gemessen an den Katalogen.)
+
+      Notiert war: Der Umbau koste fünf Übersetzungen für zwei Sätze, „und die
+      kann keine Sitzung erfinden". Erfinden müsste sie auch niemand — die
+      Sätze stehen längst in allen fünf Sprachen, ein Platzhalter hätte nur die
+      Zahl ersetzt. Der wahre Grund steht in den Katalogen selbst:
+
+          en: Loading weights — about 7.5 GB, this takes a while
+          es: Descargando pesos: unos 7,5 GB, esto lleva tiempo
+          fr: Téléchargement des poids — environ 7,5 Go, cela prend du temps
+          it: Scaricamento dei pesi: circa 7,5 GB, ci vuole tempo
+          pt: A carregar os pesos — cerca de 7,5 GB, isto demora
+
+      **Jede Sprache schreibt die Zahl so, wie sie dort geschrieben wird** —
+      Englisch mit Punkt, die vier romanischen mit Komma, und Französisch sagt
+      „Go" statt „GB". Das kann sie nur, weil der ganze Satz übersetzt wird.
+      Ein `{groesse}` an dieser Stelle bekäme seinen Wert aus dem Kern, und der
+      formatiert überall mit Punkt (`{frei:.1f}` in derselben Datei, §6 rundet
+      nur in der Anzeige). Aus „rund 7,5 GB" würde in vier Sprachen „rund 7.5
+      GB". **Der Umbau wäre für den Kunden eine Verschlechterung**, und der
+      Weg, den der Kommentar als den richtigen anführt, ist nur für ganze
+      Zahlen der richtige.
+
+      Was bleibt, ist die Driftgefahr, und die ist bereits abgesichert:
+      `tests/test_mesh_backend.py::test_the_sizes_in_the_progress_text_match_the_constants`
+      hält Konstante und Text zusammen, in beide Richtungen. Wer die Größe
+      nachzieht und den Satz vergisst, bekommt einen roten Lauf — und muss dann
+      fünf Katalogzeilen anfassen, was richtig ist, denn fünf Sprachen nennen
+      die Zahl.
+
 
 **Und ein Fund über das Suchen selbst.** Von den Verdachtsfällen dieses
 Durchgangs waren mehr falsch als richtig: Die Bausteine ohne Test hatten einen
