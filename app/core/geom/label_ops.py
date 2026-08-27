@@ -126,8 +126,15 @@ def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> M
 class LabelParams(BaseParams):
     text: str = param(
         title=_("Text"),
-        default="",
-        doc=_("Was daraufstehen soll. Leer heißt: nichts zu tun."),
+        # **Kein Vorgabewert, und das ist die Aussage.** Mit ``default=""``
+        # meldete das Schema den Parameter als *freiwillig* — an drei
+        # Oberflächen zugleich: Der Agent durfte die Operation ohne Text
+        # vorschlagen, die Kommandozeile ihn weglassen, und der Dialog bot
+        # Übernehmen an, um danach abzulehnen (Regel 19). Ohne Vorgabe steht
+        # die Pflicht im Schema, wo alle drei sie lesen. Der Satz der
+        # Operation bleibt die zweite Hürde: Der Dialog übergibt jedes Feld,
+        # auch das leere, also greift er wie bisher.
+        doc=_("Was daraufstehen soll."),
     )
     size: float = param(
         title=_("Schriftgröße"),
@@ -295,7 +302,7 @@ def label_text(ctx: OpContext) -> OpResult:
 
 @op_params
 class LabelBodyParams(BaseParams):
-    text: str = param(title=_("Text"), default="", doc=_("Was der Körper sagen soll."))
+    text: str = param(title=_("Text"), doc=_("Was der Körper sagen soll."))
     size: float = param(
         title=_("Schriftgröße"),
         default=8.0,

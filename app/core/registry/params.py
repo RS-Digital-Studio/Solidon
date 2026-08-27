@@ -180,6 +180,10 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         "object",
         "feature",
         "part",
+        # Der Name des Materials („PETG"), nicht seine Nummer — anders als
+        # ``filament``, das eine Slotnummer trägt. Die zwei sehen in der
+        # Oberfläche ähnlich aus und sind im Kern verschiedene Dinge.
+        "material",
         "source",
         "image",
         "sketch",
