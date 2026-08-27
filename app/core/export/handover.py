@@ -44,7 +44,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.export import slicer_keys, slicer_profiles
-from app.core.export.slicer_keys import SlicerFlavour
+from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
@@ -1614,13 +1614,18 @@ def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
     Ursprung (:func:`_machine_keys`), die Orca-Familie lädt ihr eigenes
     Maschinenprofil und misst von der Ecke der Platte.
 
+    Gefragt wird über :func:`wants_bed_coordinates` und nicht über den
+    Familiennamen: Es ist dieselbe Frage, die auch die Übergabe stellt, und
+    zwei Formulierungen davon laufen auseinander, sobald eine vierte Familie
+    dazukommt.
+
     Das hier ist die **Annahme**. Was die Datei selbst über ihr Bett sagt,
     liest :func:`gcode.stated_bed`, und das gilt vor — gebraucht wird die
     Annahme nur, wo der Slicer schweigt, also bei ``cura``, und dort weiß
     Solidon die Maße genau, weil es sie selbst geschrieben hat.
     """
     width, depth, height = profile.printer.build_volume
-    if flavour == "orca":
+    if wants_bed_coordinates(flavour):
         return BoundingBox((0.0, 0.0, 0.0), (width, depth, height))
     half_width, half_depth = width / 2.0, depth / 2.0
     return BoundingBox((-half_width, -half_depth, 0.0), (half_width, half_depth, height))

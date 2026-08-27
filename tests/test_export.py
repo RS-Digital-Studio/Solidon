@@ -7,14 +7,16 @@ import zipfile
 from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
+from typing import get_args
 from xml.etree import ElementTree as ET
 
 import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import threemf
+from app.core.export import handover, threemf
 from app.core.export.handover import with_slot_profiles
+from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
 from app.core.export.writer import (
     arrangement_holds,
     check_adhesion_clearance,
@@ -993,6 +995,50 @@ def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Pro
     )
     text = zipfile.ZipFile(BytesIO(orca.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
+
+
+def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> None:
+    """Wo das Bett liegt, wird an einer Stelle entschieden, nicht an zweien.
+
+    Der Test darüber prüft, *dass* nur die Orca-Familie von der Ecke misst.
+    Dieser hier prüft, dass beide Stellen, die das wissen müssen, dieselbe
+    Quelle fragen: ``wants_bed_coordinates``. ``bed_box`` verglich lange
+    selbst gegen ``"orca"`` — dieselbe Frage, zweimal formuliert, und der
+    Docstring beschrieb sie beide Male mit denselben Worten.
+
+    Auseinander laufen sie erst bei einer vierten Familie, und dann teuer:
+    Der Bettkasten, gegen den ``off_the_bed`` prüft, stünde in der einen
+    Welt, die geschriebene Datei in der anderen. Ein Druck, der um den
+    halben Bauraum danebenliegt, käme dann durch eine Prüfung, die genau
+    das verhindern soll.
+
+    **Was dieser Test leistet und was nicht — gemessen, nicht angenommen.**
+    Die erwartete Gegenprobe „Quelle mutieren, Test wird rot" schlägt fehl,
+    und zwar zu Recht: Lesen beide Stellen dieselbe Quelle, können sie nicht
+    mehr auseinanderlaufen, und die Zusicherung ist nach dem Fix eine
+    Tautologie. Drei Lagen gefahren:
+
+    ===========================================  ======
+    Quelle unverändert, ``bed_box`` fragt sie    grün
+    Quelle sagt auch ``cura``, ``bed_box``       grün
+    fragt sie
+    Quelle sagt auch ``cura``, ``bed_box``       **rot**
+    vergleicht den Namen
+    ===========================================  ======
+
+    Er ist damit kein Verhaltenstest, sondern ein **Regressionswächter**: Er
+    wird genau dann rot, wenn jemand den Namensvergleich zurückholt, während
+    die Quelle etwas anderes sagt. Das ist die Zusage, die hier gebraucht
+    wird — den Fall „nur die Orca-Familie misst von der Ecke" prüft der Test
+    darüber, und zwar am geschriebenen Ergebnis.
+    """
+    flavours = get_args(SlicerFlavour)
+    assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"
+
+    for flavour in flavours:
+        box = handover.bed_box(profile, flavour)
+        from_the_corner = box.minimum == (0.0, 0.0, 0.0)
+        assert from_the_corner == wants_bed_coordinates(flavour), flavour
 
 
 def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:
