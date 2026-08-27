@@ -62,6 +62,8 @@
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
+- [Benannte Falle schützt nicht](benannte-falle-schuetzt-nicht.md) — ein Modul, das eine Gefahr richtig beschreibt, fällt trotzdem hinein; der Satz liest sich als Beleg und verhindert die Prüfung.
+- [mypy prüft die laufende Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen verschiedene Fehler; ein grüner Bau sagt nichts über den lokalen Lauf.
 - [Patchskript schneidet Fremdes weg](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" ersetzen löscht, was die Nachbarsitzung dort einfügte; `--stat` sieht aus wie Umformatierung.
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
