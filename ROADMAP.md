@@ -11117,8 +11117,37 @@ steht, ist kein festgehaltener Fund.
   **Kein Fehlbefund der Seite**, und der Weg dorthin ist die eigentliche
   Lehre: Eine Durchsicht meldete die Zahl als grob falsch (76 bis 102 Minuten)
   — sie hatte den **vollen** Werkzeugsatz gerechnet, während der Ollama-Weg
-  den kompakten fährt, und eine Schätzung gegen eine Messung gestellt. Wartet
-  auf einen Ollama-Lauf, der `prompt_eval_count` abliest.
+  den kompakten fährt, und eine Schätzung gegen eine Messung gestellt.
+
+  **Der Lauf ist am 27.08.2026 gefahren worden, und er entscheidet nichts.**
+  Gemessen über `/api/chat` mit `num_ctx`, kompaktem Werkzeugsatz und einer
+  Gegenprobe ohne `tools`:
+
+  | | ohne `tools` | mit `tools` |
+  |---|---|---|
+  | `qwen3:14b` | 1066 | 3387 |
+  | `qwen2.5-coder:14b` | 1064 | 3395 |
+  | `gpt-oss:20b` | 975 | 1716 |
+
+  Zwei 14b-Modelle stimmen auf zwanzig Token überein — und beide liegen bei
+  einem Fünftel der eingetragenen 19 249. **Das ist keine Korrektur, sondern
+  ein Widerspruch**, denn die Schemata sind als JSON 108 144 Zeichen groß;
+  grob geschätzt sind das eher 27 000 Token als 3 400. Beide Zahlen können
+  nicht stimmen, und `prompt_eval_count` zählt offenbar nicht, was hier
+  gemeint ist — Ollama nimmt `tools` strukturiert entgegen, nicht als Text im
+  Prompt.
+
+  Was der Lauf **belegt**: Der kompakte Satz spart 27 Prozent gegenüber dem
+  vollen (108 144 gegen 148 057 Zeichen), und beide führen heute 102
+  Werkzeuge. Was er **nicht** belegt: die Zahl selbst. Wer sie ändern will,
+  braucht einen Tokenizer statt eines Aufrufs — der nächste Schritt ist
+  nicht ein weiterer Ollama-Lauf, sondern das Modell-Template mit
+  eingesetzten Werkzeugen durch denselben Tokenizer zu schicken, den das
+  Modell benutzt.
+
+  Bis dahin bleibt die Zahl stehen: Sie ist einmal gemessen worden, und eine
+  Messung, die etwas anderes zählt, ersetzt sie nicht („eine Messung trägt
+  nur am Ort ihrer Messung“).
 
 - [x] **Vier Datumsangaben werden am 31.10.2026 still falsch.** „Die Demo
   läuft bis zum 30. Oktober" steht auf der Startseite in sechs Sprachen an
