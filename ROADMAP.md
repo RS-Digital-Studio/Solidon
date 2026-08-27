@@ -127,7 +127,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Die Fusion-Spalte der Klickmessung fehlt | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **einen Lauf in Fusion an Maus und Tastatur.** Die Solidon-Spalte ist gemessen (27.08.2026, am gebauten Fenster: 3 / 6 / 6 / 9 / 4 Klicks, Tabelle im Abschnitt); die Fusion-Spalte ist es nicht, und aus dem Kopf geschrieben wäre sie eine Vermutung mit Zahlen. Fusion ist lokal installiert, lief aber nicht, und ein Lauf greift nach Roberts Maus, während er auf demselben Bildschirm arbeitet — das Protokoll steht im Abschnitt, es dauert keine zehn Minuten |
+| Der Ziehgriff hat kein Zeichen im Bild, und die Richtung entscheidet nichts | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **zwei Übernahmen aus Fusion, am laufenden Programm gesehen** (27.08.2026): Fusion legt einen blauen Pfeil in die Mitte des Profils, sobald die Extrusion offen ist — unser Griff ist der Umriss selbst und damit unsichtbar, bis der Zeiger darüber steht. Und Fusion springt selbst auf *Ausschneiden*, sobald die Tiefe negativ wird; wir sagen dort „andersherum ziehen", wo ein Zug in den Körper `sketch_pocket` sein könnte |
+| Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen Antwort | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Vorwahl wie in Fusion: Dort steht „1 Profil · Bereich 800,00 mm²" unten rechts, und der Extrusionsdialog hat das Profil schon. Bei einer eindeutigen Zeichnung kosten Frage und *Weiter* zwei Klicks für eine Auskunft, die die Anwendung hat |
+| Vier Kleinere aus dem Fusion-Vergleich | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | Ebenen im Bild statt im Auswahlfeld, zwei Maße in einer Tab-Kette mit Schloss, die Bedienfolge in jedem Werkzeughinweis, und die ruhige Zeile am Bildrand. Jedes einzeln klein, zusammen der Unterschied, den Robert „alles ab Klick 1" genannt hat — Einzelheiten im Abschnitt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft — der nächste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -138,6 +140,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
 
 ---
+
 
 ## P0 — Skelett
 
@@ -11586,11 +11589,24 @@ gemessen.**
 
 | Aufgabe | Solidon | Fusion |
 |---|---|---|
-| Rechteck 40 × 20, bemaßt | **3** — Zeichnen, Grundform, Rechteck 40 × 20 | offen |
-| Rechteck extrudieren, über *Fertig* | **6** — dazu Fertig, Weiter, Übernehmen | offen |
-| Rechteck extrudieren, über den Ziehgriff | **6** — dazu Ebenenwahl, Ziehen, Übernehmen | offen |
-| Tasche schneiden (auf einem exakten Körper) | **9** — Körper, Fläche, Zeichnen, Grundform, Rechteck, Fertig, *Tasche* wählen, Weiter, Übernehmen | offen |
-| Verrunden | **4** — Körper, Ändern, Verrunden, Übernehmen | offen |
+| Rechteck 40 × 20, bemaßt | **3** — Zeichnen, Grundform, Rechteck 40 × 20 | **4** + Tippen — Skizze erstellen, Ebene, Rechteck, erste Ecke, dann 20 Tab 40 Enter |
+| Rechteck extrudieren, über den Dialog | **6** — dazu Fertig, Weiter, Übernehmen | **7** — dazu Skizze fertig stellen, Extrusion, OK |
+| Rechteck extrudieren, über den Ziehgriff | **6** — dazu Ebenenwahl, Ziehen, Übernehmen | nicht gemessen — Fusion hat den Pfeil **im** Dialog, nicht daneben |
+| Tasche schneiden (auf einem exakten Körper) | **9** — Körper, Fläche, Zeichnen, Grundform, Rechteck, Fertig, *Tasche* wählen, Weiter, Übernehmen | **9** — Skizze erstellen, Deckfläche, Rechteck, zwei Ecken, Fertig stellen, Extrusion, Profil, OK |
+| Verrunden | **4** — Körper, Ändern, Verrunden, Übernehmen | **3** — Kante, Verrundung, OK |
+| Vom Start zur leeren Szene | **0** — die Anwendung öffnet mit einer | **2** — Neue Konstruktion, Neu erstellen |
+
+**Die Zahlen sind erstaunlich nah beieinander, und das ist der eigentliche
+Befund.** Solidon ist bei drei Aufgaben gleich schnell oder schneller und bei
+einer langsamer. Wer gehofft hatte, der Abstand liege in der Zahl der Klicks,
+findet ihn dort nicht — er liegt darin, **was zwischen den Klicks passiert.**
+
+Zwei Einschränkungen, damit die Tabelle nicht besser aussieht, als sie ist.
+Solidons Rechteck ist ein **festes** 40 × 20 aus dem Menü; Fusions vier Klicks
+ergeben *jedes* Maß, und wer bei uns 35 × 18 will, geht einen längeren Weg, der
+hier nicht gemessen ist. Und der eine Klick, mit dem ich in Fusion ein Wertfeld
+nachträglich anklicken musste, ist meiner Fernsteuerung geschuldet und zählt
+nicht: Am Platz tippt man direkt, das Feld hat den Fokus.
 
 **Der Ziehgriff spart dabei keinen einzigen Klick**, und das ist die
 überraschendste Zahl der Messung: sechs gegen sechs. Was er einbringt, ist
@@ -11603,28 +11619,100 @@ Tasche an vierter Stelle steht.
 
 Offen:
 
-- [ ] **Die Fusion-Spalte fehlt, und aus dem Kopf geschrieben wäre sie eine
-      Vermutung mit Zahlen.** Fusion ist lokal installiert
-      (`.claude/memory/zeichnen-an-fusion-orientieren.md`,
-      `%LOCALAPPDATA%\Autodesk\webdeploy\production\…\Fusion360.exe`), lief
-      am 27.08.2026 aber nicht — und ein Lauf greift nach Maus und Tastatur des
-      Rechners, an dem Robert gerade arbeitet. Aus dieser Sitzung ist Fusion
-      nicht fernsteuerbar: Die Browser-Werkzeuge fassen nur Webseiten an, und
-      seine Oberfläche liegt als kompiliertes QML vor — eine Ribbon-Definition,
-      die man auszählen könnte, gibt es auf der Platte nicht (gesucht:
-      `Fusion/Toolbar` trägt nur `.dll` und `.qmltypes`).
 
-      **Das Protokoll, damit die Messung reproduzierbar ist** — je Aufgabe von
-      einem leeren Entwurf aus, gezählt wird jeder Klick, den die Hand tut,
-      Tippen zählt gesondert:
+### Was Fusion besser macht — am laufenden Programm gesehen (27.08.2026)
 
-      1. *Rechteck 40 × 20, bemaßt:* Skizze erstellen, Ebene wählen, Rechteck,
-         zwei Ecken, Maße eintippen, Skizze beenden.
-      2. *Extrudieren:* aus derselben Skizze heraus, Höhe 15 mm — einmal über
-         den Dialog, einmal über den Ziehpfeil am Profil.
-      3. *Tasche schneiden:* auf der Deckfläche des Körpers eine zweite Skizze,
-         Rechteck, Extrusion mit Operation „Ausschneiden", Tiefe 5 mm.
-      4. *Verrunden:* eine Kante wählen, Verrundung, Radius 2 mm.
+Robert, nach dem Messlauf: „fusion finde ich relativ einfach, schön und
+übersichtlich, ebenso leicht zu verstehen, evtl können wir davon einiges
+übernehmen" — und dazu die Beobachtung, auf die alles hinausläuft: „**vor allem
+auch schon alles ab klick 1**". Der Maßstab dahinter, in seinen Worten: „ziel
+solidon, wenig cad kenntnisse, einfach, leicht, verständlich, modernes schickes
+design".
 
-      Die Differenz je Zeile ist die Arbeitsliste; die Zeile mit der größten
-      Differenz kommt zuerst.
+Neun Beobachtungen, jede beim Fahren der vier Aufgaben gesehen und nicht aus
+dem Gedächtnis geschrieben. Die Bildschirmfotos dazu liegen nicht im
+Repository; was zählt, steht hier.
+
+**1. Ab Klick 1 steht etwas im Bild, das man anfassen kann.** Ein Klick auf
+*Skizze erstellen*, und die drei Ursprungsebenen liegen als greifbare Flächen
+in der Szene — man klickt die an, auf die man zeichnen will. Solidon liest die
+Ebene aus einem Auswahlfeld („Draufsicht (XY)"). Das Feld ist genauer, die
+Flächen sind verständlicher, und für „wenig CAD-Kenntnisse" gewinnt das Bild.
+
+**2. Jeder Werkzeughinweis nennt die Bedienfolge.** Dreiteilig: Name mit
+Kürzel, ein Satz was es tut, dann *wie es geht* — „Wählen Sie den ersten Punkt
+als Anfang des Rechtecks aus. Wählen Sie den zweiten Punkt aus, oder geben Sie
+die Werte für Höhe und Breite an." Dazu „Strg+/ für weitere Hilfe". Wir haben
+genau diese Form gerade für die zehn Bedingungsknöpfe gebaut (`_does_phrase`);
+Fusion hat sie an **jedem** Werkzeug.
+
+**3. Zwei Maße hängen gleichzeitig am Zeiger, mit Schloss.** Beim Rechteck
+stehen Breite und Höhe zusammen da, Tab wechselt zwischen ihnen, und ein
+Schloss-Symbol zeigt, welche Zahl schon festgenagelt ist. Unser Maßfeld (E19)
+nimmt eine Zahl und weiß von der zweiten nichts.
+
+**4. Was eindeutig ist, wird nicht gefragt.** Beim Extrudieren einer Skizze mit
+genau einem Umriss stand das Profil schon im Dialog, und unten rechts las man
+„1 Profil | Bereich: 800,00 mm²". Solidon fragt „Was soll daraus werden?" auch
+dann, wenn es nur eine sinnvolle Antwort gibt — zwei Klicks für eine Auskunft,
+die die Anwendung hat. **Und bei der Tasche kehrt sich das um:** Dort hat die
+Skizze auf der Fläche zwei Gebiete, Fusion fragt zu Recht, und der Klick auf das
+Profil ist derselbe wie unser Klick auf *Tasche schneiden*.
+
+**5. Die Operation folgt der Geste, nicht einer Liste.** Ich habe die Tiefe der
+Tasche als **−5** eingetippt, und Fusion stellte *Vorgang* selbst auf
+„Ausschneiden". Man wählt nicht zwischen Extrudieren und Tasche schneiden, man
+zieht in die eine oder die andere Richtung. **Das ist die stärkste Übernahme für
+den Ziehgriff, den wir heute gebaut haben:** Wir sagen dort „Der Körper wächst
+von der Zeichenebene weg — andersherum ziehen", wo ein Zug **in** den Körper
+`sketch_pocket` sein könnte. Aus einer Absage würde eine zweite Operation.
+
+**6. Die Zahl steht zweimal, und das ist kein Widerspruch.** Beim Verrunden
+hängt ein Ziehgriff mit Wertfeld an der Kante **und** die Zeile „1 Kante |
+0,00 mm" im Dialog. Kein Entweder-oder zwischen „am Zeiger" und „im Dialog" —
+beides, und die eine Zahl.
+
+**7. Der Griff ist zu sehen, bevor man ihn sucht.** Der Extrusionsdialog legt
+einen blauen Pfeil in die Mitte des Profils. Unser Ziehgriff **ist** der Umriss
+und damit unsichtbar, bis der Zeiger darüber steht; der Satz in der Leiste
+(„Am Umriss ziehen zieht daraus einen Körper auf") ist ein Ersatz für ein
+Zeichen im Bild, und Text ist der schlechtere Weg zu einer Geste.
+
+**8. Die Auswahl wird quittiert, ohne dass man fragt.** Unten rechts stand
+durchgehend, was gewählt ist, in Sachbegriffen und mit Zahl. Wir haben die
+Auskunft im Objektbaum und in der Statusleiste, aber nicht als ruhige Zeile am
+Bildrand.
+
+**9. Der Modus hat eine eigene Palette.** Rechts stand die SKIZZENPALETTE mit
+allem, was im Skizzenmodus schaltbar ist — Fang, Skizzierraster, Bemaßungen,
+Abhängigkeiten, Punkte, Profil, Konstruktionsgeometrie —, jedes als Haken.
+Unsere Entsprechungen liegen in der Werkzeugzeile, teils gar nicht, und die
+Zeile ist der breiteste Posten des Modus.
+
+**Was daran nicht übernommen werden sollte**, damit die Liste eine Liste bleibt
+und kein Auftrag: Fusion braucht zwei Klicks und einen Dialog, bevor eine leere
+Szene dasteht, und es verlangt eine Kontoanmeldung, bevor überhaupt etwas geht.
+Beides ist genau das, was §2.3 („die ersten fünf Minuten") und §2 („ohne Konto
+benutzbar") ausschließen.
+
+Offen daraus:
+
+- [ ] **Der Ziehgriff braucht ein Zeichen im Bild, und die Richtung sollte die
+      Operation entscheiden.** Beides aus Fusion, beides am Griff von heute:
+      ein Pfeil (oder eine Marke) auf dem Umriss, damit die Geste ohne Satz
+      gefunden wird — und ein Zug **in** den Körper als `sketch_pocket` statt
+      der Absage „andersherum ziehen". Das Zweite ist die größere Änderung: Der
+      Griff müsste wissen, ob unter der Zeichenebene Material liegt, und die
+      Übergabe müsste zwei Operationen kennen.
+- [ ] **Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen
+      Antwort.** Bei einer Zeichnung mit einem geschlossenen Umriss und ohne
+      Körper darunter gibt es genau eine sinnvolle: aufziehen. Vorwählen und
+      durchlassen wie Fusion, statt zwei Klicks für eine Auskunft zu nehmen,
+      die schon dasteht. Die Frage bleibt, wo sie eine ist — bei mehreren
+      Gebieten oder mit einem Körper darunter.
+- [ ] **Vier Kleinere, jedes für sich klein.** Die Ebenen als anfassbare
+      Flächen im Bild statt (nur) im Auswahlfeld; zwei Maße in einer Tab-Kette
+      mit Schloss statt eines Feldes; die Bedienfolge in **jedem**
+      Werkzeughinweis statt nur an den Bedingungsknöpfen; und die ruhige Zeile
+      am Bildrand, die sagt, was gewählt ist. Zusammen sind sie das, was Robert
+      „alles ab Klick 1" genannt hat.
