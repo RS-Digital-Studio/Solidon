@@ -39,7 +39,18 @@ def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
     eine zu erfinden.
     """
     params = feature.params
-    if feature.kind == "hole":
+    if feature.kind in ("hole", "pin"):
+        # **Der Stift gehört dazu, und zwar von Anfang an.** Er trägt
+        # dieselben zwei Werte wie die Bohrung — gemessen an einem
+        # erkannten Zapfen: ``axis=(0, 0, 1)``, ``centre`` in seiner
+        # Mitte. Ohne ihn lief er in den Zweig darunter und bekam
+        # „trägt keine Achse und keine Fläche" zu lesen, was für einen
+        # Stift schlicht nicht stimmt.
+        #
+        # Der Fall, um den es geht, ist der häufigste überhaupt: Auto
+        # Split legt Stift/Loch-Paare an, und „den Stift ins Loch legen“
+        # ist genau das, wofür diese Operation da ist. Ein Rechtsklick
+        # auf einen erkannten Stift bot sie bis heute nicht einmal an.
         direction = params.get("axis")
         point = params.get("centre")
     elif feature.kind == "face":

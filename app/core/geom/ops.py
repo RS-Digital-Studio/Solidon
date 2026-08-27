@@ -658,7 +658,12 @@ class AlignParams(BaseParams):
     params=AlignParams,
     consumes=1,
     produces=1,
-    applies_to=["hole", "face"],
+    # Der Stift gehört dazu: Er trägt Achse und Mitte wie die Bohrung
+    # (gemessen an einem erkannten Zapfen), und Auto Split legt
+    # Stift/Loch-Paare an — „den Stift ins Loch legen“ ist der
+    # kanonische Fall dieser Operation. Bis zum 27.08.2026 bot ein
+    # Rechtsklick auf einen Stift sie nicht einmal an.
+    applies_to=["hole", "pin", "face"],
     doc=_("Bringt eine Bohrungsachse oder eine Fläche mit einer zweiten zur Deckung."),
 )
 def align_to_feature(ctx: OpContext) -> OpResult:

@@ -193,8 +193,54 @@ def test_a_target_that_does_not_exist_stops_the_chain(document: Document, profil
     assert not result.complete, "a target that is not there stops instead of guessing"
 
 
-def test_the_operation_belongs_to_bores_and_faces() -> None:
+def test_the_operation_belongs_to_everything_with_an_axis_or_a_face() -> None:
+    """Die Operation gilt für jedes Merkmal, an dem ``frame_of`` etwas findet.
+
+    Hier stand die Aufzählung ``{"hole", "face"}`` — vollständig geprüft,
+    also ausdrücklich **ohne** den Stift. Der trägt aber dieselben zwei
+    Werte wie die Bohrung (gemessen an einem erkannten Zapfen:
+    ``axis=(0, 0, 1)``, ``centre`` in seiner Mitte), und der kanonische
+    Fall dieser Operation ist genau er: Auto Split legt Stift/Loch-Paare
+    an, und „den Stift ins Loch legen“ ist, wofür sie da ist. Bis zum
+    27.08.2026 bot ein Rechtsklick auf einen Stift sie nicht einmal an,
+    und ``frame_of`` wies ihn ab mit „trägt keine Achse und keine
+    Fläche“.
+
+    Der Test prüft jetzt die **Zusage** statt der Liste: Woran sich
+    ausrichten lässt, ist die Frage, und die beantwortet ``frame_of``.
+    """
     spec = REGISTRY.get("align_to_feature")
 
-    assert set(spec.applies_to) == {"hole", "face"}
-    assert spec in REGISTRY.for_feature("hole")
+    assert set(spec.applies_to) == {"hole", "pin", "face"}
+    for art in ("hole", "pin", "face"):
+        assert spec in REGISTRY.for_feature(art), (
+            f"ein Rechtsklick auf {art} muss die Ausrichtung anbieten"
+        )
+
+
+def test_a_detected_pin_carries_a_frame() -> None:
+    """Gemessen, nicht aus dem Parameterschema geschlossen.
+
+    Dass ein Stift ``axis`` und ``centre`` **führt**, steht im Erzeuger; dass
+    ``frame_of`` daraus ein brauchbares Koordinatensystem macht, ist eine
+    andere Frage. Genau diese Verwechslung — Vorkommen im Quelltext für
+    Verhalten zu nehmen — hat am 27.08.2026 schon einmal `origin` rot gemacht.
+    Deshalb geht dieser Test durch die Erkennung und nicht durch das Schema.
+    """
+    import trimesh
+
+    from app.core.geom.align import frame_of
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    grund = trimesh.creation.box(extents=(30.0, 30.0, 10.0))
+    zapfen = trimesh.creation.cylinder(radius=3.0, height=12.0)
+    zapfen.apply_translation((0.0, 0.0, 8.0))
+    koerper = MeshData.of(trimesh.util.concatenate([grund, zapfen]))
+
+    stifte = [f for f in detect(koerper).values() if f.kind == "pin"]
+    assert stifte, "der Zapfen muss erkannt werden, sonst prüft der Test nichts"
+
+    richtung, punkt = frame_of(stifte[0])
+    assert abs(abs(richtung[2]) - 1.0) < 1e-6, "die Achse zeigt entlang des Zapfens"
+    assert punkt is not None, "und er hat einen Ankerpunkt"
