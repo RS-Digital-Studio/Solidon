@@ -78,7 +78,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
-| SKÅDIS-Plattendicke unbelegt — **vier der fünf Werte sind gemessen** | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine Messung der Plattendicke. Schlitz, Höhe und Raster sind am 27.08.2026 an einer echten Platte bestätigt; die Dicke ist der einzige Wert ohne Zeichnung, und die Nasentiefe hängt an ihr |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -128,6 +127,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
+| Der Ziehgriff fehlt — „nach oben ziehen" ist noch Tippen | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **VTK-Interaktion**, nicht Rechenzeit: Eine Extrusion kostet warm 1,8 ms, die Vorschau steht seit `5ccdfbaf`. Was fehlt, ist ein Zustand „ich ziehe gerade eine Höhe" im Viewport — heute wird aus einem Klick im Skizzenmodus ein `sketchPointPicked`, Drücken/Ziehen/Loslassen gibt es dort nicht. In der Querschau ist die Geste frei: dort sieht man die Ebene von der Kante und kann ohnehin nicht zeichnen |
+| „12 Freiheitsgrade sind noch frei" sagt einem Anfänger nichts | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | einen **Satz neben die Zahl**, der sie in eine Handlung übersetzt. Die Zahl selbst bleibt — für den Könner ist sie richtig. Dieselbe Frage bei den zehn Bedingungsknöpfen und der Bedingungsliste rechts |
+| Den Skizzenmodus gegen Fusion messen | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine **Messung in Klicks**: Rechteck zeichnen, extrudieren, Tasche schneiden, verrunden — dort gegen denselben Weg hier. Fusion ist lokal installiert. Ohne diese Zahl ist jede weitere Verbesserung eine Vermutung |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft — der nächste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -11484,3 +11486,65 @@ hindert; die drei behobenen stehen oben und hier.
   in die falsche Richtung. Und `test_packaging.py:70` durchsucht nur `app/`
   und vergleicht gegen das *Vorkommen einer Zeichenkette* in der Spec statt
   gegen das Ziel im Bau: `changelog/` liegt außerhalb und wird nie gesehen.
+
+## Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026)
+
+Robert, nach fünf Bildschirmfotos aus dem Skizzenmodus: „so ganz passt das
+bei zeichnen mit der vorderansicht, draufsicht und seitenansicht aber noch
+nicht, schön wäre auch dass wenn ich in der skizze was in der draufsicht
+zeichne und dann in die Seitenansicht oder vorderansicht gehe sie nach oben
+ziehen kann." Und danach: „mach den skizzenmodus perfekt zum leicht zeichnen
+für anwender ohne große cad kenntnisse — modelle erzeugen und ändern,
+erstellen, ausschneiden usw, vergleiche cad software dafür zb fusion."
+
+**Zwei Befunde sind behoben, und beide waren älter als die Frage.**
+
+- [x] **Die Zeichnung kippte beim Ebenenwechsel mit** (`8e8699f6`). Die
+      2D-Zahlen blieben, der Ort im Raum wanderte: ein Punkt bei (10 | 5) lag
+      in der Draufsicht bei (10, 5, 0), in der Vorderansicht bei (10, 0, 5).
+      Weil die Kamera mitschwenkt, sah **jede** Ansicht gleich aus — genau
+      das, was Robert schon am 24.08. gemeldet hatte („bei draufsicht,
+      seitenansicht usw sieht man auch keinen unterschied") und was damals als
+      Kamerafrage behoben galt. Jetzt nagelt der erste Strich die Ebene fest;
+      danach dreht die Wahl nur noch die Ansicht, und ein Satz daneben sagt
+      es.
+- [x] **Wer einen Körper erzeugte, sah beim Tippen nichts** (`5ccdfbaf`).
+      `compare_scenes` übersprang Objekte ohne Vorgänger, also stand ein neuer
+      Körper allein in `created` — die Ansicht zeichnet `entries`. Gemessen an
+      einer Extrusion: 0 statt 1 Eintrag, 0 statt 9600 mm³. Betraf **jede**
+      erzeugende Operation, also den Anfang von Weg 2.
+
+**Was schon gemessen ist und nicht wiederholt werden muss:**
+
+| Frage | Antwort |
+|---|---|
+| Fehlt Funktionsumfang? | Nein. `sketch_extrude`, `sketch_pocket`, `sketch_revolve`, `sketch_sweep`, `sketch_loft`, dazu `fillet_edges`, `chamfer_edges`, `mirror_object`, `pattern`, `shell_exact`. Es fehlt der **Weg** dorthin, nicht die Rechnung |
+| Trägt eine Live-Vorschau? | Ja. Eine Extrusion kostet warm **1,1 bis 1,8 ms** (kalt 461 ms, OCC-Import) — gegen 16 ms Budget bei sechzig Bildern |
+| Wie kommt man heute zur Operation? | „Fertig" → `SketchUseDialog` mit fünf Arten → `run_operation`. Der Gedanke stimmt schon: gefragt wird **nach** dem Zeichnen, mit der Zeichnung vor Augen |
+| Wie läuft die Vorschau? | `dialog.valuesChanged` → 300-ms-Timer → `session.preview_async` → `show_difference`. Die 300 ms sind für teure Operationen da |
+
+Offen:
+
+- [ ] **Der Ziehgriff fehlt — „nach oben ziehen" ist noch Tippen.** Robert
+      will in der Seitenansicht am Umriss ziehen und den Körper wachsen sehen;
+      heute tippt er eine Höhe und sieht das Ergebnis (seit `5ccdfbaf`). Der
+      Unterschied ist die Geste. Technisch frei — die Rechnung kostet 1,8 ms —,
+      aber es ist VTK-Interaktion: Drücken, Ziehen und Loslassen gehen heute
+      nicht in den Skizzenmodus, dort entsteht aus einem Klick ein
+      `sketchPointPicked`. Wartet auf: einen Zustand „ich ziehe gerade eine
+      Höhe" im Viewport, die Zahl am Zeiger und die Übergabe an
+      `sketch_extrude` beim Loslassen. **In der Querschau ist die Geste frei**
+      — dort sieht man die Ebene von der Kante und kann ohnehin nicht sinnvoll
+      zeichnen.
+- [ ] **„Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem Anfänger
+      nichts.** Weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
+      Zahl ist für den Könner richtig und gehört nicht weg; was fehlt, ist der
+      Satz daneben, der sie in eine Handlung übersetzt. Dieselbe Frage stellt
+      sich bei den zehn Bedingungsknöpfen und der Bedingungsliste rechts
+      („Abstand 1,50 mm — Kreis 1", „Fest — Kreis 1 Mitte").
+- [ ] **Gegen Fusion messen, nicht gegen den eigenen Eindruck.** Fusion ist
+      lokal installiert (`.claude/memory/zeichnen-an-fusion-orientieren.md`).
+      Was dort in wie vielen Klicks geht — Rechteck zeichnen, extrudieren,
+      Tasche schneiden, Verrundung — gegen denselben Weg hier, und die
+      Differenz ist die Arbeitsliste. Ohne diese Messung ist jede weitere
+      Verbesserung eine Vermutung.
