@@ -1279,9 +1279,9 @@ def feature_measure(feature: Feature) -> str:
     if feature.kind == "pin":
         return f"Ø{length(float(params.get('diameter', 0.0)))}"
     if feature.kind == "thread":
-        steigung = float(params.get("pitch", 0.0))
-        durchmesser = length(float(params.get("diameter", 0.0)))
-        return f"Ø{durchmesser} × {length(steigung)}" if steigung else f"Ø{durchmesser}"
+        pitch = float(params.get("pitch", 0.0))
+        diameter = length(float(params.get("diameter", 0.0)))
+        return f"Ø{diameter} × {length(pitch)}" if pitch else f"Ø{diameter}"
     # Wie bei ``feature_name`` oben: Seit alle neun Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
     # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt
