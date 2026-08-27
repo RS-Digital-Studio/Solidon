@@ -77,7 +77,7 @@ def figure_project() -> Project:
         "Gleichmäßig vernetzen",
         [
             OperationDraft(
-                op="remesh_uniform", inputs=("obj_3",), params={"edge": 1.5, "deviation": 0.0}
+                op="remesh_uniform", inputs=("obj_1",), params={"edge": 1.5, "deviation": 0.0}
             )
         ],
     )
@@ -86,7 +86,7 @@ def figure_project() -> Project:
         [
             OperationDraft(
                 op="sculpt_strokes",
-                inputs=("obj_3",),
+                inputs=("obj_1",),
                 params={
                     "strokes": strokes_to_text(
                         [
@@ -121,7 +121,7 @@ def figure_project() -> Project:
     # Ohne ihn endet der Weg in etwas, das der Slicer erst zurechtrücken muss.
     history.apply(
         "Auf die Platte stellen",
-        [OperationDraft(op="place_on_bed", inputs=("obj_3",), params={})],
+        [OperationDraft(op="place_on_bed", inputs=("obj_1",), params={})],
     )
     return project
 
