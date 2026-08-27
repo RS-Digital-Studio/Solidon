@@ -129,6 +129,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
+| Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen fuer Fcitx sind ergaenzt (`b21f8766`) und sind die ueblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestaetigung offen** - von Windows aus nicht messbar |
+| Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft - der naechste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
@@ -11253,3 +11255,73 @@ steht, ist kein festgehaltener Fund.
   sie nicht"), aber nicht behoben: Die EULA steht auf Fassung 1.2 vom
   24.08.2026, die AGB auf 1.0 vom 8.8. — die Demo ist in einer nachgezogen
   und in der anderen nicht.
+
+
+---
+
+## Der erste Kundenbericht aus dem Feld (27.08.2026)
+
+Simon Wenger, CachyOS mit GNOME auf Wayland, Solidon3D 0.1.5. Er konnte den
+Bericht **nicht aus der Anwendung senden** und schickte ihn als Anhang an
+Robert weiter, mit dem Satz „Ich kann den Bericht aus der App nicht senden:
+urlopen error“.
+
+Vier Befunde von ihm, zwei weitere fielen beim Lesen seines Berichts auf.
+Robert hat entschieden: „jede plattform sollte das gleiche haben und alles
+funktionieren“. Alle sechs sind behoben.
+
+- [x] **Das Paket hatte kein Netz** (`c0f91f52`). Kein Versehen: Es stand als
+  Entscheidung in der Roadmap, im Docstring des Erzeugers und als Zusicherung
+  im Test. Die Begruendung „ohne Netz gibt es kein Konto, keine Telemetrie
+  und keine Frage danach“ klang plausibel und war es nicht: **Die Zusage
+  haengt an der Bauart, nicht an der Sandbox.** `support.send()` hat genau
+  einen Aufrufer an einem Knopf, und Windows und macOS tragen dieselbe Zusage
+  ohne jede Sandbox. Eine Grenze, die nur auf einer von drei Plattformen
+  steht, ist keine Zusage, sondern ein Unterschied.
+
+- [x] **Der Zeiger war doppelt so gross wie jeder andere im Bild**
+  (`4605067a`). Die Groesse hing allein an der Zeilenhoehe mal zwei: bei 30
+  Punkten ein Zeiger von 60, wo Systemzeiger 24 bis 32 messen. Wer die
+  Schrift vergroessert, hat nichts ueber seine Zeiger gesagt. `XCURSOR_SIZE`
+  gilt jetzt zuerst.
+
+- [x] **Der Griffpunkt lag um den Ueberabtastungsfaktor daneben**
+  (`ef28eed7`). Die Zeichnung entsteht mit 64 Pixeln fuer 32 angeforderte
+  Punkte; der Griffpunkt wurde auf die angeforderte Groesse gerechnet. Die
+  Pfeilspitze sitzt bei 15,6 Prozent der Kantenlaenge, der Griffpunkt lag bei
+  7,8. **Der Test dafuer gab es schon und war zu locker** - er verglich mit
+  `deviceIndependentSize()`, also mit derselben Annahme, die der Code traf.
+
+- [x] **Der Fehlerbericht meldete vier Bibliotheken als nicht installiert**
+  (`37a0b9b9`), darunter PySide6, ohne das kein Fenster aufgeht.
+  `importlib.metadata` liest `.dist-info`-Ordner, und die reisen im
+  PyInstaller-Bau nicht mit. **Ein Bericht, der etwas Falsches sagt statt
+  „unbekannt“, schickt die Diagnose an eine Stelle, an der nichts ist** -
+  beim Lesen dieses Berichts ist genau das passiert.
+
+- [x] **Der Bericht sagte nichts ueber die Fenstersitzung** (`b21f8766`).
+  Vier Umgebungsvariablen erklaeren beide Wayland-Punkte des Kunden, und
+  keine stand drin. Auf Windows und macOS bleibt die Zeile weg, statt einen
+  Strich zu zeigen.
+
+- [x] **Die Eingabemethode war im Flatpak nicht erreichbar** (`b21f8766`).
+  Sie spricht ueber den Sitzungsbus, und das Manifest gibt gezielten Zugriff
+  statt des ganzen Busses - was nicht genannt ist, ist nicht erreichbar.
+
+- [ ] **Ob die Eingabemethode im Flatpak jetzt erreichbar ist.** Die zwei
+  `--talk-name`-Zeilen für Fcitx sind ergänzt und sind die üblichen aus
+  Flathub-Manifesten; IBus liegt im Runtime und braucht keine eigene. Gebaut,
+  **Bestätigung offen** — von Windows aus lässt sich das nicht messen. Es
+  braucht eine Rückmeldung desselben Kunden oder ein Linux-Gerät.
+
+- [ ] **Ob der Start auf Wayland jetzt ohne Umwege geht.** Die erste Vermutung
+  — fehlende Qt-Plugins im Paket — ist **widerlegt**: PyInstaller sammelt
+  `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit
+  (`_modules_info.py`). Was fehlte, war die Auskunft; der nächste Bericht
+  nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module`. Auch hier
+  entscheidet erst eine Rückmeldung.
+
+**Die Lehre ueber allen sechs:** Drei der Fehler waren Zusagen, die auf einer
+Plattform galten und auf einer anderen nicht, und zwei waren Pruefungen, die
+dieselbe Annahme benutzten wie ihr Prueflung. Kein einziger davon war eine
+falsche Rechnung.
