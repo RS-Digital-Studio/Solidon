@@ -989,21 +989,29 @@ def test_the_release_run_writes_the_size_span_itself(page: str) -> None:
     bleibt stehen, weil sie sich mit keinem Release ändert.
 
     Geprüft mit erfundenen Paketgrößen, damit der Test unabhängig davon ist,
-    was gerade unter ``dl/`` liegt.
+    was gerade unter ``dl/`` liegt — aber mit **echten** ``Package``-Objekten.
+
+    Hier stand eine Attrappe mit ``self.path.stat().st_size``, weil die
+    geprüfte Funktion die Größe so las. ``Package`` hat kein ``path``: Es
+    trägt ``bytes_``, beim Einlesen zusammen mit der Prüfsumme erhoben. Der
+    Test war grün, und der Release-Lauf von 0.2.1 brach am 27.08.2026 beim
+    Schreiben der Seiten ab — nachdem er die Dateien schon kopiert hatte.
+
+    Eine Attrappe, die nach dem geprüften Code geformt ist statt nach der
+    echten Klasse, prüft, dass der Code zu sich selbst passt.
     """
-    import types
-
     import tools.make_download as make_download
-
-    class FakePackage:
-        def __init__(self, megabytes: int) -> None:
-            self.path = types.SimpleNamespace(
-                stat=lambda size=megabytes * 1_000_000: types.SimpleNamespace(st_size=size)
-            )
 
     text = (WEBSITE / page).read_text(encoding="utf-8")
     fresh = make_download.write_size_span(
-        text, [FakePackage(size) for size in (205, 288, 340)], page
+        text,
+        [
+            make_download.Package(
+                kind="windows", name=f"Probe-{size}.exe", bytes_=size * 1_000_000, hash_="0" * 64
+            )
+            for size in (205, 288, 340)
+        ],
+        page,
     )
 
     row = next(
@@ -1056,11 +1064,27 @@ def test_the_technical_requirements_name_the_sizes_the_packages_have(page: str) 
     zeile = " ".join(zeilen[zeilen.index(zeile) : zeilen.index(zeile) + 2])
 
     zahlen = {int(z) for z in re.findall(r"\b(\d{2,4})\b", zeile)} - {750}
-    assert kleinstes in zahlen, (
-        f"{page}: das kleinste Paket wiegt {kleinstes} MB, die Zeile nennt {sorted(zahlen)}"
+    assert len(zahlen) >= 2, (
+        f"{page}: in der Größenzeile stehen {sorted(zahlen)} statt einer Spanne"
     )
-    assert groesstes in zahlen, (
-        f"{page}: das größte Paket wiegt {groesstes} MB, die Zeile nennt {sorted(zahlen)}"
+
+    # Hineinfallen, nicht gleich sein — und das ist der Unterschied zwischen
+    # zwei Mengen, die beide stimmen. ``version.json`` führt die Pakete der
+    # **Update-Automatik**: Windows und die beiden Macs (``VERSION_KEYS`` in
+    # make_download). Der Download-Kasten derselben Seite bietet mehr an, und
+    # ``write_size_span`` rechnet über alles, was dort steht — am 27.08.2026
+    # also bis 427 MB für die Linux-tar.gz, während das größte Paket in
+    # version.json 328 wog.
+    #
+    # Auf Gleichheit geprüft war die Zeile damit rot, obwohl sie den Kunden
+    # richtig informierte: Ein Linux-Nutzer lädt 427 MB, und eine Spanne, die
+    # bei 328 endet, wäre für ihn schlicht falsch. Geprüft wird deshalb, was
+    # die Zusage ist — kein angebotenes Paket fällt aus der genannten Spanne.
+    assert min(zahlen) <= kleinstes, (
+        f"{page}: das kleinste Paket wiegt {kleinstes} MB, die Zeile beginnt bei {min(zahlen)}"
+    )
+    assert groesstes <= max(zahlen), (
+        f"{page}: das größte Paket wiegt {groesstes} MB, die Zeile endet bei {max(zahlen)}"
     )
 
 

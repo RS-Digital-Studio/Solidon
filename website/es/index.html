@@ -214,17 +214,27 @@
           <a href="#pricing">el precio ya está fijado</a>.</p>
 
           <div class="dateien" data-files data-release-show hidden>
-            <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.2.0.exe" download="Solidon3D-Setup-0.2.0.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 192 MB</a>
-            <a class="btn ghost" href="/api/count.php?f=Solidon3D-0.2.0-x86_64.flatpak" download="Solidon3D-0.2.0-x86_64.flatpak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Linux (Flatpak) — 274 MB</a>
-            <button class="btn ghost" type="button" data-choice="macos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> macOS — 2 paquetes</button>
+            <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.2.1.exe" download="Solidon3D-Setup-0.2.1.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 194 MB</a>
+            <button class="btn ghost" type="button" data-choice="linux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Linux — 3 paquetes</button>
+            <dialog class="auswahl" id="wahl-linux" aria-label="Linux">
+              <h3>Linux</h3>
+              <p class="hinweis">Cuál encaja depende de tu sistema: todos contienen la misma aplicación.</p>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-linux-x86_64.tar.gz" download="Solidon3D-0.2.1-linux-x86_64.tar.gz"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> archivo con script de instalación — 428 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-x86_64.AppImage" download="Solidon3D-0.2.1-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> AppImage — 384 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-x86_64.flatpak" download="Solidon3D-0.2.1-x86_64.flatpak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Flatpak — 276 MB</a>
+              <form method="dialog"><button class="btn ghost" value="zu">Cerrar</button></form>
+            </dialog>
+            <button class="btn ghost" type="button" data-choice="macos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> macOS — 4 paquetes</button>
             <dialog class="auswahl" id="wahl-macos" aria-label="macOS">
               <h3>macOS</h3>
               <p class="hinweis">Cuál encaja depende de tu sistema: todos contienen la misma aplicación.</p>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.0-macos-arm64.pkg" download="Solidon3D-0.2.0-macos-arm64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Apple Silicon — 294 MB</a>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.0-macos-x86_64.pkg" download="Solidon3D-0.2.0-macos-x86_64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Intel — 327 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-macos-arm64.pkg" download="Solidon3D-0.2.1-macos-arm64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Apple Silicon — 295 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-macos-arm64.zip" download="Solidon3D-0.2.1-macos-arm64.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Apple Silicon, archivo — 295 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-macos-x86_64.pkg" download="Solidon3D-0.2.1-macos-x86_64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Intel — 328 MB</a>
+            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.1-macos-x86_64.zip" download="Solidon3D-0.2.1-macos-x86_64.zip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Intel, archivo — 329 MB</a>
               <form method="dialog"><button class="btn ghost" value="zu">Cerrar</button></form>
             </dialog>
-            <p class="version">Versión 0.2.0, publicada el 26/08/2026.</p>
+            <p class="version">Versión 0.2.1, publicada el 27/08/2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows muestra un aviso azul con una aplicación nueva y aún sin firmar: <i>Más información</i> → <i>Ejecutar de todas formas</i>. La firma llegará en cuanto esté el certificado.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Versiones nuevas.</b> Solidon comprueba al iniciarse si hay una versión más reciente y la ofrece para descargar — se descarga e instala solo con tu confirmación, y puede desactivarse en los ajustes.</p>
@@ -677,7 +687,7 @@
         una vez y elige «Abrir»; después arranca como cualquier
         otra.</td></tr>
         <tr><td>Espacio en disco</td><td>unos 750 MB instalada, descarga
-        entre 192 y 327 MB según el sistema</td></tr>
+        entre 194 y 427 MB según el sistema</td></tr>
         <tr><td>Uso básico</td><td>8 GB de RAM y una gráfica que
         hable OpenGL — las filas de IA de abajo son extras, no
         requisitos mínimos</td></tr>

@@ -482,7 +482,11 @@ def write_size_span(text: str, packages: list[Package], page: str) -> str:
     Zahlen in der Zeile: die installierte Größe und die beiden Enden der
     Spanne. Die 750 bleibt, die anderen beiden werden getauscht.
     """
-    sizes = sorted(package.path.stat().st_size // 1_000_000 for package in packages)
+    # ``bytes_`` steht schon im Paket — es wird beim Einlesen zusammen mit der
+    # Prüfsumme erhoben. Hier stand ``package.path.stat().st_size``, und
+    # ``Package`` hat kein ``path``: Der Lauf brach beim Schreiben der Seiten
+    # ab, nachdem die Dateien bereits kopiert waren.
+    sizes = sorted(package.bytes_ // 1_000_000 for package in packages)
     if not sizes:
         return text
     smallest, largest = str(sizes[0]), str(sizes[-1])
