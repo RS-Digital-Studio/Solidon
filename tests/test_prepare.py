@@ -890,6 +890,38 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
         assert entry.mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
+def test_splitting_says_that_the_halves_still_lie_together(
+    document: Document, profile: Profile
+) -> None:
+    """Zwei Hälften an ihrem Platz sehen aus wie ein Körper — und sagten es nicht.
+
+    Das Teilen setzt beide Stücke dorthin, wo sie im ganzen Teil lagen; das
+    ist richtig, sonst passten sie nicht mehr zusammen. Im Bild ist das
+    Ergebnis damit von der Ausgangslage nicht zu unterscheiden: ein Schritt
+    im Verlauf, zwei Zeilen im Baum, davor ein Körper wie vorher — und
+    keinerlei Auskunft (Fund 27, 27.08.2026).
+
+    Der Nachbarbefund ``arrange.bodies_in_one_place`` greift hier nicht: Er
+    sucht Körper, die sich in Hüllquader **und** Volumen gleichen, und zwei
+    komplementäre Hälften tun das nicht. Die Auskunft kommt deshalb aus der
+    Operation selbst.
+    """
+    project, history = loaded(document)
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"axis": "z", "pins": 0})],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "prepare.halves_in_place" in codes, f"das Teilen sagt es: {codes}"
+    hinweis = next(
+        entry for entry in result.scene.report.findings if entry.code == "prepare.halves_in_place"
+    )
+    assert hinweis.severity == "info", "nichts ist schiefgegangen"
+
+
 def test_a_plane_beside_the_body_stops_instead_of_making_a_ghost(
     document: Document, profile: Profile
 ) -> None:

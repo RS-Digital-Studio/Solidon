@@ -314,6 +314,10 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Operationen bewusst nicht selbst tun — und ohne diesen Knopf muss man
     # ihn kennen, um ihn zu finden.
     "arrange.bodies_in_one_place": (ARRANGE_ON_BED,),
+    # Dieselbe Handlung wie bei den Nachbarn: Was aneinander liegt, wird
+    # nebeneinander gelegt. Der Befund kommt aus dem Teilen selbst, weil
+    # nur die Operation weiß, dass die zwei Körper zusammengehören.
+    "prepare.halves_in_place": (ARRANGE_ON_BED,),
     # Derselbe Sachverhalt, nur eine Stufe später gemessen: nicht die Szene
     # ragt hinaus, sondern die **Druckdatei**, die der Slicer daraus gemacht
     # hat (``gcode.printed_extent``). CuraEngine prüft seinen Bauraum nicht.

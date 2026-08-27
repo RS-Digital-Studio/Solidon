@@ -881,7 +881,37 @@ def _cut_and_pin(
                 features=dict(pair.bore_features),
             ),
         ],
-        findings=[*findings, *pair.findings],
+        findings=[*findings, *pair.findings, _halves_still_together(source)],
+    )
+
+
+def _halves_still_together(source: SceneObject) -> Finding:
+    """Zwei Hälften an ihrem Platz sehen aus wie ein Körper.
+
+    Das Teilen setzt beide Stücke dorthin, wo sie im ganzen Teil lagen —
+    richtig so, denn erst damit passen sie noch zusammen, und die Passstifte
+    sitzen aufeinander. Im Bild ist das Ergebnis aber von der Ausgangslage
+    nicht zu unterscheiden: ein Schritt im Verlauf, zwei Zeilen im Baum, und
+    davor ein Körper, der aussieht wie vorher (Fund 27, 27.08.2026).
+
+    Der Nachbarbefund ``arrange.bodies_in_one_place`` greift hier **nicht**:
+    Er sucht Körper, die sich in Hüllquader und Volumen gleichen, und zwei
+    komplementäre Hälften tun genau das nicht. Deshalb sagt es die Operation
+    selbst — sie ist die einzige Stelle, die weiß, dass die zwei Körper
+    zusammengehören.
+
+    Ein Hinweis und keine Warnung: Nichts ist schiefgegangen, und wer gleich
+    exportiert, bekommt zwei richtige Dateien. Die Handlung daneben ist
+    *Auf dem Bett anordnen* — dieselbe, die auch die Nachbarbefunde tragen.
+    """
+    return Finding(
+        code="prepare.halves_in_place",
+        severity="info",
+        message=_(
+            "Die zwei Hälften liegen noch aneinander — im Bild sieht das aus wie ein Teil. "
+            "Zum Drucken nebeneinander legen."
+        ),
+        object_id=source.id,
     )
 
 
