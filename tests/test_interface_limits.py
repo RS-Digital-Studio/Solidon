@@ -1185,6 +1185,7 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
     es nur im Tooltip des Knopfes — und der Docstring von ``entries`` nennt
     „den ganzen Zeichensatz" seit je als das, was fehlte.
     """
+    from app.i18n import tr
     from app.ui.shortcuts_window import entries
     from app.ui.sketch_editor import ACTION_KEYS, PLANE_KEYS, TOOL_KEYS, VIEW_KEYS
 
@@ -1193,6 +1194,21 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
     missing = sorted(key for key in drawing.values() if key not in named)
 
     assert not missing, f"die Übersicht kennt diese Zeichentasten nicht: {missing}"
+
+    # **Und jede trägt einen Namen, keinen rohen Schlüssel.** Die Zeile darüber
+    # prüft die *Taste*; ein Werkzeug ohne Eintrag in der Titeltabelle fiel
+    # bis zum 27.08.2026 stillschweigend ganz aus der Liste
+    # (``titles.get(name)`` ohne Zweig für ``None``), und rot wurde nichts.
+    # Jetzt taucht es mit seinem Schlüssel auf — sichtbar statt verschwunden,
+    # dieselbe Haltung wie bei ``group_title`` im Register. Diese Zeile macht
+    # daraus einen roten Lauf, damit es niemand erst im Fenster sieht.
+    schluessel = set(drawing)
+    roh = sorted(
+        title
+        for group, title, _key in entries(window.menuBar(), window)
+        if group == str(tr("Zeichnen")) and title in schluessel
+    )
+    assert not roh, f"diese Zeichentasten haben keinen Namen, nur ihren Schlüssel: {roh}"
 
 
 def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:

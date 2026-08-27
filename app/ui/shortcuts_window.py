@@ -153,9 +153,17 @@ def _drawing_keys() -> list[tuple[str, str, str]]:
     found: list[tuple[str, str, str]] = []
     for source in (TOOL_KEYS, ACTION_KEYS, VIEW_KEYS, PLANE_KEYS):
         for name, sequence in source.items():
+            # **Ein Schlüssel ohne Titel taucht auf, statt zu verschwinden.**
+            # Hier stand ``if title is not None`` — ein neues Werkzeug fiel
+            # damit stillschweigend aus der Übersicht, und rot wurde nichts:
+            # ``tests/test_interface_limits.py`` deckt die Fenstertasten ab,
+            # und diese hier hängen am ``SketchPanel``. Dieselbe Haltung wie
+            # bei ``group_title`` im Register: „Eine neue Kategorie soll
+            # auftauchen und nicht verschwinden." Ein roher Schlüssel in der
+            # Übersicht ist hässlich und wird gesehen; eine fehlende Zeile
+            # nicht.
             title = titles.get(name)
-            if title is not None:
-                found.append((group, str(title), _native(sequence)))
+            found.append((group, str(title) if title is not None else name, _native(sequence)))
     return found
 
 

@@ -87,7 +87,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
-| Zeichenwerkzeuge zweimal benannt | Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026) | nichts — die Namen stimmen bis auf zwei; offen ist die Bauart, die einen neuen Schlüssel still fallen lässt |
 | Thema und Navigation zweimal beschriftet | Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026) | nichts — beide sagen erkennbar dasselbe; es ist Pflegeaufwand, kein Fehler |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein nicht rechenbarer Schritt ist eine Sackgasse | OpenSCAD ist ausgebaut (26.08.2026) | eine **Anzeige der rohen Werte** und einen Weg, den Schritt loszuwerden. Er lässt sich weder öffnen (kein Registereintrag, kein Dialog) noch löschen (`History` kann nicht aus der Mitte entfernen, §15.4). Der Quelltext einer 0.1.3-Datei ist damit nur im ZIP erreichbar |
@@ -10752,17 +10751,27 @@ Kürzel der Ansichtsleiste, Kantenwinkel, Menügrenze, Befundzeile gegen
 Tooltip, Druckdauer, Körperfarbe im hellen Thema). Zwei bleiben offen, weil
 sie heute **noch** dasselbe sagen — sie sind Schuld, kein Fehler.
 
-- [ ] **Zeichenwerkzeuge heißen in der Kürzelübersicht anders als am Knopf.**
+- [x] **Zeichenwerkzeuge heißen in der Kürzelübersicht anders als am Knopf.**
   `shortcuts_window._drawing_keys` führt eine eigene `titles`-Tabelle;
   `sketch_editor` beschriftet seine Knöpfe daneben. Zwei Namen weichen heute
   ab (`fit`: „Alles einpassen" gegen „Einpassen", `rectangle` mit und ohne
   Maßangabe), der Rest stimmt.
 
-  Der eigentliche Schaden ist die Bauart: `titles.get(name)` lässt einen
+  Der eigentliche Schaden war die Bauart: `titles.get(name)` ließ einen
   unbekannten Schlüssel **stillschweigend fallen**. Ein neues `TOOL_KEYS`-
-  Werkzeug verschwindet damit aus der Übersicht, ohne dass etwas rot wird —
-  `tests/test_interface_limits.py` deckt nur `WINDOW_KEYS` ab, weil die
-  Zeichentasten am `SketchPanel` hängen und nicht am Fenster.
+  Werkzeug verschwand damit aus der Übersicht, ohne dass etwas rot wurde.
+
+  **Behoben am 27.08.2026.** Ein Schlüssel ohne Titel taucht jetzt mit seinem
+  Schlüssel auf, statt zu verschwinden — dieselbe Haltung wie bei
+  `group_title` im Register: „Eine neue Kategorie soll auftauchen und nicht
+  verschwinden." Ein roher Schlüssel in der Übersicht ist hässlich und wird
+  gesehen; eine fehlende Zeile nicht. Dazu eine Zeile im vorhandenen Test, die
+  daraus einen roten Lauf macht: Er prüfte bisher, dass jede *Taste* vorkommt,
+  nicht dass sie einen *Namen* hat. Gegenprobe gefahren — ein Werkzeug ohne
+  Titeleintrag lässt ihn fallen und nennt es beim Namen.
+
+  Die zwei abweichenden Namen (`fit`, `rectangle`) bleiben: Sie sind
+  ausführlicher als am Knopf, und das ist in einer Übersicht richtig.
 
 - [ ] **Thema und Navigationsschema haben zwei Vokabulare.** Das Ansichtsmenü
   sagt „Dunkles Thema" und „Navigation: Cura", der Einstellungsdialog „Dunkel"
