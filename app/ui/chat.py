@@ -43,6 +43,11 @@ from app.ui.style import NORMAL, set_level
 #: auseinanderbleiben (§19.1).
 ROLE_MARKER = {"user": ">", "agent": "*"}
 
+#: Die Zeile, die zeigt, was der Zug gerade tut. Ein eigenes Zeichen, weil sie
+#: kein Beitrag ist: Sie steht nur, solange gerechnet wird, und verschwindet
+#: ohne Spur — im Dokument taucht sie nie auf.
+PROGRESS_MARKER = "\u00b7"
+
 DISCARDED_COLOUR = "#7a828c"
 
 #: Wie hoch der Gesprächsverlauf mindestens ist, auch wenn nichts darin steht.
@@ -275,6 +280,7 @@ class ChatPanel(QWidget):
 
         self._available = False
         self._busy = False
+        self._progress_item: QListWidgetItem | None = None
         self._locked = False
         self.set_available(False)
 
@@ -340,9 +346,48 @@ class ChatPanel(QWidget):
     def set_busy(self, busy: bool) -> None:
         """Während das Modell denkt, wird nichts weiter gesendet — ein Zug nach
         dem anderen.
+
+        Endet der Zug, verschwindet die Fortschrittszeile: Sie gehört dem Lauf
+        und nicht dem Gespräch.
         """
         self._busy = busy
+        if not busy:
+            self.clear_progress()
         self._update_enabled()
+
+    def show_progress(self, step: int, label: str) -> None:
+        """Was der Zug gerade tut — im Chat, wo der Nutzer hinsieht (§2.8).
+
+        **Die Auskunft gab es schon, nur am falschen Ort.** Der Kern meldet
+        jeden Schritt samt Werkzeugnamen, und das Fenster schreibt ihn in die
+        Statuszeile — unten links, während der Chat rechts steht. Wer einen
+        Zug abwartet, sah dort zehn bis sechzig Sekunden nichts als ein
+        gesperrtes Eingabefeld.
+
+        Eine Zeile, die sich fortschreibt, statt einer je Schritt: Ein Zug mit
+        acht Werkzeugen soll das Gespräch nicht mit acht Zeilen zuschütten,
+        die gleich wieder verschwinden.
+        """
+        text = f"{PROGRESS_MARKER} {tr('Schritt')} {step}: {label}"
+        if self._progress_item is None:
+            self._progress_item = QListWidgetItem(text)
+            self._progress_item.setForeground(QColor(DISCARDED_COLOUR))
+            # Nicht auswählbar: Die Zeile ist eine Auskunft, kein Beitrag, und
+            # ein Klick darauf hätte nichts, worauf er zeigen könnte.
+            self._progress_item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.turns.addItem(self._progress_item)
+        else:
+            self._progress_item.setText(text)
+        self.turns.scrollToBottom()
+
+    def clear_progress(self) -> None:
+        """Die Fortschrittszeile wegnehmen, falls eine steht."""
+        if self._progress_item is None:
+            return
+        row = self.turns.row(self._progress_item)
+        if row >= 0:
+            self.turns.takeItem(row)
+        self._progress_item = None
 
     @property
     def busy(self) -> bool:
@@ -357,6 +402,7 @@ class ChatPanel(QWidget):
         """Zeichnet das Gespräch neu und graut aus, was zurückgenommen
         wurde (§26.3).
         """
+        self._progress_item = None
         self.turns.clear()
         for entry in document.chat:
             self.turns.addItem(_item(entry, is_discarded(entry, document)))

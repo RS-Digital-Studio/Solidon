@@ -5784,6 +5784,10 @@ class MainWindow(QMainWindow):
         if not self.chat.busy:
             return
         self.status_message.setText(f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}")
+        # **Und im Chat**, wo der Nutzer während eines Zuges hinsieht. Die
+        # Statuszeile bleibt: Sie trägt den Deckel (``/MAX_STEPS``) und steht
+        # auch dann, wenn der Chat zugeklappt ist.
+        self.chat.show_progress(step, label)
 
     def _on_split_busy(self, busy: bool) -> None:
         """Die Trennebenensuche läuft — Fortschritt und Abbrechen wie bei

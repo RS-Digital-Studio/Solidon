@@ -1327,3 +1327,55 @@ def test_a_damaged_installation_does_not_offer_a_key_that_would_not_help(
     assert not knopf_beschaedigt, "und bekommt keinen Knopf in eine Sackgasse"
     assert "Testzeitraum" in abgelaufen, "der abgelaufene Testlauf behält seinen Satz"
     assert knopf_abgelaufen, "und seinen Knopf — dort hilft ein Schlüssel wirklich"
+
+
+def test_the_chat_shows_what_the_turn_is_doing(qt_app: QApplication) -> None:
+    """§2.8: Was der Zug tut, steht im Chat — nicht nur in der Statuszeile.
+
+    Der Kern meldet jeden Schritt samt Werkzeugnamen, und das Fenster schrieb
+    ihn bislang allein in die Statuszeile unten links. Wer einen Agentenzug
+    abwartet, sieht auf den Chat rechts, und dort stand zehn bis sechzig
+    Sekunden lang nichts.
+
+    Geprüft wird beides: dass die Zeile erscheint und sich **fortschreibt**
+    statt sich zu stapeln — ein Zug mit acht Werkzeugen soll das Gespräch
+    nicht mit acht Zeilen zuschütten, die gleich wieder verschwinden.
+    """
+    panel = ChatPanel()
+    panel.set_busy(True)
+    vorher = panel.turns.count()
+
+    panel.show_progress(1, "Bohrung setzen")
+    assert panel.turns.count() == vorher + 1, "die Zeile erscheint"
+    assert "Bohrung setzen" in panel.turns.item(panel.turns.count() - 1).text()
+
+    panel.show_progress(2, "Deckel erzeugen")
+    assert panel.turns.count() == vorher + 1, "sie stapelt sich nicht"
+    letzte = panel.turns.item(panel.turns.count() - 1).text()
+    assert "Deckel erzeugen" in letzte, "sie schreibt sich fort"
+    assert "Bohrung setzen" not in letzte
+
+    # Der Zug endet: die Zeile gehört ihm und nicht dem Gespräch.
+    panel.set_busy(False)
+    assert panel.turns.count() == vorher, "sie verschwindet ohne Spur"
+
+
+def test_the_progress_line_is_no_contribution(qt_app: QApplication) -> None:
+    """Die Fortschrittszeile ist eine Auskunft, kein Beitrag.
+
+    Sie lässt sich nicht auswählen — ein Klick hätte nichts, worauf er zeigen
+    könnte —, und ein neu gezeichnetes Gespräch kennt sie nicht.
+    """
+    panel = ChatPanel()
+    panel.set_busy(True)
+    panel.show_progress(3, "Netz reparieren")
+    eintrag = panel.turns.item(panel.turns.count() - 1)
+
+    assert not eintrag.flags(), "nicht auswählbar"
+
+    # Ein leeres Dokument zeichnet das Gespräch neu — die Zeile ist dann weg,
+    # und der Verweis darauf auch (sonst räumte ``clear_progress`` einen
+    # Eintrag weg, den es nicht mehr gibt).
+    panel.show_document(new_project("centauri-carbon-2", "pla").document)
+    assert panel.turns.count() == 0
+    panel.set_busy(False)
