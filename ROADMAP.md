@@ -79,7 +79,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
-| Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
 | Elf Verzweigungen fragen den Slicer-Namen, wo sie eine Eigenschaft meinen | Der Slicer-Name stand da, wo eine Eigenschaft gemeint war (27.08.2026) | nichts — **die Messung ist fertig** (26 Verzweigungen, der Familienschnitt trägt, am echten ElegooSlicer geprüft). Es fehlt die Arbeit: benannte Prädikate neben `wants_bed_coordinates`, dort wo der Kommentar die Eigenschaft schon nennt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
@@ -10097,11 +10096,32 @@ ist im Rahmen und nützlich, und es beantwortet die Frage nicht.
   und die gebaute Zahl gegen die Deklaration, und unerklärtes Zerfallen
   bleibt rot.
 
-- [ ] **Die Deklaration bauen:** ein Feld am `register_part` für die erklärte
-  Teilezahl, im Bereichstest die Druckspaltenprüfung (Spaltweite aus dem
-  Materialprofil, nie als Zahl im Baustein) und der Abgleich der gebauten
-  Komponenten gegen die Deklaration — dazu das Bolzenscharnier, an dem die
-  Frage aufkam, als ihr erster Nutzer.
+- [x] **Die Deklaration bauen** — am 27.08.2026 in vier Schritten, alle vier
+  gemessen und mit Gegenprobe:
+
+  `bodies` am `register_part` (`93fd3783`) sagt, wie viele Körper ein Baustein
+  **erklärt** hervorbringt. Der Bereichstest prüft die gebaute Zahl gegen die
+  erklärte, die Suite ebenfalls: Wer nichts deklariert, hat `bodies=1` und
+  damit wortgleich die alte Zusage; unerklärtes Zerfallen bleibt rot. Das ist
+  der Unterschied zu einer Ausnahme im Test — die Prüfung wird nicht
+  schwächer, sondern genauer.
+
+  Das Bolzenscharnier (`6d3ac074`) ist der erste Nutzer und der Beleg, dass es
+  trägt: zwei Laschen um einen mitgedruckten Bolzen, wasserdicht bei jedem
+  Spaltmaß. Es ist das Scharnier, das `hinge_eye` am 25.08. nicht sein durfte.
+
+  Die Druckspaltenprüfung (`ff8f7332`) misst den engsten Abstand zwischen den
+  Teilen gegen das kalibrierte Material. **Dabei kam ein zweiter Fund heraus,
+  der größer ist als der erste:** Der Bereichstest fuhr `play = 0` und prüfte
+  damit eine Geometrie, die im Einsatz nie entsteht — `insert_part` setzt dort
+  seit je den Profilwert ein. Beim Scharnier war das ein Gelenk mit einer
+  Hundertstel Spalt, das beim Drucken verschweißt.
+
+  Und eine Toleranzfrage, die kein Detail war: Der Vergleich läuft gegen
+  `EPS_DISPLAY` und nicht gegen `EPS_GEOM`. Ein facettierter Zylinder zeigt
+  seine Sehne und nicht den Bogen, der gemessene Spalt fällt also um
+  Bruchteile kleiner aus — mit dem Rechenepsilon meldete die Prüfung ein
+  Scharnier, das genau richtig gebaut war.
 
 
 ## Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026)
