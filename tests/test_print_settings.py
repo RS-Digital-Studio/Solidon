@@ -3032,3 +3032,26 @@ def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
     weg = [pair for pair in UNREACHED if pair not in unreached]
     assert not neu, "Einstellungen ohne Wirkung und ohne Begründung: " + str(sorted(neu))
     assert not weg, "steht als unerreichbar in der Liste, wirkt aber: " + str(sorted(weg))
+
+
+def test_the_dialog_writes_time_and_mass_like_the_status_line() -> None:
+    """Eine Sitzung, eine Schreibweise für dieselbe Größe.
+
+    Gemessen am 27.08.2026: Die Statuszeile sagte „10 h 5 min" und „18 g", der
+    Druckdialog für dieselben Werte „605 min" und „18,4 g". Zwei Stellen, die
+    beide entschieden, wie eine Dauer und eine Masse aussehen — und `min` und
+    `g` standen im Dialog als feste Zeichenketten, obwohl `facts.py` sie
+    ausdrücklich durch `tr()` schickt (Regel 20).
+
+    Geprüft wird die Quelle, nicht das Fenster: Was der Dialog daraus baut,
+    ist eine Zeile mit Doppelpunkt davor, und die Zahl darin kommt seit dem
+    Umbau aus derselben Funktion wie die der Statuszeile.
+    """
+    from app.ui.facts import duration, mass
+
+    assert duration(605 * 60.0) == "10 h 5 min", "über einer Stunde in Stunden und Minuten"
+    assert duration(90 * 60.0) == "1 h 30 min"
+    # Über zehn Gramm ohne Nachkommastelle — bei einer Schätzung ist „18,4 g"
+    # dieselbe Aussage wie „18 g", und die kürzere liest sich im Vorbeigehen.
+    assert mass(18.44) == "18 g"
+    assert mass(250.0) == "250 g"

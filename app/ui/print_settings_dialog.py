@@ -75,6 +75,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
 from app.ui.dialogs import damaged_line, show_error
+from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
 from app.ui.labels import (
     NumberSpin,
@@ -82,7 +83,6 @@ from app.ui.labels import (
     choice_label,
     colour_name,
     explain_choices,
-    localised,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
@@ -2798,11 +2798,17 @@ class PrintSettingsDialog(QDialog):
             return
         metrics = gcode.combine([entry.metrics for entry in outcomes])
         parts = []
+        # **Über ``facts``, nicht von Hand.** Hier stand `f"{minutes:.0f} min"`
+        # und `f"{grams:.1f} g"`: Die Statuszeile schrieb für dieselbe Größe
+        # „10 h 5 min" und „18 g", dieser Dialog „605 min" und „18,4 g" — eine
+        # Sitzung, zwei Schreibweisen. Dazu waren `min` und `g` feste
+        # Zeichenketten in der Oberfläche (Regel 20), während `facts.py` sie
+        # ausdrücklich durch `tr()` schickt.
         if metrics.print_minutes is not None:
-            parts.append(f"{tr('Druckzeit')}: {metrics.print_minutes:.0f} min")
+            parts.append(f"{tr('Druckzeit')}: {duration(metrics.print_minutes * 60.0)}")
         grams = metrics.grams(self.settings.filament.density)
         if grams is not None:
-            parts.append(f"{tr('Material')}: " + localised(f"{grams:.1f} g"))
+            parts.append(f"{tr('Material')}: {mass(grams)}")
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
         if len(outcomes) > 1:
