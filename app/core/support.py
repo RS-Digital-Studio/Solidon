@@ -53,8 +53,17 @@ MAX_TOTAL_BYTES: Final = 12 * 1024 * 1024
 #: an.
 MAX_MESSAGE_LENGTH: Final = 20_000
 
-#: Wie viel von der Antwort gelesen wird. Sie trägt zwei Felder.
-MAX_ANSWER_BYTES: Final = 64 * 1024
+#: Wie viel von der Antwort gelesen wird. Sie trägt zwei Felder — ``ok`` und
+#: eine Referenz —, also ist die Grenze hier ein Deckel gegen einen bösen
+#: Server und keine Platzrechnung.
+#:
+#: **Der Name ist seit dem 27.08.2026 ein anderer.** Er lautete wie die
+#: Antwortgrenze in :mod:`app.core.updates`, und die deckelt die
+#: Versionsdatei — an jenem Tag auf einen abgeleiteten Wert umgestellt, weil
+#: sie beim Kunden riss. Damit standen zwei verschiedene Zahlen unter einem
+#: Namen, und am Namen sah man es nicht. Gemeldet vom Zwillingsscan einer
+#: Nachbarsitzung.
+MAX_REPLY_BYTES: Final = 64 * 1024
 
 #: Die Arten einer Sendung. Sie stehen im Betreff und sortieren den Posteingang
 #: — mehr tun sie nicht, und deshalb sind es fünf und nicht zwölf.
@@ -426,8 +435,8 @@ def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
         method="POST",
     )
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
-        raw = answer.read(MAX_ANSWER_BYTES + 1)
-    if len(raw) > MAX_ANSWER_BYTES:
+        raw = answer.read(MAX_REPLY_BYTES + 1)
+    if len(raw) > MAX_REPLY_BYTES:
         raise ValueError("answer is too large")
     try:
         return dict(json.loads(raw.decode("utf-8")))
