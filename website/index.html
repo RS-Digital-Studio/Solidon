@@ -136,7 +136,7 @@
       "name": "Läuft das auf einem Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Bei Apple signiert ist es noch nicht, und Gatekeeper lässt eine unsignierte Anwendung aus dem Netz per Doppelklick nicht starten: einmal mit der rechten Maustaste auf das Programm und „Öffnen“ wählen, danach startet es wie jedes andere. Notarisierung kommt, sobald das Apple-Konto steht."
+        "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Bei Apple notarisiert ist es noch nicht, und macOS öffnet ein Installationspaket ohne diese Prüfung nicht per Doppelklick: Es meldet, es könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an. Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das Apple-Konto steht."
       }
     },
     {
@@ -669,9 +669,11 @@
       <table class="req">
         <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit), macOS 12 oder
         neuer, oder Linux — auf dem Mac für Apple Silicon und Intel getrennt.
-        Die Mac-Version ist noch nicht bei Apple signiert: beim ersten Start
-        einmal mit der rechten Maustaste auf das Programm und „Öffnen“ wählen,
-        danach startet es wie jedes andere.</td></tr>
+        Die Mac-Version ist noch nicht bei Apple notarisiert: macOS öffnet das
+        Installationspaket deshalb nicht per Doppelklick. Im Hinweis „Fertig“
+        wählen — nicht „In den Papierkorb“ — und das Paket danach in den
+        Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ mit „Trotzdem
+        öffnen“ freigeben.</td></tr>
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download je
         nach System zwischen 194 und 328 MB</td></tr>
         <tr><td>Grundbetrieb</td><td>8 GB Arbeitsspeicher und eine
@@ -781,11 +783,14 @@
           <summary>Läuft das auf einem Mac?</summary>
           <p>Ja, für Apple Silicon und für Intel als getrennte Versionen — ein
           Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht,
-          und das betrifft jedes Gerät vor 2020. Bei Apple signiert ist es
-          noch nicht, und Gatekeeper lässt eine unsignierte Anwendung aus dem
-          Netz per Doppelklick nicht starten: einmal mit der rechten Maustaste
-          auf das Programm und „Öffnen“ wählen, danach startet es wie jedes
-          andere. Notarisierung kommt, sobald das Apple-Konto steht.</p>
+          und das betrifft jedes Gerät vor 2020. Bei Apple notarisiert ist es
+          noch nicht, und macOS öffnet ein Installationspaket ohne diese
+          Prüfung nicht per Doppelklick: Es meldet, es könne die Datei nicht
+          auf Schadsoftware prüfen, und bietet als ersten Knopf „In den
+          Papierkorb“ an. Dort „Fertig“ wählen und das Paket in den
+          Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ mit
+          „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das
+          Apple-Konto steht.</p>
         </details>
         <details>
           <summary>Funktioniert das mit meinem Drucker?</summary>

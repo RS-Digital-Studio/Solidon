@@ -136,7 +136,7 @@
       "name": "Does it run on a Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac, and that covers every machine made before 2020. It is not yet signed with Apple, and Gatekeeper refuses to launch an unsigned application from the web on a double-click: right-click the application once and choose “Open”, after that it starts like any other. Notarisation follows once the Apple account is in place."
+        "text": "Yes, as separate builds for Apple Silicon and Intel — a package built on arm64 will not start on an Intel Mac, and that covers every machine made before 2020. It is not yet notarised with Apple, and macOS will not open an installer package without that check on a double-click: it reports that it cannot verify the file is free of malware and offers “Move to Trash” as the first button. Choose “Done” there, then release the package in System Settings under “Privacy & Security” with “Open Anyway”. Notarisation follows once the Apple account is in place."
       }
     },
     {
@@ -659,9 +659,10 @@
       <table class="req">
         <tr><td>Operating system</td><td>Windows 10/11 (64 bit), macOS 12 or
         later, or Linux — on the Mac as separate builds for Apple Silicon and
-        Intel. The Mac build is not yet signed with Apple: on first launch,
-        right-click the application once and choose “Open”, after that it
-        starts like any other.</td></tr>
+        Intel. The Mac build is not yet notarised with Apple: macOS will not
+        open the installer package on a double-click. Choose “Done” in the
+        warning — not “Move to Trash” — then release the package in System
+        Settings under “Privacy &amp; Security” with “Open Anyway”.</td></tr>
         <tr><td>Disk space</td><td>about 750 MB installed, download between
         194 and 328 MB depending on your system</td></tr>
         <tr><td>Basic use</td><td>8 GB of RAM and any graphics that
@@ -769,11 +770,13 @@
           <summary>Does it run on a Mac?</summary>
           <p>Yes, as separate builds for Apple Silicon and Intel — a package
           built on arm64 will not start on an Intel Mac, and that covers every
-          machine made before 2020. It is not yet signed with Apple, and
-          Gatekeeper refuses to launch an unsigned application from the web on
-          a double-click: right-click the application once and choose “Open”,
-          after that it starts like any other. Notarisation follows once the
-          Apple account is in place.</p>
+          machine made before 2020. It is not yet notarised with Apple, and
+          macOS will not open an installer package without that check on a
+          double-click: it reports that it cannot verify the file is free of
+          malware and offers “Move to Trash” as the first button. Choose
+          “Done” there, then release the package in System Settings under
+          “Privacy &amp; Security” with “Open Anyway”. Notarisation follows
+          once the Apple account is in place.</p>
         </details>
         <details>
           <summary>Will it work with my printer?</summary>

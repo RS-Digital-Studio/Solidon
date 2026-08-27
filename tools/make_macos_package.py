@@ -123,8 +123,10 @@ def conclusion() -> str:
         "Sie finden die Anwendung im Ordner „Programme“ (oder dort, wohin Sie sie "
         "installiert haben).\n\n"
         "Beim ersten Start meldet macOS, dass die Anwendung von einem nicht "
-        "verifizierten Entwickler stammt: Rechtsklick auf das Symbol, „Öffnen“, und "
-        "im Hinweis noch einmal „Öffnen“. Danach startet sie wie jede andere.\n\n"
+        "verifizierten Entwickler stammt. Im Hinweis „Fertig“ wählen und die "
+        "Anwendung dann in den Systemeinstellungen unter „Datenschutz & "
+        "Sicherheit“ mit „Trotzdem öffnen“ freigeben. Danach startet sie wie "
+        "jede andere.\n\n"
         f"Handbuch, Hilfe und Kontakt: {WEBSITE_URL}\n"
     )
 
