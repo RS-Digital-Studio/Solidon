@@ -121,6 +121,15 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; Tasks: deskt
 
 [Run]
 Filename: "{app}\{#AppName}.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Und derselbe Start noch einmal, für den stillen Lauf.
+;
+; Der Eintrag darüber trägt ``skipifsilent`` und greift bei ``/SILENT`` gerade
+; nicht — richtig so, denn dort gibt es keine Schlussseite mit einem Häkchen
+; darauf. Ein Update aus der Anwendung heraus ist aber genau dieser Fall: Solidon
+; beendet sich, der Installer läuft still, und ohne diese Zeile bliebe der Nutzer
+; vor einem geschlossenen Programm und müsste selbst darauf kommen, es zu
+; starten. ``updates.SETUP_ARGUMENTS`` übergibt den Schalter.
+Filename: "{app}\{#AppName}.exe"; Flags: nowait; Check: WantsRestart
 
 [UninstallDelete]
 ; install-language.txt schreibt der [Code]-Abschnitt unten selbst — was nicht
@@ -129,6 +138,23 @@ Filename: "{app}\{#AppName}.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; 
 Type: files; Name: "{app}\install-language.txt"
 
 [Code]
+function WantsRestart: Boolean;
+begin
+  { Ob Solidon nach einem stillen Lauf wieder starten soll.
+
+    ``/RESTARTAPP=1`` ist kein Schalter von Inno Setup, sondern unserer — die
+    Anwendung setzt ihn, wenn sie das Update selbst angestoßen hat
+    (``app/core/updates.py``, ``SETUP_ARGUMENTS``). Wer die Setup-Datei von Hand
+    doppelklickt, setzt ihn nicht und bekommt die gewohnte Schlussseite mit dem
+    Häkchen.
+
+    Die Vorgabe hinter dem senkrechten Strich ist der ganze Trick: Ohne sie
+    liefert ``{param:...}`` bei einem fehlenden Schalter eine leere
+    Zeichenkette, und die verglich sich hier stillschweigend als "nicht
+    gewünscht" — dasselbe Ergebnis, aber aus Zufall statt aus Absicht. }
+  Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   { Die Sprachwahl an die Anwendung weitergeben.

@@ -31,7 +31,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import platform
+import shlex
 import subprocess
 import sys
 import urllib.error
@@ -42,7 +44,8 @@ from pathlib import Path
 from typing import Any, Final
 from urllib.parse import urlsplit
 
-from app.branding import APP_VERSION
+from app.branding import APP_ID, APP_VERSION
+from app.core import discover
 from app.core.activation import ed25519
 from app.core.backends.llm import Transport
 from app.core.errors import (
@@ -200,13 +203,62 @@ PLATFORM_MACOS_ARM: Final = "macos-arm64"
 PLATFORM_MACOS_INTEL: Final = "macos-x86_64"
 PLATFORM_LINUX: Final = "linux"
 
-#: Wo ein Paket, das gestartet werden kann, überhaupt startbar ist.
+#: Wie diese Installation eingespielt worden ist — und damit, **wie** ein
+#: Update sie ersetzt.
 #:
-#: Linux fehlt mit Absicht. Ein Flatpak ersetzt sich über ``flatpak update``
-#: und ein AppImage gar nicht — beides von innen anzustoßen hieße, dem Nutzer
-#: ein Paket in einen Ordner zu legen und ihn damit allein zu lassen. Dort
-#: bleibt es beim Hinweis und dem Weg zur Download-Seite (§37.2).
-STARTABLE: Final = frozenset({PLATFORM_WINDOWS, PLATFORM_MACOS_ARM, PLATFORM_MACOS_INTEL})
+#: Nicht zu verwechseln mit dem Plattformschlüssel darüber: Der sagt, *welches*
+#: Paket gemeint ist. Unter Linux tragen drei Arten denselben Schlüssel
+#: ``linux`` und brauchen drei verschiedene Wege — dort ist die Plattform als
+#: Auskunft zu grob.
+KIND_WINDOWS_SETUP: Final = "windows-setup"
+KIND_MACOS_PACKAGE: Final = "macos-package"
+KIND_FLATPAK: Final = "flatpak"
+KIND_APPIMAGE: Final = "appimage"
+KIND_TARBALL: Final = "tarball"
+KIND_SOURCE: Final = "source"
+
+#: Welche Arten sich von innen ersetzen lassen.
+#:
+#: **Hier stand einmal eine Menge von Plattformen, und Linux fehlte darin** —
+#: mit der Begründung, ein Flatpak wolle ``flatpak update`` und ein AppImage
+#: ersetze sich gar nicht. Der zweite Halbsatz stimmt weiterhin. Der erste war
+#: der Grund für eine Lücke, die keiner der drei Plattformen anzusehen war:
+#: Ausgeliefert wird für Linux **nur** das Flatpak-Bundle, und damit war Linux
+#: die einzige Plattform ohne Update aus der Anwendung heraus. Wer dort
+#: arbeitete, sah einen Hinweis und durfte 276 MB von Hand holen — während
+#: Windows und macOS es angeboten bekamen.
+#:
+#: **Ein Repo braucht es dafür nicht.** ``flatpak install`` nimmt eine
+#: Bundle-Datei unmittelbar und aktualisiert damit eine vorhandene
+#: Installation; der Weg nach draußen steht mit ``flatpak-spawn --host``
+#: ohnehin schon (:func:`app.core.discover.on_host`, Berechtigung
+#: ``--talk-name=org.freedesktop.Flatpak`` im Manifest).
+#:
+#: AppImage und Archiv bleiben außen, aber nicht mehr aus Prinzip, sondern
+#: weil es sie nicht gibt: Die CI baut beide, auf der Download-Seite steht
+#: keines. Erkannt werden sie trotzdem — sonst bekäme ein AppImage-Nutzer ein
+#: ``flatpak install``, das scheitern muss, und die Auskunft „geht hier nicht"
+#: wäre eine Vermutung statt einer Feststellung.
+REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_MACOS_PACKAGE, KIND_FLATPAK})
+
+#: Womit die Setup-Datei beim Update aufgerufen wird.
+#:
+#: ``/SILENT`` und **nicht** ``/VERYSILENT``: Der Fortschrittsbalken bleibt.
+#: Ein Paket von rund 180 MB packt sich aus, und das dauert — ohne jede Anzeige
+#: sähe der Nutzer nach dem Beenden minutenlang nichts und hielte es für einen
+#: Absturz. Still heißt hier „ohne Fragen", nicht „ohne Zeichen".
+#:
+#: ``/NORESTART``, damit der Installer den Rechner nicht neu startet. Das ist
+#: seine Entscheidung nicht, und ein Update, das den Rechner mitnimmt, verliert
+#: alles andere, was offen war.
+#:
+#: ``/RESTARTAPP=1`` ist kein Schalter von Inno Setup, sondern unserer:
+#: ``packaging/solidon3d.iss`` liest ihn in einem eigenen ``[Run]``-Eintrag und
+#: startet Solidon danach wieder. Der vorhandene Eintrag dort trägt
+#: ``skipifsilent`` und greift bei einem stillen Lauf gerade **nicht** — ohne
+#: den zweiten bliebe der Nutzer nach dem Update vor einem geschlossenen
+#: Programm und müsste selbst darauf kommen, es zu starten.
+SETUP_ARGUMENTS: Final = ("/SILENT", "/NORESTART", "/RESTARTAPP=1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,18 +333,25 @@ class Release:
         return self.packages.get(key or platform_key())
 
     def startable(self, key: str = "") -> Package | None:
-        """Das Paket, **das sich von hier aus auch starten lässt.**
+        """Das Paket, **das sich von hier aus auch einspielen lässt.**
 
         Drei Gründe, warum es keines gibt, und alle drei sind kein Fehler: Die
-        Versionsdatei nennt für diese Plattform keines, es ist eine, die sich
-        nicht von innen ersetzen lässt (Linux), oder Solidon läuft gar nicht
-        als Paket, sondern aus den Quellen. Dann bleibt der Hinweis, und der
-        Weg führt auf die Download-Seite.
+        Versionsdatei nennt für diese Plattform keines, diese Installation
+        lässt sich nicht von innen ersetzen (AppImage, ausgepacktes Archiv),
+        oder Solidon läuft gar nicht als Paket, sondern aus den Quellen. Dann
+        bleibt der Hinweis, und der Weg führt auf die Download-Seite.
+
+        **Gefragt wird nach der Installationsart, nicht nach der Plattform.**
+        Vorher stand hier eine Menge von Plattformschlüsseln, und ``linux``
+        fehlte darin — womit die Antwort für ein Flatpak und für ein AppImage
+        dieselbe war, obwohl nur das zweite sich wirklich nicht ersetzen lässt.
+        Der übergebene Schlüssel wählt jetzt nur noch **welches** Paket
+        zurückkommt; ob es eingespielt werden kann, entscheidet
+        :func:`install_kind`.
         """
-        chosen = key or platform_key()
-        if chosen not in STARTABLE or not packaged():
+        if install_kind() not in REPLACEABLE:
             return None
-        return self.packages.get(chosen)
+        return self.packages.get(key or platform_key())
 
 
 def platform_key() -> str:
@@ -304,6 +363,39 @@ def platform_key() -> str:
         # beide Versionen 64-bittig, unterschieden werden sie am Befehlssatz.
         return PLATFORM_MACOS_ARM if platform.machine() == "arm64" else PLATFORM_MACOS_INTEL
     return PLATFORM_LINUX
+
+
+def install_kind(system: str = "") -> str:
+    """Wie diese Installation eingespielt worden ist.
+
+    Aus den Quellen gefahren ist keine Installation — dann gibt es nichts, was
+    ein Installer ersetzen könnte. Alles übrige entscheidet sich am System und
+    unter Linux am **Format**: Ein Flatpak sagt es selbst (``/.flatpak-info``
+    oder ``FLATPAK_ID``), ein AppImage über ``$APPIMAGE``, und was beides nicht
+    ist, ist der ausgepackte Ordner aus dem Archiv.
+
+    **Das System ist ein Parameter und keine Abfrage im Rumpf**, und das ist
+    hier keine Stilfrage (``.claude/rules/kern.md``): Ein Zweig hinter
+    ``sys.platform`` wird auf der Maschine, auf der entwickelt wird, nie
+    ausgeführt und nie geprüft — genau so sind fünf Stellen entstanden, an
+    denen Linux und macOS weniger konnten als Windows. So lässt sich jeder der
+    drei Wege überall messen, und ``mypy --platform`` sieht alle drei.
+    """
+    chosen = system or sys.platform
+    if not packaged():
+        return KIND_SOURCE
+    if chosen == "win32":
+        return KIND_WINDOWS_SETUP
+    if chosen == "darwin":
+        return KIND_MACOS_PACKAGE
+    if discover.in_flatpak():
+        return KIND_FLATPAK
+    # ``$APPIMAGE`` setzt der Bootloader des AppImage selbst; er nennt den Pfad
+    # der Datei, die der Nutzer gestartet hat. Im ausgepackten Archiv steht er
+    # nicht.
+    if os.environ.get("APPIMAGE"):
+        return KIND_APPIMAGE
+    return KIND_TARBALL
 
 
 def _as_tuple(version: str) -> tuple[int, ...]:
@@ -637,7 +729,7 @@ def download(
         _remove(file)
         raise ExternalToolError(
             tool="update",
-            detail=_("Die Prüfsumme des Pakets stimmt nicht — es wurde gelöscht."),
+            detail=_("Das geladene Paket ist beschädigt und wurde gelöscht."),
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
             values={"url": package.url, "expected": package.sha256, "got": digest.hexdigest()},
         )
@@ -646,8 +738,113 @@ def download(
     return file
 
 
+def runs_unattended() -> bool:
+    """Läuft das Einspielen ohne Fragen durch — und startet Solidon danach wieder?
+
+    Zwei der drei Wege tun das: Die Setup-Datei bekommt ``/SILENT`` und den
+    eigenen Neustart-Eintrag, das Flatpak-Bundle wird eingespielt und mit
+    ``flatpak run`` zurückgeholt. Der dritte ist Apples Installer — er zeigt
+    den Lizenzvertrag, lässt den Ort wählen und startet danach nichts
+    (Entscheidung Robert, 28.08.2026: der ``.pkg``-Weg bleibt).
+
+    Der Dialog braucht die Auskunft für **einen Satz**, und der Satz ist keine
+    Kosmetik: Wer „dann startet das Installationsprogramm" liest und
+    stattdessen nichts sieht, hält das Update für gescheitert und klickt ein
+    zweites Mal.
+    """
+    return install_kind() in (KIND_WINDOWS_SETUP, KIND_FLATPAK)
+
+
+def _flatpak_is_user(info: str | None = None) -> bool:
+    """Liegt diese Flatpak-Installation im Nutzerprofil?
+
+    **Der Geltungsbereich wird gelesen, nicht geraten**, und daran hängt mehr
+    als eine Kleinigkeit: ``--user`` auf eine systemweite Installation legt
+    eine **zweite** daneben, statt die vorhandene zu ersetzen. Der Nutzer hätte
+    danach zwei Fassungen, von denen die alte weiter startet, und keinen
+    Hinweis darauf, warum das Update nichts geändert hat.
+
+    ``/.flatpak-info`` nennt unter ``app-path`` den Ort des eingehängten
+    Anwendungsordners. Eine systemweite Installation liegt unter
+    ``/var/lib/flatpak``, eine im Profil unter dem Heimatverzeichnis.
+
+    Ist die Datei nicht lesbar, gilt das Profil: Es ist die Wahl, die ohne
+    Rechte auskommt. Sie kann im schlimmsten Fall eine zweite Installation
+    anlegen — die andere Richtung scheitert an einer Rechteabfrage, die
+    niemand sieht, weil Solidon zu diesem Zeitpunkt beendet ist.
+
+    Der Inhalt ist ein Parameter, damit beide Lagen ohne Flatpak messbar sind.
+    """
+    raw = info
+    if raw is None:
+        try:
+            raw = Path("/.flatpak-info").read_text(encoding="utf-8")
+        except OSError as problem:
+            _log.info("cannot read /.flatpak-info: %s", problem)
+            return True
+    for line in raw.splitlines():
+        name, found, value = line.partition("=")
+        if found and name.strip() == "app-path":
+            return not value.strip().startswith("/var/lib/flatpak")
+    return True
+
+
+def _flatpak_command(file: Path) -> list[str]:
+    """Das Bundle einspielen und Solidon danach wieder starten.
+
+    Beides in **einer** Kette auf dem Rechner, und beides muss dort laufen:
+    ``flatpak-spawn --host`` überlebt den Sandkasten, der gleich danach endet.
+    Zwei getrennte Aufrufe gingen nicht — der zweite darf erst laufen, wenn der
+    erste durch ist, und dazwischen ist Solidon längst beendet.
+
+    ``flatpak run`` am Ende ist dasselbe Versprechen wie ``/RESTARTAPP=1`` unter
+    Windows: Wer ein Update anstößt, will danach weiterarbeiten und nicht vor
+    einem geschlossenen Programm sitzen.
+
+    **Ein Repo braucht das nicht.** ``flatpak install`` nimmt die Bundle-Datei
+    unmittelbar und aktualisiert damit die vorhandene Installation — genau das
+    Paket, das die Download-Seite ohnehin anbietet.
+
+    Und der Pfad stimmt auf beiden Seiten: Der Zwischenspeicher liegt unter
+    ``$XDG_CACHE_HOME``, und das ist im Flatpak ``~/.var/app/<kennung>/cache``
+    — derselbe Pfad, den der Rechner sieht. Er wird trotzdem gequotet: Er
+    trägt den Dateinamen aus der Versionsdatei, und der kommt von einem Server
+    (``_safe_name`` hat ihn entschärft, aber eine Shell-Zeile baut man nicht
+    auf ein Vertrauen, das eine andere Funktion herstellt).
+    """
+    scope = "--user" if _flatpak_is_user() else "--system"
+    identifier = os.environ.get("FLATPAK_ID") or APP_ID
+    line = (
+        f"flatpak install {scope} --assumeyes {shlex.quote(str(file))}"
+        f" && flatpak run {shlex.quote(identifier)}"
+    )
+    return discover.on_host(["sh", "-c", line])
+
+
+def _install_command(file: Path) -> list[str]:
+    """Der Befehl, der dieses Paket einspielt — je Installationsart ein anderer.
+
+    Hier stand eine Zeile mit einer Verzweigung darin: Windows startete die
+    Datei, alles andere gab sie an ``open``. Das war für macOS richtig und für
+    Linux nie erreichbar, weil dort gar kein Paket angeboten wurde.
+
+    Drei Wege, und jeder ist der, den sein Format vorsieht: Die Setup-Datei
+    nimmt Schalter (:data:`SETUP_ARGUMENTS`), das ``.pkg`` geht an ``open`` und
+    zeigt Apples Installer, das Flatpak-Bundle geht an ``flatpak install``.
+    """
+    kind = install_kind()
+    if kind == KIND_WINDOWS_SETUP:
+        return [str(file), *SETUP_ARGUMENTS]
+    if kind == KIND_FLATPAK:
+        return _flatpak_command(file)
+    # macOS: ``open`` übergibt das Paket dem Installer des Systems, der den
+    # Lizenzvertrag zeigt und den Ort wählen lässt (Entscheidung Robert,
+    # 28.08.2026 — der Weg bleibt, wie er ist).
+    return ["open", str(file)]
+
+
 def start_installer(file: Path) -> None:
-    """Startet das geholte Paket. Danach beendet sich Solidon — nicht hier.
+    """Spielt das geholte Paket ein. Danach beendet sich Solidon — nicht hier.
 
     Getrennt mit Absicht: Was mit dem offenen Dokument geschieht, entscheidet
     das Fenster und nicht der Kern. Diese Funktion startet ein Programm und
@@ -660,7 +857,7 @@ def start_installer(file: Path) -> None:
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
             values={"path": str(file)},
         )
-    command = [str(file)] if sys.platform == "win32" else ["open", str(file)]
+    command = _install_command(file)
     try:
         # Kein Warten auf das Ende: Der Installer läuft weiter, wenn Solidon
         # nicht mehr da ist — darauf zu warten hieße, auf das eigene Ende zu

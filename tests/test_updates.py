@@ -347,10 +347,9 @@ def test_the_platform_decides_which_package_is_meant(monkeypatch: pytest.MonkeyP
     assert updates.platform_key() == updates.PLATFORM_MACOS_INTEL
 
 
-def test_linux_gets_the_hint_and_no_package_to_start(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Flatpak und AppImage lassen sich nicht von innen ersetzen (§37.2)."""
-    monkeypatch.setattr(updates, "packaged", lambda: True)
-    payload = {
+def linux_payload() -> dict[str, Any]:
+    """Eine Versionsdatei, die für Linux das Flatpak-Bundle nennt."""
+    return {
         "version": "99.0.0",
         "packages": {
             updates.PLATFORM_LINUX: {
@@ -362,11 +361,42 @@ def test_linux_gets_the_hint_and_no_package_to_start(monkeypatch: pytest.MonkeyP
         },
     }
 
-    release = updates.check(fetch=answering(payload))
+
+def test_a_flatpak_can_be_replaced_from_inside(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Für Linux wird nur das Flatpak ausgeliefert — es muss der Weg sein.
+
+    **Hier stand das Gegenteil**, und zwar begründet: „Flatpak und AppImage
+    lassen sich nicht von innen ersetzen". Der zweite Halbsatz stimmt weiter,
+    der erste war ein Missverständnis — ``flatpak install`` nimmt ein Bundle
+    unmittelbar. Weil für Linux sonst nichts auf der Download-Seite steht, war
+    Linux damit die einzige Plattform ohne Update aus der Anwendung heraus.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)
+
+    release = updates.check(fetch=answering(linux_payload()))
+
+    assert release is not None
+    assert release.startable(updates.PLATFORM_LINUX) is not None, "das Flatpak wird eingespielt"
+
+
+def test_an_appimage_still_only_gets_the_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein AppImage ersetzt sich nicht selbst — dort bleibt es beim Hinweis.
+
+    Der Unterschied zum Flatpak ist der ganze Grund für
+    :func:`updates.install_kind`: Beide tragen denselben Plattformschlüssel
+    ``linux``, und nur einer der beiden lässt sich einspielen. Wer nach der
+    Plattform fragt, kann die zwei nicht trennen — und bot dem AppImage-Nutzer
+    ein ``flatpak install`` an, das scheitern muss.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_APPIMAGE)
+
+    release = updates.check(fetch=answering(linux_payload()))
 
     assert release is not None
     assert release.package(updates.PLATFORM_LINUX) is not None, "der Hinweis kennt es"
-    assert release.startable(updates.PLATFORM_LINUX) is None, "gestartet wird es nicht"
+    assert release.startable(updates.PLATFORM_LINUX) is None, "eingespielt wird es nicht"
 
 
 def test_running_from_source_offers_no_package(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,6 +409,135 @@ def test_running_from_source_offers_no_package(monkeypatch: pytest.MonkeyPatch) 
     assert release is not None
     assert release.package(updates.PLATFORM_WINDOWS) is not None
     assert release.startable(updates.PLATFORM_WINDOWS) is None
+
+
+# --- Die Installationsart (§37.2) -----------------------------------------------
+
+
+def test_running_from_source_is_no_installation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aus den Quellen gefahren gibt es nichts, was ein Installer ersetzen könnte."""
+    monkeypatch.setattr(updates, "packaged", lambda: False)
+
+    assert updates.install_kind("win32") == updates.KIND_SOURCE
+    assert updates.install_kind("linux") == updates.KIND_SOURCE
+
+
+def test_each_system_names_its_own_way(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Plattform ist ein Parameter, damit jeder Weg überall messbar ist.
+
+    Genau darum geht es in ``.claude/rules/kern.md``: Ein Zweig hinter
+    ``sys.platform`` wird auf der Maschine, auf der entwickelt wird, nie
+    ausgeführt — so sind fünf Stellen entstanden, an denen Linux und macOS
+    weniger konnten als Windows. Dieser Test läuft auf jeder der drei.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.discover, "in_flatpak", lambda: False)
+    monkeypatch.delenv("APPIMAGE", raising=False)
+
+    assert updates.install_kind("win32") == updates.KIND_WINDOWS_SETUP
+    assert updates.install_kind("darwin") == updates.KIND_MACOS_PACKAGE
+    assert updates.install_kind("linux") == updates.KIND_TARBALL
+
+
+def test_linux_tells_its_three_formats_apart(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drei Arten, ein Plattformschlüssel — und nur eine lässt sich einspielen."""
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+
+    monkeypatch.setattr(updates.discover, "in_flatpak", lambda: True)
+    assert updates.install_kind("linux") == updates.KIND_FLATPAK
+
+    monkeypatch.setattr(updates.discover, "in_flatpak", lambda: False)
+    monkeypatch.setenv("APPIMAGE", "/home/wer/Solidon3D-0.2.1-x86_64.AppImage")
+    assert updates.install_kind("linux") == updates.KIND_APPIMAGE
+
+    monkeypatch.delenv("APPIMAGE")
+    assert updates.install_kind("linux") == updates.KIND_TARBALL
+
+
+def test_only_the_two_silent_ways_come_back_by_themselves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Apples Installer startet nach dem Einspielen nichts — der Satz muss anders sein."""
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_WINDOWS_SETUP)
+    assert updates.runs_unattended()
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)
+    assert updates.runs_unattended()
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_MACOS_PACKAGE)
+    assert not updates.runs_unattended()
+
+
+def test_the_setup_runs_without_questions_and_brings_the_window_back() -> None:
+    """Still heißt „ohne Fragen", nicht „ohne Zeichen" — und danach ist es wieder da.
+
+    ``/VERYSILENT`` wäre falsch: Ein Paket von rund 180 MB packt sich aus, und
+    ohne Balken sähe der Nutzer minutenlang nichts. Und ohne ``/RESTARTAPP=1``
+    bliebe er vor einem geschlossenen Programm — der vorhandene
+    ``[Run]``-Eintrag im Inno-Skript trägt ``skipifsilent`` und greift bei einem
+    stillen Lauf gerade nicht.
+    """
+    assert "/SILENT" in updates.SETUP_ARGUMENTS
+    assert "/VERYSILENT" not in updates.SETUP_ARGUMENTS
+    assert "/RESTARTAPP=1" in updates.SETUP_ARGUMENTS
+
+
+def test_the_restart_switch_is_read_by_the_installer_script() -> None:
+    """Der Schalter ist unserer — er wirkt nur, wenn das Inno-Skript ihn liest.
+
+    Ein Anschlusstest (``AGENTS.md``, Testart „Anschluss"): Die Argumentliste
+    allein beweist nichts. Wer sie ändert, ohne ``solidon3d.iss`` nachzuziehen,
+    baut ein Update, nach dem das Fenster wegbleibt — und das fällt erst dem
+    ersten Kunden auf.
+    """
+    script = (Path(__file__).resolve().parent.parent / "packaging" / "solidon3d.iss").read_text(
+        encoding="utf-8"
+    )
+
+    assert "Check: WantsRestart" in script, "der zweite [Run]-Eintrag fehlt"
+    assert "{param:RESTARTAPP|0}" in script, "der Schalter wird nicht gelesen"
+
+
+def test_a_flatpak_is_installed_from_the_bundle_and_started_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Kein Repo, kein Umweg: das Bundle einspielen und zurückkommen.
+
+    Beides muss auf dem **Rechner** laufen, nicht im Sandkasten — der endet
+    gleich darauf. Und es muss eine Kette sein: Der zweite Befehl darf erst
+    laufen, wenn der erste durch ist, und dazwischen ist Solidon beendet.
+    """
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)
+    monkeypatch.setattr(updates.discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(updates, "_flatpak_is_user", lambda: True)
+    monkeypatch.setenv("FLATPAK_ID", "de.rsdigital.solidon3d")
+
+    command = updates._install_command(Path("/home/wer/.cache/Solidon3D/updates/neu.flatpak"))
+
+    assert command[:2] == ["flatpak-spawn", "--host"], "sonst landet es im Sandkasten"
+    line = command[-1]
+    assert "flatpak install --user --assumeyes" in line
+    assert "neu.flatpak" in line
+    assert "&& flatpak run" in line, "ohne das bleibt das Fenster weg"
+
+
+def test_a_system_wide_flatpak_is_not_replaced_by_a_second_one() -> None:
+    """``--user`` auf eine systemweite Installation legt eine zweite daneben.
+
+    Der Nutzer hätte danach zwei Fassungen, von denen die alte weiter startet,
+    und keinen Hinweis darauf, warum das Update nichts geändert hat. Der Ort
+    steht in ``/.flatpak-info`` und wird gelesen, nicht geraten.
+    """
+    systemweit = """[Instance]
+app-path=/var/lib/flatpak/app/x/current"""
+    im_profil = """[Instance]
+app-path=/home/wer/.local/share/flatpak/app/x/current"""
+    ohne_angabe = """[Instance]
+branch=stable"""
+
+    assert not updates._flatpak_is_user(systemweit)
+    assert updates._flatpak_is_user(im_profil)
+    assert updates._flatpak_is_user(ohne_angabe), "ohne Angabe gilt das Profil"
 
 
 # --- Das Holen ------------------------------------------------------------------

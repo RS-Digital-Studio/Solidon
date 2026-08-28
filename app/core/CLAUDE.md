@@ -56,7 +56,9 @@ Teilmenge) · `examples.py` · `tour.py`
 
 **Kundenkontakt — der Weg hinaus:**
 
-`updates.py` (fragen, holen, prüfen — gestartet wird nur auf Klick) ·
+`updates.py` (fragen, holen, prüfen, einspielen — angestoßen wird nur auf
+Klick; **wie** eingespielt wird, entscheidet `install_kind()` und nicht die
+Plattform) ·
 `changes.py` (was neu ist) · `report.py` (Fehlerbericht als Ordner: schreibt,
 sendet nie) · `support.py` (**der einzige Weg hinaus**, an einem Knopf) ·
 `feedback.py`

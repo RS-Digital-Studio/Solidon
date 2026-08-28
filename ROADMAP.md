@@ -140,6 +140,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
+| AppImage und Archiv werden gebaut und nicht ausgeliefert | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | eine **Entscheidung von Robert**, keine Messung: Die CI baut beide, die Download-Seite zeigt nur das Flatpak. Ein AppImage braucht keine Paketverwaltung und ist der kürzeste Weg zum Probieren; das Archiv wäre über `install.sh --accept --prefix` sogar updatefähig. Bleibt es beim Flatpak allein, gehören die zwei Bauschritte aus der CI heraus |
 
 ---
 
@@ -11939,3 +11940,69 @@ Offen:
       Entscheidung, wie weit gegangen wird. Bis dahin wird nichts gebaut: §2.5
       legt das Fensterschema fest, und wer es ändert, ändert Handbuch, Tour und
       jedes Bildschirmfoto mit.
+
+---
+
+## Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026)
+
+Robert hat zwei Dinge zusammen aufgetragen: den Ablauf des Updates glätten, und
+**„mac und linux genauso wie windows, ohne weniger Funktionen"**. Der zweite Satz
+traf eine Lücke, die keiner Plattform anzusehen war.
+
+**Was gemessen war.** Ausgeliefert werden vier Pakete: `Setup-0.2.1.exe`, zwei
+`.pkg` für macOS und `Solidon3D-0.2.1-x86_64.flatpak` (276 MB). Windows und
+macOS standen in der Versionsdatei und ließen sich aus der Anwendung holen —
+Linux nicht. Die Begründung stand als Kommentar an `VERSION_KEYS` und an
+`STARTABLE`: „ein Flatpak will `flatpak update`". Sie war ein Missverständnis mit
+Folgen, denn `flatpak install` nimmt eine **Bundle-Datei unmittelbar** und
+aktualisiert damit eine vorhandene Installation. Ein Repo braucht es dafür nicht,
+und der Weg nach draußen stand mit `discover.on_host` seit dem 27.08. schon.
+
+Dazu die Verhältniszahl, die den zweiten Auftrag begründet: Die Installation
+besteht zu über 95 Prozent aus Fremdbibliotheken (PySide6 643 MB, scipy 116,
+OCP 92, VTK 50, numpy 35 — gegen 5,4 MB eigenen Python-Quelltext). Ein
+Wartungsschritt ändert davon fast nichts, das Paket wird trotzdem ganz geladen.
+
+**Was gebaut ist.**
+
+- `updates.install_kind()` unterscheidet sechs Installationsarten statt drei
+  Plattformen. Der Unterschied trägt: Flatpak, AppImage und ausgepacktes Archiv
+  haben denselben Schlüssel `linux` und drei verschiedene Wege — wer nach der
+  Plattform fragt, kann sie nicht trennen.
+- **Die Plattform ist ein Parameter**, nach `.claude/rules/kern.md`, und dreimal
+  mit `mypy --platform` geprüft. Genau so sind die fünf Stellen entstanden, an
+  denen Linux und macOS weniger konnten als Windows: Ein Zweig hinter
+  `sys.platform` wird auf der Entwicklungsmaschine nie ausgeführt.
+- **Windows läuft still und kommt zurück.** `/SILENT /NORESTART /RESTARTAPP=1`;
+  der letzte Schalter ist unserer, ein zweiter `[Run]`-Eintrag im Inno-Skript
+  liest ihn. Der vorhandene konnte es nicht — er trägt `skipifsilent`. Nicht
+  `/VERYSILENT`: 180 MB packen sich aus, und ohne Balken hielte der Nutzer es
+  für einen Absturz.
+- **Linux spielt das Flatpak ein und kommt zurück** — `flatpak install` plus
+  `flatpak run` als eine Kette auf dem Rechner, weil der Sandkasten gleich
+  danach endet. Der Geltungsbereich wird aus `/.flatpak-info` **gelesen**:
+  `--user` auf eine systemweite Installation legte eine zweite daneben, und die
+  alte startete weiter.
+- **macOS bleibt beim `.pkg`** (Entscheidung Robert, 28.08.2026). Der Installer
+  zeigt Lizenzvertrag und Ort; `runs_unattended()` trennt die beiden Sätze im
+  Dialog, denn „dann startet das Installationsprogramm" über einem stillen Lauf
+  ließe den Nutzer ein zweites Mal klicken.
+- **„Prüfsumme" ist aus den Kundentexten heraus** (Robert, 28.08.2026): Sie
+  interessiert ihn nicht, geprüft *wurde* interessiert ihn. Drei Sätze in sechs
+  Sprachen.
+
+Nebenbei gefunden und behoben: `app/ui/panels.py` machte mypy rot, seit
+`c4bfd361` — eine `None`-Prüfung innerhalb von `range(item.childCount())`, die
+nicht erreichbar ist. Das Tor war damit schon vor dieser Arbeit rot.
+
+Offen:
+
+- [ ] **AppImage und Archiv werden gebaut und nicht ausgeliefert.** Die CI baut
+      beide (`tools/make_linux_packages.py --appimage --tarball`, der Schritt
+      trägt `continue-on-error`), auf der Download-Seite steht nur das Flatpak.
+      Das ist entweder Rechenzeit für nichts oder eine Lücke: Ein AppImage
+      braucht keine Paketverwaltung und ist der kürzeste Weg für jemanden, der
+      Solidon nur probieren will — `install.sh --accept --prefix` wäre für das
+      Archiv sogar updatefähig. **Braucht eine Entscheidung von Robert**, keine
+      Messung: Es ist eine Frage der Auslieferung, nicht der Technik. Bleibt es
+      beim Flatpak allein, gehören die beiden Bauschritte aus der CI heraus.

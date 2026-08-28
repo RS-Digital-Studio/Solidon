@@ -619,11 +619,20 @@ VERSION_FILE = WEBSITE / "version.json"
 
 #: Welcher Paketschlüssel in der Versionsdatei zu welcher Datei gehört.
 #:
-#: **Nur was sich starten lässt, steht dort.** Ein ``.zip`` entpackt sich, ein
-#: AppImage ersetzt sich nicht selbst, ein Flatpak will ``flatpak update`` —
-#: sie alle stehen im Download-Kasten, aber ein Eintrag in der Versionsdatei
-#: heißt für die Anwendung „das kannst du holen und starten". Ein Paket dort,
-#: das beim Doppelklick nichts tut, wäre schlimmer als keines.
+#: **Nur was sich einspielen lässt, steht dort.** Ein ``.zip`` entpackt sich
+#: bloß, ein AppImage ersetzt sich nicht selbst — sie stehen im Download-Kasten,
+#: aber ein Eintrag in der Versionsdatei heißt für die Anwendung „das kannst du
+#: holen und einspielen". Ein Paket dort, das beim Doppelklick nichts tut, wäre
+#: schlimmer als keines.
+#:
+#: **Das Flatpak stand aus demselben Grund lange nicht hier**, und die
+#: Begründung daneben lautete, es wolle ``flatpak update``. Das war ein
+#: Missverständnis mit Folgen: ``flatpak install`` nimmt eine Bundle-Datei
+#: unmittelbar und aktualisiert damit eine vorhandene Installation — ein Repo
+#: braucht es dafür nicht. Und weil für Linux **nur** das Flatpak ausgeliefert
+#: wird, war Linux damit die einzige Plattform ohne Update aus der Anwendung
+#: heraus: ein Hinweis und 276 MB von Hand, während Windows und macOS es
+#: angeboten bekamen. Den Weg nach draußen baut ``updates._flatpak_command``.
 #:
 #: Die Architektur steht nur bei macOS im Schlüssel: Ein für arm64 gebautes
 #: Programm startet auf einem Intel-Mac nicht.
@@ -631,6 +640,7 @@ VERSION_KEYS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("windows", ".exe", ()),
     ("macos-arm64", ".pkg", ("arm64",)),
     ("macos-x86_64", ".pkg", ("x86_64", "x64", "intel")),
+    ("linux", ".flatpak", ()),
 )
 
 

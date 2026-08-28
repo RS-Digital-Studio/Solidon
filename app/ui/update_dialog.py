@@ -216,14 +216,33 @@ class UpdateDialog(QDialog):
         self.state.setText(tr("Wird geladen …"))
 
     def _show_ready(self) -> None:
-        """Geholt und geprüft — und erst jetzt ist von Starten die Rede."""
+        """Geholt und geprüft — und erst jetzt ist von Einspielen die Rede.
+
+        **Zwei Sätze, weil es zwei Abläufe gibt.** Unter Windows und im Flatpak
+        läuft das Einspielen ohne eine einzige Frage durch, und Solidon kommt
+        danach von selbst zurück; auf dem Mac öffnet sich Apples Installer und
+        will durchgeklickt werden. Ein Satz für beides müsste einen der beiden
+        Fälle falsch beschreiben — und wer „dann startet das
+        Installationsprogramm" liest und nichts sieht, hält das Update für
+        gescheitert.
+
+        **„Prüfsumme" stand hier und ist herausgeflogen** (Robert, 28.08.2026):
+        Sie interessiert einen Kunden nicht. Was ihn interessiert, ist, dass
+        geprüft *wurde* — das Verfahren ist unsere Sache, und §37.2 beschreibt
+        es an der Stelle, an der es hingehört.
+        """
         self.progress.setVisible(False)
         self.get_button.setText(tr("Jetzt installieren"))
         self.page_button.setEnabled(True)
         self.later_button.setEnabled(True)
         self.state.setText(
             tr(
-                "Das Paket ist geladen und die Prüfsumme stimmt. "
+                "Das Paket ist geladen und geprüft. "
+                "Solidon wird beendet, spielt das Update ein und startet danach wieder."
+            )
+            if updates.runs_unattended()
+            else tr(
+                "Das Paket ist geladen und geprüft. "
                 "Solidon wird beendet, dann startet das Installationsprogramm."
             )
         )
