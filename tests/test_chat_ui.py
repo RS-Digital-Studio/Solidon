@@ -499,6 +499,32 @@ def test_the_key_dialog_offers_the_local_model_too(
     assert {name for name, _size, _what in llm.OLLAMA_SUGGESTIONS} <= offered
 
 
+def test_the_key_dialog_separates_cloud_and_local_paths(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne KI-Vorwissen sind ein Passwortfeld und ein Modellname keine Wahl.
+
+    Die beiden Wege stehen als benannte Gruppen da; der Cloud-Weg nennt
+    Anbieter, Datengrenze und das Feld selbst, der lokale Weg bleibt davon
+    sichtbar getrennt.
+    """
+    from PySide6.QtWidgets import QGroupBox, QLabel
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    groups = {box.title() for box in dialog.findChildren(QGroupBox)}
+    assert {"Cloud-Modell", "Lokales Modell"} <= groups
+    assert dialog.field.accessibleName() == "API-Schlüssel"
+    cloud = next(box for box in dialog.findChildren(QGroupBox) if box.title() == "Cloud-Modell")
+    text = " ".join(label.text() for label in cloud.findChildren(QLabel))
+    assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
+    assert "nicht übertragen" in text, "und die Datengrenze vor dem Klick"
+
+
 def test_the_key_dialog_remembers_the_model_without_a_key(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -972,3 +972,39 @@ def test_a_second_step_on_an_unwelded_model_stays_quick(profile: Profile) -> Non
         f"{len(loops)} offene Stellen — das ist die Speicherform der Datei, nicht das Modell"
     )
     assert taken < 5.0, "the target is well under a second; five catches the old 102 s"
+
+
+def test_matching_eight_hundred_features_stays_responsive() -> None:
+    """Die Kostenmatrix bleibt auch beim nächsten Merkmalsausreißer bedienbar.
+
+    Das reale Fehlerbild hatte 3 372 Merkmale und brauchte 101 Sekunden. Die
+    Erkennung begrenzt diesen Ausreißer inzwischen, doch die quadratische
+    Zuordnung bleibt das Sicherheitsnetz für neue Merkmalsarten. 800 Merkmale
+    bilden 640 000 Paare: vor der Vektorisierung 6,4 Sekunden auf dieser
+    Maschine, danach deutlich unter einer Sekunde.
+    """
+    from app.core.perceive.matching import match
+    from app.core.types import Feature
+
+    old: dict[str, Feature] = {}
+    new: dict[str, Feature] = {}
+    for index in range(800):
+        centre = (float(index % 40) * 2.0, float(index // 40) * 2.0, 0.0)
+        params = {
+            "centre": centre,
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 5.0 + (index % 3) * 0.01,
+        }
+        old_id = f"old_{index}"
+        new_id = f"new_{index}"
+        old[old_id] = Feature(id=old_id, kind="hole", provenance="detected", params=params)
+        new[new_id] = Feature(id=new_id, kind="hole", provenance="detected", params=params)
+
+    result: list[Any] = []
+    taken = measure(
+        "match_800",
+        lambda: result.append(match(old, new, (40.0, 20.0, 0.0), 100.0)),
+    )
+
+    assert len(result[0].mapping) == 800, "a fast wrong assignment proves nothing"
+    assert taken < 3.0, "the previous Python loops took 6.4 seconds here"

@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -733,6 +734,7 @@ class KeyDialog(QDialog):
         self.field = QLineEdit(self)
         self.field.setEchoMode(QLineEdit.EchoMode.Password)
         self.field.setPlaceholderText(tr("Schlüssel einfügen"))
+        self.field.setAccessibleName(tr("API-Schlüssel"))
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
@@ -746,7 +748,7 @@ class KeyDialog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.explanation)
-        layout.addWidget(self.field)
+        layout.addWidget(self._cloud_model_section())
         layout.addWidget(self._local_model_section())
         layout.addWidget(buttons)
 
@@ -816,6 +818,30 @@ class KeyDialog(QDialog):
         self.wait_for_look()
         super().reject()
 
+    def _cloud_model_section(self) -> QWidget:
+        """Der gehostete Weg, klar vom lokalen Modell getrennt.
+
+        Das bloße Passwortfeld über dem Ollama-Abschnitt verlangte Vorwissen:
+        Wessen Schlüssel gehört dort hinein, und was verlässt damit den
+        Rechner? Beides steht jetzt am Feld, bevor jemand einen Dienst wählt.
+        """
+        section = QGroupBox(tr("Cloud-Modell"), self)
+        provider = QLabel(tr("Anthropic"), section)
+        note = QLabel(
+            tr(
+                "Mit diesem Weg gehen Chat-Anfragen an Anthropic. Geometrie und "
+                "Projektdateien werden nicht übertragen."
+            ),
+            section,
+        )
+        note.setWordWrap(True)
+
+        form = QFormLayout(section)
+        form.addRow(tr("Anbieter"), provider)
+        form.addRow(tr("API-Schlüssel"), self.field)
+        form.addRow(note)
+        return section
+
     def _local_model_section(self) -> QWidget:
         """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels.
 
@@ -827,7 +853,7 @@ class KeyDialog(QDialog):
         einem Fenster sitzt. Jetzt steht an jedem der drei Schritte der Knopf,
         der ihn tut.
         """
-        section = QWidget(self)
+        section = QGroupBox(tr("Lokales Modell"), self)
         note = QLabel(
             tr(
                 "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es "

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import trimesh
 
 from app.core.bootstrap import load_operations
@@ -15,6 +16,7 @@ from app.core.ingest.loader import normalise
 from app.core.knowledge import standards
 from app.core.perceive.features import detect_holes
 from app.core.perceive.matching import (
+    _cost_matrix,
     apply_mapping,
     cost,
     match,
@@ -56,6 +58,82 @@ def socket_plate(thickness: float = 15.0) -> MeshData:
     ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
     ball.apply_translation((0.0, 0.0, thickness / 2.0))
     return MeshData.of(trimesh.boolean.difference([block, ball]))
+
+
+def test_the_vectorised_matrix_is_the_single_pair_formula() -> None:
+    """Die schnelle Rechnung darf keine neue Zuordnungsregel erfinden.
+
+    Gemischt werden richtungslose Achsen, gerichtete Normalen, verschiedene
+    Arten und die beiden Größenschlüssel. Damit steht jede Verzweigung von
+    ``cost`` mindestens einmal in der Matrix und wird elementweise gegen die
+    lesbare Einzelpaar-Referenz geprüft.
+    """
+    old = [
+        Feature(
+            id="hole_old",
+            kind="hole",
+            provenance="detected",
+            params={
+                "centre": (1.0, 2.0, 3.0),
+                "axis": (0.0, 0.0, 1.0),
+                "diameter": 5.2,
+            },
+        ),
+        Feature(
+            id="face_old",
+            kind="face",
+            provenance="detected",
+            params={
+                "centre": (-4.0, 1.5, 8.0),
+                "normal": (0.0, 1.0, 0.0),
+                "area": 120.0,
+            },
+        ),
+        Feature(
+            id="sphere_old",
+            kind="sphere",
+            provenance="detected",
+            params={"centre": (3.0, -2.0, 4.0), "diameter": 16.0},
+        ),
+    ]
+    new = [
+        Feature(
+            id="hole_new",
+            kind="hole",
+            provenance="detected",
+            params={
+                "centre": (11.1, -2.0, 5.0),
+                "axis": (0.0, 0.0, -1.0),
+                "diameter": 5.4,
+            },
+        ),
+        Feature(
+            id="face_new",
+            kind="face",
+            provenance="detected",
+            params={
+                "centre": (5.0, -2.5, 10.0),
+                "normal": (0.0, -1.0, 0.0),
+                "area": 118.0,
+            },
+        ),
+        Feature(
+            id="sphere_new",
+            kind="sphere",
+            provenance="detected",
+            params={"centre": (13.0, -6.0, 6.0), "diameter": 15.8},
+        ),
+    ]
+    before = (0.0, 0.0, 0.0)
+    after = (10.0, -4.0, 2.0)
+    diagonal = 80.0
+
+    matrix = _cost_matrix(old, new, before, after, diagonal)
+    reference = np.asarray(
+        [[cost(first, second, before, after, diagonal) for second in new] for first in old]
+    )
+
+    np.testing.assert_allclose(matrix, reference, rtol=1e-12, atol=1e-12)
 
 
 def test_the_matching_needs_no_entry_for_a_new_kind_of_feature() -> None:

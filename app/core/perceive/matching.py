@@ -65,6 +65,15 @@ MATCH_THRESHOLD = 1.0
 #: kann.
 KIND_PENALTY = 1e6
 
+#: Wie viele alte Merkmale gleichzeitig gegen alle neuen gerechnet werden.
+#:
+#: Die volle Kostenmatrix muss für die ungarische Zuordnung ohnehin im
+#: Speicher liegen. Die drei Koordinaten je Paar dagegen nicht: Bei 3 372
+#: Merkmalen wäre allein ein solcher Zwischenwert rund 273 MB groß. Blöcke
+#: halten die Rechnung vektorisiert, ohne den Arbeitsspeicher mit mehreren
+#: dreidimensionalen Matrizen zu belegen.
+VECTOR_ROWS = 256
+
 
 @dataclass(slots=True)
 class MatchResult:
@@ -129,6 +138,73 @@ def cost(
     return float(position + axis + diameter)
 
 
+def _cost_matrix(
+    first: list[Feature],
+    second: list[Feature],
+    first_centre: Vec3,
+    second_centre: Vec3,
+    diagonal: float,
+) -> np.ndarray:
+    """Alle Paarkosten auf einmal, mit :func:`cost` als Einzelpaar-Referenz.
+
+    Der frühere Aufbau rief ``cost`` in zwei Python-Schleifen auf. Bei 3 372
+    Merkmalen waren das 11,4 Millionen Aufrufe und rund 101 Sekunden, bevor
+    die eigentliche Zuordnung überhaupt begann. Hier bleibt dieselbe Formel;
+    NumPy rechnet nur ihre unabhängigen Paare blockweise in kompiliertem Code.
+
+    Blockweise ist für die Speichergrenze ebenso wichtig wie die
+    Vektorisierung für die Zeit: Die Ergebnis-Matrix ist quadratisch und
+    unvermeidlich, ihre dreidimensionalen Zwischenwerte sind es nicht.
+    """
+    first_vectors = np.vstack(
+        [feature_vector(feature, first_centre, diagonal) for feature in first]
+    )
+    second_vectors = np.vstack(
+        [feature_vector(feature, second_centre, diagonal) for feature in second]
+    )
+    second_kinds = np.asarray([feature.kind for feature in second], dtype=object)
+    matrix = np.empty((len(first), len(second)), dtype=float)
+
+    for start in range(0, len(first), VECTOR_ROWS):
+        stop = min(start + VECTOR_ROWS, len(first))
+        one = first_vectors[start:stop]
+
+        position_delta = one[:, None, :3] - second_vectors[None, :, :3]
+        block = np.linalg.norm(position_delta, axis=2)
+        del position_delta
+        block /= POSITION_TOLERANCE
+
+        axis_delta = one[:, None, 3:6] - second_vectors[None, :, 3:6]
+        axis_cost = np.linalg.norm(axis_delta, axis=2)
+        del axis_delta
+        signless = np.fromiter(
+            ("axis" in feature.params for feature in first[start:stop]),
+            dtype=bool,
+            count=stop - start,
+        )
+        if np.any(signless):
+            opposite_delta = one[signless, None, 3:6] + second_vectors[None, :, 3:6]
+            opposite = np.linalg.norm(opposite_delta, axis=2)
+            del opposite_delta
+            axis_cost[signless] = np.minimum(axis_cost[signless], opposite)
+        block += axis_cost / AXIS_TOLERANCE
+        del axis_cost
+
+        first_size = one[:, None, 6]
+        second_size = second_vectors[None, :, 6]
+        scale = np.maximum(np.abs(first_size), np.abs(second_size))
+        np.maximum(scale, EPS_GEOM, out=scale)
+        size_cost = np.abs(first_size - second_size)
+        size_cost /= scale
+        block += size_cost / DIAMETER_TOLERANCE
+
+        first_kinds = np.asarray([feature.kind for feature in first[start:stop]], dtype=object)
+        block[first_kinds[:, None] != second_kinds[None, :]] = KIND_PENALTY
+        matrix[start:stop] = block
+
+    return matrix
+
+
 def match(
     old: dict[FeatureId, Feature],
     new: dict[FeatureId, Feature],
@@ -149,9 +225,12 @@ def match(
     before = old_centre if old_centre is not None else centre
     old_ids = list(old)
     new_ids = list(new)
-    matrix = np.array(
-        [[cost(old[a], new[b], before, centre, diagonal) for b in new_ids] for a in old_ids],
-        dtype=float,
+    matrix = _cost_matrix(
+        [old[identifier] for identifier in old_ids],
+        [new[identifier] for identifier in new_ids],
+        before,
+        centre,
+        diagonal,
     )
     threshold = MATCH_THRESHOLD
     # **Was ohnehin abgelehnt würde, kostet so viel wie eine falsche Art.**
@@ -174,7 +253,16 @@ def match(
     result = MatchResult()
     taken: set[str] = set()
 
-    for row, column in zip(rows, columns, strict=True):
+    # Der zweite quadratische Python-Lauf war die Rivalensuche: Für jedes
+    # zugeordnete Merkmal wurde die ganze Zeile Element für Element gelesen.
+    # Die Vergleiche entstehen gemeinsam; Python sieht danach nur noch die
+    # wenigen Kennungen, die tatsächlich Rivalen sind.
+    best_costs = matrix[rows, columns]
+    limits = best_costs * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+    rival_masks = matrix[rows] <= limits[:, None]
+    rival_masks[np.arange(len(rows)), columns] = False
+
+    for assigned, (row, column) in enumerate(zip(rows, columns, strict=True)):
         old_id = old_ids[row]
         best = float(matrix[row, column])
         if best > threshold:
@@ -188,12 +276,7 @@ def match(
         # Tasche und Bohrung übereinander machte jede Auswertung des Gehäuses
         # zur Rückfrage. Der Boden hält den Fall offen, dass zwei Kandidaten
         # beide fast nichts kosten und wirklich nicht zu unterscheiden sind.
-        limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
-        rivals = [
-            new_ids[other]
-            for other in range(len(new_ids))
-            if other != column and float(matrix[row, other]) <= limit
-        ]
+        rivals = [new_ids[other] for other in np.flatnonzero(rival_masks[assigned])]
         if rivals:
             # §21.3: mehrere dichte Kandidaten — anhalten und fragen statt raten.
             result.ambiguous[old_id] = (new_ids[column], *rivals)

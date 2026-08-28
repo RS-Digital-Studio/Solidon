@@ -30,10 +30,17 @@ def ok(dialog: GenerateDialog):
     return dialog.buttons.button(QDialogButtonBox.StandardButton.Ok)
 
 
+def wait_for_readiness(dialog: GenerateDialog, qt_app: QApplication) -> None:
+    """Die äußere Generatorfrage beantworten lassen und ihr Signal zustellen."""
+    assert dialog.wait_for_readiness(5000)
+    qt_app.processEvents()
+
+
 def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
     """Den Arbeiter zu Ende laufen lassen, ohne den Oberflächen-Thread zu
     blockieren.
     """
+    wait_for_readiness(dialog, qt_app)
     dialog._start()
     worker = dialog._worker
     assert worker is not None
@@ -74,6 +81,7 @@ def test_without_a_generator_the_dialog_explains_itself(qt_app: QApplication) ->
     Menüeintrag.
     """
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("eine Figur")
 
     assert not dialog.available
@@ -103,6 +111,7 @@ def test_the_missing_generator_comes_with_the_way_to_one(qt_app: QApplication) -
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
     try:
         dialog.show()
+        wait_for_readiness(dialog, qt_app)
         qt_app.processEvents()
 
         assert dialog.setup.isVisibleTo(dialog), "ohne Generator steht der Weg dorthin da"
@@ -118,6 +127,7 @@ def test_the_missing_generator_comes_with_the_way_to_one(qt_app: QApplication) -
     ready = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
     try:
         ready.show()
+        wait_for_readiness(ready, qt_app)
         qt_app.processEvents()
         assert not ready.setup.isVisibleTo(ready), "wo nichts fehlt, steht auch kein Weg"
     finally:
@@ -183,6 +193,7 @@ def test_typing_does_not_ask_the_generator_again(qt_app: QApplication) -> None:
     """
     backend = CountingBackend()
     dialog = GenerateDialog(backend=backend)
+    wait_for_readiness(dialog, qt_app)
     after_build = backend.asked
     assert after_build == 1, "einmal beim Aufgehen, das ist der Anlass"
 
@@ -192,13 +203,51 @@ def test_typing_does_not_ask_the_generator_again(qt_app: QApplication) -> None:
     assert backend.asked == after_build, "und danach kein weiteres Mal"
 
     dialog.recheck()
+    wait_for_readiness(dialog, qt_app)
     assert backend.asked == after_build + 1, "wer nachsieht, sieht wirklich nach"
+
+
+def test_a_slow_generator_check_does_not_hold_the_dialog_closed(qt_app: QApplication) -> None:
+    """§2.8: Ein äußerer Dienst darf das erste sichtbare Fenster nicht aufhalten.
+
+    ComfyUI kann auf einem zweiten Rechner oder hinter einem Reverse-Proxy
+    liegen. Dann ist die Bereitschaftsfrage nicht mehr die 88-ms-Messung vom
+    lokalen Dienst, sondern mehrere Zeitlimits. Der Dialog erscheint trotzdem
+    und sagt bis zur Antwort ehrlich, dass er nachsieht.
+    """
+
+    class SlowBackend(CountingBackend):
+        def __init__(self) -> None:
+            super().__init__(available=True)
+            self.entered = threading.Event()
+            self.release = threading.Event()
+
+        @property
+        def available(self) -> bool:
+            self.asked += 1
+            self.entered.set()
+            self.release.wait(5.0)
+            return True
+
+    backend = SlowBackend()
+    started = time.perf_counter()
+    dialog = GenerateDialog(backend=backend)
+    built_in = time.perf_counter() - started
+
+    assert built_in < 0.2, "die Netzfrage gehört nicht in den Konstruktor"
+    assert "geprüft" in dialog.state.text(), "kein erfundener Zustand vor der Antwort"
+    assert backend.entered.wait(2.0), "der Hintergrundlauf fragt wirklich nach"
+
+    backend.release.set()
+    wait_for_readiness(dialog, qt_app)
+    assert dialog.available
 
 
 def test_the_button_waits_for_something_to_generate_from(
     qt_app: QApplication, generator: ScriptedMeshBackend
 ) -> None:
     dialog = GenerateDialog(backend=generator)
+    wait_for_readiness(dialog, qt_app)
 
     assert not ok(dialog).isEnabled(), "nothing said yet"
     dialog.prompt.setText("eine kleine Figur")
@@ -284,6 +333,7 @@ def test_a_failure_says_why_and_what_helps(qt_app: QApplication) -> None:
     from app.core.errors import CANCEL, INSTALL_MISSING
 
     dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    wait_for_readiness(dialog, qt_app)
     dialog._on_failed(
         GenerationFailed(
             title="Die Mesh-Erzeugung konnte nicht starten.",
@@ -338,6 +388,7 @@ def test_the_way_out_stays_open_while_it_runs(
     daneben grau dasteht (§2.8).
     """
     dialog = GenerateDialog(backend=generator)
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("eine kleine Figur")
     dialog._running(True)
 
@@ -446,6 +497,7 @@ def test_the_dialog_names_the_middle_state_before_the_run(
             return mesh.Readiness.NO_NODES
 
     dialog = GenerateDialog(backend=Halb())
+    wait_for_readiness(dialog, qt_app)
 
     assert dialog.readiness is mesh.Readiness.NO_NODES
     assert not dialog.available, "bereit ist es damit nicht"
@@ -475,6 +527,7 @@ def test_the_button_leads_where_the_state_says(
         (mesh.Readiness.NO_NODES, "nodes"),
     ):
         dialog = GenerateDialog(backend=Lage(state))
+        wait_for_readiness(dialog, qt_app)
         asked: list[str] = []
         # Die Liste wird ausdrücklich gebunden: ein Lambda, das sie aus dem
         # Schleifenkörper aufliest, zeigt beim zweiten Durchgang noch auf die
@@ -505,6 +558,7 @@ def test_an_unknown_answer_does_not_lock_the_button(
             return mesh.Readiness.UNKNOWN
 
     dialog = GenerateDialog(backend=Fremd())
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("ein Halter")
 
     assert dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled()
@@ -530,6 +584,7 @@ def test_an_unexpected_error_does_not_leave_the_generator_waiting(
             raise KeyError("outputs")
 
     dialog = GenerateDialog(backend=Bricht())
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("ein Halter")
     dialog._start()
     for _ in range(200):
@@ -578,6 +633,7 @@ def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication)
     from app.ui.generate_dialog import GenerateDialog
 
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    wait_for_readiness(dialog, qt_app)
 
     assert dialog._workflow() == "text_to_mesh", "ohne Bild ist es der Textweg"
     dialog._image = b"ein Bild"
@@ -595,6 +651,7 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     from app.ui.generate_dialog import GenerateDialog
 
     dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    wait_for_readiness(dialog, qt_app)
     dialog._readiness = mesh.Readiness.NO_MODEL
     dialog._update_state()
 
@@ -661,6 +718,7 @@ def test_cancelling_stops_the_worker_instead_of_leaving_it_polling(qt_app: QAppl
     """
     backend = WaitingBackend()
     dialog = GenerateDialog(backend=backend)
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("eine Figur")
 
     crashes: list[str] = []
@@ -691,6 +749,7 @@ def test_letting_the_dialog_go_stops_the_worker_too(qt_app: QApplication) -> Non
     """
     backend = WaitingBackend()
     dialog = GenerateDialog(backend=backend)
+    wait_for_readiness(dialog, qt_app)
     dialog.prompt.setText("eine Figur")
     dialog._start()
     worker = dialog._worker

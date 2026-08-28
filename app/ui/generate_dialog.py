@@ -150,6 +150,26 @@ class _Worker(Worker):
         self.step.emit(fraction, text)
 
 
+class _ReadinessWorker(Worker):
+    """Fragt den Generator ab, ohne das Öffnen des Dialogs aufzuhalten.
+
+    Ein lokales ComfyUI antwortet meist schnell. Eine eingetragene Adresse auf
+    einem zweiten Rechner, ein Reverse-Proxy oder ein belegter Port kann aber
+    mehrere Zeitlimits kosten. Das ist äußere Arbeit und gehört darum ebenso
+    wenig in den Oberflächen-Thread wie die Erzeugung selbst (§2.8).
+    """
+
+    done = Signal(str, object)
+
+    def __init__(self, backend: MeshBackend, workflow: str) -> None:
+        super().__init__()
+        self._backend = backend
+        self._workflow = workflow
+
+    def work(self) -> None:
+        self.done.emit(self._workflow, _look(self._backend, self._workflow))
+
+
 def _look(backend: MeshBackend, workflow: str = "image_to_mesh") -> mesh.Readiness:
     """Wie weit dieser Generator ist — auch wenn er die Frage nicht kennt.
 
@@ -201,26 +221,11 @@ class GenerateDialog(QDialog):
         # noch nicht gesetztes Feld — und ein Konstruktor, der auf halbem Weg
         # abbricht, hinterlässt ein Fenster ohne Arbeiterfeld.
         self._image: bytes | None = None
-        self._readiness = _look(self.backend, self._workflow())
-        """Ob ein Generator läuft — **einmal** gefragt und gemerkt.
-
-        ``ComfyBackend.available`` öffnet einen Socket mit einem Zeitlimit von
-        einer Viertelsekunde. Gefragt wurde es aus ``_update_state``, und das
-        hängt an ``textChanged``: Gemessen kostete jeder Tastendruck **510 ms**
-        im Qt-Hauptthread — „Halter" zu tippen hieß drei Sekunden stehendes
-        Fenster (§2.8). Neu gefragt wird, wenn es einen Anlass gibt, und der
-        ist nicht der nächste Buchstabe: beim Aufgehen, nach einem Besuch bei
-        den zusätzlichen Programmen (:meth:`recheck`) und beim Wählen eines
-        Bildes — das wechselt den Ablauf, und die beiden brauchen nicht
-        dasselbe.
-
-        Die Frage kostet mehr als früher, und das ist gemessen: Sie prüft
-        seither jeden Knoten des Ablaufs und dazu die Modelle, also bis zu
-        vierzehn Anfragen statt einer — zusammen **88 ms** gegen ein ComfyUI auf
-        dieser Maschine. Einmal beim Aufgehen ist das vertretbar; wer die Zahl
-        der Anfragen weiter erhöht oder sie an ein Ereignis hängt, das öfter
-        kommt, misst nach und schiebt sie in einen Arbeiter (§38).
-        """
+        self._readiness: mesh.Readiness | None = None
+        """Die letzte Antwort — ``None`` heißt, dass gerade nachgesehen wird."""
+        self._readiness_worker: _ReadinessWorker | None = None
+        self._readiness_pending = False
+        """Der Ablauf wechselte, während die vorige Frage noch lief."""
         self.result_mesh: GeneratedMesh | None = None
         self._busy = False
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
@@ -327,6 +332,7 @@ class GenerateDialog(QDialog):
 
         self.prompt.textChanged.connect(self._update_state)
         self._update_state()
+        self.recheck()
 
     # --- state ------------------------------------------------------------------
 
@@ -335,8 +341,8 @@ class GenerateDialog(QDialog):
         return self._readiness is mesh.Readiness.READY
 
     @property
-    def readiness(self) -> mesh.Readiness:
-        """Wie weit der Generator vorbereitet ist — vier Lagen, vier Sätze."""
+    def readiness(self) -> mesh.Readiness | None:
+        """Wie weit der Generator vorbereitet ist — oder ob die Antwort läuft."""
         return self._readiness
 
     def _workflow(self) -> str:
@@ -355,8 +361,49 @@ class GenerateDialog(QDialog):
         Einrichtung: Wer ComfyUI gerade gestartet hat, soll nicht den Dialog
         schließen und neu öffnen müssen, um es zu erfahren.
         """
-        self._readiness = _look(self.backend, self._workflow())
+        self._readiness = None
         self._update_state()
+        worker = self._readiness_worker
+        if worker is not None and worker.isRunning():
+            self._readiness_pending = True
+            return
+
+        workflow = self._workflow()
+        worker = _ReadinessWorker(self.backend, workflow)
+        worker.done.connect(self._readiness_done)
+        worker.crashed.connect(self._readiness_crashed)
+        worker.finished.connect(lambda done=worker: self._readiness_finished(done))
+        self._readiness_worker = worker
+        self._leash.start(worker)
+
+    def _readiness_done(self, workflow: str, found: object) -> None:
+        """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""
+        if workflow != self._workflow():
+            self._readiness_pending = True
+            return
+        assert isinstance(found, mesh.Readiness)
+        self._readiness = found
+        self._update_state()
+
+    def _readiness_crashed(self, detail: str) -> None:
+        """Eine unerwartete Antwort beendet den Wartezustand und lässt einen Versuch zu."""
+        _log.warning("generator readiness crashed: %s", detail)
+        self._readiness = mesh.Readiness.UNKNOWN
+        self._update_state()
+        self.state.setText(f"{UNEXPECTED_CRASH!s} {detail}")
+
+    def _readiness_finished(self, worker: object) -> None:
+        if self._readiness_worker is worker:
+            self._readiness_worker = None
+        self._leash.hold_until_done(worker)
+        if self._readiness_pending:
+            self._readiness_pending = False
+            self.recheck()
+
+    def wait_for_readiness(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> bool:
+        """Auf die äußere Erhebung warten — für Tests und geordnetes Schließen."""
+        worker = self._readiness_worker
+        return worker.wait(timeout_ms) if worker is not None else True
 
     def _ask_for_setup(self) -> None:
         """Der Knopf führt dorthin, wo die Lage zu beheben ist."""
@@ -372,7 +419,10 @@ class GenerateDialog(QDialog):
         # gestartet hatte, ohne sie einzurichten, tippte seinen Satz, drückte
         # *Erzeugen*, wartete, und erfuhr es danach. Die Auskunft war die ganze
         # Zeit einen HTTP-Aufruf entfernt.
-        if self._readiness is mesh.Readiness.ABSENT:
+        if self._readiness is None:
+            self.state.setText(tr("Generator wird geprüft …"))
+            self.setup.setText(tr("Zusätzliche Programme …"))
+        elif self._readiness is mesh.Readiness.ABSENT:
             self.state.setText(
                 tr(
                     "Es läuft kein Generator. Solidon spricht lokal mit ComfyUI — "
@@ -422,7 +472,7 @@ class GenerateDialog(QDialog):
         # Knopfleiste hatte das verdeckt, nicht verhindert.
         # ``UNKNOWN`` darf starten: Dort antwortet etwas, das wir nicht
         # kennen, und ein gesperrter Knopf wäre eine Behauptung darüber.
-        possible = self._readiness is not mesh.Readiness.ABSENT
+        possible = self._readiness is not None and self._readiness is not mesh.Readiness.ABSENT
         ready = possible and not self._busy and bool(self.prompt.text().strip() or self._image)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
 
@@ -648,4 +698,7 @@ class GenerateDialog(QDialog):
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.wait(timeout_ms)
+        readiness_worker = self._readiness_worker
+        if readiness_worker is not None and readiness_worker.isRunning():
+            readiness_worker.wait(timeout_ms)
         self._leash.wait_all()
