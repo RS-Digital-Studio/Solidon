@@ -390,8 +390,8 @@ def test_a_mesh_body_is_turned_away_with_a_sentence(profile: Profile) -> None:
         run("fillet_edges", entry, profile, radius=1.0, edges="all")
 
     error = problem.value
-    assert "exakten Körper" in str(error.title)
-    assert error.detail is not None and "Netz" in str(error.detail)
+    assert "bearbeitbare Flächen und Kanten" in str(error.title)
+    assert error.detail is not None and "festen Dreiecken" in str(error.detail)
     assert error.object_id == "obj_1", "der Fehler nennt den Körper, den er meint"
     assert error.suggestions, "Regel 17: nie ohne Handlungsvorschlag"
 

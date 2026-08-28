@@ -52,7 +52,7 @@ from app.core.errors import (
     AppError,
 )
 from app.core.log import get_logger
-from app.core.registry import REGISTRY
+from app.core.registry import MENU_TWINS, REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
@@ -1122,7 +1122,11 @@ class ObjectTree(QWidget):
         # hinter „z".
         return tuple(
             sorted(
-                (spec for spec in REGISTRY.all() if spec.consumes == 1),
+                (
+                    spec
+                    for spec in REGISTRY.all()
+                    if spec.consumes == 1 and spec.name not in MENU_TWINS
+                ),
                 key=lambda spec: sort_key(spec.title),
             )
         )

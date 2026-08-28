@@ -3173,9 +3173,19 @@ def test_the_context_menu_greys_out_what_this_body_cannot_do(window: MainWindow)
         action = actions.get(str(spec.title))
         assert action is not None, f"{spec.name} fehlt im Menü — ausgegraut, nicht verschwunden"
         assert not action.isEnabled(), f"{spec.name} steht am Netz-Körper anklickbar da"
-        assert "exakten Körper" in action.toolTip(), (
+        assert "bearbeitbare Flächen und Kanten" in action.toolTip(), (
             f"{spec.name} sagt nicht, was ihm fehlt: {action.toolTip()!r}"
         )
+
+    visible_labels = [
+        action.text()
+        for entry in menu.actions()
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+        if not action.isSeparator()
+    ]
+    assert len(visible_labels) == len(set(visible_labels)), (
+        "zusammengelegte Rechenwege stehen als doppelte Handlung im Kontextmenü"
+    )
 
     # Und was auf einem Netz kann, bleibt bedienbar — sonst wäre die Prüfung
     # eine Sperre und keine Auskunft.
@@ -3221,7 +3231,7 @@ def test_the_context_menu_actually_shows_the_reason_it_wrote(window: MainWindow)
         action
         for entry in menu.actions()
         for action in (entry.menu().actions() if entry.menu() else [entry])
-        if not action.isEnabled() and "exakten Körper" in action.toolTip()
+        if not action.isEnabled() and "bearbeitbare Flächen und Kanten" in action.toolTip()
     ]
     assert locked, "kein gesperrter Eintrag mit Grund — dann sagt der Test nichts"
     menu.deleteLater()
