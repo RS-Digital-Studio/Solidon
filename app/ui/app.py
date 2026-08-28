@@ -167,8 +167,17 @@ def build_application(
         if progress is not None:
             progress(text, done)
 
-    enable_hidpi()
+    # Nur, solange es noch keine Anwendung gibt: Qt nimmt die Richtlinie nach
+    # dem Erzeugen der ``QGuiApplication`` nicht mehr an und schreibt statt
+    # dessen eine Warnung auf die Fehlerausgabe. Über ``main()`` ist sie an
+    # dieser Stelle längst gesetzt — dort läuft ``enable_hidpi`` vor dem
+    # Erzeugen —, und die Warnung stand deshalb in jedem Start und in jedem
+    # Fehlerbericht aus dem Feld, wo sie vom eigentlichen Inhalt ablenkt.
+    # Der Aufruf bleibt trotzdem: ``build_application`` wird auch ohne
+    # ``main`` benutzt, und dann ist er der einzige.
     existing = QApplication.instance()
+    if existing is None:
+        enable_hidpi()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     application.setApplicationName(APP_NAME)
     application.setApplicationVersion(APP_VERSION)
