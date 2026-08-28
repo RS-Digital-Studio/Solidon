@@ -166,7 +166,7 @@ _HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     _(
         "Behält einzeln bearbeitbare Flächen und Kanten, damit Fasen, "
         "Verrundungen, Formschrägen und der STEP-Export danach möglich bleiben. "
-        "Dafür entfallen „Oberseite öffnen“ und Entlüftungen; hier wird nur die "
+        "Dafür entfallen „Oben öffnen“ und Entlüftungen; hier wird nur die "
         "Wandstärke eingestellt. Die Option ist gesperrt, wenn der gewählte "
         "Körper bereits nur noch aus festen Dreiecken besteht."
     ),
