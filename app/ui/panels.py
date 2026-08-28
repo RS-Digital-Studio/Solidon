@@ -525,8 +525,6 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
     """
     for index in range(item.childCount()):
         child = item.child(index)
-        if child is None:
-            continue
         if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
             return child
         deeper = _feature_item(child, feature_id)
