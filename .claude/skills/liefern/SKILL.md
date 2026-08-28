@@ -80,6 +80,30 @@ letzter Schritt jedes privaten Commits:
 git reset            # ohne --hard: nur der Index, keine Datei
 ```
 
+**Und danach wird nachgesehen, nicht angenommen.** Der Satz oben — „ab dem
+nächsten Commit wieder" — ist am 28.08.2026 schärfer geworden, als zwei
+Sitzungen ihn unabhängig voneinander erlebten: Er altert nicht erst durch die
+*fremden* Commits, sondern durch die **eigenen**, und zwar sofort. Eine Sitzung
+legte zwei private Commits hintereinander und fand hinterher 14 Dateien mit
+**548 Löschungen** gegenüber `HEAD` im gemeinsamen Index — eine Rücknahme genau
+der Arbeit, die eine Minute zuvor gelandet war. Die andere Sitzung hatte
+dieselbe Lage nach ihrem einen Commit und warnte; ohne diese Warnung hätte
+niemand hingesehen.
+
+Das sichtbare Zeichen ist `MM` in `git status --short`: Der Index unterscheidet
+sich von `HEAD` **und** der Arbeitsbaum vom Index. Die Kontrolle ist eine Zeile,
+und sie muss nichts ausgeben:
+
+```
+git diff --cached --stat
+```
+
+Bleibt sie leer, ist der Index auf `HEAD`. Kommt etwas, ist noch nicht
+aufgeräumt — dann `git reset` (oder `git add` auf die eigenen Pfade, wenn der
+Arbeitsbaum bereits dem Commit entspricht) und **erneut** nachsehen. Sich auf
+den Vollzug zu verlassen ist hier besonders teuer: Der `post-commit`-Hook pusht,
+und ein Revert von 548 Zeilen ist auf den anderen Maschinen in derselben Minute.
+
 **Und der private Index muss auf `HEAD` stehen, nicht auf einem gemerkten
 Stand.** Am 23.08.2026 schrieb ein Commit sechs fremde Dateien zurück — einen
 doc-Satz und fünf Sprachkataloge, die eine andere Sitzung zwanzig Minuten

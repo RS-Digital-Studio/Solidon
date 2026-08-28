@@ -141,6 +141,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
 | AppImage und Archiv werden gebaut und nicht ausgeliefert | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | eine **Entscheidung von Robert**, keine Messung: Die CI baut beide, die Download-Seite zeigt nur das Flatpak. Ein AppImage braucht keine Paketverwaltung und ist der kürzeste Weg zum Probieren; das Archiv wäre über `install.sh --accept --prefix` sogar updatefähig. Bleibt es beim Flatpak allein, gehören die zwei Bauschritte aus der CI heraus |
+| `SALE_FROM` fehlt — die Verkaufsversion sperrt am 01.11. jeden Demo-Nutzer aus | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | nichts mehr — die Entscheidung ist gefallen (Robert, 28.08.: die 14 Tage laufen, ohne Umgehungsmöglichkeit), die Messung steht (0 von 14 Tagen, in einem isolierten Profil und von formwerk-af am Code bestätigt) und der Weg ist durchgerechnet. Es fehlt die Umsetzung: eine Konstante, ein einmaliges Anheben von `first_run`, ein fünfter Uhr-Deckel in `kern.md`, Tests in beide Richtungen |
+| Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet“ | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | die Ursache. Der Fehler ist **vorbestehend** — einzeln rot in 4,9 s und in einem Worktree auf `dce71e36` ohne die Änderungen der Sitzung ebenso; die Gegenprobe ist gefahren, er ist also kein Verdacht gegen den Update-Weg. `KeyDialog.probe_result` liest „Ollama hat nicht geantwortet“ statt „liegt jetzt hier“ |
+| `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
 
 ---
 
@@ -12006,3 +12009,80 @@ Offen:
       Archiv sogar updatefähig. **Braucht eine Entscheidung von Robert**, keine
       Messung: Es ist eine Frage der Auslieferung, nicht der Technik. Bleibt es
       beim Flatpak allein, gehören die beiden Bauschritte aus der CI heraus.
+
+---
+
+## Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026)
+
+Robert hat den Termin festgelegt: Demo bis zum 30.10.2026, bis dahin **noch
+mehrere Updates**, ab dem 01.11. Verkauf — „die Demo version wird dann nur zur
+vollversion mit dem 14 tage test bzw kauf". Diese Sitzung hat nachgesehen, was
+das technisch heißt, und einen Bruch gefunden, der keiner Absicht entspricht.
+
+**Was schon steht, und es ist viel.** `TRIAL_DAYS = 14` liegt fest, der echte
+öffentliche Lizenzschlüssel ist eingetragen (kein Platzhalter),
+`tools/make_licence_keys.py` stellt Kundenschlüssel aus — personalisiert oder
+als Vorrat für einen Zahlungsanbieter. Der Umschalter von Demo auf
+Verkaufsversion ist **eine Zeile**: `DEMO_UNTIL = date(2026, 10, 30)` → `None`
+in `app/core/activation/store.py`, und `days_left()` nennt sich selbst „die eine
+Stelle, an der sich Demo und Verkaufsversion unterscheiden".
+
+**Was daran bricht.** Beide Zweige schreiben denselben Testlaufmarker, mit
+`first_run` = Tag des ersten **Demo**-Starts. Nach dem Umschalten rechnet
+`trial_days_left()` also `used = (heute − erster Demo-Start)`. Gemessen in einem
+isolierten Profil:
+
+| Marker | am 01.11.2026 | am 20.11.2026 |
+|---|---|---|
+| erster Start 20.08. (Demo-Nutzer) | **0 von 14 Tagen** | 0 |
+| kein Marker (Neukunde) | 14 | 14 |
+
+Die Untergrenze, die es dort schon gibt, greift nicht: Sie hebt `first_run` nur
+an, wenn er **vor** `DEMO_FROM` liegt — und `DEMO_FROM` ist der 20.08.2026,
+also genau der Tag, an dem die Demo erschien. Ein Marker von diesem Tag bleibt
+stehen; am 01.11. sind das 73 Tage `used`. Von formwerk-af unabhängig am Code
+nachgeprüft.
+
+Der Kunde erlebt das so: kostenlos genutzt, Update gemacht, alles zu, kaufen —
+und die vierzehn Tage, die die Website nennt, bekommt er nie zu sehen.
+
+**Entscheidung Robert, 28.08.2026:** Die 14 Tage sollen laufen, „allerdings ohne
+Ausweg, dass sie es umgehen können".
+
+Offen:
+
+- [ ] **`SALE_FROM` fehlt, und ohne sie sperrt die Verkaufsversion die
+      Bestandskunden aus.** Gebaut wird sie analog zu `DEMO_FROM` in
+      `app/core/activation/store.py`: Ein `first_run` vor dem Verkaufsstart kann
+      kein Start der Verkaufsversion sein, weil es sie vorher nicht gab — also
+      wird er einmalig auf `now` angehoben und **festgeschrieben**. Die
+      Umgehungswege sind durchgerechnet und tragen nicht: `last_seen` wächst
+      monoton, eine zurückgestellte Uhr ändert `effective = max(now, last_seen)`
+      also nicht, eine vorgestellte kostet den Nutzer selbst Tage, und ein
+      editierter Marker gilt als `FORGED` und beendet die Frist sofort. Es bleibt
+      die schon dokumentierte Restgrenze: Wer **beide** Marker-Orte löscht, fängt
+      neu an — das gilt heute genauso, und sie zu schließen hieße Konto oder
+      Server, was §2 ausschließt. **Dazu gehört ein fünfter Uhr-Deckel in
+      `.claude/rules/kern.md`** (dort stehen bisher vier) und je ein Test für
+      beide Richtungen. Erledigt dabei: der Registerpunkt „AGB § 2 beschreibt
+      vierzehn Tage, die für die Demo nicht gelten" löst sich am 01.11. **nur
+      mit** diesem Schritt auf, nicht von selbst.
+- [ ] **Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet".**
+      `tests/test_chat_ui.py::test_the_pull_shows_a_share_and_a_way_out` erwartet
+      „liegt jetzt hier" in `KeyDialog.probe_result` und liest „Ollama hat nicht
+      geantwortet — läuft es noch?". **Kein Lasteffekt**: einzeln rot in 4,9 s,
+      und in einem Worktree auf `dce71e36` ohne die Änderungen dieser Sitzung
+      genauso rot — die Gegenprobe ist gefahren, damit er nicht als Verdacht
+      gegen den Update-Weg stehen bleibt. Was fehlt, ist die Ursache: Der Test
+      wartet 200 × 20 ms auf den Arbeiter und fährt ausdrücklich den ganzen Weg
+      über die Thread-Grenze, nicht den Slot allein.
+- [ ] **`rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier
+      Tests rot.** Es ist am 24.08.2026 aus `pyproject.toml` entfernt und durch
+      `app/core/geom/enclosure.py` ersetzt worden, steht seither auf der
+      Sperrliste (§36) — installiert bleibt es trotzdem, weil eine
+      Deinstallation kein Teil eines `git pull` ist. Rot werden dadurch
+      `test_licences.py` (3) und `test_acceptance_p0.py` (1). Behebung ist ein
+      Befehl je Maschine: `python -m pip uninstall -y rtree`; danach 27 grün.
+      Auf **dieser** Maschine am 28.08. erledigt. Der Punkt bleibt offen, bis er
+      auf allen drei gelaufen ist — er sieht wie ein Codefehler aus und ist
+      keiner, und das kostet beim nächsten Mal wieder eine halbe Stunde Suche.
