@@ -302,7 +302,7 @@ def test_a_pocket_on_a_mesh_says_it_needs_a_brep_body() -> None:
     # Menüeintrag ist seitdem weg, und ein Vorschlag, der auf ihn zeigt, wäre
     # eine Sackgasse. Genannt wird deshalb der Haken, über den die Operation
     # heute erreichbar ist.
-    assert "Exakter Körper (B-Rep)" in str(raised.value)
+    assert "Flächen und Kanten später bearbeiten" in str(raised.value)
 
 
 @pytest.mark.parametrize(

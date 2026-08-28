@@ -217,6 +217,18 @@ def test_stitching_keeps_the_source_of_a_split_face() -> None:
     )
 
 
+def test_stitching_ignores_scalar_metadata_instead_of_crashing() -> None:
+    """Nur ein Wert je Fläche kann beim Teilen eindeutig weiterreisen."""
+    broken = t_junction()
+    broken.raw.face_attributes["revision"] = 7
+
+    fixed, seams = stitch_t_junctions(broken)
+
+    assert seams == 1
+    assert fixed.is_watertight
+    assert "revision" not in fixed.raw.face_attributes
+
+
 def test_the_hole_filler_alone_cannot_do_it() -> None:
     """Warum es das hier gibt: ein Dreieck über drei kollinearen Punkten hat
     keine Fläche.

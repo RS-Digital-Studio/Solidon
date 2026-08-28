@@ -13,6 +13,7 @@ ihren Befunden.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import trimesh
@@ -182,11 +183,14 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
     # Dreiecksaufteilung. Wird ein Dreieck geteilt, erben beide Hälften seine
     # Herkunft — sonst verliert ausgerechnet die Reparatur die Zuordnung von
     # B-Rep-Fläche zu Viewport-Markierung (und ebenso jedes spätere Attribut).
-    face_attributes = {
-        name: np.concatenate([np.asarray(values)[kept], np.asarray(values)[added_from]], axis=0)
-        for name, values in body.face_attributes.items()
-        if len(values) == len(faces)
-    }
+    face_attributes: dict[str, Any] = {}
+    for name, values in body.face_attributes.items():
+        array = np.asarray(values)
+        # Fremde Netze dürfen auch skalare Metadaten tragen. Nur ein Wert je
+        # Fläche kann beim Teilen eindeutig mit der Fläche weiterreisen.
+        if array.ndim == 0 or len(array) != len(faces):
+            continue
+        face_attributes[name] = np.concatenate([array[kept], array[added_from]], axis=0)
     stitched = trimesh.Trimesh(
         vertices=body.vertices,
         faces=rebuilt,
