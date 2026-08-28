@@ -32,6 +32,7 @@ from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Document, Profile, Source
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -139,6 +140,8 @@ def test_an_imported_bore_can_be_made_larger_and_smaller(profile: Profile) -> No
 
     assert larger.mesh.is_watertight and smaller.mesh.is_watertight
     assert larger.mesh.volume < body.volume < smaller.mesh.volume
+    assert smaller.mesh.bounds.minimum == pytest.approx(body.bounds.minimum, abs=EPS_GEOM)
+    assert smaller.mesh.bounds.maximum == pytest.approx(body.bounds.maximum, abs=EPS_GEOM)
     assert len([entry for entry in detect(larger.mesh).values() if entry.kind == "hole"]) == 4
     assert len([entry for entry in detect(smaller.mesh).values() if entry.kind == "hole"]) == 4
     enlarged = min(
@@ -1253,8 +1256,10 @@ def test_the_preparation_operations_are_registered_completely() -> None:
     resize = REGISTRY.get("resize_hole")
     assert resize.applies_to == ("hole",)
     assert resize.requires_seed, "der Mesh-Weg benutzt dieselbe Boolesche Rückfallkette"
+    diameter = next(entry for entry in resize.params.spec() if entry.name == "diameter")
     feature = next(entry for entry in resize.params.spec() if entry.name == "at_feature")
-    assert feature.kind == "feature" and feature.required
+    assert diameter.placement == "front", "der einfache Weg fragt nur nach dem Zielmaß"
+    assert feature.kind == "feature" and feature.required and feature.placement == "advanced"
     assert REGISTRY.get("split_pinned").produces == 2
     assert REGISTRY.get("arrange_bed").produces == VARIABLE
     assert REGISTRY.get("check_collisions").produces == VARIABLE

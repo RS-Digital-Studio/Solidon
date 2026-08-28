@@ -23,12 +23,13 @@ from app.core.brep.kernel import Solid, available, tessellate
 from app.core.errors import GeometryError, NeedsSolidError, ValidationError
 from app.core.export.writer import export_bytes, plan_export, write_plan
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Mesh, OpContext, Profile, Scene, SceneObject, Source, kind_of
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
@@ -676,6 +677,78 @@ def test_resizing_a_bore_keeps_an_exact_body(profile: Profile) -> None:
     assert larger.mesh.is_closed and smaller.mesh.is_closed
     assert larger.features[bore.id].params["diameter"] == pytest.approx(10.0)
     assert smaller.features[bore.id].params["diameter"] == pytest.approx(4.0)
+
+
+def test_resizing_a_step_bore_uses_the_unrounded_topology(profile: Profile) -> None:
+    """Ein STEP-Maß reist in doppelter Genauigkeit bis zum Werkzeug.
+
+    Vier Nachkommastellen gehören in die Anzeige, nicht zwischen den exakten
+    Körper und seinen Füllring. Sonst bleibt beim Vergrößern eine hauchdünne
+    alte Lippe stehen; beim Verkleinern schwimmt ein loser Ring im Loch.
+    """
+    original_diameter = 6.00004
+    original_depth = 8.00004
+    original = edit.bore(
+        block(),
+        position=(0.0, 0.0, HEIGHT),
+        axis="z",
+        diameter=original_diameter,
+        depth=original_depth,
+    )
+    features = features_of(original)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=original, kind="brep", features=features)
+
+    assert bore.params["diameter"] == pytest.approx(original_diameter, abs=EPS_GEOM)
+    assert bore.params["depth"] == pytest.approx(original_depth, abs=EPS_GEOM)
+
+    unchanged = run(
+        "resize_hole",
+        source,
+        profile,
+        at_feature=bore.id,
+        diameter=float(bore.params["diameter"]),
+    )
+    assert unchanged.outputs[0] is source, "bloßes Bestätigen ändert den exakten Körper nicht"
+
+    for target in (10.0, 4.0):
+        changed = run("resize_hole", source, profile, at_feature=bore.id, diameter=target).outputs[
+            0
+        ]
+        holes = [entry for entry in changed.features.values() if entry.kind == "hole"]
+        expected = WIDTH * DEPTH * HEIGHT - math.pi * (target / 2.0) ** 2 * original_depth
+
+        assert changed.mesh.volume == pytest.approx(expected, rel=1e-9)
+        assert len(holes) == 1, "kein alter Rand und kein loser Füllring"
+        assert holes[0].params["diameter"] == pytest.approx(target, abs=EPS_GEOM)
+        assert holes[0].params["depth"] == pytest.approx(original_depth, abs=EPS_GEOM)
+
+
+def test_repeated_mesh_resizing_keeps_a_blind_bore_blind(profile: Profile) -> None:
+    """Ein gerundeter Anzeigewert darf die Bohrung nicht schrittweise vertiefen."""
+    exact = edit.bore(
+        edit.box(30.0, 30.0, 20.0),
+        position=(0.0, 0.0, 20.0),
+        axis="z",
+        diameter=6.00004,
+        depth=8.00004,
+    )
+    mesh = as_mesh_data(exact.to_mesh())
+    features = detect(mesh)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=mesh, features=features)
+
+    smaller = run("resize_hole", source, profile, at_feature=bore.id, diameter=4.0).outputs[0]
+    reduced = smaller.features[bore.id]
+    larger = run("resize_hole", smaller, profile, at_feature=bore.id, diameter=8.0).outputs[0]
+    enlarged = larger.features[bore.id]
+
+    assert not reduced.params["through"]
+    assert not enlarged.params["through"]
+    assert reduced.params["depth"] == pytest.approx(bore.params["depth"], abs=EPS_DISPLAY / 10.0)
+    assert enlarged.params["depth"] == pytest.approx(bore.params["depth"], abs=EPS_DISPLAY / 10.0)
+    assert larger.mesh.bounds.minimum == pytest.approx(mesh.bounds.minimum, abs=EPS_GEOM)
+    assert larger.mesh.bounds.maximum == pytest.approx(mesh.bounds.maximum, abs=EPS_GEOM)
 
 
 def test_the_exact_bore_agrees_with_the_mesh_on_direction_at_the_centre() -> None:
