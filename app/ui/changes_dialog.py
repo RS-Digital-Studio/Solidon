@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
 from app.i18n import tr
-from app.ui.style import NORMAL
+from app.ui.style import NORMAL, set_level
 
 #: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
 #: saß vorher als ``setMaximumHeight`` auf dem Rollbereich, und wer das
@@ -121,6 +121,11 @@ class ChangesDialog(QDialog):
         picker_layout.addWidget(self.version_choice, 1)
         self.picker.setVisible(bool(self.entries))
 
+        self.summary = QLabel(self)
+        self.summary.setWordWrap(True)
+        set_level(self.summary, "caption")
+        self.summary.setVisible(bool(self.entries))
+
         self.body = QLabel(self)
         self.body.setWordWrap(True)
         self.body.setTextFormat(Qt.TextFormat.RichText)
@@ -156,6 +161,7 @@ class ChangesDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
         layout.addWidget(self.picker)
+        layout.addWidget(self.summary)
         layout.addWidget(self.empty)
         # Der Rollbereich bekommt jeden gezogenen Bildpunkt (Stretch 1):
         # Überschrift und Knöpfe brauchen nicht mehr, als sie haben, und ein
@@ -168,8 +174,24 @@ class ChangesDialog(QDialog):
         """Zeigt genau die gewählte Fassung und setzt den Lesebeginn zurück."""
         if index < 0:
             self.body.clear()
+            self.summary.clear()
             return
         version = self.version_choice.itemData(index)
         selected = tuple(entry for entry in self.entries if entry.version == version)
         self.body.setText(history_html(selected))
+        if selected:
+            entry = selected[0]
+            changes_count = len(entry.points)
+            topics_count = len(entry.groups)
+            changes_word = tr(
+                "Neuerung" if changes_count == 1 else "Neuerungen",
+                context="Changelog-Zähler",
+            )
+            topics_word = tr(
+                "Thema" if topics_count == 1 else "Themen",
+                context="Changelog-Zähler",
+            )
+            self.summary.setText(f"{changes_count} {changes_word} · {topics_count} {topics_word}")
+        else:
+            self.summary.clear()
         self.scroller.verticalScrollBar().setValue(0)

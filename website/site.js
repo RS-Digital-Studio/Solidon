@@ -67,6 +67,7 @@
 
   const picker = document.querySelector("[data-changelog-select]");
   const entries = [...document.querySelectorAll("[data-changelog-entry]")];
+  const status = document.querySelector("[data-changelog-status]");
   if (!picker || entries.length === 0) return;
 
   const show = (version, remember) => {
@@ -75,6 +76,7 @@
 
     picker.value = version;
     for (const entry of entries) entry.hidden = entry !== selected;
+    if (status) status.textContent = selected.dataset.announcement || version;
 
     if (remember && window.history?.replaceState) {
       history.replaceState(null, "", `#${selected.id}`);

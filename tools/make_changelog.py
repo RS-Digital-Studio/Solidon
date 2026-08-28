@@ -16,6 +16,7 @@ import html
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBSITE = ROOT / "website"
@@ -23,9 +24,10 @@ SITE = "https://solidon3d.de"
 
 sys.path.insert(0, str(ROOT))
 
-from app.branding import APP_VERSION  # noqa: E402
+from app.branding import APP_NAME, APP_VERSION  # noqa: E402
 from app.core import changes  # noqa: E402
-from app.i18n.catalog import available_languages  # noqa: E402
+from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
+from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
 from tools.stamp_assets import stamp_of  # noqa: E402
 
 
@@ -53,208 +55,63 @@ class Copy:
     legal: str
     privacy: str
     preview_alt: str
+    empty: str
+    change_one: str
+    change_many: str
+    topic_one: str
+    topic_many: str
 
 
-COPY = {
-    "de": Copy(
-        title="Changelog: Neuerungen und Verbesserungen — Solidon3D",
-        description=(
-            "Alle Neuerungen von Solidon3D nach Version: neue Werkzeuge, "
-            "Verbesserungen und behobene Stolpersteine für den 3D-Druck."
-        ),
-        skip="Zum Inhalt springen",
-        features="Funktionen",
-        manual="Handbuch",
-        news="Neuerungen",
-        demo="Demo",
-        language="Sprache wählen",
-        kicker="Produktfortschritt",
-        heading="Was sich in Solidon3D geändert hat.",
-        lead=(
-            "Neue Werkzeuge, spürbare Verbesserungen und behobene Stolpersteine — "
-            "nach Version geordnet und so beschrieben, wie sie beim Arbeiten auffallen."
-        ),
-        select="Version auswählen",
-        current="Diese Version",
-        version="Version",
-        app_note="Dieselben Neuerungen finden Sie direkt in Solidon3D unter Hilfe → Neuerungen.",
-        no_script="Ohne JavaScript stehen alle Versionen vollständig untereinander.",
-        home="Startseite",
-        legal="Impressum",
-        privacy="Datenschutz",
-        preview_alt="Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht",
+COPY_MESSAGES: Final[dict[str, TranslatableText]] = {
+    "title": _("Neuerungen — {app}"),
+    "description": _("Alle Neuerungen nach Version: klar erklärt, ohne CAD-Fachwissen."),
+    "skip": _("Zum Inhalt springen"),
+    "features": _("Funktionen"),
+    "manual": _("Handbuch"),
+    "news": _("Neuerungen"),
+    "demo": _("Demo"),
+    "language": _("Sprache wählen"),
+    "kicker": _("Neuerungen"),
+    "heading": _("Was ist neu in {app}?"),
+    "lead": _(
+        "Neue Werkzeuge, einfachere Abläufe und behobene Stolpersteine — "
+        "verständlich erklärt und nach Version geordnet."
     ),
-    "en": Copy(
-        title="Changelog: what\u2019s new and improved — Solidon3D",
-        description=(
-            "Every Solidon3D release note by version: new tools, improvements "
-            "and fixed pain points for 3D printing."
-        ),
-        skip="Skip to content",
-        features="Features",
-        manual="Manual",
-        news="What\u2019s new",
-        demo="Demo",
-        language="Choose language",
-        kicker="Product progress",
-        heading="What changed in Solidon3D.",
-        lead=(
-            "New tools, meaningful improvements and fixed pain points — organised "
-            "by version and described as you experience them while working."
-        ),
-        select="Choose a version",
-        current="This version",
-        version="Version",
-        app_note=(
-            "You can find the same release notes inside Solidon3D under Help → What\u2019s new."
-        ),
-        no_script="Without JavaScript, every version is shown in full below.",
-        home="Home",
-        legal="Legal notice",
-        privacy="Privacy",
-        preview_alt="The Solidon3D main window with model, history and inspection report",
+    "select": _("Version"),
+    "current": _("diese Version"),
+    "version": _("Version"),
+    "app_note": _(
+        "Dieselben Neuerungen finden Sie auch direkt in Solidon3D unter Hilfe → Neuerungen."
     ),
-    "es": Copy(
-        title="Historial de cambios: novedades y mejoras — Solidon3D",
-        description=(
-            "Todas las novedades de Solidon3D por versión: herramientas nuevas, "
-            "mejoras y obstáculos resueltos para la impresión 3D."
-        ),
-        skip="Saltar al contenido",
-        features="Funciones",
-        manual="Manual",
-        news="Novedades",
-        demo="Demo",
-        language="Elegir idioma",
-        kicker="Evolución del producto",
-        heading="Qué ha cambiado en Solidon3D.",
-        lead=(
-            "Herramientas nuevas, mejoras perceptibles y obstáculos resueltos, "
-            "ordenados por versión y descritos tal como se notan al trabajar."
-        ),
-        select="Elegir una versión",
-        current="Esta versión",
-        version="Versión",
-        app_note="Encontrará las mismas novedades en Solidon3D, en Ayuda → Novedades.",
-        no_script="Sin JavaScript, todas las versiones aparecen completas una tras otra.",
-        home="Inicio",
-        legal="Aviso legal",
-        privacy="Privacidad",
-        preview_alt=(
-            "La ventana principal de Solidon3D con modelo, historial e informe de inspección"
-        ),
-    ),
-    "fr": Copy(
-        title="Journal des modifications : nouveautés et améliorations — Solidon3D",
-        description=(
-            "Toutes les nouveautés de Solidon3D par version : nouveaux outils, "
-            "améliorations et obstacles supprimés pour l'impression 3D."
-        ),
-        skip="Aller au contenu",
-        features="Fonctions",
-        manual="Manuel",
-        news="Nouveautés",
-        demo="Démo",
-        language="Choisir la langue",
-        kicker="Évolution du produit",
-        heading="Ce qui a changé dans Solidon3D.",
-        lead=(
-            "De nouveaux outils, des améliorations sensibles et des obstacles "
-            "supprimés — classés par version et décrits tels qu'ils se présentent au travail."
-        ),
-        select="Choisir une version",
-        current="Cette version",
-        version="Version",
-        app_note="Vous trouverez les mêmes nouveautés dans Solidon3D sous Aide → Nouveautés.",
-        no_script="Sans JavaScript, toutes les versions sont affichées intégralement à la suite.",
-        home="Accueil",
-        legal="Mentions légales",
-        privacy="Confidentialité",
-        preview_alt=(
-            "La fenêtre principale de Solidon3D avec le modèle, l'historique et le rapport"
-        ),
-    ),
-    "it": Copy(
-        title="Cronologia delle modifiche: novità e miglioramenti — Solidon3D",
-        description=(
-            "Tutte le novità di Solidon3D per versione: nuovi strumenti, "
-            "miglioramenti e ostacoli risolti per la stampa 3D."
-        ),
-        skip="Vai al contenuto",
-        features="Funzioni",
-        manual="Manuale",
-        news="Novità",
-        demo="Demo",
-        language="Scegli la lingua",
-        kicker="Evoluzione del prodotto",
-        heading="Che cosa è cambiato in Solidon3D.",
-        lead=(
-            "Nuovi strumenti, miglioramenti concreti e ostacoli risolti, ordinati "
-            "per versione e descritti così come si notano durante il lavoro."
-        ),
-        select="Scegli una versione",
-        current="Questa versione",
-        version="Versione",
-        app_note="Trovi le stesse novità in Solidon3D alla voce Aiuto → Novità.",
-        no_script=(
-            "Senza JavaScript, tutte le versioni sono mostrate per intero una dopo l'altra."
-        ),
-        home="Pagina iniziale",
-        legal="Note legali",
-        privacy="Privacy",
-        preview_alt=(
-            "La finestra principale di Solidon3D con modello, cronologia e rapporto di controllo"
-        ),
-    ),
-    "pt": Copy(
-        title="Registo de alterações: novidades e melhorias — Solidon3D",
-        description=(
-            "Todas as novidades do Solidon3D por versão: novas ferramentas, "
-            "melhorias e obstáculos resolvidos para impressão 3D."
-        ),
-        skip="Ir para o conteúdo",
-        features="Funções",
-        manual="Manual",
-        news="Novidades",
-        demo="Demo",
-        language="Escolher idioma",
-        kicker="Evolução do produto",
-        heading="O que mudou no Solidon3D.",
-        lead=(
-            "Novas ferramentas, melhorias visíveis e obstáculos resolvidos, "
-            "organizados por versão e descritos tal como se sentem durante o trabalho."
-        ),
-        select="Escolher uma versão",
-        current="Esta versão",
-        version="Versão",
-        app_note="Encontra as mesmas novidades no Solidon3D em Ajuda → Novidades.",
-        no_script="Sem JavaScript, todas as versões aparecem completas umas após as outras.",
-        home="Início",
-        legal="Aviso legal",
-        privacy="Privacidade",
-        preview_alt=(
-            "A janela principal do Solidon3D com modelo, histórico e relatório de verificação"
-        ),
-    ),
+    "no_script": _("Ohne JavaScript stehen alle Versionen vollständig untereinander."),
+    "home": _("Startseite"),
+    "legal": _("Impressum"),
+    "privacy": _("Datenschutz"),
+    "preview_alt": _("Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht"),
+    "empty": _("Für diese Version liegt kein Verlauf bei."),
+    "change_one": _("Neuerung", "Changelog-Zähler"),
+    "change_many": _("Neuerungen", "Changelog-Zähler"),
+    "topic_one": _("Thema", "Changelog-Zähler"),
+    "topic_many": _("Themen", "Changelog-Zähler"),
 }
 
-LANGUAGE_NAMES = {
-    "de": "Deutsch",
-    "en": "English",
-    "es": "Español",
-    "fr": "Français",
-    "it": "Italiano",
-    "pt": "Português",
-}
 
-PAGE_PATHS = {
-    "de": "changelog.html",
-    "en": "en/changelog.html",
-    "es": "es/changelog.html",
-    "fr": "fr/changelog.html",
-    "it": "it/changelog.html",
-    "pt": "pt/changelog.html",
-}
+def copy_for(language: str) -> Copy:
+    """Die Rahmentexte einer Sprache aus ihrem einzigen Katalog lesen."""
+    catalog = read_catalog(language)
+    translated: dict[str, str] = {}
+    for field_name, message in COPY_MESSAGES.items():
+        key = f"{message.context}\x04{message.msgid}" if message.context else message.msgid
+        translated[field_name] = (
+            message.msgid if language == SOURCE_LANGUAGE else catalog.get(key, message.msgid)
+        )
+    return Copy(**translated)
+
+
+def page_path(language: str) -> str:
+    """Der Webpfad einer Sprache, ohne eine feste Sprachliste."""
+    return "changelog.html" if language == SOURCE_LANGUAGE else f"{language}/changelog.html"
+
 
 BRAND_MARK = (
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" '
@@ -267,12 +124,12 @@ BRAND_MARK = (
 
 def path_for(language: str) -> Path:
     """Der Ausgabeort einer Sprache."""
-    return WEBSITE / PAGE_PATHS[language]
+    return WEBSITE / page_path(language)
 
 
 def address_for(language: str) -> str:
     """Die öffentliche Adresse einer Sprache."""
-    return f"{SITE}/{PAGE_PATHS[language]}"
+    return f"{SITE}/{page_path(language)}"
 
 
 def home_for(language: str) -> str:
@@ -317,8 +174,8 @@ def _switcher(language: str, copy: Copy) -> str:
     for other in available_languages():
         current = ' aria-current="page"' if other == language else ""
         rows.append(
-            f'<li><a href="/{PAGE_PATHS[other]}" hreflang="{other}" lang="{other}"{current}>'
-            f"{html.escape(LANGUAGE_NAMES[other])}</a></li>"
+            f'<li><a href="/{page_path(other)}" hreflang="{other}" lang="{other}"{current}>'
+            f"{html.escape(language_name(other))}</a></li>"
         )
     return (
         '<details class="langs">'
@@ -334,7 +191,7 @@ def _header(language: str, copy: Copy) -> str:
         f'<a class="brand" href="{home_for(language)}">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
         f'<a class="hide-small" href="{feature_for(language)}">{html.escape(copy.features)}</a>'
-        f'<a href="/{PAGE_PATHS[language]}" aria-current="page">{html.escape(copy.news)}</a>'
+        f'<a href="/{page_path(language)}" aria-current="page">{html.escape(copy.news)}</a>'
         f'<a class="hide-tiny" href="{manual_for(language)}">{html.escape(copy.manual)}</a>'
         f"{_switcher(language, copy)}"
         f'<a class="cta" href="{price_for(language)}">{html.escape(copy.demo)}</a>'
@@ -361,13 +218,29 @@ def _picker(entries: tuple[changes.Entry, ...], selected: str, copy: Copy) -> st
     )
 
 
+def _summary(entry: changes.Entry, copy: Copy) -> str:
+    """Eine kurze, auch ohne Fachsprache verständliche Größenordnung."""
+    changes_count = len(entry.points)
+    topics_count = len(entry.groups)
+    changes_word = copy.change_one if changes_count == 1 else copy.change_many
+    topics_word = copy.topic_one if topics_count == 1 else copy.topic_many
+    return f"{changes_count} {changes_word} · {topics_count} {topics_word}"
+
+
 def _entry(entry: changes.Entry, selected: str, copy: Copy) -> str:
     """Eine Version mit ihren kundennahen Gruppen und Punkten."""
     groups = []
-    for group in entry.groups:
-        title = f"<h3>{html.escape(group.title)}</h3>" if group.title else ""
+    for index, group in enumerate(entry.groups, start=1):
+        title = (
+            '<div class="release-group-head">'
+            f'<span class="release-group-index" aria-hidden="true">{index:02d}</span>'
+            f"<h3>{html.escape(group.title)}</h3></div>"
+            if group.title
+            else ""
+        )
         points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
         groups.append(f'<div class="release-group">{title}<ul>{points}</ul></div>')
+    summary = _summary(entry, copy)
     badge = (
         f'<span class="release-badge">{html.escape(copy.current)}</span>'
         if entry.version == APP_VERSION
@@ -376,24 +249,44 @@ def _entry(entry: changes.Entry, selected: str, copy: Copy) -> str:
     hidden = "" if entry.version == selected else " hidden"
     return (
         f'<article class="release-card" id="{version_id(entry.version)}" '
-        f'data-changelog-entry data-version="{html.escape(entry.version)}"{hidden}>'
+        f'data-changelog-entry data-version="{html.escape(entry.version)}" '
+        f'data-announcement="{html.escape(f"{entry.version}: {summary}", quote=True)}"{hidden}>'
         '<header class="release-heading">'
-        f"<div><p>{html.escape(copy.version)}</p><h2>{html.escape(entry.version)}</h2></div>{badge}"
+        f'<div><p class="release-version-label">{html.escape(copy.version)}</p>'
+        f"<h2>{html.escape(entry.version)}</h2>"
+        f'<p class="release-summary">{html.escape(summary)}</p></div>{badge}'
         f'</header><div class="release-groups">{"".join(groups)}</div></article>'
     )
 
 
 def render_page(language: str) -> str:
     """Eine vollständige Sprachfassung als statisches HTML."""
-    copy = COPY[language]
+    copy = copy_for(language)
     entries = changes.history(language)
     selected = (
         APP_VERSION
         if any(entry.version == APP_VERSION for entry in entries)
         else entries[0].version
+        if entries
+        else ""
     )
-    cards = "".join(_entry(entry, selected, copy) for entry in entries)
+    cards = (
+        "".join(_entry(entry, selected, copy) for entry in entries)
+        if entries
+        else f'<p class="release-empty">{html.escape(copy.empty)}</p>'
+    )
+    picker = _picker(entries, selected, copy) if entries else ""
+    no_script = (
+        "<noscript>"
+        f'<p class="release-noscript">{html.escape(copy.no_script)}</p>'
+        "<style>.release-card[hidden]{display:block!important}</style>"
+        "</noscript>"
+        if entries
+        else ""
+    )
     canonical = address_for(language)
+    title = copy.title.format(app=APP_NAME)
+    heading = copy.heading.format(app=APP_NAME)
     icon_stamp = stamp_of(WEBSITE / "icon.svg")
     style_stamp = stamp_of(WEBSITE / "style.css")
     script_stamp = stamp_of(WEBSITE / "site.js")
@@ -402,14 +295,14 @@ def render_page(language: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{html.escape(copy.title)}</title>
+<title>{html.escape(title)}</title>
 <meta name="description" content="{html.escape(copy.description, quote=True)}">
 <link rel="canonical" href="{canonical}">
 {_alternates()}
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Solidon3D">
 <meta property="og:url" content="{canonical}">
-<meta property="og:title" content="{html.escape(copy.title, quote=True)}">
+<meta property="og:title" content="{html.escape(title, quote=True)}">
 <meta property="og:description" content="{html.escape(copy.description, quote=True)}">
 <meta property="og:image" content="{SITE}/handbuch/{language}/main-window.png">
 <meta property="og:image:alt" content="{html.escape(copy.preview_alt, quote=True)}">
@@ -425,18 +318,16 @@ def render_page(language: str) -> str:
   <section class="changelog-hero">
     <div class="wrap changelog-intro">
       <p class="hero-kicker">{html.escape(copy.kicker)}</p>
-      <h1>{html.escape(copy.heading)}</h1>
+      <h1>{html.escape(heading)}</h1>
       <p class="lead">{html.escape(copy.lead)}</p>
-      {_picker(entries, selected, copy)}
+      {picker}
       <p class="release-app-note">{html.escape(copy.app_note)}</p>
     </div>
   </section>
   <section class="changelog-content">
     <div class="wrap" id="release-list" data-changelog-list>
-      <noscript>
-        <p class="release-noscript">{html.escape(copy.no_script)}</p>
-        <style>.release-card[hidden]{{display:block!important}}</style>
-      </noscript>
+      {no_script}
+      <p class="visually-hidden" data-changelog-status aria-live="polite"></p>
       {cards}
     </div>
   </section>

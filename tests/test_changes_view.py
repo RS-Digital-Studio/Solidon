@@ -161,3 +161,6 @@ def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
 
     assert f">{entries[last].version}</h3>" in dialog.body.text()
     assert f">{entries[0].version}" not in dialog.body.text()
+    assert dialog.summary.text() == (
+        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} Thema"
+    )

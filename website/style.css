@@ -943,6 +943,25 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   color: var(--muted);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.release-empty {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--muted);
+}
+
 .release-card {
   max-width: 72rem;
   margin: 0 auto;
@@ -965,7 +984,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   border-bottom: 1px solid var(--line);
 }
 
-.release-heading p {
+.release-version-label {
   margin: 0 0 0.1rem;
   color: var(--muted);
   font-size: 0.76rem;
@@ -978,6 +997,12 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   margin: 0;
   font-size: clamp(1.55rem, 3vw, 2.1rem);
   font-variant-numeric: tabular-nums;
+}
+
+.release-summary {
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 /* Die laufende Fassung ist nicht nur orange: Text, Rahmen und Pillenform sind
@@ -1009,8 +1034,32 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .release-group:only-child { grid-column: 1 / -1; }
 
+.release-group:only-child ul { max-width: 68ch; }
+
+.release-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.8rem;
+}
+
+.release-group-index {
+  display: grid;
+  flex: none;
+  width: 1.85rem;
+  height: 1.85rem;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.72rem;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
 .release-group h3 {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-size: 1.05rem;
   letter-spacing: -0.01em;
 }

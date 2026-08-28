@@ -30,6 +30,7 @@ PACKAGE_DIR = Path(__file__).parent.parent
 EXTRA_SOURCES = (
     PACKAGE_DIR.parent / "tools" / "make_examples.py",
     PACKAGE_DIR.parent / "tools" / "make_figures.py",
+    PACKAGE_DIR.parent / "tools" / "make_changelog.py",
 )
 
 
