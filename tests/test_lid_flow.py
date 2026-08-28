@@ -12,7 +12,12 @@ from __future__ import annotations
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
+from app.core.geom.lid import (
+    CAP_THREAD_FEATURE,
+    CAVITY_FEATURE,
+    COLLAR_FEATURE,
+    NECK_THREAD_FEATURE,
+)
 from app.core.knowledge import profiles
 from app.core.lid_flow import apply_lid, unique_name
 from app.core.scene import History, evaluate
@@ -40,6 +45,29 @@ def _box_with_cavity(document: object, profile: Profile) -> str:
         [
             OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 30.0}),
         ],
+    )
+    made = document.ops[-1].outputs[0]  # type: ignore[attr-defined]
+    history.apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=(made,),
+                params={"wall": 3.0, "open_top": True},
+            )
+        ],
+    )
+    return str(document.ops[-1].outputs[0])  # type: ignore[attr-defined]
+
+
+def _round_container(document: object) -> str:
+    """Eine runde, oben offene Dose für den vollständigen Drehdeckel-Ablauf."""
+    from app.core.scene.history import OperationDraft
+
+    history = History(document)  # type: ignore[arg-type]
+    history.apply(
+        "Dose",
+        [OperationDraft(op="create_cylinder", params={"diameter": 40.0, "height": 60.0})],
     )
     made = document.ops[-1].outputs[0]  # type: ignore[attr-defined]
     history.apply(
@@ -103,6 +131,32 @@ def test_both_features_exist_after_evaluation(profile: Profile) -> None:
     box_id, lid_id = applied.object_ids[0], applied.object_ids[1]
     assert CAVITY_FEATURE in result.scene.objects[box_id].features
     assert COLLAR_FEATURE in result.scene.objects[lid_id].features
+
+
+def test_the_screw_lid_flow_pairs_the_outer_and_inner_threads(profile: Profile) -> None:
+    """Öffnung wählen und Drehdeckel erzeugen bleibt eine rücknehmbare Handlung."""
+    project = new_project("centauri-carbon-2", "petg")
+    container = _round_container(project.document)
+
+    applied = apply_lid(
+        project.document,
+        container,
+        {"height": 8.0, "pitch": 3.0, "wall": 2.4, "thickness": 2.4},
+        profile,
+        op="screw_lid",
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert applied.fit is not None
+    assert len(project.document.transactions[-1].ops) == 1
+    assert project.document.transactions[-1].title == "Drehdeckel erzeugen"
+    assert applied.fit.a.feature_id == NECK_THREAD_FEATURE
+    assert applied.fit.b.feature_id == CAP_THREAD_FEATURE
+    assert NECK_THREAD_FEATURE in result.scene.objects[applied.fit.a.object_id].features
+    assert CAP_THREAD_FEATURE in result.scene.objects[applied.fit.b.object_id].features
+
+    History(project.document).undo()
+    assert project.document.fits == [], "Undo nimmt Drehdeckel und Passung gemeinsam zurück"
 
 
 def test_the_fit_is_actually_measurable(profile: Profile) -> None:

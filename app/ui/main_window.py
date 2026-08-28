@@ -236,7 +236,7 @@ from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
-from app.ui.settings_dialog import SettingsDialog
+from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog
 from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for, plane_where
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
@@ -341,7 +341,7 @@ WALL_GRID_SHARE: Final = 0.8
 #: Operationen, die einen Deckel bauen und deshalb über ihren Ablauf laufen —
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
-LID_OPS: Final = frozenset({"create_lid", "create_screw_lid"})
+LID_OPS: Final = frozenset({"create_lid", "screw_lid"})
 
 
 def _filter_for(label: str, suffixes: tuple[str, ...]) -> str:
@@ -1669,7 +1669,10 @@ class MainWindow(QMainWindow):
             tr("Modell einfügen …"),
             "Ctrl+I",
             self.action_import,
-            tr("Eine Modelldatei laden (STL, 3MF, OBJ, STEP). Eine Baugruppe kommt einzeln an."),
+            tr(
+                "Eine Modelldatei oder flache Zeichnung laden. Eine 3MF-Baugruppe "
+                "kommt als einzelne Körper an."
+            ),
         )
         self.import_url_action = self._add_action(
             file_menu,
@@ -2097,15 +2100,16 @@ class MainWindow(QMainWindow):
         # Vier Navigationsschemata und zwei Themen, und keines sagte, welches
         # gerade gilt. Wer die Vorgabe einmal umgestellt hat, konnte danach nur
         # ausprobieren, worauf sie steht.
+        theme_menu = self._submenu(view_menu, tr("Thema"))
         self._theme_group = QActionGroup(self)
         self._theme_group.setExclusive(True)
-        for theme, label, hint in (
-            ("dark", tr("Dunkles Thema"), tr("Helle Geometrie auf dunklem Grund.")),
-            ("light", tr("Helles Thema"), tr("Dunkle Geometrie auf hellem Grund.")),
+        for theme, hint in (
+            ("dark", tr("Helle Geometrie auf dunklem Grund.")),
+            ("light", tr("Dunkle Geometrie auf hellem Grund.")),
         ):
             action = self._add_action(
-                view_menu,
-                label,
+                theme_menu,
+                str(THEMES[theme]),
                 None,
                 weak_slot(self, lambda view, key: view.action_theme(key), theme),
                 hint,
@@ -2118,10 +2122,9 @@ class MainWindow(QMainWindow):
         navigation_menu = self._submenu(view_menu, tr("Navigation"))
         self._navigation_group = QActionGroup(self)
         self._navigation_group.setExclusive(True)
-        for scheme, label, hint in (
+        for scheme, hint in (
             (
                 "slicer",
-                tr("Navigation: Cura"),
                 # Der Hinweis stand hier andersherum, als das Schema arbeitet:
                 # „links drehen, rechts schieben" beschreibt Bambu und Prusa,
                 # nicht die Vorgabe aus §2.9.
@@ -2129,15 +2132,14 @@ class MainWindow(QMainWindow):
             ),
             (
                 "orbit",
-                tr("Navigation: Bambu, Orca, Prusa"),
                 tr("Links dreht, rechts schiebt — die verbreitetste Aufteilung."),
             ),
-            ("cad", tr("Navigation: CAD"), tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
-            ("blender", tr("Navigation: Blender"), tr("Wie in Blender.")),
+            ("cad", tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
+            ("blender", tr("Wie in Blender.")),
         ):
             action = self._add_action(
                 navigation_menu,
-                label,
+                str(NAVIGATION[scheme]),
                 None,
                 weak_slot(self, lambda view, key: view.action_navigation(key), scheme),
                 hint,
@@ -3295,7 +3297,7 @@ class MainWindow(QMainWindow):
         url, accepted = QInputDialog.getText(
             self,
             tr("Modell aus dem Netz"),
-            tr("Adresse der Modelldatei (STL, 3MF, OBJ, STEP …):"),
+            tr("Direkte Adresse der Modelldatei:"),
             text=suggestion,
         )
         if accepted and url.strip():
@@ -6652,7 +6654,7 @@ class MainWindow(QMainWindow):
                 # Operation: erst der trägt das Paar aus Öffnung und Kragen als
                 # Passung ein (§14), und daran hängen im Slicer die genaue
                 # Außenwand, die gebremste Beschleunigung und das Bügeln.
-                applied = self.session.create_lid(inputs[0], dict(params))
+                applied = self.session.create_lid(inputs[0], dict(params), op=spec.name)
                 self.report.add_findings(applied.findings)
                 return
             self.session.apply(

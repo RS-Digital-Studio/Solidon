@@ -1083,7 +1083,13 @@ class Session(QObject):
         self.evaluate_async()
         return applied
 
-    def create_lid(self, object_id: str, params: dict[str, Any]) -> LidApplied:
+    def create_lid(
+        self,
+        object_id: str,
+        params: dict[str, Any],
+        *,
+        op: str = "create_lid",
+    ) -> LidApplied:
         """Deckel erzeugen — als Ablauf, damit die Passung mitkommt (§14).
 
         Die Operation allein baut nur den Körper. Erst der Ablauf trägt das
@@ -1091,7 +1097,7 @@ class Session(QObject):
         Slicer die genaue Außenwand, die gebremste Beschleunigung und das
         Bügeln — die drei Werte, die über eine Passung entscheiden.
         """
-        applied = apply_lid(self.project.document, object_id, params, self.profile)
+        applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()

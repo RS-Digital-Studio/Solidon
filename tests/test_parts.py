@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 from app.core.geom.boolean import boolean
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles, standards
 from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
 from app.core.knowledge.parts import ops as part_ops
@@ -1790,14 +1791,22 @@ def test_a_tool_in_a_bore_starts_at_its_mouth(profile: Profile) -> None:
         )
 
 
-def test_a_container_thread_and_a_lid_thread_are_a_matching_pair(profile: Profile) -> None:
-    """Der Behälter bekommt außen, sein Deckel innen dieselbe Gewindegröße."""
-    container = new_project("centauri-carbon-2", "petg")
-    History(container.document).apply(
-        "Behälter",
+def test_an_external_thread_post_and_an_internal_bore_are_a_matching_pair(
+    profile: Profile,
+) -> None:
+    """Gewindebolzen und Gewindebohrung benutzen dieselben Nenndaten.
+
+    Das ist bewusst **nicht** der Behälterweg: Ein Gewindebolzen auf einer
+    ebenen Fläche hat einen massiven Kern. Für eine offene Dose baut
+    ``screw_lid`` stattdessen einen ringförmigen Hals und den passenden Deckel
+    gemeinsam; dessen Durchgang wird in ``test_lid.py`` geometrisch geprüft.
+    """
+    post = new_project("centauri-carbon-2", "petg")
+    History(post.document).apply(
+        "Träger",
         [OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 10.0})],
     )
-    History(container.document).apply(
+    History(post.document).apply(
         "Außengewinde",
         [
             OperationDraft(
@@ -1807,10 +1816,10 @@ def test_a_container_thread_and_a_lid_thread_are_a_matching_pair(profile: Profil
             )
         ],
     )
-    container_result = evaluate(
-        container.document,
+    post_result = evaluate(
+        post.document,
         profile,
-        sources=ProjectSources(container),
+        sources=ProjectSources(post),
     )
 
     lid = _plate_with_a_through_bore()
@@ -1826,10 +1835,10 @@ def test_a_container_thread_and_a_lid_thread_are_a_matching_pair(profile: Profil
     )
     lid_result = evaluate(lid.document, profile, sources=ProjectSources(lid))
 
-    assert container_result.complete and lid_result.complete
+    assert post_result.complete and lid_result.complete
     outer = next(
         feature
-        for feature in container_result.scene.objects["obj_1"].features.values()
+        for feature in post_result.scene.objects["obj_1"].features.values()
         if feature.kind == "thread"
     )
     inner = next(
@@ -1843,15 +1852,15 @@ def test_a_container_thread_and_a_lid_thread_are_a_matching_pair(profile: Profil
 
 
 @pytest.mark.parametrize("countersunk", [False, True])
-def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
+def test_a_printed_screw_sits_in_its_bore_and_prepares_a_countersink(
     profile: Profile, countersunk: bool
 ) -> None:
-    """Das Gegenstück sitzt an der Bohrungsmündung, nicht in ihrer Mitte.
+    """Das Gegenstück sitzt an der Mündung und senkt sie auf Wunsch gleich mit.
 
     Es bleibt absichtlich ein eigener Körper: Eine echte Schraube soll sich
-    lösen lassen, auch wenn ihr Kopf in einer Senkung ohne Materialkontakt
-    liegt. Die Operation darf daraus keinen Fehler über ein loses Anbauteil
-    machen.
+    lösen lassen. Die Senkung gehört trotzdem in dieselbe Operation und damit
+    in denselben Undo-Schritt — ein Einsteiger soll nicht erst eine zweite
+    Operation suchen und deren Kopfdurchmesser übertragen müssen.
     """
     project = _plate_with_a_through_bore()
     History(project.document).apply(
@@ -1873,7 +1882,12 @@ def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
 
     assert result.complete, [str(f.message) for f in result.scene.report.findings]
     entry = result.scene.objects["obj_1"]
-    assert entry.mesh.bounds.maximum[2] > 10.0, "der Kopf liegt über der Platte"
+    if countersunk:
+        assert entry.mesh.bounds.maximum[2] == pytest.approx(10.0, abs=0.02), (
+            "der Senkkopf sitzt bündig statt auf der ungesenkten Fläche"
+        )
+    else:
+        assert entry.mesh.bounds.maximum[2] > 10.0, "der Sechskantkopf liegt über der Platte"
     assert entry.mesh.bounds.minimum[2] < 0.0, "der Schaft reicht durch die Bohrung"
     assert entry.mesh.component_count == 2, "Schraube und Werkstück bleiben lösbar"
     from app.core.units import EPS_GEOM
@@ -1882,11 +1896,22 @@ def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
     screw = max(components, key=lambda mesh: float(mesh.bounds[1][2]))
     points = np.asarray(screw.vertices, dtype=float)
     radii = np.hypot(points[:, 0], points[:, 1])
-    inside_plate = (points[:, 2] > EPS_GEOM) & (points[:, 2] < 10.0 - EPS_GEOM)
-    outside_bore = radii > 3.0 + EPS_GEOM
-    assert not np.any(inside_plate & outside_bore), (
-        "eine lösbare Schraube darf nicht in das Werkstück hineinragen"
-    )
+    if countersunk:
+        plate = min(components, key=lambda mesh: float(mesh.bounds[1][2]))
+        mouth = _widest_bore(MeshData.of(plate), 9.9)
+        expected = standards.screw("M6").countersink
+        assert mouth == pytest.approx(expected, abs=0.25), (
+            "der Haken formt den Kopf, hat die gewählte Bohrung aber nicht mitgesenkt"
+        )
+        assert any(feature.kind == "cone" for feature in entry.features.values()), (
+            "die automatisch erzeugte Senkung bleibt als Merkmal bearbeitbar"
+        )
+    else:
+        inside_plate = (points[:, 2] > EPS_GEOM) & (points[:, 2] < 10.0 - EPS_GEOM)
+        outside_bore = radii > 3.0 + EPS_GEOM
+        assert not np.any(inside_plate & outside_bore), (
+            "eine lösbare Schraube darf nicht in das Werkstück hineinragen"
+        )
     threads = [feature for feature in entry.features.values() if feature.kind == "thread"]
     assert any(not feature.params["internal"] for feature in threads)
     assert not any(
@@ -1894,12 +1919,16 @@ def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
     )
 
 
-def test_a_separate_printed_screw_keeps_existing_material_slots(profile: Profile) -> None:
+@pytest.mark.parametrize("countersunk", [False, True])
+def test_a_separate_printed_screw_keeps_existing_material_slots(
+    profile: Profile,
+    countersunk: bool,
+) -> None:
     """Ein nachträglich eingesetztes Teil entfärbt das Werkstück nicht.
 
-    Die Schraube bleibt geometrisch getrennt und hängt deshalb ohne Boolesche
-    Operation am vorhandenen Netz. Genau dieser kürzere Weg ließ bislang die
-    Slotliste fallen, sobald die Zahl der Dreiecke wuchs.
+    Die Schraube bleibt geometrisch getrennt. Beim Senkkopf wird vorher die
+    Senkung boolesch abgetragen, beim Sechskantkopf nicht; beide Wege müssen
+    die vorhandene Zuordnung und den neuen Standard-Slot zusammenführen.
     """
     project = _plate_with_a_through_bore()
     History(project.document).apply(
@@ -1918,7 +1947,12 @@ def test_a_separate_printed_screw_keeps_existing_material_slots(profile: Profile
             OperationDraft(
                 op="insert_printed_screw",
                 inputs=("obj_1",),
-                params={"at_feature": "hole_1", "size": "M6", "length": 12.0},
+                params={
+                    "at_feature": "hole_1",
+                    "size": "M6",
+                    "length": 12.0,
+                    "countersunk": countersunk,
+                },
             )
         ],
     )
@@ -2634,7 +2668,6 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
     """
     from app.core.errors import BooleanFailedError
     from app.core.geom.boolean import boolean
-    from app.core.geom.mesh import MeshData
     from app.core.knowledge import standards
     from app.core.knowledge.parts import PARTS, shapes
 

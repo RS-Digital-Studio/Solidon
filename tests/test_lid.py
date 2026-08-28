@@ -15,6 +15,7 @@ import trimesh
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
 from app.core.geom.boolean import shared_volume
+from app.core.geom.lid import CAP_THREAD_FEATURE, NECK_THREAD_FEATURE
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
@@ -297,6 +298,31 @@ def test_the_neck_keeps_the_diameter_of_the_opening(profile: Profile) -> None:
 
     assert result.findings[0].values["neck_mm"] == pytest.approx(40.0, abs=0.5)
     assert result.outputs[0].mesh.bounds.size[0] == pytest.approx(40.0, abs=0.1)
+
+
+def test_the_threaded_neck_keeps_the_container_open_and_names_both_threads(
+    profile: Profile,
+) -> None:
+    """Der einfache Behälterweg baut einen Ring, keinen massiven Gewindebolzen."""
+    result = make_screw_lid(jar(radius=20.0, wall=3.0), profile, height=8.0, pitch=3.0)
+    container, lid = result.outputs
+
+    cut = container.mesh.raw.section(
+        plane_origin=[0.0, 0.0, 64.0],
+        plane_normal=[0.0, 0.0, 1.0],
+    )
+    assert cut is not None
+    planar, _ = cut.to_2D()
+    assert len(planar.polygons_full) == 1
+    openings = [
+        abs(float(trimesh.path.polygons.Polygon(ring).area))
+        for ring in planar.polygons_full[0].interiors
+    ]
+    assert openings and max(openings) > np.pi * 15.0**2, (
+        "der Gewindehals verschließt die Öffnung statt sie ringförmig fortzuführen"
+    )
+    assert not container.features[NECK_THREAD_FEATURE].params["internal"]
+    assert lid.features[CAP_THREAD_FEATURE].params["internal"]
 
 
 def test_the_lid_stands_on_its_open_end(profile: Profile) -> None:

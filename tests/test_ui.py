@@ -967,7 +967,7 @@ def test_an_open_advanced_section_never_overlaps_the_action_buttons(
 
 
 def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> None:
-    """Behälter und Deckel bekommen die richtige Gewinderichtung ohne Raten."""
+    """Bohrung und ebene Außenfläche bekommen die Richtung ohne Raten."""
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
@@ -989,7 +989,8 @@ def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> N
     internal_label = dialog._rows["internal"].labelForField(dialog._editors["internal"])
     assert internal_label is not None
     assert internal_label.text() == "Innengewinde (aus = Außengewinde)"
-    assert "Außengewinde auf einer Außenfläche" in dialog._editors["internal"].toolTip()
+    assert "Gewindebolzen auf einer ebenen Außenfläche" in dialog._editors["internal"].toolTip()
+    assert "Drehdeckel erzeugen" in dialog._editors["internal"].toolTip()
     dialog.reject()
 
     window.object_tree.select_object(object_id)
@@ -997,7 +998,7 @@ def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> N
     window.run_operation(spec)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     assert dialog.values()["at_feature"] == face
-    assert not dialog.values()["internal"], "Fläche heißt Außengewinde für den Behälter"
+    assert not dialog.values()["internal"], "eine ebene Fläche heißt Gewindebolzen"
     dialog.reject()
 
 

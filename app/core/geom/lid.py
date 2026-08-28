@@ -86,6 +86,12 @@ MIN_CAVITY = 100.0
 COLLAR_FEATURE = "lid_collar"
 CAVITY_FEATURE = "lid_cavity"
 
+#: Das entsprechende Paar des Drehdeckels. Auch hier stehen die Namen vor der
+#: Auswertung fest, damit der eine UI-Ablauf Geometrie und Passung in derselben
+#: Transaktion anlegen kann.
+NECK_THREAD_FEATURE = "lid_neck_thread"
+CAP_THREAD_FEATURE = "lid_cap_thread"
+
 
 def _area_of(cavities: list[Any]) -> float:
     """Wie viel Öffnung der Kragen ausfüllt."""
@@ -674,16 +680,46 @@ def screw_lid(ctx: OpContext) -> OpResult:
     lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality)
     solver = deepest([with_neck.solver, with_thread.solver, cap_solver])
 
+    neck_thread = Feature(
+        id=NECK_THREAD_FEATURE,
+        kind="thread",
+        provenance="generated",
+        params={
+            "diameter": round(major, 4),
+            "pitch": round(params.pitch, 4),
+            "centre": (0.0, 0.0, z + params.height / 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "internal": False,
+        },
+    )
+    cap_thread = Feature(
+        id=CAP_THREAD_FEATURE,
+        kind="thread",
+        provenance="generated",
+        params={
+            "diameter": round(major, 4),
+            "pitch": round(params.pitch, 4),
+            "centre": (0.0, 0.0, params.height / 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "internal": True,
+        },
+    )
+
     _log.info("screw lid: neck %.2f, pitch %.2f, clearance %.2f", major, params.pitch, clearance)
     return OpResult(
         solver=solver,
         outputs=[
-            dataclasses.replace(source, mesh=threaded, features={}),
+            dataclasses.replace(
+                source,
+                mesh=threaded,
+                features={NECK_THREAD_FEATURE: neck_thread},
+            ),
             SceneObject(
                 id="",
                 name=f"{source.name} {_('Drehdeckel').translate()}",
                 mesh=lid,
                 material=source.material,
+                features={CAP_THREAD_FEATURE: cap_thread},
             ),
         ],
         findings=[

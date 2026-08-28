@@ -24,7 +24,12 @@ from dataclasses import dataclass, field
 
 from app.core.errors import AppError
 from app.core.expressions import resolve, resolve_value
-from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
+from app.core.geom.lid import (
+    CAP_THREAD_FEATURE,
+    CAVITY_FEATURE,
+    COLLAR_FEATURE,
+    NECK_THREAD_FEATURE,
+)
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
@@ -118,8 +123,9 @@ def apply_lid(
     ihr entstanden ist.
     """
     history = History(document)
+    title = _("Drehdeckel erzeugen") if op == "screw_lid" else _("Deckel erzeugen")
     applied = history.apply(
-        _("Deckel erzeugen"),
+        title,
         [OperationDraft(op=op, inputs=(object_id,), params=dict(params))],
         origin or Origin(by="user"),
     )
@@ -132,21 +138,27 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
-    collar = _collar_height(document, params)
-    # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
-    # Parameter, gilt die Schemavorgabe (4 mm), und die behält ihre Passung.
-    flat = collar is not None and collar <= EPS_GEOM
-    if flat:
-        # Ohne Kragen gibt es kein ``lid_collar``-Merkmal (ein flacher Deckel
-        # trägt keines mehr) — eine Passung darauf zeigte ins Leere und
-        # meldete bei jedem Öffnen eine Geometrie, die es nicht gibt.
-        _log.info("lid flow: collar is zero, no fit to pair")
-        return LidApplied(object_ids=list(made), transaction=applied.id)
+    if op == "screw_lid":
+        first_feature = NECK_THREAD_FEATURE
+        second_feature = CAP_THREAD_FEATURE
+    else:
+        collar = _collar_height(document, params)
+        # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
+        # Parameter, gilt die Schemavorgabe (4 mm), und die behält ihre Passung.
+        flat = collar is not None and collar <= EPS_GEOM
+        if flat:
+            # Ohne Kragen gibt es kein ``lid_collar``-Merkmal (ein flacher Deckel
+            # trägt keines mehr) — eine Passung darauf zeigte ins Leere und
+            # meldete bei jedem Öffnen eine Geometrie, die es nicht gibt.
+            _log.info("lid flow: collar is zero, no fit to pair")
+            return LidApplied(object_ids=list(made), transaction=applied.id)
+        first_feature = CAVITY_FEATURE
+        second_feature = COLLAR_FEATURE
 
     fit = Fit(
         name=unique_name(document),
-        a=FeatureRef(box_id, CAVITY_FEATURE),
-        b=FeatureRef(lid_id, COLLAR_FEATURE),
+        a=FeatureRef(box_id, first_feature),
+        b=FeatureRef(lid_id, second_feature),
         kind="clearance",
         tolerance=f"auto:{profile.material.id}",
     )

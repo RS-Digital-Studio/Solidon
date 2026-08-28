@@ -1202,13 +1202,11 @@ class OperationDialog(QDialog):
                 # Beide Hälften sagen dasselbe — bei einer ausgegrauten Zeile
                 # ist der Grund die Auskunft, die zählt, und ausgerechnet dort
                 # zeigt man eher auf die Beschriftung als in das gesperrte Feld.
-                _explain(
-                    editor,
-                    label,
-                    docs[entry.name]
-                    if active
-                    else _why_inactive(titles[inactive[0]], inactive[1][0]),
-                )
+                if inactive is None:
+                    explanation = docs[entry.name]
+                else:
+                    explanation = _why_inactive(titles[inactive[0]], inactive[1][0])
+                _explain(editor, label, explanation)
 
         self.valuesChanged.connect(follow)
         follow()

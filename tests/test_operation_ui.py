@@ -33,7 +33,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.sketch import shapes
 from app.core.sketch.serialize import sketch_to_text
-from app.ui.main_window import MainWindow
+from app.ui.main_window import LID_OPS, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -74,6 +74,11 @@ def select(window: MainWindow, feature_id: str | None = None) -> str:
                 item.setSelected(False)
                 break
     return object_id
+
+
+def test_both_lid_buttons_use_the_shared_fit_flow() -> None:
+    """Steck- und Drehdeckel müssen beide über den Passungsablauf laufen."""
+    assert frozenset({"create_lid", "screw_lid"}) == LID_OPS
 
 
 # --- Die Auswahl erreicht den Dialog ----------------------------------------------

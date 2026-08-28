@@ -1518,7 +1518,7 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     return _(
         "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
         "gemessene {rate} Token je Sekunde beim Einlesen. Der Auftrag dieser "
-        "Anwendung ist rund 19 000 Token lang, es dauert hier also etwa "
+        "Anwendung ist rund 24 000 Token lang, es dauert hier also etwa "
         "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Ein kleineres "
         "Modell ändert daran wenig; für zügige Antworten braucht es einen "
         "Schlüssel für ein gehostetes Modell — alles außer dem Chat bleibt "

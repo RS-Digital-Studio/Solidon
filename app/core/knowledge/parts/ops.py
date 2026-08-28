@@ -389,10 +389,11 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Ein Rezept baut mit dem Profil des Dokuments (``build_with_profile``):
     # eine ``auto:``-Toleranz darin gehört mit dem Material des Kunden
     # aufgelöst. Für die ``.py``-Bausteine bleibt ``fn`` der ganze Vertrag.
+    part_params = spec.params(**values)
     if spec.build_with_profile is not None:
-        produced = spec.build_with_profile(spec.params(**values), ctx.profile, ctx.quality)
+        produced = spec.build_with_profile(part_params, ctx.profile, ctx.quality)
     else:
-        produced = spec.fn(spec.params(**values))
+        produced = spec.fn(part_params)
 
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
@@ -412,15 +413,51 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
     if spec.separate_from_host:
+        prepared = body
+        host_features: dict[str, Feature] = {}
+        findings: list[Finding] = []
+        solver = None
+        nothing = None
+        host_cut = spec.host_cut(part_params) if spec.host_cut is not None else None
+        if host_cut is not None:
+            # Ein lösbares Teil darf nicht mit dem Träger vereinigt werden;
+            # seine Sitzfläche darf den Träger aber sehr wohl vorbereiten.
+            # Beides wird hier innerhalb **derselben Operation** gerechnet:
+            # ein Undo nimmt Schraube und Senkung gemeinsam zurück, und Agent,
+            # Menü sowie Kommandozeile benutzen denselben Vertrag.
+            cutter = as_mesh_data(host_cut.mesh)
+            placed_cutter = _place(
+                cutter,
+                ctx.params,
+                anchor,
+                0.0,
+                direction,
+                spec.keeps_up,
+                False,
+            )
+            cut = boolean("difference", [body, placed_cutter], quality=ctx.quality)
+            prepared = as_mesh_data(cut.mesh)
+            solver = cut.solver
+            findings.extend(cut.findings)
+            findings.extend(host_cut.findings)
+            nothing = without_effect(body, prepared, "difference", ctx.profile)
+            host_features = _placed_features(
+                host_cut,
+                spec,
+                ctx.params,
+                anchor,
+                0.0,
+                direction,
+                spec.keeps_up,
+                False,
+            )
         # Schraube und Mutter liegen im selben Projekt, dürfen aber nicht zu
         # einem unlösbaren Körper verschweißen. Eine Zusammenfügung hält beide
         # geschlossenen Netze in einem Szenenobjekt, ohne ihre Berührung als
         # Boolesche Verbindung zu deuten.
-        mesh = _concatenated_with_slots(body, placed)
-        solver = None
-        findings: list[Finding] = []
-        nothing = None
+        mesh = _concatenated_with_slots(prepared, placed)
     else:
+        host_features = {}
         kind: BooleanKind = "difference" if subtractive else "union"
         outcome = boolean(kind, [body, placed], quality=ctx.quality)
         mesh = as_mesh_data(outcome.mesh)
@@ -435,6 +472,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     features.update(
         _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     )
+    features.update(host_features)
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.

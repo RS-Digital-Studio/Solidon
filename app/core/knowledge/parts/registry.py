@@ -41,6 +41,17 @@ class BuildWithProfile(Protocol):
     ) -> PartResult: ...
 
 
+HostCut = Callable[[BaseParams], PartResult | None]
+"""Optionales Werkzeug, das ein lösbares Teil am Träger vorbereitet.
+
+Eine Senkkopfschraube bleibt ein eigener Körper, ihre Senkung gehört aber in
+das Werkstück. Der Baustein beschreibt deshalb beides aus demselben
+Parametersatz: ``fn`` baut das lösbare Teil, ``host_cut`` bei Bedarf die Form,
+die vor dem Anfügen vom Träger abgezogen wird. ``None`` heißt, dass diese
+Parameterstellung keine Vorbereitung braucht.
+"""
+
+
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: Kürzestes Wort, das die Suche ernst nimmt.
@@ -102,6 +113,8 @@ class PartSpec:
     group: str
     params: type[BaseParams]
     fn: PartFn
+    host_cut: HostCut | None = None
+    """Werkzeug zur Vorbereitung des Trägers vor einem lösbaren Teil."""
     version: str = "1"
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
@@ -444,6 +457,7 @@ def register_part(
     at_hole: bool = False,
     at_hole_mouth: bool = False,
     separate_from_host: bool = False,
+    host_cut: HostCut | None = None,
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
@@ -481,6 +495,7 @@ def register_part(
                 at_hole=at_hole,
                 at_hole_mouth=at_hole_mouth,
                 separate_from_host=separate_from_host,
+                host_cut=host_cut,
                 at_hole_values=at_hole_values,
                 bodies=bodies,
                 at_face=at_face,

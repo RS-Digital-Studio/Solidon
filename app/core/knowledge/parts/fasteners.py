@@ -21,7 +21,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, result, subtract, thread, union
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
-from app.core.types import BaseParams, PartResult
+from app.core.types import BaseParams, Feature, PartResult
 from app.i18n import _
 
 _SCREWS = standards.screw_sizes()
@@ -578,6 +578,20 @@ PRINTED_FASTENERS = PartChange(
     ),
 )
 
+PRINTED_SCREW_PREPARES_COUNTERSINK = PartChange(
+    version="2",
+    date="2026-08-28",
+    reason=(
+        "Der Senkkopf änderte nur die Schraube. Die gewählte Bohrung blieb "
+        "zylindrisch, deshalb stand der Kopf trotz aktivierter Wahl auf der Fläche."
+    ),
+    effect=(
+        "Bei aktiviertem Senkkopf schneidet dieselbe Baustein-Operation jetzt "
+        "eine passende 90-Grad-Senkung in die gewählte Bohrung und setzt den "
+        "Schraubenkopf bündig hinein. Ein Undo nimmt beides gemeinsam zurück."
+    ),
+)
+
 
 @op_params
 class ThreadParams(BaseParams):
@@ -611,7 +625,8 @@ class ThreadParams(BaseParams):
         subtractive_on=(True,),
         doc=_(
             "Aktivieren für Innengewinde in einer Bohrung; deaktivieren für "
-            "Außengewinde auf einer Außenfläche."
+            "einen Gewindebolzen auf einer ebenen Außenfläche. Für einen Behälter "
+            "mit passendem Schraubdeckel verwenden Sie „Drehdeckel erzeugen“."
         ),
     )
     play: float = param(
@@ -635,9 +650,10 @@ class ThreadParams(BaseParams):
     at_hole_values=size_for_thread,
     features=["thread"],
     doc=_(
-        "Druckbares Innengewinde in einer Bohrung oder Außengewinde auf einer Fläche "
-        "als Wendel mit abgeflachtem Kamm — kein ISO-Profil, weil ein Drucker es "
-        "ohnehin nicht auflöst."
+        "Druckbares Innengewinde in einer Bohrung oder Gewindebolzen auf einer "
+        "ebenen Fläche — als Wendel mit abgeflachtem Kamm. Für einen offenen "
+        "Behälter mit passendem Schraubdeckel ist „Drehdeckel erzeugen“ der "
+        "gemeinsame Weg."
     ),
     caveat=_(
         "Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit "
@@ -727,7 +743,10 @@ class PrintedScrewParams(BaseParams):
     countersunk: bool = param(
         title=_("Senkkopf"),
         default=False,
-        doc=_("Formt einen 90-Grad-Senkkopf für eine zuvor gesenkte Bohrung."),
+        doc=_(
+            "Formt einen 90-Grad-Senkkopf und senkt die gewählte Bohrung im "
+            "selben rücknehmbaren Schritt passend an."
+        ),
     )
     play: float = param(
         title=_("Spiel"),
@@ -746,17 +765,22 @@ class PrintedScrewParams(BaseParams):
     group="fasteners",
     params=PrintedScrewParams,
     at_hole=True,
+    at_face=False,
     at_hole_mouth=True,
     at_hole_values=size_for_printed_screw,
     separate_from_host=True,
-    features=["thread"],
-    doc=_("Druckbare Schraube mit Sechskant- oder Senkkopf und passendem Außengewinde."),
+    host_cut=lambda raw: _printed_screw_countersink(raw),
+    features=["thread", "countersink"],
+    doc=_(
+        "Druckbare Schraube für eine gewählte Bohrung, mit Sechskantkopf oder "
+        "automatisch bündig gesenktem Senkkopf und passendem Außengewinde."
+    ),
     caveat=_(
         "Zusammen mit der gedruckten Mutter aus demselben Material drucken: Das Spiel "
         "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
         "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
-    changes=[PRINTED_FASTENERS],
+    changes=[PRINTED_FASTENERS, PRINTED_SCREW_PREPARES_COUNTERSINK],
 )
 def printed_screw(raw: BaseParams) -> PartResult:
     """Eine Schraube, deren Gewinde und Kopf an derselben Bohrung sitzen."""
@@ -771,6 +795,10 @@ def printed_screw(raw: BaseParams) -> PartResult:
     if params.countersunk:
         head_height = (screw.countersink - diameter) / 2.0
         head = shapes.cone(diameter, screw.countersink, head_height)
+        # Der breite Rand liegt bündig an der Mündung; der schmale Teil des
+        # Kopfes reicht in die Bohrung. Vorher stand auch der Senkkopf auf
+        # z = 0 und damit vollständig **über** der Fläche.
+        head = shapes.moved(head, (0.0, 0.0, -head_height))
     else:
         head = shapes.hexagon(screw.head, screw.head_height)
 
@@ -783,6 +811,32 @@ def printed_screw(raw: BaseParams) -> PartResult:
             (0.0, 0.0, -params.length / 2.0),
         ),
     )
+
+
+def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
+    """Die zum gewählten Senkkopf passende Vorbereitung des Trägers."""
+    params = cast(PrintedScrewParams, raw)
+    if not params.countersunk:
+        return None
+
+    screw = standards.screw(params.size)
+    depth = (screw.countersink - screw.clearance) / 2.0
+    cutter = shapes.cone(screw.clearance, screw.countersink, depth)
+    cutter = shapes.moved(cutter, (0.0, 0.0, -depth))
+    identifier = "countersink_1"
+    feature = Feature(
+        id=identifier,
+        kind="cone",
+        provenance="generated",
+        params={
+            "diameter": round(screw.countersink, 4),
+            "angle": 90.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, -depth / 2.0),
+            "recess": True,
+        },
+    )
+    return result(cutter, (identifier, feature))
 
 
 @op_params
