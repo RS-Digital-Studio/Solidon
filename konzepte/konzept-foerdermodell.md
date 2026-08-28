@@ -1,12 +1,19 @@
 # Konzept: Monatliche Förderung in drei Stufen
 
 Stand 23.08.2026, **überarbeitet am 24.08.2026 gegen die ersten Zugriffszahlen**
-(§14) und am selben Tag um eine **Nachkontrolle der Haftungsgrundlagen**
-ergänzt (§15 — acht Befunde, zwei davon wirken heute).
+(§14), am selben Tag um eine **Nachkontrolle der Haftungsgrundlagen** ergänzt
+(§15 — acht Befunde, zwei davon wirken heute), und am **28.08.2026 gegen vier
+Festlegungen Roberts fortgeschrieben** (§16).
 Beauftragt von Robert: ein Konzept für eine monatliche Finanzierung
 „nebenbei, für Interessierte" in drei Stufen, bei der die höchste Stufe auch den
 Lizenzschlüssel enthält — dazu eine Kontrolle aller Rechtstexte und eine
 Recherche zur Rechtsform.
+
+> **Der Auftrag hat sich am 28.08.2026 in einem Punkt geändert, und es ist der
+> tragende:** Die höchste Stufe enthält **keinen Lizenzschlüssel** mehr. Die
+> Förderung ist reine Unterstützung; der Lizenzkauf läuft getrennt davon. Wo
+> dieses Dokument unterhalb von §16 vom Schlüssel in Stufe 3 spricht,
+> beschreibt es einen überholten Stand — die Stellen sind einzeln markiert.
 
 Dieses Dokument beantwortet drei Fragen, und sie hängen zusammen: **Was für ein
 Modell** darf es sein, ohne das Kernversprechen der Marke zu brechen (§1–§4),
@@ -25,6 +32,21 @@ heute schon darin stehen (§10).
 > - **§3:** Weg A bleibt empfohlen, aber seine Begründung trägt erst ab einer
 >   Größenordnung, die noch nicht erreicht ist.
 > - **§13:** Von den sechs Entscheidungen sind zwei beantwortet.
+
+> **Was die Fortschreibung vom 28.08.2026 geändert hat** (§16), nach demselben
+> Grundsatz — an den betroffenen Stellen, nicht nur im Nachtrag:
+>
+> - **§3 und §4:** Die Beträge sind **5 / 10 / 15 €** plus freier Betrag, und
+>   **Stufe 3 enthält keinen Lizenzschlüssel mehr.** Damit fallen die
+>   Lückenrechnung, Weg A gegen Weg B und die Handarbeit bei der
+>   Schlüsselausgabe ersatzlos weg.
+> - **§8:** Nicht ein Anbieter, sondern zwei. Der Lizenzkauf läuft über
+>   **Lemon Squeezy**, die Förderung **nicht** — Merchant-of-Record-Anbieter
+>   schließen Zuwendungen ohne Produkt vertraglich aus.
+> - **Neu:** eine **Einmalspende** (§16.3), und sie ist der einfachste Teil des
+>   Modells — eine Einmalzahlung ist kein Dauerschuldverhältnis.
+> - **§13:** Von den drei verbliebenen offenen Entscheidungen sind zwei
+>   erledigt; eine ist gegenstandslos geworden.
 
 > **Keine Rechts- oder Steuerberatung.** Alles hier ist nach bestem Wissen
 > recherchiert und mit Fundstellen belegt, aber die Einordnung eines konkreten
@@ -106,6 +128,15 @@ einmal ausgegeben und bleibt, wie der eines Käufers — auch wenn die Förderun
 endet. Technisch geht es gar nicht anders (§1), und rechtlich ist es die
 saubere Variante: Man entzieht nichts, also muss man nichts entziehen dürfen.
 
+> **Seit dem 28.08.2026 gibt es diesen Schlüssel nicht mehr** (E2 in §16):
+> Keine Förderstufe enthält eine Lizenz. Der Absatz bleibt stehen, weil er die
+> Denkbewegung festhält, die zu E2 geführt hat — **die Trennung ist die
+> konsequente Fortsetzung dessen, was hier schon angelegt war.** Wer den
+> Schlüssel ohnehin nicht entziehen kann, hat ihn nie wirklich an die
+> Förderung gekoppelt; E2 zieht daraus den Schluss und koppelt ihn auch
+> nominell ab. Der Rest von §2 — fördern statt abonnieren — gilt unverändert
+> und ist durch E2 nur eindeutiger geworden.
+
 > Diese Linie ist unabhängig von mir zweimal erreicht worden: `3d-druck-bd` kam
 > in ihrer Analyse des Kaufwegs am 23.08.2026 zum selben Ergebnis, aus derselben
 > Codestelle heraus. Das erhöht das Vertrauen in die Schlussfolgerung, ersetzt
@@ -160,6 +191,14 @@ abschaltet — sonst liest jemand „Abo" und hat recht.
 
 ## §3 Die drei Stufen
 
+> **Überholt seit dem 28.08.2026 — die geltenden Stufen stehen in §16.1.**
+> Robert hat die Beträge auf 5 / 10 / 15 € festgelegt und den Lizenzschlüssel
+> aus Stufe 3 genommen. Dieser Abschnitt bleibt stehen, weil seine
+> Begründungen es wert sind: Die Gebührenschwelle (unten), die Lückenrechnung
+> und die drei Verbote am Ende erklären, **warum** die neuen Stufen so
+> aussehen, wie sie aussehen. Was hier über den Schlüssel in Stufe 3 steht,
+> gilt nicht mehr.
+
 Namen im Ton des Projekts, Beträge als Vorschlag. Alle Beträge sind
 **Bruttobeträge** — was der Förderer zahlt, steht dran (§7).
 
@@ -180,6 +219,11 @@ Namen im Ton des Projekts, Beträge als Vorschlag. Alle Beträge sind
   selbst aufmacht, und sie soll für ihn aufgehen.
 
 ### Die Lücke, die dabei entsteht — und warum sie offen bleiben sollte
+
+> **Gegenstandslos seit dem 28.08.2026 (E2 in §16).** Ohne Schlüssel in einer
+> Förderstufe gibt es keine Lücke. Der Abschnitt bleibt als Begründung dafür
+> lesbar, warum die Trennung von Förderung und Kauf die bessere Lösung war —
+> er rechnet vor, was die Vermischung gekostet hätte.
 
 Wer Stufe 3 einen Monat lang zahlt, kündigt und den Schlüssel behält, hat 12 €
 statt 69 € gezahlt. Diese Lücke ist **technisch nicht schließbar** (§1) und
@@ -247,6 +291,12 @@ geschätzten Zahl zu treffen.
 
 ## §4 Was Stufe 3 technisch bedeutet
 
+> **Teilweise überholt seit dem 28.08.2026.** Der Menüeintrag unten gilt
+> unverändert und ist weiterhin der einzige Aufwand am Programm — dazu kommt
+> mit Stufe 3 neu die Danksagungsliste im Über-Dialog (§16.6 Punkt 20).
+> **Der Unterabschnitt „Der Schlüssel selbst" ist gegenstandslos:** Es wird
+> für keine Förderstufe ein Schlüssel ausgegeben (E2 in §16).
+
 **An der Lizenzprüfung nichts, an der Oberfläche ein Menüeintrag.** Das ist die
 ganze Rechnung.
 
@@ -270,6 +320,12 @@ nicht, wer fördert, und soll es nicht wissen — das wäre der Server, den es
 nicht gibt (§1).
 
 ### Der Schlüssel selbst
+
+> **Gegenstandslos für die Förderung seit dem 28.08.2026 (E2 in §16).** Der
+> Abschnitt bleibt stehen, weil zwei Feststellungen darin über den Anlass
+> hinaus gelten: die Verwechslungsgefahr der **zwei Schlüsselpaare** und die
+> Hauptversion als Wiederholungshebel. Für den **Kauf** über Lemon Squeezy
+> (§16.4) beschreibt er weiterhin richtig, wie ein Schlüssel entsteht.
 
 Ein Schlüssel entsteht heute über `tools/make_licence_keys.py` und wird mit dem
 privaten Teil des Lizenz-Schlüsselpaars signiert; der öffentliche Teil steht in
@@ -428,8 +484,8 @@ befreit.
 
 Bei einer Förderung mit drei Stufen und „nebenbei" ist die 25.000-€-Grenze auf
 absehbare Zeit die relevante. Zur Einordnung: 25.000 € entsprechen rund
-**170 Förderern in Stufe 3 über zwölf Monate** — zusätzlich zu allen Verkäufen,
-denn beides zählt zusammen.
+**139 Förderern in der höchsten Stufe über zwölf Monate** (bei 15 € nach E1,
+§16.1) — zusätzlich zu allen Verkäufen, denn beides zählt zusammen.
 
 ### Ist die Förderung überhaupt umsatzsteuerbar? Ja, sicherheitshalber immer annehmen.
 
@@ -437,8 +493,12 @@ Die entscheidende Unterscheidung ist **echter gegen unechten Zuschuss**: Ohne
 Gegenleistung liegt kein Leistungsaustausch vor und keine Umsatzsteuer an; mit
 Gegenleistung schon.
 
-- **Stufe 3 ist eindeutig ein Leistungsaustausch.** Der Lizenzschlüssel ist
-  eine konkrete Gegenleistung. Umsatzsteuerbar.
+- ~~**Stufe 3 ist eindeutig ein Leistungsaustausch.** Der Lizenzschlüssel ist
+  eine konkrete Gegenleistung. Umsatzsteuerbar.~~ **Seit E2 (§16) gibt es
+  keinen Schlüssel mehr** — damit fällt der eine eindeutige Fall weg, und
+  **alle drei Stufen sind Grenzfälle.** Das macht die Frage nicht kleiner,
+  sondern größer: §16.5 führt sie als die eine offene Frage dieses Modells
+  aus, samt der Zange, die daraus für die Anbieterwahl entsteht.
 - **Stufe 1 und 2 sind Grenzfälle.** Nennung auf einer Website und Vorabzugang
   sind Gegenleistungen, wenn auch geringe. Die Finanzverwaltung neigt bei
   Crowdfunding mit Gegenleistung („Crowdsponsoring") zur Steuerbarkeit.
@@ -509,6 +569,15 @@ Verhältnis von Aufwand zu ersparter Mühe.
 
 ## §8 Zahlungsabwicklung
 
+> **Überholt seit dem 28.08.2026 — die geltende Aufteilung steht in §16.4.**
+> Die Empfehlung unten, *einen* Merchant of Record für Kauf und Förderung zu
+> nehmen, ist nicht umsetzbar: **Merchant-of-Record-Anbieter schließen
+> Zuwendungen ohne Produkt vertraglich aus**, Lemon Squeezy ausdrücklich in
+> seiner Liste verbotener Produkte. Es braucht zwei Anbieter — Lemon Squeezy
+> für den Kauf (E4), eine Förderplattform für die Förderung. Die Begründung
+> unten, **warum** ein MoR für den Verkauf richtig ist, gilt unverändert; sie
+> trägt jetzt nur den Kauf und nicht mehr die Förderung.
+
 **Empfehlung: Paddle behalten, jetzt aber im Abo-Modus (Subscriptions).**
 
 Die Begründung steht bereits in `konzepte/konzept-veroeffentlichung-1.0.md:254`
@@ -549,6 +618,17 @@ Wahl, weil sie die Steuerpflicht beim Verkäufer lassen.
 
 ## §9 Was das Modell rechtlich auslöst
 
+> **Die Ableitung im ersten Satz trägt nicht mehr — die Folgen bleiben.**
+> Seit E2 (§16) enthält keine Stufe einen Schlüssel, und schon H5 hatte
+> gezeigt, dass die Pflichten ohnehin nicht am Schlüssel hängen: **Jede
+> Gegenleistung genügt**, und Nennung wie Werkstattbrief sind welche. Der
+> Kündigungsbutton bleibt deshalb Pflicht, die Widerrufsbelehrung für
+> Dauerschuldverhältnisse ebenfalls. **Wo E2 wirkt, ist die Höhe des
+> Einsatzes:** Ein Streitfall um eine Förderung von 15 € im Monat ohne
+> Schlüssel wiegt anders als einer um eine Lizenz zu 69 €. Ob die Förderung
+> überhaupt entgeltlich im Sinne dieser Vorschriften ist, ist die Frage aus
+> §16.5 — **bis sie beantwortet ist, wird sie bejaht und der Button gebaut.**
+
 Sobald **Stufe 3 den Schlüssel enthält**, ist die Förderung ein **entgeltliches
 Dauerschuldverhältnis mit Verbrauchern, online geschlossen** — und damit gilt
 das volle Programm. Das ist der Preis dafür, dass die höchste Stufe eine echte
@@ -586,6 +666,13 @@ monatlichen Förderung anders wirkt als bei einem Kauf.
 Der Monatsbetrag ist als **Gesamtpreis** anzugeben, mit dem Hinweis, ob
 Umsatzsteuer enthalten ist. Unter der Kleinunternehmerregelung wird keine
 ausgewiesen; die Rechnung stellt ohnehin Paddle als MoR (§8).
+
+> **Der letzte Halbsatz gilt seit dem 28.08.2026 nicht mehr für die
+> Förderung** (§16.4): Sie läuft über einen Anbieter, der **kein** Merchant of
+> Record ist. **Damit stellt Robert die Rechnung selbst** — unter der
+> Kleinunternehmerregelung ohne Umsatzsteuerausweis und mit dem Hinweis nach
+> § 19 UStG. Für den **Kauf** bleibt der Satz richtig; dort stellt Lemon
+> Squeezy die Rechnung.
 
 ### 4. Was ausdrücklich nicht nötig ist
 
@@ -910,7 +997,7 @@ Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 | 6 | Gewerbe anmelden, Geschäftskonto, USt-IdNr. | Gewerbeamt Bamberg, Bank, BZSt | vor dem ersten Geldeingang |
 | 7 | Krankenkasse und ggf. Arbeitgeber schriftlich informieren | — | vor dem ersten Geldeingang |
 | 8 | Steuerberater-Erstgespräch mit diesem Dokument | — | vor dem ersten Geldeingang |
-| 9 | Paddle: Subscriptions einrichten, Kündigungsbutton klären | Paddle | vor dem Start der Förderung |
+| ~~9~~ | ~~Paddle: Subscriptions einrichten, Kündigungsbutton klären~~ — **ersetzt am 28.08.2026 durch die Punkte 17 bis 19** (§16.6): der Merchant of Record trägt jetzt nur den Kauf, die Förderung läuft über einen zweiten Anbieter | — | — |
 | 10 | Förderseite bauen, Kündigungsbutton, Widerrufsbelehrung für Dauerschuldverhältnisse | `website/`, `AGB.md`, `WIDERRUF.md` | vor dem Start der Förderung |
 
 **Punkt 1 bis 5 sind Textarbeit und in einer Sitzung zu erledigen.** Punkt 6 bis
@@ -951,12 +1038,15 @@ stehen unten als erledigt, nicht gestrichen, weil die Begründung Bestand hat.
 
 ### Offen
 
-1. **Die Beträge** — 3 / 7 / 12 € sind ein begründeter Vorschlag, kein Ergebnis.
-2. **Weg A oder Weg B** bei der Schlüsselausgabe in Stufe 3 (§3). Empfehlung: A
-   — **aber die Entscheidung wartet auf die echte Kaufrate.** Bei zwölf Käufern
-   im Jahr entscheiden drei Einzelfälle über ein Fünftel des Umsatzes; das ist
-   keine Frage, die man auf einer geschätzten Zahl beantwortet. Zwei Wochen
-   Verkauf liefern sie.
+1. ~~**Die Beträge** — 3 / 7 / 12 € sind ein begründeter Vorschlag, kein
+   Ergebnis.~~ **Entschieden am 28.08.2026: 5 / 10 / 15 € plus freier Betrag**
+   (E1). Ausgeführt in §16.1, samt der Gebührenrechnung, die zeigt, warum die
+   alte Untergrenze von 3 € damit ihre Bedeutung verliert.
+2. ~~**Weg A oder Weg B** bei der Schlüsselausgabe in Stufe 3 (§3).~~
+   **Gegenstandslos seit dem 28.08.2026** (E2): Keine Stufe gibt einen
+   Schlüssel aus, also gibt es keine Lücke zu schließen. Diese Entscheidung
+   muss nicht mehr auf die Kaufrate warten — was sie zugleich vom
+   Verkaufsstart am 01.11.2026 entkoppelt (§16.8).
 3. **Ob ein Steuerberater dauerhaft mandatiert wird** oder nur für ein
    Erstgespräch. Bei Einzelunternehmen mit EÜR und Kleinunternehmerregelung
    genügt lange ein jährliches Gespräch.
@@ -1312,3 +1402,312 @@ niemand denkt, sie sei übersehen worden.
 > Formulierungsfragen, die ein Fachanwalt in einer halben Stunde entscheidet.
 > H3 und H4 sind es nicht — das sind Geschäftsrisiken mit einer Frist im
 > Dezember.
+
+---
+
+## §16 Die Fortschreibung vom 28.08.2026 — Beträge, Stufen ohne Schlüssel, Einmalspende
+
+Robert hat am 28.08.2026 vier Festlegungen getroffen. Drei davon beantworten
+offene Punkte aus §13, die vierte ist neu:
+
+| # | Festlegung | Wirkt auf |
+|---|---|---|
+| **E1** | Die Beträge sind **5 / 10 / 15 €** im Monat, dazu ein **frei wählbarer Betrag** | §13 Nummer 1 |
+| **E2** | **Kein Lizenzschlüssel in einer Förderstufe.** Die Förderung ist reine Unterstützung | §3, §4, §13 Nummer 2 |
+| **E3** | Zusätzlich eine **Einmalspende** | neu — §16.3 |
+| **E4** | Der **Lizenzkauf** läuft über **Lemon Squeezy**, sobald die Demo endet | §8 |
+
+**E2 ist die folgenreichste, und sie vereinfacht mehr, als sie wegnimmt.** Mit
+dem Schlüssel fällt die ganze Lückenrechnung aus §3 weg: kein Weg A gegen
+Weg B, keine Nähe zum Teilzahlungsgeschäft nach § 507 BGB, keine Handarbeit bei
+der Schlüsselausgabe (§4), keine Frage, ob ein Förderer den Kauf unterläuft.
+Die Förderung und der Verkauf berühren sich nicht mehr. Was §1 als Konflikt
+beschrieb, ist damit nicht nur entschärft, sondern aufgelöst.
+
+### §16.1 Die drei Stufen und der freie Betrag
+
+Beträge von Robert, Namen und Inhalte als Vorschlag. Stufe 3 hieß bisher
+**Schlüssel** — der Name trägt nicht mehr, weil kein Schlüssel mehr darin ist.
+
+| | Name | Betrag | Was zurückkommt |
+|---|---|---|---|
+| **1** | **Rückenwind** | **5 € / Monat** | Nennung auf der Unterstützerseite (freiwillig, Name oder Pseudonym). Der **Werkstattbrief**. |
+| **2** | **Werkbank** | **10 € / Monat** | Alles aus Stufe 1. Dazu die Änderungsliste, bevor die Version herauskommt, und ein Kanal für Wünsche — ausdrücklich **ohne Anspruch** auf Umsetzung. |
+| **3** | **Fundament** | **15 € / Monat** | Alles aus Stufe 2. Dazu die **Nennung im Über-Dialog der Anwendung**, in der jeweils nächsten Version. |
+| — | **Freier Betrag** | ab 5 € | Ordnet sich der höchsten erreichten Stufe zu: 12 € bekommen Werkbank, 20 € bekommen Fundament. |
+
+**Der Werkstattbrief** ist der Vorschlag, der am wenigsten kostet und am besten
+zum Projekt passt: eine unregelmäßige Notiz per E-Mail darüber, was gebaut
+wurde und was dabei schiefging — im Ton der Commit-Meldungen dieses
+Repositories, die ohnehin Erzählungen sind und keine Etiketten.
+**Ausdrücklich ohne zugesagte Frequenz** („wenn es etwas zu erzählen gibt",
+nicht „monatlich"). Eine zugesagte Frequenz wäre eine geschuldete Leistung mit
+Termin; eine unregelmäßige Notiz ist es nicht.
+
+**Die Nennung im Über-Dialog ist der eigentliche Fund für Stufe 3.** Sie ist
+dauerhaft, sie steht im Produkt statt auf einer Seite, die niemand aufruft
+(§14 hat genau das gemessen), und sie kostet in der Pflege eine Zeile je
+Förderer. Vor allem ist sie **keine Leistung an den Förderer**, sondern eine
+Nennung über ihn — das ist der Unterschied, an dem §16.4 hängt. Die
+Formulierung „in der jeweils nächsten Version" ist bewusst gewählt: Sie sagt
+zu, dass der Name aufgenommen wird, nicht dass eine Version zu einem Termin
+erscheint.
+
+**Warum diese Beträge tragen.** Die alte Begründung für 12 € („ein halbes Jahr
+übersteigt den Kaufpreis") ist mit E2 gegenstandslos — es gibt nichts mehr
+gegenzurechnen. Die neuen Beträge stehen auf einer anderen Rechnung, und sie
+geht auf:
+
+| | 5 € | 10 € | 15 € |
+|---|---|---|---|
+| Gebühr Ko-fi Gold, 5 % (§16.4) | 0,25 € | 0,50 € | 0,75 € |
+| Zahlungsgebühr, grob 0,25 € + 2,5 % | 0,38 € | 0,50 € | 0,63 € |
+| **kommt an** | **~4,37 €** | **~9,00 €** | **~13,62 €** |
+| Anteil, der ankommt | 87 % | 90 % | 91 % |
+
+Die alte Untergrenze von 3 € war mit der Gebührenschwelle begründet. **5 € hebt
+diese Schwelle von einem Argument zu einer Nebensache** — der Anteil, der
+ankommt, ist auf allen drei Stufen nahe beieinander. Damit entscheidet der
+Förderer nach dem, was er geben will, und nicht danach, wo die Gebühr am
+wenigsten frisst.
+
+**Der freie Betrag hat einen praktischen Vorbehalt.** Bei
+Mitgliedschaftsplattformen sind die Stufen in der Regel feste Beträge; ein frei
+wählbarer *monatlicher* Betrag ist nicht überall vorgesehen (bei GitHub
+Sponsors ja, bei Ko-fi-Mitgliedschaften nicht ohne Weiteres). **Vor dem Start
+beim gewählten Anbieter prüfen.** Fällt er weg, ist der Verlust klein: Der
+freie Betrag wirkt vor allem bei der Einmalspende (§16.3), und dort kann ihn
+jede Plattform.
+
+### §16.2 Was die Stufen weiterhin nicht enthalten dürfen
+
+Die drei Verbote aus §3 gelten unverändert — keine Funktion, die es ohne
+Förderung nicht gibt; kein Anspruch auf Support; keine Mitsprache über „wird
+gelesen" hinaus. **Ein viertes kommt mit E2 hinzu:**
+
+- **Kein Lizenzschlüssel und kein Rabatt darauf, in keiner Stufe.** Sonst ist
+  die Förderung doch ein Vertriebsweg, und die ganze Rechnung aus §3 kommt
+  zurück. Wer fördert und die Software behalten will, kauft sie wie jeder
+  andere.
+
+**Und eine Streichung gegenüber dem alten §3: Vorabversionen sind nicht mehr
+vorgesehen.** Sie standen dort in Stufe 2, und H5 hat gezeigt, was sie
+auslösen: Wer für Geld Vorabversionen zusagt, schuldet **mangelfreie**
+Vorabversionen, mit Nacherfüllung und Minderung über die gesamte Laufzeit
+(§ 327f, § 327k Abs. 2 BGB). Das ist das Gegenteil dessen, was eine
+Vorabversion ist. An ihrer Stelle steht in Stufe 2 die Änderungsliste vorab —
+ein Text, keine Software.
+
+> Wer Vorabversionen trotzdem will, braucht das § 327h-Häkchen aus §11
+> Nummer 14, und zwar als eigenes Häkchen im Bestellvorgang, nicht als Satz in
+> einem Vertragstext. Das ist machbar, aber es ist eine Bestellstrecke, die
+> eine Förderplattform so nicht anbietet.
+
+### §16.3 Die Einmalspende
+
+**Frei wählbarer Betrag mit drei Vorschlägen — 3 €, 10 €, 25 € —, keine
+wiederkehrende Zahlung, keine Gegenleistung.** Sie ist der einfachste Teil des
+ganzen Modells, und zwar aus einem Grund, der leicht übersehen wird: **Eine
+Einmalzahlung ist kein Dauerschuldverhältnis.**
+
+Damit entfällt genau das, was die Förderung teuer macht:
+
+| | Förderung (monatlich) | Einmalspende |
+|---|---|---|
+| Kündigungsbutton § 312k BGB | Pflicht (§9) | entfällt — nichts zu kündigen |
+| Widerrufsbelehrung für Dauerschuldverhältnisse | nötig | entfällt |
+| §§ 327 ff. BGB in der Dauerbereitstellungsvariante | greifen (H5) | greifen nicht |
+| Aktualisierungspflicht über die Laufzeit | ja | keine Laufzeit |
+
+**Empfehlung: die Einmalspende ohne jede Gegenleistung anbieten** — auch ohne
+Nennung. Dann ist sie eine Schenkung, kein Leistungsaustausch, und die Frage
+aus §16.5 stellt sich für sie gar nicht erst. Wer genannt werden will, fördert
+monatlich; das ist nebenbei ein Grund, von der Spende zur Förderung zu wechseln.
+
+> **Diese Empfehlung ist nicht neu, sie wird hier nur eingelöst.** §6 hat den
+> Satz schon am 23.08.2026 geschrieben, als es noch keine Einmalspende gab:
+> „Wer echte Spenden ohne jede Gegenleistung will, muss sie **getrennt** und
+> ohne Stufen anbieten — dann aber ohne Nennung, ohne Vorabzugang, ohne
+> alles." E3 ist genau dieses „getrennt und ohne Stufen".
+
+**Die Alternative — Nennung auch für Einmalspender ab einem Betrag — ist
+möglich, aber sie zieht die Spende in dieselbe Behandlung wie die Förderung.**
+Der Gewinn (etwas mehr Anreiz) steht gegen den Verlust (der einfachste Fall des
+Modells wird zum komplizierten). Dafür spricht wenig.
+
+**Was auf keinen Fall passieren darf:** die Einmalspende als „Vorbestellung",
+„Frühbucher" oder „schon mal etwas anzahlen" darstellen. Sobald ein Kunde
+darin eine Anzahlung auf die Lizenz lesen kann, ist es eine — mit
+Rückforderungsanspruch, wenn nicht geliefert wird. Der Satz auf der Seite muss
+das ausschließen, und zwar mit denselben Worten wie bei der Förderung: **Sie
+schaltet nichts frei und rechnet auf nichts an.**
+
+### §16.4 Die Anbieterfrage — und warum es zwei sein müssen
+
+Hier steht der harte Befund dieser Fortschreibung. **§8 empfahl Paddle für
+alles. Das geht nicht mehr, und es ginge auch mit Lemon Squeezy nicht.**
+
+**Lemon Squeezy schließt Spenden vertraglich aus.** In der Liste der verbotenen
+Produkte stehen Zuwendungen, denen kein Produkt gegenübersteht oder deren Preis
+über dem Produktwert liegt. Genau das ist eine Förderung ohne Gegenleistung,
+und genau das ist eine Spende. Lemon Squeezy prüft außerdem jeden Store vor der
+Freischaltung. Ein Store, der beides anbietet, kommt entweder nicht durch oder
+wird später gesperrt — **und das Zweite wäre erheblich schlimmer als das
+Erste**, weil dann der Verkauf mit stillsteht. Für Paddle und FastSpring gilt
+dasselbe der Sache nach: Ein Merchant of Record ist gebaut, um Produkte zu
+verkaufen, und braucht eins.
+
+**Daraus folgt die Aufteilung:**
+
+| Was | Anbieter | Warum |
+|---|---|---|
+| **Lizenzkauf** | **Lemon Squeezy** (E4) | Merchant of Record: schuldet die Umsatzsteuer im Land des Käufers, meldet sie, stellt die Rechnung. Das ist die Begründung aus §8, und sie gilt unverändert |
+| **Förderung + Einmalspende** | **nicht Lemon Squeezy** — Ko-fi, Steady oder GitHub Sponsors | dort ist eine Zuwendung ohne Produkt vorgesehen statt verboten |
+
+**Zur Wahl beim zweiten Anbieter**, gemessen an diesem Modell:
+
+| | Einmalig | Monatlich | Gebühr | Einschätzung |
+|---|---|---|---|---|
+| **Ko-fi** | ja | ja, mit Gold | 0 % einmalig; Gold 6 $/Monat, 5 % auf Mitgliedschaften | **empfohlen** — deckt beide Fälle, die Einmalspende ohne Provision |
+| Steady | ja | ja | nicht verifiziert | deutscher Anbieter, deutsches Recht — vor einer Entscheidung die Gebühren erfragen |
+| GitHub Sponsors | ja | ja, freier Betrag | 0 % für Privatkonten | kann als Einziger den freien Monatsbetrag, ist aber auf offenen Quelltext zugeschnitten — Solidon3D ist es nicht |
+
+**Zwei Vorbehalte zu E4, die zu Punkt 9 und 16 aus §11 gehören:**
+
+- **Lemon Squeezy ist seit Juli 2024 Teil von Stripe**, und seit 2026 gibt es
+  daneben **Stripe Managed Payments** — gebaut vom selben Team, zu denselben
+  Konditionen von 5 % zuzüglich 0,50 $, und vom Lemon-Squeezy-Geschäftsführer
+  selbst als das Ziel bezeichnet, auf das Bestandskunden wechseln sollen. Ein
+  Abschaltdatum ist nicht genannt, Neuanmeldungen laufen. **Das ist kein Grund
+  gegen E4, aber einer, den Umzug von vornherein einzuplanen:** keine
+  Lemon-Squeezy-Kennung in einer Projektdatei, in einem Rechtstext oder im
+  Lizenzschlüssel verankern, die einen Wechsel teuer macht. Die
+  Bestellkennung im Schlüssel (`key.py:90`, Feld `order`) ist davon nicht
+  betroffen — sie ist eine Zeichenkette ohne Anbieterbezug.
+- **Die Freistellungsklausel aus H7 gilt für Lemon Squeezy genauso** wie für
+  Paddle. Sie ist die größte vertragliche Haftungsübernahme des Modells und
+  vor der Unterschrift zu lesen.
+
+### §16.5 Die eine Frage, die diese Fortschreibung nicht beantworten kann
+
+**Ab wann ist ein Dank eine Gegenleistung?** Daran hängt mehr als eine
+Formulierung — es entscheidet, ob die Förderung überhaupt umsatzsteuerbar ist,
+und damit, ob der zweite Anbieter (der **kein** Merchant of Record ist) tragfähig
+bleibt.
+
+Die Skala, von harmlos nach heikel:
+
+| Was zurückkommt | Leistungsaustausch? |
+|---|---|
+| gar nichts (Einmalspende nach §16.3) | nein — Schenkung |
+| Nennung des Namens, schlicht | **strittig** — bloßer Dank spricht dagegen, werbewirksame Hervorhebung mit Verlinkung dafür (Sponsoring) |
+| Werkstattbrief per E-Mail | eher ja — eine auf elektronischem Weg erbrachte sonstige Leistung |
+| Änderungsliste vorab, Wunschkanal | ja |
+| Vorabversionen | ja, und dazu H5 |
+
+**Die Zange, die daraus entsteht:** Je mehr die Stufen enthalten, desto eher ist
+es ein Umsatz — und desto eher bräuchte es einen Merchant of Record, der die
+Umsatzsteuer im Land des Förderers abführt. **Genau der nimmt aber keine
+Förderung an** (§16.4). Bei digitalen Leistungen an Verbraucher in der EU gilt
+das Bestimmungslandprinzip, und ohne MoR bedeutet das eine OSS-Registrierung
+beim Bundeszentralamt für Steuern.
+
+**Zwei Auswege, und der zweite ist der empfohlene:**
+
+**Variante A — die Stufen so mager halten, dass es kein Umsatz ist.** Nur
+Nennung, sonst nichts. Sauber, aber die Stufen sind dann kaum noch
+unterscheidbar, und der Werkstattbrief — der beste Teil des Vorschlags — fällt
+weg.
+
+**Variante B — die Stufen wie in §16.1 lassen und die Umsatzsteuerbarkeit
+annehmen.** Das ist ohnehin die Haltung, die §6 dieses Dokuments schon
+einnimmt („sicherheitshalber immer annehmen"). **Solange die
+Kleinunternehmerregelung nach § 19 UStG trägt, kostet diese Annahme nichts** —
+es wird keine Umsatzsteuer ausgewiesen und keine abgeführt. Erst wenn die
+Grenze reißt, wird die Frage teuer, und dann steht ohnehin eine Umstellung an.
+
+**Empfehlung: Variante B**, mit der Frage in der Mappe für das
+Steuerberatergespräch aus §11 Nummer 8. Sie lautet konkret: *Sind Nennung und
+unregelmäßiger Werkstattbrief bei einer monatlichen Förderung ein
+Leistungsaustausch — und falls ja, wie ist die Leistung bei Förderern im
+EU-Ausland zu behandeln, wenn die Plattform kein Merchant of Record ist?*
+
+### §16.6 Was zusätzlich zu tun ist
+
+Anschluss an die Tabelle in §11; die Nummerierung läuft dort weiter.
+
+| # | Was | Wo | Wann |
+|---|---|---|---|
+| 17 | **Zweiten Anbieter wählen** und prüfen, ob er einen freien Monatsbetrag kann (§16.1, §16.4) | Ko-fi / Steady | vor dem Start der Förderung |
+| 18 | **Kündigungsbutton beim zweiten Anbieter klären** — die Frage aus §8 stellt sich für ihn, nicht mehr für den MoR | Anbieter | vor dem Start der Förderung |
+| 19 | **Lemon Squeezy einrichten** für den Lizenzkauf, Freistellungsklausel lesen (H7), Umzugsrisiko notieren (§16.4) | Lemon Squeezy | vor dem Verkaufsstart |
+| 20 | **Über-Dialog um eine Danksagungsliste ergänzen** (Stufe 3) | `app/ui/` | erst, wenn es Förderer gibt |
+| 21 | **Frage zum Leistungsaustausch** in die Steuerberater-Mappe (§16.5) | — | mit Punkt 8 |
+
+**Punkt 20 ist der einzige Code in diesem ganzen Konzept außer dem Menüeintrag
+aus §4** — und er wird erst gebraucht, wenn jemand Stufe 3 nimmt. Bis dahin ist
+das Fördermodell reine Website- und Behördenarbeit.
+
+### §16.7 Was damit aus §13 wird
+
+| §13 | Stand nach dieser Fortschreibung |
+|---|---|
+| 1. Die Beträge | **entschieden: 5 / 10 / 15 €** plus freier Betrag (E1) |
+| 2. Weg A oder Weg B | **gegenstandslos.** Ohne Schlüssel in einer Stufe gibt es keine Lücke, die man schließen könnte (E2). Die Frage muss nicht mehr auf die Kaufrate warten |
+| 3. Steuerberater dauerhaft oder einmalig | **weiterhin offen** — §16.5 gibt dem Erstgespräch eine Frage mehr mit |
+
+Damit ist von den sechs Punkten in §13 einer offen, und es ist der, der
+ohnehin nur Robert beantworten kann.
+
+### §16.8 Der Zeitplan, den das voraussetzt
+
+§13 Nummer 5 hat entschieden, dass die Förderung **nach** dem Verkaufsstart
+beginnt — nicht wegen der Reichweite, sondern weil Gewerbeanmeldung,
+Geschäftskonto, USt-IdNr. und Steuerberater identisch anfallen, ob fünf oder
+fünfhundert Menschen fördern. **Dieses „nach" hat inzwischen ein Datum.**
+
+Auskunft von Robert am 28.08.2026, über die Parallelsitzung am Update-Weg:
+Die Demo endet am **30.10.2026**, bis dahin kommen weitere Updates, und ab dem
+**01.11.2026** wird verkauft. Die Demoversion wird dabei nicht ersetzt — sie
+wird zur Vollversion mit dem vierzehntägigen Testlauf davor.
+
+Daraus ergibt sich die Reihenfolge, in der die Punkte aus §11 und §16.6 fällig
+werden:
+
+| Bis wann | Was | Woher |
+|---|---|---|
+| **sofort, unabhängig vom Modell** | ODR-Verweis (1), Konverter-Escaping (2), Demo-Haftung (12) | §11, §15 |
+| **vor dem 01.11.2026** | Gewerbe, Konto, USt-IdNr. (6), Krankenkasse (7), Steuerberater (8), Versicherung (13), § 327h-Häkchen (14), Impressum (4), Lemon Squeezy samt Freistellungsklausel (19) | §11, §16.6 |
+| **nach dem 01.11.2026, wenn der Verkauf läuft** | zweiter Anbieter (17), Kündigungsbutton bei ihm (18), Rechtsseite (15), Widerrufsbelehrung für Dauerschuldverhältnisse (10) | §16.6, §11 |
+| **wenn es Förderer gibt** | Danksagungsliste im Über-Dialog (20) | §16.6 |
+
+**Der Fördermodell-Teil ist damit der zweite Block, nicht der erste.** Was vor
+dem 01.11. liegt, liegt dort ohnehin — für den Verkauf. Die Förderung erbt
+diesen Apparat, statt ihn allein rechtfertigen zu müssen, und das war die
+Begründung von §13 Nummer 5.
+
+> **Diese Tabelle ist für das Fördermodell vollständig und für den 01.11.
+> nicht.** Der Verkaufsstart trägt außerdem einen **Auslieferungsschritt**, und
+> ohne ihn sperrt die Verkaufsversion am ersten Tag genau die Menschen aus, um
+> die es hier geht. Gemessen von der Sitzung am Update-Weg am 28.08.2026 und
+> hier am Code nachgeprüft: Der Umschalter ist eine Zeile
+> (`store.py:77`, `DEMO_UNTIL` → `None`), aber **beide Zweige schreiben
+> denselben Testlaufmarker**. `trial_days_left()` rechnet danach
+> `used = heute − erster Demo-Start`; ein Marker vom 20.08.2026 ergibt am
+> 01.11. **null von vierzehn Tagen**, während ein Neukunde vierzehn bekommt.
+> Robert hat entschieden, dass die vierzehn Tage laufen sollen, ohne
+> Umgehungsmöglichkeit; gebaut wird es als `SALE_FROM` analog zu `DEMO_FROM`.
+>
+> **Für dieses Konzept ist das kein eigener Punkt** — es ist Verkaufsarbeit und
+> wird dort erledigt. Es steht hier, weil die Zeile darüber sonst suggeriert,
+> der 01.11. sei ein reiner Behörden- und Rechtstermin. Und weil ein
+> Registerpunkt daran hängt: „AGB § 2 beschreibt vierzehn Tage, die für die
+> Demo nicht gelten" löst sich am 01.11. **nicht von selbst** auf, sondern nur
+> mit diesem Schritt.
+
+> **Eine Annahme dieses Dokuments ist damit überholt und wird hier
+> ausdrücklich als solche markiert:** §14 rechnet mit einer geschätzten
+> Kaufrate, weil „verkauft wurde noch nichts". Ab dem 01.11.2026 ist sie
+> messbar. Für E2 spielt sie keine Rolle mehr — die Lückenrechnung, für die
+> sie gebraucht wurde, ist mit dem Schlüssel weggefallen (§16.7). Sie bleibt
+> interessant für die Frage, wie prominent die Förderung beworben wird.
