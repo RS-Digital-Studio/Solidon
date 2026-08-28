@@ -43,6 +43,7 @@
 - [Roh gegen gerendert vergleichen](roh-gegen-gerendert-vergleichen.md) — wer Quelltext in fertigem HTML sucht, prüft die Maskierung mit; der Test verwarf richtige Texte und schwieg zu falschen.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
+- [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — „assert gebaut“ fragte, ob das Wörterbuch voll ist, statt ob Operationen darin stehen; der Test verglich null und blieb in der Mutationsprobe grün.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` um den Aufruf läuft ins Leere; nach dem Ergebnis fragen, nicht nach dem Grund.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; wer eines vergisst, misst seinen eigenen Aufbau und hält ihn für einen Fehler.
@@ -52,6 +53,7 @@
 
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — drei gefallene Befunde an einem Tag; beim dritten war die Messung echt und galt nur woanders.
+- [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — eine Auflage nannte „die Agenten-Werkzeugbeschreibungs-Tests“, ich fuhr test_agent.py; der gemeinte hieß test_agent_suite.py und war schon auf HEAD rot.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy lief vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „das heilt sich später von selbst" setzt jemanden voraus, der heilen kann; die Urheber-Sitzung war seit zwei Stunden beendet.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — bevor man eine Wissenslücke behauptet, sucht man über py/md/toml, nicht nur Markdown; Regeln stehen auch im eingecheckten Hook, und der injiziert sie oben in den eigenen Kontext.

@@ -129,7 +129,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Der Ziehgriff hat kein Zeichen im Bild | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | einen Entwurf: ein Pfeil oder eine Marke auf dem Umriss, damit die Geste ohne Satz gefunden wird. Ein Pfeil in der Bildebene kann eine Richtung senkrecht dazu nicht zeigen — die Konvention dafür steht schon in dieser Datei (Punkt heißt heraus, Kreuz heißt hinein). Bedienlogik vor Code |
 | Ein Zug in den Körper könnte `sketch_pocket` sein | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Klärung von zwei Haken: Regel 21 verbietet den stillen Operationswechsel (Fusion tauscht sichtbar im Dialog), und es gibt vier gemessene Fälle, in denen `sketch_pocket` das Volumen unverändert lässt — die Absage bleibt als Rückfall |
-| Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet, und jede Erzeugungs- und Änderungsoperation liegt drei Klicks tief, weil *Erzeugen* und *Ändern* ausschließlich aus Untermenüs bestehen. Drei Wege stehen im Abschnitt: Tiefe kürzen (klein, ohne Schemafrage), ein benanntes Band (groß), oder ein Band, das der Auswahl folgt (über Fusion hinaus, `applies_to` trägt es schon) |
+| Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
 | Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen Antwort | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Vorwahl wie in Fusion: Dort steht „1 Profil · Bereich 800,00 mm²" unten rechts, und der Extrusionsdialog hat das Profil schon. Bei einer eindeutigen Zeichnung kosten Frage und *Weiter* zwei Klicks für eine Auskunft, die die Anwendung hat |
 | Vier Kleinere aus dem Fusion-Vergleich | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | Ebenen im Bild statt im Auswahlfeld, zwei Maße in einer Tab-Kette mit Schloss, die Bedienfolge in jedem Werkzeughinweis, und die ruhige Zeile am Bildrand. Jedes einzeln klein, zusammen der Unterschied, den Robert „alles ab Klick 1" genannt hat — Einzelheiten im Abschnitt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
@@ -11824,6 +11824,71 @@ Gemessen danach: *Erzeugen* 11 Zeilen ohne Untermenü mit vier Überschriften,
 Überschrift. `menu_path` folgt von selbst — „Erzeugen → Quader anlegen" statt
 „Erzeugen → Grundformen → Quader anlegen" —, weil Handbuch, Agent und Leiste
 dieselbe Funktion fragen.
+
+**Zweiter Nachtrag, 27.08.2026: Für *Ändern* war Flachziehen auch nicht die
+Antwort — aber „alles falten" war sie noch weniger.** Der Absatz darüber stellte
+die Frage falsch: Ein Menü mit 33 flachen Zeilen muss falten, aber nicht
+**alles**. Die Regel dafür stand seit dem 24.08.2026 fest und war für das
+Kontextmenü gebaut — `folded_groups` faltet nur so weit, bis der Rest passt. Die
+Menüleiste hatte sie nicht, und sie konnte sie nicht haben: Die Rechnung lag in
+`app/ui/panels.py`, und `menu_path` (Kern) darf von dort nicht lesen (§8). Also
+hatte der Kern ein zweites, gröberes Modell — alles flach oder jede Kategorie
+eine Ebene tiefer.
+
+Gebaut:
+
+- [x] **`folded_groups` und `menu_rank` sind in den Kern gezogen**
+      (`app/core/registry/surfaces.py`). Wörtlich übertragen, um einen
+      `rank`-Parameter erweitert: das Kontextmenü ordnet nach der Menüleiste,
+      die Leiste nach der Stellung der Kategorie in `MENU_GROUPS`. Zwei
+      Ordnungen, **eine** Rechnung.
+- [x] **`folded_categories(kategorie)`** ist die neue Antwort, und `menu_path`
+      wie `_build_menus` fragen sie. `group_is_flat` bleibt als dünner Aufrufer
+      darüber — die Frage „kommt die Gruppe *ganz* ohne Zwischenebene aus"
+      kommt weiter vor, sie rechnet nur nicht mehr selbst.
+- [x] **Ein Fehler im Ausweichzweig von `folded_groups` mitgefunden.** Er
+      fragte den Rang nur dort, wo eine einzelne Gruppe schon genügt; wo die
+      großen zuerst fallen müssen, entschied bei Gleichstand der **Name**.
+      Damit fiel im Menü *Ändern* „Verbinden und Abziehen" statt „Formgebung",
+      weil `boolean` alphabetisch vor `shaping` steht — die häufigere Gruppe
+      wanderte tiefer als die seltenere. Die Zusage „wer falten muss, faltet
+      hinten" stand im Docstring und galt für die halbe Funktion.
+- [x] **Drei Tests, alle drei mit Mutationsprobe** (jede fällt gegen den alten
+      Stand): die Regel je Kategorie, der Gleichstand, und der **Anschluss** —
+      der genannte Weg gegen den gebauten, am Fenster gemessen.
+
+Gemessen danach, Menü *Ändern* bei einer Grenze von zwölf:
+
+| Kategorie | Zeilen | vorher | nachher |
+|---|---|---|---|
+| Verbinden und Abziehen | 4 | Untermenü | **direkt** |
+| Transformation | 9 | Untermenü | Untermenü |
+| Formgebung | 4 | Untermenü | Untermenü |
+| Bohrungen | 3 | Untermenü | **direkt** |
+| Oberfläche | 3 | Untermenü | Untermenü |
+| Netz | 9 | Untermenü | Untermenü |
+| Reparatur | 1 | Untermenü | **direkt** |
+
+Zusammen 12 Zeilen, genau an der Grenze. **Acht Operationen rücken von drei auf
+zwei Klicks**: Vereinigen, Abziehen, Schnittmenge, Weich verschmelzen, Bohrung
+setzen, Bohrung verschließen, Senken, Reparieren. Darunter die Bohrung — genau
+der Eintrag, dessen zweiter Klick am 24.08.2026 den Umbau des Kontextmenüs
+ausgelöst hat und der im Menü seither drei kostete.
+
+**Der Anschlusstest hat dabei sich selbst widerlegt, und das gehört in die
+Notiz.** Seine erste Fassung ordnete Menüeintrag und Operation über
+`action.data()` zu. Von 158 Menüeinträgen tragen **sechs** ein `data`, und keiner
+davon ist eine Operation — es sind die zwei Themen und die vier
+Navigationsarten. Der Test sammelte diese sechs, verglich null Operationen und
+blieb in der Mutationsprobe grün, während `menu_path` auf die alte Frage
+zurückgesetzt war. Sein eigener Wächter (`assert gebaut`) fragte, ob das
+Wörterbuch **voll** ist, nicht, ob Operationen darin stehen. Jetzt ordnet er
+über den Titel zu und zählt: `assert verglichen >= 60`. Ein Wächter muss die
+Größe messen, an der der Test scheitert.
+
+**Was von A jetzt noch offen ist:** *Bausteine* (26 flach) und *Ansicht* (23).
+Für beide bleibt die Antwort dieselbe wie oben — Katalog mit Bildern (§2.6)
+beziehungsweise die Ansicht selbst, nicht ein Menü. Das ist B und C.
 
 **Was von A offen bleibt**, und es ist der schwierigere Teil: *Ändern* (33
 flach), *Bausteine* (26) und *Ansicht* (23) passen nicht in die Zwölf. Für sie

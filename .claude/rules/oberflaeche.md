@@ -410,6 +410,36 @@ Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
 kein Werkzeug mehr ist.
 
+**Und gefaltet wird, weil es sein muss — je Kategorie, nicht je Gruppe.** Wer
+ein Menü über die Zeilengrenze wachsen lässt, bekommt kein Untermenü für die
+ganze Gruppe: `folded_categories` (`app/core/registry/surfaces.py`) faltet nur
+so weit, bis der Rest passt, und nimmt sich dabei die **hinteren** Kategorien
+aus `MENU_GROUPS` — die Reihenfolge dort geht von häufig nach selten. Die
+Rechnung liegt im Kern, damit `menu_path` sie fragen kann; sie war einmal in
+`panels.py`, und deshalb nannten Handbuch, Agent und Tour einen Weg, den die
+Leiste anders baute.
+
+Zwei Folgen für die Oberfläche, beide gemessen am 27.08.2026:
+
+* **Eine Kategorie, die direkt im Menü steht, behält ihren Namen als
+  Überschrift** (`addSection`, nicht `addSeparator`). Ein nackter Trennstrich
+  hält sie auseinander und **benennt** sie nicht; man erfuhr den Namen nur,
+  wenn ein Untermenü ihn trug — also genau dann, wenn der Weg einen Klick
+  länger war. Eine Überschrift ist ein Trennstrich mit Text und zählt in der
+  Zeilengrenze nicht mit (`isSeparator()` bleibt wahr).
+* **Bei einer einzigen besetzten Kategorie bleibt die Überschrift weg** —
+  sie wäre ein zweiter Name für dasselbe Menü („Bausteine → Bausteine").
+* **Die direkten Kategorien stehen vor den gefalteten**, getrennt durch einen
+  nackten Trennstrich. Eine Überschrift benennt alles bis zum nächsten
+  Trennstrich, und eine Untermenü-Zeile dazwischen liest sich als Teil der
+  Kategorie davor: „Transformation" und „Formgebung" standen unter „Verbinden
+  und Abziehen". **Den Fall gab es vorher nicht** — eine Gruppe war ganz flach
+  oder ganz gefaltet, und die Mischung entsteht erst mit
+  `folded_categories`. Wer eine Unterscheidung einführt, führt die
+  Anordnungsfrage mit ein; keine der acht bestehenden Menüprüfungen hat sie
+  gestellt, und der Trennstrich hinter dem letzten direkten Block ist die ganze
+  Antwort — die Zeilen dahinter tragen ihre Namen selbst.
+
 **Ein Zeichen darf allein stehen, wenn es entweder ein geeinigtes Bild ist
 oder die Zahl klein und die Stelle fest bleibt.** Der Skizzeneditor lebt vom
 ersten Fall: Linie, Kreis und Bogen sehen in jedem CAD gleich aus. Die obere
