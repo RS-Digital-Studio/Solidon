@@ -21,8 +21,8 @@ selbst. Hier steht, **was wo liegt**.
 | `knowledge/` | Profile, Normteile, Regelsammlung, Kalibrierung — und `parts/`, die Bausteinbibliothek (§24, §38, §39) |
 | `agent/` | Die LLM-Schicht: Kontext, Werkzeuge, Vorschlag als eine Transaktion (§26) |
 | `backends/` | LLM und Mesh-Erzeuger — extern, austauschbar, abschaltbar (§27) |
-| `export/` | STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer (§29) |
-| `activation/` | Freischaltung: Testlauf, Schlüssel, Demo-Frist |
+| `export/` | STL/3MF/OBJ/PLY/GLB/STEP, Plattenbelegung und Slicer-Übergabe (§29) |
+| `activation/` | Freischaltung: Kaufcode, Geräte-Zertifikat, Demo- und optionale Testfrist |
 
 ## Die Module direkt hier
 
@@ -39,7 +39,8 @@ selbst. Hier steht, **was wo liegt**.
 
 `paths.py` (wo Nutzerdaten liegen, §38) · `discover.py` (installierte Programme
 finden, die nicht im PATH stehen) · `install.py` (Fehlendes aus der Anwendung
-heraus nachinstallieren, §36) · `tools.py` (externe Programme) · `log.py`
+heraus nachinstallieren, §36) · `network.py` (CA-Satz im macOS-Paket) ·
+`tools.py` (externe Programme) · `log.py`
 (lokales Protokoll, §33.2)
 
 **Abläufe, die mehrere Operationen bündeln:**
@@ -61,7 +62,9 @@ Klick; **wie** eingespielt wird, entscheidet `install_kind()` und nicht die
 Plattform) ·
 `changes.py` (was neu ist) · `report.py` (Fehlerbericht als Ordner: schreibt,
 sendet nie) · `support.py` (**der einzige Weg hinaus**, an einem Knopf) ·
-`feedback.py`
+`feedback.py` · `licence_service.py` (Online-Aktivierung und -Abmeldung, nur
+nach ausdrücklichem Klick; der Freischaltzustand selbst bleibt vollständig
+lokal)
 
 **Technik:** `bootstrap.py` füllt das Register · `lazy.py` siehe unten
 

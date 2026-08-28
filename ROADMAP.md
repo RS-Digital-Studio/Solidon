@@ -81,11 +81,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
-| Die Warnung beim Zeichnen über den Bauraumrand hinaus | P13.1 — Der Skizzeneditor zieht in den Viewport | eine Stelle im Viewport-Modus, an der der Satz stehen kann — der Rand selbst ist seit dem 24.08. wieder da |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
-| Thema und Navigation zweimal beschriftet | Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026) | nichts — beide sagen erkennbar dasselbe; es ist Pflegeaufwand, kein Fehler |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein nicht rechenbarer Schritt ist eine Sackgasse | OpenSCAD ist ausgebaut (26.08.2026) | eine **Anzeige der rohen Werte** und einen Weg, den Schritt loszuwerden. Er lässt sich weder öffnen (kein Registereintrag, kein Dialog) noch löschen (`History` kann nicht aus der Mitte entfernen, §15.4). Der Quelltext einer 0.1.3-Datei ist damit nur im ZIP erreichbar |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
@@ -99,7 +97,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD, am selben Abend nach sechs weiteren Commits bei **1824** — er altert also messbar mit jedem privaten Commit weiter, und zwar in die gefährliche Richtung. Zweimal aufgeräumt, beide Male ohne Verlust: keine Datei geändert, nur der Index |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
-| Die Textsuche der Suitenteilung fragt das falsche | Ein Klick in eine Bohrung wählte die Fläche, oder nichts (24.08.2026) | ein Kriterium am **Fixture-Graphen** statt am Wortlaut. `suite-getrennt.sh` sucht Fensterdateien mit `grep -lE "MainWindow|Viewport|pyvista"`, fragt also „kommt das Wort vor?" statt „baut die Datei ein Fenster?". Zweimal zugeschnappt: `test_performance.py` sammelte in der Fenstergruppe nichts (Exit 5, steht in `CLAUDE.md`), und am 24.08. wanderte `test_sketch.py` wegen des Wortes **in einem Docstring** aus der parallelen Gruppe in die serielle — 49 Tests, grün, aber seriell, und die Sammelgruppe fiel um 36 (3559 → 3523; eine zweite Sitzung maß 3554 → 3527, andere Zeitpunkte). Behoben wurde der Einzelfall durch Umformulieren (`eefba3e9`), nicht die Ursache. Ein engeres Muster (nur `import`- und Fixture-Zeilen) wäre dichter und trotzdem nicht dicht: Eine Datei, die ihr Fixture über `conftest.py` erbt, nennt keines der drei Wörter. Gemeldet von formwerk-48 und formwerk-9e |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374. **Fortschreibung 25.08.2026 (c1fcb9ea):** Todesweg ist die **Referenzzählung**, nicht der Sammler — beide gc-Anläufe (aus + gezieltes Sammeln, aus + gar nichts) sind gemessen und verworfen, Notiz in `tests/conftest.py`. Mit dem Testbestand vom 25.08. riss `test_ui.py` deterministisch (3/3, Position wandert mit der Zusammensetzung); seit dem Suite-Pin (`_windows_live_to_the_end`) stellt die Suite den tragenden Zustand **absichtlich** her — Fenster leben bis zum Prozessende, der Riss liegt wieder hinter der Zusammenfassung. Die Mine selbst — C++-Zerstörung eines VTK-Fensters mitten im Prozess — bleibt offen; wer sie angeht, misst gegen den Bestand vom 25.08. **Fortschreibung 26.08.2026:** `test_analysis_ui.py` riss zweimal von zweimal **vor** der Zusammenfassung (einmal im Tor, einmal solo — aber unter Vier-Sitzungen-Last), Access Violation beim 24. Test, Stack im `super().__init__()` des Preview-Workers (`session.py:223` ← `preview_async`). Die Zeile ist als Ursache **ausgeschlossen**: ces Tages-Commits berühren sie nicht, und ce maß 3/3 grün solo auf ruhiger Maschine. Die Kombination ist die Auskunft — lastabhängig, die Familie in neuer Position, und der Stack nennt den Moment, nicht den Grund. Dieselbe Datei zeigte am selben Tag eine **dritte Gestalt** (a2, Torlauf): neunzehn Minuten Stillstand bei 0,015 CPU-Sekunden und 0 Bytes Ausgabe, dann von selbst gelöst und grün — als Beobachtung belegt, als Diagnose nicht; die Signatur passt zum Abbau-Deadlock (Signatur C, eine Zeile tiefer). **Fortschreibung 26.08.2026, `test_print_settings_ui.py` (d1 und ce):** Die schärfste Messung bisher, weil beide Richtungen belegt sind. Nach dem Plattenwahl-Commit (`78f559d0`) riss die Datei mit `-p no:randomly` reproduzierbar an Position 57; im Arbeitsbaum auf dem Stand davor lief sie mit 73 passed durch. **Und trotzdem lag es nicht am Inhalt der neuen Tests:** Ein trivialer 75. Test an derselben Stelle war folgenlos, der Absturz traf nie einen der neuen, sondern den Abbau von `test_switching_the_slicer_empties_the_profile_choice`, und das Zusammenlegen beider Tests zu einem verschob ihn nur von 57 auf 58. Damit ist gemessen, was die conftest-Notiz behauptet: Es zählt die Zusammensetzung, nicht ein Test — aber auch nicht die bloße Anzahl. Behoben durch Umzug in die Sammelgruppe (`77c0f5d5`), nicht durch eine Reparatur; wer die Mine entschärft, kann den Test zurückholen. Lehre nebenbei: Die erste Zuschreibung lautete „bekannte Familie, kein Verdacht gegen den Commit" — die Gegenprobe auf dem Stand davor kostete zwei Minuten und widerlegte sie |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
@@ -116,23 +113,18 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | ein Angebot. Für Personen- und Sachschäden aus einem fehlerhaften Produkt braucht es eine **Produkthaftpflicht mit Software-Einschluss**, nicht nur die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft nur den späteren Verkauf; die PayPal-Spende hat keine Gegenleistung |
 | Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | den Vertrag des Merchant of Record vor der Unterschrift. Er wickelt nur den späteren Lizenzkauf ab, nicht die PayPal-Spende. Seine Freistellung kann unbegrenzt und nach fremdem Recht gelten; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
-| Drei Messwerkzeuge des Kerns ohne Anschluss | Was der Gesamtreview liegen ließ (25.08.2026) | eine Oberfläche für Winkel, Hüllquader und Volumen der Auswahl (§18.3) — der Kern ist fertig und ungerufen |
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
-| Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
-| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | ein echtes Mac-Paket. Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**, und die reist nicht mit. Prüfung: *Hilfe → Nach Updates suchen* drücken |
-| Zwei Prüfungen in `test_packaging.py` halten weniger, als ihr Name sagt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Entscheidung, ob sie umgebaut oder nur ihre Begründung berichtigt wird. Heute richten sie keinen Schaden an; die falsche Begründung schickt aber den nächsten Leser in die falsche Richtung |
-| `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
+| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. Es fehlt ein echtes Paket auf einem Mac; dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
-| Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet“ | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | die Ursache. Der Fehler ist **vorbestehend** — einzeln rot in 4,9 s und in einem Worktree auf `dce71e36` ohne die Änderungen der Sitzung ebenso; die Gegenprobe ist gefahren, er ist also kein Verdacht gegen den Update-Weg. `KeyDialog.probe_result` liest „Ollama hat nicht geantwortet“ statt „liegt jetzt hier“ |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
 
 ---
@@ -1252,15 +1244,19 @@ Konzept, Entscheidungen und Pakete stehen in
       `SketchField` und `SketchEditorDialog` bleiben — sie sind der zweite
       Weg über den Operationsdialog
 
-- [ ] **Die Warnung „die Skizze ragt darüber hinaus" fehlt im Viewport-Modus.**
+- [x] **Die Warnung „die Skizze ragt darüber hinaus" fehlt im Viewport-Modus
+      — geschlossen am 28.08.2026.**
       Der Bauraumrand steht wieder im Bild — Kanten und Maßskala bleiben beim
       Zeichnen sichtbar, nur der Boden tritt ab. Der **Warnsatz** dazu liegt
       aber in der Zeichenfläche (`sketch_editor.py:1954`), und die ist
       unsichtbar. Das Handbuch verspricht ihn: „wer darüber hinauszeichnet,
       liest es an derselben Linie“. Damit ist das Versprechen halb
       eingelöst — man sieht die Grenze, aber nicht den Satz, der sie benennt.
-      Wartet auf: eine Stelle im Viewport-Modus, an der er stehen kann — die
-      Statuszeile führt schon `_outline_state()` und `pointer_target`
+      Die vorhandene Statuszeile ist diese Stelle jetzt: Sobald ein gelöster
+      Punkt außerhalb liegt, nennt sie den Bauraum und die Handlung „Punkte
+      innerhalb des Rahmens verschieben“. Der gestrichelte, verstärkte Rand
+      bleibt die zweite Kodierung im Bild. Ändert sich der Bauraum erst nach
+      dem Öffnen, zieht die Statusmeldung ebenfalls sofort nach.
 
 **Was dabei nebenbei auffiel und behoben ist:** Die Ziffern 1–3 für die Ebene
 lagen an `WidgetWithChildrenShortcut` und hätten nach dem Schnitt nie mehr
@@ -5848,10 +5844,10 @@ Intel-Arc-140V, und ein `qwen3:14b` bei Ollama.
       das, damit ein ComfyUI, das seine Schlange falsch beantwortet, nicht
       endlos wartet.
 
-- [x] **Der lokale Agent auf einem Rechner ohne nutzbare Karte: gemessen 41
+- [x] **Der lokale Agent auf einem Rechner ohne nutzbare Karte: heute 51
       Minuten, bis eine Antwort beginnt.** Ollama spricht die Intel-Arc nicht
       an und rechnet auf dem Prozessor — `size_vram: 0.0`, 7,8 Token je Sekunde
-      beim Einlesen. Der Systemprompt dieser Anwendung ist rund 19 000 Token
+      beim Einlesen. Der Systemprompt dieser Anwendung ist rund 24 000 Token
       lang. Die Anwendung sagte dazu nichts; sie sagte „Das Modell ruft
       Werkzeuge auf. Es ist brauchbar." Das ist wahr und nutzlos.
 
@@ -5860,8 +5856,14 @@ Intel-Arc-140V, und ein `qwen3:14b` bei Ollama.
       und den einzigen Vorschlag, der hier trägt: einen Schlüssel für ein
       gehostetes Modell. Ein kleineres Modell rettet das nicht, und das steht
       ausdrücklich dabei. Die Geschwindigkeit **schlägt** die Werkzeugfrage:
-      Wo eine Antwort einundvierzig Minuten braucht, ist es unerheblich, ob das
+      Wo eine Antwort einundfünfzig Minuten braucht, ist es unerheblich, ob das
       Modell Werkzeuge aufruft.
+
+      **Nachgemessen am 28.08.2026:** Die ursprünglichen 41 Minuten gehörten
+      zu 19 249 Token. Der heutige Produktionsauftrag mit Systemtext und allen
+      106 kompakten Werkzeugen zählt bei `qwen3:14b` 23 891 Token; bei derselben
+      gemessenen CPU-Rate sind das gerundet 51 Minuten. Ein Test bindet die
+      Messung seitdem an die Werkzeugzahl.
 
 ### Der Auftrag war tot, und Solidon wartete zehn Minuten auf ihn
 
@@ -5923,7 +5925,7 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
       **Entschieden am 26.08.2026 (Kundenmaßstab): nennen, ehrlich, abratend.**
       Die KI-Modelle-Seite trägt in allen sechs Sprachen eine Fußnote nach
       der TripoSG-Tabelle: NVIDIA gemessen, auf Intel/AMD rechnet der lokale
-      Chat auf dem Prozessor (7,8 Token je Sekunde, 41 Minuten bis zur ersten
+      Chat auf dem Prozessor (7,8 Token je Sekunde, 51 Minuten bis zur ersten
       Antwort), die Umwege heißen IPEX-LLM, ROCm und OpenVINO, werden weder
       mitgeliefert noch geprüft, und was trägt, ist ein Schlüssel — die
       Anwendung misst das seit dem 21.08. selbst und sagt es vor dem Warten.
@@ -9244,7 +9246,8 @@ Ein Prüfaufbau, der den Weg der Anwendung nachbaut, muss ihn **ganz** nachbauen
       ein Strahl gegen 8202 Hülldreiecke wäre wieder das, was vermieden werden
       sollte.
 
-- [ ] **Die Textsuche der Suitenteilung fragt das falsche.**
+- [x] **Die Textsuche der Suitenteilung fragt das falsche — geschlossen am
+      28.08.2026.**
       `suite-getrennt.sh` sucht seine Fensterdateien mit
       `grep -lE "MainWindow|Viewport|pyvista"` — also „kommt das Wort vor?"
       statt „baut die Datei ein Fenster?". Der Grund dafür ist gut: Eine neue
@@ -9268,6 +9271,12 @@ Ein Prüfaufbau, der den Weg der Anwendung nachbaut, muss ihn **ganz** nachbauen
       erbt, nennt keines der drei Wörter. Sauber wäre das Kriterium am
       **Fixture-Graphen** — was auf `qt_app` oder `window` zugreift, baut ein
       Fenster. Gemeldet von formwerk-48.
+
+      `tools/list_windowed_tests.py` lässt pytest vollständig sammeln und
+      nimmt genau die Dateien, deren aufgelöster Fixture-Graph `qt_app`
+      enthält. `suite-getrennt.sh` liest diese Liste statt Quelltext. Der
+      Werkzeugtest hält beide Richtungen fest: eine indirekte Fixture zählt,
+      ein bloßes Wort im Docstring nicht.
 
       **Bewusst nicht mitgebaut:** eine Zielhilfe am Rand eines Ausschnitts.
       Bei der Bohrung meint ein Klick 0,4 mm neben der Kante die Bohrung, weil
@@ -10511,10 +10520,14 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   gelandet — die Messreihe steht am `erosion_steps`-Docstring, und
   `fair_wall_mm` nennt die Grenze als Wert im Befund.
 
-- [ ] **Drei Messwerkzeuge des Kerns haben keinen Anschluss.**
+- [x] **Drei Messwerkzeuge des Kerns haben keinen Anschluss — geschlossen am
+  28.08.2026.**
   `angle_between`, `bounding_box_of` und `volume_of` (§18.3) existieren,
-  getestet, mit null Anrufern in `app/` — Winkelmessen, Hüllquader und
-  Volumen der Auswahl fehlen in der Oberfläche.
+  getestet, und sind jetzt angeschlossen: Die Messleiste misst den Winkel
+  zwischen zwei erkannten ebenen Flächen und zeigt Grad statt einer Länge.
+  Die Statusleiste berechnet Hüllmaß und Gesamtvolumen aus der vollständigen
+  Ein- oder Mehrfachauswahl. Ein untauglicher Winkelklick bleibt nicht stumm,
+  sondern sagt, dass zwei erkannte ebene Flächen nötig sind.
 
 - [ ] **Die orient_200-Marke fällt auf jeder Maschine einmal.** Die
   Säulenrechnung des Stützvolumens ist bewusst teurer (+23 % auf ruhiger
@@ -10555,8 +10568,9 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   nur geprüft zu werden. Bei einer Handvoll Rezepte unmessbar; wer die rote
   Startmarke (§31) angeht, nimmt diesen Posten mit.
 
-- [ ] **Kleinreste ohne Dringlichkeit.** Das seit je unbenutzte `height` in
-  `primitive_ops._object`.
+- [x] **Kleinreste ohne Dringlichkeit.** Das seit je unbenutzte `height` in
+  `primitive_ops._object` ist am 28.08.2026 entfernt; der Aufrufervertrag
+  trägt nur noch Name und Netz.
 
   **Die drei `ctx.profile is None`-Zweige, die hier standen, sind geprüft und
   richtig** (27.08.2026) — sie bleiben, und zwar mit zwei verschiedenen
@@ -10850,10 +10864,10 @@ Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
   gegen eine Grundlinie **mit demselben Text** (die eingebetteten Schriften
   wiegen schwerer als ein kleines Bild und drehen den Vergleich sonst um).
 
-  **Offen bleibt ein Handgriff:** Die Seiten müssen einmal mit
-  `tools/make_manual.py` neu erzeugt werden, damit der Fix in
-  `website/handbuch.html` und den fünf Übersetzungen ankommt. Solange das
-  nicht geschehen ist, tragen die PDFs in `Releases/` weiter keine Bilder.
+  **Erledigt am 28.08.2026:** `tools/make_manual.py` hat alle sechs HTML-Seiten
+  und alle sechs PDFs neu erzeugt. Jede Sprachfassung trägt 33 Abbildungen,
+  davon 25 mit eigener dunkler Variante; die PDF-Prüfung fand auf zusammen
+  709 Seiten keine leere Seite und kein Zeichen außerhalb des A4-Satzspiegels.
 
 ## Was Robert am 26.08.2026 aufgetragen hat
 
@@ -11032,7 +11046,8 @@ sie heute **noch** dasselbe sagen — sie sind Schuld, kein Fehler.
   Die zwei abweichenden Namen (`fit`, `rectangle`) bleiben: Sie sind
   ausführlicher als am Knopf, und das ist in einer Übersicht richtig.
 
-- [ ] **Thema und Navigationsschema haben zwei Vokabulare.** Das Ansichtsmenü
+- [x] **Thema und Navigationsschema haben zwei Vokabulare — geschlossen am
+  28.08.2026.** Das Ansichtsmenü
   sagt „Dunkles Thema" und „Navigation: Cura", der Einstellungsdialog „Dunkel"
   und „Wie in Cura — links wählt, rechts dreht". Sechs Schlüssel, zwölf Texte,
   zwölfmal fünf Kataloge — und einer der beiden Sätze für `slicer` wurde
@@ -11042,6 +11057,10 @@ sie heute **noch** dasselbe sagen — sie sind Schuld, kein Fehler.
   kein Fehler und steht hier unten. Es ist Pflegeaufwand: Beide Orte sind
   zugleich der Ort, an dem der Kunde das Schema *lernt*, und der Nächste, der
   einen der zwölf Texte schärft, schärft ihn an einer Stelle.
+
+  Menü und Einstellungsdialog lesen jetzt beide `THEMES` und `NAVIGATION` aus
+  `settings_dialog.py`; das Ansichtsmenü hat dafür ein eigenes Themen-Untermenü.
+  Ein Oberflächentest vergleicht Kennungen und sichtbare Texte beider Wege.
 
 ---
 
@@ -11262,18 +11281,20 @@ steht, ist kein festgehaltener Fund.
   und Tabelle zum ersten Mal dasselbe; vorher nannte der eine keine Zahl und
   die andere eine.
 
-- [ ] **`PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102.**
-  `llm.py` nennt 19 249 Token für Systemprompt und kompakten Werkzeugsatz, und
-  daraus folgen die „41 Minuten", die auf `ki-modelle.html` stehen (19 249 /
-  7,8 = 41,1). Der Kommentar dort sagt selbst: „wer sie ändert, misst
-  `prompt_eval_count` nach." Seither ist die Liste um ein Fünftel gewachsen.
+- [x] **`PROMPT_TOKENS` ist mit allen 106 Werkzeugen nachgemessen.** `llm.py`
+  nennt jetzt 23 891 Token für Systemprompt und kompakten Werkzeugsatz, und
+  daraus folgen die 51 Minuten auf `ki-modelle.html` (23 891 / 7,8 / 60 =
+  51,05). Gemessen am 28.08.2026 mit `qwen3:14b` über den echten
+  `/api/chat`-Auftrag: 3 510 Zeichen Systemtext, 107 649 Zeichen Werkzeug-JSON,
+  `prompt_eval_count = 23 891` und `prompt_eval_duration = 10,293 s` auf der
+  aktuellen Grafikkarte.
 
   **Kein Fehlbefund der Seite**, und der Weg dorthin ist die eigentliche
   Lehre: Eine Durchsicht meldete die Zahl als grob falsch (76 bis 102 Minuten)
   — sie hatte den **vollen** Werkzeugsatz gerechnet, während der Ollama-Weg
   den kompakten fährt, und eine Schätzung gegen eine Messung gestellt.
 
-  **Der Lauf ist am 27.08.2026 gefahren worden, und er entscheidet nichts.**
+  **Der Lauf vom 27.08.2026 entschied nichts.**
   Gemessen über `/api/chat` mit `num_ctx`, kompaktem Werkzeugsatz und einer
   Gegenprobe ohne `tools`:
 
@@ -11283,25 +11304,16 @@ steht, ist kein festgehaltener Fund.
   | `qwen2.5-coder:14b` | 1064 | 3395 |
   | `gpt-oss:20b` | 975 | 1716 |
 
-  Zwei 14b-Modelle stimmen auf zwanzig Token überein — und beide liegen bei
-  einem Fünftel der eingetragenen 19 249. **Das ist keine Korrektur, sondern
-  ein Widerspruch**, denn die Schemata sind als JSON 108 144 Zeichen groß;
-  grob geschätzt sind das eher 27 000 Token als 3 400. Beide Zahlen können
-  nicht stimmen, und `prompt_eval_count` zählt offenbar nicht, was hier
-  gemeint ist — Ollama nimmt `tools` strukturiert entgegen, nicht als Text im
-  Prompt.
+  Zwei 14b-Modelle stimmten auf zwanzig Token überein — und beide lagen bei
+  einem Fünftel der eingetragenen 19 249. Der Widerspruch ist jetzt erklärt:
+  Die damalige Gegenprobe schickte die Werkzeuge, aber nicht Solidons
+  Systemprompt und reproduzierte damit nicht den Produktionsauftrag. Der
+  vollständige Auftrag zählt die Werkzeugvorlage mit.
 
-  Was der Lauf **belegt**: Der kompakte Satz spart 27 Prozent gegenüber dem
-  vollen (108 144 gegen 148 057 Zeichen), und beide führen heute 102
-  Werkzeuge. Was er **nicht** belegt: die Zahl selbst. Wer sie ändern will,
-  braucht einen Tokenizer statt eines Aufrufs — der nächste Schritt ist
-  nicht ein weiterer Ollama-Lauf, sondern das Modell-Template mit
-  eingesetzten Werkzeugen durch denselben Tokenizer zu schicken, den das
-  Modell benutzt.
-
-  Bis dahin bleibt die Zahl stehen: Sie ist einmal gemessen worden, und eine
-  Messung, die etwas anderes zählt, ersetzt sie nicht („eine Messung trägt
-  nur am Ort ihrer Messung“).
+  Der kompakte Satz spart weiterhin 27 Prozent Zeichen gegenüber dem vollen.
+  `PROMPT_TOOL_COUNT = 106` und ein Test machen jede weitere Operation jetzt
+  zum roten Anlass für dieselbe Messung; damit altert die Kundenzahl nicht
+  wieder unbemerkt.
 
 - [x] **Vier Datumsangaben werden am 31.10.2026 still falsch.** „Die Demo
   läuft bis zum 30. Oktober" steht auf der Startseite in sechs Sprachen an
@@ -11524,7 +11536,8 @@ hindert; die drei behobenen stehen oben und hier.
   Entwicklungsumgebung und Firmenvorgabe. Was von Windows aus nicht geht:
   ein echtes `.pkg` starten und *Hilfe → Nach Updates suchen* drücken.
 
-- [ ] **Zwei Prüfungen halten weniger, als ihr Name sagt.**
+- [x] **Zwei Prüfungen halten weniger, als ihr Name sagt — geschlossen am
+  28.08.2026.**
   `test_packaging.py:82` steht auf „Was nur in einer Funktion importiert
   wird, sieht PyInstaller nicht" — gemessen falsch, `modulegraph` findet
   Funktionsimporte. Schaden richtet es heute nicht an (die zwölf gelisteten
@@ -11532,6 +11545,13 @@ hindert; die drei behobenen stehen oben und hier.
   in die falsche Richtung. Und `test_packaging.py:70` durchsucht nur `app/`
   und vergleicht gegen das *Vorkommen einer Zeichenkette* in der Spec statt
   gegen das Ziel im Bau: `changelog/` liegt außerhalb und wird nie gesehen.
+
+  Beide Prüfungen lesen jetzt die echte Python-Struktur der Spec: die
+  Zielwerte der `datas`-Tupel und die festen Einträge der `hiddenimports`-
+  Liste. Die Datensuche bildet sowohl `app/` als auch das außerhalb liegende
+  `changelog/` auf ihren Paketpfad ab; Kommentare können keinen Vertrag mehr
+  versehentlich erfüllen. Die falsche Begründung zu Funktionsimporten ist in
+  Test und Spec berichtigt.
 
 ## Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026)
 
@@ -11784,6 +11804,23 @@ Gebaut und geprüft daraus:
       am Bildrand, die sagt, was gewählt ist. Zusammen sind sie das, was Robert
       „alles ab Klick 1" genannt hat.
 
+      **Gebaut am 28.08.2026:** Beim freien Start stehen drei moderne,
+      tastaturbedienbare Ebenenkarten mitten im Bild; auch die bereits
+      vorausgewählte Draufsicht schließt die Frage sauber. *Rechteck* ist ein
+      echtes Zwei-Klick-Werkzeug mit Breite und Höhe, Tab-Reihenfolge und je
+      einem sichtbaren Schloss; gefangene Ecken werden im selben
+      Rückgängig-Schritt als Deckung gespeichert. Jeder Zeichenknopf nennt
+      Name, Kürzel und erste Klickfolge. Eine wortbasierte Auswahlquittung
+      steht ruhig am unteren Bildrand, und während des Zeichnens verschwindet
+      die allgemeine Werkzeugleiste zugunsten des klar benannten
+      Skizzenbands.
+
+      Die Abnahme deckt insbesondere die sechs Review-Rückfälle ab:
+      sichtbare Fünf-Wege-Vorwahl mit verlustfreiem Rückweg, gesamte Griff-Trefferfläche,
+      Vorschau-Aufräumen bei beiden Innenzug-Absagen, Rechteckfang,
+      Ebenenwahl auf dem bereits aktiven Eintrag sowie gemeinsames Ausblenden
+      beider Maßfelder und Schlösser.
+
 
 ### Die obere Bedienzone: drei Bänder, wo der Bauplan eines zeichnet (27.08.2026)
 
@@ -11804,23 +11841,6 @@ steht:
 | Gruppennamen | erst beim Aufklappen zu sehen | **immer sichtbar** (ERSTELLEN, ÄNDERN, PRÜFEN …) |
 | Operationen im Register | 91 in 15 Kategorien, 14 mit Kürzel | — |
 | Symbole gleichzeitig im Band | 7 Umschalter unter der Ansicht | rund 30, **keines mit Wort** |
-
-      **Gebaut am 28.08.2026:** Beim freien Start stehen drei moderne,
-      tastaturbedienbare Ebenenkarten mitten im Bild; auch die bereits
-      vorausgewählte Draufsicht schließt die Frage sauber. *Rechteck* ist ein
-      echtes Zwei-Klick-Werkzeug mit Breite und Höhe, Tab-Reihenfolge und je
-      einem sichtbaren Schloss; gefangene Ecken werden im selben
-      Rückgängig-Schritt als Deckung gespeichert. Jeder Zeichenknopf nennt
-      Name, Kürzel und erste Klickfolge. Eine wortbasierte Auswahlquittung
-      steht ruhig am unteren Bildrand, und während des Zeichnens verschwindet
-      die allgemeine Werkzeugleiste zugunsten des klar benannten
-      Skizzenbands.
-
-      Die Abnahme deckt insbesondere die sechs Review-Rückfälle ab:
-      sichtbare Fünf-Wege-Vorwahl mit verlustfreiem Rückweg, gesamte Griff-Trefferfläche,
-      Vorschau-Aufräumen bei beiden Innenzug-Absagen, Rechteckfang,
-      Ebenenwahl auf dem bereits aktiven Eintrag sowie gemeinsames Ausblenden
-      beider Maßfelder und Schlösser.
 
 **Das ist der Kern, und er ist nicht Geschmack:** Bei uns liegt jede Operation
 zum Erzeugen und Ändern **drei** Klicks tief, und wie die Gruppe heißt, erfährt
@@ -11999,6 +12019,31 @@ Offen:
       legt das Fensterschema fest, und wer es ändert, ändert Handbuch, Tour und
       jedes Bildschirmfoto mit.
 
+**Nachtrag am 28.08.2026 — die sichere Schicht davor ist gebaut.** Roberts
+Auftrag „für Kunden ohne CAD-Kenntnisse einfach, schön und modern" lässt vier
+Verbesserungen zu, ohne die offene Entscheidung B/C vorwegzunehmen:
+
+- [x] **Die sieben Hauptknöpfe tragen Symbol und Wort.** *Zeichnen*, *Formen*
+      und *Skelett* sind keine allgemein bekannten Piktogramme; ihr Name stand
+      vorher erst am Mauszeiger. Die Zeile bleibt einzeilig und passt mit
+      Projektname, Außenmaß, Drucker und Material bei 1280 Bildpunkten.
+- [x] **Der erste Start hat eine Hierarchie.** Willkommen und kurzer Einstieg,
+      dann *Grundlagen* für Sprache, Drucker und Material, danach klar als
+      freiwillig bezeichnete *Optionale Erweiterungen*. Der Installationsknopf
+      trägt nur noch seine Handlung; der Zustand steht als eigener Satz daneben.
+- [x] **Installiert ist nicht mehr „fehlt".** Ein ruhendes Comfy Desktop wird
+      als *installiert* gezeigt, ein antwortender Dienst als *bereit* und nur
+      ein wirklich fehlender Weg als *nicht eingerichtet*.
+- [x] **Die vier Startkacheln sprechen in Absichten.** Keine sichtbaren
+      „Weg 1–4" und kein „Mesh" als Voraussetzung: *Vorhandenes Modell
+      anpassen*, *Eigenes Teil bauen*, *Modell aus Text oder Bild vorbereiten*,
+      *Figur frei formen*. Dateinamen und Abnahmepfade bleiben unverändert.
+
+Das entscheidet B/C weiterhin nicht: Menüleiste und Werkzeugleiste werden
+nicht zu einem neuen Band umgebaut. Es beseitigt aber die wortlose Dichte und
+die falsche Erststart-Aussage, ohne das Fensterschema oder die 91 Operationen
+zu verschieben.
+
 ---
 
 ## Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026)
@@ -12061,6 +12106,26 @@ Offen:
       Archiv bleibt ein Bauartefakt; sein Installationsskript rechtfertigt keine
       dritte Linux-Wahl. Die Regel steht in `make_download.DELIVERED` und ist
       getestet. Die aktuelle Download-Seite bleibt bis zum Release unverändert.
+
+---
+
+## Ein Changelog in App und Website (28.08.2026)
+
+Entscheidung Robert: Ab der nächsten Version ist der Verlauf nicht nur in der
+Anwendung nachlesbar, sondern genauso sauber und kundenorientiert auf der
+Website. In beiden Oberflächen soll ein Auswahlfeld durch alle Fassungen
+führen; ein zusätzlicher Pflegeschritt soll daraus nicht entstehen.
+
+- [x] **Eine Quelle, zwei automatisch erzeugte Oberflächen.**
+      `changelog/<sprache>.md` bleibt die einzige gepflegte Quelle. Das
+      Neuerungen-Fenster öffnet auf der laufenden Version und zeigt über sein
+      Auswahlfeld jede mitgelieferte Fassung einzeln. `make_changelog.py`
+      erzeugt daraus die sechs responsiven Webfassungen; `make_download.py`
+      ruft es bei jedem Release automatisch auf. Ein Gleichheitstest hält die
+      erzeugten Seiten gegen die Quelle, und Sitemap, Sprachwechsel sowie
+      Inhaltsstempel sind angeschlossen. Desktop- und Handyansicht sind im
+      lokalen Browser geprüft; der Auswahlwechsel zeigt genau einen Abschnitt
+      und trägt die Fassung in der Adresse.
 
 ---
 
@@ -12135,15 +12200,38 @@ Offen:
       alte Tageszähler werden beim nächsten gültigen Zugriff bereinigt und in
       der Datenschutzerklärung genannt; der Videotext folgt direkt dem
       Demo-/Teststand des jeweiligen Baus.
-- [ ] **Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet".**
+- [x] **Private Support-Verwaltung für den Verkaufsstart gebaut.**
+      `tools/licence_admin.py` ist eine lokale, nicht ausgelieferte Oberfläche:
+      Sie ordnet einen anonymen Vorratsschlüssel lokal der Transaktionskennung
+      aus dem MoR-Dashboard zu und findet eine Lizenz im externen
+      Schlüsselarchiv nach vollständigem Schlüssel, Digest, Transaktion,
+      Bestell-/POOL-Kennung oder Käuferkennung, zeigt
+      Aktivierungen, Tageszähler und Änderungsprotokoll und kann neue
+      Aktivierungen sperren/freigeben, den Geräteplatz für einen Wechsel
+      freigeben und ein geklärtes Versuchslimit zurücksetzen.
+      `api/operator.php` nimmt ausschließlich den extern erzeugten
+      256-Bit-Betreiberzugang an; zum Server geht nur der Digest, nie das Archiv
+      oder die Käuferkennung. Jede Änderung trägt einen festen Anlass ohne
+      Freitext. Die Oberfläche sagt die Offline-Grenze sichtbar: Eine schon
+      ausgestellte Freischaltung wird nicht fernabgeschaltet. Der
+      Schlüsselgenerator verlangt jetzt das private JSONL-Archiv und schreibt
+      es atomar vor der Ausgabe, damit ein Supportfall identifizierbar bleibt.
+      Die Abschlussdurchsicht hat den Altbestand eingeschlossen: Das Deployment
+      akzeptiert die bestehende Drei-Tabellen-Datenbank bis zur idempotenten
+      Migration, Generator und Oberfläche teilen eine Betriebssystem-Sperre und
+      verifizieren vor jeder Änderung das vollständige Archiv. MoR-Transaktionen
+      sind eindeutig, ältere Hauptversionen bleiben über den Schlüssel suchbar.
+      Die Oberfläche führt ohne CAD-Begriffe in drei nummerierten Schritten und
+      kodiert jeden Zustand zusätzlich zu Farbe als Symbol und Klartext.
+- [x] **Der Ollama-Pull im Chat-Dialog endete im Test auf „nicht geantwortet".**
       `tests/test_chat_ui.py::test_the_pull_shows_a_share_and_a_way_out` erwartet
-      „liegt jetzt hier" in `KeyDialog.probe_result` und liest „Ollama hat nicht
-      geantwortet — läuft es noch?". **Kein Lasteffekt**: einzeln rot in 4,9 s,
-      und in einem Worktree auf `dce71e36` ohne die Änderungen dieser Sitzung
-      genauso rot — die Gegenprobe ist gefahren, damit er nicht als Verdacht
-      gegen den Update-Weg stehen bleibt. Was fehlt, ist die Ursache: Der Test
-      wartet 200 × 20 ms auf den Arbeiter und fährt ausdrücklich den ganzen Weg
-      über die Thread-Grenze, nicht den Slot allein.
+      „liegt jetzt hier" in `KeyDialog.probe_result` und las „Ollama hat nicht
+      geantwortet — läuft es noch?". Ursache war der Prüfstand: Seit lokale
+      Dienste Firmenproxies bewusst umgehen, öffnet `pull_model()` über
+      `opener_for(...).open`; der Test ersetzte weiter das nicht mehr benutzte
+      `urllib.request.urlopen` und sprach deshalb mit dem echten lokalen Port.
+      Der Ersatz folgt jetzt dem wirklichen Vertrag; Knopf, Arbeiter,
+      Fortschritt und Thread-Signal sind gemeinsam geprüft.
 - [ ] **`rtree` liegt auf Entwicklungsmaschinen als Überrest und macht vier
       Tests rot.** Es ist am 24.08.2026 aus `pyproject.toml` entfernt und durch
       `app/core/geom/enclosure.py` ersetzt worden, steht seither auf der
@@ -12155,22 +12243,26 @@ Offen:
       auf allen drei gelaufen ist — er sieht wie ein Codefehler aus und ist
       keiner, und das kostet beim nächsten Mal wieder eine halbe Stunde Suche.
 
----
+## ComfyUI aus Solidon starten (28.08.2026)
 
-## Ein Changelog in App und Website (28.08.2026)
+Robert zeigte die Zeile aus *Hilfe → Zusätzliche Programme*: ComfyUI Desktop
+war installiert, Solidon meldete „nicht gefunden“, und *Ort angeben …* fragte
+ausschließlich nach einer HTTP-Adresse. Damit führte der einzige sichtbare
+Knopf gerade nicht zu dem Programm, das ein Kunde von comfy.org bekommt.
 
-Entscheidung Robert: Ab der nächsten Version ist der Verlauf nicht nur in der
-Anwendung nachlesbar, sondern genauso sauber und kundenorientiert auf der
-Website. In beiden Oberflächen soll ein Auswahlfeld durch alle Fassungen
-führen; ein zusätzlicher Pflegeschritt soll daraus nicht entstehen.
-
-- [x] **Eine Quelle, zwei automatisch erzeugte Oberflächen.**
-      `changelog/<sprache>.md` bleibt die einzige gepflegte Quelle. Das
-      Neuerungen-Fenster öffnet auf der laufenden Version und zeigt über sein
-      Auswahlfeld jede mitgelieferte Fassung einzeln. `make_changelog.py`
-      erzeugt daraus die sechs responsiven Webfassungen; `make_download.py`
-      ruft es bei jedem Release automatisch auf. Ein Gleichheitstest hält die
-      erzeugten Seiten gegen die Quelle, und Sitemap, Sprachwechsel sowie
-      Inhaltsstempel sind angeschlossen. Desktop- und Handyansicht sind im
-      lokalen Browser geprüft; der Auswahlwechsel zeigt genau einen Abschnitt
-      und trägt die Fassung in der Adresse.
+- [x] **Desktop und Webdienst sind jetzt zwei Seiten derselben Zeile.** Erkannt
+      werden `Comfy Desktop`, die älteren Programmnamen und die offizielle
+      `comfy`-Kommandozeile. Ein gefundenes, noch nicht antwortendes ComfyUI
+      bekommt *Lokal starten*; Desktop wird geöffnet, die CLI dokumentiert mit
+      `launch --background` gerufen. Die Portprüfung läuft im Arbeiter.
+- [x] **Pfad und Adresse überschreiben einander nicht mehr.** Der gemeinsame
+      Speicherplatz machte aus `C:\…\Comfy Desktop.exe` zugleich die angebliche
+      Webadresse des Backends. Beide Angaben haben nun getrennte Schlüssel mit
+      Rückfall auf die alte Datei. *Ort angeben …* bietet entsprechend *Lokale
+      App auswählen …* und *Web-/Netzadresse verwenden …* an. Der lokale Start
+      prüft und aktiviert immer Port 8188; eine gespeicherte Netzadresse bleibt
+      dabei erhalten und kann später wieder ausgewählt werden.
+- [x] **Am Rechner des Fundes nachgemessen.** Die Erkennung liefert
+      `C:\Users\rober\AppData\Local\Programs\Comfy Desktop\Comfy Desktop.exe`,
+      der Startbefehl genau diese Datei und die Backend-Adresse weiterhin
+      `http://127.0.0.1:8188`.

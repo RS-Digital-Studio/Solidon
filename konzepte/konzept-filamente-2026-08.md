@@ -1,10 +1,12 @@
 # Konzept: Filamente statt nummerierter Slots
 
-> **Stand: ENTSCHIEDEN von Robert am 26.08.2026, Umsetzung beginnt.**
+> **Stand: UMGESETZT UND ABGENOMMEN am 28.08.2026.**
 > Entstanden aus der Einfachheits-Kontrolle des Bemalens: „Welche Farbe hat
 > Slot 1?" konnte die Oberfläche nicht beantworten, und das Punkt-Radius-Malen
 > passt nicht zu einer Anwendung, die ihre Flächen beim Namen kennt.
-> Zwei Auslegungsannahmen sind unten als solche markiert.
+> Kern, Oberfläche, Filamentkatalog, Formatmigration, Druckwerte je Filament,
+> Handbuch, Website und alle fünf Übersetzungskataloge sind nachgezogen. Die
+> Auslegungsannahmen darunter bleiben als Entscheidungsverlauf lesbar.
 
 ## Roberts Entscheidung, ausformuliert
 
@@ -268,8 +270,7 @@ Alle fünf Blöcke gebaut, jeder mit eigenem Commit und Gegenprobe:
    ein Anschluss-Test, der die Reihenfolge aus zwei wirklich geschriebenen
    3MF-Dateien liest. Damit ist die de-Zulieferung erledigt.
 
-**Offen aus den Zulieferungen:** `settings.slot_profiles` schlüsselt die
-Filamentwahl weiter **per Position** (d1) — mit benannten Katalog-Filamenten
-gehört der Schlüssel auf den Namen, sonst erbt ein Kunde nach dem Update
-stumm falsche Zuordnungen. Das gehört in den Dialog, der die Zuordnung führt
-(`print_settings_dialog`), und wartet auf die Oberflächenseite.
+**Erledigt am 28.08.2026:** Die Filamentwahl hängt nicht mehr an einer bloßen
+Position. Name und Farbe identifizieren die Spule über Dialog, direkten
+3MF-Export und Slicer-Übergabe hinweg; Druckwerte je Filament werden demselben
+Extruder zugeordnet, auch wenn ein Auftrag mehrere Platten trägt.

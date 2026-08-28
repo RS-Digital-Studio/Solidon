@@ -1138,8 +1138,8 @@ def main() -> int:
     # Nur die Sprachen, für die es eine Seite auf der Website gibt. Seit die
     # Kataloge für ES, FR, IT und PT dazugekommen sind, liefert
     # ``available_languages()`` mehr, als hier gebaut werden kann: Jede Sprache
-    # braucht ihren Ordner, ihre Navigation und einen Sprachwechsler, der fünf
-    # Ziele kennt. Das ist ein eigenes Stück Arbeit, und bis es getan ist, ist
+    # braucht ihren Ordner, ihre Navigation und einen Sprachwechsler, der alle
+    # vorhandenen Ziele kennt. Das ist ein eigenes Stück Arbeit, und bis es getan ist, ist
     # eine Meldung ehrlicher als ein Abbruch mit KeyError.
     known = [language for language in available_languages() if language in PAGES]
     missing = [language for language in available_languages() if language not in PAGES]

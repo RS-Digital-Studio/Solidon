@@ -151,8 +151,10 @@ Neun Sätze, an denen jede Entscheidung gemessen wird.
    Mehrdeutigkeit wird angehalten und gefragt.
 7. **Deterministische Geometrie, probabilistische Absicht.** Das LLM
    interpretiert die Anfrage. Die Geometrie rechnet Code.
-8. **Vollständig ohne Konto und ohne Netz nutzbar.** Gehostete Dienste sind
-   Bequemlichkeit, nie Voraussetzung.
+8. **Nach einmaliger Gerätefreischaltung vollständig ohne Konto und ohne Netz
+   nutzbar.** Die Freischaltung geht direkt oder per Anfrage- und Antwortdatei
+   über ein zweites Gerät; danach sind gehostete Dienste Bequemlichkeit, nie
+   Betriebsvoraussetzung.
 9. **Der Kern kennt keine Oberfläche.** Keine Qt-Einbindung unterhalb von
    `ui`. Alles Rechnende ist ohne Fenster aufrufbar.
 
@@ -476,7 +478,8 @@ app/
     agent/         LLM-Anbindung, Werkzeuge, Kontextverwaltung
     backends/      LLM- und Mesh-Backends hinter einer Schnittstelle
     export/        Schreiben, Slicer-Übergabe, Namensschema
-    activation/    Freischaltung, Schlüssel, Demo-Frist
+    activation/    Kaufcode, Geräteidentität, signiertes Zertifikat,
+                   Demo- und optionale Testfrist
     errors.py      Ausnahmehierarchie (§33)
     types.py       Kernverträge (§9)
   ui/              PySide6 — darf core benutzen, nie umgekehrt
@@ -494,6 +497,25 @@ nur entsteht, wenn ein Fenster offen ist, entsteht in keinem Testlauf.
 
 **Die Regel:** `core` importiert niemals aus `ui`. Ein Test importiert `core`
 ohne installiertes Qt; bricht er, ist die Trennung verletzt.
+
+**Betreiberwerkzeuge reisen nicht mit dem Produkt.** Die private
+Support-Verwaltung liegt unter `tools/` und spricht mit einem eng begrenzten
+JSON-Endpunkt des Aktivierungsdienstes; sie ist weder ein versteckter Modus der
+Kundenanwendung noch eine Web-Anwendung. Zugang gibt ein zufälliger
+256-Bit-Token, der wie der Aktivierungsstartwert außerhalb von Repository und
+Webroot liegt. Der Server kennt weiterhin nur den Digest einer Lizenz. Die
+Zuordnung zu Bestellkennung und Käuferkennung entsteht ausschließlich im
+privaten, offline gesicherten Schlüsselarchiv des Betreibers. Ein anonymer
+Vorratsschlüssel bekommt dort seine MoR-Transaktionskennung; erst der Blick ins
+Dashboard des Zahlungsanbieters löst sie zu einem Käufer auf.
+
+Vier Serverhandlungen gehören zum Supportvertrag: künftige Aktivierungen
+sperren oder wieder freigeben, den belegten Geräteplatz für einen Wechsel
+freigeben und das Tageslimit nach einem geklärten Fehlerfall zurücksetzen. Jede
+Änderung trägt einen festen Anlass und einen Audit-Eintrag ohne Freitext oder
+Kundendaten. Keine davon schaltet eine bereits ausgestellte Offline-
+Freischaltung aus der Ferne ab — das wäre nur mit einer regelmäßigen
+Lizenzabfrage möglich und widerspräche Leitprinzip 8.
 
 ---
 
@@ -721,20 +743,22 @@ prüft sie mit demselben Test, der zweimalige Auswertung vergleicht (§15.1).
 
 ```json
 {
-  "format_version": 5,
-  "app_version": "0.4.1",
-  "libs": {"manifold3d": "3.2.1", "trimesh": "4.9.0"},
-  "parts_version": "7",
+  "format_version": 14,
+  "app_version": "0.3.0",
+  "libs": {"manifold3d": "3.5.2", "trimesh": "5.0.0"},
+  "parts_version": "12",
   "scene": {"printer": "centauri-carbon-2", "material": "petg"},
   "parameters": {
     "breite": {"value": 84.0, "unit": "mm", "min": 40, "max": 200,
-               "title": "Breite"},
-    "hoehe":  {"value": 22.0, "unit": "mm", "min": 10}
+               "title": "Breite", "title_translatable": true},
+    "hoehe": {"value": 22.0, "unit": "mm", "min": 10,
+              "title": "Höhe", "title_translatable": true}
   },
   "sources": {
     "src_1": {"type": "import", "path": "sources/halterung.stl",
-              "sha256": "…",
-              "ingest": {"unit": "mm", "scale": 1.0, "welded": true},
+              "sha256": "…", "embedded": true,
+              "ingest": {"unit": "mm", "scale": 1.0, "welded": true,
+                         "removed_triangles": 0, "components": 1},
               "origin": {"url": "…", "license": "CC BY-NC 4.0",
                          "author": "…", "retrieved": "2026-07-20"}}
   },
@@ -743,33 +767,39 @@ prüft sie mit demselben Test, der zweimalige Auswertung vergleicht (§15.1).
      "type": "clearance", "tolerance": "auto:petg"}
   ],
   "transactions": [
-    {"id": "t1", "title": "Import und Reparatur", "origin": {"by": "user"},
+    {"id": "t1", "title": "Import und Reparatur",
+     "title_translatable": true, "origin": {"by": "user"},
      "ops": [1, 2]},
     {"id": "t2", "title": "Teilen und verstiften",
+     "title_translatable": true,
      "origin": {"by": "agent", "model": "…", "prompt_version": "3",
                 "rules_version": "7", "temperature": 0.2},
-     "ops": [3, 4, 5, 6]}
+     "ops": [3, 4]}
   ],
   "ops": [
     {"id": 1, "op": "load",        "in": [],                "out": ["obj_1"],
-     "params": {"source": "src_1"}},
+     "params": {"source": "src_1", "unit": "mm", "name": "Halterung"},
+     "translatable": ["name"]},
     {"id": 2, "op": "repair",      "in": ["obj_1"],         "out": ["obj_1"],
      "params": {"fill_holes": true}},
-    {"id": 3, "op": "insert_part", "in": ["obj_1"],         "out": ["obj_1"],
-     "params": {"part": "heatset_m4", "anchor": "face_1", "mode": "subtract"}},
-    {"id": 4, "op": "split_plane", "in": ["obj_1"],         "out": ["obj_2","obj_3"],
-     "params": {"axis": "z", "position": "=@hoehe/2"}},
-    {"id": 5, "op": "add_pins",    "in": ["obj_2","obj_3"], "out": ["obj_2","obj_3"],
-     "params": {"count": 3, "d": 4.0, "clearance": "auto:petg"},
+    {"id": 3, "op": "split_pinned", "in": ["obj_1"],
+     "out": ["obj_2", "obj_3"],
+     "params": {"axis": "z", "position": "=@hoehe/2", "pins": 3,
+                "diameter": 4.0, "play": "auto:petg"},
      "solver": {"strategy": "direct"}, "seed": 20260727},
-    {"id": 6, "op": "arrange_bed", "in": ["obj_2","obj_3"], "out": ["obj_2","obj_3"],
+    {"id": 4, "op": "arrange_bed", "in": ["obj_2", "obj_3"],
+     "out": ["obj_2", "obj_3"],
      "params": {"spacing": 5.0}}
-  ]
+  ],
+  "chat": [],
+  "numbering": {"transaction": 2, "op": 4, "object": 3},
+  "print_settings": null
 }
 ```
 
-Der DAG über `in`/`out` bildet Teilen (1 → 2) und Vereinigen (2 → 1) ab; der
-Stack bleibt linear darstellbar. Drei Indirektionen tragen das Modell:
+Der DAG über `in`/`out` bildet hier das Teilen (1 → 2) ab und kann ebenso ein
+Vereinigen (2 → 1) tragen; der Stack bleibt linear darstellbar. Drei
+Indirektionen tragen das Modell:
 `"auto:petg"` für Toleranzen, `"=@hoehe/2"` für Parameter (§13), `solver` und
 `seed` für Reproduzierbarkeit (§11.3, §17.2).
 
@@ -1151,7 +1181,10 @@ der Kern bleibt bei Millimeter (§11.1).
 ## 20. Farbe und Multi-Material
 
 **Datenmodell**: pro Objekt eine Liste von Materialslots, pro Dreieck ein
-Slot-Index als Face-Attribut, optional UV und Textur aus Säule B.
+Slot-Index als Face-Attribut, optional UV und Textur aus Säule B. Der Slot ist
+das Dateiformat; die Bedienung nennt **Filament mit Name und Farbe**, nie eine
+nackte Nummer. Der projektübergreifende Filamentkatalog darf beliebig viele
+Spulen führen, je Objekt gelten höchstens acht gleichzeitig benutzte Slots.
 
 **Import**: STL keine Farbe (alles Slot 0), 3MF Materialgruppen je Dreieck,
 OBJ+MTL Gruppen und optional Textur, GLB/glTF ein PBR-Material mit Textur,
@@ -1168,8 +1201,16 @@ greift, über Nächste-Fläche-Zuordnung übertragen. Neue Schnittflächen bekom
 einen konfigurierbaren Slot. **Nach Rückfallstufe „voxel" ist die Zuweisung
 immer neu zu übertragen**, weil die Vernetzung ersetzt wurde.
 
-**Bemalen** als Pinselwerkzeug mit Radius und Kantenerkennung: späte Phase,
-aber im Datenmodell von Anfang an vorgesehen.
+**Zuweisen** geschieht in zwei reproduzierbaren Operationen: *Teil färben*
+weist dem ganzen Körper ein Filament zu, *Fläche färben* genau einer erkannten
+Fläche. Die Flächengrenze kommt aus der Merkmalserkennung und wandert bei
+Maßänderungen mit. Der frühere Punkt-Radius-Pinsel ist seit Formatversion 14
+ausgebaut; sein gespeicherter Punkt konnte keine stabile Fläche benennen.
+
+**Druckwerte je Filament** dürfen Temperatur, Kühlung, Rückzug und
+Materialwerte übersteuern — nur Eigenschaften der Spule, keine Geometrie. Name,
+Farbe und Werte bleiben beim direkten 3MF-Export und bei der Slicer-Übergabe
+demselben Extruder zugeordnet, auch über mehrere Platten.
 
 ---
 
@@ -1536,10 +1577,11 @@ Loft, exaktes Gewinde (§30.1)
 **Druckvorbereitung** — aushöhlen mit Entlüftung, an Ebene schneiden,
 Verstiftung setzen, Elefantenfuß kompensieren
 
-**Import** — STL, 3MF (einzeln und als ganze Bauplatte), OBJ, GLB, STEP (§30);
-SVG und DXF mit Extrusion
+**Import** — STL, 3MF (einzeln und als ganze Bauplatte), OBJ, PLY, OFF,
+GLB/glTF, STEP/STP (§30); SVG und DXF mit Extrusion
 
-**Farbe** — Slot zuweisen, aus Textur ableiten, bemalen
+**Farbe** — ein Filament dem ganzen Teil zuweisen, aus einer Textur ableiten
+oder eine erkannte Fläche vollständig färben
 
 **Beschriftung** — Text oder Logo erhaben/vertieft auf eine gewählte Fläche
 
@@ -1779,7 +1821,7 @@ weil zu wenige Platten da sind, bleibt ein Befund und wird nie stillschweigend
 weggelassen.
 
 **Formate**: STL binär, **3MF mit Objektnamen, Anordnung und Farbgruppen**,
-OBJ, STEP (bei B-Rep-Objekten).
+OBJ, PLY, GLB zum Zeigen, STEP bei B-Rep-Objekten.
 
 **Namensschema** bei mehreren Teilen, konfigurierbar, Vorgabe
 `<projekt>_<objekt>_1von3.stl`. Objektnamen werden dateisystemtauglich
@@ -2110,7 +2152,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Zuordnung | ID-Stabilität, Mehrdeutigkeitserkennung |
 | Fehler | jede Ausnahme trägt mindestens einen Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
-| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite, ein Menüeintrag je Operation |
+| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite; eine sichtbare Handlung genau einmal, technisch gleichwertige Zwillinge und Varianten teilen ihren Einstieg |
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
@@ -2676,7 +2718,7 @@ frühe Rückmeldungen sind mehr wert als ein weiteres Feature.
 
 ### P9 — Säule B und Farbe
 *Fertig, wenn:* generiertes Mesh durchläuft die Reparaturkette zu einem
-wasserdichten Ergebnis · Slot-Zuweisung überlebt Boolesche Ops einschließlich
+wasserdichten Ergebnis · Filamentzuweisung überlebt Boolesche Ops einschließlich
 Stufe „voxel" · Quantisierung bei gleichem Startwert reproduzierbar · `3MF`
 öffnet im Slicer mit korrekten Farbgruppen · **Weg 3 aus §2.2 als
 Ende-zu-Ende-Test**.
@@ -2737,7 +2779,8 @@ Konstruktionswerkzeugen, Bediensprache und Darstellung zurück.
 
 **Die Grenzen kamen zuerst, nicht zuletzt**: höchstens neun Menüs, zwölf Zeilen
 je Menü, acht Umschalter, acht Felder auf der Vorderseite eines Dialogs, genau
-ein Menüeintrag je Operation. Vor dem Wachstum eingezogen ist das ein Riegel;
+eine sichtbare Handlung genau einmal; technisch gleichwertige Zwillinge und
+Varianten teilen ihren Einstieg. Vor dem Wachstum eingezogen ist das ein Riegel;
 danach eingezogen wäre es eine Bestandsaufnahme. Der erste Lauf fand sofort ein
 Menü mit 23 Zeilen.
 
@@ -2856,7 +2899,7 @@ selbst an.
 **Danach in dieser Reihenfolge:**
 
 1. Die Reste von P8, die die erste Veröffentlichung tragen: Zertifikat
-   (§37.2), CI-Bauläufe, Postfach und DMARC
+   (§37.2), CI-Bauläufe und DMARC; das Support-Postfach ist eingerichtet
 2. Die Entscheidungen dieser Fassung in Code überführen — §15.7 (die Antwort
    gehört in die Parameter), §31 (Bestwert je Aufrufkontext, übersetzter Kern
    im Paket), §28.2 (Kandidaten aus der konvexen Hülle), §37.2 (Unterschrift

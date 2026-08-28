@@ -40,21 +40,29 @@ auf sein Datum wartet.
 echte Modelle) · `run_ui_audit.py` (der ganze Bestand durch die laufende
 Oberfläche) · `check_local_model.py` (ruft ein lokales Modell die Werkzeuge
 wirklich auf?) · `check_support.py` (kommt die Rückmeldung an?) ·
-`qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen)
+`check_activation.py` (ist der öffentliche Aktivierungsdienst bereit?) ·
+`licence_admin.py` (private Support-Oberfläche: MoR-Transaktion einem
+Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
+Serverzustand lesen und Geräteplätze verwalten) ·
+`qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
+`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen)
 
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
-· `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` ·
-`make_examples.py` · `make_video.py` · `stamp_assets.py` (**läuft als Letztes**,
-siehe unten)
+· `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
+`make_video.py` · `stamp_assets.py` (**läuft als Letztes**, siehe unten)
 
 **Bauen und Ausliefern**
 
 `bump_version.py` (die zwei Stellen, die die Version tragen, plus drei
 abgeleitete) · `make_installer.py` · `make_linux_packages.py` ·
 `make_macos_package.py` · `make_download.py` · `sign_version.py` ·
-`build_licence_module.py` · `make_licence_keys.py`
+`build_licence_module.py` · `make_licence_keys.py` ·
+`setup_activation_server.py` (privaten Startwert, Betreiberzugang und
+Datenbank vorbereiten) · `deploy_activation_server.py` (diese privaten Werte
+und die Endpunkte mit Sicherung ausliefern) · `licence_archive.py` (gemeinsame
+Dateisperre für Generator und Support-Oberfläche)
 
 **Website** `upload_website.py` · `make_stats_access.py`
 

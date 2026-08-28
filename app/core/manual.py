@@ -11,7 +11,7 @@ sagt als das Programm.
 **Die Einführung ist geschrieben.** Was ein Operationsstack ist, warum das
 Spiel aus dem Materialprofil kommt und was passiert, wenn man dieselbe Zahl
 später ändert, steht in keinem Parameterschema. Diese Seiten sind der
-Unterschied zwischen „ich sehe 62 Einträge" und „ich weiß, was ich damit
+Unterschied zwischen „ich sehe eine lange Liste" und „ich weiß, was ich damit
 mache" — und sie sind kurz gehalten, weil ein Handbuch, das gelesen werden
 soll, keine hundert Seiten haben darf.
 
@@ -133,9 +133,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "— die Maße lassen sich später ändern. *Später einstellen* geht auch, "
             "dann gelten Vorgaben.\n\n"
             "![](figure:start-screen)\n\n"
-            "**2. Eine Datei auf das Fenster ziehen.** STL, 3MF, OBJ, GLB, "
-            "PLY, OFF und STEP; dazu SVG und DXF für Zeichnungen, die "
-            "extrudiert werden sollen. Ist in der Datei keine Einheit "
+            "**2. Eine Datei auf das Fenster ziehen.** STL, 3MF, OBJ, PLY, "
+            "OFF, GLB oder GLTF und STEP oder STP; dazu SVG und DXF für "
+            "Zeichnungen, die extrudiert werden sollen. Ist in der Datei keine Einheit "
             "vermerkt — bei STL nie —, fragt Solidon nach, statt zu raten. Im "
             "Zweifel Millimeter: fast alles im Netz ist in Millimetern.\n\n"
             "Liegt die Datei noch nicht auf der Platte, geht auch ihre Adresse: "
@@ -194,8 +194,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "durchscheinend zurück —, dazu *Formen* und *Skelett*, die "
             "beide einen gewählten Körper brauchen und das auch sagen, "
             "bevor man klickt. Escape kommt aus jedem der drei zurück wie "
-            "aus jedem anderen Werkzeug. Die Knöpfe tragen nur ihr Zeichen; "
-            "der Name erscheint, sobald der Zeiger darauf stehen bleibt.\n\n"
+            "aus jedem anderen Werkzeug. Die Knöpfe tragen Symbol und Namen "
+            "nebeneinander, damit kein Zeichen erraten werden muss.\n\n"
             "**Unter dem Modell die Werkzeugzeile:** *Schnitt*, *Messen*, "
             "*Bewegen*, *Analyse*, *Schichten*, *Explosion*, *Trennen* — "
             "von links nach rechts auf Alt+1 bis Alt+7. Die "
@@ -342,9 +342,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Für den Umriss, den kein Grundkörper hergibt. Ein Klotz mit einer "
             "Bohrung braucht keine Zeichnung — eine Grundplatte mit einer "
             "Aussparung, in die ein Netzteil passt, schon.\n\n"
-            "**Angefangen wird oben in der Werkzeugleiste.** Das fünfte Zeichen "
-            "von links ist *Zeichnen* — die Knöpfe dort tragen keine Beschriftung, "
-            "ihr Name steht am Zeiger. Es schwenkt die Ansicht senkrecht auf die "
+            "**Angefangen wird oben in der Werkzeugleiste.** *Zeichnen* steht dort "
+            "mit seinem Namen neben dem Symbol. Es schwenkt die Ansicht senkrecht auf die "
             "Zeichenebene: Gezeichnet wird im Modell und nicht daneben. Was daraus "
             "entsteht, entscheiden Sie am Ende — nicht vorher. Escape kommt wieder "
             "heraus, wie aus jedem anderen "
@@ -860,7 +859,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "abmacht.\n\n"
             "![](figure:wall)\n\n"
             "**Exportiert wird nach STL, 3MF oder STEP.** 3MF ist, was Slicer "
-            "bevorzugen, und es trägt die Materialslots als Farbgruppen mit; STL "
+            "bevorzugen, und es trägt die Filamentzuweisungen als Farbgruppen mit; STL "
             "kennt keine Farbe und verliert sie folgerichtig. STEP bewahrt "
             "Flächen und Kanten so, dass andere Konstruktionsprogramme sie "
             "einzeln weiterbearbeiten können. Dazu kommen OBJ und PLY für "
@@ -1110,8 +1109,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "auf dem Prozessor, und das ist keine andere Geschwindigkeit, "
             "sondern eine andere Größenordnung — gemessen auf einem Rechner mit "
             "Intel-Arc-Grafik knapp acht Token je Sekunde beim Einlesen. Der "
-            "Auftrag von Solidon ist rund 19 000 Token lang; es dauert dort "
-            "**einundvierzig Minuten**, bis eine Antwort überhaupt beginnt. "
+            "Auftrag von Solidon ist rund 24 000 Token lang; es dauert dort "
+            "**einundfünfzig Minuten**, bis eine Antwort überhaupt beginnt. "
             "Steht das in der Probe, ist es keine Störung, sondern die "
             "Auskunft: Auf diesem Rechner lohnt der lokale Weg nicht, und ein "
             "kleineres Modell ändert daran wenig.\n\n"
@@ -1425,8 +1424,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "nicht zum Drucken.\n\n"
             "**Prüfbericht** — die Liste dessen, was an der Szene auffällt, "
             "jeweils mit einer Handlung, die es behebt.\n\n"
-            "**Materialslot** — die Zuordnung einer Fläche zu einem Material "
-            "oder einer Farbe beim Mehrfarbendruck."
+            "**Filament** — eine benannte Spule mit Farbe und eigenen Druckwerten. "
+            "Beim Mehrfarbendruck wird sie einem ganzen Teil oder einer erkannten "
+            "Fläche zugewiesen."
         ),
     ),
 )

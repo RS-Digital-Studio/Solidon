@@ -1,6 +1,6 @@
 # `tests/` — die Suite
 
-150 Dateien, gut 100 000 Zeilen. Eine Datei je Testart; `data/` ist der
+Mehr als 150 Python-Dateien und weit über 80 000 Zeilen. Eine Datei je Testart; `data/` ist der
 Referenzkorpus.
 
 Die Regeln stehen in `.claude/rules/tests.md` — dort auch die Messfallen, die
@@ -49,6 +49,7 @@ nicht verfälschen.
 | Frage | Datei |
 |---|---|
 | Läuft der Kern ohne Qt? | `test_core_isolation.py` |
+| Öffnet jedes angebotene Modellformat dieselbe Referenzgeometrie? | `test_import_formats.py` |
 | Deutsche Stämme in Bezeichnern? | `test_language_rules.py` |
 | Ist jede Op vollständig registriert? | `test_registry_consistency.py` |
 | Zweimal ausgewertet = identisch? | `test_evaluation.py` |
@@ -59,6 +60,7 @@ nicht verfälschen.
 | Bedeutung allein über Farbe? | `test_theme_and_palette.py` |
 | Neun Menüs, zwölf Zeilen, acht Felder | `test_interface_limits.py` |
 | Sind alle Kataloge vollständig? | `test_translations.py` |
+| Bleiben Käuferzuordnung und Betreiberzugang aus dem Server und arbeitet die Support-Verwaltung nur per Digest? | `test_licence_admin.py`, `test_activation_server.py` |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`) |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |

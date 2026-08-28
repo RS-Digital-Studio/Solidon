@@ -1,9 +1,10 @@
 """Farb-Operationen (Bauplan §25, Kategorie „Farbe").
 
 Zwei Operationen, und zwischen ihnen alles von §20, was ein Nutzer heute
-erreichen kann: einen Slot von Hand zuweisen, oder eine Textur entscheiden
-lassen. Der Pinsel mit Radius ist eine späte Phase — aber alles unter ihm ist
-hier, er wird also nur malen müssen, kein Datenmodell erfinden.
+erreichen kann: dem ganzen Teil ein Filament zuweisen oder eine Textur auf die
+eingelegten Filamente vereinfachen. Eine erkannte Fläche färbt die Operation
+``paint_slot`` in :mod:`app.core.geom.prepare_ops`; einen punktfesten Pinsel
+gibt es seit Formatversion 14 nicht mehr.
 """
 
 from __future__ import annotations
@@ -34,12 +35,12 @@ class AssignSlotParams(BaseParams):
         minimum=0,
         maximum=MAX_SLOTS - 1,
         kind="filament",
-        doc=_("Der Materialslot, in den das ganze Objekt kommt."),
+        doc=_("Das Filament, das dem ganzen Objekt zugewiesen wird."),
     )
     name: str = param(
         title=_("Bezeichnung"),
         default="",
-        doc=_("Wie das Filament heißt. Leer nimmt „Slot“ und die Nummer."),
+        doc=_("Wie das Filament heißt. Leer nimmt „Filament“ und die Nummer."),
     )
     colour: str = param(
         title=_("Farbe"),
@@ -56,7 +57,7 @@ class AssignSlotParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Legt das ganze Objekt in einen Materialslot. Mehrfarbig wird ein Teil, "
+        "Ordnet dem ganzen Objekt ein Filament zu. Mehrfarbig wird ein Teil, "
         "indem verschieden zugewiesene Körper vereinigt werden."
     ),
 )
@@ -116,7 +117,7 @@ class SlotsFromTextureParams(BaseParams):
 
 @register_op(
     name="slots_from_texture",
-    title=_("Farben in Slots umrechnen"),
+    title=_("Textur in Filamente umrechnen"),
     category="colour",
     params=SlotsFromTextureParams,
     consumes=1,
@@ -124,7 +125,7 @@ class SlotsFromTextureParams(BaseParams):
     deterministic=False,
     doc=_(
         "Rechnet die Textur eines Objekts auf die Anzahl eingelegter Filamente um "
-        "und legt das Ergebnis als Materialslots ab."
+        "und speichert das Ergebnis als Filamentzuweisung."
     ),
 )
 def slots_from_texture(ctx: OpContext) -> OpResult:

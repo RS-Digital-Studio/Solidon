@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "solidon3d"
-version = "0.2.1"
+version = "0.3.0"
 description = "Desktop application for building, generating and editing printable models"
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
@@ -125,7 +125,7 @@ include = ["app*"]
 "app.core.backends" = ["data/*.json"]
 "app.core.knowledge.parts" = ["LICENSE"]
 "app.i18n" = ["locales/*.json"]
-# Die drei Beispielprojekte reisen mit: Dokumentation, Abnahmetest und
+# Die Beispielprojekte reisen mit: Dokumentation, Abnahmetest und
 # Startbildschirm-Inhalt zugleich (§37.2). Die Handbuchbilder dazu — die
 # gezeichneten und gerenderten entstehen im Lauf, die Bildschirmfotos nicht,
 # also reisen sie als Dateien (ein Ordner je Sprache).
@@ -177,7 +177,7 @@ target-version = "py313"
 # irgendetwas anders war. Es ist dieselbe Falle wie die drei in `CLAUDE.md`,
 # nur eine neue Gestalt: nicht die Pipeline und nicht die Schlusszeile, sondern
 # ein fremder Ordner im Prüfpfad.
-extend-exclude = [".claude/.state/", "3D Drucker/"]
+extend-exclude = [".claude/.state/", ".codex-*/", "3D Drucker/"]
 
 [tool.ruff.lint]
 # Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im

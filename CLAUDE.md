@@ -20,7 +20,7 @@ Die Unterlagen in ihrer Rangfolge:
 | `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln, jede mit Test |
 | `ROADMAP.md` | **Was als Nächstes** — Arbeitsliste, oben das Register der offenen Punkte |
 | `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — die abgeschlossenen Abschnitte, datiert |
-| `konzepte/README.md` | **Warum** — Index der neunzehn Konzepte und Durchsichten, mit dem Stand je Dokument |
+| `konzepte/README.md` | **Warum** — vollständiger Index der Konzepte und Durchsichten, mit dem Stand je Dokument |
 | `README.md` | Was der Nutzer sieht |
 | `<verzeichnis>/CLAUDE.md` | **Was wo liegt** — die Karte des Gebiets; lädt mit, sobald ich eine Datei darin anfasse |
 | `.claude/rules/*.md` | **Was dort einzuhalten ist** — greift über `paths:`, quer zu den Verzeichnissen |
@@ -159,9 +159,10 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
               comfy_setup.py richtet ein fremdes ComfyUI für Weg 3 ein,
               data/comfyui/ sind die Knoten dazu (TripoSG, MIT): beides im
               Kern, weil tools/ im gebauten Paket nicht mitreist
-  export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
+  export/     STL/3MF/OBJ/PLY/GLB/STEP, Plattenbelegung, Slicer-Übergabe
               (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
-  activation/ Freischaltung: Testlauf, Schlüssel, Demo-Frist (store.py)
+  activation/ Freischaltung: Kaufcode, Geräteidentität, signiertes Zertifikat,
+              Demo- und optionale Testfrist
   updates.py  Update: fragen, holen, prüfen — gestartet wird nur auf Klick,
               die Punkte dazu stehen in changelog/<sprache>.md
   report.py   Fehlerbericht als Ordner — schreibt, sendet nie
@@ -175,12 +176,14 @@ app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
-website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
+website/      öffentliche Seiten; handbuch.html und <sprache>/manual.html erzeugt
               tools/make_manual.py, die Rechtstexte tools/make_legal.py,
               Changelog-Seiten tools/make_changelog.py,
               robots/sitemap/llms tools/make_seo.py — der Rest von Hand
-              api/support.php nimmt die Rückmeldungen an; muss nach
-              httpdocs/api/ hochgeladen werden, sonst scheitert das Senden
+              api/support.php nimmt Rückmeldungen an; die activation-Endpunkte
+              aktivieren und deaktivieren Geräte, api/operator.php nimmt nur
+              die lokale Support-Verwaltung mit externem Token an; alles muss
+              nach httpdocs/api/
               bilder/ Schaustücke von Hand, beleg-*.png von tools/make_web_images.py
               dl/ die Pakete, von tools/make_download.py angelegt
 changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl

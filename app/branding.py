@@ -55,21 +55,20 @@ PROJECT_SUFFIX: Final = ".p3d"
 
 #: Anwendungsversion, gespiegelt in jede Projektdatei als ``app_version``.
 #:
-#: **0.1 ist die erste öffentliche Demo** (Demo-Konzept §2 D), nicht die
-#: Verkaufsversion. Die Null vorn ist keine Bescheidenheit, sondern Mechanik:
+#: **Die 0.x-Reihe sind die öffentlichen Demos** (Demo-Konzept §2 D), nicht
+#: die Verkaufsversion. Die Null vorn ist keine Bescheidenheit, sondern Mechanik:
 #: `key.current_major()` liest die Hauptversion, und ein Kaufschlüssel für 1.x
 #: greift damit in einer Demo nicht — wer kauft, lädt die Verkaufsversion, die
 #: keinen Stichtag trägt. Zugleich zeigt der Update-Hinweis jeder laufenden
 #: Demo auf die 1.0, sobald `version.json` sie nennt.
 #:
-#: **Wie weitergezählt wird:** die letzte Stelle steigt mit jedem
-#: ausgelieferten Bau um eins — 0.1.0, 0.1.1, 0.1.2. Die vorderen Stellen
-#: bewegen sich nur bei einer größeren Änderung, und das ist eine Entscheidung
-#: und kein Nebenprodukt des Bauens. Wer hier dreht, zieht `pyproject.toml`
-#: mit — die Zahl steht an beiden Orten. Vergessen kann man es nicht mehr:
+#: **Wie weitergezählt wird:** die letzte Stelle steigt mit jedem Bau derselben
+#: Demo-Fassung; die mittlere nur für einen benannten Funktionsstand. Die
+#: Hauptversion 1 ist die Verkaufsversion. Wer hier dreht, zieht
+#: `pyproject.toml` mit — die Zahl steht an beiden Orten. Vergessen kann man es nicht mehr:
 #: `test_the_version_is_the_same_in_both_places_that_carry_it` hält sie
 #: zusammen.
-APP_VERSION: Final = "0.2.1"
+APP_VERSION: Final = "0.3.0"
 
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"

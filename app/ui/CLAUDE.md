@@ -54,7 +54,7 @@ bevor es jemand wusste:
 
 **Rahmen und Einstieg**
 
-`app.py` (Einstiegspunkt, §38) · `main_window.py` (**8 600 Zeilen** — das
+`app.py` (Einstiegspunkt, §38) · `main_window.py` (**rund 8 900 Zeilen** — das
 Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 `start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py`
 
@@ -64,7 +64,7 @@ Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 
 **Ansicht**
 
-`viewport.py` (**7 300 Zeilen** — §18, §2.9) · `overlay.py` (Zonen über der
+`viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py`
 
 **Panels und Leisten**
@@ -79,13 +79,13 @@ Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py`
 | Datei | Besonderheit |
 |---|---|
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen |
-| `dialogs.py` | Fragen und Fehler, wie §2.7 sie beschreibt |
+| `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung |
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
 **Editor**
 
-`sketch_editor.py` (**4 100 Zeilen** — §30.1, Stufe zwei)
+`sketch_editor.py` (**rund 4 800 Zeilen** — §30.1, Stufe zwei)
 
 **Agent**
 

@@ -63,9 +63,9 @@ Kürzel, Startwert wo nötig.
 
 ## Zwei Dinge, die beim Zählen schiefgehen
 
-- **`REGISTRY` ist erst nach `load_operations()` vollständig.** Ohne den
-  Aufruf fehlen die Operationen aus der Bausteinbibliothek — der Unterschied
-  war zuletzt 61 gegen 86. Wer Operationen zählt, ruft erst
+- **`REGISTRY` ist erst nach `load_operations()` vollständig.** In einem
+  frischen Prozess ist es zunächst leer; der Aufruf lädt auch die aus der
+  Bausteinbibliothek erzeugten Operationen. Wer Operationen zählt, ruft erst
   `app.core.bootstrap.load_operations()`.
 - **Ein Schemavorgabewert ist keine Dialogvorbelegung.** Was der Dialog
   anbietet, kann aus der Auswahl kommen (`scene/placement.py`). Wer beides

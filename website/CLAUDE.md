@@ -1,7 +1,8 @@
 # `website/` — die öffentlichen Seiten
 
-**Die Dokumentation dieses Ordners ist `website/README.md`** — 283 Zeilen zu
-Dateien, Gestaltung, Bewegung, SEO und der Zusage „nichts von außen". Sie wird
+**Die Dokumentation dieses Ordners ist `website/README.md`** — die ausführliche
+Karte zu Dateien, Gestaltung, Bewegung, SEO, Aktivierung und der Zusage
+„nichts von außen". Sie wird
 hier nicht wiederholt.
 
 Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
@@ -10,7 +11,7 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 
 | Erzeugt (nie von Hand ändern) | Werkzeug |
 |---|---|
-| `handbuch.html`, `en/manual.html`, `handbuch/` | `tools/make_manual.py` |
+| `handbuch.html`, `<sprache>/manual.html`, `handbuch/` | `tools/make_manual.py` |
 | `changelog.html`, `<sprache>/changelog.html` | `tools/make_changelog.py`, automatisch aus `make_download.py` |
 | `eula.html`, `agb.html`, `widerruf.html` | `tools/make_legal.py` |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | `tools/make_seo.py` |
@@ -29,6 +30,10 @@ Eine Änderung an einer erzeugten Datei ist beim nächsten Lauf weg. Wer sie
 
 - **`api/support.php` muss nach `httpdocs/api/`.** Fehlt es dort, scheitert
   das Senden aus der Anwendung — und zwar erst beim Kunden.
+- **Die Aktivierungs-Endpunkte brauchen ihren Zustand außerhalb von
+  `httpdocs`.** Privater Startwert, Betreiber-Token und SQLite-Datenbank werden mit
+  `tools/setup_activation_server.py` vorbereitet und mit
+  `tools/check_activation.py` über HTTPS abgenommen.
 - **Große Dateien reißen die Verbindung.** Rund 1,8 MB/s, und mehrere Pakete
   am Stück gehen schief. **Ein halbes Paket sieht ganz aus** — deshalb am Ende
   `--nachpruefen`.

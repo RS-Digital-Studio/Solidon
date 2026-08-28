@@ -12,7 +12,7 @@ ein zweites Gerät aktiviert. Ohne KI bleibt nur der Chat aus.
 
 Projektdateien tragen die Endung `.p3d`.
 
-## Version 0.1 — die öffentliche Demo
+## Version 0.3.0 — die öffentliche Demo
 
 Die aktuelle Version ist eine **Demo**: vollständig, unentgeltlich, ohne
 Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach
@@ -65,16 +65,19 @@ Entwicklung bleiben daneben die Issues dieses Repositories.
 
 Beim Start liegen neun Beispielprojekte bereit — sie sind gleichzeitig
 Dokumentation und Abnahmeprüfung (§37.2). Die ersten vier beantworten „wie
-fange ich an", die übrigen „was kann das eigentlich":
+fange ich an", die übrigen „was kann das eigentlich". Auf dem Startbildschirm
+stehen dafür die Handlungen statt der internen Wegnummern: vorhandenes Modell
+anpassen, eigenes Teil bauen, ein erzeugtes Modell vorbereiten oder eine Figur
+frei formen.
 
 | Projekt | Inhalt |
 |---|---|
-| `weg1-halterung-anpassen.p3d` | fremdes Modell einlesen, reparieren, bohren |
-| `weg2-halter-konstruieren.p3d` | aus Parametern und Bausteinen neu konstruieren |
-| `weg3-generiert-aufbereiten.p3d` | erzeugtes Mesh durch die Reparaturkette |
-| `weg4-figur-formen.p3d` | weich verschmelzen, vernetzen, von Hand ausformen |
+| `weg1-halterung-anpassen.p3d` | vorhandenes Modell öffnen, prüfen und eine Bohrung ergänzen |
+| `weg2-halter-konstruieren.p3d` | eigenes Teil aus Grundformen und fertigen Bausteinen bauen |
+| `weg3-generiert-aufbereiten.p3d` | ein Modell aus Text oder Bild druckbar vorbereiten |
+| `weg4-figur-formen.p3d` | einfache Körper verbinden und wie Ton frei formen |
 | `gehaeuse-mit-bausteinen.p3d` | Mutternfalle, Heat-Set-Buchse, Kabeldurchführung, Prüfstück |
-| `schild-zweifarbig.p3d` | Schrift im Materialslot und Lettern als eigener Körper |
+| `schild-zweifarbig.p3d` | Schrift mit eigenem Filament und Lettern als eigener Körper |
 | `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |
 | `aushoehlen-und-teilen.p3d` | teilen, verstiften, aushöhlen, anordnen |
 | `dose-mit-deckel.p3d` | alles zusammen: benannte Maße, Bausteine, Deckel aus der Öffnung |
@@ -113,7 +116,7 @@ Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
 ```
 python -m venv .venv
-.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui]"
+.venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
 git config core.hooksPath .githooks
 ```
 
@@ -125,8 +128,10 @@ dem Repository, deshalb steht sie hier und nicht in einer Datei.
 
 | Befehl | Zweck |
 |---|---|
-| `.venv/Scripts/python.exe -m pytest -q` | vollständige Suite |
+| `bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh` | Suite wie in der CI, Fensterdateien getrennt |
+| `.venv/Scripts/python.exe -m pytest -q -m performance` | Leistungsbudgets aus §31 |
 | `.venv/Scripts/python.exe -m ruff check .` | Stil und Fehlerbilder |
+| `.venv/Scripts/python.exe -m ruff format --check .` | Formatierung prüfen |
 | `.venv/Scripts/python.exe -m mypy` | Typprüfung (strict) |
 | `.venv/Scripts/python.exe -m app.ui.app` | Anwendung starten |
 | `.venv/Scripts/python.exe -m app.cli.main ops` | Operationen auflisten |
@@ -145,12 +150,12 @@ Verknüpfung.
 .venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
 ```
 
-Ergebnis ist ein Ordner unter `dist/Solidon`. Die Bauläufe für Windows und
-Linux stehen in `.github/workflows/build.yml`; sie laufen erst, wenn die Suite
-auf allen drei Plattformen grün ist. Die Windows-Signierung unterstützt Azure
-Artifact Signing per OIDC und behält ein vorhandenes PFX-Zertifikat als
-Rückfall; ohne einen eingerichteten Weg entsteht mit sichtbarer Warnung ein
-unsigniertes Paket.
+Ergebnis ist ein Ordner unter `dist/Solidon3D`. Die Bauläufe für Windows,
+Linux und beide Mac-Architekturen stehen in `.github/workflows/build.yml`; sie
+laufen erst, wenn die Suite auf den vorgesehenen Plattformen grün ist. Die
+Windows-Signierung unterstützt Azure Artifact Signing per OIDC und behält ein
+vorhandenes PFX-Zertifikat als Rückfall; ohne einen eingerichteten Weg entsteht
+mit sichtbarer Warnung ein unsigniertes Paket.
 
 Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
 Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und
@@ -185,6 +190,13 @@ gedrückt wird der Knopf von einem Menschen. Wo es von dort nicht geht (gebaute
 Anwendung ohne `pip`, System ohne `winget`), steht die Begründung und die
 offizielle Seite daneben.
 
+Lokale Dienste lassen sich dort auch starten. Für ComfyUI erkennt Solidon die
+offizielle **Comfy Desktop**-App und die `comfy`-Kommandozeile; *Ort angeben …*
+trennt deshalb zwischen einer lokalen App und der Web-/Netzadresse eines schon
+laufenden Dienstes. Beide Angaben bleiben getrennt erhalten. *Lokal starten*
+wechselt bewusst auf Port 8188; die zuvor eingetragene Netzadresse bleibt für
+einen späteren Wechsel gespeichert.
+
 Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
 lässt sich das mit `SOLIDON3D_NO_VIEWPORT=1`.
 
@@ -207,10 +219,11 @@ nicht**: manches große Modell gibt den Aufruf als Fließtext aus statt als
 Aufruf, und dann sieht der Chat aus, als arbeite er, während nichts geschieht.
 
 Entscheidend ist dabei, wie viele Werkzeuge im Spiel sind. Der Agent bietet
-alle Operationen an — fünfundachtzig Schemata, rund 107 KB —, und daran fallen
-kleinere Modelle, die mit einer Handvoll noch alles treffen. Vorgabe ist
-darum `qwen3:14b`; `llama3.1:8b` ist schneller und kleiner, gibt unter der
-vollen Last aber die Mehrzahl der Aufrufe als Text aus.
+alle 95 registrierten Operationen und elf Analyse- und Dialogwerkzeuge an —
+106 Schemata, für Ollama kompakt rund 105 KB. Daran fallen kleinere Modelle,
+die mit einer Handvoll noch alles treffen. Vorgabe ist darum `qwen3:14b`;
+`llama3.1:8b` ist schneller und kleiner, gibt unter der vollen Last aber die
+Mehrzahl der Aufrufe als Text aus.
 
 Ob ein Modell die Werkzeuge wirklich aufruft, misst
 
@@ -228,7 +241,10 @@ Wie gut es dann mit den Referenzanfragen zurechtkommt, misst
 
 **Datei → Modell erzeugen** spricht lokal mit einem laufenden ComfyUI auf Port
 8188. Läuft keines, bleibt der Eintrag ausgegraut und sagt warum; alles andere
-in Solidon funktioniert weiter.
+in Solidon funktioniert weiter. Ein gefundenes lokales ComfyUI lässt sich unter
+**Hilfe → Zusätzliche Programme** mit *Lokal starten* öffnen. Die Zeile weist
+zusätzlich aus, ob gerade das lokale Backend oder eine Web-/Netzadresse aktiv
+ist.
 
 Was zurückkommt, wird als Quelle ins Projekt eingebettet und danach im Stack
 geladen und repariert — zwei Schritte, beide sichtbar, beide zurücknehmbar.
@@ -241,12 +257,13 @@ ComfyUI allein erzeugt noch nichts — es braucht die Knoten und das Modell dazu
 Beides legt **Solidon selbst** hin: *Hilfe → Zusätzliche Programme*, in der
 Zeile von ComfyUI der Knopf *Knoten und Modell einrichten …*.
 
-Der Dialog findet ComfyUI an den üblichen Stellen (sonst den Ordner angeben —
-gesucht wird der, in dem `custom_nodes` und `main.py` liegen), legt die Knoten
-hinein, holt den TripoSG-Quelltext, richtet zwei Stellen darin, zieht drei
-Pakete nach und lädt die Gewichte — rund 7,5 GB, abwählbar. Abbrechen geht
-zwischen den Schritten; was schon da ist, bleibt. Danach ComfyUI **einmal neu
-starten**: Es liest seine Knoten beim Start.
+Der Dialog findet ComfyUI an den üblichen Stellen und liest bei **Comfy
+Desktop** dessen eigene Installationsaufstellung. Sonst lässt sich der Ordner
+angeben, in dem `custom_nodes` und `main.py` liegen. Solidon legt die Knoten
+hinein, holt den TripoSG-Quelltext, richtet zwei Stellen darin, zieht die
+fehlenden Pakete nach und lädt die Gewichte — rund 7,5 GB, abwählbar. Abbrechen
+geht zwischen den Schritten; was schon da ist, bleibt. Danach ComfyUI **einmal
+neu starten**: Es liest seine Knoten beim Start.
 
 Für den Weg über **Text** kommt ein SDXL-Modell unter `models/checkpoints`
 dazu; für den Weg über ein **Bild** wird keines gebraucht.
@@ -297,7 +314,7 @@ Programme bleiben für das, wo sie wirklich besser sind.
 | Erste Schicht maßhaltig | **Elefantenfuß ausgleichen** aus dem Materialprofil | Slicer-Einstellung, projektfern |
 | Toleranz messen statt raten | **Varianten erzeugen** (§28.3) | mehrere Exporte von Hand |
 | Eine Passung prüfen, ohne das Teil zu drucken | **Druckvorbereitung → Prüfstück erzeugen** | von Hand nachmodellieren |
-| Zweifarbige Beschriftung | **Text aufbringen** mit Materialslot, oder **Schriftzug als Körper** | zwei Konstruktionen |
+| Zweifarbige Beschriftung | **Text aufbringen** mit eigenem Filament, oder **Schriftzug als Körper** | zwei Konstruktionen |
 | Deckel zu einer vorhandenen Schachtel | **Bausteine → Deckel erzeugen** | Hohlraum abmessen und neu zeichnen |
 | Schraubdeckel für ein Glas oder eine Dose | **Bausteine → Drehdeckel erzeugen** | Gewindepaar von Hand konstruieren |
 | Zehn Stück auf die Platte | **Objekt duplizieren** mit Anzahl | zehnmal kopieren, Stückzahl im Dateinamen |
@@ -313,8 +330,8 @@ aussieht. Beim Extrudieren einer Zeichnung werden innenliegende Konturen zu
 Löchern.
 
 Zweifarbig geht auf beiden Wegen, weil beide Drucker existieren: **Text
-aufbringen** mit einem Materialslot legt die Schrift in eine eigene Gruppe, die
-der 3MF-Export als Farbwechsel schreibt — eine Datei. **Schriftzug als Körper**
+aufbringen** mit einem eigenen Filament legt die Schrift in eine eigene Gruppe,
+die der 3MF-Export als Farbwechsel schreibt — eine Datei. **Schriftzug als Körper**
 macht die Buchstaben zum eigenen Objekt, für den Drucker, an dem von Hand
 gewechselt wird, und für Lettern zum Aufkleben.
 
@@ -388,23 +405,26 @@ Der Schieberegler **Explosionsansicht** unter der Ansicht zieht die Teile zum
 Ansehen auseinander. Er verschiebt nichts — Stack und Export bleiben, wie sie
 sind.
 
-## Farbe und Materialslots
+## Farbe und Filamente
 
-Jedes Dreieck trägt einen Slot, jedes Objekt eine Liste von Materialslots (§20).
-Zugewiesen wird über **Farbe → Slot zuweisen**, oder aus der Textur eines
-erzeugten Modells über **Farbe → Farben in Slots umrechnen** — k-Means auf die
-Anzahl eingelegter Filamente, mit gespeichertem Startwert, damit dieselbe Datei
-dasselbe Ergebnis liefert. Das ist nie so fein wie die Bildschirmdarstellung.
+Intern trägt jedes Dreieck einen Materialslot; in der Bedienung wählt man ein
+**Filament mit Name und Farbe**, keine Nummer (§20). Der projektübergreifende
+Filamentkatalog darf beliebig viele Spulen führen. Je Objekt bleiben höchstens
+acht gleichzeitig benutzte Filamente möglich, entsprechend dem 3MF- und
+Druckerweg.
 
-**Bemalen** ist die dritte Möglichkeit: Leiste einschalten, Slot und Radius
-wählen, ins Modell klicken. Der Pinsel läuft über die Oberfläche und hält an
-Kanten an, statt um die Ecke zu malen — die Oberseite eines Deckels wird bemalt,
-die Seitenwand nicht, ohne dass jemand eine Grenze zieht. Jeder Klick ist eine
-Operation, also nimmt ein Undo einen Strich zurück.
+Zugewiesen wird über **Farbe → Teil färben** für den ganzen Körper oder
+**Farbe → Fläche färben** für die erkannte Fläche unter dem Zeiger. Die
+Flächengrenze kommt aus der Merkmalserkennung und wandert bei späteren
+Maßänderungen mit; es gibt keinen punktfesten Pinsel und keinen Radius mehr.
+Aus der Textur eines erzeugten Modells kann **Textur in Filamente umrechnen**
+die Zahl eingelegter Filamente ableiten — mit gespeichertem Startwert, damit
+dieselbe Datei dasselbe Ergebnis liefert.
 
-Die Zuweisung überlebt Boolesche Operationen einschließlich der Voxelstufe. Beim
-Export nach `3MF` wird daraus je Slot eine Materialgruppe; `STL` kennt keine
-Farbe und verliert sie folgerichtig.
+Name, Farbe und die je Spule übersteuerten Druckwerte bleiben beim direkten
+3MF-Export und bei der Slicer-Übergabe zusammen. Die Zuweisung überlebt
+Boolesche Operationen einschließlich der Voxelstufe. `STL` kennt keine Farbe
+und verliert sie folgerichtig.
 
 ## Lizenz
 

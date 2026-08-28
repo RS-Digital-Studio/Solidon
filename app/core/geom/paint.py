@@ -78,7 +78,10 @@ class PaintParams(BaseParams):
         minimum=0,
         maximum=MAX_SLOTS - 1,
         kind="filament",
-        doc=_("Welches Filament die Fläche bekommt. Die Nummer ist der Platz im 3MF-Farbwechsel."),
+        doc=_(
+            "Welches Filament die Fläche bekommt. Im 3MF bleibt es demselben "
+            "Farbwechselplatz zugeordnet."
+        ),
     )
     at_feature: str = param(
         title=_("Fläche"),
@@ -114,7 +117,7 @@ class PaintParams(BaseParams):
         title=_("Bezeichnung"),
         default="",
         placement="advanced",
-        doc=_("Name des Slots, etwa das Filament. Erscheint im 3MF beim Farbwechsel."),
+        doc=_("Name des Filaments. Erscheint im 3MF beim Farbwechsel."),
     )
 
 
