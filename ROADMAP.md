@@ -125,12 +125,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Der Ziehgriff hat kein Zeichen im Bild | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | einen Entwurf: ein Pfeil oder eine Marke auf dem Umriss, damit die Geste ohne Satz gefunden wird. Ein Pfeil in der Bildebene kann eine Richtung senkrecht dazu nicht zeigen — die Konvention dafür steht schon in dieser Datei (Punkt heißt heraus, Kreuz heißt hinein). Bedienlogik vor Code |
-| Ein Zug in den Körper könnte `sketch_pocket` sein | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Klärung von zwei Haken: Regel 21 verbietet den stillen Operationswechsel (Fusion tauscht sichtbar im Dialog), und es gibt vier gemessene Fälle, in denen `sketch_pocket` das Volumen unverändert lässt — die Absage bleibt als Rückfall |
 | Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
-| Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen Antwort | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Vorwahl wie in Fusion: Dort steht „1 Profil · Bereich 800,00 mm²" unten rechts, und der Extrusionsdialog hat das Profil schon. Bei einer eindeutigen Zeichnung kosten Frage und *Weiter* zwei Klicks für eine Auskunft, die die Anwendung hat |
-| Vier Kleinere aus dem Fusion-Vergleich | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | Ebenen im Bild statt im Auswahlfeld, zwei Maße in einer Tab-Kette mit Schloss, die Bedienfolge in jedem Werkzeughinweis, und die ruhige Zeile am Bildrand. Jedes einzeln klein, zusammen der Unterschied, den Robert „alles ab Klick 1" genannt hat — Einzelheiten im Abschnitt |
-| Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
+| Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | ein echtes Mac-Paket. Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**, und die reist nicht mit. Prüfung: *Hilfe → Nach Updates suchen* drücken |
@@ -11562,8 +11558,8 @@ erstellen, ausschneiden usw, vergleiche cad software dafür zb fusion."
 | Wie kommt man heute zur Operation? | „Fertig" → `SketchUseDialog` mit fünf Arten → `run_operation`. Der Gedanke stimmt schon: gefragt wird **nach** dem Zeichnen, mit der Zeichnung vor Augen |
 | Wie läuft die Vorschau? | `dialog.valuesChanged` → 300-ms-Timer → `session.preview_async` → `show_difference`. Die 300 ms sind für teure Operationen da |
 
-**Zwei der drei offenen Punkte sind gebaut, und der dritte ist halb
-gemessen.**
+**Die damals offenen Grundlagen sind gebaut; die anschließenden
+Fusion-Befunde sind unten ebenfalls umgesetzt und geprüft.**
 
 - [x] **Der Ziehgriff zieht jetzt.** In der Querschau — Blick und Zeichenebene
       auseinander, also genau dort, wo man ohnehin nicht zeichnen kann — wird
@@ -11629,7 +11625,8 @@ will, sieht die Messung anders an: Von den fünf Aufgaben tragen `sketch_extrude
 zwei der neun Klicks allein die Frage „Was soll daraus werden?", in der die
 Tasche an vierter Stelle steht.
 
-Offen:
+Die folgende Vergleichsmessung lieferte die nächste, inzwischen gebaute
+Ausbaustufe:
 
 
 ### Was Fusion besser macht — am laufenden Programm gesehen (27.08.2026)
@@ -11707,9 +11704,9 @@ Szene dasteht, und es verlangt eine Kontoanmeldung, bevor überhaupt etwas geht.
 Beides ist genau das, was §2.3 („die ersten fünf Minuten") und §2 („ohne Konto
 benutzbar") ausschließen.
 
-Offen daraus:
+Gebaut und geprüft daraus:
 
-- [ ] **Der Ziehgriff braucht ein Zeichen im Bild.** Ein Pfeil (oder eine
+- [x] **Der Ziehgriff braucht ein Zeichen im Bild.** Ein Pfeil (oder eine
       Marke) auf dem Umriss, damit die Geste ohne Satz gefunden wird; der Satz
       in der Leiste ist eine Beschreibung und keine Affordanz im Bild.
 
@@ -11722,7 +11719,14 @@ Offen daraus:
       angeboten, und der Entwurf muss sagen, was das Zeichen dort tut, wenn er
       die Lage öffnet. Das ist Bedienlogik vor Code (Einordnung der
       Review-Sitzung, 27.08.2026).
-- [ ] **Ein Zug in den Körper könnte `sketch_pocket` sein statt einer Absage.**
+
+      **Gebaut am 28.08.2026:** `pull_handle` setzt Pfeil und Kreuz an den
+      längsten Profilabschnitt und hält ihre Länge mit **38 Bildpunkten** bei
+      jedem Zoom konstant. Die manuelle Trefferprüfung umfasst Schaft,
+      Pfeilspitze und Kreuz vollständig — was sichtbar ist, ist greifbar.
+      Wortpaar und unterschiedliche Zeichen kodieren die Bedeutung zusätzlich
+      zur Farbe (Regel 18).
+- [x] **Ein Zug in den Körper könnte `sketch_pocket` sein statt einer Absage.**
       Fusion stellt *Vorgang* selbst auf „Ausschneiden", sobald die Tiefe
       negativ wird; wir sagen dort „andersherum ziehen". Aus der Absage würde
       eine zweite Operation — die stärkere Übernahme, und die mit zwei Haken,
@@ -11739,13 +11743,30 @@ Offen daraus:
         dieser Datei, „Die Tasche schnitt daneben"); wo unter der Ebene nichts
         zu schneiden ist, muss der Zug weiter eine Auskunft geben. Die
         B5-Meldung wird ergänzt, nicht ersetzt.
-- [ ] **Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen
-      Antwort.** Bei einer Zeichnung mit einem geschlossenen Umriss und ohne
-      Körper darunter gibt es genau eine sinnvolle: aufziehen. Vorwählen und
-      durchlassen wie Fusion, statt zwei Klicks für eine Auskunft zu nehmen,
-      die schon dasteht. Die Frage bleibt, wo sie eine ist — bei mehreren
-      Gebieten oder mit einem Körper darunter.
-- [ ] **Vier Kleinere, jedes für sich klein.** Die Ebenen als anfassbare
+
+      **Gebaut am 28.08.2026:** Die gezogene Zahl behält ihr Vorzeichen bis
+      zur Bedienentscheidung. Nach außen steht *Höhe* und führt zu
+      `sketch_extrude`, nach innen steht *Tiefe* und führt sichtbar in den
+      Dialog von `sketch_pocket`. Der Innenzug ist nur bei genau einem
+      ausgewählten B-Rep-Körper zulässig; ohne Körper oder bei einem Netz
+      bleibt die Skizze offen, ein Handlungssatz erscheint und Drahtkäfig wie
+      Wertanzeige verschwinden vollständig. Beide Zahlenbereiche kommen aus
+      den jeweiligen Operationsschemata.
+- [x] **Auch bei einem Umriss bleibt die Erzeugungsart eine sichtbare
+      Entscheidung.** Ein geschlossenes Profil kann aufgezogen, gedreht oder
+      entlang eines Pfads geführt werden; eine automatische Extrusion wäre
+      damit stilles Raten über die Absicht (Regel 21). Die Anfängerhilfe liegt
+      in einer klaren Vorwahl statt in einem versteckten Operationswechsel.
+
+      **Gebaut und nach Review korrigiert am 28.08.2026:** `SketchUseDialog`
+      zeigt alle fünf registrierten Wege mit Beschreibung. *Aufziehen* steht
+      als verständlicher Normalfall oben und ist markiert, sodass die
+      Eingabetaste genügt; die Entscheidung bleibt trotzdem sichtbar und
+      änderbar. *Zurück zum Zeichnen* öffnet den Editor mit exakt derselben
+      Zeichnung. Ein Regressionstest fährt ausdrücklich den Fall „eine Region,
+      leere Szene" und hält Vorwahl, fünf sichtbare Wege und verlustfreien
+      Rückweg zusammen fest.
+- [x] **Vier Kleinere, jedes für sich klein.** Die Ebenen als anfassbare
       Flächen im Bild statt (nur) im Auswahlfeld; zwei Maße in einer Tab-Kette
       mit Schloss statt eines Feldes; die Bedienfolge in **jedem**
       Werkzeughinweis statt nur an den Bedingungsknöpfen; und die ruhige Zeile
@@ -11772,6 +11793,23 @@ steht:
 | Gruppennamen | erst beim Aufklappen zu sehen | **immer sichtbar** (ERSTELLEN, ÄNDERN, PRÜFEN …) |
 | Operationen im Register | 91 in 15 Kategorien, 14 mit Kürzel | — |
 | Symbole gleichzeitig im Band | 7 Umschalter unter der Ansicht | rund 30, **keines mit Wort** |
+
+      **Gebaut am 28.08.2026:** Beim freien Start stehen drei moderne,
+      tastaturbedienbare Ebenenkarten mitten im Bild; auch die bereits
+      vorausgewählte Draufsicht schließt die Frage sauber. *Rechteck* ist ein
+      echtes Zwei-Klick-Werkzeug mit Breite und Höhe, Tab-Reihenfolge und je
+      einem sichtbaren Schloss; gefangene Ecken werden im selben
+      Rückgängig-Schritt als Deckung gespeichert. Jeder Zeichenknopf nennt
+      Name, Kürzel und erste Klickfolge. Eine wortbasierte Auswahlquittung
+      steht ruhig am unteren Bildrand, und während des Zeichnens verschwindet
+      die allgemeine Werkzeugleiste zugunsten des klar benannten
+      Skizzenbands.
+
+      Die Abnahme deckt insbesondere die sechs Review-Rückfälle ab:
+      sichtbare Fünf-Wege-Vorwahl mit verlustfreiem Rückweg, gesamte Griff-Trefferfläche,
+      Vorschau-Aufräumen bei beiden Innenzug-Absagen, Rechteckfang,
+      Ebenenwahl auf dem bereits aktiven Eintrag sowie gemeinsames Ausblenden
+      beider Maßfelder und Schlösser.
 
 **Das ist der Kern, und er ist nicht Geschmack:** Bei uns liegt jede Operation
 zum Erzeugen und Ändern **drei** Klicks tief, und wie die Gruppe heißt, erfährt

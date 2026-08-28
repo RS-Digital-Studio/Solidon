@@ -592,6 +592,28 @@ class SketchCanvas(QWidget):
         )
         self.measure_field.setAccessibleName(tr("Abstand"))
         self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.second_measure_field = LengthSpin(self)
+        """Das zweite Maß eines Rechtecks — Höhe nach Breite.
+
+        Beide Felder stehen zusammen am Zeiger. Tab wechselt von der Breite
+        zur Höhe, und das Schloss daneben zeigt zusätzlich zur Zahl, welche
+        Angabe schon feststeht (Regel 18).
+        """
+        self.second_measure_field.set_range_mm(0.0, 10_000.0)
+        self.second_measure_field.setKeyboardTracking(False)
+        self.second_measure_field.setVisible(False)
+        self.second_measure_field.setToolTip(
+            tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
+        )
+        self.second_measure_field.setAccessibleName(tr("Höhe"))
+        self.second_measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.measure_lock = QLabel(tr("🔒"), self)
+        self.measure_lock.setAccessibleName(tr("Breite"))
+        self.measure_lock.setVisible(False)
+        self.second_measure_lock = QLabel(tr("🔒"), self)
+        self.second_measure_lock.setAccessibleName(tr("Höhe"))
+        self.second_measure_lock.setVisible(False)
+        self._rectangle_measures: list[float | None] = [None, None]
         self.measuringChanged.connect(self._place_measure_field)
         self._measure_host: QWidget | None = None
         """Wo das Maßfeld gerade wohnt — im Viewport-Modus die Ansicht.
@@ -947,6 +969,7 @@ class SketchCanvas(QWidget):
         self._pending.clear()
         self._pending_world.clear()
         self.selection.clear()
+        self._reset_measure_entry()
         self._resolve()
 
     def set_tool(self, tool: str) -> None:
@@ -954,6 +977,7 @@ class SketchCanvas(QWidget):
         self._pending.clear()
         self._pending_world.clear()
         # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
+        self._reset_measure_entry()
         # ob ein Zeichenwerkzeug lief oder nicht — und ein Werkzeug, dessen
         # Zustand man nur am gedrückten Knopf sieht, ist bei achtunddreißig
         # Bildpunkten Symbolgröße kein Zustand, den jemand bemerkt.
@@ -1160,6 +1184,10 @@ class SketchCanvas(QWidget):
             if started:
                 return tr("Kreis: der nächste Klick setzt den Radius. Oder das Maß eintippen.")
             return tr("Kreis: erster Klick setzt die Mitte.")
+        if self.tool == "rectangle":
+            if started:
+                return tr("Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.")
+            return tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.")
         if self.tool == "arc":
             # **Anfang, Ende, Wölbung** — die Reihenfolge von Fusion und
             # Onshape. Vorher war der erste Klick die Mitte: ein Punkt, der auf
@@ -1197,7 +1225,13 @@ class SketchCanvas(QWidget):
     def insert_shape(self, sketch: Sketch) -> None:
         """Fügt eine Grundform als weitere Elemente ein — mit verschobenen
         Bedingungszielen, denn die flachen Indizes zählen über die ganze
-        Skizze."""
+        Skizze.
+
+        ``joins`` verbindet einen vorhandenen flachen Punktindex mit einem
+        lokalen Punkt der Grundform. So bleiben Fang und Form in **demselben**
+        Rückgängig-Schritt; eine nachträglich angehängte Deckung wäre ein
+        zweiter Schritt für dieselbe Geste.
+        """
         shift = len(edit.flat_points(self.sketch))
         moved = tuple(
             SketchConstraint(
@@ -1624,13 +1658,27 @@ class SketchCanvas(QWidget):
             self.update()
             return
 
-        needed = {"point": 1, "line": 2, "circle": 2, "arc": 3}[self.tool]
+        needed = {"point": 1, "line": 2, "circle": 2, "arc": 3, "rectangle": 2}[self.tool]
         if len(self._pending_world) < needed:
             # Der Hinweis wandert mit dem angefangenen Element: was der
             # nächste Klick tut, ist nach dem ersten eine andere Auskunft als
             # davor.
             self.statusChanged.emit(self.status_text())
             self.update()
+            return
+
+        if self.tool == "rectangle":
+            first, opposite = self._pending_world
+            width = self._rectangle_measures[0] or abs(opposite[0] - first[0])
+            height = self._rectangle_measures[1] or abs(opposite[1] - first[1])
+            if width <= EPS_DISPLAY or height <= EPS_DISPLAY:
+                self._pending.pop()
+                self._pending_world.pop()
+                self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
+                return
+            across = 1.0 if opposite[0] >= first[0] else -1.0
+            upward = 1.0 if opposite[1] >= first[1] else -1.0
+            self._finish_rectangle(width, height, across, upward)
             return
 
         begin = len(edit.flat_points(self.sketch))
@@ -1705,15 +1753,25 @@ class SketchCanvas(QWidget):
         ohnehin dort liegt.
         """
         if value <= 0.0:
-            self.measure_field.setVisible(False)
+            self._hide_measure_widgets()
             return
 
         # Stumm gesetzt: ``editingFinished`` schließt das Element ab, und ein
         # Wert, den die Zeigerbewegung schreibt, ist keine Eingabe.
+        rectangle = self.tool == "rectangle" and len(self._pending_world) == 1
+        first_value = (
+            self._rectangle_measures[0] or self.pending_measures()[0] if rectangle else value
+        )
         blocked = self.measure_field.blockSignals(True)
-        self.measure_field.set_value_mm(value)
+        self.measure_field.set_value_mm(first_value)
         self.measure_field.blockSignals(blocked)
         self.measure_field.adjustSize()
+        if rectangle:
+            height = self._rectangle_measures[1] or self.pending_measures()[1]
+            blocked = self.second_measure_field.blockSignals(True)
+            self.second_measure_field.set_value_mm(height)
+            self.second_measure_field.blockSignals(blocked)
+            self.second_measure_field.adjustSize()
 
         # Verliehen rechnet die Lage der **Wirt**: Im Viewport-Modus liegt der
         # Zeiger auf der Zeichenebene, und wo das im Bild ist, weiß nur die
@@ -1723,13 +1781,19 @@ class SketchCanvas(QWidget):
         if self._measure_screen_of is not None:
             spot = self._measure_screen_of(self._pointer)
             if spot is None:
-                self.measure_field.setVisible(False)
+                self._hide_measure_widgets()
                 return
             tip = QPointF(spot)
         else:
             tip = self._to_screen(*self._pointer)
         self.measure_field.setVisible(True)
+        self.second_measure_field.setVisible(rectangle)
+        self.measure_lock.setVisible(rectangle and self._rectangle_measures[0] is not None)
+        self.second_measure_lock.setVisible(rectangle and self._rectangle_measures[1] is not None)
+        gap = 4
         width = self.measure_field.width()
+        if rectangle:
+            width += gap + self.second_measure_field.width()
         height = self.measure_field.height()
         left = tip.x() + MEASURE_GAP
         top = tip.y() + MEASURE_GAP
@@ -1742,6 +1806,23 @@ class SketchCanvas(QWidget):
         left = max(0.0, min(left, float(host.width() - width)))
         top = max(0.0, min(top, float(host.height() - height)))
         self.measure_field.move(int(left), int(top))
+        if rectangle:
+            second_left = int(left + self.measure_field.width() + gap)
+            self.second_measure_field.move(second_left, int(top))
+            self.measure_lock.adjustSize()
+            self.second_measure_lock.adjustSize()
+            self.measure_lock.move(
+                int(left + self.measure_field.width() - self.measure_lock.width()),
+                int(top),
+            )
+            self.second_measure_lock.move(
+                int(
+                    second_left
+                    + self.second_measure_field.width()
+                    - self.second_measure_lock.width()
+                ),
+                int(top),
+            )
 
     def lend_measure_field(
         self,
@@ -1756,8 +1837,9 @@ class SketchCanvas(QWidget):
         """
         self._measure_host = host
         self._measure_screen_of = screen_of
-        self.measure_field.setVisible(False)
-        self.measure_field.setParent(host)
+        for widget in self._measure_widgets():
+            widget.setVisible(False)
+            widget.setParent(host)
 
     def reclaim_measure_field(self) -> None:
         """Holt das Feld zurück, bevor das Panel stirbt.
@@ -1768,8 +1850,9 @@ class SketchCanvas(QWidget):
         """
         self._measure_host = None
         self._measure_screen_of = None
-        self.measure_field.setVisible(False)
-        self.measure_field.setParent(self)
+        for widget in self._measure_widgets():
+            widget.setVisible(False)
+            widget.setParent(self)
 
     def begin_measure_entry(self, event: Any) -> bool:
         """Die erste Ziffer beginnt die Eingabe — von beiden Wegen aus (E19).
@@ -1815,10 +1898,27 @@ class SketchCanvas(QWidget):
         Null heißt: es ist nichts angefangen, für das ein Maß gilt. Die
         Leiste schaltet ihr Feld danach.
         """
-        if len(self._pending_world) != 1 or self.tool not in ("line", "circle"):
+        if len(self._pending_world) != 1 or self.tool not in (
+            "line",
+            "circle",
+            "rectangle",
+        ):
             return 0.0
+        if self.tool == "rectangle":
+            width, height = self.pending_measures()
+            return math.hypot(width, height)
         first = self._pending_world[0]
         return math.hypot(self._pointer[0] - first[0], self._pointer[1] - first[1])
+
+    def pending_measures(self) -> tuple[float, float]:
+        """Breite und Höhe des angefangenen Rechtecks am Zeiger."""
+        if len(self._pending_world) != 1 or self.tool != "rectangle":
+            return (0.0, 0.0)
+        first = self._pending_world[0]
+        return (
+            abs(self._pointer[0] - first[0]),
+            abs(self._pointer[1] - first[1]),
+        )
 
     def place_measured(self, value: float) -> None:
         """Schließt das angefangene Element auf ein eingetipptes Maß ab (E19).
@@ -1832,8 +1932,19 @@ class SketchCanvas(QWidget):
         die Linie beim nächsten Solverlauf, und die eingetippte Zahl wäre eine
         Angabe gewesen, die nichts hält.
         """
-        if value <= 0.0 or len(self._pending_world) != 1 or self.tool not in ("line", "circle"):
+        if (
+            value <= 0.0
+            or len(self._pending_world) != 1
+            or self.tool not in ("line", "circle", "rectangle")
+        ):
             self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
+            return
+
+        if self.tool == "rectangle":
+            self._rectangle_measures[0] = value
+            self._place_measure_field(self.pending_measure())
+            self.second_measure_field.setFocus(Qt.FocusReason.TabFocusReason)
+            self.second_measure_field.selectAll()
             return
 
         first = self._pending_world[0]
@@ -1863,19 +1974,85 @@ class SketchCanvas(QWidget):
         )
         self.measuringChanged.emit(0.0)
 
-    def finish_spline(self) -> None:
-        """Den gesammelten Spline abschließen.
-
-        Unter zwei Punkten entsteht nichts — ein Spline durch einen Punkt ist
-        ein Punkt, und den gibt es als eigenes Werkzeug. Die gesammelten
-        Klicks fallen dann weg statt eine ungültige Skizze zu erzeugen.
-        """
-        if self.tool != "spline" or len(self._pending_world) < 2:
-            self._pending.clear()
-            self._pending_world.clear()
-            self.update()
+    def place_second_measured(self, value: float) -> None:
+        """Schließt ein Rechteck mit seiner zweiten, eingetippten Angabe."""
+        if (
+            value <= 0.0
+            or self.tool != "rectangle"
+            or len(self._pending_world) != 1
+            or self._rectangle_measures[0] is None
+        ):
+            self.statusChanged.emit(tr("Erst einen Punkt setzen, dann das Maß eintippen."))
             return
-        begin = len(edit.flat_points(self.sketch))
+        self._rectangle_measures[1] = value
+        first = self._pending_world[0]
+        across = 1.0 if self._pointer[0] >= first[0] else -1.0
+        upward = 1.0 if self._pointer[1] >= first[1] else -1.0
+        self._finish_rectangle(self._rectangle_measures[0], value, across, upward)
+
+    def _finish_rectangle(self, width: float, height: float, across: float, upward: float) -> None:
+        """Baut das Rechteck aus zwei Maßen, Richtung und gefangenen Ecken."""
+        first = self._pending_world[0]
+        opposite = (first[0] + across * width, first[1] + upward * height)
+        centre = (
+            first[0] + across * width / 2.0,
+            first[1] + upward * height / 2.0,
+        )
+        rectangle = replace(shapes.rectangle(width, height), plane=self.sketch.plane)
+        rectangle = edit.move(
+            rectangle,
+            tuple(range(len(rectangle.elements))),
+            centre[0],
+            centre[1],
+        )
+        points = edit.flat_points(rectangle)
+
+        def nearest_local(wanted: tuple[float, float]) -> int:
+            return min(
+                range(len(points)),
+                key=lambda index: math.dist(points[index], wanted),
+            )
+
+        joins: list[tuple[int, int]] = []
+        if self._pending and self._pending[0] >= 0:
+            joins.append((self._pending[0], nearest_local(first)))
+        if len(self._pending) > 1 and self._pending[1] >= 0:
+            joins.append((self._pending[1], nearest_local(opposite)))
+        if joins:
+            # Der gefangene Punkt verankert die Form. Die feste erste Ecke
+            # daneben wäre eine zweite, unsichtbare Ortsvorgabe und ließe die
+            # Deckung beim späteren Verschieben in einen Konflikt laufen.
+            rectangle = replace(
+                rectangle,
+                constraints=tuple(
+                    constraint for constraint in rectangle.constraints if constraint.kind != "fixed"
+                ),
+            )
+        self._pending.clear()
+        self._pending_world.clear()
+        self._reset_measure_entry()
+        self.insert_shape(rectangle, joins)
+        self.measuringChanged.emit(0.0)
+
+    def _measure_widgets(self) -> tuple[QWidget, ...]:
+        """Alle zum Zeiger gehörenden Maßanzeigen, gemeinsam verleihbar."""
+        return (
+            self.measure_field,
+            self.second_measure_field,
+            self.measure_lock,
+            self.second_measure_lock,
+        )
+
+    def _hide_measure_widgets(self) -> None:
+        """Nimmt die zusammengehörige Maßeingabe vollständig aus dem Bild."""
+        for widget in self._measure_widgets():
+            widget.setVisible(False)
+
+    def _reset_measure_entry(self) -> None:
+        """Verwirft nur die laufende Eingabe, nie gezeichnete Geometrie."""
+        self._rectangle_measures = [None, None]
+        self._hide_measure_widgets()
+
         element = SketchElement("spline", tuple(self._pending_world))
         snapped_pairs = tuple(
             SketchConstraint("coincident", (snapped_flat, begin + local))
@@ -2056,6 +2233,7 @@ class SketchCanvas(QWidget):
         if event.key() == Qt.Key.Key_Escape and self._pending_world:
             self._pending.clear()
             self._pending_world.clear()
+            self._reset_measure_entry()
             self.statusChanged.emit(self.status_text())
             self.update()
             return
@@ -2816,6 +2994,21 @@ def _does_phrase(kind: SketchConstraintKind) -> str:
     }[kind]
 
 
+def tool_instruction(name: str) -> str:
+    """Die erste Bedienfolge eines Zeichenwerkzeugs, ohne CAD-Vorwissen."""
+    return {
+        "select": tr("Punkt oder Element anklicken; mit Strg mehrere auswählen."),
+        "point": tr("Punkt: jeder Klick setzt einen, ein Klick auf einen vorhandenen greift ihn."),
+        "line": tr("Linie: erster Klick setzt den Anfang."),
+        "circle": tr("Kreis: erster Klick setzt die Mitte."),
+        "arc": tr("Bogen: erster Klick setzt den Anfang."),
+        "spline": tr("Spline: klicken, so oft es die Kurve braucht."),
+        "trim": tr("Auf die Hälfte klicken, die es betrifft."),
+        "extend": tr("Auf die Hälfte klicken, die es betrifft."),
+        "rectangle": tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke."),
+    }[name]
+
+
 #: Die Zeichenkürzel, wie Fusion sie belegt (E16). Wer aus einem CAD kommt,
 #: hat sie in den Fingern, und wer nicht, lernt sie an den Knöpfen — dort
 #: steht jedes neben seinem Werkzeug (§19.2).
@@ -2828,6 +3021,7 @@ TOOL_KEYS: dict[str, str] = {
     "line": "L",
     "circle": "C",
     "arc": "A",
+    "rectangle": "R",
     "point": "P",
     "spline": "S",
     "trim": "T",
@@ -2912,7 +3106,6 @@ CONSTRAINTS_PER_ROW = 5
 
 #: Kürzel, die kein Werkzeug wählen, sondern etwas tun.
 ACTION_KEYS: dict[str, str] = {
-    "rectangle": "R",
     "distance": "D",
     "offset": "O",
     "construction": "X",
@@ -2973,6 +3166,9 @@ class SketchPanel(QWidget):
 
     sketchChanged = Signal()
     """Weitergereicht von der Zeichenfläche, damit ein Rahmen mithören kann."""
+
+    planeChanged = Signal()
+    """Eine Ebene wurde ausdrücklich gewählt — auch wenn sie schon galt."""
 
     viewFitted = Signal(float, float, float, float)
     """Durchgereicht von der Zeichenfläche — der Rahmen stellt danach die
@@ -3035,7 +3231,11 @@ class SketchPanel(QWidget):
             # die Zeile: Qt kürzte sie auf „Tri… T" und „Ver…ern", und ein
             # abgeschnittenes Wort ist schlechter zu lesen als ein Bild.
             button.setIcon(icons.icon(f"sketch_{name}", button))
-            button.setToolTip(f"{label}  ({key})" if key else label)
+            shortcut = f"  ({key})" if key else ""
+            note = f"{label}{shortcut} — {tool_instruction(name)}"
+            button.setToolTip(note)
+            button.setStatusTip(note)
+            button.setAccessibleDescription(note)
             button.setCheckable(True)
             button.setAutoRaise(True)
             button.toggled.connect(weak_slot(self, SketchPanel._tool_chosen, name, forward=True))
@@ -3045,11 +3245,23 @@ class SketchPanel(QWidget):
 
         shapes_button = QToolButton(self)
         shapes_button.setText(tr("Grundform"))
-        shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        shapes_button.setIcon(icons.icon("sketch_rectangle", shapes_button))
+        shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        shapes_button.setCheckable(True)
+        rectangle_note = (
+            f"{tr('Rechteck')}  ({TOOL_KEYS['rectangle']}) — {tool_instruction('rectangle')}"
+        )
+        shapes_button.setToolTip(rectangle_note)
+        shapes_button.setStatusTip(rectangle_note)
+        shapes_button.setAccessibleDescription(rectangle_note)
+        shapes_button.toggled.connect(
+            weak_slot(self, SketchPanel._tool_chosen, "rectangle", forward=True)
+        )
         shapes_menu = QMenu(shapes_button)
+        shapes_menu.setToolTipsVisible(True)
         for label, factory in (
             (
-                f"{tr('Rechteck 40 × 20')}  {ACTION_KEYS['rectangle']}",
+                tr("Rechteck 40 × 20"),
                 lambda: shapes.rectangle(40.0, 20.0),
             ),
             (tr("Langloch 40 × 10"), lambda: shapes.slot(40.0, 10.0)),
@@ -3068,8 +3280,10 @@ class SketchPanel(QWidget):
             ),
         ):
             action = shapes_menu.addAction(label)
+            action.setToolTip(f"{label} — {tr('Grundform')}.")
             action.triggered.connect(weak_slot(self, SketchPanel._insert_made, factory))
         shapes_button.setMenu(shapes_menu)
+        self._tool_buttons["rectangle"] = shapes_button
         tools.addWidget(shapes_button)
 
         # Die Ebene gehört vor das Zeichnen, nicht hinter das Ergebnis: sie
@@ -3254,6 +3468,11 @@ class SketchPanel(QWidget):
         fit_button = QToolButton(self)
         fit_button.setIcon(icons.icon("sketch_fit", fit_button))
         fit_button.setToolTip(f"{tr('Einpassen')}  ({VIEW_KEYS['fit']})")
+        self.canvas.second_measure_field.editingFinished.connect(self._place_second_measured)
+        QWidget.setTabOrder(
+            self.canvas.measure_field,
+            self.canvas.second_measure_field,
+        )
         fit_button.setAutoRaise(True)
         fit_button.clicked.connect(self.canvas.fit_view)
         tools.addWidget(fit_button)
@@ -3561,11 +3780,6 @@ class SketchPanel(QWidget):
             shortcut.activated.connect(weak_slot(self, SketchPanel.choose_tool, name))
             self._shortcuts.append(shortcut)
 
-        rectangle = QShortcut(QKeySequence(ACTION_KEYS["rectangle"]), self)
-        rectangle.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        rectangle.activated.connect(self._insert_rectangle)
-        self._shortcuts.append(rectangle)
-
         measure = QShortcut(QKeySequence(ACTION_KEYS["distance"]), self)
         measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         measure.activated.connect(self._request_distance)
@@ -3694,6 +3908,7 @@ class SketchPanel(QWidget):
         eigenen Kind fest (`.claude/rules/oberflaeche.md`).
         """
         self.canvas.set_plane(str(self.plane_choice.currentData()))
+        self.planeChanged.emit()
 
     def _show_layer_note(self) -> None:
         """Der Satz neben der Ebenenwahl.
@@ -3723,6 +3938,10 @@ class SketchPanel(QWidget):
         nachziehen — beides Sachen des Panels.
         """
         self.canvas.place_measured(self.canvas.measure_field.value_mm())
+
+    def _place_second_measured(self) -> None:
+        """Die Höhe beendet das Rechteck nach der verriegelten Breite."""
+        self.canvas.place_second_measured(self.canvas.second_measure_field.value_mm())
 
     def _insert_rectangle(self) -> None:
         """Das Rechteck des Kürzels — vierzig auf zwanzig, wie die Zeichenfläche

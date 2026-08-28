@@ -1880,13 +1880,13 @@ def test_the_pulled_height_stays_inside_the_limits_of_the_operation() -> None:
 
     Eine Höhe von 4000 mm lehnt ``sketch_extrude`` ab; sie am Zeiger zu zeigen
     und danach abzulehnen wäre eine Zusage, die der nächste Schritt bricht.
-    Und wer in die falsche Richtung zieht, sieht die Untergrenze statt einer
-    negativen Zahl.
+    Das Vorzeichen bleibt erhalten: außen ist Aufbau, innen ist Tasche.
     """
     from app.ui.viewport import pulled_height
 
     assert pulled_height(4000.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(1000.0)
-    assert pulled_height(-30.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(0.1)
+    assert pulled_height(-30.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(-30.0)
+    assert pulled_height(-4000.0, step=0.0, limits=(0.1, 1000.0)) == pytest.approx(-1000.0)
 
 
 def test_without_known_limits_the_height_is_not_clamped() -> None:
@@ -2030,16 +2030,10 @@ def test_a_typed_height_above_the_maximum_is_not_applied(qt_app: QApplication) -
     assert viewport._drag_kind == "pull", "der Zug läuft weiter, das Feld bleibt stehen"
 
 
-def test_pulling_the_wrong_way_says_so_instead_of_making_a_sliver(
+def test_pulling_inward_requests_a_pocket_instead_of_making_a_sliver(
     qt_app: QApplication,
 ) -> None:
-    """Ein Zug entgegen der Aufzugsrichtung ergibt keinen 0,1-mm-Körper.
-
-    ``pulled_height`` hebt ein negatives Maß auf die Untergrenze — danach sieht
-    ein Zug nach unten aus wie ein sehr kurzer nach oben, und die Operation ging
-    glatt durch. Entschieden wird deshalb gegen das **ungeklemmte** Maß, und
-    statt eines Körpers kommt ein Satz (Regel 17).
-    """
+    """Ein Zug nach innen bleibt negativ und wird dadurch zur Tasche."""
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
@@ -2048,19 +2042,58 @@ def test_pulling_the_wrong_way_says_so_instead_of_making_a_sliver(
     viewport.sketchPulled.connect(pulled.append)
     viewport.sketchPullBlocked.connect(blocked.append)
     viewport._pull_limits = (0.1, 1000.0)
+    viewport._cut_limits = (0.1, 1000.0)
     viewport._pull_from = (0.0, 0.0)
     viewport._drag_kind = "pull"
-    # So steht die Ansicht nach einem Zug nach unten: geklemmt auf die
-    # Untergrenze, roh weit darunter.
-    viewport._pull_height = 0.1
+    viewport._pull_height = -30.0
     viewport._pull_raw = -30.0
 
     viewport.finish_sketch_pull()
 
-    assert not pulled, "in die falsche Richtung entsteht kein Körper"
-    assert len(blocked) == 1, blocked
-    assert "andersherum" in blocked[0], blocked[0]
+    assert pulled == [pytest.approx(-30.0)]
+    assert not blocked
     assert viewport.pulling() is False
+
+
+def test_the_visible_arrow_and_cross_are_grabbable(qt_app: QApplication) -> None:
+    """Was als Griff gezeichnet wird, greift bis an Pfeilspitze und Kreuz.
+
+    Der sichtbare Griff ist 38 Bildpunkte lang; nur zehn Bildpunkte um den
+    Umriss zu prüfen machte gerade seine Enden zur Attrappe.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import CURSOR_PIXELS, Viewport
+
+    viewport = Viewport()
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    viewport.set_sketching(frame)
+    viewport._sketch_curves = flat_curves()
+    viewport.pixels_per_mm = lambda _frame: 1.0
+    viewport._display_of = lambda point: (float(point[0]), float(point[2]))
+    handle = viewport._pull_handle_segments()
+    outward = handle[0][1]
+    viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
+    viewport.pull_height_at = lambda base, x, y: 10.0
+
+    assert viewport.grip_reach(int(outward[0]), int(outward[2])) > CURSOR_PIXELS
+    assert viewport.pull_handle_reach(int(outward[0]), int(outward[2])) <= CURSOR_PIXELS
+    assert viewport.sketch_pull_ready(int(outward[0]), int(outward[2]))
+
+
+def test_a_rejected_pull_clears_its_wire_preview(qt_app: QApplication) -> None:
+    """Eine Absage lässt weder Drahtkäfig noch alte Zahl im Bild stehen."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport._pull_height = -8.0
+    viewport._pull_raw = -8.0
+    viewport._pull_actors = [object()]
+
+    viewport.cancel_sketch_pull()
+
+    assert viewport._pull_actors == []
+    assert viewport._pull_height == pytest.approx(0.0)
+    assert viewport._pull_raw is None
 
 
 def test_a_segment_of_zero_length_is_measured_as_a_point(qt_app: QApplication) -> None:

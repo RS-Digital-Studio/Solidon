@@ -2399,6 +2399,7 @@
   "Region": "Região",
   "Regler schiebt die Teile auseinander. Nur die Ansicht — was exportiert wird, bleibt, wo es ist.": "O cursor afasta as peças umas das outras. Só a vista — o que é exportado fica onde está.",
   "Relief auflegen": "Aplicar relevo",
+  "Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.": "Seta: elevar o corpo · Cruz: cortar uma cavidade.",
   "Reparatur": "Reparação",
   "Reparaturkette": "Cadeia de reparação",
   "Reparieren": "Reparar",
@@ -2443,6 +2444,7 @@
   "Rückfragen": "Perguntas feitas",
   "Rückgabewert": "Código de saída",
   "Rückgängig": "Desfazer",
+  "Punkt oder Element anklicken; mit Strg mehrere auswählen.": "Clique num ponto ou elemento; mantenha Ctrl premido para selecionar vários.",
   "Rückgängig nimmt alles zurück.": "Desfazer retira tudo.",
   "Rückmeldung geben": "Dar a minha opinião",
   "Rückmeldung senden": "Enviar um comentário",
@@ -2479,6 +2481,8 @@
   "Schlauch": "Tubo flexível",
   "Schlechtester Fall": "Pior caso",
   "Schließen": "Fechar",
+  "Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.": "Retângulo: clique no canto oposto ou introduza largura e altura.",
+  "Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.": "Retângulo: o primeiro clique define um canto; o segundo, o canto oposto.",
   "Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus.": "Fecha buracos, remove triângulos degenerados e alinha as faces.",
   "Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen.": "Fecha buracos pequenos. Não substitui uma parede em falta.",
   "Schlägt in der Normteiltabelle nach": "Consulta a tabela de peças normalizadas",
@@ -3448,5 +3452,6 @@
   "Die Bohrung hat bereits diesen Durchmesser.": "O furo já tem esse diâmetro.",
   "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "O furo alterado foi calculado, mas depois não voltou a ser reconhecido. Crie um relatório de erro com o modelo afetado.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes.",
+  "🔒": "🔒"
 }

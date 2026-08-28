@@ -189,6 +189,11 @@ PATHS: Final[dict[str, str]] = {
         '<circle cx="18.5" cy="5.5" r="1.8" />'
     ),
     "sketch_circle": ('<circle cx="12" cy="12" r="7.5" /><circle cx="12" cy="12" r="1.4" />'),
+    "sketch_rectangle": (
+        '<rect x="4" y="6" width="16" height="12" rx="1" />'
+        '<circle cx="4" cy="6" r="1.2" fill="currentColor" stroke="none" />'
+        '<circle cx="20" cy="18" r="1.2" fill="currentColor" stroke="none" />'
+    ),
     "sketch_arc": (
         '<path d="M4.5 17.5a9 9 0 0 1 15 0" /><circle cx="4.5" cy="17.5" r="1.8" />'
         '<circle cx="19.5" cy="17.5" r="1.8" />'

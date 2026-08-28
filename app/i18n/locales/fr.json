@@ -2399,6 +2399,7 @@
   "Region": "Région",
   "Regler schiebt die Teile auseinander. Nur die Ansicht — was exportiert wird, bleibt, wo es ist.": "Le curseur écarte les pièces les unes des autres. Vue seulement — ce qui est exporté reste où il est.",
   "Relief auflegen": "Appliquer un relief",
+  "Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.": "Flèche : tirer le corps vers le haut · Croix : creuser une poche.",
   "Reparatur": "Réparation",
   "Reparaturkette": "Chaîne de réparation",
   "Reparieren": "Réparer",
@@ -2443,6 +2444,7 @@
   "Rückfragen": "Questions posées",
   "Rückgabewert": "Code de retour",
   "Rückgängig": "Annuler",
+  "Punkt oder Element anklicken; mit Strg mehrere auswählen.": "Cliquez sur un point ou un élément ; maintenez Ctrl pour en sélectionner plusieurs.",
   "Rückgängig nimmt alles zurück.": "Annuler ramène tout en arrière.",
   "Rückmeldung geben": "Donner mon avis",
   "Rückmeldung senden": "Envoyer un retour",
@@ -2479,6 +2481,8 @@
   "Schlauch": "Tuyau",
   "Schlechtester Fall": "Pire cas",
   "Schließen": "Fermer",
+  "Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.": "Rectangle : cliquez sur le coin opposé ou saisissez la largeur et la hauteur.",
+  "Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.": "Rectangle : le premier clic place un coin, le second le coin opposé.",
   "Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus.": "Ferme les trous, supprime les triangles dégénérés et aligne les faces.",
   "Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen.": "Ferme les petits trous. Cela ne peut pas remplacer une paroi manquante.",
   "Schlägt in der Normteiltabelle nach": "Consulte la table des pièces normalisées",
@@ -3448,5 +3452,6 @@
   "Die Bohrung hat bereits diesen Durchmesser.": "Le trou a déjà ce diamètre.",
   "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Le trou modifié a été calculé, mais n’a ensuite pas été reconnu. Créez un rapport d’erreur avec le modèle concerné.",
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes.",
+  "🔒": "🔒"
 }

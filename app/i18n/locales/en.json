@@ -2399,6 +2399,7 @@
   "Region": "Region",
   "Regler schiebt die Teile auseinander. Nur die Ansicht — was exportiert wird, bleibt, wo es ist.": "The slider pushes the parts apart. View only — what gets exported stays where it is.",
   "Relief auflegen": "Apply relief",
+  "Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.": "Arrow: pull up body · Cross: cut pocket.",
   "Reparatur": "Repair",
   "Reparaturkette": "Repair chain",
   "Reparieren": "Repair",
@@ -2443,6 +2444,7 @@
   "Rückfragen": "Questions asked",
   "Rückgabewert": "Exit code",
   "Rückgängig": "Undo",
+  "Punkt oder Element anklicken; mit Strg mehrere auswählen.": "Click a point or element; hold Ctrl to select several.",
   "Rückgängig nimmt alles zurück.": "Undo takes everything back.",
   "Rückmeldung geben": "Give feedback",
   "Rückmeldung senden": "Send feedback",
@@ -2479,6 +2481,8 @@
   "Schlauch": "Tube",
   "Schlechtester Fall": "Worst case",
   "Schließen": "Close",
+  "Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.": "Rectangle: click the opposite corner or type width and height.",
+  "Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.": "Rectangle: the first click sets one corner, the second the opposite corner.",
   "Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus.": "Closes holes, removes degenerate triangles and lines the faces up.",
   "Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen.": "Closes small holes. It cannot replace a missing wall.",
   "Schlägt in der Normteiltabelle nach": "Looks up the standard parts table",
@@ -3448,5 +3452,6 @@
   "Die Bohrung hat bereits diesen Durchmesser.": "This bore already has that diameter.",
   "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "The modified bore was calculated but was not recognised again afterwards. Create an error report with the affected model.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
+  "🔒": "🔒"
 }

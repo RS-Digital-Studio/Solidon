@@ -234,7 +234,7 @@ from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
-from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
@@ -732,8 +732,13 @@ PULL_OP = "sketch_extrude"
 PULL_FIELD = "height"
 
 
-def pull_limits() -> tuple[float, float]:
-    """Unter- und Obergrenze der gezogenen Höhe — **aus dem Schema**.
+#: Nach innen ziehen schneidet eine Tasche in den gewählten exakten Körper.
+POCKET_OP = "sketch_pocket"
+POCKET_FIELD = "depth"
+
+
+def operation_limits(op_name: str, field: str) -> tuple[float, float]:
+    """Unter- und Obergrenze eines gezogenen Maßes — **aus dem Schema**.
 
     Gefragt statt abgeschrieben, aus demselben Grund wie bei
     :func:`_sketch_param`: Eine zweite Zahl in der Ansicht fiele erst auf, wenn
@@ -741,16 +746,26 @@ def pull_limits() -> tuple[float, float]:
     Grenze im Schema, kommt null zurück — die Ansicht klemmt dann nicht, und
     das ist richtiger als eine erfundene Grenze.
     """
-    for entry in REGISTRY.get(PULL_OP).params.spec():
-        if entry.name == PULL_FIELD:
+    for entry in REGISTRY.get(op_name).params.spec():
+        if entry.name == field:
             return (float(entry.minimum or 0.0), float(entry.maximum or 0.0))
     raise InternalError(
-        detail=f"{PULL_OP!r} has no {PULL_FIELD!r} parameter",
-        values={"op": PULL_OP},
+        detail=f"{op_name!r} has no {field!r} parameter",
+        values={"op": op_name},
     )
 
 
 #: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
+def pull_limits() -> tuple[float, float]:
+    """Grenzen der Höhe für den Zug nach außen."""
+    return operation_limits(PULL_OP, PULL_FIELD)
+
+
+def pocket_limits() -> tuple[float, float]:
+    """Grenzen der Tiefe für den Zug nach innen."""
+    return operation_limits(POCKET_OP, POCKET_FIELD)
+
+
 #: steht. „user" und „agent" sind die einzigen Urheber, die das Format
 #: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
 #: „habe ich das getan?" reicht dieser Vermerk.
@@ -1092,6 +1107,7 @@ class MainWindow(QMainWindow):
         self.viewport.sketchPulled.connect(self._on_sketch_pulled)
         self.viewport.sketchPullBlocked.connect(self.announce)
         self.viewport.faceDragged.connect(self._on_face_dragged)
+        self.viewport.sketchPlaneChosen.connect(self._on_sketch_plane_chosen)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
@@ -1255,6 +1271,9 @@ class MainWindow(QMainWindow):
         self.sketch_bar = QWidget(self)
         sketch_row = QHBoxLayout(self.sketch_bar)
         sketch_row.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        sketch_title = QLabel(tr("Skizze"), self.sketch_bar)
+        set_level(sketch_title, "section")
+        sketch_row.addWidget(sketch_title)
         self._sketch_hint = QLabel(
             tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
         )
@@ -2176,6 +2195,7 @@ class MainWindow(QMainWindow):
             self.action_about,
             tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
         )
+        self.toolbar = toolbar
 
         toolbar = QToolBar(tr("Werkzeuge"), self)
         toolbar.setMovable(False)
@@ -4633,6 +4653,7 @@ class MainWindow(QMainWindow):
         # 24.08.2026 gemeldet hat — „am Viewport ändert sich nichts", und
         # Draufsicht wie Seitenansicht taten nichts, weil sie etwas geändert
         # hätten, das niemand sieht. Das Panel wird jetzt zur Leiste unter dem
+        show_plane_picker = not text.strip() and not plane
         # Bild; gezeichnet wird dort, wo die Skizze liegt.
         panel.use_viewport()
         # E19 zieht mit in den Viewport: Das Maßfeld wohnt jetzt über der
@@ -4646,7 +4667,7 @@ class MainWindow(QMainWindow):
         # Zeichenebene auseinandergehen, wird aus einem Zug am Umriss eine
         # Höhe. Die Grenzen kommen aus dem Schema, damit die Zahl am Zeiger
         # dieselbe ist, die der Dialog danach annimmt.
-        self.viewport.set_sketch_pull(self._sketch_pull_offer, pull_limits())
+        self.viewport.set_sketch_pull(self._sketch_pull_offer, pull_limits(), pocket_limits())
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
         # des Fensters —, und gezeichnet wurde zur Hälfte dahinter.
@@ -4689,6 +4710,7 @@ class MainWindow(QMainWindow):
         # sonst irgendwo — perspektivisch ist eine Draufsicht keine. Gesehen an
         # der Korpusplatte: Sie stand trapezförmig im Bild, mit sichtbaren
         # Seitenwänden, während die Zeile darunter „Draufsicht (XY)" meldete.
+        panel.canvas.selectionChanged.connect(self._update_sketch_selection)
         # Zwei gleich lange Strecken auf derselben Ebene erscheinen dabei
         # verschieden lang, je nachdem, wie weit sie von der Bildmitte weg
         # liegen — und genau darauf setzt man beim Zeichnen Punkte.
@@ -4712,8 +4734,10 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self._redraw_sketch)
         # Ab jetzt trifft ein Klick die Ebene und nicht die Szene.
         self.viewport.set_sketching(frame)
-        panel.plane_choice.currentIndexChanged.connect(self._sketch_plane_changed)
+        panel.planeChanged.connect(self._sketch_plane_changed)
         self._redraw_sketch()
+        self.viewport.show_sketch_planes(show_plane_picker)
+        self._update_sketch_selection()
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
         # offen ist — und zu zeichnen beginnen ist genau der Fall, in dem noch
         # nichts offen ist (Weg 2, §2.2). Ohne diese Zeile meldete die
@@ -4725,6 +4749,7 @@ class MainWindow(QMainWindow):
         # zweite Leiste unter der des Editors und boten ihre Umschalter an,
         # von denen keiner etwas bewirkte.
         self.tools.setVisible(False)
+        self.toolbar.setVisible(False)
         self.sketch_bar.setVisible(True)
         self._update_actions()
         # Beide Texte sagten „die Operation", auch wenn es noch keine gab: der
@@ -4752,6 +4777,7 @@ class MainWindow(QMainWindow):
         schwenkt, ist das Zeichnen selbst — dort bleibt die Ansicht, wie der
         Nutzer sie gedreht hat.
         """
+        self.viewport.show_sketch_planes(False)
         frame = self._sketch_frame()
         self.viewport.set_sketching(frame)
         # Gezeichnet wird auf ``frame``, gesehen auf ``_view_frame`` — solange
@@ -4761,6 +4787,29 @@ class MainWindow(QMainWindow):
             self.viewport.view_on_plane(looking)
         self._update_sketch_hint()
         self._redraw_sketch()
+
+    def _on_sketch_plane_chosen(self, plane: str) -> None:
+        """Eine Ebenenkarte im Bild nimmt denselben Weg wie das Auswahlfeld."""
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        if not panel.choose_plane(plane):
+            self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
+
+    def _update_sketch_selection(self) -> None:
+        """Die Auswahl steht ruhig am Bildrand, mit Wort statt nur Farbe."""
+        panel = self._sketch_panel
+        if panel is None:
+            self.viewport.show_sketch_selection("")
+            return
+        count = len(panel.canvas.selection)
+        if count == 0:
+            note = tr("Keine Auswahl")
+        elif count == 1:
+            note = tr("Eines ausgewählt — mit Strg das Nächste dazunehmen.")
+        else:
+            note = tr("{count} ausgewählt.").format(count=count)
+        self.viewport.show_sketch_selection(str(note))
 
     def _on_sketch_point(self, point: object) -> None:
         """Ein Klick auf die Zeichenebene setzt einen Punkt (§30.1, P4).
@@ -4806,7 +4855,7 @@ class MainWindow(QMainWindow):
             return ""
         if panel.canvas.view_plane == panel.canvas.sketch.plane:
             return ""
-        if self._sketch_target and self._sketch_target != PULL_OP:
+        if self._sketch_target and self._sketch_target not in (PULL_OP, POCKET_OP):
             # Wer den Modus für *Grundform drehen* betreten hat, meint keine
             # Höhe. Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten
             # hieße, die gewählte Operation stillschweigend zu tauschen.
@@ -4820,7 +4869,7 @@ class MainWindow(QMainWindow):
         return "ready"
 
     def _on_sketch_pulled(self, height: float) -> None:
-        """Am Umriss ist eine Höhe gezogen worden — daraus wird ein Körper.
+        """Außen wird Material aufgebaut, innen aus einem Körper entfernt.
 
         Der Zug endet als **Operation** und nicht als Zustand (Regel 2): Der
         Modus wird verlassen wie bei „Fertig", und ``sketch_extrude`` bekommt
@@ -4842,6 +4891,28 @@ class MainWindow(QMainWindow):
 
     def _update_sketch_hint(self) -> None:
         """Der Hinweis über der Zeichenleiste nennt die Ebene, auf der
+        if height < 0.0:
+            selected = self.object_tree.selected_objects()
+            result = self.session.last_result
+            if len(selected) != 1 or result is None or selected[0] not in result.scene.objects:
+                self.viewport.cancel_sketch_pull()
+                self.announce(tr("Dafür muss ein Körper ausgewählt sein."))
+                return
+            body = result.scene.objects[selected[0]]
+            if body.kind != "brep":
+                self.viewport.cancel_sketch_pull()
+                self.announce(
+                    tr(
+                        "Der gewählte Körper besteht bereits aus festen Dreiecken. "
+                        "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. "
+                        "Aktiviere dafür bei einer Grundform die Option „Flächen und Kanten "
+                        "später bearbeiten“ oder öffne eine STEP-Datei."
+                    )
+                )
+                return
+            self._sketch_target = POCKET_OP
+            self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
+            return
         gezeichnet wird.
 
         Die andere Hälfte der Auskunft, die die Fangmarke gibt: Das Kreuz
@@ -4892,7 +4963,7 @@ class MainWindow(QMainWindow):
         line = source.format(place=place)
         offer = self._sketch_pull_offer()
         if offer == "ready":
-            line = f"{line} {tr('Am Umriss ziehen zieht daraus einen Körper auf.')}"
+            line = f"{line} {tr('Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.')}"
         elif offer:
             line = f"{line} {offer}"
         self._sketch_hint.setText(line)
@@ -4957,6 +5028,8 @@ class MainWindow(QMainWindow):
         # Bild nicht von „das Raster ist zu blass" zu unterscheiden.
         solved = panel.canvas.solved
         kurven = curves_of(solved, frame) if solved is not None else ()
+        if panel.canvas.sketch.elements:
+            self.viewport.show_sketch_planes(False)
         # **Die Rasterweite folgt der Kamera, nicht der Zeichenfläche.**
         # Deren Maßstab steht im Viewport-Modus auf dem Startwert — dort
         # zoomt niemand mehr. Gemessen kam damit ein Raster von 20 mm
@@ -5031,10 +5104,14 @@ class MainWindow(QMainWindow):
         # eine gebundene Methode dieses Fensters und liest das Panel, das
         # gleich stirbt.
         self.viewport.set_sketch_pull(None)
+        self.viewport.show_sketch_planes(False)
+        self.viewport.show_sketch_selection("")
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self.viewport.cameraMoved.disconnect(self._redraw_sketch)
         panel.pointerMoved.disconnect(self._on_sketch_pointer)
+        panel.planeChanged.disconnect(self._sketch_plane_changed)
+        panel.canvas.selectionChanged.disconnect(self._update_sketch_selection)
         # Die dritte Verbindung aus derselben Zeilengruppe wie die zwei
         # darüber — heute folgenlos (der unsichtbare Canvas ruft fit_view
         # nie), aber die Begründung „erst abmelden, dann aufräumen" gilt für
@@ -5057,6 +5134,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_display_mode(self._mode_before_sketch)
         self.viewport.set_projection(self._projection_before_sketch)
         self.tools.setVisible(True)
+        self.toolbar.setVisible(True)
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()
         self._update_actions()

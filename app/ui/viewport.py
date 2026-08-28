@@ -314,6 +314,13 @@ CURSOR_PIXELS = 10.0
 #: und Zeigerspitze in **einem** Blick liegen — was weiter weg steht, ist
 #: wieder die Werkzeugzeile, nur an anderer Stelle.
 #:
+#: Länge des sichtbaren Ziehgriffs in Bildpunkten.
+#:
+#: Er bleibt beim Zoomen gleich groß wie ein Werkzeuggriff. Achtunddreißig
+#: Bildpunkte sind lang genug, dass Pfeilspitze und Kreuz nicht im Umriss
+#: verschwinden, aber kurz genug, um neben einem kleinen Profil zu bleiben.
+PULL_HANDLE_PIXELS = 38.0
+
 #: **Zwei Felder hängen daran**, und deshalb steht die Zahl hier statt zweimal:
 #: das Maßfeld der Zeichenfläche (``sketch_editor.SketchCanvas._show_pointer``)
 #: und die Zahl zum Zug am Ziehgriff (:meth:`DragValueBar.place`). Dieselbe
@@ -411,6 +418,68 @@ def sketch_cursor(
 #: es fünf Punkte und damit fünf Sprossen, also alle; bei einem Kreis mit
 #: vierundsechzig Segmenten wären es vierundsechzig, und das ist keine
 #: Drahtform mehr, sondern eine Wand. Zwölf lesen sich als Körper und bleiben
+def pull_handle(
+    frame: PlaneFrame, curves: Sequence[SketchCurve], size: float
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    """Pfeil nach außen und Kreuz nach innen am längsten Profilrand.
+
+    Der Fuß sitzt auf dem greifbaren Umriss. Pfeil und Kreuz sind die zweite
+    Kodierung neben der Richtung (Regel 18): nach außen entsteht Material,
+    nach innen wird es entfernt.
+    """
+    if size <= 0.0:
+        return []
+    usable = [curve for curve in curves if not curve.construction and len(curve.points) > 1]
+    if not usable:
+        return []
+
+    def curve_length(curve: SketchCurve) -> float:
+        return sum(math.dist(first, second) for first, second in pairwise(curve.points))
+
+    chosen = max(usable, key=curve_length)
+    total = curve_length(chosen)
+    if total <= EPS_GEOM:
+        return []
+    halfway = total / 2.0
+    walked = 0.0
+    base = chosen.points[0]
+    for first, second in pairwise(chosen.points):
+        segment = math.dist(first, second)
+        if walked + segment >= halfway and segment > EPS_GEOM:
+            share = (halfway - walked) / segment
+            base = (
+                float(first[0] + (second[0] - first[0]) * share),
+                float(first[1] + (second[1] - first[1]) * share),
+                float(first[2] + (second[2] - first[2]) * share),
+            )
+            break
+        walked += segment
+
+    def shifted(point: Sequence[float], vector: Sequence[float], amount: float) -> Vec3:
+        return (
+            float(point[0] + vector[0] * amount),
+            float(point[1] + vector[1] * amount),
+            float(point[2] + vector[2] * amount),
+        )
+
+    outward = shifted(base, frame.normal, size)
+    inward = shifted(base, frame.normal, -size)
+    neck = shifted(outward, frame.normal, -size * 0.32)
+    arrow_a = shifted(neck, frame.x_axis, size * 0.24)
+    arrow_b = shifted(neck, frame.x_axis, -size * 0.24)
+    cross_a = shifted(inward, frame.x_axis, size * 0.18)
+    cross_b = shifted(inward, frame.x_axis, -size * 0.18)
+    cross_c = shifted(inward, frame.y_axis, size * 0.18)
+    cross_d = shifted(inward, frame.y_axis, -size * 0.18)
+    return [
+        (inward, outward),
+        (outward, arrow_a),
+        (outward, arrow_b),
+        (cross_a, cross_b),
+        (cross_c, cross_d),
+    ]
+
+
 #: durchsichtig genug, um die Zeichnung darunter zu sehen.
 MOST_PULL_RIBS = 12
 
@@ -485,11 +554,10 @@ def pulled_height(reach: float, step: float, limits: tuple[float, float]) -> flo
     mit dem die Fangmarke ihre 6,9 ms je Mausbewegung los ist. Eine Weite von
     null heißt „kein Raster" und fängt nicht.
 
-    **Geklemmt auf die Grenzen der Operation.** Nach oben, weil ein Dialog eine
-    Höhe von 4000 mm ablehnt, die der Griff gerade gezeigt hat; nach unten,
-    weil wer in die falsche Richtung zieht, die Untergrenze sehen soll und
-    nicht eine negative Zahl. Sind keine Grenzen bekannt (beide null), wird
-    nicht geklemmt — eine erfundene Grenze wäre schlechter als keine.
+    **Geklemmt auf die Grenzen der Operation, mit erhaltenem Vorzeichen.**
+    Positiv baut Material auf, negativ schneidet hinein. Beide Richtungen
+    tragen ihre eigene Operation, aber dieselbe Maßgrenze; eine erfundene
+    Grenze wäre schlechter als keine.
 
     Eine freie Funktion, weil die Hälfte davor (:meth:`Viewport._pick_ray`)
     offscreen nicht läuft: Was hinter dem Plotter liegt, prüft in der Suite
@@ -499,7 +567,8 @@ def pulled_height(reach: float, step: float, limits: tuple[float, float]) -> flo
         reach = round(reach / step) * step
     least, most = limits
     if most > least:
-        return min(max(reach, least), most)
+        direction = -1.0 if reach < 0.0 else 1.0
+        return direction * min(max(abs(reach), least), most)
     return reach
 
 
@@ -1905,6 +1974,116 @@ class Viewport(QWidget):
     """A finished measurement — carries a ``Measurement``."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+class SketchPlanePicker(QFrame):
+    """Drei greifbare Ebenenkarten direkt im Bild.
+
+    Das Auswahlfeld in der Leiste bleibt für Genauigkeit und Flächen eines
+    Körpers erhalten. Beim freien Start beantworten diese Karten aber die
+    erste Frage dort, wo ihr Ergebnis liegt: in der Ansicht.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("sketchPlanePicker")
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        outer.setSpacing(TIGHT)
+        title = QLabel(
+            tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt."),
+            self,
+        )
+        title.setObjectName("sketchPlaneTitle")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        outer.addWidget(title)
+
+        row = QHBoxLayout()
+        row.setSpacing(TIGHT)
+        self._buttons: dict[str, QToolButton] = {}
+        choices = (
+            ("plane:xy", tr("Draufsicht (XY) — liegend"), "view_top", "1"),
+            ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn"), "view_front", "2"),
+            ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite"), "view_right", "3"),
+        )
+        for plane, label, image, key in choices:
+            button = QToolButton(self)
+            button.setText(f"{label}\n{key}")
+            button.setIcon(icon(image, button))
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+            button.setMinimumSize(142, 76)
+            button.setToolTip(str(label))
+            button.setAccessibleName(str(label))
+            button.clicked.connect(weak_slot(self, SketchPlanePicker._choose, plane))
+            row.addWidget(button)
+            self._buttons[plane] = button
+        outer.addLayout(row)
+        self.set_theme("dark")
+        self.hide()
+
+    def _choose(self, plane: str) -> None:
+        parent = self.parentWidget()
+        chosen = getattr(parent, "sketchPlaneChosen", None)
+        if chosen is not None:
+            chosen.emit(plane)
+
+    def set_theme(self, theme: str) -> None:
+        """Kartenfarben aus dem Thema; Fokus und Hover bleiben sichtbar."""
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#sketchPlanePicker {{ background: {colours['window']};"
+            f" border: 1px solid {colours['disabled']}; border-radius: 10px; }}"
+            f"#sketchPlanePicker QLabel {{ color: {colours['text']}; }}"
+            f"#sketchPlanePicker QToolButton {{ color: {colours['text']};"
+            f" background: {colours['alternate']}; border: 1px solid {colours['disabled']};"
+            " border-radius: 7px; padding: 7px; }}"
+            f"#sketchPlanePicker QToolButton:hover, #sketchPlanePicker QToolButton:focus {{"
+            f" border: 2px solid {colours['accent_line']}; }}"
+        )
+
+    def place(self) -> None:
+        """Mittig im Bild, ohne von einer Bildschirmgröße abzuhängen."""
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        self.move(
+            max((parent.width() - self.width()) // 2, 0),
+            max((parent.height() - self.height()) // 2, 0),
+        )
+        self.raise_()
+
+
+class SketchSelectionBadge(QLabel):
+    """Ruhige Auswahlquittung am unteren Bildrand, zusätzlich zur Farbe."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__("", parent)
+        self.setObjectName("sketchSelectionBadge")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
+        self.set_theme("dark")
+        self.hide()
+
+    def set_theme(self, theme: str) -> None:
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#sketchSelectionBadge {{ color: {colours['text']};"
+            f" background: {colours['window']}; border: 1px solid {colours['disabled']};"
+            " border-radius: 6px; }}"
+        )
+
+    def place(self) -> None:
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        self.move(
+            max((parent.width() - self.width()) // 2, 0),
+            max(parent.height() - self.height() - ORIENTATION_MARGIN, 0),
+        )
+        self.raise_()
+
+
     sketchMenuAt = Signal(object, int, int)
     """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
     und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
@@ -1932,6 +2111,8 @@ class Viewport(QWidget):
     (:meth:`set_sketch_pull`)."""
     faceDragged = Signal(object, float)
     """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
+    sketchPlaneChosen = Signal(str)
+    """Eine der drei Ebenenkarten im Bild wurde angeklickt."""
     scaleDragged = Signal(float)
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
@@ -2073,6 +2254,8 @@ class Viewport(QWidget):
         Vom Fenster mitgegeben und nicht hier eingetippt: Wer sie abschreibt,
         hat die zweite Wahrheit gebaut, und die fällt erst auf, wenn der Dialog
         eine Zahl ablehnt, die der Griff gerade gezeigt hat."""
+        self._cut_limits: tuple[float, float] | None = None
+        """Grenzen der Taschentiefe; ``None`` heißt: nach innen nicht angeboten."""
         self._pull_from: tuple[float, float] | None = None
         """Wo der Zug begann, in Zeichenkoordinaten — ``None`` heißt: keiner.
 
@@ -2325,6 +2508,10 @@ class Viewport(QWidget):
                 QLabel(tr("Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung."), self)
             )
             return
+        self.plane_picker = SketchPlanePicker(self)
+        """Die drei greifbaren Grundebenen beim freien Einstieg."""
+        self.sketch_selection = SketchSelectionBadge(self)
+        """Was in der Skizze gewählt ist — ruhig am Bildrand."""
 
         from pyvistaqt import QtInteractor
 
@@ -3597,6 +3784,8 @@ class Viewport(QWidget):
         # Bett und Bauraum sind eigene Aktoren, und ``show_scene`` baut sie nur
         # bei geänderter Plattenzahl neu — ein Themenwechsel ließe sie sonst in
         # den alten Farben stehen, bis die nächste Auswertung kommt: eine fast
+        self.plane_picker.set_theme(theme)
+        self.sketch_selection.set_theme(theme)
         # schwarze Bettfläche auf hellem Grund.
         if self._profile is not None:
             self.show_build_volume(self._profile)
@@ -3889,7 +4078,11 @@ class Viewport(QWidget):
                 self._hover_at is not None
                 and self._sketch_pull_offer is not None
                 and self._sketch_pull_offer() == "ready"
-                and self.grip_reach(*self._hover_at) <= CURSOR_PIXELS
+                and min(
+                    self.grip_reach(*self._hover_at),
+                    self.pull_handle_reach(*self._hover_at),
+                )
+                <= CURSOR_PIXELS
             ):
                 return "move"
             # **Ganz vorn, wie im Klick selbst.** Im Skizzenmodus meint jeder
@@ -5298,6 +5491,8 @@ class Viewport(QWidget):
         # tausende Konturen, und ebenso viele einzelne ``add_lines``-Aufrufe
         # machten aus einem Schieberschritt Sekunden — VTK zahlt je Actor,
         # nicht je Linie.
+        self.plane_picker.place()
+        self.sketch_selection.place()
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
@@ -6138,7 +6333,37 @@ class Viewport(QWidget):
                     pickable=False,
                 )
             )
+        handle = self._pull_handle_segments()
+        if handle and self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready":
+            handle_points = np.asarray([point for pair in handle for point in pair], dtype=float)
+            handle_lines = np.hstack(
+                [[2, 2 * index, 2 * index + 1] for index in range(len(handle))]
+            )
+            self._sketch_actors.append(
+                self.plotter.add_mesh(
+                    pv.PolyData(handle_points, lines=handle_lines),
+                    color=self._sketch_colour,
+                    line_width=3,
+                    name="sketch_pull_handle",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
         self._draw()
+
+    def show_sketch_planes(self, visible: bool) -> None:
+        """Zeigt oder verbirgt die drei greifbaren Grundebenen im Bild."""
+        self.plane_picker.setVisible(visible)
+        if visible:
+            self.plane_picker.place()
+
+    def show_sketch_selection(self, text: str) -> None:
+        """Quittiert die Auswahl in Worten; leer nimmt die Zeile weg."""
+        self.sketch_selection.setText(text)
+        self.sketch_selection.setVisible(bool(text))
+        if text:
+            self.sketch_selection.place()
 
     def show_sketch_cursor(self, point: tuple[float, float] | None) -> None:
         """Die Marke setzen, die zeigt, wohin der nächste Klick fällt.
@@ -6652,16 +6877,16 @@ class Viewport(QWidget):
         Höhe etwas bedeutet. Die Ansicht kennt davon nichts; sie kennt die
         Geste, den Griff im Bild und die Zahl am Zeiger.
 
-        ``limits`` sind Unter- und Obergrenze der Höhe **aus dem Schema** der
-        Operation. Sie kommen von außen, damit sie nicht zweimal dastehen: Eine
-        hier eingetippte Zahl fiele erst auf, wenn der Dialog einen Wert
-        ablehnt, den der Griff gerade gezeigt hat.
+        ``limits`` und ``cut_limits`` sind die Grenzen von Aufbau und Tasche
+        **aus ihren Schemata**. Sie kommen von außen, damit keine Zahl hier
+        abgeschrieben wird.
 
         ``None`` löst alles wieder — das Fenster tut es beim Verlassen des
         Modus, sonst hielte die Ansicht einen Rückruf auf ein gestorbenes Panel.
         """
         self._sketch_pull_offer = offer
         self._pull_limits = limits
+        self._cut_limits = cut_limits
         if offer is None:
             self._end_pull()
 
@@ -6692,6 +6917,7 @@ class Viewport(QWidget):
     def grip_reach(self, x: int, y: int) -> float:
         """Wie weit diese Bildstelle vom Umriss der Zeichnung entfernt ist.
 
+        cut_limits: tuple[float, float] | None = None,
         In Bildpunkten, und über **alle** Kurven: Der Griff ist der Umriss
         selbst. In der Querschau liegt er als Strich im Bild — dort ist „am
         Umriss" eine Handbreit Genauigkeit und keine Zielübung.
@@ -6715,6 +6941,49 @@ class Viewport(QWidget):
                 continue
             best = min(best, polyline_distance(inside, (float(x), float(y))))
         return best
+
+    def _pull_handle_segments(
+        self,
+    ) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+        """Die sichtbare Griffgeometrie in genau der gezeichneten Größe."""
+        if self._sketch_frame is None:
+            return []
+        size = PULL_HANDLE_PIXELS / max(
+            self.pixels_per_mm(self._sketch_frame),
+            EPS_GEOM,
+        )
+        return pull_handle(self._sketch_frame, self._sketch_curves, size)
+
+    def pull_handle_reach(self, x: int, y: int) -> float:
+        """Wie weit die Bildstelle von Pfeil oder Kreuz des Ziehgriffs liegt."""
+        best = math.inf
+        for first, second in self._pull_handle_segments():
+            spots = (self._display_of(first), self._display_of(second))
+            if any(spot is None for spot in spots):
+                continue
+            best = min(
+                best,
+                polyline_distance(
+                    [spot for spot in spots if spot is not None],
+                    (float(x), float(y)),
+                ),
+            )
+        return best
+
+    def _pull_handle_base(self, x: int, y: int) -> tuple[float, float] | None:
+        """Der Fuß des Griffs, wenn Pfeil oder Kreuz getroffen wurden."""
+        if self._sketch_frame is None or self.pull_handle_reach(x, y) > CURSOR_PIXELS:
+            return None
+        handle = self._pull_handle_segments()
+        if not handle:
+            return None
+        inward, outward = handle[0]
+        base: Vec3 = (
+            (inward[0] + outward[0]) / 2.0,
+            (inward[1] + outward[1]) / 2.0,
+            (inward[2] + outward[2]) / 2.0,
+        )
+        return to_plane(self._sketch_frame, base)
 
     def sketch_pull_ready(self, x: int, y: int) -> bool:
         """Ob hier ein Zug am Ziehgriff beginnen darf (§30.1).
@@ -6746,7 +7015,9 @@ class Viewport(QWidget):
         """
         if self._sketch_frame is None or self._sketch_pull_offer is None:
             return False
-        if self.grip_reach(x, y) > CURSOR_PIXELS:
+        on_outline = self.grip_reach(x, y) <= CURSOR_PIXELS
+        on_handle = self.pull_handle_reach(x, y) <= CURSOR_PIXELS
+        if not on_outline and not on_handle:
             return False
         base = self.pull_base_at(x, y)
         if base is None or self.pull_height_at(base, x, y) is None:
@@ -6754,7 +7025,7 @@ class Viewport(QWidget):
         answer = self._sketch_pull_offer()
         if answer == "ready":
             return True
-        if answer:
+        if answer and on_outline:
             self.sketchPullBlocked.emit(answer)
         return False
 
@@ -6772,6 +7043,9 @@ class Viewport(QWidget):
         """
         if self._sketch_frame is None:
             return None
+        handle_base = self._pull_handle_base(x, y)
+        if handle_base is not None:
+            return handle_base
         base = self._sketch_hit(x, y)
         if base is not None:
             return base
@@ -6827,6 +7101,9 @@ class Viewport(QWidget):
         """
         if self._sketch_frame is None:
             return None
+        handle_base = self._pull_handle_base(x, y)
+        if handle_base is not None:
+            return handle_base
         best: tuple[float, float] | None = None
         closest = math.inf
         for curve in self._sketch_curves:
@@ -6863,14 +7140,14 @@ class Viewport(QWidget):
         # in die der Körper wächst — geklemmt sind beide Richtungen gleich weit
         # von null entfernt.
         self._pull_raw = reach
-        height = pulled_height(reach, self._sketch_step, self._pull_limits)
+        height = pulled_height(reach, self._sketch_step, self._limits_for(reach))
         if abs(height - self._pull_height) <= EPS_GEOM:
             return
         self._pull_height = height
         self._show_pull_cage()
         if not self.drag_bar.typing:
             self.drag_bar.anchor = self._pointer_spot(x, y)
-        self.drag_bar.follow_length(tr("Höhe"), height)
+        self.drag_bar.follow_length(tr("Tiefe") if height < 0.0 else tr("Höhe"), abs(height))
 
     def _pointer_spot(self, x: int, y: int) -> QPoint:
         """Die Stelle des Zeigers in Qt-Logikpunkten, für das Wertfeld.
@@ -6889,9 +7166,8 @@ class Viewport(QWidget):
         """Legt die Drahtform des Zugs in die Szene — oder nimmt sie weg."""
         if self.plotter is None:
             return
-        for actor in self._pull_actors:
+        for actor in actors:
             self.plotter.remove_actor(actor, render=False)
-        self._pull_actors.clear()
         segments = (
             pull_cage(self._sketch_frame, self._sketch_curves, self._pull_height)
             if self._sketch_frame is not None
@@ -6936,26 +7212,6 @@ class Viewport(QWidget):
             # Ein Klick ist kein Zug.
             self._end_pull()
             return
-        if self._pull_raw is not None and self._pull_raw < max(self._pull_limits[0], EPS_GEOM):
-            # **Wer in die falsche Richtung zieht, bekommt eine Auskunft und
-            # keinen Körper von 0,1 mm.** Entschieden wird gegen das
-            # **ungeklemmte** Maß: :func:`pulled_height` hebt ein negatives auf
-            # die Untergrenze, und die liegt über der Schwelle darüber — der
-            # Zug lief also glatt in eine Operation, die niemand gemeint hat
-            # (Regel 17: ein Weg, der nicht geht, nennt seine Bedingung).
-            #
-            # **Nur gegen die Untergrenze, nicht gegen :meth:`_pull_takes`.**
-            # Hier stand die vollständige Prüfung, und damit lehnte sie zwei
-            # Fälle ab, die sie nicht meint (gefunden von der Review-Sitzung,
-            # 27.08.2026): Ein Zug bis zum **Anschlag** hat ein rohes Maß über
-            # der Obergrenze und ist trotzdem richtig — die Leiste zeigt den
-            # geklemmten Wert, und der ist die Zusage. Die Frage hier ist die
-            # nach der **Richtung**, und die hat nur eine Grenze.
-            self._end_pull()
-            self.sketchPullBlocked.emit(
-                str(tr("Der Körper wächst von der Zeichenebene weg — andersherum ziehen."))
-            )
-            return
         self._pull_from = None
         self._drag_kind = None
         self.drag_bar.dismiss()
@@ -6982,15 +7238,22 @@ class Viewport(QWidget):
         wer tippt, meint genau diese Zahl, und sie stillschweigend zu ändern
         wäre eine Antwort auf eine andere Frage.
         """
-        least, most = self._pull_limits
-        if height < max(least, EPS_GEOM):
+        if height < 0.0 and self._cut_limits is None:
             return False
-        return not (most > least and height > most)
+        least, most = self._limits_for(height)
+        amount = abs(height)
+        if amount < max(least, EPS_GEOM):
+            return False
+        return not (most > least and amount > most)
+
+    def _limits_for(self, height: float) -> tuple[float, float]:
+        """Grenzen der Richtung: außen aufziehen, innen ausschneiden."""
+        if height < 0.0:
+            return self._cut_limits or (0.0, 0.0)
+        return self._pull_limits
 
     def _end_pull(self) -> None:
         """Der Zug ist vorbei, ohne Ergebnis: Drahtform weg, Zahl weg."""
-        if self._pull_from is None and not self._pull_actors:
-            return
         self._pull_from = None
         self._pull_height = 0.0
         self._pull_raw = None
@@ -7035,6 +7298,10 @@ class Viewport(QWidget):
         # schwebt auf der vorigen Ebene im Raum, bis die Maus sich das nächste
         # Mal bewegt. Wer die Ebene über die Ziffern wechselt und die Hand
         # stillhält, sieht genau das.
+    def cancel_sketch_pull(self) -> None:
+        """Verwirft die Drahtvorschau, wenn das Fenster den Zug ablehnt."""
+        self._end_pull()
+
         self.show_sketch_cursor(None)
         # **Der Boden des Bauraums tritt ab, seine Kanten bleiben.** Zwei
         # Gitter übereinander sind eines zu viel: Bettraster und Zeichenraster

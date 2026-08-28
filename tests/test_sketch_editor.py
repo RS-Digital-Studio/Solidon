@@ -18,7 +18,7 @@ import pytest
 pytest.importorskip("PySide6")
 pytest.importorskip("scipy")
 
-from PySide6.QtCore import QPointF, Qt
+from PySide6.QtCore import QPoint, QPointF, Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.registry import REGISTRY
@@ -28,6 +28,7 @@ from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.types import PlaneFrame
 from app.ui.op_dialog import OperationDialog
 from app.ui.sketch_editor import (
+    ACTION_KEYS,
     ExpressionDialog,
     SketchCanvas,
     SketchEditorDialog,
@@ -103,6 +104,28 @@ def test_placing_snaps_to_an_existing_point(qt_app: QApplication) -> None:
     canvas.undo()
     assert len(canvas.sketch.elements) == 1, "ein Rückgängig nimmt den ganzen Klickzug"
     assert not canvas.sketch.constraints
+
+
+def test_a_drawn_rectangle_keeps_the_snapped_corner(qt_app: QApplication) -> None:
+    """Der Rechteckfang wird eine Deckung im selben Rückgängig-Schritt."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.add_element("point", ((0.0, 0.0),))
+    canvas.set_tool("rectangle")
+
+    canvas.place_on_plane((0.0, 0.0))
+    canvas.place_on_plane((30.0, 20.0))
+
+    joins = [
+        constraint.targets
+        for constraint in canvas.sketch.constraints
+        if constraint.kind == "coincident" and 0 in constraint.targets
+    ]
+    assert joins, "die gefangene Ecke bleibt mit dem vorhandenen Punkt verbunden"
+    assert not any(constraint.kind == "fixed" for constraint in canvas.sketch.constraints)
+
+    canvas.undo()
+    assert len(canvas.sketch.elements) == 1, "ein Rückgängig nimmt das ganze Rechteck"
 
 
 def test_a_click_falls_on_the_grid(qt_app: QApplication) -> None:
@@ -1082,14 +1105,23 @@ def test_a_key_picks_the_tool_and_the_button_follows(qt_app: QApplication) -> No
 def test_the_drawing_keys_follow_fusion(qt_app: QApplication) -> None:
     """Wer aus Fusion kommt, hat sie in den Fingern: L Linie, C Kreis,
     A Bogen, R Rechteck, D Bemaßung, Esc beendet das Werkzeug."""
-    from app.ui.sketch_editor import ACTION_KEYS, TOOL_KEYS
+    from app.ui.sketch_editor import TOOL_KEYS
 
     assert TOOL_KEYS["line"] == "L"
     assert TOOL_KEYS["circle"] == "C"
     assert TOOL_KEYS["arc"] == "A"
     assert TOOL_KEYS["select"] == "Esc"
-    assert ACTION_KEYS["rectangle"] == "R"
+    assert TOOL_KEYS["rectangle"] == "R"
     assert ACTION_KEYS["distance"] == "D"
+
+
+def test_every_drawing_tool_explains_its_first_gesture(qt_app: QApplication) -> None:
+    """Ein Symbol ohne CAD-Vorwissen bekommt Name, Taste und Klickfolge."""
+    panel = SketchPanel()
+
+    for name, button in panel._tool_buttons.items():
+        hint = button.toolTip()
+        assert "—" in hint and len(hint) > len(name) + 12, (name, hint)
 
 
 def test_the_keys_only_apply_while_drawing(qt_app: QApplication) -> None:
@@ -1374,6 +1406,48 @@ def test_typing_a_measure_finishes_the_line(qt_app: QApplication) -> None:
 def test_a_typed_measure_stays_as_a_constraint(qt_app: QApplication) -> None:
     """Sonst wandert die Linie beim nächsten Solverlauf, und die eingetippte
     Zahl wäre eine Angabe gewesen, die nichts hält."""
+def test_typing_width_and_height_finishes_the_rectangle(qt_app: QApplication) -> None:
+    """Ein Rechteck braucht zwei Maße und wird erst nach dem zweiten fertig."""
+    canvas = SketchCanvas()
+    canvas.set_tool("rectangle")
+    canvas.place(canvas._to_screen(10.0, 20.0))
+    canvas._pointer = (50.0, 45.0)
+
+    canvas.place_measured(40.0)
+
+    assert not canvas.sketch.elements, "die erste Zahl ist die Breite, nicht das Ende"
+
+    canvas.place_second_measured(25.0)
+
+    assert len(canvas.sketch.elements) == 4
+    points = [point for element in canvas.sketch.elements for point in element.points]
+    assert min(point[0] for point in points) == pytest.approx(10.0)
+    assert max(point[0] for point in points) == pytest.approx(50.0)
+    assert min(point[1] for point in points) == pytest.approx(20.0)
+    assert max(point[1] for point in points) == pytest.approx(45.0)
+
+
+def test_both_rectangle_measures_hide_when_the_plane_cannot_be_projected(
+    qt_app: QApplication,
+) -> None:
+    """Breite, Höhe und Schlösser verschwinden als eine zusammengehörige Anzeige."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 400)
+    projected: list[QPoint | None] = [QPoint(120, 90)]
+    canvas.lend_measure_field(canvas, lambda _point: projected[0])
+    canvas.set_tool("rectangle")
+    canvas.place_on_plane((10.0, 20.0))
+    canvas.hover_on_plane((50.0, 45.0))
+
+    assert not canvas.measure_field.isHidden()
+    assert not canvas.second_measure_field.isHidden()
+
+    projected[0] = None
+    canvas.hover_on_plane((55.0, 50.0))
+
+    assert all(widget.isHidden() for widget in canvas._measure_widgets())
+
+
     canvas = SketchCanvas()
     canvas.set_tool("line")
     canvas.place(canvas._to_screen(0.0, 0.0))
@@ -4034,6 +4108,123 @@ def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplic
         window.deleteLater()
 
 
+def test_one_outline_keeps_the_explicit_choice_with_extrusion_preselected(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Profil ist keine eindeutige Absicht; der Normalfall steht nur vorausgewählt."""
+    from PySide6.QtWidgets import QDialog
+
+    from app.ui.main_window import MainWindow
+    from app.ui.op_dialog import SketchUseDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    text = sketch_to_text(shapes.rectangle(40.0, 20.0))
+    offered: list[str] = []
+    kept: list[tuple[str, str]] = []
+
+    def reject(dialog: SketchUseDialog) -> QDialog.DialogCode:
+        offered.append(dialog.chosen())
+        assert dialog._list.count() == 5
+        return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(SketchUseDialog, "exec", reject)
+    monkeypatch.setattr(
+        window,
+        "start_sketch",
+        lambda operation, starting="": kept.append((operation, starting)),
+    )
+
+    try:
+        window._offer_sketch_use(text)
+        assert offered == ["sketch_extrude"], "Aufziehen ist sichtbar vorgewählt"
+        assert kept == [("", text)], "Zurück zum Zeichnen behält denselben Umriss"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
+    qt_app: QApplication,
+) -> None:
+    """Die erste Entscheidung steht im Bild; die allgemeine Leiste tritt zurück."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+
+        assert not window.viewport.plane_picker.isHidden()
+        assert set(window.viewport.plane_picker._buttons) == {
+            "plane:xy",
+            "plane:xz",
+            "plane:yz",
+        }
+        assert window.toolbar.isHidden()
+        assert window.viewport.sketch_selection.text() == "Keine Auswahl"
+
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.choose_plane("plane:xy")
+        assert window.viewport.plane_picker.isHidden(), (
+            "auch die bereits vorausgewählte Draufsicht beantwortet die Frage"
+        )
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("selected", "kind", "message"),
+    [
+        ((), "brep", "Körper ausgewählt"),
+        (("body",), "mesh", "festen Dreiecken"),
+    ],
+)
+def test_a_rejected_inward_pull_clears_its_preview(
+    qt_app: QApplication,
+    selected: tuple[str, ...],
+    kind: str,
+    message: str,
+) -> None:
+    """Fehlende oder ungeeignete Körper lassen keinen alten Drahtkäfig stehen."""
+    from types import SimpleNamespace
+
+    from app.core.types import Scene
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    cleaned: list[bool] = []
+    said: list[str] = []
+    try:
+        window.start_sketch("")
+        window.object_tree.selected_objects = lambda: selected
+        if selected:
+            window.session.last_result = SimpleNamespace(
+                scene=Scene(objects={"body": SimpleNamespace(kind=kind)})
+            )
+        window.viewport.cancel_sketch_pull = lambda: cleaned.append(True)
+        window.announce = said.append
+
+        window._on_sketch_pulled(-5.0)
+
+        assert cleaned == [True]
+        assert said and message in said[-1]
+        assert window._sketch_panel is not None, "die korrigierbare Skizze bleibt offen"
+    finally:
+        window.session.last_result = None
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
 def test_an_open_outline_blocks_the_grip_with_a_reason(qt_app: QApplication) -> None:
     """Ein Griff, der stumm nichts tut, sagt nicht einmal, dass etwas nicht
     ging (Regel 17).
@@ -4107,7 +4298,7 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
         assert panel is not None
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         before = window._sketch_hint.text()
-        assert "Am Umriss ziehen" not in before, before
+        assert "Pfeil:" not in before, before
 
         panel.choose_plane("plane:xz")
         after = window._sketch_hint.text()
@@ -4116,7 +4307,7 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
         # geschlossene Umriss" und trägt dasselbe Wort: Mit einem Angebot, das
         # nie „ready" liefert, blieb der Test grün (gefunden von der
         # Review-Sitzung, 27.08.2026).
-        assert "Am Umriss ziehen" in after, after
+        assert "Pfeil:" in after and "Kreuz:" in after, after
         assert "Zeichenebene" in after, "die Ebene bleibt in der Zeile stehen"
     finally:
         window.finish_sketch(keep=False)
@@ -4162,6 +4353,47 @@ def test_a_pulled_height_reaches_the_operation(qt_app: QApplication) -> None:
         window.deleteLater()
 
 
+def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication) -> None:
+    """Das Kreuz trägt zur Tasche; die Tiefe kommt positiv im Operationsschema an."""
+    from types import SimpleNamespace
+
+    from app.core.registry import OperationSpec
+    from app.core.types import Scene
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_plane("plane:xz")
+        window.object_tree.selected_objects = lambda: ("body",)
+        window.session.last_result = SimpleNamespace(
+            scene=Scene(objects={"body": SimpleNamespace(kind="brep")})
+        )
+
+        window._on_sketch_pulled(-8.5)
+
+        assert len(asked) == 1
+        name, given = asked[0]
+        assert name == "sketch_pocket"
+        assert given["depth"] == pytest.approx(8.5)
+        assert given["sketch"], "die ausgeschnittene Zeichnung reist mit"
+    finally:
+        window.session.last_result = None
+        window.close()
+        window.deleteLater()
+
+
 def test_the_height_limits_come_from_the_schema(qt_app: QApplication) -> None:
     """Die Grenzen der Ansicht sind die der Operation.
 
@@ -4194,14 +4426,14 @@ def test_the_bar_line_follows_the_drawing_and_does_not_age(qt_app: QApplication)
         assert panel is not None
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         panel.choose_plane("plane:xz")
-        assert "Am Umriss ziehen" in window._sketch_hint.text(), window._sketch_hint.text()
+        assert "Pfeil:" in window._sketch_hint.text(), window._sketch_hint.text()
 
         # Eine lose Linie öffnet den Umriss — ab jetzt geht die Geste nicht.
         panel.canvas.add_element("line", ((60.0, 60.0), (80.0, 70.0)))
         assert not panel.canvas.outline, "der Umriss ist jetzt offen"
 
         after = window._sketch_hint.text()
-        assert "Am Umriss ziehen" not in after, after
+        assert "Pfeil:" not in after, after
         assert window._sketch_pull_offer() in after, after
     finally:
         window.finish_sketch(keep=False)

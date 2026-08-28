@@ -2399,6 +2399,7 @@
   "Region": "Regione",
   "Regler schiebt die Teile auseinander. Nur die Ansicht — was exportiert wird, bleibt, wo es ist.": "Il cursore allontana i pezzi l'uno dall'altro. Solo la vista — ciò che viene esportato resta dov'è.",
   "Relief auflegen": "Applica un rilievo",
+  "Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.": "Freccia: estrudi il corpo · Croce: taglia una tasca.",
   "Reparatur": "Riparazione",
   "Reparaturkette": "Catena di riparazione",
   "Reparieren": "Ripara",
@@ -2443,6 +2444,7 @@
   "Rückfragen": "Domande poste",
   "Rückgabewert": "Codice di uscita",
   "Rückgängig": "Annulla",
+  "Punkt oder Element anklicken; mit Strg mehrere auswählen.": "Fare clic su un punto o un elemento; tenere premuto Ctrl per selezionarne più di uno.",
   "Rückgängig nimmt alles zurück.": "Annulla ritira tutto.",
   "Rückmeldung geben": "Dare un riscontro",
   "Rückmeldung senden": "Invia un riscontro",
@@ -2479,6 +2481,8 @@
   "Schlauch": "Tubo flessibile",
   "Schlechtester Fall": "Caso peggiore",
   "Schließen": "Chiudi",
+  "Rechteck: Gegenecke klicken oder Breite und Höhe eintippen.": "Rettangolo: fai clic sull'angolo opposto oppure inserisci larghezza e altezza.",
+  "Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke.": "Rettangolo: il primo clic imposta un angolo, il secondo quello opposto.",
   "Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus.": "Chiude i fori, rimuove i triangoli degeneri e orienta le facce.",
   "Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen.": "Chiude i fori piccoli. Non può sostituire una parete mancante.",
   "Schlägt in der Normteiltabelle nach": "Consulta la tabella dei pezzi normalizzati",
@@ -3448,5 +3452,6 @@
   "Die Bohrung hat bereits diesen Durchmesser.": "Il foro ha già questo diametro.",
   "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Il foro modificato è stato calcolato, ma successivamente non è stato riconosciuto. Crea un rapporto di errore con il modello interessato.",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
-  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» ha convertito le facce e gli spigoli modificabili singolarmente in triangoli fissi. Questo strumento deve trovarsi prima di quel passaggio nella cronologia. Annulla i passaggi da quel punto, applica lo strumento e ricrea i passaggi rimanenti."
+  "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» ha convertito le facce e gli spigoli modificabili singolarmente in triangoli fissi. Questo strumento deve trovarsi prima di quel passaggio nella cronologia. Annulla i passaggi da quel punto, applica lo strumento e ricrea i passaggi rimanenti.",
+  "🔒": "🔒"
 }
