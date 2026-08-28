@@ -27,6 +27,9 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QSizePolicy,
+    QStyle,
+    QStyleOptionComboBox,
+    QStylePainter,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -1534,6 +1537,47 @@ def _empty_parameters_text() -> str:
     )
 
 
+class _CompactParameterUnitBox(QComboBox):
+    """Zeigt die gewählte Einheit kurz und die Auswahlliste ausführlich.
+
+    Die linke Karte ist 260 Pixel breit. Ein geschlossener Eintrag wie
+    „mm — Länge“ beanspruchte dort fast so viel Platz wie die Zahl selbst;
+    aufgeklappt ist die Erklärung dagegen genau richtig. Deshalb zeichnet nur
+    die geschlossene Auswahl den gespeicherten Code. Die Einträge im Menü
+    bleiben unverändert und erklären weiterhin ihre Bedeutung.
+    """
+
+    def _compact_text(self) -> str:
+        # Keine Einheit ist absichtlich leer. Im geöffneten Menü steht weiter
+        # der übersetzte Satz „ohne Einheit“; ein erfundenes Symbol in der
+        # geschlossenen Anzeige wäre dagegen ein weiterer Oberflächentext.
+        return str(self.currentData() or "")
+
+    def paintEvent(self, _event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        option.currentText = self._compact_text()
+        painter = QStylePainter(self)
+        painter.drawComplexControl(QStyle.ComplexControl.CC_ComboBox, option)
+        painter.drawControl(QStyle.ControlElement.CE_ComboBoxLabel, option)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt gibt den Namen
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        codes = [str(self.itemData(index) or "") for index in range(self.count())]
+        width = max((self.fontMetrics().horizontalAdvance(code) for code in codes), default=0)
+        content = QSize(width + 2 * TIGHT, super().sizeHint().height())
+        return self.style().sizeFromContents(
+            QStyle.ContentsType.CT_ComboBox,
+            option,
+            content,
+            self,
+        )
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt gibt den Namen
+        return self.sizeHint()
+
+
 class ParameterPanel(QWidget):
     """Benannte Projektmaße; an einer Zahl zu drehen baut das Modell
     neu (§13).
@@ -1566,6 +1610,8 @@ class ParameterPanel(QWidget):
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
         self._unit_editors: dict[str, QComboBox] = {}
+        self._detail_buttons: dict[str, QToolButton] = {}
+        """Der sichtbare Weg zu Grenzen, Einheit und Ausdruck jeder Zeile."""
         self._rows: dict[QWidget, str] = {}
         """Welches Widget zu welchem Parameter gehört — für das Kontextmenü.
 
@@ -1632,7 +1678,7 @@ class ParameterPanel(QWidget):
         # Ein Menü zeigt Hinweise nur, wenn man es ihm sagt — sonst kommt der
         # Satz an und Qt zeigt ihn nie.
         menu.setToolTipsVisible(True)
-        entry = menu.addAction(tr("Grenzen ändern …"))
+        entry = menu.addAction(tr("Ändern …"))
         note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
         entry.setToolTip(note)
         entry.setStatusTip(note)
@@ -1682,24 +1728,49 @@ class ParameterPanel(QWidget):
 
     def _unit_editor(self, name: str, selected: str) -> QComboBox:
         """Die kompakte, nicht editierbare Einheitenauswahl einer Zeile."""
-        editor = QComboBox(self)
+        editor = _CompactParameterUnitBox(self)
         fill_parameter_units(editor, selected)
         editor.setProperty("parameterName", name)
         editor.setAccessibleName(tr("Einheit"))
-        editor.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
         editor.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         editor.activated.connect(self._unit_activated)
         self._unit_editors[name] = editor
         return editor
 
+    def _details_clicked(self) -> None:
+        """Öffnet die erweiterten Angaben der angeklickten Parameterzeile."""
+        button = self.sender()
+        if not isinstance(button, QToolButton):
+            return
+        name = str(button.property("parameterName") or "")
+        if name:
+            self.limitsRequested.emit(name)
+
     def _add_parameter_row(self, name: str, title: str, value: QWidget, unit: QComboBox) -> None:
-        """Zahl und anklickbare Einheit als eine beschriftete Zeile."""
+        """Zahl, Einheit und sichtbaren Änderungsweg als eine Zeile."""
         row = QWidget(self)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(TIGHT)
         layout.addWidget(value, 1)
         layout.addWidget(unit)
+        details = QToolButton(row)
+        # Das ausführliche Wort würde neben Zahl und Einheit die 260-Pixel-
+        # Karte sprengen. Die Ellipse ist der sichtbare „mehr“-Knopf; Tooltip
+        # und zugänglicher Name sagen ohne Symbolwissen, was dahinterliegt.
+        # Auch das sichtbare Symbol kommt aus dem Katalog (Regel 20). Jede
+        # Übersetzung von „Ändern …“ endet mit derselben typografischen
+        # Ellipse; nur sie wird in der schmalen Zeile gezeichnet.
+        details.setText(tr("Ändern …")[-1])
+        details.setAutoRaise(True)
+        note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
+        details.setToolTip(note)
+        details.setStatusTip(note)
+        details.setAccessibleName(tr("Parameter ändern"))
+        details.setProperty("parameterName", name)
+        details.clicked.connect(self._details_clicked)
+        layout.addWidget(details)
+        self._detail_buttons[name] = details
         self._form.addRow(title, row)
         self._remember_row(name, row)
 
@@ -1708,6 +1779,7 @@ class ParameterPanel(QWidget):
             self._form.removeRow(0)
         self._editors.clear()
         self._unit_editors.clear()
+        self._detail_buttons.clear()
         # **Vor dem Neuaufbau leeren, nicht danach.** ``removeRow`` löscht die
         # Widgets der alten Zeilen; ein Eintrag, der auf ein totes C++-Objekt
         # zeigt, beantwortet den nächsten Rechtsklick mit einem Absturz.
@@ -1728,6 +1800,11 @@ class ParameterPanel(QWidget):
                 # besitzt sie.
                 label = QLabel(localised(f"{parameter.value:.2f}"), self)
                 label.setToolTip(parameter.expression)
+                # Wie die Spinbox darf auch die reine Anzeige in der festen
+                # linken Karte den Restplatz nutzen. Ohne ``Ignored`` machte
+                # allein „42,00“ die Karte breiter als ihre vorgesehenen
+                # 260 Pixel, obwohl die echte Schrift dort bequem hineinpasst.
+                label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
                 self._add_parameter_row(name, f"{parameter.title or name}", label, unit)
                 # Auch die abgeleitete Zeile: Ihr Ausdruck ist genau das, was
                 # man an ihr ändern will, und bearbeiten lässt sie sich sonst
@@ -1739,6 +1816,11 @@ class ParameterPanel(QWidget):
             editor.setMaximum(parameter.maximum if parameter.maximum is not None else 100_000.0)
             editor.setValue(parameter.value)
             editor.setKeyboardTracking(False)
+            # Der Wertebereich bestimmt sonst die Mindestbreite der Spinbox:
+            # ±100 000 verlangt 156 Pixel, obwohl die aktuelle Zahl kurz ist.
+            # In der festen linken Karte darf das Feld schrumpfen und nutzt den
+            # Platz, der nach Einheit und Mehr-Knopf übrig bleibt.
+            editor.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             editor.valueChanged.connect(
                 lambda value, key=name: self._queue_parameter_edit(key, value)
             )

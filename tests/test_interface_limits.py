@@ -90,6 +90,46 @@ def test_the_tool_strip_stays_a_single_row(window: MainWindow) -> None:
     )
 
 
+def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
+    qt_app: QApplication,
+) -> None:
+    """Maßeinstellungen sind sichtbar erreichbar, ohne die Karte zu verbreitern.
+
+    Der Rechtsklick bleibt ein schneller Nebenweg. Für Einsteiger steht aber
+    in jeder Zeile ein kleiner Mehr-Knopf. Geschlossen zeigt die Einheit nur
+    ihren Code; aufgeklappt erklärt dieselbe Auswahl weiterhin ihre Bedeutung.
+    """
+    from app.core.types import Document, Parameter
+    from app.ui.overlay import LEFT_WIDTH
+    from app.ui.panels import ParameterPanel
+
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["breite"] = Parameter(name="breite", value=40.0, unit="mm")
+    document.parameters["halb"] = Parameter(
+        name="halb", value=20.0, unit="mm", expression="=@breite/2"
+    )
+    document.parameters["anzahl"] = Parameter(name="anzahl", value=4.0, unit="")
+    panel = ParameterPanel()
+    panel.show_document(document)
+
+    unit = panel._unit_editors["breite"]
+    assert unit.currentText() == "mm — Länge", "die Auswahlliste erklärt die Einheit"
+    assert unit._compact_text() == "mm", "geschlossen bleibt die schmale Karte ruhig"
+    unitless = panel._unit_editors["anzahl"]
+    assert unitless.currentText() == "ohne Einheit"
+    assert unitless._compact_text() == ""
+    assert panel.minimumSizeHint().width() <= LEFT_WIDTH, "die Zeilen passen in die linke Karte"
+
+    gerufen: list[str] = []
+    panel.limitsRequested.connect(gerufen.append)
+    details = panel._detail_buttons["halb"]
+    assert details.text() == "…"
+    assert details.accessibleName() == "Parameter ändern"
+    assert details.toolTip(), "der kompakte Knopf erklärt seinen Umfang"
+    details.click()
+    assert gerufen == ["halb"], "der sichtbare Knopf nennt seine Zeile"
+
+
 def test_no_operation_floods_the_front_of_its_dialog() -> None:
     """Tiefe gehört hinter die Klappe, nicht auf die Vorderseite (§2.5)."""
     over = {
