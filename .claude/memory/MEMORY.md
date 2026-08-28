@@ -58,6 +58,8 @@
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „das heilt sich später von selbst" setzt jemanden voraus, der heilen kann; die Urheber-Sitzung war seit zwei Stunden beendet.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — bevor man eine Wissenslücke behauptet, sucht man über py/md/toml, nicht nur Markdown; Regeln stehen auch im eingecheckten Hook, und der injiziert sie oben in den eigenen Kontext.
 
+- [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML als Artifact; jede neue beginnt mit dem Übertrag, und jeder „offene“ Punkt der Vorversion wird am Code nachgemessen, nicht abgeschrieben.
+
 ## Haltung
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
 
