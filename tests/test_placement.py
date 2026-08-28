@@ -121,9 +121,9 @@ def test_resizing_a_bore_starts_with_its_measured_diameter() -> None:
     der Schemavorgabe 5,00. Ein unverändertes Bestätigen hätte das Teil also
     verändert — das Gegenteil eines einfachen, sicheren Kundenwegs.
     """
-    values = values_for(REGISTRY.get("resize_hole"), hole(diameter=5.1901))
+    values = values_for(REGISTRY.get("resize_hole"), hole(diameter=6.00004))
 
-    assert values == {"at_feature": "hole_1", "diameter": pytest.approx(5.1901)}
+    assert values == {"at_feature": "hole_1", "diameter": pytest.approx(6.00004)}
 
 
 def test_an_operation_that_names_features_gets_the_name() -> None:

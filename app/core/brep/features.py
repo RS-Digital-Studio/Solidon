@@ -159,10 +159,14 @@ def _describe(
             }
 
         return "hole" if hollow else "pin", {
-            "diameter": round(radius * 2.0, 4),
+            # Der Kern behält das Topologiemaß in doppelter Genauigkeit.
+            # Gerundet wird erst in Baum und Dialog: Eine Bearbeitung, die
+            # daraus wieder einen exakten Zylinder baut, darf sonst einen
+            # losen Ring oder eine hauchdünne alte Lippe erzeugen.
+            "diameter": radius * 2.0,
             "centre": middle,
             "axis": (axis.X(), axis.Y(), axis.Z()),
-            "depth": round(depth, 4),
+            "depth": depth,
         }
 
     if kind == GeomAbs_Sphere:

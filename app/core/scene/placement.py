@@ -276,7 +276,11 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         if spec.name in MEASURED_DIAMETER_OPS and feature.kind == "hole":
             diameter = feature.params.get("diameter")
             if isinstance(diameter, int | float) and "diameter" in names:
-                feature_values["diameter"] = round(float(diameter), 4)
+                # Der Zahleneditor zeigt passend gerundet, bewahrt aber einen
+                # unangetasteten Kernwert vollständig. Hier vorher zu runden
+                # würde genau diese sichere Anzeige umgehen und ein bloßes
+                # Öffnen und Bestätigen zum Geometrieschritt machen.
+                feature_values["diameter"] = float(diameter)
         return feature_values
 
     values: dict[str, Any] = {}

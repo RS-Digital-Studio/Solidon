@@ -205,7 +205,11 @@ def resize_bore(
     if length <= EPS_GEOM:
         raise ValueError("a bore direction must not be zero")
     unit = vector / length
-    height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
+    grows = cut_diameter > previous_diameter
+    # Nur ein abziehendes Werkzeug darf über beide Mündungen hinausragen.
+    # Beim Verkleinern wird der Ring vereinigt; dieselbe Zugabe würde dann an
+    # beiden Außenseiten als tastbarer Kragen Teil des Modells werden.
+    height = depth + (BOOLEAN_OVERLAP * 2.0 if through and grows else 0.0)
     if height <= EPS_GEOM:
         raise ValueError("a detected bore must have a positive depth")
     to_world = np.asarray(
@@ -219,7 +223,7 @@ def resize_bore(
     local_mesh = mesh.replacing(local_body)
 
     kind: BooleanKind
-    if cut_diameter > previous_diameter:
+    if grows:
         tool = trimesh.creation.cylinder(
             radius=cut_diameter / 2.0,
             height=height,

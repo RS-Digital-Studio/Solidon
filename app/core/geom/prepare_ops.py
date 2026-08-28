@@ -8,6 +8,7 @@ Operation, wenn die Alternative eine Überraschung am Drucker ist.
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Sequence
 from functools import lru_cache
 from typing import cast
@@ -253,6 +254,7 @@ class ResizeHoleParams(BaseParams):
         unit="mm",
         minimum=0.2,
         maximum=200.0,
+        placement="front",
         doc=_(
             "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht "
             "hier zuerst ihr gemessenes Maß."
@@ -355,13 +357,15 @@ def resize_hole(ctx: OpContext) -> OpResult:
             findings=findings,
         )
 
+    body = as_mesh_data(source.mesh)
+    exact_depth = _mesh_bore_depth(body, feature, axis, depth)
     result = resize_bore(
-        as_mesh_data(source.mesh),
+        body,
         position=centre,
         direction=axis,
         previous_diameter=previous,
         diameter=params.diameter,
-        depth=depth,
+        depth=exact_depth,
         through=bool(feature.params.get("through", False)),
         profile=ctx.profile,
         compensate=params.compensate,
@@ -445,6 +449,31 @@ def _bore_number(feature: Feature, name: str) -> float:
             constraint="no_geometry",
         )
     return float(value)
+
+
+def _mesh_bore_depth(
+    mesh: MeshData,
+    feature: Feature,
+    axis: tuple[float, float, float],
+    fallback: float,
+) -> float:
+    """Liest die volle Zylinderlänge aus den gewählten Wanddreiecken.
+
+    Die Merkmalswerte sind für Auswahl und Anzeige stabil quantisiert. Für
+    das Werkzeug zählt dagegen jeder vorhandene Eckpunkt: Ein um wenige
+    Zehntausendstel verkürzter Ring kann ein Sackloch bei der nächsten
+    Erkennung fälschlich als durchgehend erscheinen lassen.
+    """
+    raw = mesh.raw
+    valid = [index for index in feature.face_indices if 0 <= index < len(raw.faces)]
+    length = math.sqrt(sum(value * value for value in axis))
+    if not valid or length <= EPS_GEOM:
+        return fallback
+    unit = tuple(value / length for value in axis)
+    vertices = raw.vertices[raw.faces[valid].reshape(-1)]
+    along = vertices[:, 0] * unit[0] + vertices[:, 1] * unit[1] + vertices[:, 2] * unit[2]
+    span = float(along.max() - along.min())
+    return span if math.isfinite(span) and span > EPS_GEOM else fallback
 
 
 def _unchanged_bore(diameter: float) -> Finding:
