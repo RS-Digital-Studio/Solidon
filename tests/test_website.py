@@ -1055,6 +1055,20 @@ def test_no_two_values_share_a_spot_and_a_moment() -> None:
     )
 
 
+def test_the_mobile_hero_is_visible_without_waiting_for_an_animation() -> None:
+    """Der erste Handybildschirm darf nicht wie eine leere Seite wirken.
+
+    Die gestaffelte Ladeanimation hielt Überschrift, Einleitung und Download
+    zunächst unsichtbar. Auf 390 Pixeln blieb dadurch unter der Kopfzeile fast
+    nur das Hintergrundraster stehen — genau dort, wo der Nutzen sofort lesbar
+    sein muss. Der letzte schmale Breakpoint schaltet nur diese Einblendung ab.
+    """
+    css = (WEBSITE / "style.css").read_text(encoding="utf-8")
+    mobile = css.rsplit("@media (max-width: 30rem)", maxsplit=1)[-1]
+
+    assert ".hero-text > * { animation: none; }" in mobile
+
+
 def test_every_reference_carries_the_stamp_of_the_file_it_points_at() -> None:
     """Jeder Verweis auf eine eigene Datei trägt deren aktuellen Inhaltsstempel.
 

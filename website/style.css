@@ -2540,6 +2540,12 @@ p.footnote {
 @media (max-width: 30rem) {
   .wrap { padding: 0 0.9rem; }
 
+  /* Auf dem kleinen Bildschirm liegt der gesamte erste Eindruck untereinander.
+     Die gestaffelte Einblendung ließ dort nach der bereits sichtbaren
+     Überschrift kurz eine fast leere Seite stehen. Der Aufmacher ist deshalb
+     sofort da; weiter unten darf die Bewegung als Orientierung bleiben. */
+  .hero-text > * { animation: none; }
+
   .download { padding: 1rem; }
   .donate { align-items: flex-start; flex-direction: column; }
   .price-card { padding: 1.1rem; }
