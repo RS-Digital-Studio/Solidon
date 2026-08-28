@@ -1050,8 +1050,8 @@ def test_a_field_without_effect_says_so() -> None:
     assert not missing, "bedingte Felder ohne ``depends_on``:\n" + "\n".join(missing)
 
 
-def test_every_dependent_field_names_a_real_switch() -> None:
-    """Und andersherum: keine Angabe zeigt auf etwas, das es nicht gibt.
+def test_every_dependent_field_names_a_real_switch_without_a_cycle() -> None:
+    """Und andersherum: keine Angabe zeigt ins Leere oder im Kreis.
 
     Ein ``depends_on`` auf einen umbenannten Parameter wäre stumm wirkungslos —
     die Regel in ``_dependent_fields`` verlangt beide Namen im Dialog und
@@ -1079,6 +1079,19 @@ def test_every_dependent_field_names_a_real_switch() -> None:
                     assert value in governing.choices, (
                         f"{spec.name}.{controller}: {value!r} ist keine Wahl"
                     )
+
+            # Eine Kette ist erlaubt und für die Scheibentasche nötig; ein
+            # Kreis hätte dagegen weder einen wirksamen noch einen klar
+            # erklärbaren Zustand.
+            path = {entry.name}
+            current = entry
+            while current.depends_on is not None:
+                parent, _ = current.depends_on
+                assert parent not in path, (
+                    f"{spec.name}.{entry.name}: Abhängigkeitskreis bei {parent}"
+                )
+                path.add(parent)
+                current = entries[parent]
 
 
 def _title_of(spec: Any, name: str) -> str:
@@ -1413,6 +1426,39 @@ def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
             switch.setCurrentIndex(switch.findData(other))
         assert not field.isEnabled(), f"{spec.name}.{entry.name} bleibt bedienbar"
         assert field.toolTip(), f"{spec.name}.{entry.name}: ausgegraut ohne Begründung"
+
+
+def test_a_nested_condition_follows_the_whole_chain(window: MainWindow) -> None:
+    """Ein angehaktes, aber selbst unwirksames Feld darf nichts freischalten.
+
+    Beim Schraubenloch lässt sich die Scheibe nur ohne Senkkopf einlassen. Wer
+    sie anhakt und danach den Senkkopf wieder einschaltet, behält den Haken zur
+    späteren Rückkehr — *Spiel* muss trotzdem grau werden, weil die Operation
+    in diesem Zweig weder Scheibe noch Spiel benutzt. Dieselbe vollständige
+    Kette brauchen Handbuch und Agent.
+    """
+    from app.core.registry.params import condition_text
+
+    spec = REGISTRY.get("insert_screw_hole")
+    entries = {entry.name: entry for entry in spec.params.spec()}
+    play_condition = condition_text(entries["play"], spec.params.spec(), keys=True)
+
+    assert "washer" in play_condition
+    assert "countersink" in play_condition
+
+    dialog = OperationDialog(spec, {}, window)
+    countersink = dialog._editors["countersink"]
+    washer = dialog._editors["washer"]
+    play = dialog._editors["play"]
+
+    countersink.setChecked(False)
+    washer.setChecked(True)
+    assert washer.isEnabled() and play.isEnabled()
+
+    countersink.setChecked(True)
+    assert not washer.isEnabled()
+    assert not play.isEnabled()
+    assert "Senkkopf" in play.toolTip()
 
 
 def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> None:

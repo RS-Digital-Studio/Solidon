@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
 
 from app.core import expressions
 from app.core.errors import AppError
-from app.core.registry import OperationSpec, caveat_line
+from app.core.registry import OperationSpec, caveat_line, inactive_dependency
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
@@ -680,18 +680,6 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
     return (max(xs) - min(xs), max(ys) - min(ys))
 
 
-def _same_choice(entered: Any, wanted: str | bool) -> bool:
-    """Ob der eingetragene Wert der gesuchte ist — ohne ``str()`` dazwischen.
-
-    ``bool`` und ``int`` sind in Python vergleichbar (``1 == True``), und ein
-    Auswahlwert ist eine Zeichenkette. Verglichen wird deshalb erst die Art,
-    dann der Wert: Sonst machte eine Anzahl von 1 einen Haken wahr.
-    """
-    if isinstance(wanted, bool):
-        return isinstance(entered, bool) and entered is wanted
-    return isinstance(entered, str) and entered == wanted
-
-
 def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
     """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
 
@@ -1188,9 +1176,10 @@ class OperationDialog(QDialog):
         # die Schwelle: über eine Handvoll hinaus gehört die Abhängigkeit an den
         # Parameter — dort steht sie jetzt (``ParamSpec.depends_on``), und
         # Handbuch und Agent lesen dieselbe Quelle.
+        schema = self.spec.params.spec()
         rules = [
-            (entry.name, *entry.depends_on)
-            for entry in self.spec.params.spec()
+            entry
+            for entry in schema
             if entry.depends_on is not None
             and entry.name in self._editors
             and entry.depends_on[0] in self._editors
@@ -1202,14 +1191,12 @@ class OperationDialog(QDialog):
 
         def follow() -> None:
             entered = self.values()
-            for name, controller, wanted in rules:
-                editor = self._editors[name]
-                # Typtreu verglichen, nicht über ``str()``: Der eine Haken in
-                # der Tabelle käme dort als „True" an, und dann stünde ein
-                # Python-Detail in einer Zusage an den Nutzer.
-                active = any(_same_choice(entered.get(controller), want) for want in wanted)
+            for entry in rules:
+                editor = self._editors[entry.name]
+                inactive = inactive_dependency(entry, schema, entered)
+                active = inactive is None
                 editor.setEnabled(active)
-                label = self._rows[name].labelForField(editor)
+                label = self._rows[entry.name].labelForField(editor)
                 if label is not None:
                     label.setEnabled(active)
                 # Beide Hälften sagen dasselbe — bei einer ausgegrauten Zeile
@@ -1218,7 +1205,9 @@ class OperationDialog(QDialog):
                 _explain(
                     editor,
                     label,
-                    docs[name] if active else _why_inactive(titles[controller], wanted[0]),
+                    docs[entry.name]
+                    if active
+                    else _why_inactive(titles[inactive[0]], inactive[1][0]),
                 )
 
         self.valuesChanged.connect(follow)

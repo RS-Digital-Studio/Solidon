@@ -2143,6 +2143,30 @@ def test_a_recessed_washer_follows_the_screw_head_depth() -> None:
     assert recess.params["depth"] == pytest.approx(washer.thickness)
 
 
+def test_a_recessed_washer_remains_reachable_from_the_surface() -> None:
+    """Die Scheibe darf nicht hinter einer engeren Kopftasche eingeschlossen sein."""
+    spec = PARTS.get("screw_hole")
+    washer = standards.washer("M4")
+    head_depth = 3.0
+    play = 0.2
+    built = spec.fn(
+        spec.params(
+            size="M4",
+            depth=10.0,
+            countersink=False,
+            head_room=head_depth,
+            washer=True,
+            play=play,
+        )
+    )
+
+    # In der Mitte der Kopftiefe muss die ganze Scheibe hindurchpassen. Eine
+    # nur kopfbreite Öffnung über einer größeren Scheibentasche wäre ein
+    # unsichtbarer Hinterschnitt: druckbar, aber nicht montierbar.
+    access = _section_diameter(built.mesh, -head_depth / 2.0)
+    assert access == pytest.approx(washer.outer + play, abs=0.02)
+
+
 def test_short_and_regular_heatset_inserts_cut_their_named_depth() -> None:
     """Im Feld wählt man die gekaufte Länge; dieselbe muss im Modell ankommen."""
     spec = PARTS.get("heatset_m4")

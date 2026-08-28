@@ -361,6 +361,75 @@ _JSON_TYPE: dict[ParamKind, str] = {
 GATHERED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
 
 
+def dependency_conditions(
+    entry: ParamSpec, schema: tuple[ParamSpec, ...]
+) -> tuple[tuple[str, tuple[str | bool, ...]], ...]:
+    """Alle Bedingungen eines Feldes, von der direkten bis zur äußersten.
+
+    Ein Steuerfeld kann selbst bedingt sein. Beim Schraubenloch wirkt *Spiel*
+    nur mit angehaktem *Unterlegscheibe einlassen*, und dieser Haken wiederum
+    nur ohne Senkkopf. Wer allein die direkte Bedingung liest, hält einen
+    gespeicherten, aber gerade unwirksamen Haken fälschlich für aktiv.
+
+    Ein Zyklus ist ein fehlerhaftes Schema; die Registerprüfung meldet ihn.
+    Hier wird er zusätzlich beendet, damit Handbuch oder Dialog bei einem
+    solchen Programmierfehler nicht hängen bleiben.
+    """
+    declared = {item.name: item for item in schema}
+    conditions: list[tuple[str, tuple[str | bool, ...]]] = []
+    seen = {entry.name}
+    current = entry
+    while current.depends_on is not None:
+        controller, wanted = current.depends_on
+        if controller in seen:
+            break
+        conditions.append((controller, wanted))
+        seen.add(controller)
+        parent = declared.get(controller)
+        if parent is None:
+            break
+        current = parent
+    return tuple(conditions)
+
+
+def _same_dependency_value(entered: Any, wanted: str | bool) -> bool:
+    """Ein Abhängigkeitswert, ohne die Gleichheit von ``bool`` und ``int``."""
+    if isinstance(wanted, bool):
+        return isinstance(entered, bool) and entered is wanted
+    return isinstance(entered, str) and entered == wanted
+
+
+def inactive_dependency(
+    entry: ParamSpec, schema: tuple[ParamSpec, ...], values: Mapping[str, Any]
+) -> tuple[str, tuple[str | bool, ...]] | None:
+    """Die erste nicht erfüllte Bedingung eines Feldes, oder ``None``.
+
+    Die Rückgabe nennt bewusst den wirklichen Grund. Ist *Unterlegscheibe*
+    noch angehakt, aber wegen *Senkkopf* unwirksam, erklärt der Dialog den
+    Senkkopf statt den sichtbar gesetzten und damit scheinbar passenden Haken.
+    """
+    for controller, wanted in dependency_conditions(entry, schema):
+        if not any(_same_dependency_value(values.get(controller), value) for value in wanted):
+            return controller, wanted
+    return None
+
+
+def _condition_sentence(
+    controller: str,
+    wanted: tuple[str | bool, ...],
+    titles: Mapping[str, str],
+    keys: bool,
+) -> str:
+    """Eine einzelne Bedingung für Mensch oder Agent formulieren."""
+    name = controller if keys else titles.get(controller, controller)
+    if any(isinstance(value, bool) for value in wanted):
+        if all(value is True for value in wanted):
+            return str(_("Gilt bei angehaktem {field}.")).format(field=name)
+        return str(_("Gilt bei nicht angehaktem {field}.")).format(field=name)
+    shown = ", ".join(str(value) for value in wanted)
+    return str(_("Gilt bei {field} = {value}.")).format(field=name, value=shown)
+
+
 def condition_text(entry: ParamSpec, schema: tuple[ParamSpec, ...], keys: bool = False) -> str:
     """Unter welcher Bedingung dieser Parameter wirkt — als Satz, oder leer.
 
@@ -382,17 +451,11 @@ def condition_text(entry: ParamSpec, schema: tuple[ParamSpec, ...], keys: bool =
     Sie steht hier und nicht bei den Oberflächen, weil ``json_schema`` sie
     braucht — und ``surfaces`` importiert dieses Modul, nicht umgekehrt.
     """
-    if entry.depends_on is None:
-        return ""
-    controller, wanted = entry.depends_on
     titles = {item.name: str(item.title) for item in schema}
-    name = controller if keys else titles.get(controller, controller)
-    if any(isinstance(value, bool) for value in wanted):
-        if all(value is True for value in wanted):
-            return str(_("Gilt bei angehaktem {field}.")).format(field=name)
-        return str(_("Gilt bei nicht angehaktem {field}.")).format(field=name)
-    shown = ", ".join(str(value) for value in wanted)
-    return str(_("Gilt bei {field} = {value}.")).format(field=name, value=shown)
+    return " ".join(
+        _condition_sentence(controller, wanted, titles, keys)
+        for controller, wanted in dependency_conditions(entry, schema)
+    )
 
 
 def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:

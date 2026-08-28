@@ -19,6 +19,7 @@ einem modalen Meldungsfenster.
 
 from __future__ import annotations
 
+from html import escape
 from pathlib import Path
 
 import pytest
@@ -42,6 +43,10 @@ from tools.make_figures import SAMPLE_FINDINGS, SAMPLE_OBJECT
 WEBSITE_PAGES = {
     "de": Path(__file__).parent.parent / "website" / "handbuch.html",
     "en": Path(__file__).parent.parent / "website" / "en" / "manual.html",
+    "es": Path(__file__).parent.parent / "website" / "es" / "manual.html",
+    "fr": Path(__file__).parent.parent / "website" / "fr" / "manual.html",
+    "it": Path(__file__).parent.parent / "website" / "it" / "manual.html",
+    "pt": Path(__file__).parent.parent / "website" / "pt" / "manual.html",
 }
 
 
@@ -107,6 +112,45 @@ def test_the_website_page_carries_every_chapter(language: str) -> None:
 
 
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_website_reference_carries_every_operation_and_parameter(language: str) -> None:
+    """Ein neues Feld darf nicht hinter einer unveränderten Kapitelüberschrift fehlen.
+
+    Die Kapitelprüfung darüber sah den neuen Lagersitz nicht: Er kam in die
+    bestehende Kategorie *Bausteine*, deren Überschrift schon im alten HTML
+    stand. Geprüft wird deshalb die Referenz selbst — jede Operation und jedes
+    ihrer dort einzeln aufgeführten Felder, in allen sechs Sprachfassungen.
+    """
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    missing: list[str] = []
+    for spec in REGISTRY.all():
+        # Das schließende ``h4`` unterscheidet den Referenzeintrag von der
+        # gleichlautenden Kennung in der kurzen Operationsliste davor.
+        marker = f"(<code>{spec.name}</code>)</h4>"
+        start = html.find(marker)
+        if start < 0:
+            missing.append(spec.name)
+            continue
+        end = html.find("<h4>", start + len(marker))
+        section = html[start : end if end >= 0 else len(html)]
+        parameters = spec.params.spec()
+        if spec.category == "parts":
+            parameters = tuple(
+                entry for entry in parameters if entry.name not in PART_PLACEMENT_PARAMS
+            )
+        for entry in parameters:
+            if f"<code>{entry.name}</code>" not in section:
+                missing.append(f"{spec.name}.{entry.name}")
+
+    assert not missing, (
+        f"{WEBSITE_PAGES[language].name} hat eine veraltete Referenz:\n"
+        + "\n".join(missing)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_every_figure_of_the_website_page_is_there(language: str) -> None:
     """Jede Abbildung, die die Seite nennt, liegt auch daneben.
 
@@ -158,17 +202,17 @@ def test_the_website_page_carries_the_generated_reference(language: str) -> None
         html = page.read_text(encoding="utf-8")
         missing: list[str] = []
         for spec in REGISTRY.all():
-            if str(spec.title) not in html:
+            if escape(str(spec.title)) not in html:
                 missing.append(f"{spec.name}: Titel")
             # Der Vorbehalt selbst und nicht die ganze Zeile: Im Handbuch
             # steht sein Vorwort halbfett, also als ``<strong>`` und nicht
             # mit den Sternchen, die ``caveat_line`` setzt.
-            if spec.caveat and str(spec.caveat) not in html:
+            if spec.caveat and escape(str(spec.caveat)) not in html:
                 missing.append(f"{spec.name}: Vorbehalt")
             schema = spec.params.spec()
             for entry in schema:
                 condition = condition_text(entry, schema)
-                if condition and condition not in html:
+                if condition and escape(condition) not in html:
                     missing.append(f"{spec.name}.{entry.name}: {condition}")
     finally:
         set_language("de")

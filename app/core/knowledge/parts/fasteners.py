@@ -210,6 +210,8 @@ def screw_hole(raw: BaseParams) -> PartResult:
     # Fläche und trug nichts ab. Ohne Kopffreiheit ist ``top`` null und alles
     # bleibt, wo es war.
     top = -params.head_room
+    washer = standards.washer(params.size) if params.washer and not params.countersink else None
+    washer_diameter = washer.outer + params.play if washer is not None else 0.0
 
     if params.countersink:
         # Eine 90-Grad-Senkung ist so tief, wie der Kopf breit ist, halbiert.
@@ -223,14 +225,17 @@ def screw_hole(raw: BaseParams) -> PartResult:
     if params.head_room > 0.0:
         # Von der Mündung (mit einem Hundertstel Überstand) bis über die Senkung
         # hinab, damit der Zylinder mit ihr zusammenhängt statt einen Spalt zu
-        # lassen.
+        # lassen. Liegt darunter eine Unterlegscheibe, bleibt der ganze Weg so
+        # breit wie die Scheibe: Eine kopfbreite Öffnung über einer größeren
+        # Tasche wäre ein gedruckter Hinterschnitt, durch den sich die Scheibe
+        # nicht einsetzen ließe.
         head_diameter = screw.countersink if params.countersink else screw.head
+        if washer is not None:
+            head_diameter = max(head_diameter, washer_diameter)
         room = shapes.cylinder(head_diameter, params.head_room + 2.0 * BOOLEAN_OVERLAP)
         parts.append(shapes.moved(room, (0.0, 0.0, top - BOOLEAN_OVERLAP)))
 
-    if params.washer and not params.countersink:
-        washer = standards.washer(params.size)
-        washer_diameter = washer.outer + params.play
+    if washer is not None:
         recess = shapes.cylinder(washer_diameter, washer.thickness + 2.0 * BOOLEAN_OVERLAP)
         # Die Scheibe ist die Auflage des Kopfes. Wird der Kopf abgesenkt,
         # muss deshalb ihre ganze Tasche mit nach unten — sonst endet die
