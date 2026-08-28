@@ -11512,12 +11512,17 @@ hindert; die drei behobenen stehen oben und hier.
   (`07858c4e`), während `constraints.txt` `pyinstaller==6.22.2` festnagelt.
   Gerade dessen Hooks entscheiden, was an Metadaten mitreist.
 
-- [ ] **CA-Zertifikate auf macOS** — neun Stellen sprechen HTTPS. Auf Windows
-  liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS
-  zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**,
-  und die reist nicht mit. Prüfbar nur an einem echten Mac-Paket: *Hilfe →
-  Nach Updates suchen* drücken. `certifi` ist ohnehin installiert, der
-  Rückfall wäre ein `ssl.create_default_context(cafile=certifi.where())`.
+- [ ] **CA-Zertifikate auf macOS — Rückfall gebaut, Paketbestätigung offen.**
+  Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`;
+  auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des
+  **Bauservers**, und die reist nicht mit. `app/core/network.py` setzt deshalb
+  im gebauten macOS-Prozess vor dem ersten Netzzugriff `SSL_CERT_FILE` auf den
+  mitgelieferten Mozilla-CA-Satz von `certifi`; eine ausdrücklich gesetzte
+  Firmen-CA gewinnt. Die Spec sammelt die Datendatei ausdrücklich ein,
+  Abhängigkeit, feste Version und MPL-2.0-Hinweis standen bereits im Baum und
+  sind jetzt auch als Laufzeitvertrag festgehalten. Drei Tests decken Paket,
+  Entwicklungsumgebung und Firmenvorgabe. Was von Windows aus nicht geht:
+  ein echtes `.pkg` starten und *Hilfe → Nach Updates suchen* drücken.
 
 - [ ] **Zwei Prüfungen halten weniger, als ihr Name sagt.**
   `test_packaging.py:82` steht auf „Was nur in einer Funktion importiert
@@ -12123,6 +12128,13 @@ Offen:
       Weg. Website, Handbuch und alle sechs Oberflächensprachen sagen gemeinsam:
       Zum Verkaufsstart gibt es keine Testphase, der gepflegte 14-Tage-Pfad ist
       lediglich deaktiviert.
+      Die Nachdurchsicht vom 28.08.2026 hat außerdem die fünf Anschlüsse
+      geschlossen: Der macOS-Vertrauensspeicher wird wirklich beim Start
+      gesetzt; eine verlorene Abmeldeantwort bleibt als sicher wiederholbarer
+      Auftrag bestehen; die Serversicherung vereinigt Hauptdatei und WAL;
+      alte Tageszähler werden beim nächsten gültigen Zugriff bereinigt und in
+      der Datenschutzerklärung genannt; der Videotext folgt direkt dem
+      Demo-/Teststand des jeweiligen Baus.
 - [ ] **Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet".**
       `tests/test_chat_ui.py::test_the_pull_shows_a_share_and_a_way_out` erwartet
       „liegt jetzt hier" in `KeyDialog.probe_result` und liest „Ollama hat nicht

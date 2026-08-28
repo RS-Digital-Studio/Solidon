@@ -6,7 +6,7 @@
 <title>Datenschutz — Solidon3D</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=bb1c08f3">
+<link rel="stylesheet" href="style.css?v=45167b05">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -118,13 +118,18 @@
     Geräteteil, den von Ihnen gewählten Gerätenamen, eine Anfragekennung und
     den kryptografischen Gerätenachweis. Der private Geräteteil bleibt im
     Schlüsselbund Ihres Betriebssystems.</p>
-    <p>Im Aktivierungsdienst speichern wir nur den Hash des Schlüssels, den
+    <p>Im Aktivierungsdienst speichern wir den Hash des Schlüssels, den
     öffentlichen Geräteteil, Gerätename, Aktivierungskennung sowie Aktivierungs-
     und Deaktivierungszeit. Das verhindert eine zweite gleichzeitige
-    Aktivierung und ermöglicht den Rechnerwechsel. Rechtsgrundlage ist
-    Art. 6 Abs. 1 lit. b DSGVO. Der Offline-Dateiweg überträgt dieselben Daten
-    an denselben Dienst, nur von dem Gerät, auf dem Sie die Aktivierungsseite
-    öffnen. Nach der Aktivierung gibt es keine regelmäßige Lizenzabfrage.</p>
+    Aktivierung und ermöglicht den Rechnerwechsel. Für den Schutz vor zu vielen
+    Anfragen speichern wir außerdem je Schlüsselhash den UTC-Kalendertag und
+    die Zahl der gültig signierten Aktivierungsversuche. IP-Adressen brauchen
+    und speichern wir dafür nicht. Abgelaufene Tageszähler werden beim nächsten
+    gültigen Aktivierungsversuch gelöscht; ohne weiteren Zugriff bleiben sie
+    bis zu diesem Bereinigungslauf bestehen. Rechtsgrundlage ist Art. 6 Abs. 1
+    lit. b DSGVO. Der Offline-Dateiweg überträgt dieselben Daten an denselben
+    Dienst, nur von dem Gerät, auf dem Sie die Aktivierungsseite öffnen. Nach
+    der Aktivierung gibt es keine regelmäßige Lizenzabfrage.</p>
 
     <h2>Die Anwendung Solidon3D</h2>
     <p>Solidon3D läuft vollständig lokal und sendet von sich aus keine Daten.

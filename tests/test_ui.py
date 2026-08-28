@@ -1746,11 +1746,7 @@ def _exact_toggle(window: MainWindow) -> Any:
 
     dialog = window._op_dialog
     assert dialog is not None
-    haken = [
-        box
-        for box in dialog.findChildren(QCheckBox)
-        if "Flächen und Kanten" in box.text()
-    ]
+    haken = [box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()]
     assert haken, [box.text() for box in dialog.findChildren(QCheckBox)]
     return haken[0]
 
@@ -4868,9 +4864,7 @@ def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> No
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
         exact = next(
-            box
-            for box in dialog.findChildren(QCheckBox)
-            if "Flächen und Kanten" in box.text()
+            box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
         )
 
         assert exact.isVisibleTo(dialog), "der Umschalter liegt wieder eingeklappt"
@@ -4893,9 +4887,7 @@ def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> N
     window.run_operation(REGISTRY.get("create_box"))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     exact = next(
-        box
-        for box in dialog.findChildren(QCheckBox)
-        if "Flächen und Kanten" in box.text()
+        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
     )
     exact.setChecked(True)
     # ``accept`` wendet an und räumt den Dialog selbst ab — danach gehört
@@ -4934,9 +4926,7 @@ def test_the_exact_twin_hides_what_it_cannot_do(
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     dialog.advanced.setChecked(True)
     exact = next(
-        box
-        for box in dialog.findChildren(QCheckBox)
-        if "Flächen und Kanten" in box.text()
+        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
     )
 
     assert dialog._editors[gone].isVisibleTo(dialog), "im Netzkern hat das Feld seine Wirkung"
@@ -7499,6 +7489,55 @@ def test_the_theme_stands_before_anything_is_shown(
         qt_app.setPalette(before)
 
 
+def test_the_program_start_configures_https_before_reading_the_licence(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der mitgelieferte CA-Satz muss vor jedem möglichen Netzkontakt gelten."""
+    import datetime
+
+    from app.core.activation import Activation
+    from app.ui import app as app_module
+
+    order: list[str] = []
+    gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
+    monkeypatch.setattr(
+        app_module.network,
+        "configure_certificates",
+        lambda: order.append("certificates") or True,
+    )
+    monkeypatch.setattr(
+        app_module.activation,
+        "state",
+        lambda: order.append("licence") or gone,
+    )
+    monkeypatch.setattr("app.ui.dialogs.show_expired_demo", lambda _state: None, raising=False)
+
+    assert app_module.main([]) == 1
+    assert order[:2] == ["certificates", "licence"]
+
+
+def test_the_marketing_video_follows_demo_trial_and_sale_configuration(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die nächste Aufnahme darf nie das Angebot des vorigen Baus versprechen."""
+    import datetime
+
+    from tools import make_video
+
+    monkeypatch.setattr(make_video.activation_store, "DEMO_UNTIL", None)
+    monkeypatch.setattr(make_video.activation_store, "TRIAL_FROM", None)
+    sale = " ".join(make_video.offer_copy("de"))
+    assert "14" not in sale and "Demo" not in sale
+
+    monkeypatch.setattr(make_video.activation_store, "TRIAL_FROM", datetime.date(2027, 2, 1))
+    trial = " ".join(make_video.offer_copy("de"))
+    assert f"{make_video.activation_store.TRIAL_DAYS} Tage" in trial
+
+    monkeypatch.setattr(make_video.activation_store, "DEMO_UNTIL", datetime.date(2026, 10, 30))
+    demo = " ".join(make_video.offer_copy("en"))
+    assert "30 October 2026" in demo and "days" not in demo
+
+
 def test_the_unlock_dialog_does_not_close_on_an_empty_field(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -7698,9 +7737,7 @@ def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
     window.edit_operation(op_id)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     exact = next(
-        box
-        for box in dialog.findChildren(QCheckBox)
-        if "Flächen und Kanten" in box.text()
+        box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
     )
     assert not exact.isChecked(), "der Haken steht auf dem, was im Verlauf steht"
     assert exact.isVisibleTo(dialog), "und er ist zu sehen, ohne aufzuklappen"
@@ -7734,9 +7771,7 @@ def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindo
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
         exact = next(
-            box
-            for box in dialog.findChildren(QCheckBox)
-            if "Flächen und Kanten" in box.text()
+            box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
         )
         assert exact.isChecked(), "der Schritt ist der exakte — der Haken sagt es"
         assert "anchor" in dialog._editors, "der Dialog kennt die Felder des Netzkerns"
@@ -7767,9 +7802,7 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     hint = window._op_actions["sketch_pocket"].toolTip()
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
-    assert "Nimm die Schritte ab dort zurück" in hint, (
-        "der Satz nennt eine Handlung, die es gibt"
-    )
+    assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"
 
 
 def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) -> None:

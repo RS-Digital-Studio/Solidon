@@ -122,6 +122,17 @@ def _stats(page: str) -> list[int]:
     return [int(m.group(1)) for m in STAT.finditer((WEBSITE / page).read_text(encoding="utf-8"))]
 
 
+def test_activation_privacy_names_the_daily_counter_without_claiming_ip_storage() -> None:
+    """Die kurze Aktivierungsseite und die Einzelheiten dürfen sich nicht widersprechen."""
+    page = (WEBSITE / "offline-aktivierung.html").read_text(encoding="utf-8")
+    privacy = (WEBSITE / "datenschutz.html").read_text(encoding="utf-8")
+
+    assert "Tageszähler" in page
+    assert "IP-Adressen" in page
+    assert "gültig signierten Aktivierungsversuche" in privacy
+    assert "ohne weiteren Zugriff" in privacy
+
+
 def _count(table: str) -> int:
     """Zählt die Maßeinträge einer Normteil- oder Druckertabelle.
 

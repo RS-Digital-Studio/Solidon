@@ -57,6 +57,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app.core.activation import store as activation_store
 from app.i18n import install_catalog, set_language
 from app.i18n.catalog import read_catalog
 
@@ -123,6 +124,55 @@ EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-tts" / "Scripts" / "python.exe"
 VOICE_SCRIPT = Path(__file__).resolve().parent / "speak_chatterbox.py"
 
+
+def offer_copy(language: str) -> tuple[str, str]:
+    """Leitet Sprecherabschluss und Schlusskarte aus genau diesem Bau ab.
+
+    Demo, späterer Testlauf und Verkauf ohne Test sind drei Angebote. Der
+    Videogenerator darf keines davon als eigenen, von der Anwendung getrennten
+    Text pflegen — sonst verspricht die nächste Aufnahme wieder den vorigen
+    Stand.
+    """
+    if activation_store.DEMO_UNTIL is not None:
+        deadline = activation_store.DEMO_UNTIL
+        if language == "en":
+            months = (
+                "January",
+                "February",
+                "March",
+                "April",
+                "May",
+                "June",
+                "July",
+                "August",
+                "September",
+                "October",
+                "November",
+                "December",
+            )
+            return (
+                "Solidon. Try the complete demo now.",
+                f"Full demo until {deadline.day} {months[deadline.month - 1]} {deadline.year}",
+            )
+        return (
+            "Solidon. Jetzt die vollständige Demo ausprobieren.",
+            f"Vollständige Demo bis {deadline:%d.%m.%Y}",
+        )
+    if activation_store.TRIAL_FROM is not None:
+        if language == "en":
+            return (
+                "Solidon. Try it free.",
+                f"Try free for {activation_store.TRIAL_DAYS} days",
+            )
+        return (
+            "Solidon. Jetzt kostenlos ausprobieren.",
+            f"{activation_store.TRIAL_DAYS} Tage kostenlos testen",
+        )
+    if language == "en":
+        return "Solidon. Simple to design. Safe to print.", "Discover Solidon"
+    return "Solidon. Einfach konstruieren. Sicher drucken.", "Solidon kennenlernen"
+
+
 #: Das Einstiegsvideo — kurz, und es beginnt beim Problem, nicht beim Programm.
 #:
 #: Für jemanden, der Solidon nicht kennt. Es nennt zuerst den Ärger, den die
@@ -142,7 +192,7 @@ OPENING: dict[str, tuple[tuple[str, str], ...]] = {
             "In Solidon nicht. Du änderst eine Zahl — "
             "und Bohrungen, Buchsen und Deckel wandern mit.",
         ),
-        ("closing", "Solidon. Vierzehn Tage kostenlos testen."),
+        ("closing", offer_copy("de")[0]),
     ),
     "en": (
         ("hook", "Two millimetres too narrow. And you start over."),
@@ -151,7 +201,7 @@ OPENING: dict[str, tuple[tuple[str, str], ...]] = {
             "Not in Solidon. You change one number — "
             "and the holes, the inserts and the lid all follow.",
         ),
-        ("closing", "Solidon. Free for fourteen days."),
+        ("closing", offer_copy("en")[0]),
     ),
 }
 
@@ -342,12 +392,12 @@ ICON_FILE = Path(__file__).resolve().parent.parent / "app" / "images" / "icon" /
 
 #: Was auf der Schlusskarte steht.
 #:
-#: Wortlaut von der Website übernommen und nicht erfunden: dort steht „14 Tage
-#: kostenlos testen". Ein Video, das etwas anderes verspricht als die Seite,
-#: auf die es schickt, verliert genau dort seinen Zuschauer.
+#: Aus demselben Freischaltstand wie die Anwendung abgeleitet. Ein Video, das
+#: etwas anderes verspricht als die Seite, auf die es schickt, verliert genau
+#: dort seinen Zuschauer.
 OUTRO_CALL = {
-    "de": "14 Tage kostenlos testen",
-    "en": "Free for 14 days",
+    "de": offer_copy("de")[1],
+    "en": offer_copy("en")[1],
 }
 
 #: Die feste Beschriftung des Hochformats, je Sprache.

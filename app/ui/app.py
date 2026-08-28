@@ -26,7 +26,7 @@ from PySide6.QtGui import QFileOpenEvent
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
-from app.core import activation
+from app.core import activation, network
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
@@ -302,6 +302,10 @@ class _LanguageSwitch(QObject):
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Vor dem ersten möglichen HTTPS-Aufruf: Im macOS-Paket zeigen OpenSSLs
+    # Vorgabepfade sonst auf die Python-Installation des Bauservers. Der
+    # mitgelieferte CA-Satz gilt für Update, Support und Aktivierung gemeinsam.
+    network.configure_certificates()
     configure(to_console=False)
 
     # Qt muss vor dem Ladebildschirm stehen, und das Register danach: sonst

@@ -8,13 +8,13 @@
 > Planungsvarianten; der gehärtete Testpfad bleibt nur für einen später bewusst
 > aktivierten Release erhalten.
 >
-> **Produktionsgrenze, gemessen am 28.08.2026:** Die lokale Umsetzung und der
-> echte PHP-Anschlusstest sind grün; der öffentliche Bereitschaftsendpunkt
-> antwortet derzeit noch mit HTTP 500. Servervariablen, PHP-Erweiterungen,
-> Datenbankablage und Backup-Probe sind deshalb vor dem Verkaufsbau noch
-> einzurichten und Ende zu Ende abzunehmen. Der Kauf-Webhook des noch zu
-> wählenden Zahlungsanbieters ist ebenfalls kein Teil der fertigen lokalen
-> Umsetzung.
+> **Produktionsstand, gemessen am 28.08.2026:** Lokale Umsetzung, echter
+> PHP-Anschlusstest und öffentlicher Bereitschaftsendpunkt sind grün (HTTPS
+> 200, Protokoll 1). FTPS prüft den Hostnamen; Startwert und SQLite liegen in
+> `solidon3d.de/appdata/` außerhalb des Webroots. Das Deployment sichert und
+> liest vorhandene Dateien vor jedem Überschreiben bytegenau zurück. Offen
+> bleiben der Kauf-Webhook des noch zu wählenden Zahlungsanbieters und der
+> echte Kaufdurchlauf vor dem Verkaufsstart.
 
 > **Stand: ENTWURF, 26.08.2026 — alle vier Teile ausgearbeitet, Abnahme offen.**
 > Entschieden von Robert ist das *Ob* und die Reihenfolge; offen ist das *Wie*.
@@ -29,10 +29,11 @@
 
 Beide von Robert am 26.08.2026:
 
-1. **Die Testphase ist eine harte Grenze.** Nach den 14 Tagen läuft nichts
-   mehr, was einen weiterbringt; Testphase und Kauf laufen über Lizenzen.
-   Die lokale Härtung dafür ist gebaut (signierter Marker an zwei Orten,
-   `3ef11e6e`) und bleibt auch mit Server die Verteidigung in der Tiefe.
+1. **Zum Verkaufsstart gibt es keine Testphase.** Die öffentliche Demo endet
+   einschließlich 30.10.2026, startet am 31.10. nicht mehr, und die
+   Verkaufsversion beginnt am 01.11.2026 mit `TRIAL_FROM = None`. Der
+   Vierzehn-Tage-Pfad bleibt für ein späteres, bewusst neu geprüftes Angebot
+   erhalten, ist aber weder Freigabe noch Schonfrist der Verkaufsversion.
 2. **Es kommt ein echter Aktivierungsserver** — auf dem eigenen Webserver
    (netcup, solidon3d.de). Zuerst dieses Konzept, gemeinsam ausgearbeitet.
 
@@ -42,7 +43,7 @@ Beide von Robert am 26.08.2026:
 |---|---|---|
 | Marker editieren erkennen | ja (Unterschrift) | ja |
 | Einen Marker-Ort löschen | ja (zweiter Ort heilt) | ja |
-| Beide Orte löschen → neue 14 Tage | **nein** (Restgrenze) | ja — Server erinnert die Maschine |
+| Beide Testmarker löschen → neuer Test | **nein** (Restgrenze) | nicht benutzt — Verkauf startet ohne Test |
 | Geteilten/geleakten Schlüssel begrenzen | nein | ja — Aktivierungen je Schlüssel zählen |
 | Erstatteten Schlüssel widerrufen | nein | ja |
 
@@ -99,42 +100,25 @@ DSGVO-seitig das mildeste Modell (Pseudonym ohne Personenbezug beim
 Aktivieren eines anonymen Schlüssels; Personenbezug entsteht erst über die
 Bestellnummer — Teil B).
 
-**Trial über den Server?** Vorschlag: **nein, vorerst nicht.** Die
-Testphase serverseitig zu registrieren hieße, dass Testen Netz braucht —
-der härteste §2-Konflikt für den geringsten Gewinn (die lokale Härtung
-deckt den einfachen Fall; wer Profile neu aufsetzt, um alle zwei Wochen 14
-Tage zu schummeln, kauft auch mit Server nicht). Offen für die Runde.
+**Testphase über den Server? Nein.** Zum Verkaufsstart gibt es überhaupt
+keine Testphase; deshalb registriert der Server auch keine. Ein späteres
+Testangebot wäre ein eigener Release mit eigener fachlicher und rechtlicher
+Abnahme, kein heute versteckter Schalter.
 
-**Vorläufig freigeschaltet — die Lücke, die der Abgleich mit Teil D fand.**
-D2 sagt richtig: Der Kein-Netz-Fall darf nichts kosten, die ausstehende
-Aktivierung ist keine Sperre, „solange etwas anderes freischaltet". Genau
-dieses *solange* hat ein Loch: Wer am letzten Testtag kauft (oder nach dem
-Ablauf) und kein Netz hat, hat am Tag darauf nichts anderes mehr — ein
-zahlender Kunde wäre gesperrt, der Fall, der heute zweimal Befund war.
-Deshalb: **Ein lokal gültiger Schlüssel ohne Zertifikat schaltet vorläufig
-frei**, befristet (Vorschlag: 14 Tage ab Eintragen — dieselbe Zahl wie der
-Testlauf, leicht zu sagen), mit sichtbarem Zustand „Aktivierung ausstehend —
-noch N Tage" und den zwei Knöpfen aus D. Die Frist läuft über dieselbe
-gehärtete Marker-Mechanik (signiert, zwei Orte). Ein Kauf ist damit nie
-schlechter als kein Kauf, und die Aktivierung bleibt trotzdem keine Formsache.
+**Keine vorläufige Freischaltung.** Ein neuer Verkaufsschlüssel ab dem
+01.11.2026 öffnet erst zusammen mit einem gültigen Geräte-Zertifikat. Eine
+lokale Schonfrist ließe sich durch Entfernen und erneutes Eintragen oder durch
+Kopieren des Profils zur Aktivierungsumgehung machen und würde die klare
+Planänderung „keine Testphase" durch die Hintertür zurückbringen. Der Weg für
+einen Arbeitsrechner ohne Internet ist stattdessen die signierte Anfrage- und
+Antwortdatei über ein zweites Gerät. Nach diesem einmaligen Vorgang arbeitet
+Solidon dauerhaft ohne Lizenzverbindung.
 
-**Und sie läuft je Schlüssel genau einmal** (Fund der Durchsicht vom
-26.08.2026): „14 Tage ab Eintragen" ohne diesen Zusatz wäre erneuerbar —
-Schlüssel entfernen, neu eintragen, neue 14 Tage, und der Teiler gäbe fünf
-Kollegen je einen ewigen Vorrat an Fristen, ohne dass je ein Platz des
-Limits verbraucht würde. Der Marker trägt deshalb den Schlüssel-Hash und
-den **ersten** Eintragungstag; ein erneutes Eintragen desselben Schlüssels
-setzt auf dieser Maschine nichts zurück. Je **weiterer** Maschine gibt es
-die Frist höchstens einmal — mehr kann ein lokaler Marker nicht halten, und
-mehr muss er nicht: danach führt kein Weg am Limit vorbei (das
-Wander-Muster aus C4, angenommen). Wer die Frist reißt, hat den
-Offline-Weg — der ist die Antwort auf „dauerhaft ohne Netz", nicht eine
-nachwachsende Frist.
-
-**Bestandskunden-Migration.** Bereits verkaufte Schlüssel funktionieren
+**Bestandskunden-Migration.** Bereits ausgegebene Schlüssel funktionieren
 offline weiter (die App kann `purchased_on`/`major` lesen): Schlüssel mit
-Kaufdatum vor dem Stichtag der Server-Einführung brauchen kein Zertifikat.
-Kein Bestandskunde wird nachträglich zur Aktivierung gezwungen.
+Kaufdatum vor `DEVICE_ACTIVATION_FROM = 01.11.2026` brauchen kein Zertifikat.
+Kein Bestandskunde wird nachträglich zur Aktivierung gezwungen; der Stichtag
+selbst ist durch Kern- und Grenztests belegt.
 
 **Und der Stichtag muss vor dem Erzeugungstag des ersten Vorrats liegen**
 (Fund der Durchsicht vom 26.08.2026): `purchased_on` wird beim Signieren
@@ -142,9 +126,11 @@ eingebrannt — ein Vorratsschlüssel trägt also den Tag seiner **Erzeugung**,
 nicht den seines Verkaufs. Läge der Stichtag danach, wäre jeder verkaufte
 Vorratsschlüssel formal ein Bestandsschlüssel, bräuchte nie ein Zertifikat,
 und das Limit griffe für den gesamten Verkauf nicht — der Server stünde
-umsonst da. `make_licence_keys.py --count` prüft deshalb beim Erzeugen
-eines Vorrats, dass der eingebrannte Tag **nach** dem Stichtag liegt, und
-verweigert sonst; dieselbe Prüfung gehört in `tests/test_licence_boundary.py`.
+umsonst da. `make_licence_keys.py --count` verweigert deshalb jeden vor dem
+Stichtag liegenden Vorrat. Für den Verkaufsbestand muss der Ausstelltag mit
+`--purchased-on 2026-11-01` gesetzt werden; ein Bestands-Einzelfall braucht
+`--legacy` **und** eine Bestellkennung. Die Werkzeugtests belegen beide
+Richtungen.
 
 **Vier Grenzdateien bleiben vier.** Die Zertifikatsprüfung gehört in
 `activation/` (im Cython-Prüfmodul), nicht in neue Grenzstellen.
@@ -277,9 +263,12 @@ POOL-Bestellkennung. Zwei Pflichten dazu, beide billig und beide später
 unbezahlbar:
 
 - **Jeder erzeugte Vorrat wird vollständig offline archiviert** (beim
-  Hauptschlüssel: Passwortmanager oder verschlüsselte Ablage). Das Werkzeug
-  druckt die Schlüssel nur — wer sie nicht ablegt, kann „ich habe meinen
-  Schlüssel verloren" nie beantworten.
+  Hauptschlüssel: Passwortmanager oder verschlüsselte Ablage).
+  `make_licence_keys.py` verlangt dafür `--archive` und schreibt den ganzen
+  Lauf atomar als JSONL, bevor es den ersten Schlüssel ausgibt. Wer den
+  Archivweg nicht nennt oder wessen Archiv beschädigt ist, bekommt keinen
+  Schlüssel auf die Ausgabe — „ich habe meinen Schlüssel verloren" bleibt so
+  beantwortbar.
 - **Klein halten und nachfüllen** (Vorschlag: 50 Stück). Der Vorrat ist die
   eine Stelle, an der fertige Lizenzen auf dem Server liegen; seine Größe
   ist die Obergrenze des Diebstahlschadens (B3).
@@ -326,9 +315,33 @@ einen Schlüssel aus, der den Namen trägt — das ist zugleich der
 Übergangsweg „Verkauf auf Anfrage", falls der Verkauf vor dem Webhook
 starten soll (offene Frage 10).
 
+**Die private Support-Oberfläche schließt die Kette für Robert.**
+`tools/licence_admin.py` ordnet einem anonymen Vorratsschlüssel lokal die
+Transaktionskennung aus dem MoR-Dashboard zu, durchsucht dieses externe Archiv
+nach Schlüssel, Digest, Transaktion, POOL-/Bestellkennung oder Käuferkennung
+und fragt den Server nur mit dem Digest. Der mit
+`setup_activation_server.py` erzeugte 256-Bit-
+Betreiberzugang liegt auf Arbeitsrechner und Server außerhalb des Repositorys;
+`api/operator.php` nimmt ohne ihn weder Abfrage noch Änderung an. Sichtbar sind
+Serverstatus, Geräteverlauf, Tageszähler und das pseudonyme Audit-Protokoll.
+Möglich sind Sperren, Entsperren, Geräteplatz freigeben und Versuchslimit
+zurücksetzen. Jede Änderung hat einen festen, nicht personenbezogenen Anlass.
+Eine bereits ausgestellte Offline-Freischaltung bleibt technisch und
+vertraglich unberührt; „Sperren" heißt deshalb ausdrücklich „keine neue
+Aktivierung" und nicht „laufenden Offline-Rechner fernabschalten".
+
+Die lokale Bedienung folgt drei Schritten: Lizenz finden, Supportfall lesen,
+Handlung wählen. Schlüsselgenerator und Support-Oberfläche halten das externe
+Archiv mit derselben Betriebssystem-Sperre exklusiv, prüfen vor jeder Änderung
+alle Signaturen und eingebetteten Käuferdaten und ersetzen die JSONL-Datei erst
+danach atomar. Transaktionskennungen sind dort eindeutig; ein zweiter Schlüssel
+mit derselben MoR-Transaktion wird abgelehnt. Die Suche prüft vollständige
+Schlüssel gegen die im Archiv gespeicherte Hauptversion, damit ein späteres
+Solidon-Release alte Supportfälle nicht unsichtbar macht.
+
 ### B3 — Die Endpunkte, der Speicher, und wo B von C4 abweicht
 
-Fünf PHP-Dateien unter `httpdocs/api/`, alle POST, alle JSON, alle nach der
+Sechs PHP-Dateien unter `httpdocs/api/`, alle POST, alle JSON, alle nach der
 Bauart von `support.php`:
 
 | Datei | Wer ruft | Tut |
@@ -338,6 +351,7 @@ Bauart von `support.php`:
 | `list.php` | die App, im Limit-Fall (D2) | C4: nennt die eigenen Aktivierungen |
 | `order.php` | **nur der MoR** | B2: teilt einen Vorratsschlüssel zu, versendet |
 | `offline.php` | die Website-Seite des Offline-Wegs | C6: nimmt den angezeigten Code, gibt die signierte Antwort |
+| `operator.php` | nur Roberts lokales Support-Werkzeug | liest den pseudonymen Zustand; sperrt/freigibt, setzt Geräteplatz oder Versuchslimit zurück |
 
 `offline.php` ist kein zweiter Aktivierungspfad, sondern **dasselbe
 `activate` in anderer Verpackung** (C6: gleiche Zufalls-ID, gleiches Limit,
@@ -347,16 +361,24 @@ Datei zurück. Der E-Mail-Weg läuft über das Support-Postfach auf denselben
 Endpunkt — am Anfang trägt Robert den Code von Hand ein; ein Automat dafür
 lohnt erst, wenn es den Fall öfter als ein paarmal im Monat gibt.
 
-**Vier Tabellen in einer SQLite-Datei** außerhalb des Dokumentenstamms:
+**Der gebaute Aktivierungsdienst hat drei Tabellen in einer SQLite-Datei**
+außerhalb des Dokumentenstamms:
 
-- `activations` — Schlüssel-Hash, Zufalls-ID, Rechnername, Ausstellungstag,
-  Weg (`online`/`offline`). Genau das, was C4 erlaubt, und nichts weiter.
-- `pool` — POOL-Kennung, Schlüssel (bis zur Zuteilung), Transaktions-ID und
-  Zuteilungstag (ab ihr). **Nach der Zuteilung wird der Klartext durch
-  seinen Hash ersetzt** — „Schlüssel verloren" beantwortet das
-  Offline-Archiv (B2), nicht die Datenbank.
-- `blocked` — Schlüssel-Hash, Grund, seit wann. Die Sofort-Sperre aus B4.
-- `rate` — Schlüssel-Hash, Tag, Zähler. Die fünf aus C5.
+- `licences` — ausschließlich Schlüssel-Hash, Status und erster Kontakt;
+  `blocked` ist ein Status und braucht keine parallele Wahrheit.
+- `activations` — Schlüssel-Hash, öffentlicher Geräteschlüssel,
+  frei gewählter Rechnername, Ausstellungstag und optionale Deaktivierung.
+- `activation_attempts` — Schlüssel-Hash, UTC-Tag und Zähler; höchstens fünf
+  gültig signierte Aktivierungsversuche je Tag (C5). Beim nächsten gültigen
+  Versuch werden alle älteren Tageszeilen global entfernt; die
+  Datenschutzerklärung sagt offen, dass der letzte Stand ohne weiteren Zugriff
+  bis zu diesem Bereinigungslauf bestehen bleibt.
+
+Die spätere Kaufabwicklung ergänzt `pool` mit POOL-Kennung,
+Transaktions-ID und Zuteilungstag. Unverbrauchte Schlüssel liegen dort nur
+bis zur Zuteilung im Klartext; danach bleibt ihr Hash. Diese Tabelle gehört
+zum noch offenen Zahlungsanbieter-Anschluss, nicht zum fertigen
+Aktivierungsdienst.
 
 **Die eine benannte Abweichung von C4:** „kein Klartext-Schlüssel (nur ein
 Hash)" gilt der Aktivierungsdatenbank, und dort gilt es uneingeschränkt.
@@ -488,19 +510,13 @@ fehlt, wenn sie fehlt.**
   Pakets. **Einmal vor dem Verkaufsstart wird eine Kopie wirklich
   zurückgespielt** — ein Backup, das nie einen Restore gesehen hat, ist
   eine Vermutung.
-- **Ausfall:** Neue Aktivierungen warten, laufende Kunden merken nichts,
-  und der Kunde mit frisch gekauftem Schlüssel arbeitet über die
-  vorläufige Freischaltung aus Teil A vierzehn Tage weiter. Ein Ausfall
-  ist damit „diese Woche beheben", nie „heute Nacht" — es gibt keine
-  Rufbereitschaft, und das ist eine Eigenschaft des Entwurfs, keine
-  Nachlässigkeit. **Genau genommen sind es zwei Stufen** (Fund der
-  Durchsicht vom 26.08.2026): Die vorläufige Freischaltung trägt nur, wer
-  schon einen **Schlüssel** hat — fällt der Server aus, bevor `order.php`
-  zugeteilt hat, hat der Käufer nichts, das trägt. Diese Stufe fangen der
-  Anbieter (Webhooks werden über Stunden wiederholt, das ist bei Paddle
-  die zugesagte Bauart) und der Erwartungssatz auf dessen
-  Bestätigungsseite („Ihr Schlüssel kommt per E-Mail") ab — nicht die
-  App, die von dem Kauf noch nichts wissen kann.
+- **Ausfall:** Laufende Kunden merken nichts; ihr Zertifikat bleibt lokal
+  gültig. Neue Aktivierungen warten oder nehmen den Dateiweg über ein zweites
+  Gerät, sofern nur der Arbeitsrechner offline ist. Bei einem vollständigen
+  Dienstausfall kann auch der Dateiweg kein Zertifikat ausstellen — deshalb
+  gehören externe Bereitschaftsprüfung, Rücksicherung und ein klarer
+  Supportweg zur Verkaufsbereitschaft. Eine lokale Schonfrist gibt es bewusst
+  nicht: Sie wäre eine erneuerbare Umgehung der Gerätebindung.
 - **Monitoring:** passiv und von außen. Ein `health.php`, das „ok" sagt,
   angefragt von einem externen Wächter oder einer wöchentlichen Handprobe
   (`tools/check_activation.py`, B8). Die Anwendung selbst überwacht nichts
@@ -752,10 +768,9 @@ viel und keinen Vorteil, weil das Limit ohnehin nicht bindet, wenn man
 deaktivieren kann.
 
 **Ratenbegrenzung** je Schlüssel, nicht je IP: Ein Büro hinter einer Adresse
-ist der Normalfall, nicht der Angriff. Vorschlag: fünf `activate` je Schlüssel
-und Tag. Wer mehr braucht, hat entweder ein Problem — dann soll er den Support
-erreichen und keine Fehlermeldung — oder er probiert Schlüssel durch, und
-dafür ist fünf pro Tag zu wenig, um je fündig zu werden.
+ist der Normalfall, nicht der Angriff. Gebaut sind fünf `activate` je Schlüssel
+und UTC-Tag, gezählt erst nach gültiger Signatur. Wer mehr braucht, bekommt den
+Weg zu Support und nächstem Tag; IP-Adressen werden dafür nicht gespeichert.
 
 **Schlüssel zu raten ist ohnehin kein Angriffsweg**, den die Begrenzung tragen
 müsste: Ein ed25519-signierter Schlüssel lässt sich nicht erraten, und der
@@ -864,10 +879,9 @@ Damit es niemand später als Lücke meldet:
   darin steht, entscheidet Teil B; was nicht darin stehen soll, steht in C4.
 - **Ein Ausfall des Servers verhindert neue Aktivierungen.** Kein laufender
   Kunde verliert etwas (die Zusage aus dem Rahmen oben), aber wer am
-  Ausfalltag kauft, wartet — abgefedert durch die vorläufige Freischaltung aus
-  Teil A (sofern der Schlüssel schon zugeteilt ist — die Zuteilungsstufe
-  fängt der Anbieter ab, B6), und das ist der zweite Grund für sie neben dem
-  Kein-Netz-Fall.
+  Ausfalltag kauft, wartet. Monitoring, Backup-Rücksicherung und Support
+  tragen diesen kleinen, klar benannten Verfügbarkeitsanteil; eine lokale
+  Aktivierungsumgehung trägt ihn nicht.
 - **Ein geklontes Plattenabbild teilt sich einen Platz.** Wer eine Maschine
   samt Profil auf N Rechner spiegelt, spiegelt die Zufalls-ID mit — alle N
   laufen unter einem Zertifikat, und der Server sieht eine Maschine. Das ist
@@ -886,31 +900,24 @@ auf der Startseite.
 
 ### D1 — Der Aktivierungsfluss, Klick für Klick
 
-Heute: einfügen → *Eintragen* → lokale Prüfung, sofort. Mit Server ändert
-sich nur, was **nach** der lokalen Prüfung kommt:
+Der Dialog zeigt zwei kleine, nummerierte Schritte und trennt lokale Prüfung
+und den ausdrücklich ausgelösten Netzkontakt:
 
-1. Kunde fügt den Schlüssel ein (mehrzeiliges Feld, Bestand). *Eintragen*
+1. Kunde fügt den Schlüssel ein (mehrzeiliges Feld, Bestand). *Schlüssel prüfen*
    bleibt grau mit Grund, bis Text dasteht (Bestand).
-2. Klick *Eintragen*: **lokale Prüfungen zuerst** — Format, Unterschrift,
+2. Klick *Schlüssel prüfen*: **lokale Prüfungen zuerst** — Format, Unterschrift,
    Hauptversion. Ein Tippfehler erreicht nie das Netz; die bestehenden
    `LicenceKeyError`-Pfade über `show_error` bleiben unverändert.
-3. Braucht der Schlüssel ein Zertifikat (Kaufdatum nach Stichtag, Teil A)
-   und liegt keines vor: Aktivierung in einem Arbeiter (`leash.Worker`,
-   `crashed` verbunden — die Regel aus `oberflaeche.md`). Im `state_label`:
-   „Der Schlüssel wird aktiviert …" mit unbestimmtem Balken, **sofort statt
-   nach 200 ms** — eine Netzrunde ist sichere Wartezeit, wie beim Schleier
-   mit `at_once`. Der Dialog bleibt bedienbar, *Eintragen* ist solange
-   gesperrt, *Schließen* bricht ab (eine angefangene Aktivierung ist kein
-   halber Export — der Server vollendet oder nicht, die App darf jederzeit
-   aufhören zu warten). Zeitbudget ~10 s, dann der Kein-Netz-Pfad.
-4. Erfolg: Zertifikat liegt lokal, der Dialog schließt über `accept()` wie
-   heute; die Zustandszeile davor zeigt „Freigeschaltet für … (Bestellung …).
-   Aktiviert auf diesem Rechner am {date} — {n} von {limit} Rechnern belegt."
-   Die Belegungszahl kommt aus der Aktivierungsantwort und wird lokal
-   gemerkt, nicht nachgefragt.
+3. Braucht der Schlüssel ein Zertifikat (Kaufdatum ab Stichtag, Teil A),
+   wählt der Kunde *Online aktivieren* oder *Offline aktivieren …*. Nur der
+   Online-Knopf startet einen Arbeiter (`leash.Worker`, `crashed` verbunden);
+   der Dateiweg speichert die signierte Anfrage und liest später die Antwort.
+4. Erfolg: Das Zertifikat liegt lokal. Die Zustandszeile nennt Lizenz,
+   Bestellung und frei gewählten Gerätenamen; danach bleibt der Dialog als
+   nachvollziehbare Bestätigung offen.
 5. **Der Dialog telefoniert nie beim Öffnen.** Kein Status-Ping, keine
    Erhebung im Konstruktor: Netzzugriff hängt an genau zwei Knöpfen
-   (*Eintragen*, *Diesen Rechner deaktivieren*). Das hält die
+   (*Online aktivieren*, *Diesen Rechner deaktivieren*). Das hält die
    Telemetrie-Grenze messbar — wie bei `support.send()` zählt ein Test die
    Aufrufer je Endpunkt, und es ist je einer, am Knopf.
 6. **Kein automatischer Neuversuch beim Start.** Ein abgelegter, noch nicht
@@ -931,37 +938,32 @@ Textquelle je Auskunft, drei Kodierungen an gesperrten Knöpfen.
 | Antwort nicht echt (kaputter Proxy, Manipulation) | „Die Antwort war nicht die des Aktivierungsservers." | *Erneut versuchen* · *Offline aktivieren …* |
 | Installation beschädigt | wie heute: `damaged_line()` **vor** allem anderen, Aktivieren gar nicht erst angeboten | Bestand |
 
-Der Kein-Netz-Fall ist der wichtigste: Er darf **nichts kosten**. Der
-Schlüssel bleibt abgelegt, der Testzeitraum läuft unverändert weiter, und wer
-noch Tage hat, arbeitet einfach weiter — die ausstehende Aktivierung ist ein
-Hinweis, keine Sperre, solange etwas anderes freischaltet. Und wenn nichts
-anderes mehr freischaltet — Kauf am letzten Testtag, kein Netz —, greift die
-**vorläufige Freischaltung** aus Teil A (Entscheidung 8): Der lokal gültige
-Schlüssel trägt befristet, der Zustand heißt „Aktivierung ausstehend — noch
-N Tage" und zeigt dieselben zwei Knöpfe. Ein Kauf ist damit nie schlechter
-als kein Kauf.
+Der Kein-Netz-Fall ist der wichtigste: Der Schlüssel bleibt abgelegt, und der
+Dialog bietet neben dem kurzen Online-Weg die Anfrage- und Antwortdatei an.
+Ein neuer Verkaufsschlüssel ohne Zertifikat bleibt sicher gesperrt; genau
+dadurch gibt es keine wiederholbare Schonfrist. Nach der einmaligen
+Dateiaktivierung braucht der Arbeitsrechner dauerhaft keine Lizenzverbindung.
 
 ### D3 — Umzug und Deaktivieren
 
 - **Beim Aktivieren vergibt der Kunde einen Rechnernamen**, vorbelegt neutral
-  („Rechner 2"), frei änderbar — nicht der Hostname als Vorgabe, der trägt
+  („Dieser Rechner"), frei änderbar — nicht der Hostname als Vorgabe, der trägt
   oft einen Personennamen und läge dann beim Server. Ohne Namen wäre die
   Limit-Liste drei Datumszeilen, und niemand weiß, welcher Eintrag der alte
   Laptop war.
-- ***Schlüssel entfernen* wird zu *Diesen Rechner deaktivieren*.** Aus
+- ***Schlüssel entfernen* wird bei einem Geräte-Zertifikat zu *Diesen Rechner
+  deaktivieren*.** Aus
   Kundensicht ist es eine Handlung („dieser Rechner soll es nicht mehr
   sein"): Sie gibt den Platz beim Server frei **und** entfernt Schlüssel und
-  Zertifikat lokal. Ohne Netz tut sie das Lokale und sagt dazu, dass der
-  Platz belegt bleibt und sich vom nächsten Rechner aus freigeben lässt —
-  kein Blockieren, kein „erst Netz suchen". Zwei getrennte Knöpfe für die
-  zwei Hälften wären die sichere Verwechslung.
-- **Der tote oder verkaufte alte Rechner braucht keinen Sonderweg:** Der
-  Limit-erreicht-Fluss am *neuen* Rechner ist der Weg — Liste ansehen, alten
-  Eintrag deaktivieren, Aktivierung läuft weiter. Selbstbedienung mit dem
-  Schlüssel als Ausweis; ob das Missbrauch öffnet (geteilter Schlüssel wirft
-  reihum den Vorbesitzer raus), bewertet Teil C — aus Bediensicht ist genau
-  dieses Wandern das akzeptierte Verhalten eines geteilten Schlüssels, denn
-  es nervt beide Beteiligten, ohne einen ehrlichen Kunden je zu treffen.
+  Zertifikat lokal. Schlägt der Serverkontakt fehl, stellt Solidon das lokale
+  Zertifikat wieder her: Der Rechner bleibt nutzbar und der Platz stimmt auf
+  beiden Seiten überein. Zwei getrennte Knöpfe für die zwei Hälften wären die
+  sichere Verwechslung.
+- **Ist der alte Rechner verloren oder defekt**, bleibt als sichere letzte
+  Stufe der Support: Mit Bestellnummer wird der belegte Platz freigegeben.
+  Eine anonyme Website-Verwaltung, auf der allein der kopierte Schlüssel ein
+  fremdes Gerät hinauswerfen kann, wird zum Verkaufsstart bewusst nicht
+  angeboten.
 - **Und hinter der Selbstbedienung steht der Support als letzte Stufe**
   (Frage Robert, 26.08.2026). Gebraucht wird er nur, wenn Schlüssel **und**
   Rechner weg sind — der Schlüssel ist ja der Ausweis für alles andere.
@@ -1041,9 +1043,9 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
    Ansage).
 7. Wortlaut der §2-Präzisierung (Vorschlag in Teil D4 — ein Satz, überall
    gleich).
-8. Vorläufige Freischaltung ohne Zertifikat (Vorschlag: 14 Tage ab
-   Eintragen, sichtbar als „Aktivierung ausstehend" — sonst sperrt der
-   Kauf am letzten Testtag ohne Netz einen zahlenden Kunden; Teil A).
+8. **Entschieden am 28.08.2026:** keine vorläufige Freischaltung ohne
+   Zertifikat. Verkauf ohne Testphase bedeutet auch keine versteckte
+   Vierzehn-Tage-Schonfrist; für Offline-Rechner trägt der Dateiweg.
 9. Zahlungsanbieter (dieselbe offene Frage wie
    `konzept-veroeffentlichung-1.0.md` §7, hier mit neuem Stand): Nach dem
    Befund vom 26.08.2026 (B2) liefert kein empfohlener Anbieter einen
