@@ -2,13 +2,12 @@
 „Mechanik").
 
 Hier liegen: die Schnappverbindung, die Rastnase, das Filmscharnier, das
-Stiftpaar, der Schnappverbinder für eine Naht und das Scharnierauge. Sie alle
-leben von Maßen, die ein Drucker entscheidet und kein
-Katalog — wie dünn ein Scharnier sein darf, wie weit ein Arm sich biegen darf,
-wie viel Spiel ein Stift braucht. Diese Zahlen kommen aus dem Materialprofil,
-nie als Literal (AGENTS.md Regel 7): ein Baustein deklariert ``play`` und
-lässt es auf null, und ``insert_part`` füllt ein, was das kalibrierte Material
-sagt.
+Stiftpaar, der Schnappverbinder für eine Naht, die Scharniere und der
+Lagersitz. Das Nennmaß eines Kugellagers kommt aus der Normteiltabelle; was
+der Drucker daraus machen muss — Spiel oder Presssitz — aus dem
+Materialprofil. Diese Zahlen stehen nie als Literal im Baustein (AGENTS.md
+Regel 7): ein Baustein deklariert ``play`` oder ``grip`` und lässt es auf
+null, und ``insert_part`` füllt ein, was das kalibrierte Material sagt.
 """
 
 from __future__ import annotations
@@ -18,6 +17,7 @@ from typing import Final, cast
 
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
+from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
@@ -29,6 +29,21 @@ from app.i18n import _
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
+
+BEARING_SEAT_ADDED = PartChange(
+    version="12",
+    date="2026-08-28",
+    reason=(
+        "Die Kugellagermaße standen in der Normteiltabelle, ließen sich aber in "
+        "keinem Baustein verwenden."
+    ),
+    effect=(
+        "Der Katalog kann jetzt eine passgenaue Lageraufnahme schneiden. Alte "
+        "Projekte ändern sich nicht, weil sie den neuen Baustein nicht enthalten."
+    ),
+)
+
+_BEARINGS = standards.bearing_sizes()
 
 #: Ein Federarm, der sich biegt, muss länger sein als dick, sonst bricht er,
 #: statt zu federn. Zehn zu eins ist das Verhältnis, das PLA übersteht.
@@ -46,6 +61,84 @@ SNAP_RATIO = 10.0
 #: eines Tages nachjustiert, hätte den Verbinder zurückgelassen
 #: (27.08.2026).
 SNAP_LEAD_ANGLE: Final = 35.0
+
+
+@op_params
+class BearingSeatParams(BaseParams):
+    size: str = param(
+        title=_("Kugellager"),
+        default="608",
+        choices=_BEARINGS,
+        doc=_(
+            "Die Nummer steht auf dem Lager. Daneben zeigt Solidon Innenmaß, Außenmaß und Breite."
+        ),
+    )
+    removable: bool = param(
+        title=_("Herausnehmbar"),
+        default=False,
+        doc=_("An heißt: Das Lager lässt sich wechseln. Aus heißt: Es wird fest eingepresst."),
+    )
+    extra_depth: float = param(
+        title=_("Zusatztiefe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        placement="advanced",
+        doc=_("Zusätzlicher Platz hinter dem Lager."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        depends_on=("removable", (True,)),
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+    grip: float = param(
+        title=_("Übermaß"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        depends_on=("removable", (False,)),
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="bearing_seat",
+    title=_("Kugellager einsetzen"),
+    group="mechanics",
+    params=BearingSeatParams,
+    subtractive=True,
+    at_hole=True,
+    features=["seat"],
+    doc=_(
+        "Schneidet eine passende Tasche für ein Kugellager. Außenmaß und Breite "
+        "kommen aus der Tabelle, die Passung aus dem eingestellten Material."
+    ),
+    caveat=_(
+        "Für eine durchgehende Welle zuerst ein Loch setzen und den Lagersitz darauf platzieren."
+    ),
+    changes=[BEARING_SEAT_ADDED],
+)
+def bearing_seat(raw: BaseParams) -> PartResult:
+    """Eine zylindrische Aufnahme, bündig unter ihrer gewählten Fläche."""
+    params = cast(BearingSeatParams, raw)
+    entry = standards.bearing(params.size)
+    diameter = entry.outer + params.play if params.removable else entry.outer - params.grip
+    depth = entry.width + params.extra_depth
+
+    pocket = shapes.cylinder(diameter, depth + BOOLEAN_OVERLAP)
+    pocket = shapes.moved(pocket, (0.0, 0.0, -depth))
+    return result(
+        pocket,
+        bore("seat_1", diameter, (0.0, 0.0, -depth / 2.0), depth=depth),
+    )
 
 
 @op_params

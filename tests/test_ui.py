@@ -1905,6 +1905,17 @@ def test_a_choice_that_is_already_a_name_stays_as_it_is(qt_app: QApplication) ->
     assert choice_label("gibt-es-nicht") == "gibt-es-nicht"
 
 
+def test_technical_part_codes_are_explained_in_the_choice(qt_app: QApplication) -> None:
+    """Buchsenvariante und Lagernummer reichen ohne Tabellenwissen nicht."""
+    from app.ui.labels import choice_label
+
+    short_insert = choice_label("M4S")
+    bearing = choice_label("608")
+
+    assert "M4" in short_insert and "mm" in short_insert and short_insert != "M4S"
+    assert "608" in bearing and "8" in bearing and "22" in bearing and "mm" in bearing
+
+
 def test_numbers_are_written_the_way_the_input_fields_write_them(
     qt_app: QApplication,
 ) -> None:

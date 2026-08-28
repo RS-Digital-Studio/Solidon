@@ -49,7 +49,7 @@ from app.core.agent.tools import (
     tool_schemas,
 )
 from app.core.backends.llm import LLMBackend, Message, ToolCall, UnreadableArguments
-from app.core.errors import AppError, UserError
+from app.core.errors import AppError, UserError, ValidationError
 from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
@@ -829,16 +829,14 @@ def standard_text(kind: str, size: str) -> str:
 
     from app.core.knowledge import standards
 
-    table = standards.table(kind)
-    if table is None:
-        # Die Funktion ist öffentlich, und beide heutigen Aufrufer prüfen
-        # vorher — der dritte wird es vergessen, und ein KeyError trägt
-        # keinen Vorschlag (Regel 17).
-        return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(standards.TABLES)})"
-    entry = table.get(size) or table.get(size.upper())
-    if entry is None:
-        known = ", ".join(sorted(table))
-        return f"{tr('Diese Größe steht nicht in der Normteiltabelle')}: {size}. {known}"
+    try:
+        entry = standards.lookup(kind, size)
+    except ValidationError as problem:
+        known = str(problem.values.get("known", ", ".join(standards.TABLES)))
+        if problem.field == "kind":
+            return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({known})"
+        wanted = str(problem.values.get("size", size))
+        return f"{tr('Diese Größe steht nicht in der Normteiltabelle')}: {wanted}. {known}"
     facts = ", ".join(
         f"{key}={value:g} mm" if isinstance(value, float) else f"{key}={value}"
         for key, value in asdict(entry).items()

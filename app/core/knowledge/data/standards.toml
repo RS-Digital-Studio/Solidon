@@ -2,7 +2,7 @@
 #
 # "Loch für M4-Einpressmutter" muss ein Nachschlagewert sein, kein Ratespiel.
 # Deshalb liegen die Maße als Daten hier und nicht im Code: ein korrigierter
-# Wert braucht kein Release, und die Herkunft steht daneben.
+# Wert braucht keine Codeänderung, und die Herkunft steht daneben.
 #
 # Rechtliches (§24.2): Maßangaben als Zahlen sind frei verwendbar, Normtexte
 # und Normtabellen nicht. Die Werte hier sind aus frei zugänglichen
@@ -12,6 +12,14 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 7 seit dem 28.08.2026: Die ISO-7089-Scheiben decken jetzt dieselben
+# Größen M2 bis M8 ab wie die Schraubentabelle; das Schraubenloch kann ihre
+# Tasche unmittelbar schneiden.
+# Version 6 seit dem 28.08.2026: Heat-Set-Buchsen tragen den gemessenen größten
+# Außendurchmesser aus den STEP-Dateien des Herstellers statt ein zweites Mal
+# die Bohrung. Die kurzen Varianten M3S, M4S und M5S sind eigene Einträge.
+# Dazu deckt die Lagertabelle die Größen 624, 626, 6000 und 6001 ab, die der
+# neue Lagersitz unmittelbar verwendet.
 # Version 5 seit dem 28.08.2026: Die Dicke der SKÅDIS-Lochwand ist mit 5,00 mm
 # an einer Platte nachgemessen und nicht länger als unbelegt gekennzeichnet.
 # Der Zahlenwert war schon derselbe; neu ist seine belastbare Herkunft.
@@ -23,7 +31,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "5"
+version = "7"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -154,90 +162,142 @@ width = 13.0
 height = 6.8
 
 # --- Unterlegscheiben -----------------------------------------------------------
+# Flache Scheiben ohne Fase nach ISO 7089. Innen-, Außenmaß und Dicke aus den
+# frei zugänglichen Produktdaten von Würth; alle sieben Größen gehören zur
+# gleichen Reihe.
+
+[[washers]]
+size = "M2"
+inner = 2.2
+outer = 5.0
+thickness = 0.3
+note = "ISO 7089; Würth-Produktdaten"
+
+[[washers]]
+size = "M2.5"
+inner = 2.7
+outer = 6.0
+thickness = 0.5
+note = "ISO 7089; Würth-Produktdaten"
 
 [[washers]]
 size = "M3"
 inner = 3.2
 outer = 7.0
 thickness = 0.5
+note = "ISO 7089; Würth-Produktdaten"
 
 [[washers]]
 size = "M4"
 inner = 4.3
 outer = 9.0
 thickness = 0.8
+note = "ISO 7089; Würth-Produktdaten"
 
 [[washers]]
 size = "M5"
 inner = 5.3
 outer = 10.0
 thickness = 1.0
+note = "ISO 7089; Würth-Produktdaten"
 
 [[washers]]
 size = "M6"
 inner = 6.4
 outer = 12.0
 thickness = 1.6
+note = "ISO 7089; Würth-Produktdaten"
+
+[[washers]]
+size = "M8"
+inner = 8.4
+outer = 16.0
+thickness = 1.6
+note = "ISO 7089; Würth-Produktdaten"
 
 # --- Heat-Set-Einpressbuchsen ---------------------------------------------------
 # Maße nach den gängigen Katalogangaben (Ruthex, CNC Kitchen). Das Loch wird
 # etwas enger als der Außendurchmesser gebohrt, damit sich Material verdrängt.
 #
-# **`outer` steht bei allen sechs auf demselben Wert wie `hole`, und das ist
-# nicht der Rändeldurchmesser.** Eingetragen ist zweimal die Bohrung; der echte
-# Außendurchmesser einer Buchse liegt darüber, sonst verdrängte sie nichts. Am
-# 25.08.2026 beim Hersteller gesucht und nicht gefunden: Ruthex veröffentlicht
-# die Maße weder auf den Produktseiten noch auf seiner Dokumenten-Seite, nur als
-# STEP-Dateien. Was aus den Bezeichnungen ablesbar war, steht drin — die Längen
-# (RX-M3x5.7, RX-M4x8.1, …), und eine davon war falsch: M2.5 stand auf 5,0
-# statt 5,7. Die Bohrungen bestätigt der Bohrersatz des Herstellers
-# (3,2 / 4,0 / 5,6 / 6,4 / 8,0 mm).
-#
-# Wer eine Buchse zur Hand hat, misst den Rändel nach. Bis dahin liest kein
-# Baustein `outer` — die Einführfase hatte es getan und wurde davon
-# unabhängig gemacht (`INSERT_LEAD_IN` in `parts/fasteners.py`).
+# `outer` ist der größte Rändeldurchmesser, am 28.08.2026 mit OpenCASCADE an
+# den STEP-Dateien des Herstellers gemessen und auf ein Zehntel gerundet. Die
+# Längen folgen den Produktbezeichnungen. `hole` bleibt das vom Hersteller
+# empfohlene Loch; kurze und lange Varianten derselben Gewindegröße benutzen
+# dasselbe. M8 bleibt draußen, obwohl eine STEP-Datei vorhanden ist: Die
+# Herstellerseite nennt dafür kein eindeutig zugeordnetes Bohrmaß, und ein
+# geratenes Loch wäre gerade an dieser Stelle schlechter als kein Eintrag.
 
 [[inserts]]
 size = "M2"
-outer = 3.2
+thread = "M2"
+outer = 3.6
 length = 4.0
 hole = 3.2
-note = "Ruthex M2"
+note = "Ruthex RX-M2x4; Außenmaß aus Hersteller-STEP"
 
 [[inserts]]
 size = "M2.5"
-outer = 3.6
+thread = "M2.5"
+outer = 4.6
 length = 5.7
 hole = 3.6
-note = "Ruthex M2.5 (RX-M2.5x5.7)"
+note = "Ruthex RX-M2.5x5.7; Außenmaß aus Hersteller-STEP"
 
 [[inserts]]
 size = "M3"
-outer = 4.0
+thread = "M3"
+outer = 4.6
 length = 5.7
 hole = 4.0
-note = "Ruthex M3"
+note = "Ruthex RX-M3x5.7; Außenmaß aus Hersteller-STEP"
+
+[[inserts]]
+size = "M3S"
+thread = "M3"
+outer = 4.6
+length = 4.0
+hole = 4.0
+note = "Ruthex RX-M3Sx4.0; Außenmaß aus Hersteller-STEP"
 
 [[inserts]]
 size = "M4"
-outer = 5.6
+thread = "M4"
+outer = 6.3
 length = 8.1
 hole = 5.6
-note = "Ruthex M4"
+note = "Ruthex RX-M4x8.1; Außenmaß aus Hersteller-STEP"
+
+[[inserts]]
+size = "M4S"
+thread = "M4"
+outer = 6.3
+length = 4.0
+hole = 5.6
+note = "Ruthex RX-M4Sx4.0; Außenmaß aus Hersteller-STEP"
 
 [[inserts]]
 size = "M5"
-outer = 6.4
+thread = "M5"
+outer = 7.1
 length = 9.5
 hole = 6.4
-note = "Ruthex M5"
+note = "Ruthex RX-M5x9.5; Außenmaß aus Hersteller-STEP"
+
+[[inserts]]
+size = "M5S"
+thread = "M5"
+outer = 7.1
+length = 5.8
+hole = 6.4
+note = "Ruthex RX-M5Sx5.8; Außenmaß aus Hersteller-STEP"
 
 [[inserts]]
 size = "M6"
-outer = 8.0
+thread = "M6"
+outer = 8.7
 length = 12.7
 hole = 8.0
-note = "Ruthex M6"
+note = "Ruthex RX-M6x12.7; Außenmaß aus Hersteller-STEP"
 
 # --- Neodym-Magnete -------------------------------------------------------------
 
@@ -273,24 +333,56 @@ size = "608"
 inner = 8.0
 outer = 22.0
 width = 7.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
 
 [[bearings]]
 size = "623"
 inner = 3.0
 outer = 10.0
 width = 4.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
+
+[[bearings]]
+size = "624"
+inner = 4.0
+outer = 13.0
+width = 5.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
 
 [[bearings]]
 size = "625"
 inner = 5.0
 outer = 16.0
 width = 5.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
+
+[[bearings]]
+size = "626"
+inner = 6.0
+outer = 19.0
+width = 6.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
 
 [[bearings]]
 size = "6800"
 inner = 10.0
 outer = 19.0
 width = 5.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
+
+[[bearings]]
+size = "6000"
+inner = 10.0
+outer = 26.0
+width = 8.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
+
+[[bearings]]
+size = "6001"
+inner = 12.0
+outer = 28.0
+width = 8.0
+note = "SKF Rillenkugellager-Hauptmaße d × D × B"
 
 # --- Aluprofil-Nutmaße ----------------------------------------------------------
 # slot: Nutbreite außen · core: Kerndurchmesser der Nut · screw: passende Schraube

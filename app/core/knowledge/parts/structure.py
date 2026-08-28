@@ -262,6 +262,18 @@ class CableGlandParams(BaseParams):
         choices=_TUBES,
         doc=_("Außendurchmesser des Kabels — die Zahl, die auf dem Mantel steht."),
     )
+    diameter: float = param(
+        title=_("Eigener Durchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        placement="advanced",
+        doc=_(
+            "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
+            "Null verwendet die ausgewählte Größe."
+        ),
+    )
     wall: float = param(
         title=_("Wandstärke"),
         default=3.0,
@@ -311,7 +323,7 @@ class CableGlandParams(BaseParams):
 def cable_gland(raw: BaseParams) -> PartResult:
     params = cast(CableGlandParams, raw)
     entry = standards.tube(params.size)
-    diameter = entry.outer + params.play
+    diameter = (params.diameter or entry.outer) + params.play
 
     # Der Ursprung ist die Mündung auf der Außenseite, das Loch geht nach unten
     # durch die Wand (§24.1). Vorher wuchs es nach oben — wer die angeklickte
@@ -470,6 +482,18 @@ class CableClipParams(BaseParams):
         choices=_TUBES,
         doc=_("Was der Clip halten soll — Kabel oder Schlauch aus der Tabelle."),
     )
+    diameter: float = param(
+        title=_("Eigener Durchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        placement="advanced",
+        doc=_(
+            "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
+            "Null verwendet die ausgewählte Größe."
+        ),
+    )
     width: float = param(
         title=_("Breite"),
         default=8.0,
@@ -536,7 +560,7 @@ def cable_clip(raw: BaseParams) -> PartResult:
     params = cast(CableClipParams, raw)
     entry = standards.tube(params.size)
 
-    inner = entry.outer + params.play
+    inner = (params.diameter or entry.outer) + params.play
     outer = inner + 2.0 * params.wall
     base = params.wall
     centre = base + inner / 2.0

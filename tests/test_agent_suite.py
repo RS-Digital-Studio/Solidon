@@ -492,6 +492,16 @@ def test_read_standard_answers_from_the_table(project: Project, profile: Profile
     assert "M4" in unknown, "eine unbekannte Größe nennt die bekannten"
 
 
+def test_read_standard_accepts_the_visible_spelling_of_a_board() -> None:
+    """Der Agent darf SKADIS schreiben, obwohl der interne Schlüssel klein ist."""
+    from app.core.agent.session import standard_text
+
+    text = standard_text("board", "SKADIS")
+
+    assert "board skadis" in text
+    assert "slot_width=" in text
+
+
 def test_an_unknown_standard_table_counts_as_invalid(project: Project, profile: Profile) -> None:
     """Die Tabelle steht als Enum im Schema — sie zu erfinden ist ein
     Schemaverstoß und zählt für die Kennzahl aus §40.

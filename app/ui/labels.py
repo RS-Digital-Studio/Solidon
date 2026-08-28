@@ -1139,6 +1139,29 @@ def choice_label(value: str) -> str:
     if named is not None:
         return str(named)
     try:
+        insert = standards.insert(value)
+    except AppError:
+        pass
+    else:
+        # M4 ist nicht nur eine Buchse, sondern auch Schraube, Mutter und
+        # Gewinde. ``choice_label`` kennt das Feld nicht; eine Buchsenlänge an
+        # **jedem** M4 wäre daher falsch. Nur die kurzen Buchsen haben einen
+        # eigenen Tabellenschlüssel. Dort ersetzt die lesbare Länge das
+        # technische S, bei den gemeinsamen Schlüsseln bleibt M4 einfach M4.
+        if insert.size != insert.thread:
+            return f"{insert.thread} · {length(insert.length)}"
+        return value
+    try:
+        bearing = standards.bearing(value)
+    except AppError:
+        pass
+    else:
+        # Die Lagernummer bleibt zum Abgleichen mit der Beschriftung erhalten;
+        # die drei Maße daneben machen sie ohne Tabellenwissen verständlich.
+        inner = length(bearing.inner, with_unit=False)
+        outer = length(bearing.outer, with_unit=False)
+        return f"{bearing.size} · {inner} × {outer} × {length(bearing.width)}"
+    try:
         board = standards.board(value)
     except AppError:
         pass

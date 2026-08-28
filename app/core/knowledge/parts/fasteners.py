@@ -103,6 +103,21 @@ HEAD_ROOM_CUTS_DOWNWARD = PartChange(
     ),
 )
 
+SCREW_HEADS_USE_THEIR_OWN_RECESSES = PartChange(
+    version="12",
+    date="2026-08-28",
+    reason=(
+        "Ohne Senkung nahm die zylindrische Kopfaussparung weiterhin den größeren "
+        "Senkkopfdurchmesser statt des Maßes für einen Zylinderkopf. Die Maße "
+        "der Unterlegscheiben standen zugleich ungenutzt in der Normteiltabelle."
+    ),
+    effect=(
+        "Eine Kopftiefe ohne Senkkopf schneidet jetzt den Zylinderkopfdurchmesser. "
+        "Bei M4 sind das 7,0 statt 8,0 mm; Senkköpfe bleiben unverändert. Neu "
+        "ist die abschaltbare Tasche für eine ISO-7089-Unterlegscheibe."
+    ),
+)
+
 
 @op_params
 class ScrewHoleParams(BaseParams):
@@ -121,18 +136,34 @@ class ScrewHoleParams(BaseParams):
         doc=_("Wie tief gebohrt wird. Mehr als die Wandstärke ergibt ein Durchgangsloch."),
     )
     countersink: bool = param(
-        title=_("Senkung"),
+        title=_("Senkkopf"),
         default=True,
-        doc=_("90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf."),
+        doc=_("90-Grad-Senkung für einen Senkkopf. Aus für einen Zylinderkopf."),
+    )
+    washer: bool = param(
+        title=_("Unterlegscheibe einlassen"),
+        default=False,
+        depends_on=("countersink", (False,)),
+        doc=_("Schneidet eine passende Auflage für die Unterlegscheibe."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        depends_on=("washer", (True,)),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
     head_room: float = param(
-        title=_("Kopffreiheit"),
+        title=_("Kopftiefe"),
         default=0.0,
         unit="mm",
         minimum=0.0,
         maximum=50.0,
         placement="advanced",
-        doc=_("Zylindrische Aussparung über der Senkung, für einen versenkten Kopf."),
+        doc=_("Wie tief Schraubenkopf und Unterlegscheibe in das Bauteil einsinken."),
     )
 
 
@@ -142,13 +173,18 @@ class ScrewHoleParams(BaseParams):
     group="fasteners",
     params=ScrewHoleParams,
     subtractive=True,
-    features=["bore", "countersink"],
+    features=["bore", "countersink", "washer"],
     doc=_(
         "Durchgangsloch zum Verschrauben mit einer metrischen Schraube, auf Wunsch "
         "mit 90-Grad-Senkung "
         "und Kopffreiheit. Maße aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, HEAD_ROOM_CUTS_DOWNWARD],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        HEAD_ROOM_CUTS_DOWNWARD,
+        SCREW_HEADS_USE_THEIR_OWN_RECESSES,
+    ],
 )
 def screw_hole(raw: BaseParams) -> PartResult:
     params = cast(ScrewHoleParams, raw)
@@ -188,8 +224,32 @@ def screw_hole(raw: BaseParams) -> PartResult:
         # Von der Mündung (mit einem Hundertstel Überstand) bis über die Senkung
         # hinab, damit der Zylinder mit ihr zusammenhängt statt einen Spalt zu
         # lassen.
-        room = shapes.cylinder(screw.countersink, params.head_room + 2.0 * BOOLEAN_OVERLAP)
+        head_diameter = screw.countersink if params.countersink else screw.head
+        room = shapes.cylinder(head_diameter, params.head_room + 2.0 * BOOLEAN_OVERLAP)
         parts.append(shapes.moved(room, (0.0, 0.0, top - BOOLEAN_OVERLAP)))
+
+    if params.washer and not params.countersink:
+        washer = standards.washer(params.size)
+        washer_diameter = washer.outer + params.play
+        recess = shapes.cylinder(washer_diameter, washer.thickness + 2.0 * BOOLEAN_OVERLAP)
+        # Die Scheibe ist die Auflage des Kopfes. Wird der Kopf abgesenkt,
+        # muss deshalb ihre ganze Tasche mit nach unten — sonst endet die
+        # Kopfaussparung wirkungslos unter einer weiterhin bündigen Scheibe.
+        washer_top = top
+        parts.append(
+            shapes.moved(
+                recess,
+                (0.0, 0.0, washer_top - washer.thickness - BOOLEAN_OVERLAP),
+            )
+        )
+        features.append(
+            bore(
+                "washer_1",
+                washer_diameter,
+                (0.0, 0.0, washer_top - washer.thickness / 2.0),
+                depth=washer.thickness,
+            )
+        )
 
     return result(union(*parts), *features)
 
@@ -332,10 +392,10 @@ def heatset_insert(raw: BaseParams) -> PartResult:
         # **Die Fase fragt nicht, wie viel Material die Buchse verdrängt.** Sie
         # fragt, wie man sie ansetzt, ohne dass sie kippt — und das ist ein
         # eigenes Maß. Vorher stand hier ``(outer - hole) / 2 + 0,3``, also die
-        # halbe Wandverdrängung; da in der Tabelle bei allen sechs Größen
-        # ``outer == hole`` eingetragen ist (zweimal die Bohrung, nicht der
-        # Rändeldurchmesser), war die Fase in Wahrheit konstant 0,3 mm. Der
-        # Fehler in der Tabelle und die falsche Ableitung deckten einander zu:
+        # halbe Wandverdrängung; da in der damaligen Tabelle bei allen sechs
+        # Größen ``outer == hole`` eingetragen war (zweimal die Bohrung, nicht
+        # der Rändeldurchmesser), war die Fase in Wahrheit konstant 0,3 mm. Der
+        # damalige Tabellenfehler und die falsche Ableitung deckten einander zu:
         # Wäre nur eines von beidem falsch gewesen, hätte man es gesehen.
         chamfer = INSERT_LEAD_IN
         lead = shapes.cone(entry.hole, entry.hole + 2.0 * chamfer, chamfer)

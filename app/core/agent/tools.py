@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
+from app.core.knowledge import standards
 from app.core.registry import REGISTRY, Registry, menu_path
 from app.core.registry import tool_schemas as op_schemas
 from app.i18n import _, tr
@@ -41,16 +42,7 @@ SET_PRINT_TARGET: Final = "set_print_target"
 
 #: Welche Tabellen der Normteilkatalog kennt (§24.2) — das Enum im Schema und
 #: die Prüfung in der Sitzung lesen dieselbe Liste.
-STANDARD_KINDS: Final[tuple[str, ...]] = (
-    "screw",
-    "nut",
-    "washer",
-    "insert",
-    "magnet",
-    "bearing",
-    "profile",
-    "tube",
-)
+STANDARD_KINDS: Final[tuple[str, ...]] = tuple(standards.TABLES)
 
 EXTRA_TOOLS: Final[tuple[str, ...]] = (
     ASK_USER,

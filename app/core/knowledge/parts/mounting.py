@@ -34,6 +34,7 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
+from app.core.units import is_greater
 from app.i18n import _
 
 FIRST_RELEASE = PartChange(
@@ -175,6 +176,30 @@ class MagnetPocketParams(BaseParams):
         choices=_MAGNETS,
         doc=_("Durchmesser mal Höhe des Rundmagneten, wie er im Handel heißt."),
     )
+    diameter: float = param(
+        title=_("Eigener Durchmesser"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=100.0,
+        placement="advanced",
+        doc=_(
+            "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
+            "Null verwendet die ausgewählte Größe."
+        ),
+    )
+    height: float = param(
+        title=_("Eigene Höhe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=30.0,
+        placement="advanced",
+        doc=_(
+            "Nur ausfüllen, wenn die passende Größe nicht in der Auswahl steht. "
+            "Null verwendet die ausgewählte Größe."
+        ),
+    )
     play: float = param(
         title=_("Spiel"),
         default=0.0,
@@ -231,7 +256,9 @@ class MagnetPocketParams(BaseParams):
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
     entry = standards.magnet(params.size)
-    diameter = entry.diameter + params.play
+    magnet_diameter = params.diameter or entry.diameter
+    magnet_height = params.height or entry.height
+    diameter = magnet_diameter + params.play
 
     # Der Ursprung ist die Mündung, die Tasche liegt darunter (§24.1). Eine
     # Decke schiebt sie tiefer hinein, statt sie anzuheben: über der Mündung
@@ -253,11 +280,26 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
     # eine Zeile darüber. Wo kein Profil bis hierher kommt, bleibt
     # ``MAGNET_LIP_GRIP`` der Rückfall — null hieße dort keine Lippe.
     grip = (params.grip or MAGNET_LIP_GRIP) if (params.press_lip and params.cover <= 0.0) else 0.0
-    narrow = entry.diameter - grip
-    lip_height = MAGNET_LIP_HEIGHT if grip else 0.0
+    if grip and not is_greater(magnet_diameter, grip):
+        raise ValidationError(
+            field="diameter",
+            detail=_(
+                "Der eigene Durchmesser muss größer als das Übermaß der "
+                "Haltelippe sein. Einen größeren Durchmesser eintragen oder "
+                "die Haltelippe ausschalten."
+            ),
+            value=magnet_diameter,
+            constraint="minimum",
+            values={"minimum": grip},
+        )
+    narrow = magnet_diameter - grip
+    # Bei sehr flachen Sondergrößen darf die feste Lippenhöhe nicht den
+    # Taschenboden umkehren. Mindestens die halbe Tiefe bleibt zylindrisch;
+    # Standardmagnete behalten unverändert die volle Lippenhöhe.
+    lip_height = min(MAGNET_LIP_HEIGHT, magnet_height / 2.0) if grip else 0.0
 
-    pocket = shapes.cylinder(diameter, entry.height - lip_height)
-    parts = [shapes.moved(pocket, (0.0, 0.0, mouth - entry.height))]
+    pocket = shapes.cylinder(diameter, magnet_height - lip_height)
+    parts = [shapes.moved(pocket, (0.0, 0.0, mouth - magnet_height))]
 
     if lip_height:
         parts.append(
@@ -281,8 +323,8 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
         bore(
             "pocket_1",
             diameter,
-            (0.0, 0.0, mouth - entry.height / 2.0),
-            depth=entry.height,
+            (0.0, 0.0, mouth - magnet_height / 2.0),
+            depth=magnet_height,
         ),
     )
 

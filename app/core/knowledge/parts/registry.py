@@ -514,8 +514,13 @@ def register_part(
 #: Eckwinkel halten die Mindestwandstärke, der Eckwinkel nennt die Mitte
 #: seiner Auflagefläche statt ihrer Kante, und das Übermaß der
 #: Magnet-Haltelippe kommt aus dem Materialprofil statt aus einer Zahl
-#: (``structure.py``, ``mounting.py``, 26.08.2026).
-LIBRARY_VERSION: Final = "11"
+#: (``structure.py``, ``mounting.py``, 26.08.2026). Version 12: Das
+#: Schraubenloch benutzt für einen zylindrischen Kopf dessen wirkliches Maß
+#: und kann eine Unterlegscheibe einlassen. Im selben Stand kommen der neue
+#: Lagersitz und optionale Sondermaße für Magnet und Kabel hinzu; Letztere
+#: ändern bestehende Projekte nicht und stehen deshalb nicht in deren
+#: Maßänderungsverlauf (28.08.2026).
+LIBRARY_VERSION: Final = "12"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

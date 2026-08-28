@@ -54,13 +54,13 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu acht.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu elf.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Zehn stehen nicht in der Erstbestückung**, und alle zehn sind eine Ansage
+    **Elf stehen nicht in der Erstbestückung**, und alle elf sind eine Ansage
     und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
@@ -118,10 +118,15 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     Materialspiel wie das druckbare Gewinde, damit ein Behältergewinde, sein
     Deckel und eine lösbare Schraubverbindung nicht drei unvereinbare Maße
     bekommen.
+
+    ``bearing_seat`` kam am 28.08.2026 dazu. Lagermaße standen schon in der
+    Normteiltabelle, waren aber im Katalog nicht benutzbar. Der Lagersitz macht
+    daraus eine einfache Auswahl: Lagernummer wählen und entscheiden, ob das
+    Lager wechselbar oder fest eingepresst sein soll.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 23
+    assert len(building) == 24
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -1095,6 +1100,37 @@ def test_the_table_answers_the_question_from_the_plan() -> None:
     assert standards.nut("M4").width == pytest.approx(7.0)
 
 
+def test_every_screw_size_has_a_matching_standard_washer() -> None:
+    """Eine angebotene Schraube darf nicht erst beim Scheibensitz aus der Tabelle fallen."""
+    assert set(standards.washer_sizes()) == set(standards.screw_sizes())
+
+
+def test_heatset_entries_name_the_real_product_variant() -> None:
+    """Eine Gewindegröße allein unterscheidet lange und kurze Buchsen nicht."""
+    regular = standards.insert("M4")
+    short = standards.insert("M4S")
+
+    assert regular.thread == short.thread == "M4"
+    assert regular.length == pytest.approx(8.1)
+    assert short.length == pytest.approx(4.0)
+    assert regular.outer == short.outer == pytest.approx(6.3, abs=0.01)
+
+
+def test_every_heatset_insert_is_wider_than_its_installation_hole() -> None:
+    """`outer == hole` war zweimal dieselbe Bohrung, kein Buchsenmaß."""
+    for size in standards.insert_sizes():
+        entry = standards.insert(size)
+        assert entry.outer > entry.hole
+        assert entry.thread in standards.screw_sizes()
+
+
+def test_the_bearing_table_covers_small_and_common_housings() -> None:
+    """Der Lagersitz soll nicht nur die eine Skateboardgröße anbieten."""
+    assert {"623", "624", "625", "626", "608", "6800", "6000", "6001"} <= set(
+        standards.bearing_sizes()
+    )
+
+
 def test_every_screw_has_the_holes_that_belong_to_it() -> None:
     for size in standards.screw_sizes():
         entry = standards.screw(size)
@@ -1130,6 +1166,70 @@ def test_every_table_can_be_looked_up_by_its_kind() -> None:
         found = standards.table(kind)
         assert found, f"{kind} liefert keine Tabelle"
     assert standards.table("kein-normteil") is None
+
+
+def test_agent_and_table_offer_the_same_standard_kinds() -> None:
+    """Eine neue Tabellenart erreicht Agent und Oberfläche ohne zweite Liste."""
+    from app.core.agent.tools import STANDARD_KINDS
+
+    assert tuple(standards.TABLES) == STANDARD_KINDS
+    assert "board" in STANDARD_KINDS, "Lochwandmaße sind hinterlegt und müssen lesbar sein"
+
+
+def test_every_typed_standard_table_offers_its_sizes() -> None:
+    """Scheiben und Lager sind keine Tabellen zweiter Klasse."""
+    assert standards.washer_sizes() == tuple(standards.load().washers)
+    assert standards.bearing_sizes() == tuple(standards.load().bearings)
+
+
+def test_duplicate_standard_sizes_are_rejected(tmp_path: Path) -> None:
+    """Ein Tippfehler darf keinen älteren Datensatz still überschreiben."""
+    table = tmp_path / "standards.toml"
+    table.write_text(
+        """
+version = "test"
+
+[[magnets]]
+size = "8x3"
+diameter = 8.0
+height = 3.0
+
+[[magnets]]
+size = "8x3"
+diameter = 9.0
+height = 3.0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as raised:
+        standards.load(table)
+    assert raised.value.values["size"] == "8x3"
+
+
+def test_impossible_standard_dimensions_are_rejected(tmp_path: Path) -> None:
+    """Innendurchmesser, Außenmaß und Verweise werden beim Laden geprüft."""
+    table = tmp_path / "standards.toml"
+    table.write_text(
+        """
+version = "test"
+
+[[bearings]]
+size = "verkehrt"
+inner = 12.0
+outer = 10.0
+width = 4.0
+""".strip(),
+        encoding="utf-8",
+    )
+
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as raised:
+        standards.load(table)
+    assert raised.value.values["size"] == "verkehrt"
 
 
 def test_an_unknown_size_says_what_is_known() -> None:
@@ -1973,6 +2073,192 @@ def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:
     )
 
 
+def test_a_round_screw_head_gets_its_own_diameter() -> None:
+    """„Senkung aus“ meint einen Zylinderkopf, nicht einen breiten Senkkopf."""
+    spec = PARTS.get("screw_hole")
+    built = spec.fn(
+        spec.params(
+            size="M4",
+            depth=10.0,
+            countersink=False,
+            head_room=3.0,
+        )
+    )
+
+    diameter = built.mesh.bounds.size[0]
+    screw = standards.screw("M4")
+    assert diameter == pytest.approx(screw.head, abs=0.1)
+    assert diameter < screw.countersink - 0.5, "die runde Aussparung nimmt das Senkkopfmaß"
+
+
+def test_the_screw_head_choice_only_promises_the_supported_round_head() -> None:
+    """Der Dialog darf einen Linsenkopf nicht mit dem Zylinderkopfmaß gleichsetzen."""
+    countersink = next(
+        entry for entry in PARTS.get("screw_hole").params.spec() if entry.name == "countersink"
+    )
+
+    assert "Zylinderkopf" in str(countersink.doc)
+    assert "Linsenkopf" not in str(countersink.doc)
+
+
+def test_a_screw_hole_can_recess_its_standard_washer() -> None:
+    """Die Tabellenmaße der Scheibe müssen als passende Tasche nutzbar sein."""
+    spec = PARTS.get("screw_hole")
+    washer = standards.washer("M4")
+    built = spec.fn(
+        spec.params(
+            size="M4",
+            depth=10.0,
+            countersink=False,
+            head_room=0.0,
+            washer=True,
+            play=0.2,
+        )
+    )
+
+    recess = built.features["washer_1"]
+    assert recess.params["diameter"] == pytest.approx(washer.outer + 0.2)
+    assert recess.params["depth"] == pytest.approx(washer.thickness)
+    assert built.mesh.bounds.size[0] == pytest.approx(washer.outer + 0.2, abs=0.02)
+
+
+def test_a_recessed_washer_follows_the_screw_head_depth() -> None:
+    """Kopftiefe senkt die Scheibenauflage mit ab, statt unter ihr leer zu enden."""
+    spec = PARTS.get("screw_hole")
+    washer = standards.washer("M4")
+    head_depth = 3.0
+    built = spec.fn(
+        spec.params(
+            size="M4",
+            depth=10.0,
+            countersink=False,
+            head_room=head_depth,
+            washer=True,
+            play=0.2,
+        )
+    )
+
+    recess = built.features["washer_1"]
+    assert recess.params["centre"][2] == pytest.approx(-head_depth - washer.thickness / 2.0)
+    assert recess.params["depth"] == pytest.approx(washer.thickness)
+
+
+def test_short_and_regular_heatset_inserts_cut_their_named_depth() -> None:
+    """Im Feld wählt man die gekaufte Länge; dieselbe muss im Modell ankommen."""
+    spec = PARTS.get("heatset_m4")
+    regular = spec.fn(spec.params(size="M4", extra_depth=0.0))
+    short = spec.fn(spec.params(size="M4S", extra_depth=0.0))
+
+    assert regular.mesh.bounds.size[2] == pytest.approx(8.1, abs=0.02)
+    assert short.mesh.bounds.size[2] == pytest.approx(4.0, abs=0.02)
+
+
+def test_a_bearing_seat_uses_the_bearing_and_material_fit() -> None:
+    """Außenmaß und Breite kommen aus der Tabelle, die Passung aus dem Profil."""
+    spec = PARTS.get("bearing_seat")
+    bearing = standards.bearing("608")
+    removable = spec.fn(
+        spec.params(size="608", removable=True, play=0.25, grip=0.05, extra_depth=0.0)
+    )
+    pressed = spec.fn(
+        spec.params(size="608", removable=False, play=0.25, grip=0.05, extra_depth=0.0)
+    )
+
+    assert removable.mesh.bounds.size[0] == pytest.approx(bearing.outer + 0.25, abs=0.02)
+    assert pressed.mesh.bounds.size[0] == pytest.approx(bearing.outer - 0.05, abs=0.02)
+    assert removable.mesh.bounds.size[2] == pytest.approx(bearing.width, abs=0.02)
+    seat = removable.features["seat_1"]
+    assert seat.params["diameter"] == pytest.approx(bearing.outer + 0.25)
+    assert seat.params["depth"] == pytest.approx(bearing.width)
+
+
+def test_a_bearing_seat_only_offers_the_fit_value_that_has_an_effect() -> None:
+    """Niemand soll einen sichtbaren Passungswert eintragen, den der Sitz ignoriert."""
+    fields = {entry.name: entry for entry in PARTS.get("bearing_seat").params.spec()}
+
+    assert fields["play"].depends_on == ("removable", (True,))
+    assert fields["grip"].depends_on == ("removable", (False,))
+
+
+def test_a_custom_magnet_size_reaches_the_pocket() -> None:
+    """Ein gemessener Magnet darf benutzt werden, ohne eine Normbezeichnung zu kennen."""
+    spec = PARTS.get("magnet_pocket")
+    built = spec.fn(
+        spec.params(
+            size="6x3",
+            diameter=9.0,
+            height=4.0,
+            play=0.2,
+            press_lip=False,
+            cover=0.0,
+        )
+    )
+
+    pocket = built.features["pocket_1"]
+    assert pocket.params["diameter"] == pytest.approx(9.2)
+    assert pocket.params["depth"] == pytest.approx(4.0)
+    assert built.mesh.bounds.size[2] == pytest.approx(4.0, abs=0.02)
+
+
+def test_a_shallow_custom_magnet_keeps_its_depth_with_a_lip() -> None:
+    """Eine Haltelippe darf aus einer flachen Sondergröße keine tiefere Tasche machen."""
+    spec = PARTS.get("magnet_pocket")
+    built = spec.fn(
+        spec.params(
+            size="6x3",
+            diameter=6.0,
+            height=0.2,
+            play=0.0,
+            press_lip=True,
+            grip=0.1,
+            cover=0.0,
+        )
+    )
+
+    assert built.features["pocket_1"].params["depth"] == pytest.approx(0.2)
+    assert built.mesh.bounds.size[2] == pytest.approx(0.2, abs=0.02)
+
+
+def test_a_custom_magnet_too_narrow_for_its_lip_gets_a_clear_error() -> None:
+    """Ein unmögliches Übermaß darf keine negative Öffnung an die Geometrie reichen."""
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("magnet_pocket")
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(
+            spec.params(
+                size="6x3",
+                diameter=0.1,
+                height=1.0,
+                press_lip=True,
+                grip=0.1,
+                cover=0.0,
+            )
+        )
+
+    assert caught.value.field == "diameter"
+    assert caught.value.suggestions, "Regel 17: die Korrektur braucht eine Handlung"
+
+
+def test_a_custom_cable_diameter_reaches_gland_and_clip() -> None:
+    """Ein gemessenes Kabelmaß gilt in beiden Kabelbausteinen gleich."""
+    gland = PARTS.get("cable_gland")
+    gland_built = gland.fn(
+        gland.params(
+            size="cable-5",
+            diameter=9.0,
+            play=0.2,
+            strain_relief=False,
+        )
+    )
+    assert gland_built.features["bore_1"].params["diameter"] == pytest.approx(9.2)
+
+    clip = PARTS.get("cable_clip")
+    clip_values = clip.params(size="cable-5", diameter=9.0, play=0.2, width=8.0)
+    clip_built = clip.fn(clip_values)
+    assert clip_built.features["seat_1"].params["area"] == pytest.approx(9.2 * 8.0)
+
+
 def test_every_play_field_defaults_to_the_profile() -> None:
     """Regel 7: `_part_values` füllt das Spiel nur bei **null** aus dem
     Materialprofil — jede andere Vorgabe ist eine feste Zahl, die die
@@ -1990,7 +2276,7 @@ def test_every_play_field_defaults_to_the_profile() -> None:
         assert play.default == 0.0, (
             f"{spec.name}: Vorgabe {play.default} statt Verweis ins Materialprofil"
         )
-    assert checked >= 7, "die Prüfung muss die Bausteine mit Spiel wirklich sehen"
+    assert checked >= 8, "die Prüfung muss die Bausteine mit Spiel wirklich sehen"
 
 
 @pytest.mark.parametrize("size", list(standards.profile_sizes()))
@@ -2911,6 +3197,15 @@ def test_the_two_changed_parts_report_themselves_to_old_projects() -> None:
     assert changed_since_library(vorher, ["pegboard_hook"]) == ("pegboard_hook",), (
         f"a project computed at library {vorher} is never told the hook grew a latch"
     )
+
+
+def test_additional_size_fields_do_not_claim_that_old_geometry_changed() -> None:
+    """Neue optionale Eingaben sind kein Maßwechsel für bestehende Projekte."""
+    from app.core.knowledge.parts.registry import changed_since_library
+
+    unchanged = ["cable_clip", "cable_gland", "magnet_pocket"]
+    assert changed_since_library("11", unchanged) == ()
+    assert changed_since_library("11", ["screw_hole"]) == ("screw_hole",)
 
 
 @pytest.mark.parametrize("size", ["M3", "M4", "M6"])
