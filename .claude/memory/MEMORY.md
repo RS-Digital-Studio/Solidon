@@ -58,8 +58,6 @@
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „das heilt sich später von selbst" setzt jemanden voraus, der heilen kann; die Urheber-Sitzung war seit zwei Stunden beendet.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — bevor man eine Wissenslücke behauptet, sucht man über py/md/toml, nicht nur Markdown; Regeln stehen auch im eingecheckten Hook, und der injiziert sie oben in den eigenen Kontext.
 
-- [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML als Artifact; jede neue beginnt mit dem Übertrag, und jeder „offene“ Punkt der Vorversion wird am Code nachgemessen, nicht abgeschrieben.
-
 ## Haltung
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
 
@@ -81,6 +79,7 @@
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
 - [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
+- [Messung iterierte die Schlüssel](messung-iterierte-die-schluessel.md) — `for o in <dict>` gibt Zeichenketten, `getattr` darauf gibt `None`, und `None == None` liest sich wie Gleichheit; neun grüne Zeilen und eine verkehrte Entwarnung.
 - [Wächter-Reichweite nur im Kommentar](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte „opérations" ausdrücklich mit, das Muster traf es nie; genau dort stand dann der Fehler.
 - [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) — fünf Sollwert-Tests quer zur Achse sind ein Test; der Normalfall einer Funktion ist oft die Lage, in der der Fehlerterm wegfällt, und der exakte Treffer ist der einzige konstruktionsfreie Sollwert.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
