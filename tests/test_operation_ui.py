@@ -630,7 +630,8 @@ def test_the_greyed_out_entry_says_why(window: MainWindow) -> None:
     window._update_actions()
 
     hint = window._op_actions["fillet_edges"].toolTip()
-    assert "B-Rep" in hint or "exakt" in hint.casefold()
+    assert "Flächen und Kanten" in hint
+    assert "später bearbeiten" in hint
 
 
 def test_the_same_operations_are_available_on_an_exact_body(window: MainWindow) -> None:

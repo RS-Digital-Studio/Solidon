@@ -1122,6 +1122,9 @@ def test_a_mesh_exported_as_step_is_told_before_the_file_is_written(
     assert finding.severity == "error"
     assert finding.object_id == "obj_1", "welcher Körper es ist"
     gesagt = str(finding.message)
+    assert "bearbeitbare Flächen und Kanten" in gesagt
+    assert "festen Dreiecken" in gesagt
+    assert "B-Rep" not in gesagt and "exakter Körper" not in gesagt
     assert "STL" in gesagt and "3MF" in gesagt, "Regel 17: was jetzt geht"
 
 
@@ -1197,6 +1200,10 @@ def test_step_for_meshes_alone_still_refuses(tmp_path: Path, profile: Profile) -
     with pytest.raises(NeedsSolidError) as caught:
         write_plan(plan, tmp_path, "step")
 
+    text = f"{caught.value.title} {caught.value.detail}"
+    assert "bearbeitbare Flächen und Kanten" in text
+    assert "festen Dreiecken" in text
+    assert "B-Rep" not in text and "exakter Körper" not in text
     assert caught.value.suggestions, "Regel 17"
     assert not list(tmp_path.iterdir()), "und keine halbe Bescherung im Ordner"
 

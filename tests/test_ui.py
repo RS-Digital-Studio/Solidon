@@ -280,9 +280,15 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
 
     for spec in REGISTRY.all():
         if spec.name in MENU_TWINS:
-            assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
+            # Beide Zwillinge tragen absichtlich denselben verständlichen
+            # Titel. Am Text lässt sich deshalb nicht erkennen, ob Qt zwei
+            # Einträge gebaut hat; die Aktionszuordnung kann es eindeutig.
+            assert spec.name not in window._op_actions, (
+                f"{spec.name} soll kein eigener Eintrag sein"
+            )
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
             partner = REGISTRY.get(MENU_TWINS[spec.name])
+            assert partner.name in window._op_actions, "der sichtbare Zwilling trägt den Eintrag"
             assert str(partner.title) in labels, "der sichtbare Zwilling trägt den Eintrag"
             continue
         if spec.name in variant_members():
@@ -1570,6 +1576,27 @@ def test_the_tree_names_the_step_a_body_came_from(window: MainWindow) -> None:
     assert "Modell laden" in tip, tip
 
 
+def test_the_tree_explains_editability_without_cad_vocabulary(window: MainWindow) -> None:
+    """Die Körperart nennt die Folge, nicht den Namen des Rechenkerns."""
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    body = dataclasses.replace(result.scene.objects["obj_1"], name="Werkstück", kind="brep")
+    scene = dataclasses.replace(result.scene, objects={"obj_1": body})
+
+    window.object_tree.show_scene(
+        dataclasses.replace(result, scene=scene), window.session.project.document
+    )
+
+    item = window.object_tree.tree.topLevelItem(0)
+    assert "weiter bearbeitbar" in item.text(0)
+    assert "Flächen und Kanten einzeln bearbeitbar" in item.toolTip(0)
+    customer_text = f"{item.text(0)} {item.toolTip(0)}".casefold()
+    assert "b-rep" not in customer_text
+    assert "exakt" not in customer_text
+    assert "normal" not in customer_text
+
+
 def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
     """Entf ist eine Operation, also holt ein Undo den Körper zurück."""
     _with_two_objects(window)
@@ -1583,12 +1610,16 @@ def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
 
 
 def _exact_toggle(window: MainWindow) -> Any:
-    """Der Haken „Exakter Körper (B-Rep)" im offenen Dialog."""
+    """Der Haken für später einzeln bearbeitbare Flächen und Kanten."""
     from PySide6.QtWidgets import QCheckBox
 
     dialog = window._op_dialog
     assert dialog is not None
-    haken = [box for box in dialog.findChildren(QCheckBox) if "xakt" in box.text()]
+    haken = [
+        box
+        for box in dialog.findChildren(QCheckBox)
+        if "Flächen und Kanten" in box.text()
+    ]
     assert haken, [box.text() for box in dialog.findChildren(QCheckBox)]
     return haken[0]
 
@@ -4690,7 +4721,11 @@ def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> No
     window.run_operation(REGISTRY.get("create_box"))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
-        exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+        exact = next(
+            box
+            for box in dialog.findChildren(QCheckBox)
+            if "Flächen und Kanten" in box.text()
+        )
 
         assert exact.isVisibleTo(dialog), "der Umschalter liegt wieder eingeklappt"
         advanced = getattr(dialog, "advanced", None)
@@ -4711,7 +4746,11 @@ def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> N
 
     window.run_operation(REGISTRY.get("create_box"))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+    exact = next(
+        box
+        for box in dialog.findChildren(QCheckBox)
+        if "Flächen und Kanten" in box.text()
+    )
     exact.setChecked(True)
     # ``accept`` wendet an und räumt den Dialog selbst ab — danach gehört
     # das C++-Objekt niemandem mehr, auch keinem ``finally``.
@@ -4748,7 +4787,11 @@ def test_the_exact_twin_hides_what_it_cannot_do(
     window.run_operation(REGISTRY.get(shown))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     dialog.advanced.setChecked(True)
-    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+    exact = next(
+        box
+        for box in dialog.findChildren(QCheckBox)
+        if "Flächen und Kanten" in box.text()
+    )
 
     assert dialog._editors[gone].isVisibleTo(dialog), "im Netzkern hat das Feld seine Wirkung"
     exact.setChecked(True)
@@ -7240,7 +7283,11 @@ def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
     op_id = window.session.project.document.ops[0].id
     window.edit_operation(op_id)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
-    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+    exact = next(
+        box
+        for box in dialog.findChildren(QCheckBox)
+        if "Flächen und Kanten" in box.text()
+    )
     assert not exact.isChecked(), "der Haken steht auf dem, was im Verlauf steht"
     assert exact.isVisibleTo(dialog), "und er ist zu sehen, ohne aufzuklappen"
     exact.setChecked(True)
@@ -7272,7 +7319,11 @@ def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindo
     window.edit_operation(op_id)
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
     try:
-        exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+        exact = next(
+            box
+            for box in dialog.findChildren(QCheckBox)
+            if "Flächen und Kanten" in box.text()
+        )
         assert exact.isChecked(), "der Schritt ist der exakte — der Haken sagt es"
         assert "anchor" in dialog._editors, "der Dialog kennt die Felder des Netzkerns"
     finally:

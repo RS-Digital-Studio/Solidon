@@ -1021,7 +1021,8 @@ def _needs_solid() -> NeedsSolidError:
     """
     return NeedsSolidError(
         detail=_(
-            "STEP hält Flächen und Kanten fest. Ein Netz hat keine — dafür bleiben STL und 3MF."
+            "STEP bewahrt einzeln bearbeitbare Flächen und Kanten. Dieses Modell "
+            "besteht aus festen Dreiecken; dafür bleiben STL und 3MF."
         ),
         values={"field": "format", "constraint": "needs_brep"},
     )

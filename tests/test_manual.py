@@ -292,6 +292,21 @@ def test_no_page_is_empty() -> None:
         assert len(str(page.body).strip()) > 80, page.key
 
 
+def test_the_written_manual_does_not_require_cad_vocabulary() -> None:
+    """Ein Einstieg für Anfänger erklärt die Wirkung statt den Rechenkern."""
+    written = "\n".join(str(page.body) for page in manual.INTRODUCTION).casefold()
+
+    for jargon in (
+        "b-rep",
+        "exakter körper",
+        "exakte körper",
+        "normaler körper",
+        "zweiten rechenkern",
+        "zweiten konstruktionskern",
+    ):
+        assert jargon not in written, jargon
+
+
 def test_the_explanations_cover_what_a_schema_cannot_say() -> None:
     """Die geschriebenen Seiten tragen das, was in keinem Parameterschema steht."""
     written = "\n".join(str(page.body) for page in manual.pages() if not page.generated)

@@ -16,6 +16,7 @@ from app.core.errors import ValidationError
 from app.core.expressions import check as check_expression
 from app.core.knowledge import licences, profiles
 from app.core.registry import (
+    MENU_TWINS,
     REGISTRY,
     cli_commands,
     context_menu,
@@ -58,12 +59,21 @@ def test_operations_are_visible_in_every_surface(qt_app: object) -> None:
     assert {schema["name"] for schema in tool_schemas()} == names
 
     # Das Objekt-Kontextmenü bietet jede Operation an, die auf einem Objekt
-    # arbeitet, das Merkmal-Kontextmenü alles, was für diese Art deklariert
-    # ist (§10, §18.5).
+    # arbeitet. Zusammengelegte Rechenwege stehen als eine verständliche
+    # Handlung da; der sichtbare Partner führt über seinen Dialog auch zum
+    # verborgenen Weg. Das Merkmal-Kontextmenü bietet alles, was für seine Art
+    # deklariert ist (§10, §18.5).
     from app.ui.panels import ObjectTree
 
     offered = {spec.name for spec in ObjectTree.operations_for_object(None)}  # type: ignore[arg-type]
-    assert offered == {spec.name for spec in REGISTRY.all() if spec.consumes == 1}
+    visible = {
+        spec.name for spec in REGISTRY.all() if spec.consumes == 1 and spec.name not in MENU_TWINS
+    }
+    assert offered == visible
+    visible_twins = {
+        shown for hidden, shown in MENU_TWINS.items() if REGISTRY.get(hidden).consumes == 1
+    }
+    assert visible_twins.issubset(offered)
     assert {spec.name for spec in context_menu("hole")} == {
         spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to
     }

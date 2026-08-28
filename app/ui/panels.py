@@ -797,9 +797,9 @@ class ObjectTree(QWidget):
             # CAD-Wissen voraus und lassen das Dreiecksmodell wie die
             # schlechtere Wahl aussehen.
             kind = (
-                tr("Kanten weiter bearbeitbar")
+                tr("Flächen und Kanten einzeln bearbeitbar")
                 if entry.kind == "brep"
-                else tr("Feste Dreiecksflächen")
+                else tr("Einzelne Flächen und Kanten nicht bearbeitbar")
             )
             tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
             if entry.material:
@@ -813,7 +813,9 @@ class ObjectTree(QWidget):
                 tip += f" · {origin}"
             item.setToolTip(0, tip)
             if entry.kind == "brep":
-                item.setText(0, f"{entry.name}  ·  {kind}")
+                # Die ausführliche Folge steht im Tooltip; im schmalen Baum
+                # muss die zweite Kodierung vollständig lesbar bleiben.
+                item.setText(0, f"{entry.name}  ·  {tr('weiter bearbeitbar')}")
             if object_id in self._hidden:
                 # Zeichen und Wort: eine ausgegraute Zeile allein wäre Farbe als
                 # einzige Kodierung (Regel 18).
