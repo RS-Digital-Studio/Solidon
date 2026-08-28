@@ -819,28 +819,31 @@ def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_start_page_places_support_between_download_and_picture(page: str) -> None:
-    """Die schmale Ansicht bleibt logisch; das Raster verschiebt nur die Spalten."""
+def test_each_start_page_keeps_picture_before_support(page: str) -> None:
+    """Sichtbare und technische Leserichtung bleiben in jeder Breite gleich."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
     download = text.index('<div class="download"')
-    support = text.index('<div class="donate hero-donate">')
+    side = text.index('<div class="hero-side">')
     picture = text.index('<div class="shot hero-shot">')
+    support = text.index('<div class="donate hero-donate">')
 
-    assert download < support < picture, (
-        f"{page}: Download, Unterstützung und Produktbild stehen nicht in ihrer mobilen Reihenfolge"
+    assert download < side < picture < support, (
+        f"{page}: Download, Produktbild und Unterstützung stehen nicht in ihrer Leserichtung"
     )
 
 
-def test_wide_hero_places_support_below_the_product_picture() -> None:
-    """Im breiten Raster teilen Produktbild und Unterstützung die rechte Spalte."""
+def test_hero_keeps_picture_and_support_in_one_column() -> None:
+    """Eine eigene Produktspalte verhindert verteilte Rasterhöhe und Fokus-Sprünge."""
     styles = (WEBSITE / "style.css").read_text(encoding="utf-8")
 
-    assert '"copy picture"\n      "copy support"' in styles
-    assert re.search(r"\.hero \.shot\s*\{[^}]*grid-area:\s*picture", styles, re.DOTALL)
-    assert re.search(
-        r"\.hero \.hero-donate\s*\{[^}]*grid-area:\s*support", styles, re.DOTALL
-    )
+    side = re.search(r"\.hero-side\s*\{([^}]*)\}", styles, re.DOTALL)
+    assert side is not None
+    assert "display: grid" in side.group(1)
+    assert "gap: 1rem" in side.group(1)
+    assert '"copy picture"' not in styles
+    assert "grid-area: picture" not in styles
+    assert "grid-area: support" not in styles
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -848,7 +851,8 @@ def test_each_paypal_donation_says_what_it_does_not_buy(page: str) -> None:
     """Freiwillig steht nicht nur im Konzept, sondern unmittelbar am Knopf."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
     block = re.search(
-        r'<div class="donate(?: [^"]*)?">(.*?)</div>\s*<div class="shot hero-shot">',
+        r'<div class="donate(?: [^"]*)?">\s*<div>(.*?)</div>\s*'
+        r'<a class="donate-button"[^>]*>.*?</a>\s*</div>',
         text,
         re.DOTALL,
     )

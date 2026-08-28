@@ -79,8 +79,9 @@ finanzieren. Nirgendwo darf daraus „vorbestellen“, „früher bekommen“ od
 
 Der Spendenknopf steht auf allen sechs Startseiten im Aufmacher. Auf breiten
 Bildschirmen nutzt er den Platz unter dem Produktbild rechts neben dem
-Download; auf schmalen Bildschirmen folgt er dem Download und steht vor dem
-Bild. Er ist ein gewöhnlicher Verweis und kein eingebettetes PayPal-Widget.
+Download; auf schmalen Bildschirmen folgen Produktbild und Spendenknopf dem
+Download in derselben Reihenfolge. Er ist ein gewöhnlicher Verweis und kein
+eingebettetes PayPal-Widget.
 
 Das hat vier beabsichtigte Folgen:
 
