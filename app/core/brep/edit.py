@@ -16,6 +16,7 @@ zugeordnet werden).
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -308,6 +309,65 @@ def bore(
     frame = gp_Ax2(gp_Pnt(*origin), gp_Dir(*direction))
     cutter = Solid(BRepPrimAPI_MakeCylinder(frame, diameter / 2.0, length).Shape())
     return boolean("difference", [solid, cutter])
+
+
+def resize_bore(
+    solid: Solid,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    previous_diameter: float,
+    diameter: float,
+    depth: float,
+) -> Solid:
+    """Ändert eine erkannte Bohrung und erhält den exakten Körper.
+
+    Dieselbe Konstruktion wie beim Netz-Zwilling: Vergrößern trägt einen
+    Zylinder ab, Verkleinern vereinigt einen Ring mit der vorhandenen Wand.
+    Der Ring greift um ``EPS_GEOM`` ins Material, damit zwei Flächen nicht nur
+    aufeinanderliegen. Das Ergebnismaß bleibt der innere Radius und damit
+    exakt der gewählte Durchmesser.
+    """
+    if abs(diameter - previous_diameter) <= EPS_GEOM:
+        return solid
+    if depth <= EPS_GEOM:
+        raise ValueError("a detected bore must have a positive depth")
+
+    length = math.sqrt(sum(float(value) ** 2 for value in direction))
+    if length <= EPS_GEOM:
+        raise ValueError("a bore direction must not be zero")
+    unit: Vec3 = (
+        float(direction[0]) / length,
+        float(direction[1]) / length,
+        float(direction[2]) / length,
+    )
+    start: Vec3 = (
+        float(position[0]) - unit[0] * depth / 2.0,
+        float(position[1]) - unit[1] * depth / 2.0,
+        float(position[2]) - unit[2] * depth / 2.0,
+    )
+    cutter = _oriented_cylinder(start, unit, diameter / 2.0, depth)
+    if diameter > previous_diameter:
+        return boolean("difference", [solid, cutter])
+
+    outer = _oriented_cylinder(
+        start,
+        unit,
+        previous_diameter / 2.0 + EPS_GEOM,
+        depth,
+    )
+    ring = boolean("difference", [outer, cutter])
+    return boolean("union", [solid, ring])
+
+
+def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: float) -> Solid:
+    """Ein exakter Zylinder an freier Achse, gemeinsam für die Ringrechnung."""
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    frame = gp_Ax2(gp_Pnt(*origin), gp_Dir(*direction))
+    return Solid(BRepPrimAPI_MakeCylinder(frame, radius, height).Shape())
 
 
 def moved(solid: Solid, offset: Vec3) -> Solid:

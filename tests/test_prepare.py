@@ -20,12 +20,14 @@ from app.core.geom.prepare import (
     drill,
     into_the_body,
     plug,
+    resize_bore,
     split_at_plane,
 )
 from app.core.geom.section import SectionPlane
-from app.core.geom.transform import apply, translation
+from app.core.geom.transform import apply, rotation, translation
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
+from app.core.perceive.features import detect
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
@@ -110,6 +112,111 @@ def test_the_compensation_comes_from_the_material_not_from_a_literal() -> None:
     tpu = profiles.make_profile("centauri-carbon-2", "tpu-95a")
 
     assert bore_diameter(5.0, petg, True) != bore_diameter(5.0, tpu, True)
+
+
+def test_an_imported_bore_can_be_made_larger_and_smaller(profile: Profile) -> None:
+    """Die Korpusplatte ist der Kundenweg: STL hinein, Bohrung anklicken,
+    neues Maß eintragen.
+
+    Beide Richtungen gehören zur Zusage. Nur größer wäre bloß ein zweites
+    *Bohrung setzen*; nur kleiner zwänge den Kunden weiter zu Stopfen plus
+    neuer Bohrung und damit zu zwei Koordinatensätzen.
+    """
+    body = plate()
+    feature = detect(body)["hole_1"]
+    common = {
+        "position": feature.params["centre"],
+        "direction": feature.params["axis"],
+        "previous_diameter": feature.params["diameter"],
+        "depth": feature.params["depth"],
+        "through": feature.params["through"],
+        "profile": profile,
+        "compensate": False,
+    }
+
+    larger = resize_bore(body, diameter=7.0, seed=11, **common)
+    smaller = resize_bore(body, diameter=3.0, seed=11, **common)
+
+    assert larger.mesh.is_watertight and smaller.mesh.is_watertight
+    assert larger.mesh.volume < body.volume < smaller.mesh.volume
+    assert len([entry for entry in detect(larger.mesh).values() if entry.kind == "hole"]) == 4
+    assert len([entry for entry in detect(smaller.mesh).values() if entry.kind == "hole"]) == 4
+    enlarged = min(
+        (entry for entry in detect(larger.mesh).values() if entry.kind == "hole"),
+        key=lambda entry: sum(
+            (float(a) - float(b)) ** 2
+            for a, b in zip(entry.params["centre"], feature.params["centre"], strict=True)
+        ),
+    )
+    reduced = min(
+        (entry for entry in detect(smaller.mesh).values() if entry.kind == "hole"),
+        key=lambda entry: sum(
+            (float(a) - float(b)) ** 2
+            for a, b in zip(entry.params["centre"], feature.params["centre"], strict=True)
+        ),
+    )
+    assert enlarged.params["diameter"] == pytest.approx(7.0, abs=0.03)
+    assert reduced.params["diameter"] == pytest.approx(3.0, abs=0.03)
+
+
+def test_a_slanted_imported_bore_keeps_its_axis(profile: Profile) -> None:
+    """Erkannte Bohrungen sind nicht auf die drei Weltachsen beschränkt.
+
+    Ein STL aus dem Netz liegt oft gedreht. Die Bedienung darf daraus keine
+    versteckte CAD-Aufgabe machen, bei der der Kunde erst eine Achse errät.
+    """
+    body = apply(apply(plate(), rotation("y", 31.0)), rotation("x", 19.0))
+    feature = detect(body)["hole_1"]
+
+    result = resize_bore(
+        body,
+        position=feature.params["centre"],
+        direction=feature.params["axis"],
+        previous_diameter=feature.params["diameter"],
+        diameter=7.0,
+        depth=feature.params["depth"],
+        through=feature.params["through"],
+        profile=profile,
+        compensate=False,
+        seed=13,
+    )
+
+    nearest = min(
+        (entry for entry in detect(result.mesh).values() if entry.kind == "hole"),
+        key=lambda entry: sum(
+            (float(a) - float(b)) ** 2
+            for a, b in zip(entry.params["centre"], feature.params["centre"], strict=True)
+        ),
+    )
+    assert nearest.params["diameter"] == pytest.approx(7.0, abs=0.03)
+    assert abs(
+        sum(
+            float(a) * float(b)
+            for a, b in zip(nearest.params["axis"], feature.params["axis"], strict=True)
+        )
+    ) == pytest.approx(1.0, abs=0.01)
+
+
+def test_an_unchanged_bore_does_not_recalculate_the_mesh(profile: Profile) -> None:
+    """Dialog öffnen und unverändert bestätigen erzeugt keine neue Rundung."""
+    body = plate()
+    feature = detect(body)["hole_1"]
+
+    result = resize_bore(
+        body,
+        position=feature.params["centre"],
+        direction=feature.params["axis"],
+        previous_diameter=feature.params["diameter"],
+        diameter=feature.params["diameter"],
+        depth=feature.params["depth"],
+        through=feature.params["through"],
+        profile=profile,
+        compensate=False,
+    )
+
+    assert result.mesh is body
+    assert result.solver is None
+    assert {entry.code for entry in result.findings} == {"bore.resize_unchanged"}
 
 
 def test_drilling_removes_material(profile: Profile) -> None:
@@ -874,6 +981,42 @@ def test_drilling_runs_as_an_operation(document: Document, profile: Profile) -> 
     assert "bore.compensated" in {finding.code for finding in result.scene.report.findings}
 
 
+def test_resizing_an_imported_bore_is_one_complete_operation(
+    document: Document, profile: Profile
+) -> None:
+    """STL laden, erkanntes Loch benennen, einen Durchmesser ändern.
+
+    Der Test geht durch Stapel, Neuerkennung und Zuordnung: Eine grüne
+    Geometriefunktion allein bewiese nicht, dass Kontextmenü und Agent die
+    Merkmal-ID danach weiterverwenden können.
+    """
+    project, history = loaded(document, "plate_holes.stl")
+    imported = evaluate(document, profile, sources=ProjectSources(project))
+    before = imported.scene.objects["obj_1"]
+    chosen = before.features["hole_1"]
+
+    history.apply(
+        _("Bohrung ändern"),
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"at_feature": chosen.id, "diameter": 7.0},
+            )
+        ],
+    )
+    changed = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert changed.complete
+    after = changed.scene.objects["obj_1"]
+    assert after.mesh.is_watertight
+    assert after.mesh.volume < before.mesh.volume
+    assert len([entry for entry in after.features.values() if entry.kind == "hole"]) == 4
+    assert after.features["hole_1"].params["diameter"] == pytest.approx(7.0, abs=0.03)
+    assert not [entry for entry in changed.scene.report.findings if entry.severity == "error"]
+
+
 def test_splitting_runs_as_an_operation(document: Document, profile: Profile) -> None:
     project, history = loaded(document)
     history.apply(
@@ -1107,6 +1250,11 @@ def test_arranging_by_material_respects_the_plate_limit(
 def test_the_preparation_operations_are_registered_completely() -> None:
     assert REGISTRY.get("drill_hole").applies_to == ("face",)
     assert REGISTRY.get("drill_hole").requires_seed, "it uses the boolean fallback chain"
+    resize = REGISTRY.get("resize_hole")
+    assert resize.applies_to == ("hole",)
+    assert resize.requires_seed, "der Mesh-Weg benutzt dieselbe Boolesche Rückfallkette"
+    feature = next(entry for entry in resize.params.spec() if entry.name == "at_feature")
+    assert feature.kind == "feature" and feature.required
     assert REGISTRY.get("split_pinned").produces == 2
     assert REGISTRY.get("arrange_bed").produces == VARIABLE
     assert REGISTRY.get("check_collisions").produces == VARIABLE

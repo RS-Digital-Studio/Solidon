@@ -76,6 +76,11 @@ AXIS_CLARITY = 0.9
 #: Zahl.
 HEAD_DIAMETER_OPS: Final[frozenset[str]] = frozenset({"countersink_hole"})
 
+#: Operationen, deren ``diameter`` genau das gemessene Bohrungsmaß ändert.
+#: Getrennt von ``HEAD_DIAMETER_OPS``: Dort wäre dasselbe Maß falsch, hier ist
+#: es der einzige sichere Ausgangswert.
+MEASURED_DIAMETER_OPS: Final[frozenset[str]] = frozenset({"resize_hole"})
+
 
 def screw_for_bore(diameter: float) -> str | None:
     """Die Schraube, für die diese **gemessene** Bohrung ein Durchgangsloch ist.
@@ -267,7 +272,12 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         None,
     )
     if field is not None:
-        return {field: feature.id, **_from_the_bore(spec, feature, names)}
+        feature_values = {field: feature.id, **_from_the_bore(spec, feature, names)}
+        if spec.name in MEASURED_DIAMETER_OPS and feature.kind == "hole":
+            diameter = feature.params.get("diameter")
+            if isinstance(diameter, int | float) and "diameter" in names:
+                feature_values["diameter"] = round(float(diameter), 4)
+        return feature_values
 
     values: dict[str, Any] = {}
     if TARGET_FIELD in names and feature.kind == "face":

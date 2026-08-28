@@ -113,6 +113,19 @@ def test_the_diameter_is_never_guessed() -> None:
     assert values["diameter"] != pytest.approx(5.2)
 
 
+def test_resizing_a_bore_starts_with_its_measured_diameter() -> None:
+    """Hier ist das gemessene Maß kein geratenes Kopfmaß, sondern genau der
+    Wert, den die Operation ändert.
+
+    Ohne ihn öffnete *Bohrung ändern* an einer erkannten Ø-5,19-Bohrung mit
+    der Schemavorgabe 5,00. Ein unverändertes Bestätigen hätte das Teil also
+    verändert — das Gegenteil eines einfachen, sicheren Kundenwegs.
+    """
+    values = values_for(REGISTRY.get("resize_hole"), hole(diameter=5.1901))
+
+    assert values == {"at_feature": "hole_1", "diameter": pytest.approx(5.1901)}
+
+
 def test_an_operation_that_names_features_gets_the_name() -> None:
     """Die Bausteinbibliothek setzt sich selbst an ein Merkmal; die Position
     ist ein Versatz.

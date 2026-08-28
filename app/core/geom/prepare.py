@@ -23,7 +23,13 @@ import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
-from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, shared_volume, without_effect
+from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
+    BooleanKind,
+    boolean,
+    shared_volume,
+    without_effect,
+)
 from app.core.geom.mesh import MeshData, concatenated, on_surface, ray_hit_distances
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
@@ -56,7 +62,7 @@ BoreAnchor = Literal["mouth", "centre"]
 @dataclass(slots=True)
 class BoreResult:
     mesh: MeshData
-    solver: SolverInfo
+    solver: SolverInfo | None
     diameter: float
     """Der wirklich geschnittene Durchmesser, samt Materialkompensation."""
     findings: list[Finding]
@@ -99,15 +105,40 @@ def over_the_edge(mesh: HasBounds, position: Vec3, axis: Axis, diameter: float) 
     einen Hohlraum — den kann sie treffen sollen — oder gar nichts, und dann
     greift ``without_effect``.
     """
+    direction = [0.0, 0.0, 0.0]
+    direction[AXIS_INDEX[axis]] = 1.0
+    vector: Vec3 = (direction[0], direction[1], direction[2])
+    return over_the_edge_along(mesh, position, vector, diameter)
+
+
+def over_the_edge_along(
+    mesh: HasBounds,
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+) -> list[Finding]:
+    """Die Kantenprüfung für eine freie Bohrungsrichtung.
+
+    Erkannte Bohrungen dürfen schräg liegen. Der seitliche Radius erscheint
+    dann in allen drei Koordinaten, jeweils als Projektion der Kreisscheibe.
+    Eine Rundung auf die nächste Hauptachse wäre genau die CAD-Arbeit, die der
+    Klick auf ein erkanntes Merkmal vermeiden soll.
+    """
+    vector = np.asarray(direction, dtype=float)
+    length = float(np.linalg.norm(vector))
+    if length <= EPS_GEOM:
+        return []
+    unit = vector / length
     radius = diameter / 2.0
     lower, upper = mesh.bounds.minimum, mesh.bounds.maximum
     over: list[str] = []
     for index, name in enumerate("xyz"):
-        if index == AXIS_INDEX[axis]:
+        extent = radius * math.sqrt(max(0.0, 1.0 - float(unit[index]) ** 2))
+        if extent <= EPS_GEOM:
             continue
         outside = (
-            position[index] - radius < lower[index] - EPS_GEOM
-            or position[index] + radius > upper[index] + EPS_GEOM
+            position[index] - extent < lower[index] - EPS_GEOM
+            or position[index] + extent > upper[index] + EPS_GEOM
         )
         if outside:
             over.append(name)
@@ -124,6 +155,119 @@ def over_the_edge(mesh: HasBounds, position: Vec3, axis: Axis, diameter: float) 
             values={"axes": ", ".join(over), "diameter": format_length(diameter)},
         )
     ]
+
+
+def resize_bore(
+    mesh: MeshData,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    previous_diameter: float,
+    diameter: float,
+    depth: float,
+    through: bool,
+    profile: Profile,
+    compensate: bool = False,
+    quality: Quality = "fine",
+    seed: int | None = None,
+) -> BoreResult:
+    """Ändert eine erkannte zylindrische Bohrung in genau einem Booleschritt.
+
+    Größer heißt: einen weiteren Zylinder abtragen. Kleiner heißt nicht
+    „Stopfen und danach neu bohren", sondern einen Ring in die vorhandene
+    Bohrung einsetzen. Damit bleiben Mittelpunkt, freie Achse und Tiefe aus
+    dem erkannten Merkmal die einzige Geometriequelle; der Kunde trägt nur den
+    neuen Durchmesser ein.
+
+    ``compensate`` steht hier absichtlich auf ``False``. Der Ausgangswert im
+    Dialog ist ein **gemessenes** Maß und kein Nenndurchmesser. Wer ihn
+    unverändert bestätigt, darf nicht allein durch eine noch einmal
+    aufgeschlagene Materialtoleranz eine andere Bohrung bekommen.
+    """
+    cut_diameter = bore_diameter(diameter, profile, compensate)
+    if abs(cut_diameter - previous_diameter) <= EPS_GEOM:
+        return BoreResult(
+            mesh=mesh,
+            solver=None,
+            diameter=cut_diameter,
+            findings=[
+                Finding(
+                    code="bore.resize_unchanged",
+                    severity="info",
+                    message=_("Die Bohrung hat bereits diesen Durchmesser."),
+                    values={"diameter": format_length(cut_diameter)},
+                )
+            ],
+        )
+
+    vector = np.asarray(direction, dtype=float)
+    length = float(np.linalg.norm(vector))
+    if length <= EPS_GEOM:
+        raise ValueError("a bore direction must not be zero")
+    unit = vector / length
+    height = depth + (BOOLEAN_OVERLAP * 2.0 if through else 0.0)
+    if height <= EPS_GEOM:
+        raise ValueError("a detected bore must have a positive depth")
+    to_world = np.asarray(
+        trimesh.geometry.align_vectors(np.array([0.0, 0.0, 1.0]), unit),
+        dtype=float,
+    )
+    to_world[:3, 3] = np.asarray(position, dtype=float)
+    to_local = np.linalg.inv(to_world)
+    local_body = mesh.raw.copy()
+    local_body.apply_transform(to_local)
+    local_mesh = mesh.replacing(local_body)
+
+    kind: BooleanKind
+    if cut_diameter > previous_diameter:
+        tool = trimesh.creation.cylinder(
+            radius=cut_diameter / 2.0,
+            height=height,
+            sections=BORE_SECTIONS,
+        )
+        kind = "difference"
+    else:
+        # Der Außenrand greift um dieselbe zentrale Überlappung ins Material,
+        # die alle Booleschen Bohrwerkzeuge benutzen. Ohne sie berührte der
+        # Ring die alte Bohrungswand nur und die Vereinigung wäre undefiniert.
+        tool = trimesh.creation.annulus(
+            r_min=cut_diameter / 2.0,
+            r_max=previous_diameter / 2.0 + BOOLEAN_OVERLAP,
+            height=height,
+            sections=BORE_SECTIONS,
+        )
+        kind = "union"
+    # Im Koordinatensystem der Bohrung rechnen. Ein schräger Zylinder ist
+    # geometrisch nicht schwieriger als ein senkrechter, numerisch aber schon:
+    # an der gedrehten Korpusplatte zerlegte der direkte Mesh-Kern 97 Grad der
+    # neuen Wand in Keile und die Erkennung nannte sie danach „Verrundung".
+    # Lokal steht die Achse exakt auf Z; zurückgedreht wird erst das fertige
+    # Ergebnis. Das ändert keine Maße und bewahrt die freie Richtung.
+    outcome = boolean(kind, [local_mesh, MeshData.of(tool)], quality=quality, seed=seed)
+    world_body = outcome.mesh.raw.copy()
+    world_body.apply_transform(to_world)
+    resized = outcome.mesh.replacing(world_body)
+    findings = list(outcome.findings)
+    nothing = without_effect(mesh, resized, kind, profile)
+    if nothing is not None:
+        findings.append(nothing)
+    unit_vector: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
+    findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter))
+    if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
+        findings.append(
+            Finding(
+                code="bore.compensated",
+                severity="info",
+                message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
+                values={"nominal": format_length(diameter), "cut": format_length(cut_diameter)},
+            )
+        )
+    return BoreResult(
+        mesh=resized,
+        solver=outcome.solver,
+        diameter=cut_diameter,
+        findings=findings,
+    )
 
 
 def drill(

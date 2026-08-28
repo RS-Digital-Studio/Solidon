@@ -14,8 +14,14 @@ from typing import cast
 
 import trimesh
 
-from app.core.errors import InternalError, ValidationError
-from app.core.geom.boolean import boolean
+from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, InternalError, ValidationError
+from app.core.geom.boolean import (
+    NOTHING_LEFT_DETAIL,
+    NOTHING_LEFT_TITLE,
+    BooleanKind,
+    boolean,
+    without_effect,
+)
 from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
@@ -26,13 +32,16 @@ from app.core.geom.prepare import (
     Arrangement,
     BoreAnchor,
     arrange_on_bed,
+    bore_diameter,
     check_build_volume,
     check_collisions,
     compensate_elephant_foot,
     countersink,
     drill,
     named_for,
+    over_the_edge_along,
     plug,
+    resize_bore,
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
@@ -40,8 +49,8 @@ from app.core.geom.transform import Axis, place_on_bed
 from app.core.knowledge.profiles import for_object, material
 from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
-from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
-from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM
+from app.core.types import BaseParams, Feature, Finding, Mesh, OpContext, OpResult, SceneObject
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length
 from app.i18n import TranslatableText, _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -234,6 +243,300 @@ def drill_hole(ctx: OpContext) -> OpResult:
         solver=result.solver,
         findings=result.findings,
     )
+
+
+@op_params
+class ResizeHoleParams(BaseParams):
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=5.0,
+        unit="mm",
+        minimum=0.2,
+        maximum=200.0,
+        doc=_(
+            "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht "
+            "hier zuerst ihr gemessenes Maß."
+        ),
+    )
+    at_feature: str = param(
+        title=_("Bohrung"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="advanced",
+        doc=_(
+            "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf "
+            "die Bohrung trägt sie ein."
+        ),
+    )
+    compensate: bool = param(
+        title=_("Materialtoleranz berücksichtigen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. "
+            "Aus bleibt das gemessene Maß unverändert."
+        ),
+    )
+
+
+@register_op(
+    name="resize_hole",
+    title=_("Bohrung ändern"),
+    category="holes",
+    params=ResizeHoleParams,
+    consumes=1,
+    produces=1,
+    applies_to=["hole"],
+    touches_features=True,
+    deterministic=False,
+    doc=_("Ändert den Durchmesser einer erkannten Bohrung."),
+)
+def resize_hole(ctx: OpContext) -> OpResult:
+    """Der gemeinsame Kundenweg für STL-Netze und exakte STEP-Körper."""
+    params = cast(ResizeHoleParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _chosen_bore(source, params.at_feature)
+    centre = _bore_vector(feature, "centre")
+    axis = _bore_vector(feature, "axis")
+    previous = _bore_number(feature, "diameter")
+    depth = _bore_number(feature, "depth")
+    cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
+
+    if source.kind == "brep":
+        from app.core.brep import edit
+        from app.core.brep.features import features_of
+        from app.core.brep.kernel import Solid
+
+        if not isinstance(source.mesh, Solid):
+            raise InternalError(
+                detail="a scene object marked as brep does not carry a Solid",
+                values={"object": source.id},
+            )
+        if abs(cut - previous) <= EPS_GEOM:
+            return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
+        solid = edit.resize_bore(
+            source.mesh,
+            position=centre,
+            direction=axis,
+            previous_diameter=previous,
+            diameter=cut,
+            depth=depth,
+        )
+        if solid.volume <= EPS_GEOM or solid.face_count == 0:
+            raise GeometryError(
+                title=NOTHING_LEFT_TITLE,
+                detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        findings: list[Finding] = []
+        change: BooleanKind = "difference" if cut > previous else "union"
+        nothing = without_effect(source.mesh, solid, change, ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+        findings.extend(over_the_edge_along(source.mesh, centre, axis, cut))
+        findings.extend(_compensation_findings(params.diameter, cut, params.compensate))
+        exact_features = _preserved_exact_features(
+            source.features,
+            features_of(solid),
+            feature,
+            cut,
+            solid,
+        )
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    source,
+                    mesh=solid,
+                    kind="brep",
+                    features=exact_features,
+                )
+            ],
+            findings=findings,
+        )
+
+    result = resize_bore(
+        as_mesh_data(source.mesh),
+        position=centre,
+        direction=axis,
+        previous_diameter=previous,
+        diameter=params.diameter,
+        depth=depth,
+        through=bool(feature.params.get("through", False)),
+        profile=ctx.profile,
+        compensate=params.compensate,
+        quality=ctx.quality,
+        seed=ctx.seed,
+    )
+    if result.solver is None:
+        return OpResult(outputs=[source], findings=result.findings)
+    resized_feature = _recognised_resized_feature(result.mesh, feature, result.diameter)
+    carried = {
+        name: entry
+        for name, entry in source.features.items()
+        if entry.provenance == "generated" and name != feature.id
+    }
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=result.mesh,
+                features={**carried, feature.id: resized_feature},
+            )
+        ],
+        solver=result.solver,
+        findings=result.findings,
+    )
+
+
+def _chosen_bore(source: SceneObject, name: str) -> Feature:
+    """Die angeklickte Bohrung oder eine Korrekturmöglichkeit statt Raten."""
+    feature = source.features.get(name)
+    if feature is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
+            value=name,
+            constraint="unknown_feature",
+            values={"known": ", ".join(sorted(source.features))},
+        )
+    if feature.kind != "hole":
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Zum Ändern des Durchmessers muss eine Bohrung gewählt sein."),
+            value=name,
+            constraint="not_a_hole",
+            values={"kind": feature.kind},
+        )
+    return feature
+
+
+def _bore_vector(feature: Feature, name: str) -> tuple[float, float, float]:
+    """Eine gespeicherte Dreierkoordinate mit einem verständlichen Fehler."""
+    value = feature.params.get(name)
+    if (
+        not isinstance(value, tuple | list)
+        or len(value) != 3
+        or not all(isinstance(entry, int | float) for entry in value)
+    ):
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. "
+                "Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut."
+            ),
+            value=feature.id,
+            constraint="no_geometry",
+        )
+    return (float(value[0]), float(value[1]), float(value[2]))
+
+
+def _bore_number(feature: Feature, name: str) -> float:
+    """Ein positives Bohrungsmaß aus der Erkennung."""
+    value = feature.params.get(name)
+    if not isinstance(value, int | float) or float(value) <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=_(
+                "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. "
+                "Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut."
+            ),
+            value=feature.id,
+            constraint="no_geometry",
+        )
+    return float(value)
+
+
+def _unchanged_bore(diameter: float) -> Finding:
+    """Die gemeinsame Auskunft für Netz und exakten Körper."""
+    return Finding(
+        code="bore.resize_unchanged",
+        severity="info",
+        message=_("Die Bohrung hat bereits diesen Durchmesser."),
+        values={"diameter": format_length(diameter)},
+    )
+
+
+def _compensation_findings(nominal: float, cut: float, compensate: bool) -> list[Finding]:
+    """Materialkompensation, wortgleich mit den anderen Bohrungswegen."""
+    if not compensate or abs(cut - nominal) <= EPS_GEOM:
+        return []
+    return [
+        Finding(
+            code="bore.compensated",
+            severity="info",
+            message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
+            values={"nominal": format_length(nominal), "cut": format_length(cut)},
+        )
+    ]
+
+
+def _expected_bore(feature: Feature, diameter: float) -> Feature:
+    """Das alte Merkmal mit dem einen Maß, das diese Operation bewusst ändert."""
+    return dataclasses.replace(
+        feature,
+        params={**feature.params, "diameter": diameter},
+    )
+
+
+def _recognised_resized_feature(mesh: MeshData, feature: Feature, diameter: float) -> Feature:
+    """Findet die eben erzeugte Wand und hängt den bestehenden Namen daran.
+
+    Die allgemeine Zuordnung darf einen Sprung von Ø 3 auf Ø 30 nicht
+    stillschweigend für dasselbe Merkmal halten. Hier ist er dagegen die
+    ausdrückliche Operation. Darum wird genau für diesen Vergleich das neue
+    Sollmaß eingesetzt, statt die globale Toleranz aufzuweichen.
+    """
+    from app.core.perceive.features import detect
+    from app.core.perceive.matching import match
+
+    detected = detect(mesh)
+    expected = _expected_bore(feature, diameter)
+    matched = match(
+        {feature.id: expected},
+        detected,
+        mesh.bounds.centre,
+        mesh.bounds.diagonal,
+    )
+    found_id = matched.mapping.get(feature.id)
+    if found_id is None:
+        raise InternalError(
+            detail=_(
+                "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. "
+                "Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell."
+            ),
+            values={"feature": feature.id, "diameter": format_length(diameter)},
+        )
+    return dataclasses.replace(
+        detected[found_id],
+        id=feature.id,
+        provenance="generated",
+        created_by=None,
+    )
+
+
+def _preserved_exact_features(
+    previous: dict[str, Feature],
+    detected: dict[str, Feature],
+    feature: Feature,
+    diameter: float,
+    solid: Mesh,
+) -> dict[str, Feature]:
+    """Ordnet die exakte Topologie neu zu, mit dem gewählten Maß als Absicht."""
+    from app.core.perceive.matching import apply_mapping, match
+
+    expected = {**previous, feature.id: _expected_bore(feature, diameter)}
+    bounds = solid.bounds
+    matched = match(expected, detected, bounds.centre, bounds.diagonal)
+    if feature.id not in matched.mapping:
+        raise InternalError(
+            detail=_(
+                "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. "
+                "Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell."
+            ),
+            values={"feature": feature.id, "diameter": format_length(diameter)},
+        )
+    return apply_mapping(detected, matched)
 
 
 def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> None:

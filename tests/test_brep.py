@@ -616,6 +616,34 @@ def test_a_blind_bore_stops_at_its_depth() -> None:
     assert blind.is_closed, "ein Sackloch lässt den Boden stehen"
 
 
+def test_resizing_a_bore_keeps_an_exact_body(profile: Profile) -> None:
+    """Derselbe Kundenweg auf STEP: Maß ändern, ohne Flächen und Kanten in
+    feste Dreiecke umzuwandeln.
+
+    Vergrößern und Verkleinern werden gegen die analytischen Zylindervolumen
+    geprüft. Ein Bild oder eine Tessellation wäre gerade bei diesem Kern die
+    falsche Wahrheit.
+    """
+    original = edit.bore(block(), position=(0.0, 0.0, HEIGHT), axis="z", diameter=6.0)
+    features = features_of(original)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=original, kind="brep", features=features)
+
+    larger = run("resize_hole", source, profile, at_feature=bore.id, diameter=10.0).outputs[0]
+    smaller = run("resize_hole", source, profile, at_feature=bore.id, diameter=4.0).outputs[0]
+
+    assert larger.kind == smaller.kind == "brep"
+    assert larger.mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - math.pi * (10.0 / 2.0) ** 2 * HEIGHT,
+        rel=1e-9,
+    )
+    assert smaller.mesh.volume == pytest.approx(
+        WIDTH * DEPTH * HEIGHT - math.pi * (4.0 / 2.0) ** 2 * HEIGHT,
+        rel=1e-9,
+    )
+    assert larger.mesh.is_closed and smaller.mesh.is_closed
+
+
 def test_the_exact_bore_agrees_with_the_mesh_on_direction_at_the_centre() -> None:
     """Skizze 10: bei der Vorgabeposition — der Achsmitte — entschieden die zwei
     Kerne den Tiebreak verschieden. Das Netz nimmt ``>=`` (nach unten), der
