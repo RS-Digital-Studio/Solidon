@@ -1377,3 +1377,37 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
         "DEMO_UNTIL in app/core/activation/store.py verschieben, wenn die Demo "
         "verlängert wird. Dann wandert diese Erinnerung mit."
     )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_generated_faq_markup_keeps_no_gap_before_a_comma(page: str) -> None:
+    """Die erzeugte FAQ-Auszeichnung trägt keine Lücke vor Komma oder Punkt.
+
+    ``make_seo.py`` leitet die ``FAQPage``-Auszeichnung aus dem sichtbaren
+    FAQ-Block ab und ersetzt dabei jedes Tag durch ein Leerzeichen — sonst
+    klebte das Ende eines Absatzes am Anfang des nächsten. Steht hinter dem Tag
+    ein Satzzeichen, entstand daraus eine Lücke davor: ``…als Baustein
+    speichern .`` und ``…Version 1.0 , die``. Am 28.08.2026 stand das an neun
+    Stellen in fünf Sprachen, sichtbar für jede Suchmaschine.
+
+    Geprüft wird nur vor Komma und Punkt. Vor ``; : ! ?`` setzt die
+    französische Fassung bewusst ein Leerzeichen; ein Wächter über alle
+    Satzzeichen würde sie fälschlich anklagen.
+    """
+    daten = (WEBSITE / page).read_text(encoding="utf-8")
+    bloecke = re.findall(r'<script type="application/ld\+json">(.*?)</script>', daten, re.DOTALL)
+    antworten = [
+        eintrag["acceptedAnswer"]["text"]
+        for daten_block in (json.loads(block) for block in bloecke)
+        if daten_block.get("@type") == "FAQPage"
+        for eintrag in (daten_block.get("mainEntity") or [])
+    ]
+    assert antworten, f"{page} trägt keine FAQ-Auszeichnung — prüft dieser Test noch etwas?"
+
+    for text in antworten:
+        luecken = re.findall(r"\S (?=[,.])", text)
+        assert not luecken, (
+            f"{page}: Auszeichnung endet vor einem Satzzeichen und hinterlässt eine "
+            f"Lücke — {luecken}. Im sichtbaren Text die Auszeichnung ans Satzende "
+            "ziehen, oder _plain in tools/make_seo.py prüfen."
+        )

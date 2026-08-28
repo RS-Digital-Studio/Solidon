@@ -1020,3 +1020,29 @@ def test_only_the_four_delivered_files_go_into_the_box() -> None:
         with pytest.raises(SystemExit) as fehler:
             refuse_wrong_delivery(rest)
         assert "fehlt" in str(fehler.value), f"Platz {ausgelassen} fehlt unbemerkt"
+
+
+# --- Die Auszeichnung für Suchmaschinen (tools/make_seo.py) ---------------------------
+
+
+def test_the_stripped_answer_keeps_no_gap_before_a_comma() -> None:
+    """Ein Tag wird zu einem Leerzeichen — vor einem Satzzeichen darf keines bleiben.
+
+    ``_plain`` ersetzt jedes Tag durch ein Leerzeichen, damit das Ende eines
+    Absatzes nicht am Anfang des nächsten klebt. Steht hinter dem Tag ein
+    Satzzeichen, wurde daraus eine Lücke davor: aus ``<b>…1.0</b>, die
+    Verkaufsversion`` wurde ``…1.0 , die Verkaufsversion``. Am 28.08.2026 stand
+    das an sechs Stellen in der ausgelieferten Auszeichnung, in fünf Sprachen.
+
+    Die Gegenprobe gehört dazu: Vor ``:`` setzt die französische Fassung
+    bewusst ein Leerzeichen. Ein Fix über alle Satzzeichen hätte sie gebrochen.
+    """
+    from tools.make_seo import _plain
+
+    assert _plain("<b>Version 1.0</b>, die Fassung") == "Version 1.0, die Fassung"
+    assert (
+        _plain("<p>als Baustein speichern</p>. Beim Anlegen")
+        == "als Baustein speichern. Beim Anlegen"
+    )
+    assert _plain("<p>eins</p><p>zwei</p>") == "eins zwei", "die Absatzgrenze ging verloren"
+    assert _plain("un terminal&nbsp;: <code>flatpak</code>") == "un terminal : flatpak"

@@ -141,6 +141,14 @@
     },
     {
       "@type": "Question",
+      "name": "How do I install the Flatpak on Linux?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "A Flatpak is not a double-click installer but a package your package manager takes in. Open a terminal in the folder you downloaded to and enter: flatpak install./Solidon3D-*.flatpak Solidon3D then appears in your application menu. You can also start it with flatpak run de.rsdigital.solidon3d and remove it with flatpak uninstall de.rsdigital.solidon3d. If your system does not know the flatpak command, your distribution installs it under exactly that name."
+      }
+    },
+    {
+      "@type": "Question",
       "name": "Will it work with my printer?",
       "acceptedAnswer": {
         "@type": "Answer",
@@ -229,6 +237,7 @@
             <p class="version">Version 0.2.1, released on 27 August 2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows shows a blue notice for a new, as yet unsigned application: <i>More info</i> → <i>Run anyway</i>. Signing follows as soon as the certificate is in place.</p>
+          <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> A Flatpak is not installed by double-clicking but from a terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in the folder you downloaded to. Solidon3D then appears in your application menu.</p>
           <p class="pruefhinweis" data-release-show hidden><b>New versions.</b> Solidon checks at startup whether a newer version is out and offers it for download — downloaded and installed only on your confirmation, and it can be switched off in the settings.</p>
           <p class="pruefhinweis">After installing: <a href="/en/manual.html#start">The first fifteen minutes</a> — from the empty window to the first exported part.</p>
 
@@ -778,6 +787,11 @@
           “Done” there, then release the package in System Settings under
           “Privacy &amp; Security” with “Open Anyway”. Notarisation follows
           once the Apple account is in place.</p>
+        </details>
+        <details>
+          <summary>How do I install the Flatpak on Linux?</summary>
+          <p>A Flatpak is not a double-click installer but a package your package manager takes in. Open a terminal in the folder you downloaded to and enter: <code>flatpak install ./Solidon3D-*.flatpak</code></p>
+          <p>Solidon3D then appears in your application menu. You can also start it with <code>flatpak run de.rsdigital.solidon3d</code> and remove it with <code>flatpak uninstall de.rsdigital.solidon3d</code>. If your system does not know the <code>flatpak</code> command, your distribution installs it under exactly that name.</p>
         </details>
         <details>
           <summary>Will it work with my printer?</summary>

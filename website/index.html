@@ -88,7 +88,7 @@
       "name": "Kann ich eigene Bausteine anlegen, ohne zu programmieren?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog Auswahl als Baustein speichern . Beim Anlegen wird der Baustein über seinen ganzen Maßbereich durchgerechnet; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit , die ihn benutzt: eine Liste von Schritten und Werten, kein Programm. Wer die Datei bekommt, kann damit rechnen, ohne etwas zu installieren."
+        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog Auswahl als Baustein speichern. Beim Anlegen wird der Baustein über seinen ganzen Maßbereich durchgerechnet; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit, die ihn benutzt: eine Liste von Schritten und Werten, kein Programm. Wer die Datei bekommt, kann damit rechnen, ohne etwas zu installieren."
       }
     },
     {
@@ -137,6 +137,14 @@
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Ja, für Apple Silicon und für Intel als getrennte Versionen — ein Paket, das auf arm64 gebaut wurde, startet auf einem Intel-Mac nicht, und das betrifft jedes Gerät vor 2020. Bei Apple notarisiert ist es noch nicht, und macOS öffnet ein Installationspaket ohne diese Prüfung nicht per Doppelklick: Es meldet, es könne die Datei nicht auf Schadsoftware prüfen, und bietet als ersten Knopf „In den Papierkorb“ an. Dort „Fertig“ wählen und das Paket in den Systemeinstellungen unter „Datenschutz & Sicherheit“ mit „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das Apple-Konto steht."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Wie installiere ich das Flatpak unter Linux?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Ein Flatpak ist kein Installationsprogramm zum Doppelklicken, sondern ein Paket, das die Paketverwaltung einspielt. Öffne ein Terminal in dem Ordner, in den du geladen hast, und gib ein: flatpak install./Solidon3D-*.flatpak Danach steht Solidon3D im Startmenü. Starten geht auch mit flatpak run de.rsdigital.solidon3d, entfernen mit flatpak uninstall de.rsdigital.solidon3d. Kennt dein System den Befehl flatpak nicht, installiert ihn die Paketverwaltung deiner Distribution unter genau diesem Namen."
       }
     },
     {
@@ -229,6 +237,7 @@
             <p class="version">Version 0.2.1, erschienen am 27.08.2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
+          <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Ein Flatpak wird nicht per Doppelklick installiert, sondern im Terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in dem Ordner, in den du geladen hast. Danach steht Solidon3D im Startmenü.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Neue Versionen.</b> Solidon sieht beim Start selbst nach, ob eine neuere Version da ist, und bietet sie zum Laden an — geladen und installiert wird erst auf deine Bestätigung, abschalten lässt es sich in den Einstellungen.</p>
           <p class="pruefhinweis">Nach der Installation: <a href="/handbuch.html#start">Die ersten fünfzehn Minuten</a> — vom leeren Fenster zum ersten exportierten Teil.</p>
 
@@ -792,6 +801,11 @@
           Systemeinstellungen unter „Datenschutz &amp; Sicherheit“ mit
           „Trotzdem öffnen“ freigeben. Notarisierung kommt, sobald das
           Apple-Konto steht.</p>
+        </details>
+        <details>
+          <summary>Wie installiere ich das Flatpak unter Linux?</summary>
+          <p>Ein Flatpak ist kein Installationsprogramm zum Doppelklicken, sondern ein Paket, das die Paketverwaltung einspielt. Öffne ein Terminal in dem Ordner, in den du geladen hast, und gib ein: <code>flatpak install ./Solidon3D-*.flatpak</code></p>
+          <p>Danach steht Solidon3D im Startmenü. Starten geht auch mit <code>flatpak run de.rsdigital.solidon3d</code>, entfernen mit <code>flatpak uninstall de.rsdigital.solidon3d</code>. Kennt dein System den Befehl <code>flatpak</code> nicht, installiert ihn die Paketverwaltung deiner Distribution unter genau diesem Namen.</p>
         </details>
         <details>
           <summary>Funktioniert das mit meinem Drucker?</summary>

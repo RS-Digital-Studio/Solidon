@@ -77,7 +77,7 @@
       "name": "Puis-je créer mes propres blocs sans programmer ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue Enregistrer la sélection comme bloc . La création calcule le bloc sur toute sa plage ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme. Qui reçoit le fichier peut calculer avec, sans rien installer."
+        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue Enregistrer la sélection comme bloc. La création calcule le bloc sur toute sa plage ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme. Qui reçoit le fichier peut calculer avec, sans rien installer."
       }
     },
     {
@@ -134,6 +134,14 @@
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d'avant 2020. Il n'est pas encore notarié chez Apple, et macOS n'ouvre pas d'un double-clic un paquet d'installation sans cette vérification : il signale qu'il ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton. Y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même ». La notarisation viendra dès que le compte Apple sera en place."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Comment installer le Flatpak sous Linux ?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Un Flatpak n'est pas un installeur à double-clic, mais un paquet que le gestionnaire de paquets prend en charge. Ouvrez un terminal dans le dossier où vous l'avez téléchargé et saisissez : flatpak install./Solidon3D-*.flatpak Solidon3D apparaît ensuite dans le menu des applications. Il démarre aussi avec flatpak run de.rsdigital.solidon3d et se retire avec flatpak uninstall de.rsdigital.solidon3d. Si votre système ne connaît pas la commande flatpak, votre distribution l'installe sous ce nom exact."
       }
     },
     {
@@ -228,6 +236,7 @@
             <p class="version">Version 0.2.1, parue le 27/08/2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. La signature suivra dès que le certificat sera en place.</p>
+          <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Un Flatpak ne s'installe pas par double-clic, mais depuis un terminal&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code> dans le dossier où vous l'avez téléchargé. Solidon3D apparaît ensuite dans le menu des applications.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Nouvelles versions.</b> Solidon vérifie au démarrage s'il existe une version plus récente et la propose au téléchargement — téléchargée et installée uniquement après votre confirmation, et cela se désactive dans les réglages.</p>
           <p class="pruefhinweis">Après l'installation&nbsp;: <a href="/fr/manual.html#start">Les quinze premières minutes</a> — de la fenêtre vide à la première pièce exportée.</p>
 
@@ -805,6 +814,11 @@
           «&nbsp;Confidentialité et sécurité&nbsp;», avec «&nbsp;Ouvrir
           quand même&nbsp;». La notarisation viendra dès que le compte Apple
           sera en place.</p>
+        </details>
+        <details>
+          <summary>Comment installer le Flatpak sous Linux&nbsp;?</summary>
+          <p>Un Flatpak n'est pas un installeur à double-clic, mais un paquet que le gestionnaire de paquets prend en charge. Ouvrez un terminal dans le dossier où vous l'avez téléchargé et saisissez&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code></p>
+          <p>Solidon3D apparaît ensuite dans le menu des applications. Il démarre aussi avec <code>flatpak run de.rsdigital.solidon3d</code> et se retire avec <code>flatpak uninstall de.rsdigital.solidon3d</code>. Si votre système ne connaît pas la commande <code>flatpak</code>, votre distribution l'installe sous ce nom exact.</p>
         </details>
         <details>
           <summary>Ça marche avec mon imprimante&nbsp;?</summary>

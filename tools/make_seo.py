@@ -149,9 +149,21 @@ def robots() -> str:
 
 
 def _plain(markup: str) -> str:
-    """Auszeichnung raus, Text übrig — für die Antwort im FAQ-Schema."""
+    """Auszeichnung raus, Text übrig — für die Antwort im FAQ-Schema.
+
+    Ein Tag wird zu einem Leerzeichen und nicht zu nichts, sonst klebte das
+    Ende eines Absatzes am Anfang des nächsten. Steht hinter dem Tag aber ein
+    Satzzeichen, entsteht daraus eine Lücke davor: aus ``<b>…1.0</b>, die
+    Verkaufsversion`` wird ``…1.0 , die Verkaufsversion``. Das stand am
+    28.08.2026 an sechs Stellen in der ausgelieferten Auszeichnung.
+
+    **Nur Komma und Punkt werden angezogen.** Vor ``; : ! ?`` setzt die
+    französische Typografie bewusst ein Leerzeichen, und die Seite tut das
+    auch — ein Fix über alle Satzzeichen würde sie brechen.
+    """
     stripped = re.sub(r"<[^>]+>", " ", markup)
-    return re.sub(r"\s+", " ", html.unescape(stripped)).strip()
+    text = re.sub(r"\s+", " ", html.unescape(stripped)).strip()
+    return re.sub(r" +([,.])", r"\1", text)
 
 
 def faq_entries(text: str) -> tuple[str, list[tuple[str, str]]]:
