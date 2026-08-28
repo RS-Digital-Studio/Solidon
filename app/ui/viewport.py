@@ -2750,6 +2750,21 @@ class Viewport(QWidget):
         self._hover_feature = False
         self._hovered_object = None
         self._hovered_feature = None
+        # Eine Auswahl gehört zur aktuellen Auswertung. Der Körper darf nach
+        # einem Schritt weiter ausgewählt bleiben; ein Merkmal, das dieser
+        # Schritt entfernt hat, dagegen nicht. Ohne den Rückfall blieb seine
+        # Kennung intern stehen, der Körper verlor die Auswahlfarbe und im Bild
+        # war weder die alte Fläche noch eine neue Auswahl zu sehen.
+        if result is not None and self._selected is not None:
+            selected_entry = result.scene.objects.get(self._selected)
+            if selected_entry is None:
+                self._selected = None
+                self._selected_feature = None
+            elif (
+                self._selected_feature is not None
+                and self._selected_feature not in selected_entry.features
+            ):
+                self._selected_feature = None
         # Die vorbereiteten Merkmalsdreiecke gehören der vorigen Auswertung.
         # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
         # Klick träfe danach, wo sie war.
@@ -4344,7 +4359,7 @@ class Viewport(QWidget):
         if feature_id is None or self._result is None or object_id is None:
             return ()
         entry = self._result.scene.objects.get(object_id)
-        if entry is None or not entry.visible or object_id in self._hidden:
+        if entry is None or not self._in_view(object_id, entry):
             return ()
         feature = entry.features.get(feature_id)
         raw = getattr(entry.mesh, "raw", None)
@@ -4396,9 +4411,9 @@ class Viewport(QWidget):
             centre = feature.params.get("centre")
             if centre is None:
                 continue
-            entry = (
-                self._result.scene.objects.get(object_id) if self._result is not None else None
-            )
+            entry = self._result.scene.objects.get(object_id) if self._result is not None else None
+            if entry is None or not self._in_view(object_id, entry):
+                continue
             shift = (
                 self._view_offset(entry, self._result)
                 if entry is not None and self._result is not None
@@ -5747,7 +5762,8 @@ class Viewport(QWidget):
         # Der Filter sitzt auch auf dem Wertfeld, und dessen Positionen als
         # Viewport-Koordinaten gelesen setzten den Zeiger an den oberen Rand —
         # falscher Hover nach der Ruhepause, Vorschausprung im Skizzenmodus.
-        interactor = self.plotter.interactor if self.plotter is not None else None
+        plotter = getattr(self, "plotter", None)
+        interactor = getattr(plotter, "interactor", None) if plotter is not None else None
         if watched is interactor:
             if kind == QEvent.Type.MouseMove:
                 self._note_pointer(event.position())
@@ -5755,6 +5771,12 @@ class Viewport(QWidget):
                 self._forget_pointer()
             elif kind == QEvent.Type.Enter:
                 self._update_cursor()
+
+        # Qt kann den Filter schon während ``QWidget.__init__`` aufrufen. In
+        # diesem kurzen Zustand gibt es weder Skizzen- noch Zugfelder; die
+        # Eingabe gehört dann vollständig Qt.
+        if not hasattr(self, "_sketch_frame"):
+            return False
 
         # **E19 im gefahrenen Modus: die erste Ziffer beginnt die Eingabe.**
         # Der Fokus liegt auf der Ansicht; ``ShortcutOverride`` nimmt den

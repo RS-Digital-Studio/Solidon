@@ -152,6 +152,39 @@ def test_an_empty_scene_forgets_what_was_selected(qt_app: QApplication) -> None:
     assert not len(viewport.measurements), "die Maße des vorigen Projekts blieben stehen"
 
 
+def test_a_rebuilt_scene_forgets_a_feature_that_no_longer_exists(
+    qt_app: QApplication,
+) -> None:
+    """Nach einer Änderung fällt die Auswahl auf den bleibenden Körper zurück."""
+    import dataclasses
+
+    from app.ui.viewport import Viewport
+
+    before = _scene_with_two_holes()
+    viewport = Viewport()
+    viewport.show_scene(before)
+    viewport.select("obj_1")
+    viewport.select_feature("hole_2")
+
+    old = before.scene.objects["obj_1"]
+    after = dataclasses.replace(
+        before,
+        scene=dataclasses.replace(
+            before.scene,
+            objects={
+                "obj_1": dataclasses.replace(
+                    old,
+                    features={"hole_1": old.features["hole_1"]},
+                )
+            },
+        ),
+    )
+    viewport.show_scene(after)
+
+    assert viewport.selected_feature is None, "das entfernte Merkmal blieb intern gewählt"
+    assert viewport.highlighted_object() == "obj_1", "der bleibende Körper übernimmt die Auswahl"
+
+
 # --- hinter der Wache: mit einer Attrappe ---------------------------------------
 
 
@@ -358,6 +391,33 @@ def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplica
     )
 
 
+@pytest.mark.parametrize("filtered", ["hidden", "other_plate"])
+def test_an_invisible_feature_leaves_no_floating_marking(
+    filtered: str,
+    qt_app: QApplication,
+) -> None:
+    """Ausgeblendet heißt auch: keine Fläche und kein Etikett ohne Körper."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
+    viewport._selected = "obj_1"
+    viewport._selected_feature = "hole_2"
+    if filtered == "hidden":
+        viewport._hidden = frozenset({"obj_1"})
+    else:
+        viewport._plate = 1
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport._redraw_features()
+
+    assert viewport.highlighted_object() is None
+    assert viewport.highlighted_faces() == ()
+    assert "feature-patch" not in plotter.names()
+    assert not plotter.labelled, "ohne Körper darf kein Merkmalsname im Raum schweben"
+
+
 def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     qt_app: QApplication,
 ) -> None:
@@ -418,6 +478,49 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     assert float(abstand.max()) > 0.0, (
         "ohne Versatz liegt die Fläche exakt auf dem Netz, und der Tiefenpuffer entscheidet"
     )
+
+
+def test_a_solid_feature_stays_opaque_while_only_hover_is_translucent(
+    qt_app: QApplication,
+) -> None:
+    """Der Durchblick ist eine Bohrungsregel, keine blasse Gesamtauswahl."""
+    import dataclasses
+
+    from app.ui.viewport import HOVERED_FEATURE_OPACITY, Viewport
+
+    result = _with_faces(_scene_with_two_holes(), "hole_2", (0, 1))
+    entry = result.scene.objects["obj_1"]
+    face = dataclasses.replace(entry.features["hole_2"], kind="face")
+    result.scene.objects["obj_1"] = dataclasses.replace(
+        entry,
+        features={**entry.features, "hole_2": face},
+    )
+    viewport = Viewport()
+    viewport.show_scene(result)
+    viewport._selected = "obj_1"
+    viewport._selected_feature = "hole_2"
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport._redraw_features()
+
+    selected = next(
+        kwargs for _kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-patch"
+    )
+    assert "opacity" not in selected, "eine feste Fläche bleibt als Auswahl kräftig und deckend"
+
+    plotter.drawn.clear()
+    plotter.labelled.clear()
+    viewport._selected_feature = None
+    viewport._hover_feature = True
+    viewport._hovered_object = "obj_1"
+    viewport._hovered_feature = "hole_2"
+    viewport._redraw_features()
+
+    hovered = next(
+        kwargs for _kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-hover"
+    )
+    assert hovered["opacity"] == HOVERED_FEATURE_OPACITY
 
 
 def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> None:

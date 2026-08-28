@@ -391,6 +391,15 @@ ausschließlich hinzugekommene Geometrie. Objektbaum, Statusleiste und
 Beschriftung halten die Auswahl weiter fest. Beim Festhalten der Vorher-Ansicht
 kehrt die Auswahlmarkierung zurück; nach dem Schließen der Vorschau ebenso.
 
+**Nur Sichtbares trägt eine Markierung.** Ein ausgeblendeter Körper und ein
+Körper auf einer gerade nicht gezeigten Druckplatte hinterlassen weder
+Merkmalsfläche noch Beschriftung frei im Raum. Nach einer Neuberechnung bleibt
+der Körper ausgewählt; ist das gewählte Merkmal dabei verschwunden, fällt die
+Auswahl auf den Körper zurück. Ein technischer Name und eine sichtbare Fläche
+sind ebenfalls keine Alternative: Wird ein erkanntes Merkmal eindeutig einem
+benannten Bausteinmerkmal zugeordnet, übernimmt der bleibende Name die aktuellen
+`face_indices` des Netzes.
+
 Gerechnet wird gegen das Netz der Szene, nicht gegen das dezimierte
 Anzeigenetz: `face_indices` zählt dort. Den Unterschied fängt der Versatz
 entlang der Flächennormalen ab (`FEATURE_PATCH_LIFT`).

@@ -1851,6 +1851,62 @@ def _small_body() -> object:
     return MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
 
 
+def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der verständliche Bausteinname darf die sichtbare Fläche nicht kosten.
+
+    Der Baustein kennt Ort und Maß seiner Bohrung, aber keine Dreiecksnummern
+    des ausgewerteten Netzes. Die Erkennung liefert genau diese Nummern. Wird
+    ihr technischer Name zugunsten des Bausteinnamens entfernt, müssen deshalb
+    die aktuellen Dreiecke an den bleibenden Namen übergehen — sonst wählt der
+    Baum eine Bohrung, während im Modell nur ihr Beschriftungspunkt erscheint.
+    """
+    from importlib import import_module
+
+    from app.core.types import Feature, Operation, SceneObject
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    params = {
+        "centre": (0.0, 0.0, 0.0),
+        "axis": (0.0, 0.0, 1.0),
+        "diameter": 6.0,
+    }
+    named = Feature(
+        id="mounting_bore",
+        kind="hole",
+        provenance="generated",
+        params=params,
+    )
+    detected = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params=params,
+        face_indices=(2, 3),
+    )
+    monkeypatch.setattr(evaluate_module, "detect", lambda _mesh: {"hole_1": detected})
+    entry = SceneObject(
+        id="obj_1",
+        name="Halter",
+        mesh=_small_body(),
+        features={named.id: named},
+    )
+
+    result = evaluate_module._with_features(
+        entry,
+        {},
+        Operation(id=1, op="insert_part"),
+        lambda _question, choices: choices[0],
+        [],
+    )
+
+    assert "hole_1" not in result.features, "der technische Doppelname bleibt entfernt"
+    assert result.features[named.id].face_indices == (2, 3), (
+        "der verständliche Name übernimmt die sichtbare Oberfläche"
+    )
+
+
 def _many_features(count: int) -> dict[str, object]:
     """``count`` erkannte Bohrungen, wie ``detect`` sie liefern würde."""
     from app.core.types import Feature

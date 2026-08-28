@@ -932,6 +932,26 @@ def _with_features(
             say(str(_("Merkmale zuordnen")))
         seen = match(declared, detected, mesh.bounds.centre, mesh.bounds.diagonal)
         blind = set(seen.orphaned)
+        # **Der Name bleibt, die aktuelle Oberfläche geht mit.** Ein Baustein
+        # kennt Ort und Maß seiner Bohrung, aber nicht die Dreiecksnummern des
+        # Netzes, das erst aus seiner Geometrie entsteht. Die Erkennung kennt
+        # genau diese Nummern. Bei einer eindeutigen Zuordnung gehören sie
+        # deshalb an das benannte Merkmal, bevor dessen technischer Doppelname
+        # unten entfernt wird. Ohne die Übergabe war die Auswahl im Baum
+        # richtig, im Viewport erschien aber nur der Beschriftungspunkt.
+        visible_faces = {
+            old_name: detected[new_name].face_indices
+            for old_name, new_name in seen.mapping.items()
+            if new_name in detected
+        }
+        declared = {
+            name: (
+                dataclasses.replace(feature, face_indices=visible_faces[name])
+                if name in visible_faces
+                else feature
+            )
+            for name, feature in declared.items()
+        }
         declared = {
             name: (feature if name not in blind else dataclasses.replace(feature, recognised=False))
             for name, feature in declared.items()
