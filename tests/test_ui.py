@@ -6671,6 +6671,107 @@ def test_an_active_key_cannot_be_overwritten_before_deactivation(
     activation.forget_cache()
 
 
+def test_an_unclear_deactivation_answer_never_restores_the_certificate(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Nach möglicher Serverfreigabe bleibt der Rechner lokal sicher gesperrt."""
+    from app.core import activation
+    from app.core.activation import store
+    from app.core.errors import AppError
+    from app.ui import dialogs
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    assert store.write_pending_deactivation("signierte Geräteabmeldung")
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(deactivation_pending=True),
+    )
+    shown: list[object] = []
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
+
+    dialog = ActivationDialog()
+    dialog._deactivation_failed(AppError(detail="Verbindung abgebrochen"))
+
+    assert store.read_certificate() is None
+    assert store.read_pending_deactivation() == "signierte Geräteabmeldung"
+    assert dialog.forget_button.text() == "Deaktivierung erneut senden"
+    assert "noch nicht bestätigt" in dialog.state_label.text()
+    assert shown and isinstance(shown[0], activation.DeviceDeactivationPending)
+    activation.forget_cache()
+
+
+def test_a_local_deactivation_failure_rolls_back_before_contacting_the_server(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Vor dem Netz darf ein Dateifehler keinen halben Sperrzustand hinterlassen."""
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui import dialogs
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    store.write_key("SOLIDON3D-1-BESTEHEND")
+    store.write_certificate("bestehendes Zertifikat")
+    store.write_pending_deactivation("wiederholbarer Auftrag")
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(deactivation_pending=True),
+    )
+    monkeypatch.setattr(activation, "prepare_deactivation", lambda: "wiederholbarer Auftrag")
+    monkeypatch.setattr(activation, "remove_certificate", lambda: False)
+    shown: list[object] = []
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
+
+    dialog = ActivationDialog()
+    dialog._deactivate()
+
+    assert store.read_pending_deactivation() is None
+    assert store.read_certificate() == "bestehendes Zertifikat"
+    assert shown
+    assert dialog.forget_button.text() != "Deaktivierung erneut senden"
+    activation.forget_cache()
+
+
+def test_confirmed_deactivation_never_claims_that_an_unremovable_key_is_gone(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Die Erfolgsmeldung folgt erst, wenn auch der lokale Schlüssel wirklich weg ist."""
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui import dialogs
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    store.write_key("SOLIDON3D-1-LOKAL-GESPERRT")
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(deactivation_pending=True),
+    )
+    monkeypatch.setattr(activation, "clear_pending_deactivation", lambda: True)
+    monkeypatch.setattr(activation, "forget_key", lambda: False)
+    shown: list[object] = []
+    notices: list[object] = []
+    monkeypatch.setattr(dialogs, "show_error", lambda error, *_args: shown.append(error))
+    monkeypatch.setattr(
+        dialogs.QMessageBox,
+        "information",
+        lambda *_args, **_kwargs: notices.append(object()),
+    )
+
+    dialog = ActivationDialog()
+    previous = dialog.field.toPlainText()
+    dialog._deactivation_completed()
+
+    assert dialog.field.toPlainText() == previous
+    assert shown, "der lokale Rest wird erklärt"
+    assert not notices, "keine falsche Erfolgsmeldung"
+    activation.forget_cache()
+
+
 def test_the_activation_dialog_rejects_with_a_reason(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

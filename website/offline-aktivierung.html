@@ -61,7 +61,10 @@
 
       <form id="activation-form">
         <label class="activation-file" for="request-file">
-          <b data-i18n="file_label">Datei auswählen</b>
+          <span class="activation-file-row">
+            <b class="activation-file-button" data-i18n="file_label">Datei auswählen</b>
+            <span id="request-file-name" class="activation-file-name" data-i18n="no_file">Keine Datei ausgewählt</span>
+          </span>
           <span data-i18n="file_help">.solidon-request · höchstens wenige Kilobyte</span>
           <input id="request-file" type="file" accept=".solidon-request,application/json">
         </label>
@@ -85,7 +88,7 @@
     <aside class="activation-aside">
       <section class="activation-note">
         <h2 data-i18n="no_account_title">Kein Konto. Keine Hardwaredaten.</h2>
-        <p data-i18n="privacy">Gespeichert werden nur ein Hash der Lizenz, Rechnername, öffentlicher Geräteschlüssel und Aktivierungsdatum. Projekte, Modelle und Hardwaremerkmale werden nicht übertragen.</p>
+        <p data-i18n="privacy">Gespeichert werden nur die Aktivierungsdaten. Ein kurzer Tageszähler schützt vor Missbrauch; IP-Adressen, Projekte, Modelle und Hardwaremerkmale werden nicht gespeichert.</p>
         <a href="/datenschutz.html" data-i18n="privacy_link">Datenschutzerklärung lesen</a>
       </section>
       <section class="activation-note">
@@ -104,7 +107,7 @@
     <a href="/datenschutz.html" data-i18n="privacy_short">Datenschutz</a>
   </div>
 </footer>
-<script src="/activation.js?v=e647458e" defer></script>
+<script src="/activation.js?v=23754f11" defer></script>
 <script src="/site.js?v=d4975872" defer></script>
 </body>
 </html>

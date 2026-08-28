@@ -44,6 +44,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |
 | `offline-aktivierung.html`, `activation.js` | Drei-Schritt-Seite für die Aktivierung eines Rechners ohne eigenen Netzzugang; sendet dieselbe Anfragedatei an denselben Endpunkt wie die Anwendung |
 | `api/activation.php`, `api/deactivation.php` | Aktiviert genau einen Geräteplatz beziehungsweise gibt ihn mit signiertem Gerätenachweis wieder frei |
+| `api/operator.php` | Nicht verlinkter JSON-Endpunkt der lokalen Support-Verwaltung; nur mit externem 256-Bit-Betreiberzugang |
 | `api/activation-health.php` | Passive Bereitschaftsprobe ohne Kauf- oder Gerätedaten |
 | `api/activation_common.php` | Gemeinsame Protokoll-, Signatur- und SQLite-Logik; nicht direkt aufrufen |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
@@ -74,34 +75,93 @@ neben `httpdocs` und sind damit über HTTP nicht erreichbar:
 ```powershell
 python tools/setup_activation_server.py `
   --private "$env:LOCALAPPDATA\Solidon3D\server\activation.seed" `
-  --database "$env:LOCALAPPDATA\Solidon3D\server\activation.sqlite"
+  --database "$env:LOCALAPPDATA\Solidon3D\server\activation.sqlite" `
+  --operator-token "$env:LOCALAPPDATA\Solidon3D\server\operator.token"
 ```
 
 Das Werkzeug verweigert jedes Ziel im Repository und überschreibt einen
 vorhandenen Startwert nur mit `--replace`. Sein Inhalt wird weder eingecheckt
 noch ausgegeben; der öffentliche Teil muss mit `ACTIVATION_PUBLIC_KEY` in
-Anwendung und PHP übereinstimmen. Danach kommen beide Dateien per FTPS nach
-`solidon3d.de/appdata/`; das Verzeichnis muss für PHP beschreibbar bleiben.
+Anwendung und PHP übereinstimmen. Danach kommen Startwert, Betreiber-Token und
+Datenbank per FTPS nach `solidon3d.de/appdata/`; das Verzeichnis muss für PHP
+beschreibbar bleiben.
 
 Nur bei einem abweichenden Ablageort sind Servervariablen nötig:
 
 ```text
 SOLIDON_ACTIVATION_SEED_FILE=/absoluter/pfad/activation.seed
 SOLIDON_ACTIVATION_DB=/absoluter/pfad/activation.sqlite
+SOLIDON_ACTIVATION_OPERATOR_TOKEN_FILE=/absoluter/pfad/operator.token
 SOLIDON_ACTIVATION_MAJOR=1
 ```
 
 Die Bereitschaftsprobe öffnet die Datenbank nur lesend und legt weder Datei
 noch Tabellen an. Gültig signierte Aktivierungsversuche sind je Schlüssel auf
-fünf pro UTC-Tag begrenzt; IP-Adressen werden dafür nicht gespeichert.
+fünf pro UTC-Tag begrenzt; IP-Adressen werden dafür nicht gespeichert. Beim
+nächsten gültigen Aktivierungsversuch verschwinden alle Zähler älterer
+UTC-Tage. Die Datenschutzerklärung nennt auch den Fall ohne weiteren Zugriff
+ausdrücklich, statt eine sofortige zeitgesteuerte Löschung zu behaupten.
 
-`tools/deploy_activation_server.py --apply` prüft vor dem Upload PHP-Syntax,
-Schlüsselpaar und SQLite-Integrität, sichert jede vorhandene Ziel- und
-Privatdatei außerhalb des Webroots und liest Sicherung und Upload bytegenau
-zurück. Der Bereitschaftsendpunkt gibt nur Bereitschaft und Protokollversion
-preis; er erhält keine Lizenz- oder Gerätedaten. Vor dem ersten Verkauf bleibt
-als Geschäftsprozess-Abnahme ein echter Kauf mit Online-Aktivierung,
-Offline-Dateiweg, Deaktivierung und Aktivierung auf einem zweiten Testrechner.
+`tools/deploy_activation_server.py --apply` verlangt Startwert, Datenbank und
+Betreiber-Token, prüft vor dem Upload PHP-Syntax, Schlüsselpaar und
+SQLite-Integrität, sichert jede vorhandene Ziel- und Privatdatei außerhalb des
+Webroots und liest Sicherung und Upload bytegenau zurück. Bei einer laufenden
+SQLite-WAL werden Hauptdatei und WAL zweimal stabil gelesen und über die
+SQLite-Sicherungs-API zu einer geprüften Ein-Datei-Sicherung vereinigt; ein
+bloßes Kopieren von `activation.sqlite` wäre keine vollständige Sicherung.
+Die bisherige Produktivdatenbank mit den drei Aktivierungstabellen bleibt dabei
+zulässig: Nach ihrer Sicherung legt der neue gemeinsame Endpunkt beim ersten
+Aktivierungs- oder Supportaufruf die zusätzliche Audit-Tabelle idempotent an.
+Die Produktivdatenbank wird für diese Migration nicht über FTPS ersetzt.
+Ein abweichender Betreiber-Token wird ebenso wenig still ersetzt wie der
+Signaturschlüssel.
+
+```powershell
+python tools/deploy_activation_server.py --apply `
+  --seed "$env:LOCALAPPDATA\Solidon3D\server\activation.seed" `
+  --database "$env:LOCALAPPDATA\Solidon3D\server\activation.sqlite" `
+  --operator-token "$env:LOCALAPPDATA\Solidon3D\server\operator.token"
+python tools/check_activation.py
+```
+
+Eine Betreiber-Tokenrotation ist ein eigener, absichtlicher Wartungsschritt:
+zuerst mit `setup_activation_server.py --replace-operator-token` eine neue
+lokale Tokendatei anlegen, dann denselben Deployment-Aufruf zusätzlich mit
+`--rotate-operator-token` ausführen. Das Deployment sichert den bisherigen
+Server-Token, bevor es den neuen hochlädt. Ohne den zweiten Schalter hält es
+bei jeder Abweichung an. Der Aktivierungsstartwert wird dabei niemals rotiert;
+das würde bereits ausgestellte Gerätezertifikate unbrauchbar machen.
+
+Der Bereitschaftsendpunkt gibt nur Bereitschaft und Protokollversion preis; er
+erhält keine Lizenz- oder Gerätedaten. Vor dem ersten Verkauf bleibt als
+Geschäftsprozess-Abnahme ein echter Kauf mit Online-Aktivierung,
+Offline-Dateiweg, Deaktivierung, Aktivierung auf einem zweiten Testrechner und
+einem vollständigen Durchlauf der privaten Support-Verwaltung.
+
+Die Support-Oberfläche läuft ausschließlich lokal:
+
+```powershell
+python tools/licence_admin.py `
+  --token "$env:LOCALAPPDATA\Solidon3D\server\operator.token" `
+  --archive "D:\Geheim\solidon-licences.jsonl"
+```
+
+Sie ordnet einen anonymen Vorratsschlüssel lokal der Transaktionskennung aus
+dem MoR-Dashboard zu, sucht im privaten Archiv nach dieser Kennung,
+Bestellkennung, Käuferkennung, vollständigem Schlüssel oder Digest und sendet
+nur den Digest an den Server. Sperren wirkt auf neue Aktivierungen; ein schon
+ausgestelltes Offline-Zertifikat bleibt wie vertraglich zugesagt lokal gültig.
+Der Betreiber-Endpunkt protokolliert jede Änderung mit einem festen Anlass,
+aber ohne Namen, E-Mail-Adresse oder Freitext.
+
+Die Oberfläche führt in drei lesbaren Schritten durch **Lizenz finden →
+Supportfall verstehen → Handlung auswählen**. `Strg+F` springt in die Suche,
+`F5` lädt den gewählten Serverzustand erneut. Zustände stehen immer als Text
+und Symbol da, nicht nur als Farbe. Generator und Oberfläche teilen sich eine
+Betriebssystem-Dateisperre; vor jedem Schreibvorgang wird das vollständige
+Archiv samt Signaturen und Käuferzuordnung geprüft. Eine MoR-Transaktion kann
+dadurch nie zwei Lizenzen bezeichnen, und auch Schlüssel älterer
+Hauptversionen bleiben über dasselbe Archiv auffindbar.
 
 ## Was Suchmaschinen sehen
 

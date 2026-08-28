@@ -14,6 +14,7 @@ bestätigen.
 from __future__ import annotations
 
 import ast
+import json
 from collections.abc import Iterator
 from datetime import date, timedelta
 from pathlib import Path
@@ -203,6 +204,8 @@ def test_the_sale_pool_cannot_accidentally_become_activation_free(
             [
                 "--private",
                 str(private),
+                "--archive",
+                str(tmp_path / "licences.jsonl"),
                 "--count",
                 "1",
                 "--purchased-on",
@@ -226,10 +229,125 @@ def test_a_legacy_key_requires_an_explicit_single_order(
         make_licence_keys(
             ["--private", str(private), "--count", "2", "--legacy", "--order", "ALT-1"]
         )
-    assert make_licence_keys(["--private", str(private), "--legacy", "--order", "ALT-1"]) == 0
+    assert (
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--archive",
+                str(tmp_path / "licences.jsonl"),
+                "--legacy",
+                "--order",
+                "ALT-1",
+            ]
+        )
+        == 0
+    )
     generated = capsys.readouterr().out.strip().splitlines()[-1]
     licence = key.parse(generated, public_key=TEST_PUBLIC, major=MAJOR)
     assert licence.purchased_on < activation.DEVICE_ACTIVATION_FROM
+
+
+def test_legacy_never_disables_activation_on_or_after_the_sale_start(tmp_path: Path) -> None:
+    """Der Schalter allein darf keinen modern datierten Hintertür-Schlüssel ausgeben."""
+    private = tmp_path / "licence.seed"
+    private.write_text(TEST_SEED.hex(), encoding="ascii")
+
+    with pytest.raises(SystemExit):
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--archive",
+                str(tmp_path / "licences.jsonl"),
+                "--legacy",
+                "--order",
+                "ALT-ZU-SPÄT",
+                "--purchased-on",
+                "2026-11-01",
+            ]
+        )
+
+
+def test_issued_keys_reach_the_private_archive_before_stdout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Support kann jeden Vorratsschlüssel später über seine POOL-Kennung finden."""
+    private = tmp_path / "licence.seed"
+    private.write_text(TEST_SEED.hex(), encoding="ascii")
+    archive = tmp_path / "licences.jsonl"
+
+    assert (
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--archive",
+                str(archive),
+                "--count",
+                "2",
+                "--purchased-on",
+                "2026-11-01",
+                "--start",
+                "7000",
+            ]
+        )
+        == 0
+    )
+
+    printed = capsys.readouterr().out.strip().splitlines()
+    records = [json.loads(line) for line in archive.read_text(encoding="utf-8").splitlines()]
+    assert [record["key"] for record in records] == printed
+    assert [record["order"] for record in records] == ["POOL-7000", "POOL-7001"]
+    assert all(record["transaction"] == "" for record in records)
+    assert all(len(record["digest"]) == 64 for record in records)
+
+
+def test_a_damaged_existing_archive_stops_the_next_issuance(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein strukturell plausibler, aber ungültiger Altbestand darf nicht wachsen."""
+    private = tmp_path / "licence.seed"
+    private.write_text(TEST_SEED.hex(), encoding="ascii")
+    archive = tmp_path / "licences.jsonl"
+    assert (
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--archive",
+                str(archive),
+                "--order",
+                "A-1",
+                "--purchased-on",
+                "2026-11-01",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    record = json.loads(archive.read_text(encoding="utf-8"))
+    record["key"] = "defekt"
+    archive.write_text(json.dumps(record) + "\n", encoding="utf-8")
+
+    assert (
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--archive",
+                str(archive),
+                "--order",
+                "A-2",
+                "--purchased-on",
+                "2026-11-01",
+            ]
+        )
+        == 1
+    )
+
+    assert "Zeile 1" in capsys.readouterr().out
+    assert "A-2" not in archive.read_text(encoding="utf-8")
 
 
 def test_the_key_survives_being_pasted_from_an_email() -> None:

@@ -12,13 +12,14 @@
       step_2_title: "Hier auswählen", step_2_text: "Die Datei endet auf .solidon-request. Mehr müssen Sie nicht eingeben.",
       step_3_title: "Antwort zurückbringen", step_3_text: "Antwort herunterladen und auf dem Solidon-Rechner einlesen.",
       form_title: "Aktivierungsanfrage auswählen", form_text: "Die Datei enthält Ihren Lizenzschlüssel, den gewählten Rechnernamen und einen zufälligen öffentlichen Geräteschlüssel.",
-      file_label: "Datei auswählen", file_help: ".solidon-request · höchstens wenige Kilobyte", or: "oder",
+      file_label: "Datei auswählen", no_file: "Keine Datei ausgewählt", selected_file: "Ausgewählt",
+      file_help: ".solidon-request · höchstens wenige Kilobyte", or: "oder",
       paste_toggle: "Die Datei lässt sich nicht auswählen?", paste_help: "Öffnen Sie die Anfrage als Text und fügen Sie den vollständigen Inhalt hier ein.",
       paste_label: "Dateiinhalt einfügen", submit: "Anfrage prüfen und diesen Rechner aktivieren",
       result_kicker: "✓ Prüfung abgeschlossen", result_title: "Antwort ist fertig", checking_title: "Anfrage wird geprüft",
       error_title: "Aktivierung noch nicht möglich", download: "Antwortdatei herunterladen",
       no_account_title: "Kein Konto. Keine Hardwaredaten.",
-      privacy: "Gespeichert werden nur ein Hash der Lizenz, Rechnername, öffentlicher Geräteschlüssel und Aktivierungsdatum. Projekte, Modelle und Hardwaremerkmale werden nicht übertragen.",
+      privacy: "Gespeichert werden nur die Aktivierungsdaten. Ein kurzer Tageszähler schützt vor Missbrauch; IP-Adressen, Projekte, Modelle und Hardwaremerkmale werden nicht gespeichert.",
       privacy_link: "Datenschutzerklärung lesen", help_title: "Etwas klappt nicht?",
       help_text: "Die Anfrage bleibt unverändert erhalten. Versuchen Sie es erneut oder schreiben Sie mit Ihrer Bestellnummer an den Support.",
       home: "Startseite", legal: "Impressum", privacy_short: "Datenschutz",
@@ -46,13 +47,14 @@
       step_2_title: "Select it here", step_2_text: "The file ends in .solidon-request. You do not need to enter anything else.",
       step_3_title: "Take the response back", step_3_text: "Download the response and import it on the Solidon computer.",
       form_title: "Select activation request", form_text: "The file contains your licence key, the computer name you chose and a random public device key.",
-      file_label: "Choose file", file_help: ".solidon-request · only a few kilobytes", or: "or",
+      file_label: "Choose file", no_file: "No file selected", selected_file: "Selected",
+      file_help: ".solidon-request · only a few kilobytes", or: "or",
       paste_toggle: "Unable to select the file?", paste_help: "Open the request as text and paste its complete contents here.",
       paste_label: "Paste file contents", submit: "Check request and activate this computer",
       result_kicker: "✓ Check completed", result_title: "Your response is ready", checking_title: "Checking your request",
       error_title: "Activation is not yet possible", download: "Download response file",
       no_account_title: "No account. No hardware data.",
-      privacy: "Only a hash of the licence, the computer name, public device key and activation date are stored. Projects, models and hardware characteristics are not transferred.",
+      privacy: "Only activation data is stored. A short-lived daily counter prevents abuse; IP addresses, projects, models and hardware characteristics are not stored.",
       privacy_link: "Read the privacy notice", help_title: "Something not working?",
       help_text: "Your request remains unchanged. Try again or contact support with your order number.",
       home: "Home", legal: "Legal notice", privacy_short: "Privacy",
@@ -80,13 +82,14 @@
       step_2_title: "Seleccionarla aquí", step_2_text: "El archivo termina en .solidon-request. No necesita introducir nada más.",
       step_3_title: "Llevar la respuesta", step_3_text: "Descargue la respuesta e impórtela en el ordenador con Solidon.",
       form_title: "Seleccionar solicitud de activación", form_text: "El archivo contiene su clave de licencia, el nombre elegido para el ordenador y una clave pública aleatoria del dispositivo.",
-      file_label: "Elegir archivo", file_help: ".solidon-request · solo unos pocos kilobytes", or: "o",
+      file_label: "Elegir archivo", no_file: "Ningún archivo seleccionado", selected_file: "Seleccionado",
+      file_help: ".solidon-request · solo unos pocos kilobytes", or: "o",
       paste_toggle: "¿No puede seleccionar el archivo?", paste_help: "Abra la solicitud como texto y pegue aquí todo su contenido.",
       paste_label: "Pegar el contenido del archivo", submit: "Comprobar la solicitud y activar este ordenador",
       result_kicker: "✓ Comprobación terminada", result_title: "La respuesta está lista", checking_title: "Comprobando la solicitud",
       error_title: "La activación aún no es posible", download: "Descargar archivo de respuesta",
       no_account_title: "Sin cuenta. Sin datos de hardware.",
-      privacy: "Solo se guardan un hash de la licencia, el nombre del ordenador, la clave pública del dispositivo y la fecha de activación. No se transfieren proyectos, modelos ni características del hardware.",
+      privacy: "Solo se guardan los datos de activación. Un contador diario de corta duración evita abusos; no se guardan direcciones IP, proyectos, modelos ni características del hardware.",
       privacy_link: "Leer la política de privacidad", help_title: "¿Algo no funciona?",
       help_text: "La solicitud permanece sin cambios. Inténtelo de nuevo o escriba al soporte con su número de pedido.",
       home: "Inicio", legal: "Aviso legal", privacy_short: "Privacidad",
@@ -114,13 +117,14 @@
       step_2_title: "La sélectionner ici", step_2_text: "Le fichier se termine par .solidon-request. Vous n’avez rien d’autre à saisir.",
       step_3_title: "Rapporter la réponse", step_3_text: "Téléchargez la réponse et importez-la sur l’ordinateur Solidon.",
       form_title: "Sélectionner la demande d’activation", form_text: "Le fichier contient votre clé de licence, le nom choisi pour l’ordinateur et une clé publique d’appareil aléatoire.",
-      file_label: "Choisir le fichier", file_help: ".solidon-request · quelques kilo-octets seulement", or: "ou",
+      file_label: "Choisir le fichier", no_file: "Aucun fichier sélectionné", selected_file: "Sélectionné",
+      file_help: ".solidon-request · quelques kilo-octets seulement", or: "ou",
       paste_toggle: "Impossible de sélectionner le fichier ?", paste_help: "Ouvrez la demande comme texte et collez ici tout son contenu.",
       paste_label: "Coller le contenu du fichier", submit: "Vérifier la demande et activer cet ordinateur",
       result_kicker: "✓ Vérification terminée", result_title: "La réponse est prête", checking_title: "Vérification de la demande",
       error_title: "L’activation n’est pas encore possible", download: "Télécharger le fichier de réponse",
       no_account_title: "Aucun compte. Aucune donnée matérielle.",
-      privacy: "Seuls un hachage de la licence, le nom de l’ordinateur, la clé publique de l’appareil et la date d’activation sont conservés. Aucun projet, modèle ou caractéristique matérielle n’est transmis.",
+      privacy: "Seules les données d’activation sont conservées. Un compteur journalier de courte durée évite les abus ; aucune adresse IP, aucun projet, modèle ou caractéristique matérielle n’est conservé.",
       privacy_link: "Lire la déclaration de confidentialité", help_title: "Quelque chose ne fonctionne pas ?",
       help_text: "Votre demande reste inchangée. Réessayez ou contactez l’assistance avec votre numéro de commande.",
       home: "Accueil", legal: "Mentions légales", privacy_short: "Confidentialité",
@@ -148,13 +152,14 @@
       step_2_title: "Selezionarla qui", step_2_text: "Il file termina con .solidon-request. Non devi inserire altro.",
       step_3_title: "Riportare la risposta", step_3_text: "Scarica la risposta e importala sul computer con Solidon.",
       form_title: "Selezionare la richiesta di attivazione", form_text: "Il file contiene la chiave di licenza, il nome scelto per il computer e una chiave pubblica casuale del dispositivo.",
-      file_label: "Scegliere il file", file_help: ".solidon-request · solo pochi kilobyte", or: "oppure",
+      file_label: "Scegliere il file", no_file: "Nessun file selezionato", selected_file: "Selezionato",
+      file_help: ".solidon-request · solo pochi kilobyte", or: "oppure",
       paste_toggle: "Non riesci a selezionare il file?", paste_help: "Apri la richiesta come testo e incolla qui l’intero contenuto.",
       paste_label: "Incollare il contenuto del file", submit: "Verificare la richiesta e attivare questo computer",
       result_kicker: "✓ Verifica completata", result_title: "La risposta è pronta", checking_title: "Verifica della richiesta",
       error_title: "L’attivazione non è ancora possibile", download: "Scaricare il file di risposta",
       no_account_title: "Nessun account. Nessun dato hardware.",
-      privacy: "Vengono conservati solo un hash della licenza, il nome del computer, la chiave pubblica del dispositivo e la data di attivazione. Progetti, modelli e caratteristiche hardware non vengono trasferiti.",
+      privacy: "Vengono conservati solo i dati di attivazione. Un contatore giornaliero di breve durata evita gli abusi; non vengono conservati indirizzi IP, progetti, modelli o caratteristiche hardware.",
       privacy_link: "Leggere l’informativa sulla privacy", help_title: "Qualcosa non funziona?",
       help_text: "La richiesta resta invariata. Riprova o scrivi all’assistenza indicando il numero d’ordine.",
       home: "Home", legal: "Note legali", privacy_short: "Privacy",
@@ -182,13 +187,14 @@
       step_2_title: "Selecioná-lo aqui", step_2_text: "O ficheiro termina em .solidon-request. Não precisa de introduzir mais nada.",
       step_3_title: "Levar a resposta", step_3_text: "Transfira a resposta e importe-a no computador com o Solidon.",
       form_title: "Selecionar o pedido de ativação", form_text: "O ficheiro contém a chave de licença, o nome escolhido para o computador e uma chave pública aleatória do dispositivo.",
-      file_label: "Escolher ficheiro", file_help: ".solidon-request · apenas alguns kilobytes", or: "ou",
+      file_label: "Escolher ficheiro", no_file: "Nenhum ficheiro selecionado", selected_file: "Selecionado",
+      file_help: ".solidon-request · apenas alguns kilobytes", or: "ou",
       paste_toggle: "Não consegue selecionar o ficheiro?", paste_help: "Abra o pedido como texto e cole aqui todo o conteúdo.",
       paste_label: "Colar o conteúdo do ficheiro", submit: "Verificar o pedido e ativar este computador",
       result_kicker: "✓ Verificação concluída", result_title: "A resposta está pronta", checking_title: "A verificar o pedido",
       error_title: "A ativação ainda não é possível", download: "Transferir ficheiro de resposta",
       no_account_title: "Sem conta. Sem dados de hardware.",
-      privacy: "São guardados apenas um hash da licença, o nome do computador, a chave pública do dispositivo e a data de ativação. Projetos, modelos e características do hardware não são transferidos.",
+      privacy: "São guardados apenas os dados de ativação. Um contador diário de curta duração evita abusos; não são guardados endereços IP, projetos, modelos ou características do hardware.",
       privacy_link: "Ler a declaração de privacidade", help_title: "Algo não está a funcionar?",
       help_text: "O pedido permanece inalterado. Tente novamente ou contacte o suporte com o número da encomenda.",
       home: "Início", legal: "Aviso legal", privacy_short: "Privacidade",
@@ -211,6 +217,7 @@
 
   const form = document.querySelector("#activation-form");
   const file = document.querySelector("#request-file");
+  const fileName = document.querySelector("#request-file-name");
   const text = document.querySelector("#request-text");
   const result = document.querySelector("#activation-result");
   const resultKicker = document.querySelector("#activation-result-kicker");
@@ -224,11 +231,17 @@
   let answer = "";
   let activeLanguage = "de";
   let resultMessageKey = "";
+  let selectedFilename = "";
 
-  if (!(form && file && text && result && resultKicker && resultTitle && message && download && language && skip && submit)) return;
+  if (!(form && file && fileName && text && result && resultKicker && resultTitle && message && download && language && skip && submit)) return;
 
   const phrase = (key) => translations[activeLanguage][key] || translations.de[key] || key;
   const chooseLanguage = (wanted) => Object.hasOwn(translations, wanted) ? wanted : "de";
+  const updateFileName = () => {
+    fileName.textContent = selectedFilename
+      ? `${phrase("selected_file")}: ${selectedFilename}`
+      : phrase("no_file");
+  };
 
   const applyLanguage = (wanted, updateAddress = false) => {
     activeLanguage = chooseLanguage(wanted);
@@ -243,6 +256,7 @@
     for (const node of document.querySelectorAll("[data-i18n-aria]")) {
       node.setAttribute("aria-label", phrase(node.dataset.i18nAria));
     }
+    updateFileName();
     if (!result.hidden && resultMessageKey) renderResult();
     if (updateAddress) {
       const address = new URL(window.location.href);
@@ -275,6 +289,16 @@
     result.scrollIntoView({behavior: "smooth", block: "nearest"});
   };
 
+  const resetResult = () => {
+    answer = "";
+    resultMessageKey = "";
+    result.hidden = true;
+    delete result.dataset.state;
+    result.removeAttribute("role");
+    message.textContent = "";
+    download.hidden = true;
+  };
+
   const serverErrorKey = (response, parsed) => {
     const code = parsed && typeof parsed.code === "string" ? parsed.code : "";
     const specific = `error_${code}`;
@@ -287,7 +311,12 @@
   };
 
   file.addEventListener("change", async () => {
+    resetResult();
+    text.value = "";
+    updateSubmit();
     const chosen = file.files && file.files[0];
+    selectedFilename = chosen ? chosen.name : "";
+    updateFileName();
     if (!chosen) return;
     if (chosen.size > MAX_REQUEST_BYTES) {
       file.setCustomValidity(phrase("error_large"));
@@ -300,17 +329,24 @@
       updateSubmit();
       submit.focus();
     } catch (_problem) {
+      text.value = "";
+      updateSubmit();
       file.setCustomValidity(phrase("error_file"));
       file.reportValidity();
     }
   });
-  text.addEventListener("input", updateSubmit);
+  text.addEventListener("input", () => {
+    resetResult();
+    file.value = "";
+    selectedFilename = "";
+    updateFileName();
+    updateSubmit();
+  });
   updateSubmit();
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    answer = "";
-    download.hidden = true;
+    resetResult();
     submit.disabled = true;
     file.disabled = true;
     text.readOnly = true;

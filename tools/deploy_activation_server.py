@@ -1,10 +1,10 @@
 """Spielt den Aktivierungsdienst mit Sicherung auf den Produktivserver.
 
 Private Dateien landen ausschließlich im benachbarten ``appdata`` und nie
-unter ``httpdocs``. Eine vorhandene Produktivdatenbank wird geprüft, aber nie
-über FTPS ersetzt — sonst könnte eine gleichzeitig offene SQLite-WAL verloren
-gehen. Ein abweichender privater Startwert wird ebenfalls nicht automatisch
-ersetzt, weil damit bereits ausgestellte Geräte-Zertifikate ihre
+unter ``httpdocs``. Eine vorhandene Produktivdatenbank wird samt ihrer
+SQLite-WAL als konsistenter Ein-Datei-Schnappschuss gesichert, aber nie über
+FTPS ersetzt. Ein abweichender privater Startwert wird ebenfalls nicht
+automatisch ersetzt, weil damit bereits ausgestellte Geräte-Zertifikate ihre
 Vertrauenskette verlören.
 """
 
@@ -14,6 +14,7 @@ import argparse
 import contextlib
 import ftplib
 import io
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -32,6 +33,7 @@ PUBLIC_FILES = (
     Path("api/activation_common.php"),
     Path("api/activation.php"),
     Path("api/deactivation.php"),
+    Path("api/operator.php"),
     Path("api/activation-health.php"),
     Path("offline-aktivierung.html"),
     Path("activation.js"),
@@ -40,6 +42,8 @@ PUBLIC_FILES = (
     Path("agb.html"),
     Path("widerruf.html"),
 )
+CORE_DATABASE_TABLES = frozenset({"licences", "activations", "activation_attempts"})
+SUPPORT_DATABASE_TABLES = CORE_DATABASE_TABLES | {"operator_events"}
 
 
 def _remote_parts(path: str) -> tuple[list[str], str]:
@@ -84,6 +88,15 @@ def _seed_matches(path: Path) -> bool:
     )
 
 
+def _operator_token_is_valid(path: Path) -> bool:
+    """Prüft Form und Entropielänge, ohne den Betreiberzugang auszugeben."""
+    try:
+        token = path.read_text(encoding="ascii").strip()
+    except (OSError, UnicodeError):
+        return False
+    return re.fullmatch(r"[0-9a-f]{64}", token) is not None
+
+
 def _check_php() -> None:
     """Hält vor jedem Upload an, wenn eine Endpunktdatei nicht einmal lädt."""
     executable = shutil.which("php")
@@ -103,12 +116,20 @@ def _check_php() -> None:
             raise SystemExit(result.stderr.strip() or result.stdout.strip())
 
 
-def _database_bytes(payload: bytes) -> bytes:
-    """Prüft Integrität und vollständiges Schema einer SQLite-Datei."""
+def _database_snapshot(
+    payload: bytes,
+    wal_payload: bytes | None = None,
+    *,
+    require_operator_events: bool = False,
+) -> bytes:
+    """Erzeugt aus Hauptdatei und optionaler WAL eine geprüfte Ein-Datei-Sicherung."""
     with tempfile.TemporaryDirectory(prefix="solidon-activation-") as temporary:
-        target = Path(temporary) / "activation.sqlite"
-        target.write_bytes(payload)
-        with contextlib.closing(sqlite3.connect(target)) as database:
+        source = Path(temporary) / "activation.sqlite"
+        source.write_bytes(payload)
+        if wal_payload is not None:
+            source.with_name(source.name + "-wal").write_bytes(wal_payload)
+        snapshot = Path(temporary) / "activation-backup.sqlite"
+        with contextlib.closing(sqlite3.connect(source)) as database:
             result = database.execute("PRAGMA integrity_check").fetchone()
             if result != ("ok",):
                 raise SystemExit("Die Aktivierungsdatenbank hat die Integritätsprüfung abgelehnt.")
@@ -118,13 +139,55 @@ def _database_bytes(payload: bytes) -> bytes:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 )
             }
-            required = {"licences", "activations", "activation_attempts"}
+            required = SUPPORT_DATABASE_TABLES if require_operator_events else CORE_DATABASE_TABLES
             if not required <= tables:
                 raise SystemExit(
                     "Die vorhandene Produktivdatenbank braucht eine Wartungsmigration; "
                     "sie wird über FTPS nicht überschrieben."
                 )
-        return target.read_bytes()
+            with contextlib.closing(sqlite3.connect(snapshot)) as destination:
+                database.backup(destination)
+        with contextlib.closing(sqlite3.connect(snapshot)) as checked:
+            if checked.execute("PRAGMA integrity_check").fetchone() != ("ok",):
+                raise SystemExit("Der Datenbankschnappschuss ist nicht wiederherstellbar.")
+        return snapshot.read_bytes()
+
+
+def _database_bytes(payload: bytes, *, require_operator_events: bool = True) -> bytes:
+    """Prüft eine einzelne SQLite-Datei und normalisiert sie für die Sicherung."""
+    return _database_snapshot(payload, require_operator_events=require_operator_events)
+
+
+def _remote_database_snapshot(session: ftplib.FTP_TLS, path: str) -> bytes | None:
+    """Liest Hauptdatei und WAL stabil und vereinigt beide ohne Datenverlust."""
+    wal_path = f"{path}-wal"
+    for _attempt in range(3):
+        database_before = _remote_bytes(session, path)
+        if database_before is None:
+            return None
+        wal_before = _remote_bytes(session, wal_path)
+        database_after = _remote_bytes(session, path)
+        wal_after = _remote_bytes(session, wal_path)
+        if database_before == database_after and wal_before == wal_after:
+            return _database_snapshot(database_after, wal_after)
+    raise SystemExit(
+        "Die Aktivierungsdatenbank wurde während der Sicherung fortlaufend verändert. "
+        "Erneut in einem ruhigen Wartungsfenster ausführen."
+    )
+
+
+def _operator_upload_needed(remote: bytes | None, local: bytes, rotate: bool) -> bool:
+    """Erlaubt einen neuen Betreiberzugang nur mit ausdrücklicher Rotation."""
+    if remote is None:
+        return True
+    if remote.strip() == local.strip():
+        return False
+    if not rotate:
+        raise SystemExit(
+            "Der Server trägt einen anderen Betreiberzugang. Für die bewusste Rotation "
+            "--rotate-operator-token angeben; vorher wird die alte Datei gesichert."
+        )
+    return True
 
 
 def _paths(access: dict[str, object]) -> tuple[str, str, str]:
@@ -134,11 +197,18 @@ def _paths(access: dict[str, object]) -> tuple[str, str, str]:
     return webroot, f"{domain_root}/appdata", f"{domain_root}/backups/activation"
 
 
-def deploy(seed: Path, database: Path) -> None:
+def deploy(
+    seed: Path,
+    database: Path,
+    operator_token: Path,
+    *,
+    rotate_operator_token: bool = False,
+) -> None:
     """Prüft, sichert und lädt alle zusammengehörigen Aktivierungsdateien."""
     seed = seed.expanduser().resolve()
     database = database.expanduser().resolve()
-    for private in (seed, database):
+    operator_token = operator_token.expanduser().resolve()
+    for private in (seed, database, operator_token):
         try:
             private.relative_to(ROOT)
         except ValueError:
@@ -149,6 +219,8 @@ def deploy(seed: Path, database: Path) -> None:
             raise SystemExit(f"Private Aktivierungsdatei fehlt: {private}")
     if not _seed_matches(seed):
         raise SystemExit("Der private Aktivierungsstartwert passt nicht zum eingebauten Schlüssel.")
+    if not _operator_token_is_valid(operator_token):
+        raise SystemExit("Der private Betreiberzugang muss 32 zufällige Bytes als Hex enthalten.")
     _check_php()
 
     access = upload_website.read_access()
@@ -163,23 +235,35 @@ def deploy(seed: Path, database: Path) -> None:
     try:
         remote_seed_path = f"{data_root}/activation.seed"
         remote_database_path = f"{data_root}/activation.sqlite"
+        remote_operator_path = f"{data_root}/operator.token"
         remote_seed = _remote_bytes(session, remote_seed_path)
         local_seed = seed.read_bytes()
         if remote_seed is not None and remote_seed.strip() != local_seed.strip():
             raise SystemExit(
                 "Der Server trägt einen anderen Aktivierungsstartwert; er wird nicht ersetzt."
             )
-        remote_database = _remote_bytes(session, remote_database_path)
+        remote_database = _remote_database_snapshot(session, remote_database_path)
+        local_database = _database_bytes(
+            database.read_bytes(),
+            require_operator_events=True,
+        )
         if remote_database is not None:
-            _database_bytes(remote_database)
-        else:
-            _database_bytes(database.read_bytes())
+            _database_bytes(remote_database, require_operator_events=False)
+        remote_operator = _remote_bytes(session, remote_operator_path)
+        local_operator = operator_token.read_bytes()
+        replace_operator = _operator_upload_needed(
+            remote_operator,
+            local_operator,
+            rotate_operator_token,
+        )
 
         targets: list[tuple[str, bytes]] = []
         if remote_seed is None:
             targets.append((remote_seed_path, local_seed))
         if remote_database is None:
-            targets.append((remote_database_path, database.read_bytes()))
+            targets.append((remote_database_path, local_database))
+        if replace_operator:
+            targets.append((remote_operator_path, local_operator))
         for relative in PUBLIC_FILES:
             local = upload_website.LOCAL_ROOT / relative
             targets.append((f"{webroot}/{relative.as_posix()}", local.read_bytes()))
@@ -189,6 +273,8 @@ def deploy(seed: Path, database: Path) -> None:
             backup_sources[remote_seed_path] = remote_seed
         if remote_database is not None:
             backup_sources[remote_database_path] = remote_database
+        if remote_operator is not None:
+            backup_sources[remote_operator_path] = remote_operator
         for remote, _payload in targets:
             previous = _remote_bytes(session, remote)
             if previous is not None:
@@ -220,14 +306,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=Path, required=True, help="privater Startwert")
     parser.add_argument("--database", type=Path, required=True, help="lokale Ausgangsdatenbank")
     parser.add_argument(
+        "--operator-token",
+        type=Path,
+        required=True,
+        help="privater Zugang der Support-Verwaltung",
+    )
+    parser.add_argument(
         "--apply",
         action="store_true",
         help="nach den lokalen Prüfungen wirklich sichern und hochladen",
     )
+    parser.add_argument(
+        "--rotate-operator-token",
+        action="store_true",
+        help="abweichenden Betreiberzugang nach bestätigter Sicherung bewusst ersetzen",
+    )
     arguments = parser.parse_args(argv)
     if not arguments.apply:
         parser.error("ohne --apply wird der Produktivserver nicht verändert")
-    deploy(arguments.seed, arguments.database)
+    deploy(
+        arguments.seed,
+        arguments.database,
+        arguments.operator_token,
+        rotate_operator_token=arguments.rotate_operator_token,
+    )
     return 0
 
 

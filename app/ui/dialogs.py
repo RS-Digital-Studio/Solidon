@@ -1309,6 +1309,11 @@ class OfflineActivationDialog(QDialog):
         save.clicked.connect(self._save_request)
         website = QPushButton(tr("2 · Aktivierungsseite öffnen"), self)
         website.clicked.connect(self._open_page)
+        self.page_address = QLineEdit(self.PAGE_URL, self)
+        self.page_address.setReadOnly(True)
+        self.page_address.setAccessibleName(website.text())
+        copy_address = QPushButton(tr("Adresse kopieren"), self)
+        copy_address.clicked.connect(self._copy_page)
         import_answer = QPushButton(tr("3 · Antwort einlesen …"), self)
         import_answer.clicked.connect(self._import_answer)
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
@@ -1317,7 +1322,11 @@ class OfflineActivationDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(explanation)
         layout.addWidget(save)
-        layout.addWidget(website)
+        page_actions = QHBoxLayout()
+        page_actions.addWidget(website)
+        page_actions.addWidget(copy_address)
+        layout.addLayout(page_actions)
+        layout.addWidget(self.page_address)
         layout.addWidget(import_answer)
         layout.addWidget(buttons)
 
@@ -1360,7 +1369,20 @@ class OfflineActivationDialog(QDialog):
         query = QUrlQuery()
         query.addQueryItem("lang", get_language())
         target.setQuery(query)
-        QDesktopServices.openUrl(target)
+        if QDesktopServices.openUrl(target) is False:
+            self._copy_page()
+            QMessageBox.information(
+                self,
+                tr("2 · Aktivierungsseite öffnen"),
+                tr(
+                    "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; "
+                    "öffnen Sie sie auf einem Gerät mit Internet."
+                ),
+            )
+
+    def _copy_page(self) -> None:
+        """Kopiert den bewusst sichtbaren Weg für das Gerät mit Internet."""
+        QApplication.clipboard().setText(self.PAGE_URL)
 
     def _import_answer(self) -> None:
         name, _chosen = QFileDialog.getOpenFileName(
@@ -1521,7 +1543,6 @@ class ActivationDialog(QDialog):
         layout.addWidget(device_group)
         layout.addWidget(buttons)
         self._worker: Worker | None = None
-        self._restore_certificate: str | None = None
         self._leash = WorkerLeash(self)
         self._show_state()
         self._follow_field()
@@ -1536,6 +1557,9 @@ class ActivationDialog(QDialog):
             # erfuhr er beim ersten Änderungsversuch. Das ist Regel 17 an der
             # Anzeige: Der Zustand nennt sich selbst, nicht erst die Absage.
             self.state_label.setText(damaged_line())
+            set_level(self.state_label, "warning")
+        elif state.deactivation_pending:
+            self.state_label.setText(deactivation_pending_line())
             set_level(self.state_label, "warning")
         elif state.licensed and state.licence is not None and state.certificate is not None:
             self.state_label.setText(
@@ -1655,18 +1679,25 @@ class ActivationDialog(QDialog):
         busy = self._worker is not None and self._worker.isRunning()
         active = state.licensed
         device_active = state.certificate is not None and state.licence is not None
-        pending = state.needs_activation
-        self.field.setReadOnly(active or busy)
-        self.device_name.setReadOnly(active or busy)
-        self.check_button.setEnabled(filled and not damaged and not active and not busy)
-        self.online_button.setEnabled(pending and named and not busy)
-        self.offline_button.setEnabled(pending and named and not busy)
-        self.buy_button.setEnabled(not damaged and not active and not busy)
+        pending_activation = state.needs_activation
+        pending_deactivation = state.deactivation_pending
+        locked_locally = active or pending_deactivation
+        self.field.setReadOnly(locked_locally or busy)
+        self.device_name.setReadOnly(locked_locally or busy)
+        self.check_button.setEnabled(filled and not damaged and not locked_locally and not busy)
+        self.online_button.setEnabled(pending_activation and named and not busy)
+        self.offline_button.setEnabled(pending_activation and named and not busy)
+        self.buy_button.setEnabled(not damaged and not locked_locally and not busy)
         self.forget_button.setEnabled(
-            (activation.read_key() is not None or state.licence is not None) and not busy
+            (activation.read_key() is not None or state.licence is not None or pending_deactivation)
+            and not busy
         )
         self.forget_button.setText(
-            tr("Diesen Rechner deaktivieren") if device_active else tr("Schlüssel entfernen")
+            tr("Deaktivierung erneut senden")
+            if pending_deactivation
+            else tr("Diesen Rechner deaktivieren")
+            if device_active
+            else tr("Schlüssel entfernen")
         )
         locked = damaged_line() if damaged else ""
         self.check_button.setToolTip(
@@ -1678,9 +1709,11 @@ class ActivationDialog(QDialog):
             button.setStatusTip(button.toolTip())
             button.setAccessibleDescription(button.toolTip())
         activation_hint = ""
-        if not pending and not active:
+        if pending_deactivation:
+            activation_hint = deactivation_pending_line()
+        elif not pending_activation and not active:
             activation_hint = tr("Zuerst den Lizenzschlüssel einfügen und prüfen.")
-        elif pending and not named:
+        elif pending_activation and not named:
             activation_hint = tr("Geben Sie einen Namen für diesen Rechner ein.")
         for button in (self.online_button, self.offline_button):
             button.setToolTip(activation_hint)
@@ -1716,10 +1749,26 @@ class ActivationDialog(QDialog):
 
     def _forget(self) -> None:
         """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
-        if activation.state().certificate is not None:
+        if (
+            activation.state().certificate is not None
+            or activation.pending_deactivation_request() is not None
+        ):
             self._deactivate()
             return
-        activation.forget_key()
+        if not activation.forget_key():
+            show_error(
+                AppError(
+                    detail=tr(
+                        "Der Lizenzschlüssel ließ sich nicht entfernen. Schließen Sie andere "
+                        "Solidon-Fenster und versuchen Sie es erneut."
+                    ),
+                    suggestions=(REPORT_ERROR, CANCEL),
+                ),
+                self,
+            )
+            self._show_state()
+            self._follow_field()
+            return
         self.field.clear()
         self._show_state()
         self._follow_field()
@@ -1780,24 +1829,40 @@ class ActivationDialog(QDialog):
     def _deactivate(self) -> None:
         """Entfernt lokal zuerst und gibt anschließend genau diesen Platz frei."""
         try:
-            request = activation.create_deactivation_request()
+            request = activation.prepare_deactivation()
         except AppError as problem:
             show_error(problem, self)
             return
-        saved = activation_store.read_certificate()
-        if saved is None or not activation.remove_certificate():
-            show_error(
-                AppError(
+        activation.forget_cache()
+        if activation_store.read_certificate() is not None and not activation.remove_certificate():
+            # Der Server wurde noch nicht angesprochen. Kann auch der soeben
+            # angelegte Wiederholungsauftrag entfernt werden, bleibt der zuvor
+            # gültige Zustand vollständig erhalten. Scheitert selbst das,
+            # bleibt die sichere lokale Sperre sichtbar und wiederholbar.
+            pending_cleared = activation.clear_pending_deactivation()
+            deactivation_problem: AppError
+            if pending_cleared:
+                deactivation_problem = AppError(
                     detail=tr(
                         "Die lokale Gerätefreigabe ließ sich nicht entfernen. "
                         "Der Serverplatz wurde deshalb nicht verändert."
                     ),
                     suggestions=(REPORT_ERROR, CANCEL),
-                ),
+                )
+            else:
+                deactivation_problem = activation.DeviceDeactivationPending(
+                    detail=tr(
+                        "Die lokale Gerätefreigabe ließ sich nicht entfernen. "
+                        "Der Serverplatz wurde deshalb nicht verändert."
+                    )
+                )
+            show_error(
+                deactivation_problem,
                 self,
             )
+            self._show_state()
+            self._follow_field()
             return
-        self._restore_certificate = saved
         worker = _DeactivationWorker(request)
         worker.completed.connect(self._deactivation_completed)
         worker.failed.connect(self._deactivation_failed)
@@ -1808,16 +1873,32 @@ class ActivationDialog(QDialog):
         self._follow_field()
         self._leash.start(worker)
 
-    def _restore_local_activation(self) -> None:
-        saved = self._restore_certificate
-        self._restore_certificate = None
-        if saved is not None:
-            activation_store.write_certificate(saved)
-            activation.forget_cache()
-
     def _deactivation_completed(self) -> None:
-        self._restore_certificate = None
-        activation.forget_key()
+        if not activation.forget_key():
+            show_error(
+                activation.DeviceDeactivationPending(
+                    detail=tr(
+                        "Der Geräteplatz ist frei, aber der Lizenzschlüssel ließ sich lokal "
+                        "nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen "
+                        "Sie Schlüssel entfernen erneut."
+                    )
+                ),
+                self,
+            )
+            self._show_state()
+            return
+        if not activation.clear_pending_deactivation():
+            show_error(
+                activation.DeviceDeactivationPending(
+                    detail=tr(
+                        "Der Geräteplatz ist auf dem Server frei, aber der lokale Auftrag "
+                        "ließ sich nicht entfernen. Senden Sie ihn erneut; das ist sicher."
+                    )
+                ),
+                self,
+            )
+            self._show_state()
+            return
         self.field.clear()
         QMessageBox.information(
             self,
@@ -1830,16 +1911,22 @@ class ActivationDialog(QDialog):
         self._show_state()
 
     def _deactivation_failed(self, problem: object) -> None:
-        self._restore_local_activation()
-        if isinstance(problem, AppError):
-            show_error(problem, self)
-        else:  # pragma: no cover - Signalvertrag wird vom Arbeiter gehalten
-            self._worker_crashed(str(problem))
+        detail = (
+            str(problem.detail or problem.title) if isinstance(problem, AppError) else str(problem)
+        )
+        show_error(
+            activation.DeviceDeactivationPending(
+                detail=tr(
+                    "Die Serverantwort ist unklar. Dieser Rechner bleibt lokal deaktiviert. "
+                    "Senden Sie die Deaktivierung erneut. Technischer Hinweis: {detail}"
+                ).format(detail=detail)
+            ),
+            self,
+        )
         self._show_state()
 
     def _deactivation_crashed(self, detail: str) -> None:
-        self._restore_local_activation()
-        self._worker_crashed(detail)
+        self._deactivation_failed(detail)
 
     def _worker_crashed(self, detail: str) -> None:
         show_error(
@@ -2371,6 +2458,12 @@ def damaged_line() -> str:
     return f"{problem.title} {problem.detail}"
 
 
+def deactivation_pending_line() -> str:
+    """Erklärt die sichere lokale Sperre nach einer unklaren Serverantwort."""
+    problem = activation.DeviceDeactivationPending()
+    return f"{problem.title} {problem.detail}"
+
+
 def licence_lock_line(state: activation.Activation | None = None) -> str:
     """Ein Sperrgrund für Menü, Chat, Slicer, Status- und Über-Dialog.
 
@@ -2383,6 +2476,8 @@ def licence_lock_line(state: activation.Activation | None = None) -> str:
     current = state or activation.state()
     if current.damaged:
         return damaged_line()
+    if current.deactivation_pending:
+        return deactivation_pending_line()
     if current.needs_activation:
         return str(
             tr(
@@ -2411,6 +2506,8 @@ def _licence_line() -> str:
         # also stand hier „Lizenziert für …" über einer Installation, die
         # nichts freischaltet.
         return damaged_line()
+    if state.deactivation_pending:
+        return deactivation_pending_line()
     if state.licensed and state.licence is not None:
         return tr("Lizenziert für {holder} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),

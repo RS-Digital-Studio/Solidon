@@ -310,8 +310,8 @@ def test_only_files_below_the_website_go_up(tmp_path: Path) -> None:
 
 
 def test_developer_notes_stay_off_the_public_server() -> None:
-    """``website/README.md`` erklärt, wie die Seiten gebaut sind — 232 Zeilen,
-    die niemand im Netz lesen soll.
+    """``website/README.md`` erklärt ausführlich, wie die Seiten gebaut sind —
+    eine interne Karte, die niemand im Netz lesen soll.
 
     Der Abgleich lud sie brav mit hoch, und sie lag öffentlich da. Was die
     Regel hält, ist diese Zeile: Was unter ``website/`` liegt und ``.md``
@@ -322,6 +322,7 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     assert not upload.wanted(upload.LOCAL_ROOT / "README.md")
     assert not upload.wanted(upload.LOCAL_ROOT / "dl" / "Solidon3D-Setup.exe")
     assert not upload.wanted(upload.LOCAL_ROOT / "activation.seed")
+    assert not upload.wanted(upload.LOCAL_ROOT / "operator.token")
     assert not upload.wanted(upload.LOCAL_ROOT / "api" / "activation.sqlite")
     assert not upload.wanted(upload.LOCAL_ROOT / "Anfrage.solidon-request")
     assert upload.wanted(upload.LOCAL_ROOT / "index.html")
@@ -339,9 +340,89 @@ def test_activation_deployment_separates_public_and_private_roots() -> None:
     assert data_root == "solidon3d.de/appdata"
     assert backup_root == "solidon3d.de/backups/activation"
     assert all(
-        path.name not in {"activation.seed", "activation.sqlite"}
+        path.name not in {"activation.seed", "activation.sqlite", "operator.token"}
         for path in deployment.PUBLIC_FILES
     )
+    assert Path("api/operator.php") in deployment.PUBLIC_FILES
+
+
+def test_activation_deployment_accepts_only_a_full_operator_token(tmp_path: Path) -> None:
+    """Ein kurzer Zugang darf nie bis zum Produktivserver gelangen."""
+    from tools import deploy_activation_server as deployment
+
+    token = tmp_path / "operator.token"
+    token.write_text("ab" * 32 + "\n", encoding="ascii")
+    assert deployment._operator_token_is_valid(token)
+
+    token.write_text("ab" * 31 + "\n", encoding="ascii")
+    assert not deployment._operator_token_is_valid(token)
+
+
+def test_activation_backup_contains_committed_rows_from_the_wal(tmp_path: Path) -> None:
+    """Eine noch nicht eingecheckte WAL ist Teil der Datenbank, nicht Beifang."""
+    import sqlite3
+
+    from tools import deploy_activation_server as deployment
+
+    source = tmp_path / "activation.sqlite"
+    database = sqlite3.connect(source)
+    try:
+        database.execute("PRAGMA journal_mode=WAL")
+        database.execute("PRAGMA wal_autocheckpoint=0")
+        for table in ("licences", "activations", "activation_attempts", "operator_events"):
+            database.execute(f"CREATE TABLE {table} (value TEXT)")
+        database.commit()
+        database.execute("INSERT INTO licences VALUES ('nur in der WAL')")
+        database.commit()
+        wal = source.with_name(source.name + "-wal")
+        assert wal.is_file()
+
+        snapshot = deployment._database_snapshot(source.read_bytes(), wal.read_bytes())
+    finally:
+        database.close()
+
+    restored = tmp_path / "restored.sqlite"
+    restored.write_bytes(snapshot)
+    checked = sqlite3.connect(restored)
+    try:
+        assert checked.execute("SELECT value FROM licences").fetchone() == ("nur in der WAL",)
+    finally:
+        checked.close()
+
+
+def test_activation_deployment_accepts_the_existing_three_table_schema(
+    tmp_path: Path,
+) -> None:
+    """Die neue Endpunktdatei migriert erst nach dem sicheren Altbestand-Backup."""
+    import sqlite3
+
+    from tools import deploy_activation_server as deployment
+
+    source = tmp_path / "activation.sqlite"
+    database = sqlite3.connect(source)
+    try:
+        for table in ("licences", "activations", "activation_attempts"):
+            database.execute(f"CREATE TABLE {table} (value TEXT)")
+        database.commit()
+    finally:
+        database.close()
+
+    snapshot = deployment._database_snapshot(source.read_bytes())
+
+    assert snapshot
+    with pytest.raises(SystemExit):
+        deployment._database_bytes(source.read_bytes(), require_operator_events=True)
+
+
+def test_operator_token_changes_only_with_an_explicit_rotation() -> None:
+    from tools import deploy_activation_server as deployment
+
+    old = ("ab" * 32).encode()
+    new = ("cd" * 32).encode()
+    assert not deployment._operator_upload_needed(old, old, False)
+    with pytest.raises(SystemExit):
+        deployment._operator_upload_needed(old, new, False)
+    assert deployment._operator_upload_needed(old, new, True)
 
 
 def test_raising_the_version_moves_both_places_and_nothing_else() -> None:

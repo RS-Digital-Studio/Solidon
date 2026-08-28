@@ -2992,6 +2992,8 @@ class MainWindow(QMainWindow):
             # Änderungsversuch. Derselbe Satz wie im Freischaltdialog, aus
             # derselben Quelle — zwei Formulierungen liefen auseinander.
             message = damaged_line()
+        elif state.deactivation_pending:
+            message = licence_lock_line(state)
         elif state.needs_activation:
             message = tr(
                 "Lizenzschlüssel gültig — diesen Rechner noch aktivieren: "

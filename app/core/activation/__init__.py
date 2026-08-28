@@ -50,6 +50,7 @@ from app.core.activation.store import TRIAL_DAYS, TRIAL_FROM, read_key
 from app.core.errors import (
     ActiveLicenceCannotBeReplaced,
     DeviceActivationRequired,
+    DeviceDeactivationPending,
     InstallationDamaged,
     LicenceRequired,
 )
@@ -70,15 +71,19 @@ __all__ = [
     "ActivationCertificate",
     "ActiveLicenceCannotBeReplaced",
     "DeviceActivationRequired",
+    "DeviceDeactivationPending",
     "InstallationDamaged",
     "Licence",
     "LicenceKeyError",
     "LicenceRequired",
+    "clear_pending_deactivation",
     "create_activation_request",
     "create_deactivation_request",
     "forget_cache",
     "forget_key",
     "install_certificate",
+    "pending_deactivation_request",
+    "prepare_deactivation",
     "read_key",
     "remember",
     "remove_certificate",
@@ -131,6 +136,8 @@ class Activation:
     Demo, die am 30.10. endet, darf niemanden überraschen, der am 28.10. ein
     Projekt anfängt.
     """
+    deactivation_pending: bool = False
+    """Ob die lokale Sperre steht und die Serverbestätigung noch aussteht."""
 
     @property
     def unlocked(self) -> bool:
@@ -140,7 +147,11 @@ class Activation:
         Meldung ein Weg an H4 vorbei geworden: Wer eine Grenzdatei ändert,
         legte einfach einen gültigen Schlüssel daneben.
         """
-        return not self.damaged and (self.licensed or self.days_left > 0)
+        return (
+            not self.damaged
+            and not self.deactivation_pending
+            and (self.licensed or self.days_left > 0)
+        )
 
     @property
     def requires_device_activation(self) -> bool:
@@ -162,7 +173,12 @@ class Activation:
     @property
     def needs_activation(self) -> bool:
         """Ob ein gültiger Kaufcode auf seine Gerätefreigabe wartet."""
-        return not self.damaged and self.requires_device_activation and self.certificate is None
+        return (
+            not self.damaged
+            and not self.deactivation_pending
+            and self.requires_device_activation
+            and self.certificate is None
+        )
 
     @property
     def trial_offered(self) -> bool:
@@ -262,6 +278,7 @@ def _determine() -> Activation:
     # ``damaged`` unabhängig von der Lizenz (H4).
     licence: Licence | None = None
     stored = read_key()
+    deactivation_pending = store.read_pending_deactivation() is not None
     if stored is not None:
         try:
             licence = parse(stored)
@@ -281,9 +298,20 @@ def _determine() -> Activation:
         # Testtage verbrauchen.
         _log.warning("licence manifest broken — the writing side stays closed")
         loaded = certificates.load_for(licence) if licence is not None else None
-        return Activation(licence=licence, certificate=loaded, damaged=True)
+        return Activation(
+            licence=licence,
+            certificate=loaded,
+            damaged=True,
+            deactivation_pending=deactivation_pending,
+        )
     if licence is not None:
-        return Activation(licence=licence, certificate=certificates.load_for(licence))
+        return Activation(
+            licence=licence,
+            certificate=certificates.load_for(licence),
+            deactivation_pending=deactivation_pending,
+        )
+    if deactivation_pending:
+        return Activation(deactivation_pending=True)
     return Activation(days_left=store.days_left(), deadline=store.DEMO_UNTIL)
 
 
@@ -317,6 +345,14 @@ def remember(text: str) -> Activation:
     global _cached
     licence = parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
     previous_text = read_key()
+    deactivation_pending = store.read_pending_deactivation() is not None
+    if deactivation_pending and previous_text is not None:
+        try:
+            previous = parse(previous_text)
+        except LicenceKeyError:
+            previous = None
+        if previous is not None and previous != licence:
+            raise ActiveLicenceCannotBeReplaced()
     if previous_text is not None and store.read_certificate() is not None:
         try:
             previous = parse(previous_text)
@@ -342,12 +378,15 @@ def remember(text: str) -> Activation:
         licence=licence,
         certificate=certificates.load_for(licence),
         damaged=not integrity.intact(),
+        deactivation_pending=deactivation_pending,
     )
     return _cached
 
 
 def create_activation_request(device_name: str) -> str:
     """Erzeugt die signierte Geräteanforderung für Online- und Dateiweg."""
+    if store.read_pending_deactivation() is not None:
+        raise DeviceDeactivationPending()
     stored = read_key()
     if stored is None:
         raise LicenceKeyError()
@@ -357,6 +396,8 @@ def create_activation_request(device_name: str) -> str:
 def install_certificate(text: str) -> ActivationCertificate:
     """Prüft und speichert eine Aktivierungsantwort für diesen Rechner."""
     global _cached
+    if store.read_pending_deactivation() is not None:
+        raise DeviceDeactivationPending()
     installed = certificates.install(text)
     stored = read_key()
     if stored is None:  # durch ``install`` bereits erklärt; nur Typverengung
@@ -377,6 +418,35 @@ def create_deactivation_request() -> str:
     if stored is None or current.certificate is None:
         raise DeviceActivationRequired()
     return certificates.create_deactivation(stored, current.certificate)
+
+
+def pending_deactivation_request() -> str | None:
+    """Gibt den wiederholbaren Auftrag einer unbestätigten Abmeldung zurück."""
+    return store.read_pending_deactivation()
+
+
+def prepare_deactivation() -> str:
+    """Legt den Serverauftrag dauerhaft ab, bevor lokal gesperrt wird."""
+    pending = store.read_pending_deactivation()
+    if pending is not None:
+        return pending
+    request = create_deactivation_request()
+    if not store.write_pending_deactivation(request):
+        raise DeviceDeactivationPending(
+            detail=_(
+                "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. "
+                "Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner."
+            )
+        )
+    forget_cache()
+    return request
+
+
+def clear_pending_deactivation() -> bool:
+    """Vergisst den Auftrag ausschließlich nach bestätigter Serverfreigabe."""
+    removed = store.forget_pending_deactivation()
+    forget_cache()
+    return removed
 
 
 def remove_certificate() -> bool:
@@ -415,6 +485,8 @@ def require(action: str) -> None:
     current = state()
     if current.damaged:
         raise InstallationDamaged(action=action)
+    if current.deactivation_pending:
+        raise DeviceDeactivationPending(action=action)
     if current.needs_activation:
         raise DeviceActivationRequired(action=action)
     if not current.unlocked:

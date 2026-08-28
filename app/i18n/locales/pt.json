@@ -3606,5 +3606,15 @@
   "„Skelett“ steht in derselben Werkzeugleiste und gehört zum selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie neu gebaut wird.": "Esqueleto encontra-se na mesma barra de ferramentas e segue o mesmo percurso: dois cliques colocam um osso e Concluído pede depois os ângulos. Assim, a figura ganha a sua pose sem ter de ser reconstruída.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes.",
-  "🔒": "🔒"
+  "🔒": "🔒",
+  "Adresse kopieren": "Copiar endereço",
+  "Deaktivierung erneut senden": "Reenviar a desativação",
+  "Der Geräteplatz ist auf dem Server frei, aber der lokale Auftrag ließ sich nicht entfernen. Senden Sie ihn erneut; das ist sicher.": "O lugar do dispositivo está livre no servidor, mas não foi possível remover o pedido local. Reenvie-o; é seguro.",
+  "Der Geräteplatz ist frei, aber der Lizenzschlüssel ließ sich lokal nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie Schlüssel entfernen erneut.": "O lugar do dispositivo está livre, mas não foi possível remover localmente a chave de licença. Feche as outras janelas do Solidon e tente novamente Remover chave.",
+  "Der Lizenzschlüssel ließ sich nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie es erneut.": "Não foi possível remover a chave de licença. Feche as outras janelas do Solidon e tente novamente.",
+  "Die Deaktivierung dieses Rechners ist noch nicht bestätigt.": "A desativação deste computador ainda não foi confirmada.",
+  "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; öffnen Sie sie auf einem Gerät mit Internet.": "Não foi possível abrir a página aqui. O endereço foi copiado; abra-o num dispositivo com acesso à Internet.",
+  "Die Serverantwort ist unklar. Dieser Rechner bleibt lokal deaktiviert. Senden Sie die Deaktivierung erneut. Technischer Hinweis: {detail}": "A resposta do servidor não é conclusiva. Este computador permanece desativado localmente. Reenvie a desativação. Nota técnica: {detail}",
+  "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "Não foi possível guardar o pedido de desativação segura. O computador permanece ativado; escolha uma pasta de perfil com permissão de escrita.",
+  "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird.": "O Solidon permanece bloqueado com segurança neste computador. Reenvie a desativação para libertar de forma fiável o lugar do dispositivo."
 }

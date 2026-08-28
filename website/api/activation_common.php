@@ -305,6 +305,12 @@ function activation_create_schema(PDO $database): void
         . 'licence_digest TEXT NOT NULL, day TEXT NOT NULL, attempts INTEGER NOT NULL, '
         . 'PRIMARY KEY(licence_digest, day))'
     );
+    $database->exec(
+        'CREATE TABLE IF NOT EXISTS operator_events ('
+        . 'id INTEGER PRIMARY KEY AUTOINCREMENT, occurred_at TEXT NOT NULL, '
+        . 'licence_digest TEXT NOT NULL, action TEXT NOT NULL, reason TEXT NOT NULL, '
+        . 'changed INTEGER NOT NULL)'
+    );
 }
 
 /** Öffnet die Datenbank; die Bereitschaftsprobe schreibt dabei garantiert nichts. */
@@ -379,6 +385,11 @@ function activation_consume_rate(PDO $database, string $digest): void
     $day = gmdate('Y-m-d');
     try {
         $database->exec('BEGIN IMMEDIATE');
+        // Der Zähler schützt nur den laufenden UTC-Tag. Ältere Zeilen würden
+        // weder die Entscheidung verändern noch dem Kunden helfen; der
+        // nächste gültige Aktivierungsversuch räumt sie deshalb gemeinsam ab.
+        $purge = $database->prepare('DELETE FROM activation_attempts WHERE day < ?');
+        $purge->execute([$day]);
         $insert = $database->prepare(
             'INSERT OR IGNORE INTO activation_attempts(licence_digest, day, attempts) VALUES(?, ?, 0)'
         );

@@ -126,7 +126,7 @@ def files_since(reference: str) -> list[Path]:
 def wanted(path: Path) -> bool:
     """Ob eine lokale Datei überhaupt auf den Server gehört.
 
-    Zwei Ausnahmen, beide mit Grund:
+    Drei Ausnahmen, jede mit Grund:
 
     ``dl/`` trägt die Installationspakete. Sie stehen nicht im Repository
     (``.gitignore``) und wiegen je Version hundert Megabyte; hochgeladen
@@ -135,6 +135,9 @@ def wanted(path: Path) -> bool:
     ``.md`` ist Entwicklerdoku. ``website/README.md`` erklärt, wie die Seiten
     gebaut sind — 232 Zeilen, die niemand im Netz lesen soll und die ein
     Abgleich sonst brav mit hochlädt. Genau das ist einmal passiert.
+
+    ``.token`` ist ein Zugangswert. Der Betreiber-Token wird ausschließlich
+    vom gehärteten Aktivierungs-Deployment in den privaten Serverordner gelegt.
     """
     relative = path.relative_to(LOCAL_ROOT)
     lower = path.name.lower()
@@ -145,6 +148,7 @@ def wanted(path: Path) -> bool:
         ".sqlite-wal",
         ".sqlite-shm",
         ".db",
+        ".token",
         ".solidon-request",
         ".solidon-activation",
     )

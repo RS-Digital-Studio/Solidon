@@ -107,6 +107,12 @@ KEY_FILE: Final = "licence.key"
 #: Zertifikat. Es reist nie in einer Projektdatei.
 CERTIFICATE_FILE: Final = "activation.certificate"
 
+#: Signierte Geräteabmeldung, deren Serverbestätigung noch aussteht. Sie wird
+#: vor dem Entfernen des Zertifikats atomar abgelegt. Ein Verbindungsabbruch
+#: kann dadurch niemals die lokale Freischaltung wiederherstellen; derselbe
+#: idempotente Auftrag lässt sich stattdessen nach einem Neustart wiederholen.
+PENDING_DEACTIVATION_FILE: Final = "deactivation.pending"
+
 #: Dateiname des Testlaufmarkers.
 TRIAL_FILE: Final = "trial.json"
 
@@ -224,6 +230,43 @@ def forget_certificate() -> bool:
     """Entfernt die lokale Gerätefreigabe; fehlend gilt bereits als entfernt."""
     try:
         certificate_path().unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
+def pending_deactivation_path() -> Path:
+    """Ablageort einer noch nicht bestätigten Geräteabmeldung."""
+    return user_config_dir() / PENDING_DEACTIVATION_FILE
+
+
+def read_pending_deactivation() -> str | None:
+    """Liest die wiederholbare Geräteabmeldung, falls eine aussteht."""
+    try:
+        text = pending_deactivation_path().read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    return text or None
+
+
+def write_pending_deactivation(text: str) -> bool:
+    """Legt eine signierte Geräteabmeldung vor der lokalen Sperre atomar ab."""
+    try:
+        ensure_dir(user_config_dir())
+        target = pending_deactivation_path()
+        scratch = target.with_suffix(".tmp")
+        scratch.write_text(text.strip(), encoding="utf-8")
+        scratch.replace(target)
+    except OSError as problem:
+        _log.warning("pending deactivation could not be written: %s", problem)
+        return False
+    return True
+
+
+def forget_pending_deactivation() -> bool:
+    """Entfernt den Auftrag erst nach bestätigter Serverfreigabe."""
+    try:
+        pending_deactivation_path().unlink(missing_ok=True)
     except OSError:
         return False
     return True

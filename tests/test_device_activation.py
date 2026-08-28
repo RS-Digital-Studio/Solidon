@@ -15,7 +15,7 @@ import pytest
 
 from app.core import activation, licence_service
 from app.core.activation import certificate, device, ed25519, key, store
-from app.core.errors import DeviceActivationRequired
+from app.core.errors import DeviceActivationRequired, DeviceDeactivationPending
 from app.core.licence_service import ActivationServiceError, activate, deactivate
 from tools.make_licence_keys import make_key
 
@@ -294,6 +294,48 @@ def test_removing_the_purchase_key_removes_its_certificate(
     assert store.read_key() is None
     assert store.read_certificate() is None
     assert not activation.state().unlocked
+
+
+def test_an_unconfirmed_deactivation_stays_locked_and_can_be_repeated(
+    activation_place: tuple[_MemoryKeyring, str],
+) -> None:
+    """Eine verlorene Serverantwort darf lokal nie einen zweiten Platz öffnen."""
+    _keyring, licence_text = activation_place
+    activation.remember(licence_text)
+    request = certificate.parse_request(
+        certificate.create_request(licence_text, "Werkstatt-PC"),
+        licence_public_key=ed25519.public_key(LICENCE_SEED),
+    )
+    activation.install_certificate(_issue(request))
+
+    deactivation = activation.prepare_deactivation()
+    assert store.read_pending_deactivation() == deactivation
+    assert activation.remove_certificate()
+    activation.forget_cache()
+
+    state = activation.state()
+    assert state.deactivation_pending
+    assert not state.needs_activation
+    assert not state.unlocked
+    assert activation.prepare_deactivation() == deactivation, (
+        "erneut wird derselbe Auftrag gesendet"
+    )
+    with pytest.raises(DeviceDeactivationPending):
+        activation.create_activation_request("Zweiter Rechner")
+    with pytest.raises(DeviceDeactivationPending):
+        activation.require(activation.CHANGE)
+
+
+def test_a_pending_deactivation_is_written_atomically(
+    activation_place: tuple[_MemoryKeyring, str],
+) -> None:
+    _keyring, _licence_text = activation_place
+
+    assert store.write_pending_deactivation("signierter Auftrag")
+    assert store.read_pending_deactivation() == "signierter Auftrag"
+    assert not store.pending_deactivation_path().with_suffix(".tmp").exists()
+    assert store.forget_pending_deactivation()
+    assert store.read_pending_deactivation() is None
 
 
 def test_the_online_client_accepts_a_certificate_but_explains_a_server_error(

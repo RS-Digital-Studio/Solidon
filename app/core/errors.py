@@ -619,6 +619,33 @@ class DeviceActivationRequired(AppError):
         self.action = action
 
 
+class DeviceDeactivationPending(AppError):
+    """Die lokale Sperre steht, die Serverbestätigung aber noch aus."""
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Die Deaktivierung dieses Rechners ist noch nicht bestätigt."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (
+        DEACTIVATE_DEVICE,
+        REPORT_ERROR,
+        CANCEL,
+    )
+
+    def __init__(
+        self,
+        action: str = "",
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if detail is None:
+            detail = _(
+                "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die "
+                "Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird."
+            )
+        super().__init__(detail=detail, **_with_values(kwargs, action=action))
+        self.action = action
+
+
 class ActiveLicenceCannotBeReplaced(AppError):
     """Eine bestehende Gerätebindung muss vor einem Schlüsselwechsel weg."""
 

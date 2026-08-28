@@ -3606,5 +3606,15 @@
   "„Skelett“ steht in derselben Werkzeugleiste und gehört zum selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie neu gebaut wird.": "Esqueleto está en la misma barra de herramientas y sigue el mismo flujo: dos clics colocan un hueso y Listo pregunta después por los ángulos. Así la figura adopta una postura sin tener que reconstruirla.",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» muestra lo que hay para elegir.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» convirtió las caras y aristas editables por separado en triángulos fijos. Esta herramienta debe aparecer antes de ese paso en el historial. Deshaz los pasos desde allí, aplica la herramienta y vuelve a crear los pasos restantes.",
-  "🔒": "🔒"
+  "🔒": "🔒",
+  "Adresse kopieren": "Copiar dirección",
+  "Deaktivierung erneut senden": "Volver a enviar la desactivación",
+  "Der Geräteplatz ist auf dem Server frei, aber der lokale Auftrag ließ sich nicht entfernen. Senden Sie ihn erneut; das ist sicher.": "La plaza del dispositivo está libre en el servidor, pero no se pudo eliminar la solicitud local. Vuelva a enviarla; es seguro.",
+  "Der Geräteplatz ist frei, aber der Lizenzschlüssel ließ sich lokal nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie Schlüssel entfernen erneut.": "La plaza del dispositivo está libre, pero no se pudo eliminar localmente la clave de licencia. Cierre las demás ventanas de Solidon y vuelva a intentar Eliminar clave.",
+  "Der Lizenzschlüssel ließ sich nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie es erneut.": "No se pudo eliminar la clave de licencia. Cierre las demás ventanas de Solidon e inténtelo de nuevo.",
+  "Die Deaktivierung dieses Rechners ist noch nicht bestätigt.": "La desactivación de este ordenador aún no está confirmada.",
+  "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; öffnen Sie sie auf einem Gerät mit Internet.": "No se pudo abrir la página aquí. La dirección se ha copiado; ábrala en un dispositivo con conexión a Internet.",
+  "Die Serverantwort ist unklar. Dieser Rechner bleibt lokal deaktiviert. Senden Sie die Deaktivierung erneut. Technischer Hinweis: {detail}": "La respuesta del servidor no es concluyente. Este ordenador permanece desactivado localmente. Vuelva a enviar la desactivación. Nota técnica: {detail}",
+  "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "No se pudo guardar la solicitud segura de desactivación. El ordenador permanece activado; elija una carpeta de perfil en la que se pueda escribir.",
+  "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird.": "Solidon permanece bloqueado de forma segura en este ordenador. Vuelva a enviar la desactivación para liberar de forma fiable la plaza del dispositivo."
 }

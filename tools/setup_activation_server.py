@@ -72,6 +72,14 @@ def _initialise_database(target: Path) -> None:
                 attempts INTEGER NOT NULL,
                 PRIMARY KEY(licence_digest, day)
             );
+            CREATE TABLE IF NOT EXISTS operator_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                occurred_at TEXT NOT NULL,
+                licence_digest TEXT NOT NULL,
+                action TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                changed INTEGER NOT NULL
+            );
             """
         )
         database.commit()
@@ -84,22 +92,52 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--private", type=Path, help="Startwert außerhalb des Repositorys")
     parser.add_argument("--database", type=Path, help="SQLite-Datei außerhalb des Repositorys")
     parser.add_argument(
+        "--operator-token",
+        type=Path,
+        help="256-Bit-Zugang der privaten Support-Verwaltung außerhalb des Repositorys",
+    )
+    parser.add_argument(
         "--replace",
         action="store_true",
         help="vorhandenes Paar bewusst ersetzen (bestehende Aktivierungen werden ungültig)",
     )
+    parser.add_argument(
+        "--replace-operator-token",
+        action="store_true",
+        help="vorhandenen Betreiberzugang bewusst ersetzen",
+    )
     arguments = parser.parse_args(argv)
-    if arguments.private is None and arguments.database is None:
-        parser.error("mindestens --private oder --database angeben")
+    if (
+        arguments.private is None
+        and arguments.database is None
+        and arguments.operator_token is None
+    ):
+        parser.error("mindestens --private, --database oder --operator-token angeben")
     if arguments.replace and arguments.private is None:
         parser.error("--replace gilt nur zusammen mit --private")
+    if arguments.replace_operator_token and arguments.operator_token is None:
+        parser.error("--replace-operator-token gilt nur zusammen mit --operator-token")
 
     private = _external_target(parser, arguments.private) if arguments.private is not None else None
     database = (
         _external_target(parser, arguments.database) if arguments.database is not None else None
     )
+    operator_token = (
+        _external_target(parser, arguments.operator_token)
+        if arguments.operator_token is not None
+        else None
+    )
     if private is not None and private.exists() and not arguments.replace:
         parser.error(f"{private} besteht bereits; zum bewussten Ersetzen --replace angeben")
+    if (
+        operator_token is not None
+        and operator_token.exists()
+        and not arguments.replace_operator_token
+    ):
+        parser.error(
+            f"{operator_token} besteht bereits; zum bewussten Ersetzen "
+            "--replace-operator-token angeben"
+        )
 
     if private is not None:
         private.parent.mkdir(parents=True, exist_ok=True)
@@ -115,6 +153,13 @@ def main(argv: list[str] | None = None) -> int:
         _initialise_database(database)
         print("Aktivierungsdatenbank ist eingerichtet:")
         print(f"  {database}")
+    if operator_token is not None:
+        operator_token.parent.mkdir(parents=True, exist_ok=True)
+        operator_token.write_text(secrets.token_hex(32) + "\n", encoding="ascii")
+        with contextlib.suppress(OSError):
+            operator_token.chmod(0o600)
+        print("Privater Betreiberzugang wurde geschrieben (Inhalt wird nicht ausgegeben):")
+        print(f"  {operator_token}")
     return 0
 
 

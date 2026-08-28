@@ -3606,5 +3606,15 @@
   "„Skelett“ steht in derselben Werkzeugleiste und gehört zum selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie neu gebaut wird.": "Skeleton is in the same toolbar and follows the same workflow: two clicks place a bone, then Done asks for the angles. This gives a figure its pose without rebuilding it.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
-  "🔒": "🔒"
+  "🔒": "🔒",
+  "Adresse kopieren": "Copy address",
+  "Deaktivierung erneut senden": "Send deactivation again",
+  "Der Geräteplatz ist auf dem Server frei, aber der lokale Auftrag ließ sich nicht entfernen. Senden Sie ihn erneut; das ist sicher.": "The device slot is free on the server, but the local request could not be removed. Send it again; doing so is safe.",
+  "Der Geräteplatz ist frei, aber der Lizenzschlüssel ließ sich lokal nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie Schlüssel entfernen erneut.": "The device slot is free, but the licence key could not be removed locally. Close other Solidon windows and try Remove key again.",
+  "Der Lizenzschlüssel ließ sich nicht entfernen. Schließen Sie andere Solidon-Fenster und versuchen Sie es erneut.": "The licence key could not be removed. Close other Solidon windows and try again.",
+  "Die Deaktivierung dieses Rechners ist noch nicht bestätigt.": "The deactivation of this computer has not yet been confirmed.",
+  "Die Seite konnte hier nicht geöffnet werden. Die Adresse wurde kopiert; öffnen Sie sie auf einem Gerät mit Internet.": "The page could not be opened here. The address has been copied; open it on a device with internet access.",
+  "Die Serverantwort ist unklar. Dieser Rechner bleibt lokal deaktiviert. Senden Sie die Deaktivierung erneut. Technischer Hinweis: {detail}": "The server response is unclear. This computer remains deactivated locally. Send the deactivation again. Technical note: {detail}",
+  "Die sichere Deaktivierungsanfrage ließ sich nicht speichern. Der Rechner bleibt aktiviert; wählen Sie einen beschreibbaren Profilordner.": "The secure deactivation request could not be saved. The computer remains activated; choose a writable profile folder.",
+  "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird.": "Solidon remains securely locked on this computer. Send the deactivation again so that the device slot is reliably released."
 }

@@ -1599,8 +1599,17 @@ def test_the_offline_activation_page_localises_visible_and_accessible_text() -> 
     assert 'new URLSearchParams(window.location.search).get("lang")' in script
     assert html.count("data-i18n-aria=") >= 3
     assert 'querySelectorAll("[data-i18n-aria]")' in script
-    for key in ("skip", "brand_home", "language_navigation", "steps_label"):
+    for key in (
+        "skip",
+        "brand_home",
+        "language_navigation",
+        "steps_label",
+        "no_file",
+        "selected_file",
+    ):
         assert script.count(f"{key}:") == 6, key
+    assert 'id="request-file-name"' in html
+    assert "updateFileName();" in script
 
 
 def test_the_offline_activation_page_explains_errors_instead_of_claiming_success() -> None:
@@ -1624,3 +1633,17 @@ def test_the_offline_activation_page_explains_errors_instead_of_claiming_success
     assert "MAX_REQUEST_BYTES = 32768" in script
     assert 'form.setAttribute("aria-busy", "true")' in script
     assert 'kind === "error" ? "alert" : "status"' in script
+
+
+def test_a_new_offline_request_clears_every_previous_answer() -> None:
+    """Eine kaputte zweite Datei darf nie die Antwort der ersten zum Download lassen."""
+    script = (WEBSITE / "activation.js").read_text(encoding="utf-8")
+
+    assert "const resetResult = () =>" in script
+    assert 'answer = "";' in script
+    assert "result.hidden = true;" in script
+    assert "delete result.dataset.state;" in script
+    assert "download.hidden = true;" in script
+    file_handler = script.split('file.addEventListener("change"', 1)[1]
+    assert file_handler.index("resetResult();") < file_handler.index("chosen.size")
+    assert 'text.addEventListener("input", () =>' in script
