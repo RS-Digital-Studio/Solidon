@@ -1033,6 +1033,44 @@ def test_the_key_reads_the_up_to_target_and_the_sketch_plane() -> None:
     assert base["#up_to"] == moved["#up_to"], "und die zwei Träger bleiben getrennte Einträge"
 
 
+def test_an_exact_sketch_plane_hashes_only_its_named_body() -> None:
+    """Eine gleichnamige Fläche eines anderen Körpers ist keine Abhängigkeit.
+
+    Ohne die Objektkennung im Cache-Kontext würde jede Änderung am falschen
+    Körper die Skizzenoperation neu rechnen. Schlimmer wäre der umgekehrte
+    Fehler: den tatsächlich gewählten Träger nicht zu berücksichtigen.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle
+
+    params_class = REGISTRY.get("sketch_extrude").params
+    drawn = sketch_to_text(dataclasses.replace(rectangle(10.0, 10.0), plane="feature:obj_b:face_p"))
+    objects = {
+        "obj_a": _face_carrier("obj_a", "face_p"),
+        "obj_b": _face_carrier("obj_b", "face_p"),
+    }
+
+    base = _with_nested_context(
+        params_class, {"sketch": drawn}, {}, None, objects, {"obj_a": "a1", "obj_b": "b1"}
+    )
+    unrelated = _with_nested_context(
+        params_class, {"sketch": drawn}, {}, None, objects, {"obj_a": "a2", "obj_b": "b1"}
+    )
+    carrier = _with_nested_context(
+        params_class, {"sketch": drawn}, {}, None, objects, {"obj_a": "a1", "obj_b": "b2"}
+    )
+
+    assert base["#sketch.plane"] == unrelated["#sketch.plane"]
+    assert base["#sketch.plane"] != carrier["#sketch.plane"]
+
+
 class _RefusingCodec(FakeCodec):
     """Ein Codec, der diesen einen Körper nicht ablegen mag — wie der echte
     einen exakten Körper (§30)."""

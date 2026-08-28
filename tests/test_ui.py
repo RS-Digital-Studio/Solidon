@@ -3310,6 +3310,35 @@ def wait_for_export(window: MainWindow) -> None:
     QApplication.processEvents()
 
 
+def test_export_suggests_the_complete_print_format_first(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne CAD-Wissen soll der erste Weg nichts Wichtiges wegwerfen.
+
+    3MF bewahrt Baugruppe, Farben und Druckeinstellungen; STL ist der
+    ausdrücklich wählbare Altweg. Der Vorschlag im Dateidialog muss deshalb
+    zu seinem ersten Filter passen.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    asked: list[tuple[str, str]] = []
+
+    def remember(_parent: object, _title: str, name: str, filters: str) -> tuple[str, str]:
+        asked.append((name, filters))
+        return "", ""
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(remember))
+
+    window.action_export()
+
+    assert asked
+    name, filters = asked[0]
+    assert name.endswith(".3mf")
+    assert filters.split(";;", 1)[0] == "3MF (*.3mf)"
+
+
 def test_export_writes_the_selected_format(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -3332,6 +3361,46 @@ def test_export_writes_the_selected_format(
 
     assert target.is_file(), "der gewählte Name ist die Datei, nicht ein Schema daraus"
     assert target.stat().st_size > 0
+
+
+def test_changing_only_the_export_filter_changes_format_and_suffix(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der 3MF-Vorschlag darf eine spätere Filterwahl nicht überstimmen.
+
+    Ein Kunde ändert im Dateidialog häufig nur „Dateityp" auf STL und lässt
+    den vorausgefüllten Namen stehen. Inhalt und Endung müssen dann beide STL
+    werden; eine STL-Datei namens ``.3mf`` wäre weder verständlich noch in
+    jedem Slicer zu öffnen.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    proposed: list[str] = []
+
+    def choose(_parent: object, _title: str, name: str, _filters: str) -> tuple[str, str]:
+        proposed.append(name)
+        return str(tmp_path / Path(name).name), "STL (*.stl)"
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(choose))
+    window.action_export()
+    wait_for_export(window)
+
+    assert proposed and proposed[0].endswith(".3mf"), "3MF bleibt der einfache Kundenweg"
+    expected = tmp_path / f"{Path(proposed[0]).stem}.stl"
+    assert expected.is_file(), "der gewählte Filter bestimmt Inhalt und sichtbare Endung"
+    assert not (tmp_path / Path(proposed[0]).name).exists(), "keine falsch benannte STL-Datei"
+
+
+def test_an_explicit_export_suffix_still_wins_over_the_filter() -> None:
+    """Wer den Namen selbst samt Endung tippt, hat die genauere Wahl getroffen."""
+    from app.ui.main_window import _export_target
+
+    target, export_format = _export_target(Path("mein_teil.obj"), "STL (*.stl)", "projekt.3mf")
+
+    assert target == Path("mein_teil.obj")
+    assert export_format == "obj"
 
 
 def test_export_as_3mf_writes_one_assembly(
@@ -8079,8 +8148,10 @@ def test_choosing_that_entry_really_starts_a_sketch_on_that_face(window: MainWin
     assert window.sketching(), "der Skizzenmodus läuft"
     panel = window._sketch_panel
     assert panel is not None
-    assert panel.canvas.sketch.plane == f"feature:{face}", "und zwar auf der geklickten Fläche"
-    assert panel.plane_choice.currentData() == f"feature:{face}", "die Wahl steht mit"
+    object_id = window.object_tree.selected()
+    expected = f"feature:{object_id}:{face}"
+    assert panel.canvas.sketch.plane == expected, "und zwar auf der geklickten Fläche"
+    assert panel.plane_choice.currentData() == expected, "die Wahl steht mit"
 
     window.finish_sketch(keep=False)
 
@@ -8333,7 +8404,7 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
     try:
         panel = window._sketch_panel
         assert panel is not None
-        assert panel.canvas.sketch.plane == f"feature:{top}", (
+        assert panel.canvas.sketch.plane == f"feature:{object_id}:{top}", (
             "die gewählte Fläche muss die Zeichenebene sein, nicht die Grundebene"
         )
         frame = window._sketch_frame()
@@ -8341,6 +8412,47 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
         assert frame.origin[2] == pytest.approx(10.0), (
             "gezeichnet wird auf der Deckfläche, nicht darunter auf z=0"
         )
+    finally:
+        window.finish_sketch(keep=False)
+
+
+def test_duplicate_face_ids_keep_the_selected_body_and_its_label(window: MainWindow) -> None:
+    """``face_1`` gilt je Körper und darf deshalb nicht den ersten gewinnen lassen.
+
+    Zwei importierte Körper tragen gleichnamige erkannte Flächen. Gewählt wird
+    bewusst der zweite: Ebenenreferenz und verständlicher Hinweis müssen bei
+    ihm bleiben, unabhängig von Flächengröße und Szenenreihenfolge.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    first, second = list(result.scene.objects.items())[-2:]
+    _first_id, first_entry = first
+    second_id, second_entry = second
+    first_entry.name = "Erster Körper"
+    second_entry.name = "Gewählter Körper"
+    duplicate = next(
+        feature_id
+        for feature_id, feature in second_entry.features.items()
+        if feature.kind == "face"
+        and feature_id in first_entry.features
+        and first_entry.features[feature_id].kind == "face"
+    )
+    assert str(first_entry.name) != str(second_entry.name), "die Namen müssen unterscheidbar sein"
+
+    window.object_tree.select_object(second_id)
+    window.object_tree.select_feature(second_id, duplicate)
+    window.action_sketch_free()
+    try:
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.sketch.plane == f"feature:{second_id}:{duplicate}"
+        assert str(second_entry.name) in window._sketch_hint.text(), (
+            "der Hinweis muss den tatsächlich gewählten Körper nennen"
+        )
+        assert str(first_entry.name) not in window._sketch_hint.text()
     finally:
         window.finish_sketch(keep=False)
 

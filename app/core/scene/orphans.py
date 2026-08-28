@@ -111,19 +111,15 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
                 Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
             )
         for field_name in _sketch_fields(source, operation.op):
-            plane_feature = face_of_sketch(str(operation.params.get(field_name) or ""))
-            if plane_feature is None:
+            plane_reference = feature_ref_of_sketch(str(operation.params.get(field_name) or ""))
+            if plane_reference is None:
                 continue
             # Eine Skizze auf einer Fläche benennt ein Merkmal — im
             # Skizzentext statt in einem feature-Parameter, und genau deshalb
             # sah dieser Filter sie nie: Die Datei bekam bei „Skizze auf
-            # Fläche" keine §21.3-Frage. Der **leere Objektname** ist Absicht:
-            # Wem die Fläche gehört, weiß erst die Auswertung — ``frame_for``
-            # sucht über alle Körper, weil ``sketch_extrude`` nichts
-            # verbraucht.
-            found.append(
-                Reference(f"plane:{operation.id}:{field_name}", FeatureRef("", plane_feature))
-            )
+            # Fläche" keine §21.3-Frage. Nur alte Projekte tragen hier einen
+            # leeren Objektnamen; neue Ebenen benennen ihren Körper eindeutig.
+            found.append(Reference(f"plane:{operation.id}:{field_name}", plane_reference))
     return found
 
 
@@ -146,9 +142,19 @@ def face_of_sketch(text: str) -> str | None:
     (``evaluate._with_nested_context``): Wer die Ebene liest, hängt vom
     Träger ab, und zwei Fassungen derselben Auskunft liefen auseinander.
     """
+    reference = feature_ref_of_sketch(text)
+    return reference.feature_id if reference is not None else None
+
+
+def feature_ref_of_sketch(text: str) -> FeatureRef | None:
+    """Die eindeutige Flächenreferenz einer Skizze lesen — oder nichts.
+
+    Für die alte Schreibweise bleibt ``object_id`` leer. Aufrufer, die nur
+    die Merkmalskennung brauchen, verwenden :func:`face_of_sketch`.
+    """
     if not text:
         return None
-    from app.core.sketch.planes import is_feature_plane
+    from app.core.sketch.planes import feature_plane_parts, is_feature_plane
     from app.core.sketch.serialize import sketch_from_text
 
     try:
@@ -157,7 +163,8 @@ def face_of_sketch(text: str) -> str | None:
         return None
     if not is_feature_plane(plane):
         return None
-    return plane.partition(":")[2]
+    object_id, feature_id = feature_plane_parts(plane)
+    return FeatureRef(object_id, feature_id)
 
 
 def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
@@ -289,6 +296,7 @@ def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
     if reference.kind == "plane":
         # Die Antwort gehört in den Skizzentext, nicht in einen eigenen
         # Parameter: Dort steht die Ebene, dort liest die Auswertung sie.
+        from app.core.sketch.planes import feature_plane
         from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 
         for index, operation in enumerate(document.ops):
@@ -296,9 +304,12 @@ def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
                 continue
             drawn = sketch_from_text(str(operation.params.get(reference.field) or ""))
             params = dict(operation.params)
-            params[reference.field] = sketch_to_text(
-                dataclasses.replace(drawn, plane=f"feature:{feature_id}")
+            plane = (
+                feature_plane(reference.ref.object_id, feature_id)
+                if reference.ref.object_id
+                else f"feature:{feature_id}"
             )
+            params[reference.field] = sketch_to_text(dataclasses.replace(drawn, plane=plane))
             document.ops[index] = dataclasses.replace(operation, params=params)
             return
         return

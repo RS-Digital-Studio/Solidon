@@ -1467,7 +1467,8 @@ class Sketch:
     """Eine 2D-Skizze auf einer Ebene (§30.1).
 
     ``plane`` ist ``plane:xy``, ``plane:xz``, ``plane:yz`` oder
-    ``feature:<id>`` für eine erkannte planare Fläche."""
+    ``feature:<object_id>:<feature_id>`` für eine erkannte planare Fläche.
+    Die ältere Schreibweise ``feature:<feature_id>`` bleibt lesbar."""
 
     plane: str
     elements: tuple[SketchElement, ...]
@@ -1482,8 +1483,8 @@ class PlaneFrame:
     sind ihre beiden Richtungen, ``normal`` steht senkrecht darauf und ist die,
     in die extrudiert wird. Alle drei sind Einheitsvektoren und rechtshändig.
 
-    Bei den drei Hauptebenen steht das fest. Bei ``feature:<id>`` wird der
-    Rahmen aus der Fläche gerechnet — siehe ``app.core.sketch.planes``."""
+    Bei den drei Hauptebenen steht das fest. Bei einer ``feature:``-Ebene wird
+    der Rahmen aus der Fläche gerechnet — siehe ``app.core.sketch.planes``."""
 
     origin: Vec3
     x_axis: Vec3

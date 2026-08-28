@@ -141,7 +141,7 @@ from app.core.scene import (
 )
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import clear_autosave, find_recovery
-from app.core.sketch.planes import frame_for_plane, to_world
+from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
 from app.core.sketch.profile import curves_of
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
@@ -666,10 +666,44 @@ def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
     for name, ending in FORMAT_SUFFIX.items():
         if suffix == ending:
             return name
+    filtered = _format_from_filter(chosen_filter)
+    return filtered if filtered is not None else "stl"
+
+
+def _format_from_filter(chosen_filter: str) -> ExportFormat | None:
+    """Das Format eines Dateidialogfilters, falls er eines benennt."""
+    from app.core.export.writer import FORMAT_SUFFIX
+
     for name, ending in FORMAT_SUFFIX.items():
         if f"*{ending}" in chosen_filter:
             return name
-    return "stl"
+    return None
+
+
+def _export_target(
+    target: Path, chosen_filter: str, suggested_name: str
+) -> tuple[Path, ExportFormat]:
+    """Dateiname und Format aus den zwei Angaben des Dateidialogs abstimmen.
+
+    Der vorausgefüllte Name endet auf 3MF. Wechselt jemand nur den Filter auf
+    STL, ist diese Auswahl ausdrücklich und die noch unangetastete Vorgabe
+    darf sie nicht wieder überschreiben. Eine selbst getippte, bekannte
+    Endung bleibt dagegen die genauere Angabe. Fehlt eine bekannte Endung,
+    wird die des Filters angehängt, damit Dateiinhalt und Name zusammenpassen.
+    """
+    from app.core.export.writer import FORMAT_SUFFIX
+
+    known = next(
+        (name for name, ending in FORMAT_SUFFIX.items() if target.suffix.lower() == ending),
+        None,
+    )
+    filtered = _format_from_filter(chosen_filter) or known or "stl"
+    untouched_suggestion = target.name.casefold() == suggested_name.casefold()
+    if untouched_suggestion:
+        return target.with_suffix(FORMAT_SUFFIX[filtered]), filtered
+    if known is not None:
+        return target, known
+    return target.with_name(target.name + FORMAT_SUFFIX[filtered]), filtered
 
 
 def _as_project_path(name: str) -> Path:
@@ -3917,13 +3951,13 @@ class MainWindow(QMainWindow):
         if any(entry.kind == "brep" for entry in objects):
             offered.append("STEP (*.step)")
         filters = ";;".join(offered)
+        suggested_name = f"{stem}.3mf"
         name, chosen_filter = QFileDialog.getSaveFileName(
-            self, tr("Exportieren"), f"{stem}.stl", filters
+            self, tr("Exportieren"), suggested_name, filters
         )
         if not name:
             return
-        target = Path(name)
-        export_format: ExportFormat = _format_of(target, chosen_filter)
+        target, export_format = _export_target(Path(name), chosen_filter, suggested_name)
         self._start_export(target, export_format)
 
     def _start_export(self, target: Path, export_format: ExportFormat) -> None:
@@ -4501,13 +4535,17 @@ class MainWindow(QMainWindow):
         """Die gewählte Fläche als Zeichenebene — leer, wenn keine gewählt ist.
 
         Dieselbe Auskunft, aus der Palette und Kontextmenü ihre Vorschläge
-        bauen, nur als Ebenenname des Kerns (``feature:<id>``). Ob die Fläche
-        als Zeichenebene taugt, entscheidet danach ``choose_plane`` — hier
-        wird nur weitergegeben, was der Nutzer schon gesagt hat.
+        bauen, nur als eindeutigen Ebenennamen des Kerns. Ob die Fläche als
+        Zeichenebene taugt, entscheidet danach ``choose_plane`` — hier wird
+        nur weitergegeben, was der Nutzer schon gesagt hat.
         """
         if self.selected_feature_kind() != "face":
             return ""
-        return f"feature:{self.object_tree.selected_feature()}"
+        object_id = self.object_tree.selected()
+        feature_id = self.object_tree.selected_feature()
+        if object_id is None or feature_id is None:
+            return ""
+        return feature_plane(object_id, feature_id)
 
     def _drawable_faces(self) -> list[tuple[str, str, tuple[float, float, float]]]:
         """Die planaren Flächen der Szene, auf denen gezeichnet werden kann.
@@ -4543,7 +4581,7 @@ class MainWindow(QMainWindow):
                 found.append(
                     (
                         size,
-                        feature_id,
+                        feature_plane(object_id, feature_id).removeprefix("feature:"),
                         label,
                         (float(normal[0]), float(normal[1]), float(normal[2])),
                     )
@@ -6495,7 +6533,13 @@ class MainWindow(QMainWindow):
         Tasche so plausibel wie ein Aufbau, und die Entscheidung vorwegzunehmen
         hieße, dem Nutzer eine von zwei gleich guten zu nehmen.
         """
-        self.start_sketch("", plane=f"feature:{feature_id}")
+        object_id = self.object_tree.selected()
+        plane = (
+            feature_plane(object_id, feature_id)
+            if object_id is not None
+            else f"feature:{feature_id}"
+        )
+        self.start_sketch("", plane=plane)
 
     def _on_object_picked(self, object_id: str) -> None:
         """Ein Klick auf einen Körper wählt ihn im Baum aus; einer daneben hebt

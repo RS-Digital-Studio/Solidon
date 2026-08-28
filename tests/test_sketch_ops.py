@@ -855,6 +855,25 @@ def test_frame_of_a_face_points_away_from_the_body() -> None:
     assert other.normal == pytest.approx((1.0, 0.0, 0.0))
 
 
+def test_an_object_qualified_face_does_not_pick_the_first_duplicate() -> None:
+    """Flächenkennungen sind nur innerhalb eines Körpers eindeutig.
+
+    Beide Quader haben ``face_2``. Die neue Ebenenangabe benennt den zweiten
+    Körper mit und muss deshalb dessen Lage liefern; die alte Angabe darunter
+    bleibt für bestehende Projekte weiterhin lesbar.
+    """
+    first = brep_box(width=40.0)
+    first.id = "obj_a"
+    second = brep_box(width=60.0)
+    second.id = "obj_b"
+
+    exact = frame_for("feature:obj_b:face_2", [first, second])
+    legacy = frame_for("feature:face_2", [first, second])
+
+    assert exact.origin[0] == pytest.approx(30.0), "der ausdrücklich benannte Körper zählt"
+    assert legacy.origin[0] == pytest.approx(20.0), "alte Projekte behalten ihre Lesart"
+
+
 def test_frame_axes_are_orthonormal_and_right_handed() -> None:
     """Sonst verzerrt die Skizze — und zwar unauffällig.
 

@@ -369,6 +369,14 @@ def test_a_sketch_plane_on_a_face_is_a_reference() -> None:
     assert found[0].ref == FeatureRef("", "face_1")
 
 
+def test_a_new_sketch_plane_keeps_its_object_in_the_reference() -> None:
+    """Gleiche Flächennamen auf zwei Körpern dürfen nicht zusammenfallen."""
+    found = orphans.references(document_with_sketch("feature:obj_7:face_1"))
+
+    assert [entry.where for entry in found] == ["plane:1:sketch"]
+    assert found[0].ref == FeatureRef("obj_7", "face_1")
+
+
 def test_a_world_plane_is_no_reference() -> None:
     """``plane:xy`` hängt an der Welt, nicht an einem Merkmal."""
     assert orphans.references(document_with_sketch("plane:xy")) == []

@@ -154,7 +154,7 @@ def sketch_parameter_references(text: str) -> frozenset[str]:
 
 
 def _known_plane(plane: str) -> bool:
-    """``plane:xy``, ``plane:xz``, ``plane:yz`` oder ``feature:<id>`` (§30.1)."""
+    """Eine Grundebene oder eine alte beziehungsweise eindeutige Flächenebene."""
     if plane in ("plane:xy", "plane:xz", "plane:yz"):
         return True
     prefix, separator, feature_id = plane.partition(":")

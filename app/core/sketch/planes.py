@@ -1,9 +1,10 @@
 """Wo eine Skizze liegt (Bauplan §30.1).
 
 Drei Ebenen sind fest — ``plane:xy``, ``plane:xz``, ``plane:yz``. Die vierte
-Möglichkeit ist ``feature:<id>``: eine erkannte planare Fläche eines Körpers.
-Sie ist die interessantere, denn sie ist der Weg, auf einem vorhandenen Teil
-weiterzubauen, statt daneben.
+Möglichkeit ist ``feature:<object_id>:<feature_id>``: eine erkannte planare
+Fläche eines bestimmten Körpers. Ältere Projekte mit ``feature:<feature_id>``
+bleiben lesbar. Die Fläche ist die interessantere Möglichkeit, denn sie ist
+der Weg, auf einem vorhandenen Teil weiterzubauen, statt daneben.
 
 **Der Rahmen wird berechnet, nicht gespeichert.** In der Projektdatei steht nur
 die Feature-ID; Ursprung und Achsen entstehen bei jeder Auswertung neu aus dem
@@ -113,13 +114,37 @@ def is_feature_plane(plane: str) -> bool:
     return plane.startswith("feature:")
 
 
+def feature_plane(object_id: str, feature_id: str) -> str:
+    """Eine Fläche zusammen mit ihrem Körper eindeutig als Ebene benennen.
+
+    Merkmalskennungen wie ``face_1`` gelten nur innerhalb eines Körpers. Ohne
+    die Objektkennung würde dieselbe Skizze bei zwei Körpern davon abhängen,
+    welcher zufällig zuerst in der Szene steht.
+    """
+    return f"feature:{object_id}:{feature_id}"
+
+
+def feature_plane_parts(plane: str) -> tuple[str, str]:
+    """Objekt- und Merkmalskennung einer Flächenebene lesen.
+
+    Der leere Objektname bezeichnet die alte, szenenweite Schreibweise
+    ``feature:<feature_id>``. Sie wird weiter unterstützt, damit bestehende
+    Projektdateien ohne Migration öffnen und unverändert rechnen.
+    """
+    payload = plane.removeprefix("feature:")
+    object_id, separator, feature_id = payload.partition(":")
+    if separator:
+        return object_id, feature_id
+    return "", payload
+
+
 def frame_for(
     plane: str,
     objects: Iterable[SceneObject],
     field: str = "plane",
     suggestions: Sequence[Action] | None = None,
 ) -> PlaneFrame:
-    """Der Rahmen zu ``feature:<id>``, gesucht über alle Objekte der Szene.
+    """Der Rahmen zu einer Flächenebene, gesucht über die Objekte der Szene.
 
     Über alle und nicht nur über das Eingangsobjekt, weil ``sketch_extrude``
     nichts verbraucht: sie erzeugt einen Körper aus dem Nichts, und die Fläche,
@@ -132,9 +157,11 @@ def frame_for(
     für eine verschwundene Skizzenebene und ein irreführender für ein
     verschwundenes Höhenziel.
     """
-    feature_id = plane.partition(":")[2]
+    object_id, feature_id = feature_plane_parts(plane)
     known: list[str] = []
     for entry in objects:
+        if object_id and entry.id != object_id:
+            continue
         for candidate, feature in entry.features.items():
             if feature.kind != "face":
                 continue

@@ -43,7 +43,7 @@ from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
-from app.core.scene.orphans import face_of_sketch
+from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
 from app.core.scene.placement import TARGET_FIELD
 from app.core.sketch.serialize import sketch_parameter_references
@@ -1359,9 +1359,14 @@ def _with_nested_context(
         if spec.kind == "sketch" and objects is not None and hashes is not None:
             drawn = resolved.get(spec.name)
             if isinstance(drawn, str) and drawn:
-                plane_feature = face_of_sketch(drawn)
-                if plane_feature is not None:
-                    carriers = _carrier_hashes(plane_feature, objects, hashes)
+                plane_reference = feature_ref_of_sketch(drawn)
+                if plane_reference is not None:
+                    carriers = _carrier_hashes(
+                        plane_reference.feature_id,
+                        objects,
+                        hashes,
+                        object_id=plane_reference.object_id or None,
+                    )
                     if carriers:
                         context[f"#{spec.name}.plane"] = carriers
             # Kein ``continue``: Der Skizzentext trägt daneben @-Parameter,
@@ -1379,16 +1384,23 @@ def _with_nested_context(
 
 
 def _carrier_hashes(
-    feature_id: str, objects: Mapping[ObjectId, SceneObject], hashes: Mapping[ObjectId, str]
+    feature_id: str,
+    objects: Mapping[ObjectId, SceneObject],
+    hashes: Mapping[ObjectId, str],
+    *,
+    object_id: ObjectId | None = None,
 ) -> tuple[str, ...]:
     """Die Hashes aller Körper, die dieses Merkmal tragen — sortiert nach
     Objektkennung, damit der Schlüssel stabil bleibt. Leer, wenn keiner es
     trägt: Dann hält die Operation selbst an, und ein leerer Eintrag würde
-    nur jeden bestehenden Schlüssel kippen."""
+    nur jeden bestehenden Schlüssel kippen. Bei einer eindeutigen
+    Skizzenebene zählt ausschließlich der ausdrücklich benannte Körper."""
     return tuple(
-        hashes[object_id]
-        for object_id in sorted(objects)
-        if object_id in hashes and feature_id in objects[object_id].features
+        hashes[carrier_id]
+        for carrier_id in sorted(objects)
+        if carrier_id in hashes
+        and feature_id in objects[carrier_id].features
+        and (carrier_id == object_id if object_id is not None else True)
     )
 
 
