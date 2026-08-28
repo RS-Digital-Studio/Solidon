@@ -84,6 +84,11 @@ kann nicht veralten, und eine neue Operation kann nicht dazukommen, ohne dort
 aufzutauchen. Gesucht wird über den Text, nicht nur über die Überschriften.
 Abbildungen gehören dazu; keine davon wird von Hand gepflegt.
 
+**Hilfe → Solidon3D unterstützen** öffnet zunächst nur einen lokalen Dialog.
+Er erklärt die freiwillige Zahlung und ihre Bedingungen; erst der Knopf darin
+öffnet die Zahlungsseite von PayPal im Standardbrowser. Die Solidon3D-Webseite
+liegt nicht dazwischen.
+
 Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
 ---

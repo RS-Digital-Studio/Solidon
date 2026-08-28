@@ -492,6 +492,65 @@ def test_the_help_menu_leads_back_to_the_examples(window: MainWindow) -> None:
     assert window.session.project.document.ops, "das Projekt steht noch, es ist nur verdeckt"
 
 
+def test_the_help_menu_offers_direct_support(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der freiwillige Förderweg steht dort, wo man Kontakt und Auskunft sucht."""
+    from app.branding import APP_NAME
+    from app.ui.dialogs import DonationDialog
+
+    entries = [
+        action
+        for menu in window.menuBar().actions()
+        if menu.menu() is not None and menu.text().replace("&", "") == "Hilfe"
+        for action in menu.menu().actions()
+    ]
+    support = next(
+        action
+        for action in entries
+        if action.text().replace("&", "") == f"{APP_NAME} unterstützen …"
+    )
+    shown: list[str] = []
+    monkeypatch.setattr(
+        DonationDialog, "exec", lambda dialog: shown.append(dialog.windowTitle()) or 0
+    )
+
+    support.trigger()
+
+    assert shown == [f"{APP_NAME} unterstützen"]
+
+
+def test_the_support_dialog_opens_paypal_only_after_the_click(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog bleibt lokal; erst sein eindeutiger Knopf fragt nach draußen."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtWidgets import QLabel
+
+    from app.branding import DONATION_URL
+    from app.ui.dialogs import DonationDialog
+
+    opened: list[str] = []
+
+    def open_url(url: QUrl) -> bool:
+        opened.append(url.toString())
+        return True
+
+    monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", open_url)
+    dialog = DonationDialog()
+
+    assert not opened
+    assert "Standardbrowser" in dialog.browser_note.text()
+    text = "\n".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "keine Bestellung" in text
+    assert "keine Gegenleistung" in text
+
+    dialog.support_button.click()
+
+    assert opened == [DONATION_URL]
+    dialog.reject()
+
+
 def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:
     """Nach *Neu* blieben die orangen Merkmalsmarkierungen des vorigen Objekts
     im Bild stehen, während Objektbaum und Prüfbericht längst leer waren."""

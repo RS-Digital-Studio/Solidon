@@ -34,7 +34,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
+from app.branding import (
+    APP_NAME,
+    APP_VERSION,
+    COPYRIGHT,
+    DONATION_URL,
+    SUPPORT_ADDRESS,
+    WEBSITE_URL,
+)
 from app.core import activation, expressions, tools
 from app.core.backends import keys, llm
 from app.core.errors import (
@@ -1382,6 +1389,20 @@ def open_website() -> None:
     QDesktopServices.openUrl(QUrl(WEBSITE_URL))
 
 
+def open_donation(parent: QWidget | None = None) -> None:
+    """Öffnet den PayPal-Zahlungsweg erst nach dem ausdrücklichen Klick."""
+    if QDesktopServices.openUrl(QUrl(DONATION_URL)):
+        return
+    QMessageBox.warning(
+        parent,
+        tr("PayPal ließ sich nicht öffnen"),
+        tr(
+            "Der Standardbrowser hat den Zahlungslink nicht angenommen. Öffnen Sie "
+            "{url} selbst oder wenden Sie sich an {address}."
+        ).format(url=DONATION_URL, address=SUPPORT_ADDRESS),
+    )
+
+
 def expired_demo_text(state: activation.Activation) -> str:
     """Was eine abgelaufene Demo zu sagen hat — der Text ohne Fenster darum.
 
@@ -1664,6 +1685,66 @@ def show_details(error: AppError, parent: QWidget | None = None) -> None:
     box.setText(str(error.title))
     box.setDetailedText("\n".join(lines) or tr("Keine weiteren Angaben."))
     box.exec()
+
+
+class DonationDialog(QDialog):
+    """Der freiwillige Förderweg — lokal erklärt, erst danach geht es hinaus."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        title = tr("{app} unterstützen").format(app=APP_NAME)
+        self.setWindowTitle(title)
+        self.setMinimumWidth(520)
+
+        heading = QLabel(title, self)
+        set_level(heading, "title")
+
+        intro = QLabel(
+            tr(
+                "Wenn Ihnen {app} hilft, können Sie die Weiterentwicklung, Tests und "
+                "die nächste Version mit einer freiwilligen Zahlung unterstützen."
+            ).format(app=APP_NAME),
+            self,
+        )
+        intro.setWordWrap(True)
+
+        terms = QLabel(
+            tr(
+                "Die Zahlung ist freiwillig. Sie ist keine Bestellung, begründet keine "
+                "Gegenleistung und wird nicht auf einen späteren Kauf angerechnet. Eine "
+                "Spendenbescheinigung können wir nicht ausstellen."
+            ),
+            self,
+        )
+        terms.setWordWrap(True)
+
+        self.browser_note = QLabel(
+            tr(
+                "PayPal verarbeitet Ihre Daten erst nach dem Klick. Dann öffnet sich die "
+                "Zahlungsseite von PayPal direkt in Ihrem Standardbrowser; die Website "
+                "von {app} wird nicht geöffnet."
+            ).format(app=APP_NAME),
+            self,
+        )
+        self.browser_note.setWordWrap(True)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        self.support_button = buttons.addButton(
+            tr("Mit PayPal unterstützen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        make_primary(self.support_button)
+        self.support_button.clicked.connect(self._open_donation)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(heading)
+        layout.addWidget(intro)
+        layout.addWidget(terms)
+        layout.addWidget(self.browser_note)
+        layout.addWidget(buttons)
+
+    def _open_donation(self) -> None:
+        open_donation(self)
 
 
 class AboutDialog(QDialog):

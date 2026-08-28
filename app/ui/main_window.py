@@ -173,6 +173,7 @@ from app.ui.dialogs import (
     ActivationDialog,
     AskDialog,
     CalibrationDialog,
+    DonationDialog,
     KeyDialog,
     ParameterDialog,
     StepValuesDialog,
@@ -2160,6 +2161,16 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
+            tr("{app} unterstützen …").format(app=APP_NAME),
+            None,
+            self.action_donate,
+            tr(
+                "Die Weiterentwicklung, Tests und die nächste Version freiwillig "
+                "mitfinanzieren."
+            ),
+        )
+        self._add_action(
+            help_menu,
             tr("Über Solidon"),
             None,
             self.action_about,
@@ -3580,6 +3591,9 @@ class MainWindow(QMainWindow):
 
     def action_about(self) -> None:
         AboutDialog(self).exec()
+
+    def action_donate(self) -> None:
+        DonationDialog(self).exec()
 
     def action_print_settings(self) -> None:
         """§29: die Einstellungen, mit denen gedruckt wird — hier, nicht im

@@ -46,6 +46,10 @@ SUPPORT_ADDRESS: Final = "support@solidon3d.de"
 #: kaufen" — sie stand vorher an zwei Stellen getrennt.
 WEBSITE_URL: Final = "https://solidon3d.de/"
 
+#: Der freiwillige Förderweg. Er führt direkt zum von PayPal gehosteten
+#: Zahlungsdialog; die Produktseite liegt nicht dazwischen.
+DONATION_URL: Final = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"
+
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 
