@@ -21,7 +21,15 @@ from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
-from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
+from PySide6.QtGui import (
+    QColor,
+    QKeySequence,
+    QPainter,
+    QPainterPath,
+    QPainterPathStroker,
+    QPen,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -534,8 +542,23 @@ class SketchCanvas(QWidget):
         parallel A"."""
         self._undo: list[Sketch] = []
         self._dragging: int | None = None
+        self._dragging_remembered = False
+        """Ob der Rückgängig-Stand des laufenden Punktzugs schon gesichert ist.
+
+        Ein bloßer Auswahlklick ist keine Dokumentänderung und darf deshalb
+        keinen leeren Rückgängig-Schritt erzeugen. Gesichert wird erst bei der
+        ersten wirklichen Bewegung; der Viewport ist dort bereits über seine
+        Zugschwelle hinaus und setzt den Merker beim Beginn.
+        """
         self._shift_from: tuple[float, float] | None = None
         """Von wo aus die Auswahl geschoben wird — ``None`` heißt: gar nicht."""
+        self._shift_applied: tuple[float, float] = (0.0, 0.0)
+        """Schon angewandter Anteil eines Auswahlzugs, seit seinem Beginn.
+
+        Der Fang gilt für den ganzen Zug und nicht für jedes einzelne
+        Mausereignis. Sonst blieben zwanzig kleine Bewegungen unter einem
+        Rasterabstand alle wirkungslos, obwohl ihre Summe längst darüber lag.
+        """
         self._shifting = False
         """Ob die Schwelle schon überschritten ist (:meth:`_shift_selection`)."""
         self._scale = START_SCALE
@@ -668,6 +691,7 @@ class SketchCanvas(QWidget):
         self._bed = size
         if self._fitting:
             self.fit_view(keep_following=True)
+        self.statusChanged.emit(self.status_text())
         self.update()
 
     def set_snapping(self, active: bool, step: float | None = None) -> None:
@@ -890,6 +914,13 @@ class SketchCanvas(QWidget):
         """
         if self.view_plane == self.sketch.plane:
             return ""
+        if self.view_plane == FREE_VIEW:
+            return str(
+                tr(
+                    "Sie sehen die Zeichnung aus einer freien Ansicht. "
+                    "Gezeichnet wird weiter auf der {plane}."
+                ).format(plane=plane_where(self.sketch.plane))
+            )
         return str(
             tr(
                 "Sie sehen die Zeichnung aus der {view}. Gezeichnet wird weiter auf der {plane}."
@@ -968,16 +999,16 @@ class SketchCanvas(QWidget):
         self.sketch = sketch
         self._pending.clear()
         self._pending_world.clear()
-        self.selection.clear()
         self._reset_measure_entry()
+        self.selection.clear()
         self._resolve()
 
     def set_tool(self, tool: str) -> None:
         self.tool = tool
         self._pending.clear()
         self._pending_world.clear()
-        # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
         self._reset_measure_entry()
+        # Der Zeiger sagt, was ein Klick tut. Er stand auf dem Pfeil, gleich
         # ob ein Zeichenwerkzeug lief oder nicht — und ein Werkzeug, dessen
         # Zustand man nur am gedrückten Knopf sieht, ist bei achtunddreißig
         # Bildpunkten Symbolgröße kein Zustand, den jemand bemerkt.
@@ -1071,6 +1102,11 @@ class SketchCanvas(QWidget):
     def status_text(self) -> str:
         if self.conflict:
             return self.conflict
+        if self.outside_bed():
+            return tr(
+                "Die Skizze ragt über den Bauraum hinaus — "
+                "Punkte innerhalb des Rahmens verschieben."
+            )
         # Ein angefangenes Element geht vor: was der nächste Klick tut, ist
         # dringender als was vorhin ausgewählt wurde. Ohne Angefangenes gewinnt
         # die Auswahl — sonst stünde beim Punktwerkzeug weiter „jeder Klick
@@ -1222,7 +1258,11 @@ class SketchCanvas(QWidget):
         remaining = tuple(entry for at, entry in enumerate(self.sketch.constraints) if at != index)
         self._apply(replace(self.sketch, constraints=remaining))
 
-    def insert_shape(self, sketch: Sketch) -> None:
+    def insert_shape(
+        self,
+        sketch: Sketch,
+        joins: Sequence[tuple[int, int]] = (),
+    ) -> None:
         """Fügt eine Grundform als weitere Elemente ein — mit verschobenen
         Bedingungszielen, denn die flachen Indizes zählen über die ganze
         Skizze.
@@ -1241,11 +1281,14 @@ class SketchCanvas(QWidget):
             )
             for entry in sketch.constraints
         )
+        joined = tuple(
+            SketchConstraint("coincident", (existing, shift + local)) for existing, local in joins
+        )
         self._apply(
             replace(
                 self.sketch,
                 elements=(*self.sketch.elements, *sketch.elements),
-                constraints=(*self.sketch.constraints, *moved),
+                constraints=(*self.sketch.constraints, *moved, *joined),
             )
         )
 
@@ -1335,15 +1378,44 @@ class SketchCanvas(QWidget):
         Ziehen eines einzelnen Punktes wird hier **nicht** gemerkt — den
         Undo-Punkt setzt der Mausdruck, sonst stünden im Rückgängig so viele
         Schritte, wie die Maus Meldungen geschickt hat.
+
+        Ganze Elemente nehmen alle ihre Punkte mit; einzeln gewählte Punkte
+        nur sich selbst. Damit bleibt eine Strg-Auswahl zweier Endpunkte auch
+        beim Ziehen genau diese Auswahl und verschiebt nicht überraschend die
+        jeweils andere Hälfte ihrer Linien.
         """
-        indices = tuple(sorted({_located(self.sketch, entry[1][0])[0] for entry in self.selection}))
-        if not indices:
+        moved: dict[int, set[int]] = {}
+        for kind, targets in self.selection:
+            if not targets:
+                continue
+            element_index, local = _located(self.sketch, targets[0])
+            locals_ = (
+                {local}
+                if kind == "point"
+                else set(range(len(self.sketch.elements[element_index].points)))
+            )
+            moved.setdefault(element_index, set()).update(locals_)
+        if not moved:
             return
-        self.sketch = edit.move(self.sketch, indices, dx, dy)
+        elements = list(self.sketch.elements)
+        for element_index, locals_ in moved.items():
+            element = elements[element_index]
+            points = list(element.points)
+            for local in locals_:
+                x, y = points[local]
+                points[local] = (x + dx, y + dy)
+            elements[element_index] = replace(element, points=tuple(points))
+        self.sketch = replace(self.sketch, elements=tuple(elements))
         self._resolve()
 
     def move_point(self, flat: int, x: float, y: float) -> None:
         """Verschiebt einen Punkt und lässt den Solver den Rest ziehen."""
+        if self._dragging == flat and not self._dragging_remembered:
+            # Erst die wirkliche Bewegung ist ein Dokumentschritt. Das steht
+            # hier statt nur im Mausereignis, damit Zeichenfläche, Viewport
+            # und der direkt geprüfte Griff denselben Verlauf erzeugen.
+            self._remember()
+            self._dragging_remembered = True
         element_index, local = _located(self.sketch, flat)
         element = self.sketch.elements[element_index]
         points = list(element.points)
@@ -1370,15 +1442,35 @@ class SketchCanvas(QWidget):
         return tuple(collected)
 
     def _select(self, entry: tuple[str, tuple[int, ...]], extend: bool) -> None:
+        # Ohne Strg ist ein Klick eine eindeutige Auswahl. Ein bereits
+        # gewähltes Element bleibt gewählt — es beim zweiten Klick abzuwählen
+        # machte gerade den Versuch, es zu ziehen, wirkungslos. Nur Strg
+        # schaltet einen Eintrag gezielt um.
         if not extend:
-            self.selection.clear()
-        if entry in self.selection:
+            self.selection[:] = [entry]
+        elif entry in self.selection:
             self.selection.remove(entry)
         else:
             self.selection.append(entry)
         self.selectionChanged.emit()
         self.statusChanged.emit(self.status_text())
         self.update()
+
+    def selected_element_indices(self) -> tuple[int, ...]:
+        """Gewählte ganze Elemente, in ihrer Reihenfolge in der Skizze."""
+        return tuple(
+            sorted(
+                {
+                    _located(self.sketch, targets[0])[0]
+                    for kind, targets in self.selection
+                    if kind != "point" and targets
+                }
+            )
+        )
+
+    def selected_point_indices(self) -> tuple[int, ...]:
+        """Einzeln gewählte Punkte als flache Indizes."""
+        return tuple(targets[0] for kind, targets in self.selection if kind == "point" and targets)
 
     # --- Koordinaten --------------------------------------------------------------
 
@@ -1459,6 +1551,33 @@ class SketchCanvas(QWidget):
                 if abs(span - radius) <= tolerance:
                     flats = tuple(range(begin, begin + len(element.points)))
                     return (element.kind, flats)
+            elif element.kind == "spline" and len(element.points) > 1:
+                # Die Kurve selbst greifen, nicht nur ihre Kontrollpunkte.
+                # Derselbe kubische Catmull-Rom-Weg wie beim Zeichnen; hier in
+                # Millimetern, damit der sichtbare Maßstab die Trefferbreite
+                # bestimmt und nicht die Größe des unsichtbaren Canvas.
+                row = [QPointF(*points[begin + step]) for step in range(len(element.points))]
+                path = QPainterPath(row[0])
+                for step in range(len(row) - 1):
+                    before = row[max(step - 1, 0)]
+                    first, second = row[step], row[step + 1]
+                    after = row[min(step + 2, len(row) - 1)]
+                    path.cubicTo(
+                        QPointF(
+                            first.x() + (second.x() - before.x()) / 6.0,
+                            first.y() + (second.y() - before.y()) / 6.0,
+                        ),
+                        QPointF(
+                            second.x() - (after.x() - first.x()) / 6.0,
+                            second.y() - (after.y() - first.y()) / 6.0,
+                        ),
+                        second,
+                    )
+                stroker = QPainterPathStroker()
+                stroker.setWidth(tolerance * 2.0)
+                if stroker.createStroke(path).contains(QPointF(wx, wy)):
+                    flats = tuple(range(begin, begin + len(element.points)))
+                    return (element.kind, flats)
         return None
 
     # --- Mausereignisse -------------------------------------------------------------
@@ -1497,6 +1616,7 @@ class SketchCanvas(QWidget):
                 # jeder Auswahlklick einen Schritt ab, der nichts geändert
                 # hat, und das Rückgängig zählte Klicks statt Änderungen.
                 self._shift_from = self._to_world(position)
+                self._shift_applied = (0.0, 0.0)
                 self._shifting = False
                 return
             if not event.modifiers():
@@ -1521,18 +1641,29 @@ class SketchCanvas(QWidget):
         unsichtbar —, und um den ersten zu bewegen, musste man erst das
         Werkzeug wechseln.
 
-        Der Undo-Stand wird hier gemerkt, weil das Ziehen gleich beginnen
-        kann: ``mouseMoveEvent`` schiebt den Punkt, sobald die Taste unten
-        bleibt, und ohne den Merker nähme ein Rückgängig den Schritt davor.
+        Der Undo-Stand entsteht erst bei der ersten Bewegung. Ein bloßer
+        Auswahlklick ändert das Dokument nicht und darf deshalb auch keinen
+        leeren Schritt in den Verlauf legen.
 
         Am Zeiger hängt er nur, wenn er danach auch ausgewählt ist: ein
         Strg-Klick auf einen bereits gewählten Punkt wählt ihn ab, und einen
         abgewählten Punkt zu verschieben wäre das Gegenteil dessen, was die
         Geste sagt.
         """
-        self._select(("point", (flat,)), extend)
-        self._remember()
-        self._dragging = flat if ("point", (flat,)) in self.selection else None
+        entry = ("point", (flat,))
+        if not extend and entry in self.selection and len(self.selection) > 1:
+            # Mehrfach gewählte Punkte sind eine Gruppe. Wer einen davon
+            # greift, zieht die Gruppe; für einen einzelnen Punkt genügt ein
+            # normaler Klick ohne Strg, der die Auswahl vorher eindeutig macht.
+            self._dragging = None
+            self._dragging_remembered = False
+            self._shift_from = self.points()[flat]
+            self._shift_applied = (0.0, 0.0)
+            self._shifting = False
+            return
+        self._select(entry, extend)
+        self._dragging = flat if entry in self.selection else None
+        self._dragging_remembered = False
 
     def cut_or_grow(self, position: QPointF) -> None:
         """Trimmen und Verlängern: ein Klick auf die Hälfte, die es betrifft.
@@ -1584,7 +1715,100 @@ class SketchCanvas(QWidget):
         Fang, Deckung und Undo-Punkt hängen daran
         (`.claude/rules/zeichenflaeche.md`).
         """
-        self.place(self._to_screen(point[0], point[1]), extend=extend)
+        position = self._to_screen(point[0], point[1])
+        if self.tool == "select":
+            self._select_at(position, extend=extend)
+            return
+        if self.tool in ("trim", "extend"):
+            self.cut_or_grow(position)
+            return
+        self.place(position, extend=extend)
+
+    def _select_at(self, position: QPointF, *, extend: bool = False) -> bool:
+        """Punkt oder Element an dieser Bildstelle auswählen.
+
+        Der gemeinsame Weg für die sichtbare Zeichenfläche und den Viewport.
+        ``True`` heißt, dass etwas getroffen wurde. Ein Klick daneben leert
+        die Auswahl nur ohne Strg — wie überall sonst in der Anwendung.
+        """
+        hit = self._hit_point(position)
+        if hit is not None:
+            self._select(("point", (hit,)), extend)
+            return True
+        element = self._hit_element(position)
+        if element is not None:
+            self._select(element, extend)
+            return True
+        if not extend and self.selection:
+            self.selection.clear()
+            self.selectionChanged.emit()
+            self.statusChanged.emit(self.status_text())
+            self.update()
+        return False
+
+    def can_drag_on_plane(self, point: tuple[float, float]) -> bool:
+        """Ob ein Zug hier einen Skizzenpunkt oder ein Element greifen würde."""
+        if self.tool != "select":
+            return False
+        position = self._to_screen(point[0], point[1])
+        return self._hit_point(position) is not None or self._hit_element(position) is not None
+
+    def begin_drag_on_plane(self, point: tuple[float, float], *, extend: bool = False) -> bool:
+        """Einen Zug im Viewport beginnen, nachdem dessen Schwelle überschritten ist."""
+        if self.tool != "select":
+            return False
+        position = self._to_screen(point[0], point[1])
+        hit = self._hit_point(position)
+        if hit is not None:
+            entry = ("point", (hit,))
+            # Eine schon gewählte Mehrfachauswahl als Gruppe ziehen. Sie beim
+            # Beginn des Zugs auf den einen Punkt zu reduzieren, macht Strg-
+            # Auswahl genau im Augenblick zunichte, für den sie gedacht ist.
+            if not extend and entry in self.selection and len(self.selection) > 1:
+                self._remember()
+                self._dragging = None
+                self._dragging_remembered = False
+                self._shift_from = point
+                self._shift_applied = (0.0, 0.0)
+                self._shifting = True
+                return True
+            if extend or entry not in self.selection:
+                self._select(entry, extend)
+            self._remember()
+            self._dragging = hit
+            self._dragging_remembered = True
+            return True
+        element = self._hit_element(position)
+        if element is None:
+            return False
+        if extend or element not in self.selection:
+            self._select(element, extend)
+        if not self.selection:
+            return False
+        self._remember()
+        self._shift_from = point
+        self._shift_applied = (0.0, 0.0)
+        self._shifting = True
+        return True
+
+    def drag_on_plane(self, point: tuple[float, float]) -> None:
+        """Einen im Viewport begonnenen Punkt- oder Elementzug fortsetzen."""
+        self._pointer = point
+        self.pointerChanged.emit(*self.pointer_target())
+        if self._dragging is not None:
+            target = self.snapped(point)
+            self.move_point(self._dragging, target[0], target[1])
+            return
+        if self._shift_from is not None:
+            self._shift_selection(self._to_screen(point[0], point[1]))
+
+    def end_drag_on_plane(self) -> None:
+        """Den Viewport-Zug lösen, ohne einen zweiten Änderungsschritt."""
+        self._dragging = None
+        self._dragging_remembered = False
+        self._shift_from = None
+        self._shift_applied = (0.0, 0.0)
+        self._shifting = False
 
     def hover_on_plane(self, point: tuple[float, float]) -> None:
         """Der Zeiger steht auf dieser Stelle der Ebene, ohne zu klicken.
@@ -2053,6 +2277,19 @@ class SketchCanvas(QWidget):
         self._rectangle_measures = [None, None]
         self._hide_measure_widgets()
 
+    def finish_spline(self) -> None:
+        """Den gesammelten Spline abschließen.
+
+        Unter zwei Punkten entsteht nichts — ein Spline durch einen Punkt ist
+        ein Punkt, und den gibt es als eigenes Werkzeug. Die gesammelten
+        Klicks fallen dann weg statt eine ungültige Skizze zu erzeugen.
+        """
+        if self.tool != "spline" or len(self._pending_world) < 2:
+            self._pending.clear()
+            self._pending_world.clear()
+            self.update()
+            return
+        begin = len(edit.flat_points(self.sketch))
         element = SketchElement("spline", tuple(self._pending_world))
         snapped_pairs = tuple(
             SketchConstraint("coincident", (snapped_flat, begin + local))
@@ -2141,7 +2378,8 @@ class SketchCanvas(QWidget):
         """
         if self._shift_from is None:
             return
-        across, up = self._pointer
+        across, up = self._to_world(position)
+        self._pointer = (across, up)
         if not self._shifting:
             start = self._to_screen(*self._shift_from)
             moved = math.hypot(position.x() - start.x(), position.y() - start.y())
@@ -2149,8 +2387,19 @@ class SketchCanvas(QWidget):
                 return
             self._remember()
             self._shifting = True
-        self.move_selected(across - self._shift_from[0], up - self._shift_from[1])
-        self._shift_from = (across, up)
+        wanted = (across - self._shift_from[0], up - self._shift_from[1])
+        if self.snapping:
+            step = self.snap_step if self.snap_step > 0.0 else self.grid_step()
+            if step > 0.0:
+                wanted = (
+                    round(wanted[0] / step) * step,
+                    round(wanted[1] / step) * step,
+                )
+        change = (wanted[0] - self._shift_applied[0], wanted[1] - self._shift_applied[1])
+        if abs(change[0]) <= EPS_DISPLAY and abs(change[1]) <= EPS_DISPLAY:
+            return
+        self.move_selected(*change)
+        self._shift_applied = wanted
 
     def _note_hover(self, under: int | None) -> bool:
         """Merkt den Punkt unter dem Zeiger und sagt, ob er gewechselt hat.
@@ -2204,7 +2453,9 @@ class SketchCanvas(QWidget):
             self._panning = None
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = None
+            self._dragging_remembered = False
             self._shift_from = None
+            self._shift_applied = (0.0, 0.0)
             self._shifting = False
 
     def wheelEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
@@ -3053,6 +3304,11 @@ VIEWPORT_LIST_HEIGHT = 96
 #: breit wie den längsten Eintrag, und das waren gemessene 612 Bildpunkte.
 PLANE_FIELD_CHARS = 20
 
+#: Interner Eintrag des Ebenenfelds, sobald die Kamera frei gekippt ist.
+#: Er reist nie in einer Projektdatei: ``Sketch.plane`` bleibt eine echte
+#: Zeichenebene, und nur ``SketchCanvas.view_plane`` darf diesen Wert tragen.
+FREE_VIEW = "view:free"
+
 
 def plane_choices() -> tuple[tuple[str, str], ...]:
     """Die drei Grundebenen, wie sie im Feld stehen.
@@ -3080,6 +3336,8 @@ def plane_where(plane: str) -> str:
     vergebenen Schlüssel mitbenutzt, kapert dessen Übersetzung still: Wer
     „vorn" eines Tages dort anders übersetzt, ändert unbemerkt diesen Satz mit.
     """
+    if plane == FREE_VIEW:
+        return str(tr("freien Ansicht"))
     full = dict(plane_choices()).get(plane, "")
     return str(full).split(" — ")[0] if full else str(tr("der gewählten Fläche"))
 
@@ -3299,6 +3557,10 @@ class SketchPanel(QWidget):
         for value, label in plane_choices():
             key = PLANE_KEYS.get(value, "")
             self.plane_choice.addItem(f"{label}  ({key})" if key else str(label), userData=value)
+        # Nach dem ersten Strich wählt dieses Feld den **Blick**. Eine freie
+        # Kameralage braucht dann einen ehrlichen Eintrag; die vorige
+        # Hauptansicht stehen zu lassen wären zwei Aussagen über ein Bild.
+        self.plane_choice.addItem(tr("Freie Ansicht — mit der Maus gekippt"), userData=FREE_VIEW)
         self.plane_choice.setToolTip(
             tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt.")
         )
@@ -3321,6 +3583,16 @@ class SketchPanel(QWidget):
         # Breite, dass er auf sieben Zeilen umbrach und die ganze Leiste hoch
         # machte. Er gehört unter die Wahl, auf die er sich bezieht.
         plane_row = QHBoxLayout()
+        self.plane_role = QLabel(tr("Zeichenebene:"), self)
+        """Wofür das benachbarte Feld **jetzt** gilt.
+
+        Vor dem ersten Strich legt es die Zeichenebene fest. Danach ist diese
+        fest, und dasselbe Feld steuert nur noch die Ansicht. Ein unbenanntes
+        Feld konnte diesen Wechsel nicht erklären und ließ im Bildschirmfoto
+        Vorderansicht und Draufsicht zugleich als „Zeichenebene" erscheinen.
+        """
+        self.plane_role.setBuddy(self.plane_choice)
+        plane_row.addWidget(self.plane_role)
         plane_row.addWidget(self.plane_choice)
 
         # Was die Ebene für den Druck bedeutet, direkt daneben (E1). Ein Satz
@@ -3328,6 +3600,11 @@ class SketchPanel(QWidget):
         # stünde er, nachdem alles fertig ist.
         self.layer_note = QLabel(self.canvas.layer_note(), self)
         self.layer_note.setWordWrap(True)
+        # Der Satz darf umbrechen und bestimmt nicht die Mindestbreite der
+        # gesamten Anwendung. Das Feld, Raster und Werkzeuge bleiben greifbar;
+        # der erklärende Text nimmt den Raum, der danach noch übrig ist.
+        self.layer_note.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
+        self.layer_note.setMinimumWidth(1)
         note_font = self.layer_note.font()
         note_font.setItalic(True)
         self.layer_note.setFont(note_font)
@@ -3341,7 +3618,8 @@ class SketchPanel(QWidget):
         # man vor dem ersten Strich, nicht mittendrin. Ein Haken und eine
         # Weite — an ist die Vorgabe, weil ein Klick sonst auf -29,75 mm
         # landet und daraus kein Maß wird, sondern Nacharbeit.
-        self.snap_toggle = QCheckBox(tr("Am Raster fangen"), self)
+        self.snap_toggle = QCheckBox(tr("Rasterfang"), self)
+        self.snap_toggle.setAccessibleName(tr("Am Raster fangen"))
         self.snap_toggle.setChecked(self.canvas.snapping)
         self.snap_toggle.setToolTip(
             tr("Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.")
@@ -3376,14 +3654,21 @@ class SketchPanel(QWidget):
         self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
+        self.snap_auto = QCheckBox(tr("Auto"), self)
+        self.snap_auto.setChecked(True)
+        self.snap_auto.setToolTip(
+            tr("Die Rasterweite folgt dem Zoom und bleibt im Bild gut lesbar.")
+        )
         #: Ob der Nutzer die Weite selbst eingestellt hat. Solange nicht, folgt
         #: sie dem Zoom (:func:`grid_step_for`); danach steht sie. Ohne diese
         #: Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
         self._pinned_step = False
         self.snap_toggle.toggled.connect(self._snapping_changed)
         self.snap_step.valueChanged.connect(self._step_typed)
+        self.snap_auto.toggled.connect(self._automatic_grid_changed)
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
+        plane_row.addWidget(self.snap_auto)
         plane_row.addWidget(self.snap_step)
         tools.addStretch(1)
 
@@ -3414,13 +3699,21 @@ class SketchPanel(QWidget):
         self.offset_distance.setAccessibleName(tr("Versetzen"))
 
         offset_button = QToolButton(self)
+        self.offset_button = offset_button
         offset_button.setIcon(icons.icon("sketch_offset", offset_button))
+        offset_button.setText(tr("Versetzen"))
+        offset_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        offset_button.setAccessibleName(tr("Versetzen"))
         offset_button.setToolTip(f"{tr('Versetzen')}  ({ACTION_KEYS['offset']})")
         offset_button.setAutoRaise(True)
         offset_button.clicked.connect(self._offset_selected)
 
         mirror_button = QToolButton(self)
+        self.mirror_button = mirror_button
         mirror_button.setIcon(icons.icon("sketch_mirror", mirror_button))
+        mirror_button.setText(tr("Spiegeln"))
+        mirror_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        mirror_button.setAccessibleName(tr("Spiegeln"))
         mirror_button.setToolTip(tr("Spiegeln"))
         mirror_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         mirror_menu = QMenu(mirror_button)
@@ -3430,7 +3723,11 @@ class SketchPanel(QWidget):
         mirror_button.setMenu(mirror_menu)
 
         construction_button = QToolButton(self)
+        self.construction_button = construction_button
         construction_button.setIcon(icons.icon("sketch_construction", construction_button))
+        construction_button.setText(tr("Hilfsgeometrie"))
+        construction_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        construction_button.setAccessibleName(tr("Hilfsgeometrie"))
         construction_button.setToolTip(
             f"{tr('Hilfsgeometrie')}  ({ACTION_KEYS['construction']}) — "
             + tr("Trägt Bedingungen, bildet aber kein Profil.")
@@ -3446,6 +3743,7 @@ class SketchPanel(QWidget):
         )
         project_button.setAutoRaise(True)
         project_button.clicked.connect(self.canvas.project_bodies)
+        tools.addWidget(project_button)
 
         # **Das Maß beim Zeichnen steht an der Zeichenfläche, nicht hier** (E19,
         # Schritt zwei). Es hing in dieser Zeile, und beim Zeichnen sieht
@@ -3454,12 +3752,47 @@ class SketchPanel(QWidget):
         # Abschließen ist eine Sache des Panels, weil der Solverlauf danach
         # kommt.
         self.canvas.measure_field.editingFinished.connect(self._place_measured)
+        self.canvas.second_measure_field.editingFinished.connect(self._place_second_measured)
+        QWidget.setTabOrder(
+            self.canvas.measure_field,
+            self.canvas.second_measure_field,
+        )
 
-        tools.addWidget(offset_button)
-        tools.addWidget(self.offset_distance)
-        tools.addWidget(mirror_button)
-        tools.addWidget(construction_button)
-        tools.addWidget(project_button)
+        # Änderungen an vorhandener Geometrie stehen erst da, wenn auch etwas
+        # gewählt ist. Das entfernt vor allem das zweite, unbeschriftete
+        # Millimeterfeld aus dem Normalzustand: Es war der Versatzabstand und
+        # sah direkt über der Rasterweite wie dieselbe Einstellung aus.
+        self.selection_tools = QWidget(self)
+        selection_tools = QHBoxLayout(self.selection_tools)
+        selection_tools.setContentsMargins(0, 0, 0, 0)
+        selection_title = QLabel(tr("Auswahl:"), self.selection_tools)
+        selection_tools.addWidget(selection_title)
+
+        self.coordinate_button = QToolButton(self.selection_tools)
+        self.coordinate_button.setText(tr("Koordinaten …"))
+        self.coordinate_button.setToolTip(
+            tr("Den gewählten Punkt über genaue Koordinaten verschieben.")
+        )
+        self.coordinate_button.clicked.connect(self._edit_selected_point)
+        selection_tools.addWidget(self.coordinate_button)
+
+        self.delete_button = QToolButton(self.selection_tools)
+        self.delete_button.setText(tr("Löschen"))
+        delete_keys = QKeySequence(QKeySequence.StandardKey.Delete).toString(
+            QKeySequence.SequenceFormat.NativeText
+        )
+        self.delete_button.setToolTip(f"{tr('Auswahl löschen')}  ({delete_keys})")
+        self.delete_button.clicked.connect(self.canvas.remove_selected)
+        selection_tools.addWidget(self.delete_button)
+        selection_tools.addWidget(mirror_button)
+        selection_tools.addWidget(construction_button)
+
+        offset_label = QLabel(tr("Versatz:"), self.selection_tools)
+        offset_label.setBuddy(self.offset_distance)
+        selection_tools.addWidget(offset_label)
+        selection_tools.addWidget(self.offset_distance)
+        selection_tools.addWidget(offset_button)
+        selection_tools.addStretch(1)
 
         # Einpassen gehört zu den Ansichtsgriffen und nicht zu den Werkzeugen,
         # steht deshalb hinten bei Rückgängig. Als Knopf und nicht nur als
@@ -3468,11 +3801,6 @@ class SketchPanel(QWidget):
         fit_button = QToolButton(self)
         fit_button.setIcon(icons.icon("sketch_fit", fit_button))
         fit_button.setToolTip(f"{tr('Einpassen')}  ({VIEW_KEYS['fit']})")
-        self.canvas.second_measure_field.editingFinished.connect(self._place_second_measured)
-        QWidget.setTabOrder(
-            self.canvas.measure_field,
-            self.canvas.second_measure_field,
-        )
         fit_button.setAutoRaise(True)
         fit_button.clicked.connect(self.canvas.fit_view)
         tools.addWidget(fit_button)
@@ -3593,6 +3921,7 @@ class SketchPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools)
         layout.addLayout(plane_row)
+        layout.addWidget(self.selection_tools)
         layout.addWidget(constraints_box)
         layout.addLayout(middle, stretch=1)
         status_row = QHBoxLayout()
@@ -3603,6 +3932,7 @@ class SketchPanel(QWidget):
         self.canvas.sketchChanged.connect(self.sketchChanged)
         self.canvas.viewFitted.connect(self.viewFitted)
         self.canvas.sketchChanged.connect(self._refresh_constraints)
+        self.canvas.sketchChanged.connect(self._refresh_plane_role)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(self.status.setText)
         self.constraint_list.installEventFilter(self)
@@ -3615,6 +3945,7 @@ class SketchPanel(QWidget):
         # nicht sieht, setzt sie ein zweites Mal. Die Knöpfe standen aus
         # demselben Grund alle bedienbar da, ohne dass etwas ausgewählt war.
         self._refresh_constraints()
+        self._refresh_plane_role()
         self._refresh_buttons()
 
         # Zuletzt, weil die Flächen in die eben gebaute Ebenenwahl kommen.
@@ -3810,6 +4141,11 @@ class SketchPanel(QWidget):
         helper.activated.connect(self.canvas.toggle_construction)
         self._shortcuts.append(helper)
 
+        remove = QShortcut(QKeySequence(QKeySequence.StandardKey.Delete), self)
+        remove.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        remove.activated.connect(self.canvas.remove_selected)
+        self._shortcuts.append(remove)
+
         for plane, key in PLANE_KEYS.items():
             view = QShortcut(QKeySequence(key), self)
             view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
@@ -3852,7 +4188,14 @@ class SketchPanel(QWidget):
         index = self.plane_choice.findData(plane)
         if index < 0:
             return False
-        self.plane_choice.setCurrentIndex(index)
+        if index == self.plane_choice.currentIndex():
+            # Auch die schon gewählte Ebene ist eine Antwort: Beim Start
+            # steht XY vorausgewählt, die Taste 1 beziehungsweise die Karte
+            # soll den Ebenenwähler trotzdem schließen und die Ansicht sauber
+            # ausrichten.
+            self._plane_picked()
+        else:
+            self.plane_choice.setCurrentIndex(index)
         return True
 
     def drop_tool(self) -> bool:
@@ -3907,8 +4250,65 @@ class SketchPanel(QWidget):
         gebundene Methode schwach, ein Lambda hielte dieses Feld an seinem
         eigenen Kind fest (`.claude/rules/oberflaeche.md`).
         """
-        self.canvas.set_plane(str(self.plane_choice.currentData()))
+        plane = str(self.plane_choice.currentData())
+        if plane == FREE_VIEW:
+            # Dieser Eintrag beschreibt einen Kamerazustand und ist keine
+            # vierte Zeichenebene. Er wird von ``reflect_camera_view`` gesetzt,
+            # sobald jemand die Kamera kippt; direkt wählen würde weder eine
+            # eindeutige Ebene noch eine eindeutige Kameralage festlegen.
+            self.canvas.statusChanged.emit(
+                tr("Die freie Ansicht entsteht durch Kippen mit der Maus.")
+            )
+            previous = self.canvas.view_plane
+            if previous == FREE_VIEW:
+                previous = self.canvas.sketch.plane
+            with QSignalBlocker(self.plane_choice):
+                self.plane_choice.setCurrentIndex(max(0, self.plane_choice.findData(previous)))
+            return
+        self.canvas.set_plane(plane)
         self.planeChanged.emit()
+
+    def reflect_camera_view(self, plane: str | None) -> None:
+        """Kameralage im Ebenenfeld zeigen, ohne die Kamera erneut zu bewegen.
+
+        Eine leere Skizze darf mit der eingerasteten Ansicht ihre
+        Zeichenebene wechseln. Ab dem ersten Element bleibt die Zeichenebene
+        fest; dann beschreibt das Feld nur noch den Blick und eine gekippte
+        Kamera ehrlich als freie Ansicht.
+        """
+        shown = plane or FREE_VIEW
+        if not self.canvas.sketch.elements and plane is None:
+            # Eine freie Kameralage ist keine Zeichenebene. Bis zum ersten
+            # Element bleibt deshalb die zuletzt eindeutige Ebene gewählt.
+            return
+        index = self.plane_choice.findData(shown)
+        if index < 0:
+            return
+        with QSignalBlocker(self.plane_choice):
+            self.plane_choice.setCurrentIndex(index)
+        if self.canvas.sketch.elements:
+            self.canvas.set_view_plane(shown)
+        elif plane is not None and plane != self.canvas.sketch.plane:
+            self.canvas.set_plane(plane)
+            self.planeChanged.emit()
+        self._refresh_plane_role()
+        self._show_layer_note()
+
+    def _refresh_plane_role(self) -> None:
+        """Das Auswahlfeld als Zeichenebene oder als Ansicht benennen."""
+        locked = bool(self.canvas.sketch.elements)
+        self.plane_role.setText(tr("Ansicht:") if locked else tr("Zeichenebene:"))
+        if locked:
+            self.plane_choice.setToolTip(
+                tr(
+                    "Nur die Ansicht wechseln. Die Zeichenebene bleibt nach dem "
+                    "ersten Element fest."
+                )
+            )
+        else:
+            self.plane_choice.setToolTip(
+                tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt.")
+            )
 
     def _show_layer_note(self) -> None:
         """Der Satz neben der Ebenenwahl.
@@ -3929,6 +4329,12 @@ class SketchPanel(QWidget):
         Vorher stand derselbe Ausdruck zweimal als Lambda da.
         """
         self.canvas.offset_selected(self.offset_distance.value_mm())
+
+    def _edit_selected_point(self) -> None:
+        """Den einen gewählten Punkt über die präzise Eingabe bearbeiten."""
+        points = self.canvas.selected_point_indices()
+        if len(points) == 1:
+            self.canvas.edit_point(points[0])
 
     def _place_measured(self) -> None:
         """Das eingetippte Maß an die Bedingung legen, die darauf wartet.
@@ -3959,8 +4365,13 @@ class SketchPanel(QWidget):
         nichts tut, sieht aus wie eine Einstellung, die nicht wirkt.
         """
         active = self.snap_toggle.isChecked()
+        self.snap_auto.setEnabled(active)
+        # Auch im Automatikzustand bleibt das Feld direkt beschreibbar: Eine
+        # Eingabe schaltet auf fest um. Erst einen Haken zu lösen, um eine Zahl
+        # tippen zu dürfen, wäre eine unnötige zweite Handlung.
         self.snap_step.setEnabled(active)
-        self.canvas.set_snapping(active, self.snap_step.value_mm())
+        step = self.snap_step.value_mm()
+        self.canvas.set_snapping(active, step)
         # **Und das Bild muss es erfahren.** ``set_snapping`` zeichnet den
         # Canvas neu, und der ist im Viewport-Modus unsichtbar — gemeldet als
         # „wenn ich das Raster anpasse ändert es sich im Viewport nicht". Das
@@ -3995,7 +4406,18 @@ class SketchPanel(QWidget):
             with QSignalBlocker(self.snap_step):
                 self.snap_step.set_value_mm(LEAST_SNAP_MM)
             typed = LEAST_SNAP_MM
-        self._pinned_step = typed > 0.0
+        automatic = typed <= 0.0
+        with QSignalBlocker(self.snap_auto):
+            self.snap_auto.setChecked(automatic)
+        self._pinned_step = not automatic
+        self._snapping_changed()
+
+    def _automatic_grid_changed(self, automatic: bool) -> None:
+        """Zwischen zoomabhängigem und festem Raster eindeutig wechseln."""
+        self._pinned_step = not automatic
+        if not automatic and self.snap_step.value_mm() <= 0.0:
+            with QSignalBlocker(self.snap_step):
+                self.snap_step.set_value_mm(max(self.canvas.grid_step(), LEAST_SNAP_MM))
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:
@@ -4018,6 +4440,8 @@ class SketchPanel(QWidget):
         """
         if self._pinned_step or step <= 0.0:
             return
+        with QSignalBlocker(self.snap_auto):
+            self.snap_auto.setChecked(True)
         with QSignalBlocker(self.snap_step):
             self.snap_step.set_value_mm(step)
         self.canvas.set_snapping(self.snap_toggle.isChecked(), step)
@@ -4064,8 +4488,16 @@ class SketchPanel(QWidget):
         self.canvas.add_constraint(kind, targets, value)
 
     def _refresh_buttons(self) -> None:
+        offers = self.constraint_offers()
         for kind, button in self._constraint_buttons.items():
-            button.setEnabled(self.constraint_offers()[kind])
+            button.setEnabled(offers[kind])
+        selected = bool(self.canvas.selection)
+        self.selection_tools.setVisible(selected)
+        self.coordinate_button.setEnabled(len(self.canvas.selected_point_indices()) == 1)
+        self.delete_button.setEnabled(selected)
+        self.offset_button.setEnabled(selected)
+        self.mirror_button.setEnabled(selected)
+        self.construction_button.setEnabled(selected)
 
     def _refresh_constraints(self) -> None:
         self.constraint_list.clear()

@@ -758,10 +758,13 @@ def test_the_canvas_knows_when_a_sketch_leaves_the_build_volume(qt_app: QApplica
 
     canvas.set_sketch(shapes.rectangle(300.0, 20.0))
     assert canvas.outside_bed(), "dreihundert nicht"
+    assert "Bauraum" in canvas.status_text()
+    assert "verschieben" in canvas.status_text(), "die Warnung braucht einen Ausweg"
 
     # Ohne bekannten Bauraum wird nichts behauptet.
     canvas.set_bed(None)
     assert not canvas.outside_bed()
+    assert "Bauraum" not in canvas.status_text()
 
 
 def _sized(panel: SketchPanel, qt_app: QApplication) -> SketchPanel:
@@ -1403,9 +1406,6 @@ def test_typing_a_measure_finishes_the_line(qt_app: QApplication) -> None:
     assert line.points[1][1] == pytest.approx(0.0), "die Richtung vom Zeiger"
 
 
-def test_a_typed_measure_stays_as_a_constraint(qt_app: QApplication) -> None:
-    """Sonst wandert die Linie beim nächsten Solverlauf, und die eingetippte
-    Zahl wäre eine Angabe gewesen, die nichts hält."""
 def test_typing_width_and_height_finishes_the_rectangle(qt_app: QApplication) -> None:
     """Ein Rechteck braucht zwei Maße und wird erst nach dem zweiten fertig."""
     canvas = SketchCanvas()
@@ -1448,6 +1448,9 @@ def test_both_rectangle_measures_hide_when_the_plane_cannot_be_projected(
     assert all(widget.isHidden() for widget in canvas._measure_widgets())
 
 
+def test_a_typed_measure_stays_as_a_constraint(qt_app: QApplication) -> None:
+    """Sonst wandert die Linie beim nächsten Solverlauf, und die eingetippte
+    Zahl wäre eine Angabe gewesen, die nichts hält."""
     canvas = SketchCanvas()
     canvas.set_tool("line")
     canvas.place(canvas._to_screen(0.0, 0.0))
@@ -4106,6 +4109,191 @@ def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplic
         window.finish_sketch(keep=False)
         window.close()
         window.deleteLater()
+
+
+def test_viewport_click_selects_and_drag_moves_existing_geometry(
+    qt_app: QApplication,
+) -> None:
+    """Der Pfeil bearbeitet die Skizze im sichtbaren Viewport statt die Kamera."""
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    original = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+    )
+    canvas.set_sketch(original)
+    canvas.set_tool("select")
+
+    canvas.place_on_plane((5.0, 0.0))
+    assert canvas.selected_element_indices() == (0,)
+    assert canvas.begin_drag_on_plane((5.0, 0.0))
+
+    canvas.drag_on_plane((8.0, 5.0))
+    canvas.end_drag_on_plane()
+
+    assert canvas.points() == pytest.approx([(3.0, 5.0), (13.0, 5.0)])
+    canvas.undo()
+    assert canvas.points() == pytest.approx([(0.0, 0.0), (10.0, 0.0)])
+
+
+def test_selected_points_drag_together_without_moving_their_whole_elements(
+    qt_app: QApplication,
+) -> None:
+    """Mehrfach ausgewählte Punkte bleiben beim Ziehen genau diese Gruppe."""
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    original = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 20.0), (10.0, 20.0))),
+        ),
+    )
+    canvas.set_sketch(original)
+    canvas.set_tool("select")
+    canvas._select(("point", (0,)), False)
+    canvas._select(("point", (2,)), True)
+
+    assert canvas.begin_drag_on_plane((0.0, 0.0))
+    canvas.drag_on_plane((5.0, 5.0))
+    canvas.end_drag_on_plane()
+
+    assert canvas.points() == pytest.approx([(5.0, 5.0), (10.0, 0.0), (5.0, 25.0), (10.0, 20.0)])
+    canvas.undo()
+    assert canvas.sketch == original
+
+
+def test_selecting_a_point_without_moving_adds_no_undo_step(qt_app: QApplication) -> None:
+    """Auswählen ist keine Dokumentänderung und bleibt aus dem Verlauf heraus."""
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+    before = len(canvas._undo)
+
+    canvas.grab_point(0)
+
+    assert len(canvas._undo) == before
+
+
+def test_plane_field_changes_role_but_never_moves_an_existing_sketch(
+    qt_app: QApplication,
+) -> None:
+    """Vor dem Zeichnen Ebene, danach Ansicht — im Feld und im Dokument."""
+    from app.core.types import Sketch, SketchElement
+    from app.ui.sketch_editor import FREE_VIEW
+
+    panel = SketchPanel()
+    try:
+        assert panel.plane_role.text() == "Zeichenebene:"
+        panel.canvas.set_sketch(
+            Sketch(
+                plane="plane:xy",
+                elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+            )
+        )
+        assert panel.plane_role.text() == "Ansicht:"
+
+        panel.reflect_camera_view(None)
+        assert panel.plane_choice.currentData() == FREE_VIEW
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert panel.canvas.view_plane == FREE_VIEW
+
+        panel.reflect_camera_view("plane:xz")
+        assert panel.plane_choice.currentData() == "plane:xz"
+        assert panel.canvas.sketch.plane == "plane:xy", "die Zeichenebene bleibt fest"
+        assert panel.canvas.view_plane == "plane:xz"
+    finally:
+        panel.close()
+
+
+def test_offset_field_only_appears_for_a_selection(qt_app: QApplication) -> None:
+    """Das zweite Millimeterfeld steht nur in seinem erklärten Kontext."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.types import Sketch, SketchElement
+
+    panel = SketchPanel()
+    try:
+        assert panel.selection_tools.isHidden()
+        panel.canvas.set_sketch(
+            Sketch(
+                plane="plane:xy",
+                elements=(SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),),
+            )
+        )
+        panel.canvas.place_on_plane((5.0, 0.0))
+
+        assert not panel.selection_tools.isHidden()
+        assert panel.offset_distance.accessibleName() == "Versetzen"
+        labels = [label.text() for label in panel.selection_tools.findChildren(QLabel)]
+        assert "Versatz:" in labels
+    finally:
+        panel.close()
+
+
+def test_automatic_grid_is_visible_and_typing_pins_it(qt_app: QApplication) -> None:
+    """Der aktuelle mm-Wert sieht nicht länger wie eine feste Vorgabe aus."""
+    panel = SketchPanel()
+    try:
+        panel.follow_grid(5.0)
+        assert panel.snap_auto.isChecked()
+        assert panel.snap_step.value_mm() == pytest.approx(5.0)
+        assert panel.snap_is_pinned() is False
+
+        panel.snap_step.set_value_mm(2.0)
+        assert panel.snap_auto.isChecked() is False
+        assert panel.snap_is_pinned() is True
+    finally:
+        panel.close()
+
+
+def test_camera_view_signal_updates_the_combo_and_keeps_the_drawing_plane(
+    qt_app: QApplication,
+) -> None:
+    """Die Kamerameldung nimmt den vollständigen Weg bis in die Skizzenleiste."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        assert window.viewport._sketch_edit_ready is not None
+        panel.canvas.add_element("line", ((0.0, 0.0), (20.0, 0.0)))
+
+        window.viewport.sketchViewChanged.emit("plane:xz")
+
+        assert panel.plane_choice.currentData() == "plane:xz"
+        assert panel.canvas.view_plane == "plane:xz"
+        assert panel.canvas.sketch.plane == "plane:xy"
+        assert "Ansicht:" in window._sketch_hint.text()
+        assert "Zeichenebene:" in window._sketch_hint.text()
+    finally:
+        window.finish_sketch(keep=False)
+        assert window.viewport._sketch_edit_ready is None
+        window.close()
+        window.deleteLater()
+
+
+def test_a_spline_can_be_selected_between_its_control_points(qt_app: QApplication) -> None:
+    """Die sichtbare Kurve ist greifbar, nicht nur ihre kleinen Punkte."""
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    canvas.set_sketch(
+        Sketch(
+            plane="plane:xy",
+            elements=(SketchElement("spline", ((0.0, 0.0), (10.0, 10.0), (20.0, 0.0))),),
+        )
+    )
+    canvas.set_tool("select")
+
+    canvas.place_on_plane((5.0, 5.625))
+
+    assert canvas.selected_element_indices() == (0,)
 
 
 def test_one_outline_keeps_the_explicit_choice_with_extrusion_preselected(

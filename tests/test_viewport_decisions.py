@@ -2424,3 +2424,94 @@ def test_a_typed_height_survives_a_pull_in_the_wrong_direction(qt_app: QApplicat
 
     assert pulled == [pytest.approx(25.0)], f"gemessen {pulled}"
     assert not blocked, blocked
+
+
+def test_camera_near_a_sketch_main_view_snaps_by_direction() -> None:
+    """Schieben ändert nichts; nur ein Blick nahe einer Hauptansicht rastet."""
+    from app.ui.viewport import sketch_view_near
+
+    assert sketch_view_near((0.2, -0.1, 10.0), (0.2, -0.1, 0.0)) == "plane:xy"
+    assert sketch_view_near((0.0, -10.0, 0.1), (0.0, 0.0, 0.0)) == "plane:xz"
+    assert sketch_view_near((10.0, 0.1, 0.0), (0.0, 0.0, 0.0)) == "plane:yz"
+    assert sketch_view_near((10.0, -10.0, 8.0), (0.0, 0.0, 0.0)) is None
+    assert sketch_view_near((0.0, 0.0, -10.0), (0.0, 0.0, 0.0)) is None
+
+
+def test_sketch_drag_callback_edits_before_it_moves_the_camera(
+    qt_app: QApplication,
+) -> None:
+    """Ein Zug auf Geometrie gehört der Auswahl, nicht der Kameranavigation."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport, _weak_callbacks
+
+    viewport = Viewport()
+    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
+    viewport._sketch_hit = lambda x, y: (float(x), float(y))
+    viewport.pull_handle_reach = lambda x, y: math.inf
+    viewport.sketch_pull_ready = lambda x, y: False
+    steps: list[object] = []
+    viewport.set_sketch_edit(
+        lambda point: True,
+        lambda point: steps.append(("start", point)) or True,
+        lambda point: steps.append(("move", point)),
+        lambda: steps.append("end"),
+    )
+
+    callbacks = _weak_callbacks(viewport)
+    assert callbacks.on_body_drag("ready", 4, 5)
+    assert callbacks.on_body_drag("start", 4, 5)
+    callbacks.on_body_drag("move", 8, 9)
+    callbacks.on_body_drag("end", 8, 9)
+
+    assert steps == [("start", (4.0, 5.0)), ("move", (8.0, 9.0)), "end"]
+
+
+def test_explicit_pull_handle_wins_over_sketch_editing(qt_app: QApplication) -> None:
+    """Der sichtbare Pfeil kann nicht in einen Auswahl- oder Kamerazug fallen."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport, _weak_callbacks
+
+    viewport = Viewport()
+    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
+    viewport._sketch_hit = lambda x, y: (float(x), float(y))
+    viewport.pull_handle_reach = lambda x, y: 0.0
+    viewport.sketch_pull_ready = lambda x, y: True
+    steps: list[str] = []
+    viewport.set_sketch_edit(
+        lambda point: True,
+        lambda point: steps.append("edit") or True,
+        lambda point: None,
+        lambda: None,
+    )
+    viewport.begin_sketch_pull = lambda x, y: steps.append("pull") or True
+    viewport.continue_sketch_pull = lambda x, y: None
+    viewport.finish_sketch_pull = lambda: None
+
+    callbacks = _weak_callbacks(viewport)
+    assert callbacks.on_body_drag("ready", 10, 10)
+    assert callbacks.on_body_drag("start", 10, 10)
+
+    assert steps == ["pull"]
+
+
+def test_sketch_render_state_keeps_selection_and_control_points_offscreen(
+    qt_app: QApplication,
+) -> None:
+    """Die Auswahl ist auch ohne VTK als Teil des sichtbaren Vertrags prüfbar."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    controls = ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0))
+    viewport.show_sketch(
+        flat_curves(),
+        frame,
+        selected_curves=(0,),
+        control_points=controls,
+        selected_points=(1,),
+    )
+
+    assert viewport._sketch_selected_curves == (0,)
+    assert viewport._sketch_control_points == controls
+    assert viewport._sketch_selected_points == (1,)

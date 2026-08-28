@@ -14,6 +14,7 @@ import math
 import os
 import weakref
 from collections.abc import Callable, Sequence
+from contextlib import suppress
 from itertools import pairwise
 from typing import Any, Final, Literal, NamedTuple, cast
 
@@ -307,13 +308,6 @@ MOST_GRID_LINES = 200
 #: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
 CURSOR_PIXELS = 10.0
 
-#: Wie weit ein mitfliegendes Zahlenfeld vom Zeiger wegsteht, in Bildpunkten.
-#:
-#: Nicht null: Läge es unter dem Zeiger, finge es die Mausbewegungen ab, und
-#: der Zug bliebe stehen. Nicht viel mehr: Der Sinn des Ganzen ist, dass Zahl
-#: und Zeigerspitze in **einem** Blick liegen — was weiter weg steht, ist
-#: wieder die Werkzeugzeile, nur an anderer Stelle.
-#:
 #: Länge des sichtbaren Ziehgriffs in Bildpunkten.
 #:
 #: Er bleibt beim Zoomen gleich groß wie ein Werkzeuggriff. Achtunddreißig
@@ -321,6 +315,56 @@ CURSOR_PIXELS = 10.0
 #: verschwinden, aber kurz genug, um neben einem kleinen Profil zu bleiben.
 PULL_HANDLE_PIXELS = 38.0
 
+#: Greifweite des ausdrücklichen Pfeil-/Kreuzgriffs in Bildpunkten.
+#:
+#: Der Griff ist eine primäre Handlung und keine dünne Kante. Vierzehn
+#: Bildpunkte geben ihm eine fehlertolerante Trefferfläche, ohne die
+#: Zeichnung daneben mitzunehmen. Der Umriss selbst behält die engere
+#: Fangweite von :data:`CURSOR_PIXELS`.
+PULL_HIT_PIXELS = 14.0
+
+#: Die drei Hauptansichten, die der Skizzenleiste entsprechen.
+SKETCH_VIEW_DIRECTIONS: dict[str, tuple[Vec3, Vec3]] = {
+    "plane:xy": VIEW_DIRECTIONS["top"],
+    "plane:xz": VIEW_DIRECTIONS["front"],
+    "plane:yz": VIEW_DIRECTIONS["right"],
+}
+
+
+def sketch_view_near(
+    position: Sequence[float],
+    focus: Sequence[float],
+    threshold_degrees: float = 10.0,
+) -> str | None:
+    """Nahe Hauptansicht der Kamera, sonst ``None`` für eine freie Ansicht.
+
+    Verglichen wird die Blickrichtung, nicht der Ort der Kamera. Dadurch
+    bleibt Schieben ohne Einfluss und nur das Kippen entscheidet. Die
+    Rückseiten rasten absichtlich nicht auf eine andersherum benannte
+    Vorder-, Seiten- oder Draufsicht ein.
+    """
+    direction = tuple(float(position[axis]) - float(focus[axis]) for axis in range(3))
+    length = math.sqrt(sum(value * value for value in direction))
+    if length <= EPS_GEOM:
+        return None
+    unit = tuple(value / length for value in direction)
+    best_plane = None
+    best_dot = -1.0
+    for plane, (wanted, _up) in SKETCH_VIEW_DIRECTIONS.items():
+        score = sum(unit[axis] * wanted[axis] for axis in range(3))
+        if score > best_dot:
+            best_plane, best_dot = plane, score
+    limit = math.cos(math.radians(max(0.0, threshold_degrees)))
+    return best_plane if best_dot >= limit else None
+
+
+#: Wie weit ein mitfliegendes Zahlenfeld vom Zeiger wegsteht, in Bildpunkten.
+#:
+#: Nicht null: Läge es unter dem Zeiger, finge es die Mausbewegungen ab, und
+#: der Zug bliebe stehen. Nicht viel mehr: Der Sinn des Ganzen ist, dass Zahl
+#: und Zeigerspitze in **einem** Blick liegen — was weiter weg steht, ist
+#: wieder die Werkzeugzeile, nur an anderer Stelle.
+#:
 #: **Zwei Felder hängen daran**, und deshalb steht die Zahl hier statt zweimal:
 #: das Maßfeld der Zeichenfläche (``sketch_editor.SketchCanvas._show_pointer``)
 #: und die Zahl zum Zug am Ziehgriff (:meth:`DragValueBar.place`). Dieselbe
@@ -411,13 +455,6 @@ def sketch_cursor(
     ]
 
 
-#: Wie viele Sprossen die Vorschau des Ziehgriffs je Kurve höchstens zeichnet.
-#:
-#: Die Sprossen sind die senkrechten Striche zwischen Umriss und angehobener
-#: Kopie — sie machen aus zwei Umrissen einen Körper. Bei einem Rechteck sind
-#: es fünf Punkte und damit fünf Sprossen, also alle; bei einem Kreis mit
-#: vierundsechzig Segmenten wären es vierundsechzig, und das ist keine
-#: Drahtform mehr, sondern eine Wand. Zwölf lesen sich als Körper und bleiben
 def pull_handle(
     frame: PlaneFrame, curves: Sequence[SketchCurve], size: float
 ) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
@@ -480,6 +517,13 @@ def pull_handle(
     ]
 
 
+#: Wie viele Sprossen die Vorschau des Ziehgriffs je Kurve höchstens zeichnet.
+#:
+#: Die Sprossen sind die senkrechten Striche zwischen Umriss und angehobener
+#: Kopie — sie machen aus zwei Umrissen einen Körper. Bei einem Rechteck sind
+#: es fünf Punkte und damit fünf Sprossen, also alle; bei einem Kreis mit
+#: vierundsechzig Segmenten wären es vierundsechzig, und das ist keine
+#: Drahtform mehr, sondern eine Wand. Zwölf lesen sich als Körper und bleiben
 #: durchsichtig genug, um die Zeichnung darunter zu sehen.
 MOST_PULL_RIBS = 12
 
@@ -1967,13 +2011,6 @@ class HoldToCompare(QWidget):
         return True
 
 
-class Viewport(QWidget):
-    """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
-
-    measurementTaken = Signal(object)
-    """A finished measurement — carries a ``Measurement``."""
-    transformDragged = Signal(object)
-    """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
 class SketchPlanePicker(QFrame):
     """Drei greifbare Ebenenkarten direkt im Bild.
 
@@ -2084,6 +2121,15 @@ class SketchSelectionBadge(QLabel):
         self.raise_()
 
 
+class Viewport(QWidget):
+    """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
+
+    measurementTaken = Signal(object)
+    """A finished measurement — carries a ``Measurement``."""
+    measurementStatus = Signal(str)
+    """Der nächste nötige Klick oder der Grund, warum keiner gezählt hat."""
+    transformDragged = Signal(object)
+    """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
     sketchMenuAt = Signal(object, int, int)
     """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
     und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
@@ -2102,6 +2148,8 @@ class SketchSelectionBadge(QLabel):
     Das Fenster macht daraus ``sketch_extrude``; die Ansicht ändert nie selbst
     Geometrie (Regel 2). Was während des Zugs im Bild steht, ist eine
     Drahtform (:func:`pull_cage`) und kein Dokumentzustand."""
+    sketchPlaneChosen = Signal(str)
+    """Eine der drei Ebenenkarten im Bild wurde angeklickt."""
     sketchPullBlocked = Signal(str)
     """Am Ziehgriff wurde gezogen, und es ging nicht — trägt den Grund.
 
@@ -2111,8 +2159,6 @@ class SketchSelectionBadge(QLabel):
     (:meth:`set_sketch_pull`)."""
     faceDragged = Signal(object, float)
     """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
-    sketchPlaneChosen = Signal(str)
-    """Eine der drei Ebenenkarten im Bild wurde angeklickt."""
     scaleDragged = Signal(float)
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
@@ -2157,6 +2203,12 @@ class SketchSelectionBadge(QLabel):
     Weite vom Betreten, der nächste Strich ließ sie springen. Gesendet wird
     **nach** der Bewegung, nie währenddessen; wer daran zeichnet, zeichnet
     einmal je Bewegung und nicht sechzigmal je Sekunde."""
+    sketchViewChanged = Signal(str)
+    """Eingerastete Skizzenansicht, oder leer für eine freie Kameralage.
+
+    Die Combo im Panel spiegelt dieses Signal. Vor dem ersten Element wird
+    daraus zugleich die Zeichenebene, danach ausschließlich die Ansicht.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2241,6 +2293,19 @@ class SketchSelectionBadge(QLabel):
         wächst. Beides steht in denselben Punkten, die :meth:`show_sketch`
         ohnehin bekommt — sie ein zweites Mal vom Fenster zu erfragen wäre die
         zweite Zahl für dieselbe Sache."""
+        self._sketch_selected_curves: tuple[int, ...] = ()
+        """Welche Kurven im letzten Skizzenbild ausgewählt gezeichnet wurden."""
+        self._sketch_control_points: tuple[Vec3, ...] = ()
+        """Greifpunkte der Skizze, unabhängig von der Kurvenabtastung."""
+        self._sketch_selected_points: tuple[int, ...] = ()
+        """Ausgewählte flache Punktindizes für die größere Griffdarstellung."""
+        self._sketch_edit_ready: Callable[[tuple[float, float]], bool] | None = None
+        self._sketch_edit_begin: Callable[[tuple[float, float]], bool] | None = None
+        self._sketch_edit_move: Callable[[tuple[float, float]], None] | None = None
+        self._sketch_edit_end: Callable[[], None] | None = None
+        """Die vier Phasen eines Skizzenzugs im sichtbaren Viewport."""
+        self._sketch_gesture: Literal["pull", "edit"] | None = None
+        """Welcher Griff den laufenden Linkszug besitzt."""
         self._sketch_pull_offer: Callable[[], str] | None = None
         """Ob der Ziehgriff gerade angeboten wird — vom Fenster gesetzt.
 
@@ -2498,6 +2563,10 @@ class SketchSelectionBadge(QLabel):
         self.drag_bar = DragValueBar(self)
         """Die Zahl zum Zug (§18.11): lesen beim Ziehen, tippen statt zielen."""
         self.drag_bar.value.installEventFilter(self)
+        self.plane_picker = SketchPlanePicker(self)
+        """Die drei greifbaren Grundebenen beim freien Einstieg."""
+        self.sketch_selection = SketchSelectionBadge(self)
+        """Was in der Skizze gewählt ist — ruhig am Bildrand."""
         self._compare = HoldToCompare(self)
         """Der Filter für die Leertaste. Er hängt an der Anwendung, solange das
         Band steht — nicht länger, sonst schluckt er anderswo Leerzeichen."""
@@ -2508,10 +2577,6 @@ class SketchSelectionBadge(QLabel):
                 QLabel(tr("Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung."), self)
             )
             return
-        self.plane_picker = SketchPlanePicker(self)
-        """Die drei greifbaren Grundebenen beim freien Einstieg."""
-        self.sketch_selection = SketchSelectionBadge(self)
-        """Was in der Skizze gewählt ist — ruhig am Bildrand."""
 
         from pyvistaqt import QtInteractor
 
@@ -2569,6 +2634,7 @@ class SketchSelectionBadge(QLabel):
         def on_end(*_: Any) -> None:
             view = weak()
             if view is not None:
+                view._settle_sketch_view()
                 view._redraw_shadows()
                 # Dreh- und Schiebezüge enden hier; der Radzoom meldet sich
                 # selbst (``on_camera`` im Interaktionsstil), weil er kein
@@ -2576,6 +2642,32 @@ class SketchSelectionBadge(QLabel):
                 view.cameraMoved.emit()
 
         self.plotter.interactor.AddObserver("EndInteractionEvent", on_end)
+
+    def _settle_sketch_view(self) -> str | None:
+        """Eine nahe Hauptansicht einrasten und ihren Namen melden.
+
+        Nur im Skizzenmodus: Außerhalb soll eine frei gedrehte Modellansicht
+        frei bleiben. Abstand, Fokus und Parallelmaßstab ändern sich nicht;
+        das Einrasten korrigiert ausschließlich die letzten wenigen Grad.
+        """
+        if self._sketch_frame is None or self.plotter is None:
+            return None
+        camera = getattr(self.plotter, "camera", None)
+        position = getattr(camera, "position", None)
+        focus = getattr(camera, "focal_point", None)
+        if position is None or focus is None:
+            return None
+        plane = sketch_view_near(position, focus)
+        if plane is not None:
+            direction, up = SKETCH_VIEW_DIRECTIONS[plane]
+            distance = max(math.dist(tuple(position), tuple(focus)), EPS_GEOM)
+            snapped = tuple(float(focus[axis]) + direction[axis] * distance for axis in range(3))
+            self.plotter.camera_position = [snapped, tuple(focus), up]
+            with suppress(Exception):  # pragma: no cover - hängt an der VTK-Version
+                self.plotter.renderer.ResetCameraClippingRange()
+            self.plotter.render()
+        self.sketchViewChanged.emit(plane or "")
+        return plane
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -3774,6 +3866,8 @@ class SketchSelectionBadge(QLabel):
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
+        self.plane_picker.set_theme(theme)
+        self.sketch_selection.set_theme(theme)
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
@@ -3784,8 +3878,6 @@ class SketchSelectionBadge(QLabel):
         # Bett und Bauraum sind eigene Aktoren, und ``show_scene`` baut sie nur
         # bei geänderter Plattenzahl neu — ein Themenwechsel ließe sie sonst in
         # den alten Farben stehen, bis die nächste Auswertung kommt: eine fast
-        self.plane_picker.set_theme(theme)
-        self.sketch_selection.set_theme(theme)
         # schwarze Bettfläche auf hellem Grund.
         if self._profile is not None:
             self.show_build_volume(self._profile)
@@ -4068,23 +4160,27 @@ class SketchSelectionBadge(QLabel):
         die Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
         """
         if self._sketch_frame is not None:
-            # **Und über dem Ziehgriff sagt er, dass man ziehen kann** (§30.1).
-            # Ohne das findet die Geste niemand: In der Querschau sieht der
-            # Umriss aus wie ein Strich, und dass er ein Griff ist, stünde
-            # nirgends. Gefragt wird dieselbe Kette wie beim Drücken
-            # (:meth:`sketch_pull_ready` über `grip_reach`) — ein Zeiger, der
-            # eine andere Rechnung nimmt, verspricht etwas, das nicht eintritt.
-            if (
-                self._hover_at is not None
-                and self._sketch_pull_offer is not None
-                and self._sketch_pull_offer() == "ready"
-                and min(
-                    self.grip_reach(*self._hover_at),
-                    self.pull_handle_reach(*self._hover_at),
+            if self._hover_at is not None:
+                x, y = self._hover_at
+                ready_to_pull = (
+                    self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready"
                 )
-                <= CURSOR_PIXELS
-            ):
-                return "move"
+                # Der ausdrückliche Pfeil/Kreuz-Griff gewinnt immer. So kann
+                # seine sichtbare Fläche nicht in einen Kamerazug fallen.
+                if ready_to_pull and self.pull_handle_reach(x, y) <= PULL_HIT_PIXELS:
+                    return "move"
+                # Danach vorhandene Geometrie: Im Auswahlwerkzeug bedeutet
+                # ein Griff auf Linie oder Punkt bearbeiten, nicht die Kamera
+                # bewegen und nicht versehentlich eine Höhe ziehen.
+                hit = self._sketch_hit(x, y)
+                if (
+                    hit is not None
+                    and self._sketch_edit_ready is not None
+                    and self._sketch_edit_ready(hit)
+                ):
+                    return "move"
+                if ready_to_pull and self.grip_reach(x, y) <= CURSOR_PIXELS:
+                    return "move"
             # **Ganz vorn, wie im Klick selbst.** Im Skizzenmodus meint jeder
             # Klick eine Stelle auf der Ebene; ein Zeiger, der daneben ein
             # Merkmal verspricht, verspricht etwas, das nicht eintritt. Die
@@ -4687,7 +4783,11 @@ class SketchSelectionBadge(QLabel):
         faces = np.hstack(
             [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
         ).ravel()
-        feature = entry.features.get(self._selected_feature)
+        feature = (
+            entry.features.get(self._selected_feature)
+            if self._selected_feature is not None
+            else None
+        )
         hole_surface = feature is not None and feature.kind == "hole"
         side_kwargs: dict[str, Any] = (
             {
@@ -5436,6 +5536,8 @@ class SketchSelectionBadge(QLabel):
         self.banner.place()
         self.view_bar.place()
         self.drag_bar.place()
+        self.plane_picker.place()
+        self.sketch_selection.place()
         self._place_orientation_widget()
 
     def _place_orientation_widget(self) -> None:
@@ -5491,8 +5593,6 @@ class SketchSelectionBadge(QLabel):
         # tausende Konturen, und ebenso viele einzelne ``add_lines``-Aufrufe
         # machten aus einem Schieberschritt Sekunden — VTK zahlt je Actor,
         # nicht je Linie.
-        self.plane_picker.place()
-        self.sketch_selection.place()
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
@@ -6238,6 +6338,10 @@ class SketchSelectionBadge(QLabel):
         frame: PlaneFrame,
         step: float = 0.0,
         reach: float = 0.0,
+        *,
+        selected_curves: Sequence[int] = (),
+        control_points: Sequence[Vec3] = (),
+        selected_points: Sequence[int] = (),
     ) -> None:
         """Die Skizze und ihr Raster in die Szene legen (§30.1, Stufe zwei).
 
@@ -6269,6 +6373,9 @@ class SketchSelectionBadge(QLabel):
         # Eine Zuweisung hinter dem ``return`` prüfte in der Suite niemand
         # (§35).
         self._sketch_curves = tuple(curves)
+        self._sketch_selected_curves = tuple(selected_curves)
+        self._sketch_control_points = tuple(control_points)
+        self._sketch_selected_points = tuple(selected_points)
         if self.plotter is None:
             return
         import numpy as np
@@ -6290,11 +6397,14 @@ class SketchSelectionBadge(QLabel):
                 )
             )
 
+        selected_curve_set = set(selected_curves)
         for construction in (False, True):
             chosen = [
                 curve
-                for curve in curves
-                if curve.construction is construction and len(curve.points) > 1
+                for index, curve in enumerate(curves)
+                if index not in selected_curve_set
+                and curve.construction is construction
+                and len(curve.points) > 1
             ]
             if chosen:
                 drawn = np.asarray(
@@ -6319,7 +6429,38 @@ class SketchSelectionBadge(QLabel):
                     )
                 )
 
+        chosen_curves = [
+            curve
+            for index, curve in enumerate(curves)
+            if index in selected_curve_set and len(curve.points) > 1
+        ]
+        if chosen_curves:
+            drawn = np.asarray(
+                [point for curve in chosen_curves for point in curve.points], dtype=float
+            )
+            self._sketch_actors.append(
+                self.plotter.add_mesh(
+                    pv.PolyData(
+                        drawn,
+                        lines=polyline_spans([len(curve.points) for curve in chosen_curves]),
+                    ),
+                    color=SELECTED_COLOUR,
+                    # Breite ist die zweite Kodierung neben der Farbe: Auch
+                    # ohne Farbunterscheidung bleibt klar, was gewählt ist.
+                    line_width=4,
+                    name="sketch_selected_lines",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+
         single = [curve.points[0] for curve in curves if len(curve.points) == 1]
+        if control_points:
+            # Dieselben Punkte kommen gleich als greifbare Kontrollpunkte;
+            # ein Punkt-Element zweimal übereinander zu zeichnen macht es nur
+            # ungleich groß, ohne eine zusätzliche Aussage zu tragen.
+            single = []
         if single:
             self._sketch_actors.append(
                 self.plotter.add_points(
@@ -6328,6 +6469,39 @@ class SketchSelectionBadge(QLabel):
                     point_size=SKETCH_POINT_PIXELS,
                     render_points_as_spheres=True,
                     name="sketch_points",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        selected_point_set = set(selected_points)
+        plain_controls = [
+            point for index, point in enumerate(control_points) if index not in selected_point_set
+        ]
+        chosen_controls = [
+            point for index, point in enumerate(control_points) if index in selected_point_set
+        ]
+        if plain_controls:
+            self._sketch_actors.append(
+                self.plotter.add_points(
+                    np.asarray(plain_controls, dtype=float),
+                    color=self._sketch_colour,
+                    point_size=7,
+                    render_points_as_spheres=True,
+                    name="sketch_control_points",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        if chosen_controls:
+            self._sketch_actors.append(
+                self.plotter.add_points(
+                    np.asarray(chosen_controls, dtype=float),
+                    color=SELECTED_COLOUR,
+                    point_size=14,
+                    render_points_as_spheres=True,
+                    name="sketch_selected_points",
                     render=False,
                     reset_camera=False,
                     pickable=False,
@@ -6862,6 +7036,7 @@ class SketchSelectionBadge(QLabel):
         self,
         offer: Callable[[], str] | None,
         limits: tuple[float, float] = (0.0, 0.0),
+        cut_limits: tuple[float, float] | None = None,
     ) -> None:
         """Verdrahtet den Ziehgriff des Skizzenmodus.
 
@@ -6917,7 +7092,6 @@ class SketchSelectionBadge(QLabel):
     def grip_reach(self, x: int, y: int) -> float:
         """Wie weit diese Bildstelle vom Umriss der Zeichnung entfernt ist.
 
-        cut_limits: tuple[float, float] | None = None,
         In Bildpunkten, und über **alle** Kurven: Der Griff ist der Umriss
         selbst. In der Querschau liegt er als Strich im Bild — dort ist „am
         Umriss" eine Handbreit Genauigkeit und keine Zielübung.
@@ -6972,7 +7146,7 @@ class SketchSelectionBadge(QLabel):
 
     def _pull_handle_base(self, x: int, y: int) -> tuple[float, float] | None:
         """Der Fuß des Griffs, wenn Pfeil oder Kreuz getroffen wurden."""
-        if self._sketch_frame is None or self.pull_handle_reach(x, y) > CURSOR_PIXELS:
+        if self._sketch_frame is None or self.pull_handle_reach(x, y) > PULL_HIT_PIXELS:
             return None
         handle = self._pull_handle_segments()
         if not handle:
@@ -7016,7 +7190,7 @@ class SketchSelectionBadge(QLabel):
         if self._sketch_frame is None or self._sketch_pull_offer is None:
             return False
         on_outline = self.grip_reach(x, y) <= CURSOR_PIXELS
-        on_handle = self.pull_handle_reach(x, y) <= CURSOR_PIXELS
+        on_handle = self.pull_handle_reach(x, y) <= PULL_HIT_PIXELS
         if not on_outline and not on_handle:
             return False
         base = self.pull_base_at(x, y)
@@ -7101,9 +7275,6 @@ class SketchSelectionBadge(QLabel):
         """
         if self._sketch_frame is None:
             return None
-        handle_base = self._pull_handle_base(x, y)
-        if handle_base is not None:
-            return handle_base
         best: tuple[float, float] | None = None
         closest = math.inf
         for curve in self._sketch_curves:
@@ -7164,6 +7335,8 @@ class SketchSelectionBadge(QLabel):
 
     def _show_pull_cage(self) -> None:
         """Legt die Drahtform des Zugs in die Szene — oder nimmt sie weg."""
+        actors = tuple(self._pull_actors)
+        self._pull_actors.clear()
         if self.plotter is None:
             return
         for actor in actors:
@@ -7263,6 +7436,10 @@ class SketchSelectionBadge(QLabel):
         self._show_pull_cage()
         self.set_drag_cursor(None)
 
+    def cancel_sketch_pull(self) -> None:
+        """Verwirft die Drahtvorschau, wenn das Fenster den Zug ablehnt."""
+        self._end_pull()
+
     def _undo_body_preview(self) -> None:
         """Setzt gezogene Aktoren an ihren Ausgangsort zurück."""
         for object_id, home in self._actor_home.items():
@@ -7298,10 +7475,6 @@ class SketchSelectionBadge(QLabel):
         # schwebt auf der vorigen Ebene im Raum, bis die Maus sich das nächste
         # Mal bewegt. Wer die Ebene über die Ziffern wechselt und die Hand
         # stillhält, sieht genau das.
-    def cancel_sketch_pull(self) -> None:
-        """Verwirft die Drahtvorschau, wenn das Fenster den Zug ablehnt."""
-        self._end_pull()
-
         self.show_sketch_cursor(None)
         # **Der Boden des Bauraums tritt ab, seine Kanten bleiben.** Zwei
         # Gitter übereinander sind eines zu viel: Bettraster und Zeichenraster
@@ -7338,6 +7511,26 @@ class SketchSelectionBadge(QLabel):
         """
         self._sketch_measure_pending = pending
         self._sketch_measure_begin = begin
+
+    def set_sketch_edit(
+        self,
+        ready: Callable[[tuple[float, float]], bool] | None,
+        begin: Callable[[tuple[float, float]], bool] | None,
+        move: Callable[[tuple[float, float]], None] | None,
+        end: Callable[[], None] | None,
+    ) -> None:
+        """Auswählen und Ziehen der Skizzengeometrie im Viewport verdrahten.
+
+        Die Ansicht übersetzt nur Mausstellen in Ebenenkoordinaten und führt
+        die Geste. Auswahl, Fang, Solver und Undo bleiben beim Canvas. Vier
+        ``None`` lösen die Verbindung beim Verlassen des Modus vollständig.
+        """
+        self._sketch_edit_ready = ready
+        self._sketch_edit_begin = begin
+        self._sketch_edit_move = move
+        self._sketch_edit_end = end
+        if ready is None:
+            self._sketch_gesture = None
 
     def sketch_screen_at(self, point: tuple[float, float]) -> QPoint | None:
         """Wo eine Stelle der Zeichenebene im Bild liegt — in Qt-Logikpunkten.
@@ -7590,19 +7783,62 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         # Körperzug schon einmal hatte.
         if found._sketch_frame is not None:
             if phase == "ready":
-                return found.sketch_pull_ready(x, y)
+                found._sketch_gesture = None
+                # Der gezeichnete Pfeil und das Kreuz sind der ausdrückliche
+                # Höhen-Griff. Sie haben Vorrang vor jeder Kurve, die im Bild
+                # zufällig darunterliegt, und vor der Kameranavigation.
+                if found.pull_handle_reach(x, y) <= PULL_HIT_PIXELS and found.sketch_pull_ready(
+                    x, y
+                ):
+                    found._sketch_gesture = "pull"
+                    return True
+                point = found._sketch_hit(x, y)
+                if (
+                    point is not None
+                    and found._sketch_edit_ready is not None
+                    and found._sketch_edit_ready(point)
+                ):
+                    found._sketch_gesture = "edit"
+                    return True
+                if found.sketch_pull_ready(x, y):
+                    found._sketch_gesture = "pull"
+                    return True
+                return False
             if phase == "start":
+                if found._sketch_gesture == "edit":
+                    point = found._sketch_hit(x, y)
+                    started = bool(
+                        point is not None
+                        and found._sketch_edit_begin is not None
+                        and found._sketch_edit_begin(point)
+                    )
+                    if not started:
+                        # Zwischen Vorprüfung und Zugbeginn kann sich die
+                        # Auswahl ändern. Dann darf die abgewiesene Geste
+                        # keinen späteren Mauszug mehr als Bearbeitung deuten.
+                        found._sketch_gesture = None
+                    return started
                 return found.begin_sketch_pull(x, y)
             if phase == "move":
-                found.continue_sketch_pull(x, y)
+                if found._sketch_gesture == "edit":
+                    point = found._sketch_hit(x, y)
+                    if point is not None and found._sketch_edit_move is not None:
+                        found._sketch_edit_move(point)
+                else:
+                    found.continue_sketch_pull(x, y)
                 return True
-            found.finish_sketch_pull()
+            if found._sketch_gesture == "edit":
+                if found._sketch_edit_end is not None:
+                    found._sketch_edit_end()
+            else:
+                found.finish_sketch_pull()
+            found._sketch_gesture = None
             return True
         if phase == "ready":
             # Nur die Frage, ob hier der gewählte Körper liegt — der Zug
             # beginnt erst, wenn die Bewegung die Klickschwelle verlässt.
-            point = found._world_at(x, y) if found.plotter is not None else None
-            return found.can_drag_body_at(point)
+            world_point = found._world_at(x, y) if found.plotter is not None else None
+            return found.can_drag_body_at(world_point)
         if phase == "start":
             return found.begin_body_drag(x, y)
         if phase == "move":
