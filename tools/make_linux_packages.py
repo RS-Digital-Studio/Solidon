@@ -393,7 +393,11 @@ def flatpak_manifest() -> str:
 
     Die Berechtigungen sind so knapp wie möglich, und jede hat einen Grund:
 
-    * ``--socket=wayland`` und ``--socket=fallback-x11`` — die Oberfläche.
+    * ``--socket=x11`` — die Oberfläche. Der eingebettete VTK-Viewport braucht
+      den X11-Display auch in einer Wayland-Sitzung. ``fallback-x11`` gäbe ihn
+      dort gerade nicht frei; im Flatpak blieb ``DISPLAY`` leer und VTK brach
+      beim ersten Modell ab. Auch Qt läuft deshalb über Xwayland: zwei
+      Fenstersysteme innerhalb eines Fensters sind keine stabile Kombination.
     * ``--device=dri`` — der Viewport rechnet mit OpenGL (§18).
     * ``--filesystem=home`` — Modelle liegen beim Nutzer, und ein Dateidialog,
       der nur in einen Sandkasten sehen darf, ist kein Dateidialog. Portale
@@ -452,8 +456,7 @@ def flatpak_manifest() -> str:
     permissions = "\n".join(
         f"  - {entry}"
         for entry in (
-            "--socket=wayland",
-            "--socket=fallback-x11",
+            "--socket=x11",
             "--share=ipc",
             "--share=network",
             "--device=dri",
@@ -777,9 +780,10 @@ def main() -> int:
         action="store_true",
         help="nur die Beschreibungen schreiben, nichts bauen (läuft überall)",
     )
-    # Die drei Formate einzeln, weil die CI sie an verschiedenen Stellen baut:
-    # das Archiv gilt als gesetzt, die beiden anderen dürfen scheitern, ohne
-    # es mitzunehmen. Ohne Angabe entstehen alle drei.
+    # Die drei Formate einzeln, weil die CI das interne Archiv getrennt von den
+    # beiden öffentlichen Paketen baut. Ein Fehler in AppImage oder Flatpak
+    # macht den Linux-Zweig rot; Windows und macOS laufen in eigenen Zweigen
+    # weiter. Ohne Angabe entstehen alle drei.
     parser.add_argument("--tarball", action="store_true", help="nur das Archiv mit install.sh")
     parser.add_argument("--appimage", action="store_true", help="nur das AppImage")
     parser.add_argument("--flatpak", action="store_true", help="nur das Flatpak")

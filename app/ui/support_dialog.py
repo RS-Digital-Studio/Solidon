@@ -605,7 +605,12 @@ class SupportDialog(QDialog):
         dort die Sackgasse hinter dem Programmfehler.
         """
         running = self._worker is not None and self._worker.isRunning()
-        has_content = bool(self.message.toPlainText().strip() or self.detail.strip())
+        # Der Bogen baut seinen Text aus Bewertung, Antworten und dem freien
+        # Nachtrag. Die Felder sind ausdrücklich optional; „optional" heißt
+        # aber nicht, dass eine einzelne Antwort im unsichtbaren Teil des
+        # Formulars den Senden-Knopf nicht freischaltet. Maßgeblich ist daher
+        # dieselbe Sendung, die ``_start`` anschließend prüft und verschickt.
+        has_content = bool(self.ticket().message.strip() or self.detail.strip())
         self.send.setEnabled(has_content and not running)
 
     # --- Senden -----------------------------------------------------------------

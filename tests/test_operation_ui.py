@@ -261,6 +261,31 @@ def test_a_number_can_be_bound_in_the_dialog(qt_app: QApplication) -> None:
     assert "30" in field.hint.text(), f"der Hinweis rechnet mit: {field.hint.text()!r}"
 
 
+def test_the_at_button_binds_an_operation_without_typing_a_name(qt_app: QApplication) -> None:
+    """Der sichtbare @-Weg erspart Syntax und Tippfehler im Operationsdialog."""
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(
+        spec,
+        [],
+        None,
+        parameter_values={"breite": 60.0, "hoehe": 20.0},
+    )
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.click()
+    assert field.parameter_button.isVisibleTo(field)
+    menu = field.parameter_button.menu()
+    assert menu is not None
+    choices = {action.data(): action for action in menu.actions()}
+    choices["breite"].trigger()
+
+    assert field.text.text() == "=@breite"
+    assert dialog.values()["width"] == "=@breite"
+
+
 def test_an_emptied_expression_falls_back_to_the_number(qt_app: QApplication) -> None:
     """Ein leeres Ausdrucksfeld darf keinen unlesbaren Parameter erzeugen."""
     from app.ui.op_dialog import ValueField

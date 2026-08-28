@@ -1497,6 +1497,7 @@ class MainWindow(QMainWindow):
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
+        self.parameters.parameterUnitEdited.connect(self._on_parameter_unit_edited)
         self.parameters.addRequested.connect(self.action_add_parameter)
         self.parameters.limitsRequested.connect(self.action_edit_parameter)
         self.right.setVisible(self.settings.right_panel_visible)
@@ -2797,8 +2798,8 @@ class MainWindow(QMainWindow):
         if not later:
             return hint
         warning = tr(
-            "Darüber liegen {zahl} Schritte, die einen exakten Körper brauchen. "
-            "Ohne den Haken halten sie an."
+            "Darüber liegen {zahl} Schritte, die einzeln bearbeitbare Flächen und "
+            "Kanten brauchen. Ohne diese Option halten sie an."
         ).format(zahl=len(later))
         return f"{hint}\n\n{warning}"
 
@@ -7804,6 +7805,24 @@ class MainWindow(QMainWindow):
             self.parameters.show_document(self.session.project.document)
             return
         self.session.change_parameter(name, value)
+
+    def _on_parameter_unit_edited(self, name: str, unit: str) -> None:
+        """Die feste Einheitenauswahl als rücknehmbare Dokumentänderung.
+
+        Auch sie kommt erst nach dem Qt-Signal der Auswahl hier an. Der
+        anschließende Neuaufbau der Leiste darf den gerade angeklickten Kasten
+        nicht während seines eigenen Signals freigeben — derselbe Absturzpfad
+        wie bei der Zahl links daneben.
+        """
+        if self.session.history.discardable and not confirm_discard(
+            self.session.history.discardable, self._discarded_names(), self
+        ):
+            self.parameters.show_document(self.session.project.document)
+            return
+        existing = self.session.project.document.parameters.get(name)
+        if existing is None:
+            return
+        self.session.edit_parameter(name, replace(existing, unit=unit))
 
     # --- start ------------------------------------------------------------------
 

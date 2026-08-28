@@ -88,6 +88,17 @@ STAT = re.compile(r"<div><b>(\d+)</b><span>([^<]+)</span></div>")
 #: nicht dazu.
 LINK = re.compile(r'(?:src|href)="([^"]+)"')
 
+#: Die einzige absichtliche Außenadresse: Sie wird ausschließlich nach einem
+#: Klick auf „Mit PayPal spenden“ geöffnet. Beim Laden der Website bleibt sie
+#: komplett außen vor; ein eingebundenes PayPal-Skript wäre keine gleichwertige
+#: Alternative, weil es jeden Besuch an den Zahlungsdienst meldete.
+PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"
+
+#: PayPal verarbeitet die Zahlungsdaten erst auf seiner eigenen Seite. Wer
+#: den Weg anbietet, muss dort trotzdem direkt zu den Einzelheiten führen —
+#: nicht zu einer Suchseite und nicht nur zum allgemeinen Hilfezentrum.
+PAYPAL_PRIVACY_URL = "https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE"
+
 #: Die Registergröße im Fließtext: eine Zahl, dahinter das Wort für Operation.
 #: Der Stamm trägt durch alle sechs Sprachen — Operationen, operations,
 #: operaciones, opérations, operazioni, operações. Eine siebte Sprache ist
@@ -495,7 +506,14 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
         )
         assert allowed, f"{page} bindet ein Skript ein, das nicht von hier kommt: {tag}"
     assert 'src="http' not in text
-    assert 'href="http' not in text.replace('href="https://solidon3d.de', "")
+    external_hrefs = [
+        reference
+        for reference in LINK.findall(text)
+        if reference.startswith("http") and not reference.startswith("https://solidon3d.de")
+    ]
+    assert all(reference == PAYPAL_DONATE_URL for reference in external_hrefs), (
+        f"{page} verweist auf eine nicht freigegebene Außenadresse: {external_hrefs}"
+    )
     # Protokollrelativ, also ohne ``http`` im Text — die beiden Zeilen darüber
     # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
     assert 'src="//' not in text, f"{page} lädt protokollrelativ von außen"
@@ -735,7 +753,8 @@ def test_the_questions_are_marked_up_the_way_they_are_written(page: str) -> None
     Rich Result zeigt, ist dann nicht, was dort steht.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    written = len(re.findall(r"<summary>", text))
+    # Die kompakten technischen Hinweise im Download-Kasten sind kein FAQ.
+    written = len(re.findall(r"<summary>", text)) - text.count('<details class="download-notes">')
     marked = len(re.findall(r'"@type": "Question"', text))
     assert written == marked, f"{page}: {written} Fragen geschrieben, {marked} ausgezeichnet"
 
@@ -782,6 +801,63 @@ START_PAGES = ("index.html", *(f"{code}/index.html" for code in ("en", "es", "fr
 
 
 @pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_makes_the_no_cad_promise_visible(page: str) -> None:
+    """Die Eintrittshürde steht am Aufmacher, nicht erst in den Fragen unten."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    kicker = re.search(r'<p class="hero-kicker">([^<]+)</p>', text)
+    assert kicker and kicker.group(1).strip(), f"{page}: der Nutzen ohne CAD fehlt am Aufmacher"
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None:
+    """Jede Sprache zeigt denselben freiwilligen, skriptfreien Spendenweg."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    links = re.findall(r'<a class="donate-button" href="([^"]+)"', text)
+    assert links == [PAYPAL_DONATE_URL], (
+        f"{page}: der Spendenknopf fehlt, ist mehrfach da oder trägt eine andere Adresse: {links}"
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_paypal_donation_says_what_it_does_not_buy(page: str) -> None:
+    """Freiwillig steht nicht nur im Konzept, sondern unmittelbar am Knopf."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    block = re.search(
+        r'<div class="donate">(.*?)</div>\s*<ul class="assure">', text, re.DOTALL
+    )
+
+    assert block is not None, f"{page}: der Spendenblock fehlt"
+    assert block.group(1).count('class="donate-terms"') == 1, (
+        f"{page}: der rechtliche Hinweis am Spendenknopf fehlt oder steht mehrfach da"
+    )
+    assert 'href="/datenschutz.html"' in block.group(1), (
+        f"{page}: der Spendenweg erklärt seine Datenverarbeitung nicht"
+    )
+
+
+def test_the_privacy_page_names_paypal_before_any_payment() -> None:
+    """Der externe Verweis spart das Einbetten, nicht die Information darüber."""
+    text = (WEBSITE / "datenschutz.html").read_text(encoding="utf-8")
+
+    assert "Freiwillige Spende über PayPal" in text
+    assert PAYPAL_PRIVACY_URL in text
+    assert "Beim Laden unserer Website wird keine Verbindung" in text
+    assert "keine Bestellung" in text and "nicht auf einen späteren Kauf angerechnet" in text
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_download_technical_notes_stay_collapsible(page: str) -> None:
+    """Der erste Eindruck bleibt beim Download, Details sind trotzdem erreichbar."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    notes = re.search(r'<details class="download-notes">(.*?)</details>', text, re.DOTALL)
+    assert notes is not None, f"{page}: die technischen Download-Hinweise sind nicht einklappbar"
+    assert "<summary>" in notes.group(1), f"{page}: die Hinweise haben keine sichtbare Beschriftung"
+    assert "data-release-show" in notes.group(1), (
+        f"{page}: die Hinweise für Installation und Updates stehen wieder ungebremst im Einstieg"
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
 def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     """Am Erscheinungstag muss der Kasten umschalten können, in jeder Sprache.
 
@@ -823,6 +899,21 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     assert "data-release-href" not in schluss.split("</div>")[0], (
         f"{page}: der Kontaktweg im Schlussabschnitt würde zum Ladeknopf"
     )
+
+
+def test_the_next_linux_release_offers_appimage_and_flatpak_but_not_the_archive() -> None:
+    """Linux bekommt einen einfachen und einen verwalteten Weg, kein Terminalarchiv.
+
+    Das AppImage startet nach dem Setzen des Ausführrechts direkt, das Flatpak
+    bleibt für die verwaltete Installation. Das tar.gz baut die CI weiterhin,
+    ist aber kein Angebot an jemanden, der gerade einfach loslegen will.
+    """
+    from tools.make_download import DELIVERED, delivery_slot
+
+    assert delivery_slot("Solidon3D-0.2.2-x86_64.AppImage") == "Linux AppImage"
+    assert delivery_slot("Solidon3D-0.2.2-x86_64.flatpak") == "Linux Flatpak"
+    assert delivery_slot("Solidon3D-0.2.2-linux-x86_64.tar.gz") == ""
+    assert len(DELIVERED) == 5, "Windows, zweimal Linux und beide Mac-Architekturen"
 
 
 def test_no_two_values_share_a_spot_and_a_moment() -> None:

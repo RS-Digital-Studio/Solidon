@@ -80,7 +80,7 @@ class BrepBoxParams(BaseParams):
 
 @register_op(
     name="create_brep_box",
-    title=_("Exakten Quader anlegen"),
+    title=_("Quader anlegen"),
     category="primitive",
     params=BrepBoxParams,
     consumes=0,
@@ -105,7 +105,7 @@ class BrepCylinderParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Als exakter Körper ist er wirklich rund, nicht vieleckig."),
+        doc=_("Außendurchmesser. Der Kreis bleibt auch beim Vergrößern wirklich rund."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -125,7 +125,7 @@ class BrepCylinderParams(BaseParams):
 
 @register_op(
     name="create_brep_cylinder",
-    title=_("Exakten Zylinder anlegen"),
+    title=_("Zylinder anlegen"),
     category="primitive",
     params=BrepCylinderParams,
     consumes=0,
@@ -163,8 +163,8 @@ class LoadStepParams(BaseParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Liest eine STEP-Datei als exakten Körper. STEP trägt seine Einheit selbst — "
-        "die Einheitenfrage entfällt."
+        "Liest eine STEP-Datei mit einzeln bearbeitbaren Flächen und Kanten. "
+        "STEP trägt seine Einheit selbst — die Einheitenfrage entfällt."
     ),
 )
 def load_step(ctx: OpContext) -> OpResult:
@@ -194,7 +194,7 @@ def load_step(ctx: OpContext) -> OpResult:
             Finding(
                 code="brep.loaded",
                 severity="info",
-                message=_("Ein exakter Körper mit benannten Flächen und Kanten."),
+                message=_("Flächen und Kanten lassen sich einzeln weiterbearbeiten."),
                 values={"faces": solid.face_count, "edges": solid.edge_count},
             )
         ],
@@ -231,8 +231,8 @@ class FilletParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Verrundet Kanten eines exakten Körpers — geometrisch genau, weil die "
-        "Kante eine Kurve ist und keine Folge von Segmenten."
+        "Verrundet eine bearbeitbare Kante als echte Kurve statt als Folge "
+        "gerader Abschnitte."
     ),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
@@ -268,7 +268,7 @@ class ChamferParams(BaseParams):
     params=ChamferParams,
     consumes=1,
     produces=1,
-    doc=_("Bricht Kanten eines exakten Körpers unter 45 Grad."),
+    doc=_("Schrägt bearbeitbare Kanten unter 45 Grad ab."),
 )
 def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
@@ -295,15 +295,15 @@ class ShellParams(BaseParams):
 @register_op(
     name="shell_exact",
     requires_kind="brep",
-    title=_("Exakt aushöhlen"),
+    title=_("Aushöhlen"),
     category="shaping",
     params=ShellParams,
     consumes=1,
     produces=1,
     doc=_(
-        "Höhlt einen exakten Körper auf eine genaue Wandstärke aus und lässt die "
-        "Oberseite offen — ein Kasten aus einem Quader, in einem Schritt. Für "
-        "geschlossenes Aushöhlen mit Entlüftung gibt es die Netz-Operation."
+        "Höhlt einen Körper mit bearbeitbaren Flächen auf die gewählte Wandstärke "
+        "aus und lässt die Oberseite offen — ein Kasten aus einem Quader, in einem "
+        "Schritt. Für geschlossenes Aushöhlen mit Entlüftung die Option abwählen."
     ),
     # Der Entlüftungshinweis der Netz-Operation gilt hier nicht: Die Oberseite
     # bleibt offen, es entsteht kein eingeschlossener Hohlraum. Der zweite Satz
@@ -371,7 +371,7 @@ class DraftParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Stellt alle senkrechten Flächen eines exakten Körpers um einen Winkel "
+        "Stellt alle senkrechten, einzeln bearbeitbaren Flächen um einen Winkel "
         "an — zum Entformen, oder damit ein Stapelbehälter sich stapeln lässt."
     ),
 )
@@ -421,7 +421,7 @@ class ThreadParams(BaseParams):
 
 @register_op(
     name="thread_exact",
-    title=_("Gewindebolzen als neues Objekt"),
+    title=_("Schraube erstellen"),
     # „primitive" und nicht „shaping": Der Bolzen verbraucht nichts und
     # erzeugt einen Körper — dasselbe wie der exakte Quader und der exakte
     # Zylinder daneben. Unter *Ändern → Formgebung* war er der einzige
@@ -432,7 +432,7 @@ class ThreadParams(BaseParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Ein Bolzen mit echtem helikalem Außengewinde — als exakter Körper, "
+        "Ein Bolzen mit echtem helikalem Außengewinde und bearbeitbaren Flächen, "
         "den der STEP-Export trägt. Mit Spiel vergrößert und von einem Körper "
         "abgezogen wird daraus das Innengewinde."
     ),
@@ -447,7 +447,7 @@ def thread_exact(ctx: OpContext) -> OpResult:
 @register_op(
     name="drill_brep_hole",
     requires_kind="brep",
-    title=_("Exakte Bohrung setzen"),
+    title=_("Bohrung setzen"),
     category="holes",
     params=DrillParams,
     consumes=1,
@@ -455,7 +455,7 @@ def thread_exact(ctx: OpContext) -> OpResult:
     applies_to=["face"],
     touches_features=True,
     doc=_(
-        "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und "
+        "Bohrt ein rundes Loch und lässt Flächen und Kanten einzeln bearbeitbar — "
         "Fase, Verrundung und der STEP-Export bleiben danach möglich."
     ),
 )
@@ -569,14 +569,15 @@ class ToMeshParams(BaseParams):
 @register_op(
     name="brep_to_mesh",
     requires_kind="brep",
-    title=_("In ein Netz umwandeln"),
+    title=_("Flächenbearbeitung beenden"),
     category="mesh",
     params=ToMeshParams,
     consumes=1,
     produces=1,
     doc=_(
-        "Wandelt einen exakten Körper in ein Dreiecksnetz um. Der Weg zurück "
-        "besteht nicht — die Kanten sind danach fort."
+        "Macht aus den einzeln bearbeitbaren Flächen feste Dreiecke. Danach lassen "
+        "sich einzelne Kanten nicht mehr fasen oder verrunden; Rückgängig stellt "
+        "den vorherigen Zustand wieder her."
     ),
 )
 def brep_to_mesh(ctx: OpContext) -> OpResult:
@@ -596,7 +597,10 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
             Finding(
                 code="brep.converted",
                 severity="info",
-                message=_("Aus dem exakten Körper wurde ein Netz. Der Rückweg besteht nicht."),
+                message=_(
+                    "Flächen und Kanten sind jetzt feste Dreiecke und nicht mehr einzeln "
+                    "bearbeitbar. Rückgängig stellt den vorherigen Zustand wieder her."
+                ),
                 object_id=source.id,
                 values={"triangles": mesh.triangle_count},
             )
@@ -616,8 +620,10 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # formatiert nicht — ein „{name}" stünde dem Nutzer wörtlich da.
             # Der Name reist wie überall in ``values``.
             detail=_(
-                "Der gewählte Körper ist ein Netz. Exakte Körper kommen aus einer "
-                "STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt."
+                "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
+                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
+                "dafür bei einer Grundform die Option „Flächen und Kanten später "
+                "bearbeiten“ oder öffne eine STEP-Datei."
             ),
             values={"name": source.name},
             object_id=source.id,

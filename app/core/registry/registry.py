@@ -100,12 +100,12 @@ def group_title(category: str) -> str:
 
 #: Zusammengelegte Menü-Zwillinge: dieselbe Handlung in zwei Rechenkernen.
 #:
-#: „Quader anlegen" und „Exakten Quader anlegen" waren zwei Menüeinträge für
+#: Zwei technische Rechenwege waren zwei Menüeinträge für
 #: einen Quader — gegen das Hausprinzip „eine Operation je Handlung, nicht je
 #: Variante". Die Ops bleiben im Register getrennt (Verlauf und Provenienz
-#: brauchen das); zusammengelegt ist nur die Bedienung: der Eintrag des
-#: Mesh-Zwillings trägt einen Umschalter „Exakt (B-Rep)", und der Dialog
-#: wählt die Op. Schlüssel ist der versteckte B-Rep-Zwilling, Wert der
+#: brauchen das); zusammengelegt ist nur die Bedienung: Der Dialog fragt nach
+#: dem **Nutzen** „Flächen und Kanten später bearbeiten", nicht nach „B-Rep"
+#: oder „exakt". Schlüssel ist der versteckte B-Rep-Zwilling, Wert der
 #: sichtbare Eintrag. Erreichbar bleiben beide — über die Befehlspalette und
 #: über den Verlauf.
 MENU_TWINS: Final[dict[str, str]] = {
@@ -115,9 +115,8 @@ MENU_TWINS: Final[dict[str, str]] = {
     # „Aushöhlen" und „Exakt aushöhlen" standen nebeneinander im Menü — und
     # zwar in **zwei verschiedenen** (``prepare`` gegen ``shaping``). Dort
     # liest „exakt" wie eine Qualitätsstufe („das andere ist also ungenau?"),
-    # obwohl es den Rechenkern meint. Der Umschaltertext von ``create_box``
-    # versprach exaktes Aushöhlen ohnehin schon, während es als eigener
-    # Eintrag daneben stand.
+    # obwohl es den Rechenkern meint. Diese Fachsprache steht heute gar nicht
+    # mehr am Haken; er benennt die spätere Bearbeitbarkeit.
     "shell_exact": "hollow_object",
 }
 
@@ -125,17 +124,15 @@ MENU_TWINS: Final[dict[str, str]] = {
 #: eingetragen: Zwei wörtliche Kopien wären zwei Stellen, an denen derselbe
 #: Satz beim nächsten Nachbessern auseinanderläuft.
 _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
-    _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
-    # Der Satz nannte den STEP-Export und „spätere Verrundungen"; die anderen
-    # fünf Werkzeuge, die daran hängen, standen nirgends. Wer eine Tasche
-    # schneiden wollte, hatte keinen Anlass, den Haken zu setzen — und fand
-    # sie später grau, ohne Weg zurück. Sie werden deshalb aufgezählt: die
-    # Entscheidung fällt hier, und was sie kostet, muss hier stehen.
+    _("Flächen und Kanten später bearbeiten"),
+    # Der Satz zählt die Folgen auf, ohne vom Nutzer den Namen des Rechenkerns
+    # zu verlangen. Die Entscheidung fällt hier; deshalb stehen Nutzen **und**
+    # das, was dafür im Dialog entfällt, genau hier.
     _(
-        "Rechnet im exakten Kern statt als Netz. Nur damit lassen sich später "
-        "Fase, Verrundung, Formschräge, Fläche versetzen, exaktes Aushöhlen "
-        "und Tasche schneiden anwenden, und nur damit geht der STEP-Export. "
-        "Netz-Feinheiten wie Verankerung oder Segmentzahl entfallen."
+        "Aktivieren, wenn du später Fasen, Verrundungen, Formschrägen, versetzte "
+        "Flächen, Aushöhlungen oder Taschen brauchst oder als STEP exportieren "
+        "willst. Einstellungen für das Dreiecksmodell, etwa Bezugspunkt oder "
+        "Segmentzahl, entfallen dann."
     ),
 )
 
@@ -158,25 +155,20 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
 #: in der Befehlspalette, die dasselbe tut wie die erste.
 #: Der Umschalter des Aushöhlens — **ein eigener Text, und zwar zwingend.**
 #:
-#: ``_EXACT_TOGGLE`` zählt auf, was nur im exakten Kern geht, und nennt darin
-#: „exaktes Aushöhlen". Am Haken des Aushöhlens gelesen ist das ein Verweis auf
-#: sich selbst: Der Haken, der exakt aushöhlt, versprach, dass man damit später
-#: exakt aushöhlen könne. Bei den drei Grundform-Zwillingen ist derselbe Satz
-#: richtig — dort ist exaktes Aushöhlen eine **Folge**operation, die der Haken
-#: erst möglich macht.
+#: Am Aushöhlen gelten andere Folgen als an einer neuen Grundform. Der Titel
+#: bleibt derselbe — gleiche Entscheidung, gleiche Übersetzung —, aber der
+#: Satz nennt hier „Oberseite öffnen" und Entlüftungen als entfallende Felder.
 #:
 #: Der Titel ist derselbe wie dort, und das ist Absicht: gleicher Satz,
 #: gleicher Katalogschlüssel, eine Übersetzung. Nur die Erklärung ist eigen.
 _HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     _EXACT_TOGGLE[0],
     _(
-        "Höhlt im exakten Kern aus und lässt den Körper exakt — Fase, "
-        "Verrundung, Formschräge und der STEP-Export bleiben danach möglich. "
-        "Dafür entfallen Oben öffnen und die Entlüftungen: Der exakte Kern "
-        "kennt nur die Wandstärke. "
-        "Verlangt einen exakten Eingangskörper: an einem Netz ist der Haken "
-        "gesperrt und nennt den Grund. Ohne ihn wird als Netz gerechnet, und "
-        "der Körper ist danach ein Netz."
+        "Behält einzeln bearbeitbare Flächen und Kanten, damit Fasen, "
+        "Verrundungen, Formschrägen und der STEP-Export danach möglich bleiben. "
+        "Dafür entfallen „Oberseite öffnen“ und Entlüftungen; hier wird nur die "
+        "Wandstärke eingestellt. Die Option ist gesperrt, wenn der gewählte "
+        "Körper bereits nur noch aus festen Dreiecken besteht."
     ),
 )
 

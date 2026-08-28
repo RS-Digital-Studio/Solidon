@@ -1,15 +1,18 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 8. August 2026 · Fassung 1.0
+Stand: 28. August 2026 · Fassung 1.1
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
 
 **Solange nur die Demo-Version angeboten wird, greifen sie nicht.** Die Demo
-ist unentgeltlich; es gibt keine Bestellung, keinen Kaufpreis und keinen
-Zahlungsdienstleister. Was für sie gilt, steht im Endnutzer-Lizenzvertrag
-unter <https://solidon3d.de/eula.html>, Abschnitt 4a. Diese Bedingungen stehen
-hier, weil sie ab dem Verkaufsstart gelten werden.
+ist unentgeltlich; es gibt keine Bestellung und keinen Kaufpreis. Eine
+freiwillige Zahlung über den PayPal-Spendenknopf ist eine unentgeltliche
+Zuwendung ohne Gegenleistung: Sie schaltet nichts frei, wird nicht auf einen
+späteren Kauf angerechnet und ist keine Bestellung einer Lizenz. Deshalb fällt
+sie nicht unter diese Bedingungen. Was für die Demo gilt, steht im
+Endnutzer-Lizenzvertrag unter <https://solidon3d.de/eula.html>, Abschnitt 4a.
+Diese Bedingungen stehen hier, weil sie ab dem Verkaufsstart gelten werden.
 
 ---
 

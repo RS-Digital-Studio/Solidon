@@ -19,9 +19,9 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
+from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QDialogButtonBox, QToolBar
 
 from app.core import errors
 from app.core.geom.measure import Measurement
@@ -120,6 +120,69 @@ def test_the_same_value_again_changes_nothing(session: Session) -> None:
 
     assert not session.history.can_undo
     assert not session.modified
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_a_non_finite_parameter_is_reported_without_changing_the_document(
+    session: Session, value: float
+) -> None:
+    """Eine ungültige Zahl bleibt im Dialogfehler, nie als Prozessabsturz."""
+    document = session.project.document
+    document.parameters["width"] = Parameter(name="width", value=84.0, unit="mm")
+    errors_seen: list[errors.ValidationError] = []
+    session.failed.connect(
+        lambda error: (
+            errors_seen.append(error) if isinstance(error, errors.ValidationError) else None
+        )
+    )
+
+    assert not session.change_parameter("width", value)
+    assert document.parameters["width"].value == 84.0
+    assert not session.history.can_undo
+    assert errors_seen and errors_seen[-1].constraint == "not_a_number"
+
+
+def test_a_parameter_spinbox_can_rebuild_after_its_own_signal(window: MainWindow) -> None:
+    """Die linke Parameterleiste darf ihren Sender erst nach dem Signal löschen."""
+    document = window.session.project.document
+    document.parameters["width"] = Parameter(name="width", value=84.0, unit="mm")
+    window.parameters.show_document(document)
+    editor = window.parameters._editors["width"]
+
+    editor.setValue(120.0)
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    assert document.parameters["width"].value == 120.0
+    assert "width" in window.parameters._editors, "die Leiste wurde sicher neu aufgebaut"
+
+
+def test_a_parameter_unit_is_a_safe_choice_in_the_left_panel(window: MainWindow) -> None:
+    """Die Einheit ist eine feste, rücknehmbare Auswahl und kein Freitext."""
+    from app.core.units import DEGREE_UNIT
+
+    document = window.session.project.document
+    document.parameters["angle"] = Parameter(name="angle", value=45.0, unit="mm")
+    window.parameters.show_document(document)
+    editor = window.parameters._unit_editors["angle"]
+
+    assert not editor.isEditable()
+    assert [editor.itemData(index) for index in range(editor.count())] == [
+        "mm",
+        DEGREE_UNIT,
+        "",
+    ]
+
+    index = editor.findData(DEGREE_UNIT)
+    editor.activated.emit(index)
+    assert document.parameters["angle"].unit == "mm", "das Auswahlsignal löscht sich nicht selbst"
+    QApplication.processEvents()
+    window.session.wait_for_idle()
+
+    assert document.parameters["angle"].unit == DEGREE_UNIT
+    assert window.session.history.can_undo
+    window.session.undo()
+    assert document.parameters["angle"].unit == "mm"
 
 
 def test_saving_and_reopening_keeps_the_stack(session: Session, tmp_path: Path) -> None:
@@ -718,6 +781,106 @@ def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
     ]
     assert hidden, "diese Operation hat welche"
     assert all(not editor.isVisibleTo(dialog) for editor in hidden), "zugeklappt heißt unsichtbar"
+
+
+def test_an_open_advanced_section_never_overlaps_the_action_buttons(
+    qt_app: QApplication,
+) -> None:
+    """Der aufgeklappte Gewinde-Dialog bleibt vollständig bedienbar."""
+    dialog = OperationDialog(REGISTRY.get("insert_printed_thread"), [])
+    try:
+        dialog.show()
+        QApplication.processEvents()
+        dialog.advanced.setChecked(True)
+        QApplication.processEvents()
+
+        box = dialog.findChild(QDialogButtonBox)
+        assert box is not None
+        advanced = [
+            editor
+            for name, editor in dialog._editors.items()
+            if next(entry.placement for entry in dialog.spec.params.spec() if entry.name == name)
+            == "advanced"
+        ]
+        assert advanced and all(editor.isVisibleTo(dialog) for editor in advanced)
+        assert max(editor.geometry().bottom() for editor in advanced) < box.geometry().top()
+    finally:
+        dialog.close()
+
+
+def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> None:
+    """Behälter und Deckel bekommen die richtige Gewinderichtung ohne Raten."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    face = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "face"
+    )
+    spec = REGISTRY.get("insert_printed_thread")
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    window.run_operation(spec)
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    assert dialog.values()["at_feature"] == hole
+    assert dialog.values()["internal"], "Bohrung heißt Innengewinde"
+    internal_label = dialog._rows["internal"].labelForField(dialog._editors["internal"])
+    assert internal_label is not None
+    assert internal_label.text() == "Innengewinde (aus = Außengewinde)"
+    assert "Außengewinde auf einer Außenfläche" in dialog._editors["internal"].toolTip()
+    dialog.reject()
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, face)
+    window.run_operation(spec)
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    assert dialog.values()["at_feature"] == face
+    assert not dialog.values()["internal"], "Fläche heißt Außengewinde für den Behälter"
+    dialog.reject()
+
+
+def test_a_tree_context_click_selects_the_feature_it_opens_for(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Rechtsklick auf eine Bohrung darf nicht die vorige Auswahl benutzen."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    face = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "face"
+    )
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    target = next(
+        item
+        for item in window.object_tree.tree.selectedItems()
+        if item.data(1, Qt.ItemDataRole.UserRole) == hole
+    )
+    assert target is not None
+    window.show()
+    window.object_tree.tree.expandAll()
+    window.object_tree.tree.scrollToItem(target)
+    QApplication.processEvents()
+    point = window.object_tree.tree.viewport().mapTo(
+        window.object_tree.tree,
+        window.object_tree.tree.visualItemRect(target).center(),
+    )
+    assert point.y() >= 0, "die Bohrung hat eine sichtbare Baumzeile"
+    window.object_tree.select_feature(object_id, face)
+    monkeypatch.setattr(window.object_tree, "context_menu", lambda: None)
+
+    window.object_tree._on_context_menu(point)
+
+    assert window.object_tree.selected_feature() == hole
 
 
 def test_a_tolerance_keeps_its_third_decimal(qt_app: QApplication) -> None:
@@ -3573,6 +3736,68 @@ def test_the_parameter_dialog_validates_inline(qt_app: QApplication) -> None:
 
     dialog.expression_field.setText("import os")
     assert dialog.validation_problem() is not None, "alles außerhalb der Grammatik fällt durch"
+
+
+def test_the_parameter_dialog_offers_fx_and_parameter_choices(qt_app: QApplication) -> None:
+    """Formeln beginnen über sichtbare Werkzeuge, nicht über auswendig gelernte Syntax."""
+    from app.ui.dialogs import ParameterDialog
+
+    parameters = {"width": Parameter(name="width", value=40.0, title="Breite")}
+    dialog = ParameterDialog(parameters)
+    dialog.name_field.setText("height")
+    dialog.show()
+    QApplication.processEvents()
+
+    assert not dialog.fx_button.isChecked()
+    assert not dialog.expression_field.isVisibleTo(dialog)
+    dialog.fx_button.click()
+    assert dialog.fx_button.isChecked()
+    assert dialog.expression_field.isVisibleTo(dialog)
+    assert not dialog.value_field.isEnabled(), (
+        "die Formel und die Zahl dürfen nicht zugleich gelten"
+    )
+
+    menu = dialog.parameter_button.menu()
+    assert menu is not None
+    choices = {action.data(): action for action in menu.actions()}
+    assert set(choices) == {"width"}
+    choices["width"].trigger()
+
+    assert dialog.expression_field.text() == "=@width"
+    assert dialog.validation_problem() is None
+    assert dialog.parameter().expression == "=@width"
+
+
+def test_the_parameter_dialog_uses_fixed_units_and_honest_decimals(
+    qt_app: QApplication,
+) -> None:
+    """Einheiten sind auswählbar; ganze Werte zeigen mindestens zwei Stellen."""
+    from app.core.units import DEGREE_UNIT
+    from app.ui.dialogs import ParameterDialog
+
+    dialog = ParameterDialog({})
+    dialog.name_field.setText("angle")
+
+    assert isinstance(dialog.unit_field, QComboBox)
+    assert not dialog.unit_field.isEditable()
+    assert [dialog.unit_field.itemData(index) for index in range(dialog.unit_field.count())] == [
+        "mm",
+        DEGREE_UNIT,
+        "",
+    ]
+    dialog.unit_field.setCurrentIndex(dialog.unit_field.findData(DEGREE_UNIT))
+    assert dialog.parameter().unit == DEGREE_UNIT
+
+    separator = QLocale().decimalPoint()
+    dialog.value_field.setValue(12.0)
+    assert dialog.value_field.text() == f"12{separator}00"
+    dialog.value_field.setValue(0.075)
+    assert dialog.value_field.text() == f"0{separator}075", "Feinmaße bleiben sichtbar"
+
+    unknown = Parameter(name="legacy", value=10.0, unit="cm")
+    old_dialog = ParameterDialog({"legacy": unknown}, existing=unknown)
+    assert old_dialog.unit_field.currentData() == "cm", "alte Dateien werden nicht umgedeutet"
+    assert not old_dialog.unit_field.isEditable()
 
 
 def test_the_parameter_dialog_offers_bounds(qt_app: QApplication) -> None:

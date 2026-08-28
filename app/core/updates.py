@@ -8,7 +8,7 @@ sondern den **Auslöser**: Es lädt nichts von allein, es ersetzt sich nichts
 im Hintergrund, und es startet nichts ohne Zustimmung.
 
 Was die Anwendung jetzt zusätzlich tut, ist das Holen und das Prüfen. Beides
-von Hand zu machen hieß: Seite finden, das richtige von vier Paketen
+von Hand zu machen hieß: Seite finden, das richtige von fünf Paketen
 erkennen, die Prüfsumme irgendwo abgleichen. Der letzte Schritt fiel dabei
 immer aus.
 
@@ -223,10 +223,12 @@ KIND_SOURCE: Final = "source"
 #: mit der Begründung, ein Flatpak wolle ``flatpak update`` und ein AppImage
 #: ersetze sich gar nicht. Der zweite Halbsatz stimmt weiterhin. Der erste war
 #: der Grund für eine Lücke, die keiner der drei Plattformen anzusehen war:
-#: Ausgeliefert wird für Linux **nur** das Flatpak-Bundle, und damit war Linux
+#: Ausgeliefert wurde für Linux **nur** das Flatpak-Bundle, und damit war Linux
 #: die einzige Plattform ohne Update aus der Anwendung heraus. Wer dort
 #: arbeitete, sah einen Hinweis und durfte 276 MB von Hand holen — während
-#: Windows und macOS es angeboten bekamen.
+#: Windows und macOS es angeboten bekamen. Ab der nächsten Version stehen
+#: Flatpak und AppImage nebeneinander; einspielen lässt sich weiterhin nur das
+#: Flatpak-Bundle.
 #:
 #: **Ein Repo braucht es dafür nicht.** ``flatpak install`` nimmt eine
 #: Bundle-Datei unmittelbar und aktualisiert damit eine vorhandene
@@ -234,11 +236,11 @@ KIND_SOURCE: Final = "source"
 #: ohnehin schon (:func:`app.core.discover.on_host`, Berechtigung
 #: ``--talk-name=org.freedesktop.Flatpak`` im Manifest).
 #:
-#: AppImage und Archiv bleiben außen, aber nicht mehr aus Prinzip, sondern
-#: weil es sie nicht gibt: Die CI baut beide, auf der Download-Seite steht
-#: keines. Erkannt werden sie trotzdem — sonst bekäme ein AppImage-Nutzer ein
-#: ``flatpak install``, das scheitern muss, und die Auskunft „geht hier nicht"
-#: wäre eine Vermutung statt einer Feststellung.
+#: AppImage und Archiv bleiben außen: Das Archiv ist nur ein Bauartefakt, das
+#: AppImage wird ab der nächsten Version zwar ausgeliefert, ersetzt sich aber
+#: nicht selbst. Erkannt werden beide trotzdem — sonst bekäme ein
+#: AppImage-Nutzer ein ``flatpak install``, das scheitern muss, und die
+#: Auskunft „geht hier nicht" wäre eine Vermutung statt einer Feststellung.
 REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_MACOS_PACKAGE, KIND_FLATPAK})
 
 #: Womit die Setup-Datei beim Update aufgerufen wird.

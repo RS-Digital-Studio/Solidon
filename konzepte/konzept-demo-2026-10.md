@@ -663,7 +663,11 @@ nicht Reife, sondern Sichtbarkeit, und die entsteht nicht durch Warten.
 
 Damit es niemand nachträglich hineinliest:
 
-* **Kein Verkauf, kein Kaufknopf, keine Zahlungsseite** (§2 H)
+* **Kein Verkauf und kein Kaufknopf** (§2 H). Der freiwillige
+  PayPal-Spendenknopf ist davon getrennt: keine Bestellung, keine
+  Gegenleistung, keine Anrechnung auf einen späteren Kauf. Er lädt beim
+  Seitenaufruf nichts von PayPal; erst der ausdrückliche Klick führt zur von
+  PayPal gehosteten Zahlungsseite
 * **Keine Beschneidung der Funktionen** (§2 E) — kein Wasserzeichen, keine
   Exportsperre
 * **Kein Konto, keine Anmeldung, keine Telemetrie.** Auch nicht „nur zum

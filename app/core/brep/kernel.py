@@ -39,11 +39,18 @@ DEFLECTION = 0.05
 #: Winkelabweichung im Bogenmaß, aus demselben Grund.
 ANGULAR_DEFLECTION = 0.3
 
+#: Zu welcher exakten Fläche jedes Dreieck der Anzeigetessellation gehört.
+#: Das Attribut bleibt am ``trimesh``-Körper, bis ``features_of`` daraus die
+#: öffentlichen ``Feature.face_indices`` macht. Ein gewöhnlicher Flächenindex
+#: ist **kein** Dreiecksindex — genau diese Verwechslung färbte an einer
+#: Bohrung ein einzelnes, fremdes Dreieck der Außenwand.
+_FACE_ATTRIBUTE = "solidon_brep_face"
+
 
 class BRepUnavailable(AppError):
     """Der B-Rep-Kern ist nicht installiert."""
 
-    default_title = _("Der B-Rep-Kern ist auf diesem Rechner nicht installiert.")
+    default_title = _("Die Werkzeuge für bearbeitbare Flächen und Kanten fehlen.")
     # **Ohne diese Zeile bat Solidon um einen Fehlerbericht.** Die Klasse
     # nannte keine Vorschläge, ``AppError`` fällt dann auf „Abbrechen" zurück,
     # und für einen Dialog, dem sonst nichts bleibt, tritt der Bericht ein
@@ -56,7 +63,7 @@ class BRepUnavailable(AppError):
         super().__init__(
             detail=detail
             or _(
-                "Fasen, Verrundungen und STEP brauchen OpenCASCADE. "
+                "Fasen, Verrundungen und STEP brauchen das Zusatzpaket OpenCASCADE. "
                 "Alles andere in Solidon funktioniert ohne."
             )
         )
@@ -210,6 +217,21 @@ class Solid:
         """Die Einbahntür aus §30. Ausdrücklich, denn der Rückweg ist zu."""
         return self.mesh
 
+    def triangles_of_face(self, face_index: int) -> tuple[int, ...]:
+        """Die Dreiecke der Tessellation, die zu einer exakten Fläche gehören.
+
+        ``face_index`` zählt die Topologieflächen aus :meth:`faces`, die
+        Rückgabe die Dreiecke aus :attr:`raw`. Beide Zahlenräume sind
+        verschieden: Ein Zylindermantel ist eine einzige exakte Fläche, aber
+        viele Dutzend Dreiecke im Viewport.
+        """
+        import numpy as np
+
+        source = np.asarray(self.raw.face_attributes.get(_FACE_ATTRIBUTE, ()), dtype=np.int64)
+        if len(source) != self.triangle_count:
+            return ()
+        return tuple(int(index) for index in np.flatnonzero(source == face_index))
+
     @property
     def vertex_count(self) -> int:
         return self.mesh.vertex_count
@@ -332,12 +354,15 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     points: list[tuple[float, float, float]] = []
     faces: list[tuple[int, int, int]] = []
     explorer = TopExp_Explorer(shape, TopAbs_FACE)
+    face_index = 0
+    face_sources: list[int] = []
     while explorer.More():
         face = TopoDS.Face_s(explorer.Current())
         location = TopLoc_Location()
         triangulation = BRep_Tool.Triangulation_s(face, location)
         explorer.Next()
         if triangulation is None:
+            face_index += 1
             continue
 
         transform = location.Transformation()
@@ -392,12 +417,15 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
             faces.append(
                 (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)
             )
+            face_sources.append(face_index)
+        face_index += 1
 
     if not faces:
         return MeshData.of(trimesh.Trimesh())
     body = trimesh.Trimesh(
         vertices=np.asarray(points, dtype=float),
         faces=np.asarray(faces, dtype=np.int64),
+        face_attributes={_FACE_ATTRIBUTE: np.asarray(face_sources, dtype=np.int64)},
         process=True,
     )
     _log.info("tessellated a B-Rep body into %d triangles", len(body.faces))

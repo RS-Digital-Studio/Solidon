@@ -412,6 +412,96 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     )
 
 
+def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> None:
+    """§18.5 unterscheidet Überfahren von Anklicken, nicht nur im Zeiger.
+
+    Hover ist durchscheinend in der Merkmalsfarbe; die Auswahl ist deckend in
+    Bernstein. Ohne den eigenen Hover-Actor änderte sich beim Überfahren nur
+    der Mauszeiger, obwohl der Bauplan das Merkmal selbst hervorhebt.
+    """
+    from app.ui.viewport import FEATURE_LABEL_COLOUR, HOVERED_FEATURE_OPACITY, Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
+    viewport._selected = "obj_1"
+    viewport._hover_feature = True
+    viewport._hovered_object = "obj_1"
+    viewport._hovered_feature = "hole_2"
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport._redraw_features()
+
+    hover = [kwargs for kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-hover"]
+    assert len(hover) == 1
+    assert str(hover[0]["color"]) == FEATURE_LABEL_COLOUR
+    assert hover[0]["opacity"] == HOVERED_FEATURE_OPACITY
+    assert "feature-patch" not in plotter.names(), "überfahren ist noch keine Auswahl"
+    labels = [text for group in plotter.labelled for text in group]
+    assert len(labels) == 1 and "8" in labels[0], (
+        "auch ohne dauerhafte Überlagerung sagt die Hervorhebung, welches Merkmal sie meint"
+    )
+
+    viewport._selected_feature = "hole_2"
+    plotter.drawn.clear()
+    plotter.labelled.clear()
+    viewport._redraw_features()
+
+    assert "feature-patch" in plotter.names()
+    assert "feature-hover" not in plotter.names(), (
+        "die deckende Auswahl ersetzt Hover, statt zwei Flächen übereinanderzulegen"
+    )
+
+
+def test_difference_colours_take_priority_over_selection(qt_app: QApplication) -> None:
+    """Vorschau-Orange und Auswahl-Bernstein dürfen sich nicht vermischen.
+
+    Die Auswahl bleibt semantisch erhalten; nur ihre Modellfarbe weicht,
+    solange die Differenz sichtbar ist. Beim gehaltenen Vorher-Vergleich kommt
+    sie zurück, weil dort keine Vorschaufarbe mehr erklärt werden muss.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
+    viewport.select("obj_1")
+    viewport.select_feature("hole_2")
+    assert viewport.highlighted_faces() == (0, 1)
+
+    difference = object()
+    viewport.show_difference(difference)
+
+    assert viewport.selected_feature == "hole_2", "die Auswahl selbst bleibt bestehen"
+    assert viewport.highlighted_faces() == (), "die Vorschau besitzt jetzt die Modellfarben"
+    assert viewport.highlighted_object() is None
+
+    viewport.hold_before(True)
+    assert viewport.highlighted_faces() == (0, 1), "im Vorher-Bild kehrt die Auswahl zurück"
+
+    viewport.hold_before(False)
+    assert viewport.highlighted_faces() == ()
+    viewport.show_difference(None)
+    assert viewport.highlighted_faces() == (0, 1), "nach der Vorschau ist die Auswahl wieder da"
+
+
+def test_difference_colours_also_replace_a_whole_body_highlight(
+    qt_app: QApplication,
+) -> None:
+    """Dasselbe gilt eine Stufe höher für die Körperauswahl."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_two_holes())
+    viewport.select("obj_1")
+    assert viewport.highlighted_object() == "obj_1"
+
+    viewport.show_difference(object())
+    assert viewport.highlighted_object() is None
+
+    viewport.hold_before(True)
+    assert viewport.highlighted_object() == "obj_1"
+
+
 def test_a_round_body_gets_no_edges_and_a_box_does(qt_app: QApplication) -> None:
     """§18.1: Hier stehen die Kanten des *Körpers*, nicht die des Netzes.
 

@@ -475,9 +475,9 @@ def evaluate(
                         code="evaluate.exact_became_mesh",
                         severity="info",
                         message=_(
-                            "Aus einem exakten Körper wurde ein Netz. "
-                            "Verrundung, Fase und Skizzen-Operationen stehen darauf nicht mehr "
-                            "zur Verfügung."
+                            "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste "
+                            "Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen "
+                            "stehen danach nicht mehr zur Verfügung."
                         ),
                         values={"op": operation.op, "object": object_id},
                         object_id=object_id,

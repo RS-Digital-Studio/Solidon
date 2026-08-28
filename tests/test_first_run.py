@@ -734,6 +734,29 @@ def test_an_empty_message_cannot_be_sent(qt_app: QApplication) -> None:
     assert dialog.send.isEnabled()
 
 
+def test_a_survey_answer_can_be_sent_without_the_optional_fields(qt_app: QApplication) -> None:
+    """Bewertung oder eine Antwort genügt; der freie Nachtrag bleibt freiwillig."""
+    from app.core.support import KIND_SURVEY
+
+    dialog = SupportDialog(kind=KIND_SURVEY)
+    try:
+        assert dialog.survey is not None
+        assert not dialog.send.isEnabled(), "ein ganz leerer Bogen bleibt leer"
+
+        dialog.survey.ratings.button(4).click()
+        assert dialog.send.isEnabled(), "eine Bewertung darf nicht am leeren Nachtrag scheitern"
+
+        dialog.survey.ratings.setExclusive(False)
+        for button in dialog.survey.ratings.buttons():
+            button.setChecked(False)
+        dialog.survey.ratings.setExclusive(True)
+        dialog.survey.fields["missing"].setPlainText("Die Auswahl ist zu klein.")
+        assert dialog.send.isEnabled(), "auch eine einzelne Freitextantwort genügt"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_a_crash_can_be_sent_without_typing_anything(qt_app: QApplication) -> None:
     """Der Stapelabzug ist der Bericht — der Knopf wartet nicht auf einen Satz."""
     dialog = SupportDialog(kind="crash", error=ValueError("kaputt"))

@@ -267,14 +267,14 @@ def variant_of(name: str, language: str) -> str:
     return " (" + ", ".join(marks) + ")"
 
 
-#: Was wirklich ausgeliefert wird: vier Dateien, eine je Zielsystem
-#: (Entscheidung Robert, 27.08.2026 — „insgesamt 4 Dateien wie die ganze Zeit
-#: schon und es auch immer sein wird").
+#: Was wirklich ausgeliefert wird: fünf Dateien. Windows und beide Mac-Architekturen
+#: bekommen je eine, Linux bekommt AppImage zum direkten Start und Flatpak für
+#: die verwaltete Installation (Entscheidung Robert, 28.08.2026).
 #:
 #: Der Baulauf wirft **acht** aus: Linux allein drei (Archiv, AppImage,
-#: Flatpak), macOS zwei je Architektur (Installationspaket und Archiv). Welche
-#: davon angeboten werden, stand bis hierher nirgends — es stand nur in der
-#: Gewohnheit dessen, der die Dateien beim Aufruf aufzählte.
+#: Flatpak), macOS zwei je Architektur (Installationspaket und Archiv). Das
+#: Archiv bleibt ein Bauartefakt: Es setzt ein Terminal voraus und ist kein
+#: besserer Einstieg als das AppImage.
 #:
 #: Am 27.08.2026 hat diese Lücke zugeschnappt: Beim Release von 0.2.1 gingen
 #: alle acht in den Kasten, und die Startseiten verwiesen in sechs Sprachen
@@ -282,14 +282,15 @@ def variant_of(name: str, language: str) -> str:
 #: gegeben, und keine Prüfung hätte es gesagt.
 DELIVERED: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Windows", ".exe", ()),
-    ("Linux", ".flatpak", ()),
+    ("Linux AppImage", ".appimage", ()),
+    ("Linux Flatpak", ".flatpak", ()),
     ("macOS (Apple Silicon)", ".pkg", ("arm64",)),
     ("macOS (Intel)", ".pkg", ("x86_64", "x64", "intel")),
 )
 
 
 def delivery_slot(name: str) -> str:
-    """Welchen der vier Plätze eine Datei besetzt — oder nichts.
+    """Welchen der fünf Plätze eine Datei besetzt — oder nichts.
 
     **Der Produktname gehört zur Bedingung, nicht nur die Endung.** Ohne ihn
     entscheidet allein das Suffix, und dann besetzt jede fremde ``.exe`` im
@@ -309,7 +310,7 @@ def delivery_slot(name: str) -> str:
 
 
 def refuse_wrong_delivery(paths: list[Path]) -> None:
-    """Hält an, wenn die übergebenen Dateien nicht die vier Ausgelieferten sind.
+    """Hält an, wenn die übergebenen Dateien nicht die fünf Ausgelieferten sind.
 
     Geprüft wird in **beide** Richtungen, und die zweite ist die wichtigere:
     Eine Datei zu viel steht als toter Verweis auf der Seite, eine zu wenig
@@ -339,16 +340,16 @@ def refuse_wrong_delivery(paths: list[Path]) -> None:
     if not unknown and not missing and not twice:
         return
 
-    lines = ["Das sind nicht die vier Dateien, die ausgeliefert werden."]
+    lines = ["Das sind nicht die fünf Dateien, die ausgeliefert werden."]
     for name in sorted(unknown):
-        lines.append(f"  zu viel:  {name} — besetzt keinen der vier Plätze")
+        lines.append(f"  zu viel:  {name} — besetzt keinen der fünf Plätze")
     for label in missing:
         suffix = next(s for lab, s, _ in DELIVERED if lab == label)
         lines.append(f"  fehlt:    {label} ({suffix})")
     for label, names in sorted(twice.items()):
         lines.append(f"  zweimal:  {label} — {', '.join(sorted(names))}")
     lines.append("")
-    lines.append("  Der Baulauf wirft acht Dateien aus, angeboten werden vier.")
+    lines.append("  Der Baulauf wirft acht Dateien aus, angeboten werden fünf.")
     lines.append("  Erwartet: " + ", ".join(f"{lab} {suf}" for lab, suf, _ in DELIVERED))
     raise SystemExit("\n".join(lines))
 
@@ -442,11 +443,11 @@ def download_link(package: Package, label: str, css_class: str) -> str:
 def links(packages: list[Package], language: str) -> str:
     """Die Verweise, wie sie im Kasten stehen — ein Knopf je Plattform.
 
-    **Warum nicht eine Zeile je Datei.** Acht Pakete sind acht Knöpfe, und
-    sieben davon gehen den Leser nichts an: Wer auf einem Mac sitzt, braucht
-    keine Auswahl zwischen Flatpak und AppImage. Also trägt jede Plattform
-    einen Knopf; hat sie mehr als eine Datei, öffnet er einen Dialog mit
-    dieser einen Frage.
+    **Warum nicht eine Zeile je Datei.** Fünf ausgelieferte Pakete sind nicht
+    fünf Hauptknöpfe: Wer auf Linux sitzt, braucht keine Mac-Architektur, und
+    wer auf einem Mac sitzt, keine Auswahl zwischen Flatpak und AppImage. Also
+    trägt jede Plattform einen Knopf; hat sie mehr als eine Datei, öffnet er
+    einen Dialog mit genau den passenden Varianten.
 
     **Keine ``<div>`` im erzeugten Text.** ``write_pages`` schneidet den
     Kasten mit einem Ausdruck heraus, der beim ersten ``</div>`` endet — ein
@@ -629,10 +630,13 @@ VERSION_FILE = WEBSITE / "version.json"
 #: Begründung daneben lautete, es wolle ``flatpak update``. Das war ein
 #: Missverständnis mit Folgen: ``flatpak install`` nimmt eine Bundle-Datei
 #: unmittelbar und aktualisiert damit eine vorhandene Installation — ein Repo
-#: braucht es dafür nicht. Und weil für Linux **nur** das Flatpak ausgeliefert
-#: wird, war Linux damit die einzige Plattform ohne Update aus der Anwendung
-#: heraus: ein Hinweis und 276 MB von Hand, während Windows und macOS es
-#: angeboten bekamen. Den Weg nach draußen baut ``updates._flatpak_command``.
+#: braucht es dafür nicht. Und weil für Linux damals **nur** das Flatpak
+#: ausgeliefert wurde, war Linux damit die einzige Plattform ohne Update aus
+#: der Anwendung heraus: ein Hinweis und 276 MB von Hand, während Windows und
+#: macOS es angeboten bekamen. Ab der nächsten Version kommt das AppImage als
+#: direkter Startweg dazu; in der Versionsdatei bleibt das Flatpak der
+#: Linux-Eintrag, weil nur dieses Paket von der Anwendung eingespielt werden
+#: kann. Den Weg nach draußen baut ``updates._flatpak_command``.
 #:
 #: Die Architektur steht nur bei macOS im Schlüssel: Ein für arm64 gebautes
 #: Programm startet auf einem Intel-Mac nicht.

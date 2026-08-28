@@ -60,7 +60,7 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Acht stehen nicht in der Erstbestückung**, und alle acht sind eine Ansage
+    **Zehn stehen nicht in der Erstbestückung**, und alle zehn sind eine Ansage
     und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
@@ -112,10 +112,16 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     baut, sagt wie viele, und dann prüft der Bereichstest die gebaute Zahl
     gegen die erklärte. Unerklärtes Zerfallen bleibt rot. Er ist der erste
     Nutzer von ``bodies`` und damit der Beleg, dass die Deklaration trägt.
+
+    Die gedruckte Schraube und Mutter kamen am 28.08.2026 aus einer
+    Supportmeldung hinzu. Sie benutzen dieselbe Normtabelle und dasselbe
+    Materialspiel wie das druckbare Gewinde, damit ein Behältergewinde, sein
+    Deckel und eine lösbare Schraubverbindung nicht drei unvereinbare Maße
+    bekommen.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 21
+    assert len(building) == 23
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -1453,10 +1459,10 @@ def test_the_change_log_says_what_moved() -> None:
 
 
 @pytest.mark.parametrize("pair", by_direction(subtractive=False), ids=direction_ids)
-def test_an_added_part_grows_together_with_the_body(
+def test_an_added_part_has_the_component_count_it_declares(
     pair: tuple[PartSpec, BaseParams], profile: Profile
 ) -> None:
-    """Ein aufgesetzter Baustein muss **ein** Körper mit seinem Träger werden.
+    """Ein aufgesetzter Baustein verbindet sich — außer als lösbares Gegenstück.
 
     Die Rastnase wurde es nicht: sie sitzt mit 6 × 1 mm auf der Fläche auf, und
     zwei Volumen, die sich nur in einer Fläche berühren, sind das eine, woran
@@ -1492,7 +1498,8 @@ def test_an_added_part_grows_together_with_the_body(
 
     assert result.complete, [f.message for f in result.scene.report.findings]
     body = result.scene.objects["obj_1"].mesh
-    assert body.component_count == 1, direction_ids(pair)
+    expected = 2 if spec.separate_from_host else 1
+    assert body.component_count == expected, direction_ids(pair)
     assert body.is_watertight, direction_ids(pair)
 
 
@@ -1681,6 +1688,111 @@ def test_a_tool_in_a_bore_starts_at_its_mouth(profile: Profile) -> None:
             f"an {feature} gesetzt ({threaded}) blieb die Bohrung auf z={smooth} glatt — "
             "dort greift keine Schraube"
         )
+
+
+def test_a_container_thread_and_a_lid_thread_are_a_matching_pair(profile: Profile) -> None:
+    """Der Behälter bekommt außen, sein Deckel innen dieselbe Gewindegröße."""
+    container = new_project("centauri-carbon-2", "petg")
+    History(container.document).apply(
+        "Behälter",
+        [OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 10.0})],
+    )
+    History(container.document).apply(
+        "Außengewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "size": "M6", "length": 12.0},
+            )
+        ],
+    )
+    container_result = evaluate(
+        container.document,
+        profile,
+        sources=ProjectSources(container),
+    )
+
+    lid = _plate_with_a_through_bore()
+    History(lid.document).apply(
+        "Innengewinde",
+        [
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "size": "M6", "length": 12.0, "internal": True},
+            )
+        ],
+    )
+    lid_result = evaluate(lid.document, profile, sources=ProjectSources(lid))
+
+    assert container_result.complete and lid_result.complete
+    outer = next(
+        feature
+        for feature in container_result.scene.objects["obj_1"].features.values()
+        if feature.kind == "thread"
+    )
+    inner = next(
+        feature
+        for feature in lid_result.scene.objects["obj_1"].features.values()
+        if feature.kind == "thread"
+    )
+    assert not outer.params["internal"] and inner.params["internal"]
+    assert outer.params["diameter"] == inner.params["diameter"] == 6.0
+    assert outer.params["pitch"] == inner.params["pitch"]
+
+
+@pytest.mark.parametrize("countersunk", [False, True])
+def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
+    profile: Profile, countersunk: bool
+) -> None:
+    """Das Gegenstück sitzt an der Bohrungsmündung, nicht in ihrer Mitte.
+
+    Es bleibt absichtlich ein eigener Körper: Eine echte Schraube soll sich
+    lösen lassen, auch wenn ihr Kopf in einer Senkung ohne Materialkontakt
+    liegt. Die Operation darf daraus keinen Fehler über ein loses Anbauteil
+    machen.
+    """
+    project = _plate_with_a_through_bore()
+    History(project.document).apply(
+        "Schraube",
+        [
+            OperationDraft(
+                op="insert_printed_screw",
+                inputs=("obj_1",),
+                params={
+                    "at_feature": "hole_1",
+                    "size": "M6",
+                    "length": 12.0,
+                    "countersunk": countersunk,
+                },
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    entry = result.scene.objects["obj_1"]
+    assert entry.mesh.bounds.maximum[2] > 10.0, "der Kopf liegt über der Platte"
+    assert entry.mesh.bounds.minimum[2] < 0.0, "der Schaft reicht durch die Bohrung"
+    assert entry.mesh.component_count == 2, "Schraube und Werkstück bleiben lösbar"
+    threads = [feature for feature in entry.features.values() if feature.kind == "thread"]
+    assert any(not feature.params["internal"] for feature in threads)
+    assert not any(
+        finding.code == "parts.hanging_loose" for finding in result.scene.report.findings
+    )
+
+
+def test_printed_nut_has_the_matching_internal_thread() -> None:
+    """Schraube und Mutter sind ein Paar, nicht zwei ähnlich benannte Körper."""
+    screw = PARTS.get("printed_screw").fn(PARTS.get("printed_screw").params(size="M5", length=12.0))
+    nut = PARTS.get("printed_nut").fn(PARTS.get("printed_nut").params(size="M5"))
+
+    external = next(feature for feature in screw.features.values() if feature.kind == "thread")
+    internal = next(feature for feature in nut.features.values() if feature.kind == "thread")
+    assert external.params["diameter"] == internal.params["diameter"] == 5.0
+    assert external.params["pitch"] == internal.params["pitch"]
+    assert not external.params["internal"] and internal.params["internal"]
 
 
 def test_a_part_that_reaches_upwards_keeps_the_middle_of_the_bore(profile: Profile) -> None:

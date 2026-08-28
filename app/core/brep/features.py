@@ -74,7 +74,10 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
             kind=kind,
             provenance="detected",
             params=params,
-            face_indices=(index,),
+            # Eine Topologiefläche besteht im Viewport aus vielen Dreiecken.
+            # Der nackte ``index`` gehört zur B-Rep-Flächenliste und wäre als
+            # Dreiecksindex eine andere Zahl mit zufällig gültigem Bereich.
+            face_indices=solid.triangles_of_face(index),
         )
 
     _log.info(

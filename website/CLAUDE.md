@@ -33,8 +33,10 @@ Eine Änderung an einer erzeugten Datei ist beim nächsten Lauf weg. Wer sie
   `--nachpruefen`.
 - **`stamp_assets.py` läuft als Letztes**, nach allen Bilder- und
   Seitenläufen.
-- **Der Download-Kasten zeigt vier Pakete**, obwohl der Baulauf acht liefert
-  (Linux ist das Flatpak).
+- **Der Download-Kasten zeigt ab der nächsten Version fünf Pakete**, obwohl der
+  Baulauf acht liefert: Windows, zwei macOS-Pakete sowie für Linux AppImage und
+  Flatpak. Das Archiv bleibt ein Bauartefakt und wird nicht hochgeladen. Die
+  aktuelle Seite bleibt bis zu diesem Release unverändert.
 
 ## Eine Falle beim Suchen
 

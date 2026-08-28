@@ -26,12 +26,16 @@ Doppelklick.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import struct
 import subprocess
+import sys
 from pathlib import Path
 from typing import Final
+
+import pytest
 
 from app.branding import APP_NAME
 
@@ -49,6 +53,26 @@ IGNORED: Final = ("__pycache__", ".pyc", ".pyo")
 #: Block, der etwas anderes trägt, übergeht macOS — das Symbol fehlt dann in
 #: genau dieser Größe, ohne Fehlermeldung.
 PNG_MAGIC: Final = b"\x89PNG\r\n\x1a\n"
+
+
+def _posix_shell() -> str | None:
+    """Liefert eine POSIX-Shell, auch wenn Git sie unter Windows nicht einträgt.
+
+    Die Installationslogik ist bewusst POSIX-``sh`` und muss daher ausgeführt
+    werden. Git for Windows bringt ein passendes ``sh.exe`` mit, registriert es
+    aber standardmäßig nicht im ``PATH``. Fehlt tatsächlich eine Shell, lässt
+    sich der dynamische Teil auf diesem Rechner nicht prüfen; die übrigen
+    Paketprüfungen laufen trotzdem weiter.
+    """
+    found = shutil.which("sh")
+    if found is not None:
+        return found
+
+    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    git_shell = program_files / "Git" / "usr" / "bin" / "sh.exe"
+    if git_shell.is_file():
+        return str(git_shell)
+    return None
 
 
 def _data_directories() -> set[Path]:
@@ -417,8 +441,14 @@ def test_every_platform_can_do_the_same_things() -> None:
         "Aktualisierungen sehen — auf Windows und macOS kann er beides"
     )
     # Der Viewport rechnet mit OpenGL, und der Schlüssel des Agenten liegt im
-    # Schlüsselbund — beides braucht seine Zeile.
+    # Schlüsselbund — beides braucht seine Zeile. VTK braucht den X11-Display;
+    # ``fallback-x11`` ließe ihn in einer Wayland-Sitzung weg und macht den
+    # Viewport nach dem Laden eines Modells leer. Qt läuft mit ihm über Xwayland,
+    # damit nicht zwei Fenstersysteme im selben Fenster gegeneinander arbeiten.
     assert "--device=dri" in manifest
+    assert "--socket=x11" in manifest
+    assert "--socket=wayland" not in manifest
+    assert "--socket=fallback-x11" not in manifest
     assert "--talk-name=org.freedesktop.secrets" in manifest
     # Und die Anwendung startet über ihren eigenen Namen, nicht über ein Skript.
     assert "command: " in manifest
@@ -463,6 +493,11 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "make_linux_packages.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert ".AppImage" in workflow, "das AppImage wird nicht mitgenommen"
     assert ".flatpak" in workflow, "das Flatpak wird nicht mitgenommen"
+    step = workflow.split("- name: AppImage und Flatpak bauen (Linux)", 1)[1].split(
+        "\n      - name:", 1
+    )[0]
+    assert "continue-on-error" not in step, "ein fehlendes öffentliches Paket bliebe grün"
+    assert "Öffentliche Linux-Pakete prüfen" in workflow
 
 
 def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
@@ -672,6 +707,29 @@ def test_the_macos_package_keeps_the_two_architectures_apart() -> None:
         assert options.get("hostArchitectures") == architecture
 
 
+def test_the_macos_conclusion_only_promises_an_apple_check_when_it_follows() -> None:
+    """Der Schlusstext darf Gatekeeper weder verschweigen noch herbeireden."""
+    from tools import make_macos_package as tool
+
+    unsigned = tool.conclusion()
+    notarized = tool.conclusion(notarized=True)
+
+    assert "Trotzdem öffnen" in unsigned
+    assert "Trotzdem öffnen" not in notarized
+    assert "von Apple geprüft" in notarized
+
+
+def test_the_macos_tool_refuses_a_notarization_promise_without_a_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein unsigniertes Paket kann Apple nicht als geprüft angekündigt werden."""
+    from tools import make_macos_package as tool
+
+    monkeypatch.setattr(sys, "argv", ["make_macos_package.py", "--notarized"])
+
+    assert tool.main() == 2
+
+
 def test_the_macos_description_is_the_one_the_tool_writes() -> None:
     """Auch hier: eine erzeugte, eingecheckte Datei veraltet still.
 
@@ -699,6 +757,28 @@ def test_the_workflow_builds_the_macos_installer_package() -> None:
 
     assert "make_macos_package.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert "*-macos-*.pkg" in workflow, "die .pkg wird nicht hochgeladen"
+    assert "pkgutil --check-signature" in workflow, "die Paketsignatur wird nicht geprüft"
+    assert "--notarized" in workflow, "der Installer verspricht Apples Prüfung nie"
+    assert "xcrun notarytool submit" in workflow, "das Paket wird Apple nicht vorgelegt"
+    assert "--wait" in workflow, "die CI könnte ein ungeprüftes Paket weiterreichen"
+    assert "xcrun stapler staple" in workflow, "das Prüfungsticket reist nicht mit"
+    assert "xcrun stapler validate" in workflow, "das angeheftete Ticket wird nicht geprüft"
+    assert "spctl --assess --type install" in workflow, "Gatekeepers Installationsweg bleibt offen"
+
+
+def test_the_workflow_verifies_both_windows_signatures() -> None:
+    """Beide Windows-Signierwege prüfen Anwendung und Setup-Datei."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert workflow.count("signtool sign") == 2, "Anwendung und Setup-Datei brauchen Signaturen"
+    assert workflow.count("azure/artifact-signing-action@v2") == 2, (
+        "Artifact Signing muss Anwendung und Setup-Datei erreichen"
+    )
+    assert "azure/login@v3" in workflow, "OIDC-Anmeldung für Artifact Signing fehlt"
+    assert "id-token: write" in workflow, "OIDC bekommt kein kurzlebiges GitHub-Token"
+    assert workflow.count("signtool verify /pa /v") == 4, (
+        "PFX und Artifact Signing müssen beide Signaturen auch nachweisen"
+    )
 
 
 # --- Die Projektdatei gehört der Anwendung (Dateizuordnung) ---------------------
@@ -885,8 +965,11 @@ def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) ->
     (shared / "bin").mkdir(parents=True)
     (shared / "bin" / "andere-anwendung").write_text("wichtig", encoding="utf-8")
 
-    sh = shutil.which("sh")
-    assert sh is not None, "ohne sh lässt sich ein sh-Skript nicht prüfen"
+    sh = _posix_shell()
+    if sh is None:
+        import pytest
+
+        pytest.skip("ohne POSIX-Shell lässt sich ein sh-Skript nicht ausführen")
     done = subprocess.run(
         [
             sh,
@@ -919,8 +1002,11 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
     found = re.search(r"\ncase \"\$TARGET\" in\n  \*/\"\$SHORT\"\).*?\nesac\n", script, re.DOTALL)
     assert found is not None
 
-    sh = shutil.which("sh")
-    assert sh is not None
+    sh = _posix_shell()
+    if sh is None:
+        import pytest
+
+        pytest.skip("ohne POSIX-Shell lässt sich ein sh-Skript nicht ausführen")
     done = subprocess.run(
         [
             sh,

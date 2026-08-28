@@ -523,10 +523,11 @@ def check_before_export(
                         code="export.needs_solid",
                         severity="error",
                         message=_(
-                            "Dieses Format hält Flächen und Kanten fest, und dieser "
-                            "Körper ist ein Netz — es hat keine. Als STL oder 3MF "
-                            "geht es; einen exakten Körper liefern die Operationen "
-                            "des zweiten Kerns."
+                            "STEP speichert einzeln bearbeitbare Flächen und Kanten; der "
+                            "gewählte Körper besteht nur noch aus festen Dreiecken. Als STL "
+                            "oder 3MF lässt er sich exportieren. Für STEP eine STEP-Datei "
+                            "öffnen oder bei der Grundform „Flächen und Kanten später "
+                            "bearbeiten“ aktivieren."
                         ),
                         object_id=entry.id,
                         values={"format": export_format},

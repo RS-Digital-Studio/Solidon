@@ -109,34 +109,43 @@ def distribution(architecture: str) -> str:
     )
 
 
-def conclusion() -> str:
+def conclusion(notarized: bool = False) -> str:
     """Der Text auf der letzten Seite — wo die Anwendung liegt und was folgt.
 
-    Er nennt den unsignierten Erststart ausdrücklich: Gatekeeper lässt eine
-    Anwendung ohne Developer-ID nicht per Doppelklick starten, und wer das
-    nicht weiß, hält ein frisch installiertes Programm für kaputt. Steht eine
-    Signatur, fällt der Absatz beim nächsten Bau von selbst weg — er hängt am
-    Vorhandensein der Umgebungsvariablen, nicht an einer gepflegten Liste.
+    Ohne Notarisierung nennt er den gesperrten Erststart ausdrücklich:
+    Gatekeeper lässt das Paket nicht per Doppelklick starten, und wer das nicht
+    weiß, hält ein frisch installiertes Programm für kaputt. Im notarisierten
+    Paket fällt der Absatz beim Bau weg; ein Fehlschlag danach hält die CI an,
+    sodass nie ein Paket mit der falschen Zusage ausgeliefert wird.
     """
-    return (
+    paragraphs = [
         f"{APP_NAME} ist installiert.\n\n"
         "Sie finden die Anwendung im Ordner „Programme“ (oder dort, wohin Sie sie "
-        "installiert haben).\n\n"
-        "Beim ersten Start meldet macOS, dass die Anwendung von einem nicht "
-        "verifizierten Entwickler stammt. Im Hinweis „Fertig“ wählen und die "
-        "Anwendung dann in den Systemeinstellungen unter „Datenschutz & "
-        "Sicherheit“ mit „Trotzdem öffnen“ freigeben. Danach startet sie wie "
-        "jede andere.\n\n"
-        f"Handbuch, Hilfe und Kontakt: {WEBSITE_URL}\n"
-    )
+        "installiert haben)."
+    ]
+    if notarized:
+        paragraphs.append(
+            "Das Paket wurde von Apple geprüft. Für den ersten Start ist keine "
+            "besondere Freigabe erforderlich."
+        )
+    else:
+        paragraphs.append(
+            "Beim ersten Start meldet macOS, dass die Anwendung von einem nicht "
+            "verifizierten Entwickler stammt. Im Hinweis „Fertig“ wählen und die "
+            "Anwendung dann in den Systemeinstellungen unter „Datenschutz & "
+            "Sicherheit“ mit „Trotzdem öffnen“ freigeben. Danach startet sie wie "
+            "jede andere."
+        )
+    paragraphs.append(f"Handbuch, Hilfe und Kontakt: {WEBSITE_URL}")
+    return "\n\n".join(paragraphs) + "\n"
 
 
-def write_files(architecture: str) -> list[Path]:
+def write_files(architecture: str, *, notarized: bool = False) -> list[Path]:
     """Schreibt die Beschreibung und den Schlusstext."""
     PACKAGING.mkdir(parents=True, exist_ok=True)
     DISTRIBUTION_FILE.write_text(distribution(architecture), encoding="utf-8", newline="\n")
     conclusion_file = PACKAGING / "macos-conclusion.txt"
-    conclusion_file.write_text(conclusion(), encoding="utf-8", newline="\n")
+    conclusion_file.write_text(conclusion(notarized), encoding="utf-8", newline="\n")
     return [DISTRIBUTION_FILE, conclusion_file]
 
 
@@ -223,7 +232,15 @@ def main() -> int:
         metavar="IDENTITÄT",
         help='Name eines "Developer ID Installer"-Zertifikats; ohne ihn unsigniert',
     )
+    parser.add_argument(
+        "--notarized",
+        action="store_true",
+        help="Schlusstext für ein Paket, das die CI anschließend notarisiert",
+    )
     arguments = parser.parse_args()
+    if arguments.notarized and not arguments.sign:
+        print("Notarisierung setzt ein signiertes Installationspaket voraus — --sign fehlt.")
+        return 2
 
     # Die Architektur des laufenden Rechners — auf einem fremden System die
     # von Apple Silicon, damit die erzeugte Beschreibung überall gleich
@@ -232,7 +249,7 @@ def main() -> int:
     if architecture == "AMD64":  # ein Windows-Rechner nennt sich so
         architecture = "x86_64"
 
-    for path in write_files(architecture):
+    for path in write_files(architecture, notarized=arguments.notarized):
         print(f"geschrieben: {path.relative_to(ROOT)}")
     if arguments.files:
         return 0

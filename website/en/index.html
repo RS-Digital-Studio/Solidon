@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=c1a16e11">
+<link rel="stylesheet" href="../style.css?v=b3f03d9a">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -96,7 +96,7 @@
       "name": "Do I have to use AI?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. The chat is one way out of four. Without a key and without Ollama, everything except the chat stays fully usable — menus, context menus, command line and all 91 operations."
+        "text": "No. The chat is one way out of four. Without a key and without Ollama, everything except the chat stays fully usable — menus, context menus, command line and all 93 operations."
       }
     },
     {
@@ -204,17 +204,14 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-text">
-        <h1>The model you downloaded does not fit. Make it fit.</h1>
-        <p class="lead">Drag the STL in, place a hole, add a lid, take the
-        clearance from the material profile — and before you slice, the report
-        says what will go wrong on the printer. Solidon3D edits other people's
-        models, designs your own and cleans up generated ones. Local, no
-        account, no subscription; an AI agent drives the same tools as the
-        menus, and geometry is computed by code, never by the language
-        model.</p>
+        <p class="hero-kicker">Edit and create 3D models — no CAD experience needed</p>
+        <h1>Turn any STL into the part you need.</h1>
+        <p class="lead">Drop in a model, change its dimensions, add a hole or
+        choose a fit — then Solidon3D checks before slicing whether it is ready
+        to print. No CAD experience, cloud or account required.</p>
 
         <div class="download" id="download">
-          <strong data-past-text="Demo — free, no account" data-release-text="The demo is here — free, no account">The demo is here — free, no account</strong>
+          <strong data-past-text="Try it free — no account" data-release-text="Download for free now">Download for free now</strong>
           <p class="countdown" data-countdown
              data-template="{rest} to go" aria-hidden="true" hidden></p>
           <p>Complete and without a key: no watermarks, no export lock, no
@@ -236,12 +233,28 @@
             </dialog>
             <p class="version">Version 0.2.1, released on 27 August 2026.</p>
           </div>
-          <p class="pruefhinweis" data-release-show hidden>Windows shows a blue notice for a new, as yet unsigned application: <i>More info</i> → <i>Run anyway</i>. Signing follows as soon as the certificate is in place.</p>
+          <details class="download-notes">
+            <summary>Installation and update notes</summary>
+            <p class="pruefhinweis" data-release-show hidden>Windows shows a blue notice for a new, as yet unsigned application: <i>More info</i> → <i>Run anyway</i>. Signing follows as soon as the certificate is in place.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> A Flatpak is not installed by double-clicking but from a terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in the folder you downloaded to. Solidon3D then appears in your application menu.</p>
           <p class="pruefhinweis" data-release-show hidden><b>New versions.</b> Solidon checks at startup whether a newer version is out and offers it for download — downloaded and installed only on your confirmation, and it can be switched off in the settings.</p>
+          </details>
           <p class="pruefhinweis">After installing: <a href="/en/manual.html#start">The first fifteen minutes</a> — from the empty window to the first exported part.</p>
 
+          <div class="donate">
+            <div>
+              <strong>Support Solidon3D</strong>
+              <p>The demo stays free. A voluntary donation funds further development, testing and the next version.</p>
+              <p class="donate-terms">This is not an order, provides nothing in return and is not credited toward a later purchase. We do not issue donation receipts. PayPal processes the payment only after you click; <a href="/datenschutz.html">privacy details</a>.</p>
+            </div>
+            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Donate with PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+          </div>
+
           <ul class="assure">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Developed in Germany
+            </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Runs offline
@@ -279,8 +292,8 @@
   <section class="tint">
     <div class="wrap">
       <div class="stats">
-        <div><b>91</b><span>operations in the registry</span></div>
-        <div><b>24</b><span>tested building blocks</span></div>
+        <div><b>93</b><span>operations in the registry</span></div>
+        <div><b>26</b><span>tested building blocks</span></div>
         <div><b>41</b><span>standard part sizes</span></div>
         <div><b>16</b><span>printer profiles included</span></div>
         <div><b>9</b><span>example projects included</span></div>
@@ -733,7 +746,7 @@
           <summary>Do I have to use AI?</summary>
           <p>No. The chat is one way out of four. Without a key and without
           Ollama, everything except the chat stays fully usable — menus,
-          context menus, command line and all 91 operations.</p>
+          context menus, command line and all 93 operations.</p>
         </details>
         <details>
           <summary>Does the AI compute my geometry?</summary>

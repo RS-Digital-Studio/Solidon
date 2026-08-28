@@ -234,6 +234,46 @@ def test_a_bore_is_read_off_the_topology_rather_than_fitted() -> None:
     assert holes["hole_1"].params["axis"][2] == pytest.approx(1.0)
 
 
+def test_a_brep_feature_names_all_its_viewport_triangles() -> None:
+    """Eine exakte Fläche ist nicht dasselbe wie ein Dreieck des Anzeigenetzes.
+
+    Die Bohrungswand ist im B-Rep genau **eine** Fläche. Im Viewport besteht
+    sie aus vielen Dreiecken. ``features_of`` schrieb früher die Nummer der
+    B-Rep-Fläche als ``face_indices`` hinein; der Viewport las sie als
+    Dreiecksnummer und färbte dadurch einen einzelnen Keil der Außenwand.
+    """
+    import numpy as np
+
+    diameter = 5.2
+    drilled = edit.boolean(
+        "difference",
+        [edit.cylinder(9.0, 13.0), edit.moved(edit.cylinder(diameter, 20.0), (0.0, 0.0, -3.0))],
+    )
+
+    hole = next(entry for entry in features_of(drilled).values() if entry.kind == "hole")
+    assert len(hole.face_indices) > 12, "ein runder Mantel braucht viele Anzeigedreiecke"
+
+    triangles = np.asarray(drilled.raw.triangles)[list(hole.face_indices)]
+    radii = np.linalg.norm(triangles[:, :, :2], axis=2)
+    assert radii == pytest.approx(diameter / 2.0, abs=drilled.deflection), (
+        "jede markierte Ecke liegt auf der Bohrungswand, keine auf der Außenwand"
+    )
+
+
+def test_brep_features_partition_the_whole_simple_body() -> None:
+    """Beim einfachen Rohr bleibt kein Dreieck fremd und keines doppelt."""
+    drilled = edit.boolean(
+        "difference",
+        [edit.cylinder(9.0, 13.0), edit.moved(edit.cylinder(5.2, 20.0), (0.0, 0.0, -3.0))],
+    )
+    groups = [set(feature.face_indices) for feature in features_of(drilled).values()]
+
+    assert set().union(*groups) == set(range(drilled.triangle_count))
+    assert sum(len(group) for group in groups) == drilled.triangle_count, (
+        "jedes Dreieck gehört genau einer exakten Fläche"
+    )
+
+
 def test_a_rounded_corner_is_not_reported_as_a_hole() -> None:
     """Eine Verrundung ist auch ein Zylinder — sie eine Bohrung zu nennen
     setzte eine Schraube in eine Wand.

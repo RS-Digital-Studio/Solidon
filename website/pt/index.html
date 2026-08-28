@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=c1a16e11">
+<link rel="stylesheet" href="../style.css?v=b3f03d9a">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -93,7 +93,7 @@
       "name": "Tenho de usar uma IA?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Não. O chat é um caminho entre quatro. Sem chave e sem Ollama, tudo menos o chat continua totalmente utilizável — menus, menus de contexto, linha de comandos e todas as 91 operações."
+        "text": "Não. O chat é um caminho entre quatro. Sem chave e sem Ollama, tudo menos o chat continua totalmente utilizável — menus, menus de contexto, linha de comandos e todas as 93 operações."
       }
     },
     {
@@ -201,17 +201,14 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-text">
-        <h1>A peça que transferiu não serve. Faça-a servir.</h1>
-        <p class="lead">Arrastar o STL para dentro, abrir um furo, juntar uma
-        tampa, tirar o ajuste do perfil de material — e antes do slicing o
-        relatório de verificação diz o que vai correr mal na impressão. O
-        Solidon3D edita modelos alheios, constrói os seus e prepara os
-        gerados. Local, sem conta, sem subscrição; um agente de IA usa as
-        mesmas ferramentas que os menus, e a geometria é calculada por
-        código, nunca pelo modelo de linguagem.</p>
+        <p class="hero-kicker">Edite e crie modelos 3D — sem conhecimentos de CAD</p>
+        <h1>Transforme qualquer STL na peça de que precisa.</h1>
+        <p class="lead">Importe um modelo, altere as dimensões, acrescente um
+        furo ou escolha um ajuste — o Solidon3D verifica antes de fatiar se a
+        peça está pronta a imprimir. Sem CAD, cloud nem conta.</p>
 
         <div class="download" id="download">
-          <strong data-past-text="Demo — gratuita, sem conta" data-release-text="A demo chegou — gratuita, sem conta">A demo chegou — gratuita, sem conta</strong>
+          <strong data-past-text="Experimente grátis — sem conta" data-release-text="Descarregar grátis agora">Descarregar grátis agora</strong>
           <p class="countdown" data-countdown
              data-template="Faltam {rest}" aria-hidden="true" hidden></p>
           <p>Completa e sem chave: sem marcas de água, sem bloqueio de
@@ -234,12 +231,28 @@
             </dialog>
             <p class="version">Versão 0.2.1, publicada a 27/08/2026.</p>
           </div>
-          <p class="pruefhinweis" data-release-show hidden>O Windows mostra um aviso azul numa aplicação nova e ainda não assinada: <i>Mais informações</i> → <i>Executar mesmo assim</i>. A assinatura chega assim que o certificado estiver pronto.</p>
+          <details class="download-notes">
+            <summary>Notas de instalação e atualizações</summary>
+            <p class="pruefhinweis" data-release-show hidden>O Windows mostra um aviso azul numa aplicação nova e ainda não assinada: <i>Mais informações</i> → <i>Executar mesmo assim</i>. A assinatura chega assim que o certificado estiver pronto.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Um Flatpak não se instala com duplo clique, mas no terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> na pasta onde o transferiu. Depois o Solidon3D aparece no menu de aplicações.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Versões novas.</b> O Solidon verifica ao iniciar se existe uma versão mais recente e oferece-a para transferência — transferida e instalada apenas com a sua confirmação, e pode ser desativado nas definições.</p>
+          </details>
           <p class="pruefhinweis">Depois da instalação: <a href="/pt/manual.html#start">Os primeiros quinze minutos</a> — da janela vazia à primeira peça exportada.</p>
 
+          <div class="donate">
+            <div>
+              <strong>Apoie o Solidon3D</strong>
+              <p>A demonstração continua gratuita. Uma doação voluntária financia o desenvolvimento, os testes e a próxima versão.</p>
+              <p class="donate-terms">Não é uma encomenda, não oferece qualquer contrapartida nem é descontado de uma compra posterior. Não emitimos recibos de donativo. A PayPal só processa o pagamento depois do clique; <a href="/datenschutz.html">detalhes de privacidade</a>.</p>
+            </div>
+            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Doar com PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+          </div>
+
           <ul class="assure">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Desenvolvido na Alemanha
+            </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Funciona offline
@@ -277,8 +290,8 @@
   <section class="tint">
     <div class="wrap">
       <div class="stats">
-        <div><b>91</b><span>operações no registo</span></div>
-        <div><b>24</b><span>blocos verificados</span></div>
+        <div><b>93</b><span>operações no registo</span></div>
+        <div><b>26</b><span>blocos verificados</span></div>
         <div><b>41</b><span>medidas de peças normalizadas</span></div>
         <div><b>16</b><span>perfis de impressora de fábrica</span></div>
         <div><b>9</b><span>projetos de exemplo incluídos</span></div>
@@ -742,7 +755,7 @@
           <summary>Tenho de usar uma IA?</summary>
           <p>Não. O chat é um caminho entre quatro. Sem chave e sem Ollama,
           tudo menos o chat continua totalmente utilizável — menus, menus de
-          contexto, linha de comandos e todas as 91 operações.</p>
+          contexto, linha de comandos e todas as 93 operações.</p>
         </details>
         <details>
           <summary>É a IA que calcula a minha geometria?</summary>

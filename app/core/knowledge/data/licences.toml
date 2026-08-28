@@ -23,6 +23,9 @@
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
 #   TripoSG           MIT       Quelltext und Gewichte, in ComfyUI geladen
 #   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet)
+#   Azure/login       MIT       OIDC-Anmeldung nur im Windows-Baulauf
+#   Azure/artifact-signing-action
+#                      MIT       signiert Anwendung und Installer im Windows-Baulauf
 #
 # TripoSG ist der Grund, warum Weg 3 überhaupt geht: Die naheliegende
 # Alternative war lizenzrechtlich in Europa nicht nutzbar. Die Knoten unter

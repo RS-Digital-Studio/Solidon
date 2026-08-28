@@ -819,8 +819,8 @@ class PegboardHookParams(BaseParams):
         "— ohne Werkzeug geht das nur, wenn man vor der Wand steht. Wer ein Teil "
         "oft abnimmt, schaltet sie ab; dann löst sich der Einhänger auf "
         "demselben Weg, auf dem er eingehängt wird. Schlitzmaße und Raster sind "
-        "gegen eine bemaßte Zeichnung geprüft, die Dicke der Platte nicht — und "
-        "aus ihr folgt, wie weit Nase und Zunge greifen."
+        "gegen eine bemaßte Zeichnung geprüft; die Plattendicke ist mit 5 mm am "
+        "28.08.2026 gemessen — daraus folgen Tiefe von Nase und Zunge."
     ),
     changes=[PEGBOARD_HOOK_ADDED, HOOK_FEATURE_ON_A_REAL_FACE, HOOK_HOLDS_WHEN_LIFTED],
 )

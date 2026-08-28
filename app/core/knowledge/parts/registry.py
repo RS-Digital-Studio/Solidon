@@ -136,6 +136,21 @@ class PartSpec:
     23.08.2026 wirkten auch Passungsleiter, Wandleiter und Überhangfächer an
     einer Bohrung — sie ergeben dort nur keinen Sinn.
     """
+    at_hole_mouth: bool = False
+    """Wahr, wenn der Ursprung eines Bohrungsbausteins an deren Mündung liegt.
+
+    Ein Innengewinde baut vollständig unter seinem Ursprung und wird deshalb
+    automatisch an die Mündung geschoben. Eine Schraube hat ihren Kopf darüber
+    und braucht dieselbe Bezugsebene trotzdem: Sie liegt mit Kopf und Schaft
+    an der angeklickten Bohrung statt mit ihrer Mitte darin.
+    """
+    separate_from_host: bool = False
+    """Wahr, wenn der Baustein neben seinem Träger ein eigenes Teil bleibt.
+
+    Eine Schraube in einer gesenkten Bohrung berührt den Träger absichtlich
+    nicht. Die zusammengesetzte Szene enthält dann zwei Körper, aber keinen
+    Fehler: Der Baustein bildet eine demontierbare Verbindung ab.
+    """
     joined_by_host: bool = False
     """Wahr, wenn der **Träger** die Teile dieses Bausteins zusammenhält.
 
@@ -427,6 +442,8 @@ def register_part(
     version: str = "1",
     subtractive: bool = False,
     at_hole: bool = False,
+    at_hole_mouth: bool = False,
+    separate_from_host: bool = False,
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
@@ -462,6 +479,8 @@ def register_part(
                 version=changes[-1].version if changes else version,
                 subtractive=subtractive,
                 at_hole=at_hole,
+                at_hole_mouth=at_hole_mouth,
+                separate_from_host=separate_from_host,
                 at_hole_values=at_hole_values,
                 bodies=bodies,
                 at_face=at_face,
@@ -496,7 +515,7 @@ def register_part(
 #: seiner Auflagefläche statt ihrer Kante, und das Übermaß der
 #: Magnet-Haltelippe kommt aus dem Materialprofil statt aus einer Zahl
 #: (``structure.py``, ``mounting.py``, 26.08.2026).
-LIBRARY_VERSION: Final = "10"
+LIBRARY_VERSION: Final = "11"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

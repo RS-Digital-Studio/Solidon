@@ -363,13 +363,14 @@ def linux_payload() -> dict[str, Any]:
 
 
 def test_a_flatpak_can_be_replaced_from_inside(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Für Linux wird nur das Flatpak ausgeliefert — es muss der Weg sein.
+    """Von den beiden Linux-Angeboten lässt sich nur das Flatpak einspielen.
 
     **Hier stand das Gegenteil**, und zwar begründet: „Flatpak und AppImage
     lassen sich nicht von innen ersetzen". Der zweite Halbsatz stimmt weiter,
     der erste war ein Missverständnis — ``flatpak install`` nimmt ein Bundle
-    unmittelbar. Weil für Linux sonst nichts auf der Download-Seite steht, war
-    Linux damit die einzige Plattform ohne Update aus der Anwendung heraus.
+    unmittelbar. Als es allein auf der Download-Seite stand, war Linux damit
+    die einzige Plattform ohne Update aus der Anwendung heraus. Das AppImage
+    kommt ab der nächsten Version hinzu, ersetzt sich aber nicht selbst.
     """
     monkeypatch.setattr(updates, "packaged", lambda: True)
     monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)

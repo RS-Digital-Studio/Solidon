@@ -158,6 +158,7 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
     faces = [list(map(int, face)) for face in body.faces]
     kept = np.ones(len(faces), dtype=bool)
     added: list[list[int]] = []
+    added_from: list[int] = []
     for face_index, cuts in splits.items():
         first, second, vertex = cuts[0]
         face = faces[face_index]
@@ -171,12 +172,27 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
         head, tail = (first, second) if forward else (second, first)
         kept[face_index] = False
         added.extend([[head, vertex, third], [vertex, tail, third]])
+        added_from.extend([face_index, face_index])
 
     if not added:
         return mesh, 0
 
     rebuilt = np.vstack([np.asarray(body.faces)[kept], np.asarray(added, dtype=np.int64)])
-    stitched = trimesh.Trimesh(vertices=body.vertices, faces=rebuilt, process=False)
+    # Flächenattribute gehören zur Fläche, nicht zu ihrer ursprünglichen
+    # Dreiecksaufteilung. Wird ein Dreieck geteilt, erben beide Hälften seine
+    # Herkunft — sonst verliert ausgerechnet die Reparatur die Zuordnung von
+    # B-Rep-Fläche zu Viewport-Markierung (und ebenso jedes spätere Attribut).
+    face_attributes = {
+        name: np.concatenate([np.asarray(values)[kept], np.asarray(values)[added_from]], axis=0)
+        for name, values in body.face_attributes.items()
+        if len(values) == len(faces)
+    }
+    stitched = trimesh.Trimesh(
+        vertices=body.vertices,
+        faces=rebuilt,
+        face_attributes=face_attributes,
+        process=False,
+    )
     _log.info("stitched %d T-junction(s)", len(added) // 2)
     return mesh.replacing(stitched), len(added) // 2
 

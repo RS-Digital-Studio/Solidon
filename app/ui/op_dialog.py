@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QMenu,
     QPushButton,
     QSizePolicy,
     QSpinBox,
@@ -202,6 +203,21 @@ class ValueField(QWidget):
         self._completer.setWidget(self.text)
         self._completer.activated.connect(self._insert_reference)
 
+        self.parameter_button = QToolButton(self)
+        self.parameter_button.setText(expressions.REFERENCE_PREFIX)
+        self.parameter_button.setAutoRaise(True)
+        self.parameter_button.setToolTip(tr("@name setzt einen Projektparameter ein."))
+        self.parameter_button.setAccessibleName(tr("Parameter"))
+        parameter_menu = QMenu(self.parameter_button)
+        for name in sorted(self._parameter_values):
+            action = parameter_menu.addAction(f"{expressions.REFERENCE_PREFIX}{name}")
+            action.setData(name)
+        parameter_menu.triggered.connect(weak_slot(self, ValueField._take_reference, forward=True))
+        self.parameter_button.setMenu(parameter_menu)
+        self.parameter_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.parameter_button.setEnabled(not parameter_menu.isEmpty())
+        self.parameter_button.setVisible(False)
+
         self.toggle = QToolButton(self)
         self.toggle.setText(self.TOGGLE_TEXT)
         self.toggle.setCheckable(True)
@@ -221,6 +237,7 @@ class ValueField(QWidget):
         row.setSpacing(TIGHT)
         row.addWidget(self.spin, 1)
         row.addWidget(self.text, 1)
+        row.addWidget(self.parameter_button)
         row.addWidget(self.toggle)
 
         layout = QVBoxLayout(self)
@@ -315,6 +332,7 @@ class ValueField(QWidget):
     def _switch(self, to_expression: bool) -> None:
         self.spin.setVisible(not to_expression)
         self.text.setVisible(to_expression)
+        self.parameter_button.setVisible(to_expression)
         self.hint.setVisible(to_expression)
         if to_expression and not self.text.text().strip():
             # Aus der stehenden Zahl wird der Anfang des Ausdrucks: wer
@@ -447,6 +465,34 @@ class ValueField(QWidget):
         text = self.text.text()
         self.text.setText(f"{text[:start]}{chosen}{text[start + len(typed) :]}")
         self.text.setCursorPosition(start + len(chosen))
+
+    def _take_reference(self, action: Any) -> None:
+        """Bindet den im sichtbaren @-Menü gewählten Projektparameter."""
+        name = str(action.data() or "")
+        if not name:
+            return
+        chosen = f"{expressions.REFERENCE_PREFIX}{name}"
+        entered = self.text.text().strip()
+        # ``fx`` beginnt mit der bisherigen Zahl. Die erste @-Auswahl meint in
+        # diesem einfachen Zustand fast immer „an dieses Maß binden" und nicht
+        # „die Zahl ohne Rechenzeichen vor einen Namen schreiben".
+        try:
+            if entered.startswith("="):
+                float(entered[1:].strip())
+                plain_number = True
+            else:
+                plain_number = False
+        except ValueError:
+            plain_number = False
+        if not entered or plain_number:
+            self.text.setText(f"={chosen}")
+            self.text.setCursorPosition(len(self.text.text()))
+            return
+        found = self._reference_prefix()
+        if found is not None:
+            self._insert_reference(chosen)
+            return
+        self.text.insert(chosen)
 
     def _describe(self) -> None:
         """Sagt unter dem Feld, was der Ausdruck gerade ergibt — oder woran er
@@ -1570,7 +1616,23 @@ class OperationDialog(QDialog):
         """
         inner.setVisible(open_now)
         self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
-        self.adjustSize()
+        if not open_now:
+            self.adjustSize()
+            return
+
+        # ``adjustSize`` deckelt Dialoge bei zwei Dritteln der Bildschirmhöhe.
+        # Bei einem Gewinde blieben deshalb die hinteren Felder unter den
+        # Aktionsknöpfen liegen. Der geöffnete Bereich bekommt seine echte
+        # Inhaltshöhe, bis höchstens an den sichtbaren Bildschirmrand.
+        layout = self.layout()
+        if layout is None:
+            return
+        layout.activate()
+        wanted = max(self.height(), layout.sizeHint().height())
+        screen = self.screen()
+        if screen is not None:
+            wanted = min(wanted, screen.availableGeometry().height() - 48)
+        self.resize(self.width(), wanted)
 
     def _fill_filament_fields(self, name: str, colour: str) -> None:
         """Name und Farbe des gewählten Filaments in ihre eigenen Felder.

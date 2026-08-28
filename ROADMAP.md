@@ -73,7 +73,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen CI-Baulauf, der `_chain` für Windows, macOS und Linux baut — dass es mitreist, ist seit dem 22.08. entschieden (Bauplan §31). Danach bleibt `_plane_segments` mit 893 ms die größte Position, nicht mehr GEOS |
-| CI-Bauläufe und Signierung | P8 — Erste Veröffentlichung | einen CI-Dienst, der die Läufe fährt; die Signierung ein Zertifikat. AppImage und Flatpak stehen seit dem 20.08. |
+| CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
@@ -114,10 +114,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 43 Texte stehen wortgleich in mehreren Dateien | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
-| Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | ein Angebot. `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen unter anderem mit einer Berufshaftpflicht — die in §11 und §13 nicht vorkommt. Gebraucht wird eine **Produkthaftpflicht mit Software-Einschluss**, nicht die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
-| Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
-| Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
-| Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | den Vertrag selbst, vor der Unterschrift. MoR-Verträge enthalten regelmäßig eine Freistellung zulasten des Verkäufers, oft unbegrenzt und nach fremdem Recht; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
+| Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | ein Angebot. Für Personen- und Sachschäden aus einem fehlerhaften Produkt braucht es eine **Produkthaftpflicht mit Software-Einschluss**, nicht nur die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
+| Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft nur den späteren Verkauf; die PayPal-Spende hat keine Gegenleistung |
+| Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | den Vertrag des Merchant of Record vor der Unterschrift. Er wickelt nur den späteren Lizenzkauf ab, nicht die PayPal-Spende. Seine Freistellung kann unbegrenzt und nach fremdem Recht gelten; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
 | Drei Messwerkzeuge des Kerns ohne Anschluss | Was der Gesamtreview liegen ließ (25.08.2026) | eine Oberfläche für Winkel, Hüllquader und Volumen der Auswahl (§18.3) — der Kern ist fertig und ungerufen |
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
@@ -133,14 +132,14 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Frage „Was soll daraus werden?" fragt auch bei einer einzigen Antwort | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine Vorwahl wie in Fusion: Dort steht „1 Profil · Bereich 800,00 mm²" unten rechts, und der Extrusionsdialog hat das Profil schon. Bei einer eindeutigen Zeichnung kosten Frage und *Weiter* zwei Klicks für eine Auskunft, die die Anwendung hat |
 | Vier Kleinere aus dem Fusion-Vergleich | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | Ebenen im Bild statt im Auswahlfeld, zwei Maße in einer Tab-Kette mit Schloss, die Bedienfolge in jedem Werkzeughinweis, und die ruhige Zeile am Bildrand. Jedes einzeln klein, zusammen der Unterschied, den Robert „alles ab Klick 1" genannt hat — Einzelheiten im Abschnitt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
-| Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft — der nächste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
+| Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | ein echtes Mac-Paket. Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**, und die reist nicht mit. Prüfung: *Hilfe → Nach Updates suchen* drücken |
 | Zwei Prüfungen in `test_packaging.py` halten weniger, als ihr Name sagt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Entscheidung, ob sie umgebaut oder nur ihre Begründung berichtigt wird. Heute richten sie keinen Schaden an; die falsche Begründung schickt aber den nächsten Leser in die falsche Richtung |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
-| AppImage und Archiv werden gebaut und nicht ausgeliefert | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | eine **Entscheidung von Robert**, keine Messung: Die CI baut beide, die Download-Seite zeigt nur das Flatpak. Ein AppImage braucht keine Paketverwaltung und ist der kürzeste Weg zum Probieren; das Archiv wäre über `install.sh --accept --prefix` sogar updatefähig. Bleibt es beim Flatpak allein, gehören die zwei Bauschritte aus der CI heraus |
+| AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `SALE_FROM` fehlt — die Verkaufsversion sperrt am 01.11. jeden Demo-Nutzer aus | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | nichts mehr — die Entscheidung ist gefallen (Robert, 28.08.: die 14 Tage laufen, ohne Umgehungsmöglichkeit), die Messung steht (0 von 14 Tagen, in einem isolierten Profil und von formwerk-af am Code bestätigt) und der Weg ist durchgerechnet. Es fehlt die Umsetzung: eine Konstante, ein einmaliges Anheben von `first_run`, ein fünfter Uhr-Deckel in `kern.md`, Tests in beide Richtungen |
 | Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet“ | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | die Ursache. Der Fehler ist **vorbestehend** — einzeln rot in 4,9 s und in einem Worktree auf `dce71e36` ohne die Änderungen der Sitzung ebenso; die Gegenprobe ist gefahren, er ist also kein Verdacht gegen den Update-Weg. `KeyDialog.probe_result` liest „Ollama hat nicht geantwortet“ statt „liegt jetzt hier“ |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
@@ -615,16 +614,23 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 ## P8 — Erste Veröffentlichung
 - [x] Name entschieden, überall durchgezogen — alles Namensbezogene steht in
       `app/branding.py`
-- [~] CI-Bauläufe, Signierung Windows, AppImage/Flatpak — `.github/workflows/`
-      baut Windows und Linux, erst nachdem die Suite auf allen drei Plattformen
-      grün ist. Windows wird zu einer Setup-Datei (`packaging/solidon3d.iss`,
-      gebaut von `tools/make_installer.py`, das die Werte aus
-      `app/branding.py` liest), Linux zu einem tar.gz, weil der
-      Artefakt-Upload sonst die Ausführungsrechte verliert; Anwendung und
-      Installer werden signiert, der Schritt überspringt sich ohne Zertifikat.
-      **Ungeprüft**, weil dieses Repository noch nicht auf einem CI-Dienst
-      liegt. Der Grund, der hier stand — es gebe kein Anwendungssymbol —, gilt
-      nicht mehr: `app/images/icon/solidon3d.svg` ist die Quelle,
+- [~] CI-Bauläufe, Signierung und Notarisierung — `.github/workflows/` baut
+      Windows, Linux sowie macOS für Apple Silicon und Intel, erst nachdem die
+      Suite auf allen drei Plattformen grün ist. Windows wird zu einer
+      Setup-Datei (`packaging/solidon3d.iss`, gebaut von
+      `tools/make_installer.py`), Linux zu AppImage und Flatpak sowie einem
+      internen tar.gz, macOS zu je einem `.pkg`. Alle Werte kommen aus
+      `app/branding.py`. Windows unterstützt Azure Artifact Signing per OIDC;
+      Anwendung und Setup-Datei werden getrennt signiert und geprüft, der alte
+      PFX-Weg bleibt Rückfall. Ohne Azure-Konto oder Zertifikat überspringt sich
+      die Signierung mit sichtbarer Warnung. Die Apple-Notarisierung ist als
+      gesperrter CI-Schritt gebaut:
+      `notarytool` wartet auf Apples Prüfung, `stapler` heftet und prüft das
+      Ticket, `spctl` prüft anschließend den Installationsweg. Es fehlen noch
+      Apple-Konto, Developer-IDs und die sieben CI-Geheimnisse. Ein grünes Rezept
+      ersetzt außerdem keinen Feldlauf der fertigen Pakete. Der Grund,
+      der hier einmal stand — es gebe kein Anwendungssymbol —, gilt nicht mehr:
+      `app/images/icon/solidon3d.svg` ist die Quelle,
       `tools/make_icon.py` rastert daraus `packaging/solidon3d.ico` und
       `website/icon.svg`, und Installer wie exe tragen es.
 
@@ -670,22 +676,25 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
       der Kunde erlebt ihn als Fehler. Entscheidung Robert: „jede plattform
       sollte das gleiche haben und alles funktionieren."
 
-      Was sonst drin ist, hat je einen Grund — Wayland und X11 für die
-      Oberfläche, `dri` für den Viewport (§18), `home` für die Modelle,
+      Was sonst drin ist, hat je einen Grund — X11, unter Wayland über
+      Xwayland, für Oberfläche und VTK-Viewport, `dri` für OpenGL (§18),
+      `home` für die Modelle,
       `org.freedesktop.secrets` für den Schlüssel des Agenten (§26).
 
       Zwei Stolpersteine sind vorweggenommen, weil sie sonst als Fehlermeldung
       ohne Absender erschienen wären: `appimagetool` ist selbst ein AppImage und
       braucht FUSE 2, das Ubuntu seit 24.04 nicht mehr mitbringt —
-      `APPIMAGE_EXTRACT_AND_RUN=1` packt es vorher aus. Und der Upload steht auf
-      `if-no-files-found: warn`, sonst hielte ein gescheiterter Paketierschritt
-      das tar.gz zurück, das längst fertig ist.
+      `APPIMAGE_EXTRACT_AND_RUN=1` packt es vorher aus. AppImage und Flatpak
+      sind ab der nächsten Version Pflichtausgaben: Fehlt eines, wird der
+      Linux-Zweig rot. Wegen `fail-fast: false` laufen Windows und beide
+      Mac-Zweige trotzdem fertig; ein halber Linux-Bau wird nicht als
+      veröffentlichbar ausgegeben.
 
       **Geprüft ist, was von Windows aus prüfbar ist**, und das ist mehr als
       nichts: `tests/test_packaging.py` hält die drei Beschreibungen an
       `app/branding.py` (dieselbe Drift-Prüfung wie bei den Handbuchabbildungen),
-      liest die `.desktop`-Schlüssel, prüft die Metainfo als XML, verbietet die
-      Netzberechtigung und verlangt, dass die CI das Werkzeug auch aufruft. Der
+      liest die `.desktop`-Schlüssel, prüft die Metainfo als XML, verlangt die
+      Netzberechtigung und den Aufruf des Werkzeugs durch die CI. Der
       **Bau** selbst braucht Linux und die beiden externen Programme — er bleibt
       ungeprüft wie der übrige Workflow, und aus demselben Grund
 - [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
@@ -1924,9 +1933,11 @@ bevor die falsche Zahl auf der Seite stand.
       rechnet die Prüfsumme über `shasum -a 256` und lädt je Architektur ein
       eigenes Artefakt hoch — Intel und Apple Silicon getrennt. Was wirklich
       fehlt, ist enger und benennbar: das **Apple-Zertifikat** und die
-      **Notarisierung**. `xcrun notarytool` und `stapler` kommen im Auftrag
-      nirgends vor, und ohne sie hält Gatekeeper eine geladene Anwendung auch
-      dann an, wenn sie signiert ist.
+      **Notarisierung**. Der gesperrte CI-Weg steht inzwischen: `notarytool`
+      wartet auf Apple, `stapler` heftet und prüft das Ticket, `spctl` prüft den
+      Installationsweg. Offen sind Apple-Konto, Developer-IDs, CI-Geheimnisse
+      und der Feldlauf beider Architekturen; ohne sie hält Gatekeeper eine
+      geladene Anwendung weiterhin an.
 - [x] **G-Code an die Maschine senden** (B3) — **entschieden: nein**, am
       13.08.2026 (`konzepte/konzept-wettbewerb-2026-08.md`, Teil 7 Frage 2). §28 meint
       mit „Drucker" das Zurücklesen; Senden wäre eine Bauplanänderung, und die
@@ -9645,15 +9656,16 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
 
 ---
 
-## Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026)
+## Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026)
 
 Robert hat die Haftungsgrundlagen des Geschäftsmodells noch einmal prüfen
-lassen. Acht Befunde, ausgearbeitet in `konzepte/konzept-foerdermodell.md` §15;
-hier stehen die fünf, die Arbeit sind.
+lassen. Der damalige Förderentwurf ist inzwischen durch eine PayPal-Spende
+ohne Gegenleistung ersetzt; hier stehen die Befunde, die für Demo oder Verkauf
+trotzdem Arbeit sind.
 
-**Der Anlass, in einem Satz:** §10 B6 des Konzepts hatte die Haftungsklauseln
-der EULA als „fachlich solide aufgebaut" abgehakt, und §5 baut die
-Rechtsformentscheidung darauf. Der Aufbau stimmt auch — der Wortlaut nicht.
+**Der Anlass, in einem Satz:** Die damalige Prüfung hatte die
+Haftungsklauseln der EULA als „fachlich solide aufgebaut" abgehakt und die
+Rechtsformentscheidung darauf gebaut. Der Aufbau stimmte — der Wortlaut nicht.
 
 **Und einer der Punkte gilt heute und nicht erst zum Verkaufsstart:** `AGB.md`
 setzt sich für die Demo-Zeit selbst außer Kraft, der Verkauf ist bis zum
@@ -9689,11 +9701,9 @@ heutiger Wirkung** — und die schwächste der drei.
       nächste Website-Upload, der die erzeugte Seite mitnimmt.
 
 - [ ] **Die Versicherung trägt die Rechtsformentscheidung und steht in keiner
-      Liste.** `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen
-      auch damit, dass gegen das nicht Ausschließbare „eine Berufshaftpflicht
-      für IT besser und billiger hilft als eine Rechtsform". In §11 stehen zehn
-      Aufgaben, in §13 sechs Entscheidungen — die Versicherung kommt in keiner
-      vor.
+      Liste.** Die Entscheidung für das Einzelunternehmen setzt voraus, dass
+      das nicht ausschließbare Produktrisiko versichert wird. Dafür fehlt noch
+      ein Angebot.
 
       Und sie muss anders aussehen als der Nebensatz vermuten lässt: Eine
       IT-Berufshaftpflicht deckt typischerweise **Vermögensschäden**. Personen-
@@ -9714,30 +9724,23 @@ heutiger Wirkung** — und die schwächste der drei.
       Abweichung **ausdrücklich und gesondert** vereinbart ist. Ein Abschnitt in
       einem Vertragstext ist beides nicht.
 
-      Dasselbe gilt für die **Vorabversionen** aus Förderstufe 2: Wer sie gegen
-      Entgelt zusagt, schuldet nach § 327e Abs. 3 BGB die übliche Beschaffenheit
-      — bei einer Vorabversion begriffsnotwendig ein Problem. Betrifft also den
-      Verkauf **und** die Förderung, und beides über dieselbe Formalie.
+      Der PayPal-Spendenweg verspricht keine Vorabversion und keine andere
+      Gegenleistung. Der Punkt betrifft deshalb nur den späteren Verkauf.
 
-- [ ] **Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der
-      Anwendung.** § 312k Abs. 2 BGB will eine ständig verfügbare, ohne
-      Anmeldung erreichbare Schaltfläche auf einer Webseite; §13 Nummer 6 des
-      Konzepts hat am selben Tag entschieden, die Förderung in die Anwendung zu
-      legen und keine Website-Seite zu bauen. Eine Schaltfläche in einem
-      Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und
-      wer kündigt, hat es oft schon gelöscht. Dazu verspricht Stufe 1 eine
-      Nennung auf einer Förderseite, die es dann nicht gibt: eine geschuldete
-      Leistung ohne Ort.
-
-      **Das stößt die Entscheidung nicht um, es ergänzt sie:** Die Seite wird
-      gebraucht — als Rechtsseite mit Kündigung, Bedingungen und Nennung, nicht
-      als Werbeseite. Geworben wird weiter in der Anwendung; das war der Befund
-      aus den Zugriffszahlen und der bleibt.
+- [x] **Für die PayPal-Spende ist keine eigene Kündigungsschaltfläche nötig.**
+      Der alte Befund hing an einem monatlichen Stufenmodell mit geschuldeten
+      Gegenleistungen. Dieses Modell ist gestrichen. § 312k Abs. 1 BGB setzt
+      ein Dauerschuldverhältnis voraus, das den Unternehmer zu einer
+      **entgeltlichen Leistung** verpflichtet; die PayPal-Spende ist
+      ausdrücklich eine unentgeltliche Zuwendung ohne Gegenleistung. PayPal
+      lässt wiederkehrende Spenden außerdem in den Profileinstellungen ändern
+      oder beenden. Website, AGB, Widerrufsseite und Datenschutz erklären diese
+      Grenze seit dem 28.08.2026 unmittelbar am Zahlungsweg.
 
 - [ ] **Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück.**
-      `konzept-foerdermodell.md` §8 zählt auf, was ein Merchant of Record
-      abnimmt — Umsatzsteuer, Rechnung, Widerruf, Streitfälle — und nennt die
-      Kehrseite nicht: MoR-Verträge enthalten regelmäßig eine
+      Ein Merchant of Record nimmt beim späteren Lizenzkauf Umsatzsteuer,
+      Rechnung, Widerruf und Streitfälle ab. Seine Verträge enthalten
+      regelmäßig eine
       **Freistellungsklausel** zulasten des Verkäufers, häufig der Höhe nach
       unbegrenzt, nach fremdem Recht und mit fremdem Gerichtsstand.
       `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem
@@ -12000,15 +12003,12 @@ nicht erreichbar ist. Das Tor war damit schon vor dieser Arbeit rot.
 
 Offen:
 
-- [ ] **AppImage und Archiv werden gebaut und nicht ausgeliefert.** Die CI baut
-      beide (`tools/make_linux_packages.py --appimage --tarball`, der Schritt
-      trägt `continue-on-error`), auf der Download-Seite steht nur das Flatpak.
-      Das ist entweder Rechenzeit für nichts oder eine Lücke: Ein AppImage
-      braucht keine Paketverwaltung und ist der kürzeste Weg für jemanden, der
-      Solidon nur probieren will — `install.sh --accept --prefix` wäre für das
-      Archiv sogar updatefähig. **Braucht eine Entscheidung von Robert**, keine
-      Messung: Es ist eine Frage der Auslieferung, nicht der Technik. Bleibt es
-      beim Flatpak allein, gehören die beiden Bauschritte aus der CI heraus.
+- [~] **Ab der nächsten Version kommen AppImage und Flatpak auf die
+      Download-Seite.** Entscheidung Robert, 28.08.2026: Das AppImage ist der
+      direkte Start ohne Terminal, das Flatpak die verwaltete Installation. Das
+      Archiv bleibt ein Bauartefakt; sein Installationsskript rechtfertigt keine
+      dritte Linux-Wahl. Die Regel steht in `make_download.DELIVERED` und ist
+      getestet. Die aktuelle Download-Seite bleibt bis zum Release unverändert.
 
 ---
 

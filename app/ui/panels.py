@@ -67,6 +67,7 @@ from app.ui.labels import (
     feature_label,
     feature_measure,
     feature_name,
+    fill_parameter_units,
     group_title,
     kind_requirement,
     length,
@@ -525,6 +526,10 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
     """
     for index in range(item.childCount()):
         child = item.child(index)
+        if child is None:
+            # Der Index liegt durch ``childCount`` im Bereich; der Qt-Stub
+            # lässt dennoch ``None`` zu. Ein defensiver Wächter hält beides.
+            continue
         if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
             return child
         deeper = _feature_item(child, feature_id)
@@ -787,10 +792,15 @@ class ObjectTree(QWidget):
             item = QTreeWidgetItem([str(entry.name), f"{measures} {self._unit}"])
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
-            # §30: welche Sorte Körper das ist, gehört in den Baum, denn sie
-            # entscheidet, was sich noch mit ihm tun lässt — und der Weg von
-            # B-Rep zu Mesh ist eine Einbahnstraße.
-            kind = tr("exakt") if entry.kind == "brep" else tr("Netz")
+            # §30: Nicht den Namen des Rechenkerns zeigen, sondern die Folge,
+            # die für die nächste Handlung zählt. „Exakt" und „B-Rep" setzen
+            # CAD-Wissen voraus und lassen das Dreiecksmodell wie die
+            # schlechtere Wahl aussehen.
+            kind = (
+                tr("Kanten weiter bearbeitbar")
+                if entry.kind == "brep"
+                else tr("Feste Dreiecksflächen")
+            )
             tip = f"{object_id} · {kind} · {entry.mesh.triangle_count} {tr('Dreiecke')} · {state}"
             if entry.material:
                 tip += f" · {entry.material}"
@@ -1390,9 +1400,24 @@ class ObjectTree(QWidget):
         )
 
     def _on_context_menu(self, position: QPoint) -> None:
+        # Das Signal kommt in Koordinaten des gesamten Baums, ``itemAt`` und
+        # der Ansichtsbereich erwarten dagegen Koordinaten ihres Viewports.
+        # Ohne die Umrechnung trifft ein Rechtsklick unter der Kopfzeile die
+        # Zeile darüber oder gar keine — gerade ein Bohrungsmenü verlor so
+        # sein Zielmerkmal.
+        viewport_position = self.tree.viewport().mapFrom(self.tree, position)
+        item = self.tree.itemAt(viewport_position)
+        if item is not None:
+            # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
+            # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
+            # aber ein vorher gewähltes Merkmal oder keines — ein Gewinde
+            # stand dann nicht in der gerade angeklickten Bohrung.
+            self.tree.clearSelection()
+            item.setSelected(True)
+            self.tree.setCurrentItem(item)
         menu = self.context_menu()
         if menu is not None:
-            menu.exec(self.tree.viewport().mapToGlobal(position))
+            menu.exec(self.tree.viewport().mapToGlobal(viewport_position))
 
     def _add_source_step(self, menu: QMenu) -> None:
         """„Diesen Schritt ändern" — der Weg vom Ergebnis zurück zum Schritt
@@ -1509,6 +1534,8 @@ class ParameterPanel(QWidget):
     """
 
     parameterEdited = Signal(str, float)
+    parameterUnitEdited = Signal(str, str)
+    """Eine feste Einheit wurde in der Zeile gewählt."""
     addRequested = Signal()
     """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
     limitsRequested = Signal(str)
@@ -1532,6 +1559,7 @@ class ParameterPanel(QWidget):
         fit_wrapped(self._empty)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
+        self._unit_editors: dict[str, QComboBox] = {}
         self._rows: dict[QWidget, str] = {}
         """Welches Widget zu welchem Parameter gehört — für das Kontextmenü.
 
@@ -1622,10 +1650,58 @@ class ParameterPanel(QWidget):
         if label is not None:
             self._rows[label] = name
 
+    def _queue_parameter_edit(self, name: str, value: float) -> None:
+        """Meldet eine fertige Eingabe erst nach dem Signal der Spinbox.
+
+        ``show_document`` baut die Zeilen nach einer Änderung neu auf. Geschah
+        das noch innerhalb von ``QDoubleSpinBox.valueChanged``, löschte Qt auf
+        Windows das gerade sendende Eingabefeld; der Prozess verschwand ohne
+        Fehlermeldung. Der nächste Ereignisschritt lässt das Signal vollständig
+        zurückkehren, bevor die Leiste neu gebaut wird.
+        """
+        QTimer.singleShot(0, self, lambda: self.parameterEdited.emit(name, value))
+
+    def _queue_parameter_unit_edit(self, name: str, unit: str) -> None:
+        """Meldet auch die Einheit erst nach dem Signal ihrer Auswahlliste."""
+        QTimer.singleShot(0, self, lambda: self.parameterUnitEdited.emit(name, unit))
+
+    def _unit_activated(self, index: int) -> None:
+        """Übernimmt die feste Auswahl, ohne den sendenden Kasten zu löschen."""
+        editor = self.sender()
+        if not isinstance(editor, QComboBox):
+            return
+        name = str(editor.property("parameterName") or "")
+        if name:
+            self._queue_parameter_unit_edit(name, str(editor.itemData(index) or ""))
+
+    def _unit_editor(self, name: str, selected: str) -> QComboBox:
+        """Die kompakte, nicht editierbare Einheitenauswahl einer Zeile."""
+        editor = QComboBox(self)
+        fill_parameter_units(editor, selected)
+        editor.setProperty("parameterName", name)
+        editor.setAccessibleName(tr("Einheit"))
+        editor.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        editor.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        editor.activated.connect(self._unit_activated)
+        self._unit_editors[name] = editor
+        return editor
+
+    def _add_parameter_row(self, name: str, title: str, value: QWidget, unit: QComboBox) -> None:
+        """Zahl und anklickbare Einheit als eine beschriftete Zeile."""
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        layout.addWidget(value, 1)
+        layout.addWidget(unit)
+        self._form.addRow(title, row)
+        self._remember_row(name, row)
+
     def show_document(self, document: Document) -> None:
         while self._form.rowCount():
             self._form.removeRow(0)
         self._editors.clear()
+        self._unit_editors.clear()
         # **Vor dem Neuaufbau leeren, nicht danach.** ``removeRow`` löscht die
         # Widgets der alten Zeilen; ein Eintrag, der auf ein totes C++-Objekt
         # zeigt, beantwortet den nächsten Rechtsklick mit einem Absturz.
@@ -1640,30 +1716,28 @@ class ParameterPanel(QWidget):
             return
 
         for name, parameter in document.parameters.items():
+            unit = self._unit_editor(name, str(parameter.unit or ""))
             if parameter.expression:
                 # Abgeleitete Werte werden gezeigt, nicht bearbeitet — der Ausdruck
                 # besitzt sie.
-                label = QLabel(f"{localised(f'{parameter.value:.2f}')} {parameter.unit}", self)
+                label = QLabel(localised(f"{parameter.value:.2f}"), self)
                 label.setToolTip(parameter.expression)
-                self._form.addRow(f"{parameter.title or name}", label)
+                self._add_parameter_row(name, f"{parameter.title or name}", label, unit)
                 # Auch die abgeleitete Zeile: Ihr Ausdruck ist genau das, was
                 # man an ihr ändern will, und bearbeiten lässt sie sich sonst
                 # nirgends.
-                self._remember_row(name, label)
                 continue
             editor = NumberSpin(self)
             editor.setDecimals(2)
-            editor.setSuffix(f" {parameter.unit}")
             editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)
             editor.setMaximum(parameter.maximum if parameter.maximum is not None else 100_000.0)
             editor.setValue(parameter.value)
             editor.setKeyboardTracking(False)
             editor.valueChanged.connect(
-                lambda value, key=name: self.parameterEdited.emit(key, value)
+                lambda value, key=name: self._queue_parameter_edit(key, value)
             )
             self._editors[name] = editor
-            self._form.addRow(f"{parameter.title or name}", editor)
-            self._remember_row(name, editor)
+            self._add_parameter_row(name, f"{parameter.title or name}", editor, unit)
         self._fit()
 
 

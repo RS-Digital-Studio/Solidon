@@ -16,6 +16,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from functools import partial
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -570,7 +571,19 @@ class Session(QObject):
 
         parameters = self.project.document.parameters
         existing = parameters.get(name)
-        if existing is None or is_close(existing.value, value):
+        if existing is None:
+            return False
+        if not isfinite(value):
+            self.failed.emit(
+                ValidationError(
+                    field=name,
+                    detail=tr("Dieser Wert ist keine endliche Zahl"),
+                    value=value,
+                    constraint="not_a_number",
+                )
+            )
+            return False
+        if is_close(existing.value, value):
             return False
 
         changed = dataclasses.replace(existing, value=value)

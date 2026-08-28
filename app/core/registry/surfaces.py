@@ -354,14 +354,14 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         # (MENU_TWINS): sein Ort ist der Eintrag des Partners — alles andere
         # schickte Nutzer und Agent an eine Stelle, die es nicht gibt.
         #
-        # Wie er dort erreicht wird, hängt am Paar: mit einem Umschalter
+        # Wie er dort erreicht wird, hängt am Paar: mit einer Option
         # (TWIN_TOGGLES), oder über einen Wert im Dialog. Der Zusatz nannte
         # früher immer den Umschalter „Exakt" — für ein Paar ohne ihn wäre
         # das eine Wegbeschreibung zu einem Haken, den es nicht gibt.
         twin = source.get(MENU_TWINS[spec.name])
         where = menu_path(twin, source)
         if spec.name in TWIN_TOGGLES:
-            return f"{where} ({_('Umschalter „Exakt“')})"
+            return f"{where} ({_('Option „Flächen und Kanten später bearbeiten“')})"
         return f"{where} ({_('im selben Dialog')})"
     steps = [group_title(spec.category)]
 

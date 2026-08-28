@@ -575,6 +575,11 @@ def test_the_exact_thread_is_a_core_plus_a_helical_ridge() -> None:
     assert body.volume - core == pytest.approx(gang, rel=0.2)
 
 
+def test_the_exact_thread_is_offered_as_a_screw() -> None:
+    """Der Außengang war vorhanden, für Einsteiger aber nur als Bolzen lesbar."""
+    assert str(REGISTRY.get("thread_exact").title) == "Schraube erstellen"
+
+
 def test_the_thread_pitch_needs_a_core() -> None:
     with pytest.raises(ValidationError):
         run("thread_exact", diameter=3.0, pitch=3.0, length=12.0)

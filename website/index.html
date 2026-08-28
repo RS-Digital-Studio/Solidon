@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=c1a16e11">
+<link rel="stylesheet" href="style.css?v=b3f03d9a">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -96,7 +96,7 @@
       "name": "Muss ich eine KI benutzen?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs, Kontextmenüs, Kommandozeile und alle 91 Operationen."
+        "text": "Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs, Kontextmenüs, Kommandozeile und alle 93 Operationen."
       }
     },
     {
@@ -204,16 +204,14 @@
   <div class="wrap">
     <div class="hero">
       <div class="hero-text">
-        <h1>Das heruntergeladene Teil passt nicht. Mach es passend.</h1>
-        <p class="lead">STL hereinziehen, Bohrung setzen, Deckel dazu, Passung
-        aus dem Materialprofil — und vor dem Slicen steht im Prüfbericht, was
-        beim Drucken schiefgeht. Solidon3D bearbeitet fremde Modelle,
-        konstruiert eigene und bereitet erzeugte auf. Lokal, ohne Konto, ohne
-        Abo; ein KI-Agent bedient dieselben Werkzeuge wie die Menüs, und die
-        Geometrie rechnet Code, nie das Sprachmodell.</p>
+        <p class="hero-kicker">3D-Modelle bearbeiten &amp; erstellen — ohne CAD-Vorkenntnisse</p>
+        <h1>Aus STL wird das Teil, das du brauchst.</h1>
+        <p class="lead">Modell hineinziehen, Maß ändern, Bohrung setzen,
+        Passung wählen — und Solidon3D prüft vor dem Slicen, ob dein Teil
+        druckbar ist. Ohne CAD-Vorkenntnisse, ohne Cloud, ohne Konto.</p>
 
         <div class="download" id="download">
-          <strong data-past-text="Demo — kostenlos, ohne Konto" data-release-text="Die Demo ist da — kostenlos, ohne Konto">Die Demo ist da — kostenlos, ohne Konto</strong>
+          <strong data-past-text="Kostenlos testen — ohne Konto" data-release-text="Jetzt kostenlos herunterladen">Jetzt kostenlos herunterladen</strong>
           <p class="countdown" data-countdown
              data-template="Noch {rest}" aria-hidden="true" hidden></p>
           <p>Vollständig und ohne Schlüssel: keine Wasserzeichen, keine
@@ -236,12 +234,28 @@
             </dialog>
             <p class="version">Version 0.2.1, erschienen am 27.08.2026.</p>
           </div>
-          <p class="pruefhinweis" data-release-show hidden>Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
+          <details class="download-notes">
+            <summary>Hinweise zu Installation und Updates</summary>
+            <p class="pruefhinweis" data-release-show hidden>Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Ein Flatpak wird nicht per Doppelklick installiert, sondern im Terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> in dem Ordner, in den du geladen hast. Danach steht Solidon3D im Startmenü.</p>
           <p class="pruefhinweis" data-release-show hidden><b>Neue Versionen.</b> Solidon sieht beim Start selbst nach, ob eine neuere Version da ist, und bietet sie zum Laden an — geladen und installiert wird erst auf deine Bestätigung, abschalten lässt es sich in den Einstellungen.</p>
+          </details>
           <p class="pruefhinweis">Nach der Installation: <a href="/handbuch.html#start">Die ersten fünfzehn Minuten</a> — vom leeren Fenster zum ersten exportierten Teil.</p>
 
+          <div class="donate">
+            <div>
+              <strong>Solidon3D unterstützen</strong>
+              <p>Die Demo bleibt kostenlos. Mit einer freiwilligen Spende finanzierst du Weiterentwicklung, Tests und die nächste Version.</p>
+              <p class="donate-terms">Keine Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf. Wir stellen keine Spendenbescheinigung aus. PayPal verarbeitet die Zahlung erst nach dem Klick; <a href="/datenschutz.html">Details im Datenschutz</a>.</p>
+            </div>
+            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Mit PayPal spenden <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+          </div>
+
           <ul class="assure">
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Entwickelt in Deutschland
+            </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Läuft offline
@@ -279,8 +293,8 @@
   <section class="tint">
     <div class="wrap">
       <div class="stats">
-        <div><b>91</b><span>Operationen im Register</span></div>
-        <div><b>24</b><span>geprüfte Bausteine</span></div>
+        <div><b>93</b><span>Operationen im Register</span></div>
+        <div><b>26</b><span>geprüfte Bausteine</span></div>
         <div><b>41</b><span>Normteilmaße hinterlegt</span></div>
         <div><b>16</b><span>Druckerprofile ab Werk</span></div>
         <div><b>9</b><span>Beispielprojekte dabei</span></div>
@@ -746,7 +760,7 @@
           <summary>Muss ich eine KI benutzen?</summary>
           <p>Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne
           Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs,
-          Kontextmenüs, Kommandozeile und alle 91 Operationen.</p>
+          Kontextmenüs, Kommandozeile und alle 93 Operationen.</p>
         </details>
         <details>
           <summary>Rechnet die KI meine Geometrie?</summary>

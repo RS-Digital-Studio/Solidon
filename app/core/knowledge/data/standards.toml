@@ -12,6 +12,9 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 5 seit dem 28.08.2026: Die Dicke der SKÅDIS-Lochwand ist mit 5,00 mm
+# an einer Platte nachgemessen und nicht länger als unbelegt gekennzeichnet.
+# Der Zahlenwert war schon derselbe; neu ist seine belastbare Herkunft.
 # Version 4 seit dem 25.08.2026: Drei Mutternhöhen auf ISO 4032 berichtigt und
 # eine Buchsenlänge (M2.5). Das sind die ersten Änderungen an bestehenden
 # Werten — bis dahin kam nur hinzu.
@@ -20,7 +23,7 @@
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "4"
+version = "5"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -369,9 +372,10 @@ note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 # engsten gemessenen Schlitz bleiben unter PETG 0,15 mm Luft, unter PLA 0,10.
 # `tests/test_parts.py` hält das fest.
 #
-# **Die Plattendicke fehlt weiterhin.** Sie war die einzige der fünf Zahlen,
-# die eine Messung gebraucht hätte, und sie ist bei diesem Durchgang nicht
-# mitgekommen.
+# **Die Plattendicke ist nachgemessen.** Am 28.08.2026 wurde eine SKÅDIS-Platte
+# mit dem Messschieber mit 5,00 mm gemessen. Sie bestimmt den Durchgang des
+# Einhängers und die Nasentiefe; der Wert bleibt deshalb in dieser Tabelle und
+# nicht als Konstante im Baustein.
 #
 # **Beim Hersteller gesucht und nicht gefunden** (25.08.2026): IKEA
 # veröffentlicht die Lochung an keiner der vier offiziellen Stellen — Produkt-
@@ -387,7 +391,7 @@ slot_height = 15.0
 pitch = 40.0
 stagger = 20.0
 thickness = 5.0
-note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt. Nennmaße an einer echten Platte bestätigt, Toleranz ±0,1 mm; Plattendicke unbelegt"
+note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt. Nennmaße an einer echten Platte bestätigt, Toleranz ±0,1 mm; Plattendicke 5,00 mm am 28.08.2026 gemessen"
 
 # --- Schläuche und Rohre --------------------------------------------------------
 

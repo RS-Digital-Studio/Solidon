@@ -10,9 +10,11 @@
 # auflösen und meldet, wenn eine neue etwas bricht. Ohne ihn erfährt man davon
 # erst beim nächsten frischen Klon — und dann mitten in einer anderen Arbeit.
 #
-# Die Signierung braucht ein Zertifikat, das nicht in diesem Repository liegt.
-# Der Schritt steht hier und überspringt sich, wenn das Secret fehlt — ein
-# Fork baut dann unsigniert, statt zu scheitern.
+# Die Signierung braucht externe Identitäten, die nicht in diesem Repository
+# liegen: Azure Artifact Signing oder ein vorhandenes PFX für Windows sowie
+# Developer-IDs und Notarisierungsdaten für Apple. Die Schritte stehen hier
+# und überspringen sich, wenn ihre Angaben fehlen — ein Fork baut dann
+# unsigniert, statt zu scheitern.
 #
 # Der tägliche Push läuft nur auf Ubuntu; die volle Drei-Plattform-Matrix und
 # die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch), also
@@ -245,6 +247,9 @@ jobs:
     needs: suite
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -280,9 +285,19 @@ jobs:
       # die eine Stelle, die die Bedingung unten sieht.
       SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
       SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+      ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+      ARTIFACT_SIGNING_PROFILE: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
       APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
       APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
       APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+      APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+      APPLE_NOTARY_ID: ${{ secrets.APPLE_NOTARY_ID }}
+      APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -335,7 +350,7 @@ jobs:
         # mehr heraus — ein PFX in einem Secret ist für ein neu gekauftes
         # Zertifikat kein möglicher Weg. Wenn signiert wird, dann über Azure
         # Trusted Signing, und dann wird dieser Schritt ersetzt, nicht gefüllt.
-        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE == ''
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE == ''
         shell: pwsh
         run: |
           Write-Host "::warning::Unsigniert gebaut - SmartScreen warnt beim ersten Start."
@@ -343,7 +358,7 @@ jobs:
       - name: Signieren (Windows)
         # Erst die Anwendung, dann unten der Installer — was in die Setup-Datei
         # wandert, muss vorher signiert sein.
-        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE != ''
         shell: pwsh
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
@@ -355,6 +370,42 @@ jobs:
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
             "dist/$name/$name.exe"
+          & signtool verify /pa /v "dist/$name/$name.exe"
+
+      - name: Bei Azure für Artifact Signing anmelden
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Anwendungspfad für Artifact Signing bestimmen
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        shell: pwsh
+        run: |
+          $name = python -c "from app.branding import APP_NAME; print(APP_NAME)"
+          $path = (Resolve-Path "dist/$name/$name.exe").Path
+          "ARTIFACT_APP=$path" >> $env:GITHUB_ENV
+
+      - name: Anwendung mit Azure Artifact Signing signieren
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ env.ARTIFACT_APP }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Solidon3D
+          description-url: https://solidon3d.de/
+
+      - name: Azure-Signatur der Anwendung prüfen
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        shell: pwsh
+        run: signtool verify /pa /v $env:ARTIFACT_APP
 
       - name: Inno Setup sicherstellen (Windows)
         # Auf den GitHub-Runnern vorinstalliert; die Prüfung hält den Lauf
@@ -372,7 +423,7 @@ jobs:
         run: python tools/make_installer.py
 
       - name: Installer signieren (Windows)
-        if: runner.os == 'Windows' && env.SIGN_CERTIFICATE != ''
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE != ''
         shell: pwsh
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
@@ -382,6 +433,34 @@ jobs:
           & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
             /tr http://timestamp.digicert.com /td SHA256 `
             $setup.FullName
+          & signtool verify /pa /v $setup.FullName
+
+      - name: Installerpfad für Artifact Signing bestimmen
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem dist -Filter "*-Setup-*.exe" | Select-Object -First 1
+          if ($null -eq $setup) { throw "Die Setup-Datei fehlt." }
+          "ARTIFACT_SETUP=$($setup.FullName)" >> $env:GITHUB_ENV
+
+      - name: Installer mit Azure Artifact Signing signieren
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ env.ARTIFACT_SETUP }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Solidon3D Setup
+          description-url: https://solidon3d.de/
+
+      - name: Azure-Signatur des Installers prüfen
+        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
+        shell: pwsh
+        run: signtool verify /pa /v $env:ARTIFACT_SETUP
 
       - name: Archiv packen (Linux)
         # Als tar.gz, nicht als roher Ordner: der Artefakt-Upload verliert die
@@ -411,12 +490,10 @@ jobs:
             org.freedesktop.Platform//24.08 org.freedesktop.Sdk//24.08
 
       - name: AppImage und Flatpak bauen (Linux)
-        # Ein Fehlschlag hält den Lauf nicht auf: Das tar.gz ist da, und ein
-        # fehlendes Linux-Paket ist kein Grund, die Setup-Datei für Windows
-        # wegzuwerfen. Was fehlt, sagt der Schritt — die Download-Seite nimmt
-        # nur, was hochgeladen wurde.
+        # Beide sind ab der nächsten Version öffentliche Pakete. Ein Fehlschlag
+        # macht deshalb den Linux-Zweig rot; ``fail-fast: false`` lässt Windows
+        # und beide Mac-Bauten trotzdem zu Ende laufen.
         if: runner.os == 'Linux'
-        continue-on-error: true
         env:
           # appimagetool ist selbst ein AppImage und braucht sonst FUSE 2, das
           # Ubuntu seit 24.04 nicht mehr mitbringt. Mit dieser Variable packt
@@ -425,6 +502,12 @@ jobs:
           # dass eine Variable fehlt.
           APPIMAGE_EXTRACT_AND_RUN: '1'
         run: python tools/make_linux_packages.py --appimage --flatpak
+
+      - name: Öffentliche Linux-Pakete prüfen
+        if: runner.os == 'Linux'
+        run: |
+          ls dist/*.AppImage >/dev/null
+          ls dist/*.flatpak >/dev/null
 
       - name: Bundle prüfen (macOS)
         # Der Bau bricht nicht ab, wenn BUNDLE ausbleibt — er liefert dann
@@ -490,9 +573,43 @@ jobs:
         # unsigniertes Paket — der Schlusstext des Installers erklärt dann den
         # ersten Start.
         if: runner.os == 'macOS'
-        env:
-          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
-        run: python tools/make_macos_package.py --sign "${APPLE_INSTALLER_IDENTITY:-}"
+        run: |
+          args=()
+          if [ -n "$APPLE_INSTALLER_IDENTITY" ]; then
+            args+=(--sign "$APPLE_INSTALLER_IDENTITY")
+          fi
+          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_INSTALLER_IDENTITY" ] && \
+             [ -n "$APPLE_NOTARY_ID" ] && [ -n "$APPLE_NOTARY_PASSWORD" ] && \
+             [ -n "$APPLE_TEAM_ID" ]; then
+            args+=(--notarized)
+          fi
+          python tools/make_macos_package.py "${args[@]}"
+
+      - name: Signatur des macOS-Pakets prüfen
+        if: runner.os == 'macOS' && env.APPLE_INSTALLER_IDENTITY != ''
+        run: |
+          package=$(find dist -maxdepth 1 -name '*-macos-*.pkg' -print -quit)
+          test -n "$package"
+          pkgutil --check-signature "$package"
+
+      - name: Fehlende Apple-Freigabe ausweisen
+        if: runner.os == 'macOS' && (env.APPLE_CERTIFICATE == '' || env.APPLE_INSTALLER_IDENTITY == '' || env.APPLE_NOTARY_ID == '' || env.APPLE_NOTARY_PASSWORD == '' || env.APPLE_TEAM_ID == '')
+        run: |
+          echo "::warning::Nicht notarisiert - Developer-ID, Apple-ID, Team-ID und anwendungsspezifisches Passwort muessen vollstaendig sein."
+
+      - name: macOS-Paket notarisieren und Ticket anheften
+        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != '' && env.APPLE_INSTALLER_IDENTITY != '' && env.APPLE_NOTARY_ID != '' && env.APPLE_NOTARY_PASSWORD != '' && env.APPLE_TEAM_ID != ''
+        run: |
+          package=$(find dist -maxdepth 1 -name '*-macos-*.pkg' -print -quit)
+          test -n "$package"
+          xcrun notarytool submit "$package" \
+            --apple-id "$APPLE_NOTARY_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_NOTARY_PASSWORD" \
+            --wait
+          xcrun stapler staple "$package"
+          xcrun stapler validate "$package"
+          spctl --assess --type install --verbose=2 "$package"
 
       - name: Prüfsummen (Windows)
         # Sie stehen auf der Download-Seite neben der Datei — bei einem
@@ -555,10 +672,10 @@ jobs:
             dist/*.AppImage.sha256
             dist/*.flatpak
             dist/*.flatpak.sha256
-          # Fehlt eines der Muster, warnt der Upload und lädt den Rest — ohne
-          # das bricht er ab, und dann wäre ein gescheiterter Paketierschritt
-          # der Grund, warum auch das tar.gz nicht ankommt.
-          if-no-files-found: warn
+          # Der Bau darüber verlangt AppImage und Flatpak ausdrücklich. Fehlt
+          # danach jede Ausgabe, ist auch der Artefaktschritt rot; ein internes
+          # tar.gz macht einen unvollständigen öffentlichen Linux-Bau nicht grün.
+          if-no-files-found: error
           retention-days: 7
 
       - name: Archiv hochladen (macOS)
@@ -574,7 +691,7 @@ jobs:
             dist/*-macos-*.pkg.sha256
             dist/*-macos-*.zip
             dist/*-macos-*.zip.sha256
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 7
 
   latest:

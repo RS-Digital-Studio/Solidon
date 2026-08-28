@@ -136,16 +136,18 @@ Verknüpfung.
 
 Ergebnis ist ein Ordner unter `dist/Solidon`. Die Bauläufe für Windows und
 Linux stehen in `.github/workflows/build.yml`; sie laufen erst, wenn die Suite
-auf allen drei Plattformen grün ist. Die Windows-Signierung braucht ein
-Zertifikat als Repository-Secret — ohne das entsteht ein unsigniertes Paket
-statt eines Fehlers.
+auf allen drei Plattformen grün ist. Die Windows-Signierung unterstützt Azure
+Artifact Signing per OIDC und behält ein vorhandenes PFX-Zertifikat als
+Rückfall; ohne einen eingerichteten Weg entsteht mit sichtbarer Warnung ein
+unsigniertes Paket.
 
 Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
 Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und
 das **Flatpak** der Weg in die Software-Verwaltung mit Aktualisierung und
 Sandbox. Gebaut werden sie von `tools/make_linux_packages.py`, das die Werte aus
 `app/branding.py` liest und daraus Menüeintrag, Flatpak-Manifest und
-AppStream-Beschreibung schreibt:
+AppStream-Beschreibung schreibt. Ausgeliefert werden ab der nächsten Version
+AppImage und Flatpak; das Archiv bleibt ein Bauartefakt.
 
 ```
 python tools/make_linux_packages.py --files    # nur die Beschreibungen
@@ -153,10 +155,11 @@ python tools/make_linux_packages.py            # beide Pakete, braucht Linux
 ```
 
 `appimagetool` und `flatpak-builder` sind externe Programme und werden nicht
-mitgeliefert (§36). Das Flatpak läuft **ohne Netzberechtigung**: Ohne Netz gibt
-es kein Konto, keine Telemetrie und keine Frage danach — wer den Chat gegen
-einen Dienst fahren will, gibt die Berechtigung in der Software-Verwaltung
-dazu.
+mitgeliefert (§36). Das Flatpak hat dieselbe Netzfähigkeit wie Windows und
+macOS: Aktualisierungsprüfung, Rückmeldung und ausdrücklich konfigurierte
+Onlinedienste funktionieren. Daraus entstehen weder Konto noch Telemetrie;
+ohne Netz bleibt alles außer Chat und bewusst gewählten Onlinediensten
+benutzbar.
 
 Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern konfiguriert
 (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon gefunden

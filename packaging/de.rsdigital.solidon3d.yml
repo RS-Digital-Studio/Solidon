@@ -6,8 +6,7 @@ runtime-version: '24.08'
 sdk: org.freedesktop.Sdk
 command: Solidon3D
 finish-args:
-  - --socket=wayland
-  - --socket=fallback-x11
+  - --socket=x11
   - --share=ipc
   - --share=network
   - --device=dri

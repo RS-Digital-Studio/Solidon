@@ -233,7 +233,7 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="brep",
         title="OpenCASCADE",
-        what_for=_("Exakte Kanten: Fasen, Verrundungen und STEP."),
+        what_for=_("Bearbeitbare Kanten für Fasen, Verrundungen und STEP."),
         kind="package",
         package="cadquery-ocp-novtk",
         module="OCP.BRepPrimAPI",

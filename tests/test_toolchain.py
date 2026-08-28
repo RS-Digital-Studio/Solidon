@@ -639,9 +639,9 @@ def test_the_cleanup_spares_what_the_version_file_still_promises() -> None:
 
     Beide Namensfelder zählen. ``updates.py`` liest ``url`` **und** ``file``, und
     wer nur eines auswertet, hält eine Datei für entbehrlich, die das andere
-    noch verspricht. Dazu kommt alles mit der laufenden Fassung im Namen: Das
-    Flatpak steht in ``version.json`` nicht, weil Linux dort mit Absicht fehlt
-    (``updates.py``) — löschen darf man es trotzdem nicht.
+    noch verspricht. Dazu kommt alles mit der laufenden Fassung im Namen: Die
+    Attrappe dieses Tests nennt nur Windows; das aktuelle Flatpak darf der
+    Abgleich trotzdem nicht löschen.
     """
     from app.branding import APP_VERSION
     from tools.upload_website import stale_packages
@@ -656,7 +656,7 @@ def test_the_cleanup_spares_what_the_version_file_still_promises() -> None:
 
     assert grund == "", f"unerwarteter Einwand: {grund}"
     assert aktuell not in veraltet, "das Paket der laufenden Fassung soll bleiben"
-    assert flatpak not in veraltet, "das Flatpak steht nicht in version.json und bleibt trotzdem"
+    assert flatpak not in veraltet, "das aktuelle Flatpak bleibt auch ohne Eintrag in der Attrappe"
     assert veraltet == ["Solidon3D-0.0.1-x86_64.flatpak", "Solidon3D-Setup-0.0.1.exe"], veraltet
 
 
@@ -974,13 +974,13 @@ def test_the_version_file_waits_for_a_package_that_only_looks_complete(
     assert version in rest, "version.json blieb liegen, obwohl alle Pakete vollständig oben sind"
 
 
-def test_only_the_four_delivered_files_go_into_the_box() -> None:
-    """Der Kasten nimmt vier Dateien — die, die auch hochgeladen werden.
+def test_only_the_five_delivered_files_go_into_the_box() -> None:
+    """Der Kasten nimmt fünf Dateien — die, die auch hochgeladen werden.
 
     **Der Fall.** Der Baulauf wirft acht aus: Linux drei (Archiv, AppImage,
-    Flatpak), macOS zwei je Architektur. Hochgeladen werden seit jeher vier,
-    eine je Zielsystem — nur stand das nirgends, sondern in der Gewohnheit
-    dessen, der die Dateien beim Aufruf aufzählte.
+    Flatpak), macOS zwei je Architektur. Ab der nächsten Version werden fünf
+    hochgeladen: Windows, die beiden Mac-Pakete sowie AppImage und Flatpak für
+    Linux. Das Archiv bleibt ein Bauartefakt.
 
     Am 27.08.2026 gingen beim Release von 0.2.1 alle acht in den Kasten. Die
     Startseiten verwiesen danach in sechs Sprachen auf vier Dateien, die nie
@@ -994,29 +994,29 @@ def test_only_the_four_delivered_files_go_into_the_box() -> None:
     """
     from tools.make_download import DELIVERED, refuse_wrong_delivery
 
-    vier = [
+    ausgeliefert = [
         Path("Solidon3D-Setup-0.2.1.exe"),
+        Path("Solidon3D-0.2.1-x86_64.AppImage"),
         Path("Solidon3D-0.2.1-x86_64.flatpak"),
         Path("Solidon3D-0.2.1-macos-arm64.pkg"),
         Path("Solidon3D-0.2.1-macos-x86_64.pkg"),
     ]
-    assert len(vier) == len(DELIVERED), "die Probe deckt nicht jeden Platz ab"
-    refuse_wrong_delivery(vier)  # muss durchgehen
+    assert len(ausgeliefert) == len(DELIVERED), "die Probe deckt nicht jeden Platz ab"
+    refuse_wrong_delivery(ausgeliefert)  # muss durchgehen
 
-    # Zu viel: die vier aus dem Baulauf, die nicht ausgeliefert werden.
+    # Zu viel: die drei aus dem Baulauf, die nicht ausgeliefert werden.
     for zu_viel in (
         "Solidon3D-0.2.1-linux-x86_64.tar.gz",
-        "Solidon3D-0.2.1-x86_64.AppImage",
         "Solidon3D-0.2.1-macos-arm64.zip",
         "Solidon3D-0.2.1-macos-x86_64.zip",
     ):
         with pytest.raises(SystemExit) as fehler:
-            refuse_wrong_delivery([*vier, Path(zu_viel)])
+            refuse_wrong_delivery([*ausgeliefert, Path(zu_viel)])
         assert zu_viel in str(fehler.value), f"{zu_viel} wird nicht benannt"
 
     # Zu wenig: jeder Platz einzeln ausgelassen.
-    for ausgelassen in range(len(vier)):
-        rest = [p for i, p in enumerate(vier) if i != ausgelassen]
+    for ausgelassen in range(len(ausgeliefert)):
+        rest = [p for i, p in enumerate(ausgeliefert) if i != ausgelassen]
         with pytest.raises(SystemExit) as fehler:
             refuse_wrong_delivery(rest)
         assert "fehlt" in str(fehler.value), f"Platz {ausgelassen} fehlt unbemerkt"
@@ -1057,23 +1057,25 @@ def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:
     ist: Dann meldet sie „zweimal". Liegt die fremde allein da, sah die
     Auslieferung vollständig aus.
 
-    Die Gegenprobe gehört dazu: Die vier echten Namen müssen ihre Plätze
+    Die Gegenprobe gehört dazu: Die fünf echten Namen müssen ihre Plätze
     weiterhin bekommen, sonst hätte die Härtung die Auslieferung stillgelegt.
     """
     from tools.make_download import DELIVERED, delivery_slot
 
     assert delivery_slot("irgendwas-fremdes.exe") == "", "eine fremde .exe besetzt Windows"
     assert delivery_slot("setup.exe") == "", "ein Allerweltsname besetzt Windows"
+    assert delivery_slot("fremd-x86_64.AppImage") == "", "ein fremdes AppImage besetzt Linux"
     assert delivery_slot("fremd-x86_64.flatpak") == "", "ein fremdes Flatpak besetzt Linux"
 
     echt = {
         "Solidon3D-Setup-9.9.9.exe": "Windows",
-        "Solidon3D-9.9.9-x86_64.flatpak": "Linux",
+        "Solidon3D-9.9.9-x86_64.AppImage": "Linux AppImage",
+        "Solidon3D-9.9.9-x86_64.flatpak": "Linux Flatpak",
         "Solidon3D-9.9.9-macos-arm64.pkg": "macOS (Apple Silicon)",
         "Solidon3D-9.9.9-macos-x86_64.pkg": "macOS (Intel)",
     }
     assert set(echt.values()) == {label for label, _s, _m in DELIVERED}, (
-        "die vier Plätze haben sich geändert — dieser Test kennt sie nicht mehr"
+        "die fünf Plätze haben sich geändert — dieser Test kennt sie nicht mehr"
     )
     for name, platz in echt.items():
         assert delivery_slot(name) == platz, f"{name} bekam {delivery_slot(name)!r} statt {platz!r}"

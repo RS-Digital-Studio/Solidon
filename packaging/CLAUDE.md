@@ -42,11 +42,29 @@ stillen Lauf gerade nicht. Wer an einem der beiden dreht, dreht am anderen mit;
 
 **Auf den anderen beiden Plattformen sieht es anders aus, und das ist
 entschieden:** macOS bleibt beim `.pkg` und zeigt Apples Installer (Robert,
-28.08.2026). Linux spielt das Flatpak-Bundle über `flatpak install` ein und
-kommt mit `flatpak run` zurück — **ohne Repo**, weil `flatpak install` eine
-Bundle-Datei unmittelbar nimmt. Bis dahin war Linux die einzige Plattform ohne
-Update aus der Anwendung heraus, obwohl für sie nur das Flatpak ausgeliefert
-wird.
+28.08.2026). Linux liefert **ab der nächsten Version** zwei Dateien aus:
+AppImage zum direkten Start und Flatpak zur verwalteten Installation. Das
+AppImage wird nicht installiert; nach dem einmaligen Setzen des Ausführrechts
+startet es per Doppelklick. Das Flatpak-Bundle spielt die Anwendung mit
+`flatpak install` ein und kommt mit `flatpak run` zurück — **ohne Repo**, weil
+`flatpak install` eine Bundle-Datei unmittelbar nimmt. Das tar.gz bleibt ein
+Bauartefakt und wird nicht hochgeladen.
+
+Die macOS-Pipeline ist für Apples Freigabe vorbereitet: Nur wenn
+`APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGN_IDENTITY`,
+`APPLE_INSTALLER_IDENTITY`, `APPLE_NOTARY_ID`, `APPLE_NOTARY_PASSWORD` und
+`APPLE_TEAM_ID` vollständig stehen, nennt der Schlusstext das Paket geprüft.
+Danach müssen `notarytool`, `stapler` und `spctl` tatsächlich grün sein; sonst
+entsteht kein auslieferbares Artefakt. Ohne diese Angaben bleibt der bestehende
+Warntext für Gatekeeper erhalten.
+
+Windows unterstützt Azure Artifact Signing über OIDC. Sobald
+`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`,
+`ARTIFACT_SIGNING_ENDPOINT`, `ARTIFACT_SIGNING_ACCOUNT` und
+`ARTIFACT_SIGNING_PROFILE` stehen, signiert die CI Anwendung und Setup-Datei
+mit der offiziellen Aktion und prüft beide Signaturen. Der bisherige
+PFX-Secret-Weg bleibt als Rückfall für ein vorhandenes älteres Zertifikat;
+fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
 
 ## Was hier hineinmuss, wenn sich etwas ändert
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
@@ -55,6 +55,40 @@ def localised(text: str) -> str:
     """
     separator = QLocale().decimalPoint()
     return text.replace(".", separator) if separator != "." else text
+
+
+#: Die drei Bedeutungen eines Projektparameters (§13), als feste Auswahl.
+#:
+#: Ein freies Einheitenfeld ist bei Maßen gefährlich: ``cm`` sieht plausibel
+#: aus, der Kern rechnet aber weiterhin in Millimetern. Längen bleiben deshalb
+#: in der Kerneinheit; Winkel und einheitenlose Anzahlen sind die beiden anderen
+#: Bedeutungen. Dieselbe Liste bedient Parameterdialog, linke Leiste und
+#: Rezeptdialog, damit ein Projektparameter überall dieselbe Sprache spricht.
+PARAMETER_UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
+    ("mm", _("mm — Länge")),
+    (DEGREE_UNIT, _("Grad — Winkel")),
+    ("", _("ohne Einheit")),
+)
+
+
+def fill_parameter_units(box: QComboBox, selected: str = "mm") -> None:
+    """Füllt *box* mit den festen Parametereinheiten und wählt *selected*.
+
+    Eine alte Projektdatei kann einen freien Wert tragen. Er wird sichtbar als
+    zusätzlicher Eintrag erhalten, nie still als Millimeter umgedeutet. Tippen
+    lässt die Auswahl trotzdem nicht zu: Neue Werte kommen nur aus der
+    freigegebenen Liste.
+    """
+    box.clear()
+    box.setEditable(False)
+    for code, label in PARAMETER_UNITS:
+        box.addItem(str(label), code)
+    index = box.findData(selected)
+    if index < 0:
+        unknown_label = str(tr("{unit} — wird nicht umgerechnet").format(unit=selected or "?"))
+        box.addItem(unknown_label, selected)
+        index = box.count() - 1
+    box.setCurrentIndex(index)
 
 
 #: Die Einheit, in der die Oberfläche Längen schreibt (§19.3).
@@ -626,7 +660,7 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Die Mitte der Aufstandsfläche steht fest — beim Skalieren bleibt das Teil auf dem Bett."
     ),
     "corner": _("Gemessen von der Ecke aus — die Maße wachsen in eine Richtung."),
-    "exact": _("Am echten Netz geprüft — genau, aber langsamer."),
+    "exact": _("An der tatsächlichen Oberfläche geprüft — genau, aber langsamer."),
     "box": _("Nur die Hüllquader verglichen — schnell, meldet aber auch Beinahe-Berührungen."),
     "pin": _("An diesem Teil entsteht der Stift."),
     "bore": _("An diesem Teil entsteht die Bohrung."),
@@ -1053,9 +1087,10 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
         # niemand ausführen kann, ist schlechter als keiner.
         return str(
             tr(
-                "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des "
-                "exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese "
-                "Operation anwenden und den Rest neu setzen."
+                "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste "
+                "Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. "
+                "Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den "
+                "Rest danach neu."
             )
         ).format(step=spoiled_by)
     # Der Satz sagte, woher exakte Körper *kommen*, und ließ offen, was man
@@ -1065,9 +1100,10 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
     # des Schritts, wenn man ihn im Verlauf wieder öffnet.
     return str(
         tr(
-            "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter "
-            "Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, "
-            "über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit."
+            "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
+            "dafür im Dialog der Grundform „Flächen und Kanten später bearbeiten“ — "
+            "auch nachträglich über den Schritt im Verlauf. Eine STEP-Datei bringt "
+            "diese Flächen und Kanten ebenfalls mit."
         )
     )
 

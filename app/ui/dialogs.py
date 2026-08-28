@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtCore import QLocale, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -23,11 +23,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
     QPushButton,
     QTextBrowser,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -46,13 +48,25 @@ from app.core.errors import (
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
-from app.ui.labels import UNEXPECTED_CRASH, NumberSpin, deadline_date, value_line
+from app.ui.labels import (
+    UNEXPECTED_CRASH,
+    NumberSpin,
+    deadline_date,
+    fill_parameter_units,
+    value_line,
+)
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.style import make_primary, set_level
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort.
 umbruch = chr(10)
+
+#: Formelsymbole sind keine übersetzbaren Wörter. Als Namen statt als Literale
+#: in ``setText`` erkennt auch die Oberflächenprüfung, dass hier kein deutscher
+#: Text am Katalog vorbeiläuft.
+FORMULA_MARKER = "fx"
+PARAMETER_MARKER = expressions.REFERENCE_PREFIX
 
 _log = get_logger(__name__)
 
@@ -191,6 +205,25 @@ class CalibrationDialog(QDialog):
         )
 
 
+class _ParameterValueSpin(NumberSpin):
+    """Projektwerte mit mindestens zwei, aber ohne unehrliche Nullstellen.
+
+    ``QDoubleSpinBox`` zeigt immer genau ``decimals`` Stellen. Drei sind für
+    ein Feinmaß wie 0,075 nötig, lassen eine einfache Zwölf aber als 12,000
+    erscheinen. Hier bleibt die dritte Stelle nur stehen, wenn sie etwas sagt:
+    12,00 · 12,50 · 0,075.
+    """
+
+    def textFromValue(self, value: float) -> str:  # noqa: N802 - Qt gibt den Namen
+        text = super().textFromValue(value)
+        separator = QLocale().decimalPoint()
+        head, found, fraction = text.partition(separator)
+        if not found:
+            return f"{text}{separator}00"
+        fraction = fraction.rstrip("0").ljust(2, "0")
+        return f"{head}{separator}{fraction}"
+
+
 class ParameterDialog(QDialog):
     """Ein Projektmaß von Hand anlegen **oder ändern** (Bauplan §13, §2.3).
 
@@ -254,10 +287,15 @@ class ParameterDialog(QDialog):
 
         self.name_field = QLineEdit(self)
         self.name_field.setPlaceholderText(tr("zum Beispiel breite"))
-        self.value_field = NumberSpin(self)
+        self.value_field = _ParameterValueSpin(self)
         self.value_field.setDecimals(3)
         self.value_field.setRange(-100_000.0, 100_000.0)
-        self.unit_field = QLineEdit("mm", self)
+        self.unit_field = QComboBox(self)
+        fill_parameter_units(
+            self.unit_field,
+            str(existing.unit or "") if existing is not None else "mm",
+        )
+        self.unit_field.setAccessibleName(tr("Einheit"))
         # Die Schreibseite der Grenzen (Gesamtreview B-15): Die Leiste liest
         # minimum/maximum seit je als Spinbox-Grenzen und fiel immer auf
         # ±100 000 zurück, weil keine Stelle der Anwendung sie je setzte.
@@ -269,12 +307,68 @@ class ParameterDialog(QDialog):
         self.maximum_field = QLineEdit(self)
         self.maximum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
         self.expression_field = QLineEdit(self)
-        self.expression_field.setPlaceholderText(tr("optional — zum Beispiel =@breite/2 + 5"))
-        # Der Ausdruck besitzt den Wert (§13) — dieselbe Regel, nach der die
-        # Leiste abgeleitete Werte zeigt statt sie zu öffnen.
+        self.expression_field.setPlaceholderText(tr("zum Beispiel =@breite/2"))
+
+        # Die zwei sichtbaren Werkzeuge entsprechen dem Operationsdialog:
+        # ``fx`` schaltet eine Formel ein, ``@`` nimmt einen vorhandenen Namen.
+        # Wer CAD und Ausdruckssyntax nicht kennt, muss dadurch weder das
+        # Gleichheitszeichen noch einen internen Parameternamen erraten.
+        self.fx_button = QToolButton(self)
+        self.fx_button.setText(FORMULA_MARKER)
+        self.fx_button.setCheckable(True)
+        self.fx_button.setAutoRaise(True)
+        self.fx_button.setToolTip(tr("Statt einer Zahl einen Parameterausdruck eintragen."))
+        self.fx_button.setAccessibleName(tr("Parameterausdruck"))
+
+        self.parameter_button = QToolButton(self)
+        self.parameter_button.setText(PARAMETER_MARKER)
+        self.parameter_button.setAutoRaise(True)
+        self.parameter_button.setToolTip(tr("@name setzt einen Projektparameter ein."))
+        self.parameter_button.setAccessibleName(tr("Parameter"))
+        parameter_menu = QMenu(self.parameter_button)
+        own_name = str(existing.name) if existing is not None else ""
+        for name, parameter in parameters.items():
+            if name == own_name:
+                continue
+            title = str(parameter.title or "").strip()
+            label = f"@{name}" if not title or title == name else f"@{name} — {title}"
+            action = parameter_menu.addAction(label)
+            action.setData(name)
+        parameter_menu.triggered.connect(
+            weak_slot(self, ParameterDialog._insert_parameter, forward=True)
+        )
+        self.parameter_button.setMenu(parameter_menu)
+        self.parameter_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.parameter_button.setEnabled(not parameter_menu.isEmpty())
+
+        value_row = QWidget(self)
+        value_layout = QHBoxLayout(value_row)
+        value_layout.setContentsMargins(0, 0, 0, 0)
+        value_layout.addWidget(self.value_field, 1)
+        value_layout.addWidget(self.fx_button)
+
+        self.expression_row = QWidget(self)
+        expression_layout = QHBoxLayout(self.expression_row)
+        expression_layout.setContentsMargins(0, 0, 0, 0)
+        expression_layout.addWidget(self.expression_field, 1)
+        expression_layout.addWidget(self.parameter_button)
+
+        form = QFormLayout()
+        form.addRow(tr("Name"), self.name_field)
+        form.addRow(tr("Wert"), value_row)
+        form.addRow(tr("Einheit"), self.unit_field)
+        form.addRow(tr("Untergrenze"), self.minimum_field)
+        form.addRow(tr("Obergrenze"), self.maximum_field)
+        form.addRow(tr("Ausdruck"), self.expression_row)
+        self._form = form
+
+        self.fx_button.toggled.connect(
+            weak_slot(self, ParameterDialog._set_expression_mode, forward=True)
+        )
         self.expression_field.textChanged.connect(
             weak_slot(self, ParameterDialog._expression_typed, forward=True)
         )
+        self._set_expression_mode(False)
 
         if existing is not None:
             # Vorbelegt mit dem heutigen Stand — ein Änderungsdialog, der leer
@@ -292,20 +386,11 @@ class ParameterDialog(QDialog):
                 )
             )
             self.value_field.setValue(float(existing.value))
-            self.unit_field.setText(str(existing.unit or ""))
             if existing.minimum is not None:
                 self.minimum_field.setText(f"{float(existing.minimum):g}")
             if existing.maximum is not None:
                 self.maximum_field.setText(f"{float(existing.maximum):g}")
             self.expression_field.setText(str(existing.expression or ""))
-
-        form = QFormLayout()
-        form.addRow(tr("Name"), self.name_field)
-        form.addRow(tr("Wert"), self.value_field)
-        form.addRow(tr("Einheit"), self.unit_field)
-        form.addRow(tr("Untergrenze"), self.minimum_field)
-        form.addRow(tr("Obergrenze"), self.maximum_field)
-        form.addRow(tr("Ausdruck"), self.expression_field)
 
         self.problem = QLabel("", self)
         self.problem.setWordWrap(True)
@@ -342,7 +427,9 @@ class ParameterDialog(QDialog):
                 "Der Name muss sich in einem Ausdruck als @name schreiben "
                 "lassen — Buchstaben, Ziffern und Unterstriche."
             )
-        expression = self.expression_field.text().strip()
+        expression = self.expression_field.text().strip() if self.fx_button.isChecked() else ""
+        if self.fx_button.isChecked() and not expression:
+            return tr("Ein Ausdruck beginnt mit = und rechnet in Millimetern.")
         if expression:
             try:
                 self._value = expressions.evaluate(expression, self._values)
@@ -378,13 +465,41 @@ class ParameterDialog(QDialog):
         return found[0], found[1]
 
     def _expression_typed(self, text: str) -> None:
-        """Solange ein Ausdruck dasteht, ist das Wertfeld gesperrt.
+        """Ein eingefügter Ausdruck schaltet ``fx`` von selbst ein.
 
         Als Methode und nicht als Lambda: Der Abschluss fing ``self``, hing am
         eigenen Eingabefeld und hielt den Dialog fest — zehn von zehn
         überlebten ihr Loslassen.
         """
-        self.value_field.setEnabled(not text.strip())
+        if text.strip() and not self.fx_button.isChecked():
+            self.fx_button.setChecked(True)
+
+    def _set_expression_mode(self, enabled: bool) -> None:
+        """Zeigt genau die Eingabe, die beim Übernehmen gelten wird."""
+        self._form.setRowVisible(self.expression_row, enabled)
+        # Der Ausdruck besitzt den Wert (§13) — dieselbe Regel, nach der die
+        # Leiste abgeleitete Werte zeigt statt sie zu öffnen.
+        self.value_field.setEnabled(not enabled)
+        if enabled:
+            self.expression_field.setFocus()
+
+    def _insert_parameter(self, action: Any) -> None:
+        """Setzt den im @-Menü gewählten Parameternamen an den Cursor."""
+        name = str(action.data() or "")
+        if not name:
+            return
+        self.fx_button.setChecked(True)
+        reference = f"@{name}"
+        entered = self.expression_field.text()
+        if not entered.strip():
+            self.expression_field.setText(f"={reference}")
+            self.expression_field.setCursorPosition(len(self.expression_field.text()))
+            return
+        if not entered.lstrip().startswith("="):
+            entered = f"={entered}"
+            self.expression_field.setText(entered)
+            self.expression_field.setCursorPosition(len(entered))
+        self.expression_field.insert(reference)
 
     def _accept(self) -> None:
         problem = self.validation_problem()
@@ -406,12 +521,15 @@ class ParameterDialog(QDialog):
         """
         from app.core.types import Parameter
 
-        expression = self.expression_field.text().strip() or None
+        expression = (
+            self.expression_field.text().strip() or None if self.fx_button.isChecked() else None
+        )
         low, high = self._bounds() or (None, None)
+        unit = self.unit_field.currentData()
         return Parameter(
             name=self.name_field.text().strip(),
             value=self._value if expression else self.value_field.value(),
-            unit=self.unit_field.text().strip() or "mm",
+            unit=str(unit) if unit is not None else "mm",
             title=self._title,
             minimum=low,
             maximum=high,

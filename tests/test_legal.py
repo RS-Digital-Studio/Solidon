@@ -75,6 +75,25 @@ def test_the_installer_shows_the_agreement_and_not_the_copyright_notice() -> Non
     assert "**" not in content
 
 
+def test_a_demo_donation_does_not_turn_into_a_licence_order() -> None:
+    """Der PayPal-Knopf widerspricht weder AGB noch Widerrufsbelehrung.
+
+    Beide Texte sagten vorher pauschal, während der Demo gebe es keinen
+    Zahlungsdienstleister. Seit dem Spendenknopf ist das falsch, obwohl es
+    weiterhin keinen Kauf gibt. Die Grenze ist die Gegenleistung und muss in
+    Quelle und erzeugter Seite dieselbe bleiben.
+    """
+    agb = (ROOT / "AGB.md").read_text(encoding="utf-8")
+    withdrawal = (ROOT / "WIDERRUF.md").read_text(encoding="utf-8")
+    agb_words = " ".join(agb.split())
+
+    assert "unentgeltliche Zuwendung ohne Gegenleistung" in agb_words
+    assert "keine Bestellung einer Lizenz" in agb_words
+    assert "Profileinstellungen" in withdrawal
+    assert "PayPal-Spendenknopf" in (WEBSITE / "agb.html").read_text(encoding="utf-8")
+    assert "Profileinstellungen" in (WEBSITE / "widerruf.html").read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("page_name", ["index.html", "en/index.html"])
 def test_the_selling_page_links_every_legal_text(page_name: str) -> None:
     """Eine Seite, die einen Preis nennt, muss zu den Bedingungen führen."""

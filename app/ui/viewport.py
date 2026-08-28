@@ -689,6 +689,12 @@ BED_SCALE_GAP = 8.0
 #: stellenweise davor.
 FEATURE_PATCH_LIFT = 0.0015
 
+#: Eine Vorschau unter dem Zeiger ist noch keine Auswahl. Sie nimmt deshalb
+#: die Merkmalsfarbe und bleibt durchscheinend; die Auswahl selbst ist
+#: deckend bernsteinfarben. Der Merkmalszeiger ist die zweite Kodierung nach
+#: Regel 18.
+HOVERED_FEATURE_OPACITY = 0.5
+
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
 #: beim Drehen.
@@ -2193,6 +2199,8 @@ class Viewport(QWidget):
         """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
         Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
         aufleuchtet — die Auswahl zeigte das Objekt und nicht die Stelle."""
+        self._hover_patch: Any | None = None
+        """Die durchscheinende Fläche unter dem ruhenden Zeiger (§18.5)."""
         self._layer_actors: list[Any] = []
         self._layer: LayerInfo | None = None
         self._layer_rebuild = QTimer(self)
@@ -2277,6 +2285,14 @@ class Viewport(QWidget):
         """Wo die Maus zuletzt stand, in VTK-Koordinaten."""
         self._hover_feature = False
         """Ob unter dem Zeiger ein benanntes Merkmal liegt (§18.5)."""
+        self._hovered_object: ObjectId | None = None
+        self._hovered_feature: FeatureId | None = None
+        """Das genaue Merkmal hinter :attr:`_hover_feature`.
+
+        Der Wahrheitswert steuert den Zeiger; die Kennungen steuern die
+        sichtbare Hervorhebung. Nur ein Wahrheitswert könnte beim Wechsel von
+        einer Bohrung zur nächsten nichts neu zeichnen.
+        """
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
@@ -2721,6 +2737,13 @@ class Viewport(QWidget):
         # noch einmal.
         self._layer_rebuild.stop()
         self._result = result
+        # Ein Hoverziel gehört ebenso zur Auswertung wie seine vorbereiteten
+        # Dreiecke. Nach einer Änderung kann dieselbe Kennung eine andere
+        # Fläche meinen oder ganz verschwunden sein.
+        self._hover_timer.stop()
+        self._hover_feature = False
+        self._hovered_object = None
+        self._hovered_feature = None
         # Die vorbereiteten Merkmalsdreiecke gehören der vorigen Auswertung.
         # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
         # Klick träfe danach, wo sie war.
@@ -2743,6 +2766,9 @@ class Viewport(QWidget):
             # Einpassen: das sind Aussagen über die Szene, nicht über VTK.
             self._selected = None
             self._selected_feature = None
+            self._hover_feature = False
+            self._hovered_object = None
+            self._hovered_feature = None
             self.measurements.clear()
         if self.plotter is None:
             return
@@ -3887,8 +3913,29 @@ class Viewport(QWidget):
             # Während eines Zugs ist gleichgültig, was unter dem Zeiger liegt,
             # und die Suche danach wäre die teuerste Stelle im Zug.
             self._hover_timer.stop()
-            self._hover_feature = False
+            self._set_hover_target(None, None)
         self._update_cursor()
+
+    def _set_hover_target(
+        self, object_id: ObjectId | None, feature_id: FeatureId | None
+    ) -> None:
+        """Hover-Zeiger, sichtbare Fläche und Beschriftung gemeinsam setzen."""
+        found = feature_id is not None
+        target_changed = (object_id, feature_id) != (
+            self._hovered_object,
+            self._hovered_feature,
+        )
+        role_changed = found != self._hover_feature
+        if not target_changed and not role_changed:
+            return
+        self._hover_feature = found
+        self._hovered_object = object_id if found else None
+        self._hovered_feature = feature_id
+        if target_changed and self.plotter is not None:
+            self._redraw_features()
+            self._draw()
+        if role_changed:
+            self._update_cursor()
 
     def _look_under_pointer(self) -> None:
         """Sucht nach der Ruhepause, ob unter dem Zeiger ein Merkmal liegt.
@@ -3920,10 +3967,11 @@ class Viewport(QWidget):
         # ``_from_view`` aus demselben Grund wie beim Klick (§25): Der Zeiger
         # muss dieselbe Stelle befragen, die der Klick trifft, sonst zeigt er
         # auf Platte 2 die Form für einen Körper, der dort nicht liegt.
-        found = point is not None and self._would_pick_feature(self._from_view(point))
-        if found != self._hover_feature:
-            self._hover_feature = found
-            self._update_cursor()
+        object_id: ObjectId | None = None
+        feature_id: FeatureId | None = None
+        if point is not None:
+            object_id, feature_id = self._click_target(self._from_view(point))
+        self._set_hover_target(object_id, feature_id)
 
     def _note_pointer(self, position: Any) -> None:
         """Merkt sich, wo die Maus steht, und stößt die Suche neu an.
@@ -3973,9 +4021,7 @@ class Viewport(QWidget):
         """Die Maus hat das Bild verlassen."""
         self._hover_timer.stop()
         self._hover_at = None
-        if self._hover_feature:
-            self._hover_feature = False
-            self._update_cursor()
+        self._set_hover_target(None, None)
 
     def _on_paint_drag(self, x: int, y: int, fresh: bool) -> None:
         """Ein Zug des gedrückten Pinsels — einer je halbem Radius (§18.11).
@@ -4257,7 +4303,7 @@ class Viewport(QWidget):
         Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
         Test, der sich dort überspringt, prüft nie etwas.
         """
-        if self._selected_feature is not None:
+        if self._selection_marking_hidden() or self._selected_feature is not None:
             return None
         return self._selected
 
@@ -4269,12 +4315,32 @@ class Viewport(QWidget):
         Kante aus dem exakten Kern. Gezählt wird im Netz der Szene, nicht im
         dezimierten Anzeigenetz (§18.9).
         """
-        if self._selected_feature is None or self._result is None or self._selected is None:
+        if self._selection_marking_hidden():
             return ()
-        entry = self._result.scene.objects.get(self._selected)
-        if entry is None or not entry.visible or self._selected in self._hidden:
+        return self._face_indices(self._selected, self._selected_feature)
+
+    def _selection_marking_hidden(self) -> bool:
+        """Ob die Differenzfarben gerade Vorrang vor Auswahl und Hover haben.
+
+        „Entfernt" ist orange und die Auswahl bernsteinfarben. Beides zugleich
+        auf derselben Bohrung ergibt keine dritte, lesbare Bedeutung. Während
+        die Vorschau sichtbar ist, tragen deshalb nur hinzugefügt/entfernt die
+        Modellfarben; Objektbaum, Beschriftung und Statuszeile halten die
+        Auswahl weiter fest. Beim gehaltenen Vorher-Vergleich kehrt die
+        Auswahlmarkierung zurück.
+        """
+        return self._difference is not None and not self._difference_held
+
+    def _face_indices(
+        self, object_id: ObjectId | None, feature_id: FeatureId | None
+    ) -> tuple[int, ...]:
+        """Gültige Dreiecke eines sichtbaren Merkmals, unabhängig von seiner Rolle."""
+        if feature_id is None or self._result is None or object_id is None:
             return ()
-        feature = entry.features.get(self._selected_feature)
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None or not entry.visible or object_id in self._hidden:
+            return ()
+        feature = entry.features.get(feature_id)
         raw = getattr(entry.mesh, "raw", None)
         if feature is None or raw is None:
             return ()
@@ -4290,21 +4356,25 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         self._redraw_feature_patch()
+        self._redraw_hover_patch()
         for actor in self._feature_actors:
             self.plotter.remove_actor(actor, render=False)
         self._feature_actors.clear()
         # Ohne Überlagerung bleibt das **gewählte** Merkmal beschriftet: seine
         # Fläche leuchtet in der Auswahlfarbe, und eine Aussage allein über
         # Farbe wäre genau die, die Regel 18 verbietet.
-        shown = (
-            self._features_of_selection()
-            if self._feature_overlay
-            else {
-                feature_id: feature
-                for feature_id, feature in self._features_of_selection().items()
-                if feature_id == self._selected_feature
-            }
-        )
+        shown: dict[tuple[ObjectId, FeatureId], Feature] = {}
+        if self._selected is not None:
+            for feature_id, feature in self._features_of_selection().items():
+                if self._feature_overlay or feature_id == self._selected_feature:
+                    shown[(self._selected, feature_id)] = feature
+        # Beim Überfahren bleibt der Name auch bei ausgeschalteter
+        # Überlagerung sichtbar. Farbe plus Merkmalszeiger allein würden sagen,
+        # *dass* dort etwas liegt, aber nicht *was* (§19.1).
+        if self._hovered_object is not None and self._hovered_feature is not None:
+            hovered = self._features_of(self._hovered_object).get(self._hovered_feature)
+            if hovered is not None:
+                shown[(self._hovered_object, self._hovered_feature)] = hovered
         if not shown:
             return
 
@@ -4314,22 +4384,20 @@ class Viewport(QWidget):
         # durch ``_view_offset``, ihr Etikett stand daneben auf den nackten
         # Szenenkoordinaten — dieselbe Bohrung, zwei Orte, eine Bettbreite
         # auseinander (§25, §18.8).
-        entry = (
-            self._result.scene.objects.get(self._selected)
-            if self._result is not None and self._selected is not None
-            else None
-        )
-        shift = (
-            self._view_offset(entry, self._result)
-            if entry is not None and self._result is not None
-            else np.zeros(3)
-        )
         points: list[list[float]] = []
         labels: list[str] = []
-        for feature_id, feature in shown.items():
+        for (object_id, feature_id), feature in shown.items():
             centre = feature.params.get("centre")
             if centre is None:
                 continue
+            entry = (
+                self._result.scene.objects.get(object_id) if self._result is not None else None
+            )
+            shift = (
+                self._view_offset(entry, self._result)
+                if entry is not None and self._result is not None
+                else np.zeros(3)
+            )
             points.append(
                 [float(value) + float(moved) for value, moved in zip(centre, shift, strict=True)]
             )
@@ -4414,6 +4482,65 @@ class Viewport(QWidget):
             backface_params={"color": SELECTED_COLOUR},
             lighting=False,
             name="feature-patch",
+            render=False,
+            reset_camera=False,
+            pickable=False,
+        )
+
+    def _redraw_hover_patch(self) -> None:
+        """Das Merkmal unter dem Zeiger zeigen, ohne es als gewählt auszugeben.
+
+        Die Auswahl ist deckend bernsteinfarben, Hover durchscheinend in der
+        Merkmalsfarbe. Ist dasselbe Merkmal bereits gewählt oder zeigt die
+        Differenzansicht ihre eigenen Rollen, kommt keine zweite Fläche hinzu.
+        """
+        if self.plotter is None:
+            return
+        if self._hover_patch is not None:
+            self.plotter.remove_actor(self._hover_patch, render=False)
+            self._hover_patch = None
+        if (
+            self._selection_marking_hidden()
+            or self._hovered_object is None
+            or self._hovered_feature is None
+            or (
+                self._hovered_object == self._selected
+                and self._hovered_feature == self._selected_feature
+            )
+        ):
+            return
+        indices = self._face_indices(self._hovered_object, self._hovered_feature)
+        if not indices or self._result is None:
+            return
+        entry = self._result.scene.objects.get(self._hovered_object)
+        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+        if entry is None or raw is None:
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        chosen = np.asarray(indices, dtype=np.int64)
+        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
+        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
+        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
+        lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+        corners += np.repeat(normals, 3, axis=0) * lift
+        corners += self._view_offset(entry, self._result)
+        count = len(triangles)
+        faces = np.hstack(
+            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
+        ).ravel()
+        self._hover_patch = self.plotter.add_mesh(
+            pv.PolyData(corners, faces),
+            color=FEATURE_LABEL_COLOUR,
+            opacity=HOVERED_FEATURE_OPACITY,
+            backface_params={
+                "color": FEATURE_LABEL_COLOUR,
+                "opacity": HOVERED_FEATURE_OPACITY,
+            },
+            lighting=False,
+            name="feature-hover",
             render=False,
             reset_camera=False,
             pickable=False,
@@ -4964,6 +5091,11 @@ class Viewport(QWidget):
         ohne Farbsehen lesbar.
         """
         self._difference = difference
+        # Die Differenz besitzt die Modellfarben, solange sie sichtbar ist.
+        # Auswahl und Hover bleiben in Baum, Text und Zeiger erhalten, färben
+        # aber nicht über „hinzugefügt/entfernt" hinweg.
+        self._apply_selection_colour()
+        self._redraw_features()
         self._redraw_difference()
         if self.plotter is not None:
             self._draw()
@@ -5006,6 +5138,8 @@ class Viewport(QWidget):
             return
         self._difference_held = held
         self._redraw_difference()
+        self._apply_selection_colour()
+        self._redraw_features()
         if self.plotter is not None:
             self._draw()
 

@@ -313,7 +313,7 @@ class NeedsSolidError(UserError):
     """
 
     default_title: ClassVar[TranslatableText] = _(
-        "Diese Operation arbeitet nur auf einem exakten Körper."
+        "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten."
     )
     default_suggestions: ClassVar[tuple[Action, ...]] = (CANCEL,)
 

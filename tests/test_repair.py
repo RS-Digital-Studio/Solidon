@@ -198,6 +198,25 @@ def test_a_vertex_on_an_edge_is_stitched() -> None:
     assert fixed.triangle_count == broken.triangle_count + 1, "one face became two"
 
 
+def test_stitching_keeps_the_source_of_a_split_face() -> None:
+    """Beide Hälften erben die Flächenattribute des geteilten Dreiecks."""
+    import numpy as np
+
+    broken = t_junction()
+    source = np.arange(broken.triangle_count, dtype=np.int64)
+    broken.raw.face_attributes["source"] = source
+
+    fixed, seams = stitch_t_junctions(broken)
+
+    assert seams == 1
+    arrived = np.asarray(fixed.raw.face_attributes["source"], dtype=np.int64)
+    assert len(arrived) == fixed.triangle_count
+    counts = np.bincount(arrived, minlength=broken.triangle_count)
+    assert sorted(counts) == [1] * (broken.triangle_count - 1) + [2], (
+        "nur das geteilte Dreieck kommt zweimal zurück"
+    )
+
+
 def test_the_hole_filler_alone_cannot_do_it() -> None:
     """Warum es das hier gibt: ein Dreieck über drei kollinearen Punkten hat
     keine Fläche.

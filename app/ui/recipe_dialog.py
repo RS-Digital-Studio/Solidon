@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable
-from typing import Any, Final
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -52,9 +52,8 @@ from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
-from app.core.units import DEGREE_UNIT
-from app.i18n import TranslatableText, _, tr
-from app.ui.labels import NumberSpin, feature_label, localised
+from app.i18n import tr
+from app.ui.labels import PARAMETER_UNITS, NumberSpin, feature_label, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
 
@@ -166,33 +165,10 @@ class _CheckWorker(Worker):
 #: Beschriftung. Mehr Auswahl wäre keine: „cm" gäbe es im Kern nicht, es sähe
 #: nur so aus.
 #:
-#: **``_()`` und nicht ``tr()``, weil diese Tabelle im Modulrumpf steht.**
-#: ``tr()`` übersetzt sofort, und „sofort" heißt hier: beim Import, in der
-#: Sprache, die dann gerade gilt — beim Start ist das noch keine. Ein
-#: Sprachwechsel zur Laufzeit (``app.rebuild_for_language``) baut die Fenster
-#: neu auf, nicht die Module: Die drei Einträge blieben danach deutsch in
-#: einem englischen Dialog. Dieselbe Falle wie in ``settings_dialog`` und aus
-#: demselben Grund behoben; ``_()`` gibt einen ``TranslatableText``, der seine
-#: Sprache erst beim ``str()`` sucht.
-#:
-#: **Der Code kommt aus dem Kern, nicht aus einer Zeichenkette.** Hier stand
-#: ``"grad"`` — ein roher deutscher Schlüssel, den der Kern am 20.08.2026
-#: abgeschafft hat (``DEGREE_UNIT``, seither ``"°"``, weil ``"grad"`` in
-#: keinem Katalog steht und deshalb auch im englischen Fenster so dastand).
-#: Fünf Tage später kam er hier wieder herein, und ein Test schrieb ihn fest.
-#:
-#: Zweimal falsch, in beide Richtungen: Wer „Grad — Winkel" wählte, schrieb
-#: ``unit="grad"`` in den Projektparameter, und die Parameterliste setzte das
-#: roh neben den Wert — „40.00 grad" in einem Fenster, in dem jedes
-#: Operationsfeld „°" zeigt. Und ein Parameter, der die Schreibweise des Kerns
-#: trug, wurde hier nicht gefunden und als **fremde** Einheit angehängt: „° —
-#: wird nicht umgerechnet". Solidon führte seine eigene Winkeleinheit als
-#: unbekannte.
-UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
-    ("mm", _("mm — Länge")),
-    (DEGREE_UNIT, _("Grad — Winkel")),
-    ("", _("ohne Einheit")),
-)
+#: Öffentlicher Name für bestehende Nutzer und Tests dieses Dialogs. Die
+#: Wahrheit selbst liegt bei den übrigen gemeinsamen Oberflächenbeschriftungen:
+#: Parameterdialog, linke Leiste und Rezept dürfen nicht auseinanderlaufen.
+UNITS = PARAMETER_UNITS
 
 
 class _ParamRow:

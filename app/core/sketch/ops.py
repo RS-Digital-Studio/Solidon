@@ -249,10 +249,10 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # Ohne Platzhalter: TranslatableText löst nur den Katalog auf und
             # formatiert nicht. Der Name reist wie überall in ``values``.
             detail=_(
-                "Der gewählte Körper ist ein Netz. Exakte Körper kommen aus einer "
-                "STEP-Datei oder aus den Grundformen mit gesetztem Haken „Exakter "
-                "Körper (B-Rep)“; wer aushöhlen muss, setzt denselben Haken bei "
-                "Aushöhlen."
+                "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
+                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
+                "dafür bei einer Grundform oder beim Aushöhlen „Flächen und Kanten "
+                "später bearbeiten“ oder öffne eine STEP-Datei."
             ),
             values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,
@@ -441,9 +441,9 @@ class SketchPocketParams(BaseParams):
     produces=1,
     applies_to=("face",),
     doc=_(
-        "Schneidet eine Grundform als Tasche in einen exakten Körper — von der "
-        "Oberkante senkrecht nach unten, auf Wunsch durchgehend. Ein Klick auf "
-        "eine Fläche trägt den Ort vorab ein."
+        "Schneidet eine Grundform als Tasche in einen Körper mit einzeln "
+        "bearbeitbaren Flächen — von der Oberkante senkrecht nach unten, auf "
+        "Wunsch durchgehend. Ein Klick auf eine Fläche trägt den Ort vorab ein."
     ),
 )
 def sketch_pocket(ctx: OpContext) -> OpResult:

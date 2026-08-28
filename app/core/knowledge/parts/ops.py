@@ -25,7 +25,7 @@ from typing import Any
 
 from app.core.errors import Action, AppError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.log import get_logger
@@ -383,7 +383,7 @@ def _loose_advice(spec: PartSpec) -> TranslatableText:
 
 
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
-    """Baut den Baustein, setzt ihn an seinen Platz und vereint oder schneidet."""
+    """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
     values = _part_values(spec, ctx.params, ctx.profile)
     # Ein Rezept baut mit dem Profil des Dokuments (``build_with_profile``):
@@ -409,27 +409,44 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
-    kind: BooleanKind = "difference" if subtractive else "union"
-    outcome = boolean(kind, [body, placed], quality=ctx.quality)
+    if spec.separate_from_host:
+        # Schraube und Mutter liegen im selben Projekt, dürfen aber nicht zu
+        # einem unlösbaren Körper verschweißen. Eine Zusammenfügung hält beide
+        # geschlossenen Netze in einem Szenenobjekt, ohne ihre Berührung als
+        # Boolesche Verbindung zu deuten.
+        mesh = body.replacing(concatenated([body.raw, placed.raw]))
+        solver = None
+        findings: list[Finding] = []
+        nothing = None
+    else:
+        kind: BooleanKind = "difference" if subtractive else "union"
+        outcome = boolean(kind, [body, placed], quality=ctx.quality)
+        mesh = as_mesh_data(outcome.mesh)
+        solver = outcome.solver
+        findings = outcome.findings
+        # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
+        # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
+        # Antwort steht im Volumen (§2.7).
+        nothing = without_effect(body, mesh, kind, ctx.profile)
 
     features = dict(source.features)
     features.update(
         _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     )
 
-    # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
-    # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
-    # Antwort steht im Volumen (§2.7).
-    nothing = without_effect(body, as_mesh_data(outcome.mesh), kind, ctx.profile)
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.
-    loose = _hanging_loose(body, as_mesh_data(outcome.mesh), spec, subtractive)
+    loose = (
+        None
+        if spec.separate_from_host
+        else _hanging_loose(body, as_mesh_data(outcome.mesh), spec, subtractive)
+    )
 
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=features)],
-        solver=outcome.solver,
+        outputs=[dataclasses.replace(source, mesh=mesh, features=features)],
+        solver=solver,
         findings=[
-            *outcome.findings,
+            *findings,
             *produced.findings,
             *([nothing] if nothing else []),
             *([loose] if loose else []),
@@ -566,11 +583,15 @@ def _anchor(
     centre = feature.params.get("centre", (0.0, 0.0, 0.0))
     point: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
     direction = _direction_of(feature)
-    return _at_the_mouth(point, direction, feature, built), direction
+    return _at_the_mouth(point, direction, feature, built, spec), direction
 
 
 def _at_the_mouth(
-    point: Vec3, direction: Vec3 | None, feature: Feature, built: MeshData | None
+    point: Vec3,
+    direction: Vec3 | None,
+    feature: Feature,
+    built: MeshData | None,
+    spec: PartSpec | None,
 ) -> Vec3:
     """Der Ansatzpunkt an einer Bohrung — ihre Mündung statt ihrer Mitte.
 
@@ -610,7 +631,10 @@ def _at_the_mouth(
     depth = float(feature.params.get("depth") or 0.0)
     if depth <= EPS_GEOM:
         return point
-    if float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM:
+    if (
+        not (spec is not None and spec.at_hole_mouth)
+        and float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
+    ):
         return point
     reach = depth / 2.0
     return (

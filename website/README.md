@@ -1,7 +1,17 @@
 # Website — solidon3d.de
 
-Statische Seiten, **keine externen Ressourcen**. Alles in diesem Ordner wird
-unverändert hochgeladen; einen Build-Schritt gibt es nicht.
+Statische Seiten, **keine externen Ressourcen beim Laden**. Alles in diesem
+Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht. Der
+Spendenknopf ist ein gewöhnlicher Verweis zu PayPal und lädt dort erst nach
+einem ausdrücklichen Klick die Zahlungsseite — kein PayPal-Skript, keine
+Schrift und kein Zählpixel sind in die Seite eingebunden.
+
+Der Hinweis unmittelbar am Knopf hält die rechtliche Grenze fest: keine
+Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf und
+keine Spendenbescheinigung. `datenschutz.html` nennt PayPal als eigenständig
+Verantwortlichen, die übermittelten Transaktionsdaten und den Umgang mit
+wiederkehrenden Spenden. Diese Sätze gehören zum Zahlungsweg; sie werden nicht
+aus Platzgründen aus dem Download-Kasten entfernt.
 
 Ein einziges Skript liegt dabei, `site.js`, und es kommt von hier — kein CDN,
 keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut zwei
@@ -272,11 +282,12 @@ eigenes Produkt: **netcup Webhosting 2000**.
   kein Mailprogramm das Postfach erreichte. Webmail in Plesk unter
   *E-Mail-Einstellungen* der Domain auf Roundcube stellen — dann ist der
   Nachweis eine Minute Arbeit und hängt an keinem Client.
-- Den Installer in das Verzeichnis legen und den Download-Kasten in beiden
-  `index.html` auf den echten Link umstellen. Die Dateien kommen aus der CI
-  (oder lokal aus `tools/make_installer.py`) und heißen
-  `Solidon3D-Setup-<Version>.exe` für Windows und
-  `Solidon3D-<Version>-linux-x86_64.tar.gz` für Linux.
+- Die ausgelieferten Dateien aus der CI in das Verzeichnis legen und den
+  Download-Kasten mit `tools/make_download.py` daraus erzeugen. Ab der nächsten
+  Version sind es fünf: `Solidon3D-Setup-<Version>.exe`, zwei macOS-`.pkg`,
+  `Solidon3D-<Version>-x86_64.AppImage` zum direkten Start und
+  `Solidon3D-<Version>-x86_64.flatpak` zur Installation. Das Linux-Archiv
+  bleibt im Bau, wird aber nicht hochgeladen.
 - `version.json` führen: `version` ist die veröffentlichte Version,
   `url` die Download-Seite, `notes` ein Satz zur Neuerung. Die Anwendung
   vergleicht gegen `APP_VERSION` in `app/branding.py` und zeigt nur einen

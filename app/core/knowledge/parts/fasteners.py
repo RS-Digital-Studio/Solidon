@@ -15,10 +15,10 @@ from __future__ import annotations
 from typing import Any, cast
 
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, result, thread, union
+from app.core.knowledge.parts.build import bore, result, subtract, thread, union
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
@@ -282,6 +282,19 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     return {"size": fitting[-1], "internal": True}
 
 
+def size_for_printed_screw(diameter: float) -> dict[str, Any]:
+    """Die Normschraube für ein vorhandenes Durchgangsloch.
+
+    Die Einordnung einer Bohrung als Durchgangsloch steht absichtlich einmal
+    in ``scene.placement``. Das gedruckte Gegenstück benutzt dieselbe Antwort
+    wie Senkung und Bohrhinweis, statt nebenan eine zweite Maßregel zu pflegen.
+    """
+    from app.core.scene.placement import screw_for_bore
+
+    size = screw_for_bore(diameter)
+    return {"size": size} if size is not None else {}
+
+
 @register_part(
     name="heatset_m4",
     title=_("Heat-Set-Einpressbuchse"),
@@ -487,6 +500,19 @@ THREAD_CUTS_INWARD = PartChange(
     ),
 )
 
+PRINTED_FASTENERS = PartChange(
+    version="1",
+    date="2026-08-28",
+    reason=(
+        "Gedruckte Schraube und Mutter fehlten, obwohl ein druckbares Gewinde "
+        "bereits vorhanden war."
+    ),
+    effect=(
+        "Eine Schraube mit Sechskant- oder Senkkopf und eine passende Mutter "
+        "sind jetzt als getrennte, druckbare Bausteine verfügbar."
+    ),
+)
+
 
 @op_params
 class ThreadParams(BaseParams):
@@ -508,7 +534,7 @@ class ThreadParams(BaseParams):
         doc=_("Länge des Gewindes, nicht des Bolzens."),
     )
     internal: bool = param(
-        title=_("Innengewinde"),
+        title=_("Innengewinde (aus = Außengewinde)"),
         default=False,
         # **Der Satz stand hier, die Operation tat es nicht.** Ohne
         # ``subtractive_on`` galt der feste Wert des Registereintrags
@@ -518,7 +544,10 @@ class ThreadParams(BaseParams):
         # statt -48. Der Docstring der Funktion nennt den Körper sogar
         # „das Werkzeug" — ein Werkzeug, das man vereinigt, ist keines.
         subtractive_on=(True,),
-        doc=_("Innengewinde wird abgezogen, Außengewinde wird angesetzt."),
+        doc=_(
+            "Aktivieren für Innengewinde in einer Bohrung; deaktivieren für "
+            "Außengewinde auf einer Außenfläche."
+        ),
     )
     play: float = param(
         title=_("Spiel"),
@@ -533,7 +562,7 @@ class ThreadParams(BaseParams):
 
 @register_part(
     name="printed_thread",
-    title=_("Gewinde in Bohrung schneiden"),
+    title=_("Druckbares Gewinde"),
     group="fasteners",
     params=ThreadParams,
     subtractive=False,
@@ -541,8 +570,9 @@ class ThreadParams(BaseParams):
     at_hole_values=size_for_thread,
     features=["thread"],
     doc=_(
-        "Druckbares Gewinde als Wendel mit abgeflachtem Kamm — kein ISO-Profil, "
-        "weil ein Drucker es ohnehin nicht auflöst."
+        "Druckbares Innengewinde in einer Bohrung oder Außengewinde auf einer Fläche "
+        "als Wendel mit abgeflachtem Kamm — kein ISO-Profil, weil ein Drucker es "
+        "ohnehin nicht auflöst."
     ),
     caveat=_(
         "Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit "
@@ -571,28 +601,33 @@ def printed_thread(raw: BaseParams) -> PartResult:
       r = 3,075 — hundertfünfzig Mikrometer Luft.
     """
     params = cast(ThreadParams, raw)
-    screw = standards.screw(params.size)
-    depth = screw.pitch * shapes.RIDGE_SHARE
-    if params.internal:
-        # Das Werkzeug: Kern plus Spiel, und die Nut reicht von dort hinaus.
-        diameter = screw.nominal - 2.0 * depth + params.play
-        core = shapes.cylinder(diameter, params.length)
-    else:
-        diameter = screw.nominal - params.play
-        core = shapes.cylinder(diameter - 2.0 * depth, params.length)
+    return _printed_thread(params.size, params.length, params.internal, params.play)
 
-    ridge = shapes.thread_body(diameter, screw.pitch, params.length, internal=params.internal)
+
+def _printed_thread(size: str, length: float, internal: bool, play: float) -> PartResult:
+    """Baut das Gewinde für Bausteine, die mit seinen Maßen zusammenpassen."""
+    screw = standards.screw(size)
+    depth = screw.pitch * shapes.RIDGE_SHARE
+    if internal:
+        # Das Werkzeug: Kern plus Spiel, und die Nut reicht von dort hinaus.
+        diameter = screw.nominal - 2.0 * depth + play
+        core = shapes.cylinder(diameter, length)
+    else:
+        diameter = screw.nominal - play
+        core = shapes.cylinder(diameter - 2.0 * depth, length)
+
+    ridge = shapes.thread_body(diameter, screw.pitch, length, internal=internal)
     body = union(core, ridge)
     # Die Helix endet ein Stück über der Nennlänge; sie wird zurückgeschnitten,
     # damit das Teil genau so lang ist, wie es sagt.
-    limit = shapes.cylinder(diameter * 2.0 + 4.0, params.length)
+    limit = shapes.cylinder(diameter * 2.0 + 4.0, length)
     body = _intersect(body, limit)
 
     # **Ein Werkzeug liegt unter seiner Mündung** (§24.1). Das Innengewinde
     # trägt ab, also gehört es in das Material unter der angeklickten Stelle;
     # nach oben gebaut steht es in der Luft und schneidet nichts. Das
     # Außengewinde setzt auf und bleibt, wo es ist.
-    reach = -params.length if params.internal else 0.0
+    reach = -length if internal else 0.0
     if reach:
         body = shapes.moved(body, (0.0, 0.0, reach))
 
@@ -602,8 +637,140 @@ def printed_thread(raw: BaseParams) -> PartResult:
             "thread_1",
             screw.nominal,
             screw.pitch,
-            (0.0, 0.0, reach + params.length / 2.0),
-            internal=params.internal,
+            (0.0, 0.0, reach + length / 2.0),
+            internal=internal,
+        ),
+    )
+
+
+@op_params
+class PrintedScrewParams(BaseParams):
+    size: str = param(
+        title=_("Größe"),
+        default="M5",
+        choices=_SCREWS,
+        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    )
+    length: float = param(
+        title=_("Länge"),
+        default=12.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=200.0,
+        doc=_("Länge des Gewindes unter dem Schraubenkopf."),
+    )
+    countersunk: bool = param(
+        title=_("Senkkopf"),
+        default=False,
+        doc=_("Formt einen 90-Grad-Senkkopf für eine zuvor gesenkte Bohrung."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="printed_screw",
+    title=_("Schraube"),
+    group="fasteners",
+    params=PrintedScrewParams,
+    at_hole=True,
+    at_hole_mouth=True,
+    at_hole_values=size_for_printed_screw,
+    separate_from_host=True,
+    features=["thread"],
+    doc=_("Druckbare Schraube mit Sechskant- oder Senkkopf und passendem Außengewinde."),
+    caveat=_(
+        "Zusammen mit der gedruckten Mutter aus demselben Material drucken: Das Spiel "
+        "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
+        "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
+    ),
+    changes=[PRINTED_FASTENERS],
+)
+def printed_screw(raw: BaseParams) -> PartResult:
+    """Eine Schraube, deren Gewinde und Kopf an derselben Bohrung sitzen."""
+    params = cast(PrintedScrewParams, raw)
+    screw = standards.screw(params.size)
+    threaded = as_mesh_data(
+        _printed_thread(params.size, params.length, internal=False, play=params.play).mesh
+    )
+    threaded = shapes.moved(threaded, (0.0, 0.0, -params.length + BOOLEAN_OVERLAP))
+
+    diameter = screw.nominal - params.play
+    if params.countersunk:
+        head_height = (screw.countersink - diameter) / 2.0
+        head = shapes.cone(diameter, screw.countersink, head_height)
+    else:
+        head = shapes.hexagon(screw.head, screw.head_height)
+
+    return result(
+        union(head, threaded),
+        thread(
+            "thread_1",
+            screw.nominal,
+            screw.pitch,
+            (0.0, 0.0, -params.length / 2.0),
+        ),
+    )
+
+
+@op_params
+class PrintedNutParams(BaseParams):
+    size: str = param(
+        title=_("Größe"),
+        default="M5",
+        choices=_NUTS,
+        doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="printed_nut",
+    title=_("Gedruckte Mutter"),
+    group="fasteners",
+    params=PrintedNutParams,
+    separate_from_host=True,
+    features=["thread"],
+    doc=_("Druckbare Sechskantmutter mit passendem Innengewinde."),
+    caveat=_(
+        "Zusammen mit der gedruckten Schraube aus demselben Material drucken: Das Spiel "
+        "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
+        "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
+    ),
+    changes=[PRINTED_FASTENERS],
+)
+def printed_nut(raw: BaseParams) -> PartResult:
+    """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""
+    params = cast(PrintedNutParams, raw)
+    screw = standards.screw(params.size)
+    nut = standards.nut(params.size)
+    depth = nut.height + 2.0 * BOOLEAN_OVERLAP
+    cutter = as_mesh_data(_printed_thread(params.size, depth, internal=True, play=params.play).mesh)
+    cutter = shapes.moved(cutter, (0.0, 0.0, nut.height + BOOLEAN_OVERLAP))
+    body = subtract(shapes.hexagon(nut.width, nut.height), cutter)
+    return result(
+        body,
+        thread(
+            "thread_1",
+            screw.nominal,
+            screw.pitch,
+            (0.0, 0.0, nut.height / 2.0),
+            internal=True,
         ),
     )
 
