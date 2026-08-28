@@ -123,7 +123,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
-| Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -10856,14 +10855,13 @@ Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
 ## Was Robert am 26.08.2026 aufgetragen hat
 
 Zwei Aufträge aus dem Tag der 0.2.0-Veröffentlichung, beide von Robert selbst.
-**Der erste ist zur Hälfte gebaut** (Stand 27.08.2026): Modell und Übergabe an
-den Slicer stehen seit `1261935f` — `types.SlotOverride`,
-`PrintSettings.slot_overrides`, `handover.settings_for_slot` und
-`override_for`. Was fehlt, ist die Oberfläche: In `app/ui/` kommt keiner
-dieser Namen vor. Die Registerzeile oben sagt es genau so; dieser Satz hier
-führte beide noch als „nicht angefangen".
+**Der erste ist gebaut** (Stand 28.08.2026): Modell und Übergabe standen seit
+`1261935f`; der Filamentwähler trägt nun auch die Oberfläche. Name und Farbe
+identifizieren die Spule unabhängig von der Extruderreihenfolge, und der
+direkte 3MF-Export schreibt ihre Werte ebenso je Extruder wie die Übergabe an
+den Slicer.
 
-- [ ] **Einstellungen je Filament.** Solidons eigene Felder — Temperaturen,
+- [x] **Einstellungen je Filament.** Solidons eigene Felder — Temperaturen,
   Kühlung — sollen sich **je Materialslot** übersteuern lassen, und die
   Übergabe an den Slicer soll sie je Extruder mitgeben. Die Grenze ist dabei
   die Sache selbst: übersteuerbar ist, was **an der Spule hängt** und sich
@@ -10871,6 +10869,14 @@ führte beide noch als „nicht angefangen".
   dazu — Wandstärken und Schichthöhen sind Eigenschaften des Teils und nicht
   des Materials, und ein Feld, das beides vermischt, macht aus einem
   zweifarbigen Teil zwei verschiedene Teile.
+
+  **Gebaut und geprüft am 28.08.2026:** Am benutzten Filament öffnet
+  „Druckwerte …“ einen gestuft tiefen Dialog für Temperatur, Kühlung, Rückzug
+  und Materialwerte. Ausgeschaltete Gruppen bleiben bei den Projektwerten;
+  eingeschaltete gelten nur für diese Spule. Der direkte 3MF-Export und der
+  Reimport bewahren Namen und Farbe, Orca erhält die Werte je Extruder. Ein
+  gewähltes Herstellerprofil ergänzt die Spule, überdeckt aber keine
+  ausdrückliche Kundenwahl.
 
 - [ ] **Am 15.10.2026 die Verkaufsbereitschaft prüfen.** Sind Finanzamt und
   Merchant of Record bis dahin nicht durch, wird die Demo verlängert — und das
