@@ -12,10 +12,12 @@ zur Verfügung, die Befehlszeile, die dort entstünde, schon.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from app.core import install
+from app.core import install, tools
 from app.ui.install_dialog import InstallDialog
 
 
@@ -455,6 +457,11 @@ def test_one_press_installs_everything_that_is_missing(
         return install.InstallResult(requirement=requirement, installed=True)
 
     monkeypatch.setattr(install, "present", lambda entry: entry.kind != "program")
+    monkeypatch.setattr(
+        tools,
+        "state_of",
+        lambda tool: tools.ToolState(tool=tool, path=None, running=False),
+    )
     monkeypatch.setattr(install, "installable", lambda entry: entry.kind == "program")
     monkeypatch.setattr(install, "install", fake_install)
 
@@ -583,6 +590,11 @@ def test_what_needs_a_second_step_says_so_and_has_a_button(
     die im Paket nicht existiert.
     """
     monkeypatch.setattr(install, "present", lambda _entry: True)
+    monkeypatch.setattr(
+        tools,
+        "state_of",
+        lambda tool: tools.ToolState(tool=tool, path=Path(f"{tool.id}.exe"), running=False),
+    )
 
     dialog = settled(InstallDialog(), qt_app)
     with_follow_up = {row.requirement.id for row in dialog.rows if not row.follow.isHidden()}
@@ -600,6 +612,11 @@ def test_the_second_step_stays_hidden_until_the_first_is_done(
     """Etwas einzurichten, das nicht da ist, geht nicht — also steht der Knopf
     nicht da."""
     monkeypatch.setattr(install, "present", lambda _entry: False)
+    monkeypatch.setattr(
+        tools,
+        "state_of",
+        lambda tool: tools.ToolState(tool=tool, path=None, running=False),
+    )
 
     dialog = settled(InstallDialog(), qt_app)
 
@@ -831,7 +848,7 @@ def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) 
     monkeypatch.setattr(install_dialog.QInputDialog, "getText", antworten)
     monkeypatch.setattr(
         install_dialog.tools,
-        "set_location",
+        "set_address",
         lambda tool_id, value: gespeichert.append((tool_id, value)),
     )
 
@@ -844,3 +861,150 @@ def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) 
     assert gespeichert == [], "ein Ordner ist keine Adresse und wird nicht gemerkt"
     assert len(gefragt) == 2, "es wird erneut gefragt, nicht stillschweigend verworfen"
     assert "Ordner" in gefragt[1], "beim zweiten Mal steht der Grund über dem Feld"
+
+
+def test_comfyui_offers_a_local_app_and_a_network_address(qt_app: QApplication) -> None:
+    """ComfyUI ist Dienst und lokale App — „Ort“ darf nicht nur eine URL meinen."""
+    from app.ui.install_dialog import _Row
+
+    row = _Row(by_id("comfyui"))
+    try:
+        menu = row.locate.menu()
+        assert menu is not None, "ComfyUI bekam weiter nur den Adressdialog"
+        texts = {action.text() for action in menu.actions()}
+        assert any("App" in text for text in texts), texts
+        assert any("adresse" in text.casefold() for text in texts), texts
+    finally:
+        row.deleteLater()
+
+
+def test_an_installed_comfyui_that_is_not_running_gets_a_start_button(
+    qt_app: QApplication,
+) -> None:
+    """Der Kunde startet den gefundenen Desktop aus derselben Zeile."""
+    from app.ui.install_dialog import _Row
+
+    requirement = by_id("comfyui")
+    row = _Row(requirement)
+    try:
+        row.show_status(
+            install.Status(
+                requirement=requirement,
+                present=True,
+                location=r"C:\Programme\Comfy Desktop.exe",
+                running=False,
+                startable=True,
+                address="http://127.0.0.1:8188",
+            )
+        )
+
+        assert not row.launch.isHidden()
+        assert row.launch.text() == "Lokal starten"
+        assert "lokal" in row.where.text().casefold()
+    finally:
+        row.deleteLater()
+
+
+def test_a_running_comfyui_needs_no_second_start_button(qt_app: QApplication) -> None:
+    """Ein beantwortender Dienst wird nicht ein zweites Mal gestartet."""
+    from app.ui.install_dialog import _Row
+
+    requirement = by_id("comfyui")
+    row = _Row(requirement)
+    try:
+        row.show_status(
+            install.Status(
+                requirement=requirement,
+                present=True,
+                location="http://127.0.0.1:8188",
+                running=True,
+                startable=False,
+            )
+        )
+
+        assert row.launch.isHidden()
+    finally:
+        row.deleteLater()
+
+
+def test_starting_comfyui_waits_outside_the_gui_thread(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Port darf zwanzig Sekunden brauchen, ohne das Fenster einzufrieren."""
+    import threading
+
+    here = threading.get_ident()
+    seen: list[int] = []
+    monkeypatch.setattr(
+        tools.ExternalTool,
+        "start_command",
+        lambda _tool: ["Comfy Desktop.exe"],
+    )
+
+    def started(_tool: tools.ExternalTool) -> tools.StartResult:
+        seen.append(threading.get_ident())
+        return tools.StartResult(launched=True, running=True)
+
+    monkeypatch.setattr(tools, "start_detailed", started)
+    dialog = settled(InstallDialog(), qt_app)
+    row = next(entry for entry in dialog.rows if entry.requirement.id == "comfyui")
+    row.show_status(
+        install.Status(
+            requirement=row.requirement,
+            present=True,
+            location="Comfy Desktop.exe",
+            running=False,
+            startable=True,
+        )
+    )
+
+    row.launch.click()
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._launcher is None:
+            break
+        dialog._launcher.wait(20)
+    qt_app.processEvents()
+
+    assert seen and here not in seen
+    dialog.release()
+
+
+def test_each_external_status_probes_its_service_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Dialogzeile darf den gleichen Port nicht mehrfach hintereinander prüfen."""
+    requirement = by_id("comfyui")
+    tool = tools.by_id("comfyui")
+    assert tool is not None
+    calls: list[str] = []
+
+    def state_of(given: tools.ExternalTool) -> tools.ToolState:
+        calls.append(given.id)
+        return tools.ToolState(tool=given, path=None, running=False)
+
+    monkeypatch.setattr(tools, "state_of", state_of)
+    monkeypatch.setattr(install, "installable", lambda _requirement: False)
+
+    install.status_of(requirement)
+
+    assert calls == ["comfyui"]
+
+
+def test_a_failed_launch_says_that_the_program_was_not_opened(qt_app: QApplication) -> None:
+    """Ein Rechtefehler darf nicht als erfolgreich geöffnete Desktop-App erscheinen."""
+    dialog = settled(InstallDialog(), qt_app)
+    requirement = by_id("comfyui")
+
+    dialog._tool_started(
+        (
+            requirement,
+            tools.StartResult(
+                program=Path("Comfy Desktop.exe"),
+                reason="Zugriff verweigert",
+            ),
+        )
+    )
+
+    assert "nicht geöffnet" in dialog.state.text()
+    assert "Zugriff verweigert" in dialog.state.text()
+    assert "erneut" in dialog.state.text()
+    dialog.release()

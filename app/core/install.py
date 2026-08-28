@@ -401,19 +401,59 @@ class Status:
     installable: bool = False
     reason: TranslatableText | str = ""
     by_hand: str = ""
+    running: bool = False
+    """Bei einem Dienst: Sein Port antwortet bereits."""
+    startable: bool = False
+    """Ein lokales Startprogramm liegt da und der Dienst läuft noch nicht."""
+    address: str = ""
+    """Die derzeit aktive Dienstadresse."""
+    remote_address: str = ""
+    """Eine gespeicherte Netzadresse, auch wenn gerade lokal gearbeitet wird."""
+    using_remote_address: bool = False
+    """Die Netzadresse ist aktiv statt der lokalen Vorgabe."""
 
 
 def status_of(requirement: Requirement) -> Status:
     """Eine Anforderung einmal ansehen — alles, was die Zeile braucht."""
-    here = present(requirement)
     can = installable(requirement)
+    tool = tools.by_id(requirement.id)
+    if tool is None:
+        here = present(requirement)
+        return Status(
+            requirement=requirement,
+            present=here,
+            location=location_of(requirement) if here else _explain(requirement),
+            installable=can,
+            reason="" if can or here else why_not(requirement),
+            by_hand="" if can or here else requirement.by_hand(),
+        )
+
+    tool_state = tools.state_of(tool)
+    here = tool_state.installed
+    address = tool.address()
+    if tool_state.path is not None:
+        location = str(tool_state.path)
+    elif here:
+        location = address
+    else:
+        location = str(tool_state.explain())
     return Status(
         requirement=requirement,
         present=here,
-        location=location_of(requirement) if here else _explain(requirement),
+        location=location,
         installable=can,
         reason="" if can or here else why_not(requirement),
         by_hand="" if can or here else requirement.by_hand(),
+        running=tool_state.running,
+        startable=bool(
+            here
+            and not tool_state.running
+            and tool_state.path is not None
+            and tool_state.tool.startable
+        ),
+        address=address,
+        remote_address=tool.remote_address(),
+        using_remote_address=tool.using_remote_address,
     )
 
 

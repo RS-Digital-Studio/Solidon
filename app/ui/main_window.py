@@ -2225,10 +2225,7 @@ class MainWindow(QMainWindow):
             tr("{app} unterstützen …").format(app=APP_NAME),
             None,
             self.action_donate,
-            tr(
-                "Die Weiterentwicklung, Tests und die nächste Version freiwillig "
-                "mitfinanzieren."
-            ),
+            tr("Die Weiterentwicklung, Tests und die nächste Version freiwillig mitfinanzieren."),
         )
         self._add_action(
             help_menu,
@@ -2253,7 +2250,7 @@ class MainWindow(QMainWindow):
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
         for symbol, label, slot, source, own_hint in (
-            ("new", tr("Neu"), self.action_new, self.new_action, ""),
+            ("new", tr("Neues Projekt"), self.action_new, self.new_action, ""),
             ("open", tr("Öffnen"), self.action_open, self.open_action, ""),
             ("save", tr("Speichern"), self.action_save, self.save_action, ""),
             ("import", tr("Modell einfügen"), self.action_import, self.import_action, ""),
@@ -2289,6 +2286,8 @@ class MainWindow(QMainWindow):
                 tr("Knochen in einen gewählten Körper setzen und ihn danach beugen."),
             ),
         ):
+            if symbol in ("import", "sculpt"):
+                toolbar.addSeparator()
             action = QAction(icon(symbol, toolbar), label, self)
             action.triggered.connect(slot)
             # Ohne Beschriftung am Knopf ist der Tooltip die Stelle, an der
@@ -2874,7 +2873,7 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
-        """Was am unbeschrifteten Knopf steht: Name, Kürzel, Zweck.
+        """Was am Werkzeugknopf steht: Name, Kürzel, Zweck.
 
         Der Zweck kommt aus dem Menüeintrag derselben Handlung, wenn es einen
         gibt — er ist dort schon geschrieben und übersetzt, und zwei Sätze für
@@ -2896,14 +2895,11 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _with_name(action: QAction, reason: str) -> str:
-        """Der Grund, dem Namen des Knopfes vorangestellt — aber nur dort, wo
-        der Knopf ihn nicht selbst zeigt.
+        """Der Grund, dem Namen vorangestellt — nur wenn der Knopf ihn nicht zeigt.
 
-        Die Werkzeugleiste über dem Fenster steht ohne Beschriftung; ihr
-        Tooltip ist die Stelle, an der ihr Name steht. Ein Grund, der ihn
-        überschreibt, lässt ein Bild und einen Satz zurück, die nichts
-        miteinander zu tun scheinen. Im Menü steht der Name daneben — dort
-        bleibt der Grund allein.
+        Beschriftete Werkzeugknöpfe und Menüeinträge lassen den Grund allein.
+        Für einen reinen Symbolknopf bleibt der Name im Hinweis erhalten; ein
+        Bild und ein Satz ohne Verbindung wären sonst zu raten.
 
         Getrennt wird mit Doppelpunkt und nicht mit Gedankenstrich: Der
         Sperrgrund führt selbst einen, und zwei in einem Satz sagen nicht mehr,
@@ -4564,7 +4560,7 @@ class MainWindow(QMainWindow):
         if result is None:
             return []
         found: list[tuple[float, str, str, tuple[float, float, float]]] = []
-        for entry in result.scene.objects.values():
+        for object_id, entry in result.scene.objects.items():
             for feature_id, feature in entry.features.items():
                 if feature.kind != "face":
                     continue

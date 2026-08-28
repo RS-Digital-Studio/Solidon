@@ -68,8 +68,8 @@ def test_a_missing_tool_is_not_an_error() -> None:
 def test_a_service_is_asked_on_its_port_not_looked_for_on_the_disk() -> None:
     """ComfyUI kann portabel in ``D:\\AI`` liegen — dort findet es keine Suche.
 
-    Solidon startet es ohnehin nie, es redet über HTTP mit ihm. Die Frage ist
-    also, ob etwas antwortet, und nicht, ob eine Datei existiert.
+    Benutzbar ist der Dienst erst, wenn sein Port antwortet. Ein zusätzlich
+    gefundener lokaler Starter ändert an dieser Prüfung nichts.
     """
     service = tools.ExternalTool(
         id="x", title="X", what_for="y", kind="service", url="http://127.0.0.1:9"
@@ -128,22 +128,113 @@ def test_a_tool_can_be_pointed_at_by_hand(tmp_path: Path) -> None:
 # --- einen Dienst starten (§27, §38) -------------------------------------------------
 
 
-def test_only_a_service_with_a_command_can_be_started() -> None:
-    """Geraten wird nicht.
+def test_only_a_service_with_a_documented_command_can_be_started() -> None:
+    """Geraten wird nicht: Beide Befehle sind die der jeweiligen Anwendung."""
+    startable = {tool.id for tool in tools.TOOLS if tool.startable}
 
-    Ollama startet mit ``ollama serve`` — derselbe Befehl, den ein Mensch
-    eintippen würde. ComfyUI hat keinen: Es läuft aus seinem eigenen Ordner mit
-    seinem eigenen Python, und eine Anwendung, die das errät, startet
-    irgendwann das Falsche.
-    """
-    startable = {tool.id for tool in tools.TOOLS if tool.start_arguments}
-
-    assert startable == {"ollama"}
+    assert startable == {"ollama", "comfyui"}
     ollama = tools.by_id("ollama")
     assert ollama is not None and ollama.start_arguments == ("serve",)
     for tool in tools.TOOLS:
-        if tool.start_arguments:
+        if tool.startable:
             assert tool.kind == "service", tool.id
+
+
+def test_comfy_desktop_and_the_cli_have_their_own_start_commands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Desktop wird geöffnet, die offizielle CLI dagegen mit ``launch`` gerufen."""
+    comfyui = tools.by_id("comfyui")
+    assert comfyui is not None
+
+    desktop = Path("Comfy Desktop.exe")
+    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: desktop)
+    assert comfyui.start_command() == [str(desktop)]
+
+    command_line = Path("comfy.exe")
+    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: command_line)
+    assert comfyui.start_command() == [str(command_line), "launch", "--background"]
+
+
+def test_starting_locally_keeps_the_remote_address_but_activates_the_local_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der lokale Knopf startet und prüft lokal; die Webadresse bleibt für später erhalten."""
+    comfyui = tools.by_id("comfyui")
+    assert comfyui is not None
+    desktop = Path("Comfy Desktop.exe")
+    remote = "http://comfy.example:8188"
+    checked: list[str] = []
+    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: desktop)
+    monkeypatch.setattr(tools.subprocess, "Popen", lambda *_a, **_k: object())
+
+    def reachable(address: str, *_args: object, **_kwargs: object) -> bool:
+        checked.append(address)
+        return address == comfyui.url
+
+    monkeypatch.setattr(tools.discover, "reachable", reachable)
+    tools.set_address("comfyui", remote)
+    try:
+        result = tools.start_detailed(comfyui, wait_seconds=0)
+
+        assert result.running
+        assert checked == [comfyui.url]
+        assert comfyui.address() == comfyui.url
+        assert tools.discover.remembered_remote_address("comfyui") == remote
+    finally:
+        tools.set_address("comfyui", "")
+
+
+def test_the_default_address_is_described_as_local() -> None:
+    """Eine von Hand wiederholte Vorgabe darf nicht wie ein anderer Rechner wirken."""
+    comfyui = tools.by_id("comfyui")
+    assert comfyui is not None
+    tools.set_address("comfyui", f"{comfyui.url}/")
+    try:
+        assert not comfyui.using_remote_address
+    finally:
+        tools.set_address("comfyui", "")
+
+
+def test_a_start_error_keeps_its_reason(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Oberfläche muss „nicht geöffnet“ von „Port antwortet nicht“ unterscheiden können."""
+    comfyui = tools.by_id("comfyui")
+    assert comfyui is not None
+    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: Path("Comfy Desktop.exe"))
+    monkeypatch.setattr(
+        tools.subprocess,
+        "Popen",
+        lambda *_a, **_k: (_ for _ in ()).throw(PermissionError("Zugriff verweigert")),
+    )
+
+    result = tools.start_detailed(comfyui, wait_seconds=0)
+
+    assert not result.launched
+    assert not result.running
+    assert "Zugriff verweigert" in result.reason
+
+
+def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Installer legt ``Comfy Desktop.exe`` ab, nicht ``ComfyUI.exe``."""
+    folder = tmp_path / "Programs" / "Comfy Desktop"
+    folder.mkdir(parents=True)
+    executable = folder / "Comfy Desktop.exe"
+    executable.write_text("")
+    monkeypatch.setattr(tools.discover, "_install_roots", lambda: (tmp_path / "Programs",))
+    monkeypatch.setattr(tools.discover.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(tools.discover, "_from_registry", lambda _names: None)
+    monkeypatch.setattr(tools.discover, "_from_flatpak", lambda _names: None)
+    monkeypatch.setattr(tools.discover, "_from_appimage", lambda _names: None)
+    monkeypatch.setattr(tools.discover, "_from_host", lambda _names: None)
+    tools.discover.forget_cache()
+    comfyui = tools.by_id("comfyui")
+    assert comfyui is not None
+
+    found = tools.discover.unpatched_find_program("comfyui", comfyui.executables)
+
+    assert found == executable
 
 
 def test_starting_something_that_is_not_installed_does_nothing(
@@ -182,7 +273,7 @@ def test_starting_a_service_uses_its_own_command_and_lets_go(
     monkeypatch.setattr(tools.subprocess, "Popen", fake_popen)
     ollama = tools.by_id("ollama")
     assert ollama is not None
-    monkeypatch.setattr(type(ollama), "running", lambda _self: True)
+    monkeypatch.setattr(tools.discover, "reachable", lambda _address: True)
 
     try:
         assert tools.start(ollama), "der Port antwortet, also gilt es als gestartet"
@@ -206,7 +297,7 @@ def test_a_service_that_does_not_come_up_says_no(
     monkeypatch.setattr(tools.subprocess, "Popen", lambda *a, **k: object())
     ollama = tools.by_id("ollama")
     assert ollama is not None
-    monkeypatch.setattr(type(ollama), "running", lambda _self: False)
+    monkeypatch.setattr(tools.discover, "reachable", lambda _address: False)
 
     try:
         assert not tools.start(ollama, wait_seconds=0.0)
@@ -352,7 +443,36 @@ def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
     assert external_tools.TOOLS, "ohne Werkzeugliste prüft die Schleife nichts"
     for tool in external_tools.TOOLS:
         assert str(tool.title) in shown, f"{tool.id} fehlt in der Erstinbetriebnahme"
-    assert dialog.open_button.text().startswith("Modell")
+    assert "Modell öffnen" in dialog.open_button.text()
+
+
+def test_the_first_run_groups_basics_and_optional_extras(qt_app: QApplication) -> None:
+    """Der erste Blick trennt notwendige Vorgaben von freiwilligen Erweiterungen."""
+    from PySide6.QtWidgets import QGroupBox
+
+    dialog = FirstRunDialog(UiSettings())
+    groups = {group.title() for group in dialog.findChildren(QGroupBox)}
+
+    assert {"Grundlagen", "Optionale Erweiterungen"} <= groups
+    assert dialog.install_button.text() == "Zusatzprogramme verwalten …"
+    assert dialog.open_button.text() == "Eigenes Modell öffnen …"
+
+
+def test_an_installed_service_is_not_called_missing(qt_app: QApplication) -> None:
+    """Comfy Desktop auf der Platte ist installiert, auch solange sein Port noch ruht."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import tools as external_tools
+    from app.ui.first_run import ToolRow
+
+    tool = external_tools.by_id("comfyui")
+    assert tool is not None
+    state = external_tools.ToolState(tool=tool, path=Path("Comfy Desktop.exe"), running=False)
+    row = ToolRow(state)
+    words = {label.text() for label in row.findChildren(QLabel)}
+
+    assert "installiert" in words
+    assert "nicht eingerichtet" not in words
 
 
 def test_the_first_run_offers_the_chat_setup(qt_app: QApplication) -> None:
@@ -993,7 +1113,7 @@ def test_choosing_a_language_switches_the_dialog_at_once(qt_app: QApplication) -
     fresh = visible_texts(after)
     unchanged = [a for a, b in zip(spoken, fresh, strict=False) if a == b]
     assert len(unchanged) <= 1, f"diese Texte wechselten nicht mit: {unchanged}"
-    assert any("Let" in text or "External" in text for text in fresh), (
+    assert any("Welcome" in text or "Optional extensions" in text for text in fresh), (
         "der neue Dialog spricht die gewählte Sprache"
     )
 
@@ -1037,7 +1157,7 @@ def test_an_unexpected_error_does_not_leave_the_first_run_waiting(
     assert dialog.install_button.isEnabled(), "der Weg zur Liste bleibt offen"
     assert "nachgesehen" not in dialog.chat_state.text(), "keine Zeile bleibt auf „wird“ stehen"
     assert "schiefgegangen" in dialog.chat_state.text()
-    assert dialog.open_button.text().startswith("Modell"), "und der Weg hinaus steht da"
+    assert "Modell öffnen" in dialog.open_button.text(), "und der Weg hinaus steht da"
 
 
 def test_the_session_attachment_names_the_parts_that_stay_behind(

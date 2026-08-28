@@ -206,6 +206,45 @@ def test_a_service_can_live_on_another_machine() -> None:
     assert discover.service_url("comfyui", "http://127.0.0.1:8188") == "http://192.168.1.5:8188"
 
 
+def test_a_local_launcher_and_a_remote_address_are_remembered_together(tmp_path: Path) -> None:
+    """ComfyUI ist beides; die App-Auswahl darf die Webadresse nicht überschreiben."""
+    program = tmp_path / "Comfy Desktop.exe"
+    program.write_text("")
+
+    try:
+        discover.remember_address("comfyui", "http://192.168.1.5:8188")
+        discover.remember_path("comfyui", str(program))
+
+        assert discover.service_url("comfyui", "http://127.0.0.1:8188") == (
+            "http://192.168.1.5:8188"
+        )
+        assert discover.unpatched_find_program("comfyui", ("Comfy Desktop",)) == program
+
+        discover.use_local_address("comfyui")
+        assert discover.service_url("comfyui", "http://127.0.0.1:8188") == ("http://127.0.0.1:8188")
+        assert discover.remembered_remote_address("comfyui") == "http://192.168.1.5:8188"
+
+        discover.remember_address("comfyui", "http://192.168.1.5:8188")
+        assert discover.service_url("comfyui", "http://127.0.0.1:8188") == (
+            "http://192.168.1.5:8188"
+        )
+    finally:
+        discover.remember_address("comfyui", "")
+        discover.remember_path("comfyui", "")
+
+
+def test_a_manually_selected_macos_app_bundle_is_a_program(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine ``.app`` ist auf dem Dateisystem ein Ordner, für den Nutzer aber die App."""
+    bundle = tmp_path / "Comfy Desktop.app"
+    bundle.mkdir()
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool_id: str(bundle))
+    monkeypatch.setattr(discover.sys, "platform", "darwin")
+
+    assert discover.unpatched_find_program("comfyui", ("Comfy Desktop",)) == bundle
+
+
 def test_a_closed_port_answers_false_quickly() -> None:
     """Auf einem Port, auf dem nichts lauscht — die Antwort ist Nein, kein Fehler."""
     assert not discover.reachable("http://127.0.0.1:9", seconds=0.2)

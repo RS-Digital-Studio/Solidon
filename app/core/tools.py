@@ -18,9 +18,9 @@ Gegenwert: Der Kunde installiert 40 MB und merkt nichts davon.
 **Zwei Arten, zwei Fragen.** Ein Programm wird aufgerufen, es braucht also eine
 Datei; gesucht wird sie von :mod:`app.core.discover`, und zwar nicht nur im
 PATH. Ein Dienst wird angesprochen, er braucht also eine Adresse; gefragt wird
-sein Port. Ollama ist beides: erst installiert, dann gestartet — und zwischen
-diesen beiden Zuständen liegt genau der Satz, den jemand lesen muss, um weiter
-zu kommen.
+sein Port. Ollama und ComfyUI sind beides: erst installiert, dann gestartet —
+und zwischen diesen beiden Zuständen liegt genau der Satz, den jemand lesen
+muss, um weiterzukommen.
 """
 
 from __future__ import annotations
@@ -55,13 +55,18 @@ class ExternalTool:
     url: str = ""
     """Vorgabeadresse eines Dienstes. Bei einem reinen Programm leer."""
     optional: bool = True
-    start_arguments: tuple[str, ...] = ()
+    start_arguments: tuple[str, ...] | None = None
     """Womit sich dieser Dienst starten lässt, oder nichts.
 
-    Nur wo es einen Befehl gibt, den ein Mensch genauso eingeben würde:
-    ``ollama serve``. ComfyUI bleibt leer — es wird aus seinem eigenen Ordner
-    mit seinem eigenen Python gestartet, und eine Anwendung, die das errät,
-    startet irgendwann das Falsche.
+    ``None`` heißt: Solidon kennt keinen sicheren Startweg. Ein leeres Tupel
+    heißt dagegen: die gefundene Desktop-Anwendung selbst öffnen.
+    """
+    start_argument_overrides: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    """Abweichende Argumente für einen bestimmten Programmnamen.
+
+    Comfy Desktop wird ohne Argument geöffnet; die offizielle ``comfy``-CLI
+    startet denselben Dienst mit ``launch --background``. Beides ist
+    dokumentiert, nichts davon wird aus einem Installationsordner geraten.
     """
 
     def path(self) -> Path | None:
@@ -70,9 +75,41 @@ class ExternalTool:
             return None
         return discover.find_program(self.id, self.executables)
 
+    @property
+    def startable(self) -> bool:
+        """Kennt Solidon für diesen Dienst einen ausdrücklichen Startweg?"""
+        return self.kind == "service" and self.start_arguments is not None
+
+    def start_command(self) -> list[str] | None:
+        """Der vollständige Startbefehl, oder ``None`` ohne gefundenes Programm."""
+        if not self.startable:
+            return None
+        program = self.path()
+        if program is None:
+            return None
+        if sys.platform == "darwin" and program.suffix.lower() == ".app":
+            return ["/usr/bin/open", str(program)]
+        arguments = self.start_arguments or ()
+        program_name = discover.plain_name(program.name)
+        for name, replacement in self.start_argument_overrides:
+            if program_name == discover.plain_name(name):
+                arguments = replacement
+                break
+        return [str(program), *arguments]
+
     def address(self) -> str:
         """Die Adresse, unter der der Dienst gesucht wird."""
         return discover.service_url(self.id, self.url) if self.url else ""
+
+    def remote_address(self) -> str:
+        """Die gespeicherte Netzadresse, auch während der lokale Dienst aktiv ist."""
+        return discover.remembered_remote_address(self.id) if self.url else ""
+
+    @property
+    def using_remote_address(self) -> bool:
+        """Ist die gespeicherte Netzadresse statt der lokalen Vorgabe aktiv?"""
+        chosen = discover.remembered_address(self.id).rstrip("/")
+        return bool(chosen and chosen != self.url.rstrip("/"))
 
     def running(self) -> bool:
         """Antwortet der Dienst? Bei einem reinen Programm immer ``False``."""
@@ -137,8 +174,20 @@ TOOLS: Final[tuple[ExternalTool, ...]] = (
         title="ComfyUI",
         what_for=_("3D-Modell aus Text oder Bild erzeugen."),
         kind="service",
-        executables=("ComfyUI", "comfyui", "comfy"),
+        # Der offizielle Desktop heißt seit 2026 ``Comfy Desktop``. Die alten
+        # Namen bleiben für dessen Vorgänger und für portable Installationen;
+        # ``comfy`` ist die offizielle CLI.
+        executables=(
+            "Comfy Desktop",
+            "comfy-desktop",
+            "comfyui-desktop",
+            "ComfyUI",
+            "comfyui",
+            "comfy",
+        ),
         url=mesh.DEFAULT_COMFY_URL,
+        start_arguments=(),
+        start_argument_overrides=(("comfy", ("launch", "--background")),),
     ),
 )
 
@@ -188,6 +237,18 @@ class ToolState:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class StartResult:
+    """Was beim Öffnen eines lokalen Dienstes tatsächlich passiert ist."""
+
+    program: Path | None = None
+    command: tuple[str, ...] = ()
+    address: str = ""
+    launched: bool = False
+    running: bool = False
+    reason: str = ""
+
+
 def state_of(tool: ExternalTool) -> ToolState:
     """Ein Werkzeug einmal ansehen. Fehlend ist normal, kein Fehler."""
     return ToolState(tool=tool, path=tool.path(), running=tool.running())
@@ -208,30 +269,45 @@ def set_location(tool_id: str, location: str) -> None:
     discover.remember(tool_id, location)
 
 
+def set_program(tool_id: str, location: str) -> None:
+    """Den lokalen Startpfad setzen, ohne eine Netzadresse zu verwerfen."""
+    discover.remember_path(tool_id, location)
+
+
+def set_address(tool_id: str, address: str) -> None:
+    """Die Netzadresse setzen, ohne einen lokalen Startpfad zu verwerfen."""
+    discover.remember_address(tool_id, address)
+
+
 #: Wie lange auf einen gestarteten Dienst gewartet wird, bevor gesagt wird,
 #: dass er nicht antwortet. Ollama lädt beim Start seine Modellliste; eine
 #: Sekunde ist zu wenig, eine Minute wäre ein Hänger.
 START_TIMEOUT_SECONDS: Final = 20.0
 
 
-def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bool:
-    """Einen Dienst starten, der installiert ist und nicht läuft.
+def start_detailed(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> StartResult:
+    """Einen lokalen Dienst öffnen und das Ergebnis vollständig beschreiben.
 
     **Warum das hier steht und nicht in einem Satz.** „Ollama antwortet nicht.
     Läuft es? «ollama serve» startet es." war die vollständige Auskunft — an
     einen Menschen, der gerade in einem Fenster sitzt und keine Konsole offen
-    hat. Der Befehl ist derselbe, den er eintippen würde; ihn an einen Knopf
-    zu hängen, nimmt ihm einen Umweg und keine Entscheidung ab.
+    hat. Bei ComfyUI gilt dasselbe für die Desktop-App und die offizielle CLI.
+    Der dokumentierte Befehl hängt an einem Knopf und erspart den Umweg über
+    ein Terminal.
 
     Der Prozess wird **losgelassen**: Er gehört nicht Solidon, er überlebt es
     und wird von Solidon nie beendet. Was hier zurückkommt, ist die Antwort
     auf die einzige Frage, die zählt — antwortet der Port jetzt?
     """
-    if tool.kind != "service" or not tool.start_arguments:
-        return False
-    program = tool.path()
-    if program is None:
-        return False
+    command = tool.start_command()
+    if command is None:
+        return StartResult(reason="Kein lokales Startprogramm gefunden.")
+
+    program = Path(command[1]) if command[0] == "/usr/bin/open" else Path(command[0])
+    # Wer „Lokal starten“ drückt, meint den lokalen Vorgabedienst. Eine zuvor
+    # gespeicherte Netzadresse bleibt erhalten, darf aber weder die Startprobe
+    # noch den anschließenden Modellweg auf einen anderen Rechner lenken.
+    target_address = tool.url or tool.address()
 
     # Losgelöst und ohne Fenster: ein Konsolenfenster, das über der Anwendung
     # aufgeht, ist für den Nutzer ein Fehler und für uns nichts. Die beiden
@@ -245,7 +321,7 @@ def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bo
     # Host-Pfad; im Sandkasten gibt es ihn nicht. Ohne ``on_host`` endet der
     # Knopf in einem ``OSError``, einer Protokollzeile und ``False`` — er tut
     # sichtbar nichts, und daneben steht weiter „Antwortet nicht".
-    launched = discover.on_host([str(program), *tool.start_arguments])
+    launched = discover.on_host(command)
     try:
         subprocess.Popen(
             launched,
@@ -257,15 +333,41 @@ def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bo
         )
     except OSError as problem:
         _log.warning("could not start %s: %s", tool.id, problem)
-        return False
+        return StartResult(
+            program=program,
+            command=tuple(command),
+            address=target_address,
+            reason=str(problem),
+        )
 
-    _log.info("started %s, waiting for its port", tool.id)
+    _log.info("started %s, waiting for %s", tool.id, target_address)
     deadline = time.monotonic() + wait_seconds
     while time.monotonic() < deadline:
-        if tool.running():
-            return True
+        if target_address and discover.reachable(target_address):
+            discover.use_local_address(tool.id)
+            return StartResult(
+                program=program,
+                command=tuple(command),
+                address=target_address,
+                launched=True,
+                running=True,
+            )
         time.sleep(_POLL_SECONDS)
-    return tool.running()
+    running = bool(target_address) and discover.reachable(target_address)
+    if running:
+        discover.use_local_address(tool.id)
+    return StartResult(
+        program=program,
+        command=tuple(command),
+        address=target_address,
+        launched=True,
+        running=running,
+    )
+
+
+def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bool:
+    """Kompatible Kurzantwort für bestehende Einrichtungswege."""
+    return start_detailed(tool, wait_seconds).running
 
 
 #: Wie oft nachgesehen wird, ob der Port antwortet. Die Probe selbst kostet

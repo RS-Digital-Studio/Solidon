@@ -39,11 +39,10 @@ installiert Solidon ein Programm und führt es danach weiter als „nicht
 gefunden". Das ist die schlechteste aller Antworten: Sie lässt den Nutzer an
 seiner eigenen Handlung zweifeln.
 
-Dienste sind eine andere Frage und bekommen eine andere Antwort. Solidon
-startet ComfyUI und Ollama nie, es redet über HTTP mit ihnen — es zählt also,
-ob auf dem Port etwas antwortet, und nicht, ob irgendwo eine Datei liegt. Ein
-nach ``D:\\AI`` entpacktes ComfyUI hat keine ausführbare Datei zum Finden und
-keinen Registry-Eintrag zum Lesen, und es funktioniert einwandfrei.
+    Dienste sind eine andere Frage und bekommen eine andere Antwort. Benutzbar
+    sind ComfyUI und Ollama, wenn ihr Port antwortet; eine gefundene lokale App
+    ist zusätzlich ein Startweg. Ein Dienst auf einem anderen Rechner braucht
+    dagegen nur seine Adresse.
 
 Die gemerkten Pfade liegen in einer kleinen Datei neben der übrigen
 Nutzerkonfiguration. Nichts hiervon schreibt je in ein Projekt.
@@ -182,6 +181,97 @@ def remember(tool_id: str, value: str) -> None:
     _log.info("external tool %s set to %r", tool_id, value)
 
 
+def _typed_key(tool_id: str, kind: str) -> str:
+    """Getrennter Speicherplatz für die zwei Seiten eines lokalen Dienstes."""
+    return f"{tool_id}:{kind}"
+
+
+def remembered_path(tool_id: str) -> str:
+    """Der gewählte Programmpfad, mit Rückfall auf das alte gemeinsame Feld."""
+    entries = _load()
+    chosen = entries.get(_typed_key(tool_id, "path"), "")
+    if chosen:
+        return chosen
+    legacy = entries.get(tool_id, "")
+    return legacy if "://" not in legacy else ""
+
+
+def _remote_address(entries: dict[str, str], tool_id: str) -> str:
+    """Die gespeicherte Netzadresse aus dem neuen oder dem alten Feld."""
+    chosen = entries.get(_typed_key(tool_id, "address"), "")
+    if chosen:
+        return chosen
+    legacy = entries.get(tool_id, "")
+    return legacy if "://" in legacy else ""
+
+
+def remembered_remote_address(tool_id: str) -> str:
+    """Die gespeicherte Netzadresse, auch wenn gerade lokal gearbeitet wird."""
+    return _remote_address(_load(), tool_id)
+
+
+def remembered_address(tool_id: str) -> str:
+    """Die aktive Netzadresse; im lokalen Betrieb bleibt sie im Hintergrund erhalten."""
+    entries = _load()
+    remote = _remote_address(entries, tool_id)
+    if entries.get(_typed_key(tool_id, "address_mode")) == "local":
+        return ""
+    return remote
+
+
+def _remember_typed(tool_id: str, kind: str, value: str) -> None:
+    """Eine Seite eines Dienstes ändern, ohne die andere zu verlieren."""
+    entries = _load()
+    key = _typed_key(tool_id, kind)
+    if value:
+        entries[key] = value
+    else:
+        entries.pop(key, None)
+        legacy = entries.get(tool_id, "")
+        is_address = "://" in legacy
+        if (kind == "address") == is_address:
+            entries.pop(tool_id, None)
+    _store(entries)
+    forget_cache()
+    _log.info("external tool %s %s set to %r", tool_id, kind, value)
+
+
+def remember_path(tool_id: str, value: str) -> None:
+    """Den lokalen Startpfad eines Dienstes merken."""
+    _remember_typed(tool_id, "path", value)
+
+
+def remember_address(tool_id: str, value: str) -> None:
+    """Eine Netzadresse speichern und als aktiven Dienstweg auswählen."""
+    entries = _load()
+    address_key = _typed_key(tool_id, "address")
+    mode_key = _typed_key(tool_id, "address_mode")
+    if value:
+        entries[address_key] = value
+        entries[mode_key] = "remote"
+    else:
+        entries.pop(address_key, None)
+        entries.pop(mode_key, None)
+        legacy = entries.get(tool_id, "")
+        if "://" in legacy:
+            entries.pop(tool_id, None)
+    _store(entries)
+    forget_cache()
+    _log.info("external tool %s address set to %r", tool_id, value)
+
+
+def use_local_address(tool_id: str) -> None:
+    """Den lokalen Vorgabedienst aktivieren, ohne die Netzadresse zu vergessen."""
+    entries = _load()
+    mode_key = _typed_key(tool_id, "address_mode")
+    if _remote_address(entries, tool_id):
+        entries[mode_key] = "local"
+    else:
+        entries.pop(mode_key, None)
+    _store(entries)
+    _log.info("external tool %s switched to its local address", tool_id)
+
+
 # --- Programme ------------------------------------------------------------------
 
 #: Antworten aus dem Ordnerdurchgang, dem einzigen teuren Schritt. Wird nach
@@ -244,7 +334,7 @@ def refresh_path() -> bool:
 
 def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
     """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
-    chosen = remembered(tool_id)
+    chosen = remembered_path(tool_id)
     if chosen and "://" not in chosen:
         # Die Bedingung schließt eine **Adresse** aus, und das ist keine
         # Feinheit: :func:`remember` legt beides im selben Speicher ab, und
@@ -260,7 +350,9 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
         # bietet es ausdrücklich an —, findet danach im Protokoll, sein Eintrag
         # sei fort. Eine falsche Auskunft ist teurer als keine.
         path = Path(chosen)
-        if path.is_file():
+        if path.is_file() or (
+            sys.platform == "darwin" and path.suffix.lower() == ".app" and path.is_dir()
+        ):
             return path
         # **Im Flatpak ist ein eingetragener Pfad ein Host-Pfad**, und
         # ``is_file()`` darauf sagt zuverlässig nein. Ihn hier als verschwunden
@@ -818,7 +910,7 @@ def opener_for(url: str) -> urllib.request.OpenerDirector:
 
 def service_url(tool_id: str, default: str) -> str:
     """Die Adresse eines Dienstes: die von Hand gesetzte, sonst die vorgegebene."""
-    return remembered(tool_id) or default
+    return remembered_address(tool_id) or default
 
 
 def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:

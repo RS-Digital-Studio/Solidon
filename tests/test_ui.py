@@ -1001,6 +1001,19 @@ def test_a_thread_dialog_uses_the_selected_face_or_bore(window: MainWindow) -> N
     dialog.reject()
 
 
+def test_drawable_faces_keep_the_object_that_owns_them(window: MainWindow) -> None:
+    """Die Ebenenliste bindet jede Fläche an ihren Körper, ohne NameError."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id = next(iter(result.scene.objects))
+
+    faces = window._drawable_faces()
+
+    assert faces, "ein Würfel bietet ebene Zeichenflächen an"
+    assert all(identifier.startswith(f"{object_id}:") for identifier, _label, _normal in faces)
+
+
 def test_a_tree_context_click_selects_the_feature_it_opens_for(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1435,7 +1448,7 @@ def test_findings_carry_their_severity_as_a_shape(qt_app: QApplication) -> None:
         assert not item.text().startswith(("!", "·", "X")), "der Marker steckt jetzt im Zeichen"
 
 
-def test_the_first_run_says_found_and_missing_in_words(qt_app: QApplication) -> None:
+def test_the_first_run_describes_every_tool_state_in_words(qt_app: QApplication) -> None:
     """„+" und „−" waren die kryptischste Stelle im allerersten Dialog.
 
     Das Wort ist geblieben, das Zeichen steht jetzt daneben — nicht statt
@@ -1453,7 +1466,9 @@ def test_the_first_run_says_found_and_missing_in_words(qt_app: QApplication) -> 
     for state in states:
         row = ToolRow(state)
         words = [child.text() for child in row.findChildren(QLabel) if child.text()]
-        assert any(word in ("gefunden", "fehlt") for word in words), words
+        assert any(
+            word in ("gefunden", "bereit", "installiert", "nicht eingerichtet") for word in words
+        ), words
         assert row.toolTip(), "wo es liegt, steht im Hinweis"
         assert not any(word.startswith(("+ ", "- ")) for word in words)
 
@@ -3081,7 +3096,7 @@ def test_the_toolbar_buttons_carry_a_symbol_and_show_their_words(
         assert action.statusTip(), f"{action.text()} ohne Hinweis in der Statuszeile"
 
     labels = {action.text() for action in toolbar.actions()}
-    assert {"Neu", "Modell einfügen", "Zeichnen", "Formen", "Skelett"} <= labels
+    assert {"Neues Projekt", "Modell einfügen", "Zeichnen", "Formen", "Skelett"} <= labels
 
 
 def test_a_labelled_button_keeps_the_reason_short(
@@ -6900,9 +6915,9 @@ def test_the_first_run_dialog_promises_no_trial_in_the_sale_version(
     monkeypatch.setattr(store, "TRIAL_FROM", None)
     activation.forget_cache()
     dialog = FirstRunDialog(UiSettings())
-    assert "14" not in dialog.greeting.text()
-    assert "ohne Testphase" in dialog.greeting.text()
-    assert "Geräteaktivierung" in dialog.greeting.text()
+    assert "14" not in dialog.terms.text()
+    assert "ohne Testphase" in dialog.terms.text()
+    assert "Geräteaktivierung" in dialog.terms.text()
     activation.forget_cache()
 
 
@@ -6928,7 +6943,7 @@ def test_the_first_run_dialog_promises_no_free_days_on_a_damaged_install(
 
     dialog = FirstRunDialog(UiSettings())
 
-    text = dialog.greeting.text()
+    text = dialog.terms.text()
     assert str(InstallationDamaged().detail) in text, text
     assert "14" not in text, f"kein Versprechen über freie Tage: {text!r}"
 

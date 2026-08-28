@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -54,7 +55,7 @@ from app.ui.icons import icon
 from app.ui.labels import by_title, deadline_date
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.settings import UiSettings
-from app.ui.style import NORMAL, TIGHT, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -119,7 +120,13 @@ class ToolRow(QWidget):
         name = "done" if state.available else "severity-info"
         symbol.setPixmap(icon(name, self).pixmap(16, 16))
 
-        word = QLabel(tr("gefunden") if state.available else tr("fehlt"), self)
+        if state.available:
+            status = tr("bereit") if state.tool.kind == "service" else tr("gefunden")
+        elif state.installed:
+            status = tr("installiert")
+        else:
+            status = tr("nicht eingerichtet")
+        word = QLabel(status, self)
         set_level(word, "caption")
 
         what = QLabel(f"{state.tool.title} — {state.tool.what_for}", self)
@@ -157,7 +164,7 @@ class FirstRunDialog(QDialog):
         super().__init__(parent)
         self.settings = settings
         self.setWindowTitle(tr("Erste Schritte"))
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(680)
 
         # Der Testlauf steht hier in einem Satz und mehr nicht: die
         # Ersteinrichtung fragt nach keinem Schlüssel — das wäre eine Hürde
@@ -195,17 +202,19 @@ class FirstRunDialog(QDialog):
                 "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "
                 "Ansehen und Messen es."
             ).format(days=TRIAL_DAYS)
+        title = QLabel(tr("Willkommen bei {app}").format(app=APP_NAME), self)
+        set_level(title, "title")
         self.greeting = QLabel(
-            f"{APP_NAME} — "
-            + tr(
-                "Konstruieren, erzeugen und anpassen für den 3D-Druck. Diese Angaben "
-                "stehen später unter Bearbeiten, Einstellungen; überspringen geht auch."
-            )
-            + " "
-            + terms,
+            tr(
+                "Für einen guten Start reichen drei Angaben. Wenn Sie unsicher sind, "
+                "lassen Sie die Vorschläge einfach stehen."
+            ),
             self,
         )
         self.greeting.setWordWrap(True)
+        self.terms = QLabel(terms, self)
+        self.terms.setWordWrap(True)
+        set_level(self.terms, "caption")
 
         self.language = QComboBox(self)
         # Der Name, nicht das Kürzel: „de" stand hier als allererste Angabe, die
@@ -236,12 +245,36 @@ class FirstRunDialog(QDialog):
             self.material.addItem(str(material.title), identifier)
         _select(self.material, settings.material or profiles.DEFAULT_MATERIAL)
 
-        form = QFormLayout()
+        basics = QGroupBox(tr("Grundlagen"), self)
+        form = QFormLayout(basics)
+        form.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        basics_hint = QLabel(
+            tr("Diese Vorgaben gelten für neue Projekte und lassen sich jederzeit ändern."),
+            basics,
+        )
+        basics_hint.setWordWrap(True)
+        set_level(basics_hint, "caption")
+        form.addRow(basics_hint)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Drucker"), self.printer)
         form.addRow(tr("Material"), self.material)
 
-        self.tools = QWidget(self)
+        optional = QGroupBox(tr("Optionale Erweiterungen"), self)
+        optional_layout = QVBoxLayout(optional)
+        optional_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        optional_layout.setSpacing(NORMAL)
+        optional_hint = QLabel(
+            tr(
+                "Slicer, Bildgenerierung und Chat erweitern Solidon. Zum Konstruieren "
+                "und Bearbeiten brauchen Sie nichts davon."
+            ),
+            optional,
+        )
+        optional_hint.setWordWrap(True)
+        set_level(optional_hint, "caption")
+        optional_layout.addWidget(optional_hint)
+
+        self.tools = QWidget(optional)
         self._tool_rows = QVBoxLayout(self.tools)
         self._tool_rows.setContentsMargins(0, 0, 0, 0)
         self._tool_rows.setSpacing(TIGHT)
@@ -251,17 +284,32 @@ class FirstRunDialog(QDialog):
         set_level(looking, "caption")
         self._tool_rows.addWidget(looking)
 
-        self.install_button = QPushButton(tr("Fehlendes installieren …"), self)
+        self.extras_state = QLabel(tr("Wird nachgesehen …"), optional)
+        self.extras_state.setWordWrap(True)
+        set_level(self.extras_state, "caption")
+
+        self.install_button = QPushButton(tr("Zusatzprogramme verwalten …"), optional)
         self.install_button.clicked.connect(self._install)
         self.install_button.setEnabled(False)
 
-        self.chat_state = QLabel(tr("Wird nachgesehen …"), self)
+        self.chat_state = QLabel(tr("Wird nachgesehen …"), optional)
         self.chat_state.setWordWrap(True)
+        set_level(self.chat_state, "caption")
 
-        self.chat_button = QPushButton(tr("Chat einrichten …"), self)
+        self.chat_button = QPushButton(tr("Chat einrichten …"), optional)
         self.chat_button.clicked.connect(self._setup_chat)
 
-        self.open_button = QPushButton(tr("Modell öffnen …"), self)
+        optional_layout.addWidget(self.tools)
+        optional_layout.addWidget(self.extras_state)
+        optional_layout.addWidget(self.chat_state)
+        optional_actions = QHBoxLayout()
+        optional_actions.setSpacing(NORMAL)
+        optional_actions.addWidget(self.install_button)
+        optional_actions.addWidget(self.chat_button)
+        optional_actions.addStretch(1)
+        optional_layout.addLayout(optional_actions)
+
+        self.open_button = QPushButton(tr("Eigenes Modell öffnen …"), self)
         self.open_button.clicked.connect(self._open)
 
         # Nach der Handlung benannt, wie der Dialog *Ungesicherte Änderungen*
@@ -270,20 +318,23 @@ class FirstRunDialog(QDialog):
         # wieder, und nur einer merkt sich die getroffene Auswahl. Wer sie
         # geändert und dann „Überspringen" gedrückt hätte, hätte sie verloren.
         buttons = QDialogButtonBox(self)
-        buttons.addButton(tr("Los geht's"), QDialogButtonBox.ButtonRole.AcceptRole)
+        buttons.addButton(self.open_button, QDialogButtonBox.ButtonRole.ActionRole)
+        start = buttons.addButton(
+            tr("Speichern und starten"), QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        make_primary(start)
         buttons.addButton(tr("Später einstellen"), QDialogButtonBox.ButtonRole.RejectRole)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(WIDE)
+        layout.addWidget(title)
         layout.addWidget(self.greeting)
-        layout.addLayout(form)
-        layout.addWidget(QLabel(tr("Externe Programme — keines davon ist Pflicht:"), self))
-        layout.addWidget(self.tools)
-        layout.addWidget(self.install_button)
-        layout.addWidget(self.chat_state)
-        layout.addWidget(self.chat_button)
-        layout.addWidget(self.open_button)
+        layout.addWidget(self.terms)
+        layout.addWidget(basics)
+        layout.addWidget(optional)
         layout.addWidget(buttons)
 
         self._survey: _Survey | None = None
@@ -381,7 +432,7 @@ class FirstRunDialog(QDialog):
         assert isinstance(found, Findings)
         self.findings = found
         self._fill_tools(found.tools)
-        self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {found.missing}")
+        self.extras_state.setText(found.missing)
         self.install_button.setEnabled(True)
         self.chat_state.setText(found.chat)
         self._grow_soon()
@@ -404,7 +455,12 @@ class FirstRunDialog(QDialog):
         _log.warning("first run survey crashed: %s", detail)
         self._fill_tools(())
         self.install_button.setEnabled(True)
-        self.install_button.setText(tr("Fehlendes installieren …"))
+        self.extras_state.setText(
+            tr(
+                "Der Zustand der Zusatzprogramme konnte nicht geprüft werden. Sie "
+                "können sie trotzdem verwalten."
+            )
+        )
         self.chat_state.setText(
             tr(
                 "Beim Nachsehen ist etwas schiefgegangen. Der Chat und die "
@@ -576,8 +632,10 @@ def _missing_text() -> str:
     """
     absent = install.missing()
     if not absent:
-        return tr("Alles Zusätzliche ist vorhanden.")
-    return f"{tr('Nicht gefunden')}: " + ", ".join(str(entry.title) for entry in absent)
+        return tr("Zusatzprogramme sind eingerichtet.")
+    return f"{tr('Optional nicht eingerichtet')}: " + ", ".join(
+        str(entry.title) for entry in absent
+    )
 
 
 def should_run(settings: UiSettings) -> bool:

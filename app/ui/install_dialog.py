@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QMenu,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -101,6 +102,20 @@ class _Worker(Worker):
         self.done.emit(install.install(self._requirement, self.line.emit))
 
 
+class _LaunchWorker(Worker):
+    """Einen gefundenen Dienst öffnen und abseits der Oberfläche auf ihn warten."""
+
+    done = Signal(object)
+
+    def __init__(self, requirement: install.Requirement, tool: tools.ExternalTool) -> None:
+        super().__init__()
+        self._requirement = requirement
+        self._tool = tool
+
+    def work(self) -> None:
+        self.done.emit((self._requirement, tools.start_detailed(self._tool)))
+
+
 class _Row(QWidget):
     """Eine Anforderung: Zustand, Zweck, Fundort und was sich tun lässt.
 
@@ -110,6 +125,8 @@ class _Row(QWidget):
 
     startRequested = Signal(object)
     followUpRequested = Signal(object)
+    toolStartRequested = Signal(object)
+    locationChanged = Signal()
 
     def __init__(self, requirement: install.Requirement, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -139,8 +156,25 @@ class _Row(QWidget):
         self.follow = QPushButton(str(requirement.follow_up_title), self)
         self.follow.clicked.connect(lambda: self.followUpRequested.emit(requirement))
         self.follow.setVisible(False)
+        self.launch = QPushButton(tr("Lokal starten"), self)
+        self.launch.clicked.connect(lambda: self.toolStartRequested.emit(requirement))
+        self.launch.setToolTip(
+            tr("Öffnet die lokale Anwendung und verbindet Solidon mit ihrem Backend.")
+        )
+        self.launch.setVisible(False)
         self.locate = QPushButton(tr("Ort angeben …"), self)
-        self.locate.clicked.connect(self._choose_location)
+        self.locate.setToolTip(
+            tr("Lokale Anwendung auswählen oder eine Web-/Netzadresse verwenden.")
+        )
+        if self.tool is not None and self.tool.kind == "service" and self.tool.startable:
+            location_menu = QMenu(self.locate)
+            local_action = location_menu.addAction(tr("Lokale App auswählen …"))
+            local_action.triggered.connect(self._choose_file)
+            address_action = location_menu.addAction(tr("Web-/Netzadresse verwenden …"))
+            address_action.triggered.connect(self._choose_address)
+            self.locate.setMenu(location_menu)
+        else:
+            self.locate.clicked.connect(self._choose_location)
         self.locate.setVisible(self.tool is not None)
         self.copy = QPushButton(tr("Befehl kopieren"), self)
         self.copy.clicked.connect(self._copy_command)
@@ -154,6 +188,7 @@ class _Row(QWidget):
         head.addWidget(self.state)
         head.addWidget(title, stretch=1)
         head.addWidget(self.action)
+        head.addWidget(self.launch)
         head.addWidget(self.follow)
         head.addWidget(self.locate)
         head.addWidget(self.copy)
@@ -177,6 +212,8 @@ class _Row(QWidget):
         # Der zweite Schritt erscheint, sobald der erste getan ist — vorher
         # wäre er ein Angebot, etwas einzurichten, das es nicht gibt.
         self.follow.setVisible(here and bool(self.requirement.follow_up))
+        self.launch.setVisible(status.startable and not status.running)
+        self.page.setVisible(not here and bool(self.requirement.url))
         # **Der Befehl zum Abschreiben.** „Auf diesem System geht es nicht" ist
         # eine Auskunft, mit der niemand weiterkommt; die Zeile, die es täte,
         # kennt Solidon — sie steht in ``install.MANAGERS``.
@@ -188,6 +225,9 @@ class _Row(QWidget):
     def set_busy(self, running: bool) -> None:
         """Während irgendetwas installiert wird, drückt hier niemand etwas."""
         self.action.setEnabled(not running and self.status is not None and self.status.installable)
+        self.launch.setEnabled(not running)
+        self.follow.setEnabled(not running)
+        self.locate.setEnabled(not running)
 
     def _where_text(self, status: install.Status) -> str:
         """Der Fundort, wenn es einen gibt — sonst der Satz, der weiterhilft.
@@ -197,6 +237,26 @@ class _Row(QWidget):
         Befehl im Blick wäre eine Zumutung.
         """
         if status.present:
+            if self.tool is not None and self.tool.kind == "service":
+                if status.running and status.using_remote_address:
+                    detail = tr("Aktiv: Web-/Netzadresse {adresse} — erreichbar.").format(
+                        adresse=status.address
+                    )
+                elif status.running:
+                    detail = tr("Aktiv: lokales Backend {adresse} — erreichbar.").format(
+                        adresse=status.address
+                    )
+                elif status.using_remote_address:
+                    detail = tr(
+                        "Die Web-/Netzadresse {adresse} antwortet nicht. Mit „Lokal starten“ "
+                        "wechseln Sie zum lokalen Backend."
+                    ).format(adresse=status.address)
+                else:
+                    detail = tr(
+                        "Lokales Backend {adresse} antwortet noch nicht — mit „Lokal "
+                        "starten“ öffnen."
+                    ).format(adresse=status.address)
+                return f"{status.location}\n{detail}"
             return status.location
         if status.by_hand:
             return f"{status.reason}\n{status.by_hand}"
@@ -225,7 +285,6 @@ class _Row(QWidget):
             self._choose_address()
         else:
             self._choose_file()
-        self.show_status(install.status_of(self.requirement))
 
     def _address_question(self, problem: str = "") -> str:
         """Die Frage über dem Feld — mit einem Beispiel, und im zweiten Anlauf
@@ -243,13 +302,23 @@ class _Row(QWidget):
         die Vorgabe ändert.
         """
         example = self.tool.url if self.tool else ""
-        sentence = tr(
-            "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
-            "Solidon startet ihn nicht, es spricht über das Netz mit ihm. Hier "
-            "gehört deshalb kein Ordner und keine Programmdatei hin, sondern "
-            "die Adresse, die das Programm beim Start selbst nennt.\n"
-            "Leer lassen heißt: wieder die Vorgabe benutzen."
-        ).format(beispiel=example)
+        if self.tool is not None and self.tool.startable:
+            sentence = tr(
+                "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
+                "Hier gehört die Webadresse eines bereits laufenden ComfyUI oder "
+                "Ollama hin, auch auf einem anderen Rechner — kein Ordner und keine "
+                "Programmdatei. Für eine lokale App wählen Sie stattdessen „Lokale "
+                "App auswählen …“.\n"
+                "Leer lassen heißt: wieder die Vorgabe benutzen."
+            ).format(beispiel=example)
+        else:
+            sentence = tr(
+                "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
+                "Solidon spricht über das Netz mit ihm. Hier gehört deshalb kein "
+                "Ordner und keine Programmdatei hin, sondern die Adresse, die das "
+                "Programm beim Start selbst nennt.\n"
+                "Leer lassen heißt: wieder die Vorgabe benutzen."
+            ).format(beispiel=example)
         return f"{problem}\n\n{sentence}" if problem else sentence
 
     def _choose_address(self) -> None:
@@ -262,7 +331,7 @@ class _Row(QWidget):
         if self.tool is None:
             return
         problem = ""
-        entered = self.tool.address()
+        entered = self.tool.remote_address() or self.tool.url
         while True:
             entered, accepted = QInputDialog.getText(
                 self,
@@ -274,7 +343,8 @@ class _Row(QWidget):
                 return
             trouble = discover.unusable_address(entered)
             if trouble is None:
-                tools.set_location(self.tool.id, entered.strip())
+                tools.set_address(self.tool.id, entered.strip())
+                self.locationChanged.emit()
                 return
             problem = str(trouble)
 
@@ -285,10 +355,11 @@ class _Row(QWidget):
             self,
             tr("Programm auswählen"),
             str(current.parent) if current is not None else "",
-            tr("Programme (*.exe);;Alle Dateien (*)"),
+            tr("Programme und Apps (*.exe *.com *.AppImage *.app);;Alle Dateien (*)"),
         )
         if chosen:
-            tools.set_location(self.tool.id, str(Path(chosen)))
+            tools.set_program(self.tool.id, str(Path(chosen)))
+            self.locationChanged.emit()
 
     def _open_page(self) -> None:
         QDesktopServices.openUrl(QUrl(self.requirement.url))
@@ -300,13 +371,16 @@ class InstallDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Zusätzliche Programme"))
-        self.setMinimumWidth(640)
+        self.setMinimumWidth(760)
         self._worker: _Worker | None = None
+        self._launcher: _LaunchWorker | None = None
         self._survey: _Survey | None = None
         self._queue: list[install.Requirement] = []
         """Was „Alles Fehlende installieren" noch vor sich hat."""
         self._running_title = ""
         """Was gerade installiert wird — für die Zeile mit der Laufzeit."""
+        self._running_action = "install"
+        """Ob die Laufzeitzeile eine Installation oder einen Start beschreibt."""
         self._started_at = 0.0
         self._tick = QTimer(self)
         self._tick.setInterval(TICK_MS)
@@ -333,6 +407,8 @@ class InstallDialog(QDialog):
         for row in self.rows:
             row.startRequested.connect(self._start)
             row.followUpRequested.connect(self._follow_up)
+            row.toolStartRequested.connect(self._start_tool)
+            row.locationChanged.connect(self.refresh)
 
         self.state = QLabel(self)
         self.state.setWordWrap(True)
@@ -458,7 +534,12 @@ class InstallDialog(QDialog):
         """Eine Zeile über das Ganze — sie ersetzt „Wird gesucht …"."""
         absent = [status for status in found if not status.present]
         if not absent:
-            return tr("Alles Zusätzliche ist vorhanden.")
+            if any(status.startable for status in found):
+                return tr(
+                    "Alle Zusatzprogramme sind installiert. Lokale Dienste starten Sie "
+                    "direkt in ihrer Zeile."
+                )
+            return tr("Alles Zusätzliche ist bereit.")
         names = ", ".join(str(status.requirement.title) for status in absent)
         return f"{tr('Nicht gefunden')}: {names}"
 
@@ -508,6 +589,31 @@ class InstallDialog(QDialog):
 
     # --- installieren -----------------------------------------------------------
 
+    def _start_tool(self, requirement: install.Requirement) -> None:
+        """Einen lokalen Dienst öffnen; die Portprüfung läuft im Arbeiter."""
+        if self._busy_working():
+            return
+        self._broke = False
+        tool = tools.by_id(requirement.id)
+        if tool is None or tool.start_command() is None:
+            self.state.setText(
+                tr("Kein lokales Startprogramm gefunden — geben Sie die App oder die Adresse an.")
+            )
+            return
+        self._busy(True)
+        self._running_title = str(requirement.title)
+        self._running_action = "start"
+        self._started_at = time.monotonic()
+        self._show_elapsed()
+        self._tick.start()
+
+        worker = _LaunchWorker(requirement, tool)
+        worker.done.connect(self._tool_started)
+        worker.crashed.connect(self._crashed)
+        worker.finished.connect(self._launch_thread_done)
+        self._launcher = worker
+        self._leash.start(worker)
+
     def _start_all(self) -> None:
         """Alles Fehlende, eines nach dem anderen."""
         self._queue = [
@@ -526,10 +632,11 @@ class InstallDialog(QDialog):
         self.refresh()
 
     def _start(self, requirement: install.Requirement) -> None:
-        if self._busy_installing():
+        if self._busy_working():
             return
         self._busy(True)
         self._running_title = str(requirement.title)
+        self._running_action = "install"
         self._started_at = time.monotonic()
         self._show_elapsed()
         self._tick.start()
@@ -549,10 +656,69 @@ class InstallDialog(QDialog):
         Erzeugen eines Modells (``mesh.py``).
         """
         seconds = time.monotonic() - self._started_at
-        self.state.setText(f"{tr('Wird installiert')}: {self._running_title} ({seconds:.0f} s)")
+        action = tr("Wird gestartet") if self._running_action == "start" else tr("Wird installiert")
+        self.state.setText(f"{action}: {self._running_title} ({seconds:.0f} s)")
 
     def _busy_installing(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
+
+    def _busy_working(self) -> bool:
+        return self._busy_installing() or (
+            self._launcher is not None and self._launcher.isRunning()
+        )
+
+    def _tool_started(self, result: object) -> None:
+        """Die verständliche Antwort auf den Startversuch zeigen."""
+        assert isinstance(result, tuple) and len(result) == 2
+        requirement, start_result = result
+        assert isinstance(requirement, install.Requirement)
+        assert isinstance(start_result, tools.StartResult)
+        self._tick.stop()
+        self._busy(False)
+        if start_result.running:
+            self.state.setText(f"{requirement.title}: {tr('Lokales Backend läuft jetzt.')}")
+            return
+        self._broke = True
+        if not start_result.launched:
+            reason = start_result.reason or tr("Unbekannter Grund")
+            self.state.setText(
+                f"{requirement.title}: "
+                + tr(
+                    "Das lokale Programm konnte nicht geöffnet werden: {grund}. "
+                    "Prüfen Sie den gespeicherten Ort oder wählen Sie die App erneut aus."
+                ).format(grund=reason)
+            )
+            return
+        if requirement.id == "comfyui":
+            program_name = (
+                discover.plain_name(start_result.program.name)
+                if start_result.program is not None
+                else ""
+            )
+            if program_name == "comfy":
+                reason = tr(
+                    "Die ComfyUI-Kommandozeile wurde gestartet, aber das Backend antwortet "
+                    "noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut."
+                )
+            else:
+                reason = tr(
+                    "ComfyUI ist geöffnet, aber das Backend antwortet noch nicht. Öffnen Sie "
+                    "dort die lokale Installation und versuchen Sie es erneut."
+                )
+        else:
+            reason = tr(
+                "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. "
+                "Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut."
+            )
+        self.state.setText(f"{requirement.title}: {reason}")
+
+    def _launch_thread_done(self) -> None:
+        worker = self._launcher
+        self._launcher = None
+        if worker is not None:
+            self._leash.hold_until_done(worker)
+        if not self._broke:
+            self.refresh()
 
     def _note_line(self, line: str) -> None:
         """Eine Zeile der Paketverwaltung — gesammelt, nicht gezeigt."""
@@ -613,6 +779,9 @@ class InstallDialog(QDialog):
             # halbem Weg abzuwürgen lässt eine Maschine in einem Zustand zurück,
             # den niemand lesen kann.
             worker.wait(50)
+        launcher = self._launcher
+        if launcher is not None and launcher.isRunning():
+            launcher.wait(50)
         # Die Suche dagegen ist in Millisekunden bis Sekunden durch, und sie
         # schreibt nichts — auf sie wird gewartet, statt sie zu verwaisen.
         self.wait_for_survey()
