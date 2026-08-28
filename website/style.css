@@ -422,8 +422,12 @@ nav.lang a.cta:hover {
        Bildschirmrändern warten. */
     display: grid;
     grid-template-columns: minmax(0, 0.86fr) minmax(34rem, 1.14fr);
-    gap: clamp(2rem, 4vw, 4.25rem);
-    align-items: center;
+    grid-template-areas:
+      "copy picture"
+      "copy support";
+    column-gap: clamp(2rem, 4vw, 4.25rem);
+    row-gap: 1rem;
+    align-items: start;
     padding: clamp(3.5rem, 5vw, 5.5rem) 0 clamp(4rem, 6vw, 6.5rem);
   }
 
@@ -441,7 +445,10 @@ nav.lang a.cta:hover {
     font-size: 1.25rem;
   }
 
-  .hero-text { max-width: 38rem; }
+  .hero-text {
+    grid-area: copy;
+    max-width: 38rem;
+  }
 
   .hero .download { max-width: 39rem; }
 
@@ -450,6 +457,7 @@ nav.lang a.cta:hover {
      Es ist der visuelle Beweis neben der Überschrift und gehört oben in den
      ersten Blick, nicht erst neben die Fußzeilen des Kastens. */
   .hero .shot {
+    grid-area: picture;
     align-self: start;
     width: 100%;
     justify-self: end;
@@ -461,6 +469,14 @@ nav.lang a.cta:hover {
       var(--card);
     box-shadow: 0 2rem 5rem color-mix(in srgb, #000 48%, transparent);
   }
+
+  .hero .hero-donate {
+    grid-area: support;
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .hero .hero-shot { margin-top: 0; }
 
   .hero .stage { margin-top: 0; }
 }
@@ -481,8 +497,9 @@ nav.lang a.cta:hover {
 .download b { color: var(--fg); }
 
 /* Die Handlung kommt vor der Erklärung: Wer die Demo laden möchte, bekommt
-   die passende Plattform sofort. Laufzeit, Kaufmodell und die freiwillige
-   Spende bleiben vollständig erhalten, folgen aber erst danach. */
+   die passende Plattform sofort. Laufzeit und Kaufmodell bleiben vollständig
+   erhalten, folgen aber erst danach. Die freiwillige Spende ist ein eigener
+   Block neben dem Download und gehört deshalb nicht in diese Reihenfolge. */
 .download {
   display: flex;
   flex-direction: column;
@@ -495,7 +512,6 @@ nav.lang a.cta:hover {
 .download > p:not(.countdown, .pruefhinweis) { order: 5; }
 .download > .download-notes { order: 6; }
 .download > .pruefhinweis { order: 7; }
-.download > .donate { order: 8; }
 
 /* Die drei technischen Hinweise sind für die Installation wichtig, aber sie
    dürfen nicht die erste Entscheidung überlagern. Sie bleiben in derselben
@@ -519,10 +535,16 @@ nav.lang a.cta:hover {
   font-size: 0.88rem;
 }
 
-/* Die Spende steht beim Download, aber trägt bewusst nicht dessen kräftige
-   Handlungsfarbe: Sie ist eine freiwillige Finanzierung und kein Schritt,
-   den jemand zum Ausprobieren des Programms erledigen muss. Der Verweis lädt
-   keine PayPal-Ressource; erst ein ausdrücklicher Klick verlässt die Seite. */
+/* Die Spende steht im Aufmacher beim Download, auf breiten Bildschirmen aber
+   unter dem Produktbild. Damit nutzt sie die rechte Spalte, statt den
+   Downloadkasten unter seine eigentliche Aufgabe zu verlängern. Auf schmalen
+   Ansichten folgt sie dem Download und kommt vor dem Bild. Sie trägt bewusst
+   nicht dessen kräftige Handlungsfarbe: Die freiwillige Finanzierung ist kein
+   Schritt, den jemand zum Ausprobieren des Programms erledigen muss. Der
+   Verweis lädt keine PayPal-Ressource; erst ein ausdrücklicher Klick verlässt
+   die Seite. */
+.hero-shot { margin-top: 2rem; }
+
 .donate {
   display: flex;
   align-items: center;

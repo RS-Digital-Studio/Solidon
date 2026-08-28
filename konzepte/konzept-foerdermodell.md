@@ -4,7 +4,7 @@ Stand 28.08.2026. Dieses Dokument ersetzt das am 23.08.2026 entworfene und am
 24./28.08.2026 fortgeschriebene Drei-Stufen-Modell vollständig.
 
 > **Entschieden und umgesetzt:** Während der Demo-Phase gibt es genau einen
-> freiwilligen Finanzierungsweg: den PayPal-Spendenknopf im Download-Kasten der
+> freiwilligen Finanzierungsweg: den PayPal-Spendenknopf im Aufmacher der
 > Website. Die Zahlung schaltet nichts frei, wird auf keinen späteren Kauf
 > angerechnet und begründet keinen Anspruch auf Support, Vorabversionen,
 > Nennung oder Mitsprache.
@@ -77,8 +77,10 @@ finanzieren. Nirgendwo darf daraus „vorbestellen“, „früher bekommen“ od
 
 ## §3 Der technische Weg
 
-Der Spendenknopf steht auf allen sechs Startseiten direkt beim Download. Er
-ist ein gewöhnlicher Verweis und kein eingebettetes PayPal-Widget.
+Der Spendenknopf steht auf allen sechs Startseiten im Aufmacher. Auf breiten
+Bildschirmen nutzt er den Platz unter dem Produktbild rechts neben dem
+Download; auf schmalen Bildschirmen folgt er dem Download und steht vor dem
+Bild. Er ist ein gewöhnlicher Verweis und kein eingebettetes PayPal-Widget.
 
 Das hat vier beabsichtigte Folgen:
 

@@ -819,11 +819,38 @@ def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None
 
 
 @pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_places_support_between_download_and_picture(page: str) -> None:
+    """Die schmale Ansicht bleibt logisch; das Raster verschiebt nur die Spalten."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+
+    download = text.index('<div class="download"')
+    support = text.index('<div class="donate hero-donate">')
+    picture = text.index('<div class="shot hero-shot">')
+
+    assert download < support < picture, (
+        f"{page}: Download, Unterstützung und Produktbild stehen nicht in ihrer mobilen Reihenfolge"
+    )
+
+
+def test_wide_hero_places_support_below_the_product_picture() -> None:
+    """Im breiten Raster teilen Produktbild und Unterstützung die rechte Spalte."""
+    styles = (WEBSITE / "style.css").read_text(encoding="utf-8")
+
+    assert '"copy picture"\n      "copy support"' in styles
+    assert re.search(r"\.hero \.shot\s*\{[^}]*grid-area:\s*picture", styles, re.DOTALL)
+    assert re.search(
+        r"\.hero \.hero-donate\s*\{[^}]*grid-area:\s*support", styles, re.DOTALL
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
 def test_each_paypal_donation_says_what_it_does_not_buy(page: str) -> None:
     """Freiwillig steht nicht nur im Konzept, sondern unmittelbar am Knopf."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
     block = re.search(
-        r'<div class="donate">(.*?)</div>\s*<ul class="assure">', text, re.DOTALL
+        r'<div class="donate(?: [^"]*)?">(.*?)</div>\s*<div class="shot hero-shot">',
+        text,
+        re.DOTALL,
     )
 
     assert block is not None, f"{page}: der Spendenblock fehlt"
