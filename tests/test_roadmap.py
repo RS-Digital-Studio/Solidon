@@ -202,3 +202,12 @@ def test_the_archive_keeps_a_directory_of_what_it_holds() -> None:
         f"{len(astray)} Einträge im Verzeichnis springen ins Leere — ihre Marke "
         f"passt nicht zur Überschrift: {astray[:5]}"
     )
+
+
+def test_the_existing_support_mailbox_is_not_listed_as_open_work() -> None:
+    """Ein bestätigtes Postfach bleibt nicht als vermeintliche Aufgabe stehen."""
+    text = ROADMAP.read_text(encoding="utf-8")
+
+    assert "Postfach `support@solidon3d.de` samt SPF/DMARC" not in text
+    assert "das Postfach support@solidon3d.de anlegen" not in text
+    assert "Das Postfach `support@solidon3d.de` existiert" in text

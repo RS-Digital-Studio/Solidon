@@ -809,6 +809,29 @@ def test_each_start_page_makes_the_no_cad_promise_visible(page: str) -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_matches_the_sale_activation_policy(
+    page: str, shipped_demo_until: object, shipped_trial_from: object
+) -> None:
+    """Sechs Übersetzungen dürfen die Lizenzgrenze nicht sechsfach erfinden.
+
+    Die maschinenlesbaren Merkmale stehen am jeweiligen Kundensatz. So prüft
+    der Test die Bedeutung und hängt nicht an sechs übersetzten Formulierungen.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    expected_deadline = shipped_demo_until.isoformat() if shipped_demo_until is not None else "none"
+    assert text.count(f'data-demo-until="{expected_deadline}"') == 1, (
+        f"{page}: Demo-Stichtag weicht von store.DEMO_UNTIL ab"
+    )
+    assert text.count('data-active-devices="1"') == 1, (
+        f"{page}: genau ein gleichzeitig aktives Gerät fehlt im Angebot"
+    )
+    expected_trial = "true" if shipped_trial_from is not None else "false"
+    assert text.count(f'data-sale-trial-active="{expected_trial}"') == 1, (
+        f"{page}: Testphasen-Aussage weicht von store.TRIAL_FROM ab"
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
 def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None:
     """Jede Sprache zeigt denselben freiwilligen, skriptfreien Spendenweg."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
@@ -1452,19 +1475,19 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
     )
 
 
-#: Wie viele Tage vor dem Demo-Ende die Website ihre Datumssätze braucht.
+#: Wie viele Tage vor dem Demo-Ende die Website ihre Datumssätze umstellen muss.
 #:
 #: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich beides
-#: noch ausgeht: die Entscheidung treffen (verlängern oder verkaufen), die
-#: Sätze in sechs Sprachen umschreiben und hochladen. Wer am 30. merkt, dass
-#: die Seite den 30. verspricht, hat keinen Tag mehr.
-DECISION_LEAD_DAYS = 5
+#: noch ausgeht: die für den Verkauf bereits entschiedenen Sätze in sechs
+#: Sprachen umschreiben und hochladen. Wer am 30. merkt, dass die Seite den 30.
+#: verspricht, hat keinen Tag mehr.
+TRANSITION_LEAD_DAYS = 5
 
 
 def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     shipped_demo_until: object,
 ) -> None:
-    """Erinnert rechtzeitig daran, dass vier Datumssätze eine Entscheidung brauchen.
+    """Erinnert rechtzeitig an die Umstellung der vier Demo-Datumssätze.
 
     „Die Demo läuft bis zum 30. Oktober 2026" steht auf den Startseiten in
     sechs Sprachen an mehreren Stellen, dazu die Frage „Was passiert am
@@ -1479,10 +1502,10 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.
 
-    Prüfbar ist der Inhalt der Sätze heute **nicht**: Was dort ab dem 31.
-    stehen soll, hängt an einer offenen Entscheidung (Robert, 27.08.2026:
-    „erst später entscheiden"). Prüfbar ist nur, dass die Entscheidung
-    rechtzeitig ansteht.
+    Was danach gilt, ist seit dem 28.08.2026 entschieden: Verkauf ab 01.11.,
+    keine zusätzliche Testphase, 69 Euro bis 31.01.2027 und danach 99 Euro.
+    Die heutigen Zukunftssätze sind bis zum Demo-Ende richtig; dieser Test
+    sorgt dafür, dass sie rechtzeitig in Gegenwartsform umgeschrieben werden.
 
     **Er hängt an ``DEMO_UNTIL`` und nicht an einer zweiten Zahl.** Wird die
     Demo verlängert, verschiebt sich die Erinnerung von selbst mit; ein hier
@@ -1500,7 +1523,7 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
         pytest.skip("Verkaufsversion ohne Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
 
     assert isinstance(shipped_demo_until, date)
-    faellig = shipped_demo_until - timedelta(days=DECISION_LEAD_DAYS)
+    faellig = shipped_demo_until - timedelta(days=TRANSITION_LEAD_DAYS)
     heute = date.today()
     assert heute < faellig, (
         f"Die Demo endet am {shipped_demo_until:%d.%m.%Y}, heute ist der "
@@ -1509,9 +1532,10 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
         "Satz „läuft bis zum 30. Oktober“ (sechs Sprachen, mehrere Stellen), die "
         "FAQ-Frage „Was passiert am 30. Oktober?“ und der Einführungspreis bis "
         "31.01.2027. "
-        "Entweder die Sätze umschreiben auf das, was ab dem Ende gilt — oder "
-        "DEMO_UNTIL in app/core/activation/store.py verschieben, wenn die Demo "
-        "verlängert wird. Dann wandert diese Erinnerung mit."
+        "Die Sätze auf den bereits entschiedenen Verkaufszustand umschreiben. "
+        "Nur eine neue ausdrückliche Entscheidung darf stattdessen DEMO_UNTIL "
+        "in app/core/activation/store.py verschieben; dann wandert diese "
+        "Erinnerung mit."
     )
 
 
@@ -1547,3 +1571,56 @@ def test_the_generated_faq_markup_keeps_no_gap_before_a_comma(page: str) -> None
             f"Lücke — {luecken}. Im sichtbaren Text die Auszeichnung ans Satzende "
             "ziehen, oder _plain in tools/make_seo.py prüfen."
         )
+
+
+def test_the_offline_activation_page_is_one_plain_three_step_path() -> None:
+    """Der Ausnahmeweg erklärt sich ohne Konto-, CAD- oder Serverwissen."""
+    html = (WEBSITE / "offline-aktivierung.html").read_text(encoding="utf-8")
+
+    assert html.count('class="activation-steps"') == 1
+    assert html.count('class="activation-stepmark"') == 1
+    assert html.count(">2</p>") == 1
+    assert 'id="request-file"' in html
+    assert 'id="request-text"' in html, "Einfügen bleibt als barrierearmer Rückfall"
+    assert 'class="activation-paste"' in html, (
+        "der technische Rückfall dominiert nicht den Hauptweg"
+    )
+    assert html.count('type="submit"') == 1, "ein Arbeitsgang hat einen Hauptknopf"
+    assert "support@solidon3d.de" in html
+
+
+def test_the_offline_activation_page_localises_visible_and_accessible_text() -> None:
+    """Die aus der Anwendung übergebene Sprache gilt auch für Screenreader."""
+    html = (WEBSITE / "offline-aktivierung.html").read_text(encoding="utf-8")
+    script = (WEBSITE / "activation.js").read_text(encoding="utf-8")
+
+    languages = set(re.findall(r"^    (de|en|es|fr|it|pt): \{", script, re.MULTILINE))
+    assert languages == {"de", "en", "es", "fr", "it", "pt"}
+    assert 'new URLSearchParams(window.location.search).get("lang")' in script
+    assert html.count("data-i18n-aria=") >= 3
+    assert 'querySelectorAll("[data-i18n-aria]")' in script
+    for key in ("skip", "brand_home", "language_navigation", "steps_label"):
+        assert script.count(f"{key}:") == 6, key
+
+
+def test_the_offline_activation_page_explains_errors_instead_of_claiming_success() -> None:
+    """Netz-, Datei- und Serverfehler behalten Überschrift und nächsten Schritt."""
+    script = (WEBSITE / "activation.js").read_text(encoding="utf-8")
+
+    for key in (
+        "error_title",
+        "error_file",
+        "error_network",
+        "error_device_limit",
+        "error_rate_limit",
+        "error_wrong_major",
+        "error_licence_blocked",
+        "error_service_unavailable",
+        "error_invalid_request",
+    ):
+        assert script.count(f"{key}:") == 6, key
+    assert 'kind === "loading" ? "checking_title" : "error_title"' in script
+    assert "problem instanceof TypeError" in script
+    assert "MAX_REQUEST_BYTES = 32768" in script
+    assert 'form.setAttribute("aria-busy", "true")' in script
+    assert 'kind === "error" ? "alert" : "status"' in script

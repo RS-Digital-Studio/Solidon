@@ -18,7 +18,8 @@ Danach, je Kauf oder für einen Vorrat:
 
     python tools/make_licence_keys.py --private geheim.key \
         --order A-1234 --holder "vorname@beispiel.de"
-    python tools/make_licence_keys.py --private geheim.key --count 50
+    python tools/make_licence_keys.py --private geheim.key --count 50 \
+        --purchased-on 2026-11-01
 
 Mit ``--count`` entstehen unpersonalisierte Schlüssel für einen Vorrat, den der
 Zahlungsanbieter ausliefert; die Bestellkennung vergibt dann er, und die
@@ -36,7 +37,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.core.activation import ed25519
+from app.core.activation import DEVICE_ACTIVATION_FROM, ed25519
 from app.core.activation.key import Licence, current_major, encode, format_key
 
 
@@ -95,6 +96,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--count", type=int, default=1, help="wie viele Schlüssel")
     parser.add_argument("--major", type=int, default=None, help="Hauptversion, Vorgabe: die eigene")
     parser.add_argument(
+        "--purchased-on",
+        type=date.fromisoformat,
+        default=date.today(),
+        metavar="JJJJ-MM-TT",
+        help="im Schlüssel gespeicherter Ausstelltag, Vorgabe: heute",
+    )
+    parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="bewusster einzelner Bestandsschlüssel ohne Geräteaktivierung",
+    )
+    parser.add_argument(
         "--start",
         type=int,
         default=None,
@@ -106,6 +119,14 @@ def main(argv: list[str] | None = None) -> int:
         return _new_keypair()
     if arguments.private is None:
         parser.error("--private oder --new-keypair")
+    if arguments.purchased_on < DEVICE_ACTIVATION_FROM and not arguments.legacy:
+        parser.error(
+            f"{arguments.purchased_on} liegt vor der Geräteaktivierung ab "
+            f"{DEVICE_ACTIVATION_FROM}. Für den Verkaufsvorrat --purchased-on "
+            f"{DEVICE_ACTIVATION_FROM} angeben; einen bewussten Einzelfall mit --legacy"
+        )
+    if arguments.legacy and (arguments.count != 1 or not arguments.order):
+        parser.error("--legacy ist nur für einen ausdrücklich benannten Einzelfall mit --order")
     try:
         seed = bytes.fromhex(arguments.private.read_text(encoding="utf-8").strip())
     except (OSError, ValueError) as problem:
@@ -132,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
             order = f"{prefix}-{number + 1:04d}"
         licence = Licence(
             major=major,
-            purchased_on=date.today(),
+            purchased_on=arguments.purchased_on,
             order=order,
             holder=arguments.holder,
         )

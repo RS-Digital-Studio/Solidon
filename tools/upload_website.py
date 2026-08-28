@@ -137,7 +137,20 @@ def wanted(path: Path) -> bool:
     Abgleich sonst brav mit hochlädt. Genau das ist einmal passiert.
     """
     relative = path.relative_to(LOCAL_ROOT)
-    return relative.parts[0] != "dl" and path.suffix != ".md"
+    lower = path.name.lower()
+    private_endings = (
+        ".seed",
+        ".sqlite",
+        ".sqlite3",
+        ".sqlite-wal",
+        ".sqlite-shm",
+        ".db",
+        ".solidon-request",
+        ".solidon-activation",
+    )
+    return (
+        relative.parts[0] != "dl" and path.suffix != ".md" and not lower.endswith(private_endings)
+    )
 
 
 def local_files() -> list[Path]:

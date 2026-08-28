@@ -1242,25 +1242,41 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     ),
     Page(
         key="activation",
-        summary=_("Testzeitraum, Lizenzschlüssel, und was nach Ablauf noch geht."),
+        summary=_("Lizenzschlüssel, Geräteaktivierung und der Offline-Weg."),
         title=_("Freischaltung"),
         body=_(
-            "**Ohne Schlüssel läuft Solidon vierzehn Tage als Testlauf.** "
-            "Danach bleibt alles Lesende offen — Modelle öffnen, ansehen, "
-            "vermessen —, nur die vier schreibenden Handlungen brauchen "
-            "einen Schlüssel: eine Änderung am Modell, ein Export, die "
-            "Übergabe an den Slicer und der Chat. Projekte bleiben, wo sie "
-            "sind, auch ohne Schlüssel.\n\n"
+            "**Die Verkaufsversion startet zunächst ohne Testphase.** Ohne "
+            "Lizenzschlüssel und Geräteaktivierung bleibt alles Lesende offen — "
+            "Modelle öffnen, ansehen, vermessen —, nur die vier schreibenden "
+            "Handlungen brauchen die Freischaltung: eine Änderung am Modell, "
+            "ein Export, die Übergabe an den Slicer und der Chat. Projekte "
+            "bleiben, wo sie sind. Eine Testphase kann in einer späteren "
+            "Version angeboten werden; in der Fassung ab 01.11.2026 ist sie "
+            "nicht aktiv.\n\n"
             "**Eine befristete Demo ist ein anderer Fall.** Sie endet an "
             "einem festen Tag und startet danach nicht mehr — die "
             "Statuszeile nennt die Resttage von Anfang an und nicht erst "
             "kurz vor Schluss, damit niemand überrascht wird, der spät "
             "angefangen hat.\n\n"
             "**Ein Schlüssel wird eingetragen, kein Konto angelegt.** Der Weg "
-            "ist *Hilfe → Solidon freischalten …*; der Schlüssel landet im "
-            "Schlüsselbund des Systems, nie in einer Projektdatei. Weniger "
-            "als drei Tage vor Ablauf des Testlaufs steht dazu eine Zeile in "
-            "der Statusleiste."
+            "ist *Hilfe → Solidon freischalten …*. Nach der lokalen Prüfung "
+            "wird dieser Rechner einmalig aktiviert — direkt über den Knopf "
+            "*Online aktivieren* oder als Anfrage- und Antwortdatei über ein "
+            "zweites Gerät. Danach bleibt Solidon dauerhaft offline nutzbar; "
+            "es gibt keine regelmäßige Lizenzabfrage. Der private Geräteteil "
+            "liegt im Schlüsselbund des Systems, Kaufcode und Zertifikat im "
+            "Einstellungsordner und nichts davon in einer Projektdatei.\n\n"
+            "**Offline sind es drei Schritte:** *Offline aktivieren …* öffnen "
+            "und die Anfrage speichern; die Datei auf einem Gerät mit Internet "
+            "unter `solidon3d.de/offline-aktivierung.html` einlösen; die "
+            "heruntergeladene Antwort wieder in Solidon einlesen. Es muss kein "
+            "langer Code abgetippt werden. Die Antwort gilt ausschließlich für "
+            "den Rechner, der die Anfrage erzeugt hat.\n\n"
+            "**Beim Rechnerwechsel zuerst: Diesen Rechner deaktivieren.** "
+            "Solidon gibt den einen Geräteplatz frei und entfernt die lokale "
+            "Freischaltung samt Kaufcode. Danach lässt sich derselbe Schlüssel "
+            "auf dem neuen Rechner aktivieren. Ist der bisherige Rechner verloren "
+            "oder defekt, setzt der Support den Platz anhand der Bestellnummer zurück."
         ),
     ),
     Page(

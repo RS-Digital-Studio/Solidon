@@ -251,7 +251,9 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
     Requirement(
         id="keyring",
         title=_("Schlüsselbund"),
-        what_for=_("Legt den Schlüssel für den Chat im System ab."),
+        what_for=_(
+            "Legt die Geräteidentität der Lizenz und den Schlüssel für den Chat im System ab."
+        ),
         kind="package",
         package="keyring",
         module="keyring",

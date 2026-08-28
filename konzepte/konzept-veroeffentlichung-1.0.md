@@ -1,5 +1,13 @@
 # Konzept: Erste Veröffentlichung (Solidon 1.0)
 
+> **Aktueller Übergang, entschieden am 28.08.2026:** Die vollständige Demo
+> läuft bis einschließlich 30.10.2026 und startet am 31.10. nicht mehr. Die
+> Verkaufsversion beginnt am 01.11.2026 zunächst **ohne zusätzliche
+> Testphase**. Der gepflegte Vierzehn-Tage-Pfad bleibt mit
+> `TRIAL_FROM = None` deaktiviert und kann erst in einem späteren, ausdrücklich
+> so gebauten Release wieder angeboten werden. Diese Entscheidung ersetzt die
+> älteren Preis- und Testlaufvarianten dieses historischen Konzepts.
+
 > **Dieses Dokument hat einen Nachfolger, und es wusste es bis zum 19.08.2026
 > nicht.** Am 12.08.2026 ist aus dem Vierzehn-Tage-Testlauf mit Verkauf eine
 > **kostenlose öffentliche Demo bis zum 30.10.2026** geworden —
@@ -466,9 +474,9 @@ beide Artefakte (Setup-Datei und tar.gz) heruntergeladen und geöffnet.
    liegt auf der Website
 4. **AGB und Widerrufsbelehrung** für den Verkauf. Bei einem MoR gelten
    überwiegend dessen Bedingungen — was davon bleibt, ist mit ihm zu klären
-5. `support@solidon3d.de` anlegen bzw. Zustellung prüfen. Die Adresse steht an
-   fünf Stellen (`branding.py:29`, Über-Dialog, Fehlerbericht, beide
-   Startseiten)
+5. **Erledigt am 28.08.2026:** `support@solidon3d.de` existiert; Zustellung
+   und Annahme von außen sind geprüft. Die Adresse steht an fünf Stellen
+   (`branding.py:29`, Über-Dialog, Fehlerbericht, beide Startseiten)
 6. Die Texte fachlich prüfen lassen (§2 D, Warnkasten)
 
 > **Vier Fristen von außen, nachrecherchiert am 19.08.2026.** Sie stehen hier

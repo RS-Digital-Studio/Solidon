@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solidon3D offline aktivieren</title>
+<meta name="description" content="Eine Solidon3D-Aktivierungsanfrage von einem Offline-Rechner einlösen und die signierte Antwortdatei herunterladen.">
+<meta name="robots" content="noindex,follow">
+<link rel="canonical" href="https://solidon3d.de/offline-aktivierung.html">
+<meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
+<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster.png">
+<meta property="og:image:alt" content="Das Hauptfenster von Solidon3D">
+<link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
+<link rel="stylesheet" href="/style.css?v=ec46a215">
+</head>
+<body>
+<a class="skip" href="#content">Zum Inhalt springen</a>
+
+<header class="site">
+  <div class="wrap navrow">
+    <a class="brand" href="/" aria-label="Solidon3D Startseite" data-i18n-aria="brand_home">Solidon<span>3D</span></a>
+    <nav aria-label="Sprachauswahl" data-i18n-aria="language_navigation">
+      <label class="activation-language">
+        <span data-i18n="language">Sprache</span>
+        <select id="activation-language" aria-label="Sprache">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Português</option>
+        </select>
+      </label>
+    </nav>
+  </div>
+</header>
+
+<main id="content" class="activation-page">
+  <section class="activation-hero">
+    <p class="activation-kicker" data-i18n="kicker">Einmal verbinden, danach offline</p>
+    <h1 data-i18n="title">Solidon3D offline aktivieren</h1>
+    <p class="activation-lead" data-i18n="lead">Der Solidon-Rechner bleibt ohne Internet. Nur diese Aktivierungsanfrage wird einmal übermittelt und geprüft.</p>
+  </section>
+
+  <ol class="activation-steps" aria-label="Drei Schritte" data-i18n-aria="steps_label">
+    <li><b data-i18n="step_1_title">Anfrage speichern</b><span data-i18n="step_1_text">In Solidon unter Hilfe → Solidon freischalten → Offline aktivieren.</span></li>
+    <li><b data-i18n="step_2_title">Hier auswählen</b><span data-i18n="step_2_text">Die Datei endet auf .solidon-request. Mehr müssen Sie nicht eingeben.</span></li>
+    <li><b data-i18n="step_3_title">Antwort zurückbringen</b><span data-i18n="step_3_text">Antwort herunterladen und auf dem Solidon-Rechner einlesen.</span></li>
+  </ol>
+
+  <div class="activation-workspace">
+    <section class="activation-card" aria-labelledby="activation-form-title">
+      <div class="activation-card-head">
+        <p class="activation-stepmark">2</p>
+        <div>
+          <h2 id="activation-form-title" data-i18n="form_title">Aktivierungsanfrage auswählen</h2>
+          <p data-i18n="form_text">Die Datei enthält Ihren Lizenzschlüssel, den gewählten Rechnernamen und einen zufälligen öffentlichen Geräteschlüssel.</p>
+        </div>
+      </div>
+
+      <form id="activation-form">
+        <label class="activation-file" for="request-file">
+          <b data-i18n="file_label">Datei auswählen</b>
+          <span data-i18n="file_help">.solidon-request · höchstens wenige Kilobyte</span>
+          <input id="request-file" type="file" accept=".solidon-request,application/json">
+        </label>
+        <details class="activation-paste">
+          <summary data-i18n="paste_toggle">Die Datei lässt sich nicht auswählen?</summary>
+          <p data-i18n="paste_help">Öffnen Sie die Anfrage als Text und fügen Sie den vollständigen Inhalt hier ein.</p>
+          <label for="request-text" data-i18n="paste_label">Dateiinhalt einfügen</label>
+          <textarea id="request-text" rows="8" spellcheck="false" autocomplete="off" placeholder="{&quot;format&quot;:1,…}"></textarea>
+        </details>
+        <button class="btn primary" type="submit" data-i18n="submit" disabled>Anfrage prüfen und diesen Rechner aktivieren</button>
+      </form>
+
+      <div id="activation-result" class="activation-result" hidden aria-live="polite" tabindex="-1">
+        <p id="activation-result-kicker" class="activation-success" data-i18n="result_kicker">✓ Prüfung abgeschlossen</p>
+        <h2 data-i18n="result_title">Antwort ist fertig</h2>
+        <p id="activation-message"></p>
+        <button id="activation-download" class="btn primary" type="button" data-i18n="download">Antwortdatei herunterladen</button>
+      </div>
+    </section>
+
+    <aside class="activation-aside">
+      <section class="activation-note">
+        <h2 data-i18n="no_account_title">Kein Konto. Keine Hardwaredaten.</h2>
+        <p data-i18n="privacy">Gespeichert werden nur ein Hash der Lizenz, Rechnername, öffentlicher Geräteschlüssel und Aktivierungsdatum. Projekte, Modelle und Hardwaremerkmale werden nicht übertragen.</p>
+        <a href="/datenschutz.html" data-i18n="privacy_link">Datenschutzerklärung lesen</a>
+      </section>
+      <section class="activation-note">
+        <h2 data-i18n="help_title">Etwas klappt nicht?</h2>
+        <p data-i18n="help_text">Die Anfrage bleibt unverändert erhalten. Versuchen Sie es erneut oder schreiben Sie mit Ihrer Bestellnummer an den Support.</p>
+        <a href="mailto:support@solidon3d.de">support@solidon3d.de</a>
+      </section>
+    </aside>
+  </div>
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    © 2026 RS Digital · <a href="/" data-i18n="home">Startseite</a> ·
+    <a href="/impressum.html" data-i18n="legal">Impressum</a> ·
+    <a href="/datenschutz.html" data-i18n="privacy_short">Datenschutz</a>
+  </div>
+</footer>
+<script src="/activation.js?v=e647458e" defer></script>
+<script src="/site.js?v=67fc74f3" defer></script>
+</body>
+</html>

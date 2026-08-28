@@ -321,9 +321,27 @@ def test_developer_notes_stay_off_the_public_server() -> None:
 
     assert not upload.wanted(upload.LOCAL_ROOT / "README.md")
     assert not upload.wanted(upload.LOCAL_ROOT / "dl" / "Solidon3D-Setup.exe")
+    assert not upload.wanted(upload.LOCAL_ROOT / "activation.seed")
+    assert not upload.wanted(upload.LOCAL_ROOT / "api" / "activation.sqlite")
+    assert not upload.wanted(upload.LOCAL_ROOT / "Anfrage.solidon-request")
     assert upload.wanted(upload.LOCAL_ROOT / "index.html")
     assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "schau-skull.webp")
     assert all(path.suffix != ".md" for path in upload.local_files())
+
+
+def test_activation_deployment_separates_public_and_private_roots() -> None:
+    """Startwert und Datenbank können nie als Website-Ziele abgeleitet werden."""
+    from tools import deploy_activation_server as deployment
+
+    webroot, data_root, backup_root = deployment._paths({"root": "solidon3d.de/httpdocs"})
+
+    assert webroot == "solidon3d.de/httpdocs"
+    assert data_root == "solidon3d.de/appdata"
+    assert backup_root == "solidon3d.de/backups/activation"
+    assert all(
+        path.name not in {"activation.seed", "activation.sqlite"}
+        for path in deployment.PUBLIC_FILES
+    )
 
 
 def test_raising_the_version_moves_both_places_and_nothing_else() -> None:

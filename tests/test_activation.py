@@ -22,7 +22,8 @@ import pytest
 
 from app.core import activation
 from app.core.activation import ed25519, integrity, key, store
-from app.core.errors import InstallationDamaged, LicenceRequired
+from app.core.errors import DeviceActivationRequired, InstallationDamaged, LicenceRequired
+from tools.make_licence_keys import main as make_licence_keys
 from tools.make_licence_keys import make_key, public_key, sign
 
 # RFC 8032, §7.1 — (privater Schlüssel, öffentlicher Schlüssel, Nachricht, Signatur)
@@ -187,6 +188,50 @@ def test_a_signed_key_reads_back_exactly() -> None:
     assert key.parse(text, public_key=TEST_PUBLIC, major=MAJOR) == licence
 
 
+def test_the_sale_pool_cannot_accidentally_become_activation_free(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ein vorab erzeugter Vorrat trägt nie stillschweigend den Bestandsstatus."""
+    private = tmp_path / "licence.seed"
+    private.write_text(TEST_SEED.hex(), encoding="ascii")
+
+    with pytest.raises(SystemExit):
+        make_licence_keys(["--private", str(private), "--count", "2"])
+
+    assert (
+        make_licence_keys(
+            [
+                "--private",
+                str(private),
+                "--count",
+                "1",
+                "--purchased-on",
+                "2026-11-01",
+            ]
+        )
+        == 0
+    )
+    generated = capsys.readouterr().out.strip().splitlines()[-1]
+    licence = key.parse(generated, public_key=TEST_PUBLIC, major=MAJOR)
+    assert licence.purchased_on == activation.DEVICE_ACTIVATION_FROM
+
+
+def test_a_legacy_key_requires_an_explicit_single_order(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    private = tmp_path / "licence.seed"
+    private.write_text(TEST_SEED.hex(), encoding="ascii")
+
+    with pytest.raises(SystemExit):
+        make_licence_keys(
+            ["--private", str(private), "--count", "2", "--legacy", "--order", "ALT-1"]
+        )
+    assert make_licence_keys(["--private", str(private), "--legacy", "--order", "ALT-1"]) == 0
+    generated = capsys.readouterr().out.strip().splitlines()[-1]
+    licence = key.parse(generated, public_key=TEST_PUBLIC, major=MAJOR)
+    assert licence.purchased_on < activation.DEVICE_ACTIVATION_FROM
+
+
 def test_the_key_survives_being_pasted_from_an_email() -> None:
     """Zeilenumbrüche, Leerzeichen und Kleinschreibung dürfen den Schlüssel
     nicht ungültig machen — so kommt er aus einer Mail zurück."""
@@ -286,6 +331,10 @@ def own_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path
     (tmp_path / "data").mkdir()
     monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path / "config")
     monkeypatch.setattr(store, "user_data_dir", lambda: tmp_path / "data")
+    # Diese Datei prüft den erhaltenen, später aktivierbaren Testlaufpfad.
+    # Die ausgelieferte Verkaufsversion setzt ``TRIAL_FROM`` auf ``None``;
+    # dafür steht unten ein eigener Gegenbeweis.
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
     activation.forget_cache()
     yield tmp_path
     activation.forget_cache()
@@ -608,8 +657,8 @@ def test_a_running_demo_knows_its_last_day(own_config: Path, demo: date) -> None
     assert not state.over
 
 
-def test_a_sale_build_is_never_over(own_config: Path) -> None:
-    """Ohne Stichtag bleibt es beim Testlauf: abgelaufen ja, zu nein.
+def test_a_sale_build_is_never_over(own_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ohne Stichtag und Testangebot bleibt das Lesen offen: gesperrt, nicht aus.
 
     Der abgelaufene Testlauf lässt alles Lesende offen (Veröffentlichungs-
     konzept §2 C) — genau das, was die Demo nicht tut.
@@ -617,13 +666,21 @@ def test_a_sale_build_is_never_over(own_config: Path) -> None:
     Der Marker steht ohne Unterschrift da — so schreibt ihn eine Fassung vor
     der Härtung, und dass er gelesen wird, ist die Migrationszusage.
     """
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    activation.forget_cache()
     store.trial_path().write_text(
         '{"first_run": "2026-09-01", "last_seen": "2027-01-01"}', encoding="utf-8"
     )
     state = activation.state()
-    assert state.expired
+    assert state.sale_without_trial
+    assert not state.expired, "ohne angebotenen Test ist auch keiner abgelaufen"
     assert not state.over
     assert not state.in_demo
+
+    with pytest.raises(LicenceRequired) as raised:
+        activation.require(activation.CHANGE)
+    assert "Testzeitraum" not in str(raised.value.title)
+    assert "Geräteaktivierung" in str(raised.value.title)
 
 
 def test_a_sale_version_carries_no_deadline(shipped_demo_until: object) -> None:
@@ -640,6 +697,14 @@ def test_a_sale_version_carries_no_deadline(shipped_demo_until: object) -> None:
             f"{APP_VERSION} ist eine Verkaufsversion und trägt trotzdem einen "
             f"Stichtag ({shipped_demo_until}) — er gehört in store.DEMO_UNTIL auf None"
         )
+
+
+def test_the_shipped_sale_policy_offers_no_trial(shipped_trial_from: object) -> None:
+    """Der erhaltene Testpfad ist nicht automatisch ein aktuelles Angebot."""
+    assert shipped_trial_from is None, (
+        "Die Fassung bietet wieder eine Testphase an — Rechtstexte, Website und "
+        "Verkaufsablauf müssen vor dem Ausliefern bewusst nachgezogen werden"
+    )
 
 
 def test_the_shipped_deadline_has_not_passed(shipped_demo_until: object) -> None:
@@ -681,17 +746,38 @@ def test_an_expired_trial_locks_the_writing_side(own_config: Path) -> None:
     assert raised.value.values["action"] == activation.EXPORT
 
 
-def test_a_stored_key_unlocks_it(own_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_stored_key_still_requires_device_activation(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
     store.trial_path().write_text(
         '{"first_run": "2026-09-01", "last_seen": "2027-01-01"}', encoding="utf-8"
     )
     activation.forget_cache()
-    state = activation.remember(make_key(TEST_SEED, a_licence()))
-    assert state.unlocked
+    state = activation.remember(make_key(TEST_SEED, a_licence(purchased_on=date(2026, 11, 1))))
+    assert not state.unlocked
+    assert state.needs_activation
     assert state.licence is not None
     assert state.licence.holder == "kaeufer@beispiel.de"
-    activation.require(activation.CHANGE)
+    with pytest.raises(DeviceActivationRequired):
+        activation.require(activation.CHANGE)
+
+
+def test_a_key_from_before_device_activation_stays_locally_valid(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die neue Gerätebindung entwertet keinen bereits ausgegebenen Schlüssel."""
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+    activation.forget_cache()
+
+    state = activation.remember(make_key(TEST_SEED, a_licence()))
+
+    assert state.licensed
+    assert not state.requires_device_activation
+    assert not state.needs_activation
+    assert state.certificate is None
+    assert state.unlocked
+    activation.require(activation.EXPORT)
 
 
 def test_a_rejected_key_is_not_stored(own_config: Path) -> None:
@@ -792,7 +878,7 @@ def test_a_damaged_installation_does_not_ask_the_paying_customer_to_buy(
     assert raised.value.detail is not None, "Regel 17: der Grund gehört dazu"
 
 
-def test_a_read_only_profile_still_unlocks_the_session(
+def test_a_read_only_profile_keeps_the_checked_key_only_for_the_session(
     own_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Ein nicht beschreibbares Profil kostet die Ablage, nicht die Sitzung.
@@ -806,8 +892,9 @@ def test_a_read_only_profile_still_unlocks_the_session(
         raise OSError("read-only profile")
 
     monkeypatch.setattr(store, "ensure_dir", refuse)
-    state = activation.remember(make_key(TEST_SEED, a_licence()))
-    assert state.unlocked
+    state = activation.remember(make_key(TEST_SEED, a_licence(purchased_on=date(2026, 11, 1))))
+    assert state.needs_activation
+    assert not state.unlocked, "ein Kaufcode ohne Geräte-Zertifikat öffnet nichts"
     assert store.read_key() is None, "abgelegt wurde nichts — der Dialog sagt das auch"
 
 

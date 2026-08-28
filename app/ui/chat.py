@@ -329,17 +329,13 @@ class ChatPanel(QWidget):
         Sackgasse führt, ist schlechter als keiner; er bleibt deshalb weg,
         wo er nichts ausrichtet. Gefunden von 3d-druck-46 im Lizenz-Audit.
         """
-        from app.ui.dialogs import damaged_line
+        from app.ui.dialogs import licence_lock_line
 
         state = activation.state()
         self._locked = locked
         self.unlock.setVisible(locked and not state.damaged)
         if locked:
-            self.hint.setText(
-                damaged_line()
-                if state.damaged
-                else tr("Der Testzeitraum ist abgelaufen — der Chat braucht einen Lizenzschlüssel.")
-            )
+            self.hint.setText(licence_lock_line(state))
             self.setup.setVisible(False)
         self._update_enabled()
 

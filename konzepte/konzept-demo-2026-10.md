@@ -1,13 +1,22 @@
 # Konzept: Öffentliche Demo bis 30.10.2026
 
-Stand 12.08.2026, nachrecherchiert am 19.08.2026. Baut auf `konzept-veroeffentlichung-1.0.md` auf und
+Stand 12.08.2026, nachrecherchiert am 19.08.2026, Produktübergang entschieden
+am 28.08.2026. Baut auf `konzept-veroeffentlichung-1.0.md` auf und
 ändert dessen §7-Entscheidung „keine Beta-Version" — mit Begründung, siehe §2 A.
 Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
 Verkauf betrifft, bleibt im Veröffentlichungskonzept.
 
 Der Auftrag in einem Satz: **eine kostenlose, vollständige Version
-veröffentlichen, die am 30.10.2026 endet — danach fällt die Entscheidung
-zwischen einer zweiten Demo und dem Verkauf von 1.0.**
+veröffentlichen, die einschließlich 30.10.2026 läuft; am 31.10. bleibt sie
+gestoppt und am 01.11.2026 startet die Verkaufsversion 1.0.**
+
+> **Planänderung Robert, 28.08.2026:** Die Demo läuft einschließlich
+> **30.10.2026** vollständig. Am **31.10.2026** startet sie nicht mehr. Ab
+> **01.11.2026** wird die Verkaufsversion angeboten — zunächst **ohne
+> 14-tägige Testphase**. Der gepflegte Testpfad bleibt deaktiviert und kann nur
+> in einem späteren, ausdrücklich so gebauten Release wieder angeboten werden.
+> Diese Entscheidung ersetzt jede ältere Passage dieses Dokuments, die noch
+> zwischen Verkauf und zweiter Demo abwägt.
 
 **Vorgaben vom 12.08.2026 (Robert), im Text eingearbeitet:** Start am
 **20.08.2026**. Kein Schlüssel, keine Eingabe — herunterladen, installieren,

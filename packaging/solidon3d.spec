@@ -68,6 +68,10 @@ datas = [
 # trimesh und pyvista lesen beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
+# OpenSSLs Vorgabepfad zeigt im macOS-Paket auf den Bauserver. Die Anwendung
+# setzt dort ``SSL_CERT_FILE`` auf certifis CA-Satz; ohne dessen Datendatei
+# wäre der richtige Pfad im Quellcode trotzdem eine Lücke im Paket.
+datas += collect_data_files("certifi")
 
 # **Die Paketbeschreibungen von manifold3d und trimesh.** Ein Fehlerbericht
 # nennt die Fassung jeder tragenden Bibliothek, und ``report.environment`` fragt

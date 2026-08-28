@@ -57,6 +57,17 @@ def _lock(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
 
 
+def _certificate() -> activation.ActivationCertificate:
+    """Ein bereits geprüftes Gerätezertifikat für reine Grenztests."""
+    return activation.ActivationCertificate(
+        licence_digest="test-licence",
+        device_public=b"\x01" * 32,
+        device_name="Prüfrechner",
+        activation_id="test-activation",
+        issued_on=date(2026, 8, 28),
+    )
+
+
 def _license(monkeypatch: pytest.MonkeyPatch) -> None:
     licence = key.Licence(
         major=key.current_major(),
@@ -64,7 +75,11 @@ def _license(monkeypatch: pytest.MonkeyPatch) -> None:
         order="A-1234",
         holder="kaeufer@beispiel.de",
     )
-    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(licence=licence, certificate=_certificate()),
+    )
 
 
 def _project() -> Project:
@@ -408,9 +423,10 @@ def test_a_valid_key_does_not_open_a_damaged_installation(
     )
     monkeypatch.setattr(key, "PUBLIC_KEY", public_key(TEST_SEED))
     store.write_key(make_key(TEST_SEED, licence))
+    monkeypatch.setattr(activation.certificates, "load_for", lambda _licence: _certificate())
     target = fresh_state / "licence.manifest"
 
-    # Richtung eins: unversehrt — der Schlüssel wirkt wie eh und je.
+    # Richtung eins: unversehrt — Schlüssel und Gerätezertifikat wirken.
     _write_manifest(target, integrity.boundary_hashes())
     _expect_manifest(monkeypatch, target)
     activation.forget_cache()

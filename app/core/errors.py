@@ -102,6 +102,9 @@ OPEN_DOWNLOAD_PAGE = Action("open_download_page", _("Download-Seite öffnen"), p
 SAVE_ELSEWHERE = Action("save_elsewhere", _("Anderen Ort wählen"))
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
 BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
+ACTIVATE_ONLINE = Action("activate_online", _("Online aktivieren"), primary=True)
+ACTIVATE_OFFLINE = Action("activate_offline", _("Offline aktivieren …"), primary=True)
+DEACTIVATE_DEVICE = Action("deactivate_device", _("Diesen Rechner deaktivieren"), primary=True)
 
 
 class OperationCancelled(Exception):
@@ -552,12 +555,17 @@ class FileWriteError(AppError):
 
 
 class LicenceRequired(AppError):
-    """Der Testlauf ist abgelaufen, und diese Handlung braucht einen Schlüssel.
+    """Diese Handlung braucht einen Schlüssel und die Gerätefreigabe.
 
     Kein Bedienfehler — es gibt nichts zu korrigieren — und kein
     Programmfehler. Ein Zustand, wie ``ExternalToolError`` einer ist, mit
     demselben Bau: sagen, was jetzt möglich ist. Die beiden Wege heißen
     Schlüssel eintragen und kaufen, und mehr Wege gibt es nicht.
+
+    Der Vorgabetitel ist absichtlich neutral: Die Verkaufsversion vom
+    01.11.2026 bietet zunächst keinen Testzeitraum an. Nur der Kern kennt den
+    wirklichen Zustand und setzt beim tatsächlich abgelaufenen Test einen
+    genaueren Titel.
 
     **Was liest, wirft das nie.** Öffnen, Ansehen, Messen, Prüfbericht,
     Schichtanalyse, Speichern und Undo laufen nach Ablauf weiter — eine
@@ -566,7 +574,8 @@ class LicenceRequired(AppError):
     """
 
     default_title: ClassVar[TranslatableText] = _(
-        "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel."
+        "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige "
+        "Geräteaktivierung (Hilfe → Solidon freischalten …)."
     )
     default_suggestions: ClassVar[tuple[Action, ...]] = (ENTER_LICENCE_KEY, BUY_LICENCE, CANCEL)
 
@@ -581,6 +590,42 @@ class LicenceRequired(AppError):
         """Was versucht wurde — ``change``, ``export``, ``slicer`` oder
         ``chat``. Geht ins Protokoll, damit sich später sagen lässt, an welcher
         Grenze Leute tatsächlich anstoßen."""
+
+
+class DeviceActivationRequired(AppError):
+    """Der Kaufcode gilt, aber diesem Rechner fehlt sein signiertes Zertifikat."""
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Dieser Rechner ist für den Lizenzschlüssel noch nicht aktiviert."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (
+        ACTIVATE_ONLINE,
+        ACTIVATE_OFFLINE,
+        CANCEL,
+    )
+
+    def __init__(
+        self,
+        action: str = "",
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if detail is None:
+            detail = _(
+                "Aktivieren Sie diesen Rechner einmal online oder über die "
+                "Anfrage- und Antwortdatei. Danach bleibt Solidon offline nutzbar."
+            )
+        super().__init__(detail=detail, **_with_values(kwargs, action=action))
+        self.action = action
+
+
+class ActiveLicenceCannotBeReplaced(AppError):
+    """Eine bestehende Gerätebindung muss vor einem Schlüsselwechsel weg."""
+
+    default_title: ClassVar[TranslatableText] = _(
+        "Der aktive Lizenzschlüssel kann nicht überschrieben werden."
+    )
+    default_suggestions: ClassVar[tuple[Action, ...]] = (DEACTIVATE_DEVICE, CANCEL)
 
 
 class InstallationDamaged(AppError):

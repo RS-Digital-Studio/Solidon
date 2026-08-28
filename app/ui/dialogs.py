@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, Qt, QUrl, Signal
+from PySide6.QtCore import QLocale, Qt, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -45,7 +47,9 @@ from app.branding import (
     SUPPORT_ADDRESS,
     WEBSITE_URL,
 )
-from app.core import activation, expressions, tools
+from app.core import activation, expressions, licence_service, tools
+from app.core.activation import certificate as activation_certificate
+from app.core.activation import store as activation_store
 from app.core.backends import keys, llm
 from app.core.errors import (
     CANCEL,
@@ -57,7 +61,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
-from app.i18n import format_decimal, tr
+from app.i18n import format_decimal, get_language, tr
 from app.ui.labels import (
     UNEXPECTED_CRASH,
     NumberSpin,
@@ -1242,6 +1246,160 @@ class KeyDialog(QDialog):
         super().closeEvent(event)
 
 
+class _OnlineActivationWorker(Worker):
+    """Netzkontakt ausschließlich nach dem Klick auf *Online aktivieren*."""
+
+    completed = Signal(str)
+    failed = Signal(object)
+
+    def __init__(self, request: str) -> None:
+        super().__init__()
+        self.request = request
+
+    def work(self) -> None:
+        try:
+            answer = licence_service.activate(self.request)
+        except AppError as problem:
+            self.failed.emit(problem)
+        else:
+            self.completed.emit(answer)
+
+
+class _DeactivationWorker(Worker):
+    """Gibt den signierten Geräteplatz nach ausdrücklichem Klick frei."""
+
+    completed = Signal()
+    failed = Signal(object)
+
+    def __init__(self, request: str) -> None:
+        super().__init__()
+        self.request = request
+
+    def work(self) -> None:
+        try:
+            licence_service.deactivate(self.request)
+        except AppError as problem:
+            self.failed.emit(problem)
+        else:
+            self.completed.emit()
+
+
+class OfflineActivationDialog(QDialog):
+    """Anfrage speichern und die Antwort eines zweiten Geräts einlesen."""
+
+    PAGE_URL: Final = "https://solidon3d.de/offline-aktivierung.html"
+
+    def __init__(self, request: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.request = request
+        self.setWindowTitle(tr("Offline aktivieren"))
+        self.setMinimumWidth(560)
+
+        explanation = QLabel(
+            tr(
+                "1. Aktivierungsanfrage speichern.\n"
+                "2. Die Datei auf einem Gerät mit Internet auf der Aktivierungsseite einlösen.\n"
+                "3. Die heruntergeladene Aktivierungsantwort hier einlesen."
+            ),
+            self,
+        )
+        explanation.setWordWrap(True)
+
+        save = QPushButton(tr("1 · Anfrage speichern …"), self)
+        save.clicked.connect(self._save_request)
+        website = QPushButton(tr("2 · Aktivierungsseite öffnen"), self)
+        website.clicked.connect(self._open_page)
+        import_answer = QPushButton(tr("3 · Antwort einlesen …"), self)
+        import_answer.clicked.connect(self._import_answer)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(explanation)
+        layout.addWidget(save)
+        layout.addWidget(website)
+        layout.addWidget(import_answer)
+        layout.addWidget(buttons)
+
+    def _save_request(self) -> None:
+        name, _chosen = QFileDialog.getSaveFileName(
+            self,
+            tr("Aktivierungsanfrage speichern"),
+            "Solidon-Aktivierung.solidon-request",
+            tr("Solidon-Aktivierungsanfrage (*.solidon-request)"),
+        )
+        if not name:
+            return
+        path = Path(name)
+        if path.suffix.lower() != ".solidon-request":
+            path = path.with_suffix(".solidon-request")
+        try:
+            path.write_text(self.request, encoding="utf-8")
+        except OSError as problem:
+            show_error(
+                AppError(
+                    detail=tr("Die Aktivierungsanfrage ließ sich nicht speichern: {reason}").format(
+                        reason=problem
+                    ),
+                    suggestions=(Action("save_elsewhere", tr("Anderen Ort wählen")), CANCEL),
+                ),
+                self,
+            )
+            return
+        QMessageBox.information(
+            self,
+            tr("Aktivierungsanfrage gespeichert"),
+            tr(
+                "Übertragen Sie die Datei auf ein Gerät mit Internet und öffnen Sie dort "
+                "die Aktivierungsseite."
+            ),
+        )
+
+    def _open_page(self) -> None:
+        target = QUrl(self.PAGE_URL)
+        query = QUrlQuery()
+        query.addQueryItem("lang", get_language())
+        target.setQuery(query)
+        QDesktopServices.openUrl(target)
+
+    def _import_answer(self) -> None:
+        name, _chosen = QFileDialog.getOpenFileName(
+            self,
+            tr("Aktivierungsantwort einlesen"),
+            "",
+            tr("Solidon-Aktivierungsantwort (*.solidon-activation)"),
+        )
+        if not name:
+            return
+        path = Path(name)
+        try:
+            if path.stat().st_size > licence_service.MAX_RESPONSE_BYTES:
+                raise activation_certificate.ActivationDocumentError(
+                    detail=tr("Die Aktivierungsantwort ist ungewöhnlich groß.")
+                )
+            answer = path.read_text(encoding="utf-8")
+            activation.install_certificate(answer)
+        except AppError as problem:
+            show_error(problem, self)
+            return
+        except (OSError, UnicodeError) as problem:
+            show_error(
+                activation_certificate.ActivationDocumentError(
+                    detail=tr("Die Aktivierungsantwort ließ sich nicht lesen: {reason}").format(
+                        reason=problem
+                    )
+                ),
+                self,
+            )
+            return
+        QMessageBox.information(
+            self,
+            tr("Solidon ist freigeschaltet"),
+            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+        )
+        self.accept()
+
+
 class ActivationDialog(QDialog):
     """Wo ein Lizenzschlüssel eingetragen wird (Konzept §2 B, §2 C).
 
@@ -1258,14 +1416,26 @@ class ActivationDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Solidon freischalten"))
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(600)
 
         self.state_label = QLabel(self)
         self.state_label.setWordWrap(True)
+        self.state_label.setTextFormat(Qt.TextFormat.PlainText)
+
+        introduction = QLabel(
+            tr(
+                "Kein Konto und kein dauerhaftes Internet: Schlüssel einfügen, "
+                "diesen Rechner einmal aktivieren, fertig."
+            ),
+            self,
+        )
+        introduction.setWordWrap(True)
+        set_level(introduction, "caption")
 
         self.field = QPlainTextEdit(self)
         self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
         self.field.setFixedHeight(90)
+        self.field.setAccessibleName(tr("Lizenzschlüssel"))
         # Sonst ist der Dialog eine Tastenfalle: Ein mehrzeiliges Feld nimmt den
         # Tabulator als Zeichen, und wer ohne Maus arbeitet, kommt aus dem Feld
         # nicht mehr heraus — ausgerechnet dort, wo ein Schlüssel eingegeben
@@ -1274,10 +1444,12 @@ class ActivationDialog(QDialog):
         if stored := activation.read_key():
             self.field.setPlainText(stored)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
-        self.check_button = buttons.addButton(
-            tr("Eintragen"), QDialogButtonBox.ButtonRole.AcceptRole
-        )
+        self.device_name = QLineEdit(self)
+        self.device_name.setMaxLength(80)
+        self.device_name.setText(tr("Dieser Rechner"))
+        self.device_name.setPlaceholderText(tr("Name dieses Rechners"))
+
+        self.check_button = QPushButton(tr("Schlüssel prüfen"), self)
         self.check_button.clicked.connect(self._remember)
         # **Ohne Schlüssel kann er nichts eintragen, und sagt es vorher.**
         # „Eintragen" mit leerem Feld rief ``reject()``: Der Dialog verschwand
@@ -1285,20 +1457,72 @@ class ActivationDialog(QDialog):
         # als Antwort auf den einen Knopf, der etwas versprach. Ausgegraut mit
         # Grund ist die Regel dieses Hauses (Regel 19, §2.7).
         self.field.textChanged.connect(self._follow_field)
-        self.forget_button = buttons.addButton(
-            tr("Schlüssel entfernen"), QDialogButtonBox.ButtonRole.DestructiveRole
-        )
+        self.device_name.textChanged.connect(self._follow_field)
+        self.online_button = QPushButton(tr("Online aktivieren"), self)
+        make_primary(self.online_button)
+        self.online_button.clicked.connect(self._activate_online)
+        self.offline_button = QPushButton(tr("Offline aktivieren …"), self)
+        self.offline_button.clicked.connect(self._activate_offline)
+        self.forget_button = QPushButton(tr("Schlüssel entfernen"), self)
         self.forget_button.clicked.connect(self._forget)
-        self.buy_button = buttons.addButton(
-            tr("Solidon kaufen"), QDialogButtonBox.ButtonRole.HelpRole
-        )
+        self.buy_button = QPushButton(tr("Solidon kaufen"), self)
         self.buy_button.clicked.connect(open_website)
+
+        key_group = QGroupBox(tr("1 · Lizenzschlüssel einfügen"), self)
+        key_layout = QVBoxLayout(key_group)
+        key_explanation = QLabel(
+            tr("Den Schlüssel aus der Bestellmail vollständig hier einfügen."),
+            key_group,
+        )
+        key_explanation.setWordWrap(True)
+        key_layout.addWidget(key_explanation)
+        key_layout.addWidget(self.field)
+        key_actions = QHBoxLayout()
+        key_actions.addWidget(self.check_button)
+        key_actions.addWidget(self.buy_button)
+        key_actions.addStretch(1)
+        key_layout.addLayout(key_actions)
+
+        device_group = QGroupBox(tr("2 · Diesen Rechner aktivieren"), self)
+        device_layout = QVBoxLayout(device_group)
+        device_explanation = QLabel(
+            tr(
+                "Der Name hilft später beim Rechnerwechsel. Online ist der kurze Weg; "
+                "offline geht es mit einer Anfrage- und Antwortdatei."
+            ),
+            device_group,
+        )
+        device_explanation.setWordWrap(True)
+        device_layout.addWidget(device_explanation)
+        device_layout.addWidget(QLabel(tr("Gerätename"), device_group))
+        device_layout.addWidget(self.device_name)
+        activation_actions = QHBoxLayout()
+        activation_actions.addWidget(self.online_button)
+        activation_actions.addWidget(self.offline_button)
+        activation_actions.addStretch(1)
+        device_layout.addLayout(activation_actions)
+
+        completion = QLabel(
+            tr("Danach bleibt Solidon auf diesem Rechner auch ohne Internet vollständig nutzbar."),
+            device_group,
+        )
+        completion.setWordWrap(True)
+        set_level(completion, "caption")
+        device_layout.addWidget(completion)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        buttons.addButton(self.forget_button, QDialogButtonBox.ButtonRole.DestructiveRole)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.state_label)
-        layout.addWidget(self.field)
+        layout.addWidget(introduction)
+        layout.addWidget(key_group)
+        layout.addWidget(device_group)
         layout.addWidget(buttons)
+        self._worker: Worker | None = None
+        self._restore_certificate: str | None = None
+        self._leash = WorkerLeash(self)
         self._show_state()
         self._follow_field()
 
@@ -1313,14 +1537,39 @@ class ActivationDialog(QDialog):
             # Anzeige: Der Zustand nennt sich selbst, nicht erst die Absage.
             self.state_label.setText(damaged_line())
             set_level(self.state_label, "warning")
-        elif state.licence is not None:
+        elif state.licensed and state.licence is not None and state.certificate is not None:
             self.state_label.setText(
-                tr("Freigeschaltet für {holder} (Bestellung {order}).").format(
+                tr(
+                    "Freigeschaltet für {holder} (Bestellung {order}).\n"
+                    "Aktives Gerät: {device}. Danach bleibt Solidon ohne Lizenzverbindung nutzbar."
+                ).format(
+                    holder=state.licence.holder or tr("diesen Rechner"),
+                    order=state.licence.order,
+                    device=state.certificate.device_name,
+                )
+            )
+            self.device_name.setText(state.certificate.device_name)
+            set_level(self.state_label, "info")
+        elif state.licensed and state.licence is not None:
+            self.state_label.setText(
+                tr(
+                    "Freigeschaltet für {holder} (Bestellung {order}). Dieser "
+                    "Bestandsschlüssel braucht keine Geräteaktivierung und bleibt "
+                    "vollständig offline nutzbar."
+                ).format(
                     holder=state.licence.holder or tr("diesen Rechner"),
                     order=state.licence.order,
                 )
             )
             set_level(self.state_label, "info")
+        elif state.needs_activation and state.licence is not None:
+            self.state_label.setText(
+                tr(
+                    "Der Lizenzschlüssel ist gültig (Bestellung {order}). Dieser Rechner "
+                    "ist noch nicht aktiviert. Wählen Sie Online oder Offline aktivieren."
+                ).format(order=state.licence.order)
+            )
+            set_level(self.state_label, "warning")
         elif state.in_demo:
             # Für die Demo gibt es keinen Schlüssel — das ist keine Lücke,
             # sondern die Bauart: sie läuft ohne Eingabe und endet an einem
@@ -1346,6 +1595,15 @@ class ActivationDialog(QDialog):
                     "Danach bleiben Öffnen, Ansehen, Messen und Speichern nutzbar; "
                     "Ändern, Exportieren und die Übergabe an den Slicer brauchen "
                     "einen Schlüssel."
+                )
+            )
+            set_level(self.state_label, "info")
+        elif state.sale_without_trial:
+            self.state_label.setText(
+                tr(
+                    "Für diese Verkaufsversion ist keine Testphase aktiv. Öffnen, Ansehen "
+                    "und Messen bleiben möglich; Änderungen und Ausgaben brauchen einen "
+                    "Lizenzschlüssel und die einmalige Geräteaktivierung."
                 )
             )
             set_level(self.state_label, "info")
@@ -1390,10 +1648,26 @@ class ActivationDialog(QDialog):
         ``accessibleDescription`` für den, der den Bildschirm nicht liest.
         Grau allein wäre eine Aussage über die Farbe (Regel 18).
         """
-        damaged = activation.state().damaged
+        state = activation.state()
+        damaged = state.damaged
         filled = bool(self.field.toPlainText().strip())
-        self.check_button.setEnabled(filled and not damaged)
-        self.buy_button.setEnabled(not damaged)
+        named = bool(self.device_name.text().strip())
+        busy = self._worker is not None and self._worker.isRunning()
+        active = state.licensed
+        device_active = state.certificate is not None and state.licence is not None
+        pending = state.needs_activation
+        self.field.setReadOnly(active or busy)
+        self.device_name.setReadOnly(active or busy)
+        self.check_button.setEnabled(filled and not damaged and not active and not busy)
+        self.online_button.setEnabled(pending and named and not busy)
+        self.offline_button.setEnabled(pending and named and not busy)
+        self.buy_button.setEnabled(not damaged and not active and not busy)
+        self.forget_button.setEnabled(
+            (activation.read_key() is not None or state.licence is not None) and not busy
+        )
+        self.forget_button.setText(
+            tr("Diesen Rechner deaktivieren") if device_active else tr("Schlüssel entfernen")
+        )
         locked = damaged_line() if damaged else ""
         self.check_button.setToolTip(
             locked
@@ -1403,6 +1677,15 @@ class ActivationDialog(QDialog):
         for button in (self.check_button, self.buy_button):
             button.setStatusTip(button.toolTip())
             button.setAccessibleDescription(button.toolTip())
+        activation_hint = ""
+        if not pending and not active:
+            activation_hint = tr("Zuerst den Lizenzschlüssel einfügen und prüfen.")
+        elif pending and not named:
+            activation_hint = tr("Geben Sie einen Namen für diesen Rechner ein.")
+        for button in (self.online_button, self.offline_button):
+            button.setToolTip(activation_hint)
+            button.setStatusTip(activation_hint)
+            button.setAccessibleDescription(activation_hint)
 
     def _remember(self) -> None:
         text = self.field.toPlainText().strip()
@@ -1427,13 +1710,164 @@ class ActivationDialog(QDialog):
                     "ablegen — beim nächsten Start wird er wieder gebraucht."
                 ),
             )
-        self.accept()
+        self._show_state()
+        self._follow_field()
+        self.device_name.setFocus()
 
     def _forget(self) -> None:
         """Nimmt den abgelegten Schlüssel weg — vor dem Verkauf des Rechners."""
+        if activation.state().certificate is not None:
+            self._deactivate()
+            return
         activation.forget_key()
         self.field.clear()
         self._show_state()
+        self._follow_field()
+
+    def _activation_request(self) -> str | None:
+        """Prüft Feld und Gerätename und erzeugt genau eine signierte Anfrage."""
+        try:
+            activation.remember(self.field.toPlainText().strip())
+            return activation.create_activation_request(self.device_name.text())
+        except AppError as problem:
+            show_error(problem, self)
+            self._show_state()
+            self._follow_field()
+            return None
+
+    def _activate_online(self) -> None:
+        request = self._activation_request()
+        if request is None:
+            return
+        worker = _OnlineActivationWorker(request)
+        worker.completed.connect(self._online_completed)
+        worker.failed.connect(self._online_failed)
+        worker.crashed.connect(self._worker_crashed)
+        worker.finished.connect(self._worker_finished)
+        self._worker = worker
+        self.state_label.setText(tr("Dieser Rechner wird aktiviert …"))
+        self._follow_field()
+        self._leash.start(worker)
+
+    def _activate_offline(self) -> None:
+        request = self._activation_request()
+        if request is None:
+            return
+        OfflineActivationDialog(request, self).exec()
+        self._show_state()
+        self._follow_field()
+
+    def _online_completed(self, answer: str) -> None:
+        try:
+            activation.install_certificate(answer)
+        except AppError as problem:
+            show_error(problem, self)
+            return
+        QMessageBox.information(
+            self,
+            tr("Solidon ist freigeschaltet"),
+            tr("Dieser Rechner ist aktiviert. Ab jetzt ist keine Lizenzverbindung nötig."),
+        )
+        self._show_state()
+
+    def _online_failed(self, problem: object) -> None:
+        if isinstance(problem, AppError):
+            show_error(problem, self)
+        else:  # pragma: no cover - Signalvertrag wird vom Arbeiter gehalten
+            self._worker_crashed(str(problem))
+        self._show_state()
+
+    def _deactivate(self) -> None:
+        """Entfernt lokal zuerst und gibt anschließend genau diesen Platz frei."""
+        try:
+            request = activation.create_deactivation_request()
+        except AppError as problem:
+            show_error(problem, self)
+            return
+        saved = activation_store.read_certificate()
+        if saved is None or not activation.remove_certificate():
+            show_error(
+                AppError(
+                    detail=tr(
+                        "Die lokale Gerätefreigabe ließ sich nicht entfernen. "
+                        "Der Serverplatz wurde deshalb nicht verändert."
+                    ),
+                    suggestions=(REPORT_ERROR, CANCEL),
+                ),
+                self,
+            )
+            return
+        self._restore_certificate = saved
+        worker = _DeactivationWorker(request)
+        worker.completed.connect(self._deactivation_completed)
+        worker.failed.connect(self._deactivation_failed)
+        worker.crashed.connect(self._deactivation_crashed)
+        worker.finished.connect(self._worker_finished)
+        self._worker = worker
+        self.state_label.setText(tr("Dieser Rechner wird deaktiviert …"))
+        self._follow_field()
+        self._leash.start(worker)
+
+    def _restore_local_activation(self) -> None:
+        saved = self._restore_certificate
+        self._restore_certificate = None
+        if saved is not None:
+            activation_store.write_certificate(saved)
+            activation.forget_cache()
+
+    def _deactivation_completed(self) -> None:
+        self._restore_certificate = None
+        activation.forget_key()
+        self.field.clear()
+        QMessageBox.information(
+            self,
+            tr("Rechner deaktiviert"),
+            tr(
+                "Die lokale Freischaltung und der Lizenzschlüssel wurden entfernt. "
+                "Der Geräteplatz ist jetzt für einen anderen Rechner frei."
+            ),
+        )
+        self._show_state()
+
+    def _deactivation_failed(self, problem: object) -> None:
+        self._restore_local_activation()
+        if isinstance(problem, AppError):
+            show_error(problem, self)
+        else:  # pragma: no cover - Signalvertrag wird vom Arbeiter gehalten
+            self._worker_crashed(str(problem))
+        self._show_state()
+
+    def _deactivation_crashed(self, detail: str) -> None:
+        self._restore_local_activation()
+        self._worker_crashed(detail)
+
+    def _worker_crashed(self, detail: str) -> None:
+        show_error(
+            licence_service.ActivationServiceError(
+                detail=tr("Die Aktivierung wurde unerwartet unterbrochen: {detail}").format(
+                    detail=detail
+                )
+            ),
+            self,
+        )
+        self._show_state()
+
+    def _worker_finished(self) -> None:
+        self._worker = None
+        self._follow_field()
+
+    def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
+        """Während der Serverfreigabe darf der Dialog den Zustand nicht verlieren."""
+        if self._worker is not None and self._worker.isRunning():
+            event.ignore()
+            self.state_label.setText(tr("Bitte warten Sie, bis die Aktivierung abgeschlossen ist."))
+            return
+        self.release()
+        super().closeEvent(event)
+
+    def release(self) -> None:
+        """Wartet beim geregelten Abbau auf den ausdrücklich gestarteten Netzweg."""
+        self._leash.wait_all()
 
 
 def open_website() -> None:
@@ -1937,6 +2371,37 @@ def damaged_line() -> str:
     return f"{problem.title} {problem.detail}"
 
 
+def licence_lock_line(state: activation.Activation | None = None) -> str:
+    """Ein Sperrgrund für Menü, Chat, Slicer, Status- und Über-Dialog.
+
+    Vier Oberflächen hatten vier eigene Ableitungen aus ``not unlocked``.
+    Das war zu grob: Ein nicht angebotener Test, ein abgelaufener Test, eine
+    beschädigte Installation und ein noch nicht aktivierter Rechner sperren
+    zwar dieselben Handlungen, brauchen aber jeweils einen anderen nächsten
+    Schritt. Diese eine Quelle hält Wortlaut und Handlung zusammen.
+    """
+    current = state or activation.state()
+    if current.damaged:
+        return damaged_line()
+    if current.needs_activation:
+        return str(
+            tr(
+                "Der Lizenzschlüssel ist gültig; dieser Rechner muss noch einmal "
+                "aktiviert werden (Hilfe → Solidon freischalten …)."
+            )
+        )
+    if current.expired:
+        return str(
+            tr("Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel.")
+        )
+    return str(
+        tr(
+            "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige "
+            "Geräteaktivierung (Hilfe → Solidon freischalten …)."
+        )
+    )
+
+
 def _licence_line() -> str:
     """Der Freischaltzustand als ein Satz — für den Über-Dialog (H2)."""
     state = activation.state()
@@ -1946,7 +2411,7 @@ def _licence_line() -> str:
         # also stand hier „Lizenziert für …" über einer Installation, die
         # nichts freischaltet.
         return damaged_line()
-    if state.licence is not None:
+    if state.licensed and state.licence is not None:
         return tr("Lizenziert für {holder} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),
             order=state.licence.order,
@@ -1957,7 +2422,7 @@ def _licence_line() -> str:
         )
     if state.in_trial:
         return tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
-    return tr("Der Testzeitraum ist abgelaufen — Änderungen brauchen einen Lizenzschlüssel.")
+    return licence_lock_line(state)
 
 
 def _third_party_text() -> str:

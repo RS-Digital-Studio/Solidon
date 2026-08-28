@@ -1,7 +1,7 @@
 Endnutzer-Lizenzvertrag für Solidon3D
 -------------------------------------
 
-Stand: 24. August 2026 · Fassung 1.2
+Stand: 28. August 2026 · Fassung 1.4
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -40,9 +40,18 @@ Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
 gebraucht. Innerhalb eines Betriebs zählt also nicht die Zahl der Rechner,
 sondern die Zahl der Menschen, die damit konstruieren.
 
-Es gibt keine Aktivierungspflicht über das Netz und kein Nutzerkonto. Der
-Lizenzschlüssel wird auf Ihrem Rechner geprüft; wir erfahren nicht, wann und
-wo Sie die Software benutzen.
+Für ab dem 1. November 2026 ausgestellte Verkaufsschlüssel braucht die
+Freischaltung einmalig eine Geräteaktivierung, aber kein Nutzerkonto. Sie
+kann direkt aus Solidon über das Netz oder als Anfrage- und Antwortdatei über
+ein zweites Gerät erfolgen. Dabei wird genau ein aktiver Geräteplatz je Lizenz
+geführt. Anschließend prüft Solidon Schlüssel und Geräte-Zertifikat
+ausschließlich lokal: keine regelmäßige Lizenzabfrage, kein Heartbeat und
+keine Pflichtverbindung im Betrieb. Bereits vorher ausgegebene
+Bestandsschlüssel bleiben ohne nachträgliche Geräteaktivierung gültig.
+
+Beim Rechnerwechsel deaktivieren Sie den bisherigen Rechner in Solidon; dafür
+braucht er einmal Verbindung zum Aktivierungsdienst. Ist er verloren oder
+defekt, setzt der Support den Platz nach Prüfung der Bestellnummer zurück.
 
 3. Gewerbliche Nutzung und Ihre Ergebnisse
 ------------------------------------------
@@ -95,26 +104,21 @@ Für die Demo gilt außerdem:
   support@solidon3d.de —, ein Anspruch auf Antwort oder Fehlerbehebung
   besteht nicht.
 
-4. Testlauf
------------
+4. Freischaltung der Verkaufsversion
+------------------------------------
 
-Dieser Abschnitt betrifft die Vollversion (Versionsnummer 1.x); für die
-Demo gilt 4a.
+Die am 1. November 2026 startende Vollversion wird zunächst ohne Testphase
+angeboten. Eine Testphase kann in einer späteren Fassung ausdrücklich
+hinzukommen; aus diesem Vertrag entsteht darauf kein Anspruch.
 
-Vor dem Kauf läuft Solidon3D vierzehn Tage vollständig und ohne
-Einschränkung — keine Wasserzeichen, keine Exportsperre, keine gesperrten
-Funktionen.
-
-Nach Ablauf der Frist brauchen Sie einen Lizenzschlüssel für alles, was ein
-Projekt ändert oder ein Ergebnis herausgibt: Operationen anwenden,
-exportieren, an den Slicer übergeben, den Chat benutzen.
-
-Was nur liest, bleibt frei. Solidon3D ist auch nach Ablauf ein
-vollständiger Betrachter Ihrer eigenen Projekte: öffnen, drehen, messen,
-Prüfbericht lesen, Schichtanalyse ansehen, speichern und zurücknehmen gehen
-weiter. Ihre Dateien bleiben damit zugänglich, ohne dass Sie etwas kaufen
-müssen — und sie lassen sich mit jeder späteren Lizenz unverändert
-weiterbearbeiten.
+Ohne vollständige Freischaltung bleibt alles Lesende offen: eigene Projekte
+öffnen, drehen, messen, Prüfbericht und Schichtanalyse ansehen. Für alles, was
+ein Projekt ändert oder ein Ergebnis herausgibt, ist die Freischaltung
+erforderlich: Operationen anwenden, exportieren, an den Slicer übergeben und
+den Chat benutzen. Bei Verkaufsschlüsseln ab dem 1. November 2026 gehören dazu
+Kaufcode und passendes Geräte-Zertifikat; der Kaufcode allein öffnet diese
+Handlungen nicht. Für vorher ausgegebene Bestandsschlüssel genügt weiterhin
+der gültige Kaufcode.
 
 5. Updates
 ----------

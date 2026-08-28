@@ -1679,6 +1679,251 @@ main.legal ol, main.legal ul { padding-left: 1.4rem; }
 
 main.legal li { margin: 0.35rem 0; }
 
+/* ── Offline-Aktivierung ────────────────────────────────────────────────
+   Ein technischer Dateiweg, aber keine technische Seite: drei ruhige
+   Schritte, ein klarer Arbeitsbereich und die Datenschutzantwort direkt
+   daneben. Die Ziffern und Überschriften tragen die Reihenfolge zusätzlich
+   zur Farbe; auf kleinen Schirmen wird daraus eine einzige Leserichtung. */
+.activation-page {
+  width: min(68rem, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 5rem) 0 5rem;
+}
+
+.activation-language {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.activation-language select {
+  min-height: 2.35rem;
+  padding: 0.35rem 2rem 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+}
+
+.activation-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(2rem, 5vw, 3.5rem);
+  border: 1px solid var(--line);
+  border-radius: 1.25rem;
+  background:
+    radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 22rem),
+    var(--card);
+  box-shadow: var(--shadow);
+}
+
+.activation-kicker,
+.activation-stepmark,
+.activation-success {
+  margin: 0 0 0.55rem;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.activation-hero h1 {
+  max-width: 18ch;
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.activation-lead {
+  max-width: 56ch;
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: clamp(1rem, 2vw, 1.18rem);
+}
+
+.activation-steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.8rem;
+  margin: 1rem 0 2rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: activation-step;
+}
+
+.activation-steps li {
+  position: relative;
+  min-height: 8rem;
+  padding: 1.15rem 1.15rem 1.15rem 3.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--bg-alt);
+  counter-increment: activation-step;
+}
+
+.activation-steps li::before {
+  content: counter(activation-step);
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  font-weight: 750;
+}
+
+.activation-steps b,
+.activation-steps span { display: block; }
+.activation-steps span { margin-top: 0.35rem; color: var(--muted); font-size: 0.93rem; }
+
+.activation-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(15rem, 0.75fr);
+  align-items: start;
+  gap: 1rem;
+}
+
+.activation-workspace > *,
+#activation-form,
+.activation-file,
+.activation-file input { min-width: 0; }
+
+.activation-card,
+.activation-note {
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.activation-card { padding: clamp(1.25rem, 3vw, 2rem); }
+
+.activation-card-head {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.activation-card-head h2,
+.activation-note h2,
+.activation-result h2 { margin: 0; font-size: 1.2rem; }
+.activation-card-head p:not(.activation-stepmark) { margin: 0.35rem 0 0; color: var(--muted); }
+
+.activation-stepmark {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  place-items: center;
+  border-radius: 0.6rem;
+  background: var(--accent-soft);
+  font-size: 1rem;
+}
+
+#activation-form { display: grid; gap: 0.75rem; }
+
+.activation-file {
+  display: grid;
+  gap: 0.3rem;
+  padding: 1rem;
+  border: 1px dashed var(--accent);
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+}
+
+.activation-file span { color: var(--muted); font-size: 0.88rem; }
+.activation-file input {
+  width: 100%;
+  margin-top: 0.45rem;
+  color: var(--fg);
+  font: inherit;
+}
+
+.activation-file input::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.activation-or {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0.1rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.activation-or::before,
+.activation-or::after { content: ""; height: 1px; background: var(--line); }
+
+#request-text {
+  width: 100%;
+  min-height: 9rem;
+  resize: vertical;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+#request-text:focus,
+.activation-language select:focus,
+.activation-file:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#activation-form > .btn {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  margin-top: 0.25rem;
+  line-height: 1.3;
+  text-align: center;
+  white-space: normal;
+}
+
+.activation-result {
+  margin-top: 1.25rem;
+  padding: 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.75rem;
+  background: var(--accent-soft);
+}
+
+.activation-result p { margin: 0.5rem 0 1rem; }
+.activation-success { margin-bottom: 0.35rem !important; }
+
+.activation-aside { display: grid; gap: 1rem; }
+.activation-note { padding: 1.15rem; }
+.activation-note p { margin: 0.6rem 0; color: var(--muted); font-size: 0.93rem; }
+.activation-note a { font-weight: 650; }
+
+@media (max-width: 760px) {
+  .activation-language > span { position: absolute; width: 1px; height: 1px; overflow: hidden; }
+  .activation-steps,
+  .activation-workspace { grid-template-columns: minmax(0, 1fr); }
+  .activation-steps li { min-height: 0; }
+  .activation-aside { grid-template-columns: 1fr; }
+}
+
 /* Die Leerzeilen des Widerrufsformulars — sie sind zum Ausfüllen da. */
 main.legal p.blank {
   border-bottom: 1px solid var(--line);

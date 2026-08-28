@@ -184,6 +184,12 @@ class FirstRunDialog(QDialog):
                 "danach lässt sie sich nicht mehr starten. Ihre Projekte bleiben "
                 "erhalten."
             ).format(date=deadline_date(state))
+        elif state.sale_without_trial:
+            terms = tr(
+                "Diese Verkaufsversion startet ohne Testphase. Öffnen, Ansehen und "
+                "Messen bleiben ohne Schlüssel möglich; zum Ändern und Ausgeben "
+                "brauchen Sie einen Lizenzschlüssel und die einmalige Geräteaktivierung."
+            )
         else:
             terms = tr(
                 "Die ersten {days} Tage ist alles frei; danach bleiben Öffnen, "

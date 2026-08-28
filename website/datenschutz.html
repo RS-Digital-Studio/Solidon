@@ -6,7 +6,7 @@
 <title>Datenschutz — Solidon3D</title>
 <meta name="robots" content="noindex">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=fbad3022">
+<link rel="stylesheet" href="style.css?v=ec46a215">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -112,14 +112,31 @@
     Vertrags. Aufbewahrt werden diese Angaben, solange die handels- und
     steuerrechtlichen Fristen es verlangen.</p>
     <p>Der Lizenzschlüssel selbst trägt Ihren Namen und die Bestellkennung.
-    Er wird auf Ihrem Rechner als Datei abgelegt und von der Anwendung nur
-    dort gelesen; eine Abfrage über das Netz findet nicht statt.</p>
+    Er wird auf Ihrem Rechner als Datei abgelegt. Zur einmaligen
+    Geräteaktivierung übermittelt Solidon nach Ihrem Klick den signierten
+    Schlüssel, einen daraus gebildeten Hash, den zufälligen öffentlichen
+    Geräteteil, den von Ihnen gewählten Gerätenamen, eine Anfragekennung und
+    den kryptografischen Gerätenachweis. Der private Geräteteil bleibt im
+    Schlüsselbund Ihres Betriebssystems.</p>
+    <p>Im Aktivierungsdienst speichern wir nur den Hash des Schlüssels, den
+    öffentlichen Geräteteil, Gerätename, Aktivierungskennung sowie Aktivierungs-
+    und Deaktivierungszeit. Das verhindert eine zweite gleichzeitige
+    Aktivierung und ermöglicht den Rechnerwechsel. Rechtsgrundlage ist
+    Art. 6 Abs. 1 lit. b DSGVO. Der Offline-Dateiweg überträgt dieselben Daten
+    an denselben Dienst, nur von dem Gerät, auf dem Sie die Aktivierungsseite
+    öffnen. Nach der Aktivierung gibt es keine regelmäßige Lizenzabfrage.</p>
 
     <h2>Die Anwendung Solidon3D</h2>
     <p>Solidon3D läuft vollständig lokal und sendet von sich aus keine Daten.
-    Vier Ausnahmen, alle vier unter Kontrolle des Nutzers:</p>
+    Fünf Ausnahmen, alle fünf unter Kontrolle des Nutzers:</p>
 
     <ul>
+      <li><b>Gerät aktivieren oder deaktivieren.</b> Nur nach dem jeweiligen
+      Klick sendet die Anwendung die oben beschriebenen, signierten
+      Aktivierungsdaten. Der Offline-Weg speichert die Anfrage zunächst als
+      Datei; erst die ausdrücklich aufgerufene Aktivierungsseite sendet sie.
+      Danach prüft Solidon das Geräte-Zertifikat lokal und nimmt keinen
+      Lizenzkontakt im Hintergrund auf.</li>
       <li><b>Update-Hinweis.</b> Beim Start fragt die Anwendung eine
       Versionsdatei auf dieser Website ab (<code>version.json</code>), um zu
       erfahren, ob es eine neuere Fassung gibt. Die Anfrage nennt dabei den

@@ -42,29 +42,46 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Final
 
+from app.core.activation import certificate as certificates
 from app.core.activation import integrity, store
+from app.core.activation.certificate import ActivationCertificate
 from app.core.activation.key import Licence, LicenceKeyError, parse
-from app.core.activation.store import TRIAL_DAYS, read_key
-from app.core.errors import InstallationDamaged, LicenceRequired
+from app.core.activation.store import TRIAL_DAYS, TRIAL_FROM, read_key
+from app.core.errors import (
+    ActiveLicenceCannotBeReplaced,
+    DeviceActivationRequired,
+    InstallationDamaged,
+    LicenceRequired,
+)
 from app.core.log import get_logger
+from app.i18n import _
 
 _log = get_logger(__name__)
 
 __all__ = [
     "CHANGE",
     "CHAT",
+    "DEVICE_ACTIVATION_FROM",
     "EXPORT",
     "SLICER",
     "TRIAL_DAYS",
+    "TRIAL_FROM",
     "Activation",
+    "ActivationCertificate",
+    "ActiveLicenceCannotBeReplaced",
+    "DeviceActivationRequired",
     "InstallationDamaged",
     "Licence",
     "LicenceKeyError",
     "LicenceRequired",
+    "create_activation_request",
+    "create_deactivation_request",
     "forget_cache",
     "forget_key",
+    "install_certificate",
     "read_key",
     "remember",
+    "remove_certificate",
     "require",
     "state",
     "stored_problem",
@@ -78,12 +95,20 @@ EXPORT: Final = "export"
 SLICER: Final = "slicer"
 CHAT: Final = "chat"
 
+#: Kaufcodes ab diesem Tag gehören zur Verkaufsversion mit Gerätebindung.
+#: Ältere, bereits ausgegebene Schlüssel behalten ihre zugesagte rein lokale
+#: Gültigkeit. Der Stichtag ist Teil des Lizenzvertrags und darf deshalb nicht
+#: aus dem Vorhandensein einer Zertifikatsdatei geraten werden.
+DEVICE_ACTIVATION_FROM: Final = date(2026, 11, 1)
+
 
 @dataclass(frozen=True, slots=True)
 class Activation:
     """Der Freischaltzustand dieses Rechners."""
 
     licence: Licence | None = None
+    certificate: ActivationCertificate | None = None
+    """Geräte-Zertifikat der Lizenz. Ohne Lizenz hat es keine Wirkung."""
     days_left: int = 0
     """Resttage des Testlaufs oder der Demo. Ohne Belang, sobald eine Lizenz
     vorliegt."""
@@ -115,11 +140,58 @@ class Activation:
         Meldung ein Weg an H4 vorbei geworden: Wer eine Grenzdatei ändert,
         legte einfach einen gültigen Schlüssel daneben.
         """
-        return not self.damaged and (self.licence is not None or self.days_left > 0)
+        return not self.damaged and (self.licensed or self.days_left > 0)
+
+    @property
+    def requires_device_activation(self) -> bool:
+        """Ob dieser Kaufcode zur Verkaufslizenz mit Gerätebindung gehört."""
+        return self.licence is not None and self.licence.purchased_on >= DEVICE_ACTIVATION_FROM
+
+    @property
+    def licensed(self) -> bool:
+        """Ob der Kaufcode auf diesem Rechner vollständig freigeschaltet ist.
+
+        Bestandskeys von vor Einführung der Gerätebindung brauchen absichtlich
+        kein nachträgliches Zertifikat. Neue Verkaufsschlüssel öffnen dagegen
+        erst zusammen mit dem lokal geprüften Geräte-Zertifikat.
+        """
+        return self.licence is not None and (
+            not self.requires_device_activation or self.certificate is not None
+        )
+
+    @property
+    def needs_activation(self) -> bool:
+        """Ob ein gültiger Kaufcode auf seine Gerätefreigabe wartet."""
+        return not self.damaged and self.requires_device_activation and self.certificate is None
+
+    @property
+    def trial_offered(self) -> bool:
+        """Ob diese Fassung überhaupt einen Testzeitraum anbietet.
+
+        Null Resttage reichen dafür nicht: Die Verkaufsversion vom 01.11.2026
+        startet bewusst **ohne** Testphase und hat ebenfalls null freie Tage.
+        Wer beide Fälle zusammenwirft, sagt einem Neukunden, sein nie
+        angebotener Test sei abgelaufen. Die Angebotsentscheidung liegt bei
+        :data:`store.TRIAL_FROM`; der Demo-Stichtag bezeichnet ein anderes
+        Produkt und schließt den Testzustand aus.
+        """
+        return self.deadline is None and store.TRIAL_FROM is not None
 
     @property
     def in_trial(self) -> bool:
-        return not self.damaged and self.licence is None and self.days_left > 0
+        return (
+            not self.damaged and self.licence is None and self.trial_offered and self.days_left > 0
+        )
+
+    @property
+    def sale_without_trial(self) -> bool:
+        """Ob die lesende Verkaufsversion ohne aktuelles Testangebot läuft."""
+        return (
+            not self.damaged
+            and self.licence is None
+            and self.deadline is None
+            and not self.trial_offered
+        )
 
     @property
     def expired(self) -> bool:
@@ -130,7 +202,9 @@ class Activation:
         Sinn von :attr:`damaged`; wer sie hier wieder zusammenwirft, bekommt
         die Kaufaufforderung an anderer Stelle zurück.
         """
-        return not self.damaged and self.licence is None and self.days_left <= 0
+        return (
+            not self.damaged and self.licence is None and self.trial_offered and self.days_left <= 0
+        )
 
     @property
     def in_demo(self) -> bool:
@@ -153,7 +227,7 @@ class Activation:
         abgelaufen ist, wo es weitergeht, und wo seine Projekte liegen (sie
         bleiben, wo sie sind, und öffnen sich mit der nächsten Version).
         """
-        return self.deadline is not None and self.licence is None and self.days_left <= 0
+        return self.deadline is not None and not self.unlocked and self.days_left <= 0
 
 
 _cached: Activation | None = None
@@ -206,9 +280,10 @@ def _determine() -> Activation:
         # Marker fort, und eine beschädigte Installation soll niemandem
         # Testtage verbrauchen.
         _log.warning("licence manifest broken — the writing side stays closed")
-        return Activation(licence=licence, damaged=True)
+        loaded = certificates.load_for(licence) if licence is not None else None
+        return Activation(licence=licence, certificate=loaded, damaged=True)
     if licence is not None:
-        return Activation(licence=licence)
+        return Activation(licence=licence, certificate=certificates.load_for(licence))
     return Activation(days_left=store.days_left(), deadline=store.DEMO_UNTIL)
 
 
@@ -241,6 +316,18 @@ def remember(text: str) -> Activation:
     """
     global _cached
     licence = parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
+    previous_text = read_key()
+    if previous_text is not None and store.read_certificate() is not None:
+        try:
+            previous = parse(previous_text)
+        except LicenceKeyError:
+            previous = None
+        if previous is not None and previous != licence:
+            # Die Oberfläche sperrt das Feld ebenfalls, doch sie ist nur die
+            # freundliche erste Linie. Auch ein Agent oder ein späterer
+            # Einstellungsweg darf eine bestehende Gerätebindung nicht durch
+            # bloßes Eintragen eines anderen Kaufcodes verwaisen lassen.
+            raise ActiveLicenceCannotBeReplaced()
     store.write_key(text)
     # **Die Integritätsprüfung gehört auch hierher (H4).** Der Zustand wird aus
     # der eben geprüften Lizenz gesetzt, und dabei fiel ``damaged`` heraus: Wer
@@ -251,8 +338,52 @@ def remember(text: str) -> Activation:
     # Hürde (``kern.md``). Der Schlüssel wird trotzdem gelesen und abgelegt:
     # Erkannt heißt nicht freigeschaltet, und der zahlende Kunde soll nach der
     # Reparatur nicht noch einmal tippen.
-    _cached = Activation(licence=licence, damaged=not integrity.intact())
+    _cached = Activation(
+        licence=licence,
+        certificate=certificates.load_for(licence),
+        damaged=not integrity.intact(),
+    )
     return _cached
+
+
+def create_activation_request(device_name: str) -> str:
+    """Erzeugt die signierte Geräteanforderung für Online- und Dateiweg."""
+    stored = read_key()
+    if stored is None:
+        raise LicenceKeyError()
+    return certificates.create_request(stored, device_name)
+
+
+def install_certificate(text: str) -> ActivationCertificate:
+    """Prüft und speichert eine Aktivierungsantwort für diesen Rechner."""
+    global _cached
+    installed = certificates.install(text)
+    stored = read_key()
+    if stored is None:  # durch ``install`` bereits erklärt; nur Typverengung
+        raise LicenceKeyError()
+    licence = parse(stored)
+    _cached = Activation(
+        licence=licence,
+        certificate=installed,
+        damaged=not integrity.intact(),
+    )
+    return installed
+
+
+def create_deactivation_request() -> str:
+    """Belegt gegenüber dem Server die Freigabe des aktuellen Geräteplatzes."""
+    current = state()
+    stored = read_key()
+    if stored is None or current.certificate is None:
+        raise DeviceActivationRequired()
+    return certificates.create_deactivation(stored, current.certificate)
+
+
+def remove_certificate() -> bool:
+    """Entfernt nur die lokale Gerätefreigabe und leert den Zustandscache."""
+    removed = store.forget_certificate()
+    forget_cache()
+    return removed
 
 
 def forget_key() -> bool:
@@ -262,9 +393,10 @@ def forget_key() -> bool:
     Neustart freigeschaltet, und ein Dialog zeigte weiter „Freigeschaltet für
     …" zu einem Schlüssel, den es nicht mehr gibt.
     """
+    certificate_removed = store.forget_certificate()
     removed = store.forget_key()
     forget_cache()
-    return removed
+    return removed and certificate_removed
 
 
 def require(action: str) -> None:
@@ -283,5 +415,14 @@ def require(action: str) -> None:
     current = state()
     if current.damaged:
         raise InstallationDamaged(action=action)
+    if current.needs_activation:
+        raise DeviceActivationRequired(action=action)
     if not current.unlocked:
+        if current.expired:
+            raise LicenceRequired(
+                action=action,
+                title=_(
+                    "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel."
+                ),
+            )
         raise LicenceRequired(action=action)

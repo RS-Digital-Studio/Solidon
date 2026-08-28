@@ -1,4 +1,10 @@
-"""Wo der Lizenzschlüssel liegt und wie der Testlauf gezählt wird (§38).
+"""Wo der Lizenzschlüssel liegt und wie Demo oder Testlauf gezählt werden (§38).
+
+**Stand dieser Fassung:** Die öffentliche Demo läuft bis einschließlich
+30.10.2026. Die Verkaufsversion ab 01.11.2026 wird mit
+``DEMO_UNTIL = None`` und ``TRIAL_FROM = None`` gebaut und bietet damit keinen
+Testlauf an. Der unten beschriebene Markerpfad bleibt für ein späteres,
+ausdrücklich per neuem ``TRIAL_FROM`` freigeschaltetes Angebot erhalten.
 
 **Als Datei, nicht im Schlüsselbund** — anders als der API-Schlüssel des
 Nutzers (``backends/keys.py``). Zwei Gründe, und beide wiegen mehr als das
@@ -37,12 +43,13 @@ jenseits des Demo-Endes kann keine echte Zeit sein — er wird auf die echte Uhr
 zurückgenommen, weil sonst schon der allererste Start mit einer Uhr in der
 Zukunft (leere BIOS-Batterie) die Demo dauerhaft beendete.
 
-**Und die beiden Zugeständnisse gelten einzeln, nicht zusammen.** Wer den
-Marker löscht, fängt in der Verkaufsversion neu an — das steht oben und bleibt
-so. Wer ihn löscht *und* die Uhr zurückstellt, hätte in der Demo damit beides
-umgangen: Ohne Marker gab es keinen höchsten Tag, gegen den sich die Uhr messen
-lassen musste. Dagegen steht :data:`DEMO_FROM`, der Tag der Auslieferung — vor
-ihm kann die Demo nicht gelaufen sein, gleich was die Uhr behauptet.
+**Und die beiden Zugeständnisse gelten einzeln, nicht zusammen.** Ist ein
+späterer Testlauf ausdrücklich aktiv, fängt er nach dem Löschen beider Marker
+neu an — das steht oben und bleibt so. Wer sie löscht *und* die Uhr
+zurückstellt, hätte in der Demo damit beides umgangen: Ohne Marker gab es
+keinen höchsten Tag, gegen den sich die Uhr messen lassen musste. Dagegen steht
+:data:`DEMO_FROM`, der Tag der Auslieferung — vor ihm kann die Demo nicht
+gelaufen sein, gleich was die Uhr behauptet.
 """
 
 from __future__ import annotations
@@ -59,11 +66,17 @@ from app.core.paths import ensure_dir, user_config_dir, user_data_dir
 
 _log = get_logger(__name__)
 
-#: Wie lange der Testlauf dauert. Steht so auf der Website.
+#: Wie lange ein später ausdrücklich angebotener Testlauf dauert.
 TRIAL_DAYS: Final = 14
 
-#: Letzter Tag der öffentlichen Demo — oder ``None`` in der Verkaufsversion,
-#: die stattdessen den Testlauf zählt.
+#: Frühester Tag eines angebotenen Testlaufs. ``None`` heißt: Diese Fassung
+#: bietet keinen Testlauf an. Die Verkaufsversion ab 01.11.2026 startet genau
+#: so; ein späteres Angebot braucht einen neuen, bewusst gebauten Release.
+TRIAL_FROM: Final[date | None] = None
+
+#: Letzter Tag der öffentlichen Demo — oder ``None`` in der Verkaufsversion.
+#: Ob diese dann einen Testlauf anbietet, entscheidet allein ``TRIAL_FROM``;
+#: zum Verkaufsstart ist auch dieser Wert ``None``.
 #:
 #: Ein Stichtag statt einer Frist ab dem ersten Start: die Demo endet für alle
 #: am selben Tag, der Tag selbst gehört noch dazu. Der Testlaufmarker verliert
@@ -89,6 +102,10 @@ DEMO_FROM: Final[date] = date(2026, 8, 20)
 
 #: Dateiname des Schlüssels im Einstellungsordner.
 KEY_FILE: Final = "licence.key"
+
+#: Das vom Aktivierungsdienst signierte, an den lokalen Geräteteil gebundene
+#: Zertifikat. Es reist nie in einer Projektdatei.
+CERTIFICATE_FILE: Final = "activation.certificate"
 
 #: Dateiname des Testlaufmarkers.
 TRIAL_FILE: Final = "trial.json"
@@ -171,6 +188,42 @@ def forget_key() -> bool:
     """
     try:
         key_path().unlink(missing_ok=True)
+    except OSError:
+        return False
+    return True
+
+
+def certificate_path() -> Path:
+    """Ablageort des Geräte-Zertifikats im Einstellungsordner."""
+    return user_config_dir() / CERTIFICATE_FILE
+
+
+def read_certificate() -> str | None:
+    """Das abgelegte Geräte-Zertifikat, oder ``None`` bei jedem Lesefehler."""
+    try:
+        text = certificate_path().read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    return text or None
+
+
+def write_certificate(text: str) -> bool:
+    """Legt ein zuvor vollständig geprüftes Geräte-Zertifikat ab."""
+    try:
+        ensure_dir(user_config_dir())
+        scratch = certificate_path().with_suffix(".tmp")
+        scratch.write_text(text.strip(), encoding="utf-8")
+        scratch.replace(certificate_path())
+    except OSError as problem:
+        _log.warning("activation certificate could not be written: %s", problem)
+        return False
+    return True
+
+
+def forget_certificate() -> bool:
+    """Entfernt die lokale Gerätefreigabe; fehlend gilt bereits als entfernt."""
+    try:
+        certificate_path().unlink(missing_ok=True)
     except OSError:
         return False
     return True
@@ -262,13 +315,15 @@ def _write_trial(first_run: date, last_seen: date) -> None:
 def days_left(today: date | None = None) -> int:
     """Wie viele Tage die schreibende Seite noch offensteht. Null heißt zu.
 
-    Die eine Stelle, an der sich Demo und Verkaufsversion unterscheiden: mit
-    einem Stichtag zählt der Kalender, ohne ihn die Frist ab dem ersten Start.
-    Alles darüber — die vier Grenzstellen, die ausgegraute Oberfläche, der
-    Freischaltdialog — sieht in beiden Fällen dieselbe Zahl.
+    Die eine Stelle, an der sich die drei Zustände unterscheiden: Mit einem
+    Demo-Stichtag zählt der Kalender. Ohne Stichtag zählt ein ausdrücklich
+    angebotener Testlauf ab dem ersten Start; ohne ``TRIAL_FROM`` bleibt die
+    schreibende Seite bis zur Lizenzierung geschlossen. Alles darüber — die
+    vier Grenzstellen, die ausgegraute Oberfläche, der Freischaltdialog — sieht
+    in allen Fällen dieselbe Zahl.
     """
     if DEMO_UNTIL is None:
-        return trial_days_left(today)
+        return 0 if TRIAL_FROM is None else trial_days_left(today)
     # Auch die Demo führt den höchsten je gesehenen Tag: „Wer die Uhr
     # zurückstellt, verschiebt nur sein eigenes Kalenderblatt" stand als
     # Zusage im Modulkopf, gehalten hat sie nur der Testlauf-Zweig — Uhr auf
@@ -327,14 +382,23 @@ def trial_days_left(today: date | None = None) -> int:
     Der erste Aufruf legt den Marker an — der Testlauf beginnt also beim ersten
     Start, nicht bei der Installation.
     """
+    offer_from = TRIAL_FROM
+    if offer_from is None:
+        return 0
     now = today or date.today()
+    trial_floor = max(DEMO_FROM, offer_from)
     stored = _read_trial()
+    if now < offer_from and not (isinstance(stored, tuple) and stored[0] >= offer_from):
+        # Vor dem Angebot startet kein neuer Test. Ein bereits danach
+        # begonnener Marker darf bei zurückgestellter Uhr aber nicht auf null
+        # springen — sein höchster gesehener Tag bleibt die strengere Uhr.
+        return 0
     if isinstance(stored, str):  # FORGED
         # Wie im Demo-Zweig: Ein angefasster Marker beendet die Frist. Fehlend
         # und angefasst sind Gegensätze — fehlend heißt frisch, angefasst vorbei.
         return 0
     if stored is None:
-        if now < DEMO_FROM:
+        if now < trial_floor:
             # Eine Uhr vor der Auslieferung ist beweisbar falsch — die
             # Software gab es da nicht. Was sie sagt, wird nicht
             # festgeschrieben: Der Testlauf beginnt beim ersten Start mit
@@ -348,9 +412,9 @@ def trial_days_left(today: date | None = None) -> int:
     # Auslieferung stammt aus einer falsch gestellten Uhr (leere BIOS-Batterie
     # beim Erststart) und nahm dem ehrlichen Kunden sonst den ganzen Testlauf,
     # dauerhaft — used war dann jahrelang.
-    if first_run < DEMO_FROM:
+    if first_run < trial_floor:
         _log.warning("trial marker begins before the release, lifting it: %s", first_run)
-        first_run = DEMO_FROM
+        first_run = trial_floor
     # **Auch der erste Start kann falsch datiert sein**, und dagegen hilft der
     # Horizont darunter nicht: Er misst ``last_seen`` gegen ``first_run``, und
     # bei einem falschen Erststart stehen beide auf demselben falschen Tag.
@@ -377,7 +441,7 @@ def trial_days_left(today: date | None = None) -> int:
     # verbrauchte Spanne doppelt. Ein 2099-Marker und ein echter Marker bei
     # zurückgesprungener Uhr sehen von innen gleich aus; was sie trennt, ist
     # allein, welche der beiden Uhren beweisbar lügt.
-    if now >= DEMO_FROM and first_run > now + timedelta(days=CLOCK_HORIZON_DAYS):
+    if now >= trial_floor and first_run > now + timedelta(days=CLOCK_HORIZON_DAYS):
         _log.warning("trial marker holds an implausible first run, correcting: %s", first_run)
         first_run = now
     # Ein Tag jenseits des Horizonts ist keine verstrichene Zeit, sondern eine

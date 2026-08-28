@@ -182,6 +182,7 @@ from app.ui.dialogs import (
     confirm_discard,
     confirm_unsaved,
     damaged_line,
+    licence_lock_line,
     open_website,
     show_details,
     show_error,
@@ -2953,16 +2954,8 @@ class MainWindow(QMainWindow):
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
-            state = activation.state()
-            reason = self._with_name(
-                action,
-                damaged_line()
-                if state.damaged
-                else tr(
-                    "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
-                    "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
-                ),
-            )
+            explanation = licence_lock_line()
+            reason = self._with_name(action, explanation)
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
@@ -2999,6 +2992,11 @@ class MainWindow(QMainWindow):
             # Änderungsversuch. Derselbe Satz wie im Freischaltdialog, aus
             # derselben Quelle — zwei Formulierungen liefen auseinander.
             message = damaged_line()
+        elif state.needs_activation:
+            message = tr(
+                "Lizenzschlüssel gültig — diesen Rechner noch aktivieren: "
+                "Hilfe → Solidon freischalten …"
+            )
         elif state.in_demo and state.days_left > 0:
             message = demo_line(state)
         elif state.in_trial and state.days_left < 3:
@@ -3014,6 +3012,8 @@ class MainWindow(QMainWindow):
             # begründet die Dauerzeile damit, dass niemand überrascht werden
             # darf. ``expired`` gab es die ganze Zeit; gefragt hat es niemand.
             message = tr("Der Testzeitraum ist abgelaufen — Hilfe → Solidon freischalten …")
+        elif state.sale_without_trial:
+            message = licence_lock_line(state)
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
         self._trial_message = message
@@ -7690,6 +7690,9 @@ class MainWindow(QMainWindow):
             # dafür benutzte — der Knopf log also seinen Namen.
             "open_settings": lambda _error: self.action_settings(),
             "enter_licence_key": lambda _error: self.action_activate(),
+            "activate_online": lambda _error: self.action_activate(),
+            "activate_offline": lambda _error: self.action_activate(),
+            "deactivate_device": lambda _error: self.action_activate(),
             "buy_licence": lambda _error: open_website(),
         }
 
@@ -7697,8 +7700,9 @@ class MainWindow(QMainWindow):
         """Öffnet den Freischaltdialog (Konzept §2 B).
 
         Steht im Hilfe-Menü und nicht nur hinter der Fehlerhandlung
-        ``enter_licence_key``: wer während des Testlaufs kauft, braucht einen
-        Weg, seinen Schlüssel einzutragen, **bevor** ihn etwas aufhält.
+        ``enter_licence_key``: Wer kauft, braucht einen Weg, den Schlüssel
+        einzutragen und diesen Rechner online oder per Datei zu aktivieren,
+        **bevor** ihn etwas aufhält.
 
         Den gehaltenen Zustand räumt der Dialog selbst weg. Hier bleibt, die
         Aktionen nachzuziehen — mit einem eingetragenen Schlüssel steht wieder

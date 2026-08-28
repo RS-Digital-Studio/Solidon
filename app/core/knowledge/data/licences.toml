@@ -120,7 +120,7 @@ pillow = { licence = "MIT-CMU", note = "HPND, freizügig" }
 # Der Agent legt den eigenen Schlüssel im Schlüsselbund des Systems ab (§27).
 # Alles darunter kommt mit `keyring`; durchweg MIT außer pywin32-ctypes, das
 # unter BSD-3 steht.
-keyring = { licence = "MIT", note = "Schlüsselbund des Systems für den Modellschlüssel" }
+keyring = { licence = "MIT", note = "Schlüsselbund des Systems für Geräteidentität und Modellschlüssel" }
 "jaraco.classes" = { licence = "MIT", note = "kommt mit keyring" }
 "jaraco.context" = { licence = "MIT", note = "kommt mit keyring" }
 "jaraco.functools" = { licence = "MIT", note = "kommt mit keyring" }

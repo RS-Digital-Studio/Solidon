@@ -1,5 +1,21 @@
 # Konzept: Aktivierungsserver
 
+> **Umsetzungsstand 28.08.2026:** Geräte-Zertifikat, genau ein aktiver
+> Geräteplatz, Online- und Offline-Aktivierung, Deaktivierung sowie der
+> Aktivierungsdienst sind gebaut. Die Verkaufsversion startet am 01.11.2026
+> zunächst **ohne Testphase** (`TRIAL_FROM = None`). Aussagen dieses Entwurfs
+> über einen gleichzeitig angebotenen Vierzehn-Tage-Test sind historische
+> Planungsvarianten; der gehärtete Testpfad bleibt nur für einen später bewusst
+> aktivierten Release erhalten.
+>
+> **Produktionsgrenze, gemessen am 28.08.2026:** Die lokale Umsetzung und der
+> echte PHP-Anschlusstest sind grün; der öffentliche Bereitschaftsendpunkt
+> antwortet derzeit noch mit HTTP 500. Servervariablen, PHP-Erweiterungen,
+> Datenbankablage und Backup-Probe sind deshalb vor dem Verkaufsbau noch
+> einzurichten und Ende zu Ende abzunehmen. Der Kauf-Webhook des noch zu
+> wählenden Zahlungsanbieters ist ebenfalls kein Teil der fertigen lokalen
+> Umsetzung.
+
 > **Stand: ENTWURF, 26.08.2026 — alle vier Teile ausgearbeitet, Abnahme offen.**
 > Entschieden von Robert ist das *Ob* und die Reihenfolge; offen ist das *Wie*.
 > Teil A (Kern), C (Sicherheit) und D (Bedienung) stammen aus den Sitzungen
@@ -407,9 +423,8 @@ und bräche §2. Angenommen.
 **Rollen:** Der MoR ist für die Kaufdaten (Name, E-Mail, Zahlung, Rechnung)
 eigener Verantwortlicher — sie entstehen bei ihm und bleiben bei ihm. Für
 die Aktivierungsdaten ist Robert Verantwortlicher und netcup
-Auftragsverarbeiter: **der AVV mit netcup wird im CCP abgeschlossen** — das
-ist derselbe offene ROADMAP-Punkt, der für das Support-Postfach ohnehin
-ansteht; ein Vorgang deckt beide Zwecke.
+Auftragsverarbeiter: **der AVV mit netcup wird im CCP abgeschlossen**. Das
+Support-Postfach existiert; offen bleibt hier nur der Vertragsschritt.
 
 **Was beim Aktivieren anfällt, vollständig:** Schlüssel-Hash (Pseudonym),
 Zufalls-ID (Pseudonym ohne Hardwarebezug, Teil A), Rechnername (vom Kunden
@@ -502,8 +517,7 @@ Acht Schritte, jeder mit Prüfkriterium; keiner hängt an der Abnahme dieses
 Konzepts, und die ersten sechs kosten zusammen einen Nachmittag:
 
 1. **AVV mit netcup** im CCP abschließen. *Geprüft: das bestätigte Dokument
-   liegt in Roberts Unterlagen.* (Deckt zugleich den offenen
-   ROADMAP-Punkt fürs Support-Postfach.)
+   liegt in Roberts Unterlagen.* Das Support-Postfach ist bereits eingerichtet.
 2. **PHP-Fähigkeiten feststellen:** Wegwerfdatei `phpcheck.php` hochladen —
    PHP-Version, `extension_loaded('sodium')`, PDO-Treiberliste — ansehen,
    löschen. *Geprüft: Version ≥ 8, sodium geladen, `pdo_sqlite` da; sonst

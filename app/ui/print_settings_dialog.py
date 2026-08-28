@@ -75,7 +75,7 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
-from app.ui.dialogs import damaged_line, show_error
+from app.ui.dialogs import licence_lock_line, show_error
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
 from app.ui.labels import (
@@ -2438,12 +2438,8 @@ class PrintSettingsDialog(QDialog):
         found = self._slicer_path
         state = activation.state()
         reason = ""
-        if state.damaged:
-            reason = damaged_line()
-        elif not state.unlocked:
-            reason = tr(
-                "Der Testzeitraum ist abgelaufen — das Slicen braucht einen Lizenzschlüssel."
-            )
+        if not state.unlocked:
+            reason = licence_lock_line(state)
         elif found is not None:
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher

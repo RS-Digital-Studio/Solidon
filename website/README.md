@@ -13,16 +13,14 @@ Verantwortlichen, die übermittelten Transaktionsdaten und den Umgang mit
 wiederkehrenden Spenden. Diese Sätze gehören zum Zahlungsweg; sie werden nicht
 aus Platzgründen aus dem Download-Kasten entfernt.
 
-Ein einziges Skript liegt dabei, `site.js`, und es kommt von hier — kein CDN,
-keine Bibliothek, keine Schriftart von außen, kein Zählpixel. Es tut zwei
-Dinge, und beide sind Zugabe: die Sprungliste der Funktionsseite markiert den
-Block, der gerade gelesen wird, und der Download-Kasten der Startseite zählt
-die Zeit bis zur Demo herunter. Ohne das Skript bleibt die Liste eine
-gewöhnliche Sprungliste, und der Kasten nennt Tag und Uhrzeit im Klartext, wie
-er es ohnehin tut — der Zähler steht als `hidden` daneben und wird nur
-sichtbar, wenn ihn jemand füllt. `tests/test_website.py` prüft nicht mehr auf
-„kein JavaScript", sondern auf den Teil, der die Zusage der Seite trägt:
-**nichts von außen**.
+Beide Skripte kommen von hier — kein CDN, keine Bibliothek, keine Schriftart
+von außen, kein Zählpixel. `site.js` markiert in der Funktionsseite den gerade
+gelesenen Block und zählt auf der Startseite die Zeit bis zur Demo herunter;
+beides ist Zugabe. `activation.js` gehört ausschließlich zur bewusst
+aufgerufenen Offline-Aktivierungsseite und sendet erst nach einem Klick die
+vom Kunden gewählte Anfragedatei. `tests/test_website.py` prüft den Teil, der
+die Zusage der Seite trägt: **nichts von außen** und kein versteckter
+Netzaufruf.
 
 Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
 scroll-gesteuerte Zeitachsen (`animation-timeline: view()`) beim Lesen. Der
@@ -44,6 +42,10 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
 | `changelog.html`, `<sprache>/changelog.html` | Versionsverlauf mit Auswahl — erzeugt von `tools/make_changelog.py` aus derselben Quelle wie das App-Fenster |
 | `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |
+| `offline-aktivierung.html`, `activation.js` | Drei-Schritt-Seite für die Aktivierung eines Rechners ohne eigenen Netzzugang; sendet dieselbe Anfragedatei an denselben Endpunkt wie die Anwendung |
+| `api/activation.php`, `api/deactivation.php` | Aktiviert genau einen Geräteplatz beziehungsweise gibt ihn mit signiertem Gerätenachweis wieder frei |
+| `api/activation-health.php` | Passive Bereitschaftsprobe ohne Kauf- oder Gerätedaten |
+| `api/activation_common.php` | Gemeinsame Protokoll-, Signatur- und SQLite-Logik; nicht direkt aufrufen |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
@@ -54,6 +56,52 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | Was Suchmaschinen zuerst holen — erzeugt von `tools/make_seo.py`, nie von Hand ändern |
 | `.htaccess` | Eine Adresse je Seite, Caching, Kompression — von Hand |
+
+## Aktivierungsdienst vor dem Verkaufsbau
+
+Die PHP-Dateien brauchen PHP 7.4 oder neuer mit `sodium` und `PDO_SQLite`.
+Private Dateien liegen standardmäßig im Verzeichnis `solidon3d.de/appdata/`
+neben `httpdocs` und sind damit über HTTP nicht erreichbar:
+
+> **Produktionsprobe, 28.08.2026:**
+> `python tools/check_activation.py` erhält öffentlich HTTP 200 und Protokoll
+> 1; ein absichtlich unvollständiger POST wird als JSON mit HTTP 400 und
+> `invalid_request` abgelehnt. FTPS prüft den Zertifikatsnamen über
+> `a2f21.netcup.net`. Das Deployment hat vorhandene Dateien bytegenau unter
+> `solidon3d.de/backups/activation/20260828-203613/` gesichert und wieder
+> gelesen; private Dateien liegen in `solidon3d.de/appdata/`.
+
+```powershell
+python tools/setup_activation_server.py `
+  --private "$env:LOCALAPPDATA\Solidon3D\server\activation.seed" `
+  --database "$env:LOCALAPPDATA\Solidon3D\server\activation.sqlite"
+```
+
+Das Werkzeug verweigert jedes Ziel im Repository und überschreibt einen
+vorhandenen Startwert nur mit `--replace`. Sein Inhalt wird weder eingecheckt
+noch ausgegeben; der öffentliche Teil muss mit `ACTIVATION_PUBLIC_KEY` in
+Anwendung und PHP übereinstimmen. Danach kommen beide Dateien per FTPS nach
+`solidon3d.de/appdata/`; das Verzeichnis muss für PHP beschreibbar bleiben.
+
+Nur bei einem abweichenden Ablageort sind Servervariablen nötig:
+
+```text
+SOLIDON_ACTIVATION_SEED_FILE=/absoluter/pfad/activation.seed
+SOLIDON_ACTIVATION_DB=/absoluter/pfad/activation.sqlite
+SOLIDON_ACTIVATION_MAJOR=1
+```
+
+Die Bereitschaftsprobe öffnet die Datenbank nur lesend und legt weder Datei
+noch Tabellen an. Gültig signierte Aktivierungsversuche sind je Schlüssel auf
+fünf pro UTC-Tag begrenzt; IP-Adressen werden dafür nicht gespeichert.
+
+`tools/deploy_activation_server.py --apply` prüft vor dem Upload PHP-Syntax,
+Schlüsselpaar und SQLite-Integrität, sichert jede vorhandene Ziel- und
+Privatdatei außerhalb des Webroots und liest Sicherung und Upload bytegenau
+zurück. Der Bereitschaftsendpunkt gibt nur Bereitschaft und Protokollversion
+preis; er erhält keine Lizenz- oder Gerätedaten. Vor dem ersten Verkauf bleibt
+als Geschäftsprozess-Abnahme ein echter Kauf mit Online-Aktivierung,
+Offline-Dateiweg, Deaktivierung und Aktivierung auf einem zweiten Testrechner.
 
 ## Was Suchmaschinen sehen
 
@@ -266,10 +314,9 @@ eigenes Produkt: **netcup Webhosting 2000**.
   daran, dass der Bestellvorgang die Zustimmung nach § 356 Abs. 5 BGB
   ausdrücklich abfragt — ohne diese Abfrage im Kaufprozess nützt der beste
   Text nichts.
-- Das Postfach `support@solidon3d.de` muss zustellen, bevor die Adresse
-  ausgeliefert wird — sie steht auf beiden Startseiten, im Impressum, im
-  Über-Dialog und im Fehlerbericht der Anwendung. Eine Adresse, die im
-  Programm steht und keine Post annimmt, ist schlimmer als keine.
+- Das Postfach `support@solidon3d.de` existiert. Robert hat das am 28.08.2026
+  bestätigt; die Adresse steht auf beiden Startseiten, im Impressum, im
+  Über-Dialog und im Fehlerbericht der Anwendung.
 
   **Am 20.08.2026 geprüft, und zwar der ganze Weg:** `api/support.php` liegt
   unter `httpdocs/api/` und antwortet, `tools/check_support.py` hat eine
@@ -277,12 +324,6 @@ eigenes Produkt: **netcup Webhosting 2000**.
   Mailserver hat für alle vier Adressen von außen eingelieferte Post
   angenommen — eine erfundene Adresse derselben Domain lehnt er dagegen mit
   `550 User unknown` ab, die Annahme ist also echt und kein Catch-All.
-  **Offen bleibt der letzte Zentimeter:** angenommen ist nicht gelesen. Das
-  bestätigt erst ein Blick ins Postfach, und der ging bisher nicht, weil
-  Webmail für die Domain abgeschaltet ist (`/webmail` antwortet mit 404) und
-  kein Mailprogramm das Postfach erreichte. Webmail in Plesk unter
-  *E-Mail-Einstellungen* der Domain auf Roundcube stellen — dann ist der
-  Nachweis eine Minute Arbeit und hängt an keinem Client.
 - Die ausgelieferten Dateien aus der CI in das Verzeichnis legen und den
   Download-Kasten mit `tools/make_download.py` daraus erzeugen. Ab der nächsten
   Version sind es fünf: `Solidon3D-Setup-<Version>.exe`, zwei macOS-`.pkg`,

@@ -1,6 +1,6 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 28. August 2026 · Fassung 1.1
+Stand: 28. August 2026 · Fassung 1.3
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
@@ -39,9 +39,16 @@ diese Lizenz umfasst, regelt der Endnutzer-Lizenzvertrag unter
 Geliefert wird **ein Lizenzschlüssel in elektronischer Form**. Ein
 körperlicher Datenträger wird nicht versandt.
 
-Die Software selbst steht auf unserer Website frei zum Herunterladen bereit
-und läuft **vierzehn Tage ohne Einschränkung**, bevor ein Schlüssel gebraucht
-wird. Sie können den vollen Funktionsumfang also vor dem Kauf prüfen.
+Der Schlüssel berechtigt zu **einem gleichzeitig aktivierten Rechner**. Die
+einmalige Geräteaktivierung erfolgt direkt über das Netz oder als Anfrage- und
+Antwortdatei über ein zweites Gerät. Danach läuft die Software ohne
+regelmäßige Lizenzabfrage offline weiter. Vor einem Rechnerwechsel wird der
+bisherige Platz in Solidon deaktiviert; bei Verlust oder Defekt hilft der
+Support nach Prüfung der Bestellnummer.
+
+Zum Verkaufsstart am 1. November 2026 wird **keine zusätzliche Testphase**
+angeboten. Eine spätere Fassung kann eine Testphase ausdrücklich anbieten;
+für die hier beschriebene Fassung gilt sie nicht.
 
 ## § 3 Vertragsschluss
 
@@ -103,8 +110,9 @@ beides im Bestellvorgang ausdrücklich ab. Wer die Lizenz sofort einlösen
 will, stimmt zu; wer sich die Frist offenhalten will, stimmt nicht zu und
 bekommt den Schlüssel nach Ablauf der Widerrufsfrist.
 
-Der **vierzehntägige Testlauf** vor dem Kauf besteht unabhängig davon. Er ist
-kein Widerrufsrecht, sondern eine Möglichkeit, die Software vorher zu prüfen.
+Eine Testphase ist zum Verkaufsstart nicht aktiv. Das gesetzliche
+Widerrufsrecht und die oben beschriebene Zustimmung zur sofortigen Ausführung
+gelten davon unabhängig.
 
 ## § 7 Gewährleistung
 

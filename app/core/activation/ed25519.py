@@ -6,13 +6,14 @@ Fremdbibliothek käme als eigene Erweiterung daneben und wäre genau die Stelle,
 an der ein Angreifer ansetzt — eine mitkompilierte Umsetzung nicht. Dazu
 bleibt die Lizenzliste kurz (§36), und das Paket wächst nicht.
 
-**Nur Prüfen.** Signiert wird mit ``tools/make_licence_keys.py``; die
-Anwendung braucht das nie und trägt es deshalb nicht mit. Die Primitiven
-darunter sind gemeinsam — zwei Umsetzungen derselben Kurve wären der
-klassische Weg zu einer Signatur, die nur eine Seite versteht.
+Die Anwendung prüft Kaufcodes und Geräte-Zertifikate und signiert ausschließlich
+ihre Aktivierungsanforderung mit dem zufälligen privaten Geräteteil aus dem
+System-Schlüsselbund. Der Aussteller der Kaufcodes und der Aktivierungsdienst
+verwenden getrennte Schlüsselpaare.
 
-Seitenkanalfestigkeit ist hier ohne Belang: auf dem Rechner des Nutzers liegt
-allein der **öffentliche** Schlüssel. Es gibt nichts zu erlauschen.
+Die reine Python-Umsetzung ist nicht als allgemeine Kryptobibliothek gedacht.
+Der private Geräteteil schützt die Bindung gegen Kopieren von Dateien; der
+private Aussteller- und Serverteil liegt nie in der Anwendung.
 
 Geprüft wird gegen die Testvektoren aus RFC 8032 §7.1
 (``tests/test_activation.py``) — eine eigene Krypto-Umsetzung ohne die wäre
@@ -140,6 +141,34 @@ def base_point() -> Point:
 
 def _hash_to_scalar(*parts: bytes) -> int:
     return int.from_bytes(hashlib.sha512(b"".join(parts)).digest(), "little")
+
+
+def _clamped_scalar(seed: bytes) -> tuple[int, bytes]:
+    """Leitet den Ed25519-Skalar und das Präfix aus einem 32-Byte-Startwert ab."""
+    if len(seed) != POINT_BYTES:
+        raise ValueError("ein Ed25519-Startwert muss 32 Bytes lang sein")
+    expanded = bytearray(hashlib.sha512(seed).digest())
+    expanded[0] &= 248
+    expanded[31] &= 63
+    expanded[31] |= 64
+    return int.from_bytes(expanded[:32], "little"), bytes(expanded[32:])
+
+
+def public_key(seed: bytes) -> bytes:
+    """Leitet den gepackten öffentlichen Schlüssel aus einem Startwert ab."""
+    scalar, _prefix = _clamped_scalar(seed)
+    return compress(multiply(scalar, base_point()))
+
+
+def sign(seed: bytes, message: bytes) -> bytes:
+    """Signiert Bytes deterministisch nach RFC 8032."""
+    scalar, prefix = _clamped_scalar(seed)
+    public = compress(multiply(scalar, base_point()))
+    nonce = _hash_to_scalar(prefix, message) % GROUP_ORDER
+    packed_r = compress(multiply(nonce, base_point()))
+    challenge = _hash_to_scalar(packed_r, public, message) % GROUP_ORDER
+    scalar_s = (nonce + challenge * scalar) % GROUP_ORDER
+    return packed_r + scalar_s.to_bytes(POINT_BYTES, "little")
 
 
 def has_small_order(point: Point) -> bool:

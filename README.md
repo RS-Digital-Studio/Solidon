@@ -5,8 +5,10 @@ Modelle. Kern ist ein non-destruktiver Operationsstack über einer Szene mit
 mehreren Objekten, benannten Projektparametern und Passungsbeziehungen. Ein
 LLM-Agent steuert denselben Operations-API fern, den auch die Menüs benutzen.
 
-**Geometrie rechnet Code, nie das Modell.** Ohne Netz, ohne Konto und ohne KI
-bleibt alles außer dem Chat benutzbar.
+**Geometrie rechnet Code, nie das Modell.** Nach der einmaligen
+Gerätefreischaltung bleibt Solidon ohne Netz und ohne Konto vollständig
+nutzbar; ein Arbeitsrechner ohne Netz wird per Anfrage- und Antwortdatei über
+ein zweites Gerät aktiviert. Ohne KI bleibt nur der Chat aus.
 
 Projektdateien tragen die Endung `.p3d`.
 
@@ -19,11 +21,15 @@ niemand pflegt. Projektdateien sind davon unberührt: eine `.p3d` ist ein
 ZIP-Archiv mit JSON darin und bleibt lesbar.
 
 Der Stichtag steht in `app/core/activation/store.py` (`DEMO_UNTIL`) und
-nirgends sonst; die Verkaufsversion 1.0 trägt dort `None` und zählt
-stattdessen die vierzehn Testtage. Zwei Tests halten das zusammen: einer
-schlägt an, wenn der Stichtag verstrichen ist, der andere verbietet einer
-1.x-Version überhaupt einen. Das Konzept dahinter steht in
-`konzepte/konzept-demo-2026-10.md`.
+nirgends sonst. Am **31. Oktober 2026** bleibt die Demo gestoppt; am
+**1. November 2026** startet die Verkaufsversion 1.0. Sie trägt bei
+`DEMO_UNTIL` und `TRIAL_FROM` jeweils `None`: kein Demo-Stichtag und zunächst
+keine Testphase. Ab dem 1. November ausgestellte Verkaufsschlüssel öffnen
+schreibende Funktionen erst mit dem passenden Geräte-Zertifikat; bereits
+ausgegebene Bestandsschlüssel bleiben ohne nachträgliche Aktivierung gültig.
+Der gepflegte 14-Tage-Pfad bleibt im Code,
+aber nur ein späterer neuer Bau mit gesetztem `TRIAL_FROM` kann ihn anbieten.
+Das Konzept dahinter steht in `konzepte/konzept-demo-2026-10.md`.
 
 ## Was Solidon nicht ist
 

@@ -74,7 +74,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 |---|---|---|
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen CI-Baulauf, der `_chain` für Windows, macOS und Linux baut — dass es mitreist, ist seit dem 22.08. entschieden (Bauplan §31). Danach bleibt `_plane_segments` mit 893 ms die größte Position, nicht mehr GEOS |
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
-| Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
+| Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und den AVV im CCP. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -123,7 +123,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
-| Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
+| Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
@@ -131,12 +131,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | ein echtes Mac-Paket. Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**, und die reist nicht mit. Prüfung: *Hilfe → Nach Updates suchen* drücken |
 | Zwei Prüfungen in `test_packaging.py` halten weniger, als ihr Name sagt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Entscheidung, ob sie umgebaut oder nur ihre Begründung berichtigt wird. Heute richten sie keinen Schaden an; die falsche Begründung schickt aber den nächsten Leser in die falsche Richtung |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
-| Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
-| AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
-| `SALE_FROM` fehlt — die Verkaufsversion sperrt am 01.11. jeden Demo-Nutzer aus | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | nichts mehr — die Entscheidung ist gefallen (Robert, 28.08.: die 14 Tage laufen, ohne Umgehungsmöglichkeit), die Messung steht (0 von 14 Tagen, in einem isolierten Profil und von formwerk-af am Code bestätigt) und der Weg ist durchgerechnet. Es fehlt die Umsetzung: eine Konstante, ein einmaliges Anheben von `first_run`, ein fünfter Uhr-Deckel in `kern.md`, Tests in beide Richtungen |
-| Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet“ | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | die Ursache. Der Fehler ist **vorbestehend** — einzeln rot in 4,9 s und in einem Worktree auf `dce71e36` ohne die Änderungen der Sitzung ebenso; die Gegenprobe ist gefahren, er ist also kein Verdacht gegen den Update-Weg. `KeyDialog.probe_result` liest „Ollama hat nicht geantwortet“ statt „liegt jetzt hier“ |
-| `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
+| Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet“ | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | die Ursache. Der Fehler ist **vorbestehend** — einzeln rot in 4,9 s und in einem Worktree auf `dce71e36` ohne die Änderungen der Sitzung ebenso; die Gegenprobe ist gefahren, er ist also kein Verdacht gegen den Update-Weg. `KeyDialog.probe_result` liest „Ollama hat nicht geantwortet“ statt „liegt jetzt hier“ |
+| `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
 
 ---
 
@@ -759,7 +756,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
       Solidoodle; Google behandelt „Solidon" als Verschreiber. Dagegen hilft
       keine Auszeichnung, nur Zeit und Erwähnungen anderswo.
 
-      Offen: Postfach `support@solidon3d.de` samt SPF/DMARC und der
+      Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme
+      von außen sind geprüft. Offen bleiben DMARC und der
       Auftragsverarbeitungsvertrag im CCP. Der Zahlungsdienstleister in den AGB
       ist seit dem 08.08.2026 eingetragen (Paddle); Entwurf bleiben die
       Rechtstexte nur noch bis zur fachlichen Prüfung
@@ -1683,9 +1681,13 @@ Behoben in dieser Runde:
   in `app/branding.py`, gelesen von Über-Dialog, Fehlerbericht-Dialog,
   README, Impressum und beiden Startseiten. Der Fehlerbericht sagt jetzt
   auch, wohin der abgelegte Ordner kann — er verschickt weiter nichts.
-* **Kaufmodell auf der Website** (Entscheidung Robert, Preis delegiert):
-  14 Tage kostenlos testen, dann Einmalkauf — **49 € zur Einführung, später
-  79 €**, alle 1.x-Updates inklusive. Einordnung: Plasticity als nächster
+* **Kaufmodell auf der Website** (damalige Entscheidung, später ersetzt):
+  Ursprünglich standen hier 14 Tage kostenlos testen und **49 € zur
+  Einführung, später 79 €**, alle 1.x-Updates inklusive. Aktueller Stand vom
+  28.08.2026: vollständige Demo bis einschließlich 30.10., Verkauf ab 01.11.
+  zunächst **ohne zusätzliche Testphase**, **69 € bis 31.01.2027 und danach
+  99 €**. Der gepflegte Testpfad bleibt mit `TRIAL_FROM = None` deaktiviert.
+  Einordnung: Plasticity als nächster
   Vergleich (Indie-CAD, Einmalkauf) liegt bei 149 $, Shapr3D bei ~299 €/Jahr,
   Fusion weit darüber, die Hobby-Konkurrenz bei null. Eine 1.0 einer neuen
   Marke ohne Nutzerbasis startet darunter; „wir verbessern uns weiter" ist
@@ -1715,12 +1717,13 @@ Behoben in dieser Runde:
   Schlüssel — Kunden verzeihen Kosten, die vorher dastanden. Dazu das erste
   Bildschirmfoto auf der Startseite; eines, das fertig danebenlag.
 
-**Weiterhin offen, weil es niemand von hier aus erledigen kann:** das
-Postfach support@solidon3d.de anlegen; Anschrift ins Impressum; Zertifikat
-gegen SmartScreen; CI nie gelaufen; Zahlungsanbieter und
-Lizenzschlüssel-Mechanik für Testphase und Kauf; ein Betatest mit fremden
-Nutzern — 2100 Tests sagen, dass der Code tut, was gemeint war, nicht, dass
-ein Fremder ihn bedienen kann. Anzumerken: die Web-Domain ist
+**Damals weiterhin offen, weil es niemand von dort aus erledigen konnte:**
+Postfach, Anschrift, Zertifikat gegen SmartScreen, CI, Zahlungsanbieter,
+Lizenzschlüssel-Mechanik und ein Betatest mit fremden Nutzern. Heute stehen
+Postfach, Anschrift, Lizenzschlüssel, Geräteaktivierung und beide Offline-Wege;
+offen bleiben insbesondere Signierung/Notarisierung, Merchant of Record,
+fachliche Rechtsprüfung und Feldläufe. Die Tests sagen, dass der Code tut, was
+gemeint war, nicht, dass ein Fremder ihn bedienen kann. Damals war außerdem die Web-Domain
 solidon3d.rsdigital.de, die Mail-Domain rs-digital.org — zwei Schreibweisen
 nebeneinander, bewusst so entschieden oder zu vereinheitlichen.
 *Aufgelöst am 06.08.2026: die erste Domain existierte nicht. Alles läuft
@@ -10879,13 +10882,18 @@ den Slicer.
   ausdrückliche Kundenwahl.
 
 - [ ] **Am 15.10.2026 die Verkaufsbereitschaft prüfen.** Sind Finanzamt und
-  Merchant of Record bis dahin nicht durch, wird die Demo verlängert — und das
-  ist kein Serverschalter, sondern ein **Bau**: `DEMO_UNTIL` ist einkompiliert,
-  eine Verlängerung heißt also 0.2.1 mit allem, was dazugehört. Dazu kommt eine
-  Woche Vorlauf, damit der Update-Hinweis die Kunden erreicht, **bevor** die
-  Frist läuft. Wer den Termin verstreichen lässt, hat nicht eine Woche
-  Rückstand, sondern zwei — und dazwischen steht bei jedem Kunden eine
-  Anwendung, die sich abgelaufen meldet, obwohl niemand etwas kaufen konnte.
+  Merchant of Record bis dahin durch, folgt spätestens am 25.10. der
+  Verkaufsbau: `DEMO_UNTIL = None`, `TRIAL_FROM = None`, Rechtstexte und
+  Website in Gegenwartsform. Das ist kein Serverschalter — beide Werte sind
+  einkompiliert, und der Update-Hinweis braucht eine Woche Vorlauf, damit er
+  die Kunden **vor** dem 31.10. erreicht.
+
+  **Entscheidung Robert, 28.08.2026:** Verkauf ab 01.11.2026, zunächst ohne
+  zusätzliche Testphase. Sind die äußeren Voraussetzungen am 15.10. nicht da,
+  wird die Demo deshalb nicht stillschweigend verlängert. Dann hält dieser
+  Punkt an und verlangt eine neue ausdrückliche Entscheidung; andernfalls
+  stünde bei jedem Kunden ab 31.10. eine abgelaufene Anwendung, obwohl noch
+  nichts gekauft werden kann.
 
 ## Dieselbe Zugabe, zwei Zahlen (27.08.2026)
 
@@ -11301,9 +11309,10 @@ steht, ist kein festgehaltener Fund.
   Einführungspreis bis 31.01.2027. Die Umschaltung des Download-Kastens hat
   einen Test, diese Sätze nicht.
 
-  **Gelöst am 27.08.2026** (`24c1323f`). Entscheidung Robert: „erst
-  später entscheiden“ — also bleibt die inhaltliche Frage offen, und
-  geprüft wird stattdessen, dass sie **rechtzeitig** ansteht.
+  **Gelöst am 27.08.2026** (`24c1323f`) und am 28.08. auf die gefallene
+  Entscheidung nachgezogen: Verkauf ab 01.11. ohne zusätzliche Testphase,
+  69 Euro bis 31.01.2027, danach 99 Euro. Geprüft wird, dass die bis dahin
+  richtigen Zukunftssätze **rechtzeitig** in Gegenwartsform wechseln.
   `test_the_pages_do_not_promise_a_date_that_is_about_to_pass` wird fünf Tage
   vor dem Stichtag rot: Vorlauf genug, um zu entscheiden und in sechs Sprachen
   umzuschreiben.
@@ -11319,28 +11328,19 @@ steht, ist kein festgehaltener Fund.
   `shipped_demo_until`. Er lief grün, ohne je etwas geprüft zu haben; verraten
   hat ihn allein das „1 skipped“ in der Ausgabe.
 
-- [ ] **Die EULA beschränkt auf einen Rechner, der Code tut es nicht.**
-  `eula.html` § 2 sagt „Freigeschaltet ist dabei ein Rechner zugleich; den
-  Wechsel nehmen Sie jederzeit selbst vor" — in `app/core/activation/` gibt es
-  keine Gerätebindung: `Licence` trägt drei Felder (`major`, `order`,
-  `holder`), `activation.state` nur `first_run|last_seen` mit HMAC. Kein
-  Maschinenkennzeichen, keine Zählung.
+- [x] **Die EULA beschränkt auf einen Rechner, und der Code setzt das jetzt
+  um.** Geräte-Zertifikat, Online- und Offline-Aktivierung, genau ein aktiver
+  Geräteplatz sowie selbständige Deaktivierung sind gebaut und getestet.
+  `EULA.md` 1.4, `AGB.md` 1.3, Datenschutzseite und Verkaufsseiten beschreiben
+  denselben Stand: Installation auf den eigenen Rechnern, aber nur einer
+  zugleich freigeschaltet; danach keine regelmäßige Lizenzabfrage.
 
-  Die Verkaufsseite übernimmt den ersten Halbsatz („Eine Lizenz, alle deine
-  Rechner") und lässt den einschränkenden weg. Heute falsch ist damit die
-  EULA; falsch wird die Verkaufsseite in dem Moment, in dem die Beschränkung
-  gebaut wird — und ein Aktivierungsserver ist entschieden
-  (`.claude/rules/kern.md`). Wartet auf diese Entscheidung, weil beide Texte
-  von ihr abhängen und nicht einzeln zu berichtigen sind.
-
-- [ ] **AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten.**
-  „läuft vierzehn Tage ohne Einschränkung, bevor ein Schlüssel gebraucht wird"
-  — `TRIAL_DAYS = 14` gilt laut EULA § 4 ausdrücklich der Vollversion 1.x;
-  was heute unter `/dl/` liegt, ist die Demo mit `DEMO_UNTIL = 2026-10-30`.
-  Entschärft durch § 1 („Solange nur die Demo-Version angeboten wird, greifen
-  sie nicht"), aber nicht behoben: Die EULA steht auf Fassung 1.2 vom
-  24.08.2026, die AGB auf 1.0 vom 8.8. — die Demo ist in einer nachgezogen
-  und in der anderen nicht.
+- [x] **AGB § 2 trennte Demo und Verkaufstest nicht.** Die Demo läuft
+  vollständig bis einschließlich 30.10.2026 und startet am 31.10. nicht mehr.
+  Die Verkaufsversion wird ab 01.11.2026 zunächst ohne zusätzliche Testphase
+  angeboten. `TRIAL_FROM = None` hält den weiterhin getesteten Testpfad sauber
+  deaktiviert; eine spätere Fassung kann ihn ausdrücklich wieder einschalten.
+  Das gesetzliche vierzehntägige Widerrufsrecht bleibt davon unberührt.
 
 
 ---
@@ -12059,12 +12059,12 @@ Offen:
 
 ---
 
-## Der Verkaufsstart sperrt die Bestandskunden aus (28.08.2026)
+## Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026)
 
-Robert hat den Termin festgelegt: Demo bis zum 30.10.2026, bis dahin **noch
-mehrere Updates**, ab dem 01.11. Verkauf — „die Demo version wird dann nur zur
-vollversion mit dem 14 tage test bzw kauf". Diese Sitzung hat nachgesehen, was
-das technisch heißt, und einen Bruch gefunden, der keiner Absicht entspricht.
+Robert hat den Termin festgelegt: Demo bis einschließlich 30.10.2026, am
+31.10. kein Demostart mehr und ab 01.11. Verkauf. Zunächst war dafür ein
+vierzehntägiger Testlauf vorgesehen. Die Prüfung unten fand den Bruch, den ein
+solcher Wechsel für bisherige Demo-Nutzer verursacht hätte.
 
 **Was schon steht, und es ist viel.** `TRIAL_DAYS = 14` liegt fest, der echte
 öffentliche Lizenzschlüssel ist eingetragen (kein Platzhalter),
@@ -12093,27 +12093,36 @@ nachgeprüft.
 Der Kunde erlebt das so: kostenlos genutzt, Update gemacht, alles zu, kaufen —
 und die vierzehn Tage, die die Website nennt, bekommt er nie zu sehen.
 
-**Entscheidung Robert, 28.08.2026:** Die 14 Tage sollen laufen, „allerdings ohne
-Ausweg, dass sie es umgehen können".
+**Spätere Entscheidung Robert, 28.08.2026 — ersetzt die vorige:** Die
+vierzehntägige Testphase ist zum Verkaufsstart vorerst hinfällig. Sie soll im
+Code sauber, aktuell und getestet bleiben, damit ein späterer Release sie ohne
+Umweg ausdrücklich aktivieren kann. Für die ausgelieferte Verkaufsversion gilt
+deshalb `TRIAL_FROM = None`; `TRIAL_DAYS = 14` und der gehärtete Markerpfad
+bleiben als deaktivierte Fähigkeit erhalten.
 
 Offen:
 
-- [ ] **`SALE_FROM` fehlt, und ohne sie sperrt die Verkaufsversion die
-      Bestandskunden aus.** Gebaut wird sie analog zu `DEMO_FROM` in
-      `app/core/activation/store.py`: Ein `first_run` vor dem Verkaufsstart kann
-      kein Start der Verkaufsversion sein, weil es sie vorher nicht gab — also
-      wird er einmalig auf `now` angehoben und **festgeschrieben**. Die
-      Umgehungswege sind durchgerechnet und tragen nicht: `last_seen` wächst
-      monoton, eine zurückgestellte Uhr ändert `effective = max(now, last_seen)`
-      also nicht, eine vorgestellte kostet den Nutzer selbst Tage, und ein
-      editierter Marker gilt als `FORGED` und beendet die Frist sofort. Es bleibt
-      die schon dokumentierte Restgrenze: Wer **beide** Marker-Orte löscht, fängt
-      neu an — das gilt heute genauso, und sie zu schließen hieße Konto oder
-      Server, was §2 ausschließt. **Dazu gehört ein fünfter Uhr-Deckel in
-      `.claude/rules/kern.md`** (dort stehen bisher vier) und je ein Test für
-      beide Richtungen. Erledigt dabei: der Registerpunkt „AGB § 2 beschreibt
-      vierzehn Tage, die für die Demo nicht gelten" löst sich am 01.11. **nur
-      mit** diesem Schritt auf, nicht von selbst.
+- [x] **`SALE_FROM` wird zum Verkaufsstart nicht gebraucht.** Es müsste nur
+      einen angebotenen Testlauf von einem alten Demo-Marker abgrenzen. Weil
+      `TRIAL_FROM = None` keine Testphase anbietet, wertet `days_left()` den
+      vorhandenen Marker nicht als Freischaltung und erzeugt auch keinen neuen.
+      Ein eigener Gegenbeweis legt einen alten Marker in eine Verkaufsversion
+      und prüft: Sie ist gesperrt, aber ausdrücklich **nicht** als abgelaufener
+      Test markiert; alles Lesende bleibt offen. `sale_without_trial` trennt
+      diesen Zustand von `expired`, damit Chat, Slicer, Menüs, Über-Dialog und
+      Handbuch keinen nie angebotenen Test behaupten. Falls die Testphase
+      später aktiviert wird, bekommt dieser Release
+      einen bewusst gewählten `TRIAL_FROM`-Stichtag und die hier bereits
+      durchgerechneten Migrationsprüfungen.
+- [x] **Freischaltung für Kunden ohne Lizenz- oder CAD-Vorwissen durchgezogen.**
+      Der Dialog führt in zwei beschrifteten Schritten vom Kaufcode zur einmaligen
+      Geräteaktivierung; ein gültiger, aber noch nicht aktivierter Code heißt in
+      keinem Status mehr „lizenziert“. Der Offline-Ausweg besteht aus drei
+      nummerierten Schritten, übernimmt die Sprache der Anwendung, bleibt ohne
+      Konto nutzbar und nennt bei Datei-, Netz- und Serverfehlern den nächsten
+      Weg. Website, Handbuch und alle sechs Oberflächensprachen sagen gemeinsam:
+      Zum Verkaufsstart gibt es keine Testphase, der gepflegte 14-Tage-Pfad ist
+      lediglich deaktiviert.
 - [ ] **Der Ollama-Pull im Chat-Dialog endet auf „nicht geantwortet".**
       `tests/test_chat_ui.py::test_the_pull_shows_a_share_and_a_way_out` erwartet
       „liegt jetzt hier" in `KeyDialog.probe_result` und liest „Ollama hat nicht

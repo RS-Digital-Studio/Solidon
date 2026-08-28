@@ -9,7 +9,15 @@ description = "Desktop application for building, generating and editing printabl
 requires-python = ">=3.13"
 license = { file = "LICENSE" }
 authors = [{ name = "RS Digital" }]
-dependencies = []
+dependencies = [
+  # CA-Satz für HTTPS im gebauten macOS-Paket. OpenSSLs dortige Vorgabepfade
+  # zeigen sonst in die Python-Installation des Bauservers. MPL-2.0.
+  "certifi>=2026.7.22",
+  # Sicherer System-Schlüsselbund für die Geräteidentität der Lizenz und den
+  # optionalen Modellschlüssel. Ohne ihn darf die Gerätebindung nicht auf eine
+  # kopierbare Datei zurückfallen. MIT.
+  "keyring>=25.0",
+]
 
 [project.optional-dependencies]
 # Geometriekerne und Netz-Ein-/Ausgabe. Die Lizenzprüfung läuft gegen §36.
@@ -57,8 +65,8 @@ ui = [
   "pyvista>=0.44",
   "pyvistaqt>=0.11",
 ]
-# Der Agent braucht einen Ort für den Schlüssel des Nutzers (§27). Ohne dieses
-# Extra läuft die Anwendung; nur der Chat bleibt aus.
+# Kompatibler Extra-Name für bestehende Entwicklungsinstallationen; ``keyring``
+# gehört wegen der Geräteaktivierung inzwischen bereits zum Grundpaket.
 agent = ["keyring>=25.0"]
 # Der zweite Konstruktionskern (§30): echte Kanten, und damit exakte
 # Verrundungen, Fasen und STEP. Optional — ohne ihn sagen diese Operationen das

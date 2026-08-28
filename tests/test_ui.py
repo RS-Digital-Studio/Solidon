@@ -6282,7 +6282,7 @@ def test_entering_a_key_puts_everything_back(
     from datetime import date
 
     from app.core import activation
-    from app.core.activation import key
+    from app.core.activation import certificate, key
 
     _expired(monkeypatch)
     window = MainWindow(Session(), UiSettings())
@@ -6295,7 +6295,18 @@ def test_entering_a_key_puts_everything_back(
         order="A-1",
         holder="kaeufer@beispiel.de",
     )
-    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+    active = certificate.ActivationCertificate(
+        licence_digest=certificate.licence_digest(licence),
+        device_public=b"x" * 32,
+        device_name="Werkstatt-PC",
+        activation_id="0" * 32,
+        issued_on=date(2026, 8, 28),
+    )
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(licence=licence, certificate=active),
+    )
     window._update_actions()
     window._refresh_chat_availability()
 
@@ -6401,20 +6412,77 @@ def test_the_about_dialog_names_the_activation_state(
     from PySide6.QtWidgets import QLabel
 
     from app.core import activation
+    from app.core.activation import certificate, key
+    from app.ui.dialogs import AboutDialog
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 11, 1),
+        order="A-77",
+        holder="kaeufer@beispiel.de",
+    )
+    active = certificate.ActivationCertificate(
+        licence_digest=certificate.licence_digest(licence),
+        device_public=b"x" * 32,
+        device_name="Werkstatt-PC",
+        activation_id="0" * 32,
+        issued_on=date(2026, 8, 28),
+    )
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(licence=licence, certificate=active),
+    )
+    dialog = AboutDialog()
+    texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "kaeufer@beispiel.de" in texts
+    assert "A-77" in texts
+
+
+def test_the_about_dialog_does_not_call_an_unactivated_key_licensed(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gültiger Kaufcode allein ist noch kein freigeschalteter Rechner."""
+    from datetime import date
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import activation
     from app.core.activation import key
     from app.ui.dialogs import AboutDialog
 
     licence = key.Licence(
         major=key.current_major(),
-        purchased_on=date(2026, 8, 6),
-        order="A-77",
-        holder="kaeufer@beispiel.de",
+        purchased_on=date(2026, 11, 1),
+        order="A-78",
+        holder="kundin@beispiel.de",
     )
     monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+
     dialog = AboutDialog()
     texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
-    assert "kaeufer@beispiel.de" in texts
-    assert "A-77" in texts
+
+    assert "Lizenziert für" not in texts
+    assert "noch einmal aktiviert" in texts
+
+
+def test_the_about_dialog_does_not_invent_a_trial_for_the_sale_version(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Testangebot nennt auch der ruhige Lizenzsatz keinen Ablauf."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui.dialogs import AboutDialog
+
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+
+    dialog = AboutDialog()
+    texts = " ".join(label.text() for label in dialog.findChildren(QLabel))
+    assert "Testzeitraum" not in texts
+    assert "Geräteaktivierung" in texts
 
 
 def test_a_damaged_installation_is_not_called_unlocked(
@@ -6491,7 +6559,7 @@ def test_a_damaged_installation_greys_out_what_cannot_work(
 
     licence = key.Licence(
         major=key.current_major(),
-        purchased_on=date(2026, 8, 6),
+        purchased_on=date(2026, 11, 1),
         order="A-77",
         holder="kaeufer@beispiel.de",
     )
@@ -6552,6 +6620,48 @@ def test_the_activation_dialog_accepts_a_valid_key(
         activation.forget_cache()
 
 
+def test_an_active_key_cannot_be_overwritten_before_deactivation(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der einfache Zwei-Geräte-Nebenweg beginnt nicht mit Überschreiben im Dialog."""
+    from datetime import date
+
+    from app.core import activation
+    from app.core.activation import certificate, key, store
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    store.write_key("SOLIDON3D-1-BEREITS-AKTIV")
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 11, 1),
+        order="A-1",
+        holder="kundin@beispiel.de",
+    )
+    active = certificate.ActivationCertificate(
+        licence_digest="0" * 64,
+        device_public=b"x" * 32,
+        device_name="Werkstatt-PC",
+        activation_id="0" * 32,
+        issued_on=date(2026, 11, 1),
+    )
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(licence=licence, certificate=active),
+    )
+
+    dialog = ActivationDialog()
+
+    assert dialog.field.isReadOnly()
+    assert dialog.device_name.isReadOnly()
+    assert not dialog.check_button.isEnabled()
+    assert not dialog.online_button.isEnabled()
+    assert not dialog.offline_button.isEnabled()
+    assert dialog.forget_button.text() == "Diesen Rechner deaktivieren"
+    activation.forget_cache()
+
+
 def test_the_activation_dialog_rejects_with_a_reason(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -6578,16 +6688,23 @@ def test_the_activation_dialog_rejects_with_a_reason(
         activation.forget_cache()
 
 
-def test_the_first_run_dialog_mentions_the_trial_in_one_sentence(
+def test_the_first_run_dialog_promises_no_trial_in_the_sale_version(
     qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """V4b: die Ersteinrichtung erwähnt den Testlauf — und fragt nicht nach
-    einem Schlüssel, das wäre eine Hürde vor dem ersten Blick."""
+    """Die Verkaufsversion nennt die Planänderung und erfindet keine freien Tage."""
+    from app.core import activation
+    from app.core.activation import store
     from app.ui.first_run import FirstRunDialog
 
+    monkeypatch.setattr(store, "DEMO_UNTIL", None)
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    activation.forget_cache()
     dialog = FirstRunDialog(UiSettings())
-    assert "14" in dialog.greeting.text()
-    assert "frei" in dialog.greeting.text()
+    assert "14" not in dialog.greeting.text()
+    assert "ohne Testphase" in dialog.greeting.text()
+    assert "Geräteaktivierung" in dialog.greeting.text()
+    activation.forget_cache()
 
 
 def test_the_first_run_dialog_promises_no_free_days_on_a_damaged_install(
@@ -7312,6 +7429,56 @@ def test_the_unlock_dialog_does_not_close_on_an_empty_field(
             dialog.deleteLater()
     finally:
         activation.forget_cache()
+
+
+def test_the_activation_dialog_reads_as_two_small_steps(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ohne Lizenzwissen sieht man Reihenfolge, Abkürzung und Offline-Ausweg."""
+    from PySide6.QtWidgets import QGroupBox, QLabel
+
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    activation.forget_cache()
+    try:
+        dialog = ActivationDialog()
+        groups = [group.title() for group in dialog.findChildren(QGroupBox)]
+        labels = " ".join(label.text() for label in dialog.findChildren(QLabel))
+
+        assert groups == ["1 · Lizenzschlüssel einfügen", "2 · Diesen Rechner aktivieren"]
+        assert "Kein Konto" in labels and "ohne Internet" in labels
+        assert not dialog.online_button.isEnabled()
+        assert "Zuerst" in dialog.online_button.toolTip()
+        assert dialog.online_button.isDefault(), "der kurze Online-Weg ist der Hauptknopf"
+        assert dialog.offline_button.text().startswith("Offline")
+    finally:
+        activation.forget_cache()
+
+
+def test_the_offline_activation_page_opens_in_the_ui_language(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dateiweg wechselt nicht auf einer deutschen Website die Sprache."""
+    from PySide6.QtCore import QUrl
+
+    from app.ui import dialogs
+
+    opened: list[str] = []
+    monkeypatch.setattr(dialogs, "get_language", lambda: "es")
+    monkeypatch.setattr(
+        dialogs.QDesktopServices,
+        "openUrl",
+        staticmethod(lambda url: opened.append(url.toString())),
+    )
+
+    dialog = dialogs.OfflineActivationDialog("{}")
+    dialog._open_page()
+
+    assert opened == [f"{dialog.PAGE_URL}?lang=es"]
+    assert QUrl(opened[0]).query() == "lang=es"
 
 
 # --- Die Projektdatei als Argument (Dateizuordnung) -----------------------------
@@ -8169,6 +8336,7 @@ def test_a_paying_customer_is_not_told_the_trial_ran_out(
     3d-druck-46 im Lizenz-Audit.
     """
     from app.core import activation
+    from app.core.activation import store
     from app.ui.dialogs import damaged_line
 
     aktion = next(iter(window._op_actions.values()))
@@ -8182,12 +8350,19 @@ def test_a_paying_customer_is_not_told_the_trial_ran_out(
     window._lock_hint(aktion, True)
     abgelaufen = aktion.statusTip()
 
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    aktion.setProperty("tip_before_lock", None)
+    window._lock_hint(aktion, True)
+    ohne_test = aktion.statusTip()
+
     assert damaged_line() in beschaedigt, "die beschädigte Installation sagt, was sie ist"
     assert "Testzeitraum" not in beschaedigt, (
         "wer bezahlt hat, wird nicht nach einem Schlüssel gefragt, den er hat"
     )
     assert "Testzeitraum" in abgelaufen, "und der abgelaufene Testlauf behält seinen Satz"
     assert beschaedigt != abgelaufen
+    assert "Testzeitraum" not in ohne_test
+    assert "Geräteaktivierung" in ohne_test
 
 
 def test_the_status_line_speaks_on_the_day_the_trial_ends(
@@ -8212,6 +8387,21 @@ def test_the_status_line_speaks_on_the_day_the_trial_ends(
     assert zeile(2), "kurz davor schon"
     assert zeile(0), "und am Tag, an dem es zu ist, erst recht"
     assert "abgelaufen" in zeile(0)
+
+
+def test_the_status_line_explains_the_sale_version_without_inventing_a_trial(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesperrte Werkzeuge bekommen auch ohne vorherigen Test einen sichtbaren Grund."""
+    from app.core import activation
+    from app.core.activation import store
+
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+    window._trial_status_line()
+
+    assert "Testzeitraum" not in window.trial_line.text()
+    assert "Geräteaktivierung" in window.trial_line.text()
 
 
 def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> None:

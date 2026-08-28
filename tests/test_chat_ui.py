@@ -1352,6 +1352,7 @@ def test_a_damaged_installation_does_not_offer_a_key_that_would_not_help(
     Knopf, denn dort hilft ein Schlüssel wirklich. Gefunden von 3d-druck-46.
     """
     from app.core import activation
+    from app.core.activation import store
 
     panel = ChatPanel()
 
@@ -1365,10 +1366,16 @@ def test_a_damaged_installation_does_not_offer_a_key_that_would_not_help(
     abgelaufen = panel.hint.text()
     knopf_abgelaufen = panel.unlock.isVisibleTo(panel)
 
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    panel.set_locked(True)
+    ohne_test = panel.hint.text()
+
     assert "Testzeitraum" not in beschaedigt, "wer bezahlt hat, wird nicht nach dem gefragt"
     assert not knopf_beschaedigt, "und bekommt keinen Knopf in eine Sackgasse"
     assert "Testzeitraum" in abgelaufen, "der abgelaufene Testlauf behält seinen Satz"
     assert knopf_abgelaufen, "und seinen Knopf — dort hilft ein Schlüssel wirklich"
+    assert "Testzeitraum" not in ohne_test, "ein nie angebotener Test kann nicht ablaufen"
+    assert "Geräteaktivierung" in ohne_test, "der Verkaufszustand nennt den ganzen Weg"
 
 
 def test_the_chat_shows_what_the_turn_is_doing(qt_app: QApplication) -> None:

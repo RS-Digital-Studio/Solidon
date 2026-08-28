@@ -345,6 +345,7 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     Grund grau ist.
     """
     from app.core import activation
+    from app.core.activation import store
 
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
     dialog = PrintSettingsDialog(session, UiSettings())
@@ -357,6 +358,13 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     assert dialog.slice_button.statusTip() == reason
     assert dialog.slice_button.accessibleDescription() == reason
 
+    monkeypatch.setattr(store, "TRIAL_FROM", None)
+    dialog._show_slicer_state()
+    sale_reason = dialog.slice_button.toolTip()
+    assert "Testzeitraum" not in sale_reason
+    assert "Geräteaktivierung" in sale_reason
+
+    monkeypatch.setattr(store, "TRIAL_FROM", store.DEMO_FROM)
     monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
     dialog._show_slicer_state()
 

@@ -49,6 +49,9 @@ from app.core.types import BoundingBox, Document, Profile, SceneObject
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+#: Der tatsächlich ausgelieferte Testbeginn. Die Suite aktiviert den
+#: erhaltenen Pfad darunter für seine Mechaniktests wieder.
+_SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM
 
 
 #: Fenster, die die Suite absichtlich bis zum Prozessende hält.
@@ -188,17 +191,26 @@ def _the_calendar_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     tun haben, weil jede Dokumentänderung durch die Freischaltung geht.
 
     Wer die Frist selbst prüft, setzt sie ausdrücklich; `test_activation.py`
-    tut das über die Fixture `demo`. Den **echten** Wert bekommt nur, wer ihn
-    über `shipped_demo_until` verlangt — dort steht auch der Wecker, der
-    anschlägt, wenn der Stichtag verstrichen ist.
+    tut das über die Fixture `demo`. Für alle anderen Läufe beginnt stattdessen
+    ein Testzeitraum am Auslieferungstag, damit die Suite nicht vom Kalender
+    gesperrt wird. Den **echten** Wert bekommt nur, wer ihn über
+    `shipped_demo_until` verlangt — dort steht auch der Wecker, der anschlägt,
+    wenn der Stichtag verstrichen ist.
     """
     monkeypatch.setattr(activation_store, "DEMO_UNTIL", None)
+    monkeypatch.setattr(activation_store, "TRIAL_FROM", activation_store.DEMO_FROM)
 
 
 @pytest.fixture
 def shipped_demo_until() -> object:
     """Der Stichtag, mit dem tatsächlich ausgeliefert wird — oder ``None``."""
     return _SHIPPED_DEMO_UNTIL
+
+
+@pytest.fixture
+def shipped_trial_from() -> object:
+    """Der Testbeginn der ausgelieferten Fassung — vor dem Suite-Patch."""
+    return _SHIPPED_TRIAL_FROM
 
 
 @pytest.fixture(autouse=True)

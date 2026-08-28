@@ -76,9 +76,8 @@ ab. Wer den Lizenzschlüssel sofort einlösen möchte, erklärt beides; wer sich
 die Widerrufsfrist offenhalten möchte, erklärt es nicht und erhält den
 Schlüssel nach Ablauf der Frist.
 
-**Unabhängig davon** können Sie Solidon3D vor jedem Kauf **vierzehn Tage lang
-vollständig und ohne Einschränkung testen.** Der Testlauf ersetzt das
-Widerrufsrecht nicht, macht die Entscheidung aber vorher überprüfbar.
+Zum Verkaufsstart ist **keine zusätzliche Testphase** aktiv. Das gesetzliche
+Widerrufsrecht wird dadurch weder ersetzt noch verkürzt.
 
 ---
 
