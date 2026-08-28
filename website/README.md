@@ -42,7 +42,8 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `en/index.html` | Startseite englisch |
 | `funktionen.html`, `en/features.html` | Funktionsseite — die zwölf Blöcke mit Bildern, dazu die Sprungliste |
 | `ki-modelle.html`, `en/ai-models.html` | Was ein Modell aus Meshy, Tripo oder Rodin noch braucht |
-| `site.js` | Markiert in der Sprungliste den gelesenen Block und zählt im Download-Kasten die Zeit bis zur Demo — das einzige Skript |
+| `changelog.html`, `<sprache>/changelog.html` | Versionsverlauf mit Auswahl — erzeugt von `tools/make_changelog.py` aus derselben Quelle wie das App-Fenster |
+| `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
@@ -60,7 +61,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 aus dem Bestand abgeleitet. Es läuft **nach** `make_manual.py` und
 `make_legal.py`, denn es liest deren Ergebnis:
 
-* **`sitemap.xml`** führt die 24 indexierbaren Seiten mit ihren
+* **`sitemap.xml`** führt alle indexierbaren Seiten mit ihren
   Sprachversionen. Die Zuordnung kommt aus den `hreflang`-Angaben der Seiten
   selbst — eine zweite Liste liefe beim nächsten Zusatz auseinander. Die fünf
   Rechtstexte fehlen dort mit Absicht: sie tragen `noindex`, und eine Sitemap,
@@ -287,7 +288,8 @@ eigenes Produkt: **netcup Webhosting 2000**.
   Version sind es fünf: `Solidon3D-Setup-<Version>.exe`, zwei macOS-`.pkg`,
   `Solidon3D-<Version>-x86_64.AppImage` zum direkten Start und
   `Solidon3D-<Version>-x86_64.flatpak` zur Installation. Das Linux-Archiv
-  bleibt im Bau, wird aber nicht hochgeladen.
+  bleibt im Bau, wird aber nicht hochgeladen. Derselbe Lauf erzeugt den
+  Changelog in allen Sprachen automatisch aus `changelog/` neu.
 - `version.json` führen: `version` ist die veröffentlichte Version,
   `url` die Download-Seite, `notes` ein Satz zur Neuerung. Die Anwendung
   vergleicht gegen `APP_VERSION` in `app/branding.py` und zeigt nur einen

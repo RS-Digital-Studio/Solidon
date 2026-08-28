@@ -21,8 +21,10 @@ import html
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QHBoxLayout,
     QLabel,
     QScrollArea,
     QVBoxLayout,
@@ -78,14 +80,14 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
 
 
 class ChangesDialog(QDialog):
-    """Der Verlauf, von der neuesten Fassung abwärts."""
+    """Der Verlauf, je eine über das Auswahlfeld gewählte Fassung."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Neuerungen"))
         self.setMinimumWidth(560)
 
-        entries = changes.history()
+        self.entries = changes.history()
 
         self.headline = QLabel(self)
         self.headline.setWordWrap(True)
@@ -94,6 +96,30 @@ class ChangesDialog(QDialog):
                 app=APP_NAME, version=APP_VERSION
             )
         )
+
+        self.version_label = QLabel(tr("Version"), self)
+        self.version_choice = QComboBox(self)
+        self.version_choice.setAccessibleName(tr("Version"))
+        for entry in self.entries:
+            label = entry.version
+            if entry.version == APP_VERSION:
+                label += " — " + tr("diese Version")
+            self.version_choice.addItem(label, entry.version)
+
+        current_index = next(
+            (index for index, entry in enumerate(self.entries) if entry.version == APP_VERSION),
+            0,
+        )
+        if self.entries:
+            self.version_choice.setCurrentIndex(current_index)
+
+        self.picker = QWidget(self)
+        picker_layout = QHBoxLayout(self.picker)
+        picker_layout.setContentsMargins(0, 0, 0, 0)
+        picker_layout.setSpacing(NORMAL)
+        picker_layout.addWidget(self.version_label)
+        picker_layout.addWidget(self.version_choice, 1)
+        self.picker.setVisible(bool(self.entries))
 
         self.body = QLabel(self)
         self.body.setWordWrap(True)
@@ -104,7 +130,7 @@ class ChangesDialog(QDialog):
         # öffnen — dieselbe Zurückhaltung wie beim Update-Fenster.
         self.body.setOpenExternalLinks(False)
         self.body.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        self.body.setText(history_html(entries))
+        self.body.setText("")
 
         self.scroller = QScrollArea(self)
         self.scroller.setWidget(self.body)
@@ -116,8 +142,11 @@ class ChangesDialog(QDialog):
         # den Nutzer raten, ob es nichts gibt oder etwas kaputt ist.
         self.empty = QLabel(tr("Für diese Version liegt kein Verlauf bei."), self)
         self.empty.setWordWrap(True)
-        self.empty.setVisible(not entries)
-        self.scroller.setVisible(bool(entries))
+        self.empty.setVisible(not self.entries)
+        self.scroller.setVisible(bool(self.entries))
+
+        self.version_choice.currentIndexChanged.connect(self._show_selected)
+        self._show_selected(self.version_choice.currentIndex())
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
@@ -126,6 +155,7 @@ class ChangesDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
+        layout.addWidget(self.picker)
         layout.addWidget(self.empty)
         # Der Rollbereich bekommt jeden gezogenen Bildpunkt (Stretch 1):
         # Überschrift und Knöpfe brauchen nicht mehr, als sie haben, und ein
@@ -133,3 +163,13 @@ class ChangesDialog(QDialog):
         layout.addWidget(self.scroller, 1)
         layout.addWidget(buttons)
         self.resize(*INITIAL_SIZE)
+
+    def _show_selected(self, index: int) -> None:
+        """Zeigt genau die gewählte Fassung und setzt den Lesebeginn zurück."""
+        if index < 0:
+            self.body.clear()
+            return
+        version = self.version_choice.itemData(index)
+        selected = tuple(entry for entry in self.entries if entry.version == version)
+        self.body.setText(history_html(selected))
+        self.scroller.verticalScrollBar().setValue(0)

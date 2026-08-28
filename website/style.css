@@ -854,6 +854,188 @@ section > .wrap > :is(h1, h2) + p.sub {
 
 section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
+/* ── Changelog ────────────────────────────────────────────────────────── */
+
+/* Der Verlauf übernimmt das Raster und die Farben der Verkaufsseiten, ist
+   aber eine Leseseite: eine schmale Einleitung, darunter genau eine Fassung.
+   Der weiche Schein bindet sie an den Aufmacher, ohne Information über Farbe
+   zu transportieren. */
+.changelog-hero {
+  position: relative;
+  overflow: clip;
+  padding: clamp(3.25rem, 7vw, 5.5rem) 0 3.25rem;
+  background:
+    radial-gradient(circle at 80% 12%, color-mix(in srgb, var(--accent) 13%, transparent), transparent 32rem),
+    var(--bg);
+}
+
+.changelog-intro { max-width: 74rem; }
+
+.changelog-intro h1 {
+  max-width: 18ch;
+  margin: 0 0 0.85rem;
+  font-size: clamp(2rem, 4.6vw, 3.35rem);
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.changelog-intro .lead {
+  max-width: 58ch;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(1.08rem, 2vw, 1.24rem);
+}
+
+.release-picker {
+  display: grid;
+  grid-template-columns: auto minmax(11rem, 18rem);
+  align-items: center;
+  gap: 0.75rem 1rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 2rem;
+  padding: 0.85rem 0.95rem 0.85rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.release-picker label {
+  font-size: 0.92rem;
+  font-weight: 650;
+}
+
+.release-picker select {
+  width: 100%;
+  min-height: 2.65rem;
+  padding: 0.45rem 2.4rem 0.45rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.release-picker select:hover { border-color: var(--accent); }
+
+.release-app-note {
+  max-width: 58ch;
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.changelog-content {
+  min-height: 28rem;
+  padding: clamp(2rem, 5vw, 4rem) 0 5rem;
+  background: var(--bg-alt);
+}
+
+.release-noscript {
+  max-width: 72rem;
+  margin: 0 auto 1rem;
+  color: var(--muted);
+}
+
+.release-card {
+  max-width: 72rem;
+  margin: 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--accent);
+  border-radius: 1rem;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.release-card + .release-card { margin-top: 1.5rem; }
+
+.release-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.45rem clamp(1.15rem, 3vw, 2rem);
+  border-bottom: 1px solid var(--line);
+}
+
+.release-heading p {
+  margin: 0 0 0.1rem;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.release-heading h2 {
+  margin: 0;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Die laufende Fassung ist nicht nur orange: Text, Rahmen und Pillenform sind
+   drei unabhängige Merkmale und bleiben auch ohne Farbwahrnehmung eindeutig. */
+.release-badge {
+  flex: none;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.release-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.release-group {
+  padding: 1.15rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--bg);
+}
+
+.release-group:only-child { grid-column: 1 / -1; }
+
+.release-group h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+}
+
+.release-group ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.release-group li { margin: 0.52rem 0; }
+
+.release-group li::marker { color: var(--accent); }
+
+@media (max-width: 46rem) {
+  .release-groups { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 30rem) {
+  .release-picker {
+    grid-template-columns: 1fr;
+    width: 100%;
+    padding: 0.85rem;
+  }
+
+  .release-heading { align-items: flex-start; }
+  .release-group { padding: 1rem; }
+}
+
 /* ── Schmerzpunkte: was der Nutzer kennt, und was daraus wird ──────────── */
 
 .pains {

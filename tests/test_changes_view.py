@@ -136,3 +136,28 @@ def test_the_dialog_opens_without_a_network(qt_app: object) -> None:
     assert APP_VERSION in dialog.headline.text()
     assert not dialog.scroller.isHidden(), "history is bundled, so the list belongs on screen"
     assert dialog.empty.isHidden(), "the empty notice belongs to a package without a history"
+
+
+def test_the_dialog_offers_every_version_in_a_picker(qt_app: object) -> None:
+    """Der lange Verlauf bleibt erreichbar, ohne als eine Wand aufzugehen."""
+    entries = changes.history("de")
+    dialog = ChangesDialog()
+
+    offered = tuple(
+        dialog.version_choice.itemData(index) for index in range(dialog.version_choice.count())
+    )
+
+    assert offered == tuple(entry.version for entry in entries)
+    assert dialog.version_choice.currentData() == APP_VERSION
+
+
+def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
+    """Die Auswahl ist ein Filter und kein Sprung in einer langen Textwand."""
+    entries = changes.history("de")
+    dialog = ChangesDialog()
+    last = len(entries) - 1
+
+    dialog.version_choice.setCurrentIndex(last)
+
+    assert f">{entries[last].version}</h3>" in dialog.body.text()
+    assert f">{entries[0].version}" not in dialog.body.text()

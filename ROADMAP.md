@@ -12086,3 +12086,23 @@ Offen:
       Auf **dieser** Maschine am 28.08. erledigt. Der Punkt bleibt offen, bis er
       auf allen drei gelaufen ist — er sieht wie ein Codefehler aus und ist
       keiner, und das kostet beim nächsten Mal wieder eine halbe Stunde Suche.
+
+---
+
+## Ein Changelog in App und Website (28.08.2026)
+
+Entscheidung Robert: Ab der nächsten Version ist der Verlauf nicht nur in der
+Anwendung nachlesbar, sondern genauso sauber und kundenorientiert auf der
+Website. In beiden Oberflächen soll ein Auswahlfeld durch alle Fassungen
+führen; ein zusätzlicher Pflegeschritt soll daraus nicht entstehen.
+
+- [x] **Eine Quelle, zwei automatisch erzeugte Oberflächen.**
+      `changelog/<sprache>.md` bleibt die einzige gepflegte Quelle. Das
+      Neuerungen-Fenster öffnet auf der laufenden Version und zeigt über sein
+      Auswahlfeld jede mitgelieferte Fassung einzeln. `make_changelog.py`
+      erzeugt daraus die sechs responsiven Webfassungen; `make_download.py`
+      ruft es bei jedem Release automatisch auf. Ein Gleichheitstest hält die
+      erzeugten Seiten gegen die Quelle, und Sitemap, Sprachwechsel sowie
+      Inhaltsstempel sind angeschlossen. Desktop- und Handyansicht sind im
+      lokalen Browser geprüft; der Auswahlwechsel zeigt genau einen Abschnitt
+      und trägt die Fassung in der Adresse.

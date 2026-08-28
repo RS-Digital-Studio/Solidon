@@ -2314,6 +2314,12 @@ G-Code-Slicer" liest sich besser als die Langfassung.
   Der Bauläufer bekommt keinen Schlüssel, er bekommt einen Aufruf an einen
   Signierdienst.
 - **Automatische Bauläufe** über eine CI für alle Zielplattformen.
+- **Ein Changelog, zwei Oberflächen.** Die Anwendung führt den mitgelieferten
+  Versionsverlauf unter *Hilfe → Neuerungen* und lässt jede Fassung über ein
+  Auswahlfeld einzeln lesen. Die Website zeigt denselben Verlauf in derselben
+  Sprache und mit derselben Versionsauswahl. Gepflegt wird dafür nur
+  `changelog/<sprache>.md`; der Auslieferungslauf erzeugt die Webfassungen
+  automatisch daraus. Eine zweite Liste von Neuerungen gibt es nicht.
 - **Update in der Anwendung, aber nur auf Knopfdruck.** Die Versionsdatei
   nennt neben der Version je Plattform Paketname, Adresse, Größe und
   SHA-256. Ist eine neuere da, sagt es ein sichtbarer Hinweis — keine Zeile,

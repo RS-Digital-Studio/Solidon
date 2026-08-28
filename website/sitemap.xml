@@ -2,6 +2,16 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
+    <loc>https://solidon3d.de/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/en/ai-models.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html"/>
@@ -10,6 +20,16 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/en/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/en/features.html</loc>
@@ -52,6 +72,16 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html"/>
   </url>
   <url>
+    <loc>https://solidon3d.de/es/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/es/features.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html"/>
@@ -90,6 +120,16 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/fr/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/fr/features.html</loc>
@@ -162,6 +202,16 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html"/>
   </url>
   <url>
+    <loc>https://solidon3d.de/it/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/it/features.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html"/>
@@ -210,6 +260,16 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/ai-models.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/ki-modelle.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/pt/changelog.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/pt/features.html</loc>

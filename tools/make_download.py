@@ -13,9 +13,10 @@ Also rechnet das hier. Aufgerufen wird es mit den fertigen Paketen:
                                   Releases/Solidon3D-0.1.0-x86_64.AppImage
 
 Die Dateien werden nach ``website/dl/`` kopiert, Größe und SHA-256 daraus
-gerechnet und in die sechs ``index.html`` geschrieben. Danach schaltet die
-Seite zum Termin von selbst um: Das Skript sieht die Verweise im Kasten und
-weiß daran, dass es etwas zu laden gibt.
+gerechnet und in die sechs ``index.html`` geschrieben. Im selben Lauf entsteht
+der Web-Changelog für alle Sprachen neu aus derselben Quelle wie das Fenster in
+der Anwendung. Danach schaltet die Seite zum Termin von selbst um: Das Skript
+sieht die Verweise im Kasten und weiß daran, dass es etwas zu laden gibt.
 
 Ohne Argumente räumt es den Kasten wieder leer — für den Fall, dass ein Paket
 zurückgezogen werden muss. Die Seite fällt dann auf die Warteliste zurück,
@@ -39,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
+from tools.make_changelog import write_pages as write_changelog_pages
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -791,6 +793,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("packages", nargs="*", type=Path, help="die fertigen Installationsdateien")
     args = parser.parse_args()
+
+    changelog_pages = write_changelog_pages()
+    print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
 
     if not args.packages:
         print("Kein Paket angegeben — der Kasten wird geleert.")

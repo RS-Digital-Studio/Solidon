@@ -177,6 +177,7 @@ tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
 website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               tools/make_manual.py, die Rechtstexte tools/make_legal.py,
+              Changelog-Seiten tools/make_changelog.py,
               robots/sitemap/llms tools/make_seo.py — der Rest von Hand
               api/support.php nimmt die Rückmeldungen an; muss nach
               httpdocs/api/ hochgeladen werden, sonst scheitert das Senden

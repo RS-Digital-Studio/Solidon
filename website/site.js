@@ -1,10 +1,10 @@
 /* Solidon3D — das Einzige, was diese Website ohne Skript nicht kann.
  *
- * Drei Dinge stehen hier, und alle sind Zugabe: die Sprungliste der
+ * Vier Dinge stehen hier, und alle sind Zugabe: die Sprungliste der
  * Funktionsseite markiert den Block, der gerade gelesen wird, der
  * Download-Kasten der Startseite zählt die Zeit bis zur Demo herunter, und
- * ganz unten meldet eine Zeile dem eigenen Server, dass diese Seite
- * geöffnet wurde. Alles
+ * der Changelog zeigt die gewählte Version einzeln. Ganz unten meldet eine
+ * Zeile dem eigenen Server, dass diese Seite geöffnet wurde. Alles
  * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
  * Zeitachsen (`animation-timeline: view()`), und die gehören dorthin — sie
  * laufen im Compositor, ein Skript müsste bei jedem Bildlauf rechnen.
@@ -53,6 +53,42 @@
   );
 
   for (const target of links.keys()) watcher.observe(target);
+})();
+
+/* Die Versionsauswahl des Changelogs.
+ *
+ * Der vollständige Inhalt steht schon im HTML. Das Skript blendet lediglich
+ * alle Fassungen außer der gewählten aus und schreibt die Auswahl als
+ * Sprungmarke in die Adresse. Ohne Skript hebt der ``noscript``-Block die
+ * Ausblendung auf; dann stehen alle Versionen untereinander und nichts fehlt.
+ */
+(() => {
+  "use strict";
+
+  const picker = document.querySelector("[data-changelog-select]");
+  const entries = [...document.querySelectorAll("[data-changelog-entry]")];
+  if (!picker || entries.length === 0) return;
+
+  const show = (version, remember) => {
+    const selected = entries.find((entry) => entry.dataset.version === version);
+    if (!selected) return;
+
+    picker.value = version;
+    for (const entry of entries) entry.hidden = entry !== selected;
+
+    if (remember && window.history?.replaceState) {
+      history.replaceState(null, "", `#${selected.id}`);
+    }
+  };
+
+  const fromHash = entries.find((entry) => entry.id === location.hash.slice(1));
+  show(fromHash?.dataset.version || picker.value, false);
+
+  picker.addEventListener("change", () => show(picker.value, true));
+  window.addEventListener("hashchange", () => {
+    const selected = entries.find((entry) => entry.id === location.hash.slice(1));
+    if (selected) show(selected.dataset.version, false);
+  });
 })();
 
 /* Der Zähler bis zur Demo im Download-Kasten der Startseite.

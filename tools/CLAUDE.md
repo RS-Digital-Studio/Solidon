@@ -45,8 +45,9 @@ wirklich auf?) · `check_support.py` (kommt die Rückmeldung an?) ·
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
-· `make_icon.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
-`make_video.py` · `stamp_assets.py` (**läuft als Letztes**, siehe unten)
+· `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` ·
+`make_examples.py` · `make_video.py` · `stamp_assets.py` (**läuft als Letztes**,
+siehe unten)
 
 **Bauen und Ausliefern**
 

@@ -11,6 +11,7 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 | Erzeugt (nie von Hand ändern) | Werkzeug |
 |---|---|
 | `handbuch.html`, `en/manual.html`, `handbuch/` | `tools/make_manual.py` |
+| `changelog.html`, `<sprache>/changelog.html` | `tools/make_changelog.py`, automatisch aus `make_download.py` |
 | `eula.html`, `agb.html`, `widerruf.html` | `tools/make_legal.py` |
 | `robots.txt`, `sitemap.xml`, `llms.txt` | `tools/make_seo.py` |
 | `icon.svg` | `tools/make_icon.py` |
