@@ -336,6 +336,16 @@ QFrame#exampleTile {{
 QFrame#exampleTile:hover {{ background: {hover}; }}
 QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
 
+/* Der Unterstützen-Dialog trennt Erklärung und Handlung: Die drei Zusagen
+   stehen als ruhige Karte zusammen, der einzige Weg nach draußen bleibt als
+   Hauptknopf außerhalb. */
+QFrame#donationFacts {{
+    background: {base};
+    border: 1px solid {line};
+    border-radius: {NORMAL}px;
+}}
+QFrame#donationFacts QLabel {{ background: transparent; }}
+
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
     background: {base};

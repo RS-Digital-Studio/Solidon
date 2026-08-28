@@ -574,14 +574,44 @@ def test_the_support_dialog_opens_paypal_only_after_the_click(
 
     assert not opened
     assert "Standardbrowser" in dialog.browser_note.text()
+    assert dialog.support_button.text() == "PayPal im Browser öffnen"
+    assert dialog.close_button.text() == "Schließen"
     text = "\n".join(label.text() for label in dialog.findChildren(QLabel))
     assert "keine Bestellung" in text
     assert "keine Gegenleistung" in text
+    assert "keine zusätzlichen Funktionen" in text
+    assert "Erst nach Ihrem Klick online" in text
 
     dialog.support_button.click()
 
     assert opened == [DONATION_URL]
     dialog.reject()
+
+
+def test_a_blocked_payment_page_offers_a_copyable_way_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein fehlender Browser lässt niemanden mit einer Adresse zum Abtippen stehen."""
+    from app.branding import DONATION_URL
+    from app.ui.dialogs import DonationOpenErrorDialog, open_donation
+
+    copied: list[str] = []
+    shown: list[DonationOpenErrorDialog] = []
+    monkeypatch.setattr("app.ui.dialogs.QDesktopServices.openUrl", lambda _url: False)
+    monkeypatch.setattr("app.ui.dialogs.copy_donation_url", lambda: copied.append(DONATION_URL))
+    monkeypatch.setattr(
+        DonationOpenErrorDialog,
+        "exec",
+        lambda dialog: shown.append(dialog) or 0,
+    )
+
+    assert not open_donation()
+    assert len(shown) == 1
+    assert shown[0].copy_button.text() == "Zahlungslink kopieren"
+
+    shown[0].copy_button.click()
+
+    assert copied == [DONATION_URL]
 
 
 def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> None:

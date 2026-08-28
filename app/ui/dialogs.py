@@ -14,11 +14,13 @@ from typing import Any, Final
 from PySide6.QtCore import QLocale, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -64,7 +66,7 @@ from app.ui.labels import (
     value_line,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import make_primary, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort.
@@ -1439,18 +1441,39 @@ def open_website() -> None:
     QDesktopServices.openUrl(QUrl(WEBSITE_URL))
 
 
-def open_donation(parent: QWidget | None = None) -> None:
+def copy_donation_url() -> None:
+    """Legt den Zahlungslink für den manuellen Ausweichweg ab."""
+    QApplication.clipboard().setText(DONATION_URL)
+
+
+class DonationOpenErrorDialog(QMessageBox):
+    """Der Browser-Ausfall endet mit einem kopierbaren Ausweg."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setIcon(QMessageBox.Icon.Warning)
+        self.setWindowTitle(tr("PayPal ließ sich nicht öffnen"))
+        self.setText(tr("Der Standardbrowser konnte die Zahlungsseite nicht öffnen."))
+        self.setInformativeText(
+            tr(
+                "Kopieren Sie den Zahlungslink und öffnen Sie ihn selbst. "
+                "Bei Fragen hilft Ihnen {address}."
+            ).format(address=SUPPORT_ADDRESS)
+        )
+        self.copy_button = self.addButton(
+            tr("Zahlungslink kopieren"), QMessageBox.ButtonRole.ActionRole
+        )
+        self.copy_button.clicked.connect(copy_donation_url)
+        close_button = self.addButton(QMessageBox.StandardButton.Close)
+        close_button.setText(tr("Schließen"))
+
+
+def open_donation(parent: QWidget | None = None) -> bool:
     """Öffnet den PayPal-Zahlungsweg erst nach dem ausdrücklichen Klick."""
     if QDesktopServices.openUrl(QUrl(DONATION_URL)):
-        return
-    QMessageBox.warning(
-        parent,
-        tr("PayPal ließ sich nicht öffnen"),
-        tr(
-            "Der Standardbrowser hat den Zahlungslink nicht angenommen. Öffnen Sie "
-            "{url} selbst oder wenden Sie sich an {address}."
-        ).format(url=DONATION_URL, address=SUPPORT_ADDRESS),
-    )
+        return True
+    DonationOpenErrorDialog(parent).exec()
+    return False
 
 
 def expired_demo_text(state: activation.Activation) -> str:
@@ -1744,7 +1767,7 @@ class DonationDialog(QDialog):
         super().__init__(parent)
         title = tr("{app} unterstützen").format(app=APP_NAME)
         self.setWindowTitle(title)
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
 
         heading = QLabel(title, self)
         set_level(heading, "title")
@@ -1757,6 +1780,7 @@ class DonationDialog(QDialog):
             self,
         )
         intro.setWordWrap(True)
+        set_level(intro, "body")
 
         terms = QLabel(
             tr(
@@ -1778,20 +1802,63 @@ class DonationDialog(QDialog):
         )
         self.browser_note.setWordWrap(True)
 
+        facts = QFrame(self)
+        facts.setObjectName("donationFacts")
+        facts.setAccessibleName(tr("Hinweise zur freiwilligen Unterstützung"))
+        facts_layout = QVBoxLayout(facts)
+        facts_layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        facts_layout.setSpacing(TIGHT)
+
+        fact_rows = (
+            (tr("Freiwillig"), terms),
+            (
+                tr("Keine zusätzlichen Funktionen"),
+                QLabel(
+                    tr(
+                        "Die Unterstützung schaltet keine zusätzlichen Funktionen frei. "
+                        "Sie hilft dabei, {app} weiterzuentwickeln."
+                    ).format(app=APP_NAME),
+                    facts,
+                ),
+            ),
+            (tr("Erst nach Ihrem Klick online"), self.browser_note),
+        )
+        for index, (fact_title, fact_text) in enumerate(fact_rows):
+            fact_heading = QLabel(fact_title, facts)
+            set_level(fact_heading, "section")
+            fact_text.setParent(facts)
+            fact_text.setWordWrap(True)
+            facts_layout.addWidget(fact_heading)
+            facts_layout.addWidget(fact_text)
+            if index < len(fact_rows) - 1:
+                facts_layout.addSpacing(NORMAL)
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        self.close_button = buttons.button(QDialogButtonBox.StandardButton.Close)
+        self.close_button.setText(tr("Schließen"))
         self.support_button = buttons.addButton(
-            tr("Mit PayPal unterstützen"), QDialogButtonBox.ButtonRole.ActionRole
+            tr("PayPal im Browser öffnen"), QDialogButtonBox.ButtonRole.ActionRole
         )
         make_primary(self.support_button)
+        payment_hint = self.browser_note.text()
+        self.support_button.setToolTip(payment_hint)
+        self.support_button.setStatusTip(payment_hint)
+        self.support_button.setAccessibleDescription(payment_hint)
         self.support_button.clicked.connect(self._open_donation)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(WIDE)
         layout.addWidget(heading)
         layout.addWidget(intro)
-        layout.addWidget(terms)
-        layout.addWidget(self.browser_note)
+        layout.addWidget(facts)
         layout.addWidget(buttons)
+        # Qt berechnet den ersten Höhenvorschlag vor der Mindestbreite und
+        # verteilt den vermeintlich nötigen Platz danach als große Leerflächen.
+        # Die echte Breite entscheidet, wie viele Zeilen die Texte brauchen.
+        layout.activate()
+        self.resize(self.minimumWidth(), layout.heightForWidth(self.minimumWidth()))
 
     def _open_donation(self) -> None:
         open_donation(self)
