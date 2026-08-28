@@ -149,6 +149,35 @@ def test_way_three_tour_recognises_its_actions() -> None:
     )
 
 
+def test_way_four_tour_recognises_its_actions() -> None:
+    """Weg 4: Übergang ändern, eine Formsitzung anlegen, zurücknehmen."""
+    project, history = _opened("weg4-figur-formen")
+    document = project.document
+
+    def sculpt(d: Document, h: History) -> None:
+        h.apply(
+            "Formen",
+            [
+                OperationDraft(
+                    op="sculpt_strokes",
+                    inputs=("obj_1",),
+                    params={"strokes": "[]"},
+                )
+            ],
+        )
+
+    _walk(
+        tour_for("weg4-figur-formen"),  # type: ignore[arg-type]
+        document,
+        history,
+        {
+            1: lambda d, h: h.change_params(_op_id(d, "blend_union"), {"radius": 8.0}),
+            2: sculpt,
+            3: lambda d, h: h.undo(),
+        },
+    )
+
+
 def test_housing_tour_recognises_its_actions() -> None:
     """Gehäuse: Wandstärke drehen, Mutternfalle umstellen."""
     project, history = _opened("gehaeuse-mit-bausteinen")
@@ -211,6 +240,23 @@ def test_hollow_tour_recognises_its_actions() -> None:
     )
 
 
+def test_box_tour_recognises_its_action() -> None:
+    """Die Dose führt nicht nur Text: Die Höhenänderung wird erkannt."""
+    project, history = _opened("dose-mit-deckel")
+    document = project.document
+
+    def turn_height(d: Document, h: History) -> None:
+        parameter = dataclasses.replace(d.parameters["hoehe"], value=60.0)
+        h.apply("Parameter Höhe", changes=change_for(d, parameters={"hoehe": parameter}))
+
+    _walk(
+        tour_for("dose-mit-deckel"),  # type: ignore[arg-type]
+        document,
+        history,
+        {0: turn_height},
+    )
+
+
 def test_the_tours_are_translated() -> None:
     """Regel 20 gilt auch hier: jede Tour spricht beide Sprachen."""
     from app.i18n.catalog import read_catalog
@@ -252,6 +298,8 @@ def test_a_reading_step_does_not_hold_up_the_recognition() -> None:
     panel._document = document
     panel._current = 0
     panel._already = set()
+    panel._completed = set()
+    panel._skipped = set()
     panel._session = _FakeSession(project, history)
     panel._update_marks = lambda: None  # type: ignore[method-assign]
 
@@ -319,6 +367,8 @@ def test_every_step_that_names_a_place_points_at_it() -> None:
         "Prüfbericht": "report",
         "unter Parameter": "parameters",
         "im Objektbaum": "tree",
+        "Werkzeugleiste": "toolbar",
+        "Werkzeugzeile": "tools",
     }
     for tour in TOURS:
         for index, step in enumerate(tour.steps):
@@ -333,6 +383,88 @@ def test_every_step_that_names_a_place_points_at_it() -> None:
                 f"{tour.example_id}, Schritt {index + 1}: zeigt auf {step.shows}, "
                 f"spricht aber von {named}"
             )
+
+
+def test_the_second_way_points_at_the_parameters_it_asks_to_change() -> None:
+    """Der Satz begann bei den Parametern, ließ aber den Verlauf aufleuchten."""
+    tour = tour_for("weg2-halter-konstruieren")
+    assert tour is not None
+    assert tour.steps[0].shows == "parameters"
+
+
+def test_skipping_an_action_is_not_drawn_as_completed(qt_app: object) -> None:
+    """„Weiter“ setzte auch ohne Handlung einen Haken an die Übung.
+
+    Die Tour darf nie sperren. Sie muss aber ehrlich unterscheiden, ob eine
+    erkannte Handlung erledigt oder auf Wunsch übersprungen wurde — durch Wort
+    und Zeichen, nicht nur durch Farbe (Regel 18).
+    """
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    project, history = _opened("weg1-halterung-anpassen")
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    panel = TourPanel(session)
+    panel.start(examples.EXAMPLES[0], tour)
+
+    panel.advance()  # Leseschritt
+    assert panel.next_button.text() == "Schritt überspringen"
+    assert panel._row_hosts[1].property("tourState") == "current"
+
+    panel.advance()  # Handlung bewusst auslassen
+
+    marker, _text = panel._rows[1]
+    assert 1 in panel._skipped and 1 not in panel._completed
+    assert marker.accessibleName() == "Übersprungen"
+    assert marker.pixmap().isNull(), "ein übersprungener Schritt trägt keinen Erledigt-Haken"
+    assert panel._row_hosts[1].property("tourState") == "skipped"
+    assert panel.next_button.isDefault(), "die eindeutige nächste Handlung ist der Hauptknopf"
+
+    # Wer erst weiterliest und die Übung dann versteht, darf sie nachholen.
+    # Der alte Stand prüfte nur ab dem aktuellen Schritt und ließ den Strich
+    # deshalb selbst dann stehen, wenn die Handlung inzwischen erkannt wurde.
+    history.change_params(_op_id(project.document, "drill_hole"), {"diameter": 6.0})
+    panel._check()
+
+    assert 1 in panel._completed and 1 not in panel._skipped
+    assert marker.accessibleName() == "Erledigt"
+    assert not marker.pixmap().isNull(), "die nachgeholte Handlung bekommt ihren Haken"
+    assert panel._row_hosts[1].property("tourState") == "completed"
+
+    panel.deleteLater()
+    session.release()
+
+
+def test_only_the_current_tour_step_is_expanded(qt_app: object) -> None:
+    """Eine Führung zeigt einen Auftrag, nicht alle Absätze auf einmal."""
+    from app.ui.session import Session
+    from app.ui.tour import TourPanel
+
+    project, history = _opened("weg1-halterung-anpassen")
+    session = Session()
+    session.project = project
+    session.history = history
+    tour = tour_for("weg1-halterung-anpassen")
+    assert tour is not None
+    panel = TourPanel(session)
+    panel.start(examples.EXAMPLES[0], tour)
+
+    assert panel._rows[0][1].wordWrap()
+    assert all(not text.wordWrap() for _marker, text in panel._rows[1:])
+    assert panel._rows[1][1].toolTip() == panel._rows[1][1].full_text()
+
+    panel.advance()
+
+    assert not panel._rows[0][1].wordWrap()
+    assert panel._rows[1][1].wordWrap()
+    assert panel._rows[1][1].toolTip() == ""
+
+    panel.deleteLater()
+    session.release()
 
 
 def test_the_last_step_of_a_tour_leads_to_the_next_example() -> None:

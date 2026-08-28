@@ -1,4 +1,4 @@
-"""Baut die drei Beispielprojekte (Bauplan §37.2, §2.2).
+"""Baut die mitgelieferten Beispielprojekte (Bauplan §37.2, §2.2).
 
 Sie sind Dokumentation, Abnahmetest und Startbildschirm-Inhalt zugleich, also
 werden sie gebaut, wie alles andere gebaut wird: als Operationen auf einem
@@ -447,7 +447,11 @@ def hollow_and_split() -> Project:
         [
             OperationDraft(
                 op="create_box",
-                params={"width": 120.0, "depth": 120.0, "height": 120.0, "name": "Klotz"},
+                # Achtzig Millimeter zeigen Hohlraum und Passstifte deutlich,
+                # passen aber auch zu zweit auf ein übliches 180-mm-Bett. Das
+                # frühere 120-mm-Beispiel begrüßte kleinere Drucker mit einem
+                # Überstand statt mit einem druckfertigen Projekt.
+                params={"width": 80.0, "depth": 80.0, "height": 80.0, "name": "Klotz"},
             )
         ],
     )
@@ -457,7 +461,7 @@ def hollow_and_split() -> Project:
             OperationDraft(
                 op="split_pinned",
                 inputs=("obj_1",),
-                params={"axis": "z", "position": 60.0, "pins": 2},
+                params={"axis": "z", "position": 40.0, "pins": 2},
             )
         ],
     )

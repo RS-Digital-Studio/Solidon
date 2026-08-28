@@ -5,7 +5,7 @@ also kein Ordner mit Dateien, die jemand irgendwann exportiert hat — sie
 entstehen aus denselben Operationen wie alles andere, gebaut von
 :mod:`tools.make_examples`, und die Suite öffnet und rechnet jedes davon.
 
-Die ersten drei beantworten „wie fange ich an" — eines je Weg aus §2.2 —, die
+Die ersten vier beantworten „wie fange ich an" — eines je Weg aus §2.2 —, die
 übrigen „was kann das eigentlich". Ihre Zahl steht in :data:`EXAMPLES` und
 sonst nirgends: eine zweite Stelle wäre nach dem nächsten Beispiel falsch.
 
@@ -70,38 +70,38 @@ class Example:
 EXAMPLES: Final[tuple[Example, ...]] = (
     Example(
         id="weg1-halterung-anpassen",
-        title=_("Weg 1 — fremdes Modell anpassen"),
+        title=_("Vorhandenes Modell anpassen"),
         way="1",
         doc=_(
-            "Eine heruntergeladene Halterung: einlesen, reparieren, aufs Bett setzen "
-            "und eine Bohrung setzen. Der häufigste Fall."
+            "Eine heruntergeladene Halterung öffnen, automatisch prüfen, aufs Druckbett "
+            "stellen und eine Bohrung ergänzen. Der häufigste Einstieg."
         ),
     ),
     Example(
         id="weg2-halter-konstruieren",
-        title=_("Weg 2 — neu konstruieren"),
+        title=_("Eigenes Teil bauen"),
         way="2",
         doc=_(
-            "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, "
-            "das Modell folgt sofort."
+            "Einen Halter aus Grundformen und fertigen Bausteinen zusammensetzen. "
+            "Breite, Tiefe und Stärke lassen sich direkt ändern."
         ),
     ),
     Example(
         id="weg3-generiert-aufbereiten",
-        title=_("Weg 3 — erzeugtes Mesh aufbereiten"),
+        title=_("Modell aus Text oder Bild vorbereiten"),
         way="3",
         doc=_(
-            "Ein erzeugtes Mesh durch die Reparaturkette und geteilt. Das Erzeugen "
-            "selbst kommt später; hier liegt das fertige Mesh bei."
+            "Ein automatisch erzeugtes Modell prüfen, reparieren, auf das Druckbett "
+            "stellen und weiterbearbeiten. Ein fertiges Beispiel ist bereits enthalten."
         ),
     ),
     Example(
         id="weg4-figur-formen",
-        title=_("Weg 4 — eine Figur formen"),
+        title=_("Figur frei formen"),
         way="4",
         doc=_(
-            "Grundkörper weich verschmelzen, gleichmäßig vernetzen, von Hand ausformen. "
-            "Der Weg für Formen, die sich nicht bemaßen lassen."
+            "Einfache Körper weich verbinden und anschließend wie Ton von Hand formen. "
+            "Für Figuren und freie Formen ohne genaue Maße."
         ),
     ),
     # Die fünf darunter sind keine weiteren Wege — sie zeigen, was auf den vier
@@ -121,7 +121,7 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         title=_("Beschriftung — zweifarbig und aufhängbar"),
         way="",
         doc=_(
-            "Ein Schild mit Schrift in einem eigenen Materialslot: der 3MF-Export "
+            "Ein Schild mit Schrift in einem eigenen Filament: der 3MF-Export "
             "macht daraus den Farbwechsel. Dazu eine Schlüsselloch-Aufhängung."
         ),
     ),

@@ -553,14 +553,24 @@ def evaluate(
         # nicht die Aufgabe (Regel 21). Ein Befund, der seine Kennung selbst
         # mitbringt, behält sie.
         lone = operation.outputs[0] if len(operation.outputs) == 1 else None
-        findings.extend(
+        current_findings = [
             dataclasses.replace(
                 entry,
                 op_id=entry.op_id if entry.op_id is not None else operation.id,
                 object_id=entry.object_id if entry.object_id is not None else lone,
             )
             for entry in result.findings
-        )
+        ]
+        findings.extend(current_findings)
+        # Sobald die Hälften erfolgreich auf dem Druckbett angeordnet sind,
+        # ist der frühere Hinweis aus ``split`` erledigt. Ein stehen gebliebener
+        # Arbeitsauftrag würde den Nutzer sonst trotz fertigem Beispiel in den
+        # Prüfbericht schicken. Meldet ``arrange_bed`` selbst, dass bereits
+        # alles angeordnet war, bleibt der Hinweis dagegen erhalten.
+        if operation.op == "arrange_bed" and not any(
+            entry.code == "arrange.already_arranged" for entry in current_findings
+        ):
+            findings[:] = [entry for entry in findings if entry.code != "prepare.halves_in_place"]
         if result.solver is not None:
             solvers[operation.id] = result.solver
         completed.append(operation.id)
@@ -1130,18 +1140,19 @@ def _with_features(
         # formende Op verliert irgendein erkanntes Merkmal. Als Warnung
         # gezählt, schickt das den Prüfbericht bei gelungener Arbeit nach vorn,
         # bis niemand mehr hinsieht.
-        # Ein **erzeugtes** Merkmal ist die Ausnahme von dieser Zurückhaltung,
-        # und es bekommt deshalb seinen eigenen Befund. Es trägt einen Namen,
-        # den eine Operation vergeben hat, eine Passung kann darauf zeigen
-        # (§14), und der Agent verweist darauf statt auf Koordinaten
-        # (Leitprinzip 5). Dass es fort ist, ist eine Warnung — anders als bei
-        # einer Deckfläche, die das Aushöhlen erwartbar mitnimmt.
+        # Ein **verwendetes erzeugtes** Merkmal ist die Ausnahme von dieser
+        # Zurückhaltung, und es bekommt deshalb seinen eigenen Befund. Es trägt
+        # einen Namen, den eine Operation vergeben hat, eine Passung kann
+        # darauf zeigen (§14), und der Agent verweist darauf statt auf
+        # Koordinaten (Leitprinzip 5). Dass es fort ist, ist dann eine Warnung
+        # — anders als bei einer unbenutzten Hilfsfläche, die eine formende
+        # Operation erwartbar mitnimmt.
         #
         # Zwei Aufrufe statt eines Fragezeichens, und das hat einen Grund:
         # ``tests/test_orphans.py`` liest diesen Quelltext und verlangt, dass
         # ``perceive.orphaned`` wörtlich mit ``info`` gemeldet wird. Ein Ternär
         # an der Stelle sieht kürzer aus und nimmt dem Test seine Aussage.
-        if getattr(old_feature, "provenance", "detected") == "generated":
+        if getattr(old_feature, "provenance", "detected") == "generated" and old_id in referenced:
             findings.append(
                 Finding(
                     code="perceive.generated_lost",

@@ -135,6 +135,26 @@ def test_every_example_is_a_tile_with_its_sentence(screen: StartScreen) -> None:
         texts = [label.text() for label in tile.findChildren(QLabel)]
         assert str(tile.entry.title) in texts
         assert str(tile.entry.doc) in texts, "der Satz gehört auf die Kachel"
+        assert "Geführte Tour · Schritt für Schritt" in texts, (
+            "eine Beispielkachel muss sagen, dass hinter ihr eine Führung beginnt"
+        )
+
+
+def test_the_four_starts_use_actions_instead_of_internal_way_numbers(
+    screen: StartScreen,
+) -> None:
+    """Ein neuer Kunde wählt eine Absicht und keinen Bauplanabschnitt."""
+    starts = [tile for tile in screen.tiles if tile.entry.way]
+
+    assert len(starts) == 4
+    assert all(not str(tile.entry.title).startswith("Weg ") for tile in starts)
+    shown = {str(tile.entry.title) for tile in starts}
+    assert {
+        "Vorhandenes Modell anpassen",
+        "Eigenes Teil bauen",
+        "Modell aus Text oder Bild vorbereiten",
+        "Figur frei formen",
+    } == shown
 
 
 def test_a_tile_opens_its_project(screen: StartScreen) -> None:
@@ -286,6 +306,14 @@ def test_the_tiles_use_the_width_they_have(screen: StartScreen) -> None:
     screen.resize(3 * TILE_MIN_WIDTH + 200, 900)
     QApplication.processEvents()
     assert screen._columns == 3, "die Breite ist da und wird nicht benutzt"
+    way_positions = [screen.examples_grid.getItemPosition(index)[:2] for index in range(4)]
+    assert way_positions == [(0, 0), (0, 1), (1, 0), (1, 1)], (
+        "vier Einstiege stehen als ruhiges 2×2-Raster, nicht als 3+1 mit einem Waisenkärtchen"
+    )
+    more_positions = [
+        screen.more_grid.getItemPosition(index)[:2] for index in range(screen.more_grid.count())
+    ]
+    assert (0, 2) in more_positions, "die Vertiefungen nutzen die dritte Spalte weiter"
 
     screen.resize(2 * TILE_MIN_WIDTH + 40, 900)
     QApplication.processEvents()

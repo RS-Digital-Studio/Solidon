@@ -22,6 +22,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -37,7 +38,7 @@ from app.core.types import Document
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.session import Session
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 
 
 class StepLabel(QLabel):
@@ -112,6 +113,10 @@ class TourPanel(QWidget):
         self._already: set[int] = set()
         """Schritte, deren Erkennung schon beim Start zutraf. Sie zählen nicht
         als getan — der Nutzer hat sie nicht getan."""
+        self._completed: set[int] = set()
+        """Gelesene oder vom Dokument bestätigte Schritte."""
+        self._skipped: set[int] = set()
+        """Handlungsschritte, die der Nutzer bewusst ausgelassen hat."""
         self._rows: list[tuple[QLabel, StepLabel]] = []
         self._row_hosts: list[QWidget] = []
         """Ein Trägerwidget je Schrittzeile. Aufgeräumt wird über genau ein
@@ -129,14 +134,13 @@ class TourPanel(QWidget):
 
         self.title = QLabel("", self)
         self.title.setWordWrap(True)
-        heading = QFont(self.title.font())
-        heading.setBold(True)
-        self.title.setFont(heading)
+        set_level(self.title, "section")
 
         self.intro = QLabel("", self)
         self.intro.setWordWrap(True)
 
         self.progress = QLabel("", self)
+        set_level(self.progress, "caption")
 
         steps_host = QWidget(self)
         self._steps_layout = QVBoxLayout(steps_host)
@@ -159,6 +163,7 @@ class TourPanel(QWidget):
             tr("Schaltet zum nächsten Schritt — auch, wenn der aktuelle nicht gemacht wurde.")
         )
         self.next_button.clicked.connect(self.advance)
+        make_primary(self.next_button)
         # Am Ende der Tour steht eine Frage, die vorher niemand beantwortet
         # hat: und jetzt? Der Abschlusstext sagte, was man gelernt hat, und
         # führte nirgendwohin — die übrigen sechs Beispiele fand nur, wer den
@@ -166,6 +171,7 @@ class TourPanel(QWidget):
         self.follow_button = QPushButton("", self)
         self.follow_button.setVisible(False)
         self.follow_button.clicked.connect(self._follow)
+        make_primary(self.follow_button)
         self.stop_button = QPushButton(tr("Tour beenden"), self)
         self.stop_button.clicked.connect(self.stop)
 
@@ -210,6 +216,8 @@ class TourPanel(QWidget):
         self._document = self._session.project.document
         self._example = example
         self._current = 0
+        self._completed.clear()
+        self._skipped.clear()
         # Was beim Öffnen schon zutrifft, hat der Nutzer nicht getan. Ein
         # Schritt, dessen Erkennung von Anfang an wahr ist — „im Prüfbericht
         # steht, was die Reparatur gefunden hat" —, würde die Tour sonst
@@ -228,7 +236,8 @@ class TourPanel(QWidget):
         self.next_button.setVisible(True)
 
         for index, step in enumerate(tour.steps):
-            host = QWidget(self)
+            host = QFrame(self)
+            host.setObjectName("tourStepRow")
             marker = QLabel("", host)
             marker.setFixedWidth(self.fontMetrics().height() + 4)
             marker.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
@@ -250,9 +259,14 @@ class TourPanel(QWidget):
         self._check()
 
     def advance(self) -> None:
-        """„Weiter": quittiert den aktuellen Schritt von Hand."""
+        """Liest weiter oder lässt einen unerledigten Handlungsschritt aus."""
         if self._tour is None or self._current >= len(self._tour.steps):
             return
+        step = self._tour.steps[self._current]
+        if step.done is None or step.done(self._session.project.document, self._session.history):
+            self._completed.add(self._current)
+        else:
+            self._skipped.add(self._current)
         self._current += 1
         self._update_marks()
         self._check()
@@ -266,6 +280,8 @@ class TourPanel(QWidget):
         """Vergisst die Tour, ohne ein Signal — für den Projektwechsel."""
         self._tour = None
         self._document = None
+        self._completed.clear()
+        self._skipped.clear()
         self._clear_rows()
 
     # --- Erkennung --------------------------------------------------------------
@@ -297,11 +313,27 @@ class TourPanel(QWidget):
             step = tour.steps[index]
             return step.done is not None and bool(step.done(document, history))
 
+        # Ein ausgelassener Schritt kann später doch noch getan werden. Das
+        # passiert gerade Anfängern leicht: erst weiterlesen, dann verstehen,
+        # was gemeint war, und die Handlung nachholen. Da ``_current`` schon
+        # dahinter steht, würde die Schleife unten ihn nie wieder ansehen und
+        # die Tour trotz erfüllter Prüfung weiter als „Übersprungen“ zeigen.
+        # Erledigt bleibt danach erledigt — ein späteres Undo nimmt wie bei den
+        # übrigen Schritten die Geometrie zurück, nicht das Gelernte.
+        refreshed = False
+        for index in tuple(self._skipped):
+            if done(index):
+                self._skipped.discard(index)
+                self._completed.add(index)
+                refreshed = True
+
         advanced = False
         while self._current < len(tour.steps):
             if tour.steps[self._current].done is not None:
                 if not done(self._current):
                     break
+                self._completed.add(self._current)
+                self._skipped.discard(self._current)
                 self._current += 1
                 advanced = True
                 continue
@@ -312,9 +344,10 @@ class TourPanel(QWidget):
             ahead = range(self._current + 1, len(tour.steps))
             if not any(index not in self._already and done(index) for index in ahead):
                 break
+            self._completed.add(self._current)
             self._current += 1
             advanced = True
-        if advanced:
+        if advanced or refreshed:
             self._update_marks()
 
     # --- Darstellung ------------------------------------------------------------
@@ -359,29 +392,49 @@ class TourPanel(QWidget):
             body.setBold(index == self._current)
             text.setFont(body)
             text.setEnabled(index <= self._current)
-            # **Jeder Schritt bricht um.** Nur der aktuelle tat es, die übrigen
-            # endeten mit einer Auslassung auf ihrer Zeile — bei fünf Schritten
-            # waren vier davon unlesbar („Öffnen Sie den letzten Schritt
-            # „Bohrung setze…"), und unter ihnen standen hundertfünfzig
-            # Bildpunkte leer. Die Kürzung sparte Platz, den es nicht zu sparen
-            # gab. Der Schrittbereich liegt in einer ``QScrollArea``, eine lange
-            # Tour rollt also, statt die Knöpfe hinauszuschieben.
-            #
-            # ``StepLabel`` behält beide Fähigkeiten: eine schmale Spalte
-            # braucht die Auslassung weiter, und was sie kann, prüft
-            # ``tests/test_style.py`` am Widget.
-            text.set_wrapped(True)
-            if index < self._current:
+            # **Nur der Auftrag, der jetzt zählt, steht vollständig da.** Alle
+            # kommenden Absätze zugleich zu zeigen machte aus der Führung eine
+            # graue Textwand. Eine Zeile verrät weiterhin, was folgt; beim
+            # Erreichen klappt der Schritt vollständig auf. Der Hinweis hält
+            # den ganzen Text auch vorher für Maus und Hilfstechnik bereit.
+            is_current = index == self._current
+            text.set_wrapped(is_current)
+            text.setToolTip("" if is_current else text.full_text())
+            host = self._row_hosts[index]
+            if index in self._skipped:
+                marker.clear()
+                marker.setText(tr("—"))
+                marker.setAccessibleName(tr("Übersprungen"))
+                state = "skipped"
+            elif index in self._completed:
+                marker.setText("")
                 marker.setPixmap(self._mark("done"))
+                marker.setAccessibleName(tr("Erledigt"))
+                state = "completed"
             elif index == self._current:
+                marker.setText("")
                 marker.setPixmap(self._mark("step"))
+                marker.setAccessibleName(tr("Schritt"))
+                state = "current"
             else:
                 marker.clear()
+                marker.setAccessibleName("")
+                state = "upcoming"
+            host.setProperty("tourState", state)
+            style = host.style()
+            if style is not None:
+                style.unpolish(host)
+                style.polish(host)
         self._point_at_current()
 
         finished = self._current >= len(tour.steps)
         self.closing.setVisible(finished)
         self.next_button.setVisible(not finished)
+        if not finished:
+            current_step = tour.steps[self._current]
+            self.next_button.setText(
+                tr("Schritt überspringen") if current_step.done is not None else tr("Weiter")
+            )
         following = self._next_example() if finished else None
         self.follow_button.setVisible(following is not None)
         if following is not None:

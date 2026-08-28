@@ -261,12 +261,13 @@ class ExampleTile(QFrame):
         self.path = path
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        guided = tr("Geführte Tour · Schritt für Schritt")
         # Eine Kachel ist ein Knopf aus zwei Labels, und ein Bildschirmleser
         # las davon nichts vor: Der Titel gehört einem Kind, nicht ihr. Neun
         # solcher Kacheln sind das Erste, was jemand hier sieht — und ohne
         # Namen neun Mal „Rahmen".
         self.setAccessibleName(str(entry.title))
-        self.setAccessibleDescription(str(entry.doc))
+        self.setAccessibleDescription(f"{entry.doc} {guided}")
         # Waagerecht dehnbar, senkrecht mitwachsend: sonst steht neben einer
         # Kachel mit drei Zeilen eine mit zwei, und die Zeile sieht schief aus.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
@@ -278,6 +279,10 @@ class ExampleTile(QFrame):
         doc = QLabel(str(entry.doc), self)
         doc.setWordWrap(True)
         set_level(doc, "caption")
+
+        tour_note = QLabel(guided, self)
+        tour_note.setWordWrap(True)
+        set_level(tour_note, "caption")
 
         # Das Bild kommt aus dem Beispiel selbst, gerendert von
         # `tools/make_examples.py` beim Bauen. Fehlt es, steht die Kachel wie
@@ -307,6 +312,7 @@ class ExampleTile(QFrame):
         text.setContentsMargins(0, 0, 0, 0)
         text.setSpacing(TIGHT)
         text.addWidget(title)
+        text.addWidget(tour_note)
         text.addWidget(doc)
         # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz:
         # eine Kachel wächst auf die Höhe ihrer Nachbarin, und ohne diese
@@ -629,6 +635,12 @@ class StartScreen(QWidget):
             starts = bool(entry.way)
             grid = self.examples_grid if starts else self.more_grid
             parent = self.examples_area if starts else self.more_area
+            # Die vier Einstiege bilden bei jeder Fensterbreite ein ruhiges
+            # Raster aus zwei Spalten und zwei Zeilen. Drei plus eine einzelne
+            # Kachel sah auf großen Bildschirmen wie ein fehlender Weg aus;
+            # die Funktionsbeispiele darunter nutzen die dritte Spalte
+            # weiterhin, wenn sie passt.
+            columns = TILE_COLUMNS if starts else self._columns
             tile = ExampleTile(entry, path, parent)
             tile.chosen.connect(self.openRequested)
             index = placed[starts]

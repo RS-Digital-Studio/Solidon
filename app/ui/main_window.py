@@ -8516,6 +8516,8 @@ class MainWindow(QMainWindow):
             "history": self.history_panel,
             "report": self.report,
             "viewport": self.viewport,
+            "toolbar": self.toolbar,
+            "tools": self.tools,
         }
         area = areas.get(target)
         if area is None:

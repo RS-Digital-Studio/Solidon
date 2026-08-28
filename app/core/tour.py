@@ -36,7 +36,7 @@ StepCheck = Callable[[Document, History], bool]
 
 #: Die Bereiche des Fensters, auf die ein Schritt zeigen kann. Der Kern nennt
 #: sie beim Namen und weiß nicht, wo sie liegen — das ist Sache der Oberfläche.
-TourTarget = Literal["tree", "parameters", "history", "report", "viewport"]
+TourTarget = Literal["tree", "parameters", "history", "report", "viewport", "toolbar", "tools"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,11 +231,11 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
-                shows="history",
+                shows="parameters",
                 text=_(
-                    "Links unter Parameter stehen Breite, Tiefe und Stärke. Die "
-                    "Schritte im Verlauf verweisen mit @breite darauf — der Name "
-                    "unter dem Titel, eine Zahl, viele Verwender."
+                    "Links unter Parameter stehen Breite, Tiefe und Stärke. Ändern "
+                    "Sie hier eine Zahl; alle passenden Schritte im Verlauf verwenden "
+                    "sie automatisch."
                 ),
             ),
             TourStep(
@@ -293,6 +293,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
+                shows="viewport",
                 text=_(
                     "Maße entstehen danach als eigene Schritte, nicht durch Vermessen "
                     "des Netzes: klicken Sie eine Fläche an, dann "
@@ -352,14 +353,16 @@ TOURS: Final[tuple[Tour, ...]] = (
                     "stellen: Der Hals wird dicker, ohne dass irgendetwas neu gebaut "
                     "wird. Das ist der Unterschied zu einem Sculpting-Programm."
                 ),
+                done=_op_number_changed("blend_union", "radius", 4.0),
             ),
             TourStep(
+                shows="toolbar",
                 text=_(
                     "Jetzt der Pinsel: die Figur anklicken, dann oben in der "
-                    "Werkzeugleiste das sechste Zeichen — die Knöpfe dort tragen "
-                    "keine Beschriftung, der Name steht am Zeiger. Ziehen Sie ein "
-                    "paar Striche über den Körper, sehen Sie in der Leiste unten auf "
-                    "die Wandstärke — und beenden Sie mit Fertig."
+                    "Werkzeugleiste auf „Formen“ mit dem Pinselsymbol zeigen und "
+                    "klicken. Ziehen Sie ein paar Striche über den Körper, sehen Sie "
+                    "in der Leiste unten auf die Wandstärke — und beenden Sie mit "
+                    "Fertig."
                 ),
                 done=_op_present("sculpt_strokes"),
             ),
@@ -372,12 +375,13 @@ TOURS: Final[tuple[Tour, ...]] = (
                 done=_undo_happened,
             ),
             TourStep(
+                shows="toolbar",
                 text=_(
-                    "Das Zeichen rechts daneben ist Skelett und gehört zum selben "
-                    "Weg: zwei Klicks setzen einen Knochen, Fertig fragt danach nach "
-                    "den Winkeln. So bekommt eine Figur ihre Haltung, ohne dass sie "
-                    "neu gebaut wird."
-                )
+                    "„Skelett“ steht in derselben Werkzeugleiste und gehört zum "
+                    "selben Weg: zwei Klicks setzen einen Knochen, Fertig fragt "
+                    "danach nach den Winkeln. So bekommt eine Figur ihre Haltung, "
+                    "ohne dass sie neu gebaut wird."
+                ),
             ),
         ),
         closing=_(
@@ -402,11 +406,12 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
+                shows="viewport",
                 text=_(
                     "Das kleine Teil daneben ist ein Prüfstück: ein Ausschnitt um die "
                     "Mutternfalle. Zwei Minuten Druck sagen, ob die Passung stimmt — "
                     "statt zwei Stunden für das ganze Gehäuse."
-                )
+                ),
             ),
             TourStep(
                 shows="parameters",
@@ -435,7 +440,7 @@ TOURS: Final[tuple[Tour, ...]] = (
     Tour(
         example_id="schild-zweifarbig",
         intro=_(
-            "Zweifarbig auf zwei Wegen: Schrift in einem eigenen Materialslot für "
+            "Zweifarbig auf zwei Wegen: Schrift mit einem eigenen Filament für "
             "den Farbwechsel im 3MF — und Lettern als eigener Körper."
         ),
         steps=(
@@ -443,12 +448,13 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="history",
                 text=_(
                     "Öffnen Sie „Beschriftung“ mit einem Doppelklick im Verlauf und "
-                    "schreiben Sie Ihren eigenen Text. Die Schrift bleibt im zweiten "
-                    "Materialslot."
+                    "schreiben Sie Ihren eigenen Text. Die Schrift bleibt dem zweiten "
+                    "Filament zugeordnet."
                 ),
                 done=_op_text_changed("label_text", "text", "Solidon3D"),
             ),
             TourStep(
+                shows="viewport",
                 # **Ohne die Jahreszahl im Satz.** Sie stand hier wörtlich und
                 # war damit an den Inhalt des Beispiels gebunden: Wer ihn
                 # ändert, macht den Tourtext falsch und braucht fünf neue
@@ -458,7 +464,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                     "Die Lettern daneben sind der zweite Weg: ein eigener "
                     "Körper. Für Drucker mit einem Werkzeug — gedruckt und "
                     "aufgeklebt, oder mit Filamentwechsel von Hand."
-                )
+                ),
             ),
             TourStep(
                 shows="history",
@@ -478,8 +484,8 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Beschriftungen liegen im Menü Erzeugen: jede Schrift kann in einen "
-            "Materialslot gehen oder ein eigener Körper sein."
+            "Beschriftungen liegen im Menü Erzeugen: jede Schrift kann einem "
+            "Filament zugeordnet oder ein eigener Körper sein."
         ),
     ),
     Tour(
@@ -491,12 +497,13 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         steps=(
             TourStep(
+                shows="viewport",
                 text=_(
                     "Die Toleranzleiter zeigt, welches Spiel eine Passung braucht; "
                     "die Wandleiter, ab welcher Stärke wirklich Material liegt; der "
                     "Fächer, ab welchem Winkel Stützen nötig sind — gemessen statt "
                     "Faustregel 45 Grad."
-                )
+                ),
             ),
             TourStep(
                 # **Wo doppelgeklickt werden soll, wird gezeigt.** Dieser
@@ -513,10 +520,11 @@ TOURS: Final[tuple[Tour, ...]] = (
                 done=_op_number_changed("arrange_bed", "spacing", 8.0),
             ),
             TourStep(
+                shows="viewport",
                 text=_(
                     "Nach dem Druck: messen, welcher Stift sauber sitzt, welche Wand "
                     "trägt und wo der Fächer hässlich wird."
-                )
+                ),
             ),
             TourStep(
                 text=_(
@@ -563,10 +571,11 @@ TOURS: Final[tuple[Tour, ...]] = (
                 done=_op_number_changed("hollow_object", "wall", 3.0),
             ),
             TourStep(
+                shows="tools",
                 text=_(
                     "Unter dem Viewport liegt die Werkzeugzeile: Explosion zieht die "
                     "Hälften auseinander, dann sehen Sie Stifte und Hohlraum."
-                )
+                ),
             ),
         ),
         closing=_(
@@ -614,12 +623,13 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
+                shows="viewport",
                 text=_(
                     "Der Deckel ist nicht nachgezeichnet, sondern aus der Öffnung "
                     "geschnitten. Sein Kragen ist der Hohlraum, geschrumpft um das "
                     "Spiel aus dem Materialprofil — dieselbe Zahl, die über jede "
                     "andere Passung entscheidet."
-                )
+                ),
             ),
             TourStep(
                 shows="report",

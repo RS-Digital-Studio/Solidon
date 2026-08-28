@@ -97,6 +97,25 @@ def test_the_second_way_really_uses_parameters() -> None:
     ]
     assert bound, "the operations are tied to the parameters, not to fixed numbers"
 
+    tile = next(entry for entry in examples.EXAMPLES if entry.id == "weg2-halter-konstruieren")
+    description = str(tile.doc)
+    for parameter in project.document.parameters.values():
+        assert str(parameter.title) in description, (
+            f"die Startkachel verschweigt den sichtbaren Parameter {parameter.title}"
+        )
+
+
+def test_the_third_way_tile_describes_the_project_that_opens() -> None:
+    """Die Kachel versprach eine Teilung, obwohl der Weg keine enthält."""
+    project = load(examples.directory() / "weg3-generiert-aufbereiten.p3d")
+    tile = next(entry for entry in examples.EXAMPLES if entry.id == "weg3-generiert-aufbereiten")
+    description = str(tile.doc)
+    operations = {entry.op for entry in project.document.ops}
+
+    assert "place_on_bed" in operations and "auf das Druckbett" in description
+    assert not any(name.startswith("split") for name in operations)
+    assert "teilen" not in description.casefold(), "die Kachel verspricht einen fehlenden Schritt"
+
 
 def test_the_second_way_uses_the_library() -> None:
     """§39: Bausteine vor Primitiven — das Beispiel zeigt es, statt es zu
@@ -339,27 +358,6 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # — sie ist Teil dessen, was es vorführt.
         "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
     },
-    "dose-mit-deckel": {
-        # **Berechtigt.** Verloren geht ``face_top``, und das Aushöhlen nimmt
-        # die Deckfläche erwartbar mit: Der Befund sagt etwas Wahres über das,
-        # was das Beispiel vorführt. Zu Beginn der Nacht standen hier noch vier
-        # verlorene Merkmale bei drei gemeldeten — der Rest ist seit ``94650dc``
-        # behoben, übrig ist der Fall, der nie einer war.
-        "perceive.generated_lost": "das Aushöhlen nimmt die Deckfläche mit",
-    },
-    "weg4-figur-formen": {
-        # **Derselbe Fall wie darüber, andere Operation.** Verloren geht auch
-        # hier ``face_top`` — die benannte Oberseite des Rumpfquaders, und das
-        # weiche Verschmelzen rundet sie weg. Wer einen Kopf auf einen Rumpf
-        # schmilzt, hat danach keine Rumpf-Oberseite mehr; das ist das
-        # Ergebnis, nicht sein Verlust.
-        #
-        # Aufgetaucht ist der Befund am 27.08.2026, und zwar nicht, weil sich
-        # etwas verschlechtert hätte: ``way_four`` verwies auf ``obj_3``, und
-        # die Kennung gab es nie. Die Kette lief also gar nicht bis hierher,
-        # und was sie am Ende sagt, hatte nie jemand gesehen.
-        "perceive.generated_lost": "das weiche Verschmelzen rundet die Oberseite weg",
-    },
 }
 
 
@@ -431,6 +429,28 @@ def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None
         "Ausnahmen für Beispiele, die es nicht gibt — sie werden nie gelesen: "
         + ", ".join(erfunden)
     )
+
+
+def test_the_split_example_does_not_ask_for_work_it_already_did(profile: Profile) -> None:
+    """„Aushöhlen und teilen“ endet fertig angeordnet und ohne Restauftrag."""
+    project = load(examples.directory() / "aushoehlen-und-teilen.p3d")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "prepare.halves_in_place" not in codes, (
+        "das Beispiel hat die Hälften bereits angeordnet und darf nicht noch einmal darum bitten"
+    )
+    from app.core.export.writer import plan_export
+
+    plan = plan_export(
+        list(result.scene.objects.values()),
+        project_name="aushöhlen-und-teilen",
+        profile=profile,
+        export_format="3mf",
+        sources=dict(project.document.sources),
+    )
+    export_codes = {finding.code for finding in plan.findings}
+    assert "arrange.off_the_plate" not in export_codes, export_codes
 
 
 def test_every_example_can_still_be_built() -> None:

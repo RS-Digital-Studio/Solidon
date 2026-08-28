@@ -336,6 +336,22 @@ QFrame#exampleTile {{
 QFrame#exampleTile:hover {{ background: {hover}; }}
 QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
 
+/* Die Tour ist eine Folge kleiner Karten statt einer grauen Textwand. Der
+   aktuelle Auftrag trägt eine Akzentkante und einen Hintergrund; Pfeil,
+   Haken oder Strich bleiben die zweite Kodierung des Zustands (Regel 18). */
+QFrame#tourStepRow {{
+    border: 1px solid transparent;
+    border-radius: {NORMAL}px;
+    padding: {TIGHT}px;
+}}
+QFrame#tourStepRow[tourState="current"] {{
+    background: {hover};
+    border-left: 3px solid {accent_line};
+}}
+QFrame#tourStepRow[tourState="skipped"] {{
+    border-left: 3px dashed {line};
+}}
+
 /* Der Unterstützen-Dialog trennt Erklärung und Handlung: Die drei Zusagen
    stehen als ruhige Karte zusammen, der einzige Weg nach draußen bleibt als
    Hauptknopf außerhalb. */

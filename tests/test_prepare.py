@@ -1068,6 +1068,31 @@ def test_splitting_says_that_the_halves_still_lie_together(
     assert hinweis.severity == "info", "nichts ist schiefgegangen"
 
 
+def test_arranging_the_halves_removes_the_old_request(document: Document, profile: Profile) -> None:
+    """Ein späterer Schritt darf den früheren Befund nicht falsch lassen.
+
+    Das Beispiel „Aushöhlen und teilen“ ordnet seine Hälften am Ende bereits
+    nebeneinander an. Der Bericht verlangte trotzdem weiter genau diese
+    Handlung, weil der Hinweis aus dem Teilungsschritt bis zum Endstand
+    mitreiste. Ein Beispiel ist Dokumentation; ein überholter Vorschlag darin
+    ist ein Widerspruch, kein harmloser Hinweis.
+    """
+    project, history = loaded(document)
+    history.apply(
+        _("Teilen"),
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"axis": "z", "pins": 0})],
+    )
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=("obj_2", "obj_3"))],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "prepare.halves_in_place" not in codes, codes
+
+
 def test_a_plane_beside_the_body_stops_instead_of_making_a_ghost(
     document: Document, profile: Profile
 ) -> None:

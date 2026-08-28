@@ -1672,6 +1672,15 @@ def test_a_flashed_area_gets_opened_before_it_lights_up(window: MainWindow) -> N
     assert window.history_panel.isVisibleTo(wrapper), "und der Verlauf steht wirklich da"
 
 
+def test_a_tour_can_point_at_both_toolbars(window: MainWindow) -> None:
+    """Formen und Explosion werden dort hervorgehoben, wo ihre Knöpfe stehen."""
+    window._flash_area("toolbar")
+    assert "border" in window.toolbar.styleSheet()
+
+    window._flash_area("tools")
+    assert "border" in window.tools.styleSheet()
+
+
 def test_a_typed_name_gets_the_project_suffix(window: MainWindow) -> None:
     """„Speichern unter" erzwingt die Projektendung (Gesamtreview A2).
 
