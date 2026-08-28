@@ -522,7 +522,23 @@ def test_the_key_dialog_separates_cloud_and_local_paths(
     cloud = next(box for box in dialog.findChildren(QGroupBox) if box.title() == "Cloud-Modell")
     text = " ".join(label.text() for label in cloud.findChildren(QLabel))
     assert "Anthropic" in text, "der Schlüssel nennt seinen Anbieter"
-    assert "nicht übertragen" in text, "und die Datengrenze vor dem Klick"
+    for disclosed in (
+        "Chatnachrichten",
+        "Textzusammenfassung",
+        "Namen",
+        "Maße",
+        "Positionen",
+        "Formen wie Bohrungen",
+        "Parameter",
+        "Druckeinstellungen",
+        "Bearbeitungsschritte",
+        "Prüfhinweise",
+        "Quelldateinamen",
+        "Vorschaubilder",
+    ):
+        assert disclosed in text, f"die Cloud-Auskunft verschweigt {disclosed}"
+    assert "Bleibt lokal: die eigentliche Projektdatei" in text
+    assert dialog.sizeHint().width() <= 760, "der Hinweis sprengt kleine Bildschirme"
 
 
 def test_the_key_dialog_remembers_the_model_without_a_key(

@@ -829,12 +829,17 @@ class KeyDialog(QDialog):
         provider = QLabel(tr("Anthropic"), section)
         note = QLabel(
             tr(
-                "Mit diesem Weg gehen Chat-Anfragen an Anthropic. Geometrie und "
-                "Projektdateien werden nicht übertragen."
+                "Mit der Cloud-KI gilt:\n"
+                "An Anthropic gesendet: Ihre Chatnachrichten und eine Textzusammenfassung "
+                "des Projekts (z. B. Namen, Maße, Positionen, Formen wie Bohrungen, "
+                "Parameter, Druckeinstellungen, Bearbeitungsschritte, Prüfhinweise und "
+                "Quelldateinamen); falls vorhanden auch Vorschaubilder.\n"
+                "Bleibt lokal: die eigentliche Projektdatei."
             ),
             section,
         )
         note.setWordWrap(True)
+        note.setMaximumWidth(600)
 
         form = QFormLayout(section)
         form.addRow(tr("Anbieter"), provider)
@@ -876,6 +881,10 @@ class KeyDialog(QDialog):
         # empfehlen, ist keines, das wir verbieten.
         self.model_field = QComboBox(section)
         self.model_field.setEditable(True)
+        self.model_field.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.model_field.setMinimumContentsLength(18)
         self._fill_models()
 
         self.pull_button = QPushButton(tr("Modell holen"), section)
