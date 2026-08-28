@@ -176,6 +176,42 @@ def test_the_written_documents_count_the_ways_and_examples_right() -> None:
 
 
 @pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
+def test_no_example_ships_a_printer_of_its_own(example: examples.Example) -> None:
+    """Ein Beispiel bringt keinen Drucker mit — sonst nimmt es dem Kunden seinen.
+
+    Der Erstlauf fragt im Dialog „Erste Schritte" nach Drucker und Material.
+    Wer danach auf „Weg 1" klickt — den die Anwendung selbst „der häufigste
+    Fall" nennt —, hatte beides verloren: Alle neun Beispiele trugen
+    ``centauri-carbon-2`` und ``petg``, den Drucker dessen, der sie gebaut
+    hat. In der Leiste stand ein fremdes Gerät, in der Statuszeile Gewicht und
+    Druckzeit dafür, und die Bohrung im zweiten Tourschritt rechnete mit der
+    Toleranz von PETG statt der gewählten (0,25 gegen 0,20 mm).
+
+    Ein **gespeichertes** Projekt soll seinen Drucker mitbringen, das ist
+    Reproduzierbarkeit. Ein **mitgeliefertes** Beispiel nicht: Es zeigt einen
+    Weg, keine Werkstatt. Bleibt das Feld leer, greift beim Öffnen die Vorgabe
+    (``profiles.DEFAULT_PRINTER``), und die ist zugleich das, was der Dialog
+    vorschlägt.
+
+    Die Prüfung steht hier und nicht im Erzeuger, weil sie die **ausgelieferte
+    Datei** treffen muss: ``tools/make_examples.py`` ist reparierbar, ein
+    Beispiel im Paket nicht.
+    """
+    project = load(examples.directory() / example.filename)
+    document = project.document
+    assert not document.printer, (
+        f"{example.filename} bringt den Drucker {document.printer!r} mit und "
+        "überschreibt damit die Wahl des Kunden. Neu erzeugen: "
+        "python tools/make_examples.py"
+    )
+    assert not document.material, (
+        f"{example.filename} bringt das Material {document.material!r} mit und "
+        "überschreibt damit die Wahl des Kunden. Neu erzeugen: "
+        "python tools/make_examples.py"
+    )
+
+
+@pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
 def test_no_example_ships_a_duplicate_operation_id(example: examples.Example) -> None:
     """Zwei Operationen mit derselben Kennung zerstören das Projekt beim Undo.
 

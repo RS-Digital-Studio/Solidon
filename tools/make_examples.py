@@ -39,7 +39,7 @@ def way_one() -> Project:
     """Ein fremdes Modell anpassen: einlesen, reparieren, aufs Bett,
     bohren (§2.2).
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     with_source(project, "src_1", "plate_holes.stl")
     history = History(project.document)
     # **Mit Namen.** Ohne ihn nimmt die Op den Dateinamen, und der ist hier der
@@ -68,7 +68,7 @@ def way_one() -> Project:
 
 def way_two() -> Project:
     """Neu bauen: Parameter, ein Körper, Bausteine aus der Bibliothek (§2.2)."""
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     document = project.document
     document.parameters["breite"] = Parameter(
         name="breite", value=60.0, unit="mm", title=_("Breite")
@@ -135,7 +135,7 @@ def way_three() -> Project:
     führt vor, dass es nicht funktioniert. Die Figur bringt die Fehler mit, die
     ein Generator wirklich macht, und danach ist sie zu.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     backend = ScriptedMeshBackend(fallback=(CORPUS / "generated_figure.stl").read_bytes())
     # **Mit `name`, sonst wird der Prompt zum Objektnamen.** `from_text` nimmt
     # ohne ihn den Prompt (`into_project`, gekürzt auf fünf Wörter), und der ist
@@ -164,7 +164,7 @@ def way_four() -> Project:
     keinen Weg. Es endet dort, wo der Nutzer den Pinsel nimmt, und die Tour
     sagt ihm das.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     history = History(project.document)
 
     history.apply(
@@ -237,7 +237,7 @@ def housing() -> Project:
     Kabeldurchführung mit Zugentlastung. Alle Maße kommen aus der
     Normteiltabelle, das Spiel aus dem Materialprofil (§24.2, §28.3).
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     document = project.document
     document.parameters["breite"] = Parameter(
         name="breite", value=70.0, unit="mm", title=_("Breite")
@@ -325,7 +325,7 @@ def two_colour_sign() -> Project:
     Datei, ein Druck. Der Schriftzug daneben ist ein eigener Körper, für den
     Drucker, an dem von Hand gewechselt wird, und für Lettern zum Aufkleben.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     history = History(project.document)
     history.apply(
         _("Schild"),
@@ -388,7 +388,7 @@ def calibration_plate() -> Project:
     Drucker Stützen braucht — statt der Faustregel 45 Grad. Die Werte gehören
     danach ins Materialprofil, nicht ins Modell.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     history = History(project.document)
     history.apply(
         _("Prüfkörper"),
@@ -440,7 +440,7 @@ def hollow_and_split() -> Project:
     die Entlüftungen lassen das Material heraus, das sonst eingeschlossen
     bliebe.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     history = History(project.document)
     history.apply(
         _("Klotz"),
@@ -498,7 +498,7 @@ def box_with_lid() -> Project:
     steht. Ein Beispiel, das aussieht wie eine Platte mit fünf Löchern, zeigt
     ein Programm, das Löcher bohren kann.
     """
-    project = new_project("centauri-carbon-2", "petg")
+    project = new_project()
     document = project.document
     document.parameters["breite"] = Parameter(
         name="breite", value=80.0, unit="mm", title=_("Breite")
@@ -584,7 +584,7 @@ def box_with_lid() -> Project:
         document,
         "obj_1",
         {"thickness": 3.0, "collar": 5.0},
-        profiles.make_profile("centauri-carbon-2", "petg"),
+        profiles.make_profile(),
     )
     # ``create_lid`` verbraucht seine Eingabe und legt zwei Ausgänge an: die
     # Dose kommt als erste zurück, der Deckel als zweite. Ab hier heißt die
@@ -693,7 +693,18 @@ def mark_translatable(project: Project) -> None:
 
 def main() -> int:
     load_operations()
-    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    # Die Vorgaben und **kein** benannter Drucker: Ein Beispiel soll den Weg
+    # zeigen, nicht die Werkstatt dessen, der es gebaut hat. Trug es einen
+    # Drucker, überschrieb es beim Öffnen die Wahl, die der Kunde im ersten
+    # Dialog getroffen hatte — samt Material, Gewicht, Druckzeit und den
+    # Toleranzen, mit denen die Bohrung im nächsten Schritt gerechnet wird.
+    #
+    # Für die Auswertung hier ist das Profil ohnehin gleichgültig: Gemessen
+    # über alle neun Beispiele kommt mit ``centauri-carbon-2``/``petg``
+    # dieselbe Geometrie heraus wie mit den Vorgaben. Die Datei speichert
+    # Operationen und Werte, nicht das Ergebnis — gerechnet wird beim Öffnen,
+    # und zwar mit dem Profil des Kunden.
+    profile = profiles.make_profile()
     target = directory()
     target.mkdir(parents=True, exist_ok=True)
 
