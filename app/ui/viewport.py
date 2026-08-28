@@ -695,6 +695,12 @@ FEATURE_PATCH_LIFT = 0.0015
 #: Regel 18.
 HOVERED_FEATURE_OPACITY = 0.5
 
+#: Eine deckende Innenwand wirkt aus schrägem Blick wie ein Deckel über der
+#: Bohrung. Auswahl bleibt kräftiger als Hover, beide lassen aber den Blick
+#: durch die Öffnung frei.
+SELECTED_HOLE_OPACITY = 0.38
+HOVERED_HOLE_OPACITY = 0.24
+
 #: Wie hoch der Kontaktschatten über der Platte liegt. Ohne diesen Abstand
 #: streiten sich Schatten und Platte um dieselbe Tiefe, und das Bild flimmert
 #: beim Drehen.
@@ -4473,13 +4479,23 @@ class Viewport(QWidget):
         faces = np.hstack(
             [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
         ).ravel()
+        feature = entry.features.get(self._selected_feature)
+        hole_surface = feature is not None and feature.kind == "hole"
+        side_kwargs: dict[str, Any] = (
+            {
+                "opacity": SELECTED_HOLE_OPACITY,
+                "backface_params": {
+                    "color": SELECTED_COLOUR,
+                    "opacity": SELECTED_HOLE_OPACITY,
+                },
+            }
+            if hole_surface
+            else {"backface_params": {"color": SELECTED_COLOUR}}
+        )
         self._feature_patch = self.plotter.add_mesh(
             pv.PolyData(corners, faces),
             color=SELECTED_COLOUR,
-            # Beidseitig: die Wand einer Bohrung sieht man von innen, und ihre
-            # Normale zeigt zur Achse — ohne das wäre die gewählte Bohrung
-            # genau aus der Richtung unsichtbar, aus der man sie ansieht.
-            backface_params={"color": SELECTED_COLOUR},
+            **side_kwargs,
             lighting=False,
             name="feature-patch",
             render=False,
@@ -4531,13 +4547,16 @@ class Viewport(QWidget):
         faces = np.hstack(
             [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
         ).ravel()
+        feature = entry.features.get(self._hovered_feature)
+        hole_surface = feature is not None and feature.kind == "hole"
+        hover_opacity = HOVERED_HOLE_OPACITY if hole_surface else HOVERED_FEATURE_OPACITY
         self._hover_patch = self.plotter.add_mesh(
             pv.PolyData(corners, faces),
             color=FEATURE_LABEL_COLOUR,
-            opacity=HOVERED_FEATURE_OPACITY,
+            opacity=hover_opacity,
             backface_params={
                 "color": FEATURE_LABEL_COLOUR,
-                "opacity": HOVERED_FEATURE_OPACITY,
+                "opacity": hover_opacity,
             },
             lighting=False,
             name="feature-hover",

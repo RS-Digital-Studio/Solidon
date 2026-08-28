@@ -371,6 +371,26 @@ einer Analysekarte (§19.1). Das gewählte Merkmal trägt seine Beschriftung auc
 bei ausgeschalteter Überlagerung — ohne sie wäre die Aussage allein die Farbe
 (Regel 18).
 
+**Schweben und Auswahl sind zwei sichtbare Zustände.** Unter dem Zeiger liegt
+eine halbtransparente Flächenmarkierung samt Merkmalszeiger und Beschriftung;
+die Auswahl ist deckend und bleibt im Objektbaum sowie in der Statusleiste
+stehen. So kündigt Schweben an, was ein Klick wählen würde, ohne bereits eine
+Auswahl zu behaupten.
+
+**Eine Bohrungsmarkierung verschließt die Öffnung nicht.** Ihre Innenwand wird
+von beiden Öffnungen durchscheinend gezeichnet. Deckend liegt die Farbe der
+fernen Wand aus schrägem Blick über dem ganzen Loch und sieht wie ein Deckel
+aus, obwohl geometrisch keiner da ist; nur eine Seite zu zeichnen lässt die
+Markierung im Gegenblick dagegen ganz verschwinden. Andere Merkmalsflächen
+bleiben deckend und beidseitig sichtbar.
+
+**Eine Änderungsvorschau besitzt die Modellfarben.** Solange Vorher und Nachher
+gleichzeitig gezeigt werden, werden Auswahl- und Schwebefläche am Modell
+ausgeblendet: Orange bezeichnet dann ausschließlich entfernte, Blau
+ausschließlich hinzugekommene Geometrie. Objektbaum, Statusleiste und
+Beschriftung halten die Auswahl weiter fest. Beim Festhalten der Vorher-Ansicht
+kehrt die Auswahlmarkierung zurück; nach dem Schließen der Vorschau ebenso.
+
 Gerechnet wird gegen das Netz der Szene, nicht gegen das dezimierte
 Anzeigenetz: `face_indices` zählt dort. Den Unterschied fängt der Versatz
 entlang der Flächennormalen ab (`FEATURE_PATCH_LIFT`).

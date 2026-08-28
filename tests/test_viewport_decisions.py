@@ -395,6 +395,14 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     assert str(flaeche[0].get("color")) == str(SELECTED_COLOUR), (
         "die Fläche nahm die Auswahlfarbe nicht an"
     )
+    from app.ui.viewport import SELECTED_HOLE_OPACITY
+
+    assert flaeche[0].get("opacity") == SELECTED_HOLE_OPACITY, (
+        "eine deckende Bohrungswand schließt die Öffnung optisch wie ein Deckel"
+    )
+    assert flaeche[0]["backface_params"]["opacity"] == SELECTED_HOLE_OPACITY, (
+        "die Innenwand muss von beiden Öffnungen gleich durchscheinend bleiben"
+    )
 
     netz = plotter.meshes[-1]
     assert netz.n_cells == 2, (
@@ -419,7 +427,7 @@ def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> Non
     Bernstein. Ohne den eigenen Hover-Actor änderte sich beim Überfahren nur
     der Mauszeiger, obwohl der Bauplan das Merkmal selbst hervorhebt.
     """
-    from app.ui.viewport import FEATURE_LABEL_COLOUR, HOVERED_FEATURE_OPACITY, Viewport
+    from app.ui.viewport import FEATURE_LABEL_COLOUR, HOVERED_HOLE_OPACITY, Viewport
 
     viewport = Viewport()
     viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
@@ -435,7 +443,7 @@ def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> Non
     hover = [kwargs for kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-hover"]
     assert len(hover) == 1
     assert str(hover[0]["color"]) == FEATURE_LABEL_COLOUR
-    assert hover[0]["opacity"] == HOVERED_FEATURE_OPACITY
+    assert hover[0]["opacity"] == HOVERED_HOLE_OPACITY
     assert "feature-patch" not in plotter.names(), "überfahren ist noch keine Auswahl"
     labels = [text for group in plotter.labelled for text in group]
     assert len(labels) == 1 and "8" in labels[0], (

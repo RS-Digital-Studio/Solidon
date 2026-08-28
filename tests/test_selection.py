@@ -742,19 +742,26 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
         renderer = object()
         interactor = FakeInteractor()
 
+        def render(self) -> None:
+            """Die sichtbare Hover-Markierung fordert genau ein Neuzeichnen an."""
+
     viewport.plotter = FakePlotter()
     try:
         viewport._aim_at = lambda *_args: point  # type: ignore[method-assign]
+        # Dieser Test gilt dem Zeigerweg; die sichtbare Hover-Fläche hat ihren
+        # eigenen Plotter-Test in ``test_viewport_decisions.py``.
+        viewport._redraw_features = lambda: None  # type: ignore[method-assign]
         viewport._hover_at = (10, 10)
 
         viewport._look_under_pointer()
         assert viewport._cursor_role == "select", "noch nichts gewählt: das Teil"
 
-        viewport._select_at(point)
+        viewport.select("obj_1")
         viewport._look_under_pointer()
         assert viewport._cursor_role == "feature", "Teil gewählt: jetzt die Bohrung"
     finally:
         del viewport._aim_at
+        del viewport._redraw_features
         viewport.plotter = None
 
     assert shown, "und gesetzt wurde er wirklich, nicht nur vermerkt"
