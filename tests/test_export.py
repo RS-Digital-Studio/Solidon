@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import zipfile
 from dataclasses import replace
@@ -683,6 +684,67 @@ def test_the_chosen_filament_profile_follows_the_colour_not_the_position() -> No
         "dasselbe Filament bekommt auf jeder Platte dasselbe Profil"
     )
     assert profile_of("Weiß", [job[1]]) == "PLA-Weiss"
+
+
+def test_an_exported_3mf_carries_each_filaments_temperature(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Der Anschluss vom Projektwert bis in die exportierte Kundendatei.
+
+    ``write_config`` konnte bereits je Extruder schreiben. Der direkte
+    3MF-Export ging aber an diesem Weg vorbei und legte nur den gemeinsamen
+    PETG-Satz in ``project_settings.config`` ab. Eine PLA-Schrift kam dadurch
+    mit der richtigen Farbe und der falschen Temperatur im Slicer an.
+    """
+    from app.core.types import SlotOverride
+
+    black = MaterialSlot(index=0, name="PETG Schwarz", colour=(0.05, 0.05, 0.05))
+    white = MaterialSlot(index=0, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    objects = [
+        SceneObject(id="body", name="Gehäuse", mesh=body(), material_slots=[black]),
+        SceneObject(id="label", name="Schrift", mesh=body(), material_slots=[white]),
+    ]
+    settings = print_settings.resolve(profile)
+    pla_temperature = replace(settings.temperature, nozzle=210, nozzle_first_layer=215)
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name=white.name,
+                colour=white.colour,
+                temperature=pla_temperature,
+            ),
+        ),
+    )
+
+    written, _findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Schild",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+    )
+
+    with zipfile.ZipFile(written) as archive:
+        embedded = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert embedded["nozzle_temperature"] == [
+        str(settings.temperature.nozzle),
+        "210",
+    ]
+    assert embedded["nozzle_temperature_initial_layer"] == [
+        str(settings.temperature.nozzle_first_layer),
+        "215",
+    ]
+    imported = threemf.read_objects(written.read_bytes())
+    assert [[str(slot.name) for slot in part.slots] for part in imported] == [
+        ["PETG Schwarz"],
+        ["PLA Weiß"],
+    ], "der Import liest dieselben benannten Filamente zurück"
+    for part, expected in zip(imported, (black, white), strict=True):
+        assert part.slots[0].colour == pytest.approx(expected.colour, abs=1 / 255), (
+            "auch die sichtbaren Spulenfarben überstehen den Reimport"
+        )
 
 
 def test_only_the_part_that_needs_it_gets_the_setting() -> None:

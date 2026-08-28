@@ -37,6 +37,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -48,7 +49,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.knowledge import filaments
-from app.core.types import MaterialSlot
+from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
 from app.ui.style import TIGHT, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
@@ -344,6 +345,7 @@ class FilamentField(QComboBox):
 #: als Slot bekommen.
 _NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _COLOUR_ROLE = int(Qt.ItemDataRole.UserRole) + 2
+_SLOT_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 
 
 class FilamentPanel(QWidget):
@@ -360,10 +362,10 @@ class FilamentPanel(QWidget):
     **Zwei Hälften, und die Trennung ist die eigentliche Entscheidung:**
 
     * **Im Projekt** — was die Körper tragen, mit Farbe, Name und der Zahl
-      der Körper. Reine Anzeige. Ein Filament des Projekts *hier* zu ändern
-      hieße, Geometrie außerhalb einer Operation anzufassen (Regel 2); der
-      Weg dorthin ist das Kontextmenü am Merkmal, und der Hinweis unter der
-      Liste sagt es.
+      der Körper. Die Zeile öffnet nur Druckwerte dieser Spule. Farbe oder
+      Zuordnung zu ändern hieße dagegen, Geometrie außerhalb einer Operation
+      anzufassen (Regel 2); der Weg dorthin ist das Kontextmenü am Merkmal,
+      und der Hinweis unter der Liste sagt es.
     * **Im Regal** — die Vorwahl (:mod:`app.core.knowledge.filaments`), also
       die Spulen, die wirklich dastehen. Sie gehört keinem Projekt, hängt an
       keinem Körper und ist deshalb hier vollständig bedienbar: anlegen,
@@ -374,11 +376,16 @@ class FilamentPanel(QWidget):
     zum selben Dialog.
     """
 
+    #: Die Druckwerte gehören dem Projekt, nicht dem Regal. Das Hauptfenster
+    #: öffnet den Dialog und schreibt das Ergebnis über die Sitzung zurück.
+    overrideRequested = Signal(object)
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Filamente"))
         self.list.itemDoubleClicked.connect(self._on_activated)
+        self.list.currentItemChanged.connect(self._selection_changed)
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
 
@@ -388,19 +395,33 @@ class FilamentPanel(QWidget):
 
         self.add_button = QPushButton(tr("Filament anlegen …"), self)
         self.add_button.clicked.connect(self._add)
+        self.settings_button = QPushButton(tr("Druckwerte …"), self)
+        self.settings_button.setEnabled(False)
+        self.settings_button.setToolTip(
+            tr("Temperatur, Kühlung, Rückzug und Materialwerte dieser Spule einstellen.")
+        )
+        self.settings_button.clicked.connect(self._request_override)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
         layout.setSpacing(TIGHT)
         layout.addWidget(self.list, 1)
         layout.addWidget(self.hint)
-        layout.addWidget(self.add_button)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(TIGHT)
+        buttons.addWidget(self.add_button)
+        buttons.addWidget(self.settings_button)
+        layout.addLayout(buttons)
 
-        self._used: tuple[tuple[str, str, int], ...] = ()
-        """Was das Projekt trägt: Name, Farbe, Zahl der Körper."""
+        self._used: tuple[tuple[MaterialSlot | None, str, str, int, bool], ...] = ()
+        """Slot, Name, Farbe, Zahl der Körper und eigene Druckwerte."""
         self.show_scene(())
 
-    def show_scene(self, objects: Sequence[object]) -> None:
+    def show_scene(
+        self,
+        objects: Sequence[object],
+        settings: PrintSettings | None = None,
+    ) -> None:
         """Trägt ein, welche Filamente die Körper der Szene benutzen.
 
         Zusammengelegt über Name **und** Farbe — derselbe Schlüssel, über den
@@ -413,17 +434,33 @@ class FilamentPanel(QWidget):
         Modell eine leere Projekthälfte — während im Bild ein Körper stand,
         der sehr wohl in einer Farbe gedruckt wird (Robert, 27.08.2026).
         """
-        used: dict[tuple[str, str], int] = {}
+        used: dict[tuple[str, str], tuple[MaterialSlot | None, int]] = {}
         for entry in objects:
             slots = getattr(entry, "material_slots", ()) or ()
             if not slots:
                 key = (str(tr("Ohne Filament — Farbe des Teils")), unpainted_colour())
-                used[key] = used.get(key, 0) + 1
+                previous = used.get(key, (None, 0))
+                used[key] = (None, previous[1] + 1)
                 continue
             for slot in slots:
                 key = (str(slot.name), shown_colour(int(slot.index), slot.colour))
-                used[key] = used.get(key, 0) + 1
-        self._used = tuple((name, colour, count) for (name, colour), count in sorted(used.items()))
+                previous = used.get(key, (slot, 0))
+                used[key] = (slot, previous[1] + 1)
+        overrides = {
+            entry.key
+            for entry in (settings.slot_overrides if settings is not None else ())
+            if entry is not None and not entry.empty
+        }
+        self._used = tuple(
+            (
+                slot,
+                name,
+                colour,
+                count,
+                slot is not None and (slot.name, slot.colour) in overrides,
+            )
+            for (name, colour), (slot, count) in sorted(used.items())
+        )
         self._fill()
 
     def _fill(self) -> None:
@@ -431,11 +468,19 @@ class FilamentPanel(QWidget):
         self.list.clear()
         if self._used:
             self._heading(tr("Im Projekt"))
-            for name, colour, count in self._used:
-                item = QListWidgetItem(swatch(colour), self._used_label(name, count))
-                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+            for slot, name, colour, count, has_override in self._used:
+                label = self._used_label(name, count)
+                if has_override:
+                    label = f"{label} · {tr('eigene Druckwerte')}"
+                item = QListWidgetItem(swatch(colour), label)
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+                if slot is not None:
+                    item.setData(_SLOT_ROLE, slot)
                 item.setToolTip(
-                    tr("Geändert wird die Farbe eines Körpers über das Kontextmenü am Merkmal.")
+                    tr(
+                        "Druckwerte stehen unten. Geändert wird die Farbe eines Körpers "
+                        "über das Kontextmenü am Merkmal."
+                    )
                 )
                 self.list.addItem(item)
 
@@ -456,6 +501,7 @@ class FilamentPanel(QWidget):
             self.hint.setText(
                 tr("Noch keine Spulen eingetragen. Was Sie anlegen, steht beim Färben zur Wahl.")
             )
+        self._selection_changed(self.list.currentItem())
 
     def _heading(self, text: str) -> None:
         """Eine Überschrift in der Liste — anwählbar ist sie nicht.
@@ -506,8 +552,26 @@ class FilamentPanel(QWidget):
         self._fill()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
+        if item.data(_SLOT_ROLE) is not None:
+            self._request_override()
+            return
         if item.data(_NAME_ROLE):
             self._edit()
+
+    def _selection_changed(self, item: QListWidgetItem | None, *_args: object) -> None:
+        """Nur Projektfilamente haben eigene Druckwerte."""
+        self.settings_button.setEnabled(
+            bool(item is not None and item.data(_SLOT_ROLE) is not None)
+        )
+
+    def _request_override(self) -> None:
+        """Öffnet nichts selbst — das Projekt schreibt nur die Sitzung."""
+        row = self.list.currentRow()
+        if row < 0:
+            return
+        slot = self.list.item(row).data(_SLOT_ROLE)
+        if isinstance(slot, MaterialSlot):
+            self.overrideRequested.emit(slot)
 
     def _edit(self) -> None:
         chosen = self._chosen()

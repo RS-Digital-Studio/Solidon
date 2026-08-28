@@ -89,7 +89,7 @@ from app.core.errors import (
     UserError,
 )
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
-from app.core.export.handover import SliceOutcome
+from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
     ExportFormat,
     adhesion_margin,
@@ -153,10 +153,12 @@ from app.core.types import (
     Bone,
     Feature,
     Finding,
+    MaterialSlot,
     ObjectId,
     Origin,
     Parameter,
     PlaneFrame,
+    QualityPreset,
     SliceResult,
     SourceOrigin,
     Stroke,
@@ -222,7 +224,11 @@ from app.ui.panels import (
     open_section,
 )
 from app.ui.pose_bar import PoseBar
-from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
+from app.ui.print_settings_dialog import (
+    FilamentOverrideDialog,
+    PrintSettingsDialog,
+    remembered_setup,
+)
 from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
@@ -1069,6 +1075,7 @@ class MainWindow(QMainWindow):
         self.history_panel.operationActivated.connect(self.edit_operation)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
         self.filaments = FilamentPanel(self)
+        self.filaments.overrideRequested.connect(self._edit_filament_settings)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -3665,6 +3672,38 @@ class MainWindow(QMainWindow):
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
         dialog.deleteLater()
+
+    def _edit_filament_settings(self, slot: object) -> None:
+        """Die Druckwerte einer Spule direkt am Filamentwähler (§20, §29).
+
+        Farbe und Flächenzuweisung bleiben Operationen. Hier ändert sich nur,
+        womit der Slicer diesen bereits vorhandenen Materialslot fährt; deshalb
+        reist der Wert über :meth:`Session.set_print_settings` und nicht am
+        Operationsstapel vorbei in die Geometrie.
+        """
+        if not isinstance(slot, MaterialSlot):
+            return
+        document = self.session.project.document
+        quality = cast(
+            QualityPreset,
+            self.settings.print_quality
+            if self.settings.print_quality in print_settings.quality_presets()
+            else print_settings.DEFAULT_QUALITY,
+        )
+        settings = document.print_settings or print_settings.resolve(self.session.profile, quality)
+        dialog = FilamentOverrideDialog(
+            slot,
+            settings,
+            override_for(settings, slot),
+            self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        updated = with_slot_override(settings, slot, dialog.override())
+        self.session.set_print_settings(updated)
+        result = self.session.last_result
+        if result is not None:
+            self.filaments.show_scene(list(result.scene.objects.values()), updated)
 
     def _current_slice(self) -> SliceResult | None:
         """Die Schichtanalyse des gewählten Körpers, wenn sie schon vorliegt.
@@ -7242,7 +7281,16 @@ class MainWindow(QMainWindow):
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
-        self.filaments.show_scene(list(result.scene.objects.values()))
+        quality = cast(
+            QualityPreset,
+            self.settings.print_quality
+            if self.settings.print_quality in print_settings.quality_presets()
+            else print_settings.DEFAULT_QUALITY,
+        )
+        effective_settings = self.session.project.document.print_settings or print_settings.resolve(
+            self.session.profile, quality
+        )
+        self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
         plates = {entry.plate for entry in result.scene.objects.values()}
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn

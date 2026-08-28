@@ -194,13 +194,15 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     assert zeilen.count("PETG Rot") == 1, "das Regal nennt es einmal, ohne Zählung"
 
 
-def test_a_used_filament_is_not_a_button(qt_app: QApplication, tmp_path, monkeypatch) -> None:
-    """Die Projekthälfte ist Anzeige — Ändern wäre Geometrie ohne Operation.
+def test_a_used_filament_separates_colour_from_print_values(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Die Zeile ändert keine Geometrie und öffnet nur ihre Druckwerte.
 
-    Ein Filament am Körper zu ändern heißt, den Slot eines Körpers zu ändern,
-    und das gehört einer Operation (Regel 2). Die Zeile ist deshalb nicht
-    anwählbar, und ihr Hinweis sagt, wo es geht. Das Regal darunter hat
-    keinen Körper unter sich und ist voll bedienbar.
+    Farbe und Flächenzuweisung bleiben am Merkmal und damit in einer
+    Operation. Die Temperaturen derselben Spule sind Druckeinstellungen und
+    dürfen von hier erreichbar sein. Das Regal darunter bleibt unabhängig
+    davon vollständig bedienbar.
     """
     import trimesh
 
@@ -235,9 +237,49 @@ def test_a_used_filament_is_not_a_button(qt_app: QApplication, tmp_path, monkeyp
         if panel.list.item(index).text() == "PETG Rot"
     )
 
-    assert not benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "die Anzeige ist kein Knopf"
+    assert benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "Druckwerte müssen erreichbar sein"
     assert regal.flags() & Qt.ItemFlag.ItemIsSelectable, "das Regal lässt sich bedienen"
-    assert "Kontextmenü" in benutzt.toolTip(), "und sagt, wo es geht"
+    assert "Kontextmenü" in benutzt.toolTip(), "die Farbzuweisung bleibt an der Operation"
+    panel.list.setCurrentItem(benutzt)
+    assert panel.settings_button.isEnabled(), "die sichtbare Handlung folgt der Auswahl"
+
+
+def test_the_print_values_button_names_the_exact_filament(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Nicht „Slot 1", sondern Name und Farbe reisen zum Einstellungsdialog."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import filaments
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    slot = MaterialSlot(index=4, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    panel = FilamentPanel()
+    panel.show_scene(
+        [
+            SceneObject(
+                id="A",
+                name="A",
+                mesh=MeshData.of(trimesh.creation.box()),
+                material_slots=[slot],
+            )
+        ]
+    )
+    used = next(
+        panel.list.item(index)
+        for index in range(panel.list.count())
+        if "Körper" in panel.list.item(index).text()
+    )
+    panel.list.setCurrentItem(used)
+    seen: list[MaterialSlot] = []
+    panel.overrideRequested.connect(seen.append)
+
+    panel.settings_button.click()
+
+    assert seen == [slot]
 
 
 def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch) -> None:

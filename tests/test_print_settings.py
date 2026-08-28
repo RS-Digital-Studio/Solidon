@@ -1075,6 +1075,31 @@ def test_a_spool_keeps_its_settings_when_the_order_changes(tmp_path: Path) -> No
     assert zweite["nozzle_temperature"] == ["210"], "Rot fährt seine eigenen Werte"
 
 
+def test_a_slot_override_can_be_added_changed_and_removed() -> None:
+    """Die Oberfläche braucht einen einzigen, identitätsfesten Schreibweg.
+
+    Name und Farbe sind der Schlüssel. Würde der Wähler stattdessen an eine
+    Listenposition schreiben, bekäme nach einer anderen Plattenauswahl wieder
+    die falsche Spule die Temperatur.
+    """
+    from app.core.types import MaterialSlot, SlotOverride
+
+    slot = MaterialSlot(index=3, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    first = SlotOverride(name=slot.name, colour=slot.colour, temperature=settings.temperature)
+    changed = SlotOverride(name=slot.name, colour=slot.colour, cooling=settings.cooling)
+
+    settings = handover.with_slot_override(settings, slot, first)
+    assert handover.override_for(settings, slot) == first
+
+    settings = handover.with_slot_override(settings, slot, changed)
+    assert settings.slot_overrides == (changed,), "ändern verdoppelt die Spule nicht"
+
+    settings = handover.with_slot_override(settings, slot, None)
+    assert handover.override_for(settings, slot) is None
+    assert settings.slot_overrides == (), "Projektwerte brauchen keinen leeren Eintrag"
+
+
 def test_a_slicer_that_takes_one_filament_says_so() -> None:
     """Was ein Slicer nicht entgegennimmt, wird gesagt — nicht verschwiegen.
 
@@ -1110,6 +1135,40 @@ def test_a_slicer_that_takes_one_filament_says_so() -> None:
     assert handover.unreachable_overrides(settings, prusa) == []
     leer = replace(settings, slot_overrides=(SlotOverride(name="Rot"),))
     assert handover.unreachable_overrides(leer, prusa) == []
+
+
+def test_a_single_profile_slicer_uses_the_first_filaments_values(tmp_path: Path) -> None:
+    """Ein Satz heißt erster Extruder, nicht Projektwert trotz eigener Wahl.
+
+    PrusaSlicer und CuraEngine können auf diesem Weg keine zwei Filamentprofile
+    laden. Den ersten Satz können sie sehr wohl übernehmen; ihn ebenfalls zu
+    verwerfen und zugleich nur zu warnen wäre unnötiger Datenverlust.
+    """
+    from app.core.types import MaterialSlot, SlotOverride
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    first = MaterialSlot(index=0, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    second = MaterialSlot(index=1, name="PETG Rot", colour=(1.0, 0.0, 0.0))
+    pla = replace(settings.temperature, nozzle=210)
+    petg = replace(settings.temperature, nozzle=245)
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(name=first.name, colour=first.colour, temperature=pla),
+            SlotOverride(name=second.name, colour=second.colour, temperature=petg),
+        ),
+    )
+    setup = handover.SlicerSetup(executable=Path("prusa-slicer.exe"), flavour="prusa")
+
+    written = handover.write_config(settings, profile, setup, tmp_path, slots=(first, second))
+    text = written.process.read_text(encoding="utf-8")
+
+    assert "temperature = 210" in text, "der erreichbare erste Satz kommt an"
+    findings = handover.unreachable_overrides(settings, setup, (first, second))
+    assert len(findings) == 1
+    assert findings[0].values["slots"] == 1, "nur die zweite Spule ist unerreichbar"
+    assert handover.unreachable_overrides(settings, setup, (first,)) == []
 
 
 def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
@@ -2437,6 +2496,51 @@ def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:
     befehl = handover._command(setup, [tmp_path / "platte.3mf"], config, tmp_path)
     stelle = befehl.index("--load-filaments")
     assert befehl[stelle + 1].count(";") == 1, "beide gehen an den Slicer, nicht nur eines"
+
+
+def test_a_slot_override_wins_over_its_selected_filament_profile(tmp_path: Path) -> None:
+    """Die ausdrückliche Kundenwahl ist die oberste Schicht des Profils.
+
+    Das Herstellerprofil liefert weiterhin alles, was nicht geändert wurde.
+    Eine aktivierte Temperaturgruppe darf es aber nicht still wieder auf seine
+    eigene Temperatur zurücksetzen.
+    """
+    from app.core.types import MaterialSlot, SlotOverride
+
+    pla = _filament_profile(
+        tmp_path,
+        "Haus PLA",
+        nozzle_temperature=["205"],
+        filament_max_volumetric_speed=["21"],
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    temperature = replace(settings.temperature, nozzle=215)
+    slot = MaterialSlot(
+        index=0,
+        name="PLA Weiß",
+        colour=(1.0, 1.0, 1.0),
+        material=str(pla),
+    )
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name=slot.name,
+                colour=slot.colour,
+                temperature=temperature,
+            ),
+        ),
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+
+    written = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert written["nozzle_temperature"] == ["215"], "die sichtbare Spulenwahl gewinnt"
+    assert written["filament_max_volumetric_speed"] == ["21"], (
+        "nicht geänderte Gruppen bleiben beim Herstellerprofil"
+    )
 
 
 def test_without_slots_it_stays_one_filament(tmp_path: Path) -> None:

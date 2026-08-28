@@ -19,11 +19,11 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, cast
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
@@ -71,6 +71,7 @@ from app.core.types import (
     SceneObject,
     SettingAdvice,
     SliceResult,
+    SlotOverride,
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
@@ -915,6 +916,18 @@ FIELDS: tuple[Field, ...] = (
 )
 
 
+#: Nur Werte, die physisch an der Spule hängen (§20). Die Farbe fehlt
+#: absichtlich: Sie gehört dem Materialslot und wird im Filamentwähler gesetzt.
+#: Schichthöhe, Wände und Geschwindigkeit gelten dem Teil und dürfen hier nie
+#: auftauchen — sonst erhielte ein zweifarbiges Teil zwei Geometrien.
+FILAMENT_GROUPS: Final = ("temperature", "cooling", "retraction", "filament")
+FILAMENT_FIELDS: tuple[Field, ...] = tuple(
+    field
+    for field in FIELDS
+    if field.path.partition(".")[0] in FILAMENT_GROUPS and field.path != "filament.colour"
+)
+
+
 def _toggle_of(section: QWidget) -> QToolButton | None:
     """Der Umschalter eines Abschnitts aus :func:`panels.collapsible`.
 
@@ -1034,6 +1047,213 @@ class _ColourButton(QPushButton):
         if chosen.isValid():
             self.set_value(chosen.name())
             self.changed.emit(self._value)
+
+
+def _make_setting_editor(
+    field: Field,
+    parent: QWidget,
+    changed: Callable[..., None],
+) -> QWidget:
+    """Baut dasselbe Einstellungsfeld für beide Druckdialoge.
+
+    Der große Druckdialog und die Werte einer einzelnen Spule dürfen nicht
+    zwei verschiedene Zahlenfelder für dieselbe Sache führen. Grenzen,
+    Einheiten, Auswahlwerte und Hilfesätze kommen deshalb aus derselben
+    :data:`FIELDS`-Zeile und gehen durch diesen einen Bauweg.
+    """
+    editor: QWidget
+    if field.kind == "bool":
+        editor = QCheckBox(parent)
+        editor.toggled.connect(changed)
+    elif field.kind == "int":
+        spin = QSpinBox(parent)
+        spin.setRange(int(field.minimum), int(field.maximum))
+        spin.valueChanged.connect(changed)
+        editor = spin
+    elif field.kind == "enum":
+        combo = QComboBox(parent)
+        for choice in field.choices:
+            combo.addItem(choice_label(choice), choice)
+        explain_choices(combo)
+        combo.currentIndexChanged.connect(changed)
+        editor = combo
+    elif field.kind == "colour":
+        button = _ColourButton("#000000", parent, note=str(field.note))
+        button.changed.connect(changed)
+        editor = button
+    else:
+        number = NumberSpin(parent)
+        number.setRange(field.minimum, field.maximum)
+        number.setSingleStep(field.step)
+        number.setDecimals(field.decimals)
+        number.valueChanged.connect(changed)
+        editor = number
+
+    limit = FIELD_WIDTH.get(field.kind)
+    if limit is not None:
+        editor.setMaximumWidth(max(limit, editor.sizeHint().width()))
+    note = str(field.note)
+    if note:
+        if not editor.toolTip():
+            editor.setToolTip(note)
+        editor.setStatusTip(note)
+        editor.setAccessibleDescription(note)
+    return editor
+
+
+def _set_setting_editor(editor: QWidget, field: Field, value: object) -> None:
+    """Schreibt einen Modellwert in sein Feld."""
+    if isinstance(editor, QCheckBox):
+        editor.setChecked(bool(value))
+    elif isinstance(editor, QSpinBox):
+        editor.setValue(int(cast(Any, value)))
+    elif isinstance(editor, QComboBox):
+        editor.setCurrentIndex(max(editor.findData(str(value)), 0))
+    elif isinstance(editor, _ColourButton):
+        editor.set_value(str(value))
+    elif isinstance(editor, QDoubleSpinBox):
+        editor.setValue(float(cast(Any, value)) * field.factor)
+
+
+def _setting_editor_value(editor: QWidget, field: Field) -> object:
+    """Liest den Modellwert aus seinem Feld."""
+    if isinstance(editor, QCheckBox):
+        return editor.isChecked()
+    if isinstance(editor, QSpinBox):
+        return editor.value()
+    if isinstance(editor, QComboBox):
+        return editor.currentData()
+    if isinstance(editor, _ColourButton):
+        return editor.value()
+    if isinstance(editor, QDoubleSpinBox):
+        return float(editor.value()) / field.factor
+    raise TypeError(type(editor).__name__)
+
+
+class FilamentOverrideDialog(QDialog):
+    """Eigene Druckwerte einer Spule, gruppenweise und ohne CAD-Begriffe.
+
+    Ausgeschaltet bedeutet Projektwert. Wer nur die Düsentemperatur ändern
+    will, schaltet „Temperaturen" ein; der vollständige Bereich ist mit den
+    Projektwerten vorbelegt und genau ein Wert muss geändert werden. Das ist
+    der Vertrag von :class:`SlotOverride`, sichtbar in der Oberfläche.
+    """
+
+    def __init__(
+        self,
+        slot: MaterialSlot,
+        settings: PrintSettings,
+        existing: SlotOverride | None = None,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.slot = slot
+        self.settings = settings
+        self.existing = existing
+        self.editors: dict[str, QWidget] = {}
+        self.groups: dict[str, QGroupBox] = {}
+
+        name = str(slot.name) or tr("Filament")
+        self.setWindowTitle(f"{tr('Druckeinstellungen')} — {name}")
+        self.setMinimumWidth(620)
+        layout = QVBoxLayout(self)
+
+        heading = QWidget(self)
+        heading_layout = QHBoxLayout(heading)
+        heading_layout.setContentsMargins(0, 0, 0, 0)
+        heading_layout.setSpacing(TIGHT)
+        colour = QLabel(heading)
+        colour.setPixmap(
+            swatch(shown_colour(int(slot.index), slot.colour)).pixmap(SWATCH_PIXELS, SWATCH_PIXELS)
+        )
+        colour.setAccessibleName(tr("Filamentfarbe"))
+        title = QLabel(name, heading)
+        font = title.font()
+        font.setBold(True)
+        title.setFont(font)
+        heading_layout.addWidget(colour)
+        heading_layout.addWidget(title, 1)
+        layout.addWidget(heading)
+
+        intro = QLabel(
+            tr(
+                "Nur was diese Spule anders braucht. Ausgeschaltete Bereiche "
+                "benutzen die Projektwerte."
+            ),
+            self,
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        contents = QWidget(scroll)
+        sections = QVBoxLayout(contents)
+        sections.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        sections.setSpacing(TIGHT)
+        titles = {
+            "temperature": tr("Temperaturen"),
+            "cooling": tr("Kühlung"),
+            "retraction": tr("Rückzug"),
+            "filament": tr("Filament"),
+        }
+        for group in FILAMENT_GROUPS:
+            box = QGroupBox(titles[group], contents)
+            box.setCheckable(True)
+            own_section = getattr(existing, group) if existing is not None else None
+            box.setChecked(own_section is not None)
+            box.setToolTip(tr("Eingeschaltet gelten diese Werte nur für die gewählte Spule."))
+            form = QFormLayout(box)
+            source = own_section or getattr(settings, group)
+            for field in (
+                entry for entry in FILAMENT_FIELDS if entry.path.partition(".")[0] == group
+            ):
+                editor = _make_setting_editor(field, box, lambda *_args: None)
+                _set_setting_editor(editor, field, getattr(source, field.path.partition(".")[2]))
+                self.editors[field.path] = editor
+                label = QLabel(
+                    f"{field.title!s} [{field.unit}]" if field.unit else str(field.title),
+                    box,
+                )
+                note = str(field.note)
+                if note:
+                    label.setToolTip(note)
+                    label.setStatusTip(note)
+                form.addRow(label, editor)
+            self.groups[group] = box
+            sections.addWidget(box)
+        sections.addStretch(1)
+        scroll.setWidget(contents)
+        layout.addWidget(scroll, 1)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        ok.setText(tr("Übernehmen"))
+        make_primary(ok)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def override(self) -> SlotOverride | None:
+        """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
+        values: dict[str, Any] = {}
+        for group in FILAMENT_GROUPS:
+            if not self.groups[group].isChecked():
+                continue
+            previous = getattr(self.existing, group) if self.existing is not None else None
+            section = previous or getattr(self.settings, group)
+            changed = {
+                field.path.partition(".")[2]: _setting_editor_value(self.editors[field.path], field)
+                for field in FILAMENT_FIELDS
+                if field.path.partition(".")[0] == group
+            }
+            values[group] = replace(section, **changed)
+        if not values:
+            return None
+        return SlotOverride(name=self.slot.name, colour=self.slot.colour, **values)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1354,7 +1574,8 @@ class PrintSettingsDialog(QDialog):
         """Neu aufgelöste Vorgaben — mit der Slotbelegung von vorher.
 
         **``resolve`` ist eine reine Funktion aus Profil und Stufe, und genau
-        ein Feld hat dort keine Quelle: ``slot_profiles``.** Nachgemessen: Ein
+        zwei Felder haben dort keine Quelle: ``slot_profiles`` und
+        ``slot_overrides``.** Nachgemessen: Ein
         Satz durch „fein" und zurück nach „standard" ergibt Feld für Feld
         wieder denselben — die Slotbelegung steht danach auf ``()`` und
         bleibt es, gleich wie oft man zurückschaltet.
@@ -1373,11 +1594,12 @@ class PrintSettingsDialog(QDialog):
 
         Der Fehler war an beiden Stellen derselbe, und die zweite ist die
         Stelle, an der die Übersteuerungen gerettet werden — dort fiel die
-        Slotbelegung durch dasselbe Loch.
+        Slotbelegung und die eigenen Werte der Spulen durch dasselbe Loch.
         """
         return replace(
             print_settings.resolve(self.session.profile, quality),
             slot_profiles=self.settings.slot_profiles,
+            slot_overrides=self.settings.slot_overrides,
         )
 
     def _build_front(self) -> QWidget:
@@ -2296,57 +2518,13 @@ class PrintSettingsDialog(QDialog):
         gedehnter Kasten, sondern ein größeres Ziel — zu sehen ist ohnehin nur
         das Kästchen.
         """
-        editor: QWidget
-        if field.kind == "bool":
-            editor = QCheckBox(self)
-            editor.toggled.connect(self._editor_changed)
-        elif field.kind == "int":
-            spin = QSpinBox(self)
-            spin.setRange(int(field.minimum), int(field.maximum))
-            spin.valueChanged.connect(self._editor_changed)
-            editor = spin
-        elif field.kind == "enum":
-            combo = QComboBox(self)
-            # Gezeigt wird die Übersetzung, gespeichert der englische Wert: er
-            # geht in die Projektdatei und zum Slicer (§4.1).
-            for choice in field.choices:
-                combo.addItem(choice_label(choice), choice)
-            # Und je Eintrag der Satz zum Wert: „Gyroid" ist ein Name, erst
-            # „in alle Richtungen gleich fest" ist eine Entscheidungshilfe.
-            explain_choices(combo)
-            combo.currentIndexChanged.connect(self._editor_changed)
-            editor = combo
-        elif field.kind == "colour":
-            button = _ColourButton("#000000", self, note=str(field.note))
-            button.changed.connect(self._editor_changed)
-            editor = button
-        else:
-            number = NumberSpin(self)
-            number.setRange(field.minimum, field.maximum)
-            number.setSingleStep(field.step)
-            number.setDecimals(field.decimals)
-            number.valueChanged.connect(self._editor_changed)
-            editor = number
-        limit = FIELD_WIDTH.get(field.kind)
-        if limit is not None:
-            # Nie schmaler als der eigene Bedarf: „Auf Berührungsflächen" in
-            # der Stützenauswahl braucht 246 Bildpunkte, und ein abgeschnittener
-            # Auswahlwert wäre schlechter als ein zu weiter Kasten.
-            editor.setMaximumWidth(max(limit, editor.sizeHint().width()))
+        editor = _make_setting_editor(field, self, self._editor_changed)
         self._editors[field.path] = editor
         # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
         # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
         # auf ihre Beschriftung. Der ``statusTip`` kommt dazu, weil ein
         # Bildschirmleser ihn vorliest und die Statuszeile ihn zeigt, ohne dass
         # jemand warten muss (Regel 18: nicht nur eine Kodierung).
-        note = str(field.note)
-        if note:
-            # Wer schon einen genaueren Tooltip hat, behält ihn: Der Farbknopf
-            # nennt darin den Wert und hängt den Satz selbst hinten an.
-            if not editor.toolTip():
-                editor.setToolTip(note)
-            editor.setStatusTip(note)
-            editor.setAccessibleDescription(note)
         self._fields[field.path] = field
         return editor
 
@@ -2360,17 +2538,7 @@ class PrintSettingsDialog(QDialog):
             for field in FIELDS:
                 value = print_settings.read_path(self.settings, field.path)
                 editor = self._editors[field.path]
-                if isinstance(editor, QCheckBox):
-                    editor.setChecked(bool(value))
-                elif isinstance(editor, QSpinBox):
-                    editor.setValue(int(value))
-                elif isinstance(editor, QComboBox):
-                    index = editor.findData(str(value))
-                    editor.setCurrentIndex(max(index, 0))
-                elif isinstance(editor, _ColourButton):
-                    editor.set_value(str(value))
-                elif isinstance(editor, QDoubleSpinBox):
-                    editor.setValue(float(value) * field.factor)
+                _set_setting_editor(editor, field, value)
         finally:
             self._loading = False
 
@@ -2379,19 +2547,7 @@ class PrintSettingsDialog(QDialog):
         settings = self.settings
         for field in FIELDS:
             editor = self._editors[field.path]
-            value: Any
-            if isinstance(editor, QCheckBox):
-                value = editor.isChecked()
-            elif isinstance(editor, QSpinBox):
-                value = editor.value()
-            elif isinstance(editor, QComboBox):
-                value = editor.currentData()
-            elif isinstance(editor, _ColourButton):
-                value = editor.value()
-            elif isinstance(editor, QDoubleSpinBox):
-                value = float(editor.value()) / field.factor
-            else:
-                continue
+            value = _setting_editor_value(editor, field)
             settings = print_settings.with_path(settings, field.path, value)
         return settings
 

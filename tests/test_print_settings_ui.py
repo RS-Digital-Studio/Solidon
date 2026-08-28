@@ -29,11 +29,13 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
-from app.core.types import Feature
+from app.core.types import Feature, MaterialSlot, SlotOverride
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
     FIELDS,
+    FILAMENT_FIELDS,
     GROUPS,
+    FilamentOverrideDialog,
     PrintSettingsDialog,
     _ColourButton,
 )
@@ -80,6 +82,57 @@ def test_every_setting_in_the_model_has_a_field() -> None:
 def test_every_field_points_at_a_real_setting(dialog: PrintSettingsDialog) -> None:
     for field in FIELDS:
         print_settings.read_path(dialog.settings, field.path)
+
+
+def test_filament_dialog_contains_only_values_that_belong_to_the_spool(
+    qt_app: QApplication,
+) -> None:
+    """Ein Filament darf keine zweite Geometrie des Teils erzeugen.
+
+    Schichthöhe, Wände und Tempo gelten dem Teil. Temperatur, Kühlung,
+    Rückzug und Materialkennwerte können sich dagegen zwischen zwei Spulen
+    desselben Drucks unterscheiden. Genau diese Grenze muss die Oberfläche
+    sichtbar einhalten.
+    """
+    paths = {field.path for field in FILAMENT_FIELDS}
+
+    assert {path.partition(".")[0] for path in paths} == {
+        "temperature",
+        "cooling",
+        "retraction",
+        "filament",
+    }
+    assert "filament.colour" not in paths, "die Farbe wird am Filament selbst gewählt"
+    assert not paths & {
+        "layers.layer_height",
+        "shell.wall_count",
+        "speed.outer_wall",
+    }
+    settings = print_settings.resolve(profiles.make_profile())
+    dialog = FilamentOverrideDialog(MaterialSlot(index=1, name="PLA"), settings)
+    assert set(dialog.editors) == paths, "jeder erlaubte Wert ist im Dialog erreichbar"
+
+
+def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> None:
+    """Ein Haken je Bereich statt neunzehn versteckter Einzelentscheidungen."""
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    dialog = FilamentOverrideDialog(slot, settings)
+
+    assert all(not group.isChecked() for group in dialog.groups.values())
+    dialog.groups["temperature"].setChecked(True)
+    nozzle = dialog.editors["temperature.nozzle"]
+    assert isinstance(nozzle, QSpinBox)
+    nozzle.setValue(210)
+
+    override = dialog.override()
+    assert override is not None
+    assert override.key == (slot.name, slot.colour)
+    assert override.temperature is not None
+    assert override.temperature.nozzle == 210
+    assert override.cooling is None
+    assert override.retraction is None
+    assert override.filament is None
 
 
 def test_every_field_lands_in_a_known_group() -> None:
@@ -1573,6 +1626,32 @@ def test_the_slot_assignment_outlives_a_quality_change(
     assert print_settings.read_path(dialog.settings, "layers.layer_height") == pytest.approx(
         0.12
     ), "und die Stufe wirkt weiterhin auf alles, was ihr gehört"
+
+
+def test_filament_values_outlive_a_quality_change(qt_app: QApplication, session: Session) -> None:
+    """Werte einer Spule kommen aus keiner Qualitätsstufe.
+
+    Der Dialog bewahrte die Zuordnung des Filamentprofils, aber nicht den
+    daneben gespeicherten ``SlotOverride``. Eine weiße PLA-Schrift auf einem
+    PETG-Gehäuse sprang damit beim Wechsel auf „fein" unbemerkt von 210 auf
+    240 Grad zurück.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    own_temperature = replace(dialog.settings.temperature, nozzle=210)
+    override = SlotOverride(
+        name="PLA Weiß",
+        colour=(1.0, 1.0, 1.0),
+        temperature=own_temperature,
+    )
+    dialog.settings = replace(dialog.settings, slot_overrides=(override,))
+
+    _select_quality(dialog, "fine")
+
+    assert dialog.settings.slot_overrides == (override,)
+    assert dialog.settings.quality == "fine"
+    assert dialog.settings.layers.layer_height == pytest.approx(0.12), (
+        "die Qualitätsstufe wirkt weiterhin auf die Projektwerte"
+    )
 
 
 def test_the_slot_assignment_outlives_a_printer_change(

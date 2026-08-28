@@ -24,12 +24,13 @@ from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QDialogButtonBox, QToolBar
 
 from app.core import errors
+from app.core.export import handover
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY
 from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
-from app.core.types import Parameter
+from app.core.types import MaterialSlot, Parameter, SlotOverride
 from app.i18n import tr
 from app.ui import main_window as main_window_module
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
@@ -71,6 +72,38 @@ def test_importing_a_model_goes_through_the_stack(session: Session) -> None:
     result = session.evaluate_now()
     assert result.complete
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000.0)
+
+
+def test_filament_values_from_the_panel_reach_the_project(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die neue, kurze Bedienkette: Filamentpanel → Dialog → Projektdatei."""
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+
+    class AcceptedFilamentDialog:
+        def __init__(self, chosen, settings, _existing, _parent) -> None:
+            self.chosen = chosen
+            self.temperature = dataclasses.replace(settings.temperature, nozzle=205)
+
+        def exec(self) -> int:
+            return int(QDialog.DialogCode.Accepted)
+
+        def override(self) -> SlotOverride:
+            return SlotOverride(
+                name=self.chosen.name,
+                colour=self.chosen.colour,
+                temperature=self.temperature,
+            )
+
+    monkeypatch.setattr(main_window_module, "FilamentOverrideDialog", AcceptedFilamentDialog)
+
+    window.filaments.overrideRequested.emit(slot)
+
+    settings = window.session.project.document.print_settings
+    assert settings is not None
+    override = handover.override_for(settings, slot)
+    assert override is not None and override.temperature is not None
+    assert override.temperature.nozzle == 205
 
 
 def test_undo_and_redo_reach_the_document(session: Session) -> None:

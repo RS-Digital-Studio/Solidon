@@ -805,6 +805,12 @@ def write_assembly(
         )
         for entry in objects
     ]
+    merged_slots = threemf.merge_slots(parts, across=whole_job)
+    if settings is not None:
+        from app.core.export import handover
+
+        known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
+        findings += handover.unreachable_overrides(settings, known_setup, merged_slots)
     target = _written(
         directory / (safe_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(
@@ -812,8 +818,19 @@ def write_assembly(
             project_name,
             across=whole_job,
             bed=bed,
-            project_settings=_plate_settings(settings, profile, flavour, setup),
-            prusa_config=_plate_config(settings, profile, flavour),
+            project_settings=_plate_settings(
+                settings,
+                profile,
+                flavour,
+                setup,
+                merged_slots,
+            ),
+            prusa_config=_plate_config(
+                settings,
+                profile,
+                flavour,
+                merged_slots,
+            ),
             # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
             # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
             # Matrix, die nichts sagt.
@@ -829,6 +846,7 @@ def _plate_settings(
     profile: Profile,
     flavour: SlicerFlavour,
     setup: SlicerSetup | None,
+    slots: Sequence[MaterialSlot] = (),
 ) -> dict[str, object]:
     """Die Druckeinstellungen, die mit der Datei reisen (§29).
 
@@ -846,11 +864,14 @@ def _plate_settings(
     from app.core.export import handover
 
     known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
-    return handover.project_settings(settings, profile, known)
+    return handover.project_settings(settings, profile, known, slots=slots)
 
 
 def _plate_config(
-    settings: PrintSettings | None, profile: Profile, flavour: SlicerFlavour
+    settings: PrintSettings | None,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    slots: Sequence[MaterialSlot] = (),
 ) -> dict[str, str]:
     """Dasselbe für PrusaSlicer, der es als Textzeilen führt (§29).
 
@@ -867,7 +888,8 @@ def _plate_config(
         return {}
     from app.core.export import handover
 
-    return handover.values_for(settings, profile, flavour)
+    effective = handover.settings_for_shared_slicer(settings, slots)
+    return handover.values_for(effective, profile, flavour)
 
 
 def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | None) -> bytes:

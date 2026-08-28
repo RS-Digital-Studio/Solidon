@@ -681,7 +681,11 @@ def settings_for_slot(settings: PrintSettings, override: SlotOverride | None) ->
     )
 
 
-def unreachable_overrides(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
+def unreachable_overrides(
+    settings: PrintSettings,
+    setup: SlicerSetup,
+    slots: Sequence[MaterialSlot] = (),
+) -> list[Finding]:
     """Meldet Werte je Spule, die dieser Slicer nicht entgegennimmt (§20, §29).
 
     Nur die Orca-Familie bekommt ein Filamentprofil **je Slot**
@@ -697,10 +701,15 @@ def unreachable_overrides(settings: PrintSettings, setup: SlicerSetup) -> list[F
     """
     if has_filament_profiles(setup.flavour):
         return []
+    reachable = (slots[0].name, slots[0].colour) if slots else None
+    present = {(slot.name, slot.colour) for slot in slots}
     affected = [
         position
         for position, entry in enumerate(settings.slot_overrides)
-        if entry is not None and not entry.empty
+        if entry is not None
+        and not entry.empty
+        and (not present or entry.key in present)
+        and (reachable is None or entry.key != reachable)
     ]
     if not affected:
         return []
@@ -736,6 +745,48 @@ def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | 
         if entry is not None and entry.key == (slot.name, slot.colour):
             return entry
     return None
+
+
+def with_slot_override(
+    settings: PrintSettings,
+    slot: MaterialSlot,
+    override: SlotOverride | None,
+) -> PrintSettings:
+    """Setzt oder entfernt die eigenen Werte eines Filaments (§20, §29).
+
+    Der Schlüssel ist Name und Farbe, nicht die Position. Die Oberfläche zeigt
+    die Zusammenlegung aller gewählten Platten, ein einzelner Slicerlauf kann
+    dieselben Filamente in einer anderen Reihenfolge führen. Ein positionsweiser
+    Austausch gäbe dann wieder der falschen Spule die Temperatur.
+
+    Ein leerer oder entfernter Übersteuerer reist nicht als Platzhalter mit.
+    Das hält alte Projekte klein und macht ``None`` weiterhin eindeutig:
+    Dieses Filament benutzt die Projektwerte.
+    """
+    key = (slot.name, slot.colour)
+    kept = tuple(
+        entry
+        for entry in settings.slot_overrides
+        if entry is not None and entry.key != key and not entry.empty
+    )
+    if override is None or override.empty:
+        return replace(settings, slot_overrides=kept)
+    identified = replace(override, name=slot.name, colour=slot.colour)
+    return replace(settings, slot_overrides=(*kept, identified))
+
+
+def settings_for_shared_slicer(
+    settings: PrintSettings, slots: Sequence[MaterialSlot]
+) -> PrintSettings:
+    """Der eine Filamentwertsatz für einen Slicer ohne Mehrfachprofile.
+
+    PrusaSlicer und CuraEngine nehmen auf diesem Weg genau einen Satz an. Der
+    gehört dem ersten Extruder der Platte; weitere Filamente werden gesondert
+    als nicht erreichbar gemeldet. Ohne Slot bleibt es bei den Projektwerten.
+    """
+    if not slots:
+        return settings
+    return settings_for_slot(settings, override_for(settings, slots[0]))
 
 
 def with_slot_profiles(
@@ -775,7 +826,8 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
-    values = values_for(settings, profile, setup.flavour)
+    effective = settings if setup.flavour == "orca" else settings_for_shared_slicer(settings, slots)
+    values = values_for(effective, profile, setup.flavour)
 
     if setup.flavour == "prusa":
         target = directory / "solidon.ini"
@@ -840,6 +892,7 @@ def project_settings(
     profile: Profile,
     setup: SlicerSetup,
     extruders: int = 1,
+    slots: Sequence[MaterialSlot] = (),
 ) -> dict[str, object]:
     """Die Einstellungen einer Platte, wie eine Orca-Projektdatei sie führt.
 
@@ -864,7 +917,6 @@ def project_settings(
         return {}
 
     split = by_section(settings, setup.flavour)
-    filament_values = split.get("filament", {})
 
     # Eine Projektdatei trägt kein ``inherits`` — sie muss die Werte
     # ausgeschrieben enthalten. Die Erbkette wird deshalb **aufgelöst**, für
@@ -887,21 +939,42 @@ def project_settings(
             document.update(slicer_profiles.resolve_values(found))
 
     document.update(_orca_process(split.get("process", {}), settings, setup))
-    filament = _orca_filament(filament_values, settings, profile, setup)
-    document.update(filament)
     document.update(_machine_keys(profile, setup.flavour))
 
     for key in ("type", "instantiation", "inherits"):
         document.pop(key, None)
 
-    # Welche Schlüssel je Extruder geführt werden, sagt die Übersetzungstabelle
-    # selbst — sie trägt die Sektion je Eintrag. Eine zweite Liste hier wäre
-    # beim nächsten neuen Schlüssel schon falsch.
-    per_extruder = set(filament.keys())
-    resolved: dict[str, object] = {
-        key: ([value] * extruders if key in per_extruder and not isinstance(value, list) else value)
-        for key, value in document.items()
-    }
+    # Jeder Materialslot ist ein Filament. Die Beilage führt dessen Werte als
+    # Listen, in Extruderreihenfolge. Bisher wurde ein gemeinsamer Satz nur
+    # vervielfacht; eine PLA-Schrift auf PETG trug damit zwar Weiß als Farbe,
+    # aber 240 statt 210 Grad als Temperatur.
+    count = max(1, extruders, len(slots))
+    ordered_slots: tuple[MaterialSlot | None, ...] = tuple(slots) + (None,) * (count - len(slots))
+    filament_documents: list[dict[str, object]] = []
+    for slot in ordered_slots:
+        mine = (
+            settings if slot is None else settings_for_slot(settings, override_for(settings, slot))
+        )
+        own = (
+            replace(setup, base_filament=slot.material)
+            if slot is not None and slot.material
+            else setup
+        )
+        values = by_section(mine, setup.flavour).get("filament", {})
+        filament_documents.append(_orca_filament(values, mine, profile, own, slot))
+
+    metadata = {"type", "name", "from", "instantiation", "inherits"}
+    filament_keys = set().union(*(set(entry) - metadata for entry in filament_documents))
+
+    def scalar(value: object) -> object:
+        """Ein Einzelwert aus der Ein-Filament-Darstellung."""
+        if isinstance(value, list) and len(value) == 1:
+            return value[0]
+        return value
+
+    resolved: dict[str, object] = dict(document)
+    for key in filament_keys:
+        resolved[key] = [scalar(entry.get(key, "")) for entry in filament_documents]
 
     # Erst nach der Umwandlung: das hier sind Angaben *über* die Datei, keine
     # Werte je Extruder. Als Liste geschrieben liest der Slicer sie nicht.
@@ -923,8 +996,9 @@ def project_settings(
     if setup.machine_profile:
         resolved["printer_settings_id"] = _profile_name(setup.machine_profile)
     resolved["print_settings_id"] = f"Solidon {settings.title}"
-    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
-    resolved["filament_settings_id"] = [f"Solidon {marke or settings.title}"] * extruders
+    resolved["filament_settings_id"] = [
+        str(entry.get("name", f"Solidon {settings.title}")) for entry in filament_documents
+    ]
     resolved.setdefault("printer_model", profile.printer.title)
     resolved.setdefault("nozzle_diameter", [str(profile.printer.nozzle_diameter)])
     return resolved
@@ -1136,10 +1210,14 @@ def _orca_filament(
     # mehr, sondern ein Wert aus der falschen Zeile — PLA fährt 210 bei 21.
     # Wo der Slot sein eigenes Profil nennt, gilt deshalb der Hersteller für
     # alles, was am Material hängt.
-    fremd = bool(slot is not None and slot.material and inherited)
     eigene = {key: [value] for key, value in values.items()}
-    if fremd:
-        vom_material = {orca for _solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK}
+    if slot is not None and slot.material and inherited:
+        override = override_for(settings, slot)
+        vom_material = {
+            orca
+            for solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK
+            if override is None or getattr(override, solidon.partition(".")[0]) is None
+        }
         eigene = {key: value for key, value in eigene.items() if key not in vom_material}
     document.update(eigene)
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
@@ -1864,7 +1942,7 @@ def slice_model(
     findings = [
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
-        *unreachable_overrides(settings, setup),
+        *unreachable_overrides(settings, setup, slots),
         *ignored,
         *([beyond] if beyond is not None else []),
         *gcode.findings_for(metrics),
