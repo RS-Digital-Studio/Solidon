@@ -37,7 +37,7 @@ from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_VERSION
+from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
 
 for _stream in (sys.stdout, sys.stderr):
@@ -289,8 +289,17 @@ DELIVERED: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 
 def delivery_slot(name: str) -> str:
-    """Welchen der vier Plätze eine Datei besetzt — oder nichts."""
+    """Welchen der vier Plätze eine Datei besetzt — oder nichts.
+
+    **Der Produktname gehört zur Bedingung, nicht nur die Endung.** Ohne ihn
+    entscheidet allein das Suffix, und dann besetzt jede fremde ``.exe`` im
+    Übergabeordner den Windows-Platz. :func:`refuse_wrong_delivery` fängt das
+    nur, solange auch die echte Datei dabei ist — dann meldet sie „zweimal";
+    liegt die fremde allein da, geht sie als Auslieferung durch.
+    """
     lower = name.lower()
+    if APP_NAME.lower() not in lower:
+        return ""
     for label, suffix, marks in DELIVERED:
         if not lower.endswith(suffix):
             continue

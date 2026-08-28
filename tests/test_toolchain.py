@@ -1046,3 +1046,34 @@ def test_the_stripped_answer_keeps_no_gap_before_a_comma() -> None:
     )
     assert _plain("<p>eins</p><p>zwei</p>") == "eins zwei", "die Absatzgrenze ging verloren"
     assert _plain("un terminal&nbsp;: <code>flatpak</code>") == "un terminal : flatpak"
+
+
+def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:
+    """Der Platz gehört dem Produkt, nicht der Endung.
+
+    ``delivery_slot`` entschied allein am Suffix. Damit besetzte jede fremde
+    ``.exe`` im Übergabeordner den Windows-Platz — und
+    ``refuse_wrong_delivery`` fängt das nur, solange auch die echte Datei dabei
+    ist: Dann meldet sie „zweimal". Liegt die fremde allein da, sah die
+    Auslieferung vollständig aus.
+
+    Die Gegenprobe gehört dazu: Die vier echten Namen müssen ihre Plätze
+    weiterhin bekommen, sonst hätte die Härtung die Auslieferung stillgelegt.
+    """
+    from tools.make_download import DELIVERED, delivery_slot
+
+    assert delivery_slot("irgendwas-fremdes.exe") == "", "eine fremde .exe besetzt Windows"
+    assert delivery_slot("setup.exe") == "", "ein Allerweltsname besetzt Windows"
+    assert delivery_slot("fremd-x86_64.flatpak") == "", "ein fremdes Flatpak besetzt Linux"
+
+    echt = {
+        "Solidon3D-Setup-9.9.9.exe": "Windows",
+        "Solidon3D-9.9.9-x86_64.flatpak": "Linux",
+        "Solidon3D-9.9.9-macos-arm64.pkg": "macOS (Apple Silicon)",
+        "Solidon3D-9.9.9-macos-x86_64.pkg": "macOS (Intel)",
+    }
+    assert set(echt.values()) == {label for label, _s, _m in DELIVERED}, (
+        "die vier Plätze haben sich geändert — dieser Test kennt sie nicht mehr"
+    )
+    for name, platz in echt.items():
+        assert delivery_slot(name) == platz, f"{name} bekam {delivery_slot(name)!r} statt {platz!r}"
