@@ -125,8 +125,8 @@ from app.core.registry import (
     OperationSpec,
     PaletteEntry,
     caveat_line,
+    folded_categories,
     group_for_variant,
-    group_is_flat,
     menu_tree,
     palette_entries,
     variant_members,
@@ -1764,15 +1764,52 @@ class MainWindow(QMainWindow):
             group = self._menu(str(title))
             groups[str(title)] = group
             self._workspace_menus.append(group)
-            flat = group_is_flat(present[0].category)
-            for section in present:
+            # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
+            # ``group_is_flat`` für die ganze Gruppe: alles flach oder
+            # jede Kategorie eine Ebene tiefer. Damit lagen im Menü
+            # *Ändern* alle sieben Kategorien im Untermenü — auch
+            # *Bohrungen* mit drei Einträgen, und damit die Bohrung, deren
+            # zweiter Klick am 24.08.2026 den Umbau des Kontextmenüs
+            # ausgelöst hat. Das Kontextmenü faltet seit damals nur so
+            # weit, bis der Rest passt; die Leiste konnte es nicht, weil
+            # die Rechnung in dieser Schicht lag und der Kern sie nicht
+            # fragen darf. Sie liegt jetzt im Kern, und beide fragen sie.
+            gefaltet = folded_categories(present[0].category)
+            # **Erst die direkten Kategorien, dann die gefalteten.** Eine
+            # Überschrift benennt alles bis zum nächsten Trennstrich — eine
+            # Untermenü-Zeile dazwischen liest sich als Teil der Kategorie
+            # davor. Gemessen am 27.08.2026 im Menü *Ändern*: „Transformation"
+            # und „Formgebung" standen unter der Überschrift „Verbinden und
+            # Abziehen", also in einem Abschnitt, zu dem sie nicht gehören.
+            #
+            # Den Fall gab es vorher nicht: Bis zu diesem Tag war eine Gruppe
+            # ganz flach oder ganz gefaltet, und die Mischung entsteht erst mit
+            # ``folded_categories``. Wer eine Zwischenebene je Kategorie
+            # einführt, führt damit auch die Frage ein, wo sie im Menü steht.
+            #
+            # Innerhalb beider Blöcke bleibt die Reihenfolge von
+            # ``MENU_GROUPS``; sie zählt von häufig nach selten auf, und genau
+            # deshalb stehen die direkten vorn — was oft gebraucht wird, faltet
+            # nicht.
+            direct = [section for section in present if section.category not in gefaltet]
+            deep = [section for section in present if section.category in gefaltet]
+            for position, section in enumerate([*direct, *deep]):
+                if direct and deep and position == len(direct):
+                    # Ein **nackter** Trennstrich, kein benannter: Die Zeilen
+                    # dahinter tragen ihre Namen selbst, und eine Überschrift
+                    # bräuchte ein Wort, das es nicht gibt („Weitere"?) — samt
+                    # Katalogeintrag in sechs Sprachen (Regel 20). Er schließt
+                    # den letzten Abschnitt ab, und das ist seine ganze
+                    # Aufgabe.
+                    group.addSeparator()
                 # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
                 # hieße genauso wie das Menü darüber. Und eine Gruppe, die
                 # ganz hineinpasst, braucht auch keines: dann ist die
                 # Zwischenebene ein Klick für nichts (siehe
                 # ``_fits_without_submenus``).
                 target = group
-                if flat and len(present) > 1:
+                folded = section.category in gefaltet
+                if not folded and len(present) > 1:
                     # **Die Kategorie behält ihren Namen, auch flach.** Hier
                     # stand ein nackter Trennstrich ab der zweiten Kategorie;
                     # er hielt sie auseinander und **benannte** sie nicht. Der
@@ -1795,7 +1832,7 @@ class MainWindow(QMainWindow):
                     # Untermenü zieht: Die Überschrift wäre ein zweiter Name
                     # für dasselbe Menü („Bausteine → Bausteine").
                     group.addSection(str(section.title))
-                if not flat and len(present) > 1:
+                if folded:
                     # Mit dem Fenster als Elternteil erzeugt, nicht über
                     # ``addMenu(titel)``: sonst hält nichts auf der Python-Seite
                     # das Untermenü, und sein C++-Objekt wird eingesammelt,

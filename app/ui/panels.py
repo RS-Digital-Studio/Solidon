@@ -8,7 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
@@ -52,8 +52,9 @@ from app.core.errors import (
     AppError,
 )
 from app.core.log import get_logger
-from app.core.registry import MENU_GROUPS, REGISTRY
+from app.core.registry import REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
+from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
@@ -103,105 +104,6 @@ MAX_MENU_ROWS = _MAX_MENU_ROWS
 OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 
-def folded_groups(
-    sizes: dict[str, int],
-    limit: int = MAX_MENU_ROWS,
-    fixed: int = 0,
-    keep: Collection[str] = (),
-) -> list[str]:
-    """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
-
-    Reine Rechnung über Namen und Anzahlen — **kein Qt**, und deshalb ohne ein
-    einziges Fenster prüfbar. Das ist hier keine Stilfrage: Am 24.08.2026 wurde
-    gemessen, dass jeder Test, der über die ``window``-Fixture ein
-    ``MainWindow`` baut, die Abrissquote der **ganzen Testdatei** hebt (2 von 9
-    auf 2 von 3). Eine Frage, die eine Funktion beantworten kann, bekommt kein
-    Fenster.
-
-    Gefaltet wird nur so weit, bis der Rest in die Grenze passt. Eine Gruppe
-    mit einem einzigen Eintrag wird **nie** gefaltet: Ihr Untermenü spart keine
-    Zeile und kostet einen Klick. Bleibt das Menü danach zu lang, bleibt es zu
-    lang — ein Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern
-    nur tiefer.
-
-    **Welche Gruppe es trifft, entscheidet die Reihenfolge der Menüleiste.**
-    Genügt eine Gruppe allein, um unter die Grenze zu kommen, fällt die
-    **hinterste** aus ``MENU_GROUPS`` — die Leiste ordnet von häufig nach
-    vorbereitend, und wer falten muss, faltet hinten. Genügt keine allein,
-    fällt die größte, sonst käme die Rechnung nicht voran.
-
-    Vorher entschied allein die Größe, und das war am Flächenklick die falsche
-    Frage: Nach „Bausteine" fehlt genau **eine** Zeile, und die größte der
-    übrigen ist „Ändern" — mit der Bohrung darin, also genau dem Eintrag,
-    dessen zweiter Klick den Umbau vom 24.08.2026 ausgelöst hat. Eine Gruppe,
-    die ``MENU_GROUPS`` nicht kennt, steht hinten — dieselbe Antwort, die
-    ``group_title`` einer unbekannten Kategorie gibt.
-
-    **Die Zahlen dazu, gemessen am 27.08.2026** (und sie wandern: hier stand
-    „19 Operationen, davon 10 Bausteine", was einmal stimmte und mit jedem
-    neuen Baustein weiter danebenlag — wer sie als Grundlage nimmt, rechnet
-    dann mit zwölf Bausteinen zu wenig):
-
-    ===================  ====
-    Bausteine              22
-    Ändern                  5
-    Erzeugen                2
-    Vorbereiten             2
-    ===================  ====
-
-    Einunddreißig Operationen, drei feste Zeilen darüber. „Bausteine" spart
-    einundzwanzig und genügt trotzdem nicht — danach fehlt eine Zeile, und die
-    zweite Faltung entscheidet, welcher Eintrag einen Klick tiefer liegt. Wer
-    diese Rechnung anfasst, misst sie neu, statt die Tabelle zu glauben.
-
-    ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
-    im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
-    gehören und deshalb keine Gruppe haben.
-
-    ``keep`` sind Gruppen, die **zuletzt** gefaltet werden, weil sie eine
-    Geste tragen, für die man überhaupt auf das Merkmal zeigt. Der Rang aus
-    ``MENU_GROUPS`` ordnet von häufig nach vorbereitend und war deshalb bis
-    zum 27.08.2026 die ganze Antwort — bis das Färben in „Vorbereiten"
-    landete, also ganz hinten. Am Flächenklick fehlt nach den Bausteinen
-    genau **eine** Zeile, und die Rechnung nahm sie sich dort: Gemessen am
-    gebauten Fenster stand „Fläche färben" danach im Untermenü, unter einem
-    Wort, unter dem niemand Farbe sucht. Entscheidung Robert: Die häufige
-    Geste bleibt oben, das Seltenere wandert. Wer die Gruppen bestimmt, ist
-    :func:`groups_to_keep` — über die **Kategorie** und nicht über den
-    Titel, denn der ist übersetzt.
-
-    **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
-    Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
-    für alles, und die Zwischenebene hieße, wonach man ohnehin schon geklickt
-    hat. Das ist dieselbe Ausnahme, die ``registry.surfaces.group_is_flat`` für
-    die Menüleiste macht — dort wörtlich als „Bausteine → Bausteine → Deckel
-    erzeugen" beschrieben. Sie stand hier zuerst nicht, obwohl der Text auf die
-    Regel verwies: Eine zitierte Regel ist keine befolgte.
-    """
-    if len(sizes) < 2 and not fixed:
-        return []
-    rows = sum(sizes.values()) + fixed
-    # Nur Gruppen ab zwei Einträgen: eine von eins spart keine Zeile.
-    foldable = {title: count for title, count in sizes.items() if count > 1}
-    folded: list[str] = []
-    while rows > limit and foldable:
-        missing = rows - limit
-        enough = [title for title, count in foldable.items() if count - 1 >= missing]
-        if enough:
-            # Erst die Ungeschützten, dann die hinterste, die allein genügt;
-            # bei gleichem Platz die größere, und ganz zuletzt der Name, damit
-            # die Antwort eindeutig bleibt.
-            title = min(
-                enough,
-                key=lambda name: (name in keep, -_menu_rank(name), -foldable[name], name),
-            )
-        else:
-            title = min(foldable, key=lambda name: (name in keep, -foldable[name], name))
-        folded.append(title)
-        rows -= foldable.pop(title) - 1
-    return folded
-
-
 #: Kategorien, deren Gruppe am Merkmal sichtbar bleibt.
 #:
 #: Nicht der Gruppentitel, sondern die **Kategorie** des Registereintrags: Der
@@ -228,19 +130,6 @@ def groups_to_keep(entries: Sequence[Any]) -> set[str]:
         for spec in entries
         if str(spec.category) in KEEP_VISIBLE
     }
-
-
-def _menu_rank(title: str) -> int:
-    """Wo diese Gruppe in der Reihenfolge der Menüleiste steht.
-
-    Kennt ``MENU_GROUPS`` den Titel nicht, steht er hinten — dieselbe Antwort,
-    die ``group_title`` einer unbekannten Kategorie gibt, und aus demselben
-    Grund: Eine neue Kategorie soll auftauchen und nicht verschwinden.
-    """
-    for position, (menu_title, _categories) in enumerate(MENU_GROUPS):
-        if str(menu_title) == title:
-            return position
-    return len(MENU_GROUPS)
 
 
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste

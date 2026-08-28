@@ -20,6 +20,7 @@ Schlüssel und ist nicht Teil der Testsuite.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -550,16 +551,53 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     """§2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
     Werkzeugbeschreibung — das Modell hat sonst keine Quelle, um zu sagen,
     wo eine Funktion im Fenster liegt.
+
+    Der Fehler, den dieser Test bewacht, ist eine **abgeschnittene** Angabe:
+    Nur Gruppe und Titel zu nennen schickte den Nutzer für 72 von 77 Ops an den
+    falschen Ort, weil die Leiste eine Zwischenebene einzieht, die niemand
+    erwähnte.
+
+    **Als Liste von vier Zeichenketten hat er das nicht geleistet.** Er stand
+    auf HEAD rot, gemessen am 28.08.2026 im eigenen Arbeitsbaum auf 635d1df5,
+    und zwar seit Commit 87b00475: Zwei der vier Wege sind kürzer geworden, weil
+    die Leiste seither nur noch faltet, was sie falten muss (*Erzeugen* ist
+    flach, *Bohrungen* steht direkt in *Ändern*). Ein festgeschriebener Weg ist
+    nicht falsch — er dokumentiert einen Stand —, aber er veraltet **still**,
+    wenn ihn niemand fährt.
+
+    Deshalb steht die eigentliche Zusage jetzt als Rechnung darunter: Beide
+    Tiefen müssen vorkommen. Eine Umsetzung, die grundsätzlich abschneidet,
+    lässt die dreistufigen verschwinden; eine, die grundsätzlich eine Ebene
+    erfindet, die zweistufigen. Die vier Zeichenketten bleiben als Beispiel und
+    als Anlass, hinzusehen, wenn sich ein Weg ändert.
     """
     described = {schema["name"]: schema["description"] for schema in tools.operation_tools()}
 
-    # Der volle Weg mit allen Ebenen, die die Leiste einzieht — nur Gruppe
-    # und Titel zu nennen schickte den Nutzer für 72 von 77 Ops an den
-    # falschen Ort.
-    assert "Menü: Ändern → Bohrungen → Bohrung setzen." in described["drill_hole"]
-    assert "Menü: Erzeugen → Grundformen → Quader anlegen." in described["create_box"]
+    # **Das Paar aus einem Menü ist der Wächter.** Beide liegen in *Ändern*:
+    # *Bohrungen* steht direkt darin, *Formgebung* faltet. Eine Umsetzung, die
+    # grundsätzlich abschneidet, bricht die zweite; eine, die grundsätzlich eine
+    # Ebene erfindet, die erste. Zusammen kann keine Pauschalregel sie erfüllen.
+    assert "Menü: Ändern → Bohrung setzen." in described["drill_hole"]
+    assert "Menü: Ändern → Formgebung → Fase anbringen." in described["chamfer_edges"]
+    assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
     assert "Menü: Bausteine → Verbindungen → Schraubenloch" in described["insert_screw_hole"]
     assert "Menü: Objekt → Objekt umbenennen." in described["rename_object"]
+
+    places = [
+        match.group(1)
+        for match in (re.search(r"Menü: (.+?)\.?$", text) for text in described.values())
+        if match
+    ]
+    assert len(places) >= 60, (
+        f"nur {len(places)} von {len(described)} Werkzeugen nennen einen Menüort — "
+        "dann prüft dieser Test seine eigene Suche und nicht die Beschreibungen"
+    )
+    levels = {place.count("→") + 1 for place in places}
+    assert levels <= {2, 3}, f"unerwartete Menütiefen: {sorted(levels)}"
+    assert {2, 3} <= levels, (
+        f"nur Wege mit {sorted(levels)} Ebenen — beide Tiefen müssen vorkommen, sonst "
+        "entscheidet eine Pauschale statt der Menürechnung"
+    )
 
 
 def test_the_prompt_makes_the_chat_a_search_box() -> None:

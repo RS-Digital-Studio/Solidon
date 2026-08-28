@@ -178,7 +178,7 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
     Qt, und ein Test, der dafür ein Fenster baute, hebt die Abrissquote der
     ganzen Datei (gemessen am 24.08.2026, 2 von 9 auf 2 von 3).
     """
-    from app.ui.panels import folded_groups
+    from app.core.registry.surfaces import folded_groups
 
     passt = {"Bausteine": 4, "Ändern": 3}
     assert folded_groups(passt) == [], "was in die Grenze passt, wird nicht gefaltet"
@@ -253,8 +253,8 @@ def context_rows(kind: str) -> tuple[int, list[str]]:
     Ohne Qt, weil ein Fenster hier nichts beiträgt und die Abrissquote der
     ganzen Datei hebt (gemessen am 24.08.2026).
     """
-    from app.core.registry.surfaces import group_title
-    from app.ui.panels import folded_groups, groups_to_keep
+    from app.core.registry.surfaces import folded_groups, group_title
+    from app.ui.panels import groups_to_keep
 
     sizes: dict[str, int] = {}
     offered = [spec for spec in REGISTRY.all() if kind in (spec.applies_to or ())]
@@ -1619,3 +1619,197 @@ def test_a_flat_group_keeps_the_names_of_its_categories(window: MainWindow) -> N
         geprüft += 1
 
     assert geprüft, "keine flache Gruppe mit mehreren Kategorien — dann prüft dieser Test nichts"
+
+
+# --- Gefaltet wird je Kategorie, nicht je Gruppe (27.08.2026) -----------------
+
+
+def test_no_category_is_folded_that_could_have_stayed() -> None:
+    """Die Regel vom 24.08.2026, eine Ebene tiefer.
+
+    „Gefaltet wird, weil es sein muss, nicht weil es ordentlich aussieht" galt
+    für die Gruppen des Kontextmenüs. Die Menüleiste hatte die gröbere Frage
+    (``group_is_flat``): entweder war eine Gruppe ganz flach, oder **jede** ihrer
+    Kategorien bekam eine Zwischenebene. Im Menü *Ändern* lagen deshalb alle
+    sieben eine Ebene tiefer — auch *Reparatur* mit **einem** Eintrag.
+
+    Geprüft wird die Regel und nicht die heutige Aufteilung: Jede gefaltete
+    Kategorie muss die Grenze reißen, wenn man sie allein wieder aufklappt.
+    Findet sich eine, die es nicht tut, ist ihr Untermenü ein Klick für nichts.
+    """
+    from app.core.registry import MENU_GROUPS, REGISTRY
+    from app.core.registry.surfaces import MAX_MENU_ROWS, folded_categories, menu_rows_of
+
+    populated = {spec.category for spec in REGISTRY.all()}
+    geprüft = 0
+    for title, categories in MENU_GROUPS:
+        present = [name for name in categories if name in populated]
+        if not present:
+            continue
+        gefaltet = folded_categories(present[0])
+        zeilen = sum(1 if name in gefaltet else menu_rows_of([name]) for name in present)
+        assert zeilen <= MAX_MENU_ROWS or not gefaltet, (
+            f"{title}: {zeilen} Zeilen trotz {len(gefaltet)} Untermenüs"
+        )
+        for name in gefaltet:
+            aufgeklappt = zeilen - 1 + menu_rows_of([name])
+            assert aufgeklappt > MAX_MENU_ROWS, (
+                f"{title} → {name}: aufgeklappt wären es {aufgeklappt} Zeilen, "
+                f"die Grenze ist {MAX_MENU_ROWS} — das Untermenü spart nichts"
+            )
+            geprüft += 1
+
+    assert geprüft, "keine einzige gefaltete Kategorie — dann prüft dieser Test nichts"
+
+
+def test_folding_takes_the_rarer_category_when_two_are_the_same_size() -> None:
+    """Bei gleicher Größe entscheidet die Reihenfolge, nicht das Alphabet.
+
+    ``folded_groups`` fragte den Rang nur in dem Zweig, in dem eine einzelne
+    Gruppe schon genügt; im Ausweichzweig — der die großen zuerst nimmt — stand
+    nur die Größe und danach der Name. Gemessen am Menü *Ändern*: Bei einem
+    Gleichstand fiel *Verbinden und Abziehen* statt *Formgebung*, weil
+    ``boolean`` alphabetisch vor ``shaping`` steht. Die häufigere Gruppe wanderte
+    eine Ebene tiefer als die seltenere, und das ist genau die Umkehrung dessen,
+    was der Docstring zusagt.
+
+    **Der Aufbau ist der ganze Test**, und die erste Fassung hatte ihn falsch:
+    Sie ordnete „aaa" nach hinten — damit war dieselbe Gruppe alphabetisch
+    erste *und* hinterste, und beide Fassungen des Codes hätten sie gewählt. Der
+    Name muss der Ordnung **entgegenlaufen**, sonst prüft die Probe nichts.
+
+    Drei gleich große Gruppen, Grenze acht: Zwei müssen falten, und die dritte
+    ist die vorderste. Die alte Rechnung nahm zuerst „aaa" und ließ „ccc"
+    stehen — genau verkehrt herum.
+    """
+    from app.core.registry.surfaces import folded_groups
+
+    sizes = {"aaa": 5, "bbb": 5, "ccc": 5}
+    ordnung = {"aaa": 0, "bbb": 1, "ccc": 2}
+
+    gefaltet = folded_groups(sizes, limit=8, rank=lambda name: ordnung[name])
+
+    assert "aaa" not in gefaltet, (
+        f"gefaltet wurde {gefaltet} — die vorderste Gruppe muss stehen bleiben; "
+        "sie fällt nur, weil ihr Name alphabetisch vorn steht"
+    )
+    assert gefaltet[0] == "ccc", (
+        f"zuerst gefaltet wurde {gefaltet[0]} — erwartet ist die hinterste (ccc)"
+    )
+
+
+def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
+    """Was der Kern als Weg nennt, muss im Fenster auch dort liegen.
+
+    Der **Anschlusstest** zu dieser Änderung, und er ist der Grund, aus dem sie
+    überhaupt in den Kern gehört: ``menu_path`` beantwortet dieselbe Frage wie
+    ``_build_menus``, und beide Antworten stehen dem Kunden gegenüber — die eine
+    im Handbuch, in der Werkzeugbeschreibung des Agenten und in der Tour, die
+    andere in der Leiste, die er anklickt. Solange die Rechnung in der
+    Oberfläche lag, konnte der Kern sie nicht fragen; er hatte deshalb ein
+    eigenes, gröberes Modell, und ein Weg, den das Handbuch nennt, konnte ins
+    Leere zeigen.
+
+    Geprüft wird gegen das **gebaute** Fenster, nicht gegen die Funktion, die es
+    baut: Zwei Aufrufe derselben Funktion sind auch dann einig, wenn beide falsch
+    sind.
+
+    **Zugeordnet wird über den Titel.** Die erste Fassung las ``action.data()``
+    und war damit wertlos: Von 158 Menüeinträgen tragen **sechs** ein ``data``,
+    und keiner davon ist eine Operation — es sind die zwei Themen und die vier
+    Navigationsarten. Der Test sammelte diese sechs, verglich null Operationen
+    und blieb in der Mutationsprobe grün, während ``menu_path`` auf die alte,
+    gröbere Frage zurückgesetzt war.
+
+    Sein eigener Wächter hat das nicht gefangen, und das ist die Lehre daneben:
+    ``assert gebaut`` fragte, ob das Wörterbuch **voll** ist, nicht, ob darin
+    Operationen stehen. Ein Wächter muss die Größe messen, an der der Test
+    scheitert — deshalb steht unten eine Zahl.
+    """
+    from app.core.registry import MENU_TWINS, REGISTRY
+    from app.core.registry.surfaces import menu_path
+
+    def blank(text: str) -> str:
+        return text.replace("&", "")
+
+    gebaut: dict[str, str] = {}
+    for action in window.menuBar().actions():
+        menu = action.menu()
+        if menu is None:
+            continue
+        for entry in menu.actions():
+            unter = entry.menu()
+            if unter is not None:
+                for tief in unter.actions():
+                    if not tief.isSeparator():
+                        gebaut[blank(tief.text())] = (
+                            f"{blank(action.text())} → {blank(entry.text())} → {blank(tief.text())}"
+                        )
+            elif not entry.isSeparator():
+                gebaut[blank(entry.text())] = f"{blank(action.text())} → {blank(entry.text())}"
+
+    verglichen = 0
+    for spec in REGISTRY.all():
+        titel = str(spec.title)
+        if spec.name in MENU_TWINS or titel not in gebaut:
+            continue
+        genannt = blank(menu_path(spec))
+        assert gebaut[titel] == genannt, (
+            f"{spec.name}: Handbuch und Agent nennen „{genannt}“, "
+            f"im Fenster liegt sie unter „{gebaut[titel]}“"
+        )
+        verglichen += 1
+
+    # Ohne diese Zahl prüft der Test nichts — siehe den Docstring oben. Sie ist
+    # bewusst deutlich kleiner als der Bestand (86 Operationen, davon einige als
+    # Zwilling ohne Eintrag und einige nur in Katalog und Palette): Der Wächter
+    # soll den Aufbau sichern und nicht bei jeder neuen Operation reißen.
+    assert verglichen >= 60, (
+        f"nur {verglichen} Operationen im Menü wiedergefunden — dann prüft dieser "
+        "Test seine Zuordnung und nicht die Menüwege"
+    )
+
+
+def test_a_heading_names_only_what_belongs_to_it(window: MainWindow) -> None:
+    """Keine Untermenü-Zeile unter der Überschrift einer anderen Kategorie.
+
+    Eine Überschrift (``addSection``) benennt alles bis zum nächsten
+    Trennstrich. Eine Untermenü-Zeile dazwischen liest sich damit als Teil der
+    Kategorie davor: Im Menü *Ändern* standen „Transformation" und „Formgebung"
+    unter „Verbinden und Abziehen", also in einem Abschnitt, zu dem sie nicht
+    gehören.
+
+    **Den Fall gab es vor dem 27.08.2026 nicht.** Bis dahin war eine Menügruppe
+    ganz flach (nur Überschriften) oder ganz gefaltet (nur Untermenüs); die
+    Mischung entsteht erst mit ``folded_categories``, und mit ihr die Frage, wo
+    im Menü eine Zwischenebene steht. Das ist die Lehre neben der Prüfung: Wer
+    eine Unterscheidung einführt, führt die Anordnungsfrage mit ein — und keine
+    der acht bestehenden Menüprüfungen hat sie gestellt.
+
+    Geprüft wird die Regel, nicht die heutige Aufteilung: Nach der ersten
+    Untermenü-Zeile eines Menüs darf keine beschriftete Überschrift mehr
+    kommen. Damit ist jede Überschrift von ihren eigenen Einträgen und höchstens
+    einem nackten Trennstrich begrenzt.
+    """
+    geprüft = 0
+    for action in window.menuBar().actions():
+        menu = action.menu()
+        if menu is None:
+            continue
+        tief = False
+        for entry in menu.actions():
+            if entry.isSeparator() and entry.text():
+                assert not tief, (
+                    f"{action.text()}: die Überschrift „{entry.text()}“ steht hinter "
+                    "einer Untermenü-Zeile — dann benennt die Überschrift davor "
+                    "Zeilen, die ihr nicht gehören"
+                )
+            elif entry.menu() is not None:
+                if not tief:
+                    geprüft += 1
+                tief = True
+
+    assert geprüft, (
+        "kein Menü mit Untermenü gefunden — dann prüft dieser Test seine Zuordnung "
+        "und nicht die Anordnung"
+    )
