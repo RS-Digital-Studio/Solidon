@@ -3832,7 +3832,10 @@ def test_the_parameter_dialog_offers_fx_and_parameter_choices(qt_app: QApplicati
     """Formeln beginnen über sichtbare Werkzeuge, nicht über auswendig gelernte Syntax."""
     from app.ui.dialogs import ParameterDialog
 
-    parameters = {"width": Parameter(name="width", value=40.0, title="Breite")}
+    parameters = {
+        "width": Parameter(name="width", value=40.0, title="Breite"),
+        "depth": Parameter(name="depth", value=30.0, title="Tiefe"),
+    }
     dialog = ParameterDialog(parameters)
     dialog.name_field.setText("height")
     dialog.show()
@@ -3850,12 +3853,19 @@ def test_the_parameter_dialog_offers_fx_and_parameter_choices(qt_app: QApplicati
     menu = dialog.parameter_button.menu()
     assert menu is not None
     choices = {action.data(): action for action in menu.actions()}
-    assert set(choices) == {"width"}
+    assert set(choices) == {"width", "depth"}
     choices["width"].trigger()
 
     assert dialog.expression_field.text() == "=@width"
     assert dialog.validation_problem() is None
     assert dialog.parameter().expression == "=@width"
+
+    choices["depth"].trigger()
+
+    assert dialog.expression_field.text() == "=@depth", (
+        "eine korrigierte Auswahl ersetzt den alten Verweis statt ihn anzuhängen"
+    )
+    assert dialog.validation_problem() is None
 
 
 def test_the_parameter_dialog_uses_fixed_units_and_honest_decimals(
@@ -7412,7 +7422,9 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
     hint = window._op_actions["sketch_pocket"].toolTip()
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
-    assert "zurücknehmen" in hint, "der Satz nennt eine Handlung, die es gibt"
+    assert "Nimm die Schritte ab dort zurück" in hint, (
+        "der Satz nennt eine Handlung, die es gibt"
+    )
 
 
 def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) -> None:

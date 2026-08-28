@@ -491,7 +491,13 @@ class ParameterDialog(QDialog):
             self.expression_field.setFocus()
 
     def _insert_parameter(self, action: Any) -> None:
-        """Setzt den im @-Menü gewählten Parameternamen an den Cursor."""
+        """Setzt oder ersetzt den im @-Menü gewählten Parameternamen.
+
+        Die häufigste Korrektur ist eine zweite Auswahl: Wer erst „Breite" und
+        dann „Tiefe" anklickt, meint nicht zwei Namen ohne Rechenzeichen. Ein
+        angefangener oder gerade ausgewählter ``@name`` wird deshalb ersetzt;
+        in einem zusammengesetzten Ausdruck bleibt das Menü ein Einfügewerkzeug.
+        """
         name = str(action.data() or "")
         if not name:
             return
@@ -506,6 +512,15 @@ class ParameterDialog(QDialog):
             entered = f"={entered}"
             self.expression_field.setText(entered)
             self.expression_field.setCursorPosition(len(entered))
+        cursor = self.expression_field.cursorPosition()
+        head = entered[:cursor]
+        start = head.rfind("@")
+        if start >= 0:
+            typed = head[start + 1 :]
+            if not typed or typed.replace("_", "").isalnum():
+                self.expression_field.setText(f"{entered[:start]}{reference}{entered[cursor:]}")
+                self.expression_field.setCursorPosition(start + len(reference))
+                return
         self.expression_field.insert(reference)
 
     def _accept(self) -> None:

@@ -403,9 +403,11 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # nächsten Bohren drei. Die breiteren Bausteine fielen nie auf, weil
     # manifold sie verschmolz; die Frage ist für alle dieselbe und steht darum
     # hier und nicht in jedem einzelnen. Ein subtraktiver braucht es nicht: sein
-    # Werkzeug reicht ohnehin über die Fläche hinaus.
+    # Werkzeug reicht ohnehin über die Fläche hinaus. Ein lösbares Teil darf es
+    # nicht: Das Hundertstel würde Schraube oder Mutter gerade in das Werkstück
+    # drücken, von dem sie getrennt bleiben sollen.
     subtractive = cuts(spec, ctx.params)
-    sink = 0.0 if subtractive else BOOLEAN_OVERLAP
+    sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
@@ -414,7 +416,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
         # einem unlösbaren Körper verschweißen. Eine Zusammenfügung hält beide
         # geschlossenen Netze in einem Szenenobjekt, ohne ihre Berührung als
         # Boolesche Verbindung zu deuten.
-        mesh = body.replacing(concatenated([body.raw, placed.raw]))
+        mesh = _concatenated_with_slots(body, placed)
         solver = None
         findings: list[Finding] = []
         nothing = None
@@ -452,6 +454,24 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             *([loose] if loose else []),
         ],
     )
+
+
+def _concatenated_with_slots(body: MeshData, placed: MeshData) -> MeshData:
+    """Hängt ein lösbares Teil an und erhält jede Materialzuweisung.
+
+    ``trimesh.concatenate`` lässt die Flächen beider Netze in ihrer Reihenfolge
+    stehen. Damit können auch die Slots ohne räumliche Näherung angehängt
+    werden. Hat nur eines der Netze eine Zuweisung, bekommt das andere den
+    Standard-Slot null — eine unvollständige Liste wäre beim Export nicht
+    eindeutig und ``MeshData.replacing`` müsste sie deshalb ganz verwerfen.
+    """
+    mesh = concatenated([body.raw, placed.raw])
+    if not body.slots and not placed.slots:
+        return MeshData.of(mesh)
+
+    body_slots = body.slots or ((0,) * body.triangle_count)
+    placed_slots = placed.slots or ((0,) * placed.triangle_count)
+    return MeshData.of(mesh, slots=(*body_slots, *placed_slots))
 
 
 def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[str, Any]:

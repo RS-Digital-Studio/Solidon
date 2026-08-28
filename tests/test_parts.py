@@ -1776,11 +1776,60 @@ def test_a_printed_screw_sits_in_its_bore_and_keeps_its_head_outside(
     assert entry.mesh.bounds.maximum[2] > 10.0, "der Kopf liegt über der Platte"
     assert entry.mesh.bounds.minimum[2] < 0.0, "der Schaft reicht durch die Bohrung"
     assert entry.mesh.component_count == 2, "Schraube und Werkstück bleiben lösbar"
+    from app.core.units import EPS_GEOM
+
+    components = list(entry.mesh.raw.split(only_watertight=False))
+    screw = max(components, key=lambda mesh: float(mesh.bounds[1][2]))
+    points = np.asarray(screw.vertices, dtype=float)
+    radii = np.hypot(points[:, 0], points[:, 1])
+    inside_plate = (points[:, 2] > EPS_GEOM) & (points[:, 2] < 10.0 - EPS_GEOM)
+    outside_bore = radii > 3.0 + EPS_GEOM
+    assert not np.any(inside_plate & outside_bore), (
+        "eine lösbare Schraube darf nicht in das Werkstück hineinragen"
+    )
     threads = [feature for feature in entry.features.values() if feature.kind == "thread"]
     assert any(not feature.params["internal"] for feature in threads)
     assert not any(
         finding.code == "parts.hanging_loose" for finding in result.scene.report.findings
     )
+
+
+def test_a_separate_printed_screw_keeps_existing_material_slots(profile: Profile) -> None:
+    """Ein nachträglich eingesetztes Teil entfärbt das Werkstück nicht.
+
+    Die Schraube bleibt geometrisch getrennt und hängt deshalb ohne Boolesche
+    Operation am vorhandenen Netz. Genau dieser kürzere Weg ließ bislang die
+    Slotliste fallen, sobald die Zahl der Dreiecke wuchs.
+    """
+    project = _plate_with_a_through_bore()
+    History(project.document).apply(
+        "Filament",
+        [
+            OperationDraft(
+                op="assign_slot",
+                inputs=("obj_1",),
+                params={"slot": 2, "name": "PETG Rot", "colour": "#C53D38"},
+            )
+        ],
+    )
+    History(project.document).apply(
+        "Schraube",
+        [
+            OperationDraft(
+                op="insert_printed_screw",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "size": "M6", "length": 12.0},
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    mesh = result.scene.objects["obj_1"].mesh
+    assert len(mesh.slots) == mesh.triangle_count
+    assert 2 in mesh.slots, "das zugewiesene Filament des Werkstücks bleibt erhalten"
+    assert 0 in mesh.slots, "das neue, noch nicht zugewiesene Teil bleibt als Standard erkennbar"
 
 
 def test_printed_nut_has_the_matching_internal_thread() -> None:
