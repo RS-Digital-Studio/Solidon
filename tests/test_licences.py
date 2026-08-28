@@ -75,6 +75,30 @@ def test_the_notice_file_names_every_runtime_package() -> None:
     )
 
 
+def test_the_notice_file_names_every_platform_package() -> None:
+    """Auch die Pakete der **anderen** Plattformen (§36).
+
+    Der Test darüber prüft, was hier installiert ist. Genau das ist seine
+    Lücke: ``PLATFORM_PACKAGES`` sind die Pakete, die je nach Betriebssystem
+    dazukommen, und ``runtime_packages()`` sieht auf dieser Maschine nur die
+    eigenen. Gemessen auf Windows ist von den sechs Einträgen genau einer
+    dabei — ``pywin32-ctypes``; die fünf für Linux fehlen dem Baum. Ein
+    verschwundenes ``SecretStorage`` bliebe damit unbemerkt, und die
+    Hinweisdatei reist trotzdem zu einem Linux-Kunden.
+
+    Deshalb hier gegen die Tabelle statt gegen die Umgebung. Geprüft wird der
+    **Name**, aus demselben Grund wie oben: An einer geänderten Schreibweise
+    der Lizenz soll kein Lauf scheitern.
+    """
+    text = NOTICE_FILE.read_text(encoding="utf-8")
+    missing = sorted(name for name in licences.PLATFORM_PACKAGES if name not in text)
+    assert not missing, (
+        "THIRD-PARTY-NOTICES.md nennt diese Plattformpakete nicht:\n"
+        + "\n".join(missing)
+        + "\n\nNeu erzeugen: python -m app.core.knowledge.licences"
+    )
+
+
 @pytest.mark.parametrize("package", ["pymeshlab", "PyQt5", "PyQt6"])
 def test_the_plan_names_these_as_forbidden(package: str) -> None:
     assert package in licences.load_policy().banned_packages
