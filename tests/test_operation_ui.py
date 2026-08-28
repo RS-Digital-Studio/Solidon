@@ -114,6 +114,17 @@ def test_a_selected_bore_fills_in_where_it_is(window: MainWindow) -> None:
     assert values["axis"] == "z"
 
 
+def test_a_selected_bore_opens_resize_at_its_measured_size(window: MainWindow) -> None:
+    """Der sichtbare Kundenweg braucht weder Koordinaten noch ein geratenes Maß."""
+    object_id = select(window)
+    window._on_feature_picked("hole_1")
+
+    values = window._from_selection(REGISTRY.get("resize_hole"), object_id)
+
+    assert values["at_feature"] == "hole_1"
+    assert values["diameter"] == pytest.approx(5.1901, abs=0.001)
+
+
 def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
     """Der Name des Merkmals — **und seit dem 23.08.2026 die Größe dazu.**
 

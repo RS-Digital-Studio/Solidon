@@ -3432,6 +3432,15 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "volta a abrir o passo — basta alterar o número",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignorado — a malha é demasiado grande para esta vez; o mapa de análise na janela consegue.",
   "— keines —": "— nenhum —",
+  "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht hier zuerst ihr gemessenes Maß.": "Novo diâmetro final do furo detetado. Ao clicar, aparece aqui primeiro a medida registada.",
+  "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "O furo detetado cujo diâmetro será alterado. Clique no furo para o indicar.",
+  "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Aumenta a medida final escolhida pelo valor do perfil de material. Desativado, a medida registada mantém-se inalterada.",
+  "Bohrung ändern": "Alterar furo",
+  "Ändert den Durchmesser einer erkannten Bohrung.": "Altera o diâmetro de um furo detetado.",
+  "Zum Ändern des Durchmessers muss eine Bohrung gewählt sein.": "Tem de selecionar um furo para alterar o diâmetro.",
+  "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut.": "Este furo detetado não contém dados geométricos utilizáveis. Volte a reconhecer as características e selecione-o novamente.",
+  "Die Bohrung hat bereits diesen Durchmesser.": "O furo já tem esse diâmetro.",
+  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "O furo alterado foi calculado, mas depois não voltou a ser reconhecido. Crie um relatório de erro com o modelo afetado.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes."
 }

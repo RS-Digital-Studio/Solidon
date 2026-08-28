@@ -642,6 +642,8 @@ def test_resizing_a_bore_keeps_an_exact_body(profile: Profile) -> None:
         rel=1e-9,
     )
     assert larger.mesh.is_closed and smaller.mesh.is_closed
+    assert larger.features[bore.id].params["diameter"] == pytest.approx(10.0)
+    assert smaller.features[bore.id].params["diameter"] == pytest.approx(4.0)
 
 
 def test_the_exact_bore_agrees_with_the_mesh_on_direction_at_the_centre() -> None:

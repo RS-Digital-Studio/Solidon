@@ -3432,6 +3432,15 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "rouvre l'étape — changer le nombre suffit",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "— keines —": "— aucun —",
+  "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht hier zuerst ihr gemessenes Maß.": "Nouveau diamètre final du trou détecté. Un clic affiche d’abord sa mesure relevée ici.",
+  "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "Le trou détecté dont le diamètre doit être modifié. Cliquez sur le trou pour le renseigner.",
+  "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Augmente la cote finale choisie de la valeur du profil de matériau. Désactivé, la mesure relevée reste inchangée.",
+  "Bohrung ändern": "Modifier le trou",
+  "Ändert den Durchmesser einer erkannten Bohrung.": "Modifie le diamètre d’un trou détecté.",
+  "Zum Ändern des Durchmessers muss eine Bohrung gewählt sein.": "Un trou doit être sélectionné pour modifier son diamètre.",
+  "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut.": "Ce trou détecté ne contient pas de données géométriques utilisables. Relancez la reconnaissance des éléments, puis sélectionnez-le à nouveau.",
+  "Die Bohrung hat bereits diesen Durchmesser.": "Le trou a déjà ce diamètre.",
+  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Le trou modifié a été calculé, mais n’a ensuite pas été reconnu. Créez un rapport d’erreur avec le modèle concerné.",
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes."
 }

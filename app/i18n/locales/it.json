@@ -3432,6 +3432,15 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "riapre il passo — basta cambiare il numero",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "saltato — la mesh è troppo grande per questo turno, la mappa di analisi nella finestra ce la fa.",
   "— keines —": "— nessuno —",
+  "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht hier zuerst ihr gemessenes Maß.": "Nuovo diametro finale del foro rilevato. Facendo clic appare prima qui la sua misura rilevata.",
+  "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "Il foro rilevato di cui modificare il diametro. Fai clic sul foro per inserirlo.",
+  "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Aumenta la misura finale scelta del valore del profilo materiale. Disattivato, la misura rilevata resta invariata.",
+  "Bohrung ändern": "Modifica foro",
+  "Ändert den Durchmesser einer erkannten Bohrung.": "Modifica il diametro di un foro rilevato.",
+  "Zum Ändern des Durchmessers muss eine Bohrung gewählt sein.": "Per modificare il diametro deve essere selezionato un foro.",
+  "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut.": "Questo foro rilevato non contiene dati geometrici utilizzabili. Rileva di nuovo le caratteristiche, poi selezionalo nuovamente.",
+  "Die Bohrung hat bereits diesen Durchmesser.": "Il foro ha già questo diametro.",
+  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Il foro modificato è stato calcolato, ma successivamente non è stato riconosciuto. Crea un rapporto di errore con il modello interessato.",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» ha convertito le facce e gli spigoli modificabili singolarmente in triangoli fissi. Questo strumento deve trovarsi prima di quel passaggio nella cronologia. Annulla i passaggi da quel punto, applica lo strumento e ricrea i passaggi rimanenti."
 }

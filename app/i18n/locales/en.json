@@ -3432,6 +3432,15 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "reopens the step — changing the number is enough",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "— keines —": "— none —",
+  "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht hier zuerst ihr gemessenes Maß.": "New finished diameter of the detected bore. Clicking it first shows its measured size here.",
+  "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "The detected bore whose diameter is being changed. Click the bore to enter it.",
+  "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Increases the selected finished dimension by the value from the material profile. When off, the measured dimension remains unchanged.",
+  "Bohrung ändern": "Change bore",
+  "Ändert den Durchmesser einer erkannten Bohrung.": "Changes the diameter of a detected bore.",
+  "Zum Ändern des Durchmessers muss eine Bohrung gewählt sein.": "A bore must be selected to change its diameter.",
+  "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut.": "This detected bore contains no usable geometry data. Redetect the features, then select it again.",
+  "Die Bohrung hat bereits diesen Durchmesser.": "This bore already has that diameter.",
+  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "The modified bore was calculated but was not recognised again afterwards. Create an error report with the affected model.",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest."
 }

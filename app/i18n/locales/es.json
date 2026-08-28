@@ -3432,6 +3432,15 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "vuelve a abrir el paso — basta con cambiar el número",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "omitido — la malla es demasiado grande para esta vuelta; el mapa de análisis de la ventana sí puede.",
   "— keines —": "— ninguno —",
+  "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht hier zuerst ihr gemessenes Maß.": "Nuevo diámetro final del orificio detectado. Al hacer clic, aquí aparece primero su medida.",
+  "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "El orificio detectado cuyo diámetro se va a cambiar. Haga clic en el orificio para indicarlo.",
+  "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Aumenta la medida final seleccionada en el valor del perfil de material. Desactivado, la medida permanece sin cambios.",
+  "Bohrung ändern": "Cambiar orificio",
+  "Ändert den Durchmesser einer erkannten Bohrung.": "Cambia el diámetro de un orificio detectado.",
+  "Zum Ändern des Durchmessers muss eine Bohrung gewählt sein.": "Debe seleccionarse un orificio para cambiar su diámetro.",
+  "Diese erkannte Bohrung enthält keine verwendbaren Geometriedaten. Lassen Sie die Merkmale neu erkennen und wählen Sie sie danach erneut.": "Este orificio detectado no contiene datos geométricos utilizables. Vuelva a detectar las características y selecciónelo de nuevo.",
+  "Die Bohrung hat bereits diesen Durchmesser.": "El orificio ya tiene ese diámetro.",
+  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "El orificio modificado se calculó, pero después no volvió a reconocerse. Cree un informe de errores con el modelo afectado.",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» muestra lo que hay para elegir.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» convirtió las caras y aristas editables por separado en triángulos fijos. Esta herramienta debe aparecer antes de ese paso en el historial. Deshaz los pasos desde allí, aplica la herramienta y vuelve a crear los pasos restantes."
 }
