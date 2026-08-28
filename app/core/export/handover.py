@@ -789,14 +789,35 @@ def settings_for_shared_slicer(
     return settings_for_slot(settings, override_for(settings, slots[0]))
 
 
+def settings_for_handover(
+    settings: PrintSettings,
+    flavour: SlicerFlavour,
+    slots: Sequence[MaterialSlot] = (),
+) -> PrintSettings:
+    """Der Satz, den dieser Slicer auf seinem Übergabeweg wirklich erhält.
+
+    Die Orca-Familie nimmt ein Profil je Spule und behält deshalb die
+    Projektwerte als gemeinsame Grundlage. PrusaSlicer und CuraEngine nehmen
+    genau einen Satz; dort gewinnt die erste Spule. Schreiben und Gegenprobe
+    benutzen diese eine Funktion, damit ein richtig übernommener Spulenwert
+    nicht anschließend als Abweichung gemeldet wird.
+    """
+    if has_filament_profiles(flavour):
+        return settings
+    return settings_for_shared_slicer(settings, slots)
+
+
 def with_slot_profiles(
     slots: Sequence[MaterialSlot], chosen: Sequence[str]
 ) -> tuple[MaterialSlot, ...]:
     """Heftet die im Dialog gewählten Filamentprofile an die Slots (§20).
 
-    ``chosen`` ist ``PrintSettings.slot_profiles``: je Position ein
-    Profilname, die Position ist die Extruderbelegung. Wo nichts steht,
-    bleibt der Slot, wie er ist — dann gilt das Filament der Platte.
+    ``chosen`` ist ``PrintSettings.slot_profiles``: je Extrudernummer ein
+    Profilname. Gelesen wird deshalb :attr:`MaterialSlot.index` und nicht die
+    Lage in ``slots`` — eine einzeln exportierte Platte kann nur Extruder 2
+    enthalten und darf dadurch nicht das Profil von Extruder 1 bekommen. Wo
+    nichts steht, bleibt der Slot, wie er ist; dann gilt das Filament der
+    Platte.
 
     Diese Zuordnung ist das Stück, das fehlte: Der Dialog sammelte die Wahl
     ein und meldete „druckt mit", ``write_config`` war auf
@@ -804,10 +825,10 @@ def with_slot_profiles(
     alle Slots slicten mit dem Basisfilament.
     """
     return tuple(
-        replace(entry, material=chosen[position])
-        if position < len(chosen) and chosen[position]
+        replace(entry, material=chosen[entry.index])
+        if 0 <= entry.index < len(chosen) and chosen[entry.index]
         else entry
-        for position, entry in enumerate(slots)
+        for entry in slots
     )
 
 
@@ -826,7 +847,7 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
-    effective = settings if setup.flavour == "orca" else settings_for_shared_slicer(settings, slots)
+    effective = settings_for_handover(settings, setup.flavour, slots)
     values = values_for(effective, profile, setup.flavour)
 
     if setup.flavour == "prusa":
@@ -960,11 +981,12 @@ def project_settings(
             if slot is not None and slot.material
             else setup
         )
-        values = by_section(mine, setup.flavour).get("filament", {})
-        filament_documents.append(_orca_filament(values, mine, profile, own, slot))
+        slot_values = by_section(mine, setup.flavour).get("filament", {})
+        filament_documents.append(_orca_filament(slot_values, mine, profile, own, slot))
 
-    metadata = {"type", "name", "from", "instantiation", "inherits"}
-    filament_keys = set().union(*(set(entry) - metadata for entry in filament_documents))
+    filament_keys = sorted(
+        set().union(*(set(entry) - slicer_profiles.DESCRIBING_KEYS for entry in filament_documents))
+    )
 
     def scalar(value: object) -> object:
         """Ein Einzelwert aus der Ein-Filament-Darstellung."""
@@ -974,7 +996,26 @@ def project_settings(
 
     resolved: dict[str, object] = dict(document)
     for key in filament_keys:
-        resolved[key] = [scalar(entry.get(key, "")) for entry in filament_documents]
+        filament_values = [entry.get(key, "") for entry in filament_documents]
+        vectors = [
+            value for value in filament_values if isinstance(value, list) and len(value) != 1
+        ]
+        if vectors:
+            # Listen mit null oder mehreren Einträgen beschreiben **einen**
+            # Profilwert und keine Extruderbelegung. Sind sie überall gleich,
+            # bleibt die gültige flache Form erhalten. Verschiedene Vektoren
+            # kann das Projektformat nicht je Extruder ausdrücken; dann wird
+            # der Schlüssel weggelassen, statt eine ungültige verschachtelte
+            # Liste zu erfinden, die der Slicer still verwirft.
+            stated = [value for value in filament_values if value not in ("", [])]
+            if not stated:
+                resolved[key] = []
+            elif all(value == stated[0] for value in stated):
+                resolved[key] = stated[0]
+            else:
+                _log.warning("not writing incompatible multi-value filament key %s", key)
+            continue
+        resolved[key] = [scalar(value) for value in filament_values]
 
     # Erst nach der Umwandlung: das hier sind Angaben *über* die Datei, keine
     # Werte je Extruder. Als Liste geschrieben liest der Slicer sie nicht.
@@ -1847,6 +1888,7 @@ def slice_model(
         )
 
     started = time.perf_counter()
+    written_settings = settings_for_handover(settings, setup.flavour, slots)
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
@@ -1933,7 +1975,7 @@ def slice_model(
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
-        ignored = verify(payload, as_mapping(settings, setup.flavour))
+        ignored = verify(payload, as_mapping(written_settings, setup.flavour))
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.

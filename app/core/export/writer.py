@@ -806,11 +806,13 @@ def write_assembly(
         for entry in objects
     ]
     merged_slots = threemf.merge_slots(parts, across=whole_job)
+    configured_slots: Sequence[MaterialSlot] = merged_slots
     if settings is not None:
         from app.core.export import handover
 
+        configured_slots = handover.with_slot_profiles(merged_slots, settings.slot_profiles)
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
-        findings += handover.unreachable_overrides(settings, known_setup, merged_slots)
+        findings += handover.unreachable_overrides(settings, known_setup, configured_slots)
     target = _written(
         directory / (safe_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(
@@ -823,13 +825,13 @@ def write_assembly(
                 profile,
                 flavour,
                 setup,
-                merged_slots,
+                configured_slots,
             ),
             prusa_config=_plate_config(
                 settings,
                 profile,
                 flavour,
-                merged_slots,
+                configured_slots,
             ),
             # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
             # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
@@ -888,7 +890,7 @@ def _plate_config(
         return {}
     from app.core.export import handover
 
-    effective = handover.settings_for_shared_slicer(settings, slots)
+    effective = handover.settings_for_handover(settings, flavour, slots)
     return handover.values_for(effective, profile, flavour)
 
 

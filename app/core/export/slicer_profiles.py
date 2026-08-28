@@ -374,7 +374,7 @@ def find_profiles(
 #: sondern die Frage, zu welchem Drucker ein Profil überhaupt gehört.
 _BINDING = ("compatible_printers", "compatible_printers_condition")
 
-_DESCRIBING: Final = frozenset(
+DESCRIBING_KEYS: Final = frozenset(
     {
         "type",
         "name",
@@ -385,6 +385,8 @@ _DESCRIBING: Final = frozenset(
         "filament_id",
         "compatible_printers",
         "compatible_printers_condition",
+        "compatible_prints",
+        "compatible_prints_condition",
         "renamed_from",
         "description",
         "version",
@@ -420,7 +422,7 @@ def resolve_values(path: Path) -> dict[str, Any]:
     """
     values: dict[str, Any] = {}
     for loaded in reversed(_chain(path)):  # Wurzel zuerst, Spezielles gewinnt
-        values.update({key: value for key, value in loaded.items() if key not in _DESCRIBING})
+        values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
     return values
 
 
@@ -428,7 +430,7 @@ def binding(path: Path) -> dict[str, Any]:
     """Woran ein Profil seine Verträglichkeit knüpft (§29).
 
     :func:`resolve_values` lässt die beschreibenden Schlüssel aus
-    (``_DESCRIBING``), und das ist für Werte richtig — ein geerbtes
+    (``DESCRIBING_KEYS``), und das ist für Werte richtig — ein geerbtes
     ``from: system`` wäre gelogen. Für **die Bindung** ist es falsch:
     ``compatible_printers`` steht selten in der obersten Datei.
 

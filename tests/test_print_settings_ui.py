@@ -118,9 +118,18 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
     slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
     dialog = FilamentOverrideDialog(slot, settings)
+    dialog.show()
+    qt_app.processEvents()
+    collapsed_height = dialog.height()
 
     assert all(not group.isChecked() for group in dialog.groups.values())
+    assert all(body.isHidden() for body in dialog.group_bodies.values()), (
+        "ohne eigene Werte bleiben die neunzehn Detailfelder eingeklappt"
+    )
     dialog.groups["temperature"].setChecked(True)
+    qt_app.processEvents()
+    assert not dialog.group_bodies["temperature"].isHidden()
+    assert dialog.height() > collapsed_height, "geöffnete Felder brauchen sichtbar mehr Raum"
     nozzle = dialog.editors["temperature.nozzle"]
     assert isinstance(nozzle, QSpinBox)
     nozzle.setValue(210)
@@ -133,6 +142,14 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
     assert override.cooling is None
     assert override.retraction is None
     assert override.filament is None
+
+    dialog.project_values_button.click()
+
+    assert all(not group.isChecked() for group in dialog.groups.values())
+    assert all(body.isHidden() for body in dialog.group_bodies.values())
+    assert isinstance(nozzle, QSpinBox)
+    assert nozzle.value() == settings.temperature.nozzle
+    assert dialog.override() is None, "ein sichtbarer Knopf nimmt alle eigenen Werte zurück"
 
 
 def test_every_field_lands_in_a_known_group() -> None:
@@ -1858,3 +1875,28 @@ def test_a_failed_slicer_run_leaves_its_reason_in_the_dialog(
 
     assert gezeigt, "das Fehlerfenster kommt weiterhin"
     assert "außerhalb seines Bauraums" in dialog.state.text(), dialog.state.text()
+
+
+def test_a_failed_slicer_run_returns_the_plate_findings(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der externe Abbruch darf die genauere Vorprüfung nicht verschlucken."""
+    from app.core.errors import ExternalToolError
+    from app.core.types import Finding
+    from app.ui import print_settings_dialog as modul
+
+    monkeypatch.setattr(modul, "show_error", lambda *args, **kwargs: None)
+    returned: list[list[Finding]] = []
+    dialog.reported.connect(returned.append)
+    finding = Finding(
+        code="arrange.out_of_build_volume",
+        severity="error",
+        message="Das Teil ist größer als der Bauraum.",
+    )
+
+    dialog._slice_failed(
+        ExternalToolError(tool="elegoo-slicer", detail="Keine Druckdatei."),
+        [finding],
+    )
+
+    assert returned == [[finding]], "der Prüfbericht erfährt sonst nichts vom Abbruch"

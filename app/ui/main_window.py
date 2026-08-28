@@ -3695,13 +3695,19 @@ class MainWindow(QMainWindow):
             override_for(settings, slot),
             self,
         )
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        updated = with_slot_override(settings, slot, dialog.override())
-        self.session.set_print_settings(updated)
-        result = self.session.last_result
-        if result is not None:
-            self.filaments.show_scene(list(result.scene.objects.values()), updated)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted:
+                return
+            updated = with_slot_override(settings, slot, dialog.override())
+            self.session.set_print_settings(updated)
+            result = self.session.last_result
+            if result is not None:
+                self.filaments.show_scene(list(result.scene.objects.values()), updated)
+        finally:
+            # Das Hauptfenster ist Qt-Eigentümer. Ohne die Freigabe bliebe
+            # jeder geschlossene Dialog samt seinen neunzehn Feldern bis zum
+            # Ende der Sitzung als unsichtbares Kind erhalten.
+            dialog.deleteLater()
 
     def _current_slice(self) -> SliceResult | None:
         """Die Schichtanalyse des gewählten Körpers, wenn sie schon vorliegt.

@@ -684,6 +684,9 @@ def test_the_chosen_filament_profile_follows_the_colour_not_the_position() -> No
         "dasselbe Filament bekommt auf jeder Platte dasselbe Profil"
     )
     assert profile_of("Weiß", [job[1]]) == "PLA-Weiss"
+    assert profile_of("Weiß", [replace(job[1], slots=(white,))]) == "PLA-Weiss", (
+        "auch eine Platte mit nur dem späteren Auftragsslot behält dessen Profil"
+    )
 
 
 def test_an_exported_3mf_carries_each_filaments_temperature(
@@ -745,6 +748,78 @@ def test_an_exported_3mf_carries_each_filaments_temperature(
         assert part.slots[0].colour == pytest.approx(expected.colour, abs=1 / 255), (
             "auch die sichtbaren Spulenfarben überstehen den Reimport"
         )
+
+
+def test_a_direct_3mf_export_uses_each_chosen_filament_profile(
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Profilwahl aus dem Druckdialog gilt auch beim normalen Export.
+
+    Der Slicerlauf heftete die Namen bereits an die Slots; der direkte Export
+    ging an diesem Schritt vorbei und nahm für beide Spulen das eine
+    Basisprofil. Eine PLA-Schrift erbte dadurch die PETG-Temperatur, solange
+    der Kunde nicht zusätzlich dieselbe Temperatur von Hand übersteuerte.
+    """
+    from app.core.export import slicer_profiles
+
+    petg_path = tmp_path / "Haus PETG.json"
+    petg_path.write_text(
+        json.dumps(
+            {
+                "name": "Haus PETG",
+                "nozzle_temperature": ["240"],
+                "filament_max_volumetric_speed": ["5"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    pla_path = tmp_path / "Haus PLA.json"
+    pla_path.write_text(
+        json.dumps(
+            {
+                "name": "Haus PLA",
+                "nozzle_temperature": ["210"],
+                "filament_max_volumetric_speed": ["21"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    available = [
+        slicer_profiles.SlicerProfile(path=petg_path, name="Haus PETG", kind="filament"),
+        slicer_profiles.SlicerProfile(path=pla_path, name="Haus PLA", kind="filament"),
+    ]
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: available)
+
+    black = MaterialSlot(index=0, name="PETG Schwarz", colour=(0.05, 0.05, 0.05))
+    white = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    objects = [
+        SceneObject(id="body", name="Gehäuse", mesh=body(), material_slots=[black]),
+        SceneObject(id="label", name="Schrift", mesh=body(), material_slots=[white]),
+    ]
+    settings = replace(
+        print_settings.resolve(profile),
+        slot_profiles=("Haus PETG", "Haus PLA"),
+    )
+    setup = handover.SlicerSetup(
+        executable=tmp_path / "orca.exe",
+        flavour="orca",
+        base_filament="Haus PETG",
+    )
+
+    written, _findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Schild mit Profilen",
+        profile=profile,
+        settings=settings,
+        flavour="orca",
+        setup=setup,
+    )
+
+    with zipfile.ZipFile(written) as archive:
+        embedded = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert embedded["nozzle_temperature"] == ["240", "210"]
+    assert embedded["filament_max_volumetric_speed"] == ["5", "21"]
 
 
 def test_only_the_part_that_needs_it_gets_the_setting() -> None:

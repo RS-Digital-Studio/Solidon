@@ -10,6 +10,9 @@ passiert.
 
 from __future__ import annotations
 
+import gc
+import weakref
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -235,6 +238,23 @@ def test_a_worker_survives_the_death_of_its_leash(qt_app: QApplication) -> None:
             break
         arbeiter.msleep(10)
     assert arbeiter not in leash_module.alive(), "und lässt ihn danach los"
+
+
+def test_a_finished_worker_does_not_keep_its_owner_alive(qt_app: QApplication) -> None:
+    """Das Fertigsignal darf keinen Ring zurück zum Fenster schließen."""
+    besitzer = QObject()
+    beobachter = weakref.ref(besitzer)
+    leine = WorkerLeash(besitzer)
+    arbeiter = _Schlaefer()
+
+    leine.start(arbeiter)
+    arbeiter.wait(2000)
+    del besitzer, leine
+    for _ in range(5):
+        qt_app.processEvents()
+    gc.collect()
+
+    assert beobachter() is None, "der Rückruf des Arbeiters hält sein Fenster fest"
 
 
 # --- ein Arbeiter, der auch mit dem Unerwarteten zurückkommt ---------------------

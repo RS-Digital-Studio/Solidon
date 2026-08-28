@@ -777,7 +777,7 @@ class KeyDialog(QDialog):
         worker = _Look()
         worker.done.connect(self._show_state)
         worker.crashed.connect(self._crashed)
-        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        worker.finished.connect(self._worker_finished)
         self._look = worker
         self._leash.start(worker)
 
@@ -980,7 +980,7 @@ class KeyDialog(QDialog):
         worker = _StartWorker(tool)
         worker.done.connect(self._started)
         worker.crashed.connect(self._crashed)
-        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        worker.finished.connect(self._worker_finished)
         self._starter = worker
         self._leash.start(worker)
 
@@ -1065,7 +1065,7 @@ class KeyDialog(QDialog):
         worker.step.connect(self._pull_step)
         worker.done.connect(self._pull_done)
         worker.crashed.connect(self._crashed)
-        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        worker.finished.connect(self._worker_finished)
         self._pull = worker
         self._leash.start(worker)
 
@@ -1115,8 +1115,9 @@ class KeyDialog(QDialog):
         self.probe_result.setText(f"{UNEXPECTED_CRASH!s} {detail}")
         set_level(self.probe_result, "warning")
 
-    def _worker_finished(self, worker: object) -> None:
+    def _worker_finished(self) -> None:
         """Wer einen Arbeiter startet, hält ihn fest — siehe :mod:`app.ui.leash`."""
+        worker = self.sender()
         if self._starter is worker:
             self._starter = None
         if self._pull is worker:
@@ -1134,7 +1135,7 @@ class KeyDialog(QDialog):
         worker = _ToolProbeWorker(model)
         worker.done.connect(self._probe_done)
         worker.crashed.connect(self._crashed)
-        worker.finished.connect(lambda done=worker: self._probe_finished(done))
+        worker.finished.connect(self._probe_finished)
         self._probe = worker
         self._leash.start(worker)
 
@@ -1186,10 +1187,11 @@ class KeyDialog(QDialog):
             minutes=round(speed.prompt_minutes),
         )
 
-    def _probe_finished(self, worker: object) -> None:
+    def _probe_finished(self) -> None:
         # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig
         # ist: `finished` kommt, während Qt ihn noch abräumt — das Loslassen
         # übernimmt die Halteleine, nicht dieses Feld.
+        worker = self.sender()
         if self._probe is worker:
             self._probe = None
         self._leash.hold_until_done(worker)

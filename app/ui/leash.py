@@ -18,7 +18,7 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from typing import Any, Final
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
@@ -73,6 +73,23 @@ def alive() -> tuple[Any, ...]:
     return tuple(_alive)
 
 
+def _release_global(worker: Any) -> None:
+    """Einen abgewarteten Arbeiter erst nach seinen eingereihten Signalen lösen.
+
+    ``wait`` beendet den Thread, stellt aber sein ``finished``-Signal noch
+    nicht zu. Die modulweite Referenz davor zu streichen kann das C++-Objekt
+    unter dem eingereihten Signal freigeben. Der langlebige Empfänger hält den
+    Arbeiter bis zur nächsten Runde der Ereignisschleife sicher fest.
+    """
+    if worker is None or not isValid(worker):
+        _alive.discard(worker)
+        return
+    if worker.isRunning():
+        QTimer.singleShot(RELEASE_RETRY_MS, _keeper_object(), lambda: _release_global(worker))
+        return
+    _alive.discard(worker)
+
+
 def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
     """Auf jeden gehaltenen Arbeiter warten — auch auf die ohne Fenster.
 
@@ -109,20 +126,6 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
             # überlebt die C++-Seite, wenn ein Qt-Elternteil sie mitnimmt.
             _alive.discard(worker)
             continue
-        # **Erst trennen, dann warten**, und die Reihenfolge ist der Punkt.
-        # Wer während der Frist fertig wird, sendet ``finished`` über die
-        # Thread-Grenze — als ``QueuedConnection``, also in die Ereignis-
-        # schlange. Wer danach ``processEvents`` ruft, stellt es zu: an einen
-        # Empfänger, den niemand mehr abgeräumt hat, weil er an keinem Fenster
-        # hing. Nach dem ``wait`` zu trennen hilft nicht, denn Qt entfernt ein
-        # bereits eingereihtes Signal beim ``disconnect`` nicht.
-        # ``QObject.disconnect(x, None, None, None)`` und nicht
-        # ``worker.disconnect()``: Die argumentlose Form gibt es in C++, in
-        # PySide6 nicht — sie wirft ``TypeError``. Die Vier-Argument-Form
-        # wirkt (nachgemessen, sie gibt ``True`` zurück); die Typstubs führen
-        # sie nur mit ``QMetaMethod`` statt ``None``, deshalb der Vermerk.
-        with suppress(RuntimeError):
-            QObject.disconnect(worker, None, None, None)  # type: ignore[call-overload]
         if worker.isRunning():
             worker.wait(timeout_ms)
         if worker.isRunning():
@@ -130,11 +133,10 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
             # C++-Objekt unter einem laufenden Thread freizugeben.
             stubborn.append(worker)
             continue
-        # **Die Leine kann ihn nicht mehr loslassen**, weil das ``disconnect``
-        # oben auch ihre eigene Verbindung zu ``hold_until_done`` gekappt hat.
-        # Wer die Verantwortung nimmt, trägt sie: Sonst stünde er beim nächsten
-        # Aufruf wieder da, und aus der Aufräumhilfe würde ein Leck.
-        _alive.discard(worker)
+        # Das ``finished``-Signal liegt jetzt möglicherweise noch in Qts
+        # Ereignisschlange. Die globale Halterung fällt deshalb ebenfalls erst
+        # dort; so kann der Rückruf seine Leine geordnet aufräumen.
+        QTimer.singleShot(0, _keeper_object(), lambda done=worker: _release_global(done))
     return tuple(stubborn)
 
 
@@ -212,8 +214,36 @@ class WorkerLeash:
         if worker is None:
             return
         _alive.add(worker)
-        worker.finished.connect(lambda done=worker: self.hold_until_done(done))
+        worker.finished.connect(self._finished_callback(worker))
         worker.start()
+
+    def _finished_callback(self, worker: Any) -> Callable[[], None]:
+        """Das Fertigsignal halten, ohne Arbeiter oder Besitzer einzuschließen.
+
+        Das Signal gehört dem Arbeiter. Ein Rückruf mit ``self`` und
+        ``worker`` als Abschluss schließt deshalb genau den Ring, den die
+        Leine verhindern soll: Arbeiter → Rückruf → Leine → Fenster. Beide
+        Verweise bleiben hier schwach; die modulweite Menge hält den Arbeiter
+        so lange sicher fest, wie es nötig ist.
+        """
+        leash_ref = weakref.ref(self)
+        worker_ref = weakref.ref(worker)
+
+        def finished() -> None:
+            found_worker = worker_ref()
+            if found_worker is None:
+                return
+            found_leash = leash_ref()
+            if found_leash is None:
+                QTimer.singleShot(
+                    0,
+                    _keeper_object(),
+                    lambda done=found_worker: _release_global(done),
+                )
+                return
+            found_leash.hold_until_done(found_worker)
+
+        return finished
 
     def hold_until_done(self, worker: Any) -> None:
         """Den fertigen Arbeiter halten, bis ``isRunning`` nein sagt.
@@ -257,7 +287,7 @@ class WorkerLeash:
         # Nicht beim Signal selbst loslassen — dieselbe Begründung wie in
         # ``hold_until_done``, und derselbe Weg hinaus, damit es nur einen
         # gibt.
-        worker.finished.connect(lambda done=worker: self.hold_until_done(done))
+        worker.finished.connect(self._finished_callback(worker))
 
     def _release(self, worker: Any) -> None:
         """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""

@@ -79,6 +79,7 @@ def test_filament_values_from_the_panel_reach_the_project(
 ) -> None:
     """Die neue, kurze Bedienkette: Filamentpanel → Dialog → Projektdatei."""
     slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    released: list[MaterialSlot] = []
 
     class AcceptedFilamentDialog:
         def __init__(self, chosen, settings, _existing, _parent) -> None:
@@ -95,6 +96,9 @@ def test_filament_values_from_the_panel_reach_the_project(
                 temperature=self.temperature,
             )
 
+        def deleteLater(self) -> None:  # noqa: N802 - bildet die Qt-API nach
+            released.append(self.chosen)
+
     monkeypatch.setattr(main_window_module, "FilamentOverrideDialog", AcceptedFilamentDialog)
 
     window.filaments.overrideRequested.emit(slot)
@@ -104,6 +108,32 @@ def test_filament_values_from_the_panel_reach_the_project(
     override = handover.override_for(settings, slot)
     assert override is not None and override.temperature is not None
     assert override.temperature.nozzle == 205
+    assert released == [slot], "der geschlossene Dialog bleibt nicht am Hauptfenster hängen"
+
+
+def test_a_cancelled_filament_dialog_is_released(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch Abbrechen räumt den parent-eigenen Qt-Dialog vollständig ab."""
+    slot = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    released: list[MaterialSlot] = []
+
+    class RejectedFilamentDialog:
+        def __init__(self, chosen, _settings, _existing, _parent) -> None:
+            self.chosen = chosen
+
+        def exec(self) -> int:
+            return int(QDialog.DialogCode.Rejected)
+
+        def deleteLater(self) -> None:  # noqa: N802 - bildet die Qt-API nach
+            released.append(self.chosen)
+
+    monkeypatch.setattr(main_window_module, "FilamentOverrideDialog", RejectedFilamentDialog)
+
+    window.filaments.overrideRequested.emit(slot)
+
+    assert released == [slot]
+    assert window.session.project.document.print_settings is None
 
 
 def test_undo_and_redo_reach_the_document(session: Session) -> None:

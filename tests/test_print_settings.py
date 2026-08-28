@@ -23,6 +23,7 @@ from app.core.slice import advise
 from app.core.types import (
     BoundingBox,
     LayerInfo,
+    MaterialSlot,
     Polygon,
     SliceResult,
 )
@@ -1726,6 +1727,46 @@ def _slicer_writing(
     return model, handover.SlicerSetup(executable=executable, flavour=flavour)  # type: ignore[arg-type]
 
 
+def test_the_first_spools_value_is_verified_as_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe vergleicht mit dem Satz, den der Slicer wirklich bekam.
+
+    Prusa und Cura nehmen einen Filamentsatz. Ist die erste Spule auf 210 °C
+    gestellt und das Projekt auf 240 °C, ist 210 im G-Code ein Erfolg und kein
+    angebliches Übergehen der Einstellung.
+    """
+    from app.core.types import SlotOverride
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    slot = MaterialSlot(index=0, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    own_temperature = replace(settings.temperature, nozzle=210)
+    settings = replace(
+        settings,
+        slot_overrides=(
+            SlotOverride(
+                name=slot.name,
+                colour=slot.colour,
+                temperature=own_temperature,
+            ),
+        ),
+    )
+    payload = _gcode_printing_at(-10.0, 10.0) + "; temperature = 210\n"
+    model, setup = _slicer_writing(monkeypatch, tmp_path, payload, flavour="prusa")
+
+    outcome = handover.slice_model(
+        model,
+        settings,
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=(slot,),
+    )
+
+    assert "slicer.setting_ignored" not in {finding.code for finding in outcome.findings}
+
+
 def test_a_gcode_that_prints_beside_the_bed_becomes_a_finding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2456,6 +2497,36 @@ def _filament_profile(directory: Path, name: str, **werte: object) -> Path:
     datei = directory / f"{name}.json"
     datei.write_text(json.dumps({"name": name, **werte}), encoding="utf-8")
     return datei
+
+
+def test_project_settings_keep_profile_wide_lists_flat(tmp_path: Path) -> None:
+    """Profil-Metadaten und Vektoren sind keine zweite Extruderliste.
+
+    Ein äußerer Eintrag je Spule um eine bereits vollständige Liste erzeugte
+    ``[[], []]`` beziehungsweise ``[[a, b], [a, b]]``. Diese Form kennt das
+    Slicerformat nicht; beschreibende Felder fallen weg, ein gemeinsamer
+    Profilwert bleibt flach.
+    """
+    filament = _filament_profile(
+        tmp_path,
+        "Haus PLA",
+        compatible_prints=[],
+        filament_custom_curve=["a", "b"],
+    )
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    settings = print_settings.resolve(profile)
+    slots = (
+        MaterialSlot(index=0, name="PLA Weiß", material=str(filament)),
+        MaterialSlot(index=1, name="PLA Schwarz", material=str(filament)),
+    )
+    setup = handover.SlicerSetup(executable=Path("orca.exe"), flavour="orca")
+
+    document = handover.project_settings(settings, profile, setup, slots=slots)
+
+    assert "compatible_prints" not in document, "Profilbeschreibung ist kein Druckwert"
+    assert document["filament_custom_curve"] == ["a", "b"], (
+        "ein gemeinsamer Vektor bleibt eine flache Liste"
+    )
 
 
 def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:

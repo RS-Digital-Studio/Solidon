@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -1152,6 +1153,7 @@ class FilamentOverrideDialog(QDialog):
         self.existing = existing
         self.editors: dict[str, QWidget] = {}
         self.groups: dict[str, QGroupBox] = {}
+        self.group_bodies: dict[str, QWidget] = {}
 
         name = str(slot.name) or tr("Filament")
         self.setWindowTitle(f"{tr('Druckeinstellungen')} — {name}")
@@ -1187,9 +1189,13 @@ class FilamentOverrideDialog(QDialog):
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         contents = QWidget(scroll)
         sections = QVBoxLayout(contents)
-        sections.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        self._scroll = scroll
+        self._section_contents = contents
+        self._sections = sections
+        sections.setContentsMargins(0, TIGHT, 0, TIGHT)
         sections.setSpacing(TIGHT)
         titles = {
             "temperature": tr("Temperaturen"),
@@ -1202,25 +1208,36 @@ class FilamentOverrideDialog(QDialog):
             box.setCheckable(True)
             own_section = getattr(existing, group) if existing is not None else None
             box.setChecked(own_section is not None)
-            box.setToolTip(tr("Eingeschaltet gelten diese Werte nur für die gewählte Spule."))
-            form = QFormLayout(box)
+            explanation = tr("Eingeschaltet gelten diese Werte nur für die gewählte Spule.")
+            box.setToolTip(explanation)
+            box.setAccessibleDescription(explanation)
+            box_layout = QVBoxLayout(box)
+            box_layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+            body = QWidget(box)
+            form = QFormLayout(body)
+            form.setContentsMargins(0, 0, 0, 0)
             source = own_section or getattr(settings, group)
             for field in (
                 entry for entry in FILAMENT_FIELDS if entry.path.partition(".")[0] == group
             ):
-                editor = _make_setting_editor(field, box, lambda *_args: None)
+                editor = _make_setting_editor(field, body, lambda *_args: None)
                 _set_setting_editor(editor, field, getattr(source, field.path.partition(".")[2]))
                 self.editors[field.path] = editor
                 label = QLabel(
                     f"{field.title!s} [{field.unit}]" if field.unit else str(field.title),
-                    box,
+                    body,
                 )
                 note = str(field.note)
                 if note:
                     label.setToolTip(note)
                     label.setStatusTip(note)
                 form.addRow(label, editor)
+            box_layout.addWidget(body)
+            box.toggled.connect(body.setVisible)
+            box.toggled.connect(self._fit_depth)
+            body.setVisible(box.isChecked())
             self.groups[group] = box
+            self.group_bodies[group] = body
             sections.addWidget(box)
         sections.addStretch(1)
         scroll.setWidget(contents)
@@ -1233,9 +1250,33 @@ class FilamentOverrideDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         ok.setText(tr("Übernehmen"))
         make_primary(ok)
+        self.project_values_button = buttons.addButton(
+            tr("Projektwerte verwenden"), QDialogButtonBox.ButtonRole.ResetRole
+        )
+        self.project_values_button.clicked.connect(self._use_project_values)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+        self._fit_depth()
+
+    def _fit_depth(self, _checked: bool | None = None) -> None:
+        """Die Dialoghöhe an geöffnete Gruppen und den Bildschirm anpassen."""
+        self._sections.activate()
+        self._section_contents.adjustSize()
+        available = self.screen().availableGeometry().height()
+        maximum = max(240, int(available * 0.55))
+        wanted = min(self._section_contents.sizeHint().height(), maximum)
+        self._scroll.setMinimumHeight(wanted)
+        self.adjustSize()
+
+    def _use_project_values(self) -> None:
+        """Alle eigenen Gruppen sichtbar und eindeutig zurücknehmen."""
+        for field in FILAMENT_FIELDS:
+            group, _separator, name = field.path.partition(".")
+            value = getattr(getattr(self.settings, group), name)
+            _set_setting_editor(self.editors[field.path], field, value)
+        for box in self.groups.values():
+            box.setChecked(False)
 
     def override(self) -> SlotOverride | None:
         """Die vier Gruppen aus den Feldern, oder Projektwerte für alle."""
