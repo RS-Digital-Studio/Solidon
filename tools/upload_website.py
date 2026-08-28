@@ -302,14 +302,49 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     if not versprochen and not im_kasten:
         return files
 
-    oben = {name.split("/")[-1] for name in remote_index(session, f"/{root}/dl")}
-    fehlt_fuer_update = sorted(versprochen - oben)
-    fehlt_im_kasten = sorted(im_kasten - oben - set(fehlt_fuer_update))
+    oben = {
+        name.split("/")[-1]: groesse
+        for name, groesse in remote_index(session, f"/{root}/dl").items()
+    }
+
+    def bereit(name: str) -> bool:
+        """Ob die Datei oben liegt — **und ganz ist**.
+
+        Der Name allein reicht nicht. Ein abgebrochener Upload hinterlässt den
+        Eintrag und einen Teil der Bytes; die Pakete wiegen 260 bis 412 MB und
+        gehen mit rund 1,8 MB/s hinauf, mehrere am Stück reißen die Verbindung.
+        Wer nur nach dem Namen fragt, gibt ``version.json`` über einem halben
+        Paket frei — und das ist schlimmer als der 404, gegen den diese
+        Funktion gebaut wurde: Es sieht wie ein Erfolg aus, und die
+        Update-Automatik lädt es jedem Kunden herunter.
+
+        ``remote_index`` liefert die Größe ohnehin mit; :func:`differs` und
+        :func:`verify_downloads` vergleichen sie längst. Nur hier fehlte sie.
+
+        Ohne lokale Datei bleibt es beim Vorhandensein — dann gibt es kein
+        Vergleichsmaß, und ein Paket, das hier nicht mehr liegt, ist deshalb
+        nicht kaputt.
+        """
+        if name not in oben:
+            return False
+        hier = LOCAL_ROOT / "dl" / name
+        if not hier.is_file():
+            return True
+        return oben[name] == hier.stat().st_size
+
+    def halb(name: str) -> bool:
+        """Liegt oben, ist aber kürzer als hier — die Unterscheidung fürs Sagen."""
+        return name in oben and not bereit(name)
+
+    fehlt_fuer_update = sorted(name for name in versprochen if not bereit(name))
+    fehlt_im_kasten = sorted(
+        name for name in im_kasten if not bereit(name) and name not in fehlt_fuer_update
+    )
 
     if fehlt_im_kasten:
         print(f"Achtung: {len(fehlt_im_kasten)} Paket(e) aus dem Download-Kasten fehlen oben.")
         for name in fehlt_im_kasten:
-            print(f"  {name}")
+            print(f"  {name}{' — liegt oben, aber unvollständig' if halb(name) else ''}")
         print("  Die Seiten gehen trotzdem hoch — ein Klick darauf gibt bis dahin 404.")
 
     if not fehlt_fuer_update:
@@ -320,7 +355,11 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
         "fehlen oben."
     )
     for name in fehlt_fuer_update:
-        print(f"  {name}")
+        if halb(name):
+            ganz = (LOCAL_ROOT / "dl" / name).stat().st_size
+            print(f"  {name} — liegt oben mit {oben[name]} statt {ganz} Bytes")
+        else:
+            print(f"  {name}")
     print("  Erst hochladen, dann version.json — sonst gibt jedes Update 404.")
     print(f"  Zu tun: python tools/upload_website.py website/dl/{fehlt_fuer_update[0]}")
     return [path for path in files if path.name != "version.json"]

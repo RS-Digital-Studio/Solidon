@@ -897,12 +897,81 @@ def test_the_version_file_waits_for_its_packages(monkeypatch: pytest.MonkeyPatch
     assert version not in rest, "version.json ging hoch, obwohl kein Paket oben liegt"
     assert upload.LOCAL_ROOT / "index.html" in rest, "die Seiten sollen trotzdem hochgehen"
 
-    # Alles oben: sie geht mit.
+    # Alles oben, und zwar vollständig: sie geht mit. Die Größe muss zu der
+    # lokalen Datei passen — seit ``hold_back_version`` nicht mehr nur nach dem
+    # Namen fragt, ist eine erfundene Größe ein halbes Paket.
     monkeypatch.setattr(
-        upload, "remote_index", lambda *_: {f"dl/{name}": 1 for name in versprochen}
+        upload,
+        "remote_index",
+        lambda *_: {f"dl/{name}": _ganze_groesse(name) for name in versprochen},
     )
     rest = upload.hold_back_version(None, "httpdocs", list(dateien))
     assert version in rest, "version.json blieb liegen, obwohl alle Pakete oben sind"
+
+
+def _ganze_groesse(name: str) -> int:
+    """Die Größe, die eine vollständig hochgeladene Datei oben hätte."""
+    import tools.upload_website as upload
+
+    hier = upload.LOCAL_ROOT / "dl" / name
+    return hier.stat().st_size if hier.is_file() else 1
+
+
+def test_the_version_file_waits_for_a_package_that_only_looks_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein abgebrochener Upload hinterlässt den Namen — und ein halbes Paket.
+
+    **Warum der Name nicht reicht.** Die Pakete wiegen 260 bis 412 MB und gehen
+    mit rund 1,8 MB/s hinauf; dass mehrere am Stück die Verbindung reißen, ist
+    im Projekt vermerkt („ein halbes Paket sieht ganz aus"). Bricht der Upload
+    ab, steht der Eintrag oben und trägt einen Teil der Bytes. Wer nur fragt, ob
+    der Name da ist, gibt ``version.json`` darüber frei — und das ist schlimmer
+    als der 404, gegen den die Funktion gebaut wurde: Es sieht wie ein Erfolg
+    aus, und die Update-Automatik lädt das Bruchstück jedem Kunden herunter.
+
+    Verschärfend kommt hinzu, dass ein zweiter Lauf es nicht heilt:
+    :func:`wanted` nimmt ``dl/`` vom ``--fehlend``-Abgleich aus, die halbe Datei
+    wird also nicht noch einmal angefasst.
+
+    Die Größe liegt vor — ``remote_index`` liefert sie als ``dict[str, int]``,
+    und :func:`differs` wie :func:`verify_downloads` vergleichen sie längst. Nur
+    an dieser einen Stelle wurde sie verworfen.
+    """
+    import tools.upload_website as upload
+
+    version = upload.LOCAL_ROOT / "version.json"
+    versprochen = upload.promised_files(json.loads(version.read_text(encoding="utf-8")))
+    vorhanden = [name for name in versprochen if (upload.LOCAL_ROOT / "dl" / name).is_file()]
+    if not vorhanden:
+        pytest.skip("kein Paket unter website/dl/ — ohne Vergleichsmaß sagt der Fall nichts")
+
+    dateien = [version, upload.LOCAL_ROOT / "index.html"]
+    halbes = vorhanden[0]
+
+    def oben(_session: object, _pfad: str) -> dict[str, int]:
+        """Alle Namen liegen oben — eines davon aber nur zur Hälfte."""
+        stand = {f"dl/{name}": _ganze_groesse(name) for name in versprochen}
+        stand[f"dl/{halbes}"] = _ganze_groesse(halbes) // 2
+        return stand
+
+    monkeypatch.setattr(upload, "remote_index", oben)
+    rest = upload.hold_back_version(None, "httpdocs", list(dateien))
+
+    assert version not in rest, (
+        f"version.json ging hoch, obwohl {halbes} oben nur halb liegt — "
+        "der Name allein hat entschieden"
+    )
+    assert upload.LOCAL_ROOT / "index.html" in rest, "die Seiten sollen trotzdem hochgehen"
+
+    # Gegenprobe: dieselbe Lage, nur vollständig — dann geht sie mit.
+    monkeypatch.setattr(
+        upload,
+        "remote_index",
+        lambda *_: {f"dl/{name}": _ganze_groesse(name) for name in versprochen},
+    )
+    rest = upload.hold_back_version(None, "httpdocs", list(dateien))
+    assert version in rest, "version.json blieb liegen, obwohl alle Pakete vollständig oben sind"
 
 
 def test_only_the_four_delivered_files_go_into_the_box() -> None:
