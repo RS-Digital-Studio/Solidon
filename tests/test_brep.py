@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import trimesh
@@ -97,6 +99,36 @@ def test_a_precise_boolean_needs_no_fallback_chain() -> None:
 
     expected = WIDTH * DEPTH * HEIGHT - math.pi * 16.0 * HEIGHT
     assert drilled.volume == pytest.approx(expected, rel=1e-9)
+
+
+def test_a_failed_difference_names_the_editing_not_a_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Bohrung zieht ab; ihre Meldung darf nicht vom Verbinden sprechen."""
+    import OCP.BRepAlgoAPI as brep_api
+
+    class BrokenBoolean:
+        """Kleinster Ersatz für einen Booleschen Builder ohne Ergebnis."""
+
+        def __init__(self, _first: object, _second: object) -> None:
+            pass
+
+        def Build(self) -> None:
+            pass
+
+        def IsDone(self) -> bool:
+            return False
+
+    monkeypatch.setattr(brep_api, "BRepAlgoAPI_Cut", BrokenBoolean)
+    part = cast(Solid, SimpleNamespace(shape=object()))
+
+    with pytest.raises(GeometryError) as caught:
+        edit.boolean("difference", [part, part])
+
+    text = str(caught.value.detail)
+    assert "Bearbeitung" in text
+    assert "Verschieben Sie" in text
+    assert "verbinden" not in text.casefold()
 
 
 def test_a_radius_that_does_not_fit_is_an_error_not_a_guess() -> None:

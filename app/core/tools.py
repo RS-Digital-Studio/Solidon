@@ -135,7 +135,7 @@ TOOLS: Final[tuple[ExternalTool, ...]] = (
     ExternalTool(
         id="comfyui",
         title="ComfyUI",
-        what_for=_("Mesh-Erzeugung aus Text oder Bild."),
+        what_for=_("3D-Modell aus Text oder Bild erzeugen."),
         kind="service",
         executables=("ComfyUI", "comfyui", "comfy"),
         url=mesh.DEFAULT_COMFY_URL,

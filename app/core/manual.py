@@ -1305,7 +1305,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Meldung. Die späteren Schritte zurücknehmen, ändern, neu aufbauen.\n\n"
             "**Verrundung, Fase oder STEP sind ausgegraut.**\n"
             "Diese Werkzeuge brauchen Flächen und Kanten, die sich einzeln "
-            "bearbeiten lassen. Aktiviere beim Anlegen der Grundform *Flächen "
+            "bearbeiten lassen. Aktivieren Sie beim Anlegen der Grundform *Flächen "
             "und Kanten später bearbeiten*; derselbe Haken steht auch im Dialog "
             "des Schritts. Hat ein späterer Schritt daraus feste Dreiecke "
             "gemacht, hilft nur die Reihenfolge: die Schritte ab dort "

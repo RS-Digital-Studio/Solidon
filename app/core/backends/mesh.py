@@ -264,7 +264,7 @@ class MeshBackend(Protocol):
 class GenerationFailed(AppError):
     """Der Generator hat keinen Körper geliefert."""
 
-    default_title = _("Die Mesh-Erzeugung hat kein Modell geliefert.")
+    default_title = _("Die 3D-Modell-Erzeugung hat kein Modell geliefert.")
 
     def __init__(
         self,
@@ -317,7 +317,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         # und mittendrin aufgelegt — typisch, wenn ein Modell den
         # Speicher sprengt. „Läuft es?" wäre dann die falsche Frage.
         raise GenerationFailed(
-            title=_("Die Mesh-Erzeugung wurde unterbrochen."),
+            title=_("Die 3D-Modell-Erzeugung wurde unterbrochen."),
             detail=_(
                 "ComfyUI hat die Verbindung mitten in der Antwort beendet. "
                 "Meist fehlt Arbeitsspeicher: ein kleineres Modell wählen "
@@ -333,7 +333,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         # ohne einen Hinweis, was jetzt hilft. Der Titel ist derselbe Fehler:
         # geliefert hat der Generator nichts, weil er nie angefangen hat.
         raise GenerationFailed(
-            title=_("Die Mesh-Erzeugung konnte nicht starten."),
+            title=_("Die 3D-Modell-Erzeugung konnte nicht starten."),
             # Die Adresse gehört in die Werte daneben, nicht als Platzhalter in
             # den Satz: einen Fehlertext formatiert niemand nach, er wird
             # angezeigt wie er ist.
@@ -770,7 +770,7 @@ class ComfyBackend:
         # suchen, dem in Wahrheit die Knotensammlung fehlt.
         if class_type not in described:
             raise GenerationFailed(
-                title=_("Die Mesh-Erzeugung konnte nicht starten."),
+                title=_("Die 3D-Modell-Erzeugung konnte nicht starten."),
                 # Der Satz nannte hier „«python tools/setup_comfyui.py»" — einen
                 # Befehl, den ein Kunde nicht ausführen kann: ``tools/`` reist
                 # im Paket nicht mit. Solidon richtet die Knoten selbst ein,

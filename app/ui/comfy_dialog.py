@@ -96,10 +96,10 @@ class ComfySetupDialog(QDialog):
 
         intro = QLabel(
             tr(
-                "ComfyUI rechnet die Mesh-Erzeugung. Damit der Ablauf läuft, "
-                "braucht es die Knoten, die er anspricht, und das Modell, das sie "
-                "laden — beides legt Solidon hier hinein. ComfyUI selbst wird "
-                "nicht angefasst und danach einmal neu gestartet."
+                "ComfyUI erzeugt das 3D-Modell. Dafür braucht der Ablauf zusätzliche "
+                "Bausteine (Knoten) und ein Erzeugungsmodell — beides richtet Solidon "
+                "hier ein. ComfyUI selbst wird nicht verändert und danach einmal neu "
+                "gestartet."
             ),
             self,
         )

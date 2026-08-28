@@ -300,7 +300,10 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
         # Modell dazu. Dass der zweite Schritt existiert, gehört an die
         # Stelle, an der jemand den ersten tut — sonst installiert er ComfyUI
         # und findet den Menüeintrag weiterhin ausgegraut.
-        what_for=_("Mesh-Erzeugung aus Text oder Bild. Braucht danach Knoten und Modell."),
+        what_for=_(
+            "3D-Modell aus Text oder Bild erzeugen. Solidon richtet danach die "
+            "benötigten Zusatzbausteine und das Erzeugungsmodell ein."
+        ),
         kind="program",
         url="https://www.comfy.org/download",
         # Und den zweiten Schritt macht Solidon selbst. Der Satz hier nannte

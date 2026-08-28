@@ -233,10 +233,10 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
             # Reparatur.
             raise GeometryError(
                 detail=_(
-                    "Solidon kann diese Körper so nicht verbinden — meist "
-                    "berühren sie sich nur an einer Fläche oder Kante. Verschiebe "
-                    "einen der beiden so weit, dass sich die Körper wirklich "
-                    "überlappen."
+                    "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer "
+                    "jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche "
+                    "oder Kante. Verschieben Sie einen der beiden so weit, dass sich die "
+                    "Körper wirklich überlappen."
                 ),
                 suggestions=(CORRECT_INPUT, CANCEL),
             )

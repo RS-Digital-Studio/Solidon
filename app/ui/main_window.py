@@ -1651,7 +1651,7 @@ class MainWindow(QMainWindow):
             tr("Modell erzeugen …"),
             "Ctrl+G",
             self.action_generate,
-            tr("Aus Text oder Bild ein Mesh erzeugen lassen — braucht ein laufendes ComfyUI."),
+            tr("Aus Text oder Bild ein 3D-Modell erzeugen lassen — braucht ein laufendes ComfyUI."),
         )
         self._add_action(
             file_menu,

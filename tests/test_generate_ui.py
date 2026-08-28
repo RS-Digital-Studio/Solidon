@@ -319,13 +319,13 @@ def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
 
     assert dialog.result_mesh is None
     assert dialog.buttons.isEnabled(), "the dialog can be tried again"
-    assert "Mesh" in dialog.state.text()
+    assert "3D-Modell" in dialog.state.text()
 
 
 def test_a_failure_says_why_and_what_helps(qt_app: QApplication) -> None:
     """§2.7 verlangt drei Dinge, und der Dialog zeigte nur eines.
 
-    Der Titel allein — „Die Mesh-Erzeugung konnte nicht starten" — lässt den
+    Der Titel allein — „Die 3D-Modell-Erzeugung konnte nicht starten" — lässt den
     Nutzer stehen. Der Grund steht im Detail, der Ausweg im Vorschlag; beide
     gehören in die Zeile, denn modal geht hier nichts.
     """
@@ -336,7 +336,7 @@ def test_a_failure_says_why_and_what_helps(qt_app: QApplication) -> None:
     wait_for_readiness(dialog, qt_app)
     dialog._on_failed(
         GenerationFailed(
-            title="Die Mesh-Erzeugung konnte nicht starten.",
+            title="Die 3D-Modell-Erzeugung konnte nicht starten.",
             detail="ComfyUI antwortet nicht.",
             suggestions=(INSTALL_MISSING, CANCEL),
         )
