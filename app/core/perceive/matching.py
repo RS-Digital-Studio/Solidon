@@ -26,8 +26,8 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
+from scipy.optimize import linear_sum_assignment
 
-from app.core.deferred import linear_sum_assignment
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Transform, Vec3
 from app.core.units import EPS_GEOM

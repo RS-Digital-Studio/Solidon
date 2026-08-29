@@ -1289,10 +1289,12 @@ class SketchCanvas(QWidget):
         started = len(self._pending_world)
         if self.tool == "spline":
             if started:
-                return tr("Spline: weiter klicken. Doppelklick oder Eingabetaste schließt ihn.")
-            return tr("Spline: klicken, so oft es die Kurve braucht.")
-        if self.tool in ("trim", "extend"):
-            return tr("Auf die Hälfte klicken, die es betrifft.")
+                return tr("Kurve: weiter klicken. Doppelklick oder Eingabetaste schließt sie.")
+            return tr("Kurve: klicken, so oft es die Form braucht.")
+        if self.tool == "trim":
+            return tr("Auf die Hälfte klicken, die wegfallen soll.")
+        if self.tool == "extend":
+            return tr("Auf die Hälfte klicken, die wachsen soll.")
         if self.tool == "point":
             # Beide Hälften in einem Satz: das Werkzeug bleibt nach dem Klick
             # stehen, und wer einen vorhandenen Punkt greifen will, muss nicht
@@ -3330,9 +3332,9 @@ def tool_instruction(name: str) -> str:
         "line": tr("Linie: erster Klick setzt den Anfang."),
         "circle": tr("Kreis: erster Klick setzt die Mitte."),
         "arc": tr("Bogen: erster Klick setzt den Anfang."),
-        "spline": tr("Spline: klicken, so oft es die Kurve braucht."),
-        "trim": tr("Auf die Hälfte klicken, die es betrifft."),
-        "extend": tr("Auf die Hälfte klicken, die es betrifft."),
+        "spline": tr("Kurve: klicken, so oft es die Form braucht."),
+        "trim": tr("Auf die Hälfte klicken, die wegfallen soll."),
+        "extend": tr("Auf die Hälfte klicken, die wachsen soll."),
         "rectangle": tr("Rechteck: erster Klick setzt eine Ecke, der zweite die Gegenecke."),
     }[name]
 
@@ -3553,7 +3555,7 @@ class SketchPanel(QWidget):
             ("line", tr("Linie")),
             ("circle", tr("Kreis")),
             ("arc", tr("Bogen")),
-            ("spline", tr("Spline")),
+            ("spline", tr("Kurve")),
             ("trim", tr("Trimmen")),
             ("extend", tr("Verlängern")),
         ):

@@ -13,10 +13,10 @@ als Rand, Kinder mit genau einem Umschließer mehr als Löcher, derselbe
 beschnittene Graph —, nur liefert die Kandidaten ein ``STRtree`` aus shapely
 (GEOS, längst Abhängigkeit).
 
-**Sie ersetzt trimeshs Fassung vor dem ersten betroffenen Rechenschritt.** Das
-ist ein bewusster Eingriff in ein fremdes Modul und die kleinste ehrliche
-Lösung, denn beide echten Aufrufer erreichen die Funktion als **Modulglobale**
-ihrer eigenen Datei — kein Parameter, keine Unterklasse erreicht sie von außen:
+**Sie ersetzt trimeshs Fassung beim Import dieses Moduls.** Das ist ein
+bewusster Eingriff in ein fremdes Modul und die kleinste ehrliche Lösung,
+denn beide echten Aufrufer erreichen die Funktion als **Modulglobale** ihrer
+eigenen Datei — kein Parameter, keine Unterklasse erreicht sie von außen:
 ``trimesh/path/polygons.py`` ruft sie in ``edges_to_polygons`` (dorthin
 führt ``slice_mesh_plane`` über ``trimesh/intersections.py``), und
 ``trimesh/path/path.py`` in ``Path2D.enclosure_directed``. Der Vertrag ist
@@ -30,8 +30,6 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
-
-from app.core.deferred import trimesh
 
 
 def enclosure_tree(polygons: Any) -> tuple[np.ndarray, Any]:
@@ -94,12 +92,12 @@ def enclosure_tree(polygons: Any) -> tuple[np.ndarray, Any]:
     return roots, contains
 
 
-def install() -> None:
-    """Trimeshs Fassung unmittelbar vor ihrer ersten möglichen Nutzung ersetzen.
+def _install() -> None:
+    """Trimeshs Fassung durch diese ersetzen — beim Import; die Zuweisung ist
+    idempotent, ein zweiter Lauf setzt nur dieselbe Funktion erneut."""
+    import trimesh.path.polygons as polygons
 
-    Die Zuweisung ist idempotent. Sie steht nicht mehr im Modulkopf: Das
-    Operationsregister importiert ``section`` und ``outline`` nur für ihre
-    Deklarationen, und ein Import von trimesh dort kostete den Kundenstart,
-    obwohl noch kein Modell geöffnet war.
-    """
-    trimesh.path.polygons.enclosure_tree = enclosure_tree
+    polygons.enclosure_tree = enclosure_tree
+
+
+_install()

@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
+import trimesh
 
 from app.core import activation
-from app.core.deferred import trimesh
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.slicer_keys import (

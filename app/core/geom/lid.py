@@ -19,7 +19,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
-from app.core.deferred import trimesh
+import trimesh
+
 from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data

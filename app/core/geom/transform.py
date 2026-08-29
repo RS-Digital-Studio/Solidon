@@ -16,8 +16,8 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.types import Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM

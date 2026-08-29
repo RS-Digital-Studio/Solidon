@@ -72,7 +72,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| `weg4-figur-formen` kostet 56 Sekunden, und keine davon liegt im Kern | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen Prüfstand im echten Fenster für VTK und Aktoraufbau; offscreen öffnet dasselbe Projekt in 0,82 s und misst diesen Anteil nicht |
+| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen CI-Baulauf, der `_chain` für Windows, macOS und Linux baut — dass es mitreist, ist seit dem 22.08. entschieden (Bauplan §31). Danach bleibt `_plane_segments` mit 893 ms die größte Position, nicht mehr GEOS |
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und den AVV im CCP. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -103,6 +103,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels`. **Vierte Messung am 27.08.2026 (30):** Die Datei trägt inzwischen **307** statt 303 Tests, und der Satz „mit `-p no:randomly` laufen alle durch" gilt nicht mehr — drei Läufe unter dem Schloss, mit fester Reihenfolge, gaben **1 von 3**: einmal Zugriffsverletzung bei 70 Prozent, zweimal 307 passed. Stelle wie gehabt `panels.py` unter `_show_scene`, diesmal `show_result`, ausgelöst aus `_with_two_objects` über `wait_for_idle`. Damit ist die Reihenfolge als Bedingung **widerlegt** und die Zusammensetzung bestätigt: Vier Tests mehr genügen, um die Mine auch bei fester Reihenfolge scharf zu machen. Eine Zuschreibung an die Commits des Tages ist bei dieser Rate nicht führbar — sie bräuchte viele Läufe je Seite —, und der Absturzstapel führt durch `main_window.py`, das während der Messung von einer anderen Sitzung geändert wurde. `test_operation_ui.py` riss im selben Torlauf mit und lief einzeln mit 67 passed durch: dort war es Fremdlast |
+| Die 56 Sekunden von `weg4-figur-formen` liegen in der Oberfläche | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen **Prüfstand im echten Fenster**. Im Kern kostet das Projekt 0,82 s (offscreen über `Session.open_project` gemessen); der Rest hängt an VTK und am Aktoraufbau und ist offscreen unsichtbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von `dose-mit-deckel` |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
@@ -278,22 +279,26 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 - [x] Schichtenvorschau im Viewport (§18.10), ehrlich beschriftet
 - [x] Herkunft jeder Kennzahl ausweisen (`internal`), nie mit G-Code vermischt —
       Legende und Prüfbericht weisen sie aus
-- [x] Leistungsziele §31 für die Schichtanalyse — **alle drei im Ziel**,
-      gemessen in `tests/test_performance.py` und am 29.08. zusätzlich in einer
-      warmen Serie. Die Orientierungssuche liegt unter 20 s. Die
-      Wandstärkenkarte fiel durch wiederverwendete Abtastfelder von 3,10 auf
-      1,43–1,48 s. Der native Kern schneidet, gruppiert und verkettet selbst;
-      dazu entfallen doppelte Sorts, Konturkopien und sicher unnötige
-      Brückenmessungen. Die ganze Schichtanalyse fiel von 1,05 s ohne Kern auf
-      331–355 ms bei 327 680 Dreiecken und 288–299 ms bei exakt 200 000
-      (Median 292 ms). Suite und Paketier-Job bauen den Kern auf jeder
-      Plattform, die Spec fordert und verpackt ihn — der frühere
-      Auslieferungsrest ist geschlossen
+- [~] Leistungsziele §31 für die Schichtanalyse — **zwei von dreien offen**,
+      gemessen in `tests/test_performance.py`. Die Orientierungssuche (16,5 s)
+      liegt im Ziel; die Wandstärkenkarte steht bei 3,08 s im Hintergrund und
+      damit knapp über den drei Sekunden aus §31 — der Assert dort greift erst
+      bei acht, hält also nur die Regression auf, nicht das Ziel. Die
+      Schichtanalyse steht bei 1,05 s auf 328 000 Dreiecken, wo §31 für 200 000
+      dreihundert Millisekunden nennt. Die Zahlen und die vier Änderungen, die
+      dorthin führten, stehen unter „Leistung (§31) — Stand nach der
+      Durchsicht". Was übrig ist, ist der Polygonaufbau in GEOS und braucht
+      einen kompilierten Kern, keine weitere Python-Idee — **dass dieser Kern
+      mit ausgeliefert wird, ist seit dem 22.08.2026 entschieden** (Bauplan
+      §31), und damit gelten die Zielwerte dort ausdrücklich *mit* ihm. Offen
+      ist nicht mehr die Entscheidung, sondern der CI-Baulauf für drei
+      Plattformen; danach ist `_plane_segments` mit 893 ms die größte Position
+      und nicht mehr GEOS
 
-      **Historischer Zwischenstand vom 14.08.2026:** Damals stand die
-      Wandstärkenkarte bei **4,30 s** — auch allein gefahren, ohne
-      Leistungsdatei davor. Die Orientierungssuche lag mit 14,8 s im Ziel, die
-      Schichtanalyse bei 1,07 s. Die aktuellen Zahlen stehen im Absatz darüber.
+      **Nachgemessen am 14.08.2026**, und eine der Zahlen oben ist überholt:
+      die Wandstärkenkarte steht nicht mehr bei 3,08 s, sondern bei **4,30 s**
+      — auch allein gefahren, ohne Leistungsdatei davor. Die Orientierungssuche
+      liegt mit 14,8 s im Ziel, die Schichtanalyse bei 1,07 s.
 
       **Dabei fiel eine verwaiste Messmarke auf, und sie ist verworfen.**
       `subdivide_surface` meldete das 3,54-fache seines Bestwerts (1 956 ms

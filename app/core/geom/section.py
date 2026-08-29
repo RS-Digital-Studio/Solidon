@@ -15,9 +15,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
-from app.core.geom import enclosure
+from app.core.geom import enclosure as _enclosure  # noqa: F401
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import Vec3
@@ -211,7 +211,7 @@ def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh,
 
     Das Deckeln braucht die Konturverschachtelung, und die kommt seit dem
     24.08.2026 aus :mod:`app.core.geom.enclosure` statt aus ``rtree`` — der
-    Aufruf unten installiert sie, bevor hier geschnitten wird.
+    Import oben installiert sie, bevor hier geschnitten wird.
     """
     normal = np.asarray(plane.normal, dtype=float)
     length = float(np.linalg.norm(normal))
@@ -231,7 +231,6 @@ def _apply(body: trimesh.Trimesh, plane: SectionPlane) -> tuple[trimesh.Trimesh,
         return body, watertight
     if distances.min() >= -EPS_GEOM:
         return trimesh.Trimesh(), watertight
-    enclosure.install()
     result = body.slice_plane(
         plane_origin=np.asarray(plane.origin, dtype=float),
         plane_normal=-normal,

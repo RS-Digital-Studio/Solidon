@@ -19,8 +19,8 @@ from typing import Any, cast
 
 import manifold3d
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, NotManifoldError, ValidationError
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface

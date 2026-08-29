@@ -3184,12 +3184,12 @@ class MainWindow(QMainWindow):
     def open_path(self, path: Path) -> None:
         """Ein Einstiegspunkt für Menü, Zuletzt-Liste und Drag and Drop.
 
-        Mit Wartezeiger und Statuszeile: Gelesen wird hier synchron — die
-        Projektdatei über ``load``, das Modell über ``path.read_bytes()``. Die
-        Ladeanzeige deckt das **nicht** ab: sie hängt am Fortschritt der
-        Auswertung, und der beginnt erst, wenn die Datei gelesen ist; ihre
-        200 ms Verzögerung kommen obendrauf. Die Statuszeile wird ausdrücklich
-        neu gezeichnet, bevor das Lesen den Hauptthread belegt (§2.8).
+        Mit Wartezeiger: Gelesen wird hier synchron — die Projektdatei über
+        ``load``, das Modell über ``path.read_bytes()``. Die Ladeanzeige deckt
+        das **nicht** ab: sie hängt am Fortschritt der Auswertung, und der
+        beginnt erst, wenn die Datei gelesen ist; ihre 200 ms Verzögerung
+        kommen obendrauf. Bis dahin stünde ein Fenster ohne jede Auskunft da
+        (§2.8).
         """
         if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
             return
@@ -3203,17 +3203,13 @@ class MainWindow(QMainWindow):
         )
         if starting_fresh and not self._may_discard():
             return
-        if path.suffix.lower() == PROJECT_SUFFIX:
-            # Was zum vorigen Projekt zu sagen war, gilt für dieses nicht:
-            # „Exportiert: dose.3mf" über einer gerade geöffneten Datei wäre
-            # eine Auskunft über etwas anderes. Vor dem Ladehinweis leeren,
-            # sonst nähme ``announce`` ihn gleich wieder weg.
-            self.announce("")
-        self.status_message.setText(tr("Projekt wird geladen …"))
-        self.status_message.repaint()
         try:
             with waiting():
                 if path.suffix.lower() == PROJECT_SUFFIX:
+                    # Was zum vorigen Projekt zu sagen war, gilt für dieses
+                    # nicht: „Exportiert: dose.3mf" über einer gerade
+                    # geöffneten Datei wäre eine Auskunft über etwas anderes.
+                    self.announce("")
                     self.session.open_project(path)
                     self.settings.remember(path)
                     save_settings(self.settings)
@@ -3228,7 +3224,6 @@ class MainWindow(QMainWindow):
                 self._offer_recovery(path)
                 self._offer_tour(path)
         except AppError as error:
-            self.status_message.setText(self._announcement)
             show_error(error, self)
             return
         self._show_start_screen(False)

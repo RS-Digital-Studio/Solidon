@@ -81,7 +81,7 @@ class LoadParams(BaseParams):
     place_on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=False,
-        doc=_("Setzt das Modell mit seiner Unterseite auf Z = 0."),
+        doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
     )
     weld: bool = param(
         title=_("Punkte verschweißen"),

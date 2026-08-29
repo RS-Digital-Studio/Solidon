@@ -203,14 +203,14 @@ class GenerateDialog(QDialog):
     """
 
     setupRequested = Signal()
-    nodesRequested = Signal()
-    """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
-    anderer als der zur Liste der Programme."""
     """Der Benutzer will den fehlenden Generator einrichten (§2.7, Regel 17).
 
     Wie im Chat: Das Panel weiß, *dass* etwas fehlt, aber nicht, wo man es
     holt — das entscheidet das Fenster.
     """
+    nodesRequested = Signal()
+    """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
+    anderer als der zur Liste der Programme."""
 
     def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)

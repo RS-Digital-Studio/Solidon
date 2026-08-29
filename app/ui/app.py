@@ -153,13 +153,13 @@ def build_application(
     entsteht, braucht kein Startbild.
     """
 
-    # Erst hier und nicht oben im Modulkopf: Der Import baut den großen
-    # Qt-Objektbaum auf und gehört damit hinter den Ladebildschirm. Bis zum
-    # 29.08.2026 zog er über die Operationsmodule zusätzlich trimesh, scipy
-    # und networkx nach — vergangen, **bevor** der Ladebildschirm überhaupt
-    # gebaut werden konnte. ``app.core.deferred`` hält diese Bibliotheken nun
-    # bis zur ersten wirklichen Rechnung zurück; die Trennung hier bleibt die
-    # sichtbare Grenze und der Schutz gegen dieselbe Regression.
+    # Erst hier und nicht oben im Modulkopf: Der Import von ``main_window``
+    # zieht ``app.core.scene`` und damit trimesh und networkx nach, und das
+    # sind gemessen 2,2 der 2,4 Sekunden, die ``import app.ui.app`` kostete —
+    # vergangen, **bevor** der Ladebildschirm überhaupt gebaut werden konnte.
+    # Ein leerer Bildschirm ist nach §2.8 ab zwei Sekunden keine Anzeige.
+    # Jetzt liegt die Zeit hinter dem Ladebildschirm, unter der Zeile
+    # „Operationen werden geladen …", die sie ohnehin schon beschrieb.
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
 

@@ -66,10 +66,7 @@ sendet nie) · `support.py` (**der einzige Weg hinaus**, an einem Knopf) ·
 nach ausdrücklichem Klick; der Freischaltzustand selbst bleibt vollständig
 lokal)
 
-**Technik:** `bootstrap.py` füllt das Register · `lazy.py` verhindert
-Import-Deadlocks zwischen Kernpaketen (siehe unten) · `deferred.py` hält
-`trimesh`/`scipy`/`networkx` bis zum ersten wirklichen Rechenschritt aus dem
-Kundenstart heraus
+**Technik:** `bootstrap.py` füllt das Register · `lazy.py` siehe unten
 
 ## Zwei Muster, die überall wiederkehren
 

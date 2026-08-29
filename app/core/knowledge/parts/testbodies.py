@@ -24,8 +24,8 @@ import math
 from typing import cast
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes

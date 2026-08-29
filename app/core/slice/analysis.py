@@ -17,7 +17,7 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal
 
 import numpy as np
 import shapely
@@ -84,18 +84,9 @@ BRIDGE_FROM = 1.0
 #: Threads für zwanzig Polygone zu starten ist reiner Verwaltungsaufwand.
 PARALLEL_FROM = 40
 
-#: Obergrenze der Threads für die Stützsuche. Sechzehn statt acht brachten die
-#: 200 Kandidaten auf dieser Maschine ans gemessene Minimum. Die vollständige
-#: Analyse hat nach den Abkürzungen darunter kleinere Aufträge; dort sind zehn
-#: schneller (Median 291 statt 304 ms bei exakt 200 000 Dreiecken).
-MAX_WORKERS = 16
-FULL_WORKERS = 10
-
-#: Ab dieser Zahl Stützflächen ist der Aufbau eines räumlichen Index billiger
-#: als ein vektorisierter GEOS-Test gegen jede einzelne. An 59 Kugelschichten
-#: mit bis zu 151 Teilen: 50 auf 35 ms; darunter bleibt der direkte Aufruf
-#: schneller und spart den Baumaufbau.
-SUPPORT_TREE_FROM = 64
+#: Obergrenze der Threads. Darüber sind die Schichten zu klein, um sie zu
+#: füllen.
+MAX_WORKERS = 8
 
 Detail = Literal["full", "support"]
 """Wie viel einer Schicht vermessen wird. ``support`` lässt alles aus, was die
@@ -115,8 +106,6 @@ class LayerMetrics:
     contour_count: int
     overhang: ShapelyPolygon | None = None
     """Der ungestützte Bereich selbst — die Stützkarte braucht den Ort, nicht die Zahl."""
-    islands: ShapelyPolygon | None = None
-    """Die Inseln selbst — damit der Ergebnisaufbau sie nicht ein zweites Mal schneidet."""
 
 
 def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full") -> SliceResult:
@@ -160,31 +149,25 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
         # oberhalb von EPS_GEOM ist genau eine gedruckte Lage; ihr Schnitt liegt
         # in der Mitte, wo er sicher Material trifft.
         heights = np.array([(low + high) / 2.0], dtype=float)
-    sections, section_contours = _cross_sections(mesh, heights, capture_contours=True)
+    sections = cross_sections(mesh, heights)
     measured = _measure_all(sections, layer_height, detail)
     support = _support_volume(sections, measured, layer_height)
 
-    for z, shape, metrics, contours in zip(
-        heights, sections, measured, section_contours, strict=True
-    ):
+    previous: ShapelyPolygon | None = None
+    for z, shape, metrics in zip(heights, sections, measured, strict=True):
         if shape is None or shape.is_empty or metrics is None:
+            previous = None
             continue
 
         layers.append(
             LayerInfo(
                 z=float(z),
-                # Beim nativen Ein-Ring-Weg liegen genau diese Zahlen schon
-                # vor. Sie erneut aus GEOS herauszukopieren kostete an 400
-                # Kugelschichten rund 40 ms. Mehrteilige Schnitte bleiben auf
-                # dem allgemeinen Weg und kommen ebenfalls hier fertig an.
-                contours=_to_polygons(shape) if contours is None else contours,
+                contours=_to_polygons(shape),
                 area=metrics.area,
                 overhang_area=metrics.overhang_area,
                 islands=()
                 if metrics.island_area <= EPS_GEOM
-                or metrics.islands is None
-                or metrics.islands.is_empty
-                else _to_polygons(metrics.islands),
+                else _to_polygons(_islands(shape, previous)),
                 min_width=metrics.min_width,
                 overhangs=()
                 if metrics.overhang is None or metrics.overhang.is_empty
@@ -192,6 +175,7 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
                 bridge_width=metrics.bridge_width,
             )
         )
+        previous = shape
 
     return SliceResult(
         layers=tuple(layers),
@@ -277,17 +261,15 @@ def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
 def _above_material(pending: list[ShapelyPolygon], below: ShapelyPolygon) -> list[ShapelyPolygon]:
     """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
 
-    Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird in
-    **einem** Aufruf über alle Teile, nicht einmal je Teil. Bei kleinen Listen
-    ist das vektorisierte Prädikat am billigsten. Ab ``SUPPORT_TREE_FROM``
-    spart ein räumlicher Index genug Paarfragen, um seinen Aufbau zu bezahlen;
-    unterhalb dieser gemessenen Grenze bleibt er bewusst weg.
+    Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird das
+    **vektorisiert**: ein Aufruf über alle Teile, nicht einer je Teil. Ein
+    räumlicher Index stand hier zuerst und war die schlechtere Wahl — er will
+    je Schicht neu gebaut werden, und bei hundert Teilen kostet der Bau mehr
+    als die Fragen, die er spart. An der Orientierungssuche über 200
+    Kandidaten gemessen: 27,4 s mit Baum, 19,1 s ohne.
     """
-    if len(pending) >= SUPPORT_TREE_FROM:
-        touching = shapely.STRtree(pending).query(below, predicate="intersects").tolist()
-    else:
-        parts = np.asarray(pending, dtype=object)
-        touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()
+    parts = np.asarray(pending, dtype=object)
+    touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()
     if not touching:
         return pending
     hit = set(touching)
@@ -345,18 +327,16 @@ def _measure_all(
         index, shape, below, plate = job
         results[index] = _measure(shape, below, plate, layer_height, detail)
 
-    with ThreadPoolExecutor(
-        max_workers=_workers(FULL_WORKERS if detail == "full" else MAX_WORKERS)
-    ) as pool:
+    with ThreadPoolExecutor(max_workers=_workers()) as pool:
         list(pool.map(one, jobs))
     return results
 
 
-def _workers(limit: int) -> int:
+def _workers() -> int:
     """Ein Thread je Kern, in Maßen. Mehr fügt nur Umschalten hinzu."""
     import os
 
-    return max(1, min(limit, (os.cpu_count() or 2)))
+    return max(1, min(MAX_WORKERS, (os.cpu_count() or 2)))
 
 
 def cross_section(mesh: MeshData, z: float) -> ShapelyPolygon | None:
@@ -382,32 +362,17 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
     Detail: eine Schicht mit der darunter zu vergleichen bedeutet nur etwas,
     wenn beide auf dieselbe Karte gezeichnet sind.
     """
-    return _cross_sections(mesh, heights, capture_contours=False)[0]
-
-
-def _cross_sections(
-    mesh: MeshData, heights: Any, *, capture_contours: bool
-) -> tuple[list[ShapelyPolygon | None], list[tuple[Polygon, ...] | None]]:
-    """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
-
-    ``cross_sections`` braucht nur GEOS-Geometrien. ``slice_body`` muss sie
-    danach in :class:`Polygon` zurückübersetzen; beim häufigen Ein-Ring-Fall
-    wären das dieselben Koordinaten zum zweiten Mal. Der private gemeinsame
-    Weg hält sie deshalb nur für diesen Aufrufer fest.
-    """
     heights = np.asarray(heights, dtype=float)
     empty: list[ShapelyPolygon | None] = [None] * len(heights)
-    no_contours: list[tuple[Polygon, ...] | None] = [None] * len(heights)
     if not len(heights) or not len(mesh.raw.faces):
-        return empty, no_contours
+        return empty
 
     points, layers, nodes = _plane_segments(mesh, heights)
     if not len(points):
-        return empty, no_contours
+        return empty
 
-    # Beide Segmentwege liefern bereits schichtweise. Der native Kern füllt
-    # dafür je Schicht einen eigenen Bereich und erspart hier den globalen
-    # stabilen Sort über mehrere hunderttausend Segmente.
+    order = np.argsort(layers, kind="stable")
+    points, layers, nodes = points[order], layers[order], nodes[order]
     starts = np.searchsorted(layers, np.arange(len(heights)), side="left")
     ends = np.searchsorted(layers, np.arange(len(heights)), side="right")
 
@@ -424,18 +389,9 @@ def _cross_sections(
     # vierhundert Schichten, und das Herumreichen der Aufträge wäre wieder
     # teurer als die Arbeit (gemessen: 23 ms auf vier Threads).
     result: list[ShapelyPolygon | None] = []
-    contours: list[tuple[Polygon, ...] | None] = []
     for start, end in zip(starts, ends, strict=True):
-        if end <= start:
-            result.append(None)
-            contours.append(None)
-            continue
-        shape, own = _polygon_with_contours(
-            points[start:end], nodes[start:end], capture_contours=capture_contours
-        )
-        result.append(shape)
-        contours.append(own)
-    return result, contours
+        result.append(_polygon_from(points[start:end], nodes[start:end]) if end > start else None)
+    return result
 
 
 def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
@@ -453,20 +409,6 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     nach — teurer und angreifbarer (siehe den Absatz zur kanonischen
     Kantenrichtung weiter unten).
     """
-    # Ein ignorierter lokaler Bau kann älter als die Quelle sein. Der
-    # Quellklon bleibt dann funktionsfähig und sagt über die übersprungenen
-    # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
-    if _chain is not None and hasattr(_chain, "plane_segments"):
-        return cast(
-            tuple[Any, Any, Any],
-            _chain.plane_segments(
-                np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64),
-                np.ascontiguousarray(mesh.raw.faces, dtype=np.int64),
-                np.ascontiguousarray(heights, dtype=np.float64),
-                EPS_GEOM,
-            ),
-        )
-
     triangles = np.asarray(mesh.raw.triangles, dtype=float)
 
     vertical = triangles[:, :, 2]
@@ -567,9 +509,7 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     nodes = np.minimum(corner_from, corner_to) * len(mesh.raw.vertices) + np.maximum(
         corner_from, corner_to
     )
-    kept_points, kept_layers, kept_nodes = points, layers[keep], nodes
-    order = np.argsort(kept_layers, kind="stable")
-    return kept_points[order], kept_layers[order], kept_nodes[order]
+    return points, layers[keep], nodes
 
 
 def _no_segments() -> tuple[Any, Any, Any]:
@@ -619,25 +559,19 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
     if len(ends) < 6:
         return None
 
-    # Ein Sort genügt für drei Aufgaben: gleiche Knoten paaren, Grad zwei
-    # prüfen und ihre Nummern dicht machen. Vorher sortierte ``np.unique``
-    # zuerst die großen Kantennummern und ``argsort`` danach dieselben Enden
-    # noch einmal über ihre dichten Nummern — rund 20 ms für 400 Schichten.
-    order = np.argsort(ends, kind="stable")
-    ordered = ends[order]
-    if len(ordered) % 2 or np.any(ordered[0::2] != ordered[1::2]):
-        return None
-    # Vier gleiche Enden würden zwei scheinbar gültige Paare ergeben. Die
-    # Grenze zwischen den Paaren deckt jeden Grad über zwei ab.
-    if np.any(ordered[1:-1:2] == ordered[2::2]):
+    # Knotennummern dicht machen: die Kantennummer ist aus Eckennummern
+    # gerechnet und damit beliebig groß; ``bincount`` darüber wäre je Schicht
+    # ein Feld über das Quadrat der Eckenzahl.
+    unique, dense = np.unique(ends, return_inverse=True)
+    dense = np.ascontiguousarray(np.asarray(dense, dtype=np.int64).reshape(-1, 2))
+
+    degree = np.bincount(dense.reshape(-1), minlength=len(unique))
+    if degree.min() != 2 or degree.max() != 2:
         return None
 
-    dense_flat = np.empty(len(order), dtype=np.int64)
-    dense_flat[order] = np.repeat(np.arange(len(order) // 2, dtype=np.int64), 2)
-    dense = np.ascontiguousarray(dense_flat.reshape(-1, 2))
-
-    # Je Knoten die beiden Segmente, die an ihm hängen. ``order`` nennt die
-    # flachen Segmentenden; ganzzahlig durch zwei ist ihre Segmentnummer.
+    # Je Knoten die beiden Segmente, die an ihm hängen. ``argsort`` über die
+    # Knotennummern legt die beiden Vorkommen nebeneinander.
+    order = np.argsort(dense.reshape(-1), kind="stable")
     incident = np.ascontiguousarray((order // 2).reshape(-1, 2))
 
     walk = np.empty(len(dense), dtype=np.int64)
@@ -664,13 +598,6 @@ def _rings_from(points: Any, nodes: Any) -> tuple[Any, Any] | None:
 
 
 def _polygon_from(points: Any, nodes: Any) -> ShapelyPolygon | None:
-    """Die GEOS-Fläche eines Schnitts; Kernkonturen braucht dieser Aufrufer nicht."""
-    return _polygon_with_contours(points, nodes, capture_contours=False)[0]
-
-
-def _polygon_with_contours(
-    points: Any, nodes: Any, *, capture_contours: bool
-) -> tuple[ShapelyPolygon | None, tuple[Polygon, ...] | None]:
     """Baut die gefüllte Fläche einer Schicht aus ihren losen Segmenten.
 
     Zuerst über die Kantennummern verkettet (:func:`_rings_from`); trägt deren
@@ -683,41 +610,22 @@ def _polygon_with_contours(
     chained = _rings_from(points, nodes)
     if chained is not None:
         coordinates, ring_of = chained
-        if len(ring_of) and ring_of[-1] == 0:
-            # ``polygonize`` richtet einen einzelnen Außenring im Uhrzeigersinn
-            # aus und schließt ihn. Beides ist hier ohne GEOS bekannt. Dieselbe
-            # Reihenfolge hält Fläche, Kontur und Fließkommaergebnis bitgleich;
-            # ein ungültiger Ring bleibt beim allgemeinen Reparaturweg.
-            twice_area = np.sum(
-                coordinates[:, 0] * np.roll(coordinates[:, 1], -1)
-                - np.roll(coordinates[:, 0], -1) * coordinates[:, 1]
-            )
-            if twice_area > 0.0:
-                coordinates = np.concatenate((coordinates[:1], coordinates[:0:-1]))
-            shape = ShapelyPolygon(coordinates)
-            if shape.is_valid:
-                own: tuple[Polygon, ...] | None = None
-                if capture_contours:
-                    closed = np.vstack((coordinates, coordinates[0]))
-                    own = (Polygon(outline=tuple(map(tuple, closed.tolist())), holes=()),)
-                return shape, own
         edges = shapely.linearrings(coordinates, indices=ring_of)
     else:
         rounded = np.round(points.reshape(-1, 2), 6)
         lengths = np.linalg.norm(rounded[1::2] - rounded[0::2], axis=1)
         usable = np.repeat(lengths > 0.0, 2)
         if not usable.any():
-            return None, None
+            return None
         kept = rounded[usable]
         edges = shapely.linestrings(kept, indices=np.repeat(np.arange(len(kept) // 2), 2))
 
     built = shapely.polygonize(edges)
     parts = [part for part in getattr(built, "geoms", []) if not part.is_empty]
     if not parts:
-        return None, None
+        return None
     if len(parts) == 1:
-        shape = parts[0]
-        return shape, _to_polygons(shape) if capture_contours else None
+        return parts[0]
 
     # Nur die Außenlinien zählen als Behälter. GEOS gibt die Bohrung einer
     # Platte zweimal zurück — einmal als Loch der Platte und einmal als
@@ -756,9 +664,8 @@ def _polygon_with_contours(
         ]
         solids.append(_repaired(ShapelyPolygon(shells[index].exterior, holes)))
     if not solids:
-        return None, None
-    shape = unary_union(solids)
-    return shape, _to_polygons(shape) if capture_contours else None
+        return None
+    return unary_union(solids)
 
 
 def _repaired(shape: ShapelyPolygon) -> ShapelyPolygon:
@@ -785,9 +692,7 @@ def _measure(
     detail: Detail = "full",
 ) -> LayerMetrics:
     area = float(shape.area)
-    reach = max(layer_height * OVERHANG_ANGLE_FACTOR, OVERHANG_MARGIN)
     region: ShapelyPolygon | None = None
-    island_region: ShapelyPolygon | None = None
     if on_plate:
         # Auf der Druckplatte aufzuliegen ist die eine Stützart, die nichts kostet.
         overhang = 0.0
@@ -796,13 +701,12 @@ def _measure(
         overhang = area
         islands = area
         region = shape
-        island_region = shape
     else:
+        reach = max(layer_height * OVERHANG_ANGLE_FACTOR, OVERHANG_MARGIN)
         supported = previous.buffer(reach)
         region = shape.difference(supported)
         overhang = float(region.area)
-        island_region = _islands(shape, previous)
-        islands = float(island_region.area)
+        islands = float(_islands(shape, previous).area)
 
     if detail == "support":
         # Alles darunter geht um die gedruckte Struktur, nicht um Stützen.
@@ -815,22 +719,7 @@ def _measure(
             bridge_width=0.0,
             contour_count=0,
             overhang=region,
-            islands=island_region,
         )
-
-    # Ist selbst jenseits der größeren Überhangzugabe nichts frei, kann in
-    # dem schmalen Band bis zur kleineren Brückenzugabe keine druckrelevante
-    # Spannweite liegen. Bei 0,2-mm-Schichten sind das höchstens 0,15 mm je
-    # Seite, deutlich unter ``BRIDGE_FROM``. Damit entfallen an einer glatten
-    # Kugel rund 340 zweite Buffer-/Differenzrechnungen. Bei groben Schichten,
-    # deren Band selbst breit genug wäre, bleibt die vollständige Messung.
-    bridge_width = (
-        0.0
-        if previous is None
-        or previous.is_empty
-        or (region is not None and region.is_empty and reach - OVERHANG_MARGIN < BRIDGE_FROM / 2.0)
-        else _bridge_width(shape, previous)
-    )
 
     return LayerMetrics(
         z=0.0,
@@ -838,10 +727,9 @@ def _measure(
         overhang_area=overhang,
         island_area=islands,
         min_width=minimum_width(shape),
-        bridge_width=bridge_width,
+        bridge_width=_bridge_width(shape, previous),
         contour_count=_contour_count(shape),
         overhang=region,
-        islands=island_region,
     )
 
 
@@ -889,36 +777,23 @@ def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERE
     """
     if shape.is_empty or shape.length <= EPS_GEOM:
         return 0.0
+    coarse = shape.simplify(WIDTH_SIMPLIFY)
+    if coarse.is_empty:
+        coarse = shape
     # Die doppelte Fläche über dem Umfang ist der größte Kreis, der überhaupt
     # hineinpasst — bei einer Scheibe und bei einem Quadrat ist es genau der
     # einbeschriebene. Dort zu beginnen statt bei der Diagonale hält jeden
     # Versuch klein, und eine kleine Erosion auf einer vereinfachten Kontur ist
     # das, was das hier überhaupt bezahlbar macht.
     high = 2.0 * float(shape.area) / float(shape.length)
-    check_simplified_limit = False
     if interesting_below > 0.0:
         if high <= interesting_below / 2.0:
             # Dicker kann sie ohnehin nicht sein; jetzt ordentlich messen.
             pass
-        # Der häufige dicke Fall braucht genau eine Erosion. Ihn vorher zu
-        # vereinfachen kostete an 400 Kugelschichten dreimal so viel wie die
-        # Erosion selbst (306 gegen 101 ms, sequenziell). Überlebt die genaue
-        # Kontur, ist die Antwort sicher die obere Berichtsgrenze. Nur ein
-        # tatsächlich schmaler Kandidat bezahlt die Vereinfachung und Suche.
-        elif not shape.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty:
+        elif not coarse.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty:
             return float(interesting_below)
         else:
-            check_simplified_limit = True
-        high = min(high, interesting_below / 2.0)
-
-    coarse = shape.simplify(WIDTH_SIMPLIFY)
-    if coarse.is_empty:
-        coarse = shape
-    if (
-        check_simplified_limit
-        and not coarse.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty
-    ):
-        return float(interesting_below)
+            high = min(high, interesting_below / 2.0)
 
     low = 0.0
     for _step in range(WIDTH_STEPS):

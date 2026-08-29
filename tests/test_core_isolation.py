@@ -131,40 +131,6 @@ def test_importing_core_pulls_in_no_surface_dependency() -> None:
     assert not finished.stdout.strip(), f"core pulled in a surface dependency: {finished.stdout}"
 
 
-def test_loading_the_registry_defers_geometry_libraries() -> None:
-    """Das vollständige Register kostet noch keinen Geometriekern.
-
-    ``load_operations`` läuft vor dem bedienbaren Fenster, weil Menü, Dialog,
-    Kommandozeile und Agent dieselben Deklarationen brauchen (§10). Früher zog
-    dieser reine Katalogimport schon trimesh, scipy und networkx herein: warm
-    rund 800 Millisekunden, kalt mehrere Sekunden. Die erste wirkliche
-    Geometrie darf sie laden; die 86 Deklarationen dürfen es nicht.
-    """
-    script = textwrap.dedent(
-        """
-        import sys
-        from app.core.bootstrap import load_operations
-        from app.core.registry import REGISTRY
-
-        load_operations()
-        assert len(REGISTRY.all()) >= 80, 'das Register wurde nicht vollständig geladen'
-        heavy = sorted(name for name in ('trimesh', 'scipy', 'networkx') if name in sys.modules)
-        print(','.join(heavy))
-        """
-    )
-    finished = subprocess.run(
-        [sys.executable, "-c", script],
-        capture_output=True,
-        text=True,
-        cwd=Path(app.core.__file__).parents[2],
-        check=False,
-    )
-    assert finished.returncode == 0, finished.stderr
-    assert not finished.stdout.strip(), (
-        "das Operationsregister lud schon schwere Geometriebibliotheken: " + finished.stdout
-    )
-
-
 def test_core_sources_never_reference_the_surface() -> None:
     offenders: list[str] = []
     for path in core_sources():

@@ -21,8 +21,8 @@ import dataclasses
 from typing import Any, Literal, cast
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.attributes import with_slot
 from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect

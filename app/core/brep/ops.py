@@ -134,7 +134,7 @@ class BrepCylinderParams(BaseParams):
     # einem Kunden nichts; was er wissen will, ist, was er damit kann. Der
     # Quader nebenan sagte es, der Zylinder nicht.
     doc=_(
-        "Legt einen Zylinder mit echten Kanten an, stehend auf Z = 0 — an sie lassen "
+        "Legt einen Zylinder mit echten Kanten an, stehend auf dem Druckbett — an sie lassen "
         "sich später Fasen und Verrundungen setzen."
     ),
 )
@@ -406,7 +406,7 @@ class ThreadParams(BaseParams):
         unit="mm",
         minimum=1.0,
         maximum=500.0,
-        doc=_("Gewindelänge von Z = 0 nach oben, mindestens zwei Gänge."),
+        doc=_("Gewindelänge vom Druckbett nach oben, mindestens zwei Gänge."),
     )
     name: str = param(
         title=_("Name"),

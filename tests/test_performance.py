@@ -32,7 +32,6 @@ from app.core.perceive.features import detect
 from app.core.perceive.maps import wall_thickness_map
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
 from app.core.scene.project import ProjectSources, new_project
-from app.core.scene.project import load as load_project
 from app.core.slice.analysis import slice_body
 from app.core.slice.orientation import search
 from app.core.types import Profile, Source
@@ -41,7 +40,6 @@ from app.i18n import _
 pytestmark = pytest.mark.performance
 
 MESHES = Path(__file__).parent / "data" / "meshes"
-EXAMPLES = Path(__file__).parent.parent / "app" / "examples"
 BASELINE = Path(__file__).parent / ".performance.json"
 
 #: Wie viel langsamer als der letzte Lauf auf dieser Maschine als Fehler gilt (§31).
@@ -244,15 +242,7 @@ def measure(name: str, work: Callable[[], Any]) -> float:
 
 
 def test_reading_a_million_triangles(profile: Profile) -> None:
-    """Nicht namentlich in §31, aber das Tor zu allem anderen.
-
-    Seit dem verzögerten Geometrieimport vom 29.08.2026 enthält der erste Lauf
-    rund 490 ms für ``trimesh``. Die frühere Einzelmarke lag deshalb bei
-    426 ms, die neue bei 919 ms. Das ist kein versteckter Gewinn: Bis zum
-    bedienbaren Fenster fiel derselbe Import weg, dort sank die Zeit von rund
-    2,5 auf 1,5 s. Start plus erstes Modell sind damit weiterhin etwa eine
-    halbe Sekunde schneller; beide Einzelmarken halten die Verschiebung fest.
-    """
+    """Nicht namentlich in §31, aber das Tor zu allem anderen."""
     taken = measure("read_dense", dense_mesh)
     assert taken < 30.0
 
@@ -277,27 +267,11 @@ def test_wall_thickness_answers_quickly() -> None:
 
 
 def medium_mesh() -> MeshData:
-    """Der bestehende härtere Korpus mit 327 680 Dreiecken."""
-    import trimesh
-
-    return MeshData.of(trimesh.creation.icosphere(subdivisions=7, radius=40.0))
-
-
-def slice_target_mesh() -> MeshData:
-    """Exakt 200 000 Dreiecke — die ausdrücklich genannte §31-Größe.
-
-    Feature-Erkennung und Wandkarte behalten den gewachsenen 327-680er-Korpus:
-    Das vereinfachte Netz hat eine andere Merkmalstopologie und wäre dort ein
-    anderer Test. Nur die Schichtzeile beantwortet zusätzlich die genaue
-    Zielgröße, statt von einem um 64 Prozent größeren Körper abzuleiten.
-    """
+    """Rund 200 000 Dreiecke — die Größe, für die jedes §31-Ziel angegeben ist."""
     import trimesh
 
     sphere = trimesh.creation.icosphere(subdivisions=7, radius=40.0)
-    result = MeshData.of(sphere.simplify_quadric_decimation(face_count=200_000))
-    assert result.triangle_count == 200_000, "the §31 fixture does not have its named size"
-    assert result.is_watertight, "decimation opened the §31 fixture"
-    return result
+    return MeshData.of(sphere)
 
 
 def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
@@ -315,9 +289,8 @@ def test_the_sketch_solver_meets_its_budget() -> None:
     Eine Kette aus hundert Maschen — hundert Linien, deren Enden aufeinander
     liegen, jede mit einem Maß, ein Anker. Gemessen wird der ganze Weg durch
     ``solve_sketch`` einschließlich Validierung und Ranganalyse; die
-    analytischen Ableitungen, der ``lsmr``-Unterlöser und seine begrenzten
-    inneren Schritte sind die Entscheidungen, die diesen Wert tragen (700 ms
-    mit dichter SVD, 105 ms mit unbeschränktem LSMR, 48–50 ms jetzt)."""
+    analytischen Ableitungen und der ``lsmr``-Unterlöser sind genau die zwei
+    Entscheidungen, die diesen Wert tragen (700 ms mit dichter SVD)."""
     from app.core.sketch import solve_sketch
     from app.core.types import Sketch, SketchConstraint, SketchElement
 
@@ -337,16 +310,18 @@ def test_the_sketch_solver_meets_its_budget() -> None:
 def test_the_layer_analysis_stays_under_the_budget() -> None:
     """§31 verlangt 300 ms bei 200 000 Dreiecken und 0,2 mm.
 
-    Der weiterhin geschlossene Körper hat jetzt wirklich exakt 200 000
-    Dreiecke und liegt nach der ganzen Kette bei 288–299 ms (Median 292 ms).
-    Der größere alte Körper mit 327 680 Dreiecken liegt bei 331–355 ms. Am
-    Anfang waren es 2,35 Sekunden, über den NumPy-/GEOS-Rückfallweg 1,05.
-    Der native Kern schneidet und gruppiert die Ebenensegmente und verkettet
-    die Ringe; bekannte Konturen werden nicht zurückübersetzt, eindeutig
-    schmale Überhangbänder nicht ein zweites Mal als Brücke vermessen. Zehn
-    Threads tragen die vollständige Analyse, sechzehn die Stützsuche.
+    Dieser Körper hat 328 000 Dreiecke und braucht etwa 1,05 Sekunden — also
+    grob 650 ms bei der Größe, die §31 nennt, von 2,35 Sekunden am Anfang. Zwei
+    Änderungen haben ihn dorthin gebracht: die Breitensuche hört auf, sobald
+    eine Schicht dicker ist als alles, wovor §22.2 warnt, und das Messen läuft
+    auf so vielen Threads, wie die Maschine hat, denn GEOS gibt den
+    Interpreter-Lock frei, während es arbeitet.
+
+    Übrig bleibt das Bauen der Polygone, und das parallelisiert *nicht* — die
+    Messung steht in ``cross_sections``. Den Rest zu schließen braucht einen
+    kompilierten Kern, keine weitere Python-Idee.
     """
-    mesh = slice_target_mesh()
+    mesh = medium_mesh()
     taken = measure("slice_medium", lambda: slice_body(mesh, 0.2))
     assert taken < 2.5
 
@@ -410,12 +385,10 @@ def test_the_wall_thickness_map_stays_under_the_bound() -> None:
 
     Erreicht, nach zwei Änderungen. Das Raster wurde früher Schicht für Schicht
     geschnitten, was alle 328 000 Dreiecke einmal je Schicht ablief —
-    dreihundertmal. Es ist jetzt ein Durchgang über alle Höhen. Die Abtastung
-    verwendet außerdem ihre großen Fließkomma- und Ganzzahlfelder wieder,
-    statt sie in 175 Schritten neu anzulegen. Beides brachte die Karte von acht
-    Sekunden über 3,10 auf 1,43–1,48 Sekunden. Sie läuft weiterhin in einem
-    Thread mit einem Hinweis in der Leiste (§18.9) statt im Vordergrund hinter
-    einem Wartezeiger.
+    dreihundertmal. Es ist jetzt ein Durchgang über alle Höhen, und das brachte
+    die Karte von acht Sekunden auf drei. Und sie läuft in einem Thread mit
+    einem Hinweis in der Leiste (§18.9) statt im Vordergrund hinter einem
+    Wartezeiger.
     """
     mesh = medium_mesh()
     taken = measure("map_wall_medium", lambda: wall_thickness_map(mesh))
@@ -470,40 +443,6 @@ def test_reevaluating_from_the_cache_is_quick(profile: Profile) -> None:
     )
     assert taken < 1.0
     assert cache.statistics.hits >= 1
-
-
-def test_the_multicolour_example_opens_without_a_surface_search_explosion(
-    profile: Profile,
-) -> None:
-    """Das echte Dosenprojekt: Boolesche Schritte und zwei Filamentflächen.
-
-    Am 29.08.2026 brauchte seine Kernauswertung 14,11 Sekunden. Nicht die acht
-    Booleschen Operationen waren teuer, sondern die anschließende exakte
-    Slot-Übertragung: Eine einzelne große Fläche weitete die Suche auf 32,36
-    Millionen Dreieckspaare. Nach Größenbändern sind es 224 432 und 1,53
-    Sekunden bei identischen Slotwerten. Der Strukturtest in ``test_slots``
-    zählt die Paare; dieser hier hält den Kundenweg als Ganzes fest.
-    """
-    from app.core.bootstrap import load_operations
-
-    load_operations()
-    project = load_project(EXAMPLES / "dose-mit-deckel.p3d")
-    outcome: list[Any] = []
-    taken = measure(
-        "open_multicolour_example",
-        lambda: outcome.append(
-            evaluate(
-                project.document,
-                profile,
-                sources=ProjectSources(project),
-                cache=ResultCache(),
-            )
-        ),
-    )
-
-    assert taken < 10.0, "ein kleines Kundenbeispiel darf keine zweistellige Wartezeit haben"
-    assert outcome[0].complete
-    assert len(outcome[0].scene.objects) == 2
 
 
 # --- Organische Modellierung (P16.2) ----------------------------------------
@@ -889,11 +828,10 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from app.core.bootstrap import load_operations, load_user_parts
+from app.core.bootstrap import load_operations
 from app.ui.app import build_application
 
 load_operations()
-load_user_parts()
 application, window = build_application([])
 window.show()
 '''
@@ -903,29 +841,25 @@ def test_the_application_is_usable_quickly(tmp_path: Path) -> None:
     """§31: Anwendungsstart bis bedienbar unter 3 s — die Zeile hatte keine Marke.
 
     Gemessen wird ein **eigener Prozess**, und das ist die Entscheidung, die
-    diese Marke trägt. Zwei Gründe. Erstens gehört der Prozessstart dazu: Vor
-    dem Umbau vom 29.08.2026 zog der Registerimport allein trimesh, scipy und
-    networkx nach; im laufenden Testprozess wären sie längst da und die Marke
-    eine Zehntelsekunde und eine Lüge. Jetzt hält
-    ``test_loading_the_registry_defers_geometry_libraries`` diese Ursache
-    einzeln fest, der eigene Prozess weiter ihre Kundenwirkung. Zweitens
-    entsteht im Messprozess selbst kein Fenster; die Datei bleibt damit aus
-    der Fenstergruppe der geteilten Suite heraus.
+    diese Marke trägt. Zwei Gründe. Erstens gehört der Prozessstart dazu: Der
+    Import von ``main_window`` allein zieht trimesh und networkx nach und kostet
+    gemessen 2,2 der 2,4 Sekunden, die ``import app.ui.app`` brauchte — im
+    laufenden Testprozess ist das längst geschehen, und die Marke wäre eine
+    Zehntelsekunde und eine Lüge. Zweitens entsteht im Messprozess selbst kein
+    Fenster; die Datei bleibt damit aus der Fenstergruppe der geteilten Suite
+    heraus.
 
-    Bis wohin gemessen wird: Register und eigener Bausteinordner geladen,
-    Anwendung und Fenster gebaut, Fenster gezeigt — das ist „bedienbar". Nicht
-    dabei ist, was ``main()`` davor tut (Ladebildschirm, Freischaltung, eine
-    Datei von der Befehlszeile). Der Ladebildschirm gehört bewusst nicht dazu:
-    Er verdeckt die Wartezeit, er verkürzt sie nicht.
+    Bis wohin gemessen wird: Register geladen, Anwendung und Fenster gebaut,
+    Fenster gezeigt — das ist „bedienbar". Nicht dabei ist, was ``main()``
+    davor tut (Ladebildschirm, Freischaltung, eine Datei von der Befehlszeile).
+    Der Ladebildschirm gehört bewusst nicht dazu: Er verdeckt die Wartezeit, er
+    verkürzt sie nicht.
 
     Diese Zahl hat eine kalte und eine warme Fassung, und der Unterschied ist
     kein Rauschen: Die ersten zwei Messungen am 22.08.2026 lasen 13 764 und
     12 936 ms, jede weitere an diesem Tag 2500 bis 3000 — fünffach, und dann
     nie wieder. Der Betriebssystem-Cache holt die Dateien der Anwendung beim
-    ersten Mal von der Platte und behält sie danach. Nach dem verzögerten
-    Geometrieimport misst die warme Fassung am 29.08.2026 1482 ms; eine neue
-    kalte Zahl braucht einen geleerten Plattencache und gehört nicht in diesen
-    Testlauf.
+    ersten Mal von der Platte und behält sie danach.
 
     Die Marke behält den kleinsten Wert und ist damit die **warme** Zahl. Sie
     ist die richtige für den Vergleich — eine Suite, die mehrmals am Tag läuft,

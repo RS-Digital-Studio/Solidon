@@ -283,7 +283,7 @@ class SketchExtrudeParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Wie hoch der Körper aufgezogen wird, von Z = 0 nach oben."),
+        doc=_("Wie hoch der Körper aufgezogen wird, vom Druckbett nach oben."),
     )
     corners: int = param(
         title=_("Ecken"),
@@ -609,7 +609,7 @@ class SketchRevolveParams(BaseParams):
     produces=1,
     doc=_(
         "Dreht einen Querschnitt um die senkrechte Achse: ein Rechteck wird "
-        "zur Hülse, ein Kreis zum Ring. Der Körper steht auf Z = 0."
+        "zur Hülse, ein Kreis zum Ring. Der Körper steht auf dem Druckbett."
     ),
 )
 def sketch_revolve(ctx: OpContext) -> OpResult:

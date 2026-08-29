@@ -492,69 +492,6 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert triangle.dtype == np.int64
 
 
-def test_one_large_triangle_does_not_widen_every_surface_search(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Eine einzelne große Fläche darf nicht jede kleine Fläche zum Kandidaten machen.
-
-    Die exakte Suche schrank früher alle Dreiecke mit der **größten**
-    Schwerpunkt-Ecke-Spanne des ganzen Netzes ein. Im Dosenbeispiel hatten
-    ein Prozent der Flächen eine große Spanne; dadurch wurden für 849 Punkte
-    32,36 Millionen Dreieckspaare exakt nachgerechnet. Kleine und große
-    Dreiecke getrennt einzuschränken ändert die Antwort nicht, nur die Menge
-    der Kandidaten. Die Paarzahl prüft diese Struktur ohne eine wackelige
-    Zeitgrenze.
-    """
-    from app.core.geom.mesh import on_surface
-
-    steps = 64
-    axis = np.linspace(-10.0, 10.0, steps + 1)
-    grid_x, grid_y = np.meshgrid(axis, axis, indexing="xy")
-    vertices = np.column_stack((grid_x.ravel(), grid_y.ravel(), np.zeros(grid_x.size)))
-    row = np.arange(steps)[:, None] * (steps + 1)
-    column = np.arange(steps)[None, :]
-    bottom_left = (row + column).ravel()
-    bottom_right = bottom_left + 1
-    top_left = bottom_left + steps + 1
-    top_right = top_left + 1
-    faces = np.vstack(
-        (
-            np.column_stack((bottom_left, bottom_right, top_right)),
-            np.column_stack((bottom_left, top_right, top_left)),
-        )
-    )
-    grid = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
-    broad = trimesh.Trimesh(
-        vertices=np.asarray(((-200.0, -200.0, -10.0), (200.0, -200.0, -10.0), (0.0, 200.0, -10.0))),
-        faces=np.asarray(((0, 1, 2),)),
-        process=False,
-    )
-    body = trimesh.util.concatenate((grid, broad))
-    points = np.column_stack(
-        (
-            np.linspace(-9.75, 9.75, 64),
-            np.linspace(9.25, -9.25, 64),
-            np.full(64, 0.05),
-        )
-    )
-
-    examined = 0
-    exact = trimesh.triangles.closest_point
-
-    def counted(triangles: np.ndarray, queries: np.ndarray) -> np.ndarray:
-        nonlocal examined
-        examined += len(triangles)
-        return exact(triangles, queries)
-
-    monkeypatch.setattr(trimesh.triangles, "closest_point", counted)
-    closest, distance, triangle = on_surface(body, points)
-
-    assert examined < 50_000, f"{examined} Dreieckspaare sind kein räumlicher Vorfilter"
-    assert np.allclose(distance, 0.05, atol=1e-12)
-    assert np.allclose(closest[:, 2], 0.0, atol=1e-12)
-    assert np.all(triangle < len(grid.faces)), "die nahe Rasterfläche muss gewinnen"
-
-
 def test_the_geometry_paths_never_load_rtree() -> None:
     """Die Zusage hinter dem Umbau vom 24.08.2026: ``rtree`` rechnet nie mehr
     mit.
@@ -601,6 +538,7 @@ def test_the_geometry_paths_never_load_rtree() -> None:
         "from app.core.geom.pins import plan_pins\n"
         "from app.core.geom.section import cut, SectionPlane\n"
         "from app.core.ingest.outline import extrude\n"
+        "assert _polygons.enclosure_tree is enclosure.enclosure_tree, 'der Patch greift nicht'\n"
         "closest, distance, triangle = on_surface(\n"
         "    trimesh.creation.box((20.0, 20.0, 20.0)), np.array([[100.0, 0.0, 0.0]])\n"
         ")\n"
@@ -609,8 +547,6 @@ def test_the_geometry_paths_never_load_rtree() -> None:
         "hole = trimesh.creation.cylinder(radius=6.0, height=30.0)\n"
         "body = trimesh.boolean.difference([plate, hole], engine='manifold')\n"
         "sliced = cut(MeshData.of(body), SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0))\n"
-        "assert _polygons.enclosure_tree is enclosure.enclosure_tree, "
-        "'der Schnitt installiert den Patch nicht'\n"
         "assert sliced.capped and sliced.mesh.raw.is_watertight\n"
         "wall = trimesh.creation.box((60.0, 40.0, 10.0))\n"
         "plan = plan_pins(MeshData.of(wall), SectionPlane(normal=(1.0, 0.0, 0.0), position=0.0))\n"

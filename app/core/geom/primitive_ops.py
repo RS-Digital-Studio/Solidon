@@ -104,7 +104,7 @@ class BoxParams(BaseParams):
     # das Sprachmodell — eine Regel aus rules.toml, gelandet in dem Feld, das
     # der Nutzer im Dialog liest. Wer auf „Quader anlegen" klickt, hat sich
     # entschieden; die Regel steht dort, wo sie hingehört, und gilt weiter.
-    doc=_("Legt einen Quader an, mittig auf Z = 0 oder auf einer Ecke."),
+    doc=_("Legt einen Quader an, mittig auf dem Druckbett oder auf einer Ecke."),
 )
 def create_box(ctx: OpContext) -> OpResult:
     params = cast(BoxParams, ctx.params)
@@ -122,7 +122,7 @@ class CylinderParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Der Zylinder steht auf Z = 0."),
+        doc=_("Außendurchmesser. Der Zylinder steht auf dem Druckbett."),
     )
     height: float = param(
         title=_("Höhe"),
@@ -155,7 +155,7 @@ class CylinderParams(BaseParams):
     params=CylinderParams,
     consumes=0,
     produces=1,
-    doc=_("Legt einen Zylinder an, stehend auf Z = 0."),
+    doc=_("Legt einen Zylinder an, stehend auf dem Druckbett."),
 )
 def create_cylinder(ctx: OpContext) -> OpResult:
     params = cast(CylinderParams, ctx.params)
@@ -171,7 +171,7 @@ class SphereParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Außendurchmesser. Die Kugel sitzt auf Z = 0 auf."),
+        doc=_("Außendurchmesser. Die Kugel sitzt auf dem Druckbett auf."),
     )
     segments: int = param(
         title=_("Segmente"),
@@ -196,7 +196,7 @@ class SphereParams(BaseParams):
     params=SphereParams,
     consumes=0,
     produces=1,
-    doc=_("Legt eine Kugel an, aufsitzend auf Z = 0."),
+    doc=_("Legt eine Kugel an, aufsitzend auf dem Druckbett."),
 )
 def create_sphere(ctx: OpContext) -> OpResult:
     import trimesh

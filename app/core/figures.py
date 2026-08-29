@@ -641,7 +641,7 @@ def _sketch_editor(theme: Theme) -> str:
     # altert mit dem nächsten Werkzeug, die Aufzählung nicht.
     canvas.box(10, 10, 600, 32, fill=colours.fill)
     for index, (name, key) in enumerate(
-        ((_("Linie"), "L"), (_("Kreis"), "C"), (_("Bogen"), "A"), (_("Spline"), "S"))
+        ((_("Linie"), "L"), (_("Kreis"), "C"), (_("Bogen"), "A"), (_("Kurve"), "S"))
     ):
         left = 20 + index * 92
         canvas.box(left, 16, 84, 20, stroke=colours.muted, radius=2.0)

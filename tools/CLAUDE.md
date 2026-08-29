@@ -66,7 +66,7 @@ Dateisperre für Generator und Support-Oberfläche)
 
 **Website** `upload_website.py` · `make_stats_access.py`
 
-**Übersetzen** `build_slice_core.py` (Ebenenschnitt und Konturverkettung der
+**Übersetzen** `build_slice_core.py` (die Konturverkettung der
 Schichtanalyse)
 
 **Sonstiges** `setup_comfyui.py` · `speak_chatterbox.py`

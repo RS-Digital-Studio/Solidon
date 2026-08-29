@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger

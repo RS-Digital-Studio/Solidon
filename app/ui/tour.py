@@ -88,13 +88,14 @@ class TourPanel(QWidget):
     """Führt durch ein Beispiel: erklärt, wartet, erkennt, schaltet weiter."""
 
     closed = Signal()
+    """Die Tour wurde beendet — das Fenster nimmt den Reiter weg."""
     pointsAt = Signal(str)
+    """Wovon der aktuelle Schritt spricht — „history", „parameters", „report",
+    „tree", „toolbar", „tools" oder „viewport". Das Fenster lässt den Bereich
+    kurz aufleuchten."""
     followRequested = Signal(str)
     """Das nächste Beispiel, wenn die Tour zu Ende ist und jemand weitermachen
     will — trägt seine Kennung."""
-    """Wovon der aktuelle Schritt spricht — „history", „parameters", „report",
-    „tree" oder „viewport". Das Fenster lässt den Bereich kurz aufleuchten."""
-    """Die Tour wurde beendet — das Fenster nimmt den Reiter weg."""
 
     def __init__(self, session: Session, parent: QWidget | None = None) -> None:
         super().__init__(parent)

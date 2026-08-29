@@ -27,8 +27,8 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane

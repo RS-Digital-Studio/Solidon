@@ -139,7 +139,7 @@ def _drawing_keys() -> list[tuple[str, str, str]]:
         "circle": _("Kreis"),
         "arc": _("Bogen"),
         "point": _("Punkt"),
-        "spline": _("Spline"),
+        "spline": _("Kurve"),
         "trim": _("Trimmen"),
         "rectangle": _("Rechteck"),
         "distance": _("Abstand"),

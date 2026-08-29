@@ -1917,24 +1917,22 @@ Gemessen auf dem Referenzkorpus (§34), als Teil der Suite protokolliert.
 | Anzeige-Dezimierung greift ab | 500 000 Dreiecken | Schwelle, keine Zeit |
 | Boolesche Op, 200 000 Dreiecke | unter 2 s | 1,14 s — im Ziel |
 | Feature-Erkennung, 200 000 Dreiecke | unter 1 s | 0,80 s — im Ziel |
-| Analysekarte Wandstärke | unter 3 s, im Hintergrund | 1,43–1,48 s — im Ziel |
+| Analysekarte Wandstärke | unter 3 s, im Hintergrund | 4,25 s — **darüber** |
 | Projekt öffnen aus Plattencache | unter 1 s | 0,56–0,67 s beim zweiten Öffnen, 4,87 s beim ersten |
 | Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige | 8 ms — im Ziel, und die Zusage hält |
-| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 288–299 ms auf exakt 200 000, Median 292 ms — im Ziel; 331–355 ms auf 327 680 |
-| Skizzen-Solver, 200 Bedingungen | unter 100 ms | 48–50 ms — im Ziel |
+| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 1,22 s auf 328 000 — **darüber** |
+| Skizzen-Solver, 200 Bedingungen | unter 100 ms | 118 ms — knapp darüber |
 | Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar | 17,9 s — im Ziel, zweimal aber über 20 s |
-| Anwendungsstart bis bedienbar, **kalt** | unter 3 s | 12,9 s vor dem verzögerten Geometrieimport — neue Kaltmessung steht aus |
-| Anwendungsstart bis bedienbar, **warm** | unter 3 s | 1,48 s — im Ziel |
+| Anwendungsstart bis bedienbar, **kalt** | unter 3 s | 12,9 s — **verfehlt**, von Hand gemessen |
+| Anwendungsstart bis bedienbar, **warm** | unter 3 s | 2,88 s — im Ziel |
 
-Die dritte Spalte führt die Bestwerte aus `tests/.performance.json`, überwiegend
-vom 22.08.2026, auf Roberts Maschine und unter dem Schloss gemessen; der
-Anwendungsstart wurde am 29.08.2026 nachgemessen (die Datei selbst reist nicht
-mit — sie steht in `.gitignore`, also ist diese Spalte der einzige
-nachprüfbare Ort). Sie steht hier, weil eine Tabelle aus reinen Zielwerten nach
-zwei Jahren nicht mehr verrät, ob sie Absichten oder Zustände beschreibt. Was
-sie zeigt, ist beides: **Alle Rechenzeilen halten**, eine kalte Messung steht
-nach dem Umbau aus, und eine Ansichtszeile ist im Tor grundsätzlich nicht
-messbar.
+Die dritte Spalte führt die Bestwerte aus `tests/.performance.json`, Stand
+22.08.2026, auf Roberts Maschine und unter dem Schloss gemessen (die Datei
+selbst reist nicht mit — sie steht in `.gitignore`, also ist diese Spalte der
+einzige nachprüfbare Ort). Sie steht hier, weil eine Tabelle aus reinen
+Zielwerten nach zwei Jahren nicht mehr verrät, ob sie Absichten oder Zustände
+beschreibt. Was sie zeigt, ist beides: **vier Zeilen liegen darüber**, eine ist
+im Tor grundsätzlich nicht messbar, und der Rest hält.
 
 Drei Zeilen haben sich dabei geändert, und zwei davon nicht durch schnelleren
 Code. *Anwendungsstart* ist zweigeteilt (siehe unten), *Projekt öffnen* hat
@@ -1948,32 +1946,6 @@ Bildrate und im Tor nicht messbar, aber die eine teure Rechnung zwischen
 „Körper geladen" und „navigierbar" ist es sehr wohl, und sie ist der Grund,
 warum eine Million Dreiecke überhaupt flüssig gehen — gezeichnet werden 200 000.
 
-**Das echte Fenster hat am 29.08.2026 den vermeintlichen Ansichtsengpass
-widerlegt.** `dose-mit-deckel.p3d` brauchte vor der Korrektur 21,55 s bis zum
-vollständigen Bild; davon entfielen nur 0,19 s auf den Viewport. 17,09 s lagen
-in der Übertragung der Filamentflächen nach Booleschen Operationen: Eine
-einzige große Fläche weitete die exakte Kandidatensuche auf 32,36 Millionen
-Dreieckspaare. Nach Größenbändern sind es 224 432 Paare, dieselben Slotwerte
-und 3,06 s bis zum vollständigen Bild. Die Kernauswertung allein fiel von
-14,11 auf 1,53 s.
-
-**Die drei knappen Rechenziele wurden am selben Tag nicht nur neu
-beschriftet.** Der native Schichtkern verkettet jetzt nicht bloß fertige
-Segmente, sondern schneidet die Dreiecke selbst: Der NumPy-Zwischenweg kostete
-203 ms und mehrere große Felder, der übersetzte Weg 27–31 ms. Auf dem
-327-680-Dreieck-Korpus fiel die ganze Analyse von 1,05 s ohne Kern zunächst auf
-443–462 und jetzt auf 331–355 ms. Ein auf exakt 200 000 Dreiecke vereinfachter,
-weiterhin geschlossener Körper liegt warm bei 288–299 ms (Median 292 ms) und
-damit im Ziel. Dazu gibt der Kern seine Segmente bereits schichtweise aus, die
-Verkettung braucht nur noch einen Sort, vorhandene Ein-Ring-Konturen werden
-nicht aus GEOS zurückkopiert, und ein eindeutig schmales Überhangband wird
-nicht ein zweites Mal als Brücke vermessen. Die Wandstärkenkarte verwendet
-ihre zwei großen Abtastfelder wieder, statt sie in 175 Schritten neu anzulegen:
-3,10 auf 1,43–1,48 s, mit bitgleich denselben 315 218 bekannten Werten. Der
-Skizzenlöser begrenzt die inneren LSMR-Schritte so, dass TRF acht große statt
-achtzehn übergenaue Versuche macht: 105 auf 48–50 ms, der Restfehler bleibt mit
-1,3 × 10⁻⁹ weit unter der Kerntoleranz.
-
 **Ein Zielwert steht mindestens die gemessene Streuung über dem Bestwert.**
 Sonst misst er die Maschine. Der Anzeigeaufbau ist das Beispiel: 2,51 s
 gemessen, Streuung dieser Maschine zwischen zwei Läufen 10 bis 31 Prozent —
@@ -1982,19 +1954,15 @@ wurde. Also 4 s. Wird die Dezimierung eines Tages 3,5 s brauchen, fängt die
 Zahl es noch; 2,5 auf 3,5 ist keine Streuung mehr.
 
 **Und welche von zwei Zahlen gilt, entscheidet, wer sie liest — der Kunde die
-kalte, der Wächter die warme.** Vor dem Umbau brauchte der Anwendungsstart beim
-ersten Mal am Tag 12,9 s und danach 2,9; der Unterschied ist der Dateicache des
+kalte, der Wächter die warme.** Der Anwendungsstart braucht beim ersten Mal am
+Tag 12,9 s und danach 2,9; der Unterschied ist der Dateicache des
 Betriebssystems. Die Suite kann nur den warmen messen, sie läuft mehrmals
 täglich. Gemeint ist in §31 der **kalte** — dieser Plan schreibt über den
-Kunden und nicht über die Suite. Am 29.08.2026 laden die 86
-Operationsdeklarationen trimesh, scipy und networkx nicht mehr vor dem Fenster:
-Register füllen 800 → 257 ms, vollständiger warmer Start 1,98 → 1,48 s. Der
-erste wirkliche Rechenschritt lädt sie im sichtbaren, abbrechbaren Arbeitslauf.
-Mit echtem OpenGL-Viewport statt der Offscreen-Messung steht der warme Start
-bei 2,46 s und damit ebenfalls im Ziel.
-Eine neue kalte Zahl braucht einen geleerten Betriebssystemcache und steht
-deshalb ausdrücklich noch aus. Dieselbe Unterscheidung gilt für das Öffnen
-eines Projekts: 5,06 s beim ersten Mal, 0,21 beim zweiten.
+Kunden und nicht über die Suite —, also ist die Zeile heute verfehlt, und die
+warme steht als das daneben, was das Tor bewachen kann. Aufgeschlüsselt:
+Interpreterstart 1,9 s, Register füllen 1,1–1,2 s, Anwendung bauen 0,9 s,
+Fenster zeigen 7 ms. Dieselbe Unterscheidung gilt für das Öffnen eines
+Projekts: 5,06 s beim ersten Mal, 0,21 beim zweiten.
 
 **Und die dritte Spalte ist nicht das, was das Tor prüft.** Die Zusicherungen
 in `tests/test_performance.py` liegen bewusst eine Größenordnung über den
@@ -2017,15 +1985,12 @@ Schichtanalyse an der Decke des Interpreters, und das ist nicht vermutet,
 sondern an drei Verfahren gemessen: Die Ringe selbst zu verketten statt sie
 GEOS zu überlassen kostete in Python 1215 ms, vektorisiert 540 ms, GEOS selbst
 1078 ms — dieselbe Größenordnung, obwohl GEOS mehr tut. Übersetzt sind es
-11 ms. Der zweite Teil darin, die Ebenensegmente, fiel 203 auf 27–31 ms.
-`slice/_chain` ist deshalb **Teil des ausgelieferten Pakets**. Suite und
-Paketier-Job bauen ihn jeweils frisch für ihre Plattform; die PyInstaller-Spec
-bricht mit einem Handlungsvorschlag ab, wenn er trotzdem fehlt, und nimmt die
-Binärdatei ausdrücklich mit. Fehlt er in einem Quellklon, nimmt die Analyse den
-NumPy-/GEOS-Weg und ist so schnell wie vorher — der Klon wird nicht langsamer,
-nur nicht schneller. Und der Kern ist ausdrücklich **nicht der genauere Weg**:
-Er rundet gleich; was er gewinnt, ist eine Ringschließung, die nicht davon
-abhängt, dass zwei gerundete Enden zusammenfinden.
+11 ms. `slice/_chain` ist deshalb **Teil des ausgelieferten Pakets** und wird
+in der CI für alle drei Zielplattformen gebaut. Fehlt es, nimmt die Analyse den
+Weg über GEOS und ist so schnell wie vorher — ein Klon ohne Übersetzer wird
+nicht langsamer, nur nicht schneller. Und er ist ausdrücklich **nicht der
+genauere Weg**: Er rundet gleich; was er gewinnt, ist eine Ringschließung, die
+nicht davon abhängt, dass zwei gerundete Enden zusammenfinden.
 
 **Regressionsprüfung**: Messwerte je Lauf festhalten; Verschlechterung um mehr
 als ein Viertel gilt als Fehler, nicht als Rauschen — **aber erst, wenn sie

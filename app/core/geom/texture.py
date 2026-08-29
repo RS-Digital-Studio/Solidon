@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot

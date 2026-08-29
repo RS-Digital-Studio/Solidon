@@ -35,8 +35,8 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
 | `orientation.py` | Die Suche nach einer Druckorientierung (§22.3) |
 
-Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
-`tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.
+Die Konturverkettung hat einen übersetzten Teil — `tools/build_slice_core.py`
+baut ihn, das Budget dafür steht in §31.
 
 ## Grenzen
 

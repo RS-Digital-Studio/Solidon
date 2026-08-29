@@ -93,16 +93,7 @@ def _data_directories() -> set[Path]:
     found: set[Path] = set()
     for source, destination in PACKAGE_DATA_ROOTS:
         for path in source.rglob("*"):
-            if not path.is_file() or path.suffix in {
-                ".py",
-                ".pyi",
-                ".pyx",
-                ".c",
-                ".pyd",
-                ".so",
-                ".dll",
-                ".dylib",
-            }:
+            if not path.is_file() or path.suffix in {".py", ".pyi", ".pyx"}:
                 continue
             if any(part in str(path) for part in IGNORED):
                 continue
@@ -311,59 +302,6 @@ def test_the_workflow_packages_every_delivered_platform() -> None:
     for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
     assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
-
-
-def test_the_customer_package_builds_the_fast_slice_core() -> None:
-    """Die geprüfte schnelle Schichtanalyse muss auch beim Kunden ankommen.
-
-    Die Suite übersetzt ``_chain`` vor ihren Vergleichstests. Das allein
-    genügt nicht: Der Paketier-Job beginnt auf einem frischen Runner und muss
-    die Erweiterung vor PyInstaller noch einmal für seine Plattform bauen.
-    Sonst ist die CI grün, während jedes ausgelieferte Paket still auf den
-    langsameren GEOS-Weg zurückfällt.
-    """
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    package = workflow.split("\n  package:", 1)[1]
-    compile_slice = package.find("python tools/build_slice_core.py")
-    build_package = package.find("pyinstaller packaging/solidon3d.spec")
-
-    assert compile_slice >= 0, "der Paketier-Job übersetzt app/core/slice/_chain nicht"
-    assert build_package >= 0, "der Paketier-Job ruft PyInstaller nicht mehr auf"
-    assert compile_slice < build_package, "die schnelle Schichtanalyse entsteht erst nach dem Paket"
-    specification = SPEC.read_text(encoding="utf-8")
-    assert "SLICE_CORE" in specification, "die Spec fordert den gebauten Schichtkern nicht ein"
-    assert '"app/core/slice"' in specification, "der Schichtkern reist nicht als Binärdatei mit"
-
-
-def test_cleaning_the_slice_core_keeps_other_build_products(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Das Aufräumwerkzeug besitzt nur seine eigenen Zwischenprodukte.
-
-    ``build`` ist zugleich PyInstallers Arbeitsordner. Ihn vollständig zu
-    löschen räumte beim Aufruf mit ``--clean`` auch ein fast fertiges
-    Kundenpaket weg.
-    """
-    from tools import build_slice_core as tool
-
-    package = tmp_path / "app" / "core" / "slice"
-    package.mkdir(parents=True)
-    extension = package / "_chain.test.pyd"
-    extension.write_bytes(b"gebaut")
-    build_temp = tmp_path / "build" / "slice-core"
-    build_temp.mkdir(parents=True)
-    (build_temp / "zwischenstand").write_text("weg", encoding="utf-8")
-    other = tmp_path / "build" / "solidon3d" / "fertiges-paket"
-    other.mkdir(parents=True)
-
-    monkeypatch.setattr(tool, "PACKAGE", package)
-    monkeypatch.setattr(tool, "BUILD_TEMP", build_temp)
-    monkeypatch.setattr(tool, "ROOT", tmp_path)
-    tool.clean()
-
-    assert not extension.exists(), "die eigene Erweiterung blieb liegen"
-    assert not build_temp.exists(), "die eigenen Zwischenprodukte blieben liegen"
-    assert other.is_dir(), "das Aufräumen löschte PyInstallers Kundenpaket"
 
 
 def test_the_workflow_keeps_the_two_mac_packages_apart() -> None:

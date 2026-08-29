@@ -653,7 +653,7 @@ class PlaceOnBedParams(BaseParams):
     # Der häufigste Handgriff von Weg 1: Ein heruntergeladenes Modell sitzt
     # mittig auf z = 0 und steckt zur Hälfte unter der Platte.
     shortcut="Ctrl+Shift+B",
-    doc=_("Setzt das Objekt mit seiner Unterseite auf Z = 0."),
+    doc=_("Setzt das Objekt mit seiner Unterseite auf das Druckbett."),
 )
 def place_object_on_bed(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]

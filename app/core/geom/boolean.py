@@ -25,8 +25,8 @@ from dataclasses import dataclass, field
 from typing import Final, Literal, Protocol
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, BooleanFailedError
 from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData

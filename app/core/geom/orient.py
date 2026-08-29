@@ -15,8 +15,8 @@ import math
 from dataclasses import dataclass, field
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES

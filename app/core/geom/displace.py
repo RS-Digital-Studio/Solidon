@@ -25,8 +25,8 @@ import math
 from typing import Final, cast
 
 import numpy as np
+import trimesh
 
-from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, Action, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger

@@ -330,17 +330,12 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tools/make_examples.py
 
-      - name: Rechen- und Prüfmodule kompilieren, Manifest signieren
-        # Die schnelle Konturverkettung aus §31 muss auf genau der Plattform
-        # entstehen, für die PyInstaller gleich darunter das Kundenpaket baut.
-        # Die Suite hat einen eigenen frischen Runner; ihr Bau reist nicht bis
-        # hierher. V4c (Konzept §2 I H4/H5) verlangt daneben das Prüfmodul als
-        # Maschinencode, dessen Manifest die vier Grenzdateien deckt. Cython
-        # und setuptools sind reine Bau-Abhängigkeiten und landen nicht im
-        # Paket.
+      - name: Prüfmodul kompilieren und Manifest signieren
+        # V4c (Konzept §2 I H4/H5): das Prüfmodul reist als Maschinencode,
+        # das Manifest deckt die vier Grenzdateien. Cython und setuptools
+        # sind reine Bau-Abhängigkeiten und landen nicht im Paket.
         run: |
           python -m pip install -c constraints.txt cython setuptools
-          python tools/build_slice_core.py
           python tools/build_licence_module.py
 
       - name: Bauen
