@@ -45,6 +45,7 @@
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — „assert gebaut“ fragte, ob das Wörterbuch voll ist, statt ob Operationen darin stehen; der Test verglich null und blieb in der Mutationsprobe grün.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
+- [Testprojekt trifft den Fall nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was der Test hineinlegt; ausgeliefert enthält, was die Anwendung erzeugt — acht von neun Beispielen fielen, der grüne Test sah keines.
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` um den Aufruf läuft ins Leere; nach dem Ergebnis fragen, nicht nach dem Grund.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; wer eines vergisst, misst seinen eigenen Aufbau und hält ihn für einen Fehler.
 
