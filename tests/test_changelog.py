@@ -233,3 +233,75 @@ def test_no_language_uses_a_straight_quotation_mark(language: str) -> None:
         f"changelog/{language}.md: gerades Anführungszeichen in Zeile(n) "
         f"{', '.join(str(n) for n in getroffen)}"
     )
+
+
+#: Wörter, hinter denen in den Presseanschreiben eine Punktzahl steht —
+#: deutsch und englisch. Kuratiert: Eine Zahl steht in solchen Texten auch
+#: für eine Version, ein Datum oder einen Preis, und nur die Zahl **dieser**
+#: Wendungen ist der Changelog.
+ZAEHLWORTE = (
+    "ausgewählte",
+    "für Nutzer sichtbare",
+    "Nutzeränderungen",
+    "curated",
+    "user-facing",
+)
+
+#: „insgesamt 241." — die Zahl steht auch ohne Zählwort dahinter, wenn der
+#: Satz davor schon eines genannt hat.
+NACKTE_ZAHL = re.compile(r"(?:insgesamt|contains|now contains)\s+(\d{2,4})")
+
+
+def test_the_press_drafts_count_the_same_changes() -> None:
+    """Die Zahl in den Anschreiben ist die des Changelogs — heute noch.
+
+    Am 29.08.2026 standen morgens 220 in vier Entwürfen und abends waren es
+    241: Ein Nachtrag von einundzwanzig Punkten hatte die Zahl überholt, und
+    keine Prüfung sah es. Eine falsche Zahl in einer Mail an eine Redaktion ist
+    teurer als eine im Programm — sie lässt sich nicht mehr zurücknehmen.
+
+    Erlaubt sind genau zwei Werte: die Punkte der aktuellen Version und die
+    Summe über alle. Was ein Entwurf sonst als Änderungszahl nennt, ist ein
+    Fund.
+    """
+    ordner = CHANGELOG.parent / "marketing" / f"presse-{APP_VERSION}"
+    if not ordner.is_dir():
+        pytest.skip(f"keine Presseentwürfe für {APP_VERSION}")
+
+    quelle = (CHANGELOG / f"{SOURCE_LANGUAGE}.md").read_text(encoding="utf-8")
+    versionen = re.findall(r"^## (\S+)", quelle, re.MULTILINE)
+    dieser_stand = len(changelog_for(APP_VERSION, SOURCE_LANGUAGE))
+    alle = sum(len(changelog_for(version, SOURCE_LANGUAGE)) for version in versionen)
+    assert alle >= dieser_stand > 0, f"gezählt wurden {alle} und {dieser_stand}"
+    erlaubt = {dieser_stand, alle}
+
+    # Auch die Versandseite: Sie trägt heute keine Zahl, und morgen
+    # vielleicht doch — eine Datei, die niemand prüft, ist der Ort, an dem
+    # die nächste falsche steht.
+    entwürfe = sorted(
+        pfad for muster in ("*.eml", "*.md", "*.html") for pfad in ordner.glob(muster)
+    )
+    assert entwürfe, f"{ordner} ist leer — dann prüft der Test nichts"
+
+    funde = []
+    gefundene_zahlen = 0
+    for pfad in entwürfe:
+        text = " ".join(pfad.read_text(encoding="utf-8").split())
+        zahlen = [
+            int(treffer)
+            for wort in ZAEHLWORTE
+            for treffer in re.findall(rf"(\d{{2,4}})\s+{re.escape(wort)}", text)
+        ]
+        zahlen += [int(treffer) for treffer in NACKTE_ZAHL.findall(text)]
+        gefundene_zahlen += len(zahlen)
+        funde += [
+            f"{pfad.name}: nennt {zahl}, richtig wären {sorted(erlaubt)}"
+            for zahl in zahlen
+            if zahl not in erlaubt
+        ]
+
+    assert gefundene_zahlen >= 4, (
+        f"nur {gefundene_zahlen} Zahlen gefunden — das Muster greift nicht mehr, "
+        f"oder die Entwürfe nennen keine Zahl mehr"
+    )
+    assert not funde, "\n".join(funde)

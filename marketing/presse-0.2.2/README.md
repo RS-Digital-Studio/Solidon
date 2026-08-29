@@ -13,10 +13,17 @@ Texte erklären den für die jeweilige Redaktion notwendigen Kontext aus sich
 heraus.
 
 „Seit 0.1“ bedeutet in den Anschreiben: Seit der ersten öffentlichen
-0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **220 ausgewählte,
-für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 40 Punkte bis
+0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **241 ausgewählte,
+für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 61 Punkte bis
 einschließlich 0.2.2. Die Zahl ist kein Commit-Zähler und wird in den Mails auch
 nicht so dargestellt.
+
+**Die Zahl wandert, solange an der 0.2.2 gearbeitet wird**, und sie steht in
+vier Anschreiben (01, 02, 05, 11). Sie stimmte am 29.08.2026 morgens auf 220
+und war am selben Abend um einundzwanzig Punkte überholt.
+`tests/test_changelog.py::test_the_press_drafts_count_the_same_changes`
+hält beide Seiten zusammen — wer den Changelog ergänzt, bekommt einen roten
+Lauf statt einer falschen Zahl in einer Mail an eine Redaktion.
 
 ## Verteiler
 
