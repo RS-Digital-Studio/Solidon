@@ -48,6 +48,7 @@ dans `website/version.json`.
 
 - Chaque bobine peut porter ses propres températures, refroidissement, rétraction et valeurs de matière. Elles restent en place lors d'un changement de qualité.
 - Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre.
+- Au premier démarrage, Solidon reprend les filaments chargés dans le trancheur avec leur nom, type, couleur et profil du fabricant. Les bobines ne sont pas à recréer.
 - Les exemples fournis ne remplacent plus l'imprimante et le matériau choisis par les réglages qui ont servi à créer leurs aperçus.
 - Dans le Flatpak Linux, Solidon trouve et lance les trancheurs de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.
 

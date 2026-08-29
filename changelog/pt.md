@@ -47,6 +47,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Cada bobina pode ter temperaturas, arrefecimento, retração e valores de material próprios. Esses valores mantêm-se quando muda o nível de qualidade.
 - Os valores de cada bobina chegam ao ficheiro 3MF e ao slicer no lugar de material correto. Uma cor já não recebe por engano os valores de impressão de outra.
+- No primeiro arranque, o Solidon importa os filamentos carregados no slicer com nome, tipo, cor e perfil do fabricante. Não precisa de voltar a criar as bobinas.
 - Os exemplos incluídos já não substituem a impressora e o material escolhidos pelas definições usadas para criar as respetivas pré-visualizações.
 - No Flatpak Linux, o Solidon encontra e inicia slicers do computador, incluindo AppImages. Ambos os programas conseguem aceder à pasta de trabalho partilhada.
 

@@ -47,6 +47,7 @@ it into `website/version.json`.
 
 - Each filament spool can carry its own temperatures, cooling, retraction and material values. These values remain when you change the quality level.
 - Values from individual spools reach the 3MF file and slicer in the correct material slot. One colour no longer picks up another colour's print values by mistake.
+- On first launch, Solidon imports the filaments loaded in the slicer with their name, type, colour and manufacturer profile. Spools do not need to be entered again.
 - Included examples no longer replace your chosen printer and material with the settings used to build their preview images.
 - In the Linux Flatpak, Solidon finds and starts slicers on the host, including AppImages. Both programs can reach the shared working folder.
 

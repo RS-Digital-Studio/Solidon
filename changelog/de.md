@@ -72,6 +72,7 @@ Nutzen da und sonst nichts.
 
 - Jede Filamentspule kann eigene Temperaturen, Kühlung, Rückzug und Materialwerte tragen. Die Werte bleiben auch erhalten, wenn Sie die Qualitätsstufe wechseln.
 - Die Werte der einzelnen Spulen erreichen 3MF-Datei und Slicer für den richtigen Materialplatz. Eine Farbe nimmt nicht mehr versehentlich die Druckwerte einer anderen mit.
+- Beim ersten Start übernimmt Solidon die im Slicer eingelegten Filamente mit Name, Typ, Farbe und Herstellerprofil. Die Spulen müssen nicht noch einmal angelegt werden.
 - Mitgelieferte Beispiele überschreiben den gewählten Drucker und das Material nicht mehr mit den Einstellungen, mit denen ihre Vorschaubilder gebaut wurden.
 - Im Linux-Flatpak findet und startet Solidon Slicer auf dem Rechner, auch als AppImage. Der gemeinsame Arbeitsordner ist für beide Programme erreichbar.
 
