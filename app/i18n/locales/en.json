@@ -537,7 +537,7 @@
   "Das war kein gültiges JSON.": "That was not valid JSON.",
   "Dasselbe Fenster nach dem Fertigstellen: Aus der Zeichnung ist ein Körper geworden, der im Objektbaum, im Verlauf und in der Ansicht steht. Der Kreis der Zeichnung ist ein Loch im Teil.": "The same window after finishing: the drawing has become a body that stands in the object tree, in the history and in the view. The circle of the drawing is a hole in the part.",
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Export the same part several times with stepped values, instead of editing by hand.",
-  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts „Baustein einsetzen“, Deckel erzeugen.": "The same works with any box that already exists: click the face at the opening, right-click „Insert a part“, create a lid.",
+  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts *Bausteine*, dann *Deckel erzeugen*.": "The same works with any box that already exists: click the face at the opening, right-click *Parts*, then *Create lid*.",
   "Datei": "File",
   "Datei wählen": "Choose a file",
   "Datei wählen …": "Choose a file …",

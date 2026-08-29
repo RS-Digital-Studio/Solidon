@@ -642,7 +642,7 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         closing=_(
             "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der "
-            "Öffnung anklicken, mit rechts „Baustein einsetzen“, Deckel erzeugen."
+            "Öffnung anklicken, mit rechts *Bausteine*, dann *Deckel erzeugen*."
         ),
     ),
 )

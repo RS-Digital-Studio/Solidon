@@ -537,7 +537,7 @@
   "Das war kein gültiges JSON.": "Eso no era JSON válido.",
   "Dasselbe Fenster nach dem Fertigstellen: Aus der Zeichnung ist ein Körper geworden, der im Objektbaum, im Verlauf und in der Ansicht steht. Der Kreis der Zeichnung ist ein Loch im Teil.": "La misma ventana después de finalizar: el dibujo se ha convertido en un cuerpo que figura en el árbol de objetos, en el historial y en la vista. El círculo del dibujo es un agujero en la pieza.",
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Exportar la misma pieza varias veces con valores escalonados, en lugar de modificarla a mano.",
-  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts „Baustein einsetzen“, Deckel erzeugen.": "Lo mismo funciona con cualquier caja que ya exista: haga clic en la cara de la abertura, clic derecho „Insertar un bloque“, crear una tapa.",
+  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts *Bausteine*, dann *Deckel erzeugen*.": "Lo mismo funciona con cualquier caja que ya exista: haga clic en la cara de la abertura, clic derecho *Bloques*, luego *Generar tapa*.",
   "Datei": "Archivo",
   "Datei wählen": "Elegir un archivo",
   "Datei wählen …": "Elegir un archivo …",

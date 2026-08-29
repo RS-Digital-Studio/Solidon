@@ -537,7 +537,7 @@
   "Das war kein gültiges JSON.": "Ce n'était pas du JSON valide.",
   "Dasselbe Fenster nach dem Fertigstellen: Aus der Zeichnung ist ein Körper geworden, der im Objektbaum, im Verlauf und in der Ansicht steht. Der Kreis der Zeichnung ist ein Loch im Teil.": "La même fenêtre après validation : le dessin est devenu un corps qui figure dans l'arbre des objets, dans l'historique et dans la vue. Le cercle du dessin est un trou dans la pièce.",
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Exporter la même pièce plusieurs fois avec des valeurs étagées, au lieu de modifier à la main.",
-  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts „Baustein einsetzen“, Deckel erzeugen.": "Cela marche avec toute boîte déjà présente : cliquez sur la face de l'ouverture, clic droit „Insérer un bloc“, créer un couvercle.",
+  "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, mit rechts *Bausteine*, dann *Deckel erzeugen*.": "Cela marche avec toute boîte déjà présente : cliquez sur la face de l'ouverture, clic droit *Blocs*, puis *Créer un couvercle*.",
   "Datei": "Fichier",
   "Datei wählen": "Choisir un fichier",
   "Datei wählen …": "Choisir un fichier …",
