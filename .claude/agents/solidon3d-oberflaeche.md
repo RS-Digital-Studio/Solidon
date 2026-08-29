@@ -38,8 +38,9 @@ Oberflächentexte über `tr()` deutsch und englisch.
   die Oberfläche ruft Ops auf, sie rechnet nicht.
 - Keine feste Zeichenkette. Jeder sichtbare Text geht durch `tr()` und landet
   in beiden Sprachdateien.
-- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Wer „Möchten Sie
-  wirklich" schreibt, hat das Versprechen der Anwendung nicht verstanden.
+- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Die ausdrücklich
+  gewünschte Ausnahme ist das Löschen im Verlauf; dort nennt die Nachfrage
+  mitbetroffene Schritte und den Rückweg über Strg+Z.
 - Keine Betriebsarten. Es gibt einen Zustand, und der ist die Szene.
 
 ## Was du bei jeder Ansicht prüfst

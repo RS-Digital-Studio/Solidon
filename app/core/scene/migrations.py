@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 16
+FORMAT_VERSION: Final = 17
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +297,19 @@ def _keep_reports_without_suggestions_valid(data: dict[str, Any]) -> dict[str, A
     return data
 
 
+def _allow_removed_operations(data: dict[str, Any]) -> dict[str, Any]:
+    """16 → 17: Änderungsseiten können einen gelöschten Schritt tragen.
+
+    Seit v12 enthält ``edited_ops`` vollständige Fassungen eines geänderten
+    Schritts. Ab v17 darf dort auch ``null`` stehen: Auf dieser Seite der
+    Transaktion ist der Schritt entfernt, auf der anderen steht seine Fassung
+    für Undo und Redo. Alte Dateien enthalten kein solches ``null`` und
+    brauchen deshalb keine inhaltliche Umrechnung; die Versionsgrenze schützt
+    sie vor einer älteren Anwendung, die den Wert nicht lesen könnte.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -314,6 +327,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=13, to_version=14, apply=_point_strokes_stay_but_stop_computing),
     Step(from_version=14, to_version=15, apply=_protect_filament_metadata),
     Step(from_version=15, to_version=16, apply=_keep_reports_without_suggestions_valid),
+    Step(from_version=16, to_version=17, apply=_allow_removed_operations),
 )
 
 

@@ -82,16 +82,20 @@ def restore(document: Document, state: DocumentState) -> None:
     if state.material is not None:
         document.material = state.material
     if state.edited_ops is not None:
-        # Der Schritt behält Kennung und Platz, nur seine Fassung wechselt
-        # (§15.4) — deshalb Tausch an Ort und Stelle, kein Entfernen und
-        # Anhängen. Eine Kennung, die es nicht mehr gibt, wird übergangen:
-        # Dann hat eine andere Transaktion den Schritt mitgenommen, und die
-        # Auswertung meldet, was ihr fehlt.
+        # Eine Fassung ersetzt an Ort und Stelle. ``None`` entfernt; eine
+        # Fassung zu einer fehlenden Kennung setzt wieder ein — genau diese
+        # beiden Richtungen braucht das rücknehmbare Löschen seit Format v17.
         for op_id, version in state.edited_ops.items():
+            if version is None:
+                document.ops[:] = [entry for entry in document.ops if entry.id != op_id]
+                continue
             for index, entry in enumerate(document.ops):
                 if entry.id == op_id:
                     document.ops[index] = version
                     break
+            else:
+                document.ops.append(version)
+        document.ops.sort(key=lambda entry: entry.id)
 
 
 #: Eine Änderung, die erst feststeht, wenn die Operationen geplant sind.
@@ -621,6 +625,76 @@ class History:
         changed = dataclasses.replace(entry, op=op_name, params=dict(params))
         _log.info("switched op %s from %s to %s", op_id, entry.op, op_name)
         return self._swap_operation(spec.title, entry, changed)
+
+    def removal_closure(self, op_ids: Sequence[OpId]) -> tuple[OpId, ...]:
+        """Die gewählten Schritte samt späteren, die ohne sie unerfüllbar wären.
+
+        Gleiche Kennungen dürfen weiterleben: Wird etwa eine Bohrung aus einer
+        Kette genommen, steht ihr Eingangskörper noch unter derselben Kennung
+        da, und spätere Verschiebungen bleiben gültig. Erzeugt der gelöschte
+        Schritt dagegen einen neuen Körper, müssen dessen spätere Nutzer mit
+        hinaus. Unabhängige Zweige bleiben stehen.
+
+        Diese Vorschau ist lesend. Die Oberfläche zeigt damit vor der
+        Bestätigung ehrlich, ob außer der Auswahl noch etwas betroffen ist.
+        """
+        selected = {int(op_id) for op_id in op_ids}
+        if not selected:
+            return ()
+        for op_id in selected:
+            self.operation(op_id)
+
+        removed = set(selected)
+        living: set[ObjectId] = set()
+        for entry in self.operations:
+            if entry.id in removed:
+                continue
+            if any(object_id not in living for object_id in entry.inputs):
+                removed.add(entry.id)
+                continue
+            living.difference_update(set(entry.inputs) - set(entry.outputs))
+            living.update(entry.outputs)
+        return tuple(sorted(removed))
+
+    def remove_operations(self, op_ids: Sequence[OpId]) -> Transaction:
+        """Entfernt Schritte als eine vollständig rücknehmbare Transaktion.
+
+        Die ursprünglichen Transaktionen bleiben als Geschichte erhalten; die
+        neue Transaktion trägt auf ihrer Vorher-Seite die vollständigen
+        Operationen und auf ihrer Nachher-Seite ``None``. Dadurch überlebt
+        nicht nur das Löschen das Speichern, sondern auch sein Undo.
+
+        Wenn spätere Operationen frische Ausgaben der Auswahl brauchen, werden
+        sie in derselben Transaktion mitgenommen. Eine halbe Kette mit
+        verschwundenen Eingängen ist kein zulässiger Dokumentzustand (§15.2).
+        """
+        activation.require(activation.CHANGE)
+        removed_ids = self.removal_closure(op_ids)
+        if not removed_ids:
+            raise ValidationError(
+                field="ops",
+                detail=_("Zum Löschen ist kein Schritt ausgewählt."),
+                constraint="empty",
+            )
+
+        versions = {op_id: self.operation(op_id) for op_id in removed_ids}
+        self._reseed()
+        self._forget_undone()
+        changes = DocumentChange(
+            before=DocumentState(edited_ops=versions),
+            after=DocumentState(edited_ops=dict.fromkeys(removed_ids)),
+        )
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=_("Schritt löschen"),
+            ops=(),
+            changes=changes,
+        )
+        self.document.transactions.append(transaction)
+        self._record_numbering()
+        restore(self.document, changes.after)
+        _log.info("removed operation(s) %s", list(removed_ids))
+        return transaction
 
     def _swap_operation(
         self, title: TranslatableText | str, entry: Operation, changed: Operation

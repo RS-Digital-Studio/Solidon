@@ -13,7 +13,8 @@ Geometrie und ändert keine — sie ruft Ops auf.
 **Nichts ist endgültig.** Jede Handlung ist eine Op, jede Op rücknehmbar, jeder
 Wert nachträglich änderbar. Praktisch heißt das: **keine Bestätigungsdialoge
 vor rücknehmbaren Handlungen**, kein „Möchten Sie wirklich", keine Sackgassen
-(Regel 19).
+(Regel 19). Die ausdrücklich gewünschte Ausnahme ist das Löschen im Verlauf:
+Die Nachfrage nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 
 ## Texte
 

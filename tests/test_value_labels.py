@@ -1056,8 +1056,9 @@ def test_an_unknown_step_offers_the_way_to_its_values() -> None:
 
     Ohne *Werte ansehen* wäre der Satz eine Sackgasse: Der Operationsdialog
     wird aus einem Registereintrag gebaut, den es für diesen Schritt nicht
-    gibt, und löschen kann der Verlauf ihn auch nicht (§15.4). Was bleibt, sind
-    die Werte selbst — bei einer Datei aus 0.1.3 der OpenSCAD-Quelltext.
+    gibt. Löschen kann ihn der Verlauf inzwischen (§15.4), doch die Arbeit
+    wäre damit nur weg. Was hier gebraucht wird, sind die Werte selbst — bei
+    einer Datei aus 0.1.3 der OpenSCAD-Quelltext.
     """
     from app.ui.panels import FINDING_ACTIONS
 

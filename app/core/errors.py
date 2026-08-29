@@ -31,10 +31,9 @@ CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
 #:
 #: **Regel 17 verlangt eine Handlung, und lange gab es hier keine ehrliche.**
 #: ``CORRECT_INPUT`` ist falsch — es gibt keine Eingabe zu korrigieren, der
-#: Schritt selbst ist unbekannt. „Verlauf zeigen" ist sinnlos, wenn der Kunde
-#: gerade im Verlauf steht. „Schritt löschen" gibt es nicht: Die Verlaufs-API
-#: kann einen Schritt ändern und zurücknehmen, aber keinen aus der Mitte
-#: entfernen (§15.4). Und ``CANCEL`` ist ausdrücklich kein Rat.
+#: Schritt selbst ist unbekannt. Der Verlauf bietet inzwischen ein
+#: rücknehmbares Löschen aus der Mitte (§15.4), doch damit sind die erhaltenen
+#: Werte nicht lesbar. Und ``CANCEL`` ist ausdrücklich kein Rat.
 #:
 #: Was bleibt, ist das, was wirklich da ist: **die Werte des Schritts.** Ein
 #: Projekt aus einer früheren Fassung trägt sie unverändert weiter — bei einer

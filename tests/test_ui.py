@@ -21,7 +21,14 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
-from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QDialogButtonBox, QToolBar
+from PySide6.QtWidgets import (
+    QApplication,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QMessageBox,
+    QToolBar,
+)
 
 from app.core import errors
 from app.core.export import handover
@@ -439,16 +446,53 @@ def test_no_two_shortcuts_in_the_window_collide(window: MainWindow) -> None:
     Gefunden hätte man die Dublette also erst beim Drücken. Der Test steht hier
     und nicht dort, weil erst das gebaute Fenster beide Seiten kennt.
     """
-    from PySide6.QtGui import QAction, QShortcut
+    from itertools import combinations
 
-    taken: dict[str, list[str]] = {}
+    from PySide6.QtGui import QAction, QShortcut
+    from PySide6.QtWidgets import QWidget
+
+    taken: dict[str, list[tuple[str, Qt.ShortcutContext, tuple[QWidget, ...]]]] = {}
     for action in window.findChildren(QAction):
         for sequence in action.shortcuts():
-            taken.setdefault(sequence.toString(), []).append(action.text() or "(ohne Text)")
+            widgets = tuple(
+                owner for owner in action.associatedObjects() if isinstance(owner, QWidget)
+            )
+            taken.setdefault(sequence.toString(), []).append(
+                (action.text() or "(ohne Text)", action.shortcutContext(), widgets)
+            )
     for shortcut in window.findChildren(QShortcut):
-        taken.setdefault(shortcut.key().toString(), []).append("QShortcut")
+        parent = shortcut.parent()
+        widgets = (parent,) if isinstance(parent, QWidget) else ()
+        taken.setdefault(shortcut.key().toString(), []).append(
+            ("QShortcut", shortcut.context(), widgets)
+        )
 
-    twice = {key: names for key, names in taken.items() if key and len(names) > 1}
+    def overlap(
+        first: tuple[str, Qt.ShortcutContext, tuple[QWidget, ...]],
+        second: tuple[str, Qt.ShortcutContext, tuple[QWidget, ...]],
+    ) -> bool:
+        """Nur getrennte Widget-Bereiche dürfen dieselbe nackte Taste tragen."""
+        _first_name, first_context, first_widgets = first
+        _second_name, second_context, second_widgets = second
+        local = Qt.ShortcutContext.WidgetWithChildrenShortcut
+        if first_context != local or second_context != local:
+            return True
+        return any(
+            left is right or left.isAncestorOf(right) or right.isAncestorOf(left)
+            for left in first_widgets
+            for right in second_widgets
+        )
+
+    twice = {
+        key: [
+            (first[0], second[0])
+            for first, second in combinations(bindings, 2)
+            if overlap(first, second)
+        ]
+        for key, bindings in taken.items()
+        if key
+    }
+    twice = {key: pairs for key, pairs in twice.items() if pairs}
     assert not twice, f"doppelt belegte Tasten führen keine der beiden Aktionen aus: {twice}"
 
 
@@ -2172,26 +2216,85 @@ def test_the_history_shows_titles_not_registry_names(qt_app: QApplication) -> No
 
 
 def test_delete_only_bites_where_a_selection_is_visible(window: MainWindow) -> None:
-    """§2.6: „Entf" war fensterweit gebunden.
+    """§2.6: „Entf" folgt dem Bereich, in dem die Auswahl sichtbar ist.
 
     Wer im Verlauf einen Schritt markierte und die Taste drückte, verlor den
-    ausgewählten **Körper** — man drückt sie in der Erwartung, den Schritt
-    loszuwerden. Rücknehmbar, aber genau die Art Überraschung, die Vertrauen
-    kostet.
+    ausgewählten **Körper**. Jetzt hat der Verlauf seine eigene, gleich
+    begrenzte Handlung; dieselbe Taste meint dort den gewählten Schritt.
 
-    Geprüft wird der Geltungsbereich, nicht das Drücken: eine Taste, die nur
-    im Baum und in der Ansicht gilt, kann im Verlauf nichts anrichten.
+    Geprüft wird der Geltungsbereich, nicht das Drücken: Keine der beiden
+    Handlungen darf in den Bereich der anderen reichen.
     """
-    delete = next(
+    deletes = [
         action
         for action in window.findChildren(QAction)
         if action.shortcut() == QKeySequence("Del")
+    ]
+    object_delete = next(action for action in deletes if action in window.object_tree.actions())
+    history_delete = next(
+        action for action in deletes if action in window.history_panel.list.actions()
     )
 
-    assert delete.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
-    assert delete in window.object_tree.actions(), "im Baum gilt sie"
-    assert delete in window.viewport.actions(), "und in der Ansicht"
-    assert delete not in window.history_panel.actions(), "im Verlauf nicht"
+    assert object_delete.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+    assert object_delete in window.viewport.actions(), "die Objektlöschung gilt auch in der Ansicht"
+    assert object_delete not in window.history_panel.list.actions(), "aber nicht im Verlauf"
+    assert history_delete.shortcutContext() == Qt.ShortcutContext.WidgetWithChildrenShortcut
+    assert history_delete not in window.object_tree.actions(), (
+        "die Schrittlöschung gilt nicht im Baum"
+    )
+
+
+def test_removing_a_history_step_asks_and_can_be_undone(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Roberts ausdrückliche Ausnahme: Vor dem Löschen steht eine Bestätigung.
+
+    Der Dialog nennt zugleich den Ausweg. Nach dem bestätigten Löschen stellt
+    Strg+Z denselben Schritt wieder her; ein Abbruch ließe das Dokument
+    unangetastet.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    op_id = window.session.project.document.ops[0].id
+    shown: list[str] = []
+
+    def reject(box: QMessageBox) -> int:
+        shown.append(box.text())
+        button = next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen"))
+        button.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", reject)
+
+    window.remove_history_operations((op_id,))
+
+    assert [entry.id for entry in window.session.project.document.ops] == [op_id]
+
+    def accept(box: QMessageBox) -> int:
+        shown.append(box.text())
+        button = next(entry for entry in box.buttons() if entry.text() == tr("Löschen"))
+        button.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", accept)
+
+    window.remove_history_operations((op_id,))
+    window.session.wait_for_idle()
+
+    assert shown and "Strg+Z" in shown[0], "der Dialog nennt die Rücknahme"
+    assert window.session.project.document.ops == []
+    removed_rows = [
+        window.history_panel.list.item(row)
+        for row in range(window.history_panel.list.count())
+        if tr("gelöscht") in window.history_panel.list.item(row).text()
+    ]
+    assert removed_rows and removed_rows[0].font().strikeOut(), (
+        "die Ursprungszeile bleibt als gelöschte Geschichte sichtbar"
+    )
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert [entry.id for entry in window.session.project.document.ops] == [op_id]
 
 
 def test_shortcuts_with_a_modifier_stay_window_wide(window: MainWindow) -> None:

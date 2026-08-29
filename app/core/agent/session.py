@@ -430,7 +430,8 @@ class AgentSession:
         * **Zurücknehmen und Anlegen** gehören nicht in denselben Zug (§15.4).
 
         Und die Antwort sagt, was wirklich geschieht: Undo ist ein Stapel, eine
-        Transaktion aus der Mitte nimmt jede jüngere mit
+        Transaktion aus der Mitte nimmt jede jüngere mit. Das getrennte
+        Löschen einer Operation ist kein Undo-Auftrag
         (:func:`~app.core.agent.apply.sweep_for`). Das Modell soll das in
         seinem Antwortsatz nennen können, statt es dem Nutzer zu verschweigen.
         """

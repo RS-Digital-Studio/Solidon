@@ -1098,6 +1098,7 @@ class MainWindow(QMainWindow):
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
         self.filaments = FilamentPanel(self)
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
@@ -2568,6 +2569,11 @@ class MainWindow(QMainWindow):
         # vor dem Klick, mit Grund im Hinweistext. Die Hürde selbst liegt im
         # Kern; das hier ist die Freundlichkeit davor.
         locked = not activation.state().unlocked
+        # Ein offener Editor sammelt gerade Gesten für genau eine Operation.
+        # Einen älteren Schritt darunter zu löschen würde seinen Vorschauzustand
+        # entwerten; außerdem trägt der Skizzeneditor selbst Entf. Deshalb gilt
+        # hier dieselbe Sperre wie für alle anderen schreibenden Aktionen.
+        self.history_panel.remove_action.setEnabled(not locked and not gesturing)
 
         # Welcher Bauart die Auswahl ist — das Menü fragte bisher nur, wie
         # viele Objekte darin liegen. „Verrunden" war damit bei einem Netz
@@ -3557,15 +3563,14 @@ class MainWindow(QMainWindow):
     def bake_sculpt(self, op_id: int) -> None:
         """Den Stand einer Formsitzung festschreiben — mit Nachfrage.
 
-        **Die einzige Bestätigung vor einer Handlung.** (Daneben gibt es zwei
-        Fragen anderer Art: das Wiederherstellungs-Angebot nach einem Absturz
-        und Speichern/Verwerfen beim Schließen — die eine ist ein Angebot,
-        die andere schützt Unwiederbringliches.) Regel 19 verbietet
-        Bestätigungsdialoge vor rücknehmbaren Handlungen, und fast alles hier
-        ist rücknehmbar; diese Handlung ist es nicht folgenlos, denn danach
-        lässt sich an den Zügen nichts mehr ändern. Deshalb steht im Dialog
-        auch nicht „Sind Sie sicher", sondern was danach nicht mehr geht
-        (Entscheidung D, §2.7).
+        **Eine von zwei Bestätigungen vor einer Handlung.** (Daneben gibt es
+        die ausdrücklich gewünschte Ausnahme beim Löschen im Verlauf sowie
+        zwei Fragen anderer Art: Wiederherstellung nach einem Absturz und
+        Speichern/Verwerfen beim Schließen.) Regel 19 verbietet sonst
+        Bestätigungsdialoge vor rücknehmbaren Handlungen; diese Handlung ist
+        es nicht folgenlos, denn danach lässt sich an den Zügen nichts mehr
+        ändern. Deshalb steht im Dialog auch nicht „Sind Sie sicher", sondern
+        was danach nicht mehr geht (Entscheidung D, §2.7).
         """
         box = QMessageBox(
             QMessageBox.Icon.Question,
@@ -3588,6 +3593,50 @@ class MainWindow(QMainWindow):
             return
         if not self.session.bake_strokes(op_id):
             self.announce(tr("Dieser Schritt lässt sich nicht festschreiben."))
+
+    def remove_history_operations(self, op_ids: Sequence[int]) -> None:
+        """Gewählte Verlaufsschritte nach ausdrücklicher Bestätigung löschen.
+
+        Das ist die vom Nutzer gewünschte Ausnahme zu Regel 19. Die Handlung
+        bleibt als eine Transaktion rücknehmbar; die Nachfrage macht vor allem
+        sichtbar, wenn spätere abhängige Schritte mit entfernt werden.
+        """
+        chosen = tuple(dict.fromkeys(int(op_id) for op_id in op_ids))
+        removing = self.session.removal_closure(chosen)
+        if not removing:
+            return
+        if len(chosen) > 1 and len(removing) > len(chosen):
+            message = tr(
+                "Mit den gewählten Schritten werden auch weitere spätere abhängige Schritte "
+                "gelöscht. Strg+Z stellt alle gemeinsam wieder her."
+            )
+        elif len(chosen) > 1:
+            message = tr(
+                "Die gewählten Schritte werden aus dem Verlauf gelöscht. "
+                "Strg+Z stellt alle gemeinsam wieder her."
+            )
+        elif len(removing) > len(chosen):
+            message = tr(
+                "Mit dem gewählten Schritt werden auch spätere abhängige Schritte "
+                "gelöscht. Strg+Z stellt alle gemeinsam wieder her."
+            )
+        else:
+            message = tr(
+                "Der gewählte Schritt wird aus dem Verlauf gelöscht. Strg+Z stellt ihn wieder her."
+            )
+        box = QMessageBox(
+            QMessageBox.Icon.Question,
+            tr("Schritt löschen"),
+            message,
+            QMessageBox.StandardButton.NoButton,
+            self,
+        )
+        remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is not remove:
+            return
+        self.session.remove_operations(chosen)
 
     def action_undo(self) -> None:
         # Läuft eine Formsitzung, nimmt Strg+Z den letzten Zug zurück und
@@ -8058,7 +8107,8 @@ class MainWindow(QMainWindow):
         ``evaluate.unknown_operation`` sagt dem Kunden, seine Werte blieben
         erhalten — und bis hierhin gab es keinen Weg, an sie heranzukommen: Der
         Operationsdialog wird aus einem Registereintrag gebaut, den es für
-        diesen Schritt nicht gibt, und löschen kann der Verlauf ihn auch nicht.
+        diesen Schritt nicht gibt. Löschen hilft beim Aufräumen; zum Bergen
+        der Arbeit braucht es weiterhin diese Ansicht.
 
         Derselbe Handler bedient die Ausnahme aus ``History._spec_of``. Damit
         endet die Reise — Datei öffnen, Befund lesen, Verlauf zeigen, Schritt

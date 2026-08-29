@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
@@ -787,6 +787,26 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def removal_closure(self, op_ids: Sequence[int]) -> tuple[int, ...]:
+        """Gewählte und davon abhängige Schritte für die Nachfrage bestimmen."""
+        try:
+            return self.history.removal_closure(op_ids)
+        except AppError as error:
+            self.failed.emit(error)
+            return ()
+
+    def remove_operations(self, op_ids: Sequence[int]) -> bool:
+        """Verlaufsschritte als eine rücknehmbare Transaktion löschen."""
+        try:
+            self.history.remove_operations(op_ids)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return True
+
     def change_inputs(self, op_id: int, inputs: list[str]) -> None:
         """Andere Objekte für einen Schritt, der schon im Stapel steht (§15.4).
 
@@ -827,11 +847,11 @@ class Session(QObject):
         zwanzig Etappen kostet jede Auswertung zwanzig Durchgänge, und genau
         das ist der Grund für diese Handlung.
 
-        **Der einzige Fall, in dem eine Nachfrage richtig ist.** Regel 19
-        verbietet Bestätigungsdialoge vor rücknehmbaren Handlungen; diese ist
-        nicht folgenlos rücknehmbar, denn danach lässt sich an den Zügen nichts
-        mehr ändern. Die Nachfrage stellt der Aufrufer, nicht diese Methode —
-        der Kern fragt nie selbst (Regel 21).
+        **Einer von zwei Fällen, in denen eine Nachfrage richtig ist.** Neben
+        dem ausdrücklich gewünschten Löschen aus der Mitte des Verlaufs ist
+        diese Handlung nicht folgenlos rücknehmbar, denn danach lässt sich an
+        den Zügen nichts mehr ändern. Die Nachfrage stellt der Aufrufer, nicht
+        diese Methode — der Kern fragt nie selbst (Regel 21).
         """
         result = self.last_result
         operation = next((entry for entry in self.project.document.ops if entry.id == op_id), None)

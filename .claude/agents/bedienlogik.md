@@ -44,9 +44,9 @@ Antworte auf Deutsch, mit echten Umlauten, ohne Emojis.
 **Nichts ist endgültig.** Jede Handlung ist eine Op, jede Op rücknehmbar, jeder
 Wert nachträglich änderbar. Daraus folgt unmittelbar:
 
-- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Kein „Möchten Sie
-  wirklich". Wer einen solchen Dialog einbaut, sagt dem Nutzer, dass er dem
-  Undo nicht trauen soll.
+- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Die ausdrücklich
+  gewünschte Ausnahme ist das Löschen im Verlauf: Die Nachfrage nennt
+  mitbetroffene Schritte und den Rückweg über Strg+Z.
 - Keine Sackgassen. Aus jedem Zustand führt ein Weg zurück und ein Weg weiter.
 - Keine Betriebsarten. Es gibt einen Zustand, und der ist die Szene.
 

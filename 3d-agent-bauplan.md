@@ -171,7 +171,9 @@ bleiben. Vielseitigkeit gehört in die Tiefe, nicht an die Oberfläche.
 jeder Wert nachträglich änderbar. Das ist der eigentliche Gewinn des
 non-destruktiven Aufbaus — und er muss spürbar sein, nicht bloß vorhanden.
 Praktisch heißt das: keine Bestätigungsdialoge vor rücknehmbaren Handlungen,
-kein „Möchten Sie wirklich", keine Sackgassen.
+kein „Möchten Sie wirklich", keine Sackgassen. Die ausdrücklich gewünschte
+Ausnahme ist das Löschen eines Verlaufsschritts: Die Nachfrage nennt die
+Folge und Strg+Z, besonders wenn abhängige Schritte mit betroffen sind.
 
 ### 2.2 Vier Hauptwege
 
@@ -867,6 +869,16 @@ im Verlauf markiert. Alles davor bleibt bedienbar.
 ### 15.4 Keine Verzweigungen
 Eine Änderung nach einem Undo verwirft die abgeschnittenen Ops — mit
 Rückfrage, sobald es mehr als eine ist. Verzweigungen stehen in §41.
+
+Ein gewählter Schritt darf unabhängig davon als **neue Transaktion** aus der
+Mitte gelöscht werden. Spätere Ops, deren frische Eingabe damit verschwindet,
+gehen in derselben Transaktion mit; unabhängige Zweige bleiben stehen. Behält
+die Kette dieselbe Objektkennung — etwa vor und nach einer Bohrung —, arbeiten
+spätere Schritte auf dem Zustand davor weiter. Eine Nachfrage nennt vorab,
+ob abhängige Schritte betroffen sind, und dass Strg+Z alles gemeinsam
+wiederherstellt. Die ursprüngliche Zeile bleibt durchgestrichen als Geschichte
+sichtbar. Das ist keine Verzweigung: Es gibt weiterhin genau einen aktuellen
+Stack.
 
 ### 15.5 Transaktionen
 Mehrere Ops können als benannte Gruppe eingetragen werden. **Undo nimmt die

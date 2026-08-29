@@ -12,7 +12,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -174,11 +174,10 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # den jemand geschrieben hat. Ohne sie wäre der Befund eine Sackgasse: ein
     # Satz, der „Ihre Werte bleiben erhalten" verspricht, und kein Weg dorthin.
     #
-    # **Ein *Schritt löschen* steht bewusst nicht dabei.** Die Verlaufs-API
-    # kann einen Schritt ändern und zurücknehmen, aber keinen aus der Mitte
-    # entfernen — spätere Operationen bauen auf seinen Ausgaben auf (§15.4).
-    # Wer es anbieten will, baut es zuerst in ``History``; ein Knopf, den
-    # niemand bedienen kann, wäre schlechter als einer weniger.
+    # **Löschen liegt im Verlauf selbst.** Auch ein unbekannter Schritt lässt
+    # sich dort als rücknehmbare Transaktion entfernen; dieser Befund führt
+    # deshalb dorthin. *Werte ansehen* bleibt vorn, weil Löschen die Arbeit
+    # aufräumt, ihren Inhalt aber nicht vorab zugänglich macht (§15.4).
     "evaluate.unknown_operation": (SHOW_STEP_VALUES, SHOW_HISTORY),
     # Drei Antworten auf „passt nicht": kleiner machen, teilen — oder einen
     # anderen Drucker nehmen. Die dritte fehlte, solange ihr Handler fehlte,
@@ -1871,6 +1870,8 @@ class HistoryPanel(QWidget):
 
     operationActivated = Signal(int)
     """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
+    removalRequested = Signal(object)
+    """Die gewählten Operationen sollen nach einer Nachfrage gelöscht werden."""
     bakeRequested = Signal(int)
     """Der Stand einer Formsitzung soll festgeschrieben werden (Entscheidung D).
 
@@ -1898,6 +1899,11 @@ class HistoryPanel(QWidget):
         )
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
+        self.remove_action = QAction(tr("Schritt löschen …"), self.list)
+        self.remove_action.setShortcut(QKeySequence("Del"))
+        self.remove_action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self.remove_action.triggered.connect(self._request_selected_removal)
+        self.list.addAction(self.remove_action)
         self._room: int | None = None
         """Wie beim Objektbaum: die zugeteilte Höhe, ``None`` bis sie kommt."""
         self._bakeable: frozenset[int] = frozenset()
@@ -1965,6 +1971,15 @@ class HistoryPanel(QWidget):
         """
         self.list.clear()
         titles = {entry.id: _op_title(entry.op) for entry in document.ops}
+        deleted: set[int] = set()
+        for transaction in document.transactions:
+            changes = transaction.changes
+            if changes is None or changes.after.edited_ops is None:
+                continue
+            deleted.update(
+                op_id for op_id, version in changes.after.edited_ops.items() if version is None
+            )
+        deleted_ids = frozenset(deleted)
         self._bakeable = frozenset(
             entry.id
             for entry in document.ops
@@ -1985,21 +2000,35 @@ class HistoryPanel(QWidget):
                 f"{transaction.id} · {tr('Ops')} "
                 + ", ".join(str(entry) for entry in transaction.ops)
             )
-            if len(transaction.ops) == 1:
+            active_ops = tuple(op_id for op_id in transaction.ops if op_id not in deleted_ids)
+            if transaction.ops and not active_ops:
+                item.setText(f"{item.text()}  ({tr('gelöscht')})")
+                font = QFont(item.font())
+                font.setStrikeOut(True)
+                item.setFont(font)
+                item.setForeground(QColor(UNDONE_COLOUR))
+            if len(transaction.ops) == 1 and active_ops:
                 item.setData(Qt.ItemDataRole.UserRole, transaction.ops[0])
             # **Die Zeile trägt auch, was sie umfasst.** ``UserRole`` bleibt
             # die *eine* Operation zum Öffnen — eine Transaktion aus vier
             # Schritten hat keine, und das ist richtig, denn welchen sollte ein
             # Doppelklick zeigen. Für die Mehrfachauswahl zählt dagegen die
             # ganze Transaktion: Wer „Teilung in vier" wählt, meint alle vier.
-            item.setData(OPS_ROLE, tuple(transaction.ops))
+            item.setData(OPS_ROLE, active_ops)
             self.list.addItem(item)
 
             if len(transaction.ops) > 1:
                 for op_id in transaction.ops:
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
-                    child.setData(Qt.ItemDataRole.UserRole, op_id)
-                    child.setData(OPS_ROLE, (op_id,))
+                    if op_id not in deleted_ids:
+                        child.setData(Qt.ItemDataRole.UserRole, op_id)
+                        child.setData(OPS_ROLE, (op_id,))
+                    else:
+                        child.setText(f"{child.text()}  ({tr('gelöscht')})")
+                        font = QFont(child.font())
+                        font.setStrikeOut(True)
+                        child.setFont(font)
+                        child.setForeground(QColor(UNDONE_COLOUR))
                     self.list.addItem(child)
 
         for transaction in reversed(list(undone)):
@@ -2041,24 +2070,37 @@ class HistoryPanel(QWidget):
         if op_id is not None:
             self.operationActivated.emit(int(op_id))
 
+    def _request_selected_removal(self) -> None:
+        """Die sichtbare Auswahl zum bestätigten Löschen weiterreichen."""
+        chosen = self.selected_operations()
+        if chosen:
+            self.removalRequested.emit(chosen)
+
     def _on_context_menu(self, position: QPoint) -> None:
         """Was man mit einem Schritt tun kann, dort, wo er steht.
 
         Bisher gab es nur den Doppelklick, und den findet, wer ihn probiert.
-        Angeboten wird, was der Stapel wirklich kann: einen Schritt öffnen und
-        seine Zahlen ändern (§15.4). Einen Schritt aus der Mitte zu entfernen
-        steht nicht dabei — spätere Operationen bauen auf seinen Ausgaben auf,
-        und ein Menüeintrag, der manchmal geht, ist schlimmer als keiner.
+        Angeboten wird, was der Stapel wirklich kann: einen Schritt öffnen,
+        seine Zahlen ändern oder ihn samt abhängigen Schritten löschen
+        (§15.4). Das Löschen bleibt eine Transaktion und damit rücknehmbar.
         """
         item = self.list.itemAt(position)
         op_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
-        if op_id is None:
+        op_ids = tuple(item.data(OPS_ROLE) or ()) if item is not None else ()
+        if not op_ids:
             return
 
         menu = QMenu(self)
-        action = menu.addAction(tr("Parameter ändern …"))
-        action.triggered.connect(lambda _checked=False: self.operationActivated.emit(int(op_id)))
-        if int(op_id) in self._bakeable:
+        if op_id is not None:
+            action = menu.addAction(tr("Parameter ändern …"))
+            action.triggered.connect(
+                lambda _checked=False: self.operationActivated.emit(int(op_id))
+            )
+        remove = menu.addAction(tr("Schritt löschen …"))
+        remove.triggered.connect(
+            lambda _checked=False, chosen=op_ids: self.removalRequested.emit(chosen)
+        )
+        if op_id is not None and int(op_id) in self._bakeable:
             # Nur an einer Formsitzung, und nur an einer, die noch gerechnet
             # wird: Ein Eintrag, der an jedem Schritt steht und an fast keinem
             # etwas tut, ist einer, den man nicht mehr liest.

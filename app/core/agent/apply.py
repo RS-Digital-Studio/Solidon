@@ -199,12 +199,11 @@ def sweep_for(document: Document, transaction_id: str) -> tuple[TransactionId, .
 
     Leer heißt: diese Kennung steht nicht (mehr) im Verlauf.
 
-    Der Verlauf ist ein Stapel ohne Verzweigungen (§15.4), und ``History``
-    bietet nichts an, um einen Eintrag aus der Mitte herauszupflücken — es
-    gibt keine kleinere Antwort als „die genannte und jede jüngere". Was es
-    gibt, ist die Wahl zwischen stillschweigend tun und vorher sagen; diese
-    Funktion ist das Vorher-Sagen, und beide Seiten fragen dieselbe (§26.5,
-    Regel 16).
+    Der Verlauf ist ein Stapel ohne Verzweigungen (§15.4). Das getrennte
+    Löschen einer Operation aus der Mitte ist eine neue Transaktion und keine
+    Rücknahme einer alten; für *diesen* Auftrag gibt es daher keine kleinere
+    Antwort als „die genannte und jede jüngere". Diese Funktion ist das
+    Vorher-Sagen, und beide Seiten fragen dieselbe (§26.5, Regel 16).
     """
     known = [entry.id for entry in document.transactions]
     if transaction_id not in known:

@@ -85,7 +85,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
-| Ein nicht rechenbarer Schritt ist eine Sackgasse | OpenSCAD ist ausgebaut (26.08.2026) | eine **Anzeige der rohen Werte** und einen Weg, den Schritt loszuwerden. Er lässt sich weder öffnen (kein Registereintrag, kein Dialog) noch löschen (`History` kann nicht aus der Mitte entfernen, §15.4). Der Quelltext einer 0.1.3-Datei ist damit nur im ZIP erreichbar |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
@@ -10732,15 +10731,16 @@ abzubrechen. Der Rest der Szene rechnet, der Prüfbericht nennt den Schritt.
 Vorher gab dieselbe Datei einen **Programmfehler**-Dialog samt
 Fehlerbericht-Knopf — für etwas, das der Kunde selbst gebaut hatte.
 
-- [ ] **Ein Schritt, den diese Fassung nicht rechnen kann, ist eine
-      Sackgasse.** Der Kunde sieht ihn im Verlauf, kann ihn aber weder öffnen
-      (kein Registereintrag, also kein Dialog) noch löschen (`History` kennt
-      kein Entfernen aus der Mitte, §15.4 — spätere Operationen bauen auf
-      seinen Ausgaben auf). Seine Werte — bei einer Datei aus 0.1.3 sein
-      OpenSCAD-Programm — sind nur im ZIP zu erreichen. Fehlt: eine Anzeige
-      der rohen Werte und ein Weg, den Schritt loszuwerden. Der Befund trägt
-      deshalb heute nur `SHOW_HISTORY` als Handlung; ein Knopf, den niemand
-      bedienen kann, wäre schlechter als einer weniger.
+- [x] **Ein Schritt, den diese Fassung nicht rechnen kann, ist keine
+      Sackgasse mehr (29.08.2026).** *Werte ansehen* zeigt seine rohen
+      Parameter — bei einer Datei aus 0.1.3 auch das erhaltene
+      OpenSCAD-Programm. Im Verlauf lässt er sich nun aus der Mitte löschen.
+      Eine Nachfrage nennt abhängige Schritte und Strg+Z; das Löschen selbst
+      ist genau eine Transaktion. Spätere Schritte mit derselben Objektkennung
+      bleiben, Nutzer einer entfallenen frischen Ausgabe gehen gemeinsam mit,
+      unabhängige Zweige nicht. Die gelöschte Ursprungszeile bleibt
+      durchgestrichen sichtbar, und Format v17 erhält beide Seiten für Undo
+      und Redo über Speichern und Öffnen hinweg.
 
 ## Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026)
 

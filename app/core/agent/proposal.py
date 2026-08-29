@@ -51,9 +51,10 @@ class Proposal:
     Undo ist ein Stapel und kennt keine Verzweigungen (§15.4): Zu einem
     älteren Eintrag zu kommen heißt, die neueren mitzunehmen. Solange das
     nirgends stand, kündigte der Vorschlag eine Transaktion an und nahm vier
-    zurück (Regel 16). Es gibt keinen Weg, einen Eintrag aus der Mitte
-    herauszupflücken — also wird gesagt, was geschieht, und die Annahme prüft,
-    dass es beim Anwenden noch dieselben sind.
+    zurück (Regel 16). Das getrennte Löschen einer Operation aus der Mitte ist
+    keine Rücknahme dieser Transaktion — also wird hier weiter gesagt, was
+    Undo tatsächlich tut, und die Annahme prüft, dass es beim Anwenden noch
+    dieselben sind.
 
     Ist die genannte Transaktion die jüngste, steht hier genau sie."""
     questions: list[Question] = field(default_factory=list)

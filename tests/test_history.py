@@ -216,6 +216,81 @@ def test_undo_and_redo_survive_ten_transactions(history: History) -> None:
     assert len(history.operations) == 11
 
 
+def test_a_middle_step_can_be_removed_and_restored(history: History) -> None:
+    """Ein falscher Schritt im Verlauf ist kein Grund, alles danach zu verlieren.
+
+    Eine Operation mit gleicher Ein- und Ausgabe lässt sich aus der Kette
+    herausnehmen: Der Körper davor bleibt unter derselben Kennung da, und der
+    spätere Schritt arbeitet auf ihm weiter. Das Löschen selbst ist eine
+    Transaktion, damit Strg+Z genau diesen Handgriff zurücknimmt.
+    """
+    object_id = create(history)
+    history.apply(_("Erster Name"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    removed_id = history.operations[-1].id
+    history.apply(_("Zweiter Name"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    later_id = history.operations[-1].id
+
+    assert history.removal_closure((removed_id,)) == (removed_id,)
+
+    transaction = history.remove_operations((removed_id,))
+
+    assert transaction.ops == (), "das Löschen fügt keine Operation hinzu"
+    assert [entry.id for entry in history.operations] == [1, later_id]
+
+    history.undo()
+    assert [entry.id for entry in history.operations] == [1, removed_id, later_id]
+
+    history.redo()
+    assert [entry.id for entry in history.operations] == [1, later_id]
+
+
+def test_removing_a_producer_also_removes_only_its_dependants(history: History) -> None:
+    """Kein späterer Schritt bleibt mit einer verschwundenen Eingabe zurück.
+
+    Ein unabhängig erzeugter Körper bleibt dagegen stehen. Das ist die Grenze
+    zwischen einer Abhängigkeitskette und dem bloß späteren Platz im Verlauf.
+    """
+    first = create(history)
+    producer_id = history.operations[-1].id
+    history.apply(_("Abhängig"), [OperationDraft(op="rename_object", inputs=(first,))])
+    dependant_id = history.operations[-1].id
+    create(history)
+    independent_id = history.operations[-1].id
+
+    assert history.removal_closure((producer_id,)) == (producer_id, dependant_id)
+
+    history.remove_operations((producer_id,))
+
+    assert [entry.id for entry in history.operations] == [independent_id]
+    history.undo()
+    assert [entry.id for entry in history.operations] == [
+        producer_id,
+        dependant_id,
+        independent_id,
+    ]
+
+
+def test_a_removed_step_and_its_undo_survive_serialisation(
+    history: History, registry: Registry
+) -> None:
+    """Beide Seiten der Löschung reisen mit der Projektdatei.
+
+    Sonst wäre das Löschen bis zum Speichern rücknehmbar und danach endgültig
+    — genau der Fehler, den die Änderungs-Transaktionen in Format v12 behoben.
+    """
+    create(history)
+    removed_id = history.operations[-1].id
+    history.remove_operations((removed_id,))
+
+    reopened = History(document_from_data(document_to_data(history.document)), registry)
+
+    assert reopened.operations == ()
+    reopened.undo()
+    assert [entry.id for entry in reopened.operations] == [removed_id]
+    reopened.redo()
+    assert reopened.operations == ()
+
+
 def test_a_change_after_undo_discards_the_cut_off_branch(history: History) -> None:
     object_id = create(history)
     history.apply(_("Eins"), [OperationDraft(op="rename_object", inputs=(object_id,))])

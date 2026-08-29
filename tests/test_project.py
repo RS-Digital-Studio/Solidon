@@ -163,6 +163,26 @@ def test_saving_and_loading_keeps_the_stack(filled: Project, tmp_path: Path) -> 
     assert reopened.report.findings[0].code == "ingest.welded"
 
 
+def test_a_deleted_step_stays_undoable_after_loading(filled: Project, tmp_path: Path) -> None:
+    """Format v17 trägt die gelöschte und die wiederherstellbare Fassung."""
+    history = History(filled.document)
+    history.apply(
+        _("Vorübergehend umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Falsch"})],
+    )
+    removed_id = history.operations[-1].id
+    history.remove_operations((removed_id,))
+
+    reopened = load(save(filled, tmp_path / "projekt.p3d"))
+    reopened_history = History(reopened.document)
+
+    assert removed_id not in {entry.id for entry in reopened_history.operations}
+    reopened_history.undo()
+    assert removed_id in {entry.id for entry in reopened_history.operations}
+    reopened_history.redo()
+    assert removed_id not in {entry.id for entry in reopened_history.operations}
+
+
 def test_a_second_round_trip_writes_the_same_bytes(filled: Project, tmp_path: Path) -> None:
     """Bitgleich beim Speichern und Laden — das P0-Abnahmekriterium.
 

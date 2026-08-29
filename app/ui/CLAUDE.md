@@ -114,7 +114,9 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 ## Grenzen
 
 - **Keine feste Zeichenkette** — alles über `tr()` (Regel 20).
-- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen** (Regel 19).
+- **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen** (Regel 19), mit
+  der ausdrücklich gewünschten Ausnahme für das Löschen im Verlauf: Sie
+  nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 - **Keine Bedeutung allein über Farbe** — immer eine zweite Kodierung
   (Regel 18).
 - **Höchstens neun Menüs, zwölf Zeilen je Menü, acht Werkzeuge, acht Felder

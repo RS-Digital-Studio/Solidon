@@ -259,7 +259,7 @@ def state_to_data(state: DocumentState) -> dict[str, Any]:
                 None
                 if state.edited_ops is None
                 else {
-                    str(op_id): operation_to_data(version)
+                    str(op_id): None if version is None else operation_to_data(version)
                     for op_id, version in state.edited_ops.items()
                 }
             ),
@@ -275,7 +275,10 @@ def state_from_data(data: dict[str, Any]) -> DocumentState:
         edited_ops=(
             None
             if edited is None
-            else {int(op_id): operation_from_data(version) for op_id, version in edited.items()}
+            else {
+                int(op_id): None if version is None else operation_from_data(version)
+                for op_id, version in edited.items()
+            }
         ),
         parameters=(
             None
