@@ -1399,7 +1399,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Linien parallel, ein Abstand fest, ein Punkt auf einem anderen. "
             "Wird etwas gezogen, gelten sie weiter.\n\n"
             "**Freiheitsgrad** — was an einer Zeichnung noch wandern kann. "
-            "„Vier Freiheitsgrade sind frei“ heißt: vier Dinge sind noch nicht "
+            "„Vier Freiheitsgrade sind noch frei“ heißt: vier Dinge sind noch nicht "
             "festgelegt. Bei null ist die Zeichnung bestimmt.\n\n"
             "**Bestimmt** — jede Zahl der Zeichnung ist vergeben, nichts "
             "verrutscht mehr. Unbestimmt heißt nicht falsch: Die Zeichnung "
