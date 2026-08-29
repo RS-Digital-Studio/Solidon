@@ -211,7 +211,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 # keine Warnung. ``tests/test_tour.py`` hält die Zahl fest.
                 text=_(
                     "Rechts steht der Prüfbericht — hier drei Hinweise und keine Warnung: "
-                    'verschweißte Doppelpunkte vom Einlesen, „nichts zu reparieren" für '
+                    "doppelte Punkte, die beim Einlesen verschweißt wurden, "
+                    '„nichts zu reparieren" für '
                     "dieses Netz, und die Bohrung, die um die Materialtoleranz gewachsen "
                     "ist. Bei heruntergeladenen Modellen steht dort öfter eine Warnung."
                 ),
