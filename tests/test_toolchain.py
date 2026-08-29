@@ -330,6 +330,43 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     assert all(path.suffix != ".md" for path in upload.local_files())
 
 
+def test_uploading_a_page_includes_its_outdated_stamped_assets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine neue Seite darf nicht auf alte gemeinsame Dateien zeigen.
+
+    **Der Fall.** Am 29.08.2026 lag der neue Changelog auf dem Server, seine
+    Auswahl änderte aber nur das Feld: ``site.js`` war dort noch die Fassung
+    ohne Umschaltlogik. Der HTML-Verweis trug schon den neuen Inhaltsstempel,
+    nur die Bytes hinter der Adresse waren nie mit hochgeladen worden.
+
+    Wer eine Seite auswählt, nimmt deshalb alle von ihr gestempelten Dateien
+    mit, die oben fehlen oder abweichen. Bereits gleiche Dateien bleiben aus
+    dem Upload heraus.
+    """
+    import tools.upload_website as upload
+
+    page = upload.LOCAL_ROOT / "changelog.html"
+    script = upload.LOCAL_ROOT / "site.js"
+    style = upload.LOCAL_ROOT / "style.css"
+    checked: list[Path] = []
+
+    def is_outdated(_root: str, path: Path, _remote_size: int | None) -> bool:
+        checked.append(path)
+        return path == script
+
+    monkeypatch.setattr(upload, "differs", is_outdated)
+
+    selected = upload.with_outdated_page_assets(
+        [page],
+        "solidon3d.de/httpdocs",
+        {"site.js": 1, "style.css": 1, "icon.svg": 1},
+    )
+
+    assert selected == [page, script]
+    assert script in checked and style in checked
+
+
 def test_activation_deployment_separates_public_and_private_roots() -> None:
     """Startwert und Datenbank können nie als Website-Ziele abgeleitet werden."""
     from tools import deploy_activation_server as deployment

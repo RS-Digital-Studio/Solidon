@@ -522,6 +522,51 @@ def differs(root: str, path: Path, remote_size: int | None) -> bool:
     return bool(served != path.read_bytes())
 
 
+def with_outdated_page_assets(
+    files: list[Path],
+    root: str,
+    remote: dict[str, int],
+) -> list[Path]:
+    """Abweichende gestempelte Dateien ausgewählter Seiten mitnehmen.
+
+    Ein Inhaltsstempel in einer HTML-Adresse verhindert nur den Griff in den
+    Browsercache. Er veröffentlicht nicht die Datei hinter der Adresse. Am
+    29.08.2026 lag deshalb der neue Changelog bereits oben, während der Server
+    unter ``site.js`` noch die Fassung ohne seine Versionsumschaltung ausgab:
+    Das Auswahlfeld änderte sich, die sichtbare Karte nicht.
+
+    Ausgewählte HTML-Seiten bilden hier mit ihren gestempelten lokalen
+    Verweisen eine Liefereinheit. Mitgenommen wird nur, was oben fehlt oder
+    in Inhalt beziehungsweise Größe abweicht; große, bereits gleiche Bilder
+    reisen dadurch nicht bei jedem Seitenlauf erneut.
+    """
+    from tools.stamp_assets import LINK, target_of
+
+    selected = list(dict.fromkeys(path.resolve() for path in files))
+    known = set(selected)
+    referenced: list[Path] = []
+    for page in selected:
+        if page.suffix.lower() != ".html":
+            continue
+        text = page.read_text(encoding="utf-8", errors="ignore")
+        for _prefix, reference, stamp, _suffix in LINK.findall(text):
+            if not stamp:
+                continue
+            target = target_of(page, reference).resolve()
+            if target in known or target in referenced:
+                continue
+            if not target.is_file() or LOCAL_ROOT not in target.parents or not wanted(target):
+                continue
+            referenced.append(target)
+
+    for target in referenced:
+        name = remote_name(target)
+        if differs(root, target, remote.get(name)):
+            selected.append(target)
+            known.add(target)
+    return selected
+
+
 def is_address(host: str) -> bool:
     """Ob der Zugang eine IP nennt statt eines Namens.
 
@@ -751,6 +796,9 @@ def main() -> int:
             if not files:
                 print("Der Server hat alles.")
                 return 0
+        elif any(path.suffix.lower() == ".html" for path in files):
+            remote = remote_index(session, "/" + root)
+            files = with_outdated_page_assets(files, root, remote)
         files = hold_back_version(session, root, files)
         print(f"{len(files)} Datei(en) → {access['host']}:{root}")
         for path in files:
