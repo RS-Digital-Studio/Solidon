@@ -48,6 +48,23 @@ Untermenü, auch *Reparatur* mit einem einzigen Eintrag. Wer eine dritte
 Oberfläche baut, die Menütiefe braucht, fragt diese Funktionen — und schreibt
 keine vierte.
 
+### Wo eine Operation steht, entscheidet die Kachel — nicht die Kategorie
+
+`catalogue_operations()` (ebenfalls `surfaces.py`) nennt die Operationen, die
+im Bausteinkatalog eine Kachel haben. **Vier Stellen fragen sie**, und sie
+müssen dieselbe Antwort bekommen: die Menüleiste (`_build_menus` über `skip`),
+das Kontextmenü (`panels._add_operations`), `menu_path` und drei Wächter in
+`tests/`.
+
+Die Frage lautete bis zum 29.08.2026 „steht die Kategorie in `WITHOUT_MENU`",
+und das war eine Näherung: Von den 29 Operationen der Kategorie `parts` haben
+27 eine Kachel, zwei nicht — `create_lid` und `screw_lid` bauen einen Deckel,
+statt einen fertigen einzusetzen. Die Näherung nahm beide aus der Menüleiste
+und stellte sie nirgends hin; im Katalog stehen sie nicht, weil der
+`PARTS.all()` zeigt. **Ein Wächter ist so scharf wie seine weiteste
+Ausnahme** — der Test, der „jede Operation ist im Menü auffindbar" zusichert,
+blieb dabei grün.
+
 `__init__.py` exportiert lazy (siehe `app/core/CLAUDE.md`): neuer Name = drei
 Einträge.
 

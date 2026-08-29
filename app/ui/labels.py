@@ -20,7 +20,6 @@ from app.core import figures
 from app.core.activation import Activation
 from app.core.errors import AppError
 from app.core.registry import MENU_GROUPS as MENU_GROUPS
-from app.core.registry import WITHOUT_MENU as WITHOUT_MENU
 from app.core.registry import group_title as group_title
 from app.core.types import Feature, FeatureId
 from app.core.units import (

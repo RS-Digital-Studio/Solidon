@@ -28,7 +28,6 @@ from app.core.registry.registry import (
     REGISTRY,
     TWIN_TOGGLES,
     VARIANT_GROUPS,
-    WITHOUT_MENU,
     MenuSection,
     OperationSpec,
     Registry,
@@ -370,15 +369,30 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         if spec.name in TWIN_TOGGLES:
             return f"{where} ({_('Option „Flächen und Kanten später bearbeiten“')})"
         return f"{where} ({_('im selben Dialog')})"
-    if spec.category in WITHOUT_MENU:
-        # **Eine Kategorie ohne Menüort nennt den Ort, den sie wirklich hat.**
-        # Die Bausteine stehen seit dem 29.08.2026 nur noch im Katalog; ein
-        # Weg „Bausteine → Mechanik → Filmscharnier" schickte Kunde, Agent und
-        # Handbuch zu einem Menü, das es nicht mehr gibt. Die Bausteingruppe
-        # unten hängt sich an — im Katalog ordnet sie die Kacheln.
-        steps = [str(_("Datei")), str(_("Bausteinkatalog"))]
-    else:
-        steps = [group_title(spec.category)]
+    if spec.name in catalogue_operations():
+        # **Ein Baustein nennt den Ort, den er wirklich hat.**
+        # Die Bausteine der Bibliothek stehen seit dem 29.08.2026 nur noch im
+        # Katalog; ein Weg „Bausteine → Mechanik → Filmscharnier" schickte
+        # Kunde, Agent und Handbuch zu einem Menü, das es nicht mehr gibt.
+        # Gefragt wird nach der Kachel und nicht nach der Kategorie — warum,
+        # steht in :func:`catalogue_operations`.
+        #
+        # **Und der Ersatz darf nicht dieselbe Kette weiterschreiben.** Hier
+        # stand zuerst „Datei → Bausteinkatalog → Mechanik → Bolzenscharnier",
+        # also vier Glieder in einer Pfeilkette — von denen die letzten beiden
+        # keine Menüeinträge sind, sondern Gruppe und Kachel *im Katalogfenster*.
+        # Siebenundzwanzig Werkzeugbeschreibungen nannten das unter dem Vorwort
+        # „Menü:", und wer danach im Datei-Menü ein Untermenü *Mechanik* sucht,
+        # findet keines. Ein Pfeil zwischen zwei Menüs bedeutet „dann dort
+        # weiter"; zwischen Menü und Dialog bedeutet er nichts.
+        #
+        # Der Bruch wird deshalb ausgeschrieben: bis zum Katalog ein Menüweg,
+        # danach ein Satz. Er ist auch die Antwort auf die Zusage von
+        # ``tests/test_agent_suite.py``, dass kein Menüweg tiefer als drei
+        # Ebenen wird — die Leiste faltet höchstens eine Ebene, tiefer *kann*
+        # keiner sein.
+        return _catalogue_path(spec)
+    steps = [group_title(spec.category)]
 
     # **Je Kategorie gefragt, nicht je Gruppe.** ``group_is_flat`` beantwortet
     # dieselbe Frage gröber — alles flach oder jede Kategorie eine Ebene
@@ -388,21 +402,63 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     if spec.category in folded_categories(spec.category, source):
         steps.append(str(CATEGORIES.get(spec.category, spec.category)))
 
-    # Die Bausteingruppe ist dieselbe, nach welcher der Katalog seine Kacheln
-    # ordnet — lazy importiert, weil die Bausteine ihrerseits das Register
-    # laden.
+    steps.append(str(spec.title))
+    return " → ".join(steps)
+
+
+def catalogue_operations() -> frozenset[str]:
+    """Die Operationen, die im Bausteinkatalog eine Kachel haben.
+
+    **Die Trennlinie für den Menüort, und sie liegt an der Bibliothek — nicht
+    an der Kategorie.** Hier stand zuerst eine Menge von Kategorien
+    (``WITHOUT_MENU = {"parts"}``), und das war eine Näherung: Von den
+    neunundzwanzig Operationen der Kategorie ``parts`` haben
+    siebenundzwanzig eine Kachel, zwei nicht — ``create_lid`` und
+    ``screw_lid`` sind Operationen, die einen Deckel *bauen*, und der Katalog
+    zeigt ``PARTS.all()``.
+
+    Die Näherung hat beide aus der Menüleiste genommen, ohne sie irgendwo
+    hinzustellen: gemessen am gebauten Fenster **114 Menüeinträge, kein
+    „Deckel erzeugen" darunter**, im Katalog nicht vorhanden, und
+    :func:`menu_path` schickte jeden Fragenden dorthin. Auch das Kontextmenü
+    einer Fläche verlor sie — also genau der Ort, den §18.5 für sie vorsieht,
+    und den die Tour *dose-mit-deckel* dem Kunden nennt.
+
+    Gefragt wird deshalb nach der Sache: Wer eine Kachel hat, steht im
+    Katalog; wer keine hat, steht im Menü. Lazy importiert, weil die
+    Bausteine ihrerseits das Register laden.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.ops import op_name
+
+    return frozenset(op_name(part.name) for part in PARTS.all())
+
+
+def _catalogue_path(spec: OperationSpec) -> str:
+    """Wo ein Baustein liegt — Menüweg bis zum Katalog, danach ein Satz.
+
+    Getrennt von :func:`menu_path`, weil es zwei verschiedene Auskünfte sind:
+    Ein Menüweg ist eine Kette gleichartiger Schritte, hier wechselt nach dem
+    zweiten das Fenster. Die Bausteingruppe ist dieselbe, nach der der Katalog
+    seine Kacheln ordnet — lazy importiert, weil die Bausteine ihrerseits das
+    Register laden.
+
+    Kennt der Katalog die Gruppe nicht, bleibt der kurze Satz: Eine erfundene
+    Gruppe wäre schlechter als keine (Regel 21).
+    """
     from app.core.knowledge.parts import GROUPS, PARTS
     from app.core.knowledge.parts.ops import op_name
 
+    where = f"{_('Datei')} → {_('Bausteinkatalog …')}"
     part_group = next(
         (part.group for part in PARTS.all() if op_name(part.name) == spec.name),
         None,
     )
     if part_group is not None and part_group in GROUPS:
-        steps.append(str(GROUPS[part_group]))
-
-    steps.append(str(spec.title))
-    return " → ".join(steps)
+        return str(_("{weg}, dort unter {gruppe}: {titel}")).format(
+            weg=where, gruppe=GROUPS[part_group], titel=spec.title
+        )
+    return str(_("{weg}, dort: {titel}")).format(weg=where, titel=spec.title)
 
 
 def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[OperationSpec, ...]:

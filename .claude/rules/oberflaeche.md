@@ -441,6 +441,33 @@ Zwei Folgen für die Oberfläche, beide gemessen am 27.08.2026:
   gestellt, und der Trennstrich hinter dem letzten direkten Block ist die ganze
   Antwort — die Zeilen dahinter tragen ihre Namen selbst.
 
+**Ob eine Operation überhaupt einen Menüort hat, entscheidet ihre Kachel im
+Katalog — nicht ihre Kategorie.** `catalogue_operations()`
+(`app/core/registry/surfaces.py`) ist die eine Quelle; Menüleiste,
+Kontextmenü, `menu_path` und drei Wächter fragen sie. Ein Baustein der
+Bibliothek steht im Katalog mit Bild, weil ein räumliches Teil als Textzeile
+die schlechtere Darstellung ist (§2.6) — im Menü standen 29 davon in sechs
+Untermenüs, jede Zeile eine Vokabel statt einer Form.
+
+Die Frage hing bis zum 29.08.2026 an der Kategorie (`WITHOUT_MENU = {"parts"}`),
+und das ist die Sorte Näherung, die stimmt, bis sie nicht mehr stimmt: 27 der
+29 Operationen dieser Kategorie haben eine Kachel, `create_lid` und
+`screw_lid` nicht. Beide verschwanden damit aus der Menüleiste, ohne im
+Katalog aufzutauchen — gemessen 114 Menüeinträge, kein *Deckel erzeugen*
+darunter, und im Kontextmenü der Fläche ebenso wenig, also an genau dem Ort,
+den §18.5 dafür vorsieht.
+
+Zwei Sätze daraus, und der zweite ist der teurere:
+
+* **Was der Katalog vertritt, ist genau das, was er zeigt.** Ein Untermenü
+  oder ein Eintrag, der auf ihn verweist, darf nur die Ops ersetzen, die
+  darin vorkommen; alles andere steht daneben.
+* **Ein Wächter ist so scharf wie seine weiteste Ausnahme.** Der Test, der
+  „jede Operation ist im Menü auffindbar" zusichert, nahm die *Kategorie* aus
+  — und blieb deshalb grün, während zwei Operationen nirgends standen. Wer
+  eine Ausnahme formuliert, prüft sie an ihren Rändern und nicht an ihrem
+  Normalfall.
+
 **Ein Zeichen darf allein stehen, wenn es entweder ein geeinigtes Bild ist
 oder die Zahl klein und die Stelle fest bleibt.** Der Skizzeneditor lebt vom
 ersten Fall: Linie, Kreis und Bogen sehen in jedem CAD gleich aus. Die obere
@@ -595,8 +622,11 @@ Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
 im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Zwölf Operationen tragen einen, und
-gelesen hat ihn lange allein die Handbuchreferenz — nicht der Dialog, in dem
+wann eine Operation die falsche Wahl ist. Sechsundzwanzig von fünfundneunzig
+Operationen tragen einen (gemessen am 29.08.2026; hier stand „zwölf", und die
+Zahl war mit dem Bestand nicht mitgewachsen — sie ist deshalb jetzt geprüft,
+siehe `tests/test_registry_consistency.py`). Gelesen hat ihn lange allein die
+Handbuchreferenz — nicht der Dialog, in dem
 gerade jemand die Operation anwendet, nicht der Tooltip am Menüeintrag, nicht
 die Werkzeugliste des Agenten. `caveat_line()` (`app/core/registry/surfaces.py`)
 ist die eine Quelle und trägt das Wort davor: Ohne Vorwort liest sich die Grenze

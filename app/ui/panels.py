@@ -58,7 +58,7 @@ from app.core.errors import (
 from app.core.log import get_logger
 from app.core.registry import MENU_TWINS, REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
-from app.core.registry.surfaces import folded_groups
+from app.core.registry.surfaces import catalogue_operations, folded_groups
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
@@ -1235,7 +1235,6 @@ class ObjectTree(QWidget):
         # Er gilt der **Fläche**, die Sichtbarkeit dem Körper. Wer mit rechts
         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
         self._add_sketch_on_face(menu)
-        self._add_catalog(menu)
         self._add_visibility(menu, chosen)
 
         kind = self._feature_kind()
@@ -1342,12 +1341,33 @@ class ObjectTree(QWidget):
         # sonst hält nichts auf der Python-Seite das Untermenü, und sein
         # C++-Objekt wird eingesammelt, während es noch im Menü hängt —
         # dieselbe Falle wie in der Menüleiste.
+        parts_title = str(group_title("parts"))
+        katalog = catalogue_operations()
         for title in sorted(folded):
             submenu = QMenu(title, menu)
             # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
             # stehen die Operationen des exakten Kerns gerade hier drin.
             submenu.setToolTipsVisible(True)
-            self._fill_submenu(submenu, groups[title], kinds)
+            if title == parts_title:
+                # **Das Untermenü der Bausteine führt in den Katalog, statt
+                # ihn nachzubauen** (§2.6). Hier standen siebzehn Zeilen wie
+                # „Heat-Set-Einpressbuchse" — jede eine Vokabel statt einer
+                # Form, und genau die Darstellung, gegen die der Katalog
+                # gebaut wurde. Drinnen steht deshalb der Weg dorthin.
+                #
+                # **Und daneben, was der Katalog nicht zeigt.** Er zeigt
+                # ``PARTS.all()``; *Deckel erzeugen* und *Drehdeckel erzeugen*
+                # haben keine Kachel. Ein Untermenü, das nur den Katalog
+                # nennt, ließ beide verschwinden — an der Fläche, also genau
+                # dort, wo §18.5 sie vorsieht und die Tour sie nennt.
+                self._add_catalog(submenu)
+                own = [spec for spec in groups[title] if spec.name not in katalog]
+                if own:
+                    submenu.addSeparator()
+                    for spec in own:
+                        self._add_operation(submenu, spec, kinds)
+            else:
+                self._fill_submenu(submenu, groups[title], kinds)
             menu.addMenu(submenu)
 
     def _fill_submenu(self, menu: QMenu, specs: Sequence[Any], kinds: Sequence[str]) -> None:
@@ -1501,6 +1521,31 @@ class ObjectTree(QWidget):
         Teil gewählt hat". Von hier aus stimmt beides — die Auswahl steht, und
         der Katalog weiß dadurch, dass er den Hinweis auf die fehlende Stelle
         **nicht** zeigen muss.
+
+        **Er steht an der Stelle des gefalteten Bausteine-Untermenüs, nicht
+        darüber** — und das ist eine Berichtigung, keine Feinheit. Zuerst stand
+        er fest oben im Menü, also *neben* den Bausteinen statt an ihrer
+        Stelle. Am Merkmalsmenü einer Bohrung gemessen:
+
+            Operationen für „hole"                  10
+            Zeilen darüber (mit diesem Eintrag)      3
+            13 > 12  ->  „Bausteine" wird gefaltet
+
+        Ohne ihn sind es zwölf, also genau die Grenze, und alles steht flach.
+        Die eine Zeile hat damit fünf Operationen eine Ebene tiefer geschoben —
+        *Kugellager einsetzen*, *Heat-Set-Einpressbuchse*, *Mutternfalle*,
+        *Schraube*, *Druckbares Gewinde* —, und das sind an einer Bohrung
+        genau die fünf, die überhaupt in Frage kommen. §18.5 nennt diesen Ort
+        „die wichtigste Einzelfunktion"; :meth:`_add_operations` rechnet
+        darüber vor, dass ein gesparter Zeilenplatz gegen einen zusätzlichen
+        Klick ein schlechtes Geschäft ist. Beides stand da, und die Zeile kam
+        trotzdem hinzu: **ein Diff zeigt seine eine Zeile, nicht die Grenze,
+        die sie reißt.**
+
+        Am neuen Ort kostet er nichts, weil er ersetzt statt hinzuzufügen. Wo
+        die Bausteine flach passen, stehen sie flach und der Katalog bleibt
+        über *Datei → Bausteinkatalog …* und Strg+K erreichbar — zwei Wege, die
+        immer offen sind.
         """
         insert = menu.addAction(tr("Baustein einsetzen …"))
         insert.setStatusTip(

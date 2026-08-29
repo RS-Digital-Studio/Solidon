@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.registry import REGISTRY, VARIANT_GROUPS, palette_entries
+from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, palette_entries
 
 pytest.importorskip("PySide6")
 
@@ -1387,19 +1387,25 @@ def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
         # **Der Wächter zeigt seit dem 29.08.2026 auf das Register, nicht auf
         # das Menü.** Vorher stand hier „die Menüleiste zeigt gar keine
         # Bausteine — dann prüft dieser Test nichts", und genau das ist seither
-        # der Sollzustand: Die Kategorie hat keinen Menüort mehr, sie lebt im
-        # Katalog mit Bildern (§2.6, ``WITHOUT_MENU``). Ein Wächter, der den
+        # der Sollzustand: Ein Baustein der Bibliothek hat keinen Menüort mehr,
+        # er lebt im Katalog mit Bildern (§2.6). Ein Wächter, der den
         # Sollzustand für einen Fehler hält, muss mitwandern — geprüft wird
         # jetzt, dass es überhaupt Bausteine **gibt**.
-        parts = [spec.name for spec in REGISTRY.all() if spec.category == "parts"]
-        assert parts, "es gibt keine Bausteine — dann prüft dieser Test nichts"
-        in_bar = [
-            name
-            for name in in_menu
-            if REGISTRY.has(name) and REGISTRY.get(name).category == "parts"
-        ]
+        #
+        # **Gefragt wird nach der Kachel, nicht nach der Kategorie.** Hier
+        # stand ``category == "parts"``, und das ist zu grob: ``create_lid``
+        # und ``screw_lid`` tragen dieselbe Kategorie und haben keine Kachel —
+        # der Katalog zeigt ``PARTS.all()``. Solange die Frage der Kategorie
+        # galt, verlangte dieser Test, dass beide **nicht** im Menü stehen, und
+        # damit schrieb er einen Fehler fest: Sie standen daraufhin nirgends
+        # (gemessen 114 Menüeinträge, kein *Deckel erzeugen* darunter, und im
+        # Katalog auch nicht).
+        katalog = catalogue_operations()
+        assert katalog, "es gibt keine Bausteine — dann prüft dieser Test nichts"
+        in_bar = [name for name in in_menu if name in katalog]
         assert not in_bar, (
-            f"Bausteine gehören in den Katalog, nicht in die Menüleiste (§2.6): {sorted(in_bar)}"
+            f"Bausteine mit Kachel gehören in den Katalog, nicht in die Menüleiste "
+            f"(§2.6): {sorted(in_bar)}"
         )
         assert victim not in in_menu, "der eigene Baustein steht in der Menüleiste"
         assert victim in {entry.name for entry in palette_entries()}, (
@@ -1816,12 +1822,21 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     # neuen Baustein wieder jemand senkt, und die nie sagte, was eigentlich
     # gilt. Die Zusage lautet: **Jede Operation ist im Menü auffindbar**, außer
     # sie ist ein zusammengelegter Zwilling, Mitglied einer Variantengruppe
-    # oder ihre Kategorie hat gar keinen Menüort (``WITHOUT_MENU``, §2.6).
+    # oder sie hat eine Kachel im Bausteinkatalog (§2.6).
+    #
+    # **Die letzte Ausnahme hieß bis zum 29.08.2026 „ihre Kategorie steht in
+    # ``WITHOUT_MENU``", und sie war zu weit.** Von den neunundzwanzig
+    # Operationen der Kategorie ``parts`` haben siebenundzwanzig eine Kachel;
+    # ``create_lid`` und ``screw_lid`` haben keine. Die Ausnahme deckte sie
+    # mit, also blieb dieser Test grün, während beide aus der Menüleiste
+    # verschwanden — gemessen 114 Einträge, kein *Deckel erzeugen* darunter,
+    # und im Katalog stehen sie auch nicht. **Ein Wächter ist so scharf wie
+    # seine weiteste Ausnahme.**
     #
     # Als Verbotstest über die Menge, mit Zusicherung über die Grundmenge: Ein
     # leeres Register unterschreitet jede Schwelle **und** findet keine
     # Verstöße — grün, ohne geprüft zu haben.
-    from app.core.registry.registry import WITHOUT_MENU, variant_members
+    from app.core.registry.registry import variant_members
 
     assert gebaut, "die Menüleiste ist leer — dann prüft dieser Test nichts"
     ohne_ort = sorted(
@@ -1830,7 +1845,7 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
         if str(spec.title) not in gebaut
         and spec.name not in MENU_TWINS
         and spec.name not in variant_members()
-        and spec.category not in WITHOUT_MENU
+        and spec.name not in catalogue_operations()
     )
     assert not ohne_ort, f"ohne Menüort und ohne Ausnahme: {ohne_ort}"
     assert verglichen, "kein Weg verglichen — die Zuordnung über die Titel bricht"

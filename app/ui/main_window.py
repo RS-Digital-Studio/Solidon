@@ -126,6 +126,7 @@ from app.core.registry import (
     VARIANT_GROUPS,
     OperationSpec,
     PaletteEntry,
+    catalogue_operations,
     caveat_line,
     folded_categories,
     group_for_variant,
@@ -199,7 +200,6 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
-    WITHOUT_MENU,
     demo_line,
     display_unit,
     feature_label,
@@ -1871,24 +1871,44 @@ class MainWindow(QMainWindow):
         # ``tests/test_interface_limits.py`` kann es nie sehen — die Suite
         # liest den Nutzerordner bewusst nicht (§38). Erreichbar bleiben sie
         # über Bausteinkatalog, Befehlspalette und Kontextmenü.
-        own = bootstrap.user_operations()
+        # **Und die Bausteine der Bibliothek ebenso** (§2.6): Ein räumliches
+        # Teil als Textzeile zu führen ist die schlechtere Darstellung, und im
+        # Menü standen neunundzwanzig davon in sechs Untermenüs — jede Zeile
+        # eine Vokabel statt einer Form. Der Katalog mit Bildern steht in
+        # *Datei*, auf Strg+K und im Kontextmenü am gewählten Teil.
+        #
+        # **Gefragt wird nach der Kachel, nicht nach der Kategorie.** Hier
+        # stand die ganze Kategorie ``parts``, und das nahm zwei Operationen
+        # mit, die gar keine Kachel haben: *Deckel erzeugen* und *Drehdeckel
+        # erzeugen* bauen einen Deckel, statt einen fertigen einzusetzen.
+        # Gemessen am gebauten Fenster waren es 114 Menüeinträge ohne einen
+        # davon — und im Katalog stehen sie auch nicht. Sie bleiben deshalb
+        # hier stehen, und das Menü *Bausteine* trägt sie.
+        own = frozenset(bootstrap.user_operations()) | catalogue_operations()
         sections = {section.category: section for section in menu_tree(skip=own)}
         groups: dict[str, QMenu] = {}
         for title, categories in MENU_GROUPS:
-            if all(category in WITHOUT_MENU for category in categories):
-                # **Die Bausteine haben keinen Menüort mehr** (§2.6): Ein
-                # räumliches Teil als Textzeile zu führen ist die schlechtere
-                # Darstellung, und im Menü standen neunundzwanzig davon in
-                # sechs Untermenüs — jede Zeile eine Vokabel statt einer Form.
-                # Der Katalog mit Bildern steht in *Datei* und im Kontextmenü
-                # am gewählten Teil.
-                continue
             present = [sections[name] for name in categories if name in sections]
             if not present:
                 continue
             group = self._menu(str(title))
             groups[str(title)] = group
             self._workspace_menus.append(group)
+            if any(section.category == "parts" for section in present):
+                # **Ein Menü *Bausteine*, in dem keine Bausteine stehen,
+                # führt in die Irre.** Übrig sind hier zwei Operationen, die
+                # einen Deckel bauen; wer das Menü öffnet, um ein Scharnier zu
+                # suchen, findet zwei Deckel und keinen Hinweis. Der Katalog
+                # steht deshalb als erste Zeile darin — derselbe Befehl wie in
+                # *Datei*, nur an dem Ort, an dem danach gesucht wird.
+                self._add_action(
+                    group,
+                    tr("Bausteinkatalog …"),
+                    "Ctrl+K",
+                    self.action_catalog,
+                    tr("Alle Bausteine mit Bild durchsehen: Mutternfalle, Rastnase, Scharnier."),
+                )
+                group.addSeparator()
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
             # ``group_is_flat`` für die ganze Gruppe: alles flach oder
             # jede Kategorie eine Ebene tiefer. Damit lagen im Menü

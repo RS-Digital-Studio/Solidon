@@ -84,25 +84,6 @@ MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
     (_("Vorbereiten"), ("prepare", "colour")),
 )
 
-#: Kategorien, die **keinen** Menüort haben, weil sie anderswo besser stehen.
-#:
-#: ``parts`` ist der Fall, und der Bauplan sagt ihn seit §2.6: Ein Baustein ist
-#: ein räumliches Teil, und eine Textzeile ist dafür die schlechtere
-#: Darstellung. Im Menü standen neunundzwanzig davon in sechs Untermenüs — 27
-#: Einträge drei Klicks tief, und jeder nannte eine Vokabel statt einer Form:
-#: „Filmscharnier", „Schnappverbinder für eine Naht", „Nutfeder für Aluprofil".
-#: Wer nicht weiß, wie ein Filmscharnier aussieht, findet es dort nicht.
-#:
-#: Der Katalog mit Bildern gab es die ganze Zeit (*Datei → Bausteinkatalog*,
-#: Strg+K). Seit dem 29.08.2026 ist er der einzige Ort — und dafür einer, der
-#: vom gewählten Teil aus mit einem Rechtsklick erreichbar ist (Entscheidung
-#: Robert: „solange man einfach zum Katalog kommt, wenn man das Teil gewählt
-#: hat").
-#:
-#: Erreichbar bleiben die Operationen vollständig: über den Katalog, über die
-#: Befehlspalette und über den Verlauf. Was fehlt, ist allein der Menüweg.
-WITHOUT_MENU: Final[frozenset[str]] = frozenset({"parts"})
-
 
 def group_title(category: str) -> str:
     """Der Menütitel, unter dem diese Kategorie steht.

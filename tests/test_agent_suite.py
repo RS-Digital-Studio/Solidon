@@ -590,8 +590,30 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     assert "Menü: Ändern → Bohrung setzen." in described["drill_hole"]
     assert "Menü: Ändern → Formgebung → Fase anbringen." in described["chamfer_edges"]
     assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
-    assert "Menü: Bausteine → Verbindungen → Schraubenloch" in described["insert_screw_hole"]
     assert "Menü: Objekt → Objekt umbenennen." in described["rename_object"]
+
+    # **Ein Baustein der Bibliothek nennt den Katalog, und er nennt ihn als
+    # das, was er ist.** Hier stand „Menü: Bausteine → Verbindungen →
+    # Schraubenloch" — ein Menü, das es seit dem 29.08.2026 für die Bausteine
+    # nicht mehr gibt. Der erste Ersatz schrieb die Pfeilkette einfach weiter
+    # („Datei → Bausteinkatalog → Verbindungen → Schraubenloch"), und das war
+    # schlechter als der veraltete Weg: Die letzten beiden Glieder sind Gruppe
+    # und Kachel **im Katalogfenster**, und wer im Datei-Menü ein Untermenü
+    # *Verbindungen* sucht, findet keines. Ein Pfeil zwischen zwei Menüs heißt
+    # „dann dort weiter"; zwischen Menü und Dialog heißt er nichts.
+    assert (
+        "Menü: Datei → Bausteinkatalog …, dort unter Verbindungen: Schraubenloch mit Senkung."
+        in described["insert_screw_hole"]
+    )
+    # **Und die Gegenprobe dazu: nicht jede Operation der Kategorie ``parts``
+    # ist ein Katalogeintrag.** ``create_lid`` und ``screw_lid`` bauen einen
+    # Deckel, statt einen fertigen einzusetzen — der Katalog zeigt
+    # ``PARTS.all()``, und darin stehen sie nicht. Als die Regel noch an der
+    # Kategorie hing, verschwanden beide aus der Menüleiste (gemessen: 114
+    # Einträge, kein *Deckel erzeugen* darunter) und wurden trotzdem in den
+    # Katalog verwiesen. Beide Sätze zusammen sind der Wächter: Wer eine
+    # Kachel hat, nennt den Katalog; wer keine hat, nennt sein Menü.
+    assert "Menü: Bausteine → Deckel erzeugen." in described["create_lid"]
 
     places = [
         match.group(1)

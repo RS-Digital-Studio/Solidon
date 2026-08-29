@@ -33,8 +33,8 @@ from PySide6.QtWidgets import (
 from app.core import errors
 from app.core.export import handover
 from app.core.geom.measure import Measurement
-from app.core.registry import REGISTRY
-from app.core.registry.registry import TWIN_TOGGLES, WITHOUT_MENU
+from app.core.registry import REGISTRY, catalogue_operations
+from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import MaterialSlot, Parameter, SlotOverride
@@ -365,12 +365,19 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
             continue
-        if spec.category in WITHOUT_MENU:
+        if spec.name in catalogue_operations():
             # **Dritter Fall neben Zwilling und Variante, seit dem 29.08.2026.**
-            # Die Bausteine haben keinen Menüort mehr: Ein räumliches Teil als
-            # Textzeile zu führen ist die schlechtere Darstellung (§2.6). Wie
-            # bei den anderen beiden wird beides geprüft — kein Eintrag, und
-            # trotzdem vollständig erreichbar.
+            # Die Bausteine der Bibliothek haben keinen Menüort mehr: Ein
+            # räumliches Teil als Textzeile zu führen ist die schlechtere
+            # Darstellung (§2.6). Wie bei den anderen beiden wird beides
+            # geprüft — kein Eintrag, und trotzdem vollständig erreichbar.
+            #
+            # **Gefragt wird nach der Kachel, nicht nach der Kategorie.** Hier
+            # stand ``spec.category in WITHOUT_MENU``, und damit nahm die
+            # Ausnahme zwei Operationen mit, die gar keine Kachel haben:
+            # ``create_lid`` und ``screw_lid`` verschwanden aus der Leiste,
+            # ohne im Katalog aufzutauchen. Eine Ausnahme, die zu weit gefasst
+            # ist, macht einen Wächter genau dort blind, wo er greifen soll.
             assert str(spec.title) not in labels, (
                 f"{spec.name} gehört in den Katalog, nicht ins Menü"
             )
