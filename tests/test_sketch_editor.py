@@ -2266,6 +2266,12 @@ def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) 
     plus zwei Zahlenfelder à 163 in *einer* Reihe. Das ist ein eigener Fund,
     steht als eigener Punkt in der Roadmap, und hier zu prüfen hieße zwei
     Sachen in einer Prüfung zu vermischen.
+
+    **Seit dem 29.08.2026 stehen nie alle zehn da.** Die Zeile folgt der
+    Auswahl, und gemessen sind höchstens **drei** Bedingungen gleichzeitig
+    nutzbar — bei zwei Punkten Abstand, Deckung und Referenzmaß. Gemessen wird
+    deshalb der breiteste Fall, den es wirklich gibt, und nur an den Knöpfen,
+    die auch dastehen: Ein verborgener hat keine Breite, die jemand liest.
     """
     from app.ui.style import stylesheet
 
@@ -2275,17 +2281,22 @@ def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) 
     try:
         breite = panel._constraints_row.minimumSize().width()
         assert breite <= 900, f"die Bedingungszeile verlangt {breite} Bildpunkte Breite"
+        # Zwei Punkte: der Fall mit den meisten Angeboten.
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        panel.canvas.selection[:] = [("point", (0,)), ("point", (1,))]
         for width in (1600, 1366, 1280, 1152):
             panel.resize(width, 700)
             panel.show()
+            panel._refresh_buttons()
             qt_app.processEvents()
-            assert len(panel._constraint_buttons) > 3, (
-                f"nur {len(panel._constraint_buttons)} Bedingungsknöpfe — "
+            sichtbar = [b for b in panel._constraint_buttons.values() if not b.isHidden()]
+            assert len(sichtbar) >= 3, (
+                f"nur {len(sichtbar)} sichtbare Bedingungsknöpfe — "
                 "dann sagt die Breitenprüfung darunter nichts"
             )
             squeezed = [
                 f"{button.text()!r}: {button.width()} statt {button.sizeHint().width()}"
-                for button in panel._constraint_buttons.values()
+                for button in sichtbar
                 if button.width() < button.sizeHint().width()
             ]
             assert not squeezed, f"bei {width} Bildpunkten Fensterbreite: " + ", ".join(squeezed)
@@ -4927,26 +4938,35 @@ def test_the_same_constraint_twice_takes_it_back_instead_of_doubling(
     assert len(canvas.sketch.constraints) == 2, "verschiedene Ziele, zwei Bedingungen"
 
 
-def test_a_second_measure_replaces_the_value_instead_of_contradicting_it(
+def test_a_measure_is_taken_back_like_every_other_constraint(
     qt_app: QApplication,
 ) -> None:
-    """Bei einer Bedingung mit Wert heißt der zweite Griff „ändern".
+    """Auch ein Maß schaltet um — der Knopf tut überall dasselbe.
 
-    Umschalten wäre hier falsch: Wer *Abstand* ein zweites Mal auf dieselben
-    Punkte legt, will das Maß korrigieren. Zwei Abstände nebeneinander waren
-    dagegen nichts als ein Widerspruch, den niemand beabsichtigt hat.
+    **Der erste Entwurf machte hier eine Ausnahme**: Wer *Abstand* ein zweites
+    Mal legt, wolle das Maß ändern, also wurde der Wert ersetzt statt die
+    Bedingung entfernt. Das war eine Annahme, und sie widersprach dem Knopf —
+    der stand gedrückt und versprach „ein Klick nimmt sie zurück", und dann
+    blieb sie stehen. Robert am 29.08.2026: „wenn man eins fest macht und dann
+    wieder löst, erwarte ich auch, dass davon keine Bedingungen stehen."
+
+    Ein Maß ändert man jetzt, indem man es löst und neu legt. Ein Klick mehr
+    für den selteneren Fall, dafür ist der Knopf vorhersagbar.
     """
     canvas = SketchCanvas()
     canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
     canvas.add_constraint("fixed", (0,))
+    vorher = len(canvas.sketch.constraints)
 
     canvas.add_constraint("distance", (0, 1), "30")
-    canvas.add_constraint("distance", (0, 1), "40")
+    assert len(canvas.sketch.constraints) == vorher + 1
 
-    masse = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
-    assert len(masse) == 1, "kein zweiter Abstand auf denselben Punkten"
-    assert masse[0].value == "40", "der neue Wert gilt"
-    assert not canvas.conflict, "und damit entsteht der Widerspruch gar nicht erst"
+    canvas.add_constraint("distance", (0, 1), "40")
+    assert len(canvas.sketch.constraints) == vorher, "der zweite Griff nimmt zurück"
+    assert not [e for e in canvas.sketch.constraints if e.kind == "distance"], (
+        "und lässt kein Maß stehen"
+    )
+    assert not canvas.conflict
 
 
 def test_a_contradiction_freezes_the_sketch_until_it_is_loosened(
@@ -5069,5 +5089,107 @@ def test_every_menu_that_carries_a_reason_also_shows_it(qt_app: QApplication) ->
         for menue in (*untermenues, in_der_liste):
             for entry in menue.actions():
                 assert entry.toolTip(), entry.text()
+    finally:
+        panel.deleteLater()
+
+
+def test_the_constraint_row_shows_only_what_the_selection_allows(
+    qt_app: QApplication,
+) -> None:
+    """Zehn Fachwörter in zwei Reihen sind für einen Anfänger eine Wand.
+
+    Gemessen am 29.08.2026: Ohne Auswahl war **kein einziger** der zehn
+    Bedingungsknöpfe nutzbar, bei einem ausgewählten Punkt genau einer, und im
+    besten Fall — zwei Punkte — drei. Die Leiste zeigte trotzdem immer alle
+    zehn, acht davon grau. Robert dazu: „mit den Bedingungen ist es für einen
+    Nutzer ohne CAD schwer zu verstehen."
+
+    Die Zeile folgt jetzt der Auswahl. Das ist die Ausnahme von „grau und
+    begründet, nicht unsichtbar" (`oberflaeche.md`) und hat ihren Präzedenzfall
+    im selben Modul: ``selection_tools`` verschwindet seit je, wenn nichts
+    ausgewählt ist.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        # Das leere Blatt: dort sagt „zeichnen oder eine Grundform einfügen"
+        # alles, und ein zweiter Hinweis wäre einer zu viel.
+        panel._refresh_buttons()
+        assert not panel._constraints_box.isVisibleTo(panel), (
+            "auf dem leeren Blatt steht keine Bedingungszeile"
+        )
+
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+
+        # Gezeichnet, aber nichts ausgewählt: kein Knopf, aber der Satz, der
+        # sagt, dass es Bedingungen gibt. **Wer sie nie gesehen hat, vermisst
+        # sie nicht** — der Einwand kam von der Review-Sitzung, und er trifft:
+        # Die zehn grauen Knöpfe hatten bei allem Ballast diese eine Aufgabe.
+        panel.canvas.selection.clear()
+        panel._refresh_buttons()
+        assert not [b for b in panel._constraint_buttons.values() if not b.isHidden()], (
+            "ohne Auswahl passt keine Bedingung — dann steht auch kein Knopf da"
+        )
+        assert panel.constraint_placeholder.isVisibleTo(panel), (
+            "aber der Satz sagt, dass es Bedingungen gibt und wodurch sie kommen"
+        )
+
+        panel.canvas.selection[:] = [("point", (0,))]
+        panel._refresh_buttons()
+        sichtbar = {
+            kind for kind, button in panel._constraint_buttons.items() if not button.isHidden()
+        }
+        assert sichtbar == {"fixed"}, f"bei einem Punkt passt nur Fest, gezeigt wurden {sichtbar}"
+        assert panel._constraints_box.isVisibleTo(panel)
+
+        panel.canvas.selection[:] = [("point", (0,)), ("point", (1,))]
+        panel._refresh_buttons()
+        sichtbar = {
+            kind for kind, button in panel._constraint_buttons.items() if not button.isHidden()
+        }
+        assert sichtbar == {"distance", "coincident", "reference"}, sichtbar
+    finally:
+        panel.deleteLater()
+
+
+def test_a_button_that_would_take_a_constraint_back_says_so(qt_app: QApplication) -> None:
+    """Ein Umschalter, den man nicht sieht, ist eine Falle.
+
+    **Gefunden beim Durchfahren im echten Fenster**, drei Stunden nachdem der
+    Umschalter gebaut war: Ein Rechteck bringt eine ``fixed``-Bedingung mit.
+    Wer danach *Fest* drückte, löste sie — die Skizze wurde loser statt fester,
+    und der Knopf sah in beiden Fällen gleich aus. Aus elf Bedingungen wurden
+    zehn, wo der Nutzer zwölf erwartete.
+    """
+    from app.core.sketch import shapes
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        fest = panel._constraint_buttons["fixed"]
+
+        # Ein Punkt ohne eigene Fest-Bedingung: der Knopf legt an.
+        frei = next(
+            index
+            for index in range(len(panel.canvas.points()))
+            if not any(
+                entry.kind == "fixed" and entry.targets == (index,)
+                for entry in panel.canvas.sketch.constraints
+            )
+        )
+        panel.canvas.selection[:] = [("point", (frei,))]
+        panel._refresh_buttons()
+        assert not fest.isChecked(), "hier legt der Knopf an, also steht er nicht gedrückt"
+
+        # Und auf einem, der sie schon trägt, steht er gedrückt.
+        gesetzt = next(
+            entry.targets[0] for entry in panel.canvas.sketch.constraints if entry.kind == "fixed"
+        )
+        panel.canvas.selection[:] = [("point", (gesetzt,))]
+        panel._refresh_buttons()
+        assert fest.isChecked(), "hier nimmt der Knopf zurück — das muss man sehen"
+        assert "zurück" in fest.toolTip(), fest.toolTip()
     finally:
         panel.deleteLater()

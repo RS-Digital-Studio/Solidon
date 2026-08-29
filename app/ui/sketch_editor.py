@@ -69,7 +69,7 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY
 from app.i18n import tr
-from app.ui import cursors, icons
+from app.ui import cursors, icons, style
 from app.ui.labels import LengthSpin, length, localised
 from app.ui.leash import weak_slot
 from app.ui.palette import ROLES, text_colour
@@ -1350,11 +1350,18 @@ class SketchCanvas(QWidget):
         besteht, bleibt die letzte gültige Lage stehen. Der Weg hinein war ein
         Klick, der Weg hinaus keiner.
 
-        Wertlose Bedingungen schalten deshalb um: Der zweite Druck entfernt,
-        was der erste angelegt hat. Bedingungen **mit** Wert tun das nicht —
-        wer *Abstand* zweimal auf dieselben Punkte legt, will das Maß ändern
-        und nicht löschen; dort wird der Wert ersetzt. Beides verhindert die
-        Dublette, und beides tut, was der zweite Klick erwarten lässt.
+        **Jede** Bedingung schaltet um, auch eine mit Wert. Der erste Entwurf
+        ließ *Abstand* und *Referenzmaß* davon aus — wer ein Maß zweimal legt,
+        wollte es ändern, nicht löschen — und das war eine Annahme, die dem
+        Knopf widersprach: Er stand gedrückt und versprach „ein Klick nimmt sie
+        zurück", und dann blieb sie stehen. Robert dazu am 29.08.2026: „wenn
+        man eins fest macht und dann wieder löst, erwarte ich auch, dass davon
+        keine Bedingungen stehen." Ein Umschalter, der bei zwei von zehn Arten
+        etwas anderes tut, ist keiner.
+
+        Ein Maß wird deshalb geändert, indem man es löst und neu legt — ein
+        Klick mehr für den selteneren Fall, dafür tut der Knopf überall
+        dasselbe.
         """
         doppelt = next(
             (
@@ -1365,12 +1372,7 @@ class SketchCanvas(QWidget):
             None,
         )
         if doppelt is not None:
-            if value:
-                bestand = list(self.sketch.constraints)
-                bestand[doppelt] = SketchConstraint(kind, targets, value)
-                self._apply(replace(self.sketch, constraints=tuple(bestand)))
-            else:
-                self.remove_constraint(doppelt)
+            self.remove_constraint(doppelt)
             return
         constraint = SketchConstraint(kind, targets, value)
         self._apply(replace(self.sketch, constraints=(*self.sketch.constraints, constraint)))
@@ -3904,8 +3906,12 @@ class SketchPanel(QWidget):
         self.selection_tools = QWidget(self)
         selection_tools = QHBoxLayout(self.selection_tools)
         selection_tools.setContentsMargins(0, 0, 0, 0)
-        selection_title = QLabel(tr("Auswahl:"), self.selection_tools)
-        selection_tools.addWidget(selection_title)
+        # **Die Zeile beschriftet sich selbst.** „Auswahl:" kostete 96
+        # Bildpunkte und benannte eine Zeile, deren Inhalt keine Frage offen
+        # lässt — sie erscheint ohnehin nur, wenn etwas ausgewählt ist. Der
+        # Name bleibt für den Bildschirmleser am Träger stehen: Was hier
+        # verschwindet, ist die Breite, nicht die Auskunft (Regel 18).
+        self.selection_tools.setAccessibleName(tr("Werkzeuge für die Auswahl"))
 
         self.coordinate_button = QToolButton(self.selection_tools)
         self.coordinate_button.setText(tr("Koordinaten …"))
@@ -3980,12 +3986,14 @@ class SketchPanel(QWidget):
         # entscheidet :meth:`_fit_constraint_row`; wie schmal das Fenster werden
         # darf, entscheiden die Zeichenfläche und die Werkzeugzeile.
         constraints_box = QWidget(self)
+        self._constraints_box = constraints_box
         constraints_box.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
         constraints_box.setMinimumWidth(1)
         constraints_row = QGridLayout(constraints_box)
         constraints_row.setContentsMargins(0, 0, 0, 0)
         self._constraints_row = constraints_row
         self._constraint_columns = CONSTRAINTS_PER_ROW
+        self._constraint_shown: tuple[str, ...] = ()
         self._constraint_buttons: dict[SketchConstraintKind, QPushButton] = {}
         for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
@@ -4013,6 +4021,20 @@ class SketchPanel(QWidget):
         # Knöpfe auf einem breiten Schirm auseinander, und aus zehn Knöpfen
         # würde eine Zeile aus zehn Flächen.
         constraints_row.setColumnStretch(CONSTRAINTS_PER_ROW, 1)
+
+        # **Wer sie nie gesehen hat, vermisst sie nicht.** Seit die Zeile der
+        # Auswahl folgt, steht ohne Auswahl gar nichts mehr da — und die zehn
+        # grauen Knöpfe hatten bei allem Ballast eine Aufgabe: Sie sagten, dass
+        # es Bedingungen überhaupt gibt. Der Satz übernimmt das, ohne zehn
+        # Fachwörter dafür zu brauchen. Bei der **leeren** Skizze bleibt er
+        # weg: Dort ist „zeichnen oder eine Grundform einfügen" die Auskunft,
+        # und ein zweiter Hinweis daneben wäre einer zu viel.
+        self.constraint_placeholder = QLabel(
+            tr("Bedingungen erscheinen, sobald Sie Punkte oder Linien auswählen."), self
+        )
+        style.set_level(self.constraint_placeholder, "caption")
+        self.constraint_placeholder.setWordWrap(True)
+        constraints_row.addWidget(self.constraint_placeholder, 0, 0, 1, CONSTRAINTS_PER_ROW + 1)
 
         self.constraint_list = QListWidget(self)
         self.constraint_list.setToolTip(
@@ -4139,15 +4161,21 @@ class SketchPanel(QWidget):
         nebeneinander passen, sind es eben vier Zeilen. Fünf abgeschnittene
         Knöpfe wären das schlechtere von beidem.
         """
-        buttons = list(self._constraint_buttons.values())
+        buttons = [button for button in self._constraint_buttons.values() if not button.isHidden()]
         if not buttons:
             return
         widest = max(button.sizeHint().width() for button in buttons)
         gap = max(self._constraints_row.horizontalSpacing(), 0)
         fitting = (self.width() + gap) // (widest + gap)
         columns = max(min(int(fitting), len(buttons)), 1)
-        if columns == self._constraint_columns:
+        # **Auch die Menge zählt, nicht nur die Spaltenzahl.** Seit die Zeile
+        # der Auswahl folgt, wechselt sie zwischen einem Knopf und vier — bei
+        # gleicher Spaltenzahl. Ohne diesen Vergleich bliebe die alte Anordnung
+        # samt Lücken stehen, wo ein Knopf verschwunden ist.
+        shown = tuple(button.text() for button in buttons)
+        if columns == self._constraint_columns and shown == self._constraint_shown:
             return
+        self._constraint_shown = shown
         self._constraints_row.setColumnStretch(self._constraint_columns, 0)
         for position, button in enumerate(buttons):
             self._constraints_row.removeWidget(button)
@@ -4626,6 +4654,26 @@ class SketchPanel(QWidget):
         pattern = self.canvas.selected_pattern()
         return {kind: pattern in patterns for kind, patterns in _NEEDS.items()}
 
+    def constraint_already_set(self) -> dict[SketchConstraintKind, bool]:
+        """Welche Bedingung auf **dieser** Auswahl schon steht.
+
+        **Ein Umschalter, den man nicht sieht, ist eine Falle.** Seit der
+        zweite Druck zurücknimmt, entscheidet der Bestand darüber, was ein
+        Klick tut — und der Knopf sah in beiden Fällen gleich aus. Ein
+        Rechteck bringt eine ``fixed``-Bedingung mit; wer danach *Fest*
+        drückte, **löste** sie und machte die Skizze loser statt fester
+        (gefunden am 29.08.2026 beim Durchfahren im echten Fenster, drei
+        Stunden nachdem der Umschalter gebaut war).
+
+        Der Knopf steht deshalb gedrückt, wo ein Klick zurücknimmt.
+        """
+        targets = self.canvas.selection_targets()
+        existing = {(entry.kind, entry.targets) for entry in self.canvas.sketch.constraints}
+        return {
+            kind: ((kind, targets[:1] if kind == "fixed" else targets) in existing)
+            for kind in _NEEDS
+        }
+
     def request_constraint(self, kind: SketchConstraintKind) -> None:
         if not self.constraint_offers().get(kind):
             # Nicht stumm zurück: „D" ohne passende Auswahl tat gar nichts —
@@ -4643,8 +4691,16 @@ class SketchPanel(QWidget):
             )
             return
         targets = self.canvas.selection_targets()
+        if kind == "fixed":
+            targets = targets[:1]
+        takes_back = self.constraint_already_set().get(kind, False)
         value = ""
-        if kind == "distance":
+        # **Steht sie schon, wird nur gelöst — und dafür fragt niemand nach
+        # einem Maß.** Der Dialog stand vor dieser Prüfung und ging auch dann
+        # auf, wenn der Klick die Bedingung gerade entfernen sollte: erst ein
+        # Maß eintippen, dann verschwindet die Bedingung. Der Knopf verspricht
+        # „ein Klick nimmt sie zurück", und ein Klick ist einer.
+        if kind == "distance" and not takes_back:
             dialog = ExpressionDialog(
                 self._params,
                 start=measured_expression(self.canvas.points(), targets),
@@ -4653,16 +4709,68 @@ class SketchPanel(QWidget):
             if dialog.exec() != ExpressionDialog.DialogCode.Accepted:
                 return
             value = dialog.expression()
-        if kind == "fixed":
-            targets = targets[:1]
         self.canvas.add_constraint(kind, targets, value)
+        if takes_back:
+            # **Die zweite Kodierung zum gedrückten Knopf** (Regel 18). Ohne
+            # sie verschwindet eine Zeile aus der Liste, und wer nicht
+            # hinsieht, hält den Klick für wirkungslos.
+            self.canvas.statusChanged.emit(
+                tr("{name} zurückgenommen.").format(name=_constraint_label(kind))
+            )
 
     def _refresh_buttons(self) -> None:
         offers = self.constraint_offers()
+        # **Was ein Klick tut, steht am Knopf.** Ein gedrückter nimmt zurück,
+        # ein loser legt an — siehe :meth:`constraint_already_set`. Der Satz
+        # dahinter sagt es noch einmal in Worten, denn ein Druckzustand allein
+        # ist eine Kodierung und Regel 18 verlangt eine zweite.
+        already = self.constraint_already_set()
         for kind, button in self._constraint_buttons.items():
+            # **Gezeigt wird, was zur Auswahl passt.** Zehn Knöpfe in zwei
+            # Reihen standen dauerhaft da, und gemessen waren davon **null bis
+            # einer** nutzbar — ohne Auswahl keiner, bei einem Punkt genau
+            # *Fest*. Für einen Anwender ohne CAD-Kenntnis sind acht graue
+            # Fachwörter kein Angebot, sondern eine Wand (Robert, 29.08.2026).
+            #
+            # Das ist die Ausnahme von „grau und begründet, nicht unsichtbar"
+            # aus `oberflaeche.md`, und sie hat ihren Präzedenzfall zwei
+            # Zeilen weiter unten: ``selection_tools`` verschwindet seit je,
+            # wenn nichts ausgewählt ist. Die Regel gilt Feldern in einem
+            # Dialog, in dem man sucht; hier folgt eine Werkzeugzeile dem
+            # Zustand, und was fehlt, fehlt sichtbar mit der Auswahl.
+            button.setVisible(offers[kind])
             button.setEnabled(offers[kind])
+            is_set = offers[kind] and already[kind]
+            button.setCheckable(is_set)
+            button.setChecked(is_set)
+            if is_set:
+                button.setToolTip(
+                    tr("{name} steht hier schon — ein Klick nimmt sie zurück.").format(
+                        name=_constraint_label(kind)
+                    )
+                )
+            else:
+                button.setToolTip(
+                    # Derselbe Schlüssel wie am Kontextmenü — eine dritte
+                    # Formulierung derselben Auskunft wäre eine dritte
+                    # Gelegenheit, auseinanderzulaufen.
+                    tr("{name} — {does}. Dazu {what} auswählen.").format(
+                        name=_constraint_label(kind),
+                        does=_does_phrase(kind),
+                        what=_needs_phrase(kind),
+                    )
+                )
         selected = bool(self.canvas.selection)
         self.selection_tools.setVisible(selected)
+        # Passt keine einzige, bleibt der Satz — er sagt, dass es Bedingungen
+        # gibt und wodurch sie erscheinen. Auf dem leeren Blatt geht auch er:
+        # Dort steht „zeichnen oder eine Grundform einfügen", und zwei Hinweise
+        # nebeneinander sind einer zu viel.
+        fitting = any(offers.values())
+        drawn = bool(self.canvas.sketch.elements)
+        self.constraint_placeholder.setVisible(not fitting and drawn)
+        self._constraints_box.setVisible(fitting or drawn)
+        self._fit_constraint_row()
         self.coordinate_button.setEnabled(len(self.canvas.selected_point_indices()) == 1)
         self.delete_button.setEnabled(selected)
         self.offset_button.setEnabled(selected)
