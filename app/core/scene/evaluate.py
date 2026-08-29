@@ -1132,8 +1132,7 @@ def _with_features(
         if (transform is not None or arranged_rigidly) and old_feature is not None:
             if arranged_rigidly and previous_bounds is not None:
                 shift = tuple(
-                    now - before
-                    for now, before in zip(centre, previous_bounds.centre, strict=True)
+                    now - before for now, before in zip(centre, previous_bounds.centre, strict=True)
                 )
                 movement: Transform = (
                     (1.0, 0.0, 0.0, shift[0]),
