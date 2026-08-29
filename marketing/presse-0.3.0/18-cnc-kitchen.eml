@@ -1,0 +1,46 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@cnckitchen.com
+Reply-To: marketing@solidon3d.de
+Subject: Solidon3D-Testidee: Passungen messen statt Tabellen blind glauben
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Stefan,
+
+Solidon3D 0.3.0 ist veröffentlicht. Die Desktop-Anwendung soll die Lücke
+zwischen „STL gefunden“ und „Teil passt“ schließen: importierte Modelle
+anpassen, neue druckbare Teile aus Maßen und Bausteinen bauen und jeden
+Eingriff als reproduzierbaren Schritt behalten. Statt einfach „220 Neuerungen“
+in den Raum zu stellen, möchte ich einen messbaren Test vorschlagen.
+
+Solidon erzeugt ein kleines Prüfstück für Spiel, Presssitz, Mindestwand und
+Überhang. Nach einem Druck werden die brauchbaren Stufen eingetragen; danach
+verwenden Bohrungen, Zapfen, Lager- und Magnettaschen genau diese Werte für das
+gewählte Material. Die Frage für einen Test wäre simpel: Treffen so
+kalibrierte Schnappverbindungen und Presssitze auf einem zweiten Drucker
+zuverlässiger als allgemeine Tabellenwerte?
+
+Seit der 0.1-Demo kamen außerdem druckbare Schrauben und Muttern mit
+zueinander passendem Gewinde, Normsitze für Kugellager, eigene parametrische
+Bausteine aus dem Operationsverlauf und direkt änderbare Bohrungen in
+importierten STL-Modellen hinzu. Jeder Eingriff bleibt als reproduzierbarer
+Schritt bestehen; ein geändertes Maß rechnet die späteren Schritte neu. Die
+Anwendung läuft auf Windows, macOS und Linux und funktioniert ohne Konto und
+ohne Cloud.
+
+Ich würde für dich ein neutrales Testpaket zusammenstellen: Kalibrierteil,
+zwei Schnappverbindungen, zwei Presssitze, Messblatt und fertiger 0.3.0-Bau. Es
+gibt keine Vorgabe zum Ergebnis und keine Erwartung an eine positive
+Besprechung.
+
+Überblick: https://solidon3d.de/
+
+Wenn die Fragestellung interessant ist, passe ich das Paket an einen Drucker
+und zwei deiner typischen Materialien an.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

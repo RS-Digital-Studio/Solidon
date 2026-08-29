@@ -325,7 +325,13 @@ def folded_categories(category: str, registry: Registry | None = None) -> frozen
         return frozenset()
     sizes = {name: menu_rows_of([name], source) for name in present}
     order = {name: position for position, name in enumerate(present)}
-    return frozenset(folded_groups(sizes, rank=lambda name: order.get(name, len(order))))
+    return frozenset(
+        folded_groups(
+            sizes,
+            keep={"holes"},
+            rank=lambda name: order.get(name, len(order)),
+        )
+    )
 
 
 def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:

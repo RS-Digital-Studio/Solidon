@@ -1215,3 +1215,35 @@ def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:
     )
     for name, platz in echt.items():
         assert delivery_slot(name) == platz, f"{name} bekam {delivery_slot(name)!r} statt {platz!r}"
+
+
+def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> None:
+    """Vererbte Fenster-Fixtures zählen, bloße Wörter im Quelltext nicht."""
+    from tools.list_windowed_tests import collect_windowed
+
+    (tmp_path / "conftest.py").write_text(
+        "import pytest\n"
+        "@pytest.fixture\n"
+        "def qt_app():\n"
+        "    return object()\n"
+        "@pytest.fixture\n"
+        "def middle(qt_app):\n"
+        "    return qt_app\n",
+        encoding="utf-8",
+    )
+    windowed = tmp_path / "test_windowed.py"
+    windowed.write_text(
+        "def test_windowed(middle):\n    assert middle is not None\n",
+        encoding="utf-8",
+    )
+    plain = tmp_path / "test_plain.py"
+    plain.write_text(
+        "def test_plain():\n"
+        '    """MainWindow, Viewport und pyvista sind hier nur Wörter."""\n'
+        "    assert True\n",
+        encoding="utf-8",
+    )
+
+    found = collect_windowed((tmp_path,), confcutdir=tmp_path)
+
+    assert found == (windowed.resolve(),)

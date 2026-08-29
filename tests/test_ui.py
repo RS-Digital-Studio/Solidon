@@ -671,6 +671,65 @@ def test_the_right_panel_folds_away(window: MainWindow) -> None:
     assert window.settings.right_panel_visible
 
 
+def test_view_menu_and_settings_share_theme_and_navigation_names(window: MainWindow) -> None:
+    """Menü und Einstellungsdialog pflegen keine zwei Vokabulare."""
+    from app.ui.settings_dialog import NAVIGATION, THEMES
+
+    themes = {str(action.data()): action.text() for action in window._theme_group.actions()}
+    navigation = {
+        str(action.data()): action.text() for action in window._navigation_group.actions()
+    }
+
+    assert themes == {key: str(label) for key, label in THEMES.items()}
+    assert navigation == {key: str(label) for key, label in NAVIGATION.items()}
+
+
+def test_measure_bar_offers_angles_and_shows_degrees(qt_app: QApplication) -> None:
+    """Ein Winkel ist auswählbar und wird nicht als Länge beschriftet."""
+    from app.ui.section_bar import MeasureBar
+
+    bar = MeasureBar()
+    modes = [bar.mode.itemData(index) for index in range(bar.mode.count())]
+    assert "angle" in modes
+
+    bar.show_measurement("angle", 90.0, 1)
+    assert "90°" in bar.readout.text()
+    assert "mm" not in bar.readout.text()
+
+
+def test_angle_measurement_uses_two_detected_planes(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§18.3 meint erkannte Ebenen, nicht drei frei geklickte Punkte."""
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    faces = {
+        "one": SimpleNamespace(
+            kind="face", params={"normal": (1.0, 0.0, 0.0), "centre": (0.0, 0.0, 0.0)}
+        ),
+        "two": SimpleNamespace(
+            kind="face", params={"normal": (0.0, 1.0, 0.0), "centre": (5.0, 0.0, 0.0)}
+        ),
+    }
+    entry = SimpleNamespace(features=faces)
+    viewport._result = SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": entry}))
+    monkeypatch.setattr(viewport, "_object_at", lambda point: "obj_1")
+    monkeypatch.setattr(viewport, "_feature_at", lambda point: "one" if point[0] == 0 else "two")
+
+    statuses: list[str] = []
+    viewport.measurementStatus.connect(statuses.append)
+    viewport._measure_plane_angle((0.0, 0.0, 0.0))
+    viewport._measure_plane_angle((5.0, 0.0, 0.0))
+
+    assert statuses and "zweite Ebene" in statuses[-1]
+    assert len(viewport.measurements) == 1
+    assert viewport.measurements.entries[0].kind == "angle"
+    assert viewport.measurements.entries[0].value == pytest.approx(90.0)
+
+
 def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
@@ -3845,6 +3904,58 @@ def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
     window._slice_for_settings(None)
 
     assert window._settings_dialog is None
+
+
+def test_a_failed_slicer_precheck_reaches_the_main_report(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der neue Rückweg ist in der Anwendung angeschlossen, nicht nur am Dialog."""
+    from PySide6.QtCore import QObject, Signal
+
+    from app.core.knowledge import print_settings
+    from app.core.types import Finding
+    from app.ui import main_window as module
+
+    before = window.report.list.count()
+    finding = Finding(
+        code="arrange.out_of_build_volume",
+        severity="error",
+        message="Das Teil ist größer als der Bauraum.",
+    )
+
+    class FailingDialog(QObject):
+        """Ersetzt nur die Signale; echte Profil-Worker gehören nicht in den Anschlusstest."""
+
+        sliced = Signal(object)
+        reported = Signal(object)
+        setupRequested = Signal()  # noqa: N815 - bildet das echte Qt-Signal nach
+
+        def __init__(
+            self,
+            session: Session,
+            _ui_settings: UiSettings,
+            parent: MainWindow,
+            *,
+            slice_result: object | None = None,
+        ) -> None:
+            super().__init__(parent)
+            self.slice_result = slice_result
+            self.settings = print_settings.resolve(session.profile)
+
+        def exec(self) -> int:
+            self.reported.emit([finding])
+            return 0
+
+    monkeypatch.setattr(module, "PrintSettingsDialog", FailingDialog)
+
+    window.action_print_settings()
+
+    assert window.report.list.count() == before + 1
+    shown = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole).code
+        for row in range(window.report.list.count())
+    ]
+    assert "arrange.out_of_build_volume" in shown
 
 
 def test_export_as_3mf_carries_every_plate(

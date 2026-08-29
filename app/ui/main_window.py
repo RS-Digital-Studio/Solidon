@@ -98,6 +98,7 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
+from app.core.geom.measure import bounding_box_of, volume_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.pose import armature_to_text
 from app.core.geom.sculpt import (
@@ -1125,6 +1126,7 @@ class MainWindow(QMainWindow):
         self.section_bar = SectionBar(self)
         self.section_bar.sectionChanged.connect(self._on_section)
         self.measure_bar = MeasureBar(self)
+        self.viewport.measurementStatus.connect(self.measure_bar.show_status)
         self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
         self.transform_bar = TransformBar(self)
@@ -3675,6 +3677,7 @@ class MainWindow(QMainWindow):
             self._settings_dialog = dialog
             self._slice_of(object_id, self._slice_for_settings)
         dialog.sliced.connect(self._gcode_returned)
+        dialog.reported.connect(self._slicer_findings)
         # Regel 17: „Kein Slicer eingerichtet" sagte, was fehlt, und bot nichts
         # an — an der Stelle, an der jemand gerade slicen wollte. Von hier
         # führt der Weg in die Liste, und danach sieht der Dialog neu nach.
@@ -3780,6 +3783,18 @@ class MainWindow(QMainWindow):
             if len(outcomes) == 1
             else f"{tr('Geslicet')}: {len(outcomes)} {tr('Platten')}"
         )
+
+    def _slicer_findings(self, findings: list[Finding]) -> None:
+        """Die Vorprüfung bleibt sichtbar, wenn der externe Lauf abbricht.
+
+        Erfolgreiche Läufe bringen dieselben Befunde über
+        :meth:`_gcode_returned` mit. Dieser Weg gehört nur dem Fehlerfall und
+        verhindert deshalb keine Dubletten und erzeugt keine zweite Herkunft.
+        """
+        if not findings:
+            return
+        self.report.add_findings(findings)
+        self._focus_report()
 
     def action_check_gcode(self) -> None:
         """§28.1: eine geslicete Datei zurücklesen und gegen die Schätzung
@@ -3925,10 +3940,14 @@ class MainWindow(QMainWindow):
         # 23.08.2026 den Zusatz für ein ungespeichertes Projekt, und der gehört
         # ins Fenster und nicht in einen Dateinamen.
         stem = safe_name(self.session.document_name, "projekt")
+        # 3MF steht zuerst und ist der vorgeschlagene Kundenweg: Es hält eine
+        # Baugruppe in einer Datei und nimmt Namen, Farben und Druckeinstellungen
+        # mit. STL bleibt für ältere Slicer ausdrücklich erreichbar, verliert
+        # diese Informationen aber zwangsläufig.
         # GLB steht am Ende und nicht bei den Druckformaten: es ist das
         # Format zum Zeigen, nicht zum Drucken — Farben und Name reisen mit,
         # jeder Betrachter öffnet es, kein Slicer will es.
-        offered = ["STL (*.stl)", "3MF (*.3mf)", "OBJ (*.obj)", "PLY (*.ply)", "GLB (*.glb)"]
+        offered = ["3MF (*.3mf)", "STL (*.stl)", "OBJ (*.obj)", "PLY (*.ply)", "GLB (*.glb)"]
         # STEP hält Flächen und Kanten fest, und ein Netz hat keine. Der
         # Schreiber sagt das mit einem guten Satz — nur sagte er ihn erst,
         # nachdem der Nutzer Format, Ordner und Namen gewählt hatte. Bei
@@ -4690,7 +4709,8 @@ class MainWindow(QMainWindow):
         gilt unverändert.
 
         ``plane`` ist die vorgewählte Zeichenebene, üblicherweise
-        ``feature:<id>`` aus einem Klick auf eine Fläche. Sie wird über
+        eine eindeutige ``feature:``-Angabe aus einem Klick auf eine Fläche.
+        Sie wird über
         :meth:`SketchPanel.choose_plane` gesetzt, also **über das Auswahlfeld**
         und nicht an ihm vorbei — sonst behaupten zwei Stellen zweierlei. Und
         ihr Rückgabewert wird gelesen: Eine Fläche, die der Körper nicht
@@ -4881,9 +4901,14 @@ class MainWindow(QMainWindow):
         if count == 0:
             note = tr("Keine Auswahl")
         elif count == 1:
-            note = tr("Eines ausgewählt — mit Strg das Nächste dazunehmen.")
+            kind = panel.canvas.selection[0][0]
+            note = (
+                tr("Punkt ausgewählt — ziehen oder Koordinaten eingeben.")
+                if kind == "point"
+                else tr("Element ausgewählt — ziehen oder mit Strg weitere dazunehmen.")
+            )
         else:
-            note = tr("{count} ausgewählt.").format(count=count)
+            note = tr("{count} ausgewählt — gemeinsam ziehen.").format(count=count)
         self.viewport.show_sketch_selection(str(note))
 
     def _on_sketch_point(self, point: object) -> None:
@@ -6511,7 +6536,7 @@ class MainWindow(QMainWindow):
         """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).
 
         Der Baum meldet nur die Merkmalskennung; die Ebene daraus zu bauen ist
-        Sache des Fensters — ``feature:<id>`` ist ein Begriff des Kerns
+        Sache des Fensters — eine ``feature:``-Ebene ist ein Begriff des Kerns
         (``app.core.sketch.planes``), und der Objektbaum kennt den
         Skizzenmodus nicht.
 
@@ -7980,12 +8005,17 @@ class MainWindow(QMainWindow):
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
-        described = describe_selection(self.session.last_result, object_id)
-        if described is None:
+        result = self.session.last_result
+        chosen = self.object_tree.selected_objects()
+        entries = [result.scene.objects.get(entry) for entry in chosen] if result else []
+        meshes = [as_mesh_data(entry.mesh) for entry in entries if entry is not None]
+        described = describe_selection(result, object_id)
+        if described is None or not meshes:
             self.measurements.clear_selection()
             return
-        name, size, volume = described
-        self.measurements.show_object(name, size, volume)
+        name = described[0] if len(meshes) == 1 else tr("Auswahl")
+        bounds = bounding_box_of(meshes)
+        self.measurements.show_object(name, bounds.size, volume_of(meshes))
 
     def action_add_parameter(self) -> None:
         """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""
@@ -8541,7 +8571,7 @@ class MainWindow(QMainWindow):
     def _flash_area(self, target: str) -> None:
         """Lässt den Bereich aufleuchten, von dem ein Tourschritt spricht.
 
-        „Sehen Sie links in den Verlauf" nennt einen von vier Bereichen, und
+        „Sehen Sie links in den Verlauf" nennt einen Bereich, und
         wer den Satz zum ersten Mal liest, sucht ihn. Ein Rahmen für eine
         Sekunde beantwortet die Frage, ohne sie gestellt zu haben.
 

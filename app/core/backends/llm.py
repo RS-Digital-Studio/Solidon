@@ -840,12 +840,11 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
 #: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Bei 85 nachgemessen sind es 26 601 Token für
-#: Systemprompt und alle Werkzeuge, 19 249 für den kompakten Satz, den dieser
-#: Weg fährt (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) —
-#: beide kamen ganz an. Das Fenster trägt also weiter; wachsen kann es kaum,
-#: ohne die Karte zu verlassen. Was wächst, ist die Werkzeugliste: wer sie
-#: ändert, misst ``prompt_eval_count`` nach.
+#: Die Reihe fuhr 84 Schemata. Am 28.08.2026 sind es mit 106 Werkzeugen
+#: 23 891 Token für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``). Er kommt im
+#: Fenster noch ganz an; der Test gegen :data:`PROMPT_TOOL_COUNT` macht jede
+#: weitere Operation zum Anlass für eine neue Messung.
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
@@ -1420,10 +1419,16 @@ def ollama_tool_check(
 #: Marke ist Prozessorbetrieb, gleich welche Karte im Rechner steckt.
 GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 
-#: Wie groß der Systemprompt dieser Anwendung ist — der kompakte Werkzeugsatz,
-#: den der Ollama-Pfad fährt. Gemessen, nicht geschätzt (siehe
-#: :data:`OLLAMA_CONTEXT_TOKENS`).
-PROMPT_TOKENS: Final = 19249
+#: Wie groß der Systemprompt dieser Anwendung ist — einschließlich des
+#: kompakten Werkzeugsatzes, den der Ollama-Pfad fährt. Am 28.08.2026 mit
+#: ``qwen3:14b`` über den echten ``/api/chat``-Auftrag gemessen, nicht aus der
+#: JSON-Länge geschätzt (siehe :data:`OLLAMA_CONTEXT_TOKENS`).
+PROMPT_TOKENS: Final = 23891
+
+#: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
+#: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
+#: lassen.
+PROMPT_TOOL_COUNT: Final = 106
 
 
 @dataclass(frozen=True, slots=True)
@@ -1458,8 +1463,8 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
     **Die Erwartung nebenan gilt für einen Rechner mit Grafikkarte.** Ohne eine
     ist es keine andere Geschwindigkeit, sondern eine andere Größenordnung:
     Gemessen auf einer Maschine mit Intel-Arc-Grafik, die Ollama nicht
-    anspricht, 8,4 Token je Sekunde beim Einlesen — für den Systemprompt dieser
-    Anwendung achtunddreißig Minuten, **bevor** das erste Wort der Antwort
+    anspricht, 7,8 Token je Sekunde beim Einlesen — für den Systemprompt dieser
+    Anwendung einundfünfzig Minuten, **bevor** das erste Wort der Antwort
     beginnt. Der Kunde sieht ein Fenster, das nichts tut, und hält es für einen
     Fehler; es ist eine Eigenschaft seiner Maschine, und die kann ihm niemand
     sagen außer uns.
@@ -1467,8 +1472,8 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
     Ollama nennt die Zahlen in jeder Antwort mit, also kostet die Messung genau
     einen kurzen Zug und keine Zeitnahme von außen. Gerechnet wird mit dem
     Einlesetempo und nicht mit dem Schreibtempo: Der Prompt ist das, was hier
-    groß ist — die Antwort sind ein paar Dutzend Token, der Prompt sind
-    neunzehntausend.
+    groß ist — die Antwort sind ein paar Dutzend Token, der Prompt sind knapp
+    vierundzwanzigtausend.
     """
     backend = OllamaBackend(model=model, transport=transport)
     if url is not None:
@@ -1502,7 +1507,7 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     """Der Satz zur Messung — oder keiner, wenn es nichts zu sagen gibt.
 
     Gesagt wird nur, was der Kunde nicht selbst sehen kann, und mit der Zahl
-    dabei: „langsam" ist keine Auskunft, „einundvierzig Minuten, bis die
+    dabei: „langsam" ist keine Auskunft, „einundfünfzig Minuten, bis die
     Antwort beginnt" ist eine. Und der Vorschlag gehört dazu (Regel 17) — auf
     einem Rechner ohne nutzbare Karte hilft kein kleineres Modell über die
     Runden, sondern ein Schlüssel.

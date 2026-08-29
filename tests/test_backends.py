@@ -1307,7 +1307,7 @@ def test_the_speed_probe_goes_through_the_endpoint_like_everything_else() -> Non
 
     def transport(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
         gesehen.append(url)
-        return {"prompt_eval_count": 19249, "prompt_eval_duration": 10_000_000_000}
+        return {"prompt_eval_count": 23891, "prompt_eval_duration": 10_000_000_000}
 
     speed = llm.ollama_speed("qwen3:14b", url="127.0.0.1:11434", transport=transport)
 

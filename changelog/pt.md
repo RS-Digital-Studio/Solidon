@@ -15,6 +15,70 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.3.0
+
+
+### Desenho e modelação
+
+- No modo de esboço pode selecionar e arrastar pontos, linhas, círculos e contornos diretamente na vista. Uma marca e uma pega indicam também o que vai mover-se.
+- O plano de desenho fica no espaço ao alternar entre as vistas de cima, frente e lado. Assim vê a posição real em vez da mesma imagem três vezes.
+- Um retângulo pode ser concluído escrevendo a largura e a altura. As medidas ficam como restrições em vez de se perderem depois do desenho.
+- Na vista de frente ou de lado, puxe um contorno fechado para lhe dar altura. A medida e a pré-visualização em arame crescem; um valor escrito fixa a altura exata.
+- Puxe o contorno para fora para criar um corpo ou para dentro para criar uma bolsa visível. Uma seta e uma cruz tornam ambas as direções agarráveis.
+- A pré-visualização mostra o bloco, cilindro ou corpo do esboço enquanto introduz as medidas. Antes, os corpos novos ficavam invisíveis até aplicar o passo.
+- As ferramentas de desenho dizem o que fará o próximo clique. As restrições explicam o efeito e a seleção, e os graus de liberdade são descritos de forma clara.
+
+### Furos e elementos
+
+- Altere diretamente o diâmetro de um furo detetado num modelo importado, sem voltar a desenhá-lo nem abrir um programa CAD.
+- O furo alterado mantém posição e direção e funciona em malhas e corpos exatos. Mesmo um furo inclinado continua no eixo original.
+- As marcas dos elementos seguem a geometria visível após novo cálculo. Um furo marcado continua aberto e não fica tapado pela própria marca.
+- As ferramentas frequentes como Furo, União e Subtração ficam um clique mais perto no menu. Os títulos continuam a separar claramente os grupos.
+
+### Blocos e peças normalizadas
+
+- O catálogo oferece parafusos e porcas imprimíveis com roscas correspondentes. Escolha cabeça, comprimento, tamanho e folga adequados à impressão.
+- Os rolamentos comuns têm um alojamento com medidas normalizadas. O rolamento pode ficar removível com folga ou preso por ajuste à pressão.
+- Um furo de parafuso pode alojar uma cabeça escareada ou a anilha correspondente. A profundidade da cabeça regula quanto entram na peça.
+- As tabelas incluem mais anilhas, insertos roscados e rolamentos. Os tamanhos técnicos são explicados na escolha em vez de surgirem como códigos misteriosos.
+- Bolsas de ímanes, clipes e passa-cabos também aceitam medidas próprias. Os campos adicionais só aparecem se a variante escolhida os utilizar.
+
+### Impressão e filamento
+
+- Cada bobina pode ter temperaturas, arrefecimento, retração e valores de material próprios. Esses valores mantêm-se quando muda o nível de qualidade.
+- Os valores de cada bobina chegam ao ficheiro 3MF e ao slicer no lugar de material correto. Uma cor já não recebe por engano os valores de impressão de outra.
+- Os exemplos incluídos já não substituem a impressora e o material escolhidos pelas definições usadas para criar as respetivas pré-visualizações.
+- No Flatpak Linux, o Solidon encontra e inicia slicers do computador, incluindo AppImages. Ambos os programas conseguem aceder à pasta de trabalho partilhada.
+
+### Chat e geração 3D
+
+- As definições separam claramente modelos na cloud e locais. Antes de introduzir uma chave da cloud explicam que dados saem do computador.
+- A verificação de um gerador 3D lento já não prende a janela. Mostra o que está a ser verificado e como instalar os programas adicionais.
+- A atribuição dos elementos detetados continua fluida em modelos grandes. Centenas de elementos são comparados em conjunto em vez de um a um.
+- Os pedidos ao Ollama e ao ComfyUI no mesmo computador evitam o proxy da empresa. Um serviço local ativo já não é indicado por engano como inacessível.
+- No Flatpak Linux, a instalação e o início de programas auxiliares decorrem no computador, não na sandbox. O ComfyUI também é encontrado nos locais habituais.
+
+### Vista e utilização
+
+- A barra de parâmetros mantém as medidas compactas e visíveis. Unidade, limites e expressão podem ser alterados ali com anulação, sem esconder o próprio valor.
+- Os cursores do Solidon seguem o tamanho configurado no sistema em Windows, macOS e Linux. O ponto de clique volta à ponta desenhada em vez de ficar ao lado.
+- Passar o ponteiro e selecionar são marcados de forma claramente diferente. As cores de análise e diferenças continuam prioritárias sobre o realce do corpo inteiro.
+- Menus, indicações e manual usam palavras coerentes para principiantes. Os termos especializados são explicados onde são necessários pela primeira vez.
+- A janela Apoiar explica antes de abrir o PayPal que o pagamento é voluntário e não desbloqueia funções. Se o navegador falhar, o link pode ser copiado.
+- Esvaziar e as outras ferramentas dependentes mostram apenas os campos usados pela variante escolhida e explicam de forma uniforme os valores ocultos.
+
+### Plataformas e correções
+
+- Para Linux há agora uma AppImage além do Flatpak. Assim, o Solidon pode iniciar como um único ficheiro executável sem instalar Flatpak.
+- No Windows, uma atualização termina sem perguntas repetidas e volta a iniciar o Solidon. O Flatpak Linux pode ser atualizado a partir da aplicação.
+- As mensagens ao suporte também podem ser enviadas a partir do pacote Linux. Antes faltava-lhe o acesso de rede necessário.
+- No macOS, as fissuras finas da malha STL de uma rosca são cosidas ao exportar sem aceitar uma malha que tenha piorado.
+- A procura de atualizações aceita um changelog multilingue extenso. As notas já não terminam a meio de uma palavra e as listas longas não bloqueiam a procura.
+- A janela Acerca de do pacote volta a mostrar os avisos de todas as bibliotecas incluídas.
+- Os relatórios de erro mostram versões reais, sessão e método de entrada. Um traço já não indica por engano que falta uma biblioteca necessária.
+- Metadados estranhos isolados já não fazem falhar a reparação de uma malha importada.
+- Um esvaziamento bem-sucedido também indica nos corpos exatos a espessura da parede e o volume removido, em vez de ficar silencioso após o cálculo.
+
 ## 0.2.1
 
 

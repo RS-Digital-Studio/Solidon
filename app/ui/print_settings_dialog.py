@@ -1332,7 +1332,7 @@ class _SliceWorker(Worker):
     """
 
     done = Signal(object)
-    failed = Signal(object)
+    failed = Signal(object, object)
     step = Signal(int, int)
     """Welche Platte gerade läuft und wie viele es sind — beide ab eins gezählt,
     denn diese Zahl steht in der Statuszeile."""
@@ -1382,7 +1382,7 @@ class _SliceWorker(Worker):
                 # Eine Platte, die scheitert, nimmt den Auftrag mit: Was danach
                 # käme, wäre eine Sammlung von Druckdateien, in der eine fehlt —
                 # und wer sie hinterher an den Drucker gibt, merkt das nicht.
-                self.failed.emit(problem)
+                self.failed.emit(problem, list(entry.findings))
                 return
             outcome.findings = [*entry.findings, *outcome.findings]
             results.append(outcome)
@@ -1429,6 +1429,15 @@ class PrintSettingsDialog(QDialog):
 
     sliced = Signal(object)
     """Die Befunde des Laufs, für den Prüfbericht des Fensters."""
+
+    reported = Signal(object)
+    """Die Vorprüfung einer Platte, wenn der Slicer danach abbricht.
+
+    Bei einem erfolgreichen Lauf reisen dieselben Befunde im
+    :class:`SliceOutcome`. Im Fehlerfall gab es bisher keinen Rückweg: Gerade
+    „zu groß“ und „nicht geschlossen“ verschwanden hinter dem allgemeineren
+    Satz des Fremdprogramms.
+    """
 
     setupRequested = Signal()
     """Es ist kein Slicer eingerichtet, und jemand möchte einen.
@@ -3069,7 +3078,7 @@ class PrintSettingsDialog(QDialog):
             else f"{tr('Gespeichert')}: {len(targets)} {tr('Druckdateien')} → {targets[0].parent}"
         )
 
-    def _slice_failed(self, problem: AppError) -> None:
+    def _slice_failed(self, problem: AppError, findings: Sequence[Finding] = ()) -> None:
         """Der Lauf ist gescheitert: Fehlerfenster **und** Zeile im Dialog.
 
         Die Zeile stand auf ``""``, und damit hatte das Fenster den Lauf
@@ -3083,6 +3092,8 @@ class PrintSettingsDialog(QDialog):
         Formulierung: Zwei Sätze über dieselbe Sache driften auseinander, und
         der hier trägt schon die Ursache.
         """
+        if findings:
+            self.reported.emit(list(findings))
         self.state.setText(str(problem.detail) if problem.detail else tr("Abgebrochen."))
         show_error(problem, self)
 

@@ -49,7 +49,7 @@ LOCAL_ROOT = ROOT / "website"
 
 #: Was in der Zugangsdatei stehen muss.
 TEMPLATE: dict[str, Any] = {
-    "host": "188.68.47.33",
+    "host": "a2f21.netcup.net",
     "user": "hosting245877",
     "password": "hier eintragen",
     "root": "solidon3d.de/httpdocs",

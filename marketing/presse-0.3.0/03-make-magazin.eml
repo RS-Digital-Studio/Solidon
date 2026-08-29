@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: mail@make-magazin.de
+Reply-To: marketing@solidon3d.de
+Subject: Werkstattidee: Passungen einmal drucken und danach im Modell verwenden
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Make-Redaktion,
+
+Solidon3D 0.3.0 ist veröffentlicht. Die Desktop-Anwendung macht
+heruntergeladene 3D-Modelle passend und baut neue druckbare Teile aus Maßen,
+Skizzen und geprüften Bausteinen auf. Statt einer allgemeinen Produktmail
+möchte ich Ihnen dazu eine konkrete Werkstattgeschichte anbieten.
+
+Solidon3D erzeugt ein kleines Kalibrierteil für Spiel, Presssitz,
+Mindestwandstärke und Überhang. Man druckt es mit dem eigenen Drucker und
+Filament, misst die brauchbaren Stufen und trägt die Ergebnisse einmal ein.
+Danach verwenden Bohrungen, Zapfen, Lager- und Magnettaschen diese Werte statt
+einer allgemeinen Tabelle. Gerade bei Heat-Set-Buchsen, Schnapphaken und
+beweglichen Scharnieren sieht man am fertigen Teil sofort, ob die Kalibrierung
+stimmt.
+
+Seit der ersten 0.1-Demo ist daraus ein wesentlich breiteres Werkzeug
+geworden: eigene parametrische Bausteine lassen sich ohne Code aus Schritten
+im Verlauf bauen; druckbare Schrauben und Muttern teilen sich Gewindemaße;
+importierte Bohrungen können erkannt und direkt geändert werden; Skizzen
+entstehen direkt auf einer Fläche in der 3D-Ansicht. Insgesamt dokumentiert
+der Changelog bis 0.3.0 220 ausgewählte Nutzeränderungen.
+
+Für einen Beitrag könnte ich ein reproduzierbares Paket vorbereiten:
+
+1. Kalibrierteil als Projekt und 3MF,
+2. zwei identische Halter mit Standard- und Messwerten,
+3. die verwendeten Materialwerte,
+4. den fertigen 0.3.0-Bau für Windows, macOS oder Linux.
+
+Solidon läuft ohne Konto und nach dem Download offline; der optionale Chat ist
+für diesen Versuch nicht nötig. Die Demo ist kostenlos und unbeschnitten:
+https://solidon3d.de/
+
+Wenn das als Werkstattversuch oder kurzer Softwaretest passt, bereite ich die
+Dateien gern passend zu Ihrem Drucker und Material vor.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

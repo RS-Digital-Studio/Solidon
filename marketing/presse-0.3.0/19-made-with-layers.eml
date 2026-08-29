@@ -1,0 +1,45 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: im2404@toms3d.org
+Reply-To: marketing@solidon3d.de
+Subject: Testidee: Eine fremde STL passend machen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Thomas,
+
+Solidon3D 0.3.0 ist veröffentlicht. Die Desktop-Anwendung richtet sich an
+Menschen, die ein heruntergeladenes 3D-Modell passend machen oder ein eigenes
+druckbares Teil aus Maßen, Skizzen und Bausteinen aufbauen wollen, ohne zuerst
+ein vollständiges CAD-System zu lernen. Statt eine lange Funktionsliste zu
+schicken, würde ich dir gern eine klare Testaufgabe anbieten:
+
+Ein heruntergeladener Halter hat die falsche Bohrung, braucht eine
+Heat-Set-Buchse und passt mit den üblichen Toleranzen nicht zum eigenen
+Drucker. Solidon soll die vorhandene Bohrung im Netz erkennen, ihren
+Durchmesser auf derselben Achse ändern, die Buchse als Normbaustein einsetzen
+und die Passung aus einem zuvor gedruckten Kalibrierteil übernehmen. Jeder
+Schritt bleibt im Verlauf änderbar und lässt sich gemeinsam zurücknehmen.
+
+Seit 0.1 kamen bis 0.3.0 insgesamt 220 ausgewählte, sichtbare Verbesserungen
+zusammen: Skizzieren direkt in der 3D-Ansicht,
+eigene parametrische Bausteine ohne Code, druckbare Schrauben und Muttern,
+mehrere Filamentspulen mit ihren jeweiligen Druckwerten, 3MF- und
+Slicer-Übergabe sowie Pakete für Windows, macOS und Linux.
+
+Solidon ist kein Slicer und will kein vollständiges CAD ersetzen. Es soll die
+Lücke zwischen „Datei gefunden“ und „Teil passt“ für Menschen schließen, die
+nicht erst ein großes CAD-System lernen möchten. Ohne Konto und ohne Netz
+bleibt alles außer bewusst gewählten Onlinediensten nutzbar.
+
+Demo und Überblick: https://solidon3d.de/
+
+Wenn die Aufgabe zu Made with Layers passt, stelle ich Projektdatei,
+Ausgangs-STL, erwartete Maße und den fertigen 0.3.0-Bau bereit – ohne Vorgabe
+für Ergebnis oder Veröffentlichung.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

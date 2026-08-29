@@ -40,6 +40,70 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.0
+
+
+### Zeichnen und Formen
+
+- Im Skizzenmodus lassen sich Punkte, Linien, Kreise und Konturen direkt in der Ansicht auswählen und ziehen. Markierung und Griff zeigen zusätzlich, was bewegt wird.
+- Die Zeichenebene bleibt im Raum stehen, wenn Sie zwischen Drauf-, Vorder- und Seitenansicht wechseln. So erkennen Sie ihre wirkliche Lage statt dreimal dasselbe Bild zu sehen.
+- Ein Rechteck lässt sich mit eingetippter Breite und Höhe fertigstellen. Die Maße bleiben als Bedingungen erhalten, statt nach dem Zeichnen wieder verloren zu gehen.
+- In der Vorder- oder Seitenansicht ziehen Sie einen geschlossenen Umriss zur Höhe auf. Zahl und Drahtvorschau wachsen mit; ein eingetippter Wert setzt die Höhe genau.
+- Ziehen Sie den Umriss nach außen, entsteht ein Körper; ziehen Sie ihn nach innen, entsteht eine sichtbare Tasche. Pfeil und Kreuz machen beide Richtungen greifbar.
+- Beim Erzeugen eines Quaders, Zylinders oder Skizzenkörpers erscheint die Vorschau schon während der Eingabe. Neue Körper blieben vorher bis zum Anwenden unsichtbar.
+- Zeichenwerkzeuge sagen, was der nächste Klick bewirkt. Bedingungen erklären ihre Wirkung und die Auswahl; die Freiheitsgrade stehen in verständlichen Sätzen da.
+
+### Bohrungen und Merkmale
+
+- Den Durchmesser einer erkannten Bohrung in einem importierten Modell ändern Sie direkt, ohne die Bohrung neu zu zeichnen oder ein CAD-Programm zu öffnen.
+- Die geänderte Bohrung behält Lage und Richtung und funktioniert an Netzen wie an exakten Körpern. Auch eine schräge Bohrung bleibt auf ihrer ursprünglichen Achse.
+- Merkmalsmarkierungen folgen nach einer Neuberechnung der sichtbaren Geometrie. Eine markierte Bohrung bleibt dabei offen und wird nicht von ihrer Markierung verdeckt.
+- Häufige Werkzeuge wie Bohrung, Vereinigen und Abziehen liegen im Menü einen Klick näher. Überschriften halten die Gruppen trotzdem verständlich auseinander.
+
+### Bausteine und Normteile
+
+- Druckbare Schrauben und Muttern kommen mit zueinander passendem Gewinde aus dem Katalog. Kopf, Länge, Größe und Spiel lassen sich passend zum Druck wählen.
+- Für gängige Kugellager gibt es einen Lagersitz mit Normmaß. Das Lager kann wechselbar mit Spiel oder fest als Presspassung eingesetzt werden.
+- Ein Schraubenloch kann jetzt einen Senkkopf oder eine passende Unterlegscheibe einlassen. Die Kopftiefe bestimmt, wie weit beides im Teil verschwindet.
+- Die Normtabellen enthalten mehr Unterlegscheiben, Gewindeeinsätze und Kugellager. Technische Größen stehen mit einer Erklärung in der Auswahl statt als rätselhafter Code.
+- Magnettaschen, Kabelclips und Kabeldurchführungen nehmen auch eigene Maße an. Zusatzfelder erscheinen nur, wenn die gewählte Variante sie wirklich benutzt.
+
+### Drucken und Filament
+
+- Jede Filamentspule kann eigene Temperaturen, Kühlung, Rückzug und Materialwerte tragen. Die Werte bleiben auch erhalten, wenn Sie die Qualitätsstufe wechseln.
+- Die Werte der einzelnen Spulen erreichen 3MF-Datei und Slicer für den richtigen Materialplatz. Eine Farbe nimmt nicht mehr versehentlich die Druckwerte einer anderen mit.
+- Mitgelieferte Beispiele überschreiben den gewählten Drucker und das Material nicht mehr mit den Einstellungen, mit denen ihre Vorschaubilder gebaut wurden.
+- Im Linux-Flatpak findet und startet Solidon Slicer auf dem Rechner, auch als AppImage. Der gemeinsame Arbeitsordner ist für beide Programme erreichbar.
+
+### Chat und 3D-Erzeugung
+
+- Die Einstellungen trennen Cloud- und lokale Modelle sichtbar. Bevor ein Cloud-Schlüssel eingetragen wird, steht dort, welche Daten den Rechner verlassen.
+- Die Prüfung eines langsamen 3D-Generators hält den Dialog nicht mehr fest. Währenddessen steht dort, was geprüft wird und wie zusätzliche Programme eingerichtet werden.
+- Die Zuordnung erkannter Merkmale bleibt auch bei großen Modellen flüssig. Hunderte Merkmale werden gemeinsam statt nacheinander verglichen.
+- Anfragen an Ollama und ComfyUI auf demselben Rechner umgehen den Firmenproxy. Ein laufender lokaler Dienst wird dadurch nicht mehr fälschlich als unerreichbar gemeldet.
+- Im Linux-Flatpak laufen Einrichtung und Start lokaler Zusatzprogramme auf dem Rechner statt im Sandkasten. ComfyUI wird auch an üblichen Linux- und macOS-Orten gefunden.
+
+### Ansicht und Bedienung
+
+- Die Parameterleiste zeigt Maße kompakt und dauerhaft. Einheit, Grenzen und Ausdruck lassen sich dort rücknehmbar ändern, ohne dass die eigentliche Zahl aus dem Blick rutscht.
+- Eigene Werkzeugzeiger folgen auf Windows, macOS und Linux der eingestellten Systemgröße. Ihr Klickpunkt liegt wieder an der gezeichneten Spitze statt daneben.
+- Darüberfahren und Auswählen sind in der Ansicht klar verschieden markiert. Analyse- und Unterschiedsfarben bleiben dabei wichtiger als eine Ganzkörpermarkierung.
+- Menüs, Hinweise und Handbuch verwenden einheitliche Wörter für Einsteiger. Fachbegriffe werden dort erklärt, wo sie zum ersten Mal gebraucht werden.
+- Der Unterstützen-Dialog erklärt vor dem Öffnen von PayPal, dass die Zahlung freiwillig ist und keine Funktionen freischaltet. Scheitert der Browser, lässt sich der Link kopieren.
+- Aushöhlen und andere abhängige Werkzeuge zeigen nur Felder, die für die gewählte Variante gelten, und erklären ausgeblendete Werte einheitlich.
+
+### Plattformen und behobene Fehler
+
+- Für Linux gibt es neben dem Flatpak auch ein AppImage. Damit lässt sich Solidon ohne Flatpak-Installation als einzelne ausführbare Datei starten.
+- Unter Windows läuft ein Update ohne wiederholte Rückfragen durch und startet Solidon wieder. Das Linux-Flatpak lässt sich aus der Anwendung heraus aktualisieren.
+- Rückmeldungen an den Support lassen sich auch aus dem Linux-Paket senden. Dem Paket fehlte dafür bisher der Netzzugang.
+- Auf macOS werden feine Risse im STL-Netz eines Gewindes beim Export vernäht, ohne ein bereits schlechter gewordenes Netz zu übernehmen.
+- Die Update-Prüfung liest auch einen umfangreichen mehrsprachigen Changelog. Hinweise enden nicht mehr mitten im Wort, und lange Neuerungslisten verhindern die Prüfung nicht.
+- Der Über-Dialog zeigt im gebauten Paket wieder die Hinweise zu allen mitgelieferten Bibliotheken.
+- Der Fehlerbericht nennt echte Bibliotheksfassungen sowie Sitzung und Eingabemethode. Ein Strich bedeutet nicht mehr fälschlich, dass eine notwendige Bibliothek fehlt.
+- Beim Reparieren importierter Netze bringen einzelne fremde Metadaten die Reparatur nicht mehr zum Absturz.
+- Erfolgreiches Aushöhlen nennt nun auch bei exakten Körpern Wandstärke und entferntes Volumen, statt nach einer gelungenen Rechnung still zu bleiben.
+
 ## 0.2.1
 
 

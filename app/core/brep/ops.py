@@ -230,10 +230,7 @@ class FilletParams(BaseParams):
     params=FilletParams,
     consumes=1,
     produces=1,
-    doc=_(
-        "Verrundet eine bearbeitbare Kante als echte Kurve statt als Folge "
-        "gerader Abschnitte."
-    ),
+    doc=_("Verrundet eine bearbeitbare Kante als echte Kurve statt als Folge gerader Abschnitte."),
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
     params = cast(FilletParams, ctx.params)

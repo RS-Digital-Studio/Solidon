@@ -1262,6 +1262,11 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     kurz = tool_schemas(compact=True)
 
     assert {entry["name"] for entry in kurz} == {entry["name"] for entry in voll}
+    from app.core.backends import llm
+
+    assert len(kurz) == llm.PROMPT_TOOL_COUNT, (
+        "der gemessene Ollama-Prompt gehört nach jeder neuen Operation neu gemessen"
+    )
     for lang, knapp in zip(voll, kurz, strict=True):
         assert (
             lang["input_schema"]["properties"].keys() == knapp["input_schema"]["properties"].keys()

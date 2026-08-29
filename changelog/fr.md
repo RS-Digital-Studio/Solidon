@@ -16,6 +16,70 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.0
+
+
+### Dessin et mise en forme
+
+- En mode esquisse, sélectionnez et déplacez points, lignes, cercles et contours directement dans la vue. Un repère et une poignée indiquent aussi ce qui va bouger.
+- Le plan de dessin reste dans l'espace quand vous passez entre les vues de dessus, de face et de côté. Vous voyez sa position réelle au lieu de trois images identiques.
+- Un rectangle peut être terminé en saisissant sa largeur et sa hauteur. Les cotes restent des contraintes au lieu de disparaître après le dessin.
+- Dans la vue de face ou de côté, tirez un contour fermé pour lui donner une hauteur. La cote et l'aperçu filaire grandissent ; une valeur saisie fixe la hauteur exacte.
+- Tirez le contour vers l'extérieur pour créer un corps ou vers l'intérieur pour créer une poche visible. Une flèche et une croix rendent les deux directions saisissables.
+- L'aperçu affiche le pavé, cylindre ou corps esquissé pendant la saisie de ses cotes. Les nouveaux corps restaient auparavant invisibles jusqu'à l'application.
+- Les outils de dessin annoncent l'effet du prochain clic. Les contraintes expliquent leur effet et la sélection, et les degrés de liberté sont décrits simplement.
+
+### Perçages et éléments
+
+- Modifiez directement le diamètre d'un perçage détecté dans un modèle importé, sans le redessiner ni ouvrir un logiciel de CAO.
+- Le perçage modifié garde sa position et sa direction sur les maillages comme sur les corps exacts. Même un perçage incliné reste sur son axe d'origine.
+- Les repères d'éléments suivent la géométrie visible après recalcul. Un perçage repéré reste ouvert au lieu d'être masqué par son repère.
+- Les outils fréquents comme Perçage, Union et Soustraction sont accessibles avec un clic de moins. Les titres continuent de séparer clairement les groupes.
+
+### Blocs et pièces normalisées
+
+- Le catalogue propose des vis et écrous imprimables avec des filetages assortis. Choisissez tête, longueur, taille et jeu selon l'impression.
+- Les roulements courants disposent d'un logement aux dimensions normalisées. Le roulement peut rester démontable avec du jeu ou tenir par ajustement serré.
+- Un perçage de vis peut loger une tête fraisée ou sa rondelle. La profondeur de tête règle jusqu'où l'une ou l'autre s'enfonce dans la pièce.
+- Les tables contiennent davantage de rondelles, inserts filetés et roulements. Les tailles techniques sont expliquées dans le choix au lieu de rester des codes obscurs.
+- Les poches d'aimant, clips et passe-câbles acceptent aussi des dimensions personnalisées. Les champs supplémentaires n'apparaissent que si la variante les utilise.
+
+### Impression et filament
+
+- Chaque bobine peut porter ses propres températures, refroidissement, rétraction et valeurs de matière. Elles restent en place lors d'un changement de qualité.
+- Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre.
+- Les exemples fournis ne remplacent plus l'imprimante et le matériau choisis par les réglages qui ont servi à créer leurs aperçus.
+- Dans le Flatpak Linux, Solidon trouve et lance les trancheurs de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.
+
+### Chat et génération 3D
+
+- Les réglages séparent clairement les modèles cloud et locaux. Avant la saisie d'une clé cloud, ils expliquent quelles données quittent l'ordinateur.
+- La vérification d'un générateur 3D lent ne retient plus la fenêtre. Elle indique ce qui est vérifié et comment installer les programmes supplémentaires.
+- L'affectation des éléments détectés reste fluide sur les grands modèles. Des centaines d'éléments sont comparés ensemble au lieu de l'être un par un.
+- Les requêtes vers Ollama et ComfyUI sur le même ordinateur évitent le proxy de l'entreprise. Un service local actif n'est plus signalé à tort comme inaccessible.
+- Dans le Flatpak Linux, l'installation et le lancement des programmes auxiliaires se font sur l'ordinateur et non dans le bac à sable. ComfyUI est aussi trouvé aux emplacements usuels.
+
+### Vue et utilisation
+
+- La barre de paramètres garde les cotes compactes et visibles. Unité, limites et expression s'y modifient avec annulation sans masquer la valeur elle-même.
+- Les curseurs de Solidon suivent la taille système réglée sous Windows, macOS et Linux. Leur point de clic revient sur la pointe dessinée au lieu d'être à côté.
+- Le survol et la sélection sont nettement distingués dans la vue. Les couleurs d'analyse et de différence restent prioritaires sur la surbrillance du corps entier.
+- Les menus, indications et le manuel emploient des mots cohérents pour les débutants. Les termes spécialisés sont expliqués lors de leur premier emploi.
+- La fenêtre Soutenir explique avant d'ouvrir PayPal que le paiement est volontaire et ne débloque aucune fonction. Si le navigateur échoue, le lien peut être copié.
+- Évider et les autres outils dépendants n'affichent que les champs utilisés par la variante choisie et expliquent uniformément les valeurs masquées.
+
+### Plateformes et corrections
+
+- Linux dispose maintenant d'une AppImage en plus du Flatpak. Solidon peut ainsi démarrer comme un fichier exécutable unique sans installation de Flatpak.
+- Sous Windows, une mise à jour s'effectue sans questions répétées et relance Solidon. Le Flatpak Linux peut être mis à jour depuis l'application.
+- Les retours au support peuvent aussi être envoyés depuis le paquet Linux. L'accès réseau nécessaire lui manquait jusqu'ici.
+- Sous macOS, les fissures fines du maillage STL d'un filetage sont recousues à l'export sans accepter un maillage devenu moins bon.
+- La recherche de mise à jour accepte un changelog multilingue conséquent. Les notes ne finissent plus au milieu d'un mot et les longues listes ne la bloquent plus.
+- La fenêtre À propos du paquet affiche de nouveau les mentions de toutes les bibliothèques fournies.
+- Les rapports d'erreur donnent les vraies versions, la session et la méthode de saisie. Un tiret ne signifie plus à tort qu'une bibliothèque nécessaire manque.
+- Des métadonnées étrangères isolées ne font plus échouer la réparation d'un maillage importé.
+- Un évidement réussi indique aussi pour les corps exacts l'épaisseur de paroi et le volume retiré, au lieu de rester silencieux après le calcul.
+
 ## 0.2.1
 
 

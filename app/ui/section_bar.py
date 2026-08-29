@@ -26,8 +26,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
+from app.core.units import round_display
 from app.i18n import tr
-from app.ui.labels import LengthSpin, length
+from app.ui.labels import LengthSpin, length, localised
 from app.ui.leash import weak_slot
 from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
@@ -57,6 +58,7 @@ class MeasureBar(QWidget):
         self.mode.addItem(tr("Nicht messen"), userData="off")
         self.mode.addItem(tr("Abstand messen"), userData="distance")
         self.mode.addItem(tr("Wandstärke messen"), userData="thickness")
+        self.mode.addItem(tr("Winkel messen"), userData="angle")
         self.mode.currentIndexChanged.connect(
             weak_slot(self, lambda bar: bar.modeChanged.emit(bar.mode.currentData()))
         )
@@ -77,7 +79,12 @@ class MeasureBar(QWidget):
             "thickness": tr("Wandstärke"),
             "angle": tr("Winkel"),
         }.get(kind, kind)
-        self.readout.setText(f"{name}: {length(value)}   ({count})")
+        shown = localised(f"{round_display(value):g}°") if kind == "angle" else length(value)
+        self.readout.setText(f"{name}: {shown}   ({count})")
+
+    def show_status(self, text: str) -> None:
+        """Sagt, welcher Klick als Nächstes fehlt oder warum keiner zählte."""
+        self.readout.setText(text)
 
 
 class SectionBar(QWidget):

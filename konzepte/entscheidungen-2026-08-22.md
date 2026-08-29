@@ -309,8 +309,9 @@ Eine Nacht kostet das, und keine Substanz.
 Nichts davon ist eine Entscheidung, die eine Sitzung treffen könnte — es fehlt
 jeweils etwas, das man nicht beschließen kann:
 
-- **CI-Dienst und Signaturzertifikat**, Apple-Notarisierung, DMARC-Eintrag,
-  das Postfach `support@` — Zugänge und Verträge.
+- **CI-Dienst und Signaturzertifikat**, Apple-Notarisierung und DMARC-Eintrag
+  — Zugänge und Verträge. Das Postfach `support@solidon3d.de` existiert
+  (Robert, 28.08.2026).
 - **Zwei Agenten-Suite-Läufe gegen Sonnet 5** und **P16.10** — beide kosten
   Geld über Roberts Schlüssel.
 - **Zwei Messschieberwerte** an einer 2020er und einer 3030er Aluschiene.

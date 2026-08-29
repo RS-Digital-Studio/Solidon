@@ -1269,7 +1269,9 @@ def test_the_orca_machine_profile_is_written_out_not_referenced(tmp_path: Path) 
     assert document["nozzle_diameter"] == ["0.4"], "und der eigene Wert der Stufe"
     # Nichts wird nachgeladen: Was in der Datei steht, gilt.
     assert "inherits" not in document, "ausgeschrieben, nicht verwiesen"
-    assert document["from"] == "User", "sonst lehnt der Slicer die Datei ab"
+    assert document["from"] == "system", (
+        "ElegooSlicer ordnet ein User-Maschinenprofil keinem Prozessprofil zu"
+    )
     assert document["name"].startswith("Solidon"), "und es ist Solidons Datei"
 
 
@@ -1313,6 +1315,9 @@ def test_the_orca_process_names_the_machine_solidon_wrote(tmp_path: Path) -> Non
     prozessdatei = json.loads(written.process.read_text(encoding="utf-8"))
     assert prozessdatei["compatible_printers"] == [maschinendatei["name"]], (
         "der Prozess nennt die Maschine, die daneben geschrieben wurde"
+    )
+    assert prozessdatei["from"] == maschinendatei["from"] == "system", (
+        "nur dieselbe CLI-Kategorie nimmt die Bindung als verträglich an"
     )
     # Und nicht mehr die des Herstellers: Sie zeigte auf ein Profil aus
     # seinem Bestand, das hier gar nicht mitgeliefert wird.
@@ -1697,6 +1702,34 @@ def test_any_other_silence_keeps_the_old_answer(
     assert "Bauraum" not in str(raised.value), str(raised.value)
     assert not any(action.id == "arrange_on_bed" for action in raised.value.suggestions)
     assert any(action.id == "check_profile" for action in raised.value.suggestions)
+
+
+def test_no_layers_points_at_the_model_instead_of_the_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ElegooSlicer 1.5.3.4 benennt den Fall, und Solidon nutzt die Auskunft.
+
+    Ein offener Würfel endete vorher bei „Maschinenprofil prüfen“. Das Profil
+    hatte gerade einen gesunden Würfel geslicet; repariert werden muss das
+    Modell, und die Ausgabe lässt offen, ob die Ursache eine Öffnung, ein zu
+    dünner Körper oder eine falsche Einheit ist.
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_saying(
+        monkeypatch,
+        tmp_path,
+        b"No layers were detected. You might want to repair your STL file(s).\n",
+    )
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    text = str(raised.value)
+    assert "keine druckbaren Schichten" in text
+    assert all(word in text for word in ("offene Stellen", "Einheit", "Wandstärke"))
+    offered = {action.id for action in raised.value.suggestions}
+    assert {"repair_and_retry", "show_locations"} <= offered
+    assert "check_profile" not in offered, "der Slicer hat das Modell benannt, nicht das Profil"
 
 
 def _gcode_printing_at(*xs: float) -> str:

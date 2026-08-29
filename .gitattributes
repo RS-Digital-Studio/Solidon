@@ -10,4 +10,4 @@
 # aus „Mod=" + Umbruch + „ell" wird dann nicht „Modell", sondern „Mod=ll" —
 # das „=" bleibt stehen, das „e" ist weg. Die Regel „* text=auto eol=lf" oben
 # würde genau das anrichten, sobald eine .eml eingecheckt wird.
-*.eml -text
+*.eml -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

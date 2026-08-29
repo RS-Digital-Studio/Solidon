@@ -212,8 +212,11 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     # Synonym, das der Stamm ohnehin schon findet, bringt nichts und nimmt
     # einer Zusicherung ihren Fall.
     "create_box": ("exakt", "brep", "echte kanten"),
+    "create_brep_box": ("exakt", "brep", "echte kanten"),
     "create_cylinder": ("exakt", "brep", "echte kanten"),
+    "create_brep_cylinder": ("exakt", "brep", "echte kanten"),
     "drill_hole": ("exakt", "brep", "echte kanten"),
+    "drill_brep_hole": ("exakt", "brep", "echte kanten"),
     "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
     # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
     # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"

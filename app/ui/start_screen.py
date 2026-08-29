@@ -619,7 +619,6 @@ class StartScreen(QWidget):
                     widget.deleteLater()
         self.tiles = []
 
-        columns = self._columns
         placed = {True: 0, False: 0}
         for path in examples.paths():
             entry = examples.by_path(path)

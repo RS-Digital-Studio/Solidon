@@ -15,6 +15,70 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.0
+
+
+### Drawing and shaping
+
+- In sketch mode, points, lines, circles and outlines can be selected and dragged directly in the view. A marker and handle also show what will move.
+- The sketch plane stays in space when you switch between top, front and side views. You see its real position instead of the same picture three times.
+- A rectangle can be completed by typing its width and height. The dimensions remain as constraints instead of being lost after drawing.
+- In the front or side view, pull a closed outline to give it height. The number and wire preview grow with it; typing a value sets the exact height.
+- Pull the outline outwards to create a body or inwards to create a visible pocket. An arrow and cross make both directions grabbable.
+- A box, cylinder or sketched body appears in the preview while you enter its dimensions. New bodies previously stayed invisible until you applied the step.
+- Drawing tools say what the next click will do. Constraints explain their effect and required selection, and degrees of freedom are described in plain language.
+
+### Holes and features
+
+- Change the diameter of a detected hole in an imported model directly, without redrawing the hole or opening a CAD program.
+- The changed hole keeps its position and direction and works on meshes as well as exact bodies. A slanted hole also stays on its original axis.
+- Feature markers follow the visible geometry after recalculation. A marked hole stays open instead of being covered by its marker.
+- Frequent tools such as Hole, Union and Subtract are one click closer in the menu. Headings still keep the groups easy to tell apart.
+
+### Building blocks and standard parts
+
+- Printable screws and nuts come from the catalogue with matching threads. Choose head, length, size and clearance to suit the print.
+- Common bearings now have a seat built to their standard dimensions. The bearing can remain removable with clearance or be held by a press fit.
+- A screw hole can recess a countersunk head or matching washer. Head depth controls how far either one disappears into the part.
+- The standard tables contain more washers, threaded inserts and bearings. Technical sizes are explained in the choice instead of appearing as cryptic codes.
+- Magnet pockets, cable clips and cable glands also accept custom dimensions. Extra fields appear only when the selected variant actually uses them.
+
+### Printing and filament
+
+- Each filament spool can carry its own temperatures, cooling, retraction and material values. These values remain when you change the quality level.
+- Values from individual spools reach the 3MF file and slicer in the correct material slot. One colour no longer picks up another colour's print values by mistake.
+- Included examples no longer replace your chosen printer and material with the settings used to build their preview images.
+- In the Linux Flatpak, Solidon finds and starts slicers on the host, including AppImages. Both programs can reach the shared working folder.
+
+### Chat and 3D generation
+
+- Settings visibly separate cloud and local models. Before you enter a cloud key, they explain which data leaves the computer.
+- Checking a slow 3D generator no longer holds the dialog open. It shows what is being checked and how to set up additional programs.
+- Assigning detected features stays responsive on large models. Hundreds of features are compared together instead of one after another.
+- Requests to Ollama and ComfyUI on the same computer bypass the company proxy. A running local service is no longer falsely reported as unreachable.
+- In the Linux Flatpak, setup and launch of local helper programs run on the host rather than in the sandbox. ComfyUI is also found in common Linux and macOS locations.
+
+### View and controls
+
+- The parameter bar keeps dimensions compact and visible. Unit, limits and expression can be changed there with undo, without hiding the value itself.
+- Solidon's tool cursors follow the configured system size on Windows, macOS and Linux. Their click point is back on the drawn tip instead of beside it.
+- Hovering and selection are clearly different in the view. Analysis and difference colours still take priority over a whole-body highlight.
+- Menus, hints and the manual use consistent words for beginners. Specialist terms are explained where they are first needed.
+- The Support dialog explains before opening PayPal that payment is voluntary and unlocks no features. If the browser fails, the link can be copied.
+- Hollowing and other dependent tools show only fields used by the selected variant and explain hidden values consistently.
+
+### Platforms and fixes
+
+- Linux now has an AppImage alongside the Flatpak. Solidon can therefore run as a single executable file without a Flatpak installation.
+- On Windows, an update runs without repeated questions and starts Solidon again. The Linux Flatpak can be updated from inside the application.
+- Feedback can also be sent to support from the Linux package. The package previously lacked network access for this.
+- On macOS, fine cracks in a thread's STL mesh are stitched during export without accepting a mesh that became worse.
+- Update checking accepts a substantial multilingual changelog. Notes no longer end mid-word, and long lists of changes no longer stop the check.
+- The About dialog in the packaged application once again shows notices for every bundled library.
+- Error reports show real library versions as well as session and input-method details. A dash no longer falsely says that a required library is missing.
+- Individual foreign metadata values no longer make the repair of an imported mesh crash.
+- Successful hollowing now reports wall thickness and removed volume for exact bodies too, instead of staying silent after a completed calculation.
+
 ## 0.2.1
 
 

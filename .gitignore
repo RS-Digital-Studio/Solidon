@@ -45,6 +45,7 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+/.codex-*/
 .coverage
 htmlcov/
 
@@ -112,6 +113,15 @@ website/dl/
 # Und derselbe Ordner an seinem eigentlichen Ort: Auf dem Server liegt er
 # neben dem Dokumentenstamm, lokal landet er damit im Wurzelverzeichnis.
 /solidon-stats/
+
+# Private Serverwerte und übertragene Aktivierungsdateien. Der Startwert darf
+# nie ins Repository oder in den Dokumentenstamm; Anfrage und Antwort gehören
+# dem jeweiligen Kundenrechner, nicht dem Projekt.
+activation.seed
+activation.sqlite*
+operator.token
+*.solidon-request
+*.solidon-activation
 
 # Der Bericht von tools/run_ui_audit.py. Er entsteht bei jedem Lauf neu und
 # gehoert dem Rechner, auf dem er lief — nicht dem Repository.

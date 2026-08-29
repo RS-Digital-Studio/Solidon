@@ -1,0 +1,47 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: pressemitteilung@3d-grenzenlos.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: Bohrungen in importierten Modellen direkt anpassen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+Solidon3D 0.3.0 ist veröffentlicht. Die Desktop-Anwendung richtet sich an
+Menschen, die ein heruntergeladenes Modell passend machen oder ein druckbares
+Teil aus Maßen, Skizzen und geprüften Bausteinen aufbauen möchten, ohne dafür
+ein vollständiges CAD-System lernen zu müssen.
+
+Seit der ersten 0.1-Demo ist sehr viel mehr geschehen, als die Versionsnummer
+vermuten lässt: Der Changelog dokumentiert 220 ausgewählte, sichtbare
+Verbesserungen.
+
+Der stärkste neue Aufhänger für eine Meldung ist aus meiner Sicht das Ändern
+erkannter Bohrungen in importierten Modellen. Solidon erkennt die vorhandene
+Bohrung, behält Position und Achse und setzt einen neuen Durchmesser – auf
+Netzen wie auf exakten Körpern und auch bei schrägen Bohrungen. Für einen
+heruntergeladenen Halter bedeutet das: M5 statt M4, ohne Neuzeichnen und ohne
+das Ursprungs-CAD.
+
+Dazu kamen unter anderem ein Skizzenmodus direkt in der 3D-Ansicht, eigene
+parametrische Bausteine aus Schritten im Verlauf, druckbare Schrauben und
+Muttern mit passenden Gewinden, Normsitze für Kugellager, Druckwerte je
+Filamentspule sowie AppImage und Flatpak neben Windows und macOS.
+
+Der Grundsatz blieb unverändert: Jeder Eingriff ist ein rücknehmbarer,
+reproduzierbarer Schritt. Der optionale Chat darf dieselben registrierten
+Werkzeuge aufrufen wie die Menüs, aber nie selbst Geometrie oder fremden Code
+ausführen. Ohne Konto und Netz funktioniert die eigentliche Anwendung weiter.
+
+Download und Überblick: https://solidon3d.de/
+Neuerungen: https://solidon3d.de/changelog.html
+
+Gern sende ich Ihnen Bildschirmfotos, ein Testprojekt und ein kompaktes
+Pressepaket zur 0.3.0. Rückfragen beantworte ich persönlich.
+
+Mit freundlichen Grüßen
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

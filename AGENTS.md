@@ -12,8 +12,10 @@ Desktop-Anwendung zum Konstruieren, Generieren und Bearbeiten druckbarer
 3D-Modelle. Kern ist ein non-destruktiver Operationsstack über einer Szene mit
 mehreren Objekten, benannten Projektparametern und Passungsbeziehungen. Ein
 LLM-Agent steuert denselben Operations-API fern, den auch die Menüs benutzen.
-Geometrie rechnet Code, nie das Modell. Ohne Netz, ohne Konto und ohne KI
-bleibt alles außer dem Chat benutzbar.
+Geometrie rechnet Code, nie das Modell. Nach der einmaligen
+Gerätefreischaltung bleibt Solidon ohne Netz und ohne Konto vollständig
+nutzbar; ein Arbeitsrechner ohne Netz wird per Dateiweg über ein zweites Gerät
+aktiviert. Ohne KI bleibt nur der Chat aus.
 
 ---
 

@@ -106,7 +106,7 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Eine Bohrung zieht ab; ihre Meldung darf nicht vom Verbinden sprechen."""
-    import OCP.BRepAlgoAPI as brep_api
+    import OCP.BRepAlgoAPI as brep_api  # noqa: N813 - Name der externen OCP-API
 
     class BrokenBoolean:
         """Kleinster Ersatz für einen Booleschen Builder ohne Ergebnis."""
@@ -114,10 +114,10 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
         def __init__(self, _first: object, _second: object) -> None:
             pass
 
-        def Build(self) -> None:
+        def Build(self) -> None:  # noqa: N802 - bildet die externe OCP-API nach
             pass
 
-        def IsDone(self) -> bool:
+        def IsDone(self) -> bool:  # noqa: N802 - bildet die externe OCP-API nach
             return False
 
     monkeypatch.setattr(brep_api, "BRepAlgoAPI_Cut", BrokenBoolean)

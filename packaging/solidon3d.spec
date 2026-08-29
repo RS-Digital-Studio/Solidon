@@ -151,10 +151,11 @@ hiddenimports = [
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
     # Die optionalen Kerne werden innerhalb von Funktionen importiert, damit
-    # die Anwendung ohne sie startet (§30, §22.3). PyInstaller sieht nur
-    # Importe auf Modulebene, also stehen sie hier — ein paketierter Build
-    # kann nichts nachinstallieren, und einer, dem stillschweigend die
-    # Verrundungen fehlen, ist schlimmer als ein großer.
+    # die Anwendung ohne sie startet (§30, §22.3). Normale Funktionsimporte
+    # findet PyInstallers Modulgraph; ausdrücklich stehen sie hier trotzdem
+    # als Paketvertrag für optionale Kerne und dynamisch geladene Backends —
+    # ein paketierter Build kann nichts nachinstallieren, und einer, dem
+    # stillschweigend die Verrundungen fehlen, ist schlimmer als ein großer.
     "OCP.BRepPrimAPI",
     "OCP.BRepFilletAPI",
     "OCP.BRepAlgoAPI",

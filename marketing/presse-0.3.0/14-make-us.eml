@@ -1,0 +1,47 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editor@make.co
+Reply-To: marketing@solidon3d.de
+Subject: Story pitch: Print one fit gauge, then reuse its measurements in every model
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Make: Editors,
+
+Solidon3D 0.3.0 has been released. It is a local desktop application for
+adapting downloaded 3D-printing models and constructing printable parts from
+dimensions, sketches and tested components. Rather than send a general product
+announcement, I would like to pitch a reproducible workshop article: print one
+small gauge, measure the clearances that actually work on your printer and
+filament, then reuse those values in every later hole, pin, bearing seat and
+snap fit.
+
+Solidon3D generates stepped fit, wall-thickness and overhang calibration
+pieces. The maker records the useful steps in a material profile. From then
+on, a downloaded STL can have an existing hole recognised and resized, a
+heat-set insert can use the measured press fit, and a print-in-place hinge can
+inherit the tested clearance. Every change remains a reversible operation, so
+the result can be adjusted after the first print rather than rebuilt.
+
+The exercise can stand on its own, but it also shows what changed since
+Solidon’s first 0.1 demo. The 0.3.0 release brings the selected user-visible
+change count to 220: in-viewport sketching, reusable parametric parts made
+from history without code, matching printable screws and nuts, per-spool
+process data in 3MF, and Windows, macOS and Linux builds.
+
+Solidon works without an account or cloud storage. Its optional AI chat is not
+required for this project; geometry is always calculated by deterministic
+code.
+
+Overview: https://solidon3d.de/en/
+
+I can deliver a complete article test kit: calibration and comparison models,
+a measurement sheet, the 0.3.0 build, step-by-step images and the final
+3MF files. Reply “project kit” and I will send it in one download, with no
+requirement to cover the software positively—or at all.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

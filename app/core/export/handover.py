@@ -37,8 +37,10 @@ from app.core.errors import (
     EXPORT_ONLY,
     INSTALL_MISSING,
     OPEN_SETTINGS,
+    REPAIR_AND_RETRY,
     RETRY,
     SCALE_TO_FIT,
+    SHOW_LOCATIONS,
     Action,
     ExternalToolError,
     FileWriteError,
@@ -1097,7 +1099,15 @@ def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
     """
     document: dict[str, object] = {
         "type": "machine",
-        "from": "User",
+        # **CLI-Kategorie, keine Herkunftsbehauptung.** ElegooSlicer 1.5.3.4
+        # behandelt ein Maschinenprofil mit ``from: User`` als unverknüpften
+        # Einzelwert. Ein daneben geladenes Prozessprofil bleibt dann selbst
+        # bei einer wörtlich passenden ``compatible_printers``-Angabe
+        # unvereinbar; der Lauf endet mit Code -17 und ohne Druckdatei.
+        # ``system`` lässt den CLI-Leser das vollständig ausgeschriebene
+        # Profil in seine Verträglichkeitsprüfung aufnehmen. Der eigene Name
+        # und die aufgelösten Werte weisen weiterhin aus, was Solidon schrieb.
+        "from": "system",
         "instantiation": "true",
     }
     base = profile_file(setup.machine_profile, setup, "machine")
@@ -1138,7 +1148,10 @@ def _orca_process(
     # er das Modell ansieht.
     document: dict[str, object] = {
         "type": "process",
-        "from": "User",
+        # Dieselbe CLI-Kategorie wie an der Maschine. Gemessen mit
+        # ElegooSlicer 1.5.3.4: ``User`` ergibt trotz identischer Namen
+        # ``compatible 0``, ``system`` ergibt ``compatible 1`` und G-Code.
+        "from": "system",
         "instantiation": "true",
     }
     base = profile_file(setup.base_process, setup, "process")
@@ -1934,6 +1947,21 @@ def slice_model(
                         Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
                     ),
                 )
+            if _says_no_layers(output):
+                raise ExternalToolError(
+                    tool=setup.name,
+                    exit_code=completed.returncode,
+                    detail=_(
+                        "Der Slicer hat keine druckbaren Schichten gefunden. Prüfen Sie "
+                        "offene Stellen, Einheit und Wandstärke."
+                    ),
+                    values={"output": output},
+                    suggestions=(
+                        REPAIR_AND_RETRY,
+                        SHOW_LOCATIONS,
+                        Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
+                    ),
+                )
             raise ExternalToolError(
                 tool=setup.name,
                 exit_code=completed.returncode,
@@ -2114,12 +2142,23 @@ def _same(actual: str, wanted: str) -> str | bool:
 #: druckt, und dagegen steht ``arrange.out_of_build_volume`` im Prüfbericht,
 #: nicht dieser Satz hier.
 OUTSIDE_THE_VOLUME: Final[tuple[str, ...]] = ("outside of the print volume",)
+#: Gemessen an ElegooSlicer 1.5.3.4 mit einem offenen Würfel. Die Aussage
+#: nennt keine Ursache — offen, zu dünn und falsch skaliert führen alle zu
+#: derselben leeren Schichtmenge —, deshalb zählt der Nutzersatz die drei
+#: Prüfungen auf, statt eine davon zu behaupten (Regel 21).
+NO_LAYERS: Final[tuple[str, ...]] = ("no layers were detected",)
 
 
 def _says_outside_the_volume(output: str) -> bool:
     """Sagt die Ausgabe des Slicers, dass nichts im Bauraum liegt?"""
     lowered = output.lower()
     return any(phrase in lowered for phrase in OUTSIDE_THE_VOLUME)
+
+
+def _says_no_layers(output: str) -> bool:
+    """Sagt die Ausgabe des Slicers, dass keine druckbare Schicht entstand?"""
+    lowered = output.lower()
+    return any(phrase in lowered for phrase in NO_LAYERS)
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installiert Solidon3D 0.2.1 — erzeugt von tools/make_linux_packages.py.
+# Installiert Solidon3D 0.3.0 — erzeugt von tools/make_linux_packages.py.
 # Von Hand geänderte Zeilen verliert der nächste Lauf.
 #
 #   ./install.sh                          fragt nach Lizenz und Ort
@@ -9,7 +9,7 @@ set -eu
 
 NAME="Solidon3D"
 SHORT="solidon3d"
-VERSION="0.2.1"
+VERSION="0.3.0"
 IDENTIFIER="de.rsdigital.solidon3d"
 WEBSITE="https://solidon3d.de/"
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)

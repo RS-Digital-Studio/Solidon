@@ -927,13 +927,18 @@ def test_the_pull_shows_a_share_and_a_way_out(
             self.asking_for_tags = "/api/tags" in str(getattr(request, "full_url", ""))
             return self
 
+        def open(self, request: object, timeout: float = 0.0) -> object:
+            """Derselbe Einstieg wie der proxyfreie Öffner für lokale Dienste."""
+            return self(request, timeout)
+
         def __enter__(self) -> object:
             return Tags() if self.asking_for_tags else iter(self.lines)
 
         def __exit__(self, *_args: object) -> None:
             return None
 
-    monkeypatch.setattr(llm.urllib.request, "urlopen", Server())
+    server = Server()
+    monkeypatch.setattr(llm, "opener_for", lambda _address: server)
     dialog = KeyDialog()
     dialog.pull_button.setEnabled(True)
 
@@ -1205,11 +1210,11 @@ def test_a_broken_pull_frees_the_button(
 def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Gemessene einundvierzig Minuten, bis die erste Antwort beginnt.**
+    """**Gemessene einundfünfzig Minuten, bis die erste Antwort beginnt.**
 
     Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
     und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
-    Auftrag dieser Anwendung ist rund 19 000 Token lang. „Das Modell ruft
+    Auftrag dieser Anwendung ist rund 24 000 Token lang. „Das Modell ruft
     Werkzeuge auf" ist dann wahr und nutzlos — der Kunde sieht ein Fenster, das
     nichts tut, und hält es für einen Fehler der Anwendung.
 
@@ -1226,7 +1231,7 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     gesagt = dialog.probe_result.text()
     assert "Prozessor" in gesagt
     assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
-    assert "41" in gesagt, "und was sie für den Kunden bedeutet"
+    assert "51" in gesagt, "und was sie für den Kunden bedeutet"
     assert "{" not in gesagt, "die Platzhalter sind gefüllt"
     assert "Schlüssel" in gesagt, "Regel 17: der Vorschlag gehört dazu"
 

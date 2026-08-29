@@ -1,0 +1,45 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editorial@allthingsadditive.com
+Reply-To: marketing@solidon3d.de
+Subject: Software story: From imported mesh to material-aware 3MF without cloud lock-in
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear All Things Additive Editorial Team,
+
+Solidon3D 0.3.0 has been released. The desktop application takes an imported
+model through practical geometry changes, printability analysis, physical
+material assignment and external slicer handoff while keeping the project
+local. It also constructs new printable parts from dimensions, sketches and
+tested components rather than presenting itself as a full CAD replacement.
+
+The clearest example begins with an STL whose mounting hole is wrong. Solidon
+recognises the existing cylindrical feature, preserves its position and axis,
+and changes the diameter as a reversible operation. A standards-derived
+insert, screw clearance or bearing seat can then be placed using fit values
+measured from a printed calibration artefact.
+
+Each physical filament spool carries its own colour, temperatures, cooling,
+retraction and material properties. The application writes those values into
+the correct 3MF material slot and maps them into the slicer handoff, avoiding
+the common failure where one colour inherits another material’s process data.
+
+Since the first 0.1 demo, 220 curated user-visible changes have added
+in-viewport constrained sketching, exact-body tools, reusable parametric parts
+made from operation history, printable matching fasteners and stronger
+feature tracking. Solidon runs on Windows, macOS and Linux without a customer
+account, telemetry or cloud project store. Its optional LLM layer can request
+registered tools but cannot compute geometry or execute generated code.
+
+Overview: https://solidon3d.de/en/
+
+I can provide the 0.3.0 build, a sample STL-to-3MF workflow, the
+resulting slicer handoff data, a one-page technical summary and high-resolution
+images. Reply “workflow” and I will send the complete editorial pack.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

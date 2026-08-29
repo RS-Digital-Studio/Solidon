@@ -1,0 +1,48 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Reply-To: marketing@solidon3d.de
+Subject: Story lead: 220 visible changes turn a 0.1 demo into a real print workflow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Fabbaloo Editors,
+
+Solidon3D 0.3.0 has been released. It is local desktop software for adapting
+downloaded 3D-printing models and constructing printable parts from named
+dimensions, sketches and tested components. It is meant to bridge “model
+downloaded” and “part fits,” not replace a full CAD system.
+
+The development story is unusually substantial for the version number: the
+small 0.1 demo has grown into a coherent workflow through 220 curated changes
+that users can actually see.
+
+The clearest before-and-after example is an imported STL with the wrong hole.
+Solidon now recognises the cylindrical feature, keeps its original position
+and direction, and changes the diameter as a non-destructive operation. The
+user can then place a standards-based insert or fastener, calibrate the fit
+with a printed gauge, and revise any of those decisions later.
+
+The same operation history can now become a reusable parametric part without
+writing code. Its fields, preview and valid range are stored as a safe recipe
+of registered operations, so the part can travel inside a project without
+carrying executable source.
+
+Other additions since 0.1 include in-viewport sketching, matching printable
+nuts and screws, bearing seats, per-spool process data in 3MF, and full
+Windows, macOS and Linux packaging. The optional LLM layer can request those
+same operations, but it never computes geometry or executes generated code.
+
+Overview: https://solidon3d.de/en/
+Changelog: https://solidon3d.de/en/changelog.html
+
+I can send a ready-made story package: the 0.3.0 build, a one-page fact
+sheet, three high-resolution images, and the STL test case with measured
+results. If this development arc is useful, reply “story pack” and I will send
+the package directly.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

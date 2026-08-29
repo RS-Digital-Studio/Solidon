@@ -31,7 +31,14 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import ENVIRONMENT_PREFIX
-from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
+from app.core.geom.measure import (
+    Measurement,
+    MeasurementList,
+    angle_between,
+    distance,
+    snap,
+    wall_thickness,
+)
 from app.core.geom.mesh import distance_to_triangles, hull_planes, ray_span_in_hull
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
@@ -1007,7 +1014,7 @@ def source_colours(mesh: Any, face_count: int) -> Any | None:
     return np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
 
 
-MeasureMode = Literal["off", "distance", "thickness"]
+MeasureMode = Literal["off", "distance", "thickness", "angle"]
 
 MEASURE_COLOUR = ROLES["measure"]
 
@@ -2370,6 +2377,7 @@ class Viewport(QWidget):
         self._sketch_colour = THEMES["dark"]["text"]
         self._measure_mode: MeasureMode = "off"
         self._pending_point: Vec3 | None = None
+        self._pending_plane: tuple[Vec3, Vec3] | None = None
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
         self._gizmo: Any | None = None
@@ -3995,6 +4003,7 @@ class Viewport(QWidget):
         """
         self._measure_mode = mode
         self._pending_point = None
+        self._pending_plane = None
         self._update_cursor()
 
     @property
@@ -4007,6 +4016,7 @@ class Viewport(QWidget):
         """
         self.measurements.clear()
         self._pending_point = None
+        self._pending_plane = None
         self._redraw_measurements()
 
     def set_splitting(self, active: bool) -> None:
@@ -4255,9 +4265,7 @@ class Viewport(QWidget):
             self._set_hover_target(None, None)
         self._update_cursor()
 
-    def _set_hover_target(
-        self, object_id: ObjectId | None, feature_id: FeatureId | None
-    ) -> None:
+    def _set_hover_target(self, object_id: ObjectId | None, feature_id: FeatureId | None) -> None:
         """Hover-Zeiger, sichtbare Fläche und Beschriftung gemeinsam setzen."""
         found = feature_id is not None
         target_changed = (object_id, feature_id) != (
@@ -4406,6 +4414,10 @@ class Viewport(QWidget):
                 self.pointPicked.emit(picked)
             return
 
+        if self._measure_mode == "angle":
+            self._measure_plane_angle(picked)
+            return
+
         mesh = self._nearest_mesh(picked)
         if mesh is None:
             return
@@ -4428,6 +4440,43 @@ class Viewport(QWidget):
             )
         )
         self._pending_point = None
+
+    def _measure_plane_angle(self, point: Vec3) -> None:
+        """Nimmt zwei erkannte Ebenen und misst ihre Normalen (§18.3)."""
+        object_id = self._object_at(point) or self._selected
+        entry = self._result.scene.objects.get(object_id) if self._result and object_id else None
+        feature_id = self._feature_at(point)
+        feature = entry.features.get(feature_id) if entry is not None and feature_id else None
+        normal = feature.params.get("normal") if feature is not None else None
+        centre = feature.params.get("centre") if feature is not None else None
+        if feature is None or feature.kind != "face" or normal is None or centre is None:
+            self.measurementStatus.emit(
+                tr("Für eine Winkelmessung zwei erkannte ebene Flächen anklicken.")
+            )
+            return
+
+        direction = tuple(float(value) for value in normal)
+        anchor = tuple(float(value) for value in centre)
+        if len(direction) != 3 or len(anchor) != 3:
+            self.measurementStatus.emit(
+                tr("Für eine Winkelmessung zwei erkannte ebene Flächen anklicken.")
+            )
+            return
+        plane = (direction, anchor)
+        if self._pending_plane is None:
+            self._pending_plane = plane
+            self.measurementStatus.emit(tr("Erste Ebene gewählt — zweite Ebene anklicken."))
+            return
+
+        first_direction, first_anchor = self._pending_plane
+        self._add(
+            Measurement(
+                kind="angle",
+                value=angle_between(first_direction, plane[0]),
+                points=(first_anchor, plane[1]),
+            )
+        )
+        self._pending_plane = None
 
     def _add(self, measurement: Measurement) -> None:
         self.measurements.add(measurement)

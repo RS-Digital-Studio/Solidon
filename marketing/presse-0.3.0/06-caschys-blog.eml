@@ -1,0 +1,44 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: carsten.knobloch@gmail.com
+Reply-To: marketing@solidon3d.de
+Subject: Kurzes Solidon3D-Update: jetzt auf Windows, macOS und Linux
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Carsten,
+
+Solidon3D 0.3.0 ist da. Falls dir der Name noch nichts sagt: Das ist eine
+Desktop-Anwendung, mit der man heruntergeladene 3D-Druckmodelle passend macht
+oder neue Teile aus Maßen, Skizzen und fertigen Bausteinen baut – ohne Konto,
+Cloud-Ablage oder Abo.
+
+Seit der ersten 0.1-Demo ist deutlich mehr passiert, als die kleine
+Versionsnummer vermuten lässt. Der Changelog zählt inzwischen 220 ausgewählte
+Dinge, die man bei der Benutzung merkt.
+
+Die drei greifbarsten:
+
+* Eine Bohrung in einer heruntergeladenen STL lässt sich anklicken und im
+  Durchmesser ändern, ohne das Teil neu zu zeichnen.
+* Aus mehreren Schritten im Verlauf wird ein eigener parametrischer Baustein,
+  den man später wieder einsetzen und im Projekt weitergeben kann.
+* Neben Windows gibt es inzwischen Pakete für macOS und Linux; für Linux kommt
+  zum Flatpak ein AppImage.
+
+Dazu wurden Skizzen direkt in die 3D-Ansicht verlegt, Filamentspulen tragen
+ihre Farbe und Druckwerte gemeinsam bis in den Slicer, und der optionale
+KI-Chat trennt lokale und Cloud-Modelle sichtbar. Ohne Konto, Chat und Netz
+funktioniert der Rest weiter.
+
+Die unbeschnittene Demo läuft bis 30. Oktober:
+https://solidon3d.de/
+
+Wenn du reinschauen möchtest, schicke ich dir gern ein fertiges Testprojekt
+oder drei gute Vorher-Nachher-Bilder. Falls es nicht ins Blog passt, ist das
+natürlich auch in Ordnung.
+
+Viele Grüße
+Robert
+marketing@solidon3d.de

@@ -546,7 +546,11 @@ def _generated(feature: Feature, name: str) -> Feature:
     return dataclasses.replace(feature, id=name, provenance="generated")
 
 
-def _carried(mesh: MeshData, previous: dict[str, Feature]) -> tuple[dict[str, Feature], list]:
+def _carried(
+    mesh: MeshData,
+    previous: dict[str, Feature],
+    referenced: frozenset[str] | set[str] = frozenset(),
+) -> tuple[dict[str, Feature], list]:
     """``_with_features`` an einer Operation, die ``features={}`` zurückgibt.
 
     Elf Stellen unter ``app/core/geom/`` tun das, und keine von ihnen meint
@@ -561,7 +565,7 @@ def _carried(mesh: MeshData, previous: dict[str, Feature]) -> tuple[dict[str, Fe
     entry = SceneObject(id="obj_1", name="Teil", mesh=mesh, features={})
     findings: list = []
     operation = Operation(id=4, op="thicken", inputs=("obj_1",), outputs=("obj_1",), params={})
-    result = _with_features(entry, previous, operation, never, findings)
+    result = _with_features(entry, previous, operation, never, findings, referenced=referenced)
     return result.features, findings
 
 
@@ -642,8 +646,12 @@ def _made_by(mesh: MeshData, declared: dict[str, Feature]) -> object:
 
 
 def test_a_generated_feature_that_is_really_gone_is_reported() -> None:
-    """Der Gegenfall, und er ist der wichtigere: Wird das Merkmal weggerechnet,
-    darf es verschwinden — aber nicht lautlos (§21.2, Regel 17).
+    """Ein unbenutztes Merkmal darf verschwinden, aber nicht als Warnung.
+
+    Grundkörper benennen ihre Flächen. Aushöhlen mit offener Oberseite und
+    weiches Verschmelzen nehmen eine davon erwartbar mit — genau das tun zwei
+    Beispielprojekte. Solange keine spätere Operation und keine Passung auf
+    den Namen zeigt, ist das eine Auskunft und kein Problem (§21.3).
     """
     plate = one_hole_plate()
     bore = next(iter(holes_of(plate).values()))
@@ -653,9 +661,24 @@ def test_a_generated_feature_that_is_really_gone_is_reported() -> None:
     features, findings = _carried(plugged, previous)
 
     assert "op3.bore_1" not in features, "the bore is filled; keeping the name would be a phantom"
-    assert [entry for entry in findings if entry.values.get("feature") == "op3.bore_1"], (
-        "a named feature that vanishes is a finding, not a silence"
-    )
+    reported = [entry for entry in findings if entry.values.get("feature") == "op3.bore_1"]
+    assert reported, "a named feature that vanishes is a finding, not a silence"
+    assert {entry.severity for entry in reported} == {"info"}
+    assert not [entry for entry in reported if entry.code == "perceive.generated_lost"]
+
+
+def test_a_referenced_generated_feature_that_is_gone_is_a_warning() -> None:
+    """Erst der Verweis macht aus dem Verlust ein Problem (§21.3)."""
+    plate = one_hole_plate()
+    bore = next(iter(holes_of(plate).values()))
+    previous = {"op3.bore_1": _generated(bore, "op3.bore_1")}
+    plugged = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+
+    _features, findings = _carried(plugged, previous, referenced={"op3.bore_1"})
+
+    reported = [entry for entry in findings if entry.values.get("feature") == "op3.bore_1"]
+    assert [entry.code for entry in reported] == ["perceive.generated_lost"]
+    assert [entry.severity for entry in reported] == ["warning"]
 
 
 def test_a_thread_travels_unchecked_because_detection_cannot_see_it() -> None:

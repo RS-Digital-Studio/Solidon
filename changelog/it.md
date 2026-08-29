@@ -15,6 +15,70 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.0
+
+
+### Disegno e modellazione
+
+- In modalità schizzo può selezionare e trascinare punti, linee, cerchi e contorni direttamente nella vista. Un segno e una maniglia indicano anche cosa si muoverà.
+- Il piano di disegno resta nello spazio passando tra vista dall'alto, frontale e laterale. Così vede la posizione reale invece della stessa immagine tre volte.
+- Un rettangolo si completa digitando larghezza e altezza. Le misure restano come vincoli invece di perdersi dopo il disegno.
+- Nella vista frontale o laterale trascini un contorno chiuso per dargli altezza. Quota e anteprima a filo crescono insieme; un valore digitato fissa l'altezza esatta.
+- Trascini il contorno verso l'esterno per creare un corpo o verso l'interno per creare una tasca visibile. Freccia e croce rendono afferrabili entrambe le direzioni.
+- L'anteprima mostra il parallelepipedo, cilindro o corpo dello schizzo mentre inserisce le misure. Prima i nuovi corpi restavano invisibili fino all'applicazione.
+- Gli strumenti di disegno dicono cosa farà il clic successivo. I vincoli spiegano effetto e selezione, e i gradi di libertà sono descritti con parole chiare.
+
+### Fori ed elementi
+
+- Modifichi direttamente il diametro di un foro riconosciuto in un modello importato, senza ridisegnarlo né aprire un programma CAD.
+- Il foro modificato conserva posizione e direzione e funziona su mesh e corpi esatti. Anche un foro inclinato resta sul proprio asse originale.
+- I segni degli elementi seguono la geometria visibile dopo un nuovo calcolo. Un foro segnato resta aperto e non viene coperto dal proprio segno.
+- Gli strumenti frequenti come Foro, Unione e Sottrazione sono un clic più vicini nel menu. I titoli mantengono comunque ben distinti i gruppi.
+
+### Blocchi e componenti standard
+
+- Il catalogo offre viti e dadi stampabili con filettature abbinate. Scelga testa, lunghezza, misura e gioco adatti alla stampa.
+- I cuscinetti comuni hanno una sede costruita sulle misure standard. Il cuscinetto può restare estraibile con gioco o essere fissato a pressione.
+- Un foro per vite può incassare una testa svasata o la rondella abbinata. La profondità della testa regola quanto entrano nel pezzo.
+- Le tabelle comprendono più rondelle, inserti filettati e cuscinetti. Le misure tecniche sono spiegate nella scelta invece di apparire come codici oscuri.
+- Tasche per magneti, clip e passacavi accettano anche misure personalizzate. I campi aggiuntivi compaiono solo se la variante scelta li usa davvero.
+
+### Stampa e filamento
+
+- Ogni bobina può avere temperature, raffreddamento, ritrazione e valori del materiale propri. Questi valori restano quando cambia il livello di qualità.
+- I valori delle singole bobine arrivano al file 3MF e allo slicer nel posto materiale corretto. Un colore non prende più per errore i valori di stampa di un altro.
+- Gli esempi inclusi non sostituiscono più stampante e materiale scelti con le impostazioni usate per creare le loro anteprime.
+- Nel Flatpak Linux, Solidon trova e avvia gli slicer del computer, incluse le AppImage. Entrambi i programmi raggiungono la cartella di lavoro condivisa.
+
+### Chat e generazione 3D
+
+- Le impostazioni separano chiaramente modelli cloud e locali. Prima di inserire una chiave cloud spiegano quali dati lasciano il computer.
+- Il controllo di un generatore 3D lento non trattiene più la finestra. Mostra cosa viene controllato e come installare i programmi aggiuntivi.
+- L'assegnazione degli elementi riconosciuti resta fluida sui modelli grandi. Centinaia di elementi vengono confrontati insieme invece che uno alla volta.
+- Le richieste a Ollama e ComfyUI sullo stesso computer evitano il proxy aziendale. Un servizio locale attivo non viene più indicato per errore come irraggiungibile.
+- Nel Flatpak Linux, installazione e avvio dei programmi ausiliari avvengono sul computer, non nella sandbox. ComfyUI viene trovato anche nelle posizioni comuni.
+
+### Vista e comandi
+
+- La barra dei parametri mantiene le misure compatte e visibili. Unità, limiti ed espressione si modificano lì con annullamento, senza nascondere il valore.
+- I cursori di Solidon seguono la dimensione di sistema su Windows, macOS e Linux. Il loro punto di clic torna sulla punta disegnata invece che accanto.
+- Passaggio del puntatore e selezione sono segnati in modo chiaramente diverso. I colori di analisi e differenza restano prioritari sull'evidenziazione del corpo.
+- Menu, indicazioni e manuale usano parole coerenti per chi inizia. I termini specialistici vengono spiegati dove servono per la prima volta.
+- La finestra Sostieni spiega prima di aprire PayPal che il pagamento è volontario e non sblocca funzioni. Se il browser non parte, il link può essere copiato.
+- Svuota e gli altri strumenti dipendenti mostrano solo i campi usati dalla variante scelta e spiegano in modo uniforme i valori nascosti.
+
+### Piattaforme e correzioni
+
+- Per Linux è disponibile un'AppImage oltre al Flatpak. Solidon può quindi avviarsi come singolo file eseguibile senza installare Flatpak.
+- Su Windows un aggiornamento termina senza domande ripetute e riavvia Solidon. Il Flatpak Linux può essere aggiornato dall'applicazione.
+- I messaggi al supporto possono essere inviati anche dal pacchetto Linux. Prima mancava l'accesso di rete necessario.
+- Su macOS le fessure sottili nella mesh STL di una filettatura vengono ricucite all'esportazione senza accettare una mesh peggiorata.
+- La ricerca degli aggiornamenti accetta un changelog multilingue ampio. Le note non finiscono più a metà parola e gli elenchi lunghi non bloccano il controllo.
+- La finestra Informazioni del pacchetto mostra di nuovo le note di tutte le librerie incluse.
+- I rapporti di errore mostrano versioni reali, sessione e metodo di input. Un trattino non indica più per errore che manca una libreria necessaria.
+- Singoli metadati estranei non fanno più fallire la riparazione di una mesh importata.
+- Uno svuotamento riuscito indica anche per i corpi esatti lo spessore della parete e il volume rimosso, invece di restare in silenzio dopo il calcolo.
+
 ## 0.2.1
 
 

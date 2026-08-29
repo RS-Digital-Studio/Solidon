@@ -111,7 +111,7 @@ def create_box(ctx: OpContext) -> OpResult:
     mesh = box(params.width, params.depth, params.height)
     if params.anchor == "corner":
         mesh = apply(mesh, translation((params.width / 2.0, params.depth / 2.0, 0.0)))
-    return OpResult(outputs=[_object(params.name or _("Quader"), mesh, params.height)])
+    return OpResult(outputs=[_object(params.name or _("Quader"), mesh)])
 
 
 @op_params
@@ -160,7 +160,7 @@ class CylinderParams(BaseParams):
 def create_cylinder(ctx: OpContext) -> OpResult:
     params = cast(CylinderParams, ctx.params)
     mesh = cylinder(params.diameter, params.height, segments=params.segments)
-    return OpResult(outputs=[_object(params.name or _("Zylinder"), mesh, params.height)])
+    return OpResult(outputs=[_object(params.name or _("Zylinder"), mesh)])
 
 
 @op_params
@@ -207,10 +207,10 @@ def create_sphere(ctx: OpContext) -> OpResult:
     )
     body.apply_translation([0.0, 0.0, params.diameter / 2.0])
     mesh = MeshData.of(body)
-    return OpResult(outputs=[_object(params.name or _("Kugel"), mesh, params.diameter)])
+    return OpResult(outputs=[_object(params.name or _("Kugel"), mesh)])
 
 
-def _object(name: TranslatableText | str, mesh: MeshData, height: float) -> SceneObject:
+def _object(name: TranslatableText | str, mesh: MeshData) -> SceneObject:
     """Ein frischer Körper mit dem einen Merkmal, das er ehrlich versprechen
     kann: seiner Oberseite.
 

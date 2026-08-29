@@ -95,7 +95,13 @@ if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_m
   exit 4
 fi
 rm -f "$import_meldung"
-windowed=$(grep -lE "MainWindow|Viewport|pyvista" tests/test_*.py | tr '\n' ' ')
+# Pytest löst auch indirekte Fixtures aus ``conftest.py`` auf. Damit hängt die
+# Trennung daran, ob ein Test wirklich ``qt_app`` braucht — nicht daran, ob in
+# Quelltext oder Docstring zufällig MainWindow, Viewport oder pyvista steht.
+# Der Windows-Interpreter schreibt CRLF. Bleibt das ``\r`` am Dateinamen,
+# sucht pytest wörtlich nach ``tests/test_ui.py\r`` und meldet jede vorhandene
+# Fensterdatei als fehlend.
+windowed=$("$PY" tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done
 

@@ -26,6 +26,7 @@ Doppelklick.
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import shutil
@@ -47,12 +48,20 @@ ICNS: Final = ROOT / "packaging" / "solidon3d.icns"
 ICO: Final = ROOT / "packaging" / "solidon3d.ico"
 
 #: Was beim Suchen nach Datenverzeichnissen nicht zählt.
-IGNORED: Final = ("__pycache__", ".pyc", ".pyo")
+IGNORED: Final = ("__pycache__", ".pyc", ".pyo", "CLAUDE.md")
 
 #: Der Beginn einer PNG-Datei. Die modernen ICNS-Blöcke tragen PNG, und einen
 #: Block, der etwas anderes trägt, übergeht macOS — das Symbol fehlt dann in
 #: genau dieser Größe, ohne Fehlermeldung.
 PNG_MAGIC: Final = b"\x89PNG\r\n\x1a\n"
+
+#: Quellverzeichnis und sein Ziel im Paket. ``changelog`` liegt im
+#: Arbeitsbaum neben ``app``, reist aber neben das Paket, wo der Kern danach
+#: sucht.
+PACKAGE_DATA_ROOTS: Final = (
+    (ROOT / "app", Path("app")),
+    (ROOT / "changelog", Path("app/changelog")),
+)
 
 
 def _posix_shell() -> str | None:
@@ -76,54 +85,97 @@ def _posix_shell() -> str | None:
 
 
 def _data_directories() -> set[Path]:
-    """Jedes Verzeichnis unter ``app/``, in dem etwas liegt, das kein Python ist.
+    """Jedes Datenverzeichnis und der Pfad, unter dem es im Paket liegen muss.
 
     Genau diese Dateien fehlen im Paket, wenn niemand sie in die ``datas``
     schreibt: PyInstaller sammelt Module, keine Daten.
     """
     found: set[Path] = set()
-    for path in (ROOT / "app").rglob("*"):
-        if not path.is_file() or path.suffix == ".py":
-            continue
-        if any(part in str(path) for part in IGNORED):
-            continue
-        found.add(path.parent.relative_to(ROOT))
+    for source, destination in PACKAGE_DATA_ROOTS:
+        for path in source.rglob("*"):
+            if not path.is_file() or path.suffix in {".py", ".pyi", ".pyx"}:
+                continue
+            if any(part in str(path) for part in IGNORED):
+                continue
+            found.add(destination / path.parent.relative_to(source))
     return found
+
+
+def _literal_data_targets() -> set[Path]:
+    """Die wirklichen Zielpfade der wörtlichen ``datas``-Einträge."""
+    tree = ast.parse(SPEC.read_text(encoding="utf-8"), filename=str(SPEC))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "datas" for target in node.targets
+        ):
+            continue
+        if not isinstance(node.value, ast.List):
+            continue
+        return {
+            Path(str(entry.elts[1].value))
+            for entry in node.value.elts
+            if isinstance(entry, ast.Tuple)
+            and len(entry.elts) == 2
+            and isinstance(entry.elts[1], ast.Constant)
+            and isinstance(entry.elts[1].value, str)
+        }
+    return set()
+
+
+def _literal_hidden_imports() -> set[str]:
+    """Die festen Modulnamen der echten ``hiddenimports``-Liste."""
+    tree = ast.parse(SPEC.read_text(encoding="utf-8"), filename=str(SPEC))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(target, ast.Name) and target.id == "hiddenimports" for target in node.targets
+        ):
+            continue
+        if not isinstance(node.value, ast.List):
+            continue
+        return {
+            str(entry.value)
+            for entry in node.value.elts
+            if isinstance(entry, ast.Constant) and isinstance(entry.value, str)
+        }
+    return set()
 
 
 def test_every_data_directory_travels_with_the_package() -> None:
     """Ein Verzeichnis gilt als gedeckt, wenn es selbst oder ein Elternteil
     davon in der Spec steht — ``app/images/manual`` deckt beide Sprachen."""
-    spec = SPEC.read_text(encoding="utf-8")
+    targets = _literal_data_targets()
     for directory in sorted(_data_directories()):
         covered = [directory, *directory.parents]
-        assert any(f'"{parent.as_posix()}"' in spec for parent in covered if parent != Path()), (
+        assert any(parent in targets for parent in covered if parent != Path()), (
             f"{directory.as_posix()} liegt im Paket nicht bei — Eintrag in packaging/"
             f"solidon3d.spec unter datas fehlt"
         )
 
 
 def test_every_optional_dependency_the_package_needs_is_a_hidden_import() -> None:
-    """Was nur in einer Funktion importiert wird, sieht PyInstaller nicht.
+    """Dynamische optionale Kerne stehen ausdrücklich im Paketvertrag.
 
-    ``keyring`` fehlte, und das war kein Schönheitsfehler: ``backends/keys.py``
-    importiert es innerhalb von ``_keyring()``, damit die Anwendung ohne es
-    startet. Im gebauten Paket lag es damit nicht bei, ``keys.store()`` gab
-    immer False zurück — **der Kunde konnte seinen Schlüssel nicht ablegen**,
-    und der Rückfall war eine Umgebungsvariable, gedacht für einen Bauserver.
+    Normale Funktionsimporte findet PyInstallers Modulgraph. Die ausdrückliche
+    Liste bleibt trotzdem der Vertrag für optionale Kerne und dynamisch
+    geladene Backends: Ein paketierter Bau kann nichts nachinstallieren, und
+    das Installationsregister darf kein Modul versprechen, das dort fehlt.
 
     Geprüft werden die Namen, die die Anwendung zur Laufzeit nachschlägt, und
     nicht die Liste in der Spec: Die kann nur zu kurz sein, und genau das war
     sie.
     """
-    spec = SPEC.read_text(encoding="utf-8")
     from app.core import install
 
+    hidden = _literal_hidden_imports()
     for entry in install.REQUIREMENTS:
         if entry.kind != "package" or not entry.module:
             continue
         top = entry.module.split(".")[0]
-        assert f'"{top}' in spec, (
+        assert any(name == top or name.startswith(f"{top}.") for name in hidden), (
             f"{entry.id}: {top} steht nicht in den hiddenimports von packaging/"
             f"solidon3d.spec — im Paket fehlt es dann, und die Anwendung hält es "
             f"für nicht installiert"

@@ -16,6 +16,70 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.3.0
+
+
+### Dibujo y modelado
+
+- En el modo de boceto puede seleccionar y arrastrar puntos, líneas, círculos y contornos directamente en la vista. Una marca y un tirador indican además qué se moverá.
+- El plano de dibujo permanece en el espacio al cambiar entre las vistas superior, frontal y lateral. Así ve su posición real en lugar de tres imágenes iguales.
+- Puede terminar un rectángulo escribiendo su anchura y altura. Las medidas permanecen como restricciones en vez de perderse después de dibujarlo.
+- En la vista frontal o lateral, tire de un contorno cerrado para darle altura. La cifra y la vista de alambre crecen con él; un valor escrito fija la altura exacta.
+- Tire del contorno hacia fuera para crear un cuerpo o hacia dentro para crear un vaciado visible. Una flecha y una cruz permiten agarrar ambas direcciones.
+- La vista previa muestra el prisma, cilindro o cuerpo de boceto mientras introduce sus medidas. Antes, los cuerpos nuevos no aparecían hasta aplicar el paso.
+- Las herramientas de dibujo indican qué hará el siguiente clic. Las restricciones explican su efecto y selección, y los grados de libertad se describen con palabras claras.
+
+### Taladros y elementos
+
+- Cambie directamente el diámetro de un taladro detectado en un modelo importado, sin volver a dibujarlo ni abrir un programa CAD.
+- El taladro modificado conserva su posición y dirección y funciona en mallas y cuerpos exactos. Incluso un taladro inclinado permanece en su eje original.
+- Las marcas de los elementos siguen la geometría visible después de recalcular. Un taladro marcado permanece abierto y la marca no tapa su abertura.
+- Las herramientas frecuentes como Taladro, Unir y Restar están un clic más cerca en el menú. Los títulos siguen separando claramente los grupos.
+
+### Bloques y piezas normalizadas
+
+- El catálogo ofrece tornillos y tuercas imprimibles con roscas compatibles. Puede elegir cabeza, longitud, tamaño y holgura según la impresión.
+- Los rodamientos habituales tienen un asiento con sus medidas normalizadas. Pueden quedar extraíbles con holgura o sujetos mediante ajuste a presión.
+- Un taladro para tornillo puede alojar una cabeza avellanada o su arandela. La profundidad de cabeza decide cuánto se hunden en la pieza.
+- Las tablas incluyen más arandelas, insertos roscados y rodamientos. Los tamaños técnicos se explican en la selección en vez de aparecer como códigos enigmáticos.
+- Los alojamientos de imanes, clips y pasacables también aceptan medidas propias. Los campos adicionales solo aparecen si la variante elegida los utiliza.
+
+### Impresión y filamento
+
+- Cada bobina puede tener sus propias temperaturas, refrigeración, retracción y valores de material. Se conservan al cambiar el nivel de calidad.
+- Los valores de cada bobina llegan al archivo 3MF y al slicer en la posición de material correcta. Un color ya no toma por error los valores de impresión de otro.
+- Los ejemplos incluidos ya no sustituyen la impresora y el material elegidos por los ajustes usados para crear sus imágenes de vista previa.
+- En el Flatpak de Linux, Solidon encuentra e inicia slicers del equipo, incluidos AppImages. Ambos programas pueden acceder a la carpeta de trabajo compartida.
+
+### Chat y generación 3D
+
+- Los ajustes separan claramente los modelos en la nube y los locales. Antes de introducir una clave de nube explican qué datos salen del ordenador.
+- Comprobar un generador 3D lento ya no deja sujeto el diálogo. Indica qué se está comprobando y cómo instalar los programas adicionales.
+- La asignación de elementos detectados sigue siendo fluida en modelos grandes. Cientos de elementos se comparan juntos en lugar de uno tras otro.
+- Las solicitudes a Ollama y ComfyUI en el mismo equipo evitan el proxy de la empresa. Un servicio local activo ya no aparece por error como inaccesible.
+- En el Flatpak de Linux, la instalación y el inicio de programas auxiliares se ejecutan en el equipo, no en el aislamiento. ComfyUI también se encuentra en sus ubicaciones habituales.
+
+### Vista y manejo
+
+- La barra de parámetros mantiene las medidas compactas y visibles. Unidad, límites y expresión se cambian allí con deshacer, sin ocultar el propio valor.
+- Los cursores de Solidon siguen el tamaño configurado del sistema en Windows, macOS y Linux. El punto de clic vuelve a estar en la punta dibujada y no a su lado.
+- Pasar el puntero y seleccionar se marcan de forma claramente distinta. Los colores de análisis y diferencias siguen teniendo prioridad sobre el resaltado del cuerpo.
+- Los menús, avisos y el manual usan palabras coherentes para principiantes. Los términos especializados se explican donde se necesitan por primera vez.
+- El diálogo Apoyar explica antes de abrir PayPal que el pago es voluntario y no desbloquea funciones. Si falla el navegador, puede copiar el enlace.
+- Vaciar y las demás herramientas dependientes muestran solo los campos usados por la variante elegida y explican de forma uniforme los valores ocultos.
+
+### Plataformas y correcciones
+
+- Linux dispone ahora de un AppImage además del Flatpak. Así puede iniciar Solidon como un único archivo ejecutable sin instalar Flatpak.
+- En Windows, una actualización se completa sin preguntas repetidas y vuelve a iniciar Solidon. El Flatpak de Linux puede actualizarse desde la aplicación.
+- También se pueden enviar comentarios al soporte desde el paquete de Linux. Hasta ahora el paquete carecía del acceso de red necesario.
+- En macOS, las grietas finas de la malla STL de una rosca se cosen al exportar sin aceptar una malla que haya empeorado.
+- La comprobación de actualizaciones admite un changelog multilingüe amplio. Los avisos no terminan a media palabra y las listas largas ya no bloquean la comprobación.
+- El diálogo Acerca de del paquete vuelve a mostrar los avisos de todas las bibliotecas incluidas.
+- Los informes de errores muestran las versiones reales, la sesión y el método de entrada. Un guion ya no indica por error que falta una biblioteca necesaria.
+- Los metadatos ajenos aislados ya no hacen que falle la reparación de una malla importada.
+- Un vaciado correcto también indica en cuerpos exactos el grosor de pared y el volumen retirado, en vez de quedar en silencio después del cálculo.
+
 ## 0.2.1
 
 
