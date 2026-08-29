@@ -564,16 +564,26 @@ class Session(QObject):
         title: TranslatableText | str,
         drafts: list[OperationDraft],
         origin: Origin | None = None,
-    ) -> None:
-        """Eine Transaktion, dann eine frische Auswertung (§15.5)."""
+        *,
+        raise_on_error: bool = False,
+    ) -> bool:
+        """Eine Transaktion, dann eine frische Auswertung (§15.5).
+
+        Normalerweise meldet die Sitzung eine Abweisung über ``failed``. Ein
+        synchroner Oberflächenweg kann sie stattdessen nach außen reichen,
+        damit Wartezeiger und Statusanzeige zuerst sicher beendet werden.
+        """
         try:
             self.history.apply(title, drafts, origin or Origin(by="user"))
         except AppError as error:
+            if raise_on_error:
+                raise
             self.failed.emit(error)
-            return
+            return False
         self._dirty = True
         self.projectChanged.emit()
         self.evaluate_async()
+        return True
 
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
@@ -924,7 +934,13 @@ class Session(QObject):
         self._dirty = True
         self.projectChanged.emit()
 
-    def import_model(self, path: Path, unit: str = "auto") -> None:
+    def import_model(
+        self,
+        path: Path,
+        unit: str = "auto",
+        *,
+        raise_on_error: bool = False,
+    ) -> bool:
         """Bettet eine Datei von der Platte ein und legt die passende
         load-Operation auf den Stapel (§17.1).
 
@@ -932,7 +948,12 @@ class Session(QObject):
         eigenständigen Quelle. Die Operation bleibt dieselbe; sie sieht nur
         die eingebetteten Daten statt eines Verweises auf den Ursprungsordner.
         """
-        self.import_payload(path.name, read_local_payload(path), unit=unit)
+        return self.import_payload(
+            path.name,
+            read_local_payload(path),
+            unit=unit,
+            raise_on_error=raise_on_error,
+        )
 
     def import_payload(
         self,
@@ -941,7 +962,8 @@ class Session(QObject):
         *,
         unit: str = "auto",
         origin: SourceOrigin | None = None,
-    ) -> None:
+        raise_on_error: bool = False,
+    ) -> bool:
         """Derselbe Weg für eine Datei, die nicht von der Platte kommt (§16.3).
 
         Getrennt von :meth:`import_model`, weil ein heruntergeladenes Modell
@@ -985,19 +1007,21 @@ class Session(QObject):
             self._drop_source(source_id)
             raise
 
-        # **Und ``apply`` wirft nicht — es meldet.** Ein ``try`` darum greift
-        # deshalb nie: :meth:`apply` fängt jeden ``AppError`` und schickt ihn
-        # über ``failed`` an die Oberfläche. Ob der Schritt entstanden ist,
-        # sagt allein der Stapel; gemessen mit ``days_left=0`` blieb hier eine
-        # Quelle ohne Operation liegen, ohne Ausnahme und ohne ``_dirty``.
-        #
-        # Gefragt wird deshalb nach dem **Ergebnis** und nicht nach dem Grund:
-        # Das trägt die Lizenzgrenze genauso wie einen abgelehnten Plan oder
-        # was sonst noch dazukommt.
-        before = len(self.project.document.ops)
-        self.apply(plan.title, [plan.draft])
-        if len(self.project.document.ops) == before:
+        # Die Sitzung kann eine Abweisung entweder melden oder nach außen
+        # reichen. In beiden Fällen wird die Quelle zurückgenommen; nur so
+        # bleiben lokaler Import und Download derselbe, vollständige Vorgang.
+        try:
+            accepted = self.apply(
+                plan.title,
+                [plan.draft],
+                raise_on_error=raise_on_error,
+            )
+        except AppError:
             self._drop_source(source_id)
+            raise
+        if not accepted:
+            self._drop_source(source_id)
+        return accepted
 
     def _drop_source(self, source_id: str) -> None:
         """Eine eben eingebettete Quelle wieder austragen.

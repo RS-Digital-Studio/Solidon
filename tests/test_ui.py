@@ -4604,6 +4604,28 @@ def test_a_failed_import_plan_leaves_no_orphan_source(
     assert not session.project.sources, "auch ihr Inhalt"
 
 
+def test_a_rejected_import_can_be_surfaced_without_an_orphan_source(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein synchroner Oberflächenweg bekommt die Abweisung selbst zurück.
+
+    So kann er zuerst seine Warteanzeige beenden; Quelle und Inhalt dürfen
+    trotzdem nicht im Projekt zurückbleiben.
+    """
+
+    def refusing(*_args: object, **_kwargs: object) -> object:
+        raise errors.UserError(detail="der Schritt wurde abgewiesen")
+
+    monkeypatch.setattr(session.history, "apply", refusing)
+
+    with pytest.raises(errors.UserError):
+        session.import_model(MESHES / "cube_clean.stl", raise_on_error=True)
+
+    assert not session.project.document.sources, "die abgewiesene Quelle blieb im Dokument"
+    assert not session.project.sources, "der Inhalt der abgewiesenen Quelle blieb im Projekt"
+    assert not session.project.document.ops, "eine abgewiesene Operation darf nicht erscheinen"
+
+
 def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> None:
     """Zwei Suchen zugleich gab es nie absichtlich — die zweite wird abgewiesen.
 
@@ -6383,7 +6405,7 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     cursor, status = seen[0]
     assert cursor is not None, "gelesen wurde ohne Wartezeiger"
     assert cursor.shape() == Qt.CursorShape.WaitCursor
-    assert status == tr("Projekt wird geladen …"), "die Statuszeile erklärt das Warten nicht"
+    assert status == tr("Modell einfügen …"), "die Statuszeile erklärt den Vorgang nicht"
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 
@@ -6407,6 +6429,35 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
 
     assert shown, "der Fehler kam nirgends an"
     assert QApplication.overrideCursor() is None, "der Wartezeiger überlebte den Fehler"
+
+
+def test_a_rejected_file_restores_status_before_showing_the_error(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Abweisung aus ``History.apply`` darf nicht als ewiges Laden enden."""
+    window._show_start_screen(False)
+    window.announce("Bereit")
+
+    def refusing(*_args: object, **_kwargs: object) -> object:
+        raise errors.UserError(detail="der Schritt wurde abgewiesen")
+
+    shown: list[tuple[Any, Any, str]] = []
+    monkeypatch.setattr(window.session.history, "apply", refusing)
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error",
+        lambda error, *_args, **_kwargs: shown.append(
+            (error, QApplication.overrideCursor(), window.status_message.text())
+        ),
+    )
+
+    window.open_path(MESHES / "cube_clean.stl")
+
+    assert shown, "die Abweisung kam nirgends an"
+    _error, cursor, status = shown[0]
+    assert cursor is None, "der Fehler erschien noch unter dem Wartezeiger"
+    assert status == "Bereit", "der Ladehinweis blieb hinter dem Fehler stehen"
+    assert window.status_message.text() == "Bereit"
+    assert not window.session.project.document.sources
 
 
 def test_the_veil_shows_the_measured_progress(window: MainWindow) -> None:
@@ -7333,6 +7384,39 @@ def test_a_downloaded_model_keeps_where_it_came_from(window: MainWindow) -> None
     assert window.stack.currentWidget() is not window.start_screen, (
         "geladen laut Statusleiste, unsichtbar im Bild: der Startbildschirm blieb stehen"
     )
+
+
+def test_a_rejected_download_never_claims_success(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach einer Abweisung bleibt der Start sichtbar und „Geladen“ aus."""
+    from app.core.ingest.fetch import FetchedModel
+
+    shown: list[object] = []
+    received: list[dict[str, object]] = []
+
+    def refusing(*_args: object, **kwargs: object) -> bool:
+        received.append(kwargs)
+        raise errors.UserError(detail="der Schritt wurde abgewiesen")
+
+    monkeypatch.setattr(window.session, "import_payload", refusing)
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *_args, **_kwargs: shown.append(error)
+    )
+
+    window._downloaded(
+        FetchedModel(
+            name="halter.stl",
+            payload=b"solid",
+            url="https://example.invalid/halter.stl",
+            retrieved="2026-08-29T10:00:00+00:00",
+        )
+    )
+
+    assert shown, "die Abweisung kam nirgends an"
+    assert received and received[0].get("raise_on_error") is True
+    assert window.stack.currentWidget() is window.start_screen
+    assert not window._announcement.startswith(tr("Geladen"))
 
 
 def test_the_cards_grow_with_a_wide_window() -> None:
