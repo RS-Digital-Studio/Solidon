@@ -69,3 +69,26 @@ hinausgeritten ist — das ist dringender als die Zurechnung —, dann den
 Besitzer benachrichtigen, dann die Zurechnung im eigenen Folge-Commit
 geradeziehen. Ausführlich in [[was-die-suite-nicht-findet]] benachbart; die
 Regel steht in `.claude/rules/tests.md`.
+
+**Und die Ansage muss je Datei stehen, nicht als Summe** — am 29.08.2026 von
+ce zugeschnappt, obwohl diese Notiz „Zeilen, nicht Dateien" bereits sagte und
+`git add <pfad>` bereits nannte. Die Sollprobe lautete „24 Dateien, kein
+fremder Pfad", und beides stimmte: 24 Dateien, die Namensliste gegen ein
+Muster gefiltert blieb leer. In der Zeile darunter stand
+`app/ui/main_window.py | 41 ++++`, wo drei zu erwarten waren — vier fremde
+Hunks einer Sitzung, die zwischen Messung und `git add` in dieselbe Datei
+geschrieben hatte. Sie ritten mit hinaus und machten HEAD bei
+`ruff format --check` rot.
+
+Eine Gesamtsumme verschluckt den Ausreißer: 171 Einfügungen über 24 Dateien
+lesen sich plausibel, gleich ob eine davon 3 oder 41 beiträgt. Die Prüfung,
+die trägt, hält **je Datei** den angesagten Wert gegen den Istwert — und die
+Ansage dazu entsteht aus der eigenen Arbeit („zwei Hunks in main_window"),
+nicht aus dem Diff.
+
+**Der Zeitpunkt ist die zweite Hälfte.** Zwischen `git diff HEAD --numstat`
+und `git add` liegen im geteilten Baum Minuten, und eine fremde Sitzung
+schreibt in dieser Zeit. Wer vorher misst und danach staged, prüft einen
+Stand, den er nicht committet — deshalb steht oben, dass nur `git show
+<commit> --numstat` **nach** dem Commit etwas taugt. Ce hat sie nicht
+gefahren und den Fund erst über einen `ruff format`-Lauf gegen HEAD gemacht.
