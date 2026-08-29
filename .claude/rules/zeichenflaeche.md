@@ -489,6 +489,10 @@ demselben Weg wie die feste Zeichnung um. `measure_annotations()` liefert
 Maßtext und versetzte Position. Beides ändert weder Skizze noch Undo-Stand
 (Regel 2). Ein Mausereignis aktualisiert Fangkreuz und Vorschau gemeinsam und
 rendert höchstens einmal.
+Fangmarke, `pending_elements()` und der feste Klick lesen dasselbe Ziel aus
+`_placement_target`: Ein vorhandener Punkt schlägt das Raster. Damit zeigt die
+Vorschau auch bei einem Punkt auf 10,25 mm genau den Ort, an dem anschließend
+die Deckungsbedingung entsteht.
 
 Ein Raster ist kein gleichförmiger Teppich. Im Viewport gelten drei Ebenen:
 leise Zwischenlinien, jede fünfte als Landmarke, Nullachsen mit X/Y/Z-Buchstaben
@@ -500,9 +504,11 @@ Vorschau kodiert. Maße stehen in ruhigen Karten statt direkt auf der Kante.
 
 Der Fusion-nahe Weg wird progressiv erklärt. Sobald ein Umriss schließt, steht
 im Bild: Vorder- oder Seitenansicht wählen. In der Querschau nennt die Karte
-Pfeil und Kreuz; direkt am Griff stehen **Hochziehen** und **Abtragen**. Das
-Profil wird automatisch in der freien Fläche oberhalb der Werkzeugkarte
-zentriert. Ein Griff hinter der Leiste ist kein vorhandener Griff.
+den Pfeil und — nur bei ausgewähltem bearbeitbarem Körper — auch das Kreuz;
+direkt am Griff stehen entsprechend **Hochziehen** und **Abtragen**. Das Profil
+wird automatisch in der freien Fläche oberhalb der Werkzeugkarte zentriert.
+Ein Griff hinter der Leiste oder ohne gültige Operation ist kein vorhandener
+Griff.
 
 Die untere Karte bleibt eine Leiste. Im Viewport-Modus gehen der unsichtbare
 Canvas, sein leeres Strecklayout und der umbrechende Schichthinweis aus ihrer

@@ -1236,6 +1236,50 @@ def test_the_sketch_focus_tracks_zoom_and_is_removed_exactly(
     assert plotter.camera_position[1] == pytest.approx((0.0, 0.0, 0.0))
 
 
+def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
+    qt_app: QApplication,
+) -> None:
+    """Die ViewBar darf keinen Versatz einer überschriebenen Kamera abziehen."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    camera = SimpleNamespace(parallel_projection=True, parallel_scale=100.0)
+    plotter = SimpleNamespace(
+        camera=camera,
+        camera_position=[
+            (0.0, -40.0, 10.0),
+            (0.0, -40.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ],
+    )
+    viewport = Viewport()
+    viewport.resize(1000, 1000)
+    viewport.plotter = plotter
+    viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    viewport._zone_margins = (0, 0, 400)
+    viewport._sketch_occlusion_shift = (0.0, -40.0, 0.0)
+    settled: list[bool] = []
+    viewport.reset_camera = lambda: None
+    viewport._settle_sketch_view = lambda: settled.append(True)  # type: ignore[method-assign]
+    viewport._redraw_shadows = lambda: None
+
+    viewport.view_from("right")
+
+    assert plotter.camera_position[1] == pytest.approx((0.0, 0.0, -40.0))
+    assert viewport._sketch_occlusion_shift == pytest.approx((0.0, 0.0, -40.0))
+    assert settled == [True], "die ViewBar meldet die neue Skizzenansicht ans Ebenenfeld"
+
+
+def test_the_sketch_cards_have_parseable_theme_styles(qt_app: QApplication) -> None:
+    """Die modernen Karten dürfen nicht auf Qts ungestylten Rückfall fallen."""
+    from app.ui.viewport import SketchActionBadge, SketchPlanePicker, SketchSelectionBadge
+
+    cards = (SketchPlanePicker(), SketchSelectionBadge(), SketchActionBadge())
+
+    for card in cards:
+        assert "}}" not in card.styleSheet(), card.styleSheet()
+
+
 def test_a_grid_without_a_step_is_empty_and_not_an_error() -> None:
     """Eine Weite von null ist kein Sonderfall, sondern kein Raster.
 
@@ -2160,6 +2204,39 @@ def test_the_visible_arrow_and_cross_are_grabbable(qt_app: QApplication) -> None
     assert viewport.grip_reach(int(outward[0]), int(outward[2])) > CURSOR_PIXELS
     assert viewport.pull_handle_reach(int(outward[0]), int(outward[2])) <= CURSOR_PIXELS
     assert viewport.sketch_pull_ready(int(outward[0]), int(outward[2]))
+
+
+def test_without_an_editable_body_only_the_outward_pull_is_visible_and_valid(
+    qt_app: QApplication,
+) -> None:
+    """Ein fehlendes Taschenziel verschwindet aus Griff und Zugvorschau."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
+    viewport._sketch_curves = flat_curves()
+    viewport.pixels_per_mm = lambda _frame: 1.0
+    viewport.set_sketch_pull(
+        lambda: "ready",
+        (0.1, 1000.0),
+        (0.1, 1000.0),
+        lambda: False,
+    )
+
+    assert len(viewport._visible_pull_handle_segments()) == 3
+    assert viewport._pull_takes(10.0)
+    assert not viewport._pull_takes(-10.0)
+
+    hidden: list[bool] = []
+    viewport._pull_from = (0.0, 0.0)
+    viewport._pull_height = 10.0
+    viewport.pull_height_at = lambda _base, _x, _y: -10.0
+    viewport._show_pull_cage = lambda: hidden.append(True)
+    viewport.continue_sketch_pull(10, 10)
+
+    assert viewport._pull_height == pytest.approx(0.0)
+    assert hidden == [True], "beim Richtungswechsel verschwindet die alte Aufbauvorschau"
 
 
 def test_a_rejected_pull_clears_its_wire_preview(qt_app: QApplication) -> None:

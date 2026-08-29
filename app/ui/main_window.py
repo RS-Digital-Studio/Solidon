@@ -4808,7 +4808,12 @@ class MainWindow(QMainWindow):
         # Zeichenebene auseinandergehen, wird aus einem Zug am Umriss eine
         # Höhe. Die Grenzen kommen aus dem Schema, damit die Zahl am Zeiger
         # dieselbe ist, die der Dialog danach annimmt.
-        self.viewport.set_sketch_pull(self._sketch_pull_offer, pull_limits(), pocket_limits())
+        self.viewport.set_sketch_pull(
+            self._sketch_pull_offer,
+            pull_limits(),
+            pocket_limits(),
+            self._sketch_cut_available,
+        )
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
         # des Fensters —, und gezeichnet wurde zur Hälfte dahinter.
@@ -5040,6 +5045,13 @@ class MainWindow(QMainWindow):
             )
         if not panel.canvas.outline:
             return str(tr("Zum Aufziehen fehlt der geschlossene Umriss."))
+        if self._sketch_target == POCKET_OP:
+            # Wer ausdrücklich „Abtragen" gewählt hat, bekommt ohne Zielkörper
+            # nicht ersatzweise den entgegengesetzten Aufbau angeboten. Eine
+            # verlorene Auswahl ändert die Absicht nicht stillschweigend.
+            problem = self._pocket_target_problem()
+            if problem:
+                return problem
         return "ready"
 
     def _pocket_target_problem(self) -> str:
@@ -5056,6 +5068,10 @@ class MainWindow(QMainWindow):
                 )
             )
         return ""
+
+    def _sketch_cut_available(self) -> bool:
+        """Ob Griff, Beschriftung und Operation dieselbe Tasche anbieten."""
+        return not self._pocket_target_problem()
 
     def _update_sketch_actions(self) -> None:
         """Hochziehen und Abtragen folgen dem Zustand der freien Kontur."""
@@ -5199,7 +5215,16 @@ class MainWindow(QMainWindow):
         offer = self._sketch_pull_offer()
         action = ""
         if offer == "ready":
-            action = str(tr("Pfeil: Körper aufziehen · Kreuz: Tasche schneiden."))
+            action = (
+                str(tr("Pfeil: Körper aufziehen · Kreuz: Tasche schneiden."))
+                if self._sketch_cut_available()
+                else str(
+                    tr(
+                        "Pfeil: Körper hochziehen · Abtragen braucht einen ausgewählten, "
+                        "bearbeitbaren Körper."
+                    )
+                )
+            )
             line = f"{line} {action}"
         elif offer:
             line = f"{line} {offer}"
@@ -5208,7 +5233,16 @@ class MainWindow(QMainWindow):
             and panel.canvas.view_plane == panel.canvas.sketch.plane
             and self._sketch_target in ("", PULL_OP, POCKET_OP)
         ):
-            action = str(tr("Aufziehen oder abtragen: Jetzt Vorder- oder Seitenansicht wählen."))
+            action = (
+                str(tr("Aufziehen oder abtragen: Jetzt Vorder- oder Seitenansicht wählen."))
+                if self._sketch_cut_available()
+                else str(
+                    tr(
+                        "Hochziehen: Jetzt Vorder- oder Seitenansicht wählen. "
+                        "Für Abtragen zuerst einen bearbeitbaren Körper auswählen."
+                    )
+                )
+            )
         self._sketch_hint.setText(line)
         self.viewport.show_sketch_action(action)
         self._update_sketch_actions()
@@ -8177,7 +8211,13 @@ class MainWindow(QMainWindow):
         # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
         # den Knopf sofort benutzen können — ohne erst noch die Kamera oder
         # die Skizze zu bewegen.
-        self._update_sketch_actions()
+        if self._sketch_panel is not None:
+            # Neben dem Knopf ändern sich auch Kreuz, Griffbeschriftung und
+            # Erklärung im Viewport. Ein gemeinsamer Neuaufbau hält alle vier
+            # Auskünfte im selben Zustand.
+            self._redraw_sketch()
+        else:
+            self._update_sketch_actions()
         result = self.session.last_result
         chosen = self.object_tree.selected_objects()
         entries = [result.scene.objects.get(entry) for entry in chosen] if result else []

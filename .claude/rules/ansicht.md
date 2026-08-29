@@ -544,6 +544,10 @@ Bildhöhe. Das verändert weder Blickrichtung noch Maßstab und wird beim
 Verlassen zurückgenommen. `view_on_plane` und `show_span_on_plane` setzen die
 Verschiebung nach jeder neuen Kamerastellung erneut — deshalb bleiben Umriss,
 Pfeil, Kreuz und Live-Zahl auch in der Querschau oberhalb der Werkzeugkarte.
+Auch `view_from` verwirft den gespeicherten Weltvektor, bevor die ViewBar eine
+absolute Kamerastellung setzt, rechnet den heutigen Ausgleich neu ein und
+meldet die neue Hauptansicht an das Ebenenfeld. Ein gespeicherter Versatz darf
+nie von einer Kamera abgezogen werden, die ihn nicht mehr enthält.
 
 Fangmarke und unfertige Kurve besitzen eigene Actors. Ein voller
 `show_sketch`-Aufbau räumt sie nicht zwischen zwei Gesten weg; ein
@@ -551,4 +555,8 @@ Zeigerschritt aktualisiert bei gleicher Topologie nur Punkte und rendert
 Fangmarke plus Vorschau gemeinsam. Maßkarten, Achsenbuchstaben und
 Ziehgriff-Beschriftungen sind ungreifbar (`pickable=False`) und können deshalb
 keinen Klick von Zeichenebene oder Umriss abfangen.
+Der innere Schaft, das Kreuz und die Beschriftung *Abtragen* erscheinen nur,
+wenn genau ein bearbeitbarer Körper gewählt ist. Ohne ihn bleibt der Pfeil
+nach außen vollständig bedienbar; ein Zug nach innen zeigt weder Drahtkörper
+noch Tiefe und erzeugt keine Operation.
 

@@ -2171,7 +2171,7 @@ class SketchPlanePicker(QFrame):
             f"#sketchPlanePicker QLabel {{ color: {colours['text']}; }}"
             f"#sketchPlanePicker QToolButton {{ color: {colours['text']};"
             f" background: {colours['alternate']}; border: 1px solid {colours['disabled']};"
-            " border-radius: 7px; padding: 7px; }}"
+            " border-radius: 7px; padding: 7px; }"
             f"#sketchPlanePicker QToolButton:hover, #sketchPlanePicker QToolButton:focus {{"
             f" border: 2px solid {colours['accent_line']}; }}"
         )
@@ -2206,7 +2206,7 @@ class SketchSelectionBadge(QLabel):
         self.setStyleSheet(
             f"#sketchSelectionBadge {{ color: {colours['text']};"
             f" background: {colours['window']}; border: 1px solid {colours['disabled']};"
-            " border-radius: 6px; }}"
+            " border-radius: 6px; }"
         )
 
     def place(self) -> None:
@@ -2245,7 +2245,7 @@ class SketchActionBadge(QLabel):
         self.setStyleSheet(
             f"#sketchActionBadge {{ color: {colours['text']};"
             f" background: {colours['window']}; border: 2px solid {colours['accent_line']};"
-            " border-radius: 8px; font-weight: 600; }}"
+            " border-radius: 8px; font-weight: 600; }"
         )
 
     def place(self) -> None:
@@ -2467,6 +2467,14 @@ class Viewport(QWidget):
         Querschau, geschlossener Umriss, und eine Operation, für die eine Höhe
         überhaupt etwas bedeutet. Die Ansicht kennt davon nichts, sie kennt die
         Geste (siehe :meth:`set_sketch_pull`)."""
+        self._sketch_cut_available: Callable[[], bool] | None = None
+        """Ob der Zug nach innen gerade ein echtes Ziel hat.
+
+        Die Tasche braucht einen ausgewählten, bearbeitbaren Körper. Das weiß
+        das Fenster; der Viewport nutzt die Antwort für Griff, Vorschau und
+        Richtungsprüfung gemeinsam, damit nichts Sichtbares mehr verspricht
+        als die spätere Operation halten kann.
+        """
         self._pull_limits: tuple[float, float] = (0.0, 0.0)
         """Die Grenzen der Höhe, aus dem Schema von ``sketch_extrude``.
 
@@ -3605,7 +3613,7 @@ class Viewport(QWidget):
         """
         # Läuft eine Analysekarte, steht hier ohnehin nichts: `_draw_shadow`
         # legt dann keine Hülle ab, und `show_scene` räumt die alten weg.
-        if self.plotter is None or not self._shadow_hulls:
+        if self._sketch_frame is not None or self.plotter is None or not self._shadow_hulls:
             return
         direction = self._shadow_direction()
         if math.dist(self._shadow_cast, direction) < EPS_GEOM:
@@ -4390,9 +4398,7 @@ class Viewport(QWidget):
         if self._sketch_frame is not None:
             if self._hover_at is not None:
                 x, y = self._hover_at
-                ready_to_pull = (
-                    self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready"
-                )
+                ready_to_pull = self._pull_is_offered()
                 # Der ausdrückliche Pfeil/Kreuz-Griff gewinnt immer. So kann
                 # seine sichtbare Fläche nicht in einen Kamerazug fallen.
                 if ready_to_pull and self.pull_handle_reach(x, y) <= PULL_HIT_PIXELS:
@@ -6520,7 +6526,20 @@ class Viewport(QWidget):
             return
         position, up = VIEW_DIRECTIONS[direction]
         self.plotter.camera_position = [position, (0.0, 0.0, 0.0), up]
+        # Eine absolute Kameravorgabe enthält den bisherigen Ausgleich nicht
+        # mehr. Der gespeicherte Weltvektor muss deshalb gleichzeitig fallen;
+        # sonst zieht die nächste Größen- oder Zoomänderung einen Versatz ab,
+        # der in dieser neuen Kamera gar nicht steckt.
+        self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self.reset_camera()
+        if self._sketch_frame is not None:
+            self._apply_sketch_occlusion()
+            # Die sichtbare ViewBar bleibt auch im Skizzenmodus bedienbar. Ihr
+            # Ansichtsname muss daher denselben Weg ins Ebenenfeld nehmen wie
+            # ein eingerasteter Kamerazug.
+            self._settle_sketch_view()
+        else:
+            self.cameraMoved.emit()
         self._redraw_shadows()
 
     def view_on_plane(self, frame: PlaneFrame) -> None:
@@ -6933,8 +6952,9 @@ class Viewport(QWidget):
                     pickable=False,
                 )
             )
-        handle = self._pull_handle_segments()
-        if handle and self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready":
+        full_handle = self._pull_handle_segments()
+        handle = self._visible_pull_handle_segments(full_handle)
+        if handle and self._pull_is_offered():
             handle_points = np.asarray([point for pair in handle for point in pair], dtype=float)
             handle_lines = np.hstack(
                 [[2, 2 * index, 2 * index + 1] for index in range(len(handle))]
@@ -6950,20 +6970,22 @@ class Viewport(QWidget):
                     pickable=False,
                 )
             )
-            inward, outward = handle[0]
+            inward, outward = full_handle[0]
             size = math.dist(inward, outward) / 2.0
             label_shift = tuple(frame.x_axis[axis] * size * 1.1 for axis in range(3))
-            label_points = np.asarray(
-                [
-                    tuple(outward[axis] + label_shift[axis] for axis in range(3)),
-                    tuple(inward[axis] + label_shift[axis] for axis in range(3)),
-                ],
-                dtype=float,
-            )
+            label_points = [
+                tuple(outward[axis] + label_shift[axis] for axis in range(3)),
+            ]
+            labels = [str(tr("Hochziehen"))]
+            if self._cut_pull_available():
+                label_points.append(
+                    tuple(inward[axis] + label_shift[axis] for axis in range(3))
+                )
+                labels.append(str(tr("Abtragen")))
             self._sketch_actors.append(
                 plotter.add_point_labels(
-                    label_points,
-                    [str(tr("Hochziehen")), str(tr("Abtragen"))],
+                    np.asarray(label_points, dtype=float),
+                    labels,
                     text_color=self._sketch_label_colour,
                     font_size=10,
                     bold=True,
@@ -7571,6 +7593,7 @@ class Viewport(QWidget):
         offer: Callable[[], str] | None,
         limits: tuple[float, float] = (0.0, 0.0),
         cut_limits: tuple[float, float] | None = None,
+        cut_available: Callable[[], bool] | None = None,
     ) -> None:
         """Verdrahtet den Ziehgriff des Skizzenmodus.
 
@@ -7587,8 +7610,10 @@ class Viewport(QWidget):
         Geste, den Griff im Bild und die Zahl am Zeiger.
 
         ``limits`` und ``cut_limits`` sind die Grenzen von Aufbau und Tasche
-        **aus ihren Schemata**. Sie kommen von außen, damit keine Zahl hier
-        abgeschrieben wird.
+        **aus ihren Schemata**. ``cut_available`` beantwortet zusätzlich, ob
+        ein ausgewählter Körper die Tasche gerade wirklich aufnehmen kann.
+        Beides kommt von außen, damit die Ansicht weder Geometriezustand noch
+        Zahlen nachbaut.
 
         ``None`` löst alles wieder — das Fenster tut es beim Verlassen des
         Modus, sonst hielte die Ansicht einen Rückruf auf ein gestorbenes Panel.
@@ -7596,6 +7621,7 @@ class Viewport(QWidget):
         self._sketch_pull_offer = offer
         self._pull_limits = limits
         self._cut_limits = cut_limits
+        self._sketch_cut_available = cut_available
         if offer is None:
             self._end_pull()
 
@@ -7662,10 +7688,42 @@ class Viewport(QWidget):
         )
         return pull_handle(self._sketch_frame, self._sketch_curves, size)
 
+    def _pull_is_offered(self) -> bool:
+        """Ob der räumliche Griff in diesem Zustand eine gültige Geste ist."""
+        return self._sketch_pull_offer is not None and self._sketch_pull_offer() == "ready"
+
+    def _cut_pull_available(self) -> bool:
+        """Ob die sichtbare Richtung nach innen gerade angewandt werden kann."""
+        if self._cut_limits is None:
+            return False
+        return self._sketch_cut_available is None or self._sketch_cut_available()
+
+    def _visible_pull_handle_segments(
+        self,
+        handle: Sequence[tuple[Vec3, Vec3]] | None = None,
+    ) -> list[tuple[Vec3, Vec3]]:
+        """Nur die Richtungen des Griffs, die beim Loslassen auch gelten.
+
+        Ohne bearbeitbaren Zielkörper bleibt der Pfeil nach außen stehen. Der
+        innere Schaft und das Kreuz verschwinden gemeinsam mit „Abtragen" —
+        eine fehlende Handlung wird nicht als bloß gesperrte Dekoration im
+        Modell gezeigt.
+        """
+        complete = list(handle if handle is not None else self._pull_handle_segments())
+        if not complete or self._cut_pull_available():
+            return complete
+        inward, outward = complete[0]
+        base: Vec3 = (
+            (float(inward[0]) + float(outward[0])) / 2.0,
+            (float(inward[1]) + float(outward[1])) / 2.0,
+            (float(inward[2]) + float(outward[2])) / 2.0,
+        )
+        return [(base, outward), *complete[1:3]]
+
     def pull_handle_reach(self, x: int, y: int) -> float:
         """Wie weit die Bildstelle von Pfeil oder Kreuz des Ziehgriffs liegt."""
         best = math.inf
-        for first, second in self._pull_handle_segments():
+        for first, second in self._visible_pull_handle_segments():
             spots = (self._display_of(first), self._display_of(second))
             if any(spot is None for spot in spots):
                 continue
@@ -7845,6 +7903,16 @@ class Viewport(QWidget):
         # in die der Körper wächst — geklemmt sind beide Richtungen gleich weit
         # von null entfernt.
         self._pull_raw = reach
+        if reach < 0.0 and not self._cut_pull_available():
+            # Ohne ausgewählten, bearbeitbaren Körper gibt es im Bild weder
+            # Kreuz noch Tasche. Auch während eines versehentlichen Zugs nach
+            # innen darf deshalb kein Drahtkörper samt „Tiefe" aufscheinen,
+            # der beim Loslassen kommentarlos wieder verschwindet.
+            if abs(self._pull_height) > EPS_GEOM:
+                self._pull_height = 0.0
+                self._show_pull_cage()
+                self.drag_bar.dismiss()
+            return
         height = pulled_height(reach, self._sketch_step, self._limits_for(reach))
         if abs(height - self._pull_height) <= EPS_GEOM:
             return
@@ -7945,7 +8013,7 @@ class Viewport(QWidget):
         wer tippt, meint genau diese Zahl, und sie stillschweigend zu ändern
         wäre eine Antwort auf eine andere Frage.
         """
-        if height < 0.0 and self._cut_limits is None:
+        if height < 0.0 and not self._cut_pull_available():
             return False
         least, most = self._limits_for(height)
         amount = abs(height)

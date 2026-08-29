@@ -1495,6 +1495,33 @@ def test_pending_geometry_is_available_to_the_visible_viewport(qt_app: QApplicat
     assert preview[-1].points[-1] == pytest.approx((10.0, 20.0))
 
 
+def test_snap_mark_preview_and_click_share_an_existing_off_grid_point(
+    qt_app: QApplication,
+) -> None:
+    """Ein sichtbares Fangziel darf beim Festsetzen nicht mehr springen."""
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_snapping(True, 1.0)
+    canvas.add_element("point", ((10.25, 10.25),))
+    canvas.set_tool("line")
+    canvas.place_on_plane((0.0, 0.0))
+
+    canvas.hover_on_plane((10.3, 10.3))
+
+    assert canvas.pointer_target() == pytest.approx((10.25, 10.25))
+    preview = canvas.pending_elements()
+    assert preview[0].points[-1] == pytest.approx((10.25, 10.25))
+
+    canvas.place_on_plane((10.3, 10.3))
+
+    line = canvas.sketch.elements[-1]
+    assert line.points[-1] == pytest.approx((10.25, 10.25))
+    assert any(
+        entry.kind == "coincident" and 0 in entry.targets
+        for entry in canvas.sketch.constraints
+    ), "der Punkt bleibt als echte Deckung verbunden"
+
+
 def test_a_measure_without_a_start_says_what_to_do(qt_app: QApplication) -> None:
     canvas = SketchCanvas()
     canvas.set_tool("line")
@@ -4141,7 +4168,11 @@ def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplic
         assert panel.canvas.view_plane != panel.canvas.sketch.plane, "die Querschau steht"
         assert window._sketch_pull_offer() == "ready"
         assert "Pfeil:" in window.viewport.sketch_action.text()
-        assert "Kreuz:" in window.viewport.sketch_action.text()
+        assert "Kreuz:" not in window.viewport.sketch_action.text()
+        assert "bearbeitbaren Körper" in window.viewport.sketch_action.text()
+        assert len(window.viewport._visible_pull_handle_segments()) == 3, (
+            "ohne Zielkörper steht nur der Pfeil nach außen im Modell"
+        )
     finally:
         window.finish_sketch(keep=False)
         window.close()
@@ -4512,6 +4543,9 @@ def test_selecting_a_body_updates_the_visible_cut_button_immediately(
 
         assert window.sketch_cut_button.isEnabled()
         assert "Schneidet den Umriss" in window.sketch_cut_button.toolTip()
+        panel.choose_plane("plane:xz")
+        assert "Kreuz:" in window.viewport.sketch_action.text()
+        assert len(window.viewport._visible_pull_handle_segments()) == 5
     finally:
         window.session.last_result = None
         window.finish_sketch(keep=False)
@@ -4669,6 +4703,32 @@ def test_another_sketch_operation_keeps_its_own_dialog(qt_app: QApplication) -> 
         window.deleteLater()
 
 
+def test_an_explicit_cut_never_turns_into_building_when_its_body_is_lost(
+    qt_app: QApplication,
+) -> None:
+    """Eine verlorene Auswahl darf die gewählte Operation nicht umkehren."""
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_pocket")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_plane("plane:xz")
+
+        offer = window._sketch_pull_offer()
+        assert offer != "ready"
+        assert "Körper" in offer
+        assert not window.viewport._pull_is_offered()
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
 def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplication) -> None:
     """Ohne den Satz findet die Geste niemand.
 
@@ -4695,7 +4755,8 @@ def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplicati
         # geschlossene Umriss" und trägt dasselbe Wort: Mit einem Angebot, das
         # nie „ready" liefert, blieb der Test grün (gefunden von der
         # Review-Sitzung, 27.08.2026).
-        assert "Pfeil:" in after and "Kreuz:" in after, after
+        assert "Pfeil:" in after and "Kreuz:" not in after, after
+        assert "bearbeitbaren Körper" in after, after
         assert "Zeichenebene" in after, "die Ebene bleibt in der Zeile stehen"
     finally:
         window.finish_sketch(keep=False)

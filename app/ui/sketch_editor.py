@@ -741,13 +741,30 @@ class SketchCanvas(QWidget):
         während der Klick den Punkt bei 20,25 nahm — derselbe Fehler, nur
         andersherum.
         """
-        if self._dragging is None and self.tool in ("select", "point"):
-            hit = self._hit_point(self._to_screen(*self._pointer))
-            if hit is not None:
-                return self.points()[hit]
-        if self.tool == "select" and self._dragging is None:
+        if self._dragging is None:
+            hit, target = self._placement_target()
+            if hit is not None or self.tool != "select":
+                return target
+        if self.tool == "select":
             return self._pointer
         return self.snapped(self._pointer)
+
+    def _placement_target(
+        self, position: QPointF | None = None
+    ) -> tuple[int | None, tuple[float, float]]:
+        """Das gemeinsame Fangziel von Marke, Vorschau und festem Klick.
+
+        Ein vorhandener Punkt schlägt das Raster. Diese Reihenfolge darf nicht
+        an den drei sichtbaren Wegen einzeln nachgebaut werden: Schon ein
+        Punkt bei 10,25 mm ließe sonst Marke und Vorschau 10,00 mm versprechen,
+        während der Klick eine Deckung bei 10,25 mm erzeugt.
+        """
+        screen = position if position is not None else self._to_screen(*self._pointer)
+        world = self._to_world(position) if position is not None else self._pointer
+        hit = self._hit_point(screen)
+        if hit is not None:
+            return hit, self.points()[hit]
+        return None, self.snapped(world)
 
     def pending_elements(self) -> tuple[SketchElement, ...]:
         """Die Geometrie, die der nächste Klick festsetzen würde.
@@ -760,7 +777,7 @@ class SketchCanvas(QWidget):
         """
         if not self._pending_world:
             return ()
-        target = self.snapped(self._pointer)
+        target = self._placement_target()[1]
         first = self._pending_world[0]
         last = self._pending_world[-1]
         if self.tool == "line":
@@ -1907,12 +1924,7 @@ class SketchCanvas(QWidget):
         # Ein vorhandener Punkt schlägt das Raster: er wird zur Deckung, und
         # eine Deckung hält auch dann, wenn der Punkt später wandert. Erst wo
         # keiner liegt, fällt der Klick auf die Rasterweite.
-        snapped = self._hit_point(position)
-        world = (
-            self.points()[snapped]
-            if snapped is not None
-            else self.snapped(self._to_world(position))
-        )
+        snapped, world = self._placement_target(position)
 
         # Ein Klick auf einen Punkt greift ihn, statt einen zweiten daraufzu-
         # setzen. Der bekam vorher einen vierten genau auf den mittleren —
@@ -2408,7 +2420,8 @@ class SketchCanvas(QWidget):
         # das Aufleuchten braucht den Punkt, die Fangmarke braucht nur zu
         # wissen, dass es einen gibt. Zweimal zu suchen hieße, bei jeder
         # Mausbewegung zweimal über alle Punkte zu laufen.
-        under = self._hit_point(position) if self.tool in ("select", "point") else None
+        target_hit = self._hit_point(position) if self._dragging is None else None
+        under = target_hit if self.tool in ("select", "point") else None
         # Getrennt ausgewertet und nicht mit ``or`` verkettet: eine
         # Kurzschluss-Oder ließe das Zweite ungeprüft, sobald das Erste
         # zutrifft.
@@ -2416,7 +2429,7 @@ class SketchCanvas(QWidget):
         # Die Fangmarke wandert immer mit, auch schon vor dem ersten Klick:
         # das Raster wird gröber gezeichnet, als gefangen wird, und ohne die
         # Marke wäre nicht zu sehen, wohin ein Klick fiele.
-        moved = self._note_snap_mark(over_point=under is not None)
+        moved = self._note_snap_mark(over_point=target_hit is not None)
         if self._dragging is not None and buttons & Qt.MouseButton.LeftButton:
             # Ein gezogener Punkt fällt auf dieselbe Weite wie ein gesetzter —
             # sonst wäre das Raster eine Zusage, die beim ersten Nachbessern
@@ -2989,7 +3002,7 @@ class SketchCanvas(QWidget):
         for world in self._pending_world:
             painter.drawEllipse(self._to_screen(*world), 4.0, 4.0)
 
-        target = self.snapped(self._pointer)
+        target = self._placement_target()[1]
         first = self._pending_world[0]
         last = self._pending_world[-1]
         if self.tool in ("line", "spline"):
