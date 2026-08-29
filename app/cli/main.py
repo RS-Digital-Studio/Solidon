@@ -268,7 +268,9 @@ def command_info(args: argparse.Namespace) -> int:
         size = entry.mesh.bounds.size
         watertight = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
         print(
-            f"  {object_id:<8} {entry.name:<24} "
+            # !s wie beim Titel darunter: ein übersetzbarer Name kennt
+            # keine Formatbreite.
+            f"  {object_id:<8} {entry.name!s:<24} "
             f"{size[0]:.1f} x {size[1]:.1f} x {size[2]:.1f} mm   "
             f"{entry.mesh.triangle_count} {tr('Dreiecke')}, {watertight}"
         )

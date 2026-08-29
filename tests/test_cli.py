@@ -546,3 +546,30 @@ def test_the_right_order_just_works(tmp_path: Path, capsys: pytest.CaptureFixtur
     capsys.readouterr()
 
     assert main(["run", "create_box", str(path), "--width", "40"]) == 0
+
+
+EXAMPLES = Path(__file__).parent.parent / "app" / "examples"
+
+
+@pytest.mark.parametrize("beispiel", sorted(EXAMPLES.glob("*.p3d")), ids=lambda p: p.stem)
+def test_info_reads_every_shipped_example(
+    beispiel: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Jedes ausgelieferte Beispiel muss sich beschreiben lassen.
+
+    Am 29.08.2026 brach ``info`` an **allen neun** mit einem Programmfehler ab:
+    ``entry.name`` ist bei Objekten aus Bausteinen ein ``TranslatableText``, und
+    der kennt keine Formatbreite. Drei Zeilen darunter stand der richtige Weg
+    samt Begründung — ``{transaction.title!s:<28}``, mit dem Kommentar „ein
+    übersetzbarer Titel kennt keine Formatbreite". Die Nachbarzeile war ihm
+    nicht gefolgt.
+
+    Der bestehende ``info``-Test hat es nicht gesehen, und der Grund ist die
+    eigentliche Lehre: Er baut sein Projekt aus einer STL, und dort ist der
+    Objektname eine gewöhnliche Zeichenkette. Ein selbst gebautes Projekt
+    trifft die Fälle nicht, die ein ausgeliefertes mitbringt.
+    """
+    assert main(["info", str(beispiel)]) == 0, f"{beispiel.name} bricht ab"
+    gedruckt = capsys.readouterr().out
+    assert "Objekte" in gedruckt, f"{beispiel.name} beschreibt keine Objekte"
+    assert "Verlauf" in gedruckt, f"{beispiel.name} zeigt keinen Verlauf"
