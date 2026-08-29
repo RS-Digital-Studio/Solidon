@@ -199,6 +199,7 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
+    WITHOUT_MENU,
     demo_line,
     display_unit,
     feature_label,
@@ -1605,6 +1606,7 @@ class MainWindow(QMainWindow):
         self.object_tree.operationRequested.connect(self.launch_operation)
         self.object_tree.stepRequested.connect(self.edit_operation)
         self.object_tree.sketchOnFaceRequested.connect(self._on_sketch_on_face)
+        self.object_tree.catalogRequested.connect(self.action_catalog)
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
@@ -1873,6 +1875,14 @@ class MainWindow(QMainWindow):
         sections = {section.category: section for section in menu_tree(skip=own)}
         groups: dict[str, QMenu] = {}
         for title, categories in MENU_GROUPS:
+            if all(category in WITHOUT_MENU for category in categories):
+                # **Die Bausteine haben keinen Menüort mehr** (§2.6): Ein
+                # räumliches Teil als Textzeile zu führen ist die schlechtere
+                # Darstellung, und im Menü standen neunundzwanzig davon in
+                # sechs Untermenüs — jede Zeile eine Vokabel statt einer Form.
+                # Der Katalog mit Bildern steht in *Datei* und im Kontextmenü
+                # am gewählten Teil.
+                continue
             present = [sections[name] for name in categories if name in sections]
             if not present:
                 continue
@@ -5327,12 +5337,12 @@ class MainWindow(QMainWindow):
             and self._sketch_target in ("", PULL_OP, POCKET_OP)
         ):
             action = (
-                str(tr("Aufziehen oder abtragen: Jetzt Vorder- oder Seitenansicht wählen."))
+                str(tr("Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen."))
                 if self._sketch_cut_available()
                 else str(
                     tr(
-                        "Hochziehen: Jetzt Vorder- oder Seitenansicht wählen. "
-                        "Für Abtragen zuerst einen bearbeitbaren Körper auswählen."
+                        "Zum Ziehen mit der Maus: Vorder- oder Seitenansicht wählen. "
+                        "Abtragen braucht zusätzlich einen bearbeitbaren Körper."
                     )
                 )
             )

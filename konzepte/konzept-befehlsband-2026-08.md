@@ -1,8 +1,27 @@
 # Konzept — ein Befehlsband, das die Auswahl versteht
 
-> **Stand 29.08.2026 · entschieden.** Dieses Dokument hält die Entscheidung
-> über die obere Bedienzone fest. Die verbindliche Fenstergrenze bleibt
-> Bauplan §2.5; den Umsetzungsstand führt ausschließlich `ROADMAP.md`.
+> **Stand 29.08.2026 · vorgelegt und abgelehnt.** Robert hat den Umbau
+> gesehen und sich dagegen entschieden: „ich glaub ich will eher den
+> aktuellen stand aber optimiert". Der Zweig
+> `codex/command-band-integration` wird **nicht** übernommen. Die
+> verbindliche Fenstergrenze bleibt Bauplan §2.5; den Umsetzungsstand führt
+> ausschließlich `ROADMAP.md`, und der Registerpunkt zur oberen Bedienzone
+> bleibt damit offen.
+>
+> **Und eine Lehre über diesen Entwurf hinaus.** Das Dokument stand hier bis
+> zum selben Tag als „entschieden", begründet mit Roberts Auftrag, „für
+> Kunden ohne CAD-Kenntnisse einfach, schön und modern zu werden". Das war
+> eine **Auslegung** dieses Auftrags und keine Entscheidung von ihm — der
+> Registerpunkt sagt ausdrücklich „eine Entscheidung von Robert, keine
+> Messung". Ein Auftrag, etwas schöner zu machen, ist keine Freigabe, die
+> sichtbare Bedienzone umzubauen. Dieselbe Grenze zieht `ROADMAP.md` schon
+> einmal: Eine Vollmacht für das Produkt ist keine für die Struktur, und eine
+> weitergereichte ist es erst recht nicht.
+>
+> Der Entwurf bleibt hier stehen, weil seine **Messungen** gültig sind — 47
+> von 91 Operationen lagen drei Klicks tief, und drei konkurrierende
+> Bedienorte sind gezählt, nicht gefühlt. Wer die Zone später erneut angeht,
+> beginnt hier und nicht bei null.
 
 ## Anlass
 

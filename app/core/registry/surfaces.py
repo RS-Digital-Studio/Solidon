@@ -28,6 +28,7 @@ from app.core.registry.registry import (
     REGISTRY,
     TWIN_TOGGLES,
     VARIANT_GROUPS,
+    WITHOUT_MENU,
     MenuSection,
     OperationSpec,
     Registry,
@@ -369,7 +370,15 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         if spec.name in TWIN_TOGGLES:
             return f"{where} ({_('Option „Flächen und Kanten später bearbeiten“')})"
         return f"{where} ({_('im selben Dialog')})"
-    steps = [group_title(spec.category)]
+    if spec.category in WITHOUT_MENU:
+        # **Eine Kategorie ohne Menüort nennt den Ort, den sie wirklich hat.**
+        # Die Bausteine stehen seit dem 29.08.2026 nur noch im Katalog; ein
+        # Weg „Bausteine → Mechanik → Filmscharnier" schickte Kunde, Agent und
+        # Handbuch zu einem Menü, das es nicht mehr gibt. Die Bausteingruppe
+        # unten hängt sich an — im Katalog ordnet sie die Kacheln.
+        steps = [str(_("Datei")), str(_("Bausteinkatalog"))]
+    else:
+        steps = [group_title(spec.category)]
 
     # **Je Kategorie gefragt, nicht je Gruppe.** ``group_is_flat`` beantwortet
     # dieselbe Frage gröber — alles flach oder jede Kategorie eine Ebene

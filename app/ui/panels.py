@@ -606,6 +606,11 @@ class ObjectTree(QWidget):
 
     Der Empfänger baut daraus die Ebene ``feature:<id>``; der Baum kennt den
     Skizzenmodus nicht und soll ihn nicht kennen."""
+    catalogRequested = Signal()
+    """Den Bausteinkatalog öffnen — der kurze Weg vom gewählten Teil (§2.6).
+
+    Ohne Kennung: Was gewählt ist, weiß das Fenster ohnehin, und der Katalog
+    fragt es dort ab. Der Baum sagt nur, dass jemand ihn sehen will."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1230,6 +1235,7 @@ class ObjectTree(QWidget):
         # Er gilt der **Fläche**, die Sichtbarkeit dem Körper. Wer mit rechts
         # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
         self._add_sketch_on_face(menu)
+        self._add_catalog(menu)
         self._add_visibility(menu, chosen)
 
         kind = self._feature_kind()
@@ -1479,6 +1485,28 @@ class ObjectTree(QWidget):
             return None
         value: int | None = items[0].data(0, _STEP_ROLE)
         return value
+
+    def _add_catalog(self, menu: QMenu) -> None:
+        """„Baustein einsetzen …" — der kurze Weg vom gewählten Teil zum Katalog.
+
+        Die Bausteine haben seit dem 29.08.2026 keinen Menüort mehr: Ein
+        räumliches Teil als Textzeile zu führen ist die schlechtere
+        Darstellung (§2.6), und im Menü standen neunundzwanzig davon in sechs
+        Untermenüs. Der Katalog mit Bildern war schon immer der bessere Ort —
+        er lag nur in *Datei*, also dort, wo niemand hinsieht, der gerade auf
+        eine Fläche zeigt.
+
+        **Roberts Bedingung zu dieser Änderung**, und sie ist der Grund für
+        diesen Eintrag: „solange man einfach zum Katalog kommt, wenn man das
+        Teil gewählt hat". Von hier aus stimmt beides — die Auswahl steht, und
+        der Katalog weiß dadurch, dass er den Hinweis auf die fehlende Stelle
+        **nicht** zeigen muss.
+        """
+        insert = menu.addAction(tr("Baustein einsetzen …"))
+        insert.setStatusTip(
+            tr("Öffnet den Katalog mit Bildern — Mutternfalle, Rastnase, Scharnier und andere.")
+        )
+        insert.triggered.connect(lambda _checked=False: self.catalogRequested.emit())
 
     def _add_sketch_on_face(self, menu: QMenu) -> None:
         """„Auf dieser Fläche zeichnen" — der Weg auf ein vorhandenes Teil.

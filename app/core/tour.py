@@ -256,8 +256,8 @@ TOURS: Final[tuple[Tour, ...]] = (
                 shows="tree",
                 text=_(
                     "Setzen Sie selbst einen Baustein: den Halter im Objektbaum "
-                    "anklicken, dann im Menü Bausteine etwas wählen — zum Beispiel ein "
-                    "drittes Schraubenloch."
+                    "anklicken, dann mit der rechten Maustaste „Baustein einsetzen“ "
+                    "wählen — der Katalog zeigt jeden mit Bild."
                 ),
                 done=_parts_inserted(4),
             ),
@@ -642,7 +642,7 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
         closing=_(
             "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der "
-            "Öffnung anklicken, Bausteine → Deckel erzeugen."
+            "Öffnung anklicken, mit rechts „Baustein einsetzen“, Deckel erzeugen."
         ),
     ),
 )

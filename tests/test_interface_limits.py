@@ -1384,12 +1384,23 @@ def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
         # eine leere Menge prüfte. Gefangen hat das die Gegenprobe darunter,
         # nicht der Test selbst.
         in_menu = set(window._op_actions)
-        others = [
+        # **Der Wächter zeigt seit dem 29.08.2026 auf das Register, nicht auf
+        # das Menü.** Vorher stand hier „die Menüleiste zeigt gar keine
+        # Bausteine — dann prüft dieser Test nichts", und genau das ist seither
+        # der Sollzustand: Die Kategorie hat keinen Menüort mehr, sie lebt im
+        # Katalog mit Bildern (§2.6, ``WITHOUT_MENU``). Ein Wächter, der den
+        # Sollzustand für einen Fehler hält, muss mitwandern — geprüft wird
+        # jetzt, dass es überhaupt Bausteine **gibt**.
+        parts = [spec.name for spec in REGISTRY.all() if spec.category == "parts"]
+        assert parts, "es gibt keine Bausteine — dann prüft dieser Test nichts"
+        in_bar = [
             name
             for name in in_menu
             if REGISTRY.has(name) and REGISTRY.get(name).category == "parts"
         ]
-        assert others, "die Menüleiste zeigt gar keine Bausteine — dann prüft dieser Test nichts"
+        assert not in_bar, (
+            f"Bausteine gehören in den Katalog, nicht in die Menüleiste (§2.6): {sorted(in_bar)}"
+        )
         assert victim not in in_menu, "der eigene Baustein steht in der Menüleiste"
         assert victim in {entry.name for entry in palette_entries()}, (
             "und er muss über die Befehlspalette weiter erreichbar sein"
@@ -1800,14 +1811,29 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
         )
         verglichen += 1
 
-    # Ohne diese Zahl prüft der Test nichts — siehe den Docstring oben. Sie ist
-    # bewusst deutlich kleiner als der Bestand (86 Operationen, davon einige als
-    # Zwilling ohne Eintrag und einige nur in Katalog und Palette): Der Wächter
-    # soll den Aufbau sichern und nicht bei jeder neuen Operation reißen.
-    assert verglichen >= 60, (
-        f"nur {verglichen} Operationen im Menü wiedergefunden — dann prüft dieser "
-        "Test seine Zuordnung und nicht die Menüwege"
+    # **Kein Schwellenwert, sondern die Zusage selbst** (8b, 29.08.2026). Hier
+    # stand „mindestens 60", dann „mindestens 50" — eine Zahl, die bei jedem
+    # neuen Baustein wieder jemand senkt, und die nie sagte, was eigentlich
+    # gilt. Die Zusage lautet: **Jede Operation ist im Menü auffindbar**, außer
+    # sie ist ein zusammengelegter Zwilling, Mitglied einer Variantengruppe
+    # oder ihre Kategorie hat gar keinen Menüort (``WITHOUT_MENU``, §2.6).
+    #
+    # Als Verbotstest über die Menge, mit Zusicherung über die Grundmenge: Ein
+    # leeres Register unterschreitet jede Schwelle **und** findet keine
+    # Verstöße — grün, ohne geprüft zu haben.
+    from app.core.registry.registry import WITHOUT_MENU, variant_members
+
+    assert gebaut, "die Menüleiste ist leer — dann prüft dieser Test nichts"
+    ohne_ort = sorted(
+        spec.name
+        for spec in REGISTRY.all()
+        if str(spec.title) not in gebaut
+        and spec.name not in MENU_TWINS
+        and spec.name not in variant_members()
+        and spec.category not in WITHOUT_MENU
     )
+    assert not ohne_ort, f"ohne Menüort und ohne Ausnahme: {ohne_ort}"
+    assert verglichen, "kein Weg verglichen — die Zuordnung über die Titel bricht"
 
 
 def test_a_heading_names_only_what_belongs_to_it(window: MainWindow) -> None:

@@ -34,7 +34,7 @@ from app.core import errors
 from app.core.export import handover
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY
-from app.core.registry.registry import TWIN_TOGGLES
+from app.core.registry.registry import TWIN_TOGGLES, WITHOUT_MENU
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import MaterialSlot, Parameter, SlotOverride
@@ -363,6 +363,17 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             continue
         if spec.name in variant_members():
             assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
+            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            continue
+        if spec.category in WITHOUT_MENU:
+            # **Dritter Fall neben Zwilling und Variante, seit dem 29.08.2026.**
+            # Die Bausteine haben keinen Menüort mehr: Ein räumliches Teil als
+            # Textzeile zu führen ist die schlechtere Darstellung (§2.6). Wie
+            # bei den anderen beiden wird beides geprüft — kein Eintrag, und
+            # trotzdem vollständig erreichbar.
+            assert str(spec.title) not in labels, (
+                f"{spec.name} gehört in den Katalog, nicht ins Menü"
+            )
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
             continue
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
@@ -5493,7 +5504,14 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
             continue
         checked += 1
         assert built[action] == menu_path(REGISTRY.get(name)), name
-    assert checked >= 70, "die Kopplung deckt praktisch das ganze Register"
+    # **Kein Schwellenwert, sondern die Zusage** (8b, 29.08.2026). Hier stand
+    # „mindestens 70", und mit den Bausteinen im Katalog wären 50 daraus
+    # geworden — eine Zahl, die beim nächsten Umbau wieder jemand senkt.
+    # Geprüft wird stattdessen, dass die Kopplung **jede** Menüaktion erreicht:
+    # Was einen Eintrag hat, hat auch einen genannten Weg, und der stimmt.
+    assert checked, "keine einzige Kopplung gefunden — dann prüft dieser Test nichts"
+    ohne_weg = sorted(name for name, action in window._op_actions.items() if action not in built)
+    assert not ohne_weg, f"diese Menüaktionen haben keinen genannten Weg: {ohne_weg}"
 
 
 def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:
@@ -9320,3 +9338,47 @@ def test_the_halt_message_goes_when_the_chain_runs_again(window: MainWindow) -> 
     assert window._announcement == "", (
         "und der Satz über den Stopp steht nicht mehr da — er gilt nicht mehr"
     )
+
+
+def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) -> None:
+    """Die Bausteine haben keinen Menüort mehr — dafür einen am gewählten Teil.
+
+    Neunundzwanzig Bausteine standen in sechs Untermenüs, siebenundzwanzig
+    davon drei Klicks tief, und jede Zeile nannte eine Vokabel statt einer
+    Form: „Filmscharnier", „Schnappverbinder für eine Naht". Wer nicht weiß,
+    wie ein Filmscharnier aussieht, findet es dort nicht. Der Katalog mit
+    Bildern gab es die ganze Zeit — nur in *Datei*, also dort, wo niemand
+    hinsieht, der gerade auf eine Fläche zeigt (§2.6).
+
+    **Roberts Bedingung zu dieser Änderung** war genau dieser Weg: „solange
+    man einfach zum Katalog kommt, wenn man das Teil gewählt hat". Geprüft
+    wird deshalb beides — dass der Eintrag am gewählten Merkmal steht, und
+    dass er wirklich den Katalog ruft. Durchgereicht ist nicht gerufen.
+    """
+    from PySide6.QtWidgets import QMenu
+
+    face, menu = _face_menu(window)
+    assert face
+    assert isinstance(menu, QMenu)
+
+    titles = [action.text().replace("&", "") for action in menu.actions()]
+    assert "Baustein einsetzen …" in titles, (
+        f"der Weg zum Katalog fehlt am gewählten Teil — angeboten wird: {titles}"
+    )
+
+    gerufen: list[bool] = []
+    window.action_catalog = lambda: gerufen.append(True)  # type: ignore[method-assign]
+    window.object_tree.catalogRequested.connect(window.action_catalog)
+    entry = next(a for a in menu.actions() if a.text().replace("&", "") == "Baustein einsetzen …")
+    entry.trigger()
+    assert gerufen, "der Eintrag steht da, öffnet den Katalog aber nicht"
+
+    # Und die andere Hälfte: In der Menüleiste steht keiner mehr.
+    from app.core.registry import REGISTRY
+
+    in_bar = [
+        name
+        for name in window._op_actions
+        if REGISTRY.has(name) and REGISTRY.get(name).category == "parts"
+    ]
+    assert not in_bar, f"Bausteine gehören in den Katalog, nicht ins Menü: {sorted(in_bar)}"
