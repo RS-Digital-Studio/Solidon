@@ -290,6 +290,23 @@ def test_assign_slot_rejects_a_colour_it_cannot_read(profile: Profile) -> None:
     assert problem.value.field == "colour"
 
 
+def test_assign_slot_rejects_a_slicer_profile_path(profile: Profile) -> None:
+    """Die Operation ist die letzte Schranke vor der portablen Projektdatei."""
+    entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate()))
+
+    with pytest.raises(ValidationError) as problem:
+        run(
+            "assign_slot",
+            entry,
+            profile,
+            slot=1,
+            slicer_profile=r"C:\Slicer\profiles\PETG.json",
+        )
+
+    assert problem.value.field == "slicer_profile"
+    assert problem.value.suggestions
+
+
 def test_slots_from_texture_runs_as_an_operation(profile: Profile) -> None:
     entry = SceneObject(
         id="obj_1", name="Figur", mesh=MeshData.of(painted([(255, 0, 0), (0, 0, 255)]))

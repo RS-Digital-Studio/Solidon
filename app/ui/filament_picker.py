@@ -53,7 +53,7 @@ from app.core.export import slicer_keys
 from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
-from app.ui.style import TIGHT, set_level
+from app.ui.style import TIGHT, make_primary, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
@@ -164,6 +164,7 @@ class NewFilamentDialog(QDialog):
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Filament ändern") if name else tr("Neues Filament"))
+        self.setMinimumWidth(380)
         layout = QFormLayout(self)
 
         self.name = QLineEdit(self)
@@ -173,6 +174,11 @@ class NewFilamentDialog(QDialog):
 
         self.material_type = QComboBox(self)
         self.material_type.setEditable(True)
+        self.material_type.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        # Kein Spulentyp wird geraten. Die bekannte Liste bleibt sofort
+        # erreichbar, und wer einen anderen Typ auf der Spule liest, darf ihn
+        # weiterhin eintippen.
+        self.material_type.addItem(tr("Unbekannt"), "")
         for identifier, entry in profiles.material_profiles().items():
             self.material_type.addItem(str(entry.title), slicer_keys.filament_type(identifier))
         if material_type:
@@ -189,6 +195,9 @@ class NewFilamentDialog(QDialog):
                 self.material_type.setCurrentIndex(position)
             else:
                 self.material_type.setCurrentText(material_type)
+        material_help = tr("Materialart des Filaments, etwa PLA oder PETG.")
+        self.material_type.setToolTip(material_help)
+        self.material_type.setAccessibleDescription(material_help)
         layout.addRow(tr("Typ"), self.material_type)
 
         self._colour = colour or "#808080"
@@ -202,7 +211,11 @@ class NewFilamentDialog(QDialog):
         self.slicer_profile.setText(slicer_profile)
         self.slicer_profile.setReadOnly(True)
         self.slicer_profile.setPlaceholderText(tr("wird bei Übernahme aus dem Slicer gesetzt"))
-        layout.addRow(tr("Slicer-Profil"), self.slicer_profile)
+        self._slicer_profile_label = QLabel(tr("Slicer-Profil"), self)
+        layout.addRow(self._slicer_profile_label, self.slicer_profile)
+        has_slicer_profile = bool(slicer_profile.strip())
+        self._slicer_profile_label.setVisible(has_slicer_profile)
+        self.slicer_profile.setVisible(has_slicer_profile)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -211,6 +224,12 @@ class NewFilamentDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
+        self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert self._ok_button is not None
+        make_primary(self._ok_button)
+        self._ok_button.setEnabled(bool(name.strip()))
+        self.name.textChanged.connect(lambda text: self._ok_button.setEnabled(bool(text.strip())))
+        self.name.setFocus()
 
     def _pick_colour(self) -> None:
         chosen = QColorDialog.getColor(QColor(self._colour), self, tr("Farbe des Filaments"))
@@ -222,11 +241,24 @@ class NewFilamentDialog(QDialog):
 
     def filament(self) -> tuple[str, str, str, str]:
         """Die vollständige Vorwahl, wie sie im Katalog landet."""
-        material_type = self.material_type.currentData()
-        if material_type is None or self.material_type.currentText() not in {
-            self.material_type.itemText(index) for index in range(self.material_type.count())
-        }:
-            material_type = self.material_type.currentText()
+        shown_type = self.material_type.currentText().strip()
+        # Bei einem editierbaren Kombinationsfeld bleibt ``currentIndex``
+        # während des Tippens auf dem alten Eintrag. Darum wird der sichtbare
+        # Text selbst aufgelöst: „PLA" im Feld darf nie die unsichtbaren Daten
+        # des vorherigen ABS-Eintrags speichern.
+        position = next(
+            (
+                index
+                for index in range(self.material_type.count())
+                if shown_type.casefold()
+                in {
+                    self.material_type.itemText(index).casefold(),
+                    str(self.material_type.itemData(index) or "").casefold(),
+                }
+            ),
+            -1,
+        )
+        material_type = self.material_type.itemData(position) if position >= 0 else shown_type
         return (
             self.name.text().strip(),
             self._colour,
@@ -526,6 +558,16 @@ class FilamentPanel(QWidget):
             )
             for (name, colour), (slot, count) in sorted(used.items())
         )
+        self._fill()
+
+    def refresh_catalogue(self) -> None:
+        """Liest nur das Filamentregal neu, der Projektzustand bleibt stehen.
+
+        Die Erstinbetriebnahme kann Spulen aus dem Slicer übernehmen, während
+        dieses Panel längst gebaut ist. Dafür wird weder die Szene erneut
+        ausgewertet noch ihre Zusammenfassung nachgebaut: :attr:`_used` bleibt
+        dieselbe, nur die Regalhälfte liest den gemeinsamen Katalog noch einmal.
+        """
         self._fill()
 
     def _fill(self) -> None:

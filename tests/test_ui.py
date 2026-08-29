@@ -792,6 +792,37 @@ def test_a_dialog_is_generated_from_the_parameter_schema(qt_app: QApplication) -
     assert values["weld"] is True
 
 
+def test_choosing_a_profileless_filament_clears_old_slicer_metadata(
+    qt_app: QApplication,
+) -> None:
+    """Ein Filamentwechsel darf keine unsichtbare Herstellerwahl behalten.
+
+    Eine lokale Spule hat bewusst kein Slicer-Profil. Wird sie in einem
+    geöffneten Farbschritt gewählt, muss deshalb der alte Profilname
+    verschwinden; sonst fährt die neue Spule mit den Druckwerten der alten.
+    """
+    dialog = OperationDialog(
+        REGISTRY.get("assign_slot"),
+        ["obj_1"],
+        values={
+            "slot": 1,
+            "name": "PETG Grau",
+            "colour": "#808080",
+            "material_type": "PETG",
+            "slicer_profile": "Elegoo PETG PRO @ECC2",
+        },
+    )
+    try:
+        dialog._fill_filament_fields("PLA Weiß", "#ffffff", "PLA", "")
+
+        values = dialog.values()
+        assert values["name"] == "PLA Weiß"
+        assert values["material_type"] == "PLA"
+        assert values["slicer_profile"] == "", "die leere Auswahl löscht den alten Wert"
+    finally:
+        dialog.deleteLater()
+
+
 def test_a_feature_parameter_offers_the_features(qt_app: QApplication) -> None:
     """§18.5: „face_2" tippt niemand, der es nicht vorher abgelesen hat.
 

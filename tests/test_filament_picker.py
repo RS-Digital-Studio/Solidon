@@ -17,7 +17,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
-from app.ui.filament_picker import NEW_FILAMENT, FilamentField, hex_of
+from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog, hex_of
 
 
 def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
@@ -125,13 +125,73 @@ def test_a_catalogue_filament_does_not_take_slot_zero(
 
 def test_a_filament_type_can_be_chosen_by_hand(qt_app: QApplication) -> None:
     """Eine selbst angelegte Spule ist nicht auf Name und Farbe beschränkt."""
-    from app.ui.filament_picker import NewFilamentDialog
-
     dialog = NewFilamentDialog(name="Werkstattrolle", colour="#123456", material_type="PETG")
 
     assert dialog.material_type.currentData() == "PETG"
     assert dialog.slicer_profile.isReadOnly(), "Profilnamen kommen aus dem Slicer, nie als Pfad"
     assert dialog.filament() == ("Werkstattrolle", "#123456", "PETG", "")
+
+
+def test_a_typed_known_filament_type_keeps_what_is_visible(qt_app: QApplication) -> None:
+    """Tippen und Auswählen müssen denselben Materialtyp ergeben.
+
+    Ein editierbares Kombinationsfeld behält beim Tippen zunächst den alten
+    Index. Der sichtbare Text darf dadurch nicht mit dessen unsichtbaren Daten
+    gespeichert werden — „PLA" im Feld und „ABS" im Projekt wäre ein
+    gefährlicher Bedienfehler.
+    """
+    dialog = NewFilamentDialog(name="Werkstattrolle", colour="#123456")
+    dialog.material_type.setEditText("PLA")
+
+    assert dialog.material_type.currentText() == "PLA"
+    assert dialog.filament()[2] == "PLA"
+
+
+def test_a_new_filament_starts_without_a_guessed_material_type(
+    qt_app: QApplication,
+) -> None:
+    """Die alphabetische Profilreihenfolge ist keine Materialaussage.
+
+    ABS wäre nur der erste Katalogeintrag, PLA nur die allgemeine
+    Projektvorgabe. Beides sagt nichts über die Spule in der Hand; der Typ
+    beginnt deshalb sichtbar unbekannt und bleibt frei wählbar.
+    """
+    dialog = NewFilamentDialog()
+
+    assert dialog.material_type.currentData() == ""
+    assert dialog.filament()[2] == ""
+    assert "PLA" in dialog.material_type.toolTip()
+    assert dialog.material_type.accessibleDescription() == dialog.material_type.toolTip()
+
+
+def test_a_manual_filament_dialog_only_shows_questions_the_user_can_answer(
+    qt_app: QApplication,
+) -> None:
+    """Technische Slicer-Metadaten bleiben bei einer lokalen Spule verborgen."""
+    dialog = NewFilamentDialog()
+
+    assert dialog.slicer_profile.isHidden()
+    assert dialog._slicer_profile_label.isHidden()
+    assert not dialog._ok_button.isEnabled(), "ein leeres Formular kann nicht wirkungslos enden"
+
+    dialog.name.setText("Werkstattrolle")
+
+    assert dialog._ok_button.isEnabled()
+
+
+def test_an_imported_slicer_profile_is_visible_but_not_editable(
+    qt_app: QApplication,
+) -> None:
+    """Übernommene Herkunft wird gezeigt, aber nicht als technisches Eingabefeld verkauft."""
+    dialog = NewFilamentDialog(
+        name="PETG Grau",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    )
+
+    assert not dialog.slicer_profile.isHidden()
+    assert not dialog._slicer_profile_label.isHidden()
+    assert dialog.slicer_profile.isReadOnly()
 
 
 def test_every_free_number_stays_reachable(qt_app: QApplication) -> None:
@@ -214,6 +274,42 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
     assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
     assert zeilen.count("PETG Rot") == 1, "das Regal nennt es einmal, ohne Zählung"
+
+
+def test_refreshing_the_rack_keeps_the_project_summary(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Ein Slicer-Abgleich aktualisiert nur die projektübergreifende Hälfte.
+
+    Das Panel ist beim Öffnen der Ersteinrichtung schon gebaut. Nach deren
+    Filamentimport sollen die neuen Spulen sofort erscheinen, ohne die gerade
+    gezeigten Projektfilamente oder ihre Druckwertmarken zu verlieren.
+    """
+    from types import SimpleNamespace
+
+    from app.core.knowledge import filaments
+    from app.core.types import MaterialSlot
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.remember("PLA Weiß", "#ffffff", material_type="PLA")
+    panel = FilamentPanel()
+    panel.show_scene(
+        [
+            SimpleNamespace(
+                material_slots=[MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))]
+            )
+        ]
+    )
+    project_state = panel._used
+
+    filaments.remember("TPU Schwarz", "#111111", material_type="TPU")
+    panel.refresh_catalogue()
+
+    assert panel._used is project_state, "die Szenenzusammenfassung bleibt unangetastet"
+    lines = [panel.list.item(index).text() for index in range(panel.list.count())]
+    assert "PETG Grau — 1 Körper" in lines
+    assert any(line.startswith("TPU Schwarz") for line in lines), "die neue Regalspule erscheint"
 
 
 def test_a_used_filament_separates_colour_from_print_values(

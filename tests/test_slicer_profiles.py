@@ -262,6 +262,22 @@ def test_broken_json_is_skipped_not_fatal(slicer: Path, bestand: Path) -> None:
     assert found, "der Rest muss trotzdem ankommen"
 
 
+def test_a_user_profile_wins_over_the_installed_profile_with_the_same_name(
+    slicer: Path, bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was der Nutzer im Slicer geändert hat, ist seine sichtbare Auswahl."""
+    name = "Mein PETG"
+    installed = bestand / "Elegoo" / "filament" / f"{name}.json"
+    user_root = tmp_path / "user"
+    user = user_root / "filament" / f"{name}.json"
+    _write(installed, {"type": "filament", "name": name, "filament_type": ["PETG"]})
+    _write(user, {"name": name, "from": "User", "filament_type": ["PCTG"]})
+    monkeypatch.setattr(sp, "install_root", lambda _executable: bestand)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user_root])
+
+    assert sp._named_profile(slicer, "orca", name, "filament") == user
+
+
 # --- Zuordnen ----------------------------------------------------------------------
 
 

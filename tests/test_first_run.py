@@ -466,6 +466,40 @@ def test_different_loaded_filament_types_are_not_guessed(
     assert settings.material == "abs", "bei mehreren Typen bleibt die vorhandene Vorgabe"
 
 
+def test_an_unknown_loaded_filament_keeps_the_material_choice_ambiguous(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein bekannter und ein unbekannter Typ sind nicht eindeutig.
+
+    PCTG liegt neben PETG im Slicer, hat aber kein eigenes Solidon-Profil.
+    Wird der unbekannte Eintrag einfach verworfen, sieht der Rest fälschlich
+    wie eine eindeutige PETG-Entscheidung aus.
+    """
+    from app.core.knowledge import filaments
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    settings = UiSettings(material="abs")
+    dialog = settled(FirstRunDialog(settings), qt_app)
+    loaded = (
+        filaments.CatalogueFilament(
+            name="PETG Grau",
+            colour="#808080",
+            material_type="PETG",
+            slicer_profile="PETG Profil",
+        ),
+        filaments.CatalogueFilament(
+            name="PCTG Klar",
+            colour="#eeeeee",
+            material_type="PCTG",
+            slicer_profile="PCTG Profil",
+        ),
+    )
+
+    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=loaded))
+
+    assert settings.material == "abs", "ein unbekannter Typ verhindert eine automatische Wahl"
+
+
 def test_the_first_run_happens_once(qt_app: QApplication) -> None:
     settings = UiSettings()
 
@@ -603,6 +637,45 @@ def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None
 
     assert window.isVisible() is False
     assert not settings.first_run_done, "nothing happened until start() is called"
+
+
+def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Slicer-Spulen werden erhoben, bevor der Dialog geschlossen wird.
+
+    Über Hilfe → Erste Schritte ist das Filamentpanel längst gebaut. Auch
+    „Später einstellen" muss das automatisch gelesene Regal deshalb sofort
+    sichtbar machen, ohne das bestehende Dokument neu auszuwerten.
+    """
+    from app.ui import main_window
+
+    dialog_code = FirstRunDialog.DialogCode
+
+    class LaterDialog:
+        DialogCode = dialog_code
+
+        def __init__(self, *_args: object) -> None:
+            self.importRequested = mock.Mock()
+
+        def exec(self) -> int:
+            return int(self.DialogCode.Rejected)
+
+    settings = UiSettings()
+    window = MainWindow(Session(), settings)
+    refreshed = mock.Mock()
+    monkeypatch.setattr(first_run, "FirstRunDialog", LaterDialog)
+    monkeypatch.setattr(window.filaments, "refresh_catalogue", refreshed)
+    monkeypatch.setattr(main_window, "save_settings", lambda _settings: None)
+    monkeypatch.setattr(type(window.session), "set_agent_backend", lambda *_args: None)
+    monkeypatch.setattr(window, "_refresh_chat_availability", lambda **_kwargs: None)
+    try:
+        window.action_first_run()
+
+        refreshed.assert_called_once_with()
+        assert settings.first_run_done
+    finally:
+        window.close()
 
 
 # --- der Fehlerbericht (§37.2) --------------------------------------------------------

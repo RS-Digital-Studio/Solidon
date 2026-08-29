@@ -434,16 +434,16 @@ class FirstRunDialog(QDialog):
         self.chat_state.setText(found.chat)
         if found.filaments:
             filaments.synchronise(list(found.filaments))
-            material_ids = {
-                _material_id(entry.material_type)
-                for entry in found.filaments
-                if entry.material_type
-            }
-            material_ids.discard("")
+            mapped_materials = tuple(
+                profiles.material_id_for_type(entry.material_type) for entry in found.filaments
+            )
+            material_ids = set(mapped_materials)
             # Ein eindeutiger eingelegter Typ ist die bessere Vorgabe als eine
             # zweite Frage. Bei PLA und TPU nebeneinander wäre jede Wahl ein
-            # Raten; dann bleibt die dokumentierte Vorgabe stehen.
-            if len(material_ids) == 1:
+            # Raten; dasselbe gilt für einen Typ, den Solidon nicht kennt.
+            # Darum müssen **alle** Spulen zugeordnet sein, nicht nur der
+            # bekannte Rest nach dem Wegwerfen leerer Treffer.
+            if mapped_materials and all(mapped_materials) and len(material_ids) == 1:
                 self.settings.material = material_ids.pop()
         self._grow_soon()
         # **Nur, solange niemand selbst gewählt hat.** Eine gute Vorgabe ist
@@ -635,17 +635,6 @@ def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...
 def _printer_from_slicer() -> str:
     """Rückwärtskompatibler Einzelzugriff für den Druckervorschlag."""
     return _defaults_from_slicer()[0]
-
-
-def _material_id(material_type: str) -> str:
-    """Eine Slicer-Materialart auf ein bekanntes Solidon-Profil abbilden."""
-    wanted = material_type.casefold()
-    matches = [
-        identifier
-        for identifier in profiles.material_profiles()
-        if slicer_keys.filament_type(identifier).casefold() == wanted
-    ]
-    return matches[0] if len(matches) == 1 else ""
 
 
 def _select(box: QComboBox, identifier: str) -> None:

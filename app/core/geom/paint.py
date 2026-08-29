@@ -22,6 +22,7 @@ from typing import cast
 from app.core.errors import ValidationError
 from app.core.geom.colour_ops import colour_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.knowledge.filaments import profile_name
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
@@ -223,7 +224,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 colour=chosen
                 if chosen is not None
                 else (existing.colour if existing is not None else None),
-                material=params.slicer_profile
+                material=profile_name(params.slicer_profile)
                 or (existing.material if existing is not None else None),
                 material_type=params.material_type
                 or (existing.material_type if existing is not None else None),

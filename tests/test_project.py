@@ -331,6 +331,33 @@ def test_the_migration_chain_runs_step_by_step() -> None:
     assert result["libs"] == {"manifold3d": "3.2.1"}
 
 
+def test_v14_moves_to_the_filament_metadata_format_without_guessing() -> None:
+    """14 → 15 schützt neue Filamentfelder, ändert alte Schritte aber nicht.
+
+    Vor Version 15 kannten ``assign_slot`` und ``paint_slot`` weder Typ noch
+    Slicer-Profil. Beides leer nachzutragen wäre zwar möglich, aber unnötig:
+    die Schema-Vorgaben sagen bereits genau das. Die Migration muss deshalb
+    nur die Formatgrenze ziehen und alle Kundenwerte wörtlich bewahren.
+    """
+    old = {
+        "format_version": 14,
+        "ops": [
+            {
+                "id": 1,
+                "op": "assign_slot",
+                "in": ["obj_1"],
+                "out": ["obj_2"],
+                "params": {"slot": 1, "name": "PLA Weiß", "colour": "#ffffff"},
+            }
+        ],
+    }
+
+    migrated = migrate(old, target=15)
+
+    assert migrated["format_version"] == 15
+    assert migrated["ops"] == old["ops"], "optionale Felder werden nicht erfunden"
+
+
 def test_a_damaged_container_is_reported_not_raised_raw(tmp_path: Path) -> None:
     path = tmp_path / "kaputt.p3d"
     path.write_bytes(b"this is not a zip file")

@@ -8194,6 +8194,12 @@ class MainWindow(QMainWindow):
             # Überspringen zählt als erledigt: beim nächsten Mal wieder zu fragen
             # wäre Nörgeln.
             self.settings.first_run_done = True
+        # Die Erhebung übernimmt geladene Spulen auch dann, wenn dieser Dialog
+        # über Hilfe → Erste Schritte in einem bestehenden Projekt geöffnet
+        # wurde. Das Panel ist bereits gebaut und liest den Katalog deshalb
+        # ausdrücklich neu ein; eine Dokumentauswertung wäre dafür weder nötig
+        # noch bei einem nichtleeren Projekt zulässig.
+        self.filaments.refresh_catalogue()
         save_settings(self.settings)
         # Wer im Dialog den Chat eingerichtet hat, soll ihn nicht erst nach
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.

@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Final
 
 from app.core.errors import ValidationError
@@ -54,6 +54,15 @@ def catalogue_path() -> Path:
     return user_config_dir() / CATALOGUE_FILE
 
 
+def _catalogue_profile_name(value: object) -> str:
+    """Ein fremder Katalogwert als Name; Pfade kosten nur diese Angabe."""
+    try:
+        return profile_name(str(value))
+    except ValidationError:
+        _log.warning("filament catalogue contains a profile path; ignoring it")
+        return ""
+
+
 def catalogue() -> tuple[CatalogueFilament, ...]:
     """Alle Filamente der Vorwahl, sortiert nach Name (DIN 5007-1).
 
@@ -67,7 +76,7 @@ def catalogue() -> tuple[CatalogueFilament, ...]:
                 name=str(entry["name"]),
                 colour=str(entry["colour"]),
                 material_type=str(entry.get("material_type", "")),
-                slicer_profile=str(entry.get("slicer_profile", "")),
+                slicer_profile=_catalogue_profile_name(entry.get("slicer_profile", "")),
             )
             for entry in data
         ]
@@ -114,7 +123,7 @@ def remember(
         name=cleaned,
         colour=colour.lower(),
         material_type=material_type.strip(),
-        slicer_profile=slicer_profile.strip(),
+        slicer_profile=profile_name(slicer_profile),
     )
     kept = [existing for existing in catalogue() if existing.name != cleaned]
     _write([*kept, entry])
@@ -133,14 +142,54 @@ def synchronise(entries: list[CatalogueFilament]) -> tuple[CatalogueFilament, ..
         cleaned = entry.name.strip()
         if not cleaned or not _COLOUR_PATTERN.match(entry.colour):
             continue
+        try:
+            slicer_profile = profile_name(entry.slicer_profile)
+        except ValidationError:
+            # Name, Typ und Farbe bleiben nützlich. Ein fremder Pfad kostet
+            # nur die nicht portable Profilbindung, nie die ganze Spule.
+            slicer_profile = ""
+        # Der Anzeigename darf sich ändern, die Spule nicht: Aus einem
+        # einzelnen „Generic PLA" werden bei zwei Farben „Generic PLA
+        # (#…)", und beim nächsten Abgleich darf der alte Name nicht als
+        # zweite Kopie derselben Spule im Regal stehen bleiben.
+        identity = (slicer_profile.casefold(), entry.colour.casefold())
+        if slicer_profile:
+            for old_name, existing in tuple(merged.items()):
+                old_identity = (existing.slicer_profile.casefold(), existing.colour.casefold())
+                if old_name != cleaned and old_identity == identity:
+                    del merged[old_name]
         merged[cleaned] = CatalogueFilament(
             name=cleaned,
             colour=entry.colour.lower(),
             material_type=entry.material_type.strip(),
-            slicer_profile=entry.slicer_profile.strip(),
+            slicer_profile=slicer_profile,
         )
     _write(list(merged.values()))
     return catalogue()
+
+
+def profile_name(value: str) -> str:
+    """Ein portabler Slicer-Profilname — niemals ein Dateipfad (Regel 12)."""
+    cleaned = value.strip()
+    if not cleaned:
+        return ""
+    candidate = PureWindowsPath(cleaned)
+    if (
+        candidate.drive
+        or candidate.is_absolute()
+        or len(candidate.parts) != 1
+        or cleaned == ".."
+        or cleaned.startswith(("/", "\\"))
+    ):
+        raise ValidationError(
+            field="slicer_profile",
+            detail=_(
+                "Ein Slicer-Profil wird über seinen Namen gewählt, nicht über einen Dateipfad."
+            ),
+            value=value,
+            constraint="format",
+        )
+    return cleaned
 
 
 def forget(name: str) -> bool:

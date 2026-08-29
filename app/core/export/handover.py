@@ -1278,6 +1278,12 @@ def _orca_filament(
         }
         eigene = {key: value for key, value in eigene.items() if key not in vom_material}
     document.update(eigene)
+    # Die ausdrücklich gewählte Spule gewinnt zuletzt. Eine lokale PLA-Spule
+    # hat einen Typ, aber kein eigenes Herstellerprofil; in diesem Fall dient
+    # das allgemeine PETG-Profil nur als Unterlage für fehlende Werte. Sein
+    # ``filament_type`` darf die sichtbare PLA-Wahl nicht überschreiben.
+    if slot is not None and slot.material_type:
+        document["filament_type"] = [slot.material_type]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
     # warum es diesen Slot überhaupt gibt (§20). Ein Schriftzug in Weiß auf
     # schwarzem Gehäuse sind zwei Spulen, und beide bekämen sonst die eine

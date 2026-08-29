@@ -116,6 +116,62 @@ def test_a_colour_that_is_no_colour_stops_with_advice(own_catalogue: Path) -> No
     assert filaments.catalogue() == (), "abgelehnt heißt: nichts geschrieben"
 
 
+@pytest.mark.parametrize(
+    "profile",
+    (r"C:\Slicer\profiles\PETG.json", "/opt/slicer/PETG.json", "profiles/PETG"),
+)
+def test_a_profile_path_never_enters_the_catalogue(own_catalogue: Path, profile: str) -> None:
+    """Ein Profil reist als Name zwischen Rechnern, nie als lokaler Pfad."""
+    with pytest.raises(ValidationError) as raised:
+        filaments.remember("PETG Rot", "#d02020", slicer_profile=profile)
+
+    assert raised.value.field == "slicer_profile"
+    assert raised.value.constraint == "format"
+    assert raised.value.suggestions, "Regel 17: der Eingabefehler zeigt einen Ausweg"
+    assert filaments.catalogue() == ()
+
+
+def test_an_old_profile_path_costs_only_the_profile_binding(own_catalogue: Path) -> None:
+    """Ein alter Katalogpfad darf weder starten noch die ganze Spule löschen."""
+    filaments.catalogue_path().write_text(
+        '[{"name": "PETG Rot", "colour": "#d02020", '
+        '"material_type": "PETG", "slicer_profile": "C:\\\\Slicer\\\\PETG.json"}]',
+        encoding="utf-8",
+    )
+
+    assert filaments.catalogue() == (
+        filaments.CatalogueFilament("PETG Rot", "#d02020", "PETG", ""),
+    )
+
+
+def test_a_repeated_slicer_reading_renames_instead_of_doubling(
+    own_catalogue: Path,
+) -> None:
+    """Eine Farbkennung im Namen ändert sich, die geladene Spule nicht."""
+    first = filaments.CatalogueFilament("Generic PLA", "#eeeeee", "PLA", "Generic PLA @System")
+    renamed = filaments.CatalogueFilament(
+        "Generic PLA (#EEEEEE)", "#eeeeee", "PLA", "Generic PLA @System"
+    )
+
+    filaments.synchronise([first])
+    filaments.synchronise([renamed])
+
+    assert [entry.name for entry in filaments.catalogue()] == [renamed.name]
+
+
+def test_a_slicer_path_drops_the_binding_but_keeps_the_loaded_spool(
+    own_catalogue: Path,
+) -> None:
+    """Fremde Konfiguration ist unzuverlässig; Farbe und Typ bleiben brauchbar."""
+    filaments.synchronise(
+        [filaments.CatalogueFilament("PETG Grau", "#808080", "PETG", r"C:\Slicer\PETG.json")]
+    )
+
+    assert filaments.catalogue() == (
+        filaments.CatalogueFilament("PETG Grau", "#808080", "PETG", ""),
+    )
+
+
 def test_the_catalogue_survives_a_new_reading(own_catalogue: Path) -> None:
     """Persistenz ist der Zweck: Der Katalog ist die Vorwahl über Projekte
     hinweg, nicht ein Sitzungszustand."""

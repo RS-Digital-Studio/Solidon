@@ -36,6 +36,17 @@ def test_every_material_is_marked_uncalibrated() -> None:
         assert material.hole_compensation > 0.0, identifier
 
 
+@pytest.mark.parametrize(
+    ("material_type", "identifier"),
+    (("PLA", "pla"), ("petg", "petg"), ("TPU", "tpu-95a"), ("PCTG", ""), ("", "")),
+)
+def test_a_slicer_material_type_has_one_unambiguous_profile(
+    material_type: str, identifier: str
+) -> None:
+    """Bekannte Schreibweisen werden aufgelöst; unbekannte nie geraten."""
+    assert profiles.material_id_for_type(material_type) == identifier
+
+
 def test_minimum_wall_thickness_follows_the_rule_set() -> None:
     profile = profiles.make_profile()
     assert profile.minimum_wall_thickness == pytest.approx(2 * profile.printer.extrusion_width)

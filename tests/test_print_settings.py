@@ -2609,6 +2609,29 @@ def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:
     assert befehl[stelle + 1].count(";") == 1, "beide gehen an den Slicer, nicht nur eines"
 
 
+def test_a_manual_slot_type_wins_over_the_projects_base_filament(tmp_path: Path) -> None:
+    """Die sichtbare Spulenwahl steht über der allgemeinen Profilunterlage.
+
+    Eine lokal angelegte PLA-Spule hat einen Typ, aber kein eigenes
+    Herstellerprofil. Das globale PETG-Profil darf seinen Typ beim Auffüllen
+    der übrigen Werte nicht wieder über die ausdrückliche Wahl schreiben.
+    """
+    petg = _filament_profile(tmp_path, "Haus PETG", filament_type=["PETG"])
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"),
+        flavour="orca",
+        base_filament=str(petg),
+    )
+    slot = MaterialSlot(index=0, name="PLA Lokal", material_type="PLA")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+
+    written = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    assert written["filament_type"] == ["PLA"]
+
+
 def test_a_slot_override_wins_over_its_selected_filament_profile(tmp_path: Path) -> None:
     """Die ausdrückliche Kundenwahl ist die oberste Schicht des Profils.
 

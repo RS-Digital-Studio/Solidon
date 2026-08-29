@@ -17,6 +17,7 @@ from app.core.errors import ValidationError
 from app.core.geom.attributes import counts, with_slot
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
+from app.core.knowledge.filaments import profile_name
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
@@ -80,7 +81,7 @@ def assign_slot(ctx: OpContext) -> OpResult:
         index=params.slot,
         name=params.name or f"{_('Slot').translate()} {params.slot}",
         colour=colour_from(params.colour),
-        material=params.slicer_profile or None,
+        material=profile_name(params.slicer_profile) or None,
         material_type=params.material_type or None,
     )
     painted = with_slot(as_mesh_data(source.mesh), params.slot)

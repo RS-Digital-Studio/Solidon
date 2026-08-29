@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 14
+FORMAT_VERSION: Final = 15
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +266,24 @@ def _point_strokes_stay_but_stop_computing(data: dict[str, Any]) -> dict[str, An
     return data
 
 
+def _protect_filament_metadata(data: dict[str, Any]) -> dict[str, Any]:
+    """14 → 15: Farbschritte können Typ und Slicer-Profil einer Spule tragen.
+
+    Die beiden neuen Parameter ``material_type`` und ``slicer_profile`` sind
+    optional. Eine alte Operation ohne sie bedeutet deshalb bereits eindeutig
+    „kein eigener Typ, kein eigenes Herstellerprofil"; Werte nachzutragen
+    würde nur die Datei aufblähen und keine Information hinzufügen.
+
+    Die Versionsgrenze ist trotzdem notwendig: Eine Anwendung bis Format 14
+    kennt die Parameter nicht und würde eine neue Datei zunächst annehmen,
+    dann mitten in der Auswertung an einem vermeintlich unbekannten Feld
+    stoppen. Mit Version 15 lehnt sie die Datei stattdessen sofort und mit dem
+    vorhandenen Update-Vorschlag ab. Wie bei 11 → 12 ist also die Grenze selbst
+    der ganze Migrationsschritt.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -281,6 +299,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=11, to_version=12, apply=_add_edited_operations),
     Step(from_version=12, to_version=13, apply=_scad_steps_stay_but_stop_computing),
     Step(from_version=13, to_version=14, apply=_point_strokes_stay_but_stop_computing),
+    Step(from_version=14, to_version=15, apply=_protect_filament_metadata),
 )
 
 

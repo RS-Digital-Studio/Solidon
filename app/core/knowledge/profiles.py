@@ -156,6 +156,27 @@ def material_profiles() -> Mapping[str, MaterialProfile]:
     return _materials
 
 
+def material_id_for_type(material_type: str) -> str:
+    """Die eindeutige Solidon-Kennung zu einer Materialart des Slicers.
+
+    Slicer schreiben etwa ``PETG`` oder ``TPU``, Solidon hält ``petg`` und
+    ``tpu-95a``. Die Umkehrung liegt hier bei den Profilen, damit Erststart und
+    Slicerübergabe dieselbe Entscheidung treffen. Leer heißt bewusst: nichts
+    oder mehr als ein Profil passt — dann wird nicht geraten.
+    """
+    from app.core.export import slicer_keys
+
+    wanted = material_type.strip().casefold()
+    if not wanted:
+        return ""
+    matches = [
+        identifier
+        for identifier in material_profiles()
+        if slicer_keys.filament_type(identifier).casefold() == wanted
+    ]
+    return matches[0] if len(matches) == 1 else ""
+
+
 def reload() -> None:
     """Verwirft den Cache, etwa nachdem der Nutzer ein Profil bearbeitet hat."""
     global _printers, _materials

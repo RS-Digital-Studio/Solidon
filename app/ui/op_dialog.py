@@ -1650,7 +1650,11 @@ class OperationDialog(QDialog):
             ("slicer_profile", slicer_profile),
         ):
             editor = self._editors.get(key)
-            if isinstance(editor, QLineEdit) and value:
+            # Auch leer ist eine vollständige Antwort: Eine lokale Spule hat
+            # bewusst kein Herstellerprofil. Ließe man diesen Wert aus, bliebe
+            # beim Wechsel das unsichtbare Profil der vorherigen Spule stehen
+            # und der Slicer nähme deren Druckwerte.
+            if isinstance(editor, QLineEdit):
                 editor.setText(value)
 
     def values(self) -> dict[str, Any]:

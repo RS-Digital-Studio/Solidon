@@ -339,11 +339,13 @@ def _named_profile(
     werden geöffnet; sechstausend Filamente einzulesen, um eine eingelegte
     Spule zu beschreiben, kostete am Elegoo-Bestand knapp sieben Sekunden.
     """
-    roots: list[Path] = []
+    # Das selbst angelegte Profil ist das, was der Nutzer im Slicer sieht.
+    # Es gewinnt deshalb bei gleichem Namen gegen die mitgelieferte Vorlage —
+    # dieselbe Regel wie in ``find_profiles`` und ``match_filament``.
+    roots = list(user_roots(flavour, executable))
     installed = install_root(executable)
     if installed is not None:
         roots.append(installed)
-    roots.extend(user_roots(flavour, executable))
     for root in roots:
         for path in root.rglob(f"{name}.json"):
             if _kind_of(path, root) != kind:

@@ -151,6 +151,24 @@ def test_painting_keeps_the_slicer_identity_with_the_colour(profile: Profile) ->
     assert slot.material == "Elegoo PETG PRO @ECC2"
 
 
+def test_painting_rejects_a_slicer_profile_path(profile: Profile) -> None:
+    """Auch die Flächenoperation speichert keinen rechnergebundenen Pfad."""
+    entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
+
+    with pytest.raises(ValidationError) as raised:
+        run(
+            "paint_slot",
+            entry,
+            profile,
+            slot=1,
+            at_feature="face_1",
+            slicer_profile="profiles/PETG.json",
+        )
+
+    assert raised.value.field == "slicer_profile"
+    assert raised.value.suggestions
+
+
 def test_painting_without_a_face_stops_with_advice(profile: Profile) -> None:
     """Der Punkt-Pinsel ist entfallen — ohne Fläche gibt es nichts zu färben,
     und das sagt die Operation, statt still nichts zu tun."""
