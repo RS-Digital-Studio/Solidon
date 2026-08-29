@@ -22,7 +22,7 @@ nicht so dargestellt.
 
 | # | Redaktion / Kanal | Adresse | Sprache | Aufhänger | Öffentliche Quelle |
 |---:|---|---|---|---|---|
-| 1 | 3Druck.com | `content@3druck.com` | Deutsch | Folge-Update: nur neue Bausteine, Skizzen, Normteile und Spulendaten | [Artikel vom 23.08.2026](https://3druck.com/programme/solidon3d-desktopsoftware-passt-heruntergeladene-stl-dateien-ohne-cad-an-13162117/) |
+| 1 | 3Druck.com | `content@3druck.com` | Deutsch | Folge-Update: nur neue Bausteine, Skizzen, Normteile und Spulendaten | [Artikel vom 23.08.2026](https://3druck.com/programme/solidon3d-desktop-software-passt-heruntergeladene-stl-dateien-ohne-cad-an-13162117/) |
 | 2 | 3D-grenzenlos | `pressemitteilung@3d-grenzenlos.de` | Deutsch | konkrete Meldung zur direkten Bohrungsänderung | [Impressum](https://www.3d-grenzenlos.de/impressum/) |
 | 3 | Make Magazin | `mail@make-magazin.de` | Deutsch | Werkstattversuch: Bohrung ändern und Passung messen | [Tipp an die Redaktion](https://www.heise.de/make/projekt-eingabe) |
 | 4 | Golem.de | `press@golem.de` | Deutsch | lokale KI, reproduzierbare Geometrie, offline | [Impressum](https://www.golem.de/sonstiges/impressum.html) |
