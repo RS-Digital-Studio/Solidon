@@ -92,9 +92,9 @@ Einstellungen reisen zum Slicer, die Sichtbarkeit gehört der Ansicht.
 
 Was das Dokument ändert oder ein Ergebnis herausgibt, ruft
 `activation.require(<handlung>)` — was nur liest, nie (Konzept §2 C). Die
-vier Stellen sind `History.apply` (CHANGE), `export/writer.py` (EXPORT),
-`export/handover.py` (SLICER) und `agent/session.py` (CHAT); jede holt den
-Zustand selbst und wirft selbst (H3). Eine **neue** Stelle, die schreibt oder
+fünf Stellen sind `History.apply` und `History.remove_operations` (beide
+CHANGE), `export/writer.py` (EXPORT), `export/handover.py` (SLICER) und
+`agent/session.py` (CHAT); jede holt den Zustand selbst und wirft selbst (H3). Eine **neue** Stelle, die schreibt oder
 herausgibt, ohne durch eine der vier zu gehen, braucht ihren eigenen
 `require`-Aufruf — und einen Fall in `tests/test_licence_boundary.py`, in
 beide Richtungen: gesperrt lehnt ab, lesend läuft weiter.

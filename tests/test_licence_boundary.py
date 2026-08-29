@@ -1,7 +1,8 @@
 """Die Grenze im Datenpfad (Konzept §2 C, §2 I, V4).
 
-Vier Stellen im Kern prüfen den Freischaltzustand selbst: jede
-Dokumentänderung (``History.apply``), jeder Export (``write_plan``,
+Fünf Stellen im Kern prüfen den Freischaltzustand selbst: jede
+Dokumentänderung (``History.apply``), das Löschen von Schritten
+(``History.remove_operations``), jeder Export (``write_plan``,
 ``write_assembly``), die Slicer-Übergabe (``slice_model``) und der Chat
 (``AgentSession.propose``). Hier steht beides fest — dass sie mit abgelaufenem
 Testlauf ablehnen, und dass alles Lesende weiterläuft. Die zweite Hälfte ist
@@ -148,6 +149,29 @@ def test_an_expired_trial_blocks_reparametrising_a_step(monkeypatch: pytest.Monk
         assert raised.value.action == activation.CHANGE
 
     assert list(project.document.ops) == before, "abgelehnt heißt: nichts geschrieben"
+
+
+def test_an_expired_trial_blocks_removing_a_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``remove_operations`` schreibt ins Dokument, ohne durch ``apply`` zu
+    gehen — die Regel in ``kern.md`` verlangt für so eine Stelle den eigenen
+    ``require``-Aufruf und diesen Fall hier, in beide Richtungen: Die
+    Vorschau ``removal_closure`` ist Lesen und bleibt frei, das Löschen
+    selbst lehnt ab und lässt das Dokument unberührt."""
+    project = _project()
+    history = History(project.document)
+    op_id = project.document.ops[0].id
+    before_ops = list(project.document.ops)
+    before_transactions = list(project.document.transactions)
+    _lock(monkeypatch)
+
+    assert history.removal_closure([op_id]) == (op_id,), "die Vorschau ist Lesen und bleibt frei"
+
+    with pytest.raises(LicenceRequired) as raised:
+        history.remove_operations([op_id])
+    assert raised.value.action == activation.CHANGE
+    assert raised.value.suggestions, "Regel 17: auch diese Ausnahme trägt Handlungen"
+    assert list(project.document.ops) == before_ops, "abgelehnt heißt: nichts geschrieben"
+    assert list(project.document.transactions) == before_transactions
 
 
 def test_an_expired_trial_blocks_the_export(
