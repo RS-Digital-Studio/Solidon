@@ -55,11 +55,20 @@ def test_a_drawn_line_becomes_determined_by_constraints(qt_app: QApplication) ->
 
 def test_a_conflict_keeps_the_last_valid_solution(qt_app: QApplication) -> None:
     """Ein widersprüchliches Maß wird eine Meldung mit dem benannten Paar —
-    die letzte gültige Lage bleibt sichtbar (§15.3, Regel 17)."""
+    die letzte gültige Lage bleibt sichtbar (§15.3, Regel 17).
+
+    **Der Weg in den Konflikt ist seit dem 29.08.2026 ein anderer.** Hier
+    standen zwei Abstände auf denselben zwei Punkten, 30 gegen 40 — den Fall
+    gibt es nicht mehr: Ein zweiter Abstand auf denselben Zielen ersetzt jetzt
+    den Wert, statt sich danebenzulegen. Zwei festgenagelte Punkte mit einem
+    Abstand, der nicht zu ihnen passt, sind derselbe Widerspruch und obendrein
+    der realistischere — er entsteht beim Konstruieren, der andere entstand nur
+    aus einer Dublette.
+    """
     canvas = SketchCanvas()
     canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
     canvas.add_constraint("fixed", (0,))
-    canvas.add_constraint("distance", (0, 1), "30")
+    canvas.add_constraint("fixed", (1,))
     before = canvas.points()
 
     canvas.add_constraint("distance", (0, 1), "40")
@@ -1517,8 +1526,7 @@ def test_snap_mark_preview_and_click_share_an_existing_off_grid_point(
     line = canvas.sketch.elements[-1]
     assert line.points[-1] == pytest.approx((10.25, 10.25))
     assert any(
-        entry.kind == "coincident" and 0 in entry.targets
-        for entry in canvas.sketch.constraints
+        entry.kind == "coincident" and 0 in entry.targets for entry in canvas.sketch.constraints
     ), "der Punkt bleibt als echte Deckung verbunden"
 
 
@@ -2083,8 +2091,11 @@ def test_a_conflict_says_which_two_constraints(qt_app: QApplication) -> None:
     try:
         canvas = panel.canvas
         canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        # Zwei festgenagelte Punkte und ein Abstand, der nicht zu ihnen passt.
+        # Zwei Abstände auf denselben Zielen wären seit dem 29.08.2026 keiner
+        # mehr — der zweite ersetzt den Wert des ersten.
         canvas.add_constraint("fixed", (0,))
-        canvas.add_constraint("distance", (0, 1), "30")
+        canvas.add_constraint("fixed", (1,))
         canvas.add_constraint("distance", (0, 1), "40")
 
         assert canvas.conflict, "ohne Konflikt prüft dieser Test nichts"
@@ -4888,3 +4899,175 @@ def test_the_bar_line_follows_the_drawing_and_does_not_age(qt_app: QApplication)
         window.finish_sketch(keep=False)
         window.close()
         window.deleteLater()
+
+
+def test_the_same_constraint_twice_takes_it_back_instead_of_doubling(
+    qt_app: QApplication,
+) -> None:
+    """Der Knopf war eine Einbahnstraße, und „Fest" sperrte die Skizze.
+
+    Roberts Bild vom 29.08.2026 zeigt fünfmal „Fest — Linie 1 Ende" in der
+    Liste und darunter „Zwei Bedingungen widersprechen sich". Der Weg dorthin
+    war ein Klick zu viel: ``add_constraint`` hängte jede Bedingung ungeprüft
+    an, ein fester Punkt lässt sich nicht ziehen, und der zweite Druck auf
+    denselben Knopf machte es schlimmer statt besser.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+
+    canvas.add_constraint("fixed", (0,))
+    assert len(canvas.sketch.constraints) == 1
+
+    canvas.add_constraint("fixed", (0,))
+    assert canvas.sketch.constraints == (), "der zweite Druck nimmt sie zurück"
+
+    # Und ein anderer Punkt bleibt ein anderer Fall.
+    canvas.add_constraint("fixed", (0,))
+    canvas.add_constraint("fixed", (1,))
+    assert len(canvas.sketch.constraints) == 2, "verschiedene Ziele, zwei Bedingungen"
+
+
+def test_a_second_measure_replaces_the_value_instead_of_contradicting_it(
+    qt_app: QApplication,
+) -> None:
+    """Bei einer Bedingung mit Wert heißt der zweite Griff „ändern".
+
+    Umschalten wäre hier falsch: Wer *Abstand* ein zweites Mal auf dieselben
+    Punkte legt, will das Maß korrigieren. Zwei Abstände nebeneinander waren
+    dagegen nichts als ein Widerspruch, den niemand beabsichtigt hat.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    canvas.add_constraint("fixed", (0,))
+
+    canvas.add_constraint("distance", (0, 1), "30")
+    canvas.add_constraint("distance", (0, 1), "40")
+
+    masse = [entry for entry in canvas.sketch.constraints if entry.kind == "distance"]
+    assert len(masse) == 1, "kein zweiter Abstand auf denselben Punkten"
+    assert masse[0].value == "40", "der neue Wert gilt"
+    assert not canvas.conflict, "und damit entsteht der Widerspruch gar nicht erst"
+
+
+def test_a_contradiction_freezes_the_sketch_until_it_is_loosened(
+    qt_app: QApplication,
+) -> None:
+    """Der ganze Weg, den Robert nicht zurückgehen konnte.
+
+    **Und die Sperre ist nicht die, nach der es aussieht.** Ein einzelner
+    festgenagelter Punkt lässt sich sehr wohl ziehen — gemessen: ``move_point``
+    setzt ihn, und *Fest* hält ihn danach an der neuen Stelle. Was die Skizze
+    anhält, ist der **Widerspruch**: Solange einer besteht, bleibt die letzte
+    gültige Lage stehen, und keine Geste bewegt mehr etwas. Genau dorthin
+    führten die Dubletten, weil ein zweiter Druck auf *Fest* die Skizze
+    überbestimmte, statt die Bedingung zurückzunehmen.
+
+    Der Ausweg ist deshalb, eine Bedingung zu lösen — und dass es dafür einen
+    sichtbaren Weg gibt, ist der eigentliche Fix (§2.1: eine Sackgasse hat
+    einen Ausgang).
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    canvas.add_constraint("fixed", (0,))
+    canvas.add_constraint("fixed", (1,))
+    canvas.add_constraint("distance", (0, 1), "40")
+    assert canvas.conflict, "ohne Widerspruch prüft dieser Test nichts"
+
+    before = canvas.points()
+    canvas.move_point(1, 50.0, 0.0)
+    assert canvas.points() == before, "im Widerspruch bewegt sich nichts"
+
+    hanging = canvas.constraints_at(1)
+    assert hanging, "was an dem Punkt hängt, ist auffindbar — das trägt das Menü"
+    canvas.remove_constraint(hanging[-1])
+    assert not canvas.conflict, "eine Bedingung zu lösen heilt die Skizze"
+
+    canvas.move_point(1, 50.0, 0.0)
+    assert canvas.points() != before, "und danach folgt der Punkt wieder"
+
+
+def test_the_constraint_list_offers_removal_on_a_right_click(qt_app: QApplication) -> None:
+    """Der Weg hinaus stand nur auf einer Taste, und die riet niemand.
+
+    Die Liste nannte „Entf" in einem Hinweis, den man erst liest, wenn man
+    weiß, dass es ihn gibt. Ein Kontextmenü ist der Ort, an dem man nachsieht,
+    was mit *dem hier* geht — dieselbe Begründung wie beim Löschen eines
+    Elements auf der Zeichenfläche.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        panel.canvas.add_constraint("fixed", (0,))
+
+        menu = panel.constraint_menu_at(0)
+        assert not menu.isEmpty(), "die Zeile bietet etwas an"
+        assert any("entfernen" in action.text().lower() for action in menu.actions())
+
+        # Und die leere Fläche darunter bietet nichts an, statt zu raten.
+        assert panel.constraint_menu_at(-1).isEmpty()
+    finally:
+        panel.deleteLater()
+
+
+def test_the_canvas_menu_loosens_what_hangs_on_the_clicked_point(
+    qt_app: QApplication,
+) -> None:
+    """Gesucht wird der Weg zurück dort, wo der Punkt liegt.
+
+    Wer einen Punkt festgenagelt hat, klickt ihn an — nicht die Liste am
+    rechten Rand. Das Kontextmenü bot bis dahin nur an, Bedingungen
+    **anzulegen**.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    canvas.add_constraint("fixed", (0,))
+
+    menu = canvas.context_menu_at(0)
+    untermenues = [action.menu() for action in menu.actions() if action.menu() is not None]
+    assert untermenues, "am Punkt hängt etwas, also gibt es das Untermenü"
+    eintraege = [action.text() for menu_ in untermenues for action in menu_.actions()]
+    assert any("Fest" in text for text in eintraege), eintraege
+
+    # Ein Punkt ohne Bedingungen bekommt es nicht — ein leeres Untermenü wäre
+    # ein Angebot, das ins Leere zeigt.
+    ohne = canvas.context_menu_at(1)
+    assert not [action for action in ohne.actions() if action.menu() is not None]
+
+
+def test_every_menu_that_carries_a_reason_also_shows_it(qt_app: QApplication) -> None:
+    """Ein gesetzter Hinweis ist nicht dasselbe wie ein sichtbarer.
+
+    ``QMenu`` kommt mit ``toolTipsVisible == False`` auf die Welt, und
+    **Untermenüs erben die Eigenschaft nicht** — das Menü darüber kann sie
+    gesetzt haben, und der Eintrag darin bleibt trotzdem stumm. Gemessen am
+    29.08.2026 genau so: Eltern ``True``, das frisch gebaute Untermenü
+    ``False``. Ein Test über den *Wert* von ``toolTip()`` wäre grün geblieben.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        canvas.add_constraint("fixed", (0,))
+
+        am_punkt = canvas.context_menu_at(0)
+        assert am_punkt.toolTipsVisible(), "das Menü am Punkt zeigt seine Hinweise"
+
+        untermenues = [entry.menu() for entry in am_punkt.actions() if entry.menu() is not None]
+        assert untermenues, "ohne Untermenü prüft dieser Test nichts"
+        for untermenue in untermenues:
+            assert untermenue.toolTipsVisible(), untermenue.title()
+
+        in_der_liste = panel.constraint_menu_at(0)
+        assert in_der_liste.toolTipsVisible(), "und das Menü der Bedingungsliste ebenso"
+
+        # Und die Hinweise stehen wirklich daran — beide Hälften zusammen sind
+        # die Zusage, jede allein ist die halbe.
+        for menue in (*untermenues, in_der_liste):
+            for entry in menue.actions():
+                assert entry.toolTip(), entry.text()
+    finally:
+        panel.deleteLater()

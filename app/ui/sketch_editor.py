@@ -1339,8 +1339,47 @@ class SketchCanvas(QWidget):
     def add_constraint(
         self, kind: SketchConstraintKind, targets: tuple[int, ...], value: str = ""
     ) -> None:
+        """Legt eine Bedingung an — oder nimmt sie zurück, wenn sie schon steht.
+
+        **Der Knopf war eine Einbahnstraße.** Dieselbe Bedingung auf denselben
+        Zielen wurde jedes Mal ein zweites Mal angehängt: Fünfmal *Fest* auf
+        denselben Punkt ergab fünf Einträge in der Liste (Robert, 29.08.2026).
+        Was die Skizze dann anhält, ist nicht die einzelne Bedingung — ein
+        festgenagelter Punkt lässt sich weiterhin ziehen, gemessen —, sondern
+        der **Widerspruch**, in den die Dubletten sie treiben: Solange einer
+        besteht, bleibt die letzte gültige Lage stehen. Der Weg hinein war ein
+        Klick, der Weg hinaus keiner.
+
+        Wertlose Bedingungen schalten deshalb um: Der zweite Druck entfernt,
+        was der erste angelegt hat. Bedingungen **mit** Wert tun das nicht —
+        wer *Abstand* zweimal auf dieselben Punkte legt, will das Maß ändern
+        und nicht löschen; dort wird der Wert ersetzt. Beides verhindert die
+        Dublette, und beides tut, was der zweite Klick erwarten lässt.
+        """
+        doppelt = next(
+            (
+                at
+                for at, entry in enumerate(self.sketch.constraints)
+                if entry.kind == kind and entry.targets == targets
+            ),
+            None,
+        )
+        if doppelt is not None:
+            if value:
+                bestand = list(self.sketch.constraints)
+                bestand[doppelt] = SketchConstraint(kind, targets, value)
+                self._apply(replace(self.sketch, constraints=tuple(bestand)))
+            else:
+                self.remove_constraint(doppelt)
+            return
         constraint = SketchConstraint(kind, targets, value)
         self._apply(replace(self.sketch, constraints=(*self.sketch.constraints, constraint)))
+
+    def constraints_at(self, flat: int) -> tuple[int, ...]:
+        """Die Indizes aller Bedingungen, die an diesem Punkt hängen."""
+        return tuple(
+            at for at, entry in enumerate(self.sketch.constraints) if flat in entry.targets
+        )
 
     def remove_constraint(self, index: int) -> None:
         remaining = tuple(entry for at, entry in enumerate(self.sketch.constraints) if at != index)
@@ -2626,6 +2665,27 @@ class SketchCanvas(QWidget):
         if hit is not None:
             entry = menu.addAction(tr("Koordinaten …"))
             entry.triggered.connect(lambda _checked=False, flat=hit: self.edit_point(flat))
+            # **Und was an ihm hängt, lässt sich hier wieder lösen.** Wer
+            # einen Punkt festgenagelt hat, sucht den Weg zurück dort, wo der
+            # Punkt liegt — nicht in der Liste am rechten Rand. Ohne diesen
+            # Eintrag war die Bedingung von der Zeichenfläche aus unerreichbar
+            # (Robert, 29.08.2026).
+            hanging = self.constraints_at(hit)
+            if hanging:
+                loosen = menu.addMenu(tr("Bedingung entfernen"))
+                # **Untermenüs erben die Eigenschaft nicht.** Das Menü darüber
+                # hat sie gesetzt, und trotzdem bliebe hier jeder Hinweis
+                # ungelesen — gemessen: Eltern ``True``, Untermenü ``False``.
+                loosen.setToolTipsVisible(True)
+                for at in hanging:
+                    constraint = self.sketch.constraints[at]
+                    label = _constraint_label(constraint.kind)
+                    shown = measure_label(constraint, self.points())
+                    action = loosen.addAction(f"{label} {shown}" if shown else label)
+                    action.setToolTip(f"{label}: {_does_phrase(constraint.kind)}.")
+                    action.triggered.connect(
+                        lambda _checked=False, index=at: self.remove_constraint(index)
+                    )
             menu.addSeparator()
 
         # Löschen stand allein auf der Entf-Taste. Wer die nicht rät, wird ein
@@ -3955,7 +4015,18 @@ class SketchPanel(QWidget):
         constraints_row.setColumnStretch(CONSTRAINTS_PER_ROW, 1)
 
         self.constraint_list = QListWidget(self)
-        self.constraint_list.setToolTip(tr("Entf entfernt die gewählte Bedingung."))
+        self.constraint_list.setToolTip(
+            tr("Rechtsklick oder Entf entfernt die gewählte Bedingung.")
+        )
+        # **Der Weg hinaus stand nur auf einer Taste.** Wer seine Skizze in
+        # einen Widerspruch geklickt hatte, musste eine Bedingung wieder los
+        # werden — und dafür steht in der Leiste kein Knopf, während „Entf"
+        # nur wusste, wer den Hinweis gelesen hatte. Ein Kontextmenü ist der
+        # Ort, an dem man nachsieht, was mit *dem hier* geht — dieselbe
+        # Begründung wie beim Löschen eines Elements auf der Zeichenfläche
+        # (§2.1: eine Sackgasse hat einen Ausgang, und er ist sichtbar).
+        self.constraint_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.constraint_list.customContextMenuRequested.connect(self._constraint_menu)
         # Umbruch, weil die Einträge jetzt sagen, woran sie hängen: „Deckung —
         # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
         # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
@@ -4670,6 +4741,38 @@ class SketchPanel(QWidget):
         """Lässt die Punkte der überfahrenen Bedingung aufleuchten."""
         targets = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
         self.canvas.highlight_points(frozenset(targets or ()))
+
+    def constraint_menu_at(self, row: int) -> QMenu:
+        """Was die Bedingungsliste an dieser Zeile anbietet — gebaut, nicht
+        gezeigt.
+
+        Getrennt wie :meth:`SketchCanvas.context_menu_at` und aus demselben
+        Grund: ``QMenu.exec`` blockiert wie ein modaler Dialog, und ein Test,
+        der das Angebot prüft, käme nicht zurück.
+        """
+        menu = QMenu(self)
+        # Sonst bleibt der Satz darunter ungelesen — QMenu zeigt Hinweise von
+        # Haus aus nicht an.
+        menu.setToolTipsVisible(True)
+        constraints = self.canvas.sketch.constraints
+        if not 0 <= row < len(constraints):
+            return menu
+        entry = constraints[row]
+        remove = menu.addAction(tr("Bedingung entfernen  (Entf)"))
+        # **Aus derselben Quelle wie am Knopf.** Was die Bedingung tut, sagt
+        # ``_does_phrase`` an inzwischen vier Stellen; eine eigene
+        # Formulierung hier wäre die vierte Gelegenheit, auseinanderzulaufen.
+        remove.setToolTip(f"{_constraint_label(entry.kind)}: {_does_phrase(entry.kind)}.")
+        remove.triggered.connect(lambda _checked=False, at=row: self.canvas.remove_constraint(at))
+        return menu
+
+    def _constraint_menu(self, position: QPoint) -> None:
+        """Rechtsklick in der Bedingungsliste — der sichtbare Weg hinaus."""
+        row = self.constraint_list.indexAt(position).row()
+        menu = self.constraint_menu_at(row)
+        if menu.isEmpty():
+            return
+        menu.exec(self.constraint_list.viewport().mapToGlobal(position))
 
     def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Der Zeiger ist weg — dann leuchtet auch nichts mehr."""
