@@ -6264,11 +6264,11 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     Fortschritt der Auswertung, und der beginnt erst, wenn die Datei gelesen
     ist. Dazwischen lag ein Fenster ohne jede Auskunft.
     """
-    seen: list[Any] = []
+    seen: list[tuple[Any, str]] = []
     real = window.session.import_model
 
     def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
-        seen.append(QApplication.overrideCursor())
+        seen.append((QApplication.overrideCursor(), window.status_message.text()))
         return real(path, *args, **kwargs)
 
     monkeypatch.setattr(window.session, "import_model", watched)
@@ -6277,8 +6277,10 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     window.session.wait_for_idle()
 
     assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
-    assert seen[0] is not None, "gelesen wurde ohne Wartezeiger"
-    assert seen[0].shape() == Qt.CursorShape.WaitCursor
+    cursor, status = seen[0]
+    assert cursor is not None, "gelesen wurde ohne Wartezeiger"
+    assert cursor.shape() == Qt.CursorShape.WaitCursor
+    assert status == tr("Projekt wird geladen …"), "die Statuszeile erklärt das Warten nicht"
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 

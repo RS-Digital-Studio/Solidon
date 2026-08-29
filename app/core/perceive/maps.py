@@ -20,10 +20,10 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 import numpy as np
-import trimesh
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
+from app.core.deferred import trimesh
 from app.core.errors import CANCEL, Action, UserError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
@@ -382,10 +382,24 @@ def _inward_thickness(body: trimesh.Trimesh, field: SolidField) -> list[float]:
     steps = int(float(body.scale) / field.pitch) + 2
     reached = np.zeros(len(centres), dtype=float)
     inside = np.ones(len(centres), dtype=bool)
+    samples = np.empty_like(centres)
+    indices = np.empty(centres.shape, dtype=int)
+    upper = np.asarray(field.filled.shape, dtype=int) - 1
 
     for step in range(steps):
-        points = centres - normals * (field.pitch * (step + 0.5))
-        indices = _indices(field, points)
+        # Drei große Fließkommafelder und ein Ganzzahlfeld je Schritt waren
+        # hier mehr Arbeit als das Nachschlagen selbst: auf dem §31-Körper 1,5
+        # von 2,4 Sekunden. Die Rechenreihenfolge bleibt dieselbe wie in
+        # ``_indices``; nur die beiden Puffer werden für alle Höhen wieder
+        # benutzt. Damit bleiben auch Punkte genau auf einer Rasterhälfte auf
+        # derselben Seite wie zuvor.
+        np.multiply(normals, field.pitch * (step + 0.5), out=samples)
+        np.subtract(centres, samples, out=samples)
+        np.subtract(samples, field.origin, out=samples)
+        np.divide(samples, field.pitch, out=samples)
+        np.rint(samples, out=samples)
+        np.copyto(indices, samples, casting="unsafe")
+        np.clip(indices, 0, upper, out=indices)
         here = field.filled[indices[:, 0], indices[:, 1], indices[:, 2]]
         # Hat ein Lauf das Material einmal verlassen, hört er auf zu zählen: was
         # jenseits der gegenüberliegenden Wand liegt, gehört zur nächsten Wand,

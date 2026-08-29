@@ -29,17 +29,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS, ValidationError
 
-# Vor ``trimesh.load_path``, nicht erst in ``nested_polygons``: Der Import
-# ersetzt trimeshs ``enclosure_tree`` (Seiteneffekt, siehe Modulkopf von
-# ``enclosure``), und ``extrude`` ruft den Loader **vor** der Verschachtelung.
+# Vor ``trimesh.load_path``, nicht erst in ``nested_polygons``: Der Aufruf
+# ersetzt trimeshs ``enclosure_tree`` (siehe Modulkopf von ``enclosure``), und
+# ``extrude`` ruft den Loader **vor** der Verschachtelung.
 # Heute fasst der Loader die Funktion nicht an — eine trimesh-Version, die im
 # Laden eine Fläche rechnet, kippte das ohne Vorwarnung. Dieselbe Zeile wie in
 # ``geom.section``.
-from app.core.geom import enclosure as _enclosure  # noqa: F401 - Seiteneffekt
+from app.core.geom import enclosure
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.log import get_logger
 from app.core.units import EPS_GEOM
@@ -122,6 +122,7 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
             constraint="not_outline",
         )
 
+    enclosure.install()
     try:
         path = trimesh.load_path(io.BytesIO(payload), file_type=suffix.lower().lstrip("."))
     except PROGRAMMING_ERRORS:

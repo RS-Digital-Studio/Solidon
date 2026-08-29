@@ -25,9 +25,8 @@ from dataclasses import dataclass
 from typing import Final
 
 import numpy as np
-from scipy.optimize import least_squares
-from scipy.sparse import csr_matrix
 
+from app.core.deferred import csr_matrix, least_squares
 from app.core.errors import SketchConflictError, ValidationError
 from app.core.expressions import evaluate
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement, SolvedSketch
@@ -466,6 +465,14 @@ def _solve(
         jac=sparse_jac,
         method="trf",
         tr_solver="lsmr",
+        # Ohne Grenze läuft LSMR hier bis zur kleineren Matrixkante. Bei der
+        # langen, dünn besetzten Kette des §31-Korpus sind das 300 innere
+        # Schritte je Versuch und 105 ms insgesamt. Mit 150 Schritten braucht
+        # der äußere Löser acht statt achtzehn Versuche, hält denselben Rest
+        # weit unter ``_TOL`` und löst die 200 Bedingungen in 42 ms. Die
+        # Grenze ist keine Genauigkeitsschranke: TRF setzt mit dem verbleibenden
+        # Rest weiter an, statt eine unfertige Antwort zurückzugeben.
+        tr_options={"maxiter": 150},
         xtol=1e-10,
         ftol=1e-10,
         gtol=1e-10,

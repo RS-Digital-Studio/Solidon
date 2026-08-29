@@ -9,8 +9,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.types import Vec3
 

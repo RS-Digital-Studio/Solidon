@@ -38,9 +38,20 @@ LICENCE_BUILD = ROOT / "packaging" / "build"
 if not (LICENCE_BUILD / "licence.manifest").is_file() or not list(
     (LICENCE_BUILD / "activation").glob("*")
 ):
-    raise SystemExit(
-        "Das kompilierte Prüfmodul fehlt — erst: python tools/build_licence_module.py"
-    )
+    raise SystemExit("Das kompilierte Prüfmodul fehlt — erst: python tools/build_licence_module.py")
+
+# Die schnelle Schichtanalyse aus §31 ist kein optionaler Paketinhalt. Im
+# Quellbaum darf sie fehlen und fällt dann ehrlich auf GEOS zurück; ein
+# Kundenpaket wird dagegen nur gebaut, wenn der plattformeigene Rechenkern aus
+# dem unmittelbar vorherigen CI-Schritt wirklich da ist.
+SLICE_CORE = sorted(
+    [
+        *(ROOT / "app" / "core" / "slice").glob("_chain.*.pyd"),
+        *(ROOT / "app" / "core" / "slice").glob("_chain.*.so"),
+    ]
+)
+if not SLICE_CORE:
+    raise SystemExit("Der schnelle Schichtkern fehlt — erst: python tools/build_slice_core.py")
 
 datas = [
     # Neben app/, wo integrity.manifest_path() es sucht.
@@ -132,6 +143,7 @@ binaries = [
     (str(entry), "app/core/activation")
     for entry in sorted((LICENCE_BUILD / "activation").glob("*"))
 ]
+binaries += [(str(entry), "app/core/slice") for entry in SLICE_CORE]
 
 hiddenimports = [
     # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller

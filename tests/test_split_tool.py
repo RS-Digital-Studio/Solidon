@@ -603,6 +603,7 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
     Die Fensterbefehle und die Menüeinträge hatten diese Zusage nicht, und
     genau dort sind die acht dazugekommen.
     """
+    from PySide6.QtCore import Qt
     from PySide6.QtGui import QAction, QKeySequence
 
     taken: dict[str, set[str]] = {}
@@ -619,7 +620,13 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
             taken.setdefault(QKeySequence(sequence).toString(), set()).add(title)
     for action in window.findChildren(QAction):
         sequence = action.shortcut().toString()
-        if sequence:
+        # Widgetgebundene Kürzel dürfen denselben Griff verwenden: Entf im
+        # Objektbaum und Entf im Verlauf erreichen einander nicht. Ihre
+        # Zuordnung und Reichweite prüft ``test_ui`` unmittelbar am Widget.
+        if sequence and action.shortcutContext() in {
+            Qt.ShortcutContext.WindowShortcut,
+            Qt.ShortcutContext.ApplicationShortcut,
+        }:
             taken.setdefault(sequence, set()).add(action.text())
 
     doubled = {key: sorted(names) for key, names in taken.items() if len(names) > 1}

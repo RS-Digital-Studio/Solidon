@@ -38,8 +38,8 @@ from app.core.slice import analysis
 from app.core.slice.analysis import cross_section, cross_sections, slice_body
 
 pytestmark = pytest.mark.skipif(
-    analysis._chain is None,
-    reason="app/core/slice/_chain ist nicht gebaut (tools/build_slice_core.py)",
+    analysis._chain is None or not hasattr(analysis._chain, "plane_segments"),
+    reason="app/core/slice/_chain ist nicht aktuell gebaut (tools/build_slice_core.py)",
 )
 
 
@@ -142,6 +142,33 @@ def test_the_compiled_way_is_the_one_that_ran() -> None:
     assert analysis._rings_from(points, nodes) is not None, "the compiled way declined a clean cut"
 
 
+@pytest.mark.parametrize(
+    "name,mesh", bodies(), ids=lambda value: value if isinstance(value, str) else ""
+)
+def test_compiled_plane_segments_match_the_numpy_fallback(
+    name: str, mesh: MeshData, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der schnellere Schnitt darf weder eine Fläche noch eine Kante versetzen.
+
+    Kanten- und Schichtnummern sind diskret und deshalb exakt. Die Punkte
+    werden vor dem Polygonaufbau ohnehin auf sechs Stellen gerundet; genau
+    diese Eingabe muss auf beiden Wegen bitgleich sein.
+    """
+    low = float(mesh.bounds.minimum[2])
+    high = float(mesh.bounds.maximum[2])
+    heights = np.linspace(low - 0.1, high + 0.1, 31)
+
+    compiled = analysis._plane_segments(mesh, heights)
+    monkeypatch.setattr(analysis, "_chain", None)
+    fallback = analysis._plane_segments(mesh, heights)
+
+    np.testing.assert_array_equal(compiled[1], fallback[1], err_msg=f"{name}: layers")
+    np.testing.assert_array_equal(compiled[2], fallback[2], err_msg=f"{name}: edges")
+    np.testing.assert_array_equal(
+        np.round(compiled[0], 6), np.round(fallback[0], 6), err_msg=f"{name}: points"
+    )
+
+
 def test_an_open_mesh_falls_back_instead_of_guessing(without_compiled_core: None) -> None:
     """Eine offene Kante trägt nur ein Dreieck — der Grad ist eins, nicht zwei.
 
@@ -153,6 +180,31 @@ def test_an_open_mesh_falls_back_instead_of_guessing(without_compiled_core: None
     mesh = MeshData.of(open_box)
     points, _layers, nodes = analysis._plane_segments(mesh, np.array([0.0]))
     assert analysis._rings_from(points, nodes) is None, "an open mesh must not chain"
+
+
+def test_a_node_with_four_segments_is_not_split_into_two_false_nodes() -> None:
+    """Zwei Ringe an demselben Knoten haben Grad vier, nicht zweimal Grad zwei.
+
+    Der schnelle Weg paart sortierte Enden. Ohne die Prüfung zwischen zwei
+    Paaren sähen vier gleiche Knotennummern wie zwei unabhängige Knoten aus;
+    die Verkettung erfände zwei gültige Konturen aus einer mehrdeutigen.
+    """
+    nodes = np.array(((0, 1), (1, 2), (2, 0), (0, 3), (3, 4), (4, 0)), dtype=np.int64)
+    points = np.zeros((len(nodes), 2, 2), dtype=np.float64)
+
+    assert analysis._rings_from(points, nodes) is None
+
+
+def test_the_cached_single_ring_is_the_public_contour_bit_for_bit() -> None:
+    """Die gesparte Rückübersetzung darf weder Start noch Richtung ändern."""
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=8.0))
+    result = slice_body(mesh, 0.5)
+    heights = np.asarray([layer.z for layer in result.layers], dtype=float)
+    sections = cross_sections(mesh, heights)
+
+    for layer, section in zip(result.layers, sections, strict=True):
+        assert section is not None
+        assert layer.contours == analysis._to_polygons(section)
 
 
 def test_the_numbers_of_a_whole_analysis_match() -> None:

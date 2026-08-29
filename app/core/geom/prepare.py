@@ -20,8 +20,8 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,

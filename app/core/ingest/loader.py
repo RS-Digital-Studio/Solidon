@@ -27,8 +27,8 @@ from typing import Any, Final
 from urllib.parse import unquote, urlsplit
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.geom.repair import SMALL_COMPONENT_SHARE

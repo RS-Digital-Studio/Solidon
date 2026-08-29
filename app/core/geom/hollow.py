@@ -22,8 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData

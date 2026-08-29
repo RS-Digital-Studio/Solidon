@@ -44,9 +44,9 @@ from typing import Final
 from xml.etree import ElementTree as ET
 
 import numpy as np
-import trimesh
 
 from app.branding import APP_NAME, APP_VERSION
+from app.core.deferred import trimesh
 from app.core.errors import CANCEL, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger

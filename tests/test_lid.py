@@ -313,12 +313,15 @@ def test_the_threaded_neck_keeps_the_container_open_and_names_both_threads(
     )
     assert cut is not None
     planar, _ = cut.to_2D()
-    assert len(planar.polygons_full) == 1
-    openings = [
-        abs(float(trimesh.path.polygons.Polygon(ring).area))
-        for ring in planar.polygons_full[0].interiors
-    ]
-    assert openings and max(openings) > np.pi * 15.0**2, (
+    # ``polygons_full`` baut einen räumlichen Index und zieht dadurch die
+    # optionale Bibliothek rtree in eine reine Geometrieprüfung. Die einzelnen
+    # geschlossenen Konturen tragen dieselbe Aussage ohne neue Abhängigkeit.
+    # Sehr kleine Konturen entstehen, wenn die Schnittebene genau auf einer
+    # Gewindenaht liegt; für Wand und Öffnung sind nur Flächen > 1 mm² relevant.
+    areas = [abs(float(trimesh.path.polygons.Polygon(ring).area)) for ring in planar.discrete]
+    sections = [area for area in areas if area > 1.0]
+    assert len(sections) == 2, "der Schnitt braucht genau Wand und Öffnung"
+    assert min(sections) > np.pi * 15.0**2, (
         "der Gewindehals verschließt die Öffnung statt sie ringförmig fortzuführen"
     )
     assert not container.features[NECK_THREAD_FEATURE].params["internal"]

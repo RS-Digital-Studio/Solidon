@@ -29,9 +29,8 @@ from dataclasses import replace
 from typing import Any, Final, cast
 
 import numpy as np
-import trimesh
-from scipy.spatial import cKDTree
 
+from app.core.deferred import cKDTree, trimesh
 from app.core.errors import CANCEL, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.registry import op_params, param, register_op
