@@ -77,6 +77,8 @@
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
+- [Ein Probe-Worktree altert](probe-worktree-altert.md) — sein Baum ist ein vollständiger Zustand, kein Diff; übertragen nimmt er jeden Commit zurück, der seit dem Abzweig kam. Index-Diff gegen den **aktuellen** HEAD prüfen, nicht gegen die Basis.
+- [Ein Fix, der nicht grün macht](fix-der-nicht-gruen-macht.md) — bleibt der Test nach der Behebung rot, war die Diagnose falsch, nicht die Behebung unvollständig; die plausible Erzählung ging sonst ungeprüft bis in einen fremden Bericht.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
