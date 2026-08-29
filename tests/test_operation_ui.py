@@ -1818,7 +1818,7 @@ def test_a_part_dialog_offers_to_insert_not_to_name_the_part(qt_app: QApplicatio
 def test_the_source_field_offers_a_way_to_pick_a_file(qt_app: QApplication) -> None:
     """Ein leeres Projekt war in den drei Einstiegsdialogen eine Sackgasse.
 
-    *Modell laden*, *STEP laden* und *Zeichnung extrudieren* zeigen im Feld
+    *Modell laden*, *STEP laden* und *Zeichnung hochziehen* zeigen im Feld
     „Quelle" die Dateien, die das Projekt schon eingebettet hat — in einem
     frischen Projekt also keine. Die Liste klappte auf und war leer; das liest
     sich nicht als „hier fehlt etwas", sondern als kaputt. Wer über Drag & Drop

@@ -416,7 +416,7 @@ def test_import_reads_every_format_the_window_reads(
 
     project = load(path)
     assert [entry.op for entry in project.document.ops] == ["load_outline"]
-    assert str(project.document.transactions[-1].title) == "Zeichnung extrudieren"
+    assert str(project.document.transactions[-1].title) == "Zeichnung hochziehen"
 
     # Und der Weg für STEP und DXF, ohne dafür eine Datei zu brauchen: geprüft
     # wird die Entscheidung, nicht der Leser dahinter.

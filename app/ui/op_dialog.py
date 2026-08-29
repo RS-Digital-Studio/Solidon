@@ -580,7 +580,7 @@ class ImageSourceField(QWidget):
     fehlende Weg.
 
     **Und er fehlte am Quellenfeld genauso, nur ohne dass es jemand meldete.**
-    *Modell laden*, *STEP laden* und *Zeichnung extrudieren* zeigen dort die
+    *Modell laden*, *STEP laden* und *Zeichnung hochziehen* zeigen dort die
     Quellen, die das Projekt schon hat — in einem frischen Projekt also nichts.
     Die Liste klappte auf und war leer; das liest sich nicht als „hier fehlt
     etwas", sondern als kaputt, und getroffen hat es ausgerechnet die drei
@@ -977,7 +977,7 @@ class OperationDialog(QDialog):
         zurück — der Weg, den ein leeres Projekt braucht."""
         self._pick_source = pick_source
         """Dasselbe für eine Modelldatei. Ohne ihn ist das Quellenfeld in
-        *Modell laden*, *STEP laden* und *Zeichnung extrudieren* eine leere
+        *Modell laden*, *STEP laden* und *Zeichnung hochziehen* eine leere
         Liste, aus der kein Weg führt."""
         self._bones = armature_bones(str(given.get("armature") or ""))
         """Die Knochen, an denen die Stellung hängt — aus dem Skelett, das der
