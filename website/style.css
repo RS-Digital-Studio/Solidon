@@ -545,6 +545,13 @@ nav.lang a.cta:hover {
    des Programms erledigen muss. Der Verweis lädt keine PayPal-Ressource; erst
    ein ausdrücklicher Klick verlässt die Seite. */
 
+/* Der Spendenkasten stand mit neutralem Rand auf fast dem Grundton der Seite:
+   ``--accent-soft`` ist im dunklen Thema #33261a, der Grund #171614, die Linie
+   #35322d — drei Töne, die sich kaum unterscheiden. „Fällt nicht auf und wirkt
+   trostlos", gemeldet am 29.08.2026. Was ihn jetzt trägt, ist eine warme Kante
+   und ein Verlauf, der oben links etwas kräftiger anfasst; die Fläche selbst
+   bleibt ruhig. Der Knopf bleibt bewusst hinter dem gefüllten Download-Knopf
+   zurück — er ist die zweite Handlung auf dieser Seite, nicht die erste. */
 .donate {
   display: flex;
   align-items: center;
@@ -552,12 +559,17 @@ nav.lang a.cta:hover {
   gap: 1rem;
   margin-top: 1.25rem;
   padding: 1rem;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
   border-radius: 0.6rem;
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 55%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 17%, transparent), transparent 62%),
     var(--accent-soft);
   box-shadow: var(--shadow);
+}
+
+/* Die Überschrift trägt den Akzent — ein Wort, keine Fläche. */
+.donate > div > strong {
+  color: var(--accent);
 }
 
 .donate p {
@@ -580,6 +592,10 @@ nav.lang a.cta:hover {
   align-items: center;
   gap: 0.4rem;
   padding: 0.62rem 0.9rem;
+  /* Eine leichte Füllung, damit er als Knopf gelesen wird und nicht als
+     Umrandung — aber weit hinter dem gefüllten Download-Knopf, der die
+     Hauptaktion trägt. */
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px solid var(--accent);
   border-radius: 0.5rem;
   color: var(--accent);
