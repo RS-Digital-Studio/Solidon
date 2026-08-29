@@ -367,6 +367,38 @@ def test_uploading_a_page_includes_its_outdated_stamped_assets(
     assert script in checked and style in checked
 
 
+def test_page_assets_work_when_the_upload_tool_is_started_directly(tmp_path: Path) -> None:
+    """Der veröffentlichte Aufruf ist ein Skript und kein Paketimport.
+
+    Beim ersten Lauf am 29.08.2026 war der neue Helfer im Test erreichbar,
+    scheiterte aber beim direkten Werkzeugaufruf vor dem ersten Upload an
+    ``from tools``. Die Probe startet außerhalb des Repositorys und ruft genau
+    den Helfer auf, ohne Serverzugang oder Schreibvorgang.
+    """
+    import subprocess
+
+    import tools.upload_website as upload
+
+    probe = (
+        "import runpy; "
+        f"scope = runpy.run_path({str(upload.__file__)!r}); "
+        "scope['with_outdated_page_assets']([], '', {})"
+    )
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+
+    finished = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+
+    assert finished.returncode == 0, finished.stdout + finished.stderr
+
+
 def test_activation_deployment_separates_public_and_private_roots() -> None:
     """Startwert und Datenbank können nie als Website-Ziele abgeleitet werden."""
     from tools import deploy_activation_server as deployment
