@@ -666,6 +666,21 @@ def test_every_custom_message_speaks_a_language_the_installer_knows() -> None:
     assert not strangers, f"diese CustomMessages-Präfixe kennt [Languages] nicht: {strangers}"
 
 
+def test_the_restart_comment_does_not_end_at_an_inno_constant() -> None:
+    """Eine Inno-Konstante darf den erklärenden Pascal-Kommentar nicht schließen.
+
+    Geschweifte Klammern sind in Innos Pascal zugleich Kommentargrenzen und
+    Konstantenschreibweise. Stand ``{param:…}`` in einem solchen Kommentar,
+    las ISCC den deutschen Restsatz als Code und brach erst beim Release-Bau ab.
+    """
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    restart = script.split("function WantsRestart", 1)[1].split("Result :=", 1)[0]
+    comment = restart.split("begin", 1)[1].strip()
+
+    assert comment.startswith("(*") and comment.endswith("*)")
+    assert "{param:...}" in comment, "der Kommentar erklärt die fehlerträchtige Konstante nicht"
+
+
 def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -> None:
     """Auf der Lizenzseite steht der Endnutzer-Lizenzvertrag.
 

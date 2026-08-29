@@ -140,7 +140,7 @@ Type: files; Name: "{app}\install-language.txt"
 [Code]
 function WantsRestart: Boolean;
 begin
-  { Ob Solidon nach einem stillen Lauf wieder starten soll.
+  (* Ob Solidon nach einem stillen Lauf wieder starten soll.
 
     ``/RESTARTAPP=1`` ist kein Schalter von Inno Setup, sondern unserer — die
     Anwendung setzt ihn, wenn sie das Update selbst angestoßen hat
@@ -151,7 +151,7 @@ begin
     Die Vorgabe hinter dem senkrechten Strich ist der ganze Trick: Ohne sie
     liefert ``{param:...}`` bei einem fehlenden Schalter eine leere
     Zeichenkette, und die verglich sich hier stillschweigend als "nicht
-    gewünscht" — dasselbe Ergebnis, aber aus Zufall statt aus Absicht. }
+    gewünscht" — dasselbe Ergebnis, aber aus Zufall statt aus Absicht. *)
   Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
 end;
 
