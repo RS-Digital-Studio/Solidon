@@ -465,19 +465,14 @@ def test_oversized_is_divided_without_anybody_touching_a_parameter(
         assert autosplit.fits(part.mesh, profile), object_id
 
 
-def test_splitting_a_piece_again_lets_its_fits_go(profile: Profile) -> None:
-    """Zweimal trennen hinterlässt keine Passung, die ins Leere zeigt.
+def test_splitting_a_piece_again_keeps_its_existing_fits(profile: Profile) -> None:
+    """Zweimal trennen erhält die erste Naht auf dem richtigen Kindstück.
 
     So gefunden: Sechs Fachmodule über fünf gezeichnete Schnitte, und danach
-    sechs ``fit.missing_feature`` — **Fehler** im Prüfbericht, obwohl niemand
-    etwas falsch gemacht hatte. Ein Teil in mehr als zwei Stücke zu schneiden
-    heißt, ein schon geschnittenes noch einmal zu schneiden, und dessen
-    Passungen benennen es.
-
-    Umgehängt werden sie nicht — der zweite Schnitt vergibt wieder ``pin_1``,
-    und ein Verweis darauf zeigte auf einen anderen Stift als gemeint. Sie
-    entfallen, die Auswertung bleibt sauber, und der Bericht sagt es als
-    Hinweis statt als Fehler.
+    nur vier statt zehn Verbindungsgruppen. Ein Teil in mehr als zwei Stücke zu
+    schneiden heißt, ein schon geschnittenes noch einmal zu schneiden. Seine
+    Passungen müssen deshalb mitwandern, während die neue Naht eigene,
+    unverwechselbare Merkmalskennungen bekommt.
     """
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply(
@@ -500,18 +495,61 @@ def test_splitting_a_piece_again_lets_its_fits_go(profile: Profile) -> None:
         SectionPlane((0.0, 1.0, 0.0), 0.0),
         profile,
         mesh=halved.scene.objects[target].mesh,
+        features=halved.scene.objects[target].features,
     )
 
-    assert [finding.code for finding in second.findings] == [
-        "split.fit_dropped",
-        "split.fit_dropped",
-    ], "und der Bericht sagt, dass zwei entfallen sind"
-    assert all(fit not in project.document.fits for fit in first.fits), "die alten sind weg"
+    assert not [finding for finding in second.findings if finding.code == "split.fit_dropped"]
+    assert {fit.name for fit in first.fits} <= {fit.name for fit in project.document.fits}, (
+        "die erste Naht bleibt unter ihrer Kennung erhalten"
+    )
+    assert len(project.document.fits) == 4, "beide Nähte tragen je zwei Passungen"
+    assert [fit.a.feature_id for fit in second.fits] == ["pin_3", "pin_4"]
+    assert [fit.b.feature_id for fit in second.fits] == ["bore_3", "bore_4"]
 
     result = evaluate(project.document, profile, sources=ProjectSources(project))
     assert result.complete
     codes = [finding.code for finding in result.scene.report.findings]
     assert "fit.missing_feature" not in codes, codes
+
+
+def test_a_cut_through_an_existing_connector_drops_only_that_fit(profile: Profile) -> None:
+    """Eine gestreifte Verbindung darf nicht als voll tragfähig weiterleben.
+
+    Der Mittelpunkt allein reicht dafür nicht: Eine Ebene kann den Rand eines
+    Stifts schneiden, obwohl sein Mittelpunkt eindeutig auf einer Seite liegt.
+    Dann entfällt genau dieses Paar; die andere alte Verbindung bleibt erhalten.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(80.0, 60.0, 40.0)))
+    first = apply_line_split(
+        project.document, "obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), profile, mesh=block
+    )
+    halved = evaluate(project.document, profile, sources=ProjectSources(project))
+    target = first.object_ids[0]
+    entry = halved.scene.objects[target]
+    pin = entry.features["pin_1"]
+    centre = pin.params["centre"]
+    diameter = float(pin.params["diameter"])
+    plane = SectionPlane((0.0, 1.0, 0.0), float(centre[1]) + diameter / 4.0)
+
+    second = apply_line_split(
+        project.document,
+        target,
+        plane,
+        profile,
+        mesh=entry.mesh,
+        features=entry.features,
+    )
+
+    assert [finding.code for finding in second.findings].count("split.fit_dropped") == 1
+    assert first.fits[0] not in project.document.fits, "der angeschnittene Stift trägt nicht mehr"
+    assert first.fits[1].name in {fit.name for fit in project.document.fits}
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert "fit.missing_feature" not in [finding.code for finding in result.scene.report.findings]
 
 
 def test_undo_brings_the_dropped_fits_back(profile: Profile) -> None:

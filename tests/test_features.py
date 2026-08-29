@@ -1478,6 +1478,28 @@ def test_a_changed_mesh_is_examined_again() -> None:
     assert heights_after != heights_before, "das verschobene Netz bekam die alte Antwort"
 
 
+def test_a_long_history_stays_in_the_feature_cache() -> None:
+    """Ein warmer langer Verlauf darf den Cache nicht beim Lesen leeren.
+
+    Das Kundenmodell hat 132 verschiedene Zwischenkörper. Mit der früheren
+    Grenze von 32 verdrängten die ersten Schritte eines neuen Durchlaufs genau
+    die später noch benötigten Einträge; trotz vollständiger Treffer im
+    Ergebnis-Cache wurde jedes Merkmal erneut gesucht.
+    """
+    forget_cache()
+    body = trimesh.load(MESHES / "cube_clean.stl", process=False, force="mesh")
+    history_length = 132
+
+    for step in range(history_length):
+        moved = body.copy()
+        moved.apply_translation([float(step) * 3.0, 0.0, 0.0])
+        detect(MeshData.of(moved))
+
+    assert len(_FEATURE_CACHE) == history_length, (
+        "der Cache muss alle Zwischenkörper des gemessenen Kundenverlaufs halten"
+    )
+
+
 def test_the_cache_keeps_only_what_it_promises() -> None:
     """Die Grenze hält, sonst wächst er über die Laufzeit eines Tages hinaus."""
     forget_cache()

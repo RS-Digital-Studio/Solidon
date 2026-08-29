@@ -27,8 +27,9 @@ wurden — und das Passungspaar hält den Verweis fest, nicht den Wert (§14).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -92,6 +93,76 @@ SNAP_MIN_REACH = 8.0
 #: Material, das um einen Stift stehen bleiben muss. Darunter bricht die
 #: Bohrung aus.
 PIN_WALL = 1.6
+
+FeatureSide = Literal[-1, 0, 1]
+
+
+def next_connector_index(features: Mapping[FeatureId, Feature]) -> int:
+    """Die erste freie Nummer für den nächsten Verbinder dieses Körpers.
+
+    Ein erneut geteiltes Stück trägt seine früheren Stifte oder Bohrungen
+    weiter. Die neue Naht darf deren Kennungen nicht wiederverwenden, weil
+    Passungen sonst still auf einen anderen Verbinder zeigten.
+    """
+    used: list[int] = []
+    for feature_id in features:
+        kind, separator, number = feature_id.rpartition("_")
+        if separator and kind in {"pin", "bore"} and number.isdigit():
+            used.append(int(number))
+    return max(used, default=0) + 1
+
+
+def feature_side(
+    feature: Feature, plane: SectionPlane, *, connector: bool = False
+) -> FeatureSide | None:
+    """Auf welcher Seite einer Trennebene ein Merkmal vollständig liegt.
+
+    ``-1`` ist die erste, ``1`` die zweite Hälfte, ``0`` liegt auf dem Schnitt.
+    ``None`` bedeutet, dass das Merkmal keinen verlässlichen Mittelpunkt trägt.
+
+    Bei einem Verbinder reicht der Mittelpunkt nicht: Eine Ebene kann seinen
+    Rand treffen und ihn damit unbrauchbar machen. ``connector`` bezieht
+    Durchmesser, Achse und Einbindung deshalb in den Abstand ein.
+    """
+    centre = feature.params.get("centre")
+    if not isinstance(centre, tuple | list) or len(centre) != 3:
+        return None
+    normal = np.asarray(plane.normal, dtype=float)
+    length = float(np.linalg.norm(normal))
+    if length <= EPS_GEOM:
+        return None
+    normal /= length
+    distance = float(np.dot(np.asarray(centre, dtype=float), normal)) - plane.position
+    extent = _connector_extent(feature, normal) if connector else 0.0
+    if extent is None:
+        return None
+    limit = extent + EPS_GEOM
+    if distance < -limit:
+        return -1
+    if distance > limit:
+        return 1
+    return 0
+
+
+def _connector_extent(feature: Feature, plane_normal: np.ndarray) -> float | None:
+    """Halbe Ausdehnung eines Verbinders in Richtung der neuen Ebenennormalen."""
+    axis = feature.params.get("axis")
+    if not isinstance(axis, tuple | list) or len(axis) != 3:
+        return None
+    try:
+        diameter = float(feature.params["diameter"])
+        depth = float(feature.params["depth"])
+        direction = np.asarray(axis, dtype=float)
+    except (KeyError, TypeError, ValueError):
+        return None
+    axis_length = float(np.linalg.norm(direction))
+    if axis_length <= EPS_GEOM or diameter < 0.0 or depth < 0.0:
+        return None
+    direction /= axis_length
+    along = min(abs(float(np.dot(direction, plane_normal))), 1.0)
+    across = float(np.sqrt(max(0.0, 1.0 - along * along)))
+    return depth * along + diameter / 2.0 * across
+
 
 #: Zusatztiefe der Bohrung über den Stift hinaus, damit die Hälften auf der
 #: Fläche schließen und nicht auf dem Stiftende. Der Schnappverbinder braucht
@@ -384,6 +455,7 @@ def add_pins(
     plan: PinPlan,
     profile: Profile,
     *,
+    start: int = 1,
     play: float | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
@@ -452,7 +524,7 @@ def add_pins(
     # ist die Tiefe null und dieser Versatz verschwindet von selbst.
     bore_offset = -float(bore_body.raw.bounds[0][2])
 
-    for index, position in enumerate(plan.positions, start=1):
+    for index, position in enumerate(plan.positions, start=start):
         # Bis zu zwölf Boolesche je Teilung, jede mit voller Rückfallkette
         # (§15.6): zwischen zwei Stiften gehört der Abbruch gefragt und in die
         # Kette hinein durchgereicht.

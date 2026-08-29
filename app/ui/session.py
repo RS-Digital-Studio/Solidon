@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
@@ -71,6 +72,8 @@ from app.core.scene.project import (
 )
 from app.core.split import SplitApplied, apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import (
+    Feature,
+    FeatureId,
     Finding,
     Fit,
     Origin,
@@ -253,18 +256,31 @@ class _SplitWorker(Worker):
     failedWith = Signal(object)
     cancelled = Signal()
 
-    def __init__(self, mesh: Any, object_id: str, profile: Profile) -> None:
+    def __init__(
+        self,
+        mesh: Any,
+        object_id: str,
+        profile: Profile,
+        features: Mapping[FeatureId, Feature],
+    ) -> None:
         super().__init__()
         self._mesh = mesh
         self._object_id = object_id
         self._profile = profile
+        self._features = dict(features)
         #: Ein eigenes Token, wie bei der Vorschau: Die Suche kann Minuten
         #: laufen, und wer sie abbricht, will nicht auf sie warten.
         self.cancel = CancelSignal()
 
     def work(self) -> None:
         try:
-            plan = plan_split(self._mesh, self._object_id, self._profile, cancelled=self.cancel)
+            plan = plan_split(
+                self._mesh,
+                self._object_id,
+                self._profile,
+                features=self._features,
+                cancelled=self.cancel,
+            )
         except OperationCancelled:
             self.cancelled.emit()
         except AppError as error:
@@ -1049,7 +1065,11 @@ class Session(QObject):
             )
 
         applied = apply_split(
-            self.project.document, as_mesh_data(entry.mesh), object_id, self.profile
+            self.project.document,
+            as_mesh_data(entry.mesh),
+            object_id,
+            self.profile,
+            features=entry.features,
         )
         if applied.transaction is not None:
             self._dirty = True
@@ -1081,6 +1101,7 @@ class Session(QObject):
             plane,
             self.profile,
             mesh=as_mesh_data(entry.mesh) if entry is not None else None,
+            features=entry.features if entry is not None else None,
             pins=pins,
             shape=shape,
         )
@@ -1216,7 +1237,7 @@ class Session(QObject):
             return
 
         self._split_discarded = False
-        worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
+        worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile, entry.features)
         # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
         # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.
         worker.done.connect(lambda plan: self._split_planned(worker, plan, object_id, then))

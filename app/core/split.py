@@ -15,19 +15,21 @@ Paare hierher — §14 sagt genau das.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import PIN_COUNT, plan_pins
+from app.core.geom.pins import PIN_COUNT, feature_side, next_connector_index, plan_pins
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
     CancelToken,
     Document,
+    Feature,
+    FeatureId,
     FeatureRef,
     Finding,
     Fit,
@@ -52,6 +54,8 @@ class SplitPlan:
 
     Leer heißt: nicht gerechnet, dann gilt die gewünschte Zahl. Das betrifft
     nur von Hand gebaute Pläne in Tests; ``plan_split`` füllt sie immer."""
+    connector_start: int = 1
+    """Erste freie Verbinderkennung des ausgewählten Ausgangskörpers."""
 
     @property
     def cuts(self) -> int:
@@ -78,6 +82,7 @@ def plan_split(
     object_id: ObjectId,
     profile: Profile,
     *,
+    features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
     cancelled: CancelToken | None = None,
 ) -> SplitPlan:
@@ -101,6 +106,7 @@ def plan_split(
         drafts=tuple(drafts),
         outcome=outcome,
         seated=tuple(fitting_pins(step.source, step.plane.plane, pins) for step in outcome.cuts),
+        connector_start=next_connector_index(features or {}),
     )
 
 
@@ -139,10 +145,11 @@ def apply_split(
     object_id: ObjectId,
     profile: Profile,
     *,
+    features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
 ) -> SplitApplied:
     """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
-    plan = plan_split(mesh, object_id, profile, pins=pins)
+    plan = plan_split(mesh, object_id, profile, features=features, pins=pins)
     return apply_planned(document, plan, object_id, profile, pins=pins)
 
 
@@ -169,6 +176,7 @@ def apply_planned(
     existing = list(document.fits)  # Passungen aus früheren Transaktionen
     created: list[Fit] = []  # was dieser Lauf angelegt hat und noch lebt
     dropped: list[Fit] = []
+    connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
     transaction = None
 
     for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
@@ -187,6 +195,7 @@ def apply_planned(
         created, gone_new = _partition_fits(created, target)
         dropped.extend(gone_old)
         dropped.extend(gone_new)
+        feature_start = connector_starts.pop(target, 1)
         made: list[ObjectId] = []
 
         # Die Schleifenvariablen wandern als Vorgabewerte hinein: Ein
@@ -198,12 +207,25 @@ def apply_planned(
             existing: list[Fit] = existing,
             created: list[Fit] = created,
             seated: int = plan.pins_at(index, pins),
+            feature_start: int = feature_start,
         ) -> Any:
             made.extend(planned[0].outputs)
+            next_start = feature_start + seated
+            connector_starts[made[0]] = next_start
+            connector_starts[made[1]] = next_start
             # So viele Paare, wie Stifte sitzen — nicht so viele, wie
             # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
             # Stift und deshalb auch keine Passung, die auf ihn zeigt.
-            created.extend(_pairs(made[0], made[1], seated, profile, len(existing) + len(created)))
+            created.extend(
+                _pairs(
+                    made[0],
+                    made[1],
+                    seated,
+                    profile,
+                    len(existing) + len(created),
+                    feature_start=feature_start,
+                )
+            )
             return change_for(document, fits=[*existing, *created])
 
         applied = history.apply(
@@ -231,6 +253,7 @@ def apply_line_split(
     profile: Profile,
     *,
     mesh: MeshData | None = None,
+    features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
     shape: str = "round",
 ) -> SplitApplied:
@@ -247,7 +270,12 @@ def apply_line_split(
     Antwort.
     """
     seated = fitting_pins(mesh, plane, pins, shape=shape)
-    kept, dropped = _fits_without(document, object_id)
+    kept, moving = _partition_fits(list(document.fits), object_id)
+    dropped: list[Fit] = []
+    if features is None:
+        dropped.extend(moving)
+        moving = []
+    feature_start = next_connector_index(features or {})
     made: list[ObjectId] = []
     fits: list[Fit] = []
 
@@ -260,8 +288,27 @@ def apply_line_split(
         Körper benennen, die es beim Aufruf noch nicht gab.
         """
         made.extend(planned[0].outputs)
-        fits.extend(_pairs(made[0], made[1], seated, profile, len(kept)))
-        return change_for(document, fits=[*kept, *fits])
+        remapped, lost = _retarget_fits(
+            moving,
+            object_id,
+            made[0],
+            made[1],
+            features or {},
+            plane,
+        )
+        dropped.extend(lost)
+        surviving = [*kept, *remapped]
+        fits.extend(
+            _pairs(
+                made[0],
+                made[1],
+                seated,
+                profile,
+                len(surviving),
+                feature_start=feature_start,
+            )
+        )
+        return change_for(document, fits=[*surviving, *fits])
 
     history = History(document)
     applied = history.apply(
@@ -292,36 +339,59 @@ def apply_line_split(
     )
 
 
-def _fits_without(document: Document, consumed: ObjectId) -> tuple[list[Fit], list[Fit]]:
-    """Trennt die Passungen in die, die bleiben, und die, deren Teil verschwindet.
-
-    Ein Teil, das noch einmal geteilt wird, ist danach zwei — und die Passung,
-    die es benannte, zeigt ins Leere. Der Prüfbericht meldete das bisher als
-    **Fehler**, und zwar zu Recht: Ein Verweis auf ein Objekt, das es nicht
-    gibt, ist keiner. Nur hatte der Nutzer nichts falsch gemacht; er hatte
-    zweimal getrennt, und das ist der Normalfall bei einem Teil, das in mehr
-    als zwei Stücke soll.
-
-    **Umgehängt wird nicht.** Naheliegend wäre, die Passung auf das Kindstück
-    zu zeigen, das den Stift geerbt hat. Das ginge geometrisch — und die
-    Kennung wäre trotzdem falsch: Der zweite Schnitt vergibt wieder ``pin_1``,
-    und der Verweis zeigte auf einen anderen Stift als gemeint. Eine Passung,
-    die auf das Falsche zeigt, ist schlechter als keine.
-    """
-    return _partition_fits(list(document.fits), consumed)
-
-
 def _partition_fits(fits: list[Fit], consumed: ObjectId) -> tuple[list[Fit], list[Fit]]:
     """Teilt eine Passungsliste in die, die bleiben, und die, deren Teil
     verschwindet.
 
-    Dieselbe Sortierung wie :func:`_fits_without`, nur über eine beliebige Liste
-    statt über das Dokument — Auto Split braucht sie auch über die Paare, die es
-    im selben Lauf schon angelegt hat.
+    Auto Split braucht sie über die Paare, die es im selben Lauf schon
+    angelegt hat; die gezeichnete Teilung hängt die zweite Gruppe anschließend
+    anhand ihrer Merkmale um.
     """
     kept = [fit for fit in fits if consumed not in (fit.a.object_id, fit.b.object_id)]
     gone = [fit for fit in fits if consumed in (fit.a.object_id, fit.b.object_id)]
     return kept, gone
+
+
+def _retarget_fits(
+    fits: list[Fit],
+    consumed: ObjectId,
+    first: ObjectId,
+    second: ObjectId,
+    features: Mapping[FeatureId, Feature],
+    plane: SectionPlane,
+) -> tuple[list[Fit], list[Fit]]:
+    """Hängt Passungen an das Kindstück, das ihr Merkmal geerbt hat.
+
+    Nur ein Mittelpunkt abseits der Schnittebene ist eindeutig. Fehlt er oder
+    wird der Verbinder selbst durchschnitten, entfällt die Passung mit dem
+    bestehenden Hinweis — Regel 21 verbietet, eine Seite zu raten.
+    """
+    kept: list[Fit] = []
+    dropped: list[Fit] = []
+    for fit in fits:
+        refs: list[FeatureRef] = []
+        for reference in (fit.a, fit.b):
+            if reference.object_id != consumed:
+                refs.append(reference)
+                continue
+            feature = features.get(reference.feature_id)
+            side = (
+                feature_side(
+                    feature,
+                    plane,
+                    connector=reference.feature_id.startswith(("pin_", "bore_")),
+                )
+                if feature is not None
+                else None
+            )
+            if side not in (-1, 1):
+                break
+            refs.append(FeatureRef(first if side == -1 else second, reference.feature_id))
+        if len(refs) == 2:
+            kept.append(replace(fit, a=refs[0], b=refs[1]))
+        else:
+            dropped.append(fit)
+    return kept, dropped
 
 
 def _fit_dropped(fit: Fit) -> Finding:
@@ -337,7 +407,13 @@ def _fit_dropped(fit: Fit) -> Finding:
 
 
 def _pairs(
-    first: ObjectId, second: ObjectId, pins: int, profile: Profile, made_so_far: int
+    first: ObjectId,
+    second: ObjectId,
+    pins: int,
+    profile: Profile,
+    made_so_far: int,
+    *,
+    feature_start: int = 1,
 ) -> list[Fit]:
     """Ein Paar je Stift: der Stift auf der einen Hälfte, die Bohrung auf der
     anderen.
@@ -348,11 +424,11 @@ def _pairs(
     """
     return [
         Fit(
-            name=f"stift_{made_so_far + index}",
+            name=f"stift_{made_so_far + offset + 1}",
             a=FeatureRef(first, f"pin_{index}"),
             b=FeatureRef(second, f"bore_{index}"),
             kind="clearance",
             tolerance=f"auto:{profile.material.id}",
         )
-        for index in range(1, pins + 1)
+        for offset, index in enumerate(range(feature_start, feature_start + pins))
     ]

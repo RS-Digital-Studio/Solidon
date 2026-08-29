@@ -386,10 +386,13 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
 #: Öffnen andere Namen zurück als beim ersten — schlimmer als jede Wartezeit.
 _FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 
-#: Wie viele Netze der Cache behält. Eine Auswertung sieht so viele Netze, wie
-#: sie Objekte hat; zweiunddreißig trägt jedes Beispielprojekt mit Abstand, und
-#: was darüber hinausgeht, ist ein Stapel, dessen Anfang niemand mehr ansieht.
-CACHE_LIMIT = 32
+#: Wie viele Zwischenkörper der Cache behält. Eine Auswertung untersucht nicht
+#: nur die fertigen Objekte, sondern nach jeder Operation deren damaliges Netz.
+#: Der gemessene Kundenverlauf hat bei 163 Operationen 132 verschiedene Netze;
+#: eine kleinere LRU-Grenze verdrängt beim nächsten Durchlauf die später noch
+#: benötigten Einträge und macht aus lauter Treffern eine vollständige
+#: Neuberechnung. 256 lässt dafür Luft und bleibt trotzdem fest begrenzt.
+CACHE_LIMIT = 256
 
 
 def _mesh_key(mesh: MeshData) -> bytes:

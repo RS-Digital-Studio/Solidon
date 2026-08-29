@@ -9,6 +9,7 @@ import trimesh
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.mesh import MeshData
+from app.core.geom.section import SectionPlane
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import new_project
 from app.core.types import Source
@@ -119,6 +120,31 @@ def test_the_session_splits_an_oversized_part(qt_app: QApplication) -> None:
     assert len(applied.fits) == 2
     assert session.last_result is not None
     assert set(session.last_result.scene.objects) == set(applied.object_ids)
+
+
+def test_auto_split_continues_after_an_existing_drawn_seam(qt_app: QApplication) -> None:
+    """Der sichtbare Mischweg behält die tatsächlichen Verbinderkennungen."""
+    session = Session()
+    session.project = new_project("centauri-carbon-2", "petg")
+    session.history = History(session.project.document)
+    session.history.apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 600.0, "depth": 60.0, "height": 40.0})],
+    )
+    session.evaluate_async()
+    session.wait_for_idle()
+
+    first = session.split_along("obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), pins=2)
+    session.wait_for_idle()
+    second = session.auto_split(first.object_ids[0])
+    session.wait_for_idle()
+
+    assert [fit.a.feature_id for fit in second.fits] == ["pin_3", "pin_4"]
+    assert [fit.b.feature_id for fit in second.fits] == ["bore_3", "bore_4"]
+    assert session.last_result is not None
+    assert "fit.missing_feature" not in [
+        finding.code for finding in session.last_result.scene.report.findings
+    ]
 
 
 def test_the_result_of_the_split_stays_readable(qt_app: QApplication) -> None:

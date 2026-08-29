@@ -27,7 +27,15 @@ from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import orient_for_print, print_transform
-from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
+from app.core.geom.pins import (
+    PIN_COUNT,
+    PIN_MAX,
+    PinnedPair,
+    add_pins,
+    feature_side,
+    next_connector_index,
+    plan_pins,
+)
 from app.core.geom.prepare import (
     MAX_PLATES,
     Arrangement,
@@ -1180,6 +1188,7 @@ def _cut_and_pin(
     """
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
+    connector_start = next_connector_index(source.features)
 
     first, second, findings = split_at_plane(mesh, plane)
     _both_halves_or_stop(first, second, plane.position)
@@ -1203,6 +1212,7 @@ def _cut_and_pin(
             second,
             plan,
             for_object(ctx.profile, source),
+            start=connector_start,
             play=play or None,
             quality=ctx.quality,
             cancelled=ctx.cancelled,
@@ -1211,6 +1221,7 @@ def _cut_and_pin(
         else PinnedPair(first=first, second=second)
     )
 
+    first_features, second_features = _features_after_split(source.features, plane)
     first_name, second_name = half_names(source.name, pinned=bool(pair.pin_features))
     return OpResult(
         solver=pair.solver,
@@ -1219,17 +1230,42 @@ def _cut_and_pin(
                 source,
                 mesh=pair.first,
                 name=first_name,
-                features={**source.features, **pair.pin_features},
+                features={**first_features, **pair.pin_features},
             ),
             dataclasses.replace(
                 source,
                 mesh=pair.second,
                 name=second_name,
-                features=dict(pair.bore_features),
+                features={**second_features, **pair.bore_features},
             ),
         ],
         findings=[*findings, *pair.findings, _halves_still_together(source)],
     )
+
+
+def _features_after_split(
+    features: dict[str, Feature], plane: SectionPlane
+) -> tuple[dict[str, Feature], dict[str, Feature]]:
+    """Nimmt bestehende Merkmale auf die geometrisch richtige Hälfte mit.
+
+    Ein Merkmal genau auf dem neuen Schnitt wird selbst getrennt und kann
+    deshalb nicht unverändert weitergelten. Ohne Mittelpunkt bleibt das alte
+    Verhalten erhalten: Es reist mit der ersten Hälfte, statt geraten zu
+    werden.
+    """
+    first: dict[str, Feature] = {}
+    second: dict[str, Feature] = {}
+    for feature_id, feature in features.items():
+        side = feature_side(
+            feature,
+            plane,
+            connector=feature_id.startswith(("pin_", "bore_")),
+        )
+        if side in (-1, None):
+            first[feature_id] = feature
+        elif side == 1:
+            second[feature_id] = feature
+    return first, second
 
 
 def _halves_still_together(source: SceneObject) -> Finding:
