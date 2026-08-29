@@ -61,6 +61,12 @@ ABGELEGT: tuple[tuple[str, tuple[str, ...] | None, str], ...] = (
         "Die Anwendung sagt Bedingungen. In den anderen fünf Sprachen ist "
         "constraint und seine Geschwister das Wort der Anwendung.",
     ),
+    (
+        "Hilfsgeometrie",
+        ("de",),
+        "Der Knopf heißt Hilfslinie — das Wort, das jemand kennt, der nie ein "
+        "CAD benutzt hat. In den Docstrings des Kerns bleibt der Fachbegriff.",
+    ),
 )
 
 

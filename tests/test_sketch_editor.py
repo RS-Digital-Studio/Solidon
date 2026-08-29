@@ -1392,7 +1392,7 @@ def test_the_reference_tools_are_reachable(qt_app: QApplication) -> None:
     )
 
     assert tr("Projizieren") in hinweise
-    assert tr("Hilfsgeometrie") in hinweise
+    assert tr("Hilfslinie") in hinweise
     assert ACTION_KEYS["construction"] == "X", "wie in Fusion"
 
 

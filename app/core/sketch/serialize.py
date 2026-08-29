@@ -107,7 +107,9 @@ def sketch_from_text(text: str) -> Sketch:
             parsed.append((float(point[0]), float(point[1])))
         construction = entry.get("construction", False)
         if not isinstance(construction, bool):
-            raise _damaged(_("Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch."), index=index)
+            raise _damaged(
+                _("Das Kennzeichen für eine Hilfslinie ist wahr oder falsch."), index=index
+            )
         element_kind: SketchElementKind = kind  # type: ignore[assignment]
         elements.append(
             SketchElement(kind=element_kind, points=tuple(parsed), construction=construction)

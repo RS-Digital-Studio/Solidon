@@ -3866,11 +3866,11 @@ class SketchPanel(QWidget):
         construction_button = QToolButton(self)
         self.construction_button = construction_button
         construction_button.setIcon(icons.icon("sketch_construction", construction_button))
-        construction_button.setText(tr("Hilfsgeometrie"))
+        construction_button.setText(tr("Hilfslinie"))
         construction_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        construction_button.setAccessibleName(tr("Hilfsgeometrie"))
+        construction_button.setAccessibleName(tr("Hilfslinie"))
         construction_button.setToolTip(
-            f"{tr('Hilfsgeometrie')}  ({ACTION_KEYS['construction']}) — "
+            f"{tr('Hilfslinie')}  ({ACTION_KEYS['construction']}) — "
             + tr("Trägt Bedingungen, bildet aber kein Profil.")
         )
         construction_button.setAutoRaise(True)
