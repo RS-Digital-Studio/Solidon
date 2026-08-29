@@ -3205,9 +3205,7 @@ class MainWindow(QMainWindow):
         # die Frage danach gehört VOR den Wartezeiger, wie bei der .p3d oben:
         # ein Fenster, das fragt und zugleich „bitte warten" zeigt, sagt
         # zweierlei (§2.8).
-        starting_fresh = (
-            not project_file and self.stack.currentWidget() is self.start_screen
-        )
+        starting_fresh = not project_file and self.stack.currentWidget() is self.start_screen
         if starting_fresh and not self._may_discard():
             return
         if project_file:
@@ -3635,15 +3633,30 @@ class MainWindow(QMainWindow):
             message = tr(
                 "Der gewählte Schritt wird aus dem Verlauf gelöscht. Strg+Z stellt ihn wieder her."
             )
+        discarded = self._discarded_names()
+        if len(discarded) == 1:
+            message += "\n\n" + tr(
+                "Außerdem kann ein bereits zurückgenommener Schritt danach nicht mehr "
+                "wiederholt werden:"
+            )
+        elif discarded:
+            message += "\n\n" + tr(
+                "Außerdem können {count} bereits zurückgenommene Schritte danach nicht mehr "
+                "wiederholt werden:"
+            ).replace("{count}", str(len(discarded)))
+        if discarded:
+            message += "\n" + "\n".join(f"· {name}" for name in discarded)
         box = QMessageBox(
-            QMessageBox.Icon.Question,
+            QMessageBox.Icon.Warning if discarded else QMessageBox.Icon.Question,
             tr("Schritt löschen"),
             message,
             QMessageBox.StandardButton.NoButton,
             self,
         )
         remove = box.addButton(tr("Löschen"), QMessageBox.ButtonRole.DestructiveRole)
-        box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        cancel = box.addButton(tr("Abbrechen"), QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(cancel)
+        box.setEscapeButton(cancel)
         box.exec()
         if box.clickedButton() is not remove:
             return

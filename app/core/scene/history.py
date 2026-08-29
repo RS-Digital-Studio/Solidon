@@ -678,11 +678,32 @@ class History:
             )
 
         versions = {op_id: self.operation(op_id) for op_id in removed_ids}
+        objects_before = self._known_objects()
+        objects_after: set[ObjectId] = set()
+        removed_set = set(removed_ids)
+        for entry in self.operations:
+            if entry.id in removed_set:
+                continue
+            objects_after.difference_update(set(entry.inputs) - set(entry.outputs))
+            objects_after.update(entry.outputs)
+        disappeared = objects_before - objects_after
+        remaining_fits = tuple(
+            fit
+            for fit in self.document.fits
+            if fit.a.object_id not in disappeared and fit.b.object_id not in disappeared
+        )
+        fits_changed = len(remaining_fits) != len(self.document.fits)
         self._reseed()
         self._forget_undone()
         changes = DocumentChange(
-            before=DocumentState(edited_ops=versions),
-            after=DocumentState(edited_ops=dict.fromkeys(removed_ids)),
+            before=DocumentState(
+                fits=tuple(self.document.fits) if fits_changed else None,
+                edited_ops=versions,
+            ),
+            after=DocumentState(
+                fits=remaining_fits if fits_changed else None,
+                edited_ops=dict.fromkeys(removed_ids),
+            ),
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",

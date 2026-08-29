@@ -1362,6 +1362,79 @@ def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
     assert "Agent" in lines[1]
 
 
+def test_the_history_keeps_the_title_of_a_deleted_child(qt_app: QApplication) -> None:
+    """Auch ein gelöschter Teilschritt bleibt für Menschen verständlich benannt."""
+    from app.core.types import (
+        Document,
+        DocumentChange,
+        DocumentState,
+        Operation,
+        Transaction,
+    )
+    from app.ui.panels import HistoryPanel, _op_title
+
+    removed = Operation(id=1, op="drill_hole")
+    remaining = Operation(id=2, op="rename_object")
+    document = Document(format_version=17, app_version="0.1.3", ops=[remaining])
+    document.transactions.extend(
+        [
+            Transaction(id="t1", title="Zwei Änderungen", ops=(1, 2)),
+            Transaction(
+                id="t2",
+                title="Schritt löschen",
+                ops=(),
+                changes=DocumentChange(
+                    before=DocumentState(edited_ops={1: removed}),
+                    after=DocumentState(edited_ops={1: None}),
+                ),
+            ),
+        ]
+    )
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+
+    deleted = next(
+        panel.list.item(row).text()
+        for row in range(panel.list.count())
+        if tr("gelöscht") in panel.list.item(row).text() and "1" in panel.list.item(row).text()
+    )
+    assert _op_title(removed.op) in deleted, "die Zeile zeigte nur eine Nummer"
+
+
+def test_history_context_delete_uses_the_visible_multiple_selection(
+    qt_app: QApplication,
+) -> None:
+    """Rechtsklick löscht dieselbe Mehrfachauswahl wie die Entf-Taste."""
+    from app.core.types import Document, Operation, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(
+        format_version=17,
+        app_version="0.1.3",
+        ops=[Operation(id=1, op="drill_hole"), Operation(id=2, op="rename_object")],
+        transactions=[
+            Transaction(id="t1", title="Bohrung", ops=(1,)),
+            Transaction(id="t2", title="Name", ops=(2,)),
+        ],
+    )
+    panel = HistoryPanel()
+    panel.show_document(document)
+    panel.show()
+    QApplication.processEvents()
+    first = panel.list.item(0)
+    second = panel.list.item(1)
+    first.setSelected(True)
+    second.setSelected(True)
+
+    assert panel._operations_for_context(first) == (1, 2)
+
+    panel.list.clearSelection()
+    first.setSelected(True)
+    assert panel._operations_for_context(second) == (2,)
+    assert panel.selected_operations() == (2,), "der Rechtsklick ließ eine fremde Auswahl stehen"
+
+
 def test_report_findings_wrap_instead_of_scrolling(qt_app: QApplication) -> None:
     """§2.7: die Sätze des Prüfberichts müssen ganz lesbar sein.
 
@@ -2295,6 +2368,50 @@ def test_removing_a_history_step_asks_and_can_be_undone(
     window.session.undo()
     window.session.wait_for_idle()
     assert [entry.id for entry in window.session.project.document.ops] == [op_id]
+
+
+def test_history_deletion_warns_before_discarding_redo(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der eine Löschdialog nennt auch den abgeschnittenen Redo-Zweig."""
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    active_id = window.session.project.document.ops[0].id
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.undo()
+    window.session.wait_for_idle()
+    assert window.session.history.can_redo
+    undone_title = window._discarded_names()[0]
+    shown: list[str] = []
+
+    def reject(box: QMessageBox) -> int:
+        shown.append(box.text())
+        cancel = next(entry for entry in box.buttons() if entry.text() == tr("Abbrechen"))
+        assert box.icon() == QMessageBox.Icon.Warning
+        assert box.defaultButton() is cancel, "Abbrechen ist nicht die sichere Vorgabe"
+        assert box.escapeButton() is cancel, "Escape muss den Vorgang abbrechen"
+        cancel.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", reject)
+    window.remove_history_operations((active_id,))
+
+    assert window.session.history.can_redo, "Abbrechen verwarf den Redo-Zweig"
+    assert undone_title in shown[0]
+    assert "nicht mehr wiederholt werden" in shown[0]
+
+    def accept(box: QMessageBox) -> int:
+        remove = next(entry for entry in box.buttons() if entry.text() == tr("Löschen"))
+        remove.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", accept)
+    window.remove_history_operations((active_id,))
+    window.session.wait_for_idle()
+
+    assert not window.session.history.can_redo
+    assert window.session.project.document.ops == []
 
 
 def test_shortcuts_with_a_modifier_stay_window_wide(window: MainWindow) -> None:

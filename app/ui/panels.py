@@ -1982,9 +1982,14 @@ class HistoryPanel(QWidget):
             changes = transaction.changes
             if changes is None or changes.after.edited_ops is None:
                 continue
-            deleted.update(
-                op_id for op_id, version in changes.after.edited_ops.items() if version is None
-            )
+            before = changes.before.edited_ops or {}
+            for op_id, version in changes.after.edited_ops.items():
+                if version is not None:
+                    continue
+                deleted.add(op_id)
+                previous = before.get(op_id)
+                if previous is not None:
+                    titles.setdefault(op_id, _op_title(previous.op))
         deleted_ids = frozenset(deleted)
         self._bakeable = frozenset(
             entry.id
@@ -2102,6 +2107,17 @@ class HistoryPanel(QWidget):
         if chosen:
             self.removalRequested.emit(chosen)
 
+    def _operations_for_context(self, item: QListWidgetItem | None) -> tuple[int, ...]:
+        """Die sichtbare Mehrfachauswahl oder allein die rechts angeklickte Zeile."""
+        clicked = tuple(item.data(OPS_ROLE) or ()) if item is not None else ()
+        if item is not None and item.isSelected():
+            return self.selected_operations()
+        if item is not None and clicked:
+            self.list.clearSelection()
+            item.setSelected(True)
+            self.list.setCurrentItem(item)
+        return tuple(int(op_id) for op_id in clicked)
+
     def _on_context_menu(self, position: QPoint) -> None:
         """Was man mit einem Schritt tun kann, dort, wo er steht.
 
@@ -2112,26 +2128,29 @@ class HistoryPanel(QWidget):
         """
         item = self.list.itemAt(position)
         op_id = item.data(Qt.ItemDataRole.UserRole) if item is not None else None
-        op_ids = tuple(item.data(OPS_ROLE) or ()) if item is not None else ()
+        op_ids = self._operations_for_context(item)
         if not op_ids:
             return
 
         menu = QMenu(self)
-        if op_id is not None:
+        single_op = int(op_id) if op_id is not None and len(op_ids) == 1 else None
+        if single_op is not None:
             action = menu.addAction(tr("Parameter ändern …"))
             action.triggered.connect(
-                lambda _checked=False: self.operationActivated.emit(int(op_id))
+                lambda _checked=False, chosen=single_op: self.operationActivated.emit(chosen)
             )
         remove = menu.addAction(tr("Schritt löschen …"))
         remove.triggered.connect(
             lambda _checked=False, chosen=op_ids: self.removalRequested.emit(chosen)
         )
-        if op_id is not None and int(op_id) in self._bakeable:
+        if single_op is not None and single_op in self._bakeable:
             # Nur an einer Formsitzung, und nur an einer, die noch gerechnet
             # wird: Ein Eintrag, der an jedem Schritt steht und an fast keinem
             # etwas tut, ist einer, den man nicht mehr liest.
             frozen = menu.addAction(tr("Stand festschreiben …"))
-            frozen.triggered.connect(lambda _checked=False: self.bakeRequested.emit(int(op_id)))
+            frozen.triggered.connect(
+                lambda _checked=False, chosen=single_op: self.bakeRequested.emit(chosen)
+            )
         menu.exec(self.list.viewport().mapToGlobal(position))
 
 

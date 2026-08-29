@@ -260,6 +260,8 @@
   "Außenwand": "Parede exterior",
   "Außenwand auf Sollmaß": "Parede exterior à cota nominal",
   "Außenwand zuerst": "Parede exterior primeiro",
+  "Außerdem kann ein bereits zurückgenommener Schritt danach nicht mehr wiederholt werden:": "Além disso, um passo já desfeito deixará de poder ser repetido:",
+  "Außerdem können {count} bereits zurückgenommene Schritte danach nicht mehr wiederholt werden:": "Além disso, {count} passos já desfeitos deixarão de poder ser repetidos:",
   "Bahnbreite und Düse stehen im Druckerprofil": "A largura do cordão e o bico vêm do perfil de impressora",
   "Baum": "Árvore",
   "Bauraum": "Volume de impressão",

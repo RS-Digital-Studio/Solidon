@@ -260,6 +260,8 @@
   "Außenwand": "Parete esterna",
   "Außenwand auf Sollmaß": "Parete esterna a quota nominale",
   "Außenwand zuerst": "Prima la parete esterna",
+  "Außerdem kann ein bereits zurückgenommener Schritt danach nicht mehr wiederholt werden:": "Inoltre, un passaggio già annullato non potrà più essere ripetuto in seguito:",
+  "Außerdem können {count} bereits zurückgenommene Schritte danach nicht mehr wiederholt werden:": "Inoltre, {count} passaggi già annullati non potranno più essere ripetuti in seguito:",
   "Bahnbreite und Düse stehen im Druckerprofil": "Larghezza del cordone e ugello stanno nel profilo della stampante",
   "Baum": "Albero",
   "Bauraum": "Volume di stampa",

@@ -270,6 +270,33 @@ def test_removing_a_producer_also_removes_only_its_dependants(history: History) 
     ]
 
 
+def test_removing_an_object_removes_and_restores_its_fits(
+    history: History, registry: Registry
+) -> None:
+    """Passungen verschwinden und kehren mit derselben Löschtransaktion zurück."""
+    first = create(history)
+    first_op = history.operations[-1].id
+    second = create(history)
+    fit = Fit(
+        name="Steckung",
+        a=FeatureRef(first, "pin"),
+        b=FeatureRef(second, "hole"),
+    )
+    history.document.fits.append(fit)
+
+    history.remove_operations((first_op,))
+
+    assert history.document.fits == [], "die Passung zeigte auf einen gelöschten Körper"
+    history.undo()
+    assert history.document.fits == [fit], "Undo stellte die Passung nicht wieder her"
+    history.redo()
+    assert history.document.fits == [], "Redo ließ die Passung erneut stehen"
+
+    reopened = History(document_from_data(document_to_data(history.document)), registry)
+    reopened.undo()
+    assert reopened.document.fits == [fit], "die Passung ging beim Speichern des Undo verloren"
+
+
 def test_a_removed_step_and_its_undo_survive_serialisation(
     history: History, registry: Registry
 ) -> None:

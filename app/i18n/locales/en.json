@@ -260,6 +260,8 @@
   "Außenwand": "Outer wall",
   "Außenwand auf Sollmaß": "Outer wall to nominal size",
   "Außenwand zuerst": "Outer wall first",
+  "Außerdem kann ein bereits zurückgenommener Schritt danach nicht mehr wiederholt werden:": "In addition, one previously undone step can no longer be redone afterwards:",
+  "Außerdem können {count} bereits zurückgenommene Schritte danach nicht mehr wiederholt werden:": "In addition, {count} previously undone steps can no longer be redone afterwards:",
   "Bahnbreite und Düse stehen im Druckerprofil": "Bead width and nozzle come from the printer profile",
   "Baum": "Tree",
   "Bauraum": "Build volume",

@@ -260,6 +260,8 @@
   "Außenwand": "Paroi extérieure",
   "Außenwand auf Sollmaß": "Paroi extérieure à la cote nominale",
   "Außenwand zuerst": "Paroi extérieure d'abord",
+  "Außerdem kann ein bereits zurückgenommener Schritt danach nicht mehr wiederholt werden:": "En outre, une étape déjà annulée ne pourra ensuite plus être rétablie :",
+  "Außerdem können {count} bereits zurückgenommene Schritte danach nicht mehr wiederholt werden:": "En outre, {count} étapes déjà annulées ne pourront ensuite plus être rétablies :",
   "Bahnbreite und Düse stehen im Druckerprofil": "La largeur de cordon et la buse viennent du profil d'imprimante",
   "Baum": "Arbre",
   "Bauraum": "Volume d'impression",
