@@ -916,6 +916,29 @@ def test_two_filaments_on_one_plate_are_counted_not_forbidden() -> None:
     assert findings[0].values["changes"] == 220
 
 
+def test_two_filaments_on_separate_plates_cost_no_changes() -> None:
+    """Getrennte Platten werden nacheinander gedruckt, nie schichtweise.
+
+    Der Export einer mehrplattigen 3MF übergibt ``plate=None``. Bis hier jede
+    Farbe trotzdem gemeinsam gezählt wurde, meldete die fertige
+    CC2-Werkzeugbox 230 Filamentwechsel, obwohl jede Platte genau eine Farbe
+    trägt.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    objects = [
+        replace(
+            _boxed("weiss", (10.0, 10.0, 23.0), (0.0, 0.0), slot="weiß"),
+            plate=0,
+        ),
+        replace(
+            _boxed("schwarz", (10.0, 10.0, 27.0), (0.0, 0.0), slot="schwarz"),
+            plate=1,
+        ),
+    ]
+
+    assert check_filament_changes(objects, settings) == []
+
+
 def test_one_filament_costs_no_changes() -> None:
     settings = print_settings.resolve(profiles.make_profile())
     objects = [

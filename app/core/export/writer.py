@@ -422,7 +422,18 @@ def check_filament_changes(
     Slicers und nicht hier — die Größenordnung nennt der Bericht, die Zahl der
     Slicer.
     """
-    chosen = [entry for entry in objects if plate is None or entry.plate == plate]
+    # ``None`` heißt beim mehrplattigen 3MF-Export „der ganze Auftrag", nicht
+    # „alle Körper liegen auf derselben Platte". Platten werden nacheinander
+    # gedruckt; Weiß auf Platte 1 und Schwarz auf Platte 2 verursachen keinen
+    # einzigen Wechsel. Ohne die Trennung meldete die fertige CC2-Werkzeugbox
+    # 230 Wechsel, obwohl jede ihrer Platten materialrein ist.
+    if plate is None:
+        findings: list[Finding] = []
+        for current in dict.fromkeys(entry.plate for entry in objects):
+            findings.extend(check_filament_changes(objects, settings, current))
+        return findings
+
+    chosen = [entry for entry in objects if entry.plate == plate]
     slots_of = {entry.id: {slot.name for slot in entry.material_slots} or {""} for entry in chosen}
     if len({name for names in slots_of.values() for name in names}) < 2:
         return []

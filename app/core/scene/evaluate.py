@@ -1115,8 +1115,35 @@ def _with_features(
                 )
             )
 
+    # Eine gemeldete starre Matrix ist ein stärkerer Beleg als eine erneute
+    # Messung am Dreiecksnetz: Verschieben, Drehen und Spiegeln können kein
+    # Merkmal geometrisch entfernen. Für ``arrange_bed`` gilt dasselbe, nur
+    # trägt dort jeder Körper seinen eigenen Versatz und deshalb keine
+    # gemeinsame Matrix im Ergebnis. Die Erkennung kann an ihren Grenzwerten
+    # trotzdem anders runden — bei der CC2-Werkzeugbox verschwanden nach dem
+    # Anordnen zwei Verrundungen und drei Kugelflächen nur aus der Messung. In
+    # diesem Fall reist das bereits bekannte Merkmal mit der bekannten
+    # Bewegung weiter, statt dem Kunden einen Verlust zu melden, den die
+    # Operation unmöglich verursacht haben kann.
+    rigid_orphans: dict[str, Feature] = {}
+    arranged_rigidly = operation.op == "arrange_bed" and moved and previous_bounds is not None
     for old_id in matched.orphaned:
         old_feature = previous.get(old_id)
+        if (transform is not None or arranged_rigidly) and old_feature is not None:
+            if arranged_rigidly and previous_bounds is not None:
+                shift = tuple(
+                    now - before
+                    for now, before in zip(centre, previous_bounds.centre, strict=True)
+                )
+                movement: Transform = (
+                    (1.0, 0.0, 0.0, shift[0]),
+                    (0.0, 1.0, 0.0, shift[1]),
+                    (0.0, 0.0, 1.0, shift[2]),
+                    (0.0, 0.0, 0.0, 1.0),
+                )
+                old_feature = moved_features({old_id: old_feature}, movement)[old_id]
+            rigid_orphans[old_id] = old_feature
+            continue
         # Was außerhalb des neuen Körpers liegt, ist nicht verlorengegangen —
         # es wurde weggeschnitten, und zwar von jemandem, der genau das wollte.
         # Ein Prüfstück schneidet 22 mm aus einem 70er Gehäuse: acht Merkmale
@@ -1233,7 +1260,10 @@ def _with_features(
         found = mapped.get(name)
         if found is not None and found.provenance != "generated":
             mapped[name] = dataclasses.replace(found, provenance="generated")
-    return dataclasses.replace(entry, features={**mapped, **unchecked, **declared})
+    return dataclasses.replace(
+        entry,
+        features={**mapped, **rigid_orphans, **unchecked, **declared},
+    )
 
 
 #: Welcher Sammelparameter seine Ausdrücke in einem eigenen Text versteckt.

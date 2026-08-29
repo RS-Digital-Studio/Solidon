@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
+import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
@@ -493,6 +494,102 @@ def test_features_travel_with_the_motion_the_operation_reports() -> None:
 
     assert result.settled, "carried along first, every bore finds itself again"
     assert not result.orphaned
+
+
+def test_a_rigid_motion_keeps_a_feature_when_detection_misses_it(
+    monkeypatch,
+) -> None:
+    """Eine starre Bewegung kann kein Merkmal geometrisch entfernen.
+
+    Die Erkennung bleibt eine Messung am Dreiecksnetz und kann an einer
+    Rundungsgrenze nach einer großen Verschiebung anders runden. Dann ist das
+    zuvor bekannte Merkmal nicht fort: Die Operation hat seine exakte Matrix
+    mitgegeben, also reist es mit ihr weiter. Ohne diese Zusicherung öffnete
+    die sauber angeordnete CC2-Werkzeugbox mit fünf irreführenden
+    ``perceive.orphaned``-Hinweisen.
+    """
+    from app.core.geom.ops import as_transform
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    mesh = one_hole_plate()
+    previous = holes_of(mesh)
+    assert previous, "the fixture must expose a feature before it moves"
+    matrix = translation((480.0, -125.0, 0.0))
+    moved = apply(mesh, matrix)
+    import importlib
+
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(evaluation, "detect", lambda _mesh: {})
+    findings = []
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Platte", mesh=moved),
+        previous,
+        Operation(
+            id=2,
+            op="translate_object",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={},
+        ),
+        lambda question, choices: choices[0],
+        findings,
+        as_transform(matrix),
+        mesh.bounds,
+    )
+
+    assert set(result.features) == set(previous)
+    assert "perceive.orphaned" not in {entry.code for entry in findings}
+    old_centre = next(iter(previous.values())).params["centre"]
+    new_centre = next(iter(result.features.values())).params["centre"]
+    assert new_centre[0] == pytest.approx(old_centre[0] + 480.0)
+    assert new_centre[1] == pytest.approx(old_centre[1] - 125.0)
+
+
+def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None:
+    """Anordnen verschiebt jeden Körper starr, aber mit eigener Matrix.
+
+    Die Operation arbeitet auf der ganzen Szene und kann deshalb keine
+    einzelne gemeinsame ``transform``-Matrix zurückgeben. Aus ihrem Vertrag
+    ist trotzdem bekannt, dass sie die Körper nur verschiebt. Ein numerisch
+    nicht wiedererkanntes Merkmal muss deshalb um den Versatz seines Körpers
+    mitgenommen werden.
+    """
+    import importlib
+
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    mesh = one_hole_plate()
+    previous = holes_of(mesh)
+    matrix = translation((-120.0, 45.0, 0.0))
+    moved = apply(mesh, matrix)
+    evaluation = importlib.import_module("app.core.scene.evaluate")
+    monkeypatch.setattr(evaluation, "detect", lambda _mesh: {})
+    findings = []
+
+    result = _with_features(
+        SceneObject(id="obj_1", name="Platte", mesh=moved),
+        previous,
+        Operation(
+            id=2,
+            op="arrange_bed",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={},
+        ),
+        lambda question, choices: choices[0],
+        findings,
+        previous_bounds=mesh.bounds,
+    )
+
+    assert set(result.features) == set(previous)
+    assert "perceive.orphaned" not in {entry.code for entry in findings}
+    old_centre = next(iter(previous.values())).params["centre"]
+    new_centre = next(iter(result.features.values())).params["centre"]
+    assert new_centre[0] == pytest.approx(old_centre[0] - 120.0)
+    assert new_centre[1] == pytest.approx(old_centre[1] + 45.0)
 
 
 def test_without_the_motion_a_rotation_would_lose_them() -> None:
