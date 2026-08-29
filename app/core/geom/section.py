@@ -89,6 +89,76 @@ def plane_through(first: Vec3, second: Vec3, view: Vec3) -> SectionPlane | None:
     )
 
 
+def plane_patch(minimum: Vec3, maximum: Vec3, plane: SectionPlane) -> tuple[Vec3, ...]:
+    """Der Teil einer Ebene, der im Hüllquader eines Körpers liegt.
+
+    Das Polygon ist für die Vorschau des Trennwerkzeugs: Eine gezeichnete
+    Linie zeigt nur die Kante der Ebene. Erst die Fläche bis an den Körperrand
+    beantwortet sichtbar, was beim Anwenden wirklich getrennt wird. Sie ist
+    reine Anzeigegeometrie und ändert weder Netz noch Dokument.
+
+    Die Ecken kommen umlaufend sortiert zurück, damit der Viewport daraus eine
+    Fläche zeichnen kann. Verfehlt die Ebene den Quader, ist das Ergebnis leer.
+    """
+    normal = np.asarray(plane.normal, dtype=float)
+    length = float(np.linalg.norm(normal))
+    if length <= EPS_GEOM:
+        return ()
+    normal /= length
+    origin = np.asarray(plane.origin, dtype=float)
+    low, high = np.asarray(minimum, dtype=float), np.asarray(maximum, dtype=float)
+    corners = np.array(
+        [
+            (x, y, z)
+            for x in (low[0], high[0])
+            for y in (low[1], high[1])
+            for z in (low[2], high[2])
+        ],
+        dtype=float,
+    )
+    bits = tuple((x, y, z) for x in (0, 1) for y in (0, 1) for z in (0, 1))
+    points: list[np.ndarray] = []
+
+    def remember(point: np.ndarray) -> None:
+        if not any(float(np.linalg.norm(point - known)) <= EPS_GEOM for known in points):
+            points.append(point)
+
+    for first in range(len(corners)):
+        for second in range(first + 1, len(corners)):
+            if sum(a != b for a, b in zip(bits[first], bits[second], strict=True)) != 1:
+                continue
+            start, end = corners[first], corners[second]
+            start_distance = float(np.dot(start - origin, normal))
+            end_distance = float(np.dot(end - origin, normal))
+            if abs(start_distance) <= EPS_GEOM:
+                remember(start)
+            if abs(end_distance) <= EPS_GEOM:
+                remember(end)
+            crosses = (start_distance < -EPS_GEOM and end_distance > EPS_GEOM) or (
+                end_distance < -EPS_GEOM and start_distance > EPS_GEOM
+            )
+            if crosses:
+                share = start_distance / (start_distance - end_distance)
+                remember(start + share * (end - start))
+
+    if len(points) < 3:
+        return ()
+
+    centre = np.mean(points, axis=0)
+    # Die am wenigsten parallele Weltachse gibt eine stabile erste Achse in
+    # der Ebene — auch dann, wenn die Ebene fast genau waagerecht steht.
+    seed = np.eye(3)[int(np.argmin(np.abs(normal)))]
+    across = np.cross(normal, seed)
+    across /= float(np.linalg.norm(across))
+    upward = np.cross(normal, across)
+    points.sort(
+        key=lambda point: float(
+            np.arctan2(np.dot(point - centre, upward), np.dot(point - centre, across))
+        )
+    )
+    return tuple((float(point[0]), float(point[1]), float(point[2])) for point in points)
+
+
 @dataclass(frozen=True, slots=True)
 class SectionResult:
     """Was vom Körper bleibt, und ob die Schnittfläche geschlossen werden

@@ -650,14 +650,14 @@ def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
     Zwangsbedingung, dem Rückgängig-Knopf und der Überschrift der
     Bedingungsspalte.
     """
-    seen: list[tuple[int, int]] = []
+    seen: list[tuple[int, int, int]] = []
 
     class Dodger(QWidget):
         """Eine Ansicht, die ausweichen möchte, und mitschreibt, worum sie
         gebeten wird."""
 
-        def set_zone_margins(self, left: int, right: int) -> None:
-            seen.append((left, right))
+        def set_zone_margins(self, left: int, right: int, bottom: int) -> None:
+            seen.append((left, right, bottom))
 
     host = window.overlay
     host.view = Dodger(host)
@@ -665,7 +665,7 @@ def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
     host._place()
 
     assert seen, "die Ansicht wurde überhaupt gefragt"
-    left_margin, right_margin = seen[-1]
+    left_margin, right_margin, bottom_margin = seen[-1]
 
     left = host.left
     right = host.right
@@ -674,6 +674,7 @@ def test_the_dodge_margin_covers_the_card_it_dodges(window: MainWindow) -> None:
 
     assert left_margin > left.geometry().right(), "der linke Rand deckt die linke Karte vollständig"
     assert right_margin > host.width() - right.geometry().left(), "und der rechte die rechte"
+    assert bottom_margin == host._bottom_room(), "und unten gilt die echte Werkzeughöhe"
 
 
 def test_every_card_keeps_a_pixel_for_its_border(window: MainWindow) -> None:

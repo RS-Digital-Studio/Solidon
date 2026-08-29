@@ -749,6 +749,75 @@ class SketchCanvas(QWidget):
             return self._pointer
         return self.snapped(self._pointer)
 
+    def pending_elements(self) -> tuple[SketchElement, ...]:
+        """Die Geometrie, die der nächste Klick festsetzen würde.
+
+        Der sichtbare Skizzenmodus liegt im 3D-Viewport; der Canvas sammelt
+        dort weiterhin die Geste, ist selbst aber verborgen. Deshalb muss die
+        Vorschau als dieselben Skizzenelemente nach außen gelangen, aus denen
+        auch die feste Zeichnung entsteht. Sie bleibt eine Vorschau und ändert
+        weder Dokument noch Rückgängig-Verlauf (Regel 2).
+        """
+        if not self._pending_world:
+            return ()
+        target = self.snapped(self._pointer)
+        first = self._pending_world[0]
+        last = self._pending_world[-1]
+        if self.tool == "line":
+            return (SketchElement("line", (last, target)),)
+        if self.tool == "circle":
+            return (SketchElement("circle", (first, target)),)
+        if self.tool == "rectangle":
+            opposite = target
+            other_x = (opposite[0], first[1])
+            other_y = (first[0], opposite[1])
+            return (
+                SketchElement("line", (first, other_x)),
+                SketchElement("line", (other_x, opposite)),
+                SketchElement("line", (opposite, other_y)),
+                SketchElement("line", (other_y, first)),
+            )
+        if self.tool == "arc":
+            if len(self._pending_world) < 2:
+                return (SketchElement("line", (first, target)),)
+            stored = edit.arc_through(first, last, target)
+            if stored is None:
+                return (SketchElement("line", (first, last)),)
+            return (SketchElement("arc", stored),)
+        if self.tool == "spline":
+            return (SketchElement("spline", (*self._pending_world, target)),)
+        return ()
+
+    def measure_annotations(self) -> tuple[tuple[tuple[float, float], str], ...]:
+        """Lesbare Maßzahlen samt Position für Canvas und 3D-Viewport.
+
+        Die Beschriftung steht mit einem kleinen, in Bildpunkten gedachten
+        Abstand neben ihrer Strecke. So bleibt sie bei jedem Zoom gleich gut
+        lesbar und verdeckt die Kante nicht, deren Wert sie erklärt.
+        """
+        points = self.points()
+        annotations: list[tuple[tuple[float, float], str]] = []
+        gap = MEASURE_GAP / max(self._snap_scale(), EPS_DISPLAY)
+        for entry in self.sketch.constraints:
+            if entry.kind not in ("distance", "reference") or len(entry.targets) != 2:
+                continue
+            first, second = entry.targets
+            if min(first, second) < 0 or max(first, second) >= len(points):
+                continue
+            ax, ay = points[first]
+            bx, by = points[second]
+            dx, dy = bx - ax, by - ay
+            span = math.hypot(dx, dy)
+            normal = (-dy / span, dx / span) if span > EPS_DISPLAY else (0.0, 1.0)
+            place = (
+                (ax + bx) / 2.0 + normal[0] * gap,
+                (ay + by) / 2.0 + normal[1] * gap,
+            )
+            label = measure_label(entry, points)
+            if label:
+                annotations.append((place, label))
+        return tuple(annotations)
+
     def axis_names(self) -> tuple[str, str]:
         """Wie die waagerechte und die senkrechte Achse hier heißen (§30.1).
 
@@ -2680,7 +2749,7 @@ class SketchCanvas(QWidget):
                 painter.setBrush(Qt.BrushStyle.NoBrush)
                 painter.drawEllipse(screen, radius + 4.0, radius + 4.0)
 
-        self._paint_measures(painter, points)
+        self._paint_measures(painter)
         self._paint_pending(painter)
 
     def _paint_bed(self, painter: QPainter) -> None:
@@ -2895,17 +2964,12 @@ class SketchCanvas(QWidget):
                 )
             painter.drawPath(path)
 
-    def _paint_measures(self, painter: QPainter, points: list[tuple[float, float]]) -> None:
+    def _paint_measures(self, painter: QPainter) -> None:
         """Maßbedingungen stehen als Text an ihrer Strecke — der Wert oder
         der Ausdruck, so wie er gilt."""
         painter.setPen(QPen(self.palette().text().color(), 1.0))
-        for entry in self.sketch.constraints:
-            if entry.kind not in ("distance", "reference") or len(entry.targets) != 2:
-                continue
-            a = points[entry.targets[0]]
-            b = points[entry.targets[1]]
-            middle = self._to_screen((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
-            painter.drawText(middle, measure_label(entry, points))
+        for place, label in self.measure_annotations():
+            painter.drawText(self._to_screen(*place), label)
 
     def _paint_pending(self, painter: QPainter) -> None:
         """Was gerade entsteht — die gesetzten Punkte und die Linie zum Zeiger.
@@ -3914,6 +3978,13 @@ class SketchPanel(QWidget):
         side.addWidget(self.constraint_list, stretch=1)
 
         middle = QHBoxLayout()
+        self._middle = middle
+        """Canvas und Bedingungsliste im eigenständigen Editor.
+
+        Im Viewport-Modus sind beide ausgelagert. Dann muss auch dieses leere
+        Strecklayout aus der unteren Karte gehen, sonst hält es dort eine große
+        Fläche frei, die weder Inhalt noch Handlung trägt.
+        """
         middle.addWidget(self.canvas, stretch=1)
         middle.addWidget(self._side_box)
 
@@ -4029,6 +4100,14 @@ class SketchPanel(QWidget):
         """
         self.canvas.setVisible(False)
         self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
+        # Der Schichthinweis stand als umbrechender Satz **neben** dem
+        # Ebenenfeld. Im schmalen schwebenden Panel berechnete Qt ihn gegen
+        # eine Mindestbreite von einem Pixel und hielt dafür 176 Pixel Höhe
+        # frei — drei Viertel der Karte waren leer. Im Viewport trägt der
+        # sichtbare Hinweis unter der Leiste bereits Ebene und Blick; die
+        # Druckauskunft bleibt am Feld als Tooltip, statt Bildfläche zu kosten.
+        self.layer_note.hide()
+        self._refresh_plane_role()
         # **Jedes Kürzel muss im ganzen Fenster gelten, nicht nur hier
         # drinnen.** Sie lagen an ``WidgetWithChildrenShortcut``, und das war
         # richtig, solange dieses Panel die Ansicht *war*: Der Fokus lag dann
@@ -4074,6 +4153,10 @@ class SketchPanel(QWidget):
         layout = parent.layout() if parent is not None else None
         if layout is not None:
             layout.removeWidget(self._side_box)
+        own_layout = self.layout()
+        if self.canvas.isHidden() and own_layout is not None:
+            own_layout.removeItem(self._middle)
+            self.updateGeometry()
         self._side_title.hide()
         return self._side_box
 
@@ -4299,16 +4382,17 @@ class SketchPanel(QWidget):
         locked = bool(self.canvas.sketch.elements)
         self.plane_role.setText(tr("Ansicht:") if locked else tr("Zeichenebene:"))
         if locked:
-            self.plane_choice.setToolTip(
+            tip = str(
                 tr(
                     "Nur die Ansicht wechseln. Die Zeichenebene bleibt nach dem "
                     "ersten Element fest."
                 )
             )
         else:
-            self.plane_choice.setToolTip(
-                tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt.")
-            )
+            tip = str(tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt."))
+        if self.layer_note.isHidden():
+            tip = f"{tip}\n{self.canvas.layer_note()}"
+        self.plane_choice.setToolTip(tip)
 
     def _show_layer_note(self) -> None:
         """Der Satz neben der Ebenenwahl.

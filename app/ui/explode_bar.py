@@ -27,6 +27,11 @@ from app.ui.style import NORMAL, TIGHT
 #: Mitte".
 MAX_STEPS = 20
 
+#: Der erste Abstand nach einer Teilung. Sieben Zehntel legen bei zwei
+#: gleich großen Hälften genug von der Naht frei, um Stifte und Löcher zu
+#: erkennen, ohne die Teile aus dem Zusammenhang zu reißen.
+REVEAL_STEPS = 7
+
 
 class ExplodeBar(QWidget):
     """Zieht die Teile einer Teilung auseinander."""
@@ -75,6 +80,19 @@ class ExplodeBar(QWidget):
         if not wanted and self.slider.value():
             self.slider.setValue(0)
         return wanted
+
+    def reveal(self) -> None:
+        """Zieht ein frisch geteiltes Ergebnis sofort zum Prüfen auseinander.
+
+        Der gewöhnliche Schieber ist entprellt, weil ein Zug viele
+        Zwischenstände durchläuft. Hier gibt es nur einen fertigen Stand: Auf
+        ihn zu warten ließe die Hälften nach der Auswertung erst wie einen
+        unveränderten Körper erscheinen — genau dann, wenn der Nutzer nach den
+        Stiften sucht.
+        """
+        self.slider.setValue(REVEAL_STEPS)
+        self._pending.stop()
+        self.factorChanged.emit(self.factor)
 
     def _on_moved(self, value: int) -> None:
         """Entprellt wie der Schnitt: jede Stufe baut die ganze Ansicht neu."""

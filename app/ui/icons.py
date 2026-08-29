@@ -241,6 +241,21 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M4 15.5v4h4" /><path d="M20 15.5v4h-4" />'
         '<path d="M9 12h6" /><path d="M12 9v6" />'
     ),
+    # Aus einem flachen Umriss wächst ein Körper nach oben. Die Beschriftung
+    # „Hochziehen“ bleibt daneben — das Zeichen macht die Richtung auf einen
+    # Blick unterscheidbar, es ersetzt das Wort nicht.
+    "sketch_pull": (
+        '<path d="M4 15.5 12 19.5l8-4-8-4z" />'
+        '<path d="M4 15.5V10l8-4 8 4v5.5" opacity="0.55" />'
+        '<path d="M12 12V3.5" /><path d="M8.8 6.7 12 3.5l3.2 3.2" />'
+    ),
+    # Derselbe Umriss als Aussparung: gestrichelter Taschenboden und ein
+    # Pfeil ins Material. Form plus Text tragen die Aussage auch ohne Farbe.
+    "sketch_cut": (
+        '<path d="M3.5 8h17v11h-17z" />'
+        '<path d="M7 13.5h10v3H7z" stroke-dasharray="2.5 2" opacity="0.65" />'
+        '<path d="M12 3.5v9" /><path d="M8.8 9.3 12 12.5l3.2-3.2" />'
+    ),
     # --- je Kategorie eines (Konzept P15 §7 Etappe 8, D5) ----------------------
     #
     # **Nicht je Operation.** Dreiundsiebzig Symbole zu unterscheiden ist

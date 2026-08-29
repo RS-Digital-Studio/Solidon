@@ -1463,6 +1463,38 @@ def test_a_typed_measure_stays_as_a_constraint(qt_app: QApplication) -> None:
     assert float(measures[0].value) == pytest.approx(25.0)
 
 
+def test_measure_annotations_are_available_to_the_visible_viewport(
+    qt_app: QApplication,
+) -> None:
+    """Der unsichtbare Canvas darf die lesbare Maßzahl nicht für sich behalten."""
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    canvas.add_constraint("distance", (0, 1), "30")
+
+    annotations = canvas.measure_annotations()
+
+    assert len(annotations) == 1
+    point, label = annotations[0]
+    assert point[0] == pytest.approx(15.0)
+    assert point[1] > 0.0, "die Zahl liegt nicht direkt auf ihrer Strecke"
+    assert "30" in label and "mm" in label
+
+
+def test_pending_geometry_is_available_to_the_visible_viewport(qt_app: QApplication) -> None:
+    """Zwischen zwei Klicks ist sichtbar, was der nächste Klick erzeugt."""
+    canvas = SketchCanvas()
+    canvas.set_tool("rectangle")
+    canvas.place_on_plane((10.0, 20.0))
+    canvas.hover_on_plane((50.0, 45.0))
+
+    preview = canvas.pending_elements()
+
+    assert len(preview) == 4
+    assert {element.kind for element in preview} == {"line"}
+    assert preview[0].points[0] == pytest.approx((10.0, 20.0))
+    assert preview[-1].points[-1] == pytest.approx((10.0, 20.0))
+
+
 def test_a_measure_without_a_start_says_what_to_do(qt_app: QApplication) -> None:
     canvas = SketchCanvas()
     canvas.set_tool("line")
@@ -4101,10 +4133,15 @@ def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplic
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
         assert window._sketch_pull_offer() == "", "auf der Zeichenebene wird gezeichnet"
+        assert "Vorder- oder Seitenansicht" in window.viewport.sketch_action.text(), (
+            "der nächste Fusion-artige Schritt steht im Blickfeld"
+        )
 
         panel.choose_plane("plane:xz")
         assert panel.canvas.view_plane != panel.canvas.sketch.plane, "die Querschau steht"
         assert window._sketch_pull_offer() == "ready"
+        assert "Pfeil:" in window.viewport.sketch_action.text()
+        assert "Kreuz:" in window.viewport.sketch_action.text()
     finally:
         window.finish_sketch(keep=False)
         window.close()
@@ -4334,6 +4371,112 @@ def test_one_outline_keeps_the_explicit_choice_with_extrusion_preselected(
         window.deleteLater()
 
 
+def test_a_free_sketch_offers_building_and_cutting_without_a_cad_term(
+    qt_app: QApplication,
+) -> None:
+    """Die beiden häufigsten Folgen stehen sichtbar an der Zeichnung.
+
+    Ein Neuling soll weder „Extrusion" kennen noch erst über *Fertig* eine
+    Liste durchsuchen. Solange der Umriss offen ist, sagen die gesperrten
+    Knöpfe, was noch fehlt; danach ist Hochziehen sofort bereit.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        assert not window.sketch_pull_button.isHidden()
+        assert not window.sketch_cut_button.isHidden()
+        assert not window.sketch_pull_button.isEnabled()
+        assert "geschlossenen Umriss" in window.sketch_pull_button.toolTip()
+
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+        assert window.sketch_pull_button.isEnabled()
+        assert not window.sketch_cut_button.isEnabled(), "Abtragen braucht einen Körper"
+        assert "Körper" in window.sketch_cut_button.toolTip()
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_the_visible_build_button_goes_directly_to_the_height_operation(
+    qt_app: QApplication,
+) -> None:
+    """Hochziehen überspringt die allgemeine Auswahl, nicht den Op-Dialog."""
+    from app.core.registry import OperationSpec
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+        window.sketch_pull_button.click()
+
+        assert [name for name, _given in asked] == ["sketch_extrude"]
+        assert asked[0][1]["sketch"], "die Zeichnung reist in derselben Operation mit"
+        assert window._sketch_panel is None
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_visible_cut_button_goes_directly_to_the_selected_body(
+    qt_app: QApplication,
+) -> None:
+    """Abtragen ist die klare kurze Hand zur Tasche auf einem exakten Körper."""
+    from types import SimpleNamespace
+
+    from app.core.registry import OperationSpec
+    from app.core.types import Scene
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        window.object_tree.selected_objects = lambda: ("body",)
+        window.session.last_result = SimpleNamespace(
+            scene=Scene(objects={"body": SimpleNamespace(kind="brep")})
+        )
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+        assert window.sketch_cut_button.isEnabled()
+        window.sketch_cut_button.click()
+
+        assert [name for name, _given in asked] == ["sketch_pocket"]
+        assert asked[0][1]["sketch"]
+    finally:
+        window.session.last_result = None
+        window.close()
+        window.deleteLater()
+
+
 def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
     qt_app: QApplication,
 ) -> None:
@@ -4365,6 +4508,21 @@ def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
         window.finish_sketch(keep=False)
         window.close()
         window.deleteLater()
+
+
+def test_the_viewport_toolbar_drops_its_empty_canvas_row(qt_app: QApplication) -> None:
+    """Die ausgelagerte Zeichenfläche darf keinen leeren Block in der Karte lassen."""
+    panel = SketchPanel()
+    panel.use_viewport()
+
+    panel.take_constraint_list()
+
+    layout = panel.layout()
+    assert layout is not None
+    assert all(
+        layout.itemAt(index).layout() is not panel._middle for index in range(layout.count())
+    )
+    assert panel.sizeHint().height() < 200, "die Werkzeugkarte bleibt eine Leiste"
 
 
 @pytest.mark.parametrize(

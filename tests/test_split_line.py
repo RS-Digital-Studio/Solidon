@@ -20,7 +20,7 @@ from app.core.errors import ValidationError
 from app.core.geom import pins
 from app.core.geom.mesh import MeshData
 from app.core.geom.prepare import split_at_plane
-from app.core.geom.section import SectionPlane, plane_through
+from app.core.geom.section import SectionPlane, plane_patch, plane_through
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
@@ -87,6 +87,30 @@ def test_a_line_along_the_view_spans_no_plane() -> None:
     """
     assert plane_through((0.0, 0.0, 0.0), (0.0, 4.0, 0.0), view=(0.0, 1.0, 0.0)) is None
     assert plane_through((1.0, 2.0, 3.0), (1.0, 2.0, 3.0), view=(0.0, 1.0, 0.0)) is None
+
+
+def test_the_preview_patch_fills_the_body_at_the_drawn_plane() -> None:
+    """Die Linie allein zeigt die Neigung, aber nicht die ganze Trennfläche.
+
+    Der Vorschaufleck reicht deshalb bis an den Hüllquader des gewählten
+    Körpers. Geprüft wird seine Geometrie, nicht ein Pixelbild: jede Ecke liegt
+    auf der Ebene und innerhalb des Körpers.
+    """
+    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=5.0)
+
+    patch = plane_patch((-10.0, -20.0, -30.0), (10.0, 20.0, 30.0), plane)
+
+    assert len(patch) == 4
+    for point in patch:
+        assert point[2] == pytest.approx(5.0)
+        assert -10.0 <= point[0] <= 10.0
+        assert -20.0 <= point[1] <= 20.0
+
+
+def test_a_preview_patch_beside_the_body_is_empty() -> None:
+    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=50.0)
+
+    assert plane_patch((-10.0, -10.0, -10.0), (10.0, 10.0, 10.0), plane) == ()
 
 
 # --- der Schnitt ------------------------------------------------------------------

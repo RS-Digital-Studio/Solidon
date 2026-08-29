@@ -90,6 +90,24 @@ def test_the_slider_reports_a_factor(qt_app: QApplication) -> None:
     assert bar.factor == 1.0
 
 
+def test_revealing_a_split_opens_a_gap_immediately(qt_app: QApplication) -> None:
+    """Nach einer Teilung sollen Stifte und Löcher ohne einen gesuchten
+    zweiten Handgriff sichtbar werden.
+
+    ``reveal`` wartet nicht auf die Entprellung des Schiebers: Der Nutzer hat
+    ihn nicht gezogen, die Anwendung zeigt ein fertiges Ergebnis.
+    """
+    bar = ExplodeBar()
+    seen: list[float] = []
+    bar.factorChanged.connect(seen.append)
+
+    bar.reveal()
+
+    assert bar.factor > 0.0
+    assert seen == [bar.factor]
+    assert not bar._pending.isActive()
+
+
 def test_the_session_splits_an_oversized_part(qt_app: QApplication) -> None:
     session = Session()
     loaded(session, "oversized.stl")

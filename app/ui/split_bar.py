@@ -11,6 +11,12 @@ verwerfen; wer beim ersten war, liest, dass ein zweiter fehlt.
 Stifte muss jemand von Hand in Deckung halten, während der Kleber greift — das
 ist die Arbeit, die dieses Werkzeug abnehmen soll. Wer sie nicht will, nimmt
 den Haken heraus; das ist ein Handgriff weniger als ihn zu suchen.
+
+**Die Linie legt beim zweiten Punkt die Ebene fest.** Das Fenster zeigt sie
+als durchscheinende, umrandete Fläche mit einem Rand außerhalb des Körpers;
+eine spätere Kamerafahrt ändert sie nicht. Nach der Auswertung öffnet die
+Explosionsansicht die beiden Hälften automatisch, damit Stifte und Löcher nicht
+zwischen deckungsgleichen Schnittflächen verschwinden.
 """
 
 from __future__ import annotations

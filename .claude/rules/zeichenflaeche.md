@@ -429,6 +429,19 @@ und über den Ziehgriff auch sechs. Was er einbringt, ist nicht die Zahl der
 Klicks, sondern dass die Höhe **gesehen** statt geraten wird — wer 15 mm zieht,
 hat keine Zahl getippt und trotzdem eine.
 
+**Die zwei häufigsten Folgen stehen trotzdem als Wörter an der freien
+Skizze.** Der Ziehgriff ist der anschauliche Direktweg, aber nur in der
+Querschau sichtbar; wer „Extrusion“ nicht kennt, soll nicht erst *Fertig*
+drücken und unter fünf Fachbegriffen suchen. Sobald der Umriss geschlossen
+ist, führen deshalb *Hochziehen* und *Abtragen* direkt in den jeweiligen
+Operationsdialog. Dort wird die genaue Höhe oder Tiefe angegeben — die
+Zeichenleiste erzeugt selbst keine Geometrie (Regel 2). Solange der Umriss
+offen ist, nennen beide Knöpfe im Hinweis ihre Bedingung. *Abtragen* verlangt
+zusätzlich genau einen ausgewählten exakten Körper; fehlt er, steht der Grund
+am gesperrten Knopf. Wurde der Skizzenmodus bereits für eine andere Operation
+geöffnet, bleiben die beiden kurzen Wege verborgen und *Fertig* hält die
+ursprüngliche Absicht.
+
 **Und der Umriss beantwortet auch, was seine Kennzahl bedeutet**
 (`outline_advice`). „Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem
 Anfänger nichts — weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
@@ -465,3 +478,35 @@ es nebenbei. `_context_menu` ist dafür in **Bauen** (`context_menu_at`) und
 Zeigen getrennt: ein Menü, das sich selbst öffnet, hält eine Suite an —
 `QMenu.exec` blockiert wie ein modaler Dialog, und `QMenu.exec` zu patchen ist
 kein Ersatz, sondern der nächste Hänger.
+
+## Sichtbarer Skizzenmodus im Viewport (29.08.2026)
+
+Der Canvas rechnet im Viewport-Modus weiter, aber **jede Auskunft, die der
+Kunde sehen muss, reist mit ins sichtbare Bild**. `pending_elements()` gibt die
+unfertige Linie, den Kreis, Bogen, Spline oder die vier Rechteckkanten als
+gewöhnliche `SketchElement`-Vorschau heraus; `curves_of` wandelt sie auf
+demselben Weg wie die feste Zeichnung um. `measure_annotations()` liefert
+Maßtext und versetzte Position. Beides ändert weder Skizze noch Undo-Stand
+(Regel 2). Ein Mausereignis aktualisiert Fangkreuz und Vorschau gemeinsam und
+rendert höchstens einmal.
+
+Ein Raster ist kein gleichförmiger Teppich. Im Viewport gelten drei Ebenen:
+leise Zwischenlinien, jede fünfte als Landmarke, Nullachsen mit X/Y/Z-Buchstaben
+nahe am Ursprung. Die Buchstaben stehen absichtlich nicht am Ende des
+Rasters — dessen Reichweite liegt meistens außerhalb des Ausschnitts.
+Skizzenkanten sind Hinweisblau und breiter als das Raster, Auswahl und
+unfertige Geometrie bernsteinfarben und zusätzlich dicker beziehungsweise als
+Vorschau kodiert. Maße stehen in ruhigen Karten statt direkt auf der Kante.
+
+Der Fusion-nahe Weg wird progressiv erklärt. Sobald ein Umriss schließt, steht
+im Bild: Vorder- oder Seitenansicht wählen. In der Querschau nennt die Karte
+Pfeil und Kreuz; direkt am Griff stehen **Hochziehen** und **Abtragen**. Das
+Profil wird automatisch in der freien Fläche oberhalb der Werkzeugkarte
+zentriert. Ein Griff hinter der Leiste ist kein vorhandener Griff.
+
+Die untere Karte bleibt eine Leiste. Im Viewport-Modus gehen der unsichtbare
+Canvas, sein leeres Strecklayout und der umbrechende Schichthinweis aus ihrer
+Höhenrechnung. Die Schichtauskunft bleibt als Tooltip am Ebenenfeld, die
+Bedingungsliste im rechten Reiter. Gemessen am gebauten Panel fiel die
+Vorgabehöhe von 292 auf 142 Bildpunkte; die Bedienung verlor dabei keine
+Handlung.

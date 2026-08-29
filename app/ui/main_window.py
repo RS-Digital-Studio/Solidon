@@ -110,7 +110,7 @@ from app.core.geom.sculpt import (
     stroke_at,
     strokes_to_text,
 )
-from app.core.geom.section import plane_through
+from app.core.geom.section import SectionPlane, plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.knowledge import calibration, print_settings, profiles
@@ -144,7 +144,7 @@ from app.core.scene import (
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import clear_autosave, find_recovery
 from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
-from app.core.sketch.profile import curves_of
+from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import support_material
@@ -162,6 +162,7 @@ from app.core.types import (
     PlaneFrame,
     QualityPreset,
     SliceResult,
+    SolvedSketch,
     SourceOrigin,
     Stroke,
     Vec3,
@@ -1167,6 +1168,19 @@ class MainWindow(QMainWindow):
         aus der Auswahl: Wer auf ein Teil zeigt, meint dieses Teil, und ein
         Werkzeug, das stattdessen das zuletzt Ausgewählte nimmt, trennt das
         falsche."""
+        self._split_plane: SectionPlane | None = None
+        """Die beim zweiten Punkt festgelegte und sichtbare Schnittebene.
+
+        Sie bleibt auch dann gleich, wenn danach die Kamera bewegt wird. Die
+        Vorschau und die Operation meinen dadurch garantiert dieselbe Ebene.
+        """
+        self._pending_split_reveal: frozenset[ObjectId] = frozenset()
+        """Neue Hälften, die nach ihrer Auswertung auseinandergezogen werden.
+
+        Die Auswertung kommt asynchron; bis dahin zeigt ``last_result`` noch
+        die alte Szene. Gemerkt werden deshalb die Ausgaben der Operation und
+        nicht ein Zeitpunkt.
+        """
 
         # §2.4: eine Zeile Umschalter statt sieben Dauerleisten. Wie ein
         # Werkzeug beim Schließen zurückgenommen wird, steht hier und nicht in
@@ -1302,15 +1316,23 @@ class MainWindow(QMainWindow):
         # ablösen — Zeichnen ist keines davon, und ein achter Umschalter hätte
         # die Grenze aus Etappe 0 gerissen, ohne dass er hingehört.
         self.sketch_bar = QWidget(self)
-        sketch_row = QHBoxLayout(self.sketch_bar)
-        sketch_row.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        sketch_layout = QVBoxLayout(self.sketch_bar)
+        sketch_layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        sketch_layout.setSpacing(TIGHT)
+        sketch_heading = QHBoxLayout()
+        sketch_heading.setContentsMargins(0, 0, 0, 0)
         sketch_title = QLabel(tr("Skizze"), self.sketch_bar)
         set_level(sketch_title, "section")
-        sketch_row.addWidget(sketch_title)
+        sketch_heading.addWidget(sketch_title)
         self._sketch_hint = QLabel(
             tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
         )
-        sketch_row.addWidget(self._sketch_hint, stretch=1)
+        self._sketch_hint.setWordWrap(True)
+        sketch_heading.addWidget(self._sketch_hint, stretch=1)
+        sketch_layout.addLayout(sketch_heading)
+        sketch_actions = QHBoxLayout()
+        sketch_actions.setContentsMargins(0, 0, 0, 0)
+        sketch_actions.addStretch(1)
         # Der Abschluss sieht aus wie einer. Fusion setzt dafür einen großen
         # Haken oben rechts; hier stand ein Textknopf unter den anderen und
         # war von „Verwerfen" nicht zu unterscheiden. Als Hauptknopf trägt er
@@ -1379,13 +1401,31 @@ class MainWindow(QMainWindow):
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
 
+        # Die zwei häufigsten Folgen stehen **an der fertigen Kontur**. Wer
+        # Solidon ohne CAD-Vokabular benutzt, soll weder „Extrusion“ kennen
+        # noch erst über *Fertig* eine Liste durchsuchen. Der Dialog danach
+        # bleibt: Dort wird die genaue Höhe oder Tiefe eingetragen.
+        self.sketch_pull_button = QPushButton(tr("Hochziehen"), self.sketch_bar)
+        self.sketch_pull_button.setIcon(icon("sketch_pull", self.sketch_pull_button))
+        self.sketch_pull_button.clicked.connect(
+            weak_slot(self, lambda view: view._finish_sketch_as(PULL_OP))
+        )
+        self.sketch_cut_button = QPushButton(tr("Abtragen"), self.sketch_bar)
+        self.sketch_cut_button.setIcon(icon("sketch_cut", self.sketch_cut_button))
+        self.sketch_cut_button.clicked.connect(
+            weak_slot(self, lambda view: view._finish_sketch_as(POCKET_OP))
+        )
+        sketch_actions.addWidget(self.sketch_pull_button)
+        sketch_actions.addWidget(self.sketch_cut_button)
+
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         make_primary(done)
         done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
         discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
-        sketch_row.addWidget(done)
-        sketch_row.addWidget(discard)
+        sketch_actions.addWidget(done)
+        sketch_actions.addWidget(discard)
+        sketch_layout.addLayout(sketch_actions)
         self.sketch_bar.setVisible(False)
 
         # Werkzeugzeile und Skizzenleiste schweben zusammen unten in der Mitte.
@@ -3504,6 +3544,7 @@ class MainWindow(QMainWindow):
         if applied.transaction is None:
             self.announce(tr("Dieses Objekt passt bereits auf das Bett."))
             return
+        self._queue_split_reveal(applied.object_ids)
         self.announce(
             f"{tr('Geteilt')}: {len(applied.object_ids)} · {len(applied.fits)} {tr('Passungen')}"
         )
@@ -4951,7 +4992,19 @@ class MainWindow(QMainWindow):
         Die zwei Zahlen sind schon die gefangenen; hier wird nichts mehr
         gerechnet, nur gezeigt (:meth:`Viewport.show_sketch_cursor`).
         """
-        self.viewport.show_sketch_cursor((x, y))
+        frame = self._sketch_frame()
+        preview = self._sketch_preview_curves(frame) if frame is not None else ()
+        self.viewport.show_sketch_pointer((x, y), preview)
+
+    def _sketch_preview_curves(self, frame: PlaneFrame) -> tuple[SketchCurve, ...]:
+        """Die unfertige Geste mit demselben Kurvenweg wie die feste Skizze."""
+        panel = self._sketch_panel
+        if panel is None:
+            return ()
+        elements = panel.canvas.pending_elements()
+        if not elements:
+            return ()
+        return curves_of(SolvedSketch(elements, 0, 0.0), frame)
 
     def _sketch_pull_offer(self) -> str:
         """Ob am Umriss gerade eine Höhe gezogen werden darf (§30.1).
@@ -4989,6 +5042,63 @@ class MainWindow(QMainWindow):
             return str(tr("Zum Aufziehen fehlt der geschlossene Umriss."))
         return "ready"
 
+    def _pocket_target_problem(self) -> str:
+        """Warum die gezeichnete Kontur gerade nichts abtragen kann."""
+        selected = self.object_tree.selected_objects()
+        result = self.session.last_result
+        if len(selected) != 1 or result is None or selected[0] not in result.scene.objects:
+            return str(tr("Zum Abtragen muss genau ein Körper ausgewählt sein."))
+        if result.scene.objects[selected[0]].kind != "brep":
+            return str(
+                tr(
+                    "Der gewählte Körper besteht bereits aus festen Dreiecken. "
+                    "Zum Abtragen eine bearbeitbare Grundform oder eine STEP-Datei verwenden."
+                )
+            )
+        return ""
+
+    def _update_sketch_actions(self) -> None:
+        """Hochziehen und Abtragen folgen dem Zustand der freien Kontur."""
+        panel = self._sketch_panel
+        free = panel is not None and not self._sketch_target
+        self.sketch_pull_button.setVisible(free)
+        self.sketch_cut_button.setVisible(free)
+        if not free or panel is None:
+            return
+
+        closed = bool(panel.canvas.outline)
+        outline_problem = str(tr("Erst einen geschlossenen Umriss zeichnen."))
+        self.sketch_pull_button.setEnabled(closed)
+        self.sketch_pull_button.setToolTip(
+            str(tr("Macht aus dem Umriss einen Körper. Danach die Höhe einstellen."))
+            if closed
+            else outline_problem
+        )
+        pocket_problem = self._pocket_target_problem() if closed else outline_problem
+        self.sketch_cut_button.setEnabled(closed and not pocket_problem)
+        self.sketch_cut_button.setToolTip(
+            pocket_problem
+            or str(
+                tr("Schneidet den Umriss aus dem ausgewählten Körper. Danach die Tiefe einstellen.")
+            )
+        )
+
+    def _finish_sketch_as(self, op_name: str) -> None:
+        """Die sichtbare kurze Hand von der Kontur zu Aufbau oder Tasche."""
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        if not panel.canvas.outline:
+            self.announce(tr("Erst einen geschlossenen Umriss zeichnen."))
+            return
+        if op_name == POCKET_OP:
+            problem = self._pocket_target_problem()
+            if problem:
+                self.announce(problem)
+                return
+        self._sketch_target = op_name
+        self.finish_sketch(keep=True)
+
     def _on_sketch_pulled(self, height: float) -> None:
         """Außen wird Material aufgebaut, innen aus einem Körper entfernt.
 
@@ -5001,23 +5111,10 @@ class MainWindow(QMainWindow):
         if self._sketch_panel is None:
             return
         if height < 0.0:
-            selected = self.object_tree.selected_objects()
-            result = self.session.last_result
-            if len(selected) != 1 or result is None or selected[0] not in result.scene.objects:
+            problem = self._pocket_target_problem()
+            if problem:
                 self.viewport.cancel_sketch_pull()
-                self.announce(tr("Dafür muss ein Körper ausgewählt sein."))
-                return
-            body = result.scene.objects[selected[0]]
-            if body.kind != "brep":
-                self.viewport.cancel_sketch_pull()
-                self.announce(
-                    tr(
-                        "Der gewählte Körper besteht bereits aus festen Dreiecken. "
-                        "Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. "
-                        "Aktiviere dafür bei einer Grundform die Option „Flächen und Kanten "
-                        "später bearbeiten“ oder öffne eine STEP-Datei."
-                    )
-                )
+                self.announce(problem)
                 return
             self._sketch_target = POCKET_OP
             self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
@@ -5069,17 +5166,21 @@ class MainWindow(QMainWindow):
                 ),
                 place,
             )
-        source = (
-            tr(
+        if self._sketch_target:
+            source = tr(
                 "Zeichenebene: {place} · Zeichnen, dann Fertig — "
                 "die Operation öffnet auf der Skizze."
             )
-            if self._sketch_target
-            else tr(
-                "Zeichenebene: {place} · Zeichnen, dann Fertig — "
-                "dann fragt Solidon, was daraus wird."
+        elif panel.canvas.outline:
+            source = tr(
+                "Zeichenebene: {place} · Umriss geschlossen — jetzt Hochziehen, "
+                "Abtragen oder Fertig wählen."
             )
-        )
+        else:
+            source = tr(
+                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — danach "
+                "Hochziehen, Abtragen oder Fertig wählen."
+            )
         # **In der Querschau steht hier die Geste**, und zwar aus derselben
         # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst
         # verspricht der Satz etwas, was der Griff nicht hält. Ohne ihn findet
@@ -5096,11 +5197,21 @@ class MainWindow(QMainWindow):
                 view=plane_where(panel.canvas.view_plane), instruction=line
             )
         offer = self._sketch_pull_offer()
+        action = ""
         if offer == "ready":
-            line = f"{line} {tr('Pfeil: Körper aufziehen · Kreuz: Tasche schneiden.')}"
+            action = str(tr("Pfeil: Körper aufziehen · Kreuz: Tasche schneiden."))
+            line = f"{line} {action}"
         elif offer:
             line = f"{line} {offer}"
+        elif (
+            panel.canvas.outline
+            and panel.canvas.view_plane == panel.canvas.sketch.plane
+            and self._sketch_target in ("", PULL_OP, POCKET_OP)
+        ):
+            action = str(tr("Aufziehen oder abtragen: Jetzt Vorder- oder Seitenansicht wählen."))
         self._sketch_hint.setText(line)
+        self.viewport.show_sketch_action(action)
+        self._update_sketch_actions()
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
@@ -5189,6 +5300,9 @@ class MainWindow(QMainWindow):
         if panel.snap_is_pinned():
             step = panel.snap_step.value_mm()
         control_points = tuple(to_world(frame, point) for point in panel.canvas.points())
+        measure_labels = tuple(
+            (to_world(frame, point), label) for point, label in panel.canvas.measure_annotations()
+        )
         self.viewport.show_sketch(
             kurven,
             frame,
@@ -5197,6 +5311,9 @@ class MainWindow(QMainWindow):
             selected_curves=panel.canvas.selected_element_indices(),
             control_points=control_points,
             selected_points=panel.canvas.selected_point_indices(),
+            axis_names=panel.canvas.axis_names(),
+            measure_labels=measure_labels,
+            preview=self._sketch_preview_curves(frame),
         )
         # **Und die Zeile über der Leiste altert nicht mit der Zeichnung.** Sie
         # nennt neben der Ebene auch, ob der Ziehgriff gerade gilt, und das
@@ -5250,6 +5367,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_pull(None)
         self.viewport.show_sketch_planes(False)
         self.viewport.show_sketch_selection("")
+        self.viewport.show_sketch_action("")
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self.viewport.cameraMoved.disconnect(self._redraw_sketch)
@@ -6373,7 +6491,7 @@ class MainWindow(QMainWindow):
         """
         picked = (float(point[0]), float(point[1]), float(point[2]))
         if len(self._split_points) >= POINTS_NEEDED:
-            self._split_points = []
+            self._clear_split_line()
         if not self._split_points:
             target = self.viewport.object_at(picked)
             if target is None:
@@ -6385,8 +6503,26 @@ class MainWindow(QMainWindow):
                 self.announce(tr("Bitte auf das Teil klicken, das getrennt werden soll."))
                 return
             self._split_target = target
+        elif self.viewport.object_at(picked) != self._split_target:
+            self.announce(tr("Den zweiten Punkt bitte auf demselben Teil anklicken."))
+            return
         self._split_points.append(picked)
-        self.viewport.show_split_line(self._split_points)
+        if len(self._split_points) == POINTS_NEEDED:
+            first, second = self._split_points
+            self._split_plane = plane_through(first, second, self.viewport.view_direction())
+            if self._split_plane is None:
+                # Zwei Punkte genau hintereinander sehen im Bild aus wie
+                # einer. Der erste bleibt stehen, damit nur der missglückte
+                # zweite Klick wiederholt werden muss.
+                self._split_points.pop()
+                self.announce(
+                    tr("Die zwei Punkte liegen hintereinander — bitte quer über das Teil zeichnen.")
+                )
+        self.viewport.show_split_line(
+            self._split_points,
+            plane=self._split_plane,
+            target=self._split_target,
+        )
         self.split_bar.show_points(len(self._split_points))
 
     def _clear_split_line(self) -> None:
@@ -6394,6 +6530,7 @@ class MainWindow(QMainWindow):
         Änderung."""
         self._split_points = []
         self._split_target = None
+        self._split_plane = None
         self.viewport.clear_split_line()
         self.split_bar.show_points(0)
 
@@ -6404,38 +6541,48 @@ class MainWindow(QMainWindow):
         self.split_bar.reset()
 
     def _apply_split_line(self) -> None:
-        """§25: aus zwei Punkten und der Blickrichtung wird eine Ebene, aus der
-        Ebene eine Transaktion.
+        """§25: Aus der sichtbaren Ebene wird eine Transaktion.
 
-        Die Blickrichtung wird **hier** abgefragt und nicht in der Operation:
-        Eine Op, die die Kamera läse, gäbe beim zweiten Auswerten ein anderes
-        Ergebnis (§11.2). Was in den Stapel geht, sind Zahlen.
+        Die Blickrichtung wurde schon beim zweiten Punkt gelesen. Dadurch
+        bleibt genau die Ebene, die im Bild stand, auch nach einer Kamerafahrt
+        die Eingabe der Operation (§11.2).
         """
-        if len(self._split_points) < POINTS_NEEDED or self._split_target is None:
-            return
-
-        first, second = self._split_points[0], self._split_points[1]
-        plane = plane_through(first, second, self.viewport.view_direction())
-        if plane is None:
-            # Zwei Punkte genau hintereinander sehen im Bild aus wie einer.
-            # Raten wäre hier eine Ebene, die niemand gezeigt hat (Regel 21).
-            self.announce(
-                tr("Die zwei Punkte liegen hintereinander — bitte quer über das Teil zeichnen.")
-            )
+        if (
+            len(self._split_points) < POINTS_NEEDED
+            or self._split_target is None
+            or self._split_plane is None
+        ):
             return
 
         chosen = self.split_bar.values()
         pins = int(chosen["pins"])
         applied = self.session.split_along(
-            self._split_target, plane, pins=pins, shape=str(chosen["shape"])
+            self._split_target, self._split_plane, pins=pins, shape=str(chosen["shape"])
         )
         self.report.add_findings(applied.findings)
+        self._queue_split_reveal(applied.object_ids)
         self._clear_split_line()
         self.announce(
-            tr("Getrennt — die Hälften stehen im Objektbaum.")
+            tr("Getrennt — die Hälften sind zur Kontrolle geöffnet.")
             if not pins
-            else tr("Getrennt und zum Zusammenstecken vorbereitet.")
+            else tr("Getrennt — zur Kontrolle geöffnet: Stifte an Teil A, Löcher an Teil B.")
         )
+
+    def _queue_split_reveal(self, object_ids: Sequence[ObjectId]) -> None:
+        """Öffnet neue Hälften, sobald genau diese Ausgaben im Bild stehen."""
+        self._pending_split_reveal = frozenset(object_ids)
+        result = self.session.last_result
+        if result is not None:
+            self._reveal_split_result(result)
+
+    def _reveal_split_result(self, result: EvaluationResult) -> None:
+        """Macht Naht, Stifte und Löcher ohne gesuchten zweiten Griff sichtbar."""
+        wanted = self._pending_split_reveal
+        if len(wanted) < 2 or not wanted.issubset(result.scene.objects):
+            return
+        self._pending_split_reveal = frozenset()
+        self.tools.activate("explode")
+        self.explode_bar.reveal()
 
     # --- Sichtbarkeit (§18.8) ---------------------------------------------------
 
@@ -6677,10 +6824,14 @@ class MainWindow(QMainWindow):
                 applied = self.session.create_lid(inputs[0], dict(params), op=spec.name)
                 self.report.add_findings(applied.findings)
                 return
+            count_before = len(self.session.project.document.ops)
             self.session.apply(
                 spec.title,
                 [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))],
             )
+            operations = self.session.project.document.ops
+            if spec.name == "split_pinned" and len(operations) > count_before:
+                self._queue_split_reveal(operations[-1].outputs)
 
         if spec.params.spec():
             # Zusammengelegte Zwillinge (MENU_TWINS): derselbe Dialog trägt
@@ -7413,6 +7564,7 @@ class MainWindow(QMainWindow):
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
+        self._reveal_split_result(result)
         self.section_bar.set_ranges(self.viewport.section_ranges())
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(
@@ -7439,6 +7591,9 @@ class MainWindow(QMainWindow):
         if self._split_points:
             self._clear_split_line()
         document = self.session.project.document
+        produced = frozenset(output for operation in document.ops for output in operation.outputs)
+        if self._pending_split_reveal and not self._pending_split_reveal.issubset(produced):
+            self._pending_split_reveal = frozenset()
         # Wer auf dem Startbildschirm etwas ins Dokument bringt — Einfügen,
         # Generieren, ein Baustein aus dem Katalog —, will es auch sehen. Von
         # acht Wegen wechselten sieben einzeln von Hand, und der achte war der

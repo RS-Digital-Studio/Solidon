@@ -526,3 +526,29 @@ Und der Skaliergriff (`app/ui/scale_widget.py`) ist diesem Widget
 absichtlich Zeile für Zeile nachgebaut — wer dort etwas am
 Interaktionsmuster ändert, ändert es an beiden Stellen.
 
+## Die Skizze ist Vordergrund, der Körper Zusammenhang (29.08.2026)
+
+Während des Zeichnens bleibt der vorhandene Körper sichtbar, aber mit
+`SKETCH_CONTEXT_OPACITY` deutlich leiser als die Arbeitsgeometrie. Die normale
+Transparenz von 45 Prozent war im echten Handbuchbild lauter als die Skizze;
+16 Prozent lassen Form und Lage erkennen, ohne eingeprägte Details mit dem
+Umriss konkurrieren zu lassen. Kontaktschatten und orange Körperauswahl treten
+in dieser Zeit ebenfalls zurück. Beim Verlassen stellt der gewählte
+Darstellungsmodus seine Deckkraft wieder her.
+
+`OverlayHost` meldet dem Viewport linke, rechte und untere Verdeckung über
+`set_zone_margins`. Links und rechts bleiben Überlagerungen; nur die
+Skizzenkamera liest die untere Höhe. In orthografischer Projektion verschiebt
+`occluded_view_shift` Position und Fokus gemeinsam um genau die halbe verdeckte
+Bildhöhe. Das verändert weder Blickrichtung noch Maßstab und wird beim
+Verlassen zurückgenommen. `view_on_plane` und `show_span_on_plane` setzen die
+Verschiebung nach jeder neuen Kamerastellung erneut — deshalb bleiben Umriss,
+Pfeil, Kreuz und Live-Zahl auch in der Querschau oberhalb der Werkzeugkarte.
+
+Fangmarke und unfertige Kurve besitzen eigene Actors. Ein voller
+`show_sketch`-Aufbau räumt sie nicht zwischen zwei Gesten weg; ein
+Zeigerschritt aktualisiert bei gleicher Topologie nur Punkte und rendert
+Fangmarke plus Vorschau gemeinsam. Maßkarten, Achsenbuchstaben und
+Ziehgriff-Beschriftungen sind ungreifbar (`pickable=False`) und können deshalb
+keinen Klick von Zeichenebene oder Umriss abfangen.
+

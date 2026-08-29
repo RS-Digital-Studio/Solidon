@@ -20,7 +20,6 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-from app.core.geom.section import plane_through
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -168,6 +167,7 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
         def __init__(self) -> None:
             self.points: list[object] = []
             self.lines: list[object] = []
+            self.meshes: list[object] = []
             self.removed: list[object] = []
             # Der Zeiger hängt am selben Plotter; ohne ihn scheitert der Test
             # an einer Stelle, um die es nicht geht.
@@ -180,6 +180,10 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
         def add_lines(self, marks: object, **_values: object) -> str:
             self.lines.append(marks)
             return f"lines:{len(self.lines)}"
+
+        def add_mesh(self, mesh: object, **_values: object) -> str:
+            self.meshes.append(mesh)
+            return f"mesh:{len(self.meshes)}"
 
         def remove_actor(self, actor: object, **_values: object) -> None:
             self.removed.append(actor)
@@ -195,14 +199,42 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
     assert len(plotter.points) == 1, "der erste Punkt bekommt ein Zeichen"
     assert not plotter.lines, "eine Linie ist er noch nicht"
 
-    viewport.show_split_line([(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)])
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.section import SectionPlane
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    viewport._result = EvaluationResult(
+        scene=Scene(
+            objects={
+                "obj_1": SceneObject(
+                    id="obj_1",
+                    name="Würfel",
+                    mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0))),
+                )
+            }
+        )
+    )
+    viewport.show_split_line(
+        [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)],
+        plane=SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0),
+        target="obj_1",
+    )
     assert len(plotter.lines) == 1, "zwei Punkte sind eine Linie"
+    assert len(plotter.meshes) == 1, "die ganze Schnittebene wird als Fläche sichtbar"
+    surface = plotter.meshes[0]
+    assert surface.bounds[1] - surface.bounds[0] > 20.0
+    assert surface.bounds[3] - surface.bounds[2] > 20.0, (
+        "der Rand der Ebene steht über den undurchsichtigen Körper hinaus"
+    )
 
     # Gezählt wird der Zuwachs, nicht der Bestand: Das Neuzeichnen räumt selbst
     # auf, der erste Punkt ist also längst wieder heraus.
     before = len(plotter.removed)
     viewport.clear_split_line()
-    assert len(plotter.removed) - before == 2, "Zeichen und Linie gehen wieder heraus"
+    assert len(plotter.removed) - before == 3, "Zeichen, Linie und Fläche gehen wieder heraus"
 
 
 def test_leaving_the_tool_takes_the_line_out_of_the_view(qt_app: QApplication) -> None:
@@ -304,6 +336,20 @@ def test_a_click_beside_the_model_takes_the_old_line_with_it(window: MainWindow)
     assert not window.split_bar.clear.isEnabled()
 
 
+def test_the_second_point_must_belong_to_the_same_part(window: MainWindow) -> None:
+    """Eine Linie zwischen zwei Körpern legt kein eindeutiges Trennziel fest."""
+    answers = iter(("body_a", "body_b"))
+    window.viewport.object_at = lambda _point: next(answers)
+    window.tools.activate("split")
+
+    window.viewport.splitPointRequested.emit((0.0, 0.0, 0.0))
+    window.viewport.splitPointRequested.emit((10.0, 0.0, 0.0))
+
+    assert len(window._split_points) == 1, "der gültige Anfang bleibt erhalten"
+    assert "demselben Teil" in window._announcement
+    assert not window.split_bar.apply.isEnabled()
+
+
 def test_closing_the_tool_forgets_the_line(window: MainWindow) -> None:
     """Die Linie ist eine Vorschau, kein Dokumentzustand (Regel 2)."""
     with_a_cube(window)
@@ -373,6 +419,11 @@ def test_drawing_a_line_and_pressing_split_makes_two_parts(window: MainWindow) -
     assert result is not None
     for made in document.ops[-1].outputs:
         assert result.scene.objects[made].mesh.is_watertight
+    assert window.tools.active() == "explode", "das Ergebnis öffnet sich zum Ansehen"
+    assert window.explode_bar.factor > 0.0
+    assert window.viewport._explosion == pytest.approx(window.explode_bar.factor)
+    said = window._announcement
+    assert "Stifte" in said and "Löcher" in said, said
 
 
 def test_the_seam_becomes_a_fit_pair(window: MainWindow) -> None:
@@ -405,6 +456,30 @@ def test_without_the_checkbox_it_only_cuts(window: MainWindow) -> None:
     assert window.session.project.document.fits == []
 
 
+def test_the_registered_split_operation_also_reveals_its_connectors(
+    window: MainWindow,
+) -> None:
+    """Der Menüweg endet in derselben kontrollierbaren Ergebnisansicht."""
+    from app.core.registry import REGISTRY
+
+    with_a_cube(window)
+    item = window.object_tree.tree.topLevelItem(0)
+    assert item is not None
+    item.setSelected(True)
+    window._wire_preview = lambda *_args, **_values: None
+    window._open_operation_dialog = lambda _dialog, apply: apply()
+
+    window.run_operation(
+        REGISTRY.get("split_pinned"),
+        given={"axis": "y", "position": 0.0, "pins": 2},
+    )
+    window.session.wait_for_idle()
+
+    assert window.session.project.document.ops[-1].op == "split_pinned"
+    assert window.tools.active() == "explode"
+    assert window.explode_bar.factor > 0.0
+
+
 def test_one_undo_takes_the_whole_split_back(window: MainWindow) -> None:
     """Regel 16 dem Sinn nach: ein Handgriff, ein Schritt im Verlauf."""
     with_a_cube(window)
@@ -420,7 +495,9 @@ def test_one_undo_takes_the_whole_split_back(window: MainWindow) -> None:
     assert [entry.op for entry in window.session.project.document.ops] == ["load"]
 
 
-def test_the_stored_plane_does_not_depend_on_the_camera(window: MainWindow) -> None:
+def test_the_stored_plane_does_not_depend_on_the_camera(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """§11.2: Was in den Stapel geht, sind Zahlen.
 
     Die Blickrichtung wird einmal beim Trennen gelesen. Stünde sie in der
@@ -430,12 +507,15 @@ def test_the_stored_plane_does_not_depend_on_the_camera(window: MainWindow) -> N
     window.tools.activate("split")
     window.viewport.splitPointRequested.emit((-10.0, 0.0, 2.0))
     window.viewport.splitPointRequested.emit((10.0, 0.0, 2.0))
+    expected = window._split_plane
+    assert expected is not None
+    # Nach dem Zeichnen darf die Kamera bewegt werden. Die sichtbare Vorschau
+    # und die Operation müssen trotzdem dieselbe Ebene meinen.
+    monkeypatch.setattr(window.viewport, "view_direction", lambda: (1.0, 0.0, 0.0))
     window.split_bar.applyRequested.emit()
     window.session.wait_for_idle()
 
     params = window.session.project.document.ops[-1].params
-    expected = plane_through((-10.0, 0.0, 2.0), (10.0, 0.0, 2.0), window.viewport.view_direction())
-    assert expected is not None
     assert params["normal_x"] == pytest.approx(expected.normal[0])
     assert params["normal_y"] == pytest.approx(expected.normal[1])
     assert params["normal_z"] == pytest.approx(expected.normal[2])

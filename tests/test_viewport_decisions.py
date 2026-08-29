@@ -1176,6 +1176,31 @@ def test_the_grid_counts_its_lines_from_width_and_step() -> None:
     assert len(lines) == 2 * (2 * 4 + 1), "vier je Seite, die Null, und das in zwei Richtungen"
 
 
+def test_the_sketch_grid_separates_fine_lines_landmarks_and_axes() -> None:
+    """Ein gleichförmiges Netz ist eine Tapete, kein lesbarer Maßstab."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import sketch_grid, sketch_grid_layers
+
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    layers = sketch_grid_layers(frame, step=5.0, reach=30.0)
+
+    assert len(layers.axes) == 2, "der Ursprung trägt eine Linie je Achse"
+    assert len(layers.major) == 4, "bei jedem fünften Schritt liegt eine Leitlinie"
+    assert len(layers.minor) + len(layers.major) + len(layers.axes) == len(
+        sketch_grid(frame, step=5.0, reach=30.0)
+    )
+
+
+def test_the_sketch_focus_moves_to_the_centre_above_the_toolbar() -> None:
+    """Eine untere Karte von 400 px lässt die freie Bildmitte 200 px höher liegen."""
+    from app.ui.viewport import occluded_view_shift
+
+    # 200 mm sichtbare Höhe bei 1000 px: 0,2 mm/px. Die nötigen 200 px
+    # Bildverschiebung entsprechen daher 40 mm Weltmaß.
+    assert occluded_view_shift(100.0, 1000, 400) == pytest.approx(40.0)
+    assert occluded_view_shift(100.0, 1000, -400) == pytest.approx(-40.0)
+
+
 def test_a_grid_without_a_step_is_empty_and_not_an_error() -> None:
     """Eine Weite von null ist kein Sonderfall, sondern kein Raster.
 

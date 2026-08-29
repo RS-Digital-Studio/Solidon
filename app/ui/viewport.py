@@ -41,7 +41,7 @@ from app.core.geom.measure import (
 )
 from app.core.geom.mesh import distance_to_triangles, hull_planes, ray_span_in_hull
 from app.core.geom.mesh_ops import decimate
-from app.core.geom.section import SectionPlane, cut
+from app.core.geom.section import SectionPlane, cut, plane_patch
 from app.core.geom.transform import (
     Axis,
     TransformSteps,
@@ -86,6 +86,7 @@ from app.ui.palette import (
     VIRIDIS,
     DiffPalette,
     readable_on,
+    text_colour,
 )
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
@@ -259,6 +260,20 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
     return position, frame.origin, frame.y_axis
 
 
+def occluded_view_shift(parallel_scale: float, height: int, bottom: int) -> float:
+    """Weltmaß, das den Bildmittelpunkt über einer unteren Karte zentriert.
+
+    ``parallel_scale`` ist die halbe sichtbare Höhe. Eine Karte von ``bottom``
+    Bildpunkten verschiebt die Mitte der freien Fläche um ihre halbe Höhe;
+    die beiden Halbierungen kürzen sich bei der Umrechnung ins Weltmaß. Das
+    Vorzeichen bleibt erhalten, damit dieselbe Rechnung die Verschiebung beim
+    Verlassen des Modus zurücknimmt.
+    """
+    if height <= 0 or parallel_scale <= 0.0:
+        return 0.0
+    return float(bottom) * parallel_scale / float(height)
+
+
 #: Wie weit die Kamera im Skizzenmodus mindestens von der Ebene wegsteht, in mm.
 #:
 #: Zweihundert: So viel Zeichenfläche sieht man dann etwa, und das ist die
@@ -330,6 +345,14 @@ PULL_HANDLE_PIXELS = 38.0
 #: Fangweite von :data:`CURSOR_PIXELS`.
 PULL_HIT_PIXELS = 14.0
 
+#: Wie weit die Vorschau einer Schnittebene über den Körper hinausragt.
+#:
+#: Innerhalb eines undurchsichtigen Körpers ist selbst eine durchscheinende
+#: Fläche verdeckt. Dreißig Prozent Gesamtzugabe lassen deshalb ringsum einen
+#: schmalen, umrandeten Rand stehen; die Ebene bleibt am Teil, wird aber auch
+#: in einer schrägen Ansicht als Fläche erkennbar.
+SPLIT_PLANE_SCALE = 1.3
+
 #: Die drei Hauptansichten, die der Skizzenleiste entsprechen.
 SKETCH_VIEW_DIRECTIONS: dict[str, tuple[Vec3, Vec3]] = {
     "plane:xy": VIEW_DIRECTIONS["top"],
@@ -392,6 +415,31 @@ MEASURE_GAP = 14
 #: Kreuz aus zwei Strichen — zwei Formen und nicht zwei Farben (Regel 18).
 SKETCH_POINT_PIXELS = 10
 
+#: Abstand der Achsenbuchstaben vom Ursprung, in Bildpunkten.
+#:
+#: Die Rasterausdehnung reicht weit über den sichtbaren Ausschnitt; ein
+#: Buchstabe am Linienende läge deshalb meist außerhalb des Bildes. Nahe am
+#: Ursprung bleibt er bei jedem Zoom sichtbar, ohne den Nullring zu verdecken.
+AXIS_LABEL_PIXELS = 64.0
+
+#: Deckkraft des bestehenden Körpers während des Zeichnens.
+#:
+#: Er bleibt als räumlicher Zusammenhang sichtbar, tritt aber klar hinter
+#: Raster, Kurven, Maße und Ziehgriff zurück. Die normale transparente
+#: Darstellung mit 45 % war im Handbuchbild lauter als die Skizze selbst.
+SKETCH_CONTEXT_OPACITY = 0.16
+
+
+SketchGridSegment = tuple[tuple[float, float, float], tuple[float, float, float]]
+
+
+class SketchGridLayers(NamedTuple):
+    """Feines Raster, Fünfermarken und die beiden Nullachsen getrennt."""
+
+    minor: tuple[SketchGridSegment, ...]
+    major: tuple[SketchGridSegment, ...]
+    axes: tuple[SketchGridSegment, ...]
+
 
 def sketch_grid(
     frame: PlaneFrame, step: float, reach: float
@@ -429,6 +477,30 @@ def sketch_grid(
         lines.append((to_world(frame, (offset, -span)), to_world(frame, (offset, span))))
         lines.append((to_world(frame, (-span, offset)), to_world(frame, (span, offset))))
     return lines
+
+
+def sketch_grid_layers(frame: PlaneFrame, step: float, reach: float) -> SketchGridLayers:
+    """Das Zeichenraster als ruhiges Netz mit ablesbaren Landmarken.
+
+    Jede fünfte Linie führt das Auge, die beiden Nullachsen verankern den
+    Ursprung. Die Geometrie bleibt exakt dieselbe wie in :func:`sketch_grid`;
+    getrennt wird nur die Darstellung. So entsteht keine zweite Rechnung für
+    denselben Ort.
+    """
+    lines = sketch_grid(frame, step, reach)
+    minor: list[SketchGridSegment] = []
+    major: list[SketchGridSegment] = []
+    axes: list[SketchGridSegment] = []
+    for pair_index in range(0, len(lines), 2):
+        index = pair_index // 2 - (len(lines) // 2) // 2
+        pair = lines[pair_index : pair_index + 2]
+        if index == 0:
+            axes.extend(pair)
+        elif index % 5 == 0:
+            major.extend(pair)
+        else:
+            minor.extend(pair)
+    return SketchGridLayers(tuple(minor), tuple(major), tuple(axes))
 
 
 def sketch_cursor(
@@ -2142,10 +2214,46 @@ class SketchSelectionBadge(QLabel):
         if parent is None:
             return
         self.adjustSize()
+        covered = getattr(parent, "_zone_margins", (0, 0, 0))[2]
         self.move(
             max((parent.width() - self.width()) // 2, 0),
-            max(parent.height() - self.height() - ORIENTATION_MARGIN, 0),
+            max(parent.height() - self.height() - covered - ORIENTATION_MARGIN, 0),
         )
+        self.raise_()
+
+
+class SketchActionBadge(QLabel):
+    """Der nächste räumliche Schritt, als ruhige Karte im Blickfeld.
+
+    Der Ziehgriff ist eine Fusion-artige Geste. Wer sie nicht schon kennt,
+    entdeckt sie nicht in einer langen Zeile unterhalb des Viewports. Die
+    Karte steht deshalb nur dann im Bild, wenn aus dem geschlossenen Umriss
+    tatsächlich Material aufgebaut oder entfernt werden kann.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__("", parent)
+        self.setObjectName("sketchActionBadge")
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setContentsMargins(ROOMY, TIGHT, ROOMY, TIGHT)
+        self.set_theme("dark")
+        self.hide()
+
+    def set_theme(self, theme: str) -> None:
+        colours = THEMES["light" if theme == "light" else "dark"]
+        self.setStyleSheet(
+            f"#sketchActionBadge {{ color: {colours['text']};"
+            f" background: {colours['window']}; border: 2px solid {colours['accent_line']};"
+            " border-radius: 8px; font-weight: 600; }}"
+        )
+
+    def place(self) -> None:
+        parent = self.parentWidget()
+        if parent is None:
+            return
+        self.adjustSize()
+        self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
         self.raise_()
 
 
@@ -2281,6 +2389,10 @@ class Viewport(QWidget):
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
         self._sketch_frame: PlaneFrame | None = None
+        self._zone_margins: tuple[int, int, int] = (0, 0, 0)
+        """Verdeckte Bildränder links, rechts und unten, in Bildpunkten."""
+        self._sketch_occlusion_applied = 0
+        """Welcher untere Rand bereits in die Skizzenkamera eingerechnet ist."""
         self._sketch_measure_pending: Callable[[], float] | None = None
         """Ob gerade ein Maß aussteht — vom Fenster je Skizzenmodus gesetzt
         und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
@@ -2313,6 +2425,15 @@ class Viewport(QWidget):
         Der Vergleich davor spart das Neuzeichnen: Ein Render kostet gemessen
         6,9 ms, und die Marke sitzt am **gefangenen** Ort — zwischen zwei
         Rasterpunkten ändert sie sich nicht."""
+        self._preview_actor: Any | None = None
+        self._preview_mesh: Any | None = None
+        self._preview_shape: tuple[int, ...] = ()
+        self._preview_at: tuple[tuple[Vec3, ...], ...] = ()
+        """Die mitfliegende Geometrie zwischen zwei Klicks.
+
+        Wie die Fangmarke gehört sie der Maus und nicht dem Dokument. Das
+        Netz bleibt stehen und bekommt neue Punkte, solange die Form gleich
+        bleibt; so braucht ein Zeigerschritt nur einen gemeinsamen Render."""
         self._sketch_curves: tuple[SketchCurve, ...] = ()
         """Die Kurven, die zuletzt gezeigt wurden — für den Ziehgriff.
 
@@ -2373,8 +2494,13 @@ class Viewport(QWidget):
         steht. Ohne sie war „ändert sich das Raster im Viewport?" von außen
         nicht zu beantworten: Man sah Linien und musste sie zählen, und ein
         Test darüber hätte den Actor auseinandergenommen."""
-        self._grid_colour = THEMES["dark"]["grid_minor"]
-        self._sketch_colour = THEMES["dark"]["text"]
+        self._grid_minor_colour = THEMES["dark"]["grid_minor"]
+        self._grid_major_colour = THEMES["dark"]["grid_major"]
+        self._sketch_colour = ROLES["info"]
+        self._axis_x_colour = ROLES["axis_x"]
+        self._axis_y_colour = ROLES["axis_y"]
+        self._sketch_label_colour = THEMES["dark"]["text"]
+        self._sketch_label_background = THEMES["dark"]["window"]
         self._measure_mode: MeasureMode = "off"
         self._pending_point: Vec3 | None = None
         self._pending_plane: tuple[Vec3, Vec3] | None = None
@@ -2596,6 +2722,8 @@ class Viewport(QWidget):
         """Die drei greifbaren Grundebenen beim freien Einstieg."""
         self.sketch_selection = SketchSelectionBadge(self)
         """Was in der Skizze gewählt ist — ruhig am Bildrand."""
+        self.sketch_action = SketchActionBadge(self)
+        """Aufziehen und Abtragen dort erklären, wo Umriss und Griff stehen."""
         self._compare = HoldToCompare(self)
         """Der Filter für die Leertaste. Er hängt an der Anwendung, solange das
         Band steht — nicht länger, sonst schluckt er anderswo Leerzeichen."""
@@ -3153,7 +3281,9 @@ class Viewport(QWidget):
         import numpy as np
         import pyvista as pv
 
-        style = DISPLAY_MODES[self._mode]
+        style = dict(DISPLAY_MODES[self._mode])
+        if self._sketch_frame is not None:
+            style["opacity"] = min(float(style.get("opacity", 1.0)), SKETCH_CONTEXT_OPACITY)
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
                 continue
@@ -3205,7 +3335,8 @@ class Viewport(QWidget):
 
         # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
         # steht, und welche das ist, weiß nur die vollständige Szene.
-        self._place_shadows(self._shadow_direction())
+        if self._sketch_frame is None:
+            self._place_shadows(self._shadow_direction())
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
@@ -3700,7 +3831,7 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
-        highlighted = self.highlighted_object()
+        highlighted = None if self._sketch_frame is not None else self.highlighted_object()
         for identifier, actor in self._actors.items():
             if self._map is not None and identifier == self._map_object:
                 # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
@@ -3888,23 +4019,22 @@ class Viewport(QWidget):
         # (``grid_minor`` und ``text``); sie hier zu einer siebten und achten
         # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
         exact = THEMES["light" if theme == "light" else "dark"]
-        # **``grid_major`` und nicht ``grid_minor``.** Die feine Rasterfarbe ist
-        # gegen die *Zeichenfläche* gerechnet, und dort trägt sie; gegen den
-        # Verlauf des Viewports nicht. Gemessen im dunklen Thema: 1,51 gegen
-        # den Grund und **1,04** gegen den Himmel — ein Raster, das gezeichnet
-        # wird und das niemand sieht. Zum Vergleich steht das Bettraster bei
-        # 2,60 und ist zu sehen; ``grid_major`` liegt bei 2,44.
-        #
-        # Dieselbe Sorte Fehler, die `theme.py` für die Zeichenfläche schon
-        # einmal beschreibt: Eine Farbe, die gegen einen Untergrund gerechnet
-        # ist, gilt nicht gegen einen anderen.
-        self._grid_colour = exact["grid_major"]
-        self._sketch_colour = exact["text"]
+        # Gegen den Verlauf trägt ``grid_minor`` nicht zuverlässig. Beide
+        # Rasterstufen benutzen deshalb den sichtbaren Farbton; ihre Deckkraft
+        # und Breite machen daraus leise Zwischenlinien und klare Fünfermarken.
+        self._grid_minor_colour = exact["grid_major"]
+        self._grid_major_colour = exact["grid_major"]
+        self._sketch_colour = text_colour("info", colours["top"])
+        self._axis_x_colour = text_colour("axis_x", colours["top"])
+        self._axis_y_colour = text_colour("axis_y", colours["top"])
+        self._sketch_label_colour = exact["text"]
+        self._sketch_label_background = exact["window"]
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
         self.plane_picker.set_theme(theme)
         self.sketch_selection.set_theme(theme)
+        self.sketch_action.set_theme(theme)
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
@@ -4032,13 +4162,25 @@ class Viewport(QWidget):
             self.clear_split_line()
         self._update_cursor()
 
-    def show_split_line(self, points: Sequence[Vec3]) -> None:
+    def show_split_line(
+        self,
+        points: Sequence[Vec3],
+        *,
+        plane: SectionPlane | None = None,
+        target: ObjectId | None = None,
+    ) -> None:
         """Zeichnet, was bisher geklickt wurde.
 
         Ein Punkt ist eine Kugel in der Auswahlfarbe, zwei sind eine Linie mit
         einer Kugel an jedem Ende. Ohne die erste Kugel sieht ein Klick auf ein
         großes Teil aus, als sei nichts passiert — und der zweite Klick landet
         dann irgendwo, weil niemand weiß, wo der erste war.
+
+        Sobald die Linie vollständig ist, liegt zusätzlich die **ganze
+        Schnittebene** als durchscheinende, umrandete Fläche im Zielkörper. Eine
+        Linie allein beantwortet nicht, welche Seite und welche Neigung durch
+        das Modell laufen; die Fläche tut es. Farbe und Umriss kodieren dieselbe
+        Aussage doppelt (Regel 18).
 
         Beide Actors tragen einen Namen: Wo ``clear_split_line`` einmal nicht
         gelaufen ist, ersetzt pyvista den gleichnamigen, statt einen zweiten
@@ -4060,12 +4202,45 @@ class Viewport(QWidget):
                 name="split:ends",
                 render=False,
                 reset_camera=False,
+                pickable=False,
             )
         )
         if len(points) >= 2:
-            self._split_actors.append(
-                self.plotter.add_lines(marks[:2], color=SELECTED_COLOUR, width=3, name="split:line")
+            line = self.plotter.add_lines(
+                marks[:2], color=SELECTED_COLOUR, width=3, name="split:line"
             )
+            if hasattr(line, "PickableOff"):
+                line.PickableOff()
+            self._split_actors.append(line)
+        entry = self._result.scene.objects.get(target) if self._result and target else None
+        if plane is not None and entry is not None:
+            bounds = entry.mesh.bounds
+            patch = plane_patch(bounds.minimum, bounds.maximum, plane)
+            if patch:
+                import pyvista as pv
+
+                corners = np.asarray(patch, dtype=float)
+                centre = np.mean(corners, axis=0)
+                corners = centre + SPLIT_PLANE_SCALE * (corners - centre)
+                face = np.concatenate(
+                    (np.asarray([len(corners)], dtype=np.int64), np.arange(len(corners)))
+                )
+                surface = pv.PolyData(corners, faces=face)
+                self._split_actors.append(
+                    self.plotter.add_mesh(
+                        surface,
+                        color=SELECTED_COLOUR,
+                        opacity=0.22,
+                        show_edges=True,
+                        edge_color=SELECTED_COLOUR,
+                        line_width=2,
+                        lighting=False,
+                        name="split:plane",
+                        render=False,
+                        reset_camera=False,
+                        pickable=False,
+                    )
+                )
         self.plotter.render()
 
     def clear_split_line(self) -> None:
@@ -5616,6 +5791,7 @@ class Viewport(QWidget):
         self.drag_bar.place()
         self.plane_picker.place()
         self.sketch_selection.place()
+        self.sketch_action.place()
         self._place_orientation_widget()
 
     def _place_orientation_widget(self) -> None:
@@ -6352,6 +6528,8 @@ class Viewport(QWidget):
         position, focus, up = camera_for_plane(frame, distance)
         self.plotter.camera_position = [position, focus, up]
         self._fit_parallel_scale(distance)
+        self._sketch_occlusion_applied = 0
+        self._apply_sketch_occlusion()
         self._redraw_shadows()
 
     def show_span_on_plane(
@@ -6388,8 +6566,57 @@ class Viewport(QWidget):
         self.plotter.camera_position = [position, focus, up]
         if camera is not None and getattr(camera, "parallel_projection", False):
             camera.parallel_scale = scale
+        self._sketch_occlusion_applied = 0
+        self._apply_sketch_occlusion()
         self.plotter.render()
         self.cameraMoved.emit()
+
+    def set_zone_margins(self, left: int, right: int, bottom: int = 0) -> None:
+        """Die schwebenden Karten melden, welchen Bildraum sie verdecken.
+
+        Links und rechts bleiben im normalen Viewport bewusst über dem Modell.
+        Im Skizzenmodus darf die untere Werkzeugkarte dagegen weder den Umriss
+        noch Pfeil und Kreuz verdecken: Die Kamera zentriert die Zeichenebene
+        in der tatsächlich freien Höhe.
+        """
+        self._zone_margins = (
+            max(int(left), 0),
+            max(int(right), 0),
+            max(int(bottom), 0),
+        )
+        if not self.sketch_selection.isHidden():
+            self.sketch_selection.place()
+        if self._sketch_frame is not None and self._apply_sketch_occlusion():
+            self._draw()
+
+    def _apply_sketch_occlusion(self) -> bool:
+        """Die noch fehlende Verschiebung der Skizzenkamera anwenden."""
+        wanted = self._zone_margins[2]
+        difference = wanted - self._sketch_occlusion_applied
+        if difference == 0 or not self._shift_sketch_camera(difference):
+            return False
+        self._sketch_occlusion_applied = wanted
+        return True
+
+    def _shift_sketch_camera(self, bottom: int) -> bool:
+        """Den Bildinhalt um die halbe verdeckte Höhe nach oben schieben."""
+        plotter = self.plotter
+        if plotter is None:
+            return False
+        camera = getattr(plotter, "camera", None)
+        if camera is None or not getattr(camera, "parallel_projection", False):
+            return False
+        position, focus, up = plotter.camera_position
+        amount = occluded_view_shift(float(camera.parallel_scale), self.height(), bottom)
+        if abs(amount) <= EPS_GEOM:
+            return False
+        shift = tuple(-float(up[axis]) * amount for axis in range(3))
+        plotter.camera_position = [
+            tuple(float(position[axis]) + shift[axis] for axis in range(3)),
+            tuple(float(focus[axis]) + shift[axis] for axis in range(3)),
+            up,
+        ]
+        return True
 
     def _fit_parallel_scale(self, distance: float) -> None:
         """Den Ausschnitt der Parallelprojektion an den perspektivischen angleichen.
@@ -6420,6 +6647,9 @@ class Viewport(QWidget):
         selected_curves: Sequence[int] = (),
         control_points: Sequence[Vec3] = (),
         selected_points: Sequence[int] = (),
+        axis_names: tuple[str, str] = ("", ""),
+        measure_labels: Sequence[tuple[Vec3, str]] = (),
+        preview: Sequence[SketchCurve] = (),
     ) -> None:
         """Die Skizze und ihr Raster in die Szene legen (§30.1, Stufe zwei).
 
@@ -6454,26 +6684,79 @@ class Viewport(QWidget):
         self._sketch_selected_curves = tuple(selected_curves)
         self._sketch_control_points = tuple(control_points)
         self._sketch_selected_points = tuple(selected_points)
-        if self.plotter is None:
+        plotter = self.plotter
+        if plotter is None:
             return
         import numpy as np
         import pyvista as pv
 
-        segments = sketch_grid(frame, step, reach)
-        if segments:
+        layers = sketch_grid_layers(frame, step, reach)
+
+        def add_segments(
+            segments: Sequence[SketchGridSegment],
+            colour: str,
+            width: int,
+            opacity: float,
+            name: str,
+        ) -> None:
+            """Eine Rasterstufe als einen ungreifbaren Aktor einfügen."""
+            if not segments:
+                return
             grid = np.asarray([point for pair in segments for point in pair], dtype=float)
             spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
             self._sketch_actors.append(
-                self.plotter.add_mesh(
+                plotter.add_mesh(
                     pv.PolyData(grid, lines=spans),
-                    color=self._grid_colour,
-                    line_width=1,
-                    name="sketch_grid",
+                    color=colour,
+                    line_width=width,
+                    opacity=opacity,
+                    name=name,
                     render=False,
                     reset_camera=False,
                     pickable=False,
                 )
             )
+
+        add_segments(layers.minor, self._grid_minor_colour, 1, 0.32, "sketch_grid_minor")
+        add_segments(layers.major, self._grid_major_colour, 1, 0.72, "sketch_grid_major")
+        if layers.axes:
+            # ``sketch_grid`` liefert erst die senkrechte Y-, dann die
+            # waagerechte X-Achse. Buchstaben ergänzen die Farben (Regel 18).
+            add_segments((layers.axes[0],), self._axis_y_colour, 2, 0.92, "sketch_axis_y")
+            add_segments((layers.axes[1],), self._axis_x_colour, 2, 0.92, "sketch_axis_x")
+            label_distance = AXIS_LABEL_PIXELS / max(self.pixels_per_mm(frame), EPS_GEOM)
+            for point, label, colour, name in (
+                (
+                    to_world(frame, (label_distance, 0.0)),
+                    axis_names[0],
+                    self._axis_x_colour,
+                    "sketch_axis_x_label",
+                ),
+                (
+                    to_world(frame, (0.0, label_distance)),
+                    axis_names[1],
+                    self._axis_y_colour,
+                    "sketch_axis_y_label",
+                ),
+            ):
+                if not label:
+                    continue
+                self._sketch_actors.append(
+                    plotter.add_point_labels(
+                        np.asarray([point], dtype=float),
+                        [label],
+                        text_color=colour,
+                        font_size=10,
+                        bold=True,
+                        show_points=False,
+                        shape=None,
+                        always_visible=True,
+                        name=name,
+                        render=False,
+                        reset_camera=False,
+                        pickable=False,
+                    )
+                )
 
         selected_curve_set = set(selected_curves)
         for construction in (False, True):
@@ -6489,13 +6772,13 @@ class Viewport(QWidget):
                     [point for curve in chosen for point in curve.points], dtype=float
                 )
                 self._sketch_actors.append(
-                    self.plotter.add_mesh(
+                    plotter.add_mesh(
                         pv.PolyData(
                             drawn,
                             lines=polyline_spans([len(curve.points) for curve in chosen]),
                         ),
                         color=self._sketch_colour,
-                        line_width=1 if construction else 2,
+                        line_width=1 if construction else 3,
                         # Die zweite Kodierung neben der Strichbreite (Regel
                         # 18): Hilfsgeometrie ist durchscheinend, und wer den
                         # Unterschied in der Breite nicht sieht, sieht ihn hier.
@@ -6517,7 +6800,7 @@ class Viewport(QWidget):
                 [point for curve in chosen_curves for point in curve.points], dtype=float
             )
             self._sketch_actors.append(
-                self.plotter.add_mesh(
+                plotter.add_mesh(
                     pv.PolyData(
                         drawn,
                         lines=polyline_spans([len(curve.points) for curve in chosen_curves]),
@@ -6525,7 +6808,7 @@ class Viewport(QWidget):
                     color=SELECTED_COLOUR,
                     # Breite ist die zweite Kodierung neben der Farbe: Auch
                     # ohne Farbunterscheidung bleibt klar, was gewählt ist.
-                    line_width=4,
+                    line_width=5,
                     name="sketch_selected_lines",
                     render=False,
                     reset_camera=False,
@@ -6541,7 +6824,7 @@ class Viewport(QWidget):
             single = []
         if single:
             self._sketch_actors.append(
-                self.plotter.add_points(
+                plotter.add_points(
                     np.asarray(single, dtype=float),
                     color=self._sketch_colour,
                     point_size=SKETCH_POINT_PIXELS,
@@ -6561,7 +6844,7 @@ class Viewport(QWidget):
         ]
         if plain_controls:
             self._sketch_actors.append(
-                self.plotter.add_points(
+                plotter.add_points(
                     np.asarray(plain_controls, dtype=float),
                     color=self._sketch_colour,
                     point_size=7,
@@ -6574,12 +6857,33 @@ class Viewport(QWidget):
             )
         if chosen_controls:
             self._sketch_actors.append(
-                self.plotter.add_points(
+                plotter.add_points(
                     np.asarray(chosen_controls, dtype=float),
                     color=SELECTED_COLOUR,
                     point_size=14,
                     render_points_as_spheres=True,
                     name="sketch_selected_points",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        if measure_labels:
+            self._sketch_actors.append(
+                plotter.add_point_labels(
+                    np.asarray([point for point, _text in measure_labels], dtype=float),
+                    [text for _point, text in measure_labels],
+                    text_color=self._sketch_label_colour,
+                    font_size=10,
+                    bold=True,
+                    show_points=False,
+                    shape="rounded_rect",
+                    shape_color=self._sketch_label_background,
+                    fill_shape=True,
+                    margin=5,
+                    shape_opacity=0.94,
+                    always_visible=True,
+                    name="sketch_measures",
                     render=False,
                     reset_camera=False,
                     pickable=False,
@@ -6592,16 +6896,47 @@ class Viewport(QWidget):
                 [[2, 2 * index, 2 * index + 1] for index in range(len(handle))]
             )
             self._sketch_actors.append(
-                self.plotter.add_mesh(
+                plotter.add_mesh(
                     pv.PolyData(handle_points, lines=handle_lines),
-                    color=self._sketch_colour,
-                    line_width=3,
+                    color=SELECTED_COLOUR,
+                    line_width=5,
                     name="sketch_pull_handle",
                     render=False,
                     reset_camera=False,
                     pickable=False,
                 )
             )
+            inward, outward = handle[0]
+            size = math.dist(inward, outward) / 2.0
+            label_shift = tuple(frame.x_axis[axis] * size * 1.1 for axis in range(3))
+            label_points = np.asarray(
+                [
+                    tuple(outward[axis] + label_shift[axis] for axis in range(3)),
+                    tuple(inward[axis] + label_shift[axis] for axis in range(3)),
+                ],
+                dtype=float,
+            )
+            self._sketch_actors.append(
+                plotter.add_point_labels(
+                    label_points,
+                    [str(tr("Hochziehen")), str(tr("Abtragen"))],
+                    text_color=self._sketch_label_colour,
+                    font_size=10,
+                    bold=True,
+                    show_points=False,
+                    shape="rounded_rect",
+                    shape_color=self._sketch_label_background,
+                    fill_shape=True,
+                    margin=4,
+                    shape_opacity=0.94,
+                    always_visible=True,
+                    name="sketch_pull_labels",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        self._set_sketch_preview(preview)
         self._draw()
 
     def show_sketch_planes(self, visible: bool) -> None:
@@ -6617,7 +6952,14 @@ class Viewport(QWidget):
         if text:
             self.sketch_selection.place()
 
-    def show_sketch_cursor(self, point: tuple[float, float] | None) -> None:
+    def show_sketch_action(self, text: str) -> None:
+        """Zeigt den nächsten räumlichen Schritt; leer nimmt die Karte weg."""
+        self.sketch_action.setText(text)
+        self.sketch_action.setVisible(bool(text))
+        if text:
+            self.sketch_action.place()
+
+    def _set_sketch_cursor(self, point: tuple[float, float] | None) -> bool:
         """Die Marke setzen, die zeigt, wohin der nächste Klick fällt.
 
         ``point`` ist der **gefangene** Ort in Zeichenkoordinaten, so wie ihn
@@ -6658,21 +7000,21 @@ class Viewport(QWidget):
         """
         frame = self._sketch_frame
         if point is None or frame is None or self.plotter is None:
+            changed = bool(self._cursor_actors)
             if self.plotter is not None:
                 for actor in self._cursor_actors:
                     self.plotter.remove_actor(actor, render=False)
-                self._draw()
             self._cursor_actors.clear()
             self._cursor_mesh = None
             self._cursor_at = None
-            return
+            return changed
         scale = self.pixels_per_mm(frame)
         if self._cursor_at == (point, scale):
-            return
+            return False
         self._cursor_at = (point, scale)
         segments = sketch_cursor(frame, point, CURSOR_PIXELS / max(scale, EPS_GEOM))
         if not segments:
-            return
+            return False
 
         import numpy as np
         import pyvista as pv
@@ -6682,8 +7024,7 @@ class Viewport(QWidget):
             # Der übliche Fall: dasselbe Kreuz, anderswo.
             self._cursor_mesh.points = points
             self._cursor_mesh.Modified()
-            self._draw()
-            return
+            return True
 
         spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
         mesh = pv.PolyData(points, lines=spans)
@@ -6699,7 +7040,78 @@ class Viewport(QWidget):
                 pickable=False,
             )
         )
-        self._draw()
+        return True
+
+    def _set_sketch_preview(self, curves: Sequence[SketchCurve]) -> bool:
+        """Die mitfliegende Geometrie ändern, ohne selbst zu rendern."""
+        visible = tuple(curve for curve in curves if len(curve.points) > 1)
+        signature = tuple(tuple(curve.points) for curve in visible)
+        if signature == self._preview_at:
+            return False
+        self._preview_at = signature
+        if self.plotter is None or not visible:
+            changed = self._preview_actor is not None
+            if self.plotter is not None and self._preview_actor is not None:
+                self.plotter.remove_actor(self._preview_actor, render=False)
+            self._preview_actor = None
+            self._preview_mesh = None
+            self._preview_shape = ()
+            return changed
+
+        import numpy as np
+        import pyvista as pv
+
+        shape = tuple(len(curve.points) for curve in visible)
+        points = np.asarray([point for curve in visible for point in curve.points], dtype=float)
+        if self._preview_mesh is not None and self._preview_shape == shape:
+            self._preview_mesh.points = points
+            self._preview_mesh.Modified()
+            return True
+        if self._preview_actor is not None:
+            self.plotter.remove_actor(self._preview_actor, render=False)
+        mesh = pv.PolyData(points, lines=polyline_spans(shape))
+        self._preview_mesh = mesh
+        self._preview_shape = shape
+        self._preview_actor = self.plotter.add_mesh(
+            mesh,
+            color=SELECTED_COLOUR,
+            line_width=2,
+            opacity=0.82,
+            name="sketch_preview",
+            render=False,
+            reset_camera=False,
+            pickable=False,
+        )
+        return True
+
+    def show_sketch_cursor(self, point: tuple[float, float] | None) -> None:
+        """Die Fangmarke setzen und nur bei sichtbarer Änderung zeichnen."""
+        changed = self._set_sketch_cursor(point)
+        if point is None:
+            changed = self._set_sketch_preview(()) or changed
+        # ``show_sketch_pointer`` bündelt Marke und Vorschau in einen Render,
+        # führt diese öffentliche Schnittstelle aber weiterhin aus. Damit
+        # bleiben bestehende Beobachter der Fangmarke verlässlich angebunden.
+        self._sketch_cursor_changed = changed
+        if changed and not getattr(self, "_sketch_pointer_batch", False):
+            self._draw()
+
+    def show_sketch_pointer(
+        self,
+        point: tuple[float, float] | None,
+        preview: Sequence[SketchCurve] = (),
+    ) -> None:
+        """Fangmarke und Live-Vorschau mit genau einem Render nachziehen."""
+        self._sketch_pointer_batch = True
+        self._sketch_cursor_changed = False
+        try:
+            self.show_sketch_cursor(point)
+        finally:
+            self._sketch_pointer_batch = False
+        changed = self._sketch_cursor_changed
+        changed = self._set_sketch_preview(preview if point is not None else ()) or changed
+        if changed:
+            self._draw()
 
     def clear_sketch(self) -> None:
         """Nimmt die Zeichnung wieder aus der Szene.
@@ -7544,7 +7956,12 @@ class Viewport(QWidget):
         :meth:`_sketch_hit` — dort ist eine **Stelle auf der Ebene** gemeint
         und kein Ding in der Szene.
         """
+        if frame is None and self._sketch_occlusion_applied:
+            self._shift_sketch_camera(-self._sketch_occlusion_applied)
+            self._sketch_occlusion_applied = 0
         self._sketch_frame = frame
+        if frame is not None:
+            self._apply_sketch_occlusion()
         # **Die Marke gehört der Ebene, auf der sie liegt** — sie ist das
         # einzige Stück Zeichnung, das ``clear_sketch`` absichtlich stehen
         # lässt (dort steht der Grund), und deshalb muss sie hier weg. Nicht
@@ -7570,6 +7987,22 @@ class Viewport(QWidget):
         # wert ist.
         for actor in self._ground_actors:
             actor.SetVisibility(frame is None)
+        # **Der Körper ist Zusammenhang, nicht Zeichenfläche.** 45 %
+        # Deckkraft ließen im Handbuchbild selbst eine eingeprägte Schrift
+        # lauter erscheinen als die weiße Skizze. Beim Eintritt wird der
+        # bestehende Aktor sofort gedämpft; ein späterer Szenenaufbau nimmt
+        # denselben Wert in ``show_scene``. Beim Verlassen gilt wieder der
+        # gewählte Darstellungsmodus.
+        opacity = (
+            SKETCH_CONTEXT_OPACITY
+            if frame is not None
+            else float(DISPLAY_MODES[self._mode]["opacity"])
+        )
+        for actor in self._actors.values():
+            actor.prop.opacity = opacity
+        for actor in self._shadow_actors:
+            actor.SetVisibility(frame is None)
+        self._apply_selection_colour()
         # Und ein Zug am Ziehgriff endet mit der Ebene, auf der er begann —
         # aus demselben Grund wie die Marke darüber.
         self._end_pull()

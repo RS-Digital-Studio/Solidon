@@ -666,23 +666,21 @@ class OverlayHost(QWidget):
     def _tell_the_view_about_the_zones(self) -> None:
         """Die Ansicht darf sagen, dass sie den Zonen ausweichen will.
 
-        Für den Viewport ist das Übereinanderliegen richtig: man sieht das
-        Modell hinter den Karten, und das ist der Sinn der Anordnung. Für eine
-        Ansicht mit eigener Werkzeugleiste ist es falsch — im Skizzenmodus lagen
-        die **ersten** Werkzeuge unter der linken Karte, also Linie und
-        Rechteck, und die Bedingungsliste unter der rechten. Bei 1296 Pixeln
-        Breite ebenso wie bei 1900: kein Platzproblem, sondern die
-        Stapelreihenfolge.
+        Für den Viewport ist das Übereinanderliegen links und rechts richtig:
+        man sieht das Modell hinter den Karten, und das ist der Sinn der
+        Anordnung. Im Skizzenmodus ist die untere Karte die Ausnahme: Umriss,
+        Ziehgriff und Zahl müssen **oberhalb** davon liegen. Der Viewport liest
+        deshalb neben den beiden Breiten auch ihre echte Höhe und verschiebt
+        nur seine Skizzenkamera in die freie Fläche.
 
         Wer ausweichen will, bringt ``set_zone_margins`` mit; wer nichts
         mitbringt, bekommt weiterhin die ganze Fläche.
 
-        **Derzeit bringt es niemand mit, und der Absatz darüber ist
-        Vergangenheit.** Seit dem Schnitt in §30.1 (P4) ersetzt der
-        Skizzenmodus die Ansicht nicht mehr — er sitzt als Leiste unter ihr,
-        und die Karten weichen *ihr* aus (``_bottom_room``) statt umgekehrt.
-        Im Stapel liegt seither nur noch der Viewport, und für den ist das
-        Übereinanderliegen richtig.
+        Seit dem Schnitt in §30.1 (P4) ersetzt der Skizzenmodus die Ansicht
+        nicht mehr — er sitzt als Leiste über ihr. ``Viewport.set_zone_margins``
+        lässt die Szene weiterhin unter linken und rechten Karten stehen, hält
+        die aktive Zeichnung aber aus der unteren heraus. Gleichzeitig weichen
+        die seitlichen Karten dieser Leiste über ``_bottom_room`` aus.
 
         Die Stelle bleibt, weil sie eine Frage beantwortet, die wieder
         auftreten kann: Eine Ansicht mit eigener Werkzeugleiste gehört nicht
@@ -690,13 +688,14 @@ class OverlayHost(QWidget):
         Attrappe fest — ohne die wäre sie eine Zusage, die niemand mehr
         prüft.
 
-        **Gemeldet wird die Breite, die die Karte wirklich bekommt**, also
+        **Gemeldet werden die Größen, die die Karten wirklich bekommen**, also
         dieselbe Rechnung wie in ``_lay_out``. Vorher standen hier die
         Grundwerte, und die gelten nur bis etwa 2000 Pixel Fensterbreite:
         Im Vollbild war die linke Karte 332 statt 260 Pixel breit, der Rand
         also 72 Pixel zu schmal — und genau dort, bei x = 284, lag die
         Ebenenwahl des Skizzeneditors unter der Karte. Ausweichen, das die
-        eigene Breite nicht kennt, weicht am Ende nicht aus.
+        eigene Größe nicht kennt, weicht am Ende nicht aus. Unten zählt aus
+        demselben Grund ``_bottom_room()`` statt einer festen Werkzeughöhe.
         """
         inner = getattr(self.view, "currentWidget", None)
         target = inner() if callable(inner) else self.view
@@ -709,6 +708,7 @@ class OverlayHost(QWidget):
         setter(
             card_width(LEFT_WIDTH, LEFT_MAX, width) + 2 * MARGIN if showing_left else 0,
             card_width(RIGHT_WIDTH, RIGHT_MAX, width) + 2 * MARGIN if showing_right else 0,
+            self._bottom_room(),
         )
 
     def _share_room(self, zone: QWidget, room: int) -> None:
