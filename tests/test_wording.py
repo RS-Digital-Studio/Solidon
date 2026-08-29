@@ -24,6 +24,7 @@ automatische Weg ertrinkt in Fehlalarmen, weil Fach- und Alltagssprache sich
 from __future__ import annotations
 
 import html
+import json
 import re
 from pathlib import Path
 
@@ -351,3 +352,57 @@ def test_every_menu_path_in_the_texts_exists_in_the_menu_bar(
 
     assert geprüft >= 20, f"nur {geprüft} Wege gefunden — das Muster greift nicht mehr"
     assert not funde, f"{len(funde)} Menüwege führen nirgends hin:\n" + "\n".join(funde)
+
+
+# --- Die vierte Klammer: genannte Bedienelemente ----------------------------
+
+#: Ein kursiv ausgezeichneter Name in Handbuch und Tour: *Trimmen*, *Fertig*,
+#: *Auf das Bett setzen*. So werden dort Bedienelemente ausgezeichnet, und
+#: nur so — fett steht für Sammelbegriffe und Zwischenüberschriften.
+NAME_MUSTER = re.compile(r"(?<![*\w])\*([A-ZÄÖÜ][^*\n]{2,34})\*(?!\*)")
+
+#: Was hinter einem Namen stehen darf, wenn die Anwendung ihn als Anfang
+#: eines längeren Textes zeigt: „Bestimmt — alle Freiheitsgrade sind vergeben."
+TRENNER = (" — ", " – ", ": ", " …", "…", " (")
+
+
+def _kennt_die_anwendung(name: str, texte: set[str]) -> bool:
+    """Sagt die Anwendung diesen Namen — allein oder als Anfang eines Satzes?"""
+    if name in texte:
+        return True
+    return any(text.startswith(name + trenner) for text in texte for trenner in TRENNER)
+
+
+def test_every_control_the_texts_name_is_one_the_application_says() -> None:
+    """Ein Name im Handbuch muss einer sein, den der Kunde auch sieht.
+
+    Drei standen am 29.08.2026 falsch da, und alle drei hätte ein Kunde
+    gesucht: *Grenzen ändern …* heißt in Wahrheit *Ändern …*, *Laden* heißt
+    *Modell laden*, und *Färben* gibt es gar nicht — die Menüeinträge heißen
+    *Teil färben* und *Fläche färben*. Der dritte war eine falsche
+    Auszeichnung: Kursiv ist ein Bedienelement, fett ein Sammelbegriff, und
+    dreißig Zeilen später stand dasselbe Wort richtig als **Färben**.
+
+    Verglichen wird gegen die Katalogschlüssel, also gegen jeden Text, den
+    ``tr()`` je gesehen hat — die vollständigste Liste dessen, was die
+    Anwendung sagt. Menüwege trägt
+    :func:`test_every_menu_path_in_the_texts_exists_in_the_menu_bar`; sie
+    stehen hier nicht noch einmal.
+    """
+    texte = set(json.loads(Path("app/i18n/locales/en.json").read_text(encoding="utf-8")))
+    assert len(texte) > 500, f"nur {len(texte)} Katalogschlüssel — dann prüft das nichts"
+
+    genannt: dict[str, set[str]] = {}
+    for name in WEG_QUELLEN:
+        text = re.sub(r'"\s*\n\s*"', "", Path(name).read_text(encoding="utf-8"))
+        for treffer in NAME_MUSTER.findall(text):
+            genannt.setdefault(treffer.strip(), set()).add(Path(name).name)
+
+    assert len(genannt) >= 80, f"nur {len(genannt)} Namen gefunden — das Muster greift nicht mehr"
+
+    funde = [
+        f"{', '.join(sorted(quellen))}: {name}"
+        for name, quellen in sorted(genannt.items())
+        if "→" not in name and not _kennt_die_anwendung(name, texte)
+    ]
+    assert not funde, f"{len(funde)} Namen sagt die Anwendung nicht:\n" + "\n".join(funde)
