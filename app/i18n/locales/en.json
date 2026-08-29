@@ -2771,7 +2771,7 @@
   "Senkt die Mündung einer Bohrung an, damit ein Schraubenkopf bündig sitzt.": "Opens the mouth of a bore so a screw head sits flush.",
   "Senkung": "Countersink",
   "Setz eine M3-Mutternfalle in die Unterseite": "Put an M3 nut trap in the underside",
-  "Setzen Sie selbst einen Baustein: den Halter im Objektbaum anklicken, dann mit der rechten Maustaste „Baustein einsetzen“ wählen — der Katalog zeigt jeden mit Bild.": "Place a part yourself: click the bracket in Objects, then right-click and choose „Insert a part“ — the catalogue shows every one with a picture.",
+  "Setzen Sie selbst einen Baustein: den Halter im Objektbaum anklicken, dann mit der rechten Maustaste *Bausteine*, dann *Baustein einsetzen* — der Katalog zeigt jeden mit Bild.": "Place a part yourself: click the bracket in Objects, then right-click *Parts*, then *Insert a part* — the catalogue shows every one with a picture.",
   "Setzt Stifte in die eine Hälfte und die passenden Löcher in die andere. Die Teile finden dann beim Kleben von selbst zusammen; das Spiel kommt aus dem Materialprofil.": "Puts pins in one half and matching holes in the other. The parts then find each other while the glue sets; the clearance comes from the material profile.",
   "Setzt Text erhaben oder vertieft auf eine Fläche. Die Schrift wird als Umriss verarbeitet, nicht als Bild — die Kanten bleiben in jeder Größe sauber.": "Puts text raised or engraved on a face. The font is processed as an outline, not as a picture — the edges stay clean at any size.",
   "Setzt das Modell mit seiner Unterseite auf das Druckbett.": "Puts the underside of the model on the print bed.",
