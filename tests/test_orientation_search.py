@@ -43,6 +43,38 @@ def test_the_seed_decides_the_sampling() -> None:
     assert sample_directions(50, seed=7) != sample_directions(50, seed=8)
 
 
+def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Achsen stehen fest und als Flächennormalen in derselben Kandidatenliste.
+
+    Eine zweite Schichtanalyse derselben Lage kann das Ergebnis nicht ändern;
+    sie machte die Suche nur langsamer.
+    """
+    from app.core.slice import orientation
+
+    seen = []
+
+    def record(_mesh: MeshData, direction: tuple[float, float, float], _height: float):
+        seen.append(direction)
+        return orientation.Candidate(direction, float(len(seen)), 1.0, 1.0)
+
+    monkeypatch.setattr(
+        orientation,
+        "face_candidates",
+        lambda _mesh: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
+    )
+    monkeypatch.setattr(
+        orientation,
+        "sample_directions",
+        lambda _count, _seed: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0)],
+    )
+    monkeypatch.setattr(orientation, "judge", record)
+
+    result = orientation.search(MeshData.of(trimesh.creation.box()), count=2)
+
+    assert seen == [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0)]
+    assert result.tried == len(seen)
+
+
 def test_a_tilted_plate_is_laid_down_again() -> None:
     tilted = apply(corpus("plate_holes.stl"), rotation("x", 40.0))
     found = search(tilted, count=48, seed=3)

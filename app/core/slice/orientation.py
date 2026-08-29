@@ -131,6 +131,22 @@ def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
     return found
 
 
+def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
+    """Entfernt Lagen, die dieselbe Schichtanalyse erneut auslösen würden.
+
+    Die sechs Achsen stehen fest in den Flächenkandidaten und kommen bei
+    achsparallelen Körpern noch einmal als große Flächennormalen vor. Auch die
+    Ausgangslage ``-Z`` gehört dazu. Dieselbe Lage zweimal zu schneiden ändert
+    die Rangfolge nicht; bei zweihundert Kandidaten kostet es aber messbar Zeit.
+    """
+    found: list[Vec3] = []
+    for direction in directions:
+        if any(math.dist(direction, previous) <= EPS_GEOM for previous in found):
+            continue
+        found.append(direction)
+    return found
+
+
 def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
     zählen."""
@@ -164,14 +180,17 @@ def search(
     keinen Drucker kennt, soll keinen erfinden (Regel 7).
     """
     floor = profile.smallest_first_layer if profile is not None else 0.0
-    baseline = judge(mesh, (0.0, 0.0, -1.0), layer_height)
+    baseline_direction: Vec3 = (0.0, 0.0, -1.0)
+    baseline = judge(mesh, baseline_direction, layer_height)
     best = baseline
     tried = 1
 
     # Die Flächennormalen kommen mit: die beste Orientierung hat meist eine
     # ebene Fläche auf der Platte, und eine gleichmäßige Abtastung der Kugel
     # trifft eine exakte Achse nur zufällig.
-    directions = [*face_candidates(mesh), *sample_directions(count, seed)]
+    directions = _unique_directions(
+        [baseline_direction, *face_candidates(mesh), *sample_directions(count, seed)]
+    )[1:]
     for index, direction in enumerate(directions, start=1):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
