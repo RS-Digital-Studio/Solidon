@@ -1,0 +1,41 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: sales@makersmuse.com
+Reply-To: marketing@solidon3d.de
+Subject: Independent software review offer: Fix a downloaded STL without rebuilding it
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hi Angus,
+
+I would like to offer the released Solidon3D 0.2.2 for an independent,
+hands-on modelling-software review. The practical question is simple: can a
+beginner fix a dimensionally wrong downloaded STL without rebuilding it in a
+full CAD package?
+
+The test file has an angled mounting hole with the wrong diameter. Solidon
+must recognise the feature, preserve its position and axis, and apply the new
+diameter as a reversible history step. The user can then add a standards-based
+heat-set insert and use a small printed gauge to set the clearance for the
+actual printer and filament.
+
+Version 0.2.2 also adds more capable constrained sketching, matching printable
+screws and nuts, bearing seats and per-spool process data in 3MF. It is not a
+slicer or a replacement for advanced CAD; it targets the narrower gap between
+“model downloaded” and “part fits.”
+
+The entire review workflow is manual modelling software and does not require
+the optional chat feature. Projects stay local, there is no subscription or
+customer account, and the application runs on Windows, macOS and Linux.
+
+Overview: https://solidon3d.de/en/
+
+I can provide a review licence, the released build, the deliberately flawed
+STL, expected measurements and comparison files. There is no payment, no
+approval request and no expectation of a positive result.
+
+Best regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

@@ -1,0 +1,35 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: carsten.knobloch@gmail.com
+Reply-To: marketing@solidon3d.de
+Subject: Kurzes Solidon3D-Update: jetzt auch als Linux-AppImage
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Carsten,
+
+ein kurzes Software-Update, das gut in deine App- und Desktop-Berichterstattung
+passen könnte: Solidon3D 0.2.2 ist für Windows, macOS und Linux erschienen.
+Für Linux gibt es neben Flatpak jetzt auch ein AppImage, das ohne
+Flatpak-Installation als einzelne Datei startet. Aktualisierung und Übergabe
+an lokal installierte Slicer wurden ebenfalls überarbeitet.
+
+Solidon ist eine Desktop-Anwendung für 3D-Druckmodelle. Ein praktisches neues
+Beispiel: Eine vorhandene Bohrung in einer heruntergeladenen STL lässt sich
+anklicken und im Durchmesser ändern, ohne das Teil neu in CAD zu zeichnen.
+Außerdem kamen maßhaltige Skizzen in der 3D-Ansicht, druckbare Schrauben und
+Muttern sowie Druckwerte je Filamentspule hinzu.
+
+Projekte bleiben lokal; Konto, Cloud-Ablage und Abo gibt es nicht. Ohne den
+optionalen Chat funktioniert die gesamte Modellierung weiter.
+
+Die unbeschnittene Demo läuft bis 30. Oktober:
+https://solidon3d.de/
+
+Wenn du kurz reinschauen möchtest, schicke ich dir gern drei passende
+Vorher-Nachher-Bilder und ein fertiges Testprojekt.
+
+Viele Grüße
+Robert
+marketing@solidon3d.de

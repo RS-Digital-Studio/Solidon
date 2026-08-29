@@ -15,7 +15,7 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Drawing and shaping
@@ -70,7 +70,8 @@ it into `website/version.json`.
 ### Platforms and fixes
 
 - Linux now has an AppImage alongside the Flatpak. Solidon can therefore run as a single executable file without a Flatpak installation.
-- On Windows, an update runs without repeated questions and starts Solidon again. The Linux Flatpak can be updated from inside the application.
+- A Windows update started from Solidon shows only its progress and opens Solidon again afterwards. A manually launched setup retains the launch choice on its final page.
+- The Linux Flatpak can be updated from inside Solidon.
 - Feedback can also be sent to support from the Linux package. The package previously lacked network access for this.
 - On macOS, fine cracks in a thread's STL mesh are stitched during export without accepting a mesh that became worse.
 - Update checking accepts a substantial multilingual changelog. Notes no longer end mid-word, and long lists of changes no longer stop the check.
@@ -100,7 +101,7 @@ it into `website/version.json`.
 ### Building blocks
 
 - A barrel hinge that comes off the printer already moving. Nothing to assemble, nothing to insert — the printer leaves the gap open.
-- A building block may consist of several parts if it says beforehand how many. The range check tests that too.
+- A building block can combine several parts. This lets you save movable or assembled models as one reusable catalogue entry.
 - Placing the pin into the hole did not work, although both features were there. Now it does.
 
 ### Printing and slicer
@@ -156,7 +157,7 @@ it into `website/version.json`.
 
 
 ### Building blocks
-- Your own building blocks without a line of code: pick steps from the history and put them into the catalogue as a block — with your own fields, a preview and a checked value range.
+- Your own building blocks without a line of code: pick steps from the history and put them into the catalogue as a block — with your own fields, a preview and a value range you choose.
 - A block you built travels inside the project file. Whoever opens it can insert your part without having to install anything.
 - Five new blocks in the catalogue: pegboard hook, corner brace, foot, cable clip and hinge eye.
 - The pegboard hook now holds even when someone lifts the part while taking things off — a springy tongue latches behind the board. Switchable, if you take the part off often.

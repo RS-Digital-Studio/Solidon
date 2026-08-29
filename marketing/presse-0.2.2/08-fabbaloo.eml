@@ -1,0 +1,44 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Reply-To: marketing@solidon3d.de
+Subject: Release lead: Solidon3D 0.2.2 turns STL edits into reusable print workflows
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Fabbaloo Editors,
+
+Solidon3D 0.2.2 has been released. The local desktop application started as a
+way to adapt downloaded 3D-printing models without rebuilding them in CAD; the
+new release connects that edit to reusable design components and material-aware
+slicer handoff.
+
+The clearest demonstration begins with an imported STL whose hole is wrong.
+Solidon changes the recognised hole on its original axis as a reversible
+operation. A user can then add a standards-based insert or bearing seat and
+apply fit values measured from a printed calibration piece.
+
+Three changes show how the workflow has grown:
+
+* history steps can become a reusable parametric component, with named fields,
+  a preview and a tested value range, without carrying executable code;
+* matching printable screws and nuts, bearing seats, countersinks and washers
+  are available as print-oriented components;
+* every physical filament spool can carry colour and process settings into the
+  correct 3MF material slot and on to the external slicer.
+
+The release also improves in-viewport constrained sketching and adds an
+AppImage alongside Flatpak, Windows and macOS packages. Projects remain local;
+AI is an optional control layer and is not needed for modelling or export.
+
+Overview: https://solidon3d.de/en/
+Release history: https://solidon3d.de/en/changelog.html
+
+I can send a compact story pack with the 0.2.2 build, a measured STL edit,
+three high-resolution images and a one-page fact sheet.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

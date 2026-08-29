@@ -1,0 +1,45 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: redaktion@t3n.de
+Reply-To: marketing@solidon3d.de
+Subject: Deutsches Indie-Softwareprojekt: 3D-Modellierung ohne Abo und Cloud-Zwang
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo t3n-Redaktion,
+
+mit Solidon3D 0.2.2 erscheint das nächste größere Update eines unabhängigen
+deutschen Desktop-Softwareprojekts. Die Anwendung macht heruntergeladene
+3D-Druckmodelle anpassbar und baut funktionale Teile aus Maßen, Skizzen und
+geprüften Bausteinen auf.
+
+Der t3n-Aufhänger ist das Produktmodell: kein SaaS, kein Kundenkonto, keine
+Cloud-Ablage und keine Telemetrie. Die unbeschnittene Demo läuft kostenlos bis
+30. Oktober. Version 1.0 soll am 1. November für 69 Euro als Einmalkauf
+erscheinen, einschließlich aller 1.x-Updates; später sind 99 Euro vorgesehen.
+Nach einmaliger Freischaltung arbeitet die Software offline, auch auf einem
+Arbeitsrechner, der per Datei über ein zweites Gerät aktiviert wurde.
+
+Dass dahinter inzwischen ein belastbares Produkt und nicht nur ein
+Geschäftsmodell-Versprechen steht, zeigt der Entwicklungsstand: Seit der
+ersten 0.1-Demo dokumentiert der Changelog 220 ausgewählte Nutzeränderungen.
+0.2.2 ergänzt unter anderem direkt änderbare Bohrungen in importierten
+STL-Dateien, maßhaltiges Skizzieren in der 3D-Ansicht, eigene parametrische
+Bausteine ohne Code sowie Druckwerte je Filamentspule bis in 3MF und Slicer.
+Windows, macOS und Linux werden unterstützt.
+
+Der KI-Chat bleibt optional und ist nur eine zweite Bedienoberfläche für den
+festen Operationsumfang. Wer ihn nicht nutzt, verliert keine
+Modellierfunktion.
+
+Überblick und Demo: https://solidon3d.de/
+Neuerungen: https://solidon3d.de/changelog.html
+
+Gern gebe ich Einblick in Preisentscheidung, Offline-Aktivierung und den Weg
+von der frühen Demo zum plattformübergreifenden Produkt.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

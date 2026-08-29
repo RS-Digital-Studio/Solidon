@@ -137,6 +137,46 @@ def test_no_point_speaks_like_a_commit(language: str) -> None:
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
+def test_no_point_talks_about_internal_tests(language: str) -> None:
+    """Der Kunde bekommt das Ergebnis, nicht den Nachweis aus der Entwicklung.
+
+    Der Wächter liest den gesamten Verlauf. Der Fund vom 29.08.2026 stand in
+    0.2.1 und wäre einer Prüfung nur der aktuellen Fassung entgangen.
+    """
+    from app.core import changes
+
+    forbidden = re.compile(
+        r"\b(?:(?:bereichs|regressions|geometrie|einheiten|integrations|abnahme|"
+        r"leistungs|oberflächen)?test(?:s|e|en)?|tested|testing|"
+        r"pruebas?|prova sull'intervallo|testes?)\b",
+        re.IGNORECASE,
+    )
+
+    for entry in changes.history(language):
+        for point in entry.points:
+            assert not forbidden.search(point), (
+                f"{language} {entry.version}: spricht über interne Tests: {point}"
+            )
+
+
+def test_windows_update_distinguishes_the_in_app_path_from_manual_setup() -> None:
+    """Die Start-Auswahl des manuellen Setups widerspricht dem Update nicht.
+
+    Am 29.08.2026 klang der Punkt so, als gäbe es diese Auswahl gar nicht.
+    Gemeint ist aber nur der aus Solidon gestartete stille Lauf: Er öffnet die
+    Anwendung selbst wieder, während ein doppelt angeklicktes Setup seine
+    gewohnte Schlussseite behält.
+    """
+    from app.core import changes
+
+    release = next(entry for entry in changes.history("de") if entry.version == "0.2.2")
+    point = next(point for point in release.points if "Windows-Update" in point)
+
+    assert "aus Solidon gestartet" in point
+    assert "manuell gestarteten Setup" in point
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
 def test_a_point_is_a_sentence(language: str) -> None:
     """Kein Stichwort und keine halbe Zeile: Was hier steht, wird gelesen."""
     for point in changelog_for(APP_VERSION, language):

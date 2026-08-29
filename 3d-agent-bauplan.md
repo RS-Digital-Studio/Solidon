@@ -217,9 +217,10 @@ Abnahmeprüfung (§40).
   Beispielprojekte, ein großes Ablagefeld für Dateien.
 - **Ziehen und Ablegen funktioniert überall** — auf das Fenster, auf den
   Viewport, auf den Objektbaum.
-- **Die Erstinbetriebnahme fragt das Nötigste** (Sprache, Drucker, Material)
-  und lässt alles andere auf Vorgaben stehen. Sie ist übersprings- und
-  jederzeit nachholbar.
+- **Die Erstinbetriebnahme fragt das Nötigste** (Sprache und Drucker) und
+  übernimmt die im Slicer eingelegten Filamente samt Typ und Farbe. Das
+  Material wird hier nicht ein zweites Mal gefragt. Alles andere bleibt auf
+  Vorgaben stehen. Sie ist übersprings- und jederzeit nachholbar.
 - **Ohne KI-Zugang läuft alles außer dem Chat.** Kein Nörgeln, kein
   Werbebanner — ein Hinweis an der Chatleiste, mehr nicht.
 
@@ -744,7 +745,7 @@ prüft sie mit demselben Test, der zweimalige Auswertung vergleicht (§15.1).
 ```json
 {
   "format_version": 14,
-  "app_version": "0.3.0",
+  "app_version": "0.2.2",
   "libs": {"manifold3d": "3.5.2", "trimesh": "5.0.0"},
   "parts_version": "12",
   "scene": {"printer": "centauri-carbon-2", "material": "petg"},
@@ -1182,9 +1183,12 @@ der Kern bleibt bei Millimeter (§11.1).
 
 **Datenmodell**: pro Objekt eine Liste von Materialslots, pro Dreieck ein
 Slot-Index als Face-Attribut, optional UV und Textur aus Säule B. Der Slot ist
-das Dateiformat; die Bedienung nennt **Filament mit Name und Farbe**, nie eine
-nackte Nummer. Der projektübergreifende Filamentkatalog darf beliebig viele
-Spulen führen, je Objekt gelten höchstens acht gleichzeitig benutzte Slots.
+das Dateiformat; die Bedienung nennt **Filament mit Name, Typ und Farbe**, nie
+eine nackte Nummer. Der projektübergreifende Filamentkatalog darf beliebig
+viele Spulen führen, je Objekt gelten höchstens acht gleichzeitig benutzte
+Slots. Die aktuell im Slicer eingelegten Filamente werden samt Typ, Farbe und
+Herstellerprofil als Vorwahl übernommen; ein von Hand angelegtes Filament
+lässt seinen Typ ausdrücklich wählen.
 
 **Import**: STL keine Farbe (alles Slot 0), 3MF Materialgruppen je Dreieck,
 OBJ+MTL Gruppen und optional Textur, GLB/glTF ein PBR-Material mit Textur,
@@ -2513,8 +2517,9 @@ und ohne Schlüssel geht sie nirgendwohin.
 
 ## 38. Desktop-Spezifika
 
-- **Erstinbetriebnahme** beim ersten Start: Sprache, Druckerprofil, Material,
-  Pfade zu externen Programmen prüfen, LLM-Backend optional. Überspringbar und
+- **Erstinbetriebnahme** beim ersten Start: Sprache und Druckerprofil wählen,
+  die im Slicer eingelegten Filamente samt Typ und Farbe übernehmen, Pfade zu
+  externen Programmen prüfen, LLM-Backend optional. Überspringbar und
   nachholbar.
 - **Nebenläufigkeit.** Alles Rechnende im Worker-Thread mit Fortschritt und
   Abbrechen (§15.6).

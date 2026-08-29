@@ -16,7 +16,7 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Dessin et mise en forme
@@ -71,7 +71,8 @@ dans `website/version.json`.
 ### Plateformes et corrections
 
 - Linux dispose maintenant d'une AppImage en plus du Flatpak. Solidon peut ainsi démarrer comme un fichier exécutable unique sans installation de Flatpak.
-- Sous Windows, une mise à jour s'effectue sans questions répétées et relance Solidon. Le Flatpak Linux peut être mis à jour depuis l'application.
+- Une mise à jour Windows lancée depuis Solidon affiche seulement sa progression, puis rouvre Solidon. Lancé manuellement, l’installateur conserve le choix de démarrage sur sa dernière page.
+- Le Flatpak Linux peut être mis à jour depuis Solidon.
 - Les retours au support peuvent aussi être envoyés depuis le paquet Linux. L'accès réseau nécessaire lui manquait jusqu'ici.
 - Sous macOS, les fissures fines du maillage STL d'un filetage sont recousues à l'export sans accepter un maillage devenu moins bon.
 - La recherche de mise à jour accepte un changelog multilingue conséquent. Les notes ne finissent plus au milieu d'un mot et les longues listes ne la bloquent plus.
@@ -101,7 +102,7 @@ dans `website/version.json`.
 ### Blocs
 
 - Une charnière à axe qui sort de l'imprimante déjà mobile. Rien à assembler, rien à insérer : l'imprimante laisse le jeu ouvert.
-- Un bloc peut être fait de plusieurs pièces s'il dit d'avance combien. Le test de plage le vérifie aussi.
+- Un bloc peut réunir plusieurs pièces. Vous pouvez ainsi enregistrer un modèle mobile ou assemblé comme une seule entrée réutilisable du catalogue.
 - Poser l'axe dans le trou ne marchait pas, bien que les deux éléments soient là. Maintenant si.
 
 ### Impression et trancheur
@@ -157,7 +158,7 @@ dans `website/version.json`.
 
 
 ### Blocs
-- Vos propres blocs sans une ligne de code : sélectionnez des étapes dans l'historique et placez-les dans le catalogue comme bloc — avec vos champs, un aperçu et une plage de valeurs vérifiée.
+- Vos propres blocs sans une ligne de code : sélectionnez des étapes dans l'historique et placez-les dans le catalogue comme bloc — avec vos champs, un aperçu et une plage de valeurs à votre mesure.
 - Un bloc que vous avez créé voyage dans le fichier de projet. Celui qui l'ouvre peut insérer votre pièce sans rien installer.
 - Cinq nouveaux blocs au catalogue : crochet pour panneau perforé, équerre, pied, clip de câble et œil de charnière.
 - Le crochet tient désormais même si l'on soulève la pièce en retirant quelque chose — une languette élastique s'enclenche derrière le panneau. Désactivable si vous retirez souvent la pièce.

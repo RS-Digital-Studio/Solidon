@@ -40,7 +40,7 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Zeichnen und Formen
@@ -95,7 +95,8 @@ Nutzen da und sonst nichts.
 ### Plattformen und behobene Fehler
 
 - Für Linux gibt es neben dem Flatpak auch ein AppImage. Damit lässt sich Solidon ohne Flatpak-Installation als einzelne ausführbare Datei starten.
-- Unter Windows läuft ein Update ohne wiederholte Rückfragen durch und startet Solidon wieder. Das Linux-Flatpak lässt sich aus der Anwendung heraus aktualisieren.
+- Ein aus Solidon gestartetes Windows-Update zeigt nur den Fortschritt und öffnet Solidon danach wieder. Beim manuell gestarteten Setup bleibt die Start-Auswahl am Ende erhalten.
+- Das Linux-Flatpak lässt sich aus Solidon heraus aktualisieren.
 - Rückmeldungen an den Support lassen sich auch aus dem Linux-Paket senden. Dem Paket fehlte dafür bisher der Netzzugang.
 - Auf macOS werden feine Risse im STL-Netz eines Gewindes beim Export vernäht, ohne ein bereits schlechter gewordenes Netz zu übernehmen.
 - Die Update-Prüfung liest auch einen umfangreichen mehrsprachigen Changelog. Hinweise enden nicht mehr mitten im Wort, und lange Neuerungslisten verhindern die Prüfung nicht.
@@ -125,7 +126,7 @@ Nutzen da und sonst nichts.
 ### Bausteine
 
 - Ein Bolzenscharnier, das fertig beweglich aus dem Drucker kommt. Nichts zusammenstecken, nichts einlegen — der Drucker lässt den Spalt offen.
-- Ein Baustein darf aus mehreren Teilen bestehen, wenn er vorher sagt, aus wie vielen. Der Bereichstest prüft das mit.
+- Ein Baustein kann mehrere Teile zusammenfassen. So speichern Sie auch bewegliche oder zusammengesetzte Modelle als einen wiederverwendbaren Eintrag im Katalog.
 - Den Stift ins Loch legen ging nicht, obwohl beide Merkmale da waren. Jetzt schon.
 
 ### Drucken und Slicer
@@ -181,7 +182,7 @@ Nutzen da und sonst nichts.
 
 
 ### Bausteine
-- Eigene Bausteine ohne eine Zeile Code: Wählen Sie Schritte im Verlauf aus und legen Sie sie als Baustein in den Katalog — mit eigenen Feldern, Vorschaubild und geprüftem Wertebereich.
+- Eigene Bausteine ohne eine Zeile Code: Wählen Sie Schritte im Verlauf aus und legen Sie sie als Baustein in den Katalog — mit eigenen Feldern, Vorschaubild und frei wählbarem Wertebereich.
 - Ein selbst gebauter Baustein reist in der Projektdatei mit. Wer sie öffnet, kann Ihr Teil einsetzen, ohne dass bei ihm etwas installiert sein muss.
 - Fünf neue Bausteine im Katalog: Lochwand-Einhänger, Eckwinkel, Standfuß, Kabelclip und Scharnierauge.
 - Der Lochwand-Einhänger hält jetzt auch, wenn jemand das Teil beim Abnehmen anhebt — eine federnde Zunge rastet hinter der Platte ein. Abschaltbar, wenn Sie das Teil oft abnehmen.

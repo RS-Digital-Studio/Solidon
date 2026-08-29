@@ -16,7 +16,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Dibujo y modelado
@@ -71,7 +71,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Plataformas y correcciones
 
 - Linux dispone ahora de un AppImage además del Flatpak. Así puede iniciar Solidon como un único archivo ejecutable sin instalar Flatpak.
-- En Windows, una actualización se completa sin preguntas repetidas y vuelve a iniciar Solidon. El Flatpak de Linux puede actualizarse desde la aplicación.
+- Una actualización de Windows iniciada desde Solidon solo muestra el progreso y vuelve a abrir Solidon después. Si inicia el instalador a mano, mantiene la opción de apertura en la página final.
+- El Flatpak de Linux puede actualizarse desde Solidon.
 - También se pueden enviar comentarios al soporte desde el paquete de Linux. Hasta ahora el paquete carecía del acceso de red necesario.
 - En macOS, las grietas finas de la malla STL de una rosca se cosen al exportar sin aceptar una malla que haya empeorado.
 - La comprobación de actualizaciones admite un changelog multilingüe amplio. Los avisos no terminan a media palabra y las listas largas ya no bloquean la comprobación.
@@ -101,7 +102,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Bloques
 
 - Una bisagra de pasador que sale de la impresora ya móvil. Nada que montar, nada que insertar: la impresora deja la holgura abierta.
-- Un bloque puede constar de varias piezas si dice antes de cuántas. La prueba de rango lo comprueba también.
+- Un bloque puede reunir varias piezas. Así puede guardar un modelo móvil o ensamblado como una única entrada reutilizable del catálogo.
 - Poner el pasador en el agujero no funcionaba, aunque ambos elementos estaban ahí. Ahora sí.
 
 ### Impresión y slicer
@@ -157,7 +158,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 
 ### Bloques
-- Bloques propios sin una línea de código: seleccione pasos del historial y colóquelos en el catálogo como bloque — con campos propios, vista previa y rango de valores comprobado.
+- Bloques propios sin una línea de código: seleccione pasos del historial y colóquelos en el catálogo como bloque — con campos propios, vista previa y un rango de valores a su medida.
 - Un bloque creado por usted viaja dentro del archivo de proyecto. Quien lo abra puede insertar su pieza sin tener que instalar nada.
 - Cinco bloques nuevos en el catálogo: gancho para panel perforado, escuadra, pie, clip para cables y ojal de bisagra.
 - El gancho para panel aguanta ahora aunque alguien levante la pieza al retirar algo — una lengüeta elástica encaja detrás del panel. Desactivable si retira la pieza a menudo.

@@ -15,7 +15,7 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Disegno e modellazione
@@ -70,7 +70,8 @@ scrive in `website/version.json`.
 ### Piattaforme e correzioni
 
 - Per Linux è disponibile un'AppImage oltre al Flatpak. Solidon può quindi avviarsi come singolo file eseguibile senza installare Flatpak.
-- Su Windows un aggiornamento termina senza domande ripetute e riavvia Solidon. Il Flatpak Linux può essere aggiornato dall'applicazione.
+- Un aggiornamento di Windows avviato da Solidon mostra solo l’avanzamento e poi riapre Solidon. Avviando il programma d’installazione a mano, resta la scelta finale di apertura.
+- Il Flatpak Linux può essere aggiornato da Solidon.
 - I messaggi al supporto possono essere inviati anche dal pacchetto Linux. Prima mancava l'accesso di rete necessario.
 - Su macOS le fessure sottili nella mesh STL di una filettatura vengono ricucite all'esportazione senza accettare una mesh peggiorata.
 - La ricerca degli aggiornamenti accetta un changelog multilingue ampio. Le note non finiscono più a metà parola e gli elenchi lunghi non bloccano il controllo.
@@ -100,7 +101,7 @@ scrive in `website/version.json`.
 ### Blocchi
 
 - Una cerniera a perno che esce dalla stampante già mobile. Niente da montare, niente da inserire: la stampante lascia aperto il gioco.
-- Un blocco può essere fatto di più pezzi se dice prima quanti. Anche la prova sull'intervallo lo verifica.
+- Un blocco può riunire più pezzi. Così puoi salvare un modello mobile o assemblato come un'unica voce riutilizzabile del catalogo.
 - Mettere il perno nel foro non funzionava, benché entrambi gli elementi ci fossero. Ora sì.
 
 ### Stampa e slicer
@@ -156,7 +157,7 @@ scrive in `website/version.json`.
 
 
 ### Blocchi
-- Blocchi propri senza una riga di codice: scegli dei passi nella cronologia e mettili nel catalogo come blocco — con campi propri, anteprima e intervallo di valori verificato.
+- Blocchi propri senza una riga di codice: scegli dei passi nella cronologia e mettili nel catalogo come blocco — con campi propri, anteprima e un intervallo di valori a tua scelta.
 - Un blocco costruito da te viaggia dentro il file di progetto. Chi lo apre può inserire il tuo pezzo senza dover installare nulla.
 - Cinque nuovi blocchi nel catalogo: gancio per pannello forato, squadretta, piedino, clip per cavi e occhiello di cerniera.
 - Il gancio per pannello ora tiene anche se qualcuno solleva il pezzo togliendo qualcosa — una linguetta elastica scatta dietro il pannello. Disattivabile se togli spesso il pezzo.

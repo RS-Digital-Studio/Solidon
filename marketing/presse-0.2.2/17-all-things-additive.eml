@@ -1,0 +1,41 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: editorial@allthingsadditive.com
+Reply-To: marketing@solidon3d.de
+Subject: Software workflow: From an imported feature edit to material-aware 3MF
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear All Things Additive Editorial Team,
+
+Solidon3D 0.2.2 connects three desktop polymer-printing tasks that are often
+handled separately: adapting imported geometry, assigning the physical
+material configuration and handing structured data to an external slicer.
+
+The workflow begins with a recognised feature in an imported STL or 3MF. A
+mounting hole can be resized while its original location and axis are
+preserved, and the edit remains reversible. Standards-based inserts, screw
+seats or bearing seats can then use clearance values measured from a printed
+calibration artefact.
+
+Each real filament spool carries colour, temperatures, cooling, retraction and
+material properties. The application writes those values into the correct 3MF
+material slot and maps them into the slicer handoff, avoiding a mismatch
+between a selected colour and another spool's process settings.
+
+The release also adds more capable constrained sketching, matching printable
+fasteners and reusable parametric components built from operation history.
+Solidon is local desktop preparation software rather than a slicer or
+enterprise data platform. It runs on Windows, macOS and Linux without an
+account, telemetry or cloud project store.
+
+Overview: https://solidon3d.de/en/
+
+I can provide the released build, a sample STL-to-3MF workflow, the resulting
+slicer data and a one-page technical summary for editorial evaluation.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

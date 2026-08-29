@@ -15,7 +15,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
-## 0.3.0
+## 0.2.2
 
 
 ### Desenho e modelação
@@ -70,7 +70,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Plataformas e correções
 
 - Para Linux há agora uma AppImage além do Flatpak. Assim, o Solidon pode iniciar como um único ficheiro executável sem instalar Flatpak.
-- No Windows, uma atualização termina sem perguntas repetidas e volta a iniciar o Solidon. O Flatpak Linux pode ser atualizado a partir da aplicação.
+- Uma atualização do Windows iniciada pelo Solidon mostra apenas o progresso e volta a abrir o Solidon. Se iniciar o instalador à mão, mantém a opção de abertura na página final.
+- O Flatpak Linux pode ser atualizado a partir do Solidon.
 - As mensagens ao suporte também podem ser enviadas a partir do pacote Linux. Antes faltava-lhe o acesso de rede necessário.
 - No macOS, as fissuras finas da malha STL de uma rosca são cosidas ao exportar sem aceitar uma malha que tenha piorado.
 - A procura de atualizações aceita um changelog multilingue extenso. As notas já não terminam a meio de uma palavra e as listas longas não bloqueiam a procura.
@@ -100,7 +101,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Blocos
 
 - Uma dobradiça de pino que sai da impressora já móvel. Nada para montar, nada para inserir: a impressora deixa a folga aberta.
-- Um bloco pode ser feito de várias peças se disser antes de quantas. O teste de intervalo verifica-o também.
+- Um bloco pode reunir várias peças. Assim pode guardar um modelo móvel ou montado como uma única entrada reutilizável do catálogo.
 - Pôr o pino no furo não funcionava, embora ambos os elementos lá estivessem. Agora sim.
 
 ### Impressão e slicer
@@ -156,7 +157,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 
 ### Blocos
-- Blocos próprios sem uma linha de código: escolha passos no histórico e coloque-os no catálogo como bloco — com campos próprios, pré-visualização e intervalo de valores verificado.
+- Blocos próprios sem uma linha de código: escolha passos no histórico e coloque-os no catálogo como bloco — com campos próprios, pré-visualização e um intervalo de valores à sua escolha.
 - Um bloco construído por si viaja dentro do ficheiro de projeto. Quem o abrir pode inserir a sua peça sem ter de instalar nada.
 - Cinco blocos novos no catálogo: gancho para painel perfurado, esquadro, pé, clipe de cabos e olhal de dobradiça.
 - O gancho para painel agora aguenta mesmo que alguém levante a peça ao tirar algo — uma lingueta elástica encaixa atrás do painel. Desativável se tirar a peça muitas vezes.

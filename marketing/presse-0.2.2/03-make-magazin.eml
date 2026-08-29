@@ -1,0 +1,47 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: mail@make-magazin.de
+Reply-To: marketing@solidon3d.de
+Subject: Werkstattversuch: Fremde STL-Bohrung ändern und Passung messen
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Make-Redaktion,
+
+zu Solidon3D 0.2.2 möchte ich Ihnen keine allgemeine Produktmeldung, sondern
+einen nachvollziehbaren Werkstattversuch anbieten:
+
+Ein heruntergeladener Halter besitzt die falsche Bohrung. Solidon erkennt sie
+im STL-Netz, ändert den Durchmesser auf derselben Achse und setzt danach einen
+Gewindeeinsatz oder Lagersitz ein. Das notwendige Spiel stammt nicht aus einer
+allgemeinen Tabelle, sondern aus einem kleinen Kalibrierteil, das zuvor auf
+dem verwendeten Drucker mit dem verwendeten Filament gedruckt wurde.
+
+Damit lässt sich praktisch prüfen:
+
+1. Bleiben Lage und Richtung der ursprünglichen Bohrung erhalten?
+2. Passt der Einsatz mit den am Prüfstück ermittelten Werten beim ersten Druck?
+3. Lässt sich das Ergebnis durch eine einzige Maßänderung reproduzierbar
+   nachstellen?
+
+Die dazu passenden Neuerungen in 0.2.2 sind die direkte Änderung erkannter
+Bohrungen, druckbare Schrauben und Muttern mit gemeinsamem Gewindemaß,
+Normsitze für Kugellager sowie Skizzen, die sich in der 3D-Ansicht maßhaltig zu
+Körpern oder Taschen aufziehen lassen. Filamentspulen können ihre Druckwerte
+bis in 3MF und Slicer mitnehmen.
+
+Ich kann ein vollständiges Versuchspaket vorbereiten: Ausgangs-STL,
+Kalibrierteil, Messblatt, Projektdatei, Ergebnis-3MF und den veröffentlichten
+0.2.2-Bau für Windows, macOS oder Linux. Der optionale Chat wird für den
+Versuch nicht benötigt; Solidon läuft ohne Konto und Cloud-Ablage.
+
+Überblick und Download: https://solidon3d.de/
+
+Wenn die Aufgabe als Make-Test oder Werkstattprojekt passt, richte ich das
+Paket gern auf einen Ihrer Drucker und ein übliches Material aus.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de
