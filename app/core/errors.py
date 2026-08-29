@@ -64,7 +64,7 @@ SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
 #: ``unhandled_advice`` zu einem Satz zum Lesen: Der Kunde bekam den Rat, die
 #: Teilung abzubrechen, und keinen Weg, es zu tun.
 CANCEL_SPLIT = Action("cancel_split", _("Die laufende Teilung abbrechen"), primary=True)
-USE_VOXEL_STAGE = Action("use_voxel_stage", _("Voxelstufe erzwingen"))
+USE_VOXEL_STAGE = Action("use_voxel_stage", _("Gröber rechnen — Maße werden gerundet"))
 SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
@@ -411,7 +411,7 @@ class BooleanFailedError(GeometryError):
     """Der Rückfallkette sind die Stufen ausgegangen (§17.2)."""
 
     default_title: ClassVar[TranslatableText] = _(
-        "Die boolesche Operation ist auf allen Stufen gescheitert."
+        "Die Körper ließen sich auf keinem Weg verknüpfen."
     )
     default_suggestions: ClassVar[tuple[Action, ...]] = (
         REPAIR_AND_RETRY,
@@ -440,7 +440,9 @@ class BooleanFailedError(GeometryError):
         # und der Rat bleibt — mit einem Handler dahinter, der einmal mit der
         # vollen Kette rechnet.
         if attempted and "voxel" not in attempted:
-            kwargs.setdefault("title", _("Die boolesche Operation ist im Entwurf gescheitert."))
+            kwargs.setdefault(
+                "title", _("Die Körper ließen sich in der schnellen Vorschau nicht verknüpfen.")
+            )
         elif "voxel" in attempted and kwargs.get("suggestions") is None:
             kwargs["suggestions"] = tuple(
                 action for action in self.default_suggestions if action is not USE_VOXEL_STAGE

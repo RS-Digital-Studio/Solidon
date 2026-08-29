@@ -74,7 +74,7 @@ WALL_SCALE_FACTOR = 5.0
 #: feste deutsche Zeichenketten hier und liefen an ``tr()`` vorbei bis in die
 #: Legende (Regel 20). Aufgelöst wird erst beim Bauen der Karte
 #: (:func:`_named`) — beim Import steht die Sprache noch nicht fest.
-DEFECT_LEVELS: Final = (_("in Ordnung"), _("offene Kante"), _("Non-Manifold"))
+DEFECT_LEVELS: Final = (_("in Ordnung"), _("offene Kante"), _("verzweigte Kante"))
 
 #: Flächenkategorien der Passungskarte, ebenso übersetzbar.
 FIT_LEVELS: Final = (_("unbeteiligt"), _("Teil einer Passung"), _("Passung verletzt"))

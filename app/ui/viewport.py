@@ -2578,14 +2578,14 @@ class Viewport(QWidget):
         steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
         auffängt."""
         self._bed_extent: tuple[float, float] | None = None
+        """Breite und Tiefe der Druckplatte, sobald ein Bauraum gezeigt wurde.
+        Der Schatten wird an ihrer Kante geschnitten; ohne Bauraum gibt es
+        nichts zu schneiden."""
         self._build_volume: tuple[float, float, float] | None = None
         """Der Bauraum des geltenden Profils — Breite, Tiefe, Höhe.
 
         Getrennt von :attr:`_bed_extent`, weil der Schattenschnitt nur die
         Platte braucht und das Einpassen der leeren Szene die Höhe."""
-        """Breite und Tiefe der Druckplatte, sobald ein Bauraum gezeigt wurde.
-        Der Schatten wird an ihrer Kante geschnitten; ohne Bauraum gibt es
-        nichts zu schneiden."""
         self._shadow_cast: tuple[float, float] = (SHADOW_SIDE, SHADOW_REACH)
         """Die Lichtrichtung, mit der die Schatten im Bild stehen. Sie folgt
         der Kamera; wer sie schon getroffen hat, zeichnet nicht neu."""
@@ -2659,6 +2659,7 @@ class Viewport(QWidget):
         """Wie viele Betten gerade im Bild stehen. Ändert sich die Zahl, wird
         die Kulisse neu gebaut; bleibt sie, wird nichts angefasst."""
         self._sculpting = False
+        """§20: solange das an ist, sind Klicks Pinselstriche."""
         self._boning = False
         self._splitting = False
         """§25: solange das an ist, setzen Klicks die Enden einer Trennlinie."""
@@ -2669,6 +2670,8 @@ class Viewport(QWidget):
         self._brush_radius = 0.0
         """Der Pinselradius in Millimetern, solange geformt wird."""
         self._last_drag_stroke: Vec3 | None = None
+        """Wo der letzte Zug eines gezogenen Strichs saß — der Mindestabstand
+        (halber Pinselradius) rechnet dagegen."""
         self._body_drag_from: Vec3 | None = None
         """Wo ein Zug am gewählten Körper begonnen hat, in Ansichtskoordinaten.
 
@@ -2681,13 +2684,10 @@ class Viewport(QWidget):
 
         Die Vorschau wird zurückgenommen, bevor die Auswertung den Körper an
         seine neue Stelle setzt — sonst stünde er doppelt versetzt da."""
-        """Wo der letzte Zug eines gezogenen Strichs saß — der Mindestabstand
-        (halber Pinselradius) rechnet dagegen."""
         self._brush_actor: Any = None
         """Der Ring, der ihn zeigt — als Weltmaß in der Szene und nicht am
         Zeiger: Ein Zeiger hat feste Punktgröße und weiß nichts von der Kamera,
         er behauptete beim ersten Zoom eine Größe, die er nicht mehr hat."""
-        """§20: solange das an ist, sind Klicks Pinselstriche."""
         self._cursor_role = "select"
         """Welcher Zeiger gerade über dem Bild steht. Gemerkt, damit nicht bei
         jeder Mausbewegung derselbe neu gesetzt wird — Qt zeichnet ihn sonst
@@ -6978,9 +6978,7 @@ class Viewport(QWidget):
             ]
             labels = [str(tr("Hochziehen"))]
             if self._cut_pull_available():
-                label_points.append(
-                    tuple(inward[axis] + label_shift[axis] for axis in range(3))
-                )
+                label_points.append(tuple(inward[axis] + label_shift[axis] for axis in range(3)))
                 labels.append(str(tr("Abtragen")))
             self._sketch_actors.append(
                 plotter.add_point_labels(

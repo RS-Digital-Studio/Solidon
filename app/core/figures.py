@@ -741,7 +741,7 @@ def _sketch_uses(theme: Theme) -> str:
     # Drei Zeilen und nicht drei Spalten: die Titel kommen aus dem Register und
     # sind Sätze, keine Wörter — nebeneinander lief der dritte aus dem Bild.
     rows = (
-        (60.0, _("Grundform extrudieren"), _("gerade nach oben")),
+        (60.0, _("Grundform hochziehen"), _("gerade nach oben")),
         (140.0, _("Rotationskörper aufziehen"), _("um die senkrechte Achse")),
         (220.0, _("Entlang eines Bogens führen"), _("Rohrbogen in einem Schritt")),
     )

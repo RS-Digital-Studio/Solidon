@@ -283,7 +283,7 @@ class SketchExtrudeParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Wie hoch der Körper aufgezogen wird, vom Druckbett nach oben."),
+        doc=_("Wie hoch der Körper gezogen wird, vom Druckbett nach oben."),
     )
     corners: int = param(
         title=_("Ecken"),
@@ -322,13 +322,13 @@ class SketchExtrudeParams(BaseParams):
 
 @register_op(
     name="sketch_extrude",
-    title=_("Grundform extrudieren"),
+    title=_("Grundform hochziehen"),
     category="sketch",
     params=SketchExtrudeParams,
     consumes=0,
     produces=1,
     doc=_(
-        "Zieht eine Grundform senkrecht zu einem Körper auf. Der Umriss kommt "
+        "Zieht eine Grundform senkrecht hoch, bis ein Körper daraus wird. Der Umriss kommt "
         "aus einer gelösten Skizze und geht als exakte Kurve in den Kern "
         "— ein Kreis ist wirklich rund."
     ),

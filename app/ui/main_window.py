@@ -1098,6 +1098,7 @@ class MainWindow(QMainWindow):
         self.parameters = ParameterPanel(self)
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
+        self.history_panel.noteRequested.connect(self.announce)
         self.history_panel.removalRequested.connect(self.remove_history_operations)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
         self.filaments = FilamentPanel(self)
@@ -3197,37 +3198,39 @@ class MainWindow(QMainWindow):
         200 ms Verzögerung kommen obendrauf. Die Statuszeile wird ausdrücklich
         neu gezeichnet, bevor das Lesen den Hauptthread belegt (§2.8).
         """
-        if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
+        project_file = path.suffix.lower() == PROJECT_SUFFIX
+        if project_file and not self._may_discard():
             return
         # Vom Startbildschirm aus ersetzt ein Modell das offene Projekt — und
         # die Frage danach gehört VOR den Wartezeiger, wie bei der .p3d oben:
         # ein Fenster, das fragt und zugleich „bitte warten" zeigt, sagt
         # zweierlei (§2.8).
         starting_fresh = (
-            path.suffix.lower() != PROJECT_SUFFIX
-            and self.stack.currentWidget() is self.start_screen
+            not project_file and self.stack.currentWidget() is self.start_screen
         )
         if starting_fresh and not self._may_discard():
             return
-        if path.suffix.lower() == PROJECT_SUFFIX:
+        if project_file:
             # Was zum vorigen Projekt zu sagen war, gilt für dieses nicht:
             # „Exportiert: dose.3mf" über einer gerade geöffneten Datei wäre
             # eine Auskunft über etwas anderes. Vor dem Ladehinweis leeren,
             # sonst nähme ``announce`` ihn gleich wieder weg.
             self.announce("")
-        self.status_message.setText(tr("Projekt wird geladen …"))
+        self.status_message.setText(
+            tr("Projekt wird geladen …") if project_file else tr("Modell einfügen …")
+        )
         self.status_message.repaint()
         try:
             with waiting():
-                if path.suffix.lower() == PROJECT_SUFFIX:
+                if project_file:
                     self.session.open_project(path)
                     self.settings.remember(path)
                     save_settings(self.settings)
                 else:
                     if starting_fresh:
                         self.session.start_new(self.settings.printer, self.settings.material)
-                    self.session.import_model(path)
-            if path.suffix.lower() == PROJECT_SUFFIX:
+                    self.session.import_model(path, raise_on_error=True)
+            if project_file:
                 # Beide fragen etwas, und beide erst außerhalb des
                 # Wartezeigers: ein Fenster, das um Antwort bittet und dabei
                 # „bitte warten" zeigt, sagt zweierlei.
@@ -3316,6 +3319,8 @@ class MainWindow(QMainWindow):
         # nichts zurück (Gesamtreview-b, Bericht 08, Fund 1).
         if starting_fresh and not self._may_discard():
             return
+        self.status_message.setText(tr("Modell einfügen …"))
+        self.status_message.repaint()
         try:
             with waiting():
                 if starting_fresh:
@@ -3324,8 +3329,9 @@ class MainWindow(QMainWindow):
                     # aus den Einstellungen, wie es open_path beim Ablegen
                     # einer Datei auch anlegt.
                     self.session.start_new(self.settings.printer, self.settings.material)
-                self.session.import_model(Path(name))
+                self.session.import_model(Path(name), raise_on_error=True)
         except AppError as error:
+            self.status_message.setText(self._announcement)
             show_error(error, self)
 
     def action_import_url(self) -> None:
@@ -3423,11 +3429,16 @@ class MainWindow(QMainWindow):
                 self.announce(tr("Der Download wurde verworfen — das Projekt bleibt."))
                 return
             self.session.start_new(self.settings.printer, self.settings.material)
-        self.session.import_payload(
-            fetched.name,
-            fetched.payload,
-            origin=SourceOrigin(url=fetched.url, retrieved=fetched.retrieved),
-        )
+        try:
+            self.session.import_payload(
+                fetched.name,
+                fetched.payload,
+                origin=SourceOrigin(url=fetched.url, retrieved=fetched.retrieved),
+                raise_on_error=True,
+            )
+        except AppError as error:
+            show_error(error, self)
+            return
         self._show_start_screen(False)
         self.announce(f"{tr('Geladen')}: {fetched.name}")
 
@@ -5270,7 +5281,7 @@ class MainWindow(QMainWindow):
         action = ""
         if offer == "ready":
             action = (
-                str(tr("Pfeil: Körper aufziehen · Kreuz: Tasche schneiden."))
+                str(tr("Pfeil: Körper hochziehen · Kreuz: Tasche schneiden."))
                 if self._sketch_cut_available()
                 else str(
                     tr(

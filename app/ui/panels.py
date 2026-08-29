@@ -654,6 +654,8 @@ class ObjectTree(QWidget):
         """Die Höhe, die diese Karte haben darf — von der Überlagerung
         zugeteilt (§2.5). ``None`` heißt: noch niemand hat es gesagt."""
         self._result: EvaluationResult | None = None
+        """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
+        neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self._document: Document | None = None
         self._theme: DrawingTheme = "dark"
         """Für welches Thema die Vorschaubilder gezeichnet werden."""
@@ -668,8 +670,6 @@ class ObjectTree(QWidget):
         """Was noch gezeichnet werden muss. Erst nach dem Aufbau, sonst steht
         der Baum still, während das erste Bild entsteht — und bei einem
         gescannten Teil sind das achtzig Millisekunden je Zeile."""
-        """Das Zuletzt-Gezeigte, damit sich der Baum ohne neue Auswertung
-        neu zeichnen kann — beim Ausblenden ändert sich nur die Anzeige."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
         # Wer einen Körper aufklappt, will seine Merkmale sehen und nicht in
         # einem Feld von zwei Zeilen danach scrollen.
@@ -1870,6 +1870,12 @@ class HistoryPanel(QWidget):
 
     operationActivated = Signal(int)
     """Eine Operation wurde doppelt angeklickt — trägt ihre ID, zum Ändern (§15.4)."""
+    noteRequested = Signal(str)
+    """Was der Verlauf dem Nutzer zu sagen hat — das Fenster zeigt es an.
+
+    Bisher nur für den Doppelklick, der nichts öffnen kann. Als Signal und
+    nicht als eigene Zeile im Panel: Die Statuszeile ist der Ort für eine
+    Auskunft, die eine Handlung begleitet, und der Verlauf hat keine."""
     removalRequested = Signal(object)
     """Die gewählten Operationen sollen nach einer Nachfrage gelöscht werden."""
     bakeRequested = Signal(int)
@@ -2066,9 +2072,29 @@ class HistoryPanel(QWidget):
         return tuple(sorted(chosen))
 
     def _on_activated(self, item: QListWidgetItem) -> None:
+        """Doppelklick: die Operation öffnen — oder sagen, warum nicht.
+
+        Eine Transaktion aus mehreren Operationen trägt keine ``UserRole``;
+        welche der vier sollte der Doppelklick zeigen? Ihre Schritte stehen
+        eingerückt darunter und tragen je eine.
+
+        **Stumm bleiben darf er deswegen nicht.** Sechs der neun Beispieltouren
+        lehren genau diese Geste als *den* Weg zum Ändern („Öffnen Sie die
+        Mutternfalle mit einem Doppelklick im Verlauf"), und der Tooltip der
+        Liste verspricht sie ohne Einschränkung. Eine Handlung, die nichts tut,
+        sagt, was stattdessen geht (Regel 17, §2.1).
+        """
         op_id = item.data(Qt.ItemDataRole.UserRole)
         if op_id is not None:
             self.operationActivated.emit(int(op_id))
+            return
+        if item.data(OPS_ROLE):
+            self.noteRequested.emit(
+                tr(
+                    "Dieser Schritt fasst mehrere Operationen zusammen. "
+                    "Öffnen lässt sich jede einzeln — die eingerückten Zeilen darunter."
+                )
+            )
 
     def _request_selected_removal(self) -> None:
         """Die sichtbare Auswahl zum bestätigten Löschen weiterreichen."""

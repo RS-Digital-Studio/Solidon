@@ -270,7 +270,7 @@ class LoadOutlineParams(BaseParams):
 
 @register_op(
     name="load_outline",
-    title=_("Zeichnung extrudieren"),
+    title=_("Zeichnung hochziehen"),
     category="import",
     params=LoadOutlineParams,
     consumes=0,

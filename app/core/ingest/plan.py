@@ -33,7 +33,7 @@ from app.i18n import TranslatableText, _
 #: Der Titel der Transaktion je Weg. Im Verlauf steht er, nicht der Op-Name.
 _TITLES: Final[dict[str, TranslatableText]] = {
     "load_step": _("STEP laden"),
-    "load_outline": _("Zeichnung extrudieren"),
+    "load_outline": _("Zeichnung hochziehen"),
     "load": _("Modell laden"),
 }
 

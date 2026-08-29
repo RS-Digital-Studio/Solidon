@@ -169,13 +169,18 @@ def test_the_boolean_failure_says_which_stages_really_ran() -> None:
 
     Jetzt sagt der Titel, was gilt — und wo die Voxelstufe wirklich dran war,
     fällt der Rat weg, statt eine Wiederholung anzubieten.
+
+    Beide Titel nennen seit dem 29.08.2026 die Handlung statt des Verfahrens:
+    „boolesch" steht in keinem Menü und in keinem Glossareintrag, und „im
+    Entwurf" verwies auf eine Qualitätsstufe, die in der Oberfläche keinen
+    Namen trägt — im Skizzenmodus zeichnet der Kunde einen Entwurf.
     """
-    entwurf = BooleanFailedError(attempted=("direct", "welded"))
-    assert "Entwurf" in str(entwurf.title)
-    assert errors.USE_VOXEL_STAGE in entwurf.suggestions, "hier ist die Stufe noch offen"
+    vorschau = BooleanFailedError(attempted=("direct", "welded"))
+    assert "Vorschau" in str(vorschau.title)
+    assert errors.USE_VOXEL_STAGE in vorschau.suggestions, "hier ist die Stufe noch offen"
 
     voll = BooleanFailedError(attempted=("direct", "welded", "jittered", "voxel"))
-    assert "allen Stufen" in str(voll.title)
+    assert "keinem Weg" in str(voll.title)
     assert errors.USE_VOXEL_STAGE not in voll.suggestions, (
         "die Voxelstufe war dran — sie zu erzwingen wäre eine Wiederholung"
     )
