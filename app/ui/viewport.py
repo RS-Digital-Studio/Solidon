@@ -2391,8 +2391,13 @@ class Viewport(QWidget):
         self._sketch_frame: PlaneFrame | None = None
         self._zone_margins: tuple[int, int, int] = (0, 0, 0)
         """Verdeckte Bildränder links, rechts und unten, in Bildpunkten."""
-        self._sketch_occlusion_applied = 0
-        """Welcher untere Rand bereits in die Skizzenkamera eingerechnet ist."""
+        self._sketch_occlusion_shift: Vec3 = (0.0, 0.0, 0.0)
+        """Der wirklich angewandte Kameraausgleich, in Weltkoordinaten.
+
+        Ein Pixelrand allein genügt nicht: Nach Zoom oder Größenänderung meint
+        dieselbe Pixelzahl ein anderes Weltmaß. Der gespeicherte Vektor lässt
+        sich exakt entfernen und für den neuen Maßstab neu berechnen.
+        """
         self._sketch_measure_pending: Callable[[], float] | None = None
         """Ob gerade ein Maß aussteht — vom Fenster je Skizzenmodus gesetzt
         und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
@@ -4192,7 +4197,17 @@ class Viewport(QWidget):
         if self.plotter is None or not points:
             return
 
-        marks = np.asarray(points, dtype=float)
+        entry = self._result.scene.objects.get(target) if self._result and target else None
+        shift = (
+            self._view_offset(entry, self._result)
+            if entry is not None and self._result is not None
+            else np.zeros(3)
+        )
+        # Die Operation speichert Szenenkoordinaten. In „Alle Platten“ steht
+        # der Körper für die Anzeige versetzt; Linie und Ebene müssen genau
+        # denselben reinen Anzeigeversatz bekommen, sonst erscheinen sie auf
+        # Platte 1 statt auf dem angeklickten Teil.
+        marks = np.asarray(points, dtype=float) + shift
         self._split_actors.append(
             self.plotter.add_points(
                 marks,
@@ -4212,7 +4227,6 @@ class Viewport(QWidget):
             if hasattr(line, "PickableOff"):
                 line.PickableOff()
             self._split_actors.append(line)
-        entry = self._result.scene.objects.get(target) if self._result and target else None
         if plane is not None and entry is not None:
             bounds = entry.mesh.bounds
             patch = plane_patch(bounds.minimum, bounds.maximum, plane)
@@ -4221,7 +4235,7 @@ class Viewport(QWidget):
 
                 corners = np.asarray(patch, dtype=float)
                 centre = np.mean(corners, axis=0)
-                corners = centre + SPLIT_PLANE_SCALE * (corners - centre)
+                corners = centre + SPLIT_PLANE_SCALE * (corners - centre) + shift
                 face = np.concatenate(
                     (np.asarray([len(corners)], dtype=np.int64), np.arange(len(corners)))
                 )
@@ -5792,6 +5806,8 @@ class Viewport(QWidget):
         self.plane_picker.place()
         self.sketch_selection.place()
         self.sketch_action.place()
+        if self._sketch_frame is not None and self._apply_sketch_occlusion():
+            self._draw()
         self._place_orientation_widget()
 
     def _place_orientation_widget(self) -> None:
@@ -6528,7 +6544,7 @@ class Viewport(QWidget):
         position, focus, up = camera_for_plane(frame, distance)
         self.plotter.camera_position = [position, focus, up]
         self._fit_parallel_scale(distance)
-        self._sketch_occlusion_applied = 0
+        self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self._apply_sketch_occlusion()
         self._redraw_shadows()
 
@@ -6566,7 +6582,7 @@ class Viewport(QWidget):
         self.plotter.camera_position = [position, focus, up]
         if camera is not None and getattr(camera, "parallel_projection", False):
             camera.parallel_scale = scale
-        self._sketch_occlusion_applied = 0
+        self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self._apply_sketch_occlusion()
         self.plotter.render()
         self.cameraMoved.emit()
@@ -6590,16 +6606,12 @@ class Viewport(QWidget):
             self._draw()
 
     def _apply_sketch_occlusion(self) -> bool:
-        """Die noch fehlende Verschiebung der Skizzenkamera anwenden."""
-        wanted = self._zone_margins[2]
-        difference = wanted - self._sketch_occlusion_applied
-        if difference == 0 or not self._shift_sketch_camera(difference):
-            return False
-        self._sketch_occlusion_applied = wanted
-        return True
+        """Den unteren Bildrand beim heutigen Maßstab ausgleichen.
 
-    def _shift_sketch_camera(self, bottom: int) -> bool:
-        """Den Bildinhalt um die halbe verdeckte Höhe nach oben schieben."""
+        Zoom, Fenstergröße und Kameradrehung können sich ändern, obwohl die
+        Werkzeugkarte gleich hoch bleibt. Deshalb wird der vorige Weltvektor
+        zuerst exakt entfernt und der neue aus dem aktuellen Bild berechnet.
+        """
         plotter = self.plotter
         if plotter is None:
             return False
@@ -6607,15 +6619,43 @@ class Viewport(QWidget):
         if camera is None or not getattr(camera, "parallel_projection", False):
             return False
         position, focus, up = plotter.camera_position
-        amount = occluded_view_shift(float(camera.parallel_scale), self.height(), bottom)
-        if abs(amount) <= EPS_GEOM:
+        previous = self._sketch_occlusion_shift
+        amount = occluded_view_shift(
+            float(camera.parallel_scale), self.height(), self._zone_margins[2]
+        )
+        wanted: Vec3 = (
+            -float(up[0]) * amount,
+            -float(up[1]) * amount,
+            -float(up[2]) * amount,
+        )
+        if math.dist(previous, wanted) <= EPS_GEOM:
             return False
-        shift = tuple(-float(up[axis]) * amount for axis in range(3))
+        base_position = tuple(float(position[axis]) - previous[axis] for axis in range(3))
+        base_focus = tuple(float(focus[axis]) - previous[axis] for axis in range(3))
         plotter.camera_position = [
-            tuple(float(position[axis]) + shift[axis] for axis in range(3)),
-            tuple(float(focus[axis]) + shift[axis] for axis in range(3)),
+            tuple(base_position[axis] + wanted[axis] for axis in range(3)),
+            tuple(base_focus[axis] + wanted[axis] for axis in range(3)),
             up,
         ]
+        self._sketch_occlusion_shift = wanted
+        return True
+
+    def _remove_sketch_occlusion(self) -> bool:
+        """Den angewandten Kameraausgleich ohne neue Maßrechnung entfernen."""
+        plotter = self.plotter
+        if plotter is None:
+            self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
+            return False
+        shift = self._sketch_occlusion_shift
+        if math.dist(shift, (0.0, 0.0, 0.0)) <= EPS_GEOM:
+            return False
+        position, focus, up = plotter.camera_position
+        plotter.camera_position = [
+            tuple(float(position[axis]) - shift[axis] for axis in range(3)),
+            tuple(float(focus[axis]) - shift[axis] for axis in range(3)),
+            up,
+        ]
+        self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         return True
 
     def _fit_parallel_scale(self, distance: float) -> None:
@@ -6675,6 +6715,10 @@ class Viewport(QWidget):
         Kante aussehen.
         """
         self.clear_sketch()
+        # Kameraereignisse melden Zoom und Drehung über ``cameraMoved``. Der
+        # anschließende Neuaufbau hält hier den freien Bildbereich stabil,
+        # bevor Raster, Maße und Griff projiziert werden.
+        self._apply_sketch_occlusion()
         self._sketch_step = step
         # **Vor der Wache gemerkt, nicht danach.** Der Ziehgriff fragt diese
         # Kurven nach dem Umriss im Bild, und offscreen gibt es keinen Plotter:
@@ -7956,9 +8000,8 @@ class Viewport(QWidget):
         :meth:`_sketch_hit` — dort ist eine **Stelle auf der Ebene** gemeint
         und kein Ding in der Szene.
         """
-        if frame is None and self._sketch_occlusion_applied:
-            self._shift_sketch_camera(-self._sketch_occlusion_applied)
-            self._sketch_occlusion_applied = 0
+        if frame is None:
+            self._remove_sketch_occlusion()
         self._sketch_frame = frame
         if frame is not None:
             self._apply_sketch_occlusion()

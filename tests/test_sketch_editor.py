@@ -4477,6 +4477,48 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         window.deleteLater()
 
 
+def test_selecting_a_body_updates_the_visible_cut_button_immediately(
+    qt_app: QApplication,
+) -> None:
+    """Wer dem Hinweis folgt, braucht keine zweite zufällige Geste."""
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Scene, SceneObject
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        assert not window.sketch_cut_button.isEnabled()
+
+        body = SceneObject(
+            id="body",
+            name="Körper",
+            mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
+            kind="brep",
+        )
+        window.session.last_result = SimpleNamespace(scene=Scene(objects={"body": body}))
+        window.object_tree.selected_objects = lambda: ("body",)
+
+        window._on_selection("body")
+
+        assert window.sketch_cut_button.isEnabled()
+        assert "Schneidet den Umriss" in window.sketch_cut_button.toolTip()
+    finally:
+        window.session.last_result = None
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
 def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
     qt_app: QApplication,
 ) -> None:

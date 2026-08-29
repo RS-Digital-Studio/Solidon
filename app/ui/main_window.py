@@ -6562,11 +6562,18 @@ class MainWindow(QMainWindow):
         self.report.add_findings(applied.findings)
         self._queue_split_reveal(applied.object_ids)
         self._clear_split_line()
-        self.announce(
-            tr("Getrennt — die Hälften sind zur Kontrolle geöffnet.")
-            if not pins
-            else tr("Getrennt — zur Kontrolle geöffnet: Stifte an Teil A, Löcher an Teil B.")
-        )
+        connector_count = len(applied.fits)
+        if not pins:
+            message = tr("Getrennt — die Hälften sind zur Kontrolle geöffnet.")
+        elif not connector_count:
+            message = tr("Getrennt und geöffnet — die Schnittfläche ist zu klein für Passstifte.")
+        elif connector_count == 1:
+            message = tr("Getrennt und geöffnet: 1 Passstift an Teil A, passendes Loch an Teil B.")
+        else:
+            message = tr(
+                "Getrennt und geöffnet: {count} Passstifte an Teil A, passende Löcher an Teil B."
+            ).format(count=connector_count)
+        self.announce(message)
 
     def _queue_split_reveal(self, object_ids: Sequence[ObjectId]) -> None:
         """Öffnet neue Hälften, sobald genau diese Ausgaben im Bild stehen."""
@@ -8166,6 +8173,11 @@ class MainWindow(QMainWindow):
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
+        # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
+        # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
+        # den Knopf sofort benutzen können — ohne erst noch die Kamera oder
+        # die Skizze zu bewegen.
+        self._update_sketch_actions()
         result = self.session.last_result
         chosen = self.object_tree.selected_objects()
         entries = [result.scene.objects.get(entry) for entry in chosen] if result else []

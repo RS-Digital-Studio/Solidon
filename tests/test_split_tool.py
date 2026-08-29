@@ -206,17 +206,16 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
     from app.core.scene import EvaluationResult
     from app.core.types import Scene, SceneObject
 
-    viewport._result = EvaluationResult(
-        scene=Scene(
-            objects={
-                "obj_1": SceneObject(
-                    id="obj_1",
-                    name="Würfel",
-                    mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0))),
-                )
-            }
-        )
+    entry = SceneObject(
+        id="obj_1",
+        name="Würfel",
+        mesh=MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0))),
+        plate=1,
     )
+    viewport._result = EvaluationResult(scene=Scene(objects={"obj_1": entry}))
+    viewport._plate = -1
+    viewport._beds_drawn = 2
+    viewport._bed_extent = (200.0, 200.0)
     viewport.show_split_line(
         [(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)],
         plane=SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0),
@@ -224,7 +223,12 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
     )
     assert len(plotter.lines) == 1, "zwei Punkte sind eine Linie"
     assert len(plotter.meshes) == 1, "die ganze Schnittebene wird als Fläche sichtbar"
+    assert plotter.points[-1][0] == pytest.approx((240.0, 0.0, 0.0))
+    assert plotter.lines[-1][0] == pytest.approx((240.0, 0.0, 0.0))
     surface = plotter.meshes[0]
+    assert surface.center == pytest.approx((240.0, 0.0, 0.0)), (
+        "auf Platte 2 liegen Linie und Ebene am angeklickten Körper"
+    )
     assert surface.bounds[1] - surface.bounds[0] > 20.0
     assert surface.bounds[3] - surface.bounds[2] > 20.0, (
         "der Rand der Ebene steht über den undurchsichtigen Körper hinaus"
@@ -423,7 +427,7 @@ def test_drawing_a_line_and_pressing_split_makes_two_parts(window: MainWindow) -
     assert window.explode_bar.factor > 0.0
     assert window.viewport._explosion == pytest.approx(window.explode_bar.factor)
     said = window._announcement
-    assert "Stifte" in said and "Löcher" in said, said
+    assert "Passstifte" in said and "Löcher" in said, said
 
 
 def test_the_seam_becomes_a_fit_pair(window: MainWindow) -> None:
@@ -454,6 +458,29 @@ def test_without_the_checkbox_it_only_cuts(window: MainWindow) -> None:
 
     assert window.session.project.document.ops[-1].params["pins"] == 0
     assert window.session.project.document.fits == []
+
+
+def test_a_face_too_small_for_pins_is_said_plainly(window: MainWindow) -> None:
+    """Gewünschte Stifte sind keine erzeugten Stifte.
+
+    Wenn die Schnittfläche keinen trägt, darf die Erfolgszeile nicht genau die
+    Verbinder versprechen, nach denen der Nutzer anschließend vergeblich sucht.
+    """
+    from app.core.geom.section import SectionPlane
+    from app.core.split import SplitApplied
+
+    window._split_target = "body"
+    window._split_points = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0)]
+    window._split_plane = SectionPlane(normal=(0.0, 1.0, 0.0), position=0.0)
+    window.split_bar.connect_halves.setChecked(True)
+    window.session.split_along = lambda *_args, **_values: SplitApplied(
+        object_ids=["part_a", "part_b"], fits=[]
+    )
+
+    window._apply_split_line()
+
+    assert "zu klein" in window._announcement
+    assert "Stifte an Teil A" not in window._announcement
 
 
 def test_the_registered_split_operation_also_reveals_its_connectors(

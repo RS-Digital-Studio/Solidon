@@ -858,7 +858,9 @@ def test_a_failed_occlusion_is_tried_again(qt_app: QApplication) -> None:
     )
 
 
-def test_the_camera_watcher_holds_the_view_only_weakly(qt_app: QApplication) -> None:
+def test_the_camera_watcher_holds_the_view_only_weakly(
+    qt_app: QApplication, unpinned_windows: None
+) -> None:
     """VTK hält den Beobachter, und eine starke Referenz von dort auf den
     Viewport überlebt jedes Schließen.
 
@@ -940,7 +942,7 @@ def test_every_callback_holds_the_view_only_weakly(qt_app: QApplication) -> None
             )
 
 
-def test_a_released_view_is_actually_released(qt_app: QApplication) -> None:
+def test_a_released_view_is_actually_released(qt_app: QApplication, unpinned_windows: None) -> None:
     """Und niemand sonst hält sie fest — die Probe auf alle Halter zusammen.
 
     **Der Fund, aus dem dieser Test entstand.** Bis dahin überlebten *zwanzig
@@ -966,7 +968,9 @@ def test_a_released_view_is_actually_released(qt_app: QApplication) -> None:
     assert not alive, f"{len(alive)} von 5 Ansichten überlebten ihr Loslassen"
 
 
-def test_a_callback_after_the_view_is_gone_stays_quiet(qt_app: QApplication) -> None:
+def test_a_callback_after_the_view_is_gone_stays_quiet(
+    qt_app: QApplication, unpinned_windows: None
+) -> None:
     """Und es kracht auch nicht: Ein Ereignis, das nach dem Schließen ankommt,
     findet keine Ansicht und tut nichts. Genau dafür fragt jeder der fünf
     Rückrufe erst nach, statt die Referenz zu benutzen."""
@@ -1199,6 +1203,37 @@ def test_the_sketch_focus_moves_to_the_centre_above_the_toolbar() -> None:
     # Bildverschiebung entsprechen daher 40 mm Weltmaß.
     assert occluded_view_shift(100.0, 1000, 400) == pytest.approx(40.0)
     assert occluded_view_shift(100.0, 1000, -400) == pytest.approx(-40.0)
+
+
+def test_the_sketch_focus_tracks_zoom_and_is_removed_exactly(
+    qt_app: QApplication,
+) -> None:
+    """Die Pixelhöhe der Karte bleibt gleich, ihr Weltmaß nach Zoom nicht."""
+    from app.ui.viewport import Viewport
+
+    camera = SimpleNamespace(parallel_projection=True, parallel_scale=100.0)
+    plotter = SimpleNamespace(
+        camera=camera,
+        camera_position=[
+            (0.0, 0.0, 10.0),
+            (0.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+        ],
+    )
+    viewport = Viewport()
+    viewport.resize(1000, 1000)
+    viewport.plotter = plotter
+    viewport._zone_margins = (0, 0, 400)
+
+    assert viewport._apply_sketch_occlusion()
+    assert plotter.camera_position[1] == pytest.approx((0.0, -40.0, 0.0))
+
+    camera.parallel_scale = 50.0
+    assert viewport._apply_sketch_occlusion()
+    assert plotter.camera_position[1] == pytest.approx((0.0, -20.0, 0.0))
+
+    assert viewport._remove_sketch_occlusion()
+    assert plotter.camera_position[1] == pytest.approx((0.0, 0.0, 0.0))
 
 
 def test_a_grid_without_a_step_is_empty_and_not_an_error() -> None:
