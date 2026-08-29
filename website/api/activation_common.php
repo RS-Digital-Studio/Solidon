@@ -346,6 +346,23 @@ function activation_database(bool $initialise = true): PDO
     return $database;
 }
 
+/** Beendet eine mit SQL begonnene SQLite-Transaktion auch über SQL. */
+function activation_commit(PDO $database): void
+{
+    $database->exec('COMMIT');
+}
+
+/** Räumt eine begonnene SQLite-Transaktion auf und bewahrt den ersten Fehler. */
+function activation_rollback(PDO $database): void
+{
+    try {
+        $database->exec('ROLLBACK');
+    } catch (Throwable $problem) {
+        // Der ursprüngliche Fehler erklärt die Handlung; ein fehlender
+        // Transaktionszustand beim Aufräumen darf ihn nicht verdecken.
+    }
+}
+
 /** Liest den privaten Serverteil und stellt sicher, dass er zum Produkt passt. */
 function activation_seed(): string
 {
@@ -410,16 +427,12 @@ function activation_consume_rate(PDO $database, string $digest): void
             . 'WHERE licence_digest = ? AND day = ?'
         );
         $update->execute([$digest, $day]);
-        $database->commit();
+        activation_commit($database);
     } catch (ActivationFailure $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw $problem;
     } catch (Throwable $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw new ActivationFailure(
             'Die Aktivierung konnte gerade nicht geprüft werden. Versuchen Sie es später erneut.',
             503,
@@ -479,16 +492,12 @@ function activation_issue(array $request): string
                 $today,
             ]);
         }
-        $database->commit();
+        activation_commit($database);
     } catch (ActivationFailure $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw $problem;
     } catch (Throwable $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw new ActivationFailure(
             'Die Aktivierung konnte gerade nicht gespeichert werden. Versuchen Sie es erneut.',
             503,
@@ -548,16 +557,12 @@ function activation_deactivate(array $request): void
             $update = $database->prepare('UPDATE activations SET deactivated_at = ? WHERE id = ?');
             $update->execute([gmdate('c'), $request['activation_id']]);
         }
-        $database->commit();
+        activation_commit($database);
     } catch (ActivationFailure $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw $problem;
     } catch (Throwable $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw new ActivationFailure(
             'Der Geräteplatz konnte gerade nicht freigegeben werden. Versuchen Sie es erneut.',
             503,

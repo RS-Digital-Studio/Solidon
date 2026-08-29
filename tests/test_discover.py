@@ -15,6 +15,7 @@ Test selbst gebaut hat.
 from __future__ import annotations
 
 import logging
+import stat
 import sys
 import urllib.request
 from pathlib import Path
@@ -721,10 +722,11 @@ def test_the_host_is_asked_last_and_only_from_inside(monkeypatch: pytest.MonkeyP
 
 
 def _appimage(folder: Path, name: str) -> Path:
-    """Ein AppImage, wie es nach dem Herunterladen daliegt."""
+    """Ein startbares AppImage mit dem unter Unix nötigen Ausführungsrecht."""
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     path.write_bytes(b"AI\x02ELF")
+    path.chmod(path.stat().st_mode | stat.S_IXUSR)
     return path
 
 

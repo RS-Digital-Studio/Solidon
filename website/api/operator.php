@@ -214,11 +214,9 @@ function operator_change(PDO $database, array $request): bool
             $request['reason'],
             $changed ? 1 : 0,
         ]);
-        $database->commit();
+        activation_commit($database);
     } catch (Throwable $problem) {
-        if ($database->inTransaction()) {
-            $database->rollBack();
-        }
+        activation_rollback($database);
         throw $problem;
     }
     return $changed;
