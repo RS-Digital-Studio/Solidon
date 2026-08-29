@@ -1,11 +1,11 @@
-r"""Übersetzt die Konturverkettung der Schichtanalyse (Bauplan §22.1, §31).
+r"""Übersetzt Ebenenschnitt und Konturverkettung (Bauplan §22.1, §31).
 
 Aus ``app/core/slice/_chain.pyx`` entsteht daneben eine Erweiterung
 (``.pyd``/``.so``). Liegt sie, nimmt ``analysis.py`` sie; liegt sie nicht,
-läuft alles weiter über GEOS. **Das Ergebnis ist in beiden Fällen dasselbe** —
+laufen NumPy und GEOS weiter. **Das Ergebnis ist in beiden Fällen dasselbe** —
 was sich ändert, ist die Zeit: gemessen an einer Kugel mit 327 680 Dreiecken
 in 400 Schichten kostet die Verkettung 608 ms als Python-Schleife und 11 ms
-übersetzt.
+übersetzt; der Ebenenschnitt fiel von 203 auf 27 bis 31 ms.
 
 Aufruf:
 
@@ -32,6 +32,10 @@ ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = ROOT / "app" / "core" / "slice"
 SOURCE = PACKAGE / "_chain.pyx"
 
+#: Eigener Zwischenordner. ``ROOT / "build"`` gehört auch PyInstaller; ein
+#: ``--clean`` dieses Werkzeugs darf kein fast fertiges Kundenpaket löschen.
+BUILD_TEMP = ROOT / "build" / "slice-core"
+
 
 def built() -> list[Path]:
     """Was von einem früheren Lauf herumliegt."""
@@ -46,7 +50,7 @@ def clean() -> None:
     for path in built():
         path.unlink()
         print(f"weg: {path.relative_to(ROOT)}")
-    for leftover in (PACKAGE / "build", ROOT / "build"):
+    for leftover in (PACKAGE / "build", BUILD_TEMP):
         if leftover.is_dir():
             shutil.rmtree(leftover)
 
@@ -72,7 +76,14 @@ def build() -> int:
     setup(
         name="solidon3d-slice-core",
         ext_modules=cythonize(str(SOURCE), quiet=True, language_level="3"),
-        script_args=["build_ext", "--inplace", "--build-temp", str(ROOT / "build")],
+        script_args=[
+            "build_ext",
+            "--inplace",
+            "--build-temp",
+            str(BUILD_TEMP / "temp"),
+            "--build-lib",
+            str(BUILD_TEMP / "lib"),
+        ],
     )
 
     made = [path for path in built() if path.suffix in (".so", ".pyd")]

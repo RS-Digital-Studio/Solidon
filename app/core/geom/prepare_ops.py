@@ -13,8 +13,7 @@ from collections.abc import Sequence
 from functools import lru_cache
 from typing import cast
 
-import trimesh
-
+from app.core.deferred import trimesh
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, InternalError, ValidationError
 from app.core.geom.boolean import (
     NOTHING_LEFT_DETAIL,

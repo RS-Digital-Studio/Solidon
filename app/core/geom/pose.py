@@ -28,8 +28,8 @@ from collections.abc import Mapping, Sequence
 from typing import Final, cast
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import Action, ValidationError
 from app.core.expressions import evaluate, is_expression, references
 from app.core.geom.mesh import MeshData, as_mesh_data

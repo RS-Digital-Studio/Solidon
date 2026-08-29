@@ -26,8 +26,8 @@ from dataclasses import replace
 from typing import Final, cast
 
 import numpy as np
-import trimesh
 
+from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
 from app.core.geom.mesh import MeshData, concatenated, ray_hit_distances
 from app.core.log import get_logger
