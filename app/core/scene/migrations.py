@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 15
+FORMAT_VERSION: Final = 16
 
 
 @dataclass(frozen=True, slots=True)
@@ -284,6 +284,19 @@ def _protect_filament_metadata(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _keep_reports_without_suggestions_valid(data: dict[str, Any]) -> dict[str, Any]:
+    """15 → 16: Befunde können anklickbare Auswege mittragen (§2.7).
+
+    Das neue Feld liegt in ``report.json`` und im Plattencache, nicht in
+    ``project.json``. Eine ältere Datei hat es deshalb nicht und bleibt ohne
+    Umrechnung gültig: Beim erneuten Auswerten entstehen die Handlungen aus
+    der Ausnahme neu. Die Versionsgrenze schützt trotzdem vor der umgekehrten
+    Richtung — eine ältere Anwendung würde die Auswege beim nächsten Speichern
+    still verwerfen und den Prüfbericht wieder zur Sackgasse machen.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -300,6 +313,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=12, to_version=13, apply=_scad_steps_stay_but_stop_computing),
     Step(from_version=13, to_version=14, apply=_point_strokes_stay_but_stop_computing),
     Step(from_version=14, to_version=15, apply=_protect_filament_metadata),
+    Step(from_version=15, to_version=16, apply=_keep_reports_without_suggestions_valid),
 )
 
 

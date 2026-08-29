@@ -41,6 +41,7 @@ from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
+    CANCEL,
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
@@ -279,6 +280,12 @@ def actions_for(finding: Finding) -> tuple[Action, ...]:
     Operation und der Ausnahme enthält — das sind 86 mal n Zeilen, die alle
     dasselbe sagen würden.
     """
+    if finding.suggestions:
+        # Im Fehlerdialog schließt „Abbrechen" das Fenster. Im Prüfbericht
+        # ist kein Vorgang offen, den dieser Knopf abbrechen könnte; die Zeile
+        # selbst bleibt einfach stehen. Dort ist CANCEL deshalb keine
+        # Handlung, sondern ein irreführender Knopf ohne Handler.
+        return tuple(action for action in finding.suggestions if action.id != CANCEL.id)
     known = FINDING_ACTIONS.get(finding.code)
     if known:
         return known
@@ -298,6 +305,7 @@ def as_error(finding: Finding) -> AppError:
     """
     return AppError(
         title=finding.message,
+        suggestions=finding.suggestions,
         object_id=finding.object_id,
         op_id=finding.op_id,
         values=dict(finding.values),

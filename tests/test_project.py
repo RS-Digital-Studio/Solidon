@@ -358,6 +358,24 @@ def test_v14_moves_to_the_filament_metadata_format_without_guessing() -> None:
     assert migrated["ops"] == old["ops"], "optionale Felder werden nicht erfunden"
 
 
+def test_v15_moves_to_actionable_findings_without_inventing_data() -> None:
+    """15 → 16 markiert das neue Befundfeld; die alten Daten bleiben wörtlich.
+
+    Die Befunde liegen in einem eigenen Container-Eintrag und entstehen beim
+    Rechnen neu. Eine Migration von ``project.json`` darf deshalb keine
+    Handlungen raten oder bestehende Schritte anfassen.
+    """
+    old = {
+        "format_version": 15,
+        "ops": [{"id": 1, "op": "load", "params": {"source": "src_1"}}],
+    }
+
+    migrated = migrate(old, target=16)
+
+    assert migrated["format_version"] == 16
+    assert migrated["ops"] == old["ops"]
+
+
 def test_a_damaged_container_is_reported_not_raised_raw(tmp_path: Path) -> None:
     path = tmp_path / "kaputt.p3d"
     path.write_bytes(b"this is not a zip file")
@@ -850,6 +868,33 @@ def test_a_plain_message_stays_plain() -> None:
 
     assert restored.message == "roher Text"
     assert not isinstance(restored.message, TranslatableText)
+
+
+def test_a_findings_actions_survive_the_round_trip() -> None:
+    """Ein Befund aus Projekt oder Plattencache behält seine Auswege.
+
+    Ein Fehler einer Operation wird vor dem Prüfbericht abgefangen. Seine
+    Handlungen gingen dabei verloren; nach einem warmen Cache wäre selbst ein
+    flüchtiger Fix wieder verschwunden. Deshalb prüft die Runde neben Kennung
+    und Reihenfolge auch übersetzbare Beschriftung und Hervorhebung.
+    """
+    from app.core.errors import REPAIR_AND_RETRY, SHOW_LOCATIONS
+
+    finding = Finding(
+        code="op.difference.BooleanFailedError",
+        severity="error",
+        message="Die Differenz ist nicht durchgelaufen.",
+        suggestions=(REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    )
+
+    restored = finding_from_data(finding_to_data(finding))
+
+    assert [action.id for action in restored.suggestions] == [
+        "repair_and_retry",
+        "show_locations",
+    ]
+    assert isinstance(restored.suggestions[0].label, TranslatableText)
+    assert restored.suggestions[0].primary
 
 
 def test_two_sources_with_the_same_filename_survive_the_round_trip(tmp_path: Path) -> None:

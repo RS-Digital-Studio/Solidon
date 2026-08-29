@@ -2665,6 +2665,28 @@ def test_a_stopped_step_is_one_click_from_its_own_dialog(window: MainWindow) -> 
     assert opened == [result.stopped_at], "geöffnet wird der Schritt, der gescheitert ist"
 
 
+def test_a_geometry_failure_offers_repair_and_locations() -> None:
+    """Ein kaputtes Netz bekommt seine sachlichen Auswege statt eines Felds.
+
+    ``correct_input`` war der pauschale Rückfall für jeden ``op.*``-Befund.
+    Bei einem Geometriefehler liegt es aber nicht an einem Zahlenfeld; der
+    Kunde braucht die Reparatur und die markierten Stellen, die die Ausnahme
+    bereits nennt.
+    """
+    from app.core.errors import GeometryError
+    from app.core.scene.evaluate import _finding_from
+    from app.core.types import Operation
+    from app.ui.panels import actions_for
+
+    operation = Operation(id=4, op="difference", inputs=("obj_1",), outputs=("obj_1",), params={})
+    finding = _finding_from(GeometryError(), operation)
+
+    assert [action.id for action in actions_for(finding)] == [
+        "repair_and_retry",
+        "show_locations",
+    ]
+
+
 def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow) -> None:
     """Der Befund spricht über **einen** Wert — der Dialog soll ihn zeigen.
 

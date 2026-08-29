@@ -348,9 +348,16 @@ def test_a_failing_operation_stops_the_chain_with_its_error(
     result = evaluate(document, profile, registry=registry)
 
     assert result.stopped_at == 2
-    assert any(
-        finding.code.startswith("op.failing_object") for finding in result.scene.report.findings
+    failure = next(
+        finding
+        for finding in result.scene.report.findings
+        if finding.code.startswith("op.failing_object")
     )
+    assert {action.id for action in failure.suggestions} == {
+        "repair_and_retry",
+        "show_locations",
+        "cancel",
+    }, "der Prüfbericht behält die konkreten Auswege der Ausnahme"
 
 
 def test_a_foreign_exception_stops_the_chain_instead_of_escaping(

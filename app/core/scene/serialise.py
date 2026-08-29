@@ -18,6 +18,7 @@ from typing import Any, Final
 from app.core.errors import ValidationError
 from app.core.types import (
     FIT_KINDS,
+    Action,
     AdhesionSettings,
     ChatEntry,
     CoolingSettings,
@@ -466,6 +467,29 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
             "values": dict(finding.values) or None,
             "location": list(finding.location) if finding.location else None,
             "source": finding.source,
+            "suggestions": [
+                _without_none(
+                    {
+                        "id": action.id,
+                        "label": (
+                            action.label.msgid
+                            if isinstance(action.label, TranslatableText)
+                            else str(action.label)
+                        ),
+                        "label_translatable": (
+                            True if isinstance(action.label, TranslatableText) else None
+                        ),
+                        "label_context": (
+                            action.label.context
+                            if isinstance(action.label, TranslatableText)
+                            else None
+                        ),
+                        "primary": True if action.primary else None,
+                    }
+                )
+                for action in finding.suggestions
+            ]
+            or None,
         }
     )
 
@@ -475,6 +499,18 @@ def finding_from_data(data: dict[str, Any]) -> Finding:
     message: TranslatableText | str = data.get("message", "")
     if data.get("message_translatable"):
         message = TranslatableText(str(message), data.get("message_context"))
+    suggestions: list[Action] = []
+    for entry in data.get("suggestions", ()):
+        label: TranslatableText | str = entry.get("label", "")
+        if entry.get("label_translatable"):
+            label = TranslatableText(str(label), entry.get("label_context"))
+        suggestions.append(
+            Action(
+                id=str(entry.get("id", "")),
+                label=label,
+                primary=bool(entry.get("primary", False)),
+            )
+        )
     return Finding(
         code=data["code"],
         severity=data.get("severity", "info"),
@@ -485,6 +521,7 @@ def finding_from_data(data: dict[str, Any]) -> Finding:
         values=data.get("values", {}),
         location=(location[0], location[1], location[2]) if location else None,
         source=data.get("source", "internal"),
+        suggestions=tuple(suggestions),
     )
 
 

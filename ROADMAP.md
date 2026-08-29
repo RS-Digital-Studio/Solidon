@@ -116,7 +116,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
-| Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
@@ -10411,7 +10410,7 @@ Aus den elf Durchgängen über die Commits seit 0.1.5 (Befundliste in
 Zugeteilte behoben; ein Fund entstand erst beim Schließen der Testlücken
 und braucht einen Umbau statt eines Tests.
 
-- [ ] **Regel 17 endet an der Auswertungsgrenze — gemessen am 27.08.2026,
+- [x] **Regel 17 endet an der Auswertungsgrenze — gemessen am 27.08.2026,
   zehn von sechzehn Fehlerklassen verlieren ihre Auswege.** Ein Fehler, der
   die Kette anhält, erreicht den Prüfbericht ohne seine spezifischen
   Handlungen: `Finding` hat kein solches Feld, und `_finding_from` in
@@ -10488,6 +10487,21 @@ und braucht einen Umbau statt eines Tests.
 
   Gefunden beim Testlücken-Schließen am 26.08.2026, belegt an
   `scene/ops.py:361`.
+
+  **Behoben am 29.08.2026, an der Grenze statt je Fehlerfamilie.** `Finding`
+  trägt nun dieselben `suggestions` wie die abgefangene `AppError`; die
+  Auswertung reicht sie unverändert durch, und der Prüfbericht zieht sie jeder
+  pauschalen Zuordnung vor. Damit bekommt ein Geometriefehler *Reparieren und
+  erneut versuchen* sowie *Stellen zeigen*, während ein ungültiger Zahlenwert
+  weiter gezielt seinen Schrittdialog öffnet.
+
+  Der zweite halbe Fehler lag im Plattencache und in `report.json`: Ohne
+  Serialisierung wäre der Ausweg nach einem warmen Cache oder nach erneutem
+  Öffnen wieder verschwunden. Format 15 → 16 markiert deshalb die neue
+  Zusage; eine ältere Datei bleibt ohne erfundene Handlungen gültig und wird
+  beim Rechnen neu befüllt. Drei Anschlussprüfungen decken Auswertung,
+  Datenrunde und Oberfläche getrennt, die letzte den konkreten
+  Geometriefehler statt nur ein künstliches Feld.
 
 ## Was der Gesamtreview liegen ließ (25.08.2026)
 

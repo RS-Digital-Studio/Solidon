@@ -14,22 +14,13 @@ Ein Programmierfehler darf nie wie ein Bedienfehler aussehen, und umgekehrt:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, ClassVar, Final
 
+from app.core.types import Action as Action
 from app.core.types import ObjectId, OpId, SolverStage, Vec3
 from app.i18n import TranslatableText, _
 
 # --- Handlungen ------------------------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class Action:
-    """Ein anklickbarer Ausweg. An ``id`` bindet eine Oberfläche ihren Handler."""
-
-    id: str
-    label: TranslatableText | str
-    primary: bool = False
 
 
 CANCEL = Action("cancel", _("Abbrechen"))

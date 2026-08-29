@@ -796,6 +796,21 @@ class SettingAdvice:
 
 
 @dataclass(frozen=True, slots=True)
+class Action:
+    """Ein anklickbarer Ausweg, den Fehler und Befunde gemeinsam tragen.
+
+    Der Typ liegt bei den Verträgen, weil eine abgefangene Ausnahme als
+    :class:`Finding` weiterreist. Bliebe er in ``errors.py``, müsste
+    ``types.py`` zurück in die Fehlerhierarchie importieren — ein Kreis an der
+    untersten Schicht.
+    """
+
+    id: str
+    label: TranslatableText | str
+    primary: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Finding:
     """Ein Eintrag des Prüfberichts (§17.3).
 
@@ -815,6 +830,8 @@ class Finding:
     location: Vec3 | None = None
     """Wohin die Kamera fliegt, wenn die Warnung angeklickt wird (§18.4)."""
     source: MetricSource = "internal"
+    suggestions: tuple[Action, ...] = ()
+    """Konkrete Auswege, wenn der Befund aus einer Ausnahme entstand (§2.7)."""
 
 
 @dataclass(frozen=True, slots=True)

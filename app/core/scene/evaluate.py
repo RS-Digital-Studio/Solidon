@@ -1602,4 +1602,5 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
         object_id=error.object_id,
         op_id=operation.id,
         values=values,
+        suggestions=tuple(error.suggestions),
     )
