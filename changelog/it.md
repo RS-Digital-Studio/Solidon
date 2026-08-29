@@ -30,6 +30,9 @@ scrive in `website/version.json`.
 - Cubo, cilindro, foro e svuotamento compaiono una sola volta nel menu. La casella «Modifica facce e spigoli in seguito» sostituisce la seconda voce, prima chiamata «esatto».
 - Questa casella mantiene disponibili smussi, raccordi, angoli di sformo, facce spostate e l’esportazione STEP. Il dialogo nomina il vantaggio, non il motore di calcolo.
 - Durante il disegno, la barra nomina il passo successivo: Solleva, Scava o Fatto. Se manca un contorno chiuso o un corpo selezionato, lo dice anche.
+- Un vincolo si toglie con un secondo clic sullo stesso pulsante, e un clic destro sul punto mostra che cosa vi è appeso. Prima ogni clic ne aggiungeva un altro, fino al blocco.
+- La barra dei vincoli mostra solo ciò che si adatta alla selezione. Se non è selezionato nulla, lì c’è una frase invece di dieci termini tecnici in grigio.
+- I corpi di base nascono «sul piano di stampa» invece che «a Z = 0», e lo strumento di disegno si chiama «curva», come ciò che disegna.
 
 ### Fori ed elementi
 
@@ -45,6 +48,8 @@ scrive in `website/version.json`.
 - Un foro per vite può incassare una testa svasata o la rondella abbinata. La profondità della testa regola quanto entrano nel pezzo.
 - Le tabelle comprendono più rondelle, inserti filettati e cuscinetti. Le misure tecniche sono spiegate nella scelta invece di apparire come codici oscuri.
 - Tasche per magneti, clip e passacavi accettano anche misure personalizzate. I campi aggiuntivi compaiono solo se la variante scelta li usa davvero.
+- I blocchi stanno nel catalogo con immagini di anteprima invece che come elenco nel menu. Un clic destro sul pezzo scelto porta lì.
+- Il catalogo avvisa già prima di inserire quando manca il punto sul corpo. La maggior parte dei blocchi ha bisogno di una faccia o di un foro selezionato.
 
 ### Stampa e filamento
 
@@ -77,6 +82,10 @@ scrive in `website/version.json`.
 - Gli esempi inclusi si aprono con un tour guidato. A destra indica passo dopo passo cosa fare e riconosce da sé quando un passo è compiuto.
 - Le azioni proposte per un errore restano al salvataggio. Riaprendo un progetto prima restava solo l’errore, senza la via d’uscita.
 - La ricerca dell’orientamento esamina ogni posizione una sola volta. Le posizioni proposte più volte costavano tempo senza dare un risultato diverso.
+- I passi della cronologia si possono cancellare e recuperare con Ctrl+Z. La domanda precedente nomina i passi che si basano su quello cancellato.
+- Un doppio clic su un passo raggruppato della cronologia dice dove stanno i singoli passi. Prima non faceva nulla, benché le visite guidate insegnino proprio questo gesto.
+- Se un file viene rifiutato durante la lettura, l’indicatore di caricamento sparisce. Prima restava lì come se si calcolasse ancora un file che non era stato accettato.
+- Solidon si avvia più in fretta e l’analisi degli strati calcola più spedita. Le grandi librerie di calcolo vengono caricate solo quando c’è davvero da calcolare.
 
 ### Piattaforme e correzioni
 

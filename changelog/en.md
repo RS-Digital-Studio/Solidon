@@ -30,6 +30,9 @@ it into `website/version.json`.
 - Cuboid, cylinder, bore and hollowing now appear only once in the menu. The tick “Keep faces and edges editable later” replaces the second entry, formerly called “exact”.
 - That tick keeps chamfers, fillets, draft angles, offset faces and the STEP export available. The dialogue names the benefit instead of asking for a geometry engine.
 - While sketching, the bar names the next step: Pull up, Carve or Done. If a closed outline or a selected body is missing, it says so as well.
+- A constraint is taken back by a second click on the same button, and a right-click on the point shows what is attached to it. Before, every click added another one until nothing moved.
+- The constraint bar only shows what fits the current selection. When nothing is selected, a single sentence stands there instead of ten greyed-out technical terms.
+- Basic bodies are placed “on the print bed” instead of “at Z = 0”, and the drawing tool is called “curve”, like the thing it draws.
 
 ### Holes and features
 
@@ -45,6 +48,8 @@ it into `website/version.json`.
 - A screw hole can recess a countersunk head or matching washer. Head depth controls how far either one disappears into the part.
 - The standard tables contain more washers, threaded inserts and bearings. Technical sizes are explained in the choice instead of appearing as cryptic codes.
 - Magnet pockets, cable clips and cable glands also accept custom dimensions. Extra fields appear only when the selected variant actually uses them.
+- Parts live in the catalogue with preview images instead of as a list in the menu. A right-click on the selected body leads there.
+- The catalogue says before inserting when the place on the body is missing. Most parts need a selected face or hole; before, the catalogue allowed what the operation then refused.
 
 ### Printing and filament
 
@@ -77,6 +82,10 @@ it into `website/version.json`.
 - The included examples now open with a guided tour. Step by step, the panel on the right says what to do, and the tour notices by itself when a step is done.
 - The suggested actions for an error are kept when saving. After reopening a project, only the error itself used to remain, without the way out.
 - The orientation search now examines each position only once. Positions proposed more than once cost time without giving a different result.
+- Steps in the history can be deleted and brought back with Ctrl+Z. The question beforehand names the steps that build on the deleted one.
+- A double-click on a combined history step says where the individual steps are. Before it did nothing, although the guided tours teach exactly this gesture.
+- If a file is refused while being read, the loading indicator disappears. Before it stayed as if a file were still being calculated that had not been accepted at all.
+- Solidon starts faster and the layer analysis calculates more quickly. The large calculation libraries are only loaded when something really needs calculating.
 
 ### Platforms and fixes
 

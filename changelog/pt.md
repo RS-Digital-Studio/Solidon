@@ -30,6 +30,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Cubo, cilindro, furo e esvaziamento aparecem uma só vez no menu. A caixa «Editar faces e arestas mais tarde» substitui a segunda entrada, antes chamada «exato».
 - Esta caixa mantém disponíveis chanfros, arredondamentos, ângulos de saída, faces deslocadas e a exportação STEP. O diálogo nomeia a vantagem, não o motor de cálculo.
 - Ao desenhar, a barra nomeia o passo seguinte: Elevar, Rebaixar ou Concluído. Se faltar um contorno fechado ou um corpo selecionado, também o indica.
+- Uma restrição retira-se com um segundo clique no mesmo botão, e um clique direito sobre o ponto mostra o que depende dele. Antes, cada clique acrescentava outra até tudo bloquear.
+- A barra de restrições mostra apenas o que combina com a seleção. Se nada estiver selecionado, está lá uma frase em vez de dez termos técnicos a cinzento.
+- Os corpos básicos assentam «na mesa de impressão» em vez de «em Z = 0», e a ferramenta de desenho chama-se «curva», como aquilo que desenha.
 
 ### Furos e elementos
 
@@ -45,6 +48,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo de parafuso pode alojar uma cabeça escareada ou a anilha correspondente. A profundidade da cabeça regula quanto entram na peça.
 - As tabelas incluem mais anilhas, insertos roscados e rolamentos. Os tamanhos técnicos são explicados na escolha em vez de surgirem como códigos misteriosos.
 - Bolsas de ímanes, clipes e passa-cabos também aceitam medidas próprias. Os campos adicionais só aparecem se a variante escolhida os utilizar.
+- Os blocos estão no catálogo com imagens de pré-visualização em vez de como lista no menu. Um clique direito sobre a peça escolhida leva lá.
+- O catálogo avisa antes de inserir quando falta o sítio no corpo. A maioria dos blocos precisa de uma face ou de um furo selecionado; antes o catálogo permitia o que a operação depois recusava.
 
 ### Impressão e filamento
 
@@ -77,6 +82,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os exemplos incluídos abrem com uma visita guiada. À direita indica passo a passo o que fazer e reconhece sozinha quando um passo está feito.
 - As ações propostas para um erro mantêm-se ao guardar. Ao reabrir um projeto, antes restava apenas o erro, sem a saída.
 - A procura de orientação examina cada posição uma só vez. As posições propostas várias vezes custavam tempo sem dar um resultado diferente.
+- Os passos do histórico podem ser apagados e recuperados com Ctrl+Z. A pergunta anterior nomeia os passos que assentam no apagado.
+- Um duplo clique num passo agrupado do histórico diz onde estão os passos individuais. Antes não fazia nada, embora as visitas guiadas ensinem justamente esse gesto.
+- Se um ficheiro for recusado ao ser lido, o indicador de carregamento desaparece. Antes ficava como se ainda se calculasse um ficheiro que não tinha sido aceite.
+- O Solidon arranca mais depressa e a análise de camadas calcula com mais rapidez. As grandes bibliotecas de cálculo só são carregadas quando há mesmo que calcular.
 
 ### Plataformas e correções
 

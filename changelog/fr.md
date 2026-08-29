@@ -28,9 +28,12 @@ dans `website/version.json`.
 - Tirez le contour vers l'extérieur pour créer un corps ou vers l'intérieur pour créer une poche visible. Une flèche et une croix rendent les deux directions saisissables.
 - L'aperçu affiche le pavé, cylindre ou corps esquissé pendant la saisie de ses cotes. Les nouveaux corps restaient auparavant invisibles jusqu'à l'application.
 - Les outils de dessin annoncent l'effet du prochain clic. Les contraintes expliquent leur effet et la sélection, et les degrés de liberté sont décrits simplement.
-- Le pavé, le cylindre, le perçage et l’évidement n’apparaissent plus qu’une fois dans le menu. La case « Modifier les faces et les arêtes plus tard » remplace la seconde entrée, autrefois « exact ».
+- Le pavé, le cylindre, le perçage et l’évidement n’apparaissent plus qu’une fois dans le menu. La case « Modifier les faces et les arêtes plus tard » remplace l’entrée « exact ».
 - Cette case garde disponibles les chanfreins, les congés, les dépouilles, les faces décalées et l’export STEP. Le dialogue nomme l’intérêt plutôt que le moteur de calcul.
 - Pendant le dessin, la barre nomme l’étape suivante : Élever, Creuser ou Terminé. S’il manque un contour fermé ou un corps sélectionné, elle le dit aussi.
+- Une contrainte se retire d’un deuxième clic sur le même bouton, et un clic droit sur le point montre ce qui en dépend. Auparavant, chaque clic en ajoutait une autre jusqu’au blocage.
+- La barre des contraintes n’affiche que ce qui correspond à la sélection. Si rien n’est sélectionné, une phrase y figure au lieu de dix termes techniques en gris.
+- Les corps de base sont posés « sur le plateau d’impression » au lieu de « à Z = 0 », et l’outil de dessin s’appelle « courbe », comme ce qu’il dessine.
 
 ### Perçages et éléments
 
@@ -46,6 +49,8 @@ dans `website/version.json`.
 - Un perçage de vis peut loger une tête fraisée ou sa rondelle. La profondeur de tête règle jusqu'où l'une ou l'autre s'enfonce dans la pièce.
 - Les tables contiennent davantage de rondelles, inserts filetés et roulements. Les tailles techniques sont expliquées dans le choix au lieu de rester des codes obscurs.
 - Les poches d'aimant, clips et passe-câbles acceptent aussi des dimensions personnalisées. Les champs supplémentaires n'apparaissent que si la variante les utilise.
+- Les blocs se trouvent dans le catalogue avec des aperçus au lieu d’une liste dans le menu. Un clic droit sur la pièce choisie y mène.
+- Le catalogue prévient avant l’insertion lorsque l’endroit sur le corps manque. La plupart des blocs ont besoin d’une face ou d’un perçage sélectionné.
 
 ### Impression et filament
 
@@ -78,6 +83,10 @@ dans `website/version.json`.
 - Les exemples fournis s’ouvrent avec une visite guidée. À droite, elle indique pas à pas quoi faire et reconnaît d’elle-même qu’une étape est faite.
 - Les actions proposées pour une erreur sont conservées à l’enregistrement. À la réouverture d’un projet, seule l’erreur subsistait, sans l’issue.
 - La recherche d’orientation n’examine plus chaque position qu’une fois. Les positions proposées plusieurs fois coûtaient du temps sans donner un autre résultat.
+- Les étapes de l’historique peuvent être supprimées et récupérées avec Ctrl+Z. La question posée avant nomme les étapes qui reposent sur celle qui disparaît.
+- Un double clic sur une étape groupée de l’historique indique où se trouvent les étapes individuelles. Auparavant il ne faisait rien, alors que les visites guidées enseignent ce geste.
+- Si un fichier est refusé à la lecture, l’indicateur de chargement disparaît. Auparavant il restait comme si l’on calculait encore un fichier qui n’avait pas été accepté.
+- Solidon démarre plus vite et l’analyse des couches calcule plus rapidement. Les grandes bibliothèques de calcul ne sont chargées que lorsqu’il y a vraiment à calculer.
 
 ### Plateformes et corrections
 

@@ -31,6 +31,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El cubo, el cilindro, el taladro y el vaciado aparecen una sola vez en el menú. La casilla «Editar caras y aristas más adelante» sustituye a la segunda entrada, antes llamada «exacto».
 - Esa casilla mantiene disponibles chaflanes, redondeos, ángulos de desmoldeo, caras desplazadas y la exportación STEP. El diálogo nombra la ventaja, no el motor de cálculo.
 - Al dibujar, la barra nombra el paso siguiente: Elevar, Rebajar o Terminado. Si falta un contorno cerrado o un cuerpo seleccionado, también lo indica.
+- Una restricción se quita con un segundo clic en el mismo botón, y un clic derecho sobre el punto muestra qué depende de él. Antes cada clic añadía otra hasta que nada se movía.
+- La barra de restricciones solo muestra lo que encaja con la selección actual. Si no hay nada seleccionado, allí hay una frase en lugar de diez términos técnicos en gris.
+- Los cuerpos básicos se colocan «sobre la placa de impresión» en lugar de «en Z = 0», y la herramienta de dibujo se llama «curva», como lo que dibuja.
 
 ### Taladros y elementos
 
@@ -46,6 +49,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro para tornillo puede alojar una cabeza avellanada o su arandela. La profundidad de cabeza decide cuánto se hunden en la pieza.
 - Las tablas incluyen más arandelas, insertos roscados y rodamientos. Los tamaños técnicos se explican en la selección en vez de aparecer como códigos enigmáticos.
 - Los alojamientos de imanes, clips y pasacables también aceptan medidas propias. Los campos adicionales solo aparecen si la variante elegida los utiliza.
+- Los bloques están en el catálogo con imágenes de vista previa en lugar de como lista en el menú. Un clic derecho sobre la pieza elegida lleva allí.
+- El catálogo avisa antes de insertar cuando falta el lugar en el cuerpo. La mayoría de los bloques necesitan una cara o un taladro seleccionado.
 
 ### Impresión y filamento
 
@@ -78,6 +83,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los ejemplos incluidos se abren con una visita guiada. A la derecha se indica paso a paso qué hacer, y la visita reconoce por sí sola cuándo un paso está hecho.
 - Las acciones propuestas para un error se conservan al guardar. Al reabrir un proyecto antes solo quedaba el error, sin la salida.
 - La búsqueda de orientación examina cada posición una sola vez. Las posiciones propuestas varias veces costaban tiempo sin dar un resultado distinto.
+- Los pasos del historial se pueden borrar y recuperar con Ctrl+Z. La pregunta previa nombra los pasos que dependen del borrado.
+- Un doble clic en un paso agrupado del historial dice dónde están los pasos individuales. Antes no hacía nada, aunque las visitas guiadas enseñan justo ese gesto.
+- Si un archivo se rechaza al leerlo, el indicador de carga desaparece. Antes se quedaba como si aún se calculara un archivo que no se había aceptado.
+- Solidon arranca más rápido y el análisis de capas calcula con más soltura. Las bibliotecas de cálculo grandes solo se cargan cuando realmente hay que calcular.
 
 ### Plataformas y correcciones
 

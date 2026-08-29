@@ -55,6 +55,9 @@ Nutzen da und sonst nichts.
 - Quader, Zylinder, Bohrung und Aushöhlen stehen nur noch einmal im Menü. Das Häkchen „Flächen und Kanten später bearbeiten“ ersetzt den zweiten Eintrag, der vorher „exakt“ hieß.
 - Dieses Häkchen hält Fasen, Verrundungen, Formschrägen, versetzte Flächen und den STEP-Export offen. Der Dialog nennt den Nutzen, statt nach einem Rechenkern zu fragen.
 - Die Leiste beim Zeichnen benennt den nächsten Schritt: Hochziehen, Abtragen oder Fertig. Fehlt ein geschlossener Umriss oder ein ausgewählter Körper, steht auch das dort.
+- Eine gesetzte Bedingung nimmt ein zweiter Klick auf denselben Knopf zurück; ein Rechtsklick auf den Punkt zeigt, was an ihm hängt. Vorher kam jedes Mal eine weitere dazu, bis nichts mehr ging.
+- Die Bedingungsleiste zeigt nur, was zur getroffenen Auswahl passt. Ist nichts ausgewählt, steht dort ein Satz statt zehn ausgegrauter Fachwörter.
+- Grundkörper entstehen „auf dem Druckbett“ statt „auf Z = 0“, und das Zeichenwerkzeug heißt „Kurve“ wie das, was es zeichnet.
 
 ### Bohrungen und Merkmale
 
@@ -70,6 +73,8 @@ Nutzen da und sonst nichts.
 - Ein Schraubenloch kann jetzt einen Senkkopf oder eine passende Unterlegscheibe einlassen. Die Kopftiefe bestimmt, wie weit beides im Teil verschwindet.
 - Die Normtabellen enthalten mehr Unterlegscheiben, Gewindeeinsätze und Kugellager. Technische Größen stehen mit einer Erklärung in der Auswahl statt als rätselhafter Code.
 - Magnettaschen, Kabelclips und Kabeldurchführungen nehmen auch eigene Maße an. Zusatzfelder erscheinen nur, wenn die gewählte Variante sie wirklich benutzt.
+- Bausteine stehen im Katalog mit Vorschaubildern statt als Liste im Menü. Ein Rechtsklick auf das gewählte Teil führt hin.
+- Der Katalog sagt schon vor dem Einsetzen, wenn die Stelle am Körper fehlt. Die meisten Bausteine brauchen eine gewählte Fläche oder Bohrung.
 
 ### Drucken und Filament
 
@@ -102,6 +107,10 @@ Nutzen da und sonst nichts.
 - Die mitgelieferten Beispiele öffnen mit einer geführten Tour. Rechts steht Schritt für Schritt, was zu tun ist, und die Tour erkennt selbst, wenn ein Schritt erledigt ist.
 - Die Handlungsvorschläge zu einem Fehler bleiben beim Speichern erhalten. Nach dem Öffnen eines Projekts stand vorher nur noch der Fehler da, ohne den Weg heraus.
 - Die Orientierungssuche prüft jede Lage nur noch einmal. Mehrfach vorgeschlagene Lagen kosteten Rechenzeit, ohne ein anderes Ergebnis zu liefern.
+- Verlaufsschritte lassen sich löschen und mit Strg+Z zurückholen. Die Nachfrage davor nennt die Schritte, die auf dem gelöschten aufbauen.
+- Ein Doppelklick auf einen zusammengefassten Verlaufsschritt sagt, wo die einzelnen Schritte stehen. Vorher tat er nichts, obwohl die geführten Touren genau diese Geste lehren.
+- Wird eine Datei beim Einlesen abgewiesen, verschwindet die Ladeanzeige. Vorher blieb sie stehen, als werde noch an einer Datei gerechnet, die gar nicht angenommen wurde.
+- Solidon startet schneller, und die Schichtanalyse rechnet zügiger. Die großen Rechenbibliotheken werden erst geladen, wenn wirklich gerechnet wird.
 
 ### Plattformen und behobene Fehler
 
