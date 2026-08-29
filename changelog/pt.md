@@ -27,6 +27,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Puxe o contorno para fora para criar um corpo ou para dentro para criar uma bolsa visível. Uma seta e uma cruz tornam ambas as direções agarráveis.
 - A pré-visualização mostra o bloco, cilindro ou corpo do esboço enquanto introduz as medidas. Antes, os corpos novos ficavam invisíveis até aplicar o passo.
 - As ferramentas de desenho dizem o que fará o próximo clique. As restrições explicam o efeito e a seleção, e os graus de liberdade são descritos de forma clara.
+- Cubo, cilindro, furo e esvaziamento aparecem uma só vez no menu. A caixa «Editar faces e arestas mais tarde» substitui a segunda entrada, antes chamada «exato».
+- Esta caixa mantém disponíveis chanfros, arredondamentos, ângulos de saída, faces deslocadas e a exportação STEP. O diálogo nomeia a vantagem, não o motor de cálculo.
+- Ao desenhar, a barra nomeia o passo seguinte: Elevar, Rebaixar ou Concluído. Se faltar um contorno fechado ou um corpo selecionado, também o indica.
 
 ### Furos e elementos
 
@@ -50,6 +53,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - No primeiro arranque, o Solidon importa os filamentos carregados no slicer com nome, tipo, cor e perfil do fabricante. Não precisa de voltar a criar as bobinas.
 - Os exemplos incluídos já não substituem a impressora e o material escolhidos pelas definições usadas para criar as respetivas pré-visualizações.
 - No Flatpak Linux, o Solidon encontra e inicia slicers do computador, incluindo AppImages. Ambos os programas conseguem aceder à pasta de trabalho partilhada.
+- Ao dividir são colocados pinos de posicionamento numa metade e os furos correspondentes na outra. A mensagem indica quantos são ou avisa que a face de corte é pequena demais.
+- Depois de dividir, as metades afastam-se. Os pinos e os furos já não desaparecem entre duas faces de corte coincidentes.
+- Ao unir dois corpos, ambos mantêm a sua descrição de filamento com o nome. Antes, a descrição da segunda cor podia perder-se.
+- Ao exportar para várias placas, as mudanças de cor são contadas por placa. Uma placa de um só material já não anuncia mudanças que não ocorrem na impressão.
 
 ### Chat e geração 3D
 
@@ -67,6 +74,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Menus, indicações e manual usam palavras coerentes para principiantes. Os termos especializados são explicados onde são necessários pela primeira vez.
 - A janela Apoiar explica antes de abrir o PayPal que o pagamento é voluntário e não desbloqueia funções. Se o navegador falhar, o link pode ser copiado.
 - Esvaziar e as outras ferramentas dependentes mostram apenas os campos usados pela variante escolhida e explicam de forma uniforme os valores ocultos.
+- Os exemplos incluídos abrem com uma visita guiada. À direita indica passo a passo o que fazer e reconhece sozinha quando um passo está feito.
+- As ações propostas para um erro mantêm-se ao guardar. Ao reabrir um projeto, antes restava apenas o erro, sem a saída.
+- A procura de orientação examina cada posição uma só vez. As posições propostas várias vezes custavam tempo sem dar um resultado diferente.
 
 ### Plataformas e correções
 

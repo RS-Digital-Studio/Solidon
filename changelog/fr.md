@@ -28,6 +28,9 @@ dans `website/version.json`.
 - Tirez le contour vers l'extérieur pour créer un corps ou vers l'intérieur pour créer une poche visible. Une flèche et une croix rendent les deux directions saisissables.
 - L'aperçu affiche le pavé, cylindre ou corps esquissé pendant la saisie de ses cotes. Les nouveaux corps restaient auparavant invisibles jusqu'à l'application.
 - Les outils de dessin annoncent l'effet du prochain clic. Les contraintes expliquent leur effet et la sélection, et les degrés de liberté sont décrits simplement.
+- Le pavé, le cylindre, le perçage et l’évidement n’apparaissent plus qu’une fois dans le menu. La case « Modifier les faces et les arêtes plus tard » remplace la seconde entrée, autrefois « exact ».
+- Cette case garde disponibles les chanfreins, les congés, les dépouilles, les faces décalées et l’export STEP. Le dialogue nomme l’intérêt plutôt que le moteur de calcul.
+- Pendant le dessin, la barre nomme l’étape suivante : Élever, Creuser ou Terminé. S’il manque un contour fermé ou un corps sélectionné, elle le dit aussi.
 
 ### Perçages et éléments
 
@@ -51,6 +54,10 @@ dans `website/version.json`.
 - Au premier démarrage, Solidon reprend les filaments chargés dans le trancheur avec leur nom, type, couleur et profil du fabricant. Les bobines ne sont pas à recréer.
 - Les exemples fournis ne remplacent plus l'imprimante et le matériau choisis par les réglages qui ont servi à créer leurs aperçus.
 - Dans le Flatpak Linux, Solidon trouve et lance les trancheurs de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.
+- La séparation pose des goupilles sur une moitié et les trous correspondants sur l’autre. Le message en donne le nombre ou signale que la face de coupe est trop petite.
+- Après la séparation, les moitiés s’écartent. Goupilles et trous ne disparaissent plus entre deux faces de coupe confondues.
+- Lors de l’union de deux corps, les deux gardent leur description de filament avec son nom. La description de la seconde couleur pouvait auparavant se perdre.
+- À l’export sur plusieurs plaques, les changements de couleur sont comptés par plaque. Une plaque d’une seule matière n’annonce plus de changements qui n’ont pas lieu.
 
 ### Chat et génération 3D
 
@@ -68,6 +75,9 @@ dans `website/version.json`.
 - Les menus, indications et le manuel emploient des mots cohérents pour les débutants. Les termes spécialisés sont expliqués lors de leur premier emploi.
 - La fenêtre Soutenir explique avant d'ouvrir PayPal que le paiement est volontaire et ne débloque aucune fonction. Si le navigateur échoue, le lien peut être copié.
 - Évider et les autres outils dépendants n'affichent que les champs utilisés par la variante choisie et expliquent uniformément les valeurs masquées.
+- Les exemples fournis s’ouvrent avec une visite guidée. À droite, elle indique pas à pas quoi faire et reconnaît d’elle-même qu’une étape est faite.
+- Les actions proposées pour une erreur sont conservées à l’enregistrement. À la réouverture d’un projet, seule l’erreur subsistait, sans l’issue.
+- La recherche d’orientation n’examine plus chaque position qu’une fois. Les positions proposées plusieurs fois coûtaient du temps sans donner un autre résultat.
 
 ### Plateformes et corrections
 

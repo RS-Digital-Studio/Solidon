@@ -27,6 +27,9 @@ scrive in `website/version.json`.
 - Trascini il contorno verso l'esterno per creare un corpo o verso l'interno per creare una tasca visibile. Freccia e croce rendono afferrabili entrambe le direzioni.
 - L'anteprima mostra il parallelepipedo, cilindro o corpo dello schizzo mentre inserisce le misure. Prima i nuovi corpi restavano invisibili fino all'applicazione.
 - Gli strumenti di disegno dicono cosa farà il clic successivo. I vincoli spiegano effetto e selezione, e i gradi di libertà sono descritti con parole chiare.
+- Cubo, cilindro, foro e svuotamento compaiono una sola volta nel menu. La casella «Modifica facce e spigoli in seguito» sostituisce la seconda voce, prima chiamata «esatto».
+- Questa casella mantiene disponibili smussi, raccordi, angoli di sformo, facce spostate e l’esportazione STEP. Il dialogo nomina il vantaggio, non il motore di calcolo.
+- Durante il disegno, la barra nomina il passo successivo: Solleva, Scava o Fatto. Se manca un contorno chiuso o un corpo selezionato, lo dice anche.
 
 ### Fori ed elementi
 
@@ -50,6 +53,10 @@ scrive in `website/version.json`.
 - Al primo avvio, Solidon importa i filamenti caricati nello slicer con nome, tipo, colore e profilo del produttore. Non deve ricreare le bobine.
 - Gli esempi inclusi non sostituiscono più stampante e materiale scelti con le impostazioni usate per creare le loro anteprime.
 - Nel Flatpak Linux, Solidon trova e avvia gli slicer del computer, incluse le AppImage. Entrambi i programmi raggiungono la cartella di lavoro condivisa.
+- Dividendo si creano spine su una metà e i fori corrispondenti sull’altra. Il messaggio ne indica il numero o avvisa che la faccia di taglio è troppo piccola.
+- Dopo la divisione, le metà si allontanano. Spine e fori non spariscono più fra due facce di taglio coincidenti.
+- Unendo due corpi, entrambi conservano la loro descrizione del filamento con il nome. Prima la descrizione del secondo colore poteva andare persa.
+- Esportando su più piatti, i cambi di colore vengono contati per piatto. Un piatto di un solo materiale non annuncia più cambi che in stampa non avvengono.
 
 ### Chat e generazione 3D
 
@@ -67,6 +74,9 @@ scrive in `website/version.json`.
 - Menu, indicazioni e manuale usano parole coerenti per chi inizia. I termini specialistici vengono spiegati dove servono per la prima volta.
 - La finestra Sostieni spiega prima di aprire PayPal che il pagamento è volontario e non sblocca funzioni. Se il browser non parte, il link può essere copiato.
 - Svuota e gli altri strumenti dipendenti mostrano solo i campi usati dalla variante scelta e spiegano in modo uniforme i valori nascosti.
+- Gli esempi inclusi si aprono con un tour guidato. A destra indica passo dopo passo cosa fare e riconosce da sé quando un passo è compiuto.
+- Le azioni proposte per un errore restano al salvataggio. Riaprendo un progetto prima restava solo l’errore, senza la via d’uscita.
+- La ricerca dell’orientamento esamina ogni posizione una sola volta. Le posizioni proposte più volte costavano tempo senza dare un risultato diverso.
 
 ### Piattaforme e correzioni
 

@@ -28,6 +28,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tire del contorno hacia fuera para crear un cuerpo o hacia dentro para crear un vaciado visible. Una flecha y una cruz permiten agarrar ambas direcciones.
 - La vista previa muestra el prisma, cilindro o cuerpo de boceto mientras introduce sus medidas. Antes, los cuerpos nuevos no aparecían hasta aplicar el paso.
 - Las herramientas de dibujo indican qué hará el siguiente clic. Las restricciones explican su efecto y selección, y los grados de libertad se describen con palabras claras.
+- El cubo, el cilindro, el taladro y el vaciado aparecen una sola vez en el menú. La casilla «Editar caras y aristas más adelante» sustituye a la segunda entrada, antes llamada «exacto».
+- Esa casilla mantiene disponibles chaflanes, redondeos, ángulos de desmoldeo, caras desplazadas y la exportación STEP. El diálogo nombra la ventaja, no el motor de cálculo.
+- Al dibujar, la barra nombra el paso siguiente: Elevar, Rebajar o Terminado. Si falta un contorno cerrado o un cuerpo seleccionado, también lo indica.
 
 ### Taladros y elementos
 
@@ -51,6 +54,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En el primer inicio, Solidon importa los filamentos cargados en el slicer con nombre, tipo, color y perfil del fabricante. No tiene que volver a crear las bobinas.
 - Los ejemplos incluidos ya no sustituyen la impresora y el material elegidos por los ajustes usados para crear sus imágenes de vista previa.
 - En el Flatpak de Linux, Solidon encuentra e inicia slicers del equipo, incluidos AppImages. Ambos programas pueden acceder a la carpeta de trabajo compartida.
+- Al dividir se colocan pasadores en una mitad y los agujeros correspondientes en la otra. El mensaje indica cuántos son o avisa de que la cara de corte es demasiado pequeña.
+- Tras dividir, las mitades se separan. Los pasadores y los agujeros ya no desaparecen entre dos caras de corte coincidentes.
+- Al unir dos cuerpos, ambos conservan su descripción de filamento con su nombre. Antes podía perderse la descripción del segundo color.
+- Al exportar a varias bandejas, los cambios de color se cuentan por bandeja. Una bandeja de un solo material ya no anuncia cambios que no ocurren al imprimir.
 
 ### Chat y generación 3D
 
@@ -68,6 +75,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los menús, avisos y el manual usan palabras coherentes para principiantes. Los términos especializados se explican donde se necesitan por primera vez.
 - El diálogo Apoyar explica antes de abrir PayPal que el pago es voluntario y no desbloquea funciones. Si falla el navegador, puede copiar el enlace.
 - Vaciar y las demás herramientas dependientes muestran solo los campos usados por la variante elegida y explican de forma uniforme los valores ocultos.
+- Los ejemplos incluidos se abren con una visita guiada. A la derecha se indica paso a paso qué hacer, y la visita reconoce por sí sola cuándo un paso está hecho.
+- Las acciones propuestas para un error se conservan al guardar. Al reabrir un proyecto antes solo quedaba el error, sin la salida.
+- La búsqueda de orientación examina cada posición una sola vez. Las posiciones propuestas varias veces costaban tiempo sin dar un resultado distinto.
 
 ### Plataformas y correcciones
 

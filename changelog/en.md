@@ -27,6 +27,9 @@ it into `website/version.json`.
 - Pull the outline outwards to create a body or inwards to create a visible pocket. An arrow and cross make both directions grabbable.
 - A box, cylinder or sketched body appears in the preview while you enter its dimensions. New bodies previously stayed invisible until you applied the step.
 - Drawing tools say what the next click will do. Constraints explain their effect and required selection, and degrees of freedom are described in plain language.
+- Cuboid, cylinder, bore and hollowing now appear only once in the menu. The tick “Keep faces and edges editable later” replaces the second entry, formerly called “exact”.
+- That tick keeps chamfers, fillets, draft angles, offset faces and the STEP export available. The dialogue names the benefit instead of asking for a geometry engine.
+- While sketching, the bar names the next step: Pull up, Carve or Done. If a closed outline or a selected body is missing, it says so as well.
 
 ### Holes and features
 
@@ -50,6 +53,10 @@ it into `website/version.json`.
 - On first launch, Solidon imports the filaments loaded in the slicer with their name, type, colour and manufacturer profile. Spools do not need to be entered again.
 - Included examples no longer replace your chosen printer and material with the settings used to build their preview images.
 - In the Linux Flatpak, Solidon finds and starts slicers on the host, including AppImages. Both programs can reach the shared working folder.
+- Splitting now puts dowel pins on one half and the matching holes on the other. The message gives their number, or says the cut face is too small for them.
+- After splitting, the halves move apart. Pins and holes no longer disappear between two coincident cut faces.
+- When two bodies are united, both keep their filament description including its name. The description of the second colour could previously be lost.
+- When exporting to several plates, colour changes are counted per plate. Plates of a single material no longer report changes that never happen while printing.
 
 ### Chat and 3D generation
 
@@ -67,6 +74,9 @@ it into `website/version.json`.
 - Menus, hints and the manual use consistent words for beginners. Specialist terms are explained where they are first needed.
 - The Support dialog explains before opening PayPal that payment is voluntary and unlocks no features. If the browser fails, the link can be copied.
 - Hollowing and other dependent tools show only fields used by the selected variant and explain hidden values consistently.
+- The included examples now open with a guided tour. Step by step, the panel on the right says what to do, and the tour notices by itself when a step is done.
+- The suggested actions for an error are kept when saving. After reopening a project, only the error itself used to remain, without the way out.
+- The orientation search now examines each position only once. Positions proposed more than once cost time without giving a different result.
 
 ### Platforms and fixes
 

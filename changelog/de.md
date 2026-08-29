@@ -52,6 +52,9 @@ Nutzen da und sonst nichts.
 - Ziehen Sie den Umriss nach außen, entsteht ein Körper; ziehen Sie ihn nach innen, entsteht eine sichtbare Tasche. Pfeil und Kreuz machen beide Richtungen greifbar.
 - Beim Erzeugen eines Quaders, Zylinders oder Skizzenkörpers erscheint die Vorschau schon während der Eingabe. Neue Körper blieben vorher bis zum Anwenden unsichtbar.
 - Zeichenwerkzeuge sagen, was der nächste Klick bewirkt. Bedingungen erklären ihre Wirkung und die Auswahl; die Freiheitsgrade stehen in verständlichen Sätzen da.
+- Quader, Zylinder, Bohrung und Aushöhlen stehen nur noch einmal im Menü. Das Häkchen „Flächen und Kanten später bearbeiten“ ersetzt den zweiten Eintrag, der vorher „exakt“ hieß.
+- Dieses Häkchen hält Fasen, Verrundungen, Formschrägen, versetzte Flächen und den STEP-Export offen. Der Dialog nennt den Nutzen, statt nach einem Rechenkern zu fragen.
+- Die Leiste beim Zeichnen benennt den nächsten Schritt: Hochziehen, Abtragen oder Fertig. Fehlt ein geschlossener Umriss oder ein ausgewählter Körper, steht auch das dort.
 
 ### Bohrungen und Merkmale
 
@@ -75,6 +78,10 @@ Nutzen da und sonst nichts.
 - Beim ersten Start übernimmt Solidon die im Slicer eingelegten Filamente mit Name, Typ, Farbe und Herstellerprofil. Die Spulen müssen nicht noch einmal angelegt werden.
 - Mitgelieferte Beispiele überschreiben den gewählten Drucker und das Material nicht mehr mit den Einstellungen, mit denen ihre Vorschaubilder gebaut wurden.
 - Im Linux-Flatpak findet und startet Solidon Slicer auf dem Rechner, auch als AppImage. Der gemeinsame Arbeitsordner ist für beide Programme erreichbar.
+- Beim Teilen entstehen Passstifte an der einen Hälfte und die passenden Löcher an der anderen. Die Meldung nennt ihre Zahl oder sagt, dass die Schnittfläche dafür zu klein ist.
+- Nach dem Teilen rücken die Hälften auseinander. Stifte und Löcher verschwinden dadurch nicht mehr zwischen zwei deckungsgleichen Schnittflächen.
+- Werden zwei Körper vereinigt, behalten beide ihre Filamentbeschreibung samt Namen. Vorher konnte die Beschreibung der zweiten Farbe dabei verlorengehen.
+- Beim Export auf mehrere Platten werden Farbwechsel je Platte gezählt. Materialreine Platten melden keine Wechsel mehr, die beim Drucken gar nicht stattfinden.
 
 ### Chat und 3D-Erzeugung
 
@@ -92,6 +99,9 @@ Nutzen da und sonst nichts.
 - Menüs, Hinweise und Handbuch verwenden einheitliche Wörter für Einsteiger. Fachbegriffe werden dort erklärt, wo sie zum ersten Mal gebraucht werden.
 - Der Unterstützen-Dialog erklärt vor dem Öffnen von PayPal, dass die Zahlung freiwillig ist und keine Funktionen freischaltet. Scheitert der Browser, lässt sich der Link kopieren.
 - Aushöhlen und andere abhängige Werkzeuge zeigen nur Felder, die für die gewählte Variante gelten, und erklären ausgeblendete Werte einheitlich.
+- Die mitgelieferten Beispiele öffnen mit einer geführten Tour. Rechts steht Schritt für Schritt, was zu tun ist, und die Tour erkennt selbst, wenn ein Schritt erledigt ist.
+- Die Handlungsvorschläge zu einem Fehler bleiben beim Speichern erhalten. Nach dem Öffnen eines Projekts stand vorher nur noch der Fehler da, ohne den Weg heraus.
+- Die Orientierungssuche prüft jede Lage nur noch einmal. Mehrfach vorgeschlagene Lagen kosteten Rechenzeit, ohne ein anderes Ergebnis zu liefern.
 
 ### Plattformen und behobene Fehler
 
