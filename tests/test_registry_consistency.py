@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 import textwrap
 from collections.abc import Iterable
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any, Final
 
 import pytest
 
+from app.core.bootstrap import load_operations
 from app.core.registry import (
     CATEGORIES,
     FEATURE_KINDS,
@@ -849,3 +851,65 @@ def test_the_slot_limit_is_one_number_not_three() -> None:
     }
     assert len(limits) >= 3, f"zu wenige Filamentfelder gefunden ({len(limits)}) — prüft das etwas?"
     assert len(set(limits.values())) == 1, f"verschiedene Obergrenzen für dasselbe: {limits}"
+
+
+#: Zahlwörter, wie die Regeldateien sie schreiben — Ziffern stehen dort nicht.
+_ZAHLWORT: Final[dict[str, int]] = {
+    "zwölf": 12,
+    "zwanzig": 20,
+    "sechsundzwanzig": 26,
+    "siebenundzwanzig": 27,
+    "achtundzwanzig": 28,
+    "neunundzwanzig": 29,
+    "dreißig": 30,
+    "fünfundneunzig": 95,
+    "sechsundneunzig": 96,
+    "siebenundneunzig": 97,
+}
+
+
+def test_the_rule_file_counts_the_caveats_it_claims() -> None:
+    """Eine Zahl in einer Regeldatei altert genauso still wie eine in einer Mail.
+
+    `.claude/rules/oberflaeche.md` nannte „Zwölf Operationen tragen einen
+    ``caveat``". Gemessen am 29.08.2026 waren es **sechsundzwanzig** von
+    fünfundneunzig — mehr als das Doppelte, und niemand hat es bemerkt, weil
+    eine Doku-Zahl niemandem auffällt, solange sie plausibel klingt. Gefunden
+    hat sie eine Nachbarsitzung beim Bauen einer ganz anderen Prüfung.
+
+    Der Fehler war dabei nicht die falsche Zahl, sondern dass sie **ungeprüft**
+    dastand. Dieselbe Klammer, die `test_changelog.py` seit demselben Abend um
+    die Presseentwürfe legt, gehört deshalb auch hierher: Wer eine Operation
+    mit ``caveat`` hinzufügt, zieht den Satz nach oder bekommt einen roten Lauf.
+
+    Geprüft werden **beide** Zahlen des Satzes — die mit ``caveat`` und die
+    Gesamtzahl. Eine davon allein wäre die Hälfte der Aussage.
+    """
+    regel = Path(__file__).resolve().parent.parent / ".claude" / "rules" / "oberflaeche.md"
+    assert regel.exists(), f"die Regeldatei fehlt: {regel}"
+    text = regel.read_text(encoding="utf-8")
+
+    satz = re.search(r"([A-Za-zäöüß]+) von ([A-Za-zäöüß]+)\s*\n?\s*Operationen tragen einen", text)
+    assert satz, (
+        "der Satz über die caveat-Zahl steht nicht mehr in oberflaeche.md — "
+        "wurde er umformuliert, gehört diese Prüfung mit ihm umgeschrieben"
+    )
+    genannt_mit = _ZAHLWORT.get(satz.group(1).lower())
+    genannt_alle = _ZAHLWORT.get(satz.group(2).lower())
+    assert genannt_mit is not None and genannt_alle is not None, (
+        f"unbekanntes Zahlwort in oberflaeche.md: {satz.group(1)!r} von {satz.group(2)!r} — "
+        f"in _ZAHLWORT eintragen"
+    )
+
+    load_operations()
+    alle = REGISTRY.all()
+    mit_caveat = [spec.name for spec in alle if spec.caveat]
+    assert alle, "leeres Register — dann prüft dieser Test nichts"
+
+    assert genannt_alle == len(alle), (
+        f"oberflaeche.md nennt {genannt_alle} Operationen, das Register hat {len(alle)}"
+    )
+    assert genannt_mit == len(mit_caveat), (
+        f"oberflaeche.md nennt {genannt_mit} mit caveat, gezählt sind {len(mit_caveat)} — "
+        "den Satz im Abschnitt „Eine Grenze steht dort, wo gewählt wird“ nachziehen"
+    )
