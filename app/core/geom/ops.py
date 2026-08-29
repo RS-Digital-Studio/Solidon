@@ -12,8 +12,9 @@ from typing import Any, cast
 
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, GeometryError
 from app.core.geom.align import align_matrix
+from app.core.geom.attributes import used_slots
 from app.core.geom.boolean import BooleanKind, boolean, without_effect
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.repair import repair
 from app.core.geom.transform import (
     AXIS_VECTORS,
@@ -27,7 +28,15 @@ from app.core.geom.transform import (
     translation,
 )
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, FeatureRef, Finding, OpContext, OpResult, Transform
+from app.core.types import (
+    BaseParams,
+    FeatureRef,
+    Finding,
+    MaterialSlot,
+    OpContext,
+    OpResult,
+    Transform,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
@@ -480,6 +489,26 @@ class BooleanParams(BaseParams):
     pass
 
 
+def _material_slots_after_boolean(
+    ctx: OpContext, kind: BooleanKind, mesh: MeshData
+) -> list[MaterialSlot]:
+    """Behält die Beschreibungen aller Slots, die das Ergebnis wirklich nutzt.
+
+    Die Flächennummern überträgt :func:`boolean`; Name, Farbe und Filamenttyp
+    liegen jedoch am Szenenobjekt. Bei Vereinigung und Schnitt können Flächen
+    beider Eingaben übrig bleiben, bei der Differenz nur die des ersten
+    Körpers. Treffen zwei Beschreibungen dieselbe Nummer, gewinnt deshalb der
+    erste Körper — er ist auch der, dessen Name und Material fortbestehen.
+    """
+    sources = ctx.inputs[:1] if kind == "difference" else ctx.inputs[:2]
+    known: dict[int, MaterialSlot] = {}
+    for entry in sources:
+        for slot in entry.material_slots:
+            known.setdefault(slot.index, slot)
+    present = set(used_slots(mesh))
+    return [known[index] for index in sorted(known) if index in present]
+
+
 def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult:
     """Zwei Körper hinein, einer heraus — mit der Rückfallkette dahinter (§17.2).
 
@@ -521,7 +550,13 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
         if nothing is not None:
             findings.append(nothing)
     return OpResult(
-        outputs=[dataclasses.replace(ctx.inputs[0], mesh=outcome.mesh)],
+        outputs=[
+            dataclasses.replace(
+                ctx.inputs[0],
+                mesh=outcome.mesh,
+                material_slots=_material_slots_after_boolean(ctx, kind, outcome.mesh),
+            )
+        ],
         solver=outcome.solver,
         findings=findings,
     )

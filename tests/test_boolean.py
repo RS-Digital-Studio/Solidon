@@ -14,13 +14,14 @@ import trimesh
 
 from app.core.bootstrap import load_operations
 from app.core.errors import BooleanFailedError, GeometryError
+from app.core.geom.attributes import used_slots, with_slot
 from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, boolean, shared_volume
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, OpResult, Scene, SceneObject
+from app.core.types import MaterialSlot, OpContext, OpResult, Scene, SceneObject
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -35,13 +36,20 @@ def box(size: float, offset: tuple[float, float, float]) -> MeshData:
     return MeshData.of(body)
 
 
-def run_op(op: str, first: MeshData, second: MeshData) -> OpResult:
+def run_op(
+    op: str,
+    first: MeshData,
+    second: MeshData,
+    *,
+    first_slots: tuple[MaterialSlot, ...] = (),
+    second_slots: tuple[MaterialSlot, ...] = (),
+) -> OpResult:
     """Eine boolesche Operation über das Register fahren — mit Profil, damit
     ``without_effect`` an der Düse misst und nicht am Rechenepsilon."""
     load_operations()
     spec = REGISTRY.get(op)
-    a = SceneObject(id="obj_1", name="A", mesh=first)
-    b = SceneObject(id="obj_2", name="B", mesh=second)
+    a = SceneObject(id="obj_1", name="A", mesh=first, material_slots=list(first_slots))
+    b = SceneObject(id="obj_2", name="B", mesh=second, material_slots=list(second_slots))
     return spec.fn(
         OpContext(
             scene=Scene(objects={"obj_1": a, "obj_2": b}, parameters={}),
@@ -77,6 +85,27 @@ def test_intersection_keeps_only_the_overlap() -> None:
     result = boolean("intersection", [solid(), box(20.0, (10.0, 0.0, 0.0))])
 
     assert result.mesh.volume == pytest.approx(4000.0, rel=1e-6)
+
+
+def test_union_keeps_the_filament_descriptions_of_both_bodies() -> None:
+    """Die Flächen trugen beide Slotnummern, aber der zweite Name und seine
+    Farbe verschwanden am Operationsrand — die Ansicht und der 3MF-Export
+    konnten die korrekt übertragene Nummer dadurch nicht mehr erklären.
+    """
+    white = MaterialSlot(index=0, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    black = MaterialSlot(index=1, name="PLA Schwarz", colour=(0.05, 0.05, 0.05))
+
+    result = run_op(
+        "union_objects",
+        with_slot(solid(), 0),
+        with_slot(box(20.0, (10.0, 0.0, 0.0)), 1),
+        first_slots=(white,),
+        second_slots=(black,),
+    )
+
+    output = result.outputs[0]
+    assert used_slots(output.mesh) == (0, 1), "die Geometrie trägt beide Filamente"
+    assert output.material_slots == [white, black], "Name und Farbe erklären beide Nummern"
 
 
 def test_the_stage_that_worked_is_recorded() -> None:
