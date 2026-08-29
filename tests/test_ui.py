@@ -9279,3 +9279,44 @@ def test_the_dialog_names_both_bodies_a_boolean_will_take() -> None:
     # Die Gegenprobe: Wer genau so viel wählt, wie die Operation nimmt, braucht
     # keine Erklärung — sonst stünde der Satz bei jeder zweiten Operation.
     assert _works_on(["Klotz", "Stift"], 2, 2) == ""
+
+
+def test_the_halt_message_goes_when_the_chain_runs_again(window: MainWindow) -> None:
+    """„Die Kette hält an" ist ein Zustand, keine Auskunft über eine Handlung.
+
+    Eine Meldung überlebt hier absichtlich jeden Lauf (``announce``) — richtig
+    für „Exportiert: dose.3mf", das ein Ergebnis festhält, und falsch für
+    einen Stopp: Der gilt, solange die Kette steht, und nicht länger. Robert
+    sah den Satz am 29.08.2026 über einem Prüfbericht mit null Fehlern und
+    null Warnungen, lange nachdem er den Schritt zurückgenommen hatte — die
+    Statuszeile behauptete einen Zustand, den es nicht mehr gab.
+
+    Gemerkt wird die **Herkunft** der Meldung und nicht ihr Text: Ein
+    Vergleich auf den Satz bräche beim ersten Sprachwechsel.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    assert window.session.last_result.stopped_at is not None, "der Wert hält die Kette an"
+    assert "hält an" in window._announcement, "und die Statuszeile sagt es"
+
+    window.session.undo()
+    window.session.wait_for_idle()
+
+    assert window.session.last_result.stopped_at is None, "zurückgenommen rechnet sie wieder"
+    assert window._announcement == "", (
+        "und der Satz über den Stopp steht nicht mehr da — er gilt nicht mehr"
+    )

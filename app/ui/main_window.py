@@ -962,6 +962,16 @@ class MainWindow(QMainWindow):
         """§18.8: was der Nutzer ausgeblendet hat. Ansichtszustand des
         Fensters, nicht des Dokuments — er reist nicht mit der Datei."""
         self._announcement = ""
+        self._halted = False
+        """Ob die stehende Meldung von einer angehaltenen Kette stammt.
+
+        Eine Meldung überlebt hier absichtlich jeden Lauf (:meth:`announce`) —
+        richtig für das **Ergebnis einer Handlung**, falsch für einen
+        **Zustand**: „Die Kette hält an" galt weiter, nachdem der Kunde den
+        Schritt längst berichtigt hatte, und behauptete einen Stopp über einem
+        Prüfbericht ohne einen einzigen Fehler (Robert, 29.08.2026). Gemerkt
+        wird deshalb die Herkunft, nicht der Text — ein Vergleich auf den Satz
+        bräche beim ersten Sprachwechsel."""
         self._run_started: float | None = None
         """Wann der laufende Lauf begann — für die Restzeitschätzung (§2.8).
 
@@ -4217,6 +4227,11 @@ class MainWindow(QMainWindow):
         catalog = PartCatalog(self)
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
+        # Und die zweite Bedingung, die je Baustein gilt: Vierundzwanzig der
+        # siebenundzwanzig werden an eine Fläche oder Bohrung gesetzt. Sie
+        # sperrt nicht — der Weg über eine eingetragene Position bleibt —,
+        # aber sie sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
+        catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
@@ -7696,9 +7711,19 @@ class MainWindow(QMainWindow):
             # wenn eine Tour läuft: die Meldung verweist auf ihn, und ein
             # Verweis auf etwas Zugehaltenes ist keiner.
             self.announce(tr("Die Kette hält an — siehe Prüfbericht."))
+            self._halted = True
             self._focus_report(force=True)
-        elif self.report.worst_severity(result) in ("warning", "error"):
-            self._focus_report()
+        else:
+            # **Ein Zustand gilt, solange er gilt.** Rechnet die Kette wieder
+            # durch, ist die Absage von vorhin keine Auskunft mehr, sondern
+            # eine falsche: Sie stand über einem Prüfbericht mit null Fehlern
+            # und null Warnungen. Geräumt wird nur die eigene Meldung — was
+            # der Kunde seither getan hat („Exportiert: dose.3mf"), bleibt.
+            if self._halted:
+                self._halted = False
+                self.announce("")
+            if self.report.worst_severity(result) in ("warning", "error"):
+                self._focus_report()
 
     def _on_project(self) -> None:
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer

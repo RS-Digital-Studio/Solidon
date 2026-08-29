@@ -194,6 +194,14 @@ class PartCatalog(QDialog):
         self.insert_hint.setVisible(False)
         self._insert_allowed = True
         self._insert_reason = ""
+        self._feature_chosen = True
+        """Ob im Objektbaum eine Fläche oder Bohrung gewählt ist.
+
+        Vierundzwanzig der siebenundzwanzig Bausteine werden an eine solche
+        Stelle gesetzt; ohne sie wissen sie weder wohin noch in welche
+        Richtung, und die Operation bricht mit „Für diesen Baustein fehlt die
+        Stelle, an die er soll" ab. Vorgabe ``True``: Wer die Auskunft nicht
+        gibt, bekommt den Katalog wie zuvor."""
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -279,9 +287,46 @@ class PartCatalog(QDialog):
         """
         self._insert_allowed = can
         self._insert_reason = "" if can else reason
-        self.insert_hint.setText(self._insert_reason)
-        self.insert_hint.setVisible(bool(reason) and not can)
         self._show_detail()
+
+    def set_feature_chosen(self, chosen: bool) -> None:
+        """Ob eine Fläche oder Bohrung gewählt ist — die zweite Bedingung.
+
+        Sie gilt **je Baustein** und nicht für den ganzen Katalog: Von den
+        siebenundzwanzig werden vierundzwanzig an eine Stelle gesetzt, drei
+        Prüfkörper stehen frei. Eine pauschale Sperre nähme diesen dreien den
+        Weg, den sie haben.
+
+        Und sie **sperrt nicht, sie sagt es** — anders als die Bedingung des
+        Fensters darüber. Ein Baustein lässt sich auch über eine eingetragene
+        Position setzen (``x``/``y``/``z``); so machen es die ausgelieferten
+        Beispielprojekte, und ein Riegel hier nähme ihnen den Weg. Was fehlte,
+        war nicht die Erlaubnis, sondern die Auskunft: Robert bekam am
+        29.08.2026 die Absage erst als Fehler **nach** dem Klick — derselbe
+        Fall wie am 25.08., nur eine Ebene tiefer (dort war es der fehlende
+        Körper, hier die fehlende Stelle daran).
+        """
+        self._feature_chosen = chosen
+        self._show_detail()
+
+    def _insert_state(self, spec: PartSpec | None) -> tuple[bool, str]:
+        """Ob sich dieser Baustein einsetzen lässt — und was sonst zu tun ist.
+
+        Zwei Bedingungen übereinander, und nur die erste ist ein Riegel: Ohne
+        Szene oder ohne gewählten Körper geht gar nichts. Die zweite ist ein
+        Hinweis, weil der Weg über eine eingetragene Position offen bleibt.
+        """
+        if not self._insert_allowed:
+            return False, self._insert_reason
+        if spec is None:
+            return False, ""
+        if (spec.at_hole or spec.at_face) and not self._feature_chosen:
+            return True, tr(
+                "Dieser Baustein wird an eine Fläche oder Bohrung gesetzt. "
+                "Wählen Sie eine im Objektbaum, oder tragen Sie im nächsten "
+                "Dialog eine Position ein."
+            )
+        return True, ""
 
     def refresh(self) -> None:
         """Die Liste neu aus dem Register — die Suche bleibt, wie sie steht.
@@ -476,13 +521,21 @@ class PartCatalog(QDialog):
                 return
 
     def _show_detail(self) -> None:
-        """Was rechts steht, folgt der Auswahl links — und der Knopf auch."""
+        """Was rechts steht, folgt der Auswahl links — und der Knopf auch.
+
+        Die Hinweiszeile wird **hier** geschrieben und nicht in
+        :meth:`set_can_insert`: Ihr Text hängt am gewählten Baustein, und der
+        wechselt mit jedem Klick in der Liste.
+        """
         name = self.chosen()
         spec = next((entry for entry in PARTS.all() if entry.name == name), None)
         self.detail.setText(detail(spec))
+        allowed, reason = self._insert_state(spec)
         if self._insert is not None:
-            self._insert.setEnabled(spec is not None and self._insert_allowed)
-            self._insert.setToolTip(self._insert_reason if not self._insert_allowed else "")
+            self._insert.setEnabled(spec is not None and allowed)
+            self._insert.setToolTip(reason)
+        self.insert_hint.setText(reason)
+        self.insert_hint.setVisible(bool(reason))
 
     # --- choosing ---------------------------------------------------------------
 

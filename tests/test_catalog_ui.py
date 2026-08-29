@@ -419,3 +419,51 @@ def test_without_a_body_the_catalogue_shows_but_does_not_insert(qt_app: QApplica
         assert picked, "frei heißt: der Doppelklick wählt wieder"
     finally:
         catalog.release()
+
+
+def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication) -> None:
+    """Vierundzwanzig der siebenundzwanzig Bausteine brauchen eine Stelle.
+
+    Der Katalog fragte nur, ob ein **Körper** gewählt ist, und ließ dann
+    einsetzen; die Absage kam als Fehler danach — „Für diesen Baustein fehlt
+    die Stelle, an die er soll" (Robert, 29.08.2026, am Bildschirmfoto eines
+    Quaders mit aufliegender Schraube). Derselbe Fall wie am 25.08., nur eine
+    Ebene tiefer: dort fehlte der Körper, hier die Stelle an ihm.
+
+    Und die Auskunft ist **kein Riegel**: Ein Baustein lässt sich auch über
+    eine eingetragene Position setzen, so machen es die ausgelieferten
+    Beispielprojekte. Gesperrt würde ihnen der Weg genommen.
+    """
+    catalog = PartCatalog()
+    try:
+        catalog.set_can_insert(True, "")
+        catalog.set_feature_chosen(False)
+
+        def waehle(name: str) -> bool:
+            for row in range(catalog.list.count()):
+                item = catalog.list.item(row)
+                if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
+                    catalog.list.setCurrentItem(item)
+                    return True
+            return False
+
+        assert waehle("printed_screw"), "die Schraube steht im Katalog"
+        assert catalog._insert is not None
+        assert catalog._insert.isEnabled(), "kein Riegel — die Position bleibt ein Weg"
+        assert catalog.insert_hint.isVisibleTo(catalog), "aber der Hinweis steht da"
+        text = catalog.insert_hint.text()
+        assert "Fläche" in text and "Bohrung" in text, "er nennt beide Stellen"
+        assert "Position" in text, "und den zweiten Weg, den es gibt"
+
+        assert waehle("wall_ladder"), "die Wandstärkenleiter steht im Katalog"
+        assert not catalog.insert_hint.isVisibleTo(catalog), (
+            "ein frei stehender Prüfkörper braucht keine Stelle — die Sperre gilt je Baustein"
+        )
+
+        catalog.set_feature_chosen(True)
+        assert waehle("printed_screw")
+        assert not catalog.insert_hint.isVisibleTo(catalog), (
+            "mit gewählter Stelle ist nichts zu sagen"
+        )
+    finally:
+        catalog.release()
