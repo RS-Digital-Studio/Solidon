@@ -5798,6 +5798,46 @@ def test_the_parameter_card_survives_getting_parameters(qt_app: QApplication) ->
     assert "breite" in panel._editors
 
 
+def test_parameter_rows_recalculate_the_card_height(qt_app: QApplication) -> None:
+    """Neue Zeilen dürfen nicht in der Höhe des leeren Zustands landen.
+
+    Die schwebende linke Karte besitzt kein übergeordnetes Layout, das eine
+    verspätete Wunschhöhe automatisch übernimmt. Nach dem Wechsel vom leeren
+    Hinweis zu drei Parametern blieb deshalb die alte Mindesthöhe stehen und
+    Qt presste Zahlen- und Einheitenfelder bis auf wenige Pixel zusammen.
+    """
+    from app.core.types import Document, Parameter
+    from app.ui.panels import ParameterPanel
+
+    panel = ParameterPanel()
+    panel.resize(260, panel.minimumHeight())
+    panel.show_document(Document(format_version=1, app_version="0.0.1"))
+    panel.show()
+    QApplication.processEvents()
+
+    document = Document(format_version=1, app_version="0.0.1")
+    for name, title, value in (
+        ("breite", "Breite", 60.0),
+        ("tiefe", "Tiefe", 40.0),
+        ("staerke", "Stärke", 10.99),
+    ):
+        document.parameters[name] = Parameter(name=name, title=title, value=value)
+    panel.show_document(document)
+    QApplication.processEvents()
+
+    assert panel.minimumHeight() >= panel.sizeHint().height(), (
+        f"Mindesthöhe {panel.minimumHeight()} px, Inhalt {panel.sizeHint().height()} px"
+    )
+    for name, editor in panel._editors.items():
+        assert editor.height() >= editor.minimumSizeHint().height(), (
+            f"{name}: Feld {editor.height()} px, benötigt {editor.minimumSizeHint().height()} px"
+        )
+        unit = panel._unit_editors[name]
+        assert unit.height() >= unit.minimumSizeHint().height(), (
+            f"{name}: Einheit {unit.height()} px, benötigt {unit.minimumSizeHint().height()} px"
+        )
+
+
 def test_a_very_long_list_stops_growing(qt_app: QApplication) -> None:
     """Sonst schöbe ein Baum mit fünfzig Teilen den Verlauf aus dem Fenster."""
     from PySide6.QtWidgets import QTreeWidgetItem

@@ -47,6 +47,18 @@ class AssignSlotParams(BaseParams):
         default="",
         doc=_("Anzeigefarbe als #RRGGBB. Nur zur Ansicht — gedruckt wird, was eingelegt ist."),
     )
+    material_type: str = param(
+        title=_("Typ"),
+        default="",
+        placement="advanced",
+        doc=_("Materialart des Filaments, etwa PLA oder PETG."),
+    )
+    slicer_profile: str = param(
+        title=_("Slicer-Profil"),
+        default="",
+        placement="advanced",
+        doc=_("Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt."),
+    )
 
 
 @register_op(
@@ -68,6 +80,8 @@ def assign_slot(ctx: OpContext) -> OpResult:
         index=params.slot,
         name=params.name or f"{_('Slot').translate()} {params.slot}",
         colour=colour_from(params.colour),
+        material=params.slicer_profile or None,
+        material_type=params.material_type or None,
     )
     painted = with_slot(as_mesh_data(source.mesh), params.slot)
     return OpResult(

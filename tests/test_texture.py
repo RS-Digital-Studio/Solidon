@@ -262,11 +262,22 @@ def run(op: str, entry: SceneObject, profile: Profile, seed: int | None = None, 
 def test_assign_slot_paints_the_whole_object(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Deckel", mesh=MeshData.of(plate()))
 
-    result = run("assign_slot", entry, profile, slot=2, name="Rot", colour="#FF0000")
+    result = run(
+        "assign_slot",
+        entry,
+        profile,
+        slot=2,
+        name="Rot",
+        colour="#FF0000",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    )
 
     output = result.outputs[0]
     assert used_slots(output.mesh) == (2,)
     assert output.material_slots[0].colour == pytest.approx((1.0, 0.0, 0.0))
+    assert output.material_slots[0].material_type == "PETG"
+    assert output.material_slots[0].material == "Elegoo PETG PRO @ECC2"
     assert output.material_slots[0].name == "Rot"
 
 

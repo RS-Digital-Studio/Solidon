@@ -1621,8 +1621,14 @@ class OperationDialog(QDialog):
             wanted = min(wanted, screen.availableGeometry().height() - 48)
         self.resize(self.width(), wanted)
 
-    def _fill_filament_fields(self, name: str, colour: str) -> None:
-        """Name und Farbe des gewählten Filaments in ihre eigenen Felder.
+    def _fill_filament_fields(
+        self,
+        name: str,
+        colour: str,
+        material_type: str,
+        slicer_profile: str,
+    ) -> None:
+        """Die Identität des gewählten Filaments in ihre eigenen Felder.
 
         Der Wähler kennt beide, die Operation hat je ein Feld dafür
         (``name``, ``colour``) — und ohne diesen Weg hätte der Kunde die
@@ -1637,7 +1643,12 @@ class OperationDialog(QDialog):
         Slot, aber keinen Namen dazu, und ein Griff ins Leere wäre ein
         Absturz an einer Stelle, an der nur ein Komfort fehlt.
         """
-        for key, value in (("name", name), ("colour", colour)):
+        for key, value in (
+            ("name", name),
+            ("colour", colour),
+            ("material_type", material_type),
+            ("slicer_profile", slicer_profile),
+        ):
             editor = self._editors.get(key)
             if isinstance(editor, QLineEdit) and value:
                 editor.setText(value)

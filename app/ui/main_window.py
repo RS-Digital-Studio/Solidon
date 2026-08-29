@@ -1462,6 +1462,12 @@ class MainWindow(QMainWindow):
         self.right.setObjectName("overlayCard")
         self.overlay = OverlayHost(self.middle_stack, self)
         self.overlay.set_zones(left, self.right, bottom)
+        # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
+        # endgültige Höhe kennt Qt einen Ereignisschritt später; dann muss die
+        # frei gesetzte linke Karte ausdrücklich neu verteilt werden. Ohne
+        # diesen Weg blieb auf Windows die Höhe des leeren Zustands stehen und
+        # drückte Zahlen- und Einheitenfelder zu schmalen Schlitzen zusammen.
+        self.parameters.heightChanged.connect(weak_slot(self, lambda view: view.overlay.reflow()))
         # Ein geöffnetes Werkzeug macht die untere Zone dreimal so hoch. Die
         # Überlagerung setzt Geometrien, statt sie von einem Layout rechnen zu
         # lassen — sie muss also erfahren, dass sich der Bedarf geändert hat.
@@ -2175,7 +2181,7 @@ class MainWindow(QMainWindow):
             tr("Erste Schritte …"),
             None,
             self.action_first_run,
-            tr("Sprache, Drucker, Material und die externen Programme noch einmal einstellen."),
+            tr("Sprache, Drucker, Filamente und die externen Programme noch einmal einstellen."),
         )
         self._add_action(
             help_menu,
@@ -8156,7 +8162,7 @@ class MainWindow(QMainWindow):
         self._show_start_screen(False)
 
     def action_first_run(self) -> None:
-        """§38: Sprache, Drucker, Material, externe Programme, Chat-Zugang.
+        """§38: Sprache, Drucker, Filamente, externe Programme, Chat-Zugang.
         Überspringbar.
 
         **Die Schleife ist der Sprachwechsel.** Der Dialog übersetzt sich nicht,
@@ -8212,12 +8218,10 @@ class MainWindow(QMainWindow):
     def _adopt_defaults(self) -> None:
         """Ein leeres Projekt übernimmt die eben gewählten Vorgaben.
 
-        Die Erstinbetriebnahme fragt nach Drucker und Material, und die
-        Einstellungen sagen zu Recht, dass diese Werte „für das nächste neue
-        Projekt" gelten. Beim ersten Start ist das offene Projekt aber genau
-        das, mit dem weitergearbeitet wird: gewählt war Centauri Carbon 2 und
-        PETG, in den Druckeinstellungen stand danach „Allgemeiner FDM-Drucker"
-        und PLA.
+        Die Erstinbetriebnahme fragt nach dem Drucker; das Material kommt aus
+        dem Filament und wird dort nicht ein zweites Mal abgefragt. Beim
+        ersten Start ist das offene Projekt genau das, mit dem weitergearbeitet
+        wird: Der gewählte Drucker muss deshalb sofort darin gelten.
 
         Nur bei leerem Dokument. In ein Projekt mit Inhalt greift eine
         Einstellung nicht hinein — dafür gibt es die Druckeinstellungen, und

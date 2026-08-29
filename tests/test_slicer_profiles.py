@@ -27,6 +27,51 @@ def _write(path: Path, document: dict[str, object]) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
+def test_the_loaded_filaments_carry_profile_colour_and_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Farbe steht in der Slicer-Konfiguration, der Typ im Profil."""
+    executable = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
+    executable.parent.mkdir()
+    executable.write_text("")
+    installed = executable.parent / "resources" / "profiles"
+    user = tmp_path / "settings" / "ElegooSlicer" / "user" / "default"
+    user.mkdir(parents=True)
+    _write(
+        installed / "Elegoo" / "filament" / "ECC2" / "Elegoo PETG PRO @ECC2.json",
+        {
+            "type": "filament",
+            "name": "Elegoo PETG PRO @ECC2",
+            "instantiation": "true",
+            "filament_type": ["PETG"],
+        },
+    )
+    config = user.parent.parent / "ElegooSlicer.conf"
+    _write(
+        config,
+        {
+            "presets": {"machine": "Elegoo Centauri Carbon 2 0.4 nozzle"},
+            "elegoo_presets": [
+                {
+                    "machine": "Elegoo Centauri Carbon 2 0.4 nozzle",
+                    "filament": "Elegoo PETG PRO @ECC2",
+                    "filament_colors": "#9AA0A6",
+                }
+            ],
+        },
+    )
+    monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+
+    assert sp.configured_filaments("orca", executable) == (
+        sp.SlicerFilament(
+            profile="Elegoo PETG PRO @ECC2",
+            colour="#9AA0A6",
+            material_type="PETG",
+        ),
+    )
+
+
 @pytest.fixture
 def bestand(tmp_path: Path) -> Path:
     """Ein Profilbestand, wie ihn ein Orca-Ableger ausliefert."""

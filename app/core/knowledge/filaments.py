@@ -1,4 +1,4 @@
-"""Der Filamentkatalog — benannte Filamente mit Farbe, als Vorwahl (§20).
+"""Der Filamentkatalog — benannte Filamente mit Typ und Farbe (§20).
 
 Entstanden mit dem Filament-Konzept (26.08.2026): Farben kommen vom Kunden,
 nicht aus einer Ersatzpalette. Ein Filament wird einmal angelegt — Name und
@@ -40,10 +40,14 @@ _COLOUR_PATTERN: Final = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 @dataclass(frozen=True, slots=True)
 class CatalogueFilament:
-    """Ein Eintrag der Vorwahl: wie das Filament heißt und wie es aussieht."""
+    """Ein Eintrag der Vorwahl: Identität, Typ und Aussehen der Spule."""
 
     name: str
     colour: str
+    material_type: str = ""
+    """Materialart in der Schreibweise des Slicers, etwa ``PETG``."""
+    slicer_profile: str = ""
+    """Herstellerprofil ohne Pfad; leer bei einer rein lokalen Vorwahl."""
 
 
 def catalogue_path() -> Path:
@@ -59,7 +63,12 @@ def catalogue() -> tuple[CatalogueFilament, ...]:
     try:
         data = json.loads(catalogue_path().read_text(encoding="utf-8"))
         entries = [
-            CatalogueFilament(name=str(entry["name"]), colour=str(entry["colour"]))
+            CatalogueFilament(
+                name=str(entry["name"]),
+                colour=str(entry["colour"]),
+                material_type=str(entry.get("material_type", "")),
+                slicer_profile=str(entry.get("slicer_profile", "")),
+            )
             for entry in data
         ]
     except FileNotFoundError:
@@ -72,8 +81,13 @@ def catalogue() -> tuple[CatalogueFilament, ...]:
     return tuple(sorted(entries, key=lambda entry: sort_key(entry.name)))
 
 
-def remember(name: str, colour: str) -> CatalogueFilament:
-    """Legt ein Filament an — oder gibt einem vorhandenen die neue Farbe.
+def remember(
+    name: str,
+    colour: str,
+    material_type: str = "",
+    slicer_profile: str = "",
+) -> CatalogueFilament:
+    """Legt ein Filament an — oder aktualisiert ein vorhandenes vollständig.
 
     Ein Filament ist sein Name: Wer „PETG Rot" noch einmal anlegt, meint
     dasselbe Filament mit anderer Farbe, nicht ein zweites. Das ist dieselbe
@@ -96,10 +110,37 @@ def remember(name: str, colour: str) -> CatalogueFilament:
             value=colour,
             constraint="colour",
         )
-    entry = CatalogueFilament(name=cleaned, colour=colour.lower())
+    entry = CatalogueFilament(
+        name=cleaned,
+        colour=colour.lower(),
+        material_type=material_type.strip(),
+        slicer_profile=slicer_profile.strip(),
+    )
     kept = [existing for existing in catalogue() if existing.name != cleaned]
     _write([*kept, entry])
     return entry
+
+
+def synchronise(entries: list[CatalogueFilament]) -> tuple[CatalogueFilament, ...]:
+    """Übernimmt mehrere Slicerfilamente in einem atomaren Schreibvorgang.
+
+    Vorhandene Namen werden aktualisiert, alle anderen Regalzeilen bleiben
+    stehen. Der Slicer beschreibt, was gerade eingelegt ist; er besitzt nicht
+    den ganzen Vorrat und darf deshalb nichts aus dem Katalog entfernen.
+    """
+    merged = {entry.name: entry for entry in catalogue()}
+    for entry in entries:
+        cleaned = entry.name.strip()
+        if not cleaned or not _COLOUR_PATTERN.match(entry.colour):
+            continue
+        merged[cleaned] = CatalogueFilament(
+            name=cleaned,
+            colour=entry.colour.lower(),
+            material_type=entry.material_type.strip(),
+            slicer_profile=entry.slicer_profile.strip(),
+        )
+    _write(list(merged.values()))
+    return catalogue()
 
 
 def forget(name: str) -> bool:
@@ -120,7 +161,15 @@ def _write(entries: list[CatalogueFilament]) -> None:
     """Atomar, wie der Testlaufmarker — ein halber Katalog sähe kaputt aus."""
     ensure_dir(user_config_dir())
     text = json.dumps(
-        [{"name": entry.name, "colour": entry.colour} for entry in entries],
+        [
+            {
+                "name": entry.name,
+                "colour": entry.colour,
+                "material_type": entry.material_type,
+                "slicer_profile": entry.slicer_profile,
+            }
+            for entry in entries
+        ],
         ensure_ascii=False,
         indent=2,
     )

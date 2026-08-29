@@ -325,8 +325,8 @@ def test_the_answers_do_not_squeeze_the_questions(qt_app: QApplication) -> None:
     Die Erhebung tauscht „Wird nachgesehen …" gegen drei Programmzeilen und
     die Chat-Auskunft. Das Fenster blieb dabei auf seiner Aufmachgröße —
     das umbrochene Intro meldet der Layoutrechnung nur eine Zeile —, und der
-    Fehlbetrag wurde aus den Auswahlfeldern gepresst: Sprache, Drucker und
-    Material standen mit 16 von 28 Punkten da, die Schrift oben und unten
+    Fehlbetrag wurde aus den Auswahlfeldern gepresst: Sprache und Drucker
+    standen mit 16 von 28 Punkten da, die Schrift oben und unten
     abgeschnitten (Robert, 26.08.2026, mit Bild). Der Dialog wächst jetzt
     nach dem Eintragen der Antworten; geprüft wird die Wirkung an den
     Feldern, nicht die Fenstergröße — sie ist das Mittel, nicht die Zusage.
@@ -339,7 +339,7 @@ def test_the_answers_do_not_squeeze_the_questions(qt_app: QApplication) -> None:
     qt_app.processEvents()
     qt_app.processEvents()
 
-    for name in ("language", "printer", "material"):
+    for name in ("language", "printer"):
         combo = getattr(dialog, name)
         assert combo.height() >= combo.minimumSizeHint().height(), (
             f"{name}: {combo.height()} von {combo.minimumSizeHint().height()} Punkten"
@@ -415,6 +415,57 @@ def test_a_suggestion_arrives_while_nobody_has_chosen(qt_app: QApplication) -> N
     assert dialog.printer.currentData() == other
 
 
+def test_the_slicer_filament_lands_in_the_rack(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Materialfrage fällt weg, weil die wirkliche Spule übernommen wird."""
+    from app.core.knowledge import filaments
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    imported = filaments.CatalogueFilament(
+        name="Elegoo PETG PRO @ECC2",
+        colour="#9AA0A6",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    )
+
+    dialog._show(
+        first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=(imported,))
+    )
+
+    stored = filaments.catalogue()[0]
+    assert stored.name == imported.name
+    assert stored.colour == "#9aa0a6"
+    assert stored.material_type == "PETG"
+    assert stored.slicer_profile == imported.slicer_profile
+    assert dialog.settings.material == "petg", "der eindeutige Spulentyp ersetzt die Frage"
+
+
+def test_different_loaded_filament_types_are_not_guessed(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PLA und TPU nebeneinander ergeben keine eindeutige Materialvorgabe."""
+    from app.core.knowledge import filaments
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    settings = UiSettings(material="abs")
+    dialog = settled(FirstRunDialog(settings), qt_app)
+    loaded = tuple(
+        filaments.CatalogueFilament(
+            name=f"Rolle {material_type}",
+            colour=colour,
+            material_type=material_type,
+            slicer_profile=f"Profil {material_type}",
+        )
+        for material_type, colour in (("PLA", "#112233"), ("TPU", "#445566"))
+    )
+
+    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=loaded))
+
+    assert settings.material == "abs", "bei mehreren Typen bleibt die vorhandene Vorgabe"
+
+
 def test_the_first_run_happens_once(qt_app: QApplication) -> None:
     settings = UiSettings()
 
@@ -423,13 +474,13 @@ def test_the_first_run_happens_once(qt_app: QApplication) -> None:
     assert not should_run(settings)
 
 
-def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
-    """§38: language, printer, material, external programs."""
+def test_the_first_run_asks_only_for_the_two_basics(qt_app: QApplication) -> None:
+    """§38: Sprache und Drucker; das Material kommt aus dem Filament."""
     dialog = settled(FirstRunDialog(UiSettings()), qt_app)
 
     assert dialog.language.count() >= 2
     assert dialog.printer.count() >= 1
-    assert dialog.material.count() >= 1
+    assert not hasattr(dialog, "material"), "keine doppelte Materialfrage"
     # Die Programme stehen als Zeilen da, nicht mehr als ein Textblock: eine
     # je Programm, mit Zeichen, Zustand und Zweck. Geprüft an **jedem**, das
     # die Anwendung kennt, und nicht an einem herausgegriffenen Namen: Hier
@@ -523,7 +574,7 @@ def test_the_answers_land_in_the_settings(qt_app: QApplication) -> None:
     dialog.apply_to(settings)
 
     assert settings.printer
-    assert settings.material
+    assert settings.material == "pla", "ohne Filament bleibt die sichere Vorgabe stehen"
     assert settings.first_run_done
 
 

@@ -79,17 +79,28 @@ def test_the_catalogue_is_offered_and_carries_name_and_colour(
     Namen daneben trotzdem abtippen.
     """
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    filaments.remember("PETG Rot", "#cc2222")
+    filaments.remember(
+        "PETG Rot",
+        "#cc2222",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    )
 
     field = FilamentField(0)
     position = next(row for row in range(field.count()) if "PETG Rot" in field.itemText(row))
 
-    seen: list[tuple[str, str]] = []
-    field.filamentChosen.connect(lambda name, colour: seen.append((name, colour)))
+    seen: list[tuple[str, str, str, str]] = []
+    field.filamentChosen.connect(
+        lambda name, colour, material_type, profile: seen.append(
+            (name, colour, material_type, profile)
+        )
+    )
     field.setCurrentIndex(position)
     field._chosen(position)
 
-    assert seen == [("PETG Rot", "#cc2222")], "Name und Farbe müssen weitergehen"
+    assert seen == [("PETG Rot", "#cc2222", "PETG", "Elegoo PETG PRO @ECC2")], (
+        "die ganze Filamentidentität muss weitergehen"
+    )
     assert field.currentData() == 1, "die erste freie Nummer, nicht die Null"
 
 
@@ -110,6 +121,17 @@ def test_a_catalogue_filament_does_not_take_slot_zero(
     assert numbers.count(0) == 1, "die Null steht genau einmal in der Liste"
     white = next(row for row in range(field.count()) if "PLA Weiß" in field.itemText(row))
     assert field.itemData(white) != 0
+
+
+def test_a_filament_type_can_be_chosen_by_hand(qt_app: QApplication) -> None:
+    """Eine selbst angelegte Spule ist nicht auf Name und Farbe beschränkt."""
+    from app.ui.filament_picker import NewFilamentDialog
+
+    dialog = NewFilamentDialog(name="Werkstattrolle", colour="#123456", material_type="PETG")
+
+    assert dialog.material_type.currentData() == "PETG"
+    assert dialog.slicer_profile.isReadOnly(), "Profilnamen kommen aus dem Slicer, nie als Pfad"
+    assert dialog.filament() == ("Werkstattrolle", "#123456", "PETG", "")
 
 
 def test_every_free_number_stays_reachable(qt_app: QApplication) -> None:

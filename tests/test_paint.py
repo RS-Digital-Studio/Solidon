@@ -131,6 +131,26 @@ def test_painting_runs_as_an_operation(profile: Profile) -> None:
     assert [finding.code for finding in result.findings] == ["colour.painted"]
 
 
+def test_painting_keeps_the_slicer_identity_with_the_colour(profile: Profile) -> None:
+    entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
+
+    output = run(
+        "paint_slot",
+        entry,
+        profile,
+        slot=1,
+        at_feature="face_1",
+        name="Werkstattrolle",
+        colour="#9AA0A6",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    ).outputs[0]
+
+    slot = output.material_slots[0]
+    assert slot.material_type == "PETG"
+    assert slot.material == "Elegoo PETG PRO @ECC2"
+
+
 def test_painting_without_a_face_stops_with_advice(profile: Profile) -> None:
     """Der Punkt-Pinsel ist entfallen — ohne Fläche gibt es nichts zu färben,
     und das sagt die Operation, statt still nichts zu tun."""

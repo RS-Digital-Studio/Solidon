@@ -1237,7 +1237,11 @@ def _orca_filament(
         "name": f"Solidon {marke or settings.title}",
         "from": "User",
         "instantiation": "true",
-        "filament_type": [slicer_keys.filament_type(profile.material.id)],
+        "filament_type": [
+            slot.material_type
+            if slot is not None and slot.material_type
+            else slicer_keys.filament_type(profile.material.id)
+        ],
     }
     # Über ``profile_file``, nicht über ``Path(...).is_file()``: hierher kommt
     # bevorzugt ein **Name** aus dem Bestand des Slicers, denn ein Pfad

@@ -298,6 +298,9 @@ class MaterialSlot:
     """
     colour: tuple[float, float, float] | None = None
     material: str | None = None
+    """Name des Herstellerprofils im Slicer, niemals ein Dateipfad."""
+    material_type: str | None = None
+    """Materialart in der Schreibweise des Slicers, etwa ``PETG``."""
 
 
 @dataclass(slots=True)

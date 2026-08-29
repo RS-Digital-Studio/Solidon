@@ -1,9 +1,9 @@
 """Der erste Start (Bauplan §38).
 
-Sprache, Drucker, Material, ein Blick auf die externen Programme, und der
-Zugang für den Chat. Vier Schritte, alle überspringbar, alle später wieder
-erreichbar — ein Assistent, der zu Ende gebracht werden muss, bevor
-irgendetwas geht, ist eine Wand, kein Willkommen.
+Sprache, Drucker, die im Slicer eingelegten Filamente, ein Blick auf die
+externen Programme und der Zugang für den Chat. Alles überspringbar, alles
+später wieder erreichbar — ein Assistent, der zu Ende gebracht werden muss,
+bevor irgendetwas geht, ist eine Wand, kein Willkommen.
 
 Der Chat steht mit im Dialog, weil er das Versprechen ist, mit dem die
 Anwendung antritt — und weil ein neuer Nutzer weder einen Schlüssel noch ein
@@ -47,7 +47,7 @@ from app.core import activation, install, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
-from app.core.knowledge import profiles
+from app.core.knowledge import filaments, profiles
 from app.core.log import get_logger
 from app.i18n import language_name, set_language, tr
 from app.i18n.catalog import available_languages, install_language
@@ -82,6 +82,7 @@ class Findings:
     missing: str
     chat: str
     printer: str
+    filaments: tuple[filaments.CatalogueFilament, ...] = ()
 
 
 class _Survey(Worker):
@@ -94,12 +95,14 @@ class _Survey(Worker):
     done = Signal(object)
 
     def work(self) -> None:
+        printer, loaded_filaments = _defaults_from_slicer()
         self.done.emit(
             Findings(
                 tools=tools.survey(),
                 missing=_missing_text(),
                 chat=_chat_text(),
-                printer=_printer_from_slicer(),
+                printer=printer,
+                filaments=loaded_filaments,
             )
         )
 
@@ -156,7 +159,7 @@ LANGUAGE_CHANGED = 2
 
 
 class FirstRunDialog(QDialog):
-    """Eine Seite, vier Fragen, alles überspringbar."""
+    """Eine Seite mit den zwei Grundlagen und den optionalen Erweiterungen."""
 
     importRequested = Signal()
 
@@ -206,7 +209,7 @@ class FirstRunDialog(QDialog):
         set_level(title, "title")
         self.greeting = QLabel(
             tr(
-                "Für einen guten Start reichen drei Angaben. Wenn Sie unsicher sind, "
+                "Für einen guten Start reichen zwei Angaben. Wenn Sie unsicher sind, "
                 "lassen Sie die Vorschläge einfach stehen."
             ),
             self,
@@ -240,11 +243,6 @@ class FirstRunDialog(QDialog):
         self._suggested_printer = settings.printer or profiles.DEFAULT_PRINTER
         _select(self.printer, self._suggested_printer)
 
-        self.material = QComboBox(self)
-        for identifier, material in by_title(profiles.material_profiles()):
-            self.material.addItem(str(material.title), identifier)
-        _select(self.material, settings.material or profiles.DEFAULT_MATERIAL)
-
         basics = QGroupBox(tr("Grundlagen"), self)
         form = QFormLayout(basics)
         form.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
@@ -257,7 +255,6 @@ class FirstRunDialog(QDialog):
         form.addRow(basics_hint)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Drucker"), self.printer)
-        form.addRow(tr("Material"), self.material)
 
         optional = QGroupBox(tr("Optionale Erweiterungen"), self)
         optional_layout = QVBoxLayout(optional)
@@ -398,8 +395,8 @@ class FirstRunDialog(QDialog):
         und die Chat-Auskunft; das Intro-Label darüber bricht um und meldet
         der Layoutrechnung nur eine Zeile Mindesthöhe. Das Fenster blieb
         deshalb auf seiner Aufmachgröße stehen, und der Fehlbetrag wurde aus
-        den Auswahlfeldern gepresst: Sprache, Drucker und Material standen
-        mit 16 von 28 Punkten Höhe da, die Schrift oben und unten
+        den Auswahlfeldern gepresst: Sprache und Drucker standen mit 16 von
+        28 Punkten Höhe da, die Schrift oben und unten
         abgeschnitten (Robert, 26.08.2026, mit Bild).
 
         Gerufen wird über ``QTimer.singleShot(0, self, …)``, nicht direkt:
@@ -435,6 +432,19 @@ class FirstRunDialog(QDialog):
         self.extras_state.setText(found.missing)
         self.install_button.setEnabled(True)
         self.chat_state.setText(found.chat)
+        if found.filaments:
+            filaments.synchronise(list(found.filaments))
+            material_ids = {
+                _material_id(entry.material_type)
+                for entry in found.filaments
+                if entry.material_type
+            }
+            material_ids.discard("")
+            # Ein eindeutiger eingelegter Typ ist die bessere Vorgabe als eine
+            # zweite Frage. Bei PLA und TPU nebeneinander wäre jede Wahl ein
+            # Raten; dann bleibt die dokumentierte Vorgabe stehen.
+            if len(material_ids) == 1:
+                self.settings.material = material_ids.pop()
         self._grow_soon()
         # **Nur, solange niemand selbst gewählt hat.** Eine gute Vorgabe ist
         # mehr wert als eine gute Einstellmöglichkeit (§2.4) — aber eine, die
@@ -528,7 +538,9 @@ class FirstRunDialog(QDialog):
         """
         settings.language = str(self.language.currentData())
         settings.printer = str(self.printer.currentData())
-        settings.material = str(self.material.currentData())
+        # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
+        # Bis eine Spule ihren Typ liefert, gilt die dokumentierte Kernvorgabe.
+        settings.material = settings.material or profiles.DEFAULT_MATERIAL
         settings.first_run_done = True
         return settings
 
@@ -578,8 +590,8 @@ class FirstRunDialog(QDialog):
         self.accept()
 
 
-def _printer_from_slicer() -> str:
-    """Welchen Drucker der installierte Slicer zuletzt hatte (§2.3, §29).
+def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...]]:
+    """Drucker und eingelegte Filamente des installierten Slicers (§2.3, §29).
 
     Der Dialog meldet in derselben Zeile „Slicer gefunden" und schlug daneben
     den allgemeinen 220er vor, während der Bestand des Slicers den richtigen
@@ -592,16 +604,48 @@ def _printer_from_slicer() -> str:
     slicer = tools.by_id("slicer")
     found = slicer.path() if slicer is not None else None
     if found is None:
-        return ""
+        return "", ()
     try:
         flavour = slicer_keys.flavour_of(found.name)
         if flavour is None:
-            return ""
+            return "", ()
         machine = slicer_profiles.chosen_machine(flavour, found)
-        return slicer_profiles.printer_for(machine, profiles.printer_profiles())
+        printer = slicer_profiles.printer_for(machine, profiles.printer_profiles())
+        loaded = slicer_profiles.configured_filaments(flavour, found)
+        counts: dict[str, int] = {}
+        for entry in loaded:
+            counts[entry.profile] = counts.get(entry.profile, 0) + 1
+        catalogue = tuple(
+            filaments.CatalogueFilament(
+                name=entry.profile
+                if counts[entry.profile] == 1
+                else f"{entry.profile} ({entry.colour})",
+                colour=entry.colour,
+                material_type=entry.material_type,
+                slicer_profile=entry.profile,
+            )
+            for entry in loaded
+        )
+        return printer, catalogue
     except OSError as problem:
-        _log.debug("could not ask the slicer which printer it has: %s", problem)
-        return ""
+        _log.debug("could not ask the slicer for its defaults: %s", problem)
+        return "", ()
+
+
+def _printer_from_slicer() -> str:
+    """Rückwärtskompatibler Einzelzugriff für den Druckervorschlag."""
+    return _defaults_from_slicer()[0]
+
+
+def _material_id(material_type: str) -> str:
+    """Eine Slicer-Materialart auf ein bekanntes Solidon-Profil abbilden."""
+    wanted = material_type.casefold()
+    matches = [
+        identifier
+        for identifier in profiles.material_profiles()
+        if slicer_keys.filament_type(identifier).casefold() == wanted
+    ]
+    return matches[0] if len(matches) == 1 else ""
 
 
 def _select(box: QComboBox, identifier: str) -> None:

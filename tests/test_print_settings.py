@@ -2583,7 +2583,13 @@ def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:
     setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
     slots = [
         MaterialSlot(index=0, name="Gehäuse", colour=(0.0, 0.0, 0.0), material=str(petg)),
-        MaterialSlot(index=1, name="Schrift", colour=(1.0, 1.0, 1.0), material=str(pla)),
+        MaterialSlot(
+            index=1,
+            name="Schrift",
+            colour=(1.0, 1.0, 1.0),
+            material=str(pla),
+            material_type="PLA",
+        ),
     ]
 
     config = handover.write_config(settings, profile, setup, tmp_path, slots)
@@ -2593,6 +2599,7 @@ def test_every_slot_gets_its_own_filament(tmp_path: Path) -> None:
     assert erste["nozzle_temperature"] == ["240"], "der Hersteller des Slots gilt"
     assert zweite["nozzle_temperature"] == ["210"], "und für den zweiten ein anderer"
     assert zweite["filament_max_volumetric_speed"] == ["21"]
+    assert zweite["filament_type"] == ["PLA"], "der Typ reist mit derselben Spule"
     assert erste["filament_colour"] == ["#000000"], "die Farbe kommt vom Slot"
     assert zweite["filament_colour"] == ["#FFFFFF"]
     assert zweite["name"] == "Solidon Schrift"

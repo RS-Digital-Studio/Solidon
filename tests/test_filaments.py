@@ -27,12 +27,49 @@ def test_a_fresh_catalogue_is_empty(own_catalogue: Path) -> None:
 
 
 def test_remember_and_read_back(own_catalogue: Path) -> None:
-    filaments.remember("PETG Rot", "#d02020")
+    filaments.remember(
+        "PETG Rot",
+        "#d02020",
+        material_type="PETG",
+        slicer_profile="Elegoo PETG PRO @ECC2",
+    )
     filaments.remember("PLA Weiß", "#f0f0f0")
 
     names = [entry.name for entry in filaments.catalogue()]
     assert names == ["PETG Rot", "PLA Weiß"], "sortiert nach Name, nicht nach Anlage"
     assert filaments.catalogue()[0].colour == "#d02020"
+    assert filaments.catalogue()[0].material_type == "PETG"
+    assert filaments.catalogue()[0].slicer_profile == "Elegoo PETG PRO @ECC2"
+
+
+def test_an_old_catalogue_without_type_and_profile_still_opens(own_catalogue: Path) -> None:
+    """Die zwei neuen Angaben sind rückwärtskompatible Ergänzungen."""
+    filaments.catalogue_path().write_text(
+        '[{"name": "PLA Weiß", "colour": "#f0f0f0"}]', encoding="utf-8"
+    )
+
+    assert filaments.catalogue() == (
+        filaments.CatalogueFilament(name="PLA Weiß", colour="#f0f0f0"),
+    )
+
+
+def test_synchronising_the_slicer_keeps_the_rest_of_the_rack(own_catalogue: Path) -> None:
+    filaments.remember("ASA Schwarz", "#202020", material_type="ASA")
+
+    filaments.synchronise(
+        [
+            filaments.CatalogueFilament(
+                name="Elegoo PETG PRO @ECC2",
+                colour="#9AA0A6",
+                material_type="PETG",
+                slicer_profile="Elegoo PETG PRO @ECC2",
+            )
+        ]
+    )
+
+    entries = {entry.name: entry for entry in filaments.catalogue()}
+    assert set(entries) == {"ASA Schwarz", "Elegoo PETG PRO @ECC2"}
+    assert entries["Elegoo PETG PRO @ECC2"].material_type == "PETG"
 
 
 def test_the_same_name_changes_the_colour_instead_of_doubling(own_catalogue: Path) -> None:

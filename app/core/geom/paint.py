@@ -119,6 +119,18 @@ class PaintParams(BaseParams):
         placement="advanced",
         doc=_("Name des Filaments. Erscheint im 3MF beim Farbwechsel."),
     )
+    material_type: str = param(
+        title=_("Typ"),
+        default="",
+        placement="advanced",
+        doc=_("Materialart des Filaments, etwa PLA oder PETG."),
+    )
+    slicer_profile: str = param(
+        title=_("Slicer-Profil"),
+        default="",
+        placement="advanced",
+        doc=_("Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt."),
+    )
 
 
 @register_op(
@@ -211,6 +223,10 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 colour=chosen
                 if chosen is not None
                 else (existing.colour if existing is not None else None),
+                material=params.slicer_profile
+                or (existing.material if existing is not None else None),
+                material_type=params.material_type
+                or (existing.material_type if existing is not None else None),
             )
         ],
     )

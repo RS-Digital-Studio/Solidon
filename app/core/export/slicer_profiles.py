@@ -84,6 +84,15 @@ class SlicerProfile:
         return f"{self.name} ({own})" if self.from_user else self.name
 
 
+@dataclass(frozen=True, slots=True)
+class SlicerFilament:
+    """Eine im Slicer eingelegte Spule, nicht bloß ein verfügbares Profil."""
+
+    profile: str
+    colour: str
+    material_type: str = ""
+
+
 def install_root(executable: Path) -> Path | None:
     """Der Ordner, unter dem die mitgelieferten Profile liegen.
 
@@ -207,6 +216,145 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
                 _log.info("the slicer was last set to %s", machine)
                 return machine.strip()
     return ""
+
+
+def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[SlicerFilament, ...]:
+    """Die im Slicer eingelegten Filamente samt Farbe und Typ (§20, §29).
+
+    Die Orca-Familie hält die physische Belegung nicht in den
+    Filamentprofilen: Dort steht die Materialart, die Farbe dagegen in der
+    Anwendungskonfiguration je Maschine. Beides wird deshalb hier wieder
+    zusammengeführt. Es werden nur die Einträge der zuletzt gewählten Maschine
+    gelesen — der ganze Profilbestand wäre ein Herstellerkatalog und kein
+    Filamentregal.
+    """
+    if not has_user_profile_tree(flavour):
+        return ()
+    seen_configs: set[Path] = set()
+    result: list[SlicerFilament] = []
+    seen_filaments: set[tuple[str, str]] = set()
+    for root in user_roots(flavour, executable):
+        config = root.parent.parent / f"{root.parent.parent.name}.conf"
+        if config in seen_configs or not config.is_file():
+            continue
+        seen_configs.add(config)
+        document = _configuration(config)
+        if document is None:
+            continue
+        presets = document.get("presets")
+        machine = presets.get("machine") if isinstance(presets, dict) else None
+        if not isinstance(machine, str) or not machine:
+            continue
+        state = _machine_state(document, machine)
+        if state is None:
+            continue
+        names = _filament_names(state)
+        colours = _filament_colours(state)
+        for index, name in enumerate(names):
+            path = _named_profile(executable, flavour, name, "filament")
+            values = resolve_values(path) if path is not None else {}
+            colour = colours[index] if index < len(colours) else ""
+            if not _is_colour(colour):
+                colour = _first_string(values.get("filament_colour"))
+            if not _is_colour(colour):
+                continue
+            material_type = _first_string(values.get("filament_type"))
+            key = (name, colour.casefold())
+            if key in seen_filaments:
+                continue
+            seen_filaments.add(key)
+            result.append(
+                SlicerFilament(
+                    profile=name,
+                    colour=colour.upper(),
+                    material_type=material_type,
+                )
+            )
+    return tuple(result)
+
+
+def _configuration(path: Path) -> dict[str, Any] | None:
+    """Das erste JSON-Dokument einer Slicer-Konfiguration."""
+    try:
+        document, _end = json.JSONDecoder().raw_decode(
+            path.read_text(encoding="utf-8", errors="replace").lstrip()
+        )
+    except (OSError, ValueError) as problem:
+        _log.debug("could not read slicer configuration %s: %s", path.name, problem)
+        return None
+    return document if isinstance(document, dict) else None
+
+
+def _machine_state(document: Mapping[str, Any], machine: str) -> dict[str, Any] | None:
+    """Die gespeicherte Belegung der gewählten Maschine.
+
+    Elegoo, Bambu und Orca benennen die Liste mit ihrem Markennamen. Der
+    Inhalt trägt dagegen überall ``machine``; daran wird erkannt statt an
+    drei Herstellernamen.
+    """
+    for key, value in document.items():
+        if not key.casefold().endswith("presets") or not isinstance(value, list):
+            continue
+        for entry in value:
+            if isinstance(entry, dict) and entry.get("machine") == machine:
+                return entry
+    return None
+
+
+def _filament_names(state: Mapping[str, Any]) -> list[str]:
+    """``filament``, ``filament_01`` … in Extruderreihenfolge."""
+    indexed: list[tuple[int, str]] = []
+    for key, value in state.items():
+        if not isinstance(value, str) or not value:
+            continue
+        if key == "filament":
+            indexed.append((0, value))
+        elif key.startswith("filament_") and key[9:].isdigit():
+            indexed.append((int(key[9:]), value))
+    return [value for _index, value in sorted(indexed)]
+
+
+def _filament_colours(state: Mapping[str, Any]) -> list[str]:
+    value = state.get("filament_colors")
+    return [entry.strip() for entry in value.split(",")] if isinstance(value, str) else []
+
+
+def _is_colour(value: str) -> bool:
+    return (
+        len(value) == 7
+        and value.startswith("#")
+        and all(letter in "0123456789abcdefABCDEF" for letter in value[1:])
+    )
+
+
+def _named_profile(
+    executable: Path,
+    flavour: SlicerFlavour,
+    name: str,
+    kind: ProfileKind,
+) -> Path | None:
+    """Eine Profil-Datei über ihren Namen, ohne den ganzen Bestand zu lesen.
+
+    Der übliche Fall hat denselben Datei- und Profilnamen. Nur diese Dateien
+    werden geöffnet; sechstausend Filamente einzulesen, um eine eingelegte
+    Spule zu beschreiben, kostete am Elegoo-Bestand knapp sieben Sekunden.
+    """
+    roots: list[Path] = []
+    installed = install_root(executable)
+    if installed is not None:
+        roots.append(installed)
+    roots.extend(user_roots(flavour, executable))
+    for root in roots:
+        for path in root.rglob(f"{name}.json"):
+            if _kind_of(path, root) != kind:
+                continue
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if isinstance(loaded, dict) and str(loaded.get("name", path.stem)) == name:
+                return path
+    return None
 
 
 def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:

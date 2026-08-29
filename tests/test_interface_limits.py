@@ -509,12 +509,12 @@ def test_the_printer_list_is_sorted_the_way_it_is_read(window: MainWindow) -> No
     ``generic-220``. Für den, der die Liste liest, war sie unsortiert.
 
     Geprüft am Dialog und nicht an der Hilfsfunktion: die Frage ist, was in der
-    Auswahl steht, und dorthin führen drei verschiedene Wege.
+    Auswahl steht, und dorthin führen zwei verschiedene Wege.
     """
     from app.ui.first_run import FirstRunDialog
 
     dialog = FirstRunDialog(window.settings, window)
-    for auswahl, name in ((dialog.printer, "Drucker"), (dialog.material, "Material")):
+    for auswahl, name in ((dialog.language, "Sprache"), (dialog.printer, "Drucker")):
         titles = [auswahl.itemText(index) for index in range(auswahl.count())]
         assert titles == sorted(titles, key=str.casefold), f"{name}: {titles}"
 

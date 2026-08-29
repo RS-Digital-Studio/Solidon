@@ -1,4 +1,4 @@
-"""Der Filamentwähler: Farbe und Name statt einer Zahl von 0 bis 7.
+"""Der Filamentwähler: Name, Typ und Farbe statt einer Zahl von 0 bis 7.
 
 Das Feld hinter ``kind="filament"`` (Konzept „Filamente statt nummerierter
 Slots", 26.08.2026). Der Kern rechnet weiter mit der Slotnummer — sie ist es,
@@ -15,14 +15,15 @@ Drei Quellen speisen die Liste, in dieser Reihenfolge:
 * **Was der Körper schon trägt.** Ein belegter Slot steht mit seinem Namen
   und seiner Farbe da — das ist die Antwort auf die Frage oben.
 * **Die Vorwahl** (:mod:`app.core.knowledge.filaments`): die Spulen, die im
-  Regal liegen. Wer eine davon wählt, bekommt den nächsten freien Slot; Name
-  und Farbe füllt der Wähler in die Nachbarfelder, sichtbar und weiter
-  änderbar.
+  Regal liegen. Wer eine davon wählt, bekommt den nächsten freien Slot; Name,
+  Typ, Farbe und Herstellerprofil füllt der Wähler in die Nachbarfelder,
+  sichtbar und weiter änderbar.
 * **Was übrig bleibt**: die freien Nummern, damit niemand eingesperrt ist,
   der genau Slot 5 meint (§2.1 — keine Sackgassen).
 
-Und ganz unten *Neues Filament …*: Name und Farbe einmal angelegt, stehen sie
-über :func:`app.core.knowledge.filaments.remember` in jedem Projekt zur Wahl.
+Und ganz unten *Neues Filament …*: Name, Typ und Farbe einmal angelegt, stehen
+sie über :func:`app.core.knowledge.filaments.remember` in jedem Projekt zur
+Wahl.
 """
 
 from __future__ import annotations
@@ -48,7 +49,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.knowledge import filaments
+from app.core.export import slicer_keys
+from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
 from app.ui.style import TIGHT, set_level
@@ -144,7 +146,7 @@ def swatch(colour: str | None) -> QIcon:
 
 
 class NewFilamentDialog(QDialog):
-    """Name und Farbe eines neuen Filaments — mehr ist ein Filament nicht.
+    """Name, Typ, Farbe und optionales Slicerprofil eines Filaments.
 
     Mit ``name``/``colour`` derselbe Dialog fürs **Ändern**: Ein Filament ist
     sein Name (:func:`filaments.remember` überschreibt die Farbe eines
@@ -152,7 +154,14 @@ class NewFilamentDialog(QDialog):
     Feldern und nicht ein zweites daneben.
     """
 
-    def __init__(self, parent: QWidget | None = None, name: str = "", colour: str = "") -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        name: str = "",
+        colour: str = "",
+        material_type: str = "",
+        slicer_profile: str = "",
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Filament ändern") if name else tr("Neues Filament"))
         layout = QFormLayout(self)
@@ -162,12 +171,38 @@ class NewFilamentDialog(QDialog):
         self.name.setText(name)
         layout.addRow(tr("Name"), self.name)
 
+        self.material_type = QComboBox(self)
+        self.material_type.setEditable(True)
+        for identifier, entry in profiles.material_profiles().items():
+            self.material_type.addItem(str(entry.title), slicer_keys.filament_type(identifier))
+        if material_type:
+            position = next(
+                (
+                    index
+                    for index in range(self.material_type.count())
+                    if str(self.material_type.itemData(index)).casefold()
+                    == material_type.casefold()
+                ),
+                -1,
+            )
+            if position >= 0:
+                self.material_type.setCurrentIndex(position)
+            else:
+                self.material_type.setCurrentText(material_type)
+        layout.addRow(tr("Typ"), self.material_type)
+
         self._colour = colour or "#808080"
         self.colour = QPushButton(self)
         self.colour.setIcon(swatch(self._colour))
         self.colour.setText(self._colour)
         self.colour.clicked.connect(self._pick_colour)
         layout.addRow(tr("Farbe"), self.colour)
+
+        self.slicer_profile = QLineEdit(self)
+        self.slicer_profile.setText(slicer_profile)
+        self.slicer_profile.setReadOnly(True)
+        self.slicer_profile.setPlaceholderText(tr("wird bei Übernahme aus dem Slicer gesetzt"))
+        layout.addRow(tr("Slicer-Profil"), self.slicer_profile)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -185,9 +220,19 @@ class NewFilamentDialog(QDialog):
         self.colour.setIcon(swatch(self._colour))
         self.colour.setText(self._colour)
 
-    def filament(self) -> tuple[str, str]:
-        """Name und Farbe, wie sie im Katalog landen."""
-        return self.name.text().strip(), self._colour
+    def filament(self) -> tuple[str, str, str, str]:
+        """Die vollständige Vorwahl, wie sie im Katalog landet."""
+        material_type = self.material_type.currentData()
+        if material_type is None or self.material_type.currentText() not in {
+            self.material_type.itemText(index) for index in range(self.material_type.count())
+        }:
+            material_type = self.material_type.currentText()
+        return (
+            self.name.text().strip(),
+            self._colour,
+            str(material_type or "").strip(),
+            self.slicer_profile.text().strip(),
+        )
 
 
 class FilamentField(QComboBox):
@@ -198,10 +243,10 @@ class FilamentField(QComboBox):
     lernen (:meth:`OperationDialog.values`).
     """
 
-    #: Name und Farbe des gewählten Filaments — der Dialog trägt sie in die
+    #: Identität des gewählten Filaments — der Dialog trägt sie in die
     #: Nachbarfelder ein. Ein Signal und kein Griff in fremde Widgets: Wer
     #: die Felder besitzt, ist der Dialog, und er entscheidet, ob es sie gibt.
-    filamentChosen = Signal(str, str)
+    filamentChosen = Signal(str, str, str, str)
 
     def __init__(
         self,
@@ -236,9 +281,15 @@ class FilamentField(QComboBox):
             # ``str(entry.name)`` und nicht der rohe Name: Ein Slotname darf
             # ein ``TranslatableText`` sein, und Qt nimmt nur Zeichenketten.
             shown = shown_colour(index, entry.colour)
-            self.addItem(swatch(shown), self._label(index, str(entry.name)), index)
+            self.addItem(
+                swatch(shown),
+                self._label(index, str(entry.name), str(entry.material_type or "")),
+                index,
+            )
             self.setItemData(self.count() - 1, shown, _COLOUR_ROLE)
             self.setItemData(self.count() - 1, str(entry.name), _NAME_ROLE)
+            self.setItemData(self.count() - 1, str(entry.material_type or ""), _MATERIAL_TYPE_ROLE)
+            self.setItemData(self.count() - 1, str(entry.material or ""), _PROFILE_ROLE)
 
         # 2. Die Vorwahl — jedes Filament bekommt den nächsten freien Slot.
         for filament in filaments.catalogue():
@@ -250,11 +301,13 @@ class FilamentField(QComboBox):
             taken.add(free)
             self.addItem(
                 swatch(filament.colour),
-                self._label(free, filament.name),
+                self._label(free, filament.name, filament.material_type),
                 free,
             )
             self.setItemData(self.count() - 1, filament.colour, _COLOUR_ROLE)
             self.setItemData(self.count() - 1, filament.name, _NAME_ROLE)
+            self.setItemData(self.count() - 1, filament.material_type, _MATERIAL_TYPE_ROLE)
+            self.setItemData(self.count() - 1, filament.slicer_profile, _PROFILE_ROLE)
 
         # 3. Was danach noch frei ist — für den, der genau eine Nummer meint.
         for index in range(self._limit):
@@ -271,7 +324,7 @@ class FilamentField(QComboBox):
         if position >= 0:
             self.setCurrentIndex(position)
 
-    def _label(self, index: int, name: str) -> str:
+    def _label(self, index: int, name: str, material_type: str = "") -> str:
         """Wie ein Eintrag dasteht: Nummer und Name, oder was davon es gibt."""
         if index == 0 and not name:
             # Slot 0 ist kein Filament, sondern seine Abwesenheit: das Teil in
@@ -280,7 +333,12 @@ class FilamentField(QComboBox):
             return tr("Ohne Filament — Farbe des Teils")
         if not name:
             return tr("Filament {nummer} — noch keines").format(nummer=index)
-        return f"{index} — {name}"
+        suffix = (
+            f" · {material_type}"
+            if material_type and material_type.casefold() not in name.casefold()
+            else ""
+        )
+        return f"{index} — {name}{suffix}"
 
     def _free_slot(self, taken: set[int]) -> int | None:
         """Die nächste Nummer, die niemand hat. Null bleibt frei: Sie ist das
@@ -291,14 +349,19 @@ class FilamentField(QComboBox):
         return None
 
     def _chosen(self, position: int) -> None:
-        """Ein Eintrag ist gewählt — Name und Farbe weitersagen."""
+        """Ein Eintrag ist gewählt — seine ganze Identität weitersagen."""
         if self.itemData(position) == NEW_FILAMENT:
             self._make_one(position)
             return
         name = self.itemData(position, _NAME_ROLE)
         colour = self.itemData(position, _COLOUR_ROLE)
         if name:
-            self.filamentChosen.emit(str(name), str(colour or ""))
+            self.filamentChosen.emit(
+                str(name),
+                str(colour or ""),
+                str(self.itemData(position, _MATERIAL_TYPE_ROLE) or ""),
+                str(self.itemData(position, _PROFILE_ROLE) or ""),
+            )
 
     def _make_one(self, position: int) -> None:
         """*Neues Filament …* — anlegen, merken, auswählen.
@@ -312,11 +375,11 @@ class FilamentField(QComboBox):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             self.setCurrentIndex(before)
             return
-        name, colour = dialog.filament()
+        name, colour, material_type, slicer_profile = dialog.filament()
         if not name:
             self.setCurrentIndex(before)
             return
-        filaments.remember(name, colour)
+        filaments.remember(name, colour, material_type, slicer_profile)
         # Neu aufbauen statt einzufügen: Die Nummernvergabe hängt an der
         # ganzen Liste, und eine von Hand eingeschobene Zeile hätte sie
         # doppelt vergeben.
@@ -335,7 +398,7 @@ class FilamentField(QComboBox):
         return -1
 
 
-#: Wo Name und Farbe eines Eintrags liegen. Eigene Rollen, weil ``itemData``
+#: Wo Name, Typ, Profil und Farbe eines Eintrags liegen. Eigene Rollen, weil ``itemData``
 #: ohne Rolle den **Wert** trägt — und der ist die Slotnummer.
 #:
 #: **Ab UserRole + 1, und das ist keine Förmlichkeit:** ``Qt.UserRole`` *ist*
@@ -346,6 +409,8 @@ class FilamentField(QComboBox):
 _NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _COLOUR_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 _SLOT_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+_MATERIAL_TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
+_PROFILE_ROLE = int(Qt.ItemDataRole.UserRole) + 5
 
 
 class FilamentPanel(QWidget):
@@ -354,7 +419,7 @@ class FilamentPanel(QWidget):
     Die Frage, die dieses Panel beantwortet, hat Robert am 27.08.2026 gestellt
     — „wo wähle ich die Filamente und Farben aus?" — und sie war berechtigt:
     Beide Antworten standen in Dialogen. Das Filamentfeld
-    (:class:`FilamentField`) zeigt Farbe und Name, aber nur solange eine
+    (:class:`FilamentField`) zeigt Name, Typ und Farbe, aber nur solange eine
     Operation offen ist; die Filamentprofile des Slicers stehen in den
     Druckeinstellungen, zugeklappt und erst ab zwei Slots. Wer wissen wollte,
     welche Spulen ein Projekt überhaupt braucht, fand es nirgends.
@@ -487,10 +552,23 @@ class FilamentPanel(QWidget):
         self._heading(tr("Im Regal"))
         entries = filaments.catalogue()
         for entry in entries:
-            item = QListWidgetItem(swatch(entry.colour), str(entry.name))
+            label = (
+                f"{entry.name} · {entry.material_type}"
+                if entry.material_type
+                and entry.material_type.casefold() not in entry.name.casefold()
+                else str(entry.name)
+            )
+            item = QListWidgetItem(swatch(entry.colour), label)
             item.setData(_NAME_ROLE, entry.name)
             item.setData(_COLOUR_ROLE, entry.colour)
-            item.setToolTip(tr("Doppelklick ändert Name und Farbe."))
+            item.setData(_MATERIAL_TYPE_ROLE, entry.material_type)
+            item.setData(_PROFILE_ROLE, entry.slicer_profile)
+            profile_hint = (
+                tr("Slicer-Profil: {profil}").replace("{profil}", entry.slicer_profile)
+                if entry.slicer_profile
+                else tr("Ohne Slicer-Profil")
+            )
+            item.setToolTip(f"{tr('Doppelklick ändert Name, Typ und Farbe.')} {profile_hint}")
             self.list.addItem(item)
 
         if entries:
@@ -524,8 +602,8 @@ class FilamentPanel(QWidget):
             return f"{name} — {tr('1 Körper')}"
         return f"{name} — {tr('{count} Körper').replace('{count}', str(count))}"
 
-    def _chosen(self) -> tuple[str, str] | None:
-        """Name und Farbe der gewählten Regalzeile, oder nichts.
+    def _chosen(self) -> filaments.CatalogueFilament | None:
+        """Das gewählte Regalfilament, oder nichts.
 
         Gefragt wird über die Zeilennummer und nicht über ``currentItem()``:
         Die Stubs geben dort ein Element ohne ``None`` zurück, obwohl es bei
@@ -539,16 +617,21 @@ class FilamentPanel(QWidget):
         name = item.data(_NAME_ROLE)
         if not name:
             return None
-        return str(name), str(item.data(_COLOUR_ROLE) or "")
+        return filaments.CatalogueFilament(
+            name=str(name),
+            colour=str(item.data(_COLOUR_ROLE) or ""),
+            material_type=str(item.data(_MATERIAL_TYPE_ROLE) or ""),
+            slicer_profile=str(item.data(_PROFILE_ROLE) or ""),
+        )
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        name, colour = dialog.filament()
+        name, colour, material_type, slicer_profile = dialog.filament()
         if not name:
             return
-        filaments.remember(name, colour)
+        filaments.remember(name, colour, material_type, slicer_profile)
         self._fill()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
@@ -577,18 +660,23 @@ class FilamentPanel(QWidget):
         chosen = self._chosen()
         if chosen is None:
             return
-        name, colour = chosen
-        dialog = NewFilamentDialog(self, name=name, colour=colour)
+        dialog = NewFilamentDialog(
+            self,
+            name=chosen.name,
+            colour=chosen.colour,
+            material_type=chosen.material_type,
+            slicer_profile=chosen.slicer_profile,
+        )
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        renamed, fresh_colour = dialog.filament()
+        renamed, fresh_colour, material_type, slicer_profile = dialog.filament()
         if not renamed:
             return
         # Ein Filament ist sein Name: Wer ihn ändert, legt kein zweites an —
         # der alte Eintrag geht, der neue kommt.
-        if renamed != name:
-            filaments.forget(name)
-        filaments.remember(renamed, fresh_colour)
+        if renamed != chosen.name:
+            filaments.forget(chosen.name)
+        filaments.remember(renamed, fresh_colour, material_type, slicer_profile)
         self._fill()
 
     def _remove(self) -> None:
@@ -598,7 +686,7 @@ class FilamentPanel(QWidget):
         # Keine Rückfrage (Regel 19): Das Regal ist eine Vorwahl, kein
         # Dokument — was hier fehlt, legt man in zwei Klicks wieder an, und
         # kein Projekt verliert dabei etwas.
-        filaments.forget(chosen[0])
+        filaments.forget(chosen.name)
         self._fill()
 
     def _on_context_menu(self, where: QPoint) -> None:

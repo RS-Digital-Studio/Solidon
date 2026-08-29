@@ -680,7 +680,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
       Netzberechtigung und den Aufruf des Werkzeugs durch die CI. Der
       **Bau** selbst braucht Linux und die beiden externen Programme — er bleibt
       ungeprüft wie der übrige Workflow, und aus demselben Grund
-- [x] Erstinbetriebnahme (§38) — Sprache, Drucker, Material, externe Programme;
+- [x] Erstinbetriebnahme (§38) — Sprache und Drucker; übernimmt die eingelegten
+      Filamente samt Typ und Farbe aus den erkannten Slicer-Profilen;
       überspringbar, nachholbar, endet beim ersten Import
 - [x] Fehlerberichtsdialog mit Container-Anhang — legt einen Ordner an,
       verschickt nichts, und sagt beim Anhängen der Projektdatei, dass die

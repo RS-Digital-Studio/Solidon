@@ -1586,6 +1586,8 @@ class ParameterPanel(QWidget):
     parameterEdited = Signal(str, float)
     parameterUnitEdited = Signal(str, str)
     """Eine feste Einheit wurde in der Zeile gewählt."""
+    heightChanged = Signal()
+    """Die frei gesetzte Seitenkarte soll ihre Geometrie neu verteilen."""
     addRequested = Signal()
     """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
     limitsRequested = Signal(str)
@@ -1641,9 +1643,29 @@ class ParameterPanel(QWidget):
         Zeilen des Formulars weg, und damit ist das C++-Objekt des alten
         Labels fort, während die Python-Referenz noch steht. Wer es hier
         vermäße, stürbe an genau dem — beim ersten Projekt mit Parametern.
+
+        Nach ``removeRow`` und dem Neuaufbau trägt das äußere Layout noch
+        seinen zwischengespeicherten Höhenwert vom alten Inhalt. Auf Windows
+        kam dessen ``LayoutRequest`` zu spät für die frei gesetzte
+        Überlagerung: Aus drei normalen Zeilen wurden dadurch elf Pixel hohe
+        Schlitze. Deshalb wird erst im nächsten Ereignisschritt gemessen; dann
+        hat Qt die neuen Kindgrößen in beide Layoutstufen aufgenommen.
         """
-        self.setMinimumHeight(self._outer.sizeHint().height())
+        self._form.invalidate()
+        self._outer.invalidate()
         self.updateGeometry()
+        QTimer.singleShot(0, self, self._apply_fitted_height)
+
+    def _apply_fitted_height(self) -> None:
+        """Die inzwischen berechnete Inhaltshöhe an Karte und Wirt melden."""
+        self._form.activate()
+        self._outer.activate()
+        height = self._outer.sizeHint().height()
+        if height == self.minimumHeight():
+            return
+        self.setMinimumHeight(height)
+        self.updateGeometry()
+        self.heightChanged.emit()
 
     def parameter_at(self, position: QPoint) -> str | None:
         """Welcher Parameter an dieser Stelle steht — oder ``None``.

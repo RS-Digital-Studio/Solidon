@@ -345,6 +345,7 @@ def _slot_to_data(slot: MaterialSlot) -> dict[str, Any]:
         "name": _name_to_data(slot.name),
         "colour": list(slot.colour) if slot.colour else None,
         "material": slot.material,
+        "material_type": slot.material_type,
     }
 
 
@@ -355,6 +356,7 @@ def _slot_from_data(data: dict[str, Any]) -> MaterialSlot:
         name=_name_from_data(data["name"]),
         colour=(colour[0], colour[1], colour[2]) if colour else None,
         material=data.get("material"),
+        material_type=data.get("material_type"),
     )
 
 
