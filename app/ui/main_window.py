@@ -111,6 +111,7 @@ from app.core.geom.sculpt import (
 )
 from app.core.geom.section import plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
+from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.knowledge import calibration, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
@@ -300,19 +301,7 @@ PROJECT_FILTER = f"{APP_NAME} ({'*' + PROJECT_SUFFIX})"
 #: Was die Eingangsstufe liest, und was ein Slicer schreibt. Die Endungen
 #: stehen für sich; die Beschriftung davor ist ein Text wie jeder andere und
 #: geht durch ``tr()`` (Regel 20).
-MODEL_SUFFIXES: Final = (
-    ".stl",
-    ".3mf",
-    ".obj",
-    ".glb",
-    ".gltf",
-    ".ply",
-    ".off",
-    ".step",
-    ".stp",
-    ".svg",
-    ".dxf",
-)
+MODEL_SUFFIXES: Final = _CORE_MODEL_SUFFIXES
 #: Die Endungen kommen aus dem Kern: Was der Dialog zum Öffnen anbietet,
 #: muss dieselbe Menge sein, die ``handover`` im Ausgabeordner sucht.
 #: Standen sie doppelt, liefen sie auseinander (27.08.2026).

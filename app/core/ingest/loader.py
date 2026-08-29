@@ -18,8 +18,13 @@ hinein geändert wurde.
 
 from __future__ import annotations
 
+import base64
+import json
+import mimetypes
 from dataclasses import dataclass
-from typing import Final
+from pathlib import Path
+from typing import Any, Final
+from urllib.parse import unquote, urlsplit
 
 import numpy as np
 import trimesh
@@ -67,6 +72,204 @@ CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
 #: das ist keine Vermutung über die Datei, sondern die einzige Lesart, die
 #: nichts hinzudichtet.
 MEASURED_UNIT: Final[LengthUnit] = "mm"
+
+
+def read_local_payload(path: Path) -> bytes:
+    """Liest eine lokale Modelldatei als eigenständige Projektquelle.
+
+    GLTF darf Puffer und Bilder in Begleitdateien führen. Eine Projektquelle
+    ist dagegen genau eine Datei und muss auch auf einem anderen Rechner noch
+    rechnen (§16.1). Darum werden lokale Begleitdateien als Datenadressen in
+    das JSON eingebettet; die Geometrie selbst wird dabei weder geladen noch
+    verändert.
+
+    Verweise außerhalb des Ordners werden nicht verfolgt. Sonst könnte eine
+    fremde GLTF beim Einlesen beliebige Dateien des Rechners in das Projekt
+    ziehen — ein ausgewähltes Modell ist keine Erlaubnis, die Platte zu lesen
+    (§32).
+    """
+    # Die Grenze steht vor dem Lesen. ``Path.read_bytes`` hob vorher auch eine
+    # 20-GiB-Datei erst vollständig in den Speicher und erklärte danach, dass
+    # sie zu groß war. Der begrenzte Lesezug fängt zusätzlich eine Datei ab,
+    # die zwischen Größenabfrage und Lesen wächst.
+    check_limits(path.stat().st_size, 0)
+    with path.open("rb") as stream:
+        payload = stream.read(MAX_FILE_BYTES + 1)
+    check_limits(len(payload), 0)
+    if path.suffix.lower() != ".gltf":
+        return payload
+    packed = _embed_gltf_dependencies(path, payload)
+    check_limits(len(packed), 0)
+    return packed
+
+
+def _embed_gltf_dependencies(path: Path, payload: bytes) -> bytes:
+    """Macht die externen Puffer und Bilder einer GLTF selbstständig."""
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as problem:
+        raise ValidationError(
+            field="file",
+            detail=_("Die GLTF-Datei enthält kein lesbares JSON."),
+            constraint="unreadable",
+            values={"file": path.name},
+        ) from problem
+    if not isinstance(document, dict):
+        raise ValidationError(
+            field="file",
+            detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
+            constraint="unreadable",
+            values={"file": path.name},
+        )
+
+    folder = path.parent.resolve()
+    references: list[_GltfReference] = []
+    for section in ("buffers", "images"):
+        entries = document.get(section, [])
+        if not isinstance(entries, list):
+            raise ValidationError(
+                field="file",
+                detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
+                constraint="unreadable",
+                values={"file": path.name, "section": section},
+            )
+        for entry in entries:
+            if not isinstance(entry, dict):
+                raise ValidationError(
+                    field="file",
+                    detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
+                    constraint="unreadable",
+                    values={"file": path.name, "section": section},
+                )
+            uri = entry.get("uri")
+            if not isinstance(uri, str) or not uri or uri.lower().startswith("data:"):
+                continue
+            references.append(_gltf_reference(folder, entry, uri))
+
+    # Vor dem ersten Lesen und erst recht vor Base64 steht die Größe des
+    # fertigen JSON fest. Base64 macht drei Bytes zu vier; zwei einzeln
+    # erlaubte Begleitdateien können darum gemeinsam weit über der Grenze
+    # liegen. Die Prüfung danach kam für den Speicherüberlauf zu spät.
+    compact = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    projected_size = len(compact)
+    for reference in references:
+        previous_size = len(json.dumps(reference.uri, ensure_ascii=False).encode("utf-8"))
+        projected_size += _embedded_uri_size(reference) + 2 - previous_size
+    check_limits(projected_size, 0)
+
+    cached: dict[Path, str] = {}
+    for reference in references:
+        reference.entry["uri"] = _embedded_gltf_uri(reference, cached)
+    return json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+@dataclass(frozen=True, slots=True)
+class _GltfReference:
+    """Eine bereits geprüfte lokale Referenz samt ihrer späteren Größe."""
+
+    entry: dict[str, Any]
+    uri: str
+    dependency: Path
+    media_type: str
+    size: int
+
+
+def _gltf_reference(folder: Path, entry: dict[str, Any], uri: str) -> _GltfReference:
+    """Prüft Pfad und Größe, ohne den Inhalt der Begleitdatei zu lesen."""
+    parts = urlsplit(uri)
+    if parts.scheme or parts.netloc or parts.query or parts.fragment:
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die GLTF-Datei verweist nach außen. Speichere Modell und Begleitdateien "
+                "in demselben Ordner oder exportiere als GLB."
+            ),
+            constraint="scheme",
+            values={"dependency": uri},
+        )
+
+    dependency = (folder / Path(unquote(parts.path))).resolve()
+    try:
+        dependency.relative_to(folder)
+    except ValueError as problem:
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die GLTF-Datei verweist aus ihrem Ordner heraus. Lege die Begleitdatei "
+                "neben das Modell oder exportiere als GLB."
+            ),
+            constraint="absolute_path",
+            values={"dependency": uri},
+        ) from problem
+    if not dependency.is_file():
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Zur GLTF-Datei fehlt eine Begleitdatei. Lege sie neben das Modell oder "
+                "exportiere als GLB."
+            ),
+            constraint="missing_file",
+            values={"dependency": uri},
+        )
+
+    try:
+        size = dependency.stat().st_size
+    except OSError as problem:
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
+                "oder exportiere als GLB."
+            ),
+            constraint="unreadable",
+            values={"dependency": uri},
+        ) from problem
+    media_type = mimetypes.guess_type(dependency.name)[0] or "application/octet-stream"
+    return _GltfReference(entry, uri, dependency, media_type, size)
+
+
+def _embedded_uri_size(reference: _GltfReference) -> int:
+    """Länge der späteren Datenadresse, ohne sie schon anzulegen."""
+    prefix = f"data:{reference.media_type};base64,"
+    encoded = 4 * ((reference.size + 2) // 3)
+    return len(prefix.encode("ascii")) + encoded
+
+
+def _embedded_gltf_uri(reference: _GltfReference, cached: dict[Path, str]) -> str:
+    """Liest genau eine vorgeprüfte Begleitdatei innerhalb des Modellordners."""
+    if reference.dependency in cached:
+        return cached[reference.dependency]
+
+    try:
+        with reference.dependency.open("rb") as stream:
+            # Hat ein anderes Programm die Datei nach der Vorprüfung ersetzt,
+            # wird höchstens ein Byte über die angekündigte Größe hinaus
+            # gelesen. Ein Größenrennen darf die frühe Grenze nicht umgehen.
+            data = stream.read(reference.size + 1)
+    except OSError as problem:
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
+                "oder exportiere als GLB."
+            ),
+            constraint="unreadable",
+            values={"dependency": reference.uri},
+        ) from problem
+    if len(data) > reference.size:
+        raise ValidationError(
+            field="file",
+            detail=_(
+                "Die Begleitdatei der GLTF ließ sich nicht lesen. Prüfe ihre Zugriffsrechte "
+                "oder exportiere als GLB."
+            ),
+            constraint="unreadable",
+            values={"dependency": reference.uri},
+        )
+    check_limits(len(data), 0)
+    embedded = f"data:{reference.media_type};base64,{base64.b64encode(data).decode('ascii')}"
+    cached[reference.dependency] = embedded
+    return embedded
 
 
 @dataclass(frozen=True, slots=True)

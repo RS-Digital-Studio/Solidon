@@ -10,7 +10,7 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 | Datei | Rolle |
 |---|---|
-| `loader.py` | Die Eingangsstufe selbst — die sechs Schritte |
+| `loader.py` | Die Eingangsstufe selbst — die sechs Schritte; lokale GLTF-Begleitdateien werden sicher eingebettet |
 | `ops.py` | Die `load`-Operation. **Auch Laden ist eine Operation** und steht im Stapel |
 | `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile |
 | `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32) |
@@ -27,6 +27,9 @@ gegen eine geänderte Quelle neu rechnen.
 - **Einheiten**: STL trägt keine. Erkannt wird aus der Größe, und bei
   Mehrdeutigkeit **wird gefragt** (`ctx.ask`, Regel 21) — nicht geraten.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
+- **GLTF darf Begleitdateien haben.** Beim lokalen Import werden Puffer und
+  Bilder aus demselben Ordner eingebettet; Verweise aus dem Ordner heraus
+  bleiben gesperrt.
 - **Herkunft** wird vermerkt (`scene/foreign.py`, §32): Der Nutzer soll
   wissen, woher der Inhalt stammt.
 

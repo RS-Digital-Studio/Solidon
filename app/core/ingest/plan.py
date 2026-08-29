@@ -24,8 +24,9 @@ from typing import Final
 
 from app.core.brep import step as brep_step
 from app.core.export import threemf
+from app.core.geom.mesh import READABLE_SUFFIXES
 from app.core.ingest.loader import check_limits, check_unpacked
-from app.core.ingest.outline import is_outline
+from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.scene.history import OperationDraft
 from app.i18n import TranslatableText, _
 
@@ -35,6 +36,13 @@ _TITLES: Final[dict[str, TranslatableText]] = {
     "load_outline": _("Zeichnung extrudieren"),
     "load": _("Modell laden"),
 }
+
+#: Jede Endung, die der Plan einer Import-Operation zuordnen kann. Dateidialog,
+#: Ablagefeld und Netzimport lesen dieselbe Liste; eine eigene Aufzählung in der
+#: Oberfläche wäre ein Versprechen, das vom Decoder wegdriften kann.
+MODEL_SUFFIXES: Final = tuple(
+    dict.fromkeys((*READABLE_SUFFIXES, *brep_step.SUFFIXES, *OUTLINE_SUFFIXES))
+)
 
 
 @dataclass(frozen=True, slots=True)

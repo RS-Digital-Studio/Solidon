@@ -33,7 +33,7 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
 from app.core.geom.mesh import read_mesh
-from app.core.ingest.loader import detect_unit
+from app.core.ingest.loader import detect_unit, read_local_payload
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
@@ -290,7 +290,7 @@ def command_import(args: argparse.Namespace) -> int:
         print(f"{tr('Die Datei gibt es nicht')}: {incoming}", file=sys.stderr)
         return 1
 
-    payload = incoming.read_bytes()
+    payload = read_local_payload(incoming)
 
     source_id = f"src_{len(project.document.sources) + 1}"
     project.document.sources[source_id] = Source(

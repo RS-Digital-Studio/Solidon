@@ -85,21 +85,54 @@ def face_colours(mesh: trimesh.Trimesh) -> np.ndarray | None:
 
 
 def _sample_texture(mesh: trimesh.Trimesh) -> np.ndarray | None:
-    """Liest das Bild an der UV-Mitte jedes Dreiecks."""
+    """Liest das Bild an der UV-Mitte jedes Dreiecks.
+
+    Nur die tatsächlich benötigten Bildpunkte werden gelesen. Das frühere
+    ``np.asarray(..., dtype=float)`` entfaltete eine 8K-Textur vor jedem
+    Zeichnen zu mehr als 1,5 GiB, obwohl am Ende nur eine Farbe je Dreieck
+    gebraucht wird.
+    """
     material = getattr(mesh.visual, "material", None)
     image = getattr(material, "image", None)
+    factor = None
+    if image is None:
+        # GLB/glTF kommt über ``PBRMaterial``. Dort heißt dasselbe Bild
+        # ``baseColorTexture``; ``image`` gehört dem älteren SimpleMaterial.
+        # Ohne diese zweite Schreibweise blieb ein farbiges GLB grau, und auch
+        # „Farben aus Textur" fand darin gar keine Farbe (§20).
+        image = getattr(material, "baseColorTexture", None)
+        factor = getattr(material, "baseColorFactor", None)
     uv = getattr(mesh.visual, "uv", None)
     if image is None or uv is None or len(uv) != len(mesh.vertices):
         return None
 
-    picture = np.asarray(image.convert("RGB"), dtype=float) / 255.0
-    height, width = picture.shape[:2]
+    picture = image.convert("RGB")
+    width, height = picture.size
 
     middle = np.asarray(uv, dtype=float)[mesh.faces].mean(axis=1)
     # UV läuft von unten links, Bildzeilen von oben links.
     columns = np.clip((middle[:, 0] % 1.0) * width, 0, width - 1).astype(int)
     rows = np.clip((1.0 - middle[:, 1] % 1.0) * height, 0, height - 1).astype(int)
-    return np.asarray(picture[rows, columns], dtype=float)
+    if width * height <= len(rows):
+        # Ist das Bild kleiner als das ohnehin nötige Ergebnis je Dreieck,
+        # bleibt der vektorisierte Weg schneller, ohne den Spitzenverbrauch
+        # zu erhöhen. Große Bilder gehen dagegen nur über die benötigten
+        # Punkte und werden nie als Ganzes entfaltet.
+        picture_data = np.asarray(picture, dtype=np.uint8)
+        sampled = np.asarray(picture_data[rows, columns, :3], dtype=np.uint8)
+    else:
+        pixels = picture.load()
+        sampled = np.empty((len(rows), 3), dtype=np.uint8)
+        for index, (column, row) in enumerate(zip(columns, rows, strict=True)):
+            sampled[index] = pixels[int(column), int(row)][:3]
+
+    colours = sampled.astype(float) / 255.0
+    if factor is not None:
+        # glTF definiert die sichtbare Grundfarbe als Textur * Faktor. Ohne
+        # die Multiplikation wurde etwa eine weiße Textur mit blauem Faktor
+        # weiß dargestellt.
+        colours *= np.asarray(trimesh.visual.color.to_float(factor), dtype=float)[:3]
+    return colours
 
 
 def quantise(colours: np.ndarray, count: int, seed: int) -> Quantisation:

@@ -78,6 +78,43 @@ def test_a_texture_is_sampled_at_the_centre_of_the_triangle() -> None:
     assert np.unique(colours, axis=0).shape == (2, 3), "two colours in, two colours out"
 
 
+def test_a_pbr_texture_is_tinted_by_its_base_colour_factor() -> None:
+    body = textured(Image.new("RGB", (2, 2), (255, 255, 255)))
+    body.visual.material = trimesh.visual.material.PBRMaterial(
+        baseColorTexture=body.visual.material.image,
+        baseColorFactor=(32, 128, 255, 255),
+    )
+
+    colours = texture.face_colours(body)
+
+    assert colours is not None
+    assert colours == pytest.approx(np.tile((32 / 255, 128 / 255, 1.0), (len(body.faces), 1)))
+
+
+def test_sampling_does_not_expand_the_whole_texture() -> None:
+    """Auch eine riesige Textur kostet nur Speicher je Dreieck, nicht je Pixel."""
+
+    class Pixels:
+        def __getitem__(self, _position: tuple[int, int]) -> tuple[int, int, int]:
+            return (24, 140, 220)
+
+    class HugeImage:
+        size = (32_768, 32_768)
+
+        def convert(self, _mode: str) -> HugeImage:
+            return self
+
+        def load(self) -> Pixels:
+            return Pixels()
+
+    body = textured(HugeImage())  # type: ignore[arg-type]
+
+    colours = texture.face_colours(body)
+
+    assert colours is not None
+    assert colours == pytest.approx(np.tile((24 / 255, 140 / 255, 220 / 255), (len(body.faces), 1)))
+
+
 # --- quantisation ---------------------------------------------------------------
 
 

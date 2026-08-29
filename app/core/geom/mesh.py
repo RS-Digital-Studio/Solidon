@@ -11,6 +11,7 @@ zurück — das ist non-destruktives Bearbeiten, eine Ebene tiefer.
 from __future__ import annotations
 
 import io
+import json
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
@@ -30,7 +31,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Endungen, die die Eingangsstufe lesen kann (§25, „Import").
-READABLE_SUFFIXES: tuple[str, ...] = (".stl", ".obj", ".ply", ".off", ".glb", ".gltf", ".3mf")
+READABLE_SUFFIXES: tuple[str, ...] = (".stl", ".3mf", ".obj", ".ply", ".off", ".glb", ".gltf")
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,14 +106,28 @@ class MeshData:
     # --- Serialisierung ---------------------------------------------------------
 
     def to_bytes(self) -> bytes:
-        """Verlustfreie Form für den Platten-Cache — STL würde die Slots
-        verlieren."""
+        """Verlustfreie Form für den Platten-Cache.
+
+        STL würde Slots und die Darstellungsfarben importierter OBJ-, PLY-
+        oder GLTF-Dateien verlieren. Eine Textur wird dabei auf eine Farbe je
+        Dreieck abgetastet: Das reicht für die Ansicht, ohne Bilddateien oder
+        Druckmaterial vorzutäuschen.
+        """
+        from app.core.geom.texture import face_colours
+
+        colours = face_colours(self.raw)
+        stored_colours = (
+            np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
+            if colours is not None
+            else np.empty((0, 3), dtype=np.uint8)
+        )
         buffer = io.BytesIO()
         np.savez_compressed(
             buffer,
             vertices=np.asarray(self.raw.vertices, dtype=np.float64),
             faces=np.asarray(self.raw.faces, dtype=np.int64),
             slots=np.asarray(self.slots, dtype=np.int32),
+            face_colours=stored_colours,
         )
         return buffer.getvalue()
 
@@ -121,6 +136,13 @@ class MeshData:
         with np.load(io.BytesIO(payload)) as data:
             mesh = trimesh.Trimesh(vertices=data["vertices"], faces=data["faces"], process=False)
             slots = tuple(int(entry) for entry in data["slots"])
+            colours = data["face_colours"] if "face_colours" in data.files else ()
+            if len(colours) == len(mesh.faces):
+                alpha = np.full((len(colours), 1), 255, dtype=np.uint8)
+                mesh.visual = trimesh.visual.ColorVisuals(
+                    mesh=mesh,
+                    face_colors=np.column_stack((colours, alpha)),
+                )
         return cls(raw=mesh, slots=slots)
 
     def to_stl(self) -> bytes:
@@ -516,6 +538,8 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             constraint="unsupported_format",
             values={"suffix": suffix, "known": list(READABLE_SUFFIXES)},
         )
+    if normalised == ".gltf":
+        _check_embedded_gltf(payload)
     if normalised == ".3mf":
         # Nicht über trimesh: es löst eine Komponente, die in eine externe
         # Objektdatei zeigt, zur ganzen Datei auf statt zu dem Objekt, das sie
@@ -557,6 +581,57 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
             values={"suffix": suffix},
         )
     return MeshData.of(loaded)
+
+
+def _check_embedded_gltf(payload: bytes) -> None:
+    """Lehnt eine allein nicht lesbare GLTF mit einem Ausweg ab.
+
+    Der Speicherleser hat keinen Ordner, aus dem er ``.bin``- oder Bilddateien
+    holen könnte. Lokale Dateien macht :func:`read_local_payload` vorher
+    eigenständig; ein Download muss bereits eigenständig sein oder als GLB
+    vorliegen. Ohne diese Prüfung endet trimesh an einer gewöhnlichen GLTF mit
+    einem rohen ``TypeError`` statt einer Meldung für den Nutzer.
+    """
+    try:
+        document = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as problem:
+        raise ValidationError(
+            field="file",
+            detail=_("Die GLTF-Datei enthält kein lesbares JSON."),
+            constraint="unreadable",
+        ) from problem
+    if not isinstance(document, dict):
+        raise ValidationError(
+            field="file",
+            detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
+            constraint="unreadable",
+        )
+    for section in ("buffers", "images"):
+        entries = document.get(section, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) for entry in entries):
+            raise ValidationError(
+                field="file",
+                detail=_("Die GLTF-Datei enthält kein gültiges Modelldokument."),
+                constraint="unreadable",
+                values={"section": section},
+            )
+        external = [
+            entry["uri"]
+            for entry in entries
+            if isinstance(entry.get("uri"), str)
+            and entry["uri"]
+            and not entry["uri"].lower().startswith("data:")
+        ]
+        if external:
+            raise ValidationError(
+                field="file",
+                detail=_(
+                    "Diese GLTF braucht Begleitdateien. Öffne sie lokal zusammen mit "
+                    "diesen Dateien oder exportiere das Modell als GLB."
+                ),
+                constraint="missing_file",
+                values={"dependencies": external},
+            )
 
 
 def concatenated(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:

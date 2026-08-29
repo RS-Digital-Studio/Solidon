@@ -40,6 +40,7 @@ from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
+from app.core.ingest.loader import read_local_payload
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
@@ -889,8 +890,13 @@ class Session(QObject):
 
     def import_model(self, path: Path, unit: str = "auto") -> None:
         """Bettet eine Datei von der Platte ein und legt die passende
-        load-Operation auf den Stapel (§17.1)."""
-        self.import_payload(path.name, path.read_bytes(), unit=unit)
+        load-Operation auf den Stapel (§17.1).
+
+        Eine GLTF mit ``.bin``- oder Bilddateien wird hier zu einer
+        eigenständigen Quelle. Die Operation bleibt dieselbe; sie sieht nur
+        die eingebetteten Daten statt eines Verweises auf den Ursprungsordner.
+        """
+        self.import_payload(path.name, read_local_payload(path), unit=unit)
 
     def import_payload(
         self,

@@ -122,6 +122,20 @@ def test_the_drop_area_is_a_field_and_says_when_it_is_hit(screen: StartScreen) -
     assert area.styleSheet() == quiet
 
 
+def test_the_drop_area_names_every_format_it_accepts(screen: StartScreen) -> None:
+    """Eine beworbene Teilmenge lässt gültige Dateien wie Ausnahmen wirken."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.branding import PROJECT_SUFFIX
+    from app.core.ingest.plan import MODEL_SUFFIXES
+
+    area = screen.findChild(DropArea)
+    assert area is not None
+    shown = "\n".join(label.text().lower() for label in area.findChildren(QLabel))
+    for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX):
+        assert suffix.lstrip(".").lower() in shown, suffix
+
+
 def test_every_example_is_a_tile_with_its_sentence(screen: StartScreen) -> None:
     """§37.2 nennt die Beispiele Dokumentation, Abnahmetest und Inhalt des
     Startbildschirms zugleich. Eine Textzeile unter sechs anderen sagt davon

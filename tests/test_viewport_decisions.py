@@ -46,18 +46,40 @@ from __future__ import annotations
 import gc
 import math
 import weakref
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 pytest.importorskip("PySide6")
 
+import numpy as np
+import trimesh
 from PySide6.QtWidgets import QApplication
 
+from app.core.geom.mesh import MeshData
 from app.core.types import Profile
 from app.ui.theme import THEMES, viewport_colours
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
+
+
+def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) -> None:
+    """Eine Farbe aus OBJ/PLY/GLB wird gezeichnet, nicht nur gespeichert (§20)."""
+    from app.ui.viewport import Viewport
+
+    body = trimesh.creation.box(extents=(20.0, 16.0, 12.0))
+    body.visual.face_colors = np.tile([24, 140, 220, 255], (len(body.faces), 1))
+    mesh = MeshData.of(body)
+    surface = SimpleNamespace(cell_data={})
+    viewport = Viewport()
+
+    options = viewport._slot_colours(
+        surface, mesh, SimpleNamespace(material_slots=[]), mesh.triangle_count
+    )
+
+    assert options == {"scalars": "source_colour", "rgb": True, "show_scalar_bar": False}
+    assert np.all(surface.cell_data["source_colour"] == [24, 140, 220])
 
 
 @pytest.mark.parametrize("theme", list(THEMES))

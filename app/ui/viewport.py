@@ -986,6 +986,27 @@ def _hex(colour: tuple[float, float, float]) -> str:
     return f"#{red:02x}{green:02x}{blue:02x}"
 
 
+def source_colours(mesh: Any, face_count: int) -> Any | None:
+    """Darstellungsfarben einer importierten Datei als RGB-Zellenwerte.
+
+    Materialslots sind Druckinformation. OBJ, PLY und GLB können darüber
+    hinaus Eckfarben oder eine Textur tragen, und die gehört ins Bild, auch
+    bevor jemand sie bewusst auf Filamente reduziert (§20).
+    """
+    raw = getattr(mesh, "raw", None)
+    if raw is None:
+        return None
+    from app.core.geom.texture import face_colours
+
+    colours = face_colours(raw)
+    if colours is None or len(colours) != face_count:
+        return None
+
+    import numpy as np
+
+    return np.clip(np.rint(colours * 255.0), 0.0, 255.0).astype(np.uint8)
+
+
 MeasureMode = Literal["off", "distance", "thickness"]
 
 MEASURE_COLOUR = ROLES["measure"]
@@ -3283,7 +3304,15 @@ class Viewport(QWidget):
         slots = getattr(entry, "material_slots", None)
         indices = getattr(mesh, "slots", ())
         if not slots or len(indices) != face_count:
-            return {}
+            colours = source_colours(mesh, face_count)
+            if colours is None:
+                return {}
+            surface.cell_data["source_colour"] = colours
+            return {
+                "scalars": "source_colour",
+                "rgb": True,
+                "show_scalar_bar": False,
+            }
 
         import numpy as np
 

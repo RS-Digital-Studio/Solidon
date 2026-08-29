@@ -49,11 +49,9 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, PROJECT_SUFFIX
 from app.core import examples
-from app.core.brep.step import SUFFIXES as STEP_SUFFIXES
 from app.core.examples import Example
-from app.core.geom.mesh import READABLE_SUFFIXES
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
-from app.core.ingest.outline import OUTLINE_SUFFIXES
+from app.core.ingest.plan import MODEL_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.panels import collapsible
@@ -123,7 +121,12 @@ class DropArea(QFrame):
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         set_level(hint, "section")
 
-        kinds = QLabel(f"STL · 3MF · OBJ · GLB · {PROJECT_SUFFIX}", self)
+        names = [suffix.lstrip(".").upper() for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX)]
+        middle = (len(names) + 1) // 2
+        kinds = QLabel(
+            "\n".join((" · ".join(names[:middle]), " · ".join(names[middle:]))),
+            self,
+        )
         kinds.setAlignment(Qt.AlignmentFlag.AlignCenter)
         set_level(kinds, "caption")
 
@@ -375,14 +378,7 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
-        # STEP liest der andere Kern und steht darum nicht unter den
-        # Mesh-Endungen — eines fallenzulassen muss trotzdem gehen (§30).
-        if path.suffix.lower() in (
-            *READABLE_SUFFIXES,
-            *STEP_SUFFIXES,
-            *OUTLINE_SUFFIXES,
-            PROJECT_SUFFIX,
-        ):
+        if path.suffix.lower() in (*MODEL_SUFFIXES, PROJECT_SUFFIX):
             return path
     return None
 

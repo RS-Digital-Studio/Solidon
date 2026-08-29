@@ -34,8 +34,8 @@ from typing import Final
 from urllib.parse import unquote, urlsplit
 
 from app.core.errors import Action, ExternalToolError, ValidationError
-from app.core.geom.mesh import READABLE_SUFFIXES
 from app.core.ingest.loader import MAX_FILE_BYTES
+from app.core.ingest.plan import MODEL_SUFFIXES
 from app.core.log import get_logger
 from app.core.types import ProgressFn
 from app.i18n import _
@@ -57,11 +57,9 @@ TIMEOUT_SECONDS: Final = 60.0
 #: hier, weil diese Datei das Holen im Namen trägt (27.08.2026).
 CHUNK_BYTES: Final = 256 * 1024
 
-#: Was außer den Netzformaten noch hereindarf — dieselbe Liste, die auch das
-#: Ablagefeld annimmt (§25).
-EXTRA_SUFFIXES: Final = (".step", ".stp", ".svg", ".dxf")
-
-ALLOWED_SUFFIXES: Final = tuple(dict.fromkeys((*READABLE_SUFFIXES, *EXTRA_SUFFIXES)))
+#: Dieselbe Liste wie auf der Platte. Der Netzweg ändert nur die Herkunft,
+#: nicht die Formate, die Solidon verspricht (§16.3).
+ALLOWED_SUFFIXES: Final = MODEL_SUFFIXES
 
 #: Dateiname aus ``Content-Disposition``. Absichtlich schlicht: was in
 #: Anführungszeichen hinter ``filename=`` steht, mehr wird nicht geraten.
