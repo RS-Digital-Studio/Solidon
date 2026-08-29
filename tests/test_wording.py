@@ -225,3 +225,129 @@ def _absaetze(körper: str) -> list[str]:
         if len(text) >= 60:
             absätze.append(text)
     return absätze
+
+
+# --- Die dritte Klammer: genannte Menüwege ---------------------------------
+
+#: Was legitim vor einem Pfeil steht, ohne ein Menü der Leiste zu sein.
+#: Kuratiert wie ``ABGELEGT`` darüber: Wer eine Geste beschreibt, trägt ihr
+#: Wort hier ein — alles andere muss ein Menü sein, sonst schickt der Satz
+#: den Kunden an eine Stelle, die es nicht gibt.
+KEIN_MENUE = ("Rechtsklick",)
+
+#: Ein Menüweg im Fließtext: Großbuchstabe, dann mindestens ein „ → ".
+#: Das Muster nimmt den Satz mit, in dem der Weg steht — welcher Teil davon
+#: der Weg ist, entscheidet erst der Abgleich mit der Leiste.
+WEG_MUSTER = re.compile(r"[A-ZÄÖÜ][\w \-äöüß]{1,28}(?: → [A-ZÄÖÜ][\w \-äöüß.]{1,32})+")
+
+#: Wo Menüwege in Kundentexten stehen.
+WEG_QUELLEN = ("app/core/manual.py", "app/core/tour.py")
+
+
+def _ohne_zierat(text: str) -> str:
+    """Ein Menütext, wie ihn ein Satz schreibt: ohne Mnemonic und Auslassung."""
+    return text.replace("&", "").replace("…", "").replace("...", "").strip(" .")
+
+
+def _menue_der_anwendung(window: object) -> tuple[set[str], set[str]]:
+    """Alle Menüwege des gebauten Fensters, dazu die Namen der Leiste.
+
+    Gefragt wird das Fenster und nicht ``menu_path``: Die Hälfte der Wege in
+    Handbuch und Tour führt zu Einträgen, die keine Operation sind — *Datei →
+    Exportieren*, *Hilfe → Handbuch*. Ein Test gegen das Register sähe genau
+    die nicht.
+    """
+    from PySide6.QtWidgets import QMenu
+
+    wege: set[str] = set()
+    leiste: set[str] = set()
+
+    def sammeln(menu: QMenu, vorne: str) -> None:
+        for eintrag in menu.actions():
+            if eintrag.isSeparator():
+                continue
+            name = _ohne_zierat(eintrag.text())
+            if not name:
+                continue
+            weg = f"{vorne} → {name}" if vorne else name
+            wege.add(weg)
+            untermenü = eintrag.menu()
+            if untermenü is not None:
+                sammeln(untermenü, weg)
+
+    for eintrag in window.menuBar().actions():  # type: ignore[attr-defined]
+        untermenü = eintrag.menu()
+        if untermenü is not None:
+            kopf = _ohne_zierat(eintrag.text())
+            leiste.add(kopf)
+            sammeln(untermenü, kopf)
+
+    return wege, leiste
+
+
+def _weg_urteil(satz: str, wege: set[str], leiste: set[str]) -> str | None:
+    """Warum ein genannter Weg nirgends hinführt — oder ``None``, wenn doch.
+
+    Das Muster hat den umgebenden Satz mitgenommen, also wird an beiden Enden
+    zurückgeschnitten: vorn bis zu einem Namen der Leiste, hinten wortweise,
+    bis ein echter Weg dasteht. Trifft kein Ausschnitt, ist der Weg falsch.
+    """
+    glieder = [_ohne_zierat(teil) for teil in satz.split("→")]
+    erste, letzte = glieder[0].split(), glieder[-1].split()
+
+    for von in range(len(erste)):
+        kopf = " ".join(erste[von:])
+        if kopf in KEIN_MENUE:
+            return None
+        if kopf not in leiste:
+            continue
+        for bis in range(len(letzte), 0, -1):
+            fuß = _ohne_zierat(" ".join(letzte[:bis]))
+            if " → ".join([kopf, *glieder[1:-1], fuß]) in wege:
+                return None
+        return f"das Menue {kopf} gibt es, aber den Eintrag darunter nicht"
+
+    return "beginnt mit keinem Menü der Leiste"
+
+
+def test_every_menu_path_in_the_texts_exists_in_the_menu_bar(
+    qt_app: object, tmp_path: Path
+) -> None:
+    """Ein Weg, den Handbuch oder Tour nennt, muss in der Leiste stehen.
+
+    Am 29.08.2026 zweimal gebrochen, beide Male in derselben Stunde: Das
+    Handbuch schickte zum *Toleranz-Testkörper* über „Bausteine → Kalibrierung",
+    die Tour an zwei Stellen ins selbe Menü — und das Menü *Bausteine* gab es
+    seit dem Umbau auf den Katalog nicht mehr. Gefunden hat beides ein Mensch
+    beim Lesen; ``test_manual``, ``test_tour`` und ``test_website`` standen mit
+    380 grünen Zeilen daneben. Ein Verweis ins Leere liest sich so glatt wie
+    ein gültiger.
+
+    Die Tour wiegt dabei schwerer als das Handbuch: Ihre Schritte haben
+    Bedingungen und rücken nicht weiter, wenn der Kunde den Eintrag nicht
+    findet.
+    """
+    from app.core import bootstrap
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    bootstrap.load_operations()
+    window = MainWindow(Session(), UiSettings())
+    wege, leiste = _menue_der_anwendung(window)
+    assert leiste, "die Menüleiste ist leer — dann prüft der Test nichts"
+
+    funde = []
+    geprüft = 0
+    for name in WEG_QUELLEN:
+        text = Path(name).read_text(encoding="utf-8")
+        # Eine über mehrere Zeilen umbrochene Zeichenkette ist ein Satz.
+        text = re.sub(r'"\s*\n\s*"', "", text)
+        for satz in sorted(set(WEG_MUSTER.findall(text))):
+            geprüft += 1
+            grund = _weg_urteil(satz.strip(), wege, leiste)
+            if grund:
+                funde.append(f"{name}: {satz.strip()} — {grund}")
+
+    assert geprüft >= 20, f"nur {geprüft} Wege gefunden — das Muster greift nicht mehr"
+    assert not funde, f"{len(funde)} Menüwege führen nirgends hin:\n" + "\n".join(funde)
