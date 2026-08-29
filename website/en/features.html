@@ -172,15 +172,14 @@
         <div>
           <span class="kicker">Sketches with constraints</span>
           <h3>Draw it, dimension it — and every measure may be a parameter</h3>
-          <p>Line, circle, arc, spline, plus finished outlines like slot, bolt
+          <p>Line, circle, arc, curve, plus finished outlines like slot, bolt
           circle or hole grid. Ten constraints hold the drawing together —
           horizontal, perpendicular, tangent, symmetric, distance —, and the
           bottom line always says what is still free. What becomes of the
           outline is up to you afterwards: extrude it, cut it in as a pocket,
           revolve it, sweep it along a bend or span it between two
           outlines.</p>
-          <p class="note">The outline enters the B-rep kernel as an exact
-          curve. <b>A drawn circle becomes a round cylinder, not a polygon
+          <p class="note">The outline stays an exact curve. <b>A drawn circle becomes a round cylinder, not a polygon
           with many corners.</b></p>
           <p>The grid shows what snapping is measured against, and its
           spacing can be typed in. The dimension sits at the pointer, and the
@@ -508,8 +507,8 @@
     <div class="wrap">
       <h2>What else is inside</h2>
       <ul class="features">
-        <li><b>Exact edges.</b> B-rep kernel for chamfers, fillets and
-        round-trip STEP.</li>
+        <li><b>Exact edges.</b> Faces and edges stay individually editable — for chamfers,
+        fillets and round-trip STEP.</li>
         <li><b>Speed.</b> The same computations now run up to sixty times
         faster than at the start — and the progress display stays put until
         the result is actually done.</li>

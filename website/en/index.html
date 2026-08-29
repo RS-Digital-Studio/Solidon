@@ -128,7 +128,7 @@
       "name": "Which formats does Solidon3D read and write?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP through the B-rep kernel. It also reads PLY, OFF and glTF — and, as drawings, SVG and DXF, whose outline becomes a solid. It writes STL, 3MF — with colour changes and plate layout —, OBJ, PLY, GLB and STEP; STEP appears in the export dialog as soon as a solid can carry it. GLB is the format for showing: colours and name travel along, and the recipient turns the part in a browser. A project is a ZIP file with project.json inside: openable without Solidon3D."
+        "text": "It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP with real faces and edges. It also reads PLY, OFF and glTF — and, as drawings, SVG and DXF, whose outline becomes a solid. It writes STL, 3MF — with colour changes and plate layout —, OBJ, PLY, GLB and STEP; STEP appears in the export dialog as soon as a solid can carry it. GLB is the format for showing: colours and name travel along, and the recipient turns the part in a browser. A project is a ZIP file with project.json inside: openable without Solidon3D."
       }
     },
     {
@@ -526,7 +526,7 @@
         spans and support volume; the orientation search suggests the pose that
         produces the least of it.</li>
         <li><b>Constrained sketches.</b> Ten constraints hold the drawing
-        together, and the outline enters the B-rep kernel as an exact curve — a
+        together, and the outline stays an exact curve — a
         circle becomes a cylinder, not a polygon.</li>
       </ul>
       <a class="btn ghost" href="/en/features.html">See all features</a>
@@ -788,8 +788,7 @@
         </details>
         <details>
           <summary>Which formats does Solidon3D read and write?</summary>
-          <p>It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP
-          through the B-rep kernel. It also reads PLY, OFF and glTF — and, as drawings, SVG and DXF, whose outline becomes a solid. It writes STL, 3MF — with colour changes
+          <p>It reads STL, 3MF (including assemblies), OBJ and GLB, plus STEP with real faces and edges. It also reads PLY, OFF and glTF — and, as drawings, SVG and DXF, whose outline becomes a solid. It writes STL, 3MF — with colour changes
           and plate layout —, OBJ, PLY, GLB and STEP; STEP appears in the
           export dialog as soon as a solid can carry it. GLB is the format for
           showing: colours and name travel along, and the recipient turns the

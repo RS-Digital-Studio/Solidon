@@ -125,7 +125,7 @@
       "name": "Quels formats Solidon3D lit-il et écrit-il ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "En lecture : STL, 3MF (y compris en assemblage), OBJ et GLB, plus STEP via le noyau B-Rep. Également PLY, OFF et glTF — et, comme dessin, SVG et DXF, dont le contour devient un solide. En écriture : STL, 3MF — avec changements de couleur et disposition sur le plateau —, OBJ, PLY, GLB et STEP ; STEP apparaît dans le dialogue d'export dès qu'un corps peut le porter. GLB est le format pour montrer : les couleurs et le nom voyagent avec, et le destinataire fait tourner la pièce dans son navigateur. Un projet est un fichier ZIP avec project.json dedans : il s'ouvre même sans Solidon3D."
+        "text": "En lecture : STL, 3MF (y compris en assemblage), OBJ et GLB, plus STEP avec de vraies faces et arêtes. Également PLY, OFF et glTF — et, comme dessin, SVG et DXF, dont le contour devient un solide. En écriture : STL, 3MF — avec changements de couleur et disposition sur le plateau —, OBJ, PLY, GLB et STEP ; STEP apparaît dans le dialogue d'export dès qu'un corps peut le porter. GLB est le format pour montrer : les couleurs et le nom voyagent avec, et le destinataire fait tourner la pièce dans son navigateur. Un projet est un fichier ZIP avec project.json dedans : il s'ouvre même sans Solidon3D."
       }
     },
     {
@@ -538,8 +538,7 @@
         portées de pont et volume de support&nbsp;; la recherche
         d'orientation propose la position qui en produit le moins.</li>
         <li><b>Des esquisses sous contraintes.</b> Dix contraintes tiennent
-        le dessin, et le contour entre dans le noyau B-Rep comme courbe
-        exacte — un cercle devient un cylindre, pas un polygone.</li>
+        le dessin, et le contour reste une courbe exacte — un cercle devient un cylindre, pas un polygone.</li>
       </ul>
       <a class="btn ghost" href="/fr/features.html">Voir toutes les fonctions</a>
     </div>
@@ -813,7 +812,7 @@
         <details>
           <summary>Quels formats Solidon3D lit-il et écrit-il&nbsp;?</summary>
           <p>En lecture&nbsp;: STL, 3MF (y compris en assemblage), OBJ et
-          GLB, plus STEP via le noyau B-Rep. Également PLY, OFF et glTF — et, comme dessin, SVG et DXF, dont le contour devient un solide. En écriture&nbsp;: STL, 3MF —
+          GLB, plus STEP avec de vraies faces et arêtes. Également PLY, OFF et glTF — et, comme dessin, SVG et DXF, dont le contour devient un solide. En écriture&nbsp;: STL, 3MF —
           avec changements de couleur et disposition sur le plateau —, OBJ,
           PLY, GLB et STEP&nbsp;; STEP apparaît dans le dialogue d'export dès
           qu'un corps peut le porter. GLB est le format pour montrer&nbsp;:

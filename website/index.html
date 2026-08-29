@@ -128,7 +128,7 @@
       "name": "Welche Formate liest und schreibt Solidon3D?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu STEP über den B-Rep-Kern. Dazu PLY, OFF und glTF — und als Zeichnung SVG und DXF, deren Umriss zu einem Körper wird. Geschrieben werden STL, 3MF — mit Farbwechsel und Plattenbelegung —, OBJ, PLY, GLB und STEP; STEP steht im Exportdialog, sobald ein Körper es tragen kann. GLB ist das Format zum Herzeigen: Farben und Name reisen mit, und der Empfänger dreht das Teil im Browser. Ein Projekt ist eine ZIP-Datei mit project.json darin: auch ohne Solidon3D zu öffnen."
+        "text": "Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu STEP mit echten Flächen und Kanten. Dazu PLY, OFF und glTF — und als Zeichnung SVG und DXF, deren Umriss zu einem Körper wird. Geschrieben werden STL, 3MF — mit Farbwechsel und Plattenbelegung —, OBJ, PLY, GLB und STEP; STEP steht im Exportdialog, sobald ein Körper es tragen kann. GLB ist das Format zum Herzeigen: Farben und Name reisen mit, und der Empfänger dreht das Teil im Browser. Ein Projekt ist eine ZIP-Datei mit project.json darin: auch ohne Solidon3D zu öffnen."
       }
     },
     {
@@ -534,8 +534,8 @@
         <li><b>Schichtanalyse ohne Slicer.</b> Überhänge, Inseln, Brückenweiten
         und Stützvolumen; die Orientierungssuche schlägt die Lage vor, die am
         wenigsten davon erzeugt.</li>
-        <li><b>Skizzen mit Zwängen.</b> Zehn Bedingungen halten die Zeichnung
-        zusammen, und der Umriss geht als exakte Kurve in den B-Rep-Kern — ein
+        <li><b>Zeichnen mit Bedingungen.</b> Zehn davon halten die Zeichnung
+        zusammen, und der Umriss bleibt eine exakte Kurve — ein
         Kreis wird ein Zylinder, kein Vieleck.</li>
       </ul>
       <a class="btn ghost" href="/funktionen.html">Alle Funktionen ansehen</a>
@@ -803,7 +803,7 @@
         <details>
           <summary>Welche Formate liest und schreibt Solidon3D?</summary>
           <p>Gelesen werden STL, 3MF (auch als Baugruppe), OBJ und GLB, dazu
-          STEP über den B-Rep-Kern. Dazu PLY, OFF und glTF — und als Zeichnung SVG und DXF, deren Umriss zu einem Körper wird. Geschrieben werden STL, 3MF — mit
+          STEP mit echten Flächen und Kanten. Dazu PLY, OFF und glTF — und als Zeichnung SVG und DXF, deren Umriss zu einem Körper wird. Geschrieben werden STL, 3MF — mit
           Farbwechsel und Plattenbelegung —, OBJ, PLY, GLB und STEP; STEP steht
           im Exportdialog, sobald ein Körper es tragen kann. GLB ist das Format
           zum Herzeigen: Farben und Name reisen mit, und der Empfänger dreht

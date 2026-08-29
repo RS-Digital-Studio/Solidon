@@ -175,7 +175,7 @@
         <div>
           <span class="kicker">Esquisses sous contraintes</span>
           <h3>Dessiner, coter — et chaque cote peut être un paramètre</h3>
-          <p>Ligne, cercle, arc, spline et des contours tout faits comme le
+          <p>Ligne, cercle, arc, courbe et des contours tout faits comme le
           trou oblong, le cercle de perçage ou la grille de trous. Dix
           contraintes tiennent le dessin — horizontal, perpendiculaire,
           tangent, symétrique, distance —, et en bas s'affiche à tout moment
@@ -183,8 +183,7 @@
           après&nbsp;: l'extruder, l'entailler en poche, le mettre en
           révolution, le mener le long d'un arc ou le tendre entre deux
           contours.</p>
-          <p class="note">Le contour entre dans le noyau B-Rep comme courbe
-          exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
+          <p class="note">Le contour reste une courbe exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
           polygone à beaucoup de sommets.</b></p>
           <p>La grille montre à quoi l'aimantation se mesure, et son pas se
           saisit au clavier. La cote se tient près du pointeur, et la barre
@@ -520,8 +519,9 @@
     <div class="wrap">
       <h2>Ce qu'il y a encore dedans</h2>
       <ul class="features">
-        <li><b>Des arêtes exactes.</b> Un noyau B-Rep pour les chanfreins,
-        les congés et un STEP qui fait l'aller-retour.</li>
+        <li><b>Des arêtes exactes.</b> Les faces et les arêtes restent modifiables séparément —
+        pour les chanfreins, les congés et un STEP qui fait
+        l'aller-retour.</li>
         <li><b>Vitesse.</b> Les mêmes calculs tournent jusqu'à soixante fois
         plus vite qu'au début — et l'indicateur de progression ne bouge pas
         tant que le résultat n'est pas vraiment terminé.</li>

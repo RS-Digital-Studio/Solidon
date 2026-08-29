@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D</title>
-<meta name="description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Skizzen mit Zwängen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
+<meta name="description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Zeichnen mit Bedingungen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
 <link rel="canonical" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html">
 <link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html">
@@ -18,7 +18,7 @@
 <meta property="og:locale" content="de_DE">
 <meta property="og:url" content="https://solidon3d.de/funktionen.html">
 <meta property="og:title" content="Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D">
-<meta property="og:description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Skizzen mit Zwängen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
+<meta property="og:description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Zeichnen mit Bedingungen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/catalog.png">
 <meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen">
 <meta name="twitter:card" content="summary_large_image">
@@ -86,7 +86,7 @@
       <nav class="toc" aria-label="Der Überblick">
         <ol>
           <li><a href="#ki-agent">KI-Agent</a></li>
-          <li><a href="#skizzen-mit-zwaengen">Skizzen mit Zwängen</a></li>
+          <li><a href="#skizzen-mit-zwaengen">Zeichnen mit Bedingungen</a></li>
           <li><a href="#pruefbericht">Prüfbericht</a></li>
           <li><a href="#parametrisch">Parametrisch</a></li>
           <li><a href="#bausteine">Bausteine</a></li>
@@ -170,16 +170,16 @@
 
       <div class="showcase flip" id="skizzen-mit-zwaengen">
         <div>
-          <span class="kicker">Skizzen mit Zwängen</span>
+          <span class="kicker">Zeichnen mit Bedingungen</span>
           <h3>Zeichnen, bemaßen — und jedes Maß darf ein Parameter sein</h3>
-          <p>Linie, Kreis, Bogen, Spline und fertige Umrisse wie Langloch,
+          <p>Linie, Kreis, Bogen, Kurve und fertige Umrisse wie Langloch,
           Lochkreis oder Lochraster. Zehn Bedingungen halten die Zeichnung
           zusammen — waagerecht, rechtwinklig, tangential, symmetrisch,
           Abstand —, und unten steht jederzeit, was noch frei ist. Was aus dem
           Umriss wird, entscheidest du erst danach: extrudieren, als Tasche
           einschneiden, drehen, entlang eines Bogens führen oder zwischen zwei
           Umrissen aufspannen.</p>
-          <p class="note">Der Umriss geht als exakte Kurve in den B-Rep-Kern.
+          <p class="note">Der Umriss bleibt eine exakte Kurve.
           <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
           vielen Ecken.</b></p>
           <p>Das Raster zeigt, wonach gefangen wird, und seine Weite lässt
@@ -516,8 +516,9 @@
     <div class="wrap">
       <h2>Was sonst noch drinsteckt</h2>
       <ul class="features">
-        <li><b>Exakte Kanten.</b> B-Rep-Kern für Fasen, Verrundungen und
-        rundreisefähiges STEP.</li>
+        <li><b>Exakte Kanten.</b> Flächen und Kanten bleiben einzeln bearbeitbar — für Fasen,
+        Verrundungen und ein STEP, das den Rückweg
+        übersteht.</li>
         <li><b>Tempo.</b> Dieselben Rechnungen laufen bis zum Sechzigfachen
         schneller als zu Beginn — und die Fortschrittsanzeige bleibt stehen,
         bis wirklich fertig gerechnet ist.</li>
