@@ -107,7 +107,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 43 Texte stehen wortgleich in mehreren Dateien | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
-| Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
+| Wirkt die Typprüfung an `overlay.py:294` gegen den Torlauf-Riss? | Was niemand las, und was zweimal dastand (24.08.2026) | den nächsten Torlauf unter Last als Wirkungsnachweis — die Serie selbst ist erledigt (`bce88ff8`): Der Griff steht einmal (`leash.stop_watching_the_dying`), gemessen schlägt er nur in `OverlayHost` an (119 von vier Millionen Filteraufrufen, die sechs anderen Stellen null Mal — sie bleiben als Vorsorge), und der zweite Fund fällt aus anderem Grund: ein fremder Wrapper unter recyceltem Zeiger, gegen den `isValid` nichts sagt |
 | Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | ein Angebot. Für Personen- und Sachschäden aus einem fehlerhaften Produkt braucht es eine **Produkthaftpflicht mit Software-Einschluss**, nicht nur die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft nur den späteren Verkauf; die PayPal-Spende hat keine Gegenleistung |
 | Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Geschäftsmodells nachkontrolliert (24.08.2026) | den Vertrag des Merchant of Record vor der Unterschrift. Er wickelt nur den späteren Lizenzkauf ab, nicht die PayPal-Spende. Seine Freistellung kann unbegrenzt und nach fremdem Recht gelten; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
@@ -115,7 +115,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
-| Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
+| Kommt xxhash im gebauten Paket an? | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | den nächsten CI-Bau — die Diagnose ist durch (kein Hänger am frischen Prozess; jeder Kunde hashte 50-mal zu langsam, behoben mit `dedd2b8d`), aber die Kundenwirkung belegt erst das Paket selbst |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
@@ -9341,7 +9341,21 @@ Eintrag automatisch mitgeprüft wird.
 
 Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
 
-- [ ] **Elf von dreizehn Eventfiltern werden nie abbestellt, und was das
+- [x] **Erledigt, mit einem anderen Ergebnis als erwartet** (3a,
+      `bce88ff8`, 30.08.2026): Der Griff steht jetzt einmal
+      (`leash.stop_watching_the_dying`) und wird an sieben Stellen
+      gerufen. Gemessen schlägt er nur in `OverlayHost` an — 119 Mal in
+      vier Millionen Filteraufrufen, die sechs anderen Stellen null Mal.
+      Sie bleiben als **Vorsorge** für „ein Kind geht einzeln"; die
+      Zählung `installEventFilter` gegen `removeEventFilter` war nie
+      eine Aussage. Der zweite Fund (`overlay.py:294`) fällt aus einem
+      anderen Grund — ein fremder Wrapper unter recyceltem Zeiger, gegen
+      den `isValid` nichts sagt — und trägt jetzt eine Typprüfung, deren
+      Wirkung der nächste Torlauf unter Last zeigt (eigene
+      Registerzeile). Der ursprüngliche Wortlaut des Punkts bleibt
+      darunter als Geschichte stehen:
+
+      **Elf von dreizehn Eventfiltern werden nie abbestellt, und was das
       bedeutet, weiß ich nicht.** Das Zählverhältnis ist belegt:
       `installEventFilter` steht 13× in `app/ui`, `removeEventFilter` 2× —
       `survey.py:208` und `viewport.py:4183` machen es, `app.py:276` und
@@ -12532,9 +12546,25 @@ Der Stack steht in `threemf.read_objects` → `trimesh.copy` →
 `caching.hash_fallback`, während der Hauptthread gleichzeitig einen Autosave
 schreibt. Das ist ein Leistungsbefund, kein Absturz.
 
-- [ ] Diagnose des Hashing-Pfads unter gleichzeitigem Autosave, und dazu
-      eine Korpusdatei, die den Fall festhält — ein neues Fehlerbild wird
-      eine Testdatei, kein Sonderfall im Code.
+- [x] **Diagnose am echten Fall** (72, 30.08.2026 — 25 Teile, 604 146
+      Dreiecke, 10,2 MB), voller Kundenweg am frischen Prozess: 14–15 s,
+      kein Hänger — read_objects 2,8 s, Autosave 0,2 s bei 9,9 MB; der
+      Audit-Stack war ein einzelnes Timeout-Sample, die wahrscheinlichste
+      Erklärung der vier Minuten ist der Prozesszustand des Nacht-Audits
+      nach 57 Modellen (native-Familie). Gefunden hat die Messung
+      stattdessen: **xxhash stand nie in den Abhängigkeiten**, trimesh
+      fiel still auf blake2b zurück — 298 992 Aufrufe und 3,4 s je
+      Auswertung dieser Baugruppe, und weil PyInstaller nur bündelt, was
+      die Bau-Umgebung hat, fuhr jedes ausgelieferte Paket den langsamen
+      Weg. Behoben mit `dedd2b8d`: xxhash (BSD-2-Clause) nach der
+      Abhängigkeits-Checkliste, in der Spec ausdrücklich als
+      Paketvertrag; Gegenmessung 14,0 statt 15,2 s. Die Kundendatei
+      bleibt draußen (fremde Lizenz); die Leistungsmarke „große Baugruppe
+      durch die Eingangsstufe" mit erzeugter Geometrie folgt in
+      `test_performance.py` (Weg b, mit 15/53 abgestimmt).
+- [ ] **Prüfpunkt nächster CI-Bau**: Liegt xxhash im gebauten Paket?
+      Erst dann ist die Kundenwirkung belegt, nicht nur die der
+      Entwicklungsumgebung.
 
 ---
 

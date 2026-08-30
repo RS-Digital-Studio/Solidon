@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-08-27T07:36:42.182Z
+  modified: 2026-08-30T13:12:35.865Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -92,3 +92,19 @@ schreibt in dieser Zeit. Wer vorher misst und danach staged, prüft einen
 Stand, den er nicht committet — deshalb steht oben, dass nur `git show
 <commit> --numstat` **nach** dem Commit etwas taugt. Ce hat sie nicht
 gefahren und den Fund erst über einen `ruff format`-Lauf gegen HEAD gemacht.
+
+**Die MEMORY.md-Gestalt, 30.08.2026:** Der Dateistand einer geteilten
+Indexdatei kann **Verweise auf Dateien** mitnehmen, die es in HEAD nicht
+gibt. Mein `MEMORY.md`-Commit trug 3as frische Indexzeile mit, während ihre
+verlinkte `.md` untracked blieb — ein toter Link in HEAD, den erst ihr
+nächster Commit schloss. Wer `MEMORY.md` committet, prüft die verlinkten
+Ziele in einer Sekunde mit:
+
+```
+git ls-files --error-unmatch $(grep -oE '\(([a-z0-9-]+\.md)\)' \
+    .claude/memory/MEMORY.md | tr -d '()')
+```
+
+Jede Datei, die der Befehl nicht kennt, ist entweder fremde ungelandete
+Arbeit (Zeile herauslassen — Blob-Technik) oder die eigene vergessene
+Neuanlage (Datei mitcommitten).
