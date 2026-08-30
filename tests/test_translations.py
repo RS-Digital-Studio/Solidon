@@ -80,7 +80,9 @@ def test_every_text_is_translated(language: str) -> None:
 #: Ein Platzhalter im Quelltext: ``{name}``, nicht ``{}`` und nicht ``{0}``.
 #: Die Oberfläche setzt sie namentlich (``.format(adresse=…)`` oder
 #: ``.replace("{slicer}", …)``), und beide Wege brauchen den Namen.
-PLACEHOLDER = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+#: Der Name darf Umlaute tragen — die Quelle ist deutsch, und ein Muster, das
+#: bei ASCII endet, ließ einen verlorenen deutschen Platzhalter grün durch.
+PLACEHOLDER = re.compile(r"\{([^\W\d]\w*)\}")
 
 
 @pytest.mark.parametrize(
