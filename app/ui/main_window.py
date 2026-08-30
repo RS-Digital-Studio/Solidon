@@ -3938,8 +3938,14 @@ class MainWindow(QMainWindow):
         und sie je Platte dagegenzuhalten hieße, dreimal denselben Vergleich mit
         einem Drittel der Messung zu führen.
         """
-        for outcome in outcomes:
-            self.report.add_findings(outcome.findings)
+        # Der erste Nachtrag räumt die G-Code-Befunde des vorigen Laufs ab —
+        # sie beschreiben eine Druckdatei, die es nicht mehr gibt (Regel 14
+        # liefert mit der Herkunft das Kriterium). Die weiteren Platten und
+        # ``_compare_totals`` hängen an denselben Lauf an.
+        for index, outcome in enumerate(outcomes):
+            self.report.add_findings(
+                outcome.findings, replacing_source="gcode" if index == 0 else None
+            )
         self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]))
         self._focus_report()
         self.announce(
@@ -4005,7 +4011,9 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self.report.add_findings(findings)
+        # Auch hier: Die gelesene Datei ist jetzt die aktuelle — was ein
+        # früherer Lauf über eine andere gesagt hat, wird ersetzt.
+        self.report.add_findings(findings, replacing_source="gcode")
         self._compare_totals(metrics)
         self._focus_report()
         self.announce(f"{tr('G-Code gelesen')}: {metrics.slicer or tr('unbekannter Slicer')}")

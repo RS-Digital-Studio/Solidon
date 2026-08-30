@@ -1005,6 +1005,89 @@ def test_the_same_finding_is_not_listed_twice(qt_app: QApplication) -> None:
         panel.deleteLater()
 
 
+def test_a_new_slicer_run_replaces_the_gcode_findings(qt_app: QApplication) -> None:
+    """Die G-Code-Befunde beschreiben die jeweils letzte Druckdatei (Regel 14).
+
+    Drei Läufe trugen dreimal die Druckzeit ein — jede mit anderer Zahl und
+    darum nie „dasselbe" für die Wiedererkennung (Roberts Foto, 30.08.2026).
+    Ein neuer Lauf ersetzt die Herkunft ``gcode``; was aus anderer Quelle
+    stammt, bleibt stehen.
+    """
+    from app.ui.panels import ReportPanel
+
+    def measured(minutes: str) -> Finding:
+        return Finding(
+            code="slicer.handover",
+            severity="info",
+            message="Diese Datei kommt aus dem externen Slicer.",
+            values={"minutes": minutes},
+            source="gcode",
+        )
+
+    kept = Finding(
+        code="arrange.below_bed",
+        severity="info",
+        message="Ein Objekt steckt unter dem Druckbett.",
+        object_id="obj_1",
+        source="internal",
+    )
+    panel = ReportPanel()
+    try:
+        panel.add_findings([kept])
+        panel.add_findings([measured("18")], replacing_source="gcode")
+        panel.add_findings([measured("21")], replacing_source="gcode")
+
+        assert panel.list.count() == 2, "ein Lauf, eine Messung — plus der fremde Befund"
+        left = [
+            panel.list.item(row).data(Qt.ItemDataRole.UserRole) for row in range(panel.list.count())
+        ]
+        assert any(entry.values.get("minutes") == "21" for entry in left), "die letzte Messung"
+        assert not any(entry.values.get("minutes") == "18" for entry in left), "die alte ist fort"
+        assert any(entry.code == "arrange.below_bed" for entry in left), "Fremdes bleibt"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_heavier_finding_replaces_the_lighter_same_one(qt_app: QApplication) -> None:
+    """Derselbe Sachverhalt, zwei Gewichte — eine Zeile, die neuere gilt.
+
+    Die Auswertung meldet „unter dem Druckbett" als Hinweis, die Exportprüfung
+    beim Schreiben als Warnung (``about_to_write``). Beide nebeneinander lasen
+    sich wie zwei Probleme (Roberts Foto, 30.08.2026); die severity steht mit
+    Absicht nicht in der Wiedererkennung, also entscheidet die Reihenfolge —
+    und der jüngere Stand einer Sache ist der, der gilt, in beide Richtungen.
+    """
+    from app.ui.panels import ReportPanel
+
+    def sunk(severity: str) -> Finding:
+        return Finding(
+            code="arrange.below_bed",
+            severity=severity,  # type: ignore[arg-type]
+            message="Ein Objekt steckt unter dem Druckbett.",
+            object_id="obj_1",
+            values={"axes": "z", "excess": "10,00 mm"},
+        )
+
+    panel = ReportPanel()
+    try:
+        panel.add_findings([sunk("info")])
+        panel.add_findings([sunk("warning")])
+
+        assert panel.list.count() == 1, "ein Sachverhalt, eine Zeile"
+        entry = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+        assert entry.severity == "warning", "die Datei entsteht gleich — das wiegt schwerer"
+
+        panel.add_findings([sunk("info")])
+        assert panel.list.count() == 1
+        entry = panel.list.item(0).data(Qt.ItemDataRole.UserRole)
+        assert entry.severity == "info", "und zurück, sobald nur noch der Hinweis gilt"
+
+        panel.add_findings([sunk("info")])
+        assert panel.list.count() == 1, "gleich schwer bleibt stehen wie bisher"
+    finally:
+        panel.deleteLater()
+
+
 def test_the_same_message_about_another_body_stays_its_own_line(qt_app: QApplication) -> None:
     """Zwei Körper stehen aus verschiedenen Gründen hinaus — zwei Zeilen."""
     from app.ui.panels import ReportPanel

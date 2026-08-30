@@ -204,6 +204,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # dort soll ein Klick genau das tun, was er sagt.
     "arrange.above_bed": (PLACE_ON_BED, ARRANGE_ON_BED),
     "arrange.off_the_plate": (ARRANGE_ON_BED,),
+    # Die Druckdatei ist niedriger als das Modell: CuraEngine schneidet unter
+    # ``z = 0`` wortlos ab (gemessen 30.08.2026, 50 statt 100 Schichten). Die
+    # Ursache ist dieselbe wie bei ``arrange.below_bed`` — das Teil steckt
+    # unter der Platte —, nur festgestellt an der fertigen Datei; die Handlung
+    # ist darum dieselbe: aufsetzen und neu slicen.
+    "gcode.shorter_than_model": (PLACE_ON_BED,),
     # Körper, die genau aufeinander liegen, sind im Bild einer. Das entsteht
     # auf mehreren Wegen — zweimal *Quader anlegen*, Duplizieren, ein Muster
     # ohne Abstand —, und keiner davon ist ein Fehler: Die Stückzahl gehört in
@@ -2530,7 +2536,7 @@ class ReportPanel(QWidget):
         self._show_controls()
         self._grew()
 
-    def add_findings(self, findings: list[Finding]) -> None:
+    def add_findings(self, findings: list[Finding], *, replacing_source: str | None = None) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
         G-Code-Gegenprobe etwa (§28.2). Sie behalten ihre eigene
         Herkunft (§22.5).
@@ -2540,15 +2546,47 @@ class ReportPanel(QWidget):
         dass ein Körper über den Bauraum hinaussteht, und nach beiden stand die
         Zeile zweimal da. Zweimal gemeldet ist nicht zweimal passiert — ein
         Zähler daneben wäre eine Zahl, die etwas anderes behauptet.
+
+        ``replacing_source`` räumt zuerst ab, was diese Herkunft schon gemeldet
+        hat. Die G-Code-Befunde beschreiben die **jeweils letzte** Druckdatei —
+        Regel 14 gibt mit der Herkunft das Kriterium frei Haus. Ohne das stand
+        nach drei Läufen dreimal die Druckzeit da, jede mit anderer Zahl und
+        darum nie „dasselbe" für die Erkennung darüber (Roberts Foto,
+        30.08.2026): Eine veraltete Aussage über eine ersetzte Datei ist keine
+        Historie, sondern Irreführung.
         """
-        known = self._known()
+        if replacing_source is not None:
+            for row in range(self.list.count() - 1, -1, -1):
+                entry = self.list.item(row).data(Qt.ItemDataRole.UserRole)
+                if entry is not None and entry.source == replacing_source:
+                    self.list.takeItem(row)
+        # Je Identität die Zeile, nicht nur die Menge: Derselbe Sachverhalt
+        # kann mit zwei Gewichten eintreffen — die Auswertung meldet „unter dem
+        # Druckbett" als Hinweis (ein Klick behebt es), die Exportprüfung beim
+        # Schreiben als Warnung (der Klick ist nicht passiert). Die schwerere
+        # Fassung ersetzt die leichtere; andersherum bliebe die Warnung stehen,
+        # obwohl längst nur noch der Hinweis gilt — deshalb ersetzt auch die
+        # leichtere die schwerere, sobald derselbe Sachverhalt leichter
+        # wiederkommt. Was gleich schwer ist, bleibt wie bisher stehen.
+        rows = {
+            _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole)): row
+            for row in range(self.list.count())
+        }
         fresh = []
         for finding in findings:
             key = _identity(finding)
-            if key in known:
-                continue
-            known.add(key)
+            found_at = rows.get(key)
+            if found_at is not None:
+                standing = self.list.item(found_at).data(Qt.ItemDataRole.UserRole)
+                if standing.severity == finding.severity:
+                    continue
+                self.list.takeItem(found_at)
+                rows = {
+                    _identity(self.list.item(index).data(Qt.ItemDataRole.UserRole)): index
+                    for index in range(self.list.count())
+                }
             self._append(finding)
+            rows[key] = self.list.count() - 1
             fresh.append(key)
         self._resort()
         self._count_up()
@@ -2599,13 +2637,6 @@ class ReportPanel(QWidget):
             if _identity(item.data(Qt.ItemDataRole.UserRole)) in keys:
                 self.list.scrollToItem(item)
                 return
-
-    def _known(self) -> set[tuple[Any, ...]]:
-        """Woran die Liste einen Befund wiedererkennt."""
-        return {
-            _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole))
-            for row in range(self.list.count())
-        }
 
     def _append(self, finding: Finding) -> None:
         """Einen Befund als Eintrag anhängen."""

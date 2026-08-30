@@ -1504,19 +1504,25 @@ def check_placement(scene: Scene) -> list[Finding]:
     die Druckvorbereitung meldet „nichts einzuwenden", und niemand sagt es.
 
     Der Befund trägt den Körper, den er meint. ``check_build_volume`` kennt nur
-    die Reihenfolge seiner Liste — hier gibt es die Kennungen, also werden sie
-    nachgetragen; ein Bericht, der „ein Objekt" sagt, hilft bei zwanzig nicht.
+    die Reihenfolge seiner Liste — hier gibt es die Kennungen, also gehen sie
+    mit; ein Bericht, der „ein Objekt" sagt, hilft bei zwanzig nicht.
     """
-    from app.core.geom.prepare import check_build_volume, named_for
+    from app.core.geom.prepare import check_build_volume
 
     profile = scene.profile
     if profile is None or not scene.objects:
         return []
     entries = list(scene.objects.values())
-    findings = check_build_volume(
-        [entry.mesh for entry in entries], profile, [entry.plate for entry in entries]
+    # Die Kennungen direkt statt ``named_for`` hinterher: So trägt der Befund
+    # dieselbe Gestalt wie der der Exportprüfung — gleiche Werte, gleiche
+    # Kennung —, und der Bericht erkennt beide als denselben Sachverhalt,
+    # statt ihn zweimal zu zeigen (Roberts Foto, 30.08.2026).
+    return check_build_volume(
+        [entry.mesh for entry in entries],
+        profile,
+        [entry.plate for entry in entries],
+        [entry.id for entry in entries],
     )
-    return named_for(findings, entries)
 
 
 def check_bodies_in_one_place(scene: Scene) -> list[Finding]:
