@@ -57,6 +57,37 @@ def dialog(qt_app: QApplication, session: Session) -> PrintSettingsDialog:
 # --- Vollständigkeit ----------------------------------------------------------------
 
 
+def test_the_save_button_says_what_it_is_waiting_for(dialog: PrintSettingsDialog) -> None:
+    """„Druckdatei speichern …" ist der Satz, für den ein Slicer-Kunde gekommen ist.
+
+    Gesperrt stand er wortlos da, während die zwei Knöpfe daneben ihren Grund
+    vorbildlich nennen: *Slicen* sagt „Dieser Slicer braucht ein
+    Druckerprofil", *Im Slicer öffnen* sagt „Zu diesem Slicer ist kein Fenster
+    installiert". Nur hier stand nichts — dabei ist der Grund der einfachste
+    von allen: Es gibt noch keine Datei.
+
+    Geprüft werden alle drei Kanäle, die auch die Nachbarn bedienen. Der
+    Tooltip allein wäre eine Bedeutung über das Aussehen (Regel 18); die
+    Beschreibung für den Bildschirmleser ist die zweite Kodierung.
+    """
+    assert not dialog.save_button.isEnabled(), "nothing has been sliced yet"
+    for channel, value in (
+        ("tooltip", dialog.save_button.toolTip()),
+        ("status tip", dialog.save_button.statusTip()),
+        ("accessible description", dialog.save_button.accessibleDescription()),
+    ):
+        assert value.strip(), f"the disabled save button carries no {channel}"
+        assert "Slicen" in value, f"the {channel} should name the way out: {value!r}"
+
+    # **Und der Grund verschwindet, wenn er nicht mehr gilt.** Ein Hinweis, der
+    # an einem freigegebenen Knopf hängen bleibt, ist die Umkehrung des
+    # Fehlers: Er sagt, etwas fehle, während es da ist.
+    dialog._release_the_save()
+    assert dialog.save_button.isEnabled()
+    assert not dialog.save_button.toolTip()
+    assert not dialog.save_button.accessibleDescription()
+
+
 def test_every_setting_in_the_model_has_a_field() -> None:
     """Eine Einstellung ohne Feld wäre eine, die der Nutzer nie zu sehen
     bekommt — und die er trotzdem an den Slicer schickt."""
@@ -2280,3 +2311,59 @@ def test_a_result_survives_a_state_refresh(dialog: PrintSettingsDialog, tmp_path
     dialog._show_slicer_state()
 
     assert dialog.state.text() == "Druckzeit: 18 min · Material: 4,7 g"
+
+
+# --- Was der Kundenweg am Dialog gefunden hat (D13) ---------------------------------
+
+
+def test_the_dialog_grows_when_the_profile_section_opens_itself(
+    qt_app: QApplication, session: Session, tmp_path: Path
+) -> None:
+    """Die nachgereichte Klappe darf die Felder darüber nicht stauchen.
+
+    Dieselbe Familie wie ``first_run._grow_to_content`` (Robert, 26.08.2026:
+    Auswahlfelder auf 16 von 28 Punkten): Der Dialog steht auf seiner
+    Aufmachgröße, und wenn ``_open_slicer_section`` Sekunden später vier
+    Profilzeilen einblendet, wird der Fehlbetrag aus dem oberen Bereich
+    gepresst. Gemessen an der Kundenfahrt vom 30.08.2026 (Bild 2 gegen 1).
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog._slicer_path = tmp_path / "orca-slicer.exe"
+    dialog.slicer_box.setVisible(True)
+    dialog.resize(dialog.sizeHint())
+    before = dialog.height()
+    field = dialog._editors["layers.height"]
+    tall_enough = field.sizeHint().height()
+
+    dialog._open_slicer_section()
+    qt_app.processEvents()
+
+    assert dialog.height() > before, "der Dialog wächst mit der aufgeklappten Auswahl"
+    assert field.height() >= tall_enough, "und die Felder darüber behalten ihre Höhe"
+
+
+def test_every_group_of_the_depth_can_be_reached_at_the_default_width(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Acht Gruppen, und bei der Vorgabebreite waren zwei davon unerreichbar.
+
+    Die Kundenfahrt vom 30.08.2026 (Bild 3) zeigte die Reiterleiste
+    abgeschnitten — „Geschwindigkeit | S…", und *Haftung, Rückzug, Filament*
+    stand nirgends. Ohne Rollknöpfe ist eine abgeschnittene Leiste eine
+    Gruppe, die es für den Kunden nicht gibt; die Vorgabebreite muss reichen
+    oder die Leiste muss sagen, dass es weitergeht.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.resize(dialog.sizeHint())
+    dialog.tabs_toggle.setChecked(True)
+    qt_app.processEvents()
+    bar = dialog.tabs.tabBar()
+
+    assert dialog.tabs.count() == len(GROUPS), "sonst prüft dieser Test die falsche Leiste"
+    assert bar.usesScrollButtons() or bar.sizeHint().width() <= dialog.width(), (
+        "entweder passt die Leiste in die Vorgabebreite, oder sie zeigt, dass es weitergeht"
+    )
+    last = bar.tabRect(bar.count() - 1)
+    assert last.right() <= dialog.width(), (
+        f"die letzte Gruppe endet bei {last.right()} px, der Dialog ist {dialog.width()} px breit"
+    )

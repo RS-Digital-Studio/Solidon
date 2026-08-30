@@ -2403,6 +2403,7 @@
   "Noch kein Ausdruck — er beginnt mit =": "Pas encore d'expression — elle commence par =",
   "Noch kein Knochen.": "Aucun os pour l'instant.",
   "Noch kein Zug.": "Aucun trait pour l’instant.",
+  "Noch keine Druckdatei — sie entsteht beim Slicen.": "Pas encore de fichier d’impression — il naît au découpage.",
   "Noch keine Objekte. Über „Erzeugen“ entsteht ein Körper, „Modell einfügen“ liest eine Datei ein.": "Aucun objet pour l’instant. « Créer » ajoute un corps, « Insérer un modèle » lit un fichier.",
   "Noch keine Parameter. Ein Parameter ist ein benanntes Maß — Operationen und Skizzen rechnen mit ihm.": "Pas encore de paramètres. Un paramètre est une cote nommée — opérations et esquisses calculent avec.",
   "Noch keine Schritte. Jede Änderung steht hier als eine Zeile und lässt sich mit Strg+Z zurücknehmen.": "Aucune étape pour l’instant. Chaque modification apparaît ici sur une ligne et s’annule avec Ctrl+Z.",

@@ -25,7 +25,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Final, Literal, cast
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -1906,6 +1906,39 @@ class PrintSettingsDialog(QDialog):
         if self.slicer_toggle is not None:
             self.slicer_toggle.setChecked(True)
 
+    def _unfold_slicer(self, open_now: bool) -> None:
+        """Beim Aufklappen wächst der Dialog mit — von selbst tut er es nicht.
+
+        Dieser Abschnitt geht **nachgereicht** auf: Die Profilsuche läuft in
+        einem Arbeiter, und Sekunden nach dem Öffnen des Dialogs stehen vier
+        Zeilen mehr darin. Das Fenster bleibt dabei auf seiner Aufmachgröße,
+        und den Fehlbetrag presst die Layoutrechnung aus den Feldern darüber —
+        gemessen an der Kundenfahrt vom 30.08.2026: Nach dem Aufklappen
+        standen die acht Zahlenfelder der Vorderseite sichtbar gestaucht da.
+        Dieselbe Familie wie ``first_run._grow_to_content`` (Robert,
+        26.08.2026: Auswahlfelder mit 16 von 28 Punkten Höhe).
+
+        Nur wachsen, nie schrumpfen: Wer selbst zuklappt, will Platz sparen —
+        und ein Dialog, der beim Zuklappen springt, ist Bewegung ohne Auftrag.
+        Das Wachsen deckelt die nutzbare Bildschirmhöhe, wie in
+        :meth:`_unfold_tabs`.
+        """
+        if not open_now:
+            return
+        # Über den Zeitgeber wie in ``first_run``: Unmittelbar im Signal meldet
+        # ``sizeHint`` noch den zugeklappten Stand, und ein ``max`` mit einer
+        # veralteten Zahl wächst nicht. ``self`` als Empfänger, damit der Ruf
+        # verfällt, wenn der Dialog vorher weggeräumt wird.
+        QTimer.singleShot(0, self, self._grow_to_content)
+
+    def _grow_to_content(self) -> None:
+        """Auf die Höhe wachsen, die der Inhalt wünscht — bis zum Bildschirm."""
+        wanted = self.sizeHint().height()
+        screen = self.screen()
+        if screen is not None:
+            wanted = min(wanted, screen.availableGeometry().height() - 48)
+        self.resize(self.width(), max(self.height(), wanted))
+
     def _forget_result(self) -> None:
         """Das Ergebnis des vorigen Slicers verwerfen.
 
@@ -1920,7 +1953,7 @@ class PrintSettingsDialog(QDialog):
         Slicer gehört, gehört nicht zum neuen.
         """
         self._gcode = []
-        self.save_button.setEnabled(False)
+        self._hold_the_save()
         self.state.setText("")
 
     def _clear_profile_choices(self) -> None:
@@ -2591,8 +2624,8 @@ class PrintSettingsDialog(QDialog):
         # Auftrag.
         make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
         self.save_button = QPushButton(tr("Druckdatei speichern …"), self)
-        self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._save_gcode)
+        self._hold_the_save()
         buttons.addButton(self.save_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
 
@@ -3387,7 +3420,7 @@ class PrintSettingsDialog(QDialog):
         self._gcode = [entry.gcode_path for entry in outcomes]
         # Ab hier trägt die Zeile ein Ergebnis und keinen Grund.
         self._state_shows_reason = False
-        self.save_button.setEnabled(True)
+        self._release_the_save()
         outcomes[0].findings = [*self._pending_findings, *outcomes[0].findings]
         self._pending_findings = []
         self.sliced.emit(outcomes)
@@ -3397,6 +3430,38 @@ class PrintSettingsDialog(QDialog):
             metrics.slicer,
             sum(entry.seconds for entry in outcomes),
         )
+
+    def _hold_the_save(self) -> None:
+        """Den Speichern-Knopf sperren — und sagen, was ihm fehlt.
+
+        Er ist das Ziel eines Slicer-Kunden: „Druckdatei speichern …" ist der
+        Satz, für den er gekommen ist. Gesperrt stand er wortlos da, während
+        die zwei Knöpfe daneben ihren Grund vorbildlich nennen — *Slicen*
+        sagt „Dieser Slicer braucht ein Druckerprofil", *Im Slicer öffnen*
+        sagt „Zu diesem Slicer ist kein Fenster installiert". Nur hier stand
+        nichts, und der Grund ist der einfachste von allen: Es gibt noch keine
+        Datei.
+
+        Dieselben drei Kanäle wie dort — Tooltip, Statuszeile und die
+        Beschreibung für den Bildschirmleser (Regel 18: eine Bedeutung nie
+        allein über das Aussehen).
+        """
+        reason = str(tr("Noch keine Druckdatei — sie entsteht beim Slicen."))
+        self.save_button.setEnabled(False)
+        self.save_button.setToolTip(reason)
+        self.save_button.setStatusTip(reason)
+        self.save_button.setAccessibleDescription(reason)
+
+    def _release_the_save(self) -> None:
+        """Freigeben — und den Grund wegnehmen, der nicht mehr gilt.
+
+        Ein Hinweis, der an einem freigegebenen Knopf hängen bleibt, ist die
+        Umkehrung des Fehlers: Er sagt, etwas fehle, während es da ist.
+        """
+        self.save_button.setEnabled(True)
+        self.save_button.setToolTip("")
+        self.save_button.setStatusTip("")
+        self.save_button.setAccessibleDescription("")
 
     def _save_gcode(self) -> None:
         """Die Druckdateien dorthin, wo der Nutzer sie haben will (§29).

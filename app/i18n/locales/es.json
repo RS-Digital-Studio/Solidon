@@ -2403,6 +2403,7 @@
   "Noch kein Ausdruck — er beginnt mit =": "Todavía no es una expresión — empieza con =",
   "Noch kein Knochen.": "Aún ningún hueso.",
   "Noch kein Zug.": "Aún ningún trazo.",
+  "Noch keine Druckdatei — sie entsteht beim Slicen.": "Aún no hay archivo de impresión: se crea al laminar.",
   "Noch keine Objekte. Über „Erzeugen“ entsteht ein Körper, „Modell einfügen“ liest eine Datei ein.": "Todavía no hay objetos. «Crear» genera un cuerpo, «Insertar modelo» lee un archivo.",
   "Noch keine Parameter. Ein Parameter ist ein benanntes Maß — Operationen und Skizzen rechnen mit ihm.": "Aún no hay parámetros. Un parámetro es una cota con nombre — las operaciones y los bocetos calculan con él.",
   "Noch keine Schritte. Jede Änderung steht hier als eine Zeile und lässt sich mit Strg+Z zurücknehmen.": "Todavía no hay pasos. Cada cambio aparece aquí como una línea y se puede deshacer con Ctrl+Z.",

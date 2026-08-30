@@ -2403,6 +2403,7 @@
   "Noch kein Ausdruck — er beginnt mit =": "No expression yet — it starts with =",
   "Noch kein Knochen.": "No bone yet.",
   "Noch kein Zug.": "No stroke yet.",
+  "Noch keine Druckdatei — sie entsteht beim Slicen.": "No print file yet — it is created when slicing.",
   "Noch keine Objekte. Über „Erzeugen“ entsteht ein Körper, „Modell einfügen“ liest eine Datei ein.": "No objects yet. “Create” makes a body, “Insert model” reads a file.",
   "Noch keine Parameter. Ein Parameter ist ein benanntes Maß — Operationen und Skizzen rechnen mit ihm.": "No parameters yet. A parameter is a named dimension — operations and sketches compute with it.",
   "Noch keine Schritte. Jede Änderung steht hier als eine Zeile und lässt sich mit Strg+Z zurücknehmen.": "No steps yet. Every change appears here as one line and can be undone with Ctrl+Z.",
