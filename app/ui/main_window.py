@@ -1006,6 +1006,42 @@ class MainWindow(QMainWindow):
         und aus einem Wert allein lässt sich nicht hochrechnen."""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
+        self._patience = QTimer(self)
+        """Wann der Wartezeiger kommt — die zweite Stufe von §2.8.
+
+        **Unter zwei Zehntelsekunden zeigt die Anwendung nichts**, und das ist
+        keine Feinheit: Von 28 gemessenen Rechnungen liegen elf darunter,
+        darunter die häufigsten Gesten überhaupt — einen Wert im Dialog ändern
+        (7 ms), am Schichtregler ziehen (0,01 ms), einen Pinselstrich setzen
+        (0,2 ms). Bei jeder davon zuckte bisher der Fortschrittsbalken auf und
+        sofort wieder weg. Was aufblitzt, sagt nichts; es macht nur unruhig."""
+        self._patience.setSingleShot(True)
+        self._patience.setInterval(200)
+        self._patience.timeout.connect(self._show_wait_cursor)
+        self._bar_delay = QTimer(self)
+        """Wann Balken und Abbrechen kommen — die dritte Stufe von §2.8.
+
+        Zwölf der 28 Marken liegen zwischen zwei Zehnteln und zwei Sekunden:
+        Netz vergröbern, Fläche unterteilen, ein Beispielprojekt öffnen. Dort
+        verlangt der Bauplan Zeiger und Zeile, nicht den Balken — und beides
+        steht schon da. Der Balken kommt erst, wo das Warten lang genug ist,
+        dass man wissen will, wie weit es ist."""
+        self._bar_delay.setSingleShot(True)
+        self._bar_delay.setInterval(2000)
+        self._bar_delay.timeout.connect(self._show_progress_bar)
+        self._waits = False
+        """Ob gerade etwas läuft, das die Stufen von §2.8 trägt.
+
+        Der Zeitgeber fragt danach und nicht die Sitzung: Er gehört dem Lauf,
+        der ihn gestartet hat."""
+        self._waiting = False
+        """Ob der Wartezeiger gerade gesetzt ist.
+
+        Qt stapelt Zeiger: Zweimal setzen und einmal zurücknehmen lässt einen
+        stehen, und ein Zeiger, der nach dem Rechnen bleibt, sieht aus wie ein
+        hängendes Programm. Die Flagge macht das Paar abzählbar."""
+        """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
+        Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._menus: list[QMenu] = []
         """Jedes Menü der Leiste, festgehalten.
 
@@ -3668,8 +3704,14 @@ class MainWindow(QMainWindow):
         """
         self.progress.setRange(0, 100)
         if not self._anything_running():
+            # Mit dem Balken gehen die Zeitgeber und der Zeiger: Ein Arbeiter,
+            # der den Balken selbst anschaltet, hat die Stufung übersprungen,
+            # und ein Wartezeiger ohne laufende Rechnung sieht aus wie ein
+            # hängendes Programm.
+            self._stop_waiting()
             self.progress.setVisible(False)
         self.status_message.setText(self._announcement)
+
 
     def action_generate(self) -> None:
         """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
@@ -8408,13 +8450,74 @@ class MainWindow(QMainWindow):
             parts.append(left_over)
         self.status_message.setText("  ·  ".join(parts))
 
+    def _show_wait_cursor(self) -> None:
+        """Stufe zwei: der Zeiger sagt, dass gerechnet wird (§2.8).
+
+        ``BusyCursor`` und nicht ``WaitCursor``: Das ist der Zeiger *mit*
+        Sanduhr daneben, und er ist der einzige, der die Wahrheit sagt. Die
+        Rechnung läuft in einem Arbeiter, die Oberfläche bleibt bedienbar —
+        genau das verlangt §2.8 —, und ein reiner Wartezeiger behauptete das
+        Gegenteil.
+        """
+        if not self._waiting:
+            QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+            self._waiting = True
+
+    def _show_progress_bar(self) -> None:
+        """Stufe drei: ab zwei Sekunden will man wissen, wie weit es ist.
+
+        Gefragt wird ``_waits``, nicht ``_anything_running()``: Der Zeitgeber
+        gehört dem Lauf, der ihn gestartet hat, und der Zustand der Sitzung
+        kann sich zwischen Start und Feuern geändert haben. Endet der Lauf
+        vorher, stoppt ``_stop_waiting`` den Zeitgeber, und er feuert gar
+        nicht — das ist die Zusage, nicht eine zweite Abfrage.
+        """
+        if self._waits:
+            self.progress.setVisible(True)
+            self.cancel_button.setVisible(self._anything_cancellable() or self._waits)
+
+    def _stop_waiting(self) -> None:
+        """Alle Stufen zurück — Zeitgeber, Zeiger, Balken, Knopf.
+
+        Der Zeiger wird genau so oft zurückgenommen, wie er gesetzt wurde:
+        ``restoreOverrideCursor`` ohne vorangegangenes ``setOverrideCursor``
+        nimmt den Zeiger eines anderen mit.
+        """
+        self._patience.stop()
+        self._bar_delay.stop()
+        if self._waiting:
+            QApplication.restoreOverrideCursor()
+            self._waiting = False
+
     def _on_busy(self, busy: bool) -> None:
         # Agent, Trennebenensuche, Export und Download können neben der
         # Auswertung laufen; dann bleibt der Balken stehen, statt mit ihr zu
         # verschwinden — und der Knopf zeigt sich nur, wo er etwas abbricht.
         running = busy or self._anything_running()
-        self.progress.setVisible(running)
-        self.cancel_button.setVisible(busy or self._anything_cancellable())
+        # **Gestuft und nicht sofort** (§2.8). Die Zeitgeber und ihre Zahlen
+        # sind bei ihrer Anlage begründet; hier steht nur, wann sie laufen.
+        # Ein Lauf, der noch aussteht, startet sie nicht neu — sonst schöbe
+        # jede Zwischenmeldung eines nebenher laufenden Exports den Balken
+        # wieder zwei Sekunden nach hinten.
+        self._waits = running
+        if running:
+            if not self._patience.isActive() and not self._waiting:
+                self._patience.start()
+            if not self._bar_delay.isActive() and not self.progress.isVisibleTo(self):
+                self._bar_delay.start()
+        else:
+            self._stop_waiting()
+            self.progress.setVisible(False)
+        # Der Knopf zeigt sich nur neben dem Balken: Er ist die Handlung zu
+        # dem, was der Balken meldet, und allein in einer leeren Leiste wäre er
+        # eine Aufforderung ohne Gegenstand.
+        # ``isVisibleTo`` und nicht ``isVisible``: Letzteres antwortet falsch,
+        # solange das Fenster nie gezeigt wurde, und beantwortet damit die
+        # Frage nach dem *Bildschirm* statt die nach dem *Zustand*. Gemeint
+        # ist „steht der Balken", nicht „sieht ihn gerade jemand".
+        self.cancel_button.setVisible(
+            (busy or self._anything_cancellable()) and self.progress.isVisibleTo(self)
+        )
         if busy:
             self.progress.setRange(0, 100)
         self._update_veil(busy)

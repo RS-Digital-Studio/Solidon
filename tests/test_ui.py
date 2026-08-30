@@ -8263,10 +8263,20 @@ def test_what_a_screen_reader_can_name(window: MainWindow) -> None:
 def test_the_open_tool_keeps_its_symbol_readable(qt_app: QApplication) -> None:
     """Auf dem gedrückten Knopf widersprachen sich Symbol und Beschriftung.
 
-    Er trägt Bernstein, und das Stylesheet gibt der Beschriftung dort die dunkle
+    Er trug Bernstein, und das Stylesheet gab der Beschriftung dort die dunkle
     Schrift der Auswahl. Das **Symbol** kam weiter aus dem Thema, also hell:
     1,58 Kontrast auf der Fläche, gemessen. Zwei Zeichen derselben Aussage in
-    entgegengesetzten Farben — und das hellere war das unlesbare.
+    entgegengesetzten Farben — und das hellere war das unlesbare. Eine eigene
+    Umfärbung hielt die beiden zusammen.
+
+    **Seit der Akzenthaushalt gilt, gibt es die Umfärbung nicht mehr, und die
+    Zusage kehrt sich um.** Das aktive Werkzeug trägt eine gedämpfte Fläche und
+    behält die Schrift des Themas; dieselbe Farbe ist damit in beiden Zuständen
+    die richtige, und ein Symbol, das beim Einschalten die Farbe wechselte,
+    wäre jetzt das falsche. Was gleich bleibt, ist der Grund, aus dem dieser
+    Test steht: Das Zeichen muss auf seiner Fläche zu lesen sein — nur ist die
+    Fläche eine andere geworden, und darum wird gegen sie gemessen und nicht
+    mehr gegen die Auswahlfarbe.
 
     Gemessen wird am ``QIcon`` und nicht am gerenderten Knopf: die Beschriftung
     daneben streut Subpixel-Farben in jede Bildpunktzählung, und die sahen dem
@@ -8274,8 +8284,18 @@ def test_the_open_tool_keeps_its_symbol_readable(qt_app: QApplication) -> None:
     """
     from PySide6.QtCore import QSize
 
-    from app.ui.theme import contrast_ratio
+    from app.ui.style import active_fill, apply_style
+    from app.ui.theme import apply_theme, contrast_ratio
 
+    # **Die Betriebslage herstellen, sonst misst der Test Windows.** ``icon()``
+    # holt seine Farbe aus der Palette des Widgets, und ohne angewandtes Thema
+    # ist das die des Systems: Das Symbol kam schwarz heraus. Der Test war
+    # trotzdem grün, weil er gegen ``palette().highlight()`` maß — ebenfalls
+    # eine Systemfarbe. Zwei Farben, die es in der Anwendung nicht gibt, und
+    # ihr Verhältnis passte zufällig.
+    before = QApplication.instance().styleSheet()
+    apply_theme(QApplication.instance(), "dark")
+    apply_style(QApplication.instance(), "dark")
     window = MainWindow(Session(), UiSettings())
     button = window.tools._buttons["analysis"]
 
@@ -8290,17 +8310,24 @@ def test_the_open_tool_keeps_its_symbol_readable(qt_app: QApplication) -> None:
         assert tally, "das Symbol zeichnet nichts"
         return max(tally, key=lambda name: tally[name])
 
-    resting = dominant(button.icon())
-    window.tools.activate("analysis")
-    active = dominant(button.icon())
-    accent = window.palette().highlight().color().name()
+    try:
+        resting = dominant(button.icon())
+        window.tools.activate("analysis")
+        active = dominant(button.icon())
+    finally:
+        QApplication.instance().setStyleSheet(before)
+    fill = active_fill("dark")
 
-    assert active != resting, "das Symbol des offenen Werkzeugs sieht aus wie das der anderen"
-    ratio = contrast_ratio(active, accent)
-    assert ratio >= 4.5, f"Symbol {active} auf {accent}: {ratio:.2f} — auf dem Akzent unlesbar"
+    ratio = contrast_ratio(active, fill)
+    assert ratio >= 4.5, f"Symbol {active} auf {fill}: {ratio:.2f} — auf seiner Fläche unlesbar"
+    assert active == resting, (
+        "das Symbol wechselt beim Einschalten die Farbe — die Beschriftung daneben tut es "
+        "nicht mehr, und zwei Zeichen derselben Aussage in zwei Farben waren der Anlass "
+        "dieses Tests"
+    )
 
-    # Und zurück: was beim Öffnen umgefärbt wird, muss beim Schließen wieder
-    # dem Thema folgen — sonst bleibt ein dunkles Symbol auf dunklem Knopf.
+    # Und zurück, damit ein späterer Wechsel der Fläche hier auffällt und nicht
+    # erst dort, wo jemand den Knopf ansieht.
     window.tools.activate(None)
     assert dominant(button.icon()) == resting
 
@@ -9998,3 +10025,82 @@ def test_every_menu_indents_its_text_the_same(window: MainWindow) -> None:
         f"die Textspalte springt zwischen den Menüs: {starts} — "
         "ein Menü ohne jedes Symbol reserviert die Spalte nicht"
     )
+
+
+def test_a_short_calculation_shows_nothing_at_all(window: MainWindow) -> None:
+    """Was aufblitzt, sagt nichts — es macht nur unruhig (§2.8).
+
+    Von 28 gemessenen Rechnungen liegen **elf unter zwei Zehntelsekunden**,
+    und es sind die häufigsten Gesten überhaupt: einen Wert im Dialog ändern
+    (7 ms), am Schichtregler ziehen (0,01 ms), einen Pinselstrich setzen
+    (0,2 ms). Bei jeder davon zuckte der Fortschrittsbalken auf und sofort
+    wieder weg, weil ``_on_busy`` ihn ohne jeden Zeitgeber sichtbar machte.
+
+    Geprüft wird über das **Signal** der Sitzung und nicht über den Slot: Was
+    beim Rechnen erscheint, entscheidet die Verbindung, und die ist Teil der
+    Zusage.
+    """
+    window.session.busyChanged.emit(True)
+    # ``isVisibleTo`` überall: ``isVisible`` meldet in einem nie gezeigten
+    # Fenster immer False, und ein Test, der Abwesenheit prüft, wäre dann
+    # grün gegen eine Lüge — genau die Tarnung, vor der ``wartezeit.md`` warnt.
+    assert not window.progress.isVisibleTo(window), "der Balken kam sofort"
+    assert not window.cancel_button.isVisibleTo(window), "der Abbrechen-Knopf kam sofort"
+    assert QApplication.overrideCursor() is None, "der Wartezeiger kam sofort"
+
+    window.session.busyChanged.emit(False)
+    assert not window.progress.isVisibleTo(window)
+    assert QApplication.overrideCursor() is None, "ein Zeiger blieb stehen"
+
+
+def test_the_waiting_grows_in_the_three_steps_the_plan_names(window: MainWindow) -> None:
+    """Zeiger, dann Balken — und beides erst, wenn es etwas zu sagen gibt.
+
+    §2.8 kennt drei Stufen über der Schwelle: bis zwei Zehntelsekunden nichts,
+    bis zwei Sekunden Mauszeiger und Statusleiste, darüber Fortschritt mit
+    Abbrechen. Zwölf der 28 gemessenen Marken liegen in der mittleren Stufe —
+    Netz vergröbern, Fläche unterteilen, ein Beispielprojekt öffnen.
+
+    Die Zeitgeber werden hier von Hand ausgelöst statt abgewartet: Zwei
+    Sekunden Wartezeit in einem Test sind zwei Sekunden in jedem Lauf. Das
+    Signal geht dabei durch dieselbe Verbindung, die auch im Betrieb feuert.
+    """
+    try:
+        window.session.busyChanged.emit(True)
+        assert window._patience.isActive(), "die Uhr für den Zeiger läuft nicht"
+        assert window._bar_delay.isActive(), "die Uhr für den Balken läuft nicht"
+
+        window._patience.timeout.emit()
+        cursor = QApplication.overrideCursor()
+        assert cursor is not None, "nach zwei Zehnteln fehlt der Zeiger"
+        assert cursor.shape() == Qt.CursorShape.BusyCursor, (
+            "der reine Wartezeiger behauptet eine gesperrte Oberfläche — sie ist bedienbar"
+        )
+        assert not window.progress.isVisibleTo(window), "der Balken kam schon in der zweiten Stufe"
+
+        window._bar_delay.timeout.emit()
+        assert window.progress.isVisibleTo(window), "nach zwei Sekunden fehlt der Balken"
+        assert window.cancel_button.isVisibleTo(window), "ein Balken ohne Abbrechen (§2.8)"
+    finally:
+        window.session.busyChanged.emit(False)
+
+    assert not window.progress.isVisibleTo(window)
+    assert QApplication.overrideCursor() is None, (
+        "der Zeiger blieb stehen — das sieht aus wie ein hängendes Programm"
+    )
+
+
+def test_no_wait_cursor_survives_a_second_run(window: MainWindow) -> None:
+    """Qt stapelt Zeiger, und ein Stapel wird nie ganz abgeräumt.
+
+    ``setOverrideCursor`` zweimal und ``restoreOverrideCursor`` einmal lässt
+    einen stehen. Bei einer Kette von Läufen — und beim Ziehen an einem
+    Schieber ist jede Bewegung einer — wäre nach kurzer Zeit ein Wartezeiger
+    da, den nichts mehr wegnimmt.
+    """
+    for _ in range(3):
+        window.session.busyChanged.emit(True)
+        window._patience.timeout.emit()
+        window._patience.timeout.emit()  # ein zweiter Anlauf derselben Stufe
+        window.session.busyChanged.emit(False)
+    assert QApplication.overrideCursor() is None, "nach drei Läufen steht ein Zeiger im Weg"
