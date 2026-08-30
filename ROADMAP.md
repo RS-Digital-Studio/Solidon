@@ -131,7 +131,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
 | Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | 3a's Erhebung nach P5 — Ist-Verhalten am Code und im echten Fenster, Gegenmessung an Fusion, dann Befunde und Schnitt |
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 zuerst (Escape vernichtet die Zeichnung; entschieden: merken statt vernichten), dann Maß-ändern und die Ausgänge; Review je Paket |
-| Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1 zuerst (der Schnitt öffnet auf ein leeres Bild), V1/V4 bei 50 vor den Touren; Review je Paket |
+| Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1 ist zu (`7d46a87f`), V4 bei 50, V2/V5/V7 bei 72; Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
 
 ---
@@ -13049,7 +13049,7 @@ ersten Moment nach dem Öffnen raten. Neun Pakete:
 
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
-| V1 | **Kritisch**: Der Schnitt öffnet auf ein leeres Bild — Achswechsel Z lässt den Regler auf 0,0, und alles über der Ebene fällt weg; der Kunde denkt, er hat etwas kaputt gemacht. Fix: beim Achswechsel immer zentrieren (der Kommentar im Code beschreibt die richtige Regel schon, die Bedingung davor macht sie wirkungslos) | S | **50, beauftragt — vor den Touren** |
+| V1 | **Der Schnitt öffnet nicht mehr auf ein leeres Bild.** `_apply_range` zentrierte nur, wenn der alte Wert *außerhalb* der neuen Spanne lag — bei einem Teil auf dem Bett (z ∈ [0, h]) liegt 0,0 immer darin; der Kommentar über der Zeile beschrieb die richtige Regel bereits vollständig. Jetzt zentriert der Achswechsel immer (`_axis_changed` reicht es als Parameter weiter, weil jeder Weg zur Achse über `currentIndexChanged` läuft); `set_ranges` behält die alte Prüfung, damit ein neu geladenes Teil den Regler nicht verschiebt. Zwei Tests über `plane()`, zwei Mutationen in beide Richtungen | S | **fertig** (`7d46a87f`, 50) |
 | V2 | Der Zeiger beim Körperzug ist der Windows-Pfeil: `set_drag_cursor("moving")` — die Rolle existiert nicht, gemeint ist `"move"`; Ein-Zeichen-Fix plus Wächter aller Literale gegen `cursors.known()` | S | offen |
 | V3 | Die Navigationstexte versprechen Tasten, die es nicht gibt („mittlere dreht" — sie schiebt in allen vier Schemata). **Entschieden (Kundensicht): Variante b** — der Code folgt den Namen: `cad` = Mitte dreht (Umschalt+Mitte schiebt), `blender` = links wählt, Mitte dreht; `slicer`/`orbit` bleiben. Wer „Wie im CAD" wählt, will CAD-Verhalten — ehrlichere Texte über falschem Verhalten wären die halbe Antwort | M | offen |
 | V4 | Schichten tut ohne Auswahl stumm nichts (nackter toter Regler): bei genau einem Körper den nehmen, sonst der Satz der Analysekarte — in der Leiste, und er zeigt aufs Teil, nicht auf den Baum | S | **50, beauftragt — vor den Touren** |
