@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 9c480190-d910-460e-bc5c-c2d37eab6361
-  modified: 2026-08-30T05:29:28.461Z
+  modified: 2026-08-30T06:09:09.217Z
 ---
 
 Robert am 30.08.2026, auf die offene Frage nach der Review-Tiefe („wenn du
@@ -39,3 +39,11 @@ Abnahmekriterien eigenhändig fahren (unter dem Schloss, wo nötig), bei
 Bedienthemen den gebauten Zustand selbst durchgehen. Die Läufe des
 Arbeiters sind Vorleistung, nie Ersatz. Ohne eigene grüne Verifikation
 kein Go, ohne Go kein Commit — ausnahmslos.
+
+Und die Verifikationsliste wird aus den GEÄNDERTEN Modulen abgeleitet,
+nicht aus der Nennung des Arbeiters: Wer `X.py` anfasst, dessen
+`test_X*`-Familie wird komplett gefahren. Gelernt an `67a54a8c` — die
+genannte Liste war grün, `test_print_settings_ui` zur größten geänderten
+Datei fehlte darin, und genau dort saß der §38-Bruch (eine neue
+Suchfunktion stand in keiner Isolier-Fixture, die Suite fragte die echte
+Maschine).
