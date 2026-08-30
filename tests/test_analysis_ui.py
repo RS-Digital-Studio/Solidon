@@ -3066,6 +3066,109 @@ def test_the_report_says_where_you_stand_not_only_what_to_do(qt_app: QApplicatio
         panel.deleteLater()
 
 
+def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
+    qt_app: QApplication,
+) -> None:
+    """118 wortgleiche Zeilen begraben die fünf, die etwas Eigenes sagen.
+
+    Nach dem Löschen früher Verlaufsschritte meldete ``perceive.orphaned``
+    jedes verlorene Merkmal einzeln — 118 × „Ein Merkmal hat keinen
+    Nachfolger mehr", und die zwei Warnungen dazwischen fand niemand.
+    Gebündelt wird in der Anzeige, nicht im Kern: Agent, Kommandozeile und
+    Steckbrief lesen weiter jeden Befund einzeln.
+    """
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    orphan_text = "Ein Merkmal hat keinen Nachfolger mehr"
+    findings = (
+        *(
+            Finding(
+                code="perceive.orphaned",
+                severity="info",
+                message=orphan_text,
+                object_id="obj_1",
+                values={"feature": f"hole_{n}"},
+            )
+            for n in range(118)
+        ),
+        Finding(code="mesh.thin_wall", severity="warning", message="Eine Wand ist zu dünn"),
+        # Ein Kernbefund darf selbst einen ``count``-Wert führen („12 kleine
+        # Objekte übergangen") — er bleibt eine Zeile und zählt als eine.
+        Finding(
+            code="ingest.small_components",
+            severity="warning",
+            message="Kleine Objekte wurden übergangen",
+            values={"count": 12},
+        ),
+        *(
+            Finding(code="mesh.gap_closed", severity="info", message="Eine Lücke wurde geschlossen")
+            for _ in range(3)
+        ),
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+
+        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert len(texts) == 6, f"eine Sammelzeile statt 118, der Rest bleibt: {texts!r}"
+
+        bundle = [text for text in texts if orphan_text in text]
+        assert bundle == [f"118 × {orphan_text}"], "die Zahl steht im Text der Zeile (Regel 18)"
+
+        row = texts.index(bundle[0])
+        tooltip = panel.list.item(row).toolTip()
+        assert "hole_0" in tooltip, "die Betroffenen bleiben erreichbar"
+        assert "+103" in tooltip, "und der Rest hinter den ersten fünfzehn wird beziffert"
+
+        stored: Finding = panel.list.item(row).data(Qt.ItemDataRole.UserRole)
+        assert stored.values.get("count") == 118
+
+        # Die Kopfzeile zählt die Befunde, nicht die Zeilen — und der
+        # ``count``-Wert des Kernbefunds bläht sie nicht auf.
+        summary = panel.summary.text()
+        assert f"2 × {tr('Warnung')}" in summary, summary
+        assert f"121 × {tr('Hinweis')}" in summary, summary
+    finally:
+        panel.deleteLater()
+
+
+def test_identical_findings_below_the_threshold_keep_their_own_lines(
+    qt_app: QApplication,
+) -> None:
+    """Drei gleiche Zeilen sind lesbar, erst ab vier wird gebündelt.
+
+    Und gleicher Wortlaut mit anderem Schweregrad gehört nie ins selbe
+    Bündel — eine Warnung, die in 118 Hinweisen aufgeht, wäre verschluckt.
+    """
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    def shown(findings: tuple[Finding, ...]) -> list[str]:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+        return [panel.list.item(row).text() for row in range(panel.list.count())]
+
+    def echo(count: int, severity: str = "info") -> tuple[Finding, ...]:
+        return tuple(
+            Finding(
+                code="mesh.gap_closed", severity=severity, message="Eine Lücke wurde geschlossen"
+            )  # type: ignore[arg-type]
+            for _ in range(count)
+        )
+
+    panel = ReportPanel()
+    try:
+        assert len(shown(echo(3))) == 3, "unter der Schwelle bleibt jede Zeile stehen"
+        assert len(shown(echo(4))) == 1, "ab vier wird gebündelt"
+        assert len(shown(echo(4) + echo(1, "warning"))) == 2, (
+            "gleicher Wortlaut, anderer Schweregrad — zwei Zeilen"
+        )
+    finally:
+        panel.deleteLater()
+
+
 def test_the_report_writes_a_volume_that_says_something(qt_app: QApplication) -> None:
     """„wasserdicht · 0,0 cm³ · 1 Teil" stand über einem Teil von 4 mm³.
 

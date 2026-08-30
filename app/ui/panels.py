@@ -8,6 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
@@ -144,6 +145,50 @@ def groups_to_keep(entries: Sequence[Any]) -> set[str]:
 #: kam, also stand bei zwei Warnungen und vier Hinweisen zuoberst ein Hinweis.
 #: Wer einen Fehler suchte, musste ihn filtern statt lesen.
 SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
+
+
+#: Ab wie vielen wortgleichen Befunden die Liste sie zu einer Zeile bündelt.
+#:
+#: Nach einem Weg-3-Erzeugungslauf standen 123 Befunde im Bericht, 118 davon
+#: wortgleich („Ein Merkmal hat keinen Nachfolger mehr") — die fünf Zeilen,
+#: die etwas sagten, gingen darin unter, allen voran das richtige
+#: ``arrange.below_bed``. Jede Einzelzeile stimmt; die **Menge** begräbt.
+#: Gebündelt wird deshalb in der Anzeige, nicht im Kern: Agent, CLI und
+#: Tests lesen weiterhin jeden Befund einzeln. Bis drei bleibt es bei
+#: Einzelzeilen — dort trägt „welches Objekt" mehr als eine Zahl.
+BUNDLE_FROM = 4
+
+#: Trägt an einer Sammelzeile, wie viele Befunde sie bündelt. Eine eigene
+#: Rolle und nicht ``values["count"]``: Den Schlüssel führen auch Befunde des
+#: Kerns („12 kleine Objekte übergangen"), und eine Zählung, die ihn läse,
+#: zählte deren Zahl statt ihrer Zeile.
+_BUNDLE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+
+
+def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
+    """Wortgleiche Befunde ab :data:`BUNDLE_FROM` zu einer Zeile je Wortlaut.
+
+    Gruppiert wird über Kennung, Grad und Wortlaut — nicht über die Werte,
+    denn genau die (das jeweilige Merkmal) machen die 118 Zeilen verschieden.
+    Die Reihenfolge der Erstvorkommen bleibt erhalten; kleine Gruppen kommen
+    als Einzelzeilen zurück (leere Mitgliederliste).
+    """
+    groups: dict[tuple[str, str, str], list[Finding]] = {}
+    order: list[tuple[str, str, str]] = []
+    for finding in findings:
+        key = (finding.code, finding.severity, str(finding.message))
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(finding)
+    result: list[tuple[Finding, list[Finding]]] = []
+    for wording in order:
+        members = groups[wording]
+        if len(members) >= BUNDLE_FROM:
+            result.append((members[0], members))
+        else:
+            result.extend((one, []) for one in members)
+    return result
 
 
 def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
@@ -2535,8 +2580,10 @@ class ReportPanel(QWidget):
             else {}
         )
         self.list.clear()
-        for finding in _by_severity(result.scene.report.findings if result else ()):
-            self._append(finding)
+        for finding, members in _bundled(
+            _by_severity(result.scene.report.findings if result else ())
+        ):
+            self._append(finding, members=members)
         self._count_up()
         self._measure_up(result)
         self._refilter()
@@ -2687,9 +2734,35 @@ class ReportPanel(QWidget):
                 self.list.scrollToItem(item)
                 return
 
-    def _append(self, finding: Finding) -> None:
-        """Einen Befund als Eintrag anhängen."""
-        item = QListWidgetItem(_line_for(finding, self._names))
+    def _append(self, finding: Finding, members: list[Finding] | None = None) -> None:
+        """Einen Befund als Eintrag anhängen — oder ein Bündel als eine Zeile.
+
+        ``members`` trägt bei einer Sammelzeile alle gebündelten Befunde
+        (:func:`_bundled`). Die Zahl steht im Text der Zeile selbst und nicht
+        nur im Tooltip (Regel 18: die Menge ist die Aussage, und sie braucht
+        die sichtbare Kodierung); für die Zählung der Kopfzeile steht sie in
+        :data:`_BUNDLE_ROLE`, damit ein Kernbefund mit eigenem ``count``-Wert
+        weiter als eine Zeile zählt.
+        """
+        if members:
+            names = ", ".join(
+                str(one.values.get("feature", one.object_id or "?")) for one in members[:15]
+            )
+            if len(members) > 15:
+                names += f" … (+{len(members) - 15})"
+            # Die Zeile trägt Zahl und Satz — die Liste der Betroffenen wäre
+            # dort die nächste Flut und gehört in den Tooltip. ``feature``
+            # steht in ``_LINE_VALUES``, deshalb bekommt die Zeile den Satz
+            # direkt und nicht ``_line_for`` über die Bündel-Werte.
+            item = QListWidgetItem(f"{len(members)} × {finding.message}")
+            item.setData(_BUNDLE_ROLE, len(members))
+            finding = dataclasses.replace(
+                finding,
+                object_id=None,
+                values={"count": len(members), "feature": names},
+            )
+        else:
+            item = QListWidgetItem(_line_for(finding, self._names))
         # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
         # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen
         # Themas brachte Bernstein 2,22 und das Hinweisblau 2,67 — jede Zeile
@@ -2727,8 +2800,11 @@ class ReportPanel(QWidget):
         """
         counts = dict.fromkeys(SEVERITY_MARKER, 0)
         for row in range(self.list.count()):
-            finding: Finding = self.list.item(row).data(Qt.ItemDataRole.UserRole)
-            counts[finding.severity] += 1
+            item = self.list.item(row)
+            finding: Finding = item.data(Qt.ItemDataRole.UserRole)
+            # Eine Sammelzeile (siehe ``_bundled``) zählt als das, was sie
+            # bündelt — die Kopfzeile sagt sonst „6 Hinweise" über 123.
+            counts[finding.severity] += item.data(_BUNDLE_ROLE) or 1
         alerts = counts["error"] + counts["warning"]
         if alerts != self._alerts:
             self._alerts = alerts
