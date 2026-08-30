@@ -1086,6 +1086,46 @@ def _history_document() -> Document:
     )
 
 
+def _history_row(panel: Any, title: str) -> int:
+    """Findet die Verlaufszeile zu einem Schritt — an ihrem Titel, nicht an
+    ihrem ganzen Text.
+
+    **Eine Verlaufszeile heißt nicht mehr wie ihr Schritt.** Seit
+    ``a6d197d4`` trägt sie die Nummer davor und ein Kategoriesymbol daneben:
+    aus „Bohrung setzen" wurde „4  Bohrung setzen". Zwei Tests hier bauten
+    sich ein Wörterbuch aus dem nackten Zeilentext und schlugen den Titel
+    darin nach; einer davon lag danach vier Tage rot auf ``main``
+    (``ec58c62e`` zog zwei andere nach, diesen nicht — er steht in einer
+    Datei, die nach Rezepten heißt und nicht nach Verlauf).
+
+    Und die Nummer ist zugleich das, was das alte Wörterbuch **vorher**
+    zusammenfallen ließ: Drei Schritte dieses Dokuments heißen „Quader
+    anlegen", und ohne Nummer davor waren das drei gleiche Schlüssel, von
+    denen ein Wörterbuch stumm den letzten behält. Gemessen an der heutigen
+    Zeile stimmt es wieder — 5 Zeilen, 5 Schlüssel —, aber nur, weil die
+    Nummer sie unterscheidet. Eine Eindeutigkeit, die an der Zählung eines
+    Präfixes hängt, ist keine.
+
+    Deshalb wird hier über den **Titel** gesucht und nicht über den ganzen
+    Text nachgeschlagen, und die Eindeutigkeit steht als eigene Zusicherung
+    daneben: „Quader anlegen" trifft drei Zeilen und macht den Test rot,
+    statt ihn eine davon raten zu lassen (gemessen).
+    """
+    treffer = [
+        index
+        for index in range(panel.list.count())
+        if panel.list.item(index).text().strip().endswith(title)
+    ]
+    assert treffer, (
+        f"keine Verlaufszeile endet auf „{title}“ — "
+        f"vorhanden: {[panel.list.item(i).text().strip() for i in range(panel.list.count())]}"
+    )
+    assert len(treffer) == 1, (
+        f"„{title}“ trifft {len(treffer)} Zeilen — der Test würde eine davon raten"
+    )
+    return treffer[0]
+
+
 def test_the_history_hands_over_what_is_chosen(qt_app: QApplication) -> None:
     """Der Verlauf gibt die gewählten Schritte heraus — aufsteigend und ganz.
 
@@ -1107,11 +1147,10 @@ def test_the_history_hands_over_what_is_chosen(qt_app: QApplication) -> None:
 
     assert panel.selected_operations() == (), "ohne Auswahl ist die Auswahl leer"
 
-    rows = {panel.list.item(index).text().strip(): index for index in range(panel.list.count())}
-    panel.list.item(rows["Bohrung setzen"]).setSelected(True)
+    panel.list.item(_history_row(panel, "Bohrung setzen")).setSelected(True)
     assert panel.selected_operations() == (4,), "eine Zeile, ihre eine Operation"
 
-    panel.list.item(rows["Teilung in zwei"]).setSelected(True)
+    panel.list.item(_history_row(panel, "Teilung in zwei")).setSelected(True)
     assert panel.selected_operations() == (2, 3, 4), (
         "die Sammelzeile bringt beide Schritte mit, und sortiert wird nach dem Stapel"
     )
@@ -1162,11 +1201,8 @@ def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: An
         window._save_as_part(catalog)
         assert seen[-1] == (1, 2, 3, 4), "ohne Auswahl geht der ganze Stapel mit"
 
-        rows = {
-            window.history_panel.list.item(index).text().strip(): index
-            for index in range(window.history_panel.list.count())
-        }
-        window.history_panel.list.item(rows["Teilung in zwei"]).setSelected(True)
+        zeile = _history_row(window.history_panel, "Teilung in zwei")
+        window.history_panel.list.item(zeile).setSelected(True)
         window._save_as_part(catalog)
         assert seen[-1] == (2, 3), "mit Auswahl genau sie — und nicht mehr"
     finally:
