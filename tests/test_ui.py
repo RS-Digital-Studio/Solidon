@@ -2587,7 +2587,67 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
 #: Fenster, das seine Knöpfe selbst baut (der Support-Dialog), oder einem Rat,
 #: den ``unhandled_advice`` als Satz zeigt. Wer hier etwas einträgt, sagt damit:
 #: Diese Kennung braucht keine Konstante und keinen Handler.
-ACTIONS_WITHOUT_A_CONSTANT = {"open_sketch", "save_report", "send_by_mail", "retry_send"}
+#:
+#: **Die Frage, die vor jedem neuen Eintrag steht** — und ohne sie wird diese
+#: Menge zur Müllhalde, in die der nächste ``cancel_evaluation``-Fall bequem
+#: hineinrutscht:
+#:
+#:     Gibt es irgendwo eine Handlung, die diese Kennung einlösen könnte?
+#:     Wenn ja: Konstante und Verdrahtung, nicht diese Menge.
+#:
+#: Genau daran ist der Gründungsfall des Wächters gescheitert.
+#: ``cancel_evaluation`` bot an, die laufende Teilung abzubrechen — und
+#: ``Session.cancel_split`` gab es die ganze Zeit. Der Fehler war nicht
+#: „kein Handler", sondern **dass niemand gefragt hat**.
+#:
+#: Die zweite Gruppe darunter ist gemessen und nicht geraten: 32 Kennungen an
+#: 44 Fundstellen, von denen 26 in ``suggestions=`` eines geworfenen Fehlers
+#: stehen und **keine einzige** einen Handler hat. Das ist kein Befund, sondern
+#: die Bauart: ``dialogs.unhandled_advice`` zeigt einen Vorschlag ohne Handler
+#: als **Satz** — „ein Knopf ohne Wirkung ist schlimmer als keiner". Die
+#: Handlung führt in all diesen Fällen der Nutzer selbst aus: eine Fläche
+#: anklicken, einen Wert kleiner wählen, vorher aufräumen.
+#:
+#: ``primary=True`` trennt die beiden Gruppen **nicht** — nachgemessen tragen
+#: ``sketch.use_all_regions``, ``sketch.pick_face`` und
+#: ``texture.pick_cylinder`` es und sind trotzdem Selbstausführer. Das Feld
+#: sagt „der naheliegendste Weg", nicht „das tut die Oberfläche für dich".
+ACTIONS_WITHOUT_A_CONSTANT = {
+    # Ein Fenster, das seine Knöpfe selbst baut (Support-Dialog).
+    "retry_send",
+    "save_report",
+    "send_by_mail",
+    # Räte, die der Nutzer selbst ausführt — als Satz gezeigt, nicht als Knopf.
+    "check_input",
+    "coarser_pitch",
+    "decimate_first",
+    "decimate_mesh",
+    "fewer_iterations",
+    "fix_parent",
+    "open_in_browser",
+    "open_sketch",
+    "pick_face",
+    "pick_feature",
+    "pick_image",
+    "pick_in_tree",
+    "remesh_first",
+    "repack_file",
+    "sketch.clear_up_to",
+    "sketch.enter_height",
+    "sketch.flip_plane",
+    "sketch.pick_face",
+    "sketch.use_all_regions",
+    "sketch.use_global_plane",
+    "smaller_bodies",
+    "smaller_diameter",
+    "texture.pick_cylinder",
+    "texture.wrap_flat",
+    "use_parts",
+    "use_planar",
+    "use_reachable",
+    "use_texture",
+    "write_target",
+}
 
 
 def test_no_error_action_is_invented_at_the_call_site() -> None:
@@ -2624,18 +2684,33 @@ def test_no_error_action_is_invented_at_the_call_site() -> None:
         if "Action(" not in text:
             continue
         for node in ast.walk(ast.parse(text)):
-            if not isinstance(node, ast.Call) or not node.args:
+            if not isinstance(node, ast.Call):
                 continue
             if not (isinstance(node.func, ast.Name) and node.func.id == "Action"):
                 continue
-            first = node.args[0]
+            # **Beide Aufrufformen.** Hier stand ``or not node.args`` als
+            # erste Bedingung, und damit übersprang der Wächter jeden Aufruf
+            # ohne positionales Argument — also jedes ``Action(id="…", …)``.
+            # Gemessen am 30.08.2026: Von 32 inline gebauten Kennungen sah er
+            # **vier**; die übrigen 28 lebten außerhalb jeder Prüfung, darunter
+            # die drei des Slicer-Wegs, deren Knöpfe nichts taten.
+            #
+            # Der Zusatz liest sich wie eine Vorsichtsmaßnahme („ohne
+            # Argumente gibt es nichts zu prüfen") und war eine Ausnahme für
+            # die halbe Aufrufform. **Ein Wächter ist so scharf wie seine
+            # weiteste Ausnahme** — und die stand hier in einer Zeile, die
+            # niemand als Ausnahme gelesen hat.
+            named: ast.expr | None = node.args[0] if node.args else None
+            for keyword in node.keywords:
+                if keyword.arg == "id":
+                    named = keyword.value
             if (
-                isinstance(first, ast.Constant)
-                and isinstance(first.value, str)
-                and first.value not in constants
-                and first.value not in ACTIONS_WITHOUT_A_CONSTANT
+                isinstance(named, ast.Constant)
+                and isinstance(named.value, str)
+                and named.value not in constants
+                and named.value not in ACTIONS_WITHOUT_A_CONSTANT
             ):
-                invented[first.value] = f"{path}:{first.lineno}"
+                invented[named.value] = f"{path}:{node.lineno}"
 
     assert not invented, (
         "Aktionskennung ohne Konstante in errors.py — sie entgeht damit der Prüfung "
