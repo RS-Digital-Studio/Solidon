@@ -739,7 +739,26 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   die Anwendung baut.
 * **An der Aussage vorbei.** `str(op_id) in tooltip` war grün, weil „2" auch in
   „2,40 mm" steht. Eine Teilzeichenkette, die zufällig vorkommt, ist keine
-  Prüfung — verglichen wird mit dem ganzen Satz.
+  Prüfung — verglichen wird mit dem ganzen Satz. Am 30.08.2026 in seiner
+  peinlichsten Gestalt wieder da: `"2" in "1 von 2"`. Die Zusage galt dem
+  **Platz** in der Trefferliste, erfüllt hat sie die **Anzahl** daneben, und
+  beide Zahlen standen in derselben Zeile.
+* **Am erfundenen Beleg vorbei — und das ist der teuerste der Liste.** Der
+  Docstring begründete, warum die Suche auch die Erklärsätze durchsucht: „weil
+  *Elefantenfuß* dort steht und in keinem Titel". Das Wort kommt im ganzen
+  Bestand nicht vor. Der Test prüfte deshalb nur Titeltreffer, die Mutation
+  „Sätze nicht durchsuchen" blieb grün, und die Lücke war durch eine Begründung
+  gedeckt, die sich wie eine Messung las.
+
+  Der Unterschied zu den vier Punkten darüber: Die messen am falschen Ort,
+  dieser **behauptet einen Ort, den es nicht gibt** — und ein Leser, der die
+  Begründung glaubt, prüft die Stelle nie wieder
+  ([[benannte-falle-schuetzt-nicht]] ist derselbe Mechanismus, eine Ebene
+  höher). Der Griff dagegen kostet zehn Sekunden: **Ein Beleg, der ein
+  konkretes Wort, eine Zahl oder eine Datei nennt, wird gegen den Bestand
+  gegriffen, bevor er in einen Docstring kommt** — hier hätte
+  `search_hits("Elefantenfuß") == []` gereicht. Gemessen sind es „Überhänge"
+  (drei Sätze, kein Titel), und daran hängt die Zusage jetzt.
 
 Und zweimal hat sie den *Fix* verworfen, nicht den Test: der Einzeiler traf die
 falsche von drei gleichen Codestellen, und ein Testfall löste den Fehler gar

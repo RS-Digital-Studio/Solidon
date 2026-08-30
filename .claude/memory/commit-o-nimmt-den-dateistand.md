@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-08-30T13:50:46.256Z
+  modified: 2026-08-30T16:01:11.512Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -88,6 +88,16 @@ Der Weg, der hält: Blob in den privaten Index legen und `git commit` **ohne**
 hineinlegt, ist genau die eigene Änderung, und `git commit` nimmt den Index
 als Baum. Und die einzige Prüfung, die etwas taugt, ist die **nach** dem
 Commit: `git show <commit> --numstat`. Nicht `--cached`, nicht `diff HEAD`.
+
+**Und dieser Weg altert wie jeder andere Zustand** — die Gestalt steht in
+[[probe-worktree-altert]], hier nur der Anschluss: Ein Blob wird aus
+`git show HEAD:<pfad>` gebaut, und dieses HEAD ist der von *jetzt*, nicht der
+vom Sitzungsbeginn. Am 30.08.2026 hat ein Blob auf veraltetem Stand die fünf
+Sprachkataloge um einen Eintrag zurückgesetzt, den der Quelltext längst
+benutzte — fünf rote Übersetzungstests auf `origin`, und der Verursacher war
+ein Commit, der selbst alles richtig gemacht hatte außer dem Zeitpunkt seiner
+Vorlage. Also: `git show HEAD:` **unmittelbar** vor dem Bauen, und was der
+Blob nicht kennt, prüft man am Diff gegen den aktuellen HEAD.
 
 Ist es passiert: History stehen lassen. Zuerst prüfen, ob eine halbe Einheit
 hinausgeritten ist — das ist dringender als die Zurechnung —, dann den
