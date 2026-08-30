@@ -12,6 +12,25 @@ Eine Messung im geteilten Arbeitsbaum beantwortet nicht „wie verhält sich der
 Code", sondern „wie verhielt er sich in dieser Minute, mit allem, was gerade
 ungestaged darin lag".
 
+**Und daraus folgt die Regel für jeden Vergleich: Zwei Läufe sind nur
+vergleichbar, wenn sie sich in genau einer Sache unterscheiden.** Am
+30.08.2026 sah es aus, als bräche meine Änderung einen Test — 364 bestandene
+gegen 365 auf HEAD. Der Unterschied war ein ganz anderer: Ich hatte meinen
+Stand im **Hauptbaum** gefahren und HEAD in einem **Worktree**. Der
+Fehlschlag war `test_the_history_names_only_what_differs`, eine fremde
+Verlaufs-Nummerierung, die gerade ungestaged im Baum lag; meine Änderung saß
+in `tool_strip.py` und hatte damit nichts zu tun.
+
+Ein Lauf im geteilten Baum unterscheidet sich vom Vergleichslauf **in allem,
+was gerade offen ist** — und das weiß man nie vollständig. Der saubere Beleg
+kostet fünf Minuten: HEAD in einen Worktree, genau die eigenen Dateien
+hineinkopieren, dann laufen lassen. Ergebnis dort: 365 gegen 365.
+
+Die verwandte Falle steht in [[fix-der-nicht-gruen-macht]] — dort bleibt ein
+Test nach der Behebung rot und die Diagnose war falsch; hier wird ein Test
+scheinbar rot und die Zuordnung ist falsch. Beide Male rettet dieselbe Frage:
+*Was genau unterscheidet die beiden Läufe?*
+
 Am 27.08.2026: 27 meldete, die exakte Bohrung liefere bei einer Bohrung größer
 als der Körper ein leeres Objekt, das man benennen und **speichern** kann. Ich
 baute den Fall exakt nach — `History` + `evaluate`, beide Schalterstellungen —
