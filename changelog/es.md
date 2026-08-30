@@ -16,6 +16,35 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.2.3
+
+
+### Compartir bloques
+
+- Un bloque que ha construido usted se pasa como receta, y los ajenos se adoptan igual. Una receta es la lista de sus pasos con sus valores.
+- Quien adopta una receta no recibe una forma acabada, sino sus pasos — y puede cambiar cada número.
+- Al pasarlo elige qué pueden hacer los demás: usarlo libremente, citarle a usted, o citarle y compartir en las mismas condiciones.
+- Un bloque adoptado queda marcado como ajeno. Si uno de los suyos lleva el mismo nombre, el suyo tiene prioridad.
+
+### Historial y deshacer
+
+- Quien empuja una pieza tres veces seguidas obtiene un paso en el historial, no tres. Un solo deshacer retira todo el movimiento.
+- Los pasos que van juntos aparecen como una entrada y se pueden plegar. El historial sigue leyéndose aunque haya mucho en él.
+- Tras girar, la pieza vuelve a posarse en la placa. Ambas cosas son un paso, y un deshacer retira las dos.
+
+### Dibujo y medidas
+
+- Un círculo pide su diámetro y no su radio. Lo que escribe es el número que medirá en la pieza acabada.
+- Escape retira aquello en lo que está: primero la línea empezada, luego la herramienta, luego el boceto.
+- El botón de las formas básicas se llama como lo que hace un clic en él. Las demás formas siguen tras la flecha de al lado.
+- El aviso del boceto nombra los dos caminos: dibujar un contorno o insertar una forma ya hecha.
+
+### Cuando algo no va a sujetar, ahora lo dice
+
+- Un gancho de panel perforado cuya espiga no apunta hacia arriba lo dice al colocarlo. Antes salía una pieza que parecía correcta y no sujetaba.
+- Una bisagra de película puesta de canto dentro de la pieza se avisa en lugar de imprimirse. Así impresa se rompe la primera vez que se abre.
+- Un patrón de superficie que no acierta al cuerpo lo dice. Antes quedaban trozos sueltos al lado sin que nada lo advirtiera.
+
 ## 0.2.2
 
 

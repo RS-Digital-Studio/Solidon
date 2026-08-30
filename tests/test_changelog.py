@@ -270,6 +270,13 @@ def test_the_press_drafts_count_the_same_changes() -> None:
 
     quelle = (CHANGELOG / f"{SOURCE_LANGUAGE}.md").read_text(encoding="utf-8")
     versionen = re.findall(r"^## (\S+)", quelle, re.MULTILINE)
+    # **Nur bis zur beworbenen Fassung.** Ein Anschreiben für 0.2.2 nennt die
+    # Zahl zum Stand 0.2.2; sobald der Abschnitt der nächsten Fassung
+    # entsteht, wäre jede Zahl darin falsch, obwohl niemand sie angefasst hat.
+    # Gemessen am 31.08.2026: Die vierzehn Punkte von 0.2.3 machten 263 zu
+    # 277, und die Entwürfe hatten recht behalten, nicht der Test.
+    if APP_VERSION in versionen:
+        versionen = versionen[versionen.index(APP_VERSION) :]
     dieser_stand = len(changelog_for(APP_VERSION, SOURCE_LANGUAGE))
     alle = sum(len(changelog_for(version, SOURCE_LANGUAGE)) for version in versionen)
     assert alle >= dieser_stand > 0, f"gezählt wurden {alle} und {dieser_stand}"

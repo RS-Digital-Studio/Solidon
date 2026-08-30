@@ -40,6 +40,35 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.2.3
+
+
+### Bausteine teilen
+
+- Einen selbst gebauten Baustein geben Sie als Rezept weiter, und fremde übernehmen Sie genauso. Ein Rezept ist die Liste Ihrer Schritte mit ihren Werten.
+- Wer ein Rezept übernimmt, bekommt keine fertige Form, sondern Ihre Schritte — und kann jede Zahl darin ändern.
+- Beim Weitergeben wählen Sie, was andere damit dürfen: frei verwenden, mit Namensnennung, oder mit Namensnennung und unter denselben Bedingungen.
+- Ein übernommener Baustein bleibt als fremder gekennzeichnet. Trägt einer Ihrer eigenen denselben Namen, hat Ihrer Vorrang.
+
+### Verlauf und Rückgängig
+
+- Wer ein Teil dreimal hintereinander schiebt, hat danach einen Schritt im Verlauf und nicht drei. Ein Rückgängig nimmt die ganze Bewegung zurück.
+- Schritte, die zusammengehören, stehen als Oberpunkt und lassen sich einklappen. Der Verlauf bleibt lesbar, auch wenn viel darin steht.
+- Nach dem Drehen setzt sich das Teil wieder auf das Druckbett. Beides zusammen ist ein Schritt, und ein Rückgängig nimmt beides.
+
+### Zeichnen und Maße
+
+- Ein Kreis fragt nach seinem Durchmesser statt nach dem Radius. Was Sie eintippen, ist die Zahl, die Sie am fertigen Teil nachmessen.
+- Escape nimmt zurück, woran Sie gerade sind: erst die angefangene Linie, dann das Werkzeug, dann die Skizze.
+- Der Knopf für die Grundformen heißt nach dem, was ein Klick darauf tut. Die übrigen Formen stehen weiter hinter dem Pfeil daneben.
+- Der Skizzenhinweis nennt beide Wege: einen Umriss zeichnen oder eine fertige Form einsetzen.
+
+### Wenn etwas nicht hält, sagt es das jetzt
+
+- Ein Lochwand-Einhänger, dessen Zapfen nicht nach oben zeigt, meldet das beim Setzen. Vorher entstand ein Teil, das aussah wie geplant und nicht hielt.
+- Ein Filmscharnier, das hochkant im Teil steht, wird gemeldet statt gedruckt. So gedruckt bricht es beim ersten Öffnen.
+- Ein Oberflächenmuster, das den Körper verfehlt, sagt es. Vorher blieben lose Stücke daneben liegen, ohne dass etwas darauf hinwies.
+
 ## 0.2.2
 
 

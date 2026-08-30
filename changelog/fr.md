@@ -16,6 +16,35 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.2.3
+
+
+### Partager des blocs
+
+- Un bloc que vous avez construit se transmet sous forme de recette, et ceux des autres se reprennent de même. Une recette est la liste de vos étapes avec leurs valeurs.
+- Qui reprend une recette ne reçoit pas une forme finie, mais vos étapes — et peut en changer chaque chiffre.
+- En le transmettant, vous choisissez ce que les autres peuvent en faire : l'utiliser librement, vous citer, ou vous citer et partager aux mêmes conditions.
+- Un bloc repris reste signalé comme celui d'un autre. Si l'un des vôtres porte le même nom, le vôtre l'emporte.
+
+### Historique et annulation
+
+- Qui pousse une pièce trois fois de suite obtient une étape dans l'historique, pas trois. Une seule annulation retire tout le mouvement.
+- Les étapes qui vont ensemble forment une entrée et se replient. L'historique reste lisible même quand il en contient beaucoup.
+- Après une rotation, la pièce se repose sur le plateau. Les deux ensemble font une étape, et une annulation retire les deux.
+
+### Dessin et cotes
+
+- Un cercle demande son diamètre et non son rayon. Ce que vous tapez est le chiffre que vous mesurerez sur la pièce finie.
+- Échap retire ce que vous êtes en train de faire : d'abord la ligne commencée, puis l'outil, puis l'esquisse.
+- Le bouton des formes de base porte le nom de ce qu'un clic dessus fait. Les autres formes restent derrière la flèche à côté.
+- L'indication de l'esquisse nomme les deux voies : dessiner un contour ou insérer une forme toute faite.
+
+### Quand quelque chose ne tiendra pas, il le dit maintenant
+
+- Un crochet de panneau perforé dont l'ergot ne pointe pas vers le haut le dit à la pose. Avant, vous obteniez une pièce qui semblait juste et ne tenait pas.
+- Une charnière film posée de chant dans la pièce est signalée au lieu d'être imprimée. Imprimée ainsi, elle casse à la première ouverture.
+- Un motif de surface qui manque le corps le dit. Avant, des morceaux détachés restaient à côté sans que rien ne le signale.
+
 ## 0.2.2
 
 

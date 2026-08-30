@@ -15,6 +15,35 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.2.3
+
+
+### Condividere blocchi
+
+- Un blocco che ha costruito lei si passa come ricetta, e quelli altrui si riprendono allo stesso modo. Una ricetta è l'elenco dei suoi passi con i loro valori.
+- Chi riprende una ricetta non riceve una forma finita, ma i suoi passi — e può cambiarne ogni numero.
+- Nel passarlo sceglie che cosa possono farne gli altri: usarlo liberamente, citarla, oppure citarla e ricondividere alle stesse condizioni.
+- Un blocco ripreso resta segnalato come altrui. Se uno dei suoi porta lo stesso nome, il suo ha la precedenza.
+
+### Cronologia e annulla
+
+- Chi spinge un pezzo tre volte di seguito ottiene un passo nella cronologia, non tre. Un solo annulla ritira tutto il movimento.
+- I passi che vanno insieme compaiono come una voce e si possono richiudere. La cronologia resta leggibile anche quando ne contiene molti.
+- Dopo la rotazione il pezzo torna a posarsi sul piatto. Le due cose insieme sono un passo, e un annulla le ritira entrambe.
+
+### Disegno e misure
+
+- Un cerchio chiede il suo diametro e non il raggio. Quello che digita è il numero che misurerà sul pezzo finito.
+- Esc ritira ciò a cui sta lavorando: prima la linea iniziata, poi lo strumento, poi lo schizzo.
+- Il pulsante delle forme di base porta il nome di ciò che fa un clic su di esso. Le altre forme restano dietro la freccia accanto.
+- L'avviso dello schizzo nomina entrambe le strade: disegnare un contorno oppure inserire una forma già pronta.
+
+### Quando qualcosa non terrà, adesso lo dice
+
+- Un gancio da pannello forato il cui perno non punta verso l'alto lo dice quando lo posa. Prima nasceva un pezzo che sembrava giusto e non teneva.
+- Una cerniera a film messa di taglio nel pezzo viene segnalata invece che stampata. Stampata così si rompe alla prima apertura.
+- Un motivo di superficie che manca il corpo lo dice. Prima restavano pezzi staccati accanto senza che nulla lo segnalasse.
+
 ## 0.2.2
 
 
