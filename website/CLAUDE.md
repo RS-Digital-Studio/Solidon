@@ -21,19 +21,20 @@ Hier steht nur, was beim **Arbeiten** daran zusätzlich gilt.
 
 Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`, `style.css`,
 `site.js`, `.htaccess`, die Rechtstext-**Quellen** im Wurzelverzeichnis
-(`EULA.md`, `AGB.md`, `WIDERRUF.md`), die Schaustücke in `bilder/` — und
-**`datenschutz.html` und `impressum.html`**.
+(`EULA.md`, `AGB.md`, `WIDERRUF.md`, `DATENSCHUTZ.md`), die Schaustücke in
+`bilder/` — und **`impressum.html`**.
 
-Die letzten beiden standen in **keiner** der zwei Listen, und das Konzept der
-Tauschbörse hat sich darauf verlassen: Es nannte `make_legal.py` als den Weg,
-auf dem der Datenschutz entsteht. Gemessen erzeugt das Werkzeug **drei**
-Dokumente (`DOCUMENTS` in `tools/make_legal.py`) und **verlinkt** die beiden
-anderen nur. Eine Datei, die weder als erzeugt noch als handgepflegt geführt
-ist, bekommt beim nächsten Umbau von jedem eine andere Behandlung.
+`datenschutz.html` und `impressum.html` standen bis zum 30.08.2026 in
+**keiner** der beiden Listen, und das Börsen-Konzept hat sich darauf
+verlassen: Es nannte `make_legal.py` als den Weg, auf dem der Datenschutz
+entsteht — das Werkzeug erzeugte aber nur drei Dokumente und **verlinkte** die
+beiden anderen. Eine Datei, die weder als erzeugt noch als handgepflegt
+geführt ist, bekommt beim nächsten Umbau von jedem eine andere Behandlung.
 
-Wer den Datenschutz künftig doch erzeugen lassen will, legt eine
-`DATENSCHUTZ.md` an und trägt sie in `DOCUMENTS` ein — dann wandert die Zeile
-hier eine Tabelle höher.
+Der Datenschutz wird seither wirklich erzeugt (`DATENSCHUTZ.md`), das
+Impressum bleibt Handarbeit: Es trägt Anschrift und Vertretungsangaben, die
+nirgendwo sonst herkommen, und ein Erzeuger dafür wäre eine Vorlage mit genau
+einem Verwender.
 
 Eine Änderung an einer erzeugten Datei ist beim nächsten Lauf weg. Wer sie
 ändern will, ändert das Werkzeug oder die Quelle.

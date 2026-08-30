@@ -34,11 +34,20 @@ from app.branding import APP_NAME, APP_VENDOR  # noqa: E402
 
 WEBSITE = ROOT / "website"
 
-#: Quelle, Zieldatei, Titel der Seite und die Beschriftung im Fußbereich.
-DOCUMENTS: tuple[tuple[str, str, str], ...] = (
-    ("EULA.md", "eula.html", "Lizenzvertrag"),
-    ("AGB.md", "agb.html", "AGB"),
-    ("WIDERRUF.md", "widerruf.html", "Widerruf"),
+#: Quelle, Zieldatei, Titel der Seite — und ob sie ein **Vertragstext** ist.
+#:
+#: Das vierte Feld entscheidet über den englischen Sprachhinweis
+#: (:data:`LANGUAGE_NOTE`). Er sagt „German is the contract language for every
+#: purchase from this site" und gehört damit zu Lizenzvertrag, AGB und
+#: Widerruf. In der **Datenschutzerklärung** wäre er schlicht falsch: Sie ist
+#: kein Vertrag, sie gilt auch für jemanden, der nie etwas kauft, und ein
+#: Hinweis auf die Vertragssprache beantwortet dort eine Frage, die niemand
+#: gestellt hat. Genau deshalb trug die von Hand gepflegte Seite ihn nie.
+DOCUMENTS: tuple[tuple[str, str, str, bool], ...] = (
+    ("EULA.md", "eula.html", "Lizenzvertrag", True),
+    ("AGB.md", "agb.html", "AGB", True),
+    ("WIDERRUF.md", "widerruf.html", "Widerruf", True),
+    ("DATENSCHUTZ.md", "datenschutz.html", "Datenschutz", False),
 )
 
 # --- Der Übersetzer ---------------------------------------------------------------
@@ -49,6 +58,29 @@ _EMPHASIS = re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)")
 _AUTOLINK = re.compile(r"&lt;(https?://[^&\s]+|mailto:[^&\s]+|[^&\s@]+@[^&\s]+)&gt;")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+
+#: Eine Sprungmarke am Ende einer Überschrift: ``## Die Tauschbörse {#boerse}``.
+#: Kleinbuchstaben, Ziffern und Bindestrich — mehr braucht ein Anker nicht, und
+#: mehr zuzulassen hieße, jede Eingabe für ein ``id``-Attribut zu maskieren.
+_ANCHOR = re.compile(r"^(.*?)\s*\{#([a-z][a-z0-9-]*)\}$")
+
+
+def _split_anchor(title: str) -> tuple[str, str]:
+    """Trennt eine Überschrift von ihrer Sprungmarke.
+
+    **Ohne sie kann ein Rechtstext nicht auf sich selbst verweisen.** Die
+    Datenschutzerklärung braucht genau das: Der Absatz über die statischen
+    Seiten nimmt die Tauschbörse aus und verweist auf deren Abschnitt weiter
+    unten. Ein Verweis ohne Ziel ist schlechter als keiner —
+    ``tests/test_website.py`` prüft jede Sprungmarke gegen ihr Ziel.
+
+    Steht keine Marke da, bleibt die Überschrift, wie sie war; die drei
+    bestehenden Dokumente ändern sich dadurch um kein Byte (gemessen).
+    """
+    match = _ANCHOR.match(title)
+    return (match.group(1), match.group(2)) if match else (title, "")
+
+
 _BULLET = re.compile(r"^\*\s+(.*)$")
 _NUMBERED = re.compile(r"^(\d+)\.\s+(.*)$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
@@ -136,7 +168,9 @@ def to_html(markdown: str) -> str:
         if heading:
             flush()
             level = min(len(heading.group(1)), 6)
-            out.append(f"<h{level}>{inline(heading.group(2))}</h{level}>")
+            title, anchor = _split_anchor(heading.group(2))
+            marker = f' id="{anchor}"' if anchor else ""
+            out.append(f"<h{level}{marker}>{inline(title)}</h{level}>")
             continue
 
         marker = _QUOTE.match(line)
@@ -273,13 +307,20 @@ def draft_banner(markdown: str) -> str:
     return REVIEW_NOTE if REVIEW_PENDING else ""
 
 
-def body_html(markdown: str) -> str:
+def body_html(markdown: str, contract: bool = True) -> str:
     """Der Rumpf einer Seite: Überschrift, Hinweise, Text.
 
     Die Hinweise stehen unter der Überschrift und nicht darüber — sonst liest
     man zuerst eine Warnung und danach erst, wozu sie gehört.
+
+    ``contract`` entscheidet über den englischen Sprachhinweis. Er spricht von
+    der **Vertragssprache beim Kauf** und gehört damit zu Lizenzvertrag, AGB
+    und Widerruf; in der Datenschutzerklärung beantwortet er eine Frage, die
+    dort niemand stellt, und behauptet nebenbei einen Kauf, den es für ihre
+    Geltung nicht braucht. Die von Hand gepflegte Seite trug ihn nie — das
+    war kein Versehen, sondern die richtige Entscheidung, und sie bleibt.
     """
-    notes = "\n".join(filter(None, (draft_banner(markdown), LANGUAGE_NOTE)))
+    notes = "\n".join(filter(None, (draft_banner(markdown), LANGUAGE_NOTE if contract else "")))
     heading, _, rest = to_html(markdown).partition("\n")
     return f"{heading}\n{notes}\n{rest}"
 
@@ -327,7 +368,7 @@ def main() -> int:
         "datenschutz.html": "Datenschutz",
     }
 
-    for source_name, target_name, title in DOCUMENTS:
+    for source_name, target_name, title, contract in DOCUMENTS:
         source = ROOT / source_name
         markdown = source.read_text(encoding="utf-8")
 
@@ -337,7 +378,7 @@ def main() -> int:
             if name != target_name
         )
         target = WEBSITE / target_name
-        target.write_text(page(title, body_html(markdown), others), encoding="utf-8")
+        target.write_text(page(title, body_html(markdown, contract), others), encoding="utf-8")
         marker = "  (Entwurf)" if draft_banner(markdown) else ""
         print(f"  {source_name} → website/{target_name}{marker}")
 
