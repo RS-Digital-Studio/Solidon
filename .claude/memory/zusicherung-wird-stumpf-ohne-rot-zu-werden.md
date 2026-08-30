@@ -48,6 +48,24 @@ mit 24 Fällen, davon 5 „gute", wirkt gründlich. Dass die fünf guten nie
 gebraucht werden konnten, fällt erst auf, wenn jemand sie wirklich benutzt —
 hier ein Ende-zu-Ende-Lauf, der die Datei nach dem Hochladen wieder öffnete.
 
+**Und eine vierte kam in derselben Nacht dazu: die Bedeutung.** Ein Muster
+trifft ein Zeichen und weiß nicht, was es dort tut — dreimal an einem Abend,
+dreimal in einer anderen Sprache:
+
+* `[ÃâÂ]` als Mojibake-Suche fand `câble`, `tâche`, `diâmetro` — lauter
+  legitime Zirkumflexe. Echtes Mojibake ist eine **Folge** (`Ã©`, `â€`), kein
+  Einzelzeichen.
+* `bolsa` im Portugiesischen sah nach der verworfenen Finanz-Metapher aus und
+  ist dort die **Tasche** im Werkstück.
+* `suo` im Italienischen ist beim Kreis der Possessiv (*sein* Durchmesser) und
+  beim Baustein die Anrede (*Ihr* Baustein). Dieselben drei Buchstaben.
+
+Die Umkehrung gehört dazu und ist teurer: **Eine Anrede ohne Pronomen hat eine
+Gestalt, an die niemand denkt, der nach Pronomen sucht.** Die italienische
+Höflichkeitsform ist die dritte Person Singular — `sceglie`, `digita`,
+`misurerà` —, sie sieht aus wie eine Aussage über einen Dritten. Eine Suche
+nach `lei`/`suoi` fand vier von zehn Stellen und hielt die Sache für erledigt.
+
 **How to apply:**
 
 * **Vor einer Umstellung fragen, was der Test danach noch vergleicht** — nicht
