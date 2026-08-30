@@ -130,6 +130,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
 | Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | 3a's Erhebung nach P5 — Ist-Verhalten am Code und im echten Fenster, Gegenmessung an Fusion, dann Befunde und Schnitt |
+| Der ganze Zeichenmodus aus Kundensicht | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Zeichenmodus-Bestandsaufnahme (bedienlogik läuft) — danach Pakete Z1…, Verteilung, Review |
+| Viewport und Ansichts-Werkzeuge aus Kundensicht | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Viewport-Bestandsaufnahme (bedienlogik läuft) — danach Pakete V1…, Verteilung, Review |
 
 ---
 
@@ -12990,6 +12992,28 @@ Reihenfolge nach Kundenkontakt: D1, D2, D4, D5 (täglich) → D6, D3
 - [ ] Die zwölf Pakete abarbeiten — je Paket Zahlen, Gegenproben und
       Review vor dem Commit; die Fix-Details je Befund gibt die
       Freigabe bei der Beauftragung mit.
+
+---
+
+## Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026)
+
+Roberts Vervollständigung des Durchsichts-Auftrags: „den ganzen
+zeichen modus am besten auch nochmal komplett durchgehen, sowie jedes
+panel, dialog, viewport usw." Panels und Dialoge laufen als D1–D12;
+was fehlte, sind der Skizzeneditor (4 800 Zeilen) und der Viewport mit
+seinen acht Werkzeugen (8 200 Zeilen plus Leisten) — beide
+Bestandsaufnahmen laufen mit derselben Drei-Fragen-Systematik
+(versteht der Slicer-Kunde es ohne Handbuch; wirkt es hochwertig;
+was ist getestet statt behauptet).
+
+- [ ] **Zeichenmodus-Bestandsaufnahme** (bedienlogik, läuft):
+      Kernwege Klick für Klick (Rechteck zu Körper zuerst),
+      Fusion-Vergleich, Pakete Z1… — 3a's Kipp-Erhebung bleibt der
+      parallele Tiefen-Teil und wird nicht gedoppelt.
+- [ ] **Viewport-Bestandsaufnahme** (bedienlogik, läuft): die acht
+      Werkzeuge je aktivieren/benutzen/verstehen/verlassen, Kamera und
+      Auswahl, Befund-Marker und Analysekarten (Regel 18), Pakete V1… —
+      transform_bar (P1) und 3a's Baustellen sind ausgenommen.
 
 ---
 
