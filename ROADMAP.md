@@ -12941,14 +12941,14 @@ bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
 | Paket | Inhalt | Größe | Stand |
 |---|---|---|---|
 | P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle in der Leiste (Robert, 30.08.2026), „Gizmo"-Haken entfällt — das Werkzeug ist der Griff; `LengthSpin` zieht bei Einheitenwechsel auch in offenen Leisten nach; Fang-Menü hinter Raster-Symbol | M | **fertig** (`b43aab74`, d3; 391 Testzeilen, Handbuchabsatz nennt den Tipp-Weg) |
-| P2 | Haken-Reste und Texte nachziehen | S | nach P1 |
+| P2 | Haken-Reste und Texte nachziehen | S | **d3, nach V8** (15 hat die Reservierung freigegeben — eine Hand über einer Sache) |
 | P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **fertig** (`cb78bd58`): Zug bewegt alle Gewählten in einer Transaktion, die Statuszeile sagt es vorher; Drehen/Skalieren siehe P5 |
 | P4 | ~~Zug ohne Vorauswahl~~ **entfällt** — Robert hat entschieden (30.08.2026): erst wählen, dann ziehen bleibt | — | zu |
 | P5 | Mehrkörper-Drehen/Skalieren um den gemeinsamen Punkt | M | **fertig** (`d310f8fe`, Formatversion 18): `about="point"` mit genanntem Drehpunkt, das Fenster liefert die Mitte der gemeinsamen Hülle; der Anker entscheidet, nicht die Zahl (Null ist ein gültiger Punkt). **Der Versionssprung kam aus der Messung, nicht aus der Regel**: v0.2.2 nimmt den neuen Wert an und fällt still auf `centre` durch — rechnet also falsch statt abzulehnen; die plausible Vermutung („validate wirft") wäre falsch gewesen, der Wert kam dort nie an. Migration 17→18, `example_v18.p3d` eingecheckt, der zurückgezogene „gilt dem ersten"-Satz ist aus allen fünf Katalogen entfernt |
-| P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | nach P1 |
+| P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | frei (Reservierung aufgehoben) |
 | P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **fertig** (`d5eda37c`) — mit ehrlichem Umweg: Die erste Fassung schrieb den Namen an den Griff, und VTK nimmt in einem `vtkStringArray` nur ASCII — auf Französisch (`Face supérieure`, `Côté gauche` …) wäre das ein Kundenabsturz gewesen, den ein deutscher Torlauf nie sieht (gefunden d3, gegengeprüft 72). Jetzt: Marke am Griff, Name in der Statusleiste, ASCII-Wächter `test_nothing_on_the_gizmo_leaves_ascii` mit genau den vier Namen, Regel in `ansicht.md` |
 | P8 | Verschieben/Drehen/Skalieren direkt im Kontextmenü | S | **fertig** (`fa694cf1`): 7 → 10 von 12 Zeilen, „Ändern" 30 → 27, Slicer-Reihenfolge und Grenze am gebauten Menü getestet, zwei Gegenproben gefallen |
-| P9 | Aufeinanderfolgende Züge werden ein Verlaufsschritt | M | nach P1 |
+| P9 | Aufeinanderfolgende Züge werden ein Verlaufsschritt | M | frei (Reservierung aufgehoben) |
 
 - [ ] Die neun Pakete abarbeiten — je Paket Zahlen, Gegenproben und
       Review vor dem Commit; achsweises Skalieren bleibt bewusst
