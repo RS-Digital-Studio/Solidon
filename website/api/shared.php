@@ -66,30 +66,29 @@ function shared_answer_error(SharedFailure $problem): void
 function shared_uploaded_bytes(array $rules): string
 {
     if (!isset($_FILES['recipe']) || !is_array($_FILES['recipe'])) {
-        throw new SharedFailure('Es kam keine Datei an. Wählen Sie ein Rezept aus und senden Sie erneut.');
+        throw new SharedFailure(shared_text('upload_no_file'));
     }
     $file = $_FILES['recipe'];
     if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         // `post_max_size` schlägt zu, bevor PHP die Felder füllt — dann steht
         // hier ein Fehlercode und kein Hinweis auf die Ursache.
         throw new SharedFailure(
-            'Die Datei kam nicht vollständig an. Prüfen Sie ihre Größe und senden Sie erneut.'
+            shared_text('upload_incomplete')
         );
     }
     if (($file['size'] ?? 0) > $rules['max_upload_bytes']) {
         throw new SharedFailure(
-            sprintf(
-                'Die Datei ist %d Byte groß, erlaubt sind %d.',
-                (int) $file['size'],
-                (int) $rules['max_upload_bytes']
-            ),
+            shared_text('upload_too_large', [
+                'size' => (int) $file['size'],
+                'limit' => (int) $rules['max_upload_bytes'],
+            ]),
             413,
             'too_large'
         );
     }
     $bytes = @file_get_contents($file['tmp_name']);
     if ($bytes === false) {
-        throw new SharedFailure('Die hochgeladene Datei ließ sich nicht lesen.');
+        throw new SharedFailure(shared_text('upload_unreadable'));
     }
     return $bytes;
 }
@@ -100,8 +99,7 @@ function shared_contact(): string
     $address = trim((string) ($_POST['contact'] ?? ''));
     if ($address === '' || filter_var($address, FILTER_VALIDATE_EMAIL) === false) {
         throw new SharedFailure(
-            'Für eine Einreichung braucht die Börse eine Mailadresse — sie wird nicht '
-            . 'angezeigt und dient nur der Bestätigung. Tragen Sie eine gültige Adresse ein.'
+            shared_text('upload_needs_address')
         );
     }
     return $address;
@@ -117,7 +115,7 @@ function shared_upload(): void
     $findings = shared_inspect($bytes, $rules);
     if ($findings) {
         throw new SharedFailure(
-            'Die Datei ist kein Rezept, das die Börse annehmen kann.',
+            shared_text('upload_not_a_recipe'),
             422,
             'rejected',
             $findings
@@ -135,8 +133,7 @@ function shared_upload(): void
     $today->execute([$hash, $now - 86400]);
     if ((int) $today->fetchColumn() >= SHARED_MAX_PER_DAY) {
         throw new SharedFailure(
-            'Von dieser Adresse sind heute schon genug Einreichungen gekommen. '
-            . 'Versuchen Sie es morgen wieder.',
+            shared_text('upload_too_many_today'),
             429,
             'too_many'
         );
@@ -179,7 +176,7 @@ function shared_upload(): void
             ->execute([$token, $id, $now + SHARED_CONFIRM_HOURS * 3600]);
 
         if (@file_put_contents(shared_file_for($id), $bytes) === false) {
-            throw new SharedFailure('Die Datei ließ sich auf dem Server nicht ablegen.', 500, 'storage');
+            throw new SharedFailure(shared_text('upload_store_failed'), 500, 'storage');
         }
         $database->commit();
     } catch (Throwable $error) {
@@ -191,8 +188,7 @@ function shared_upload(): void
     shared_answer([
         'ok' => true,
         'pending' => true,
-        'message' => 'Angenommen. In Ihrem Postfach liegt ein Link — erst nach dem Klick '
-            . 'darauf ist der Baustein öffentlich sichtbar.',
+        'message' => shared_text('upload_accepted'),
     ]);
 }
 
@@ -213,31 +209,39 @@ function shared_send_confirmation(
     $host = $_SERVER['HTTP_HOST'] ?? 'solidon3d.de';
     $link = 'https://' . $host . '/api/shared.php?do=confirm&token=' . urlencode($token);
     $back = 'https://' . $host . '/api/shared.php?do=withdraw&key=' . urlencode($withdraw);
-    $body = "Hallo,\r\n\r\n"
-        . "Sie haben „" . $title . "\" in der Solidon-Tauschbörse eingereicht.\r\n\r\n"
-        . "Mit diesem Link wird er öffentlich sichtbar:\r\n\r\n"
-        . $link . "\r\n\r\n"
-        . "Der Link gilt " . SHARED_CONFIRM_HOURS . " Stunden. Wenn Sie nichts eingereicht "
-        . "haben, ignorieren Sie diese Nachricht — ohne Klick wird nichts veröffentlicht.\r\n"
-        . "\r\n"
-        // **Beide Links in einer Mail, und der zweite ohne Ablauf.** Wer
-        // zurückziehen will, soll das nicht bei uns beantragen müssen; die
-        // Zusage steht in datenschutz.html und lautet „jederzeit selbst".
-        . "Heben Sie diese Nachricht auf: Mit dem folgenden Link ziehen Sie "
-        . "Ihren Baustein jederzeit selbst zurück. Er wird dann gelöscht, und "
-        . "die Verknüpfung zu Ihrer Adresse geht mit.\r\n\r\n"
-        . $back . "\r\n";
+    // **Beide Links in einer Mail, und der zweite ohne Ablauf.** Wer
+    // zurückziehen will, soll das nicht bei uns beantragen müssen; die Zusage
+    // steht in datenschutz.html und lautet „jederzeit selbst".
+    $body = shared_mail_body('mail_upload_body', [
+        'title' => $title,
+        'link' => $link,
+        'hours' => SHARED_CONFIRM_HOURS,
+        'withdraw' => $back,
+    ]);
     $headers = 'From: ' . SHARED_SENDER . "\r\n"
         . "Content-Type: text/plain; charset=utf-8\r\n"
         . 'Content-Transfer-Encoding: 8bit';
-    if (!@mail($address, '=?UTF-8?B?' . base64_encode('Ihre Einreichung bestätigen') . '?=', $body, $headers)) {
+    if (!@mail($address, '=?UTF-8?B?' . base64_encode(shared_text('mail_upload_subject')) . '?=', $body, $headers)) {
         throw new SharedFailure(
-            'Der Baustein liegt auf dem Server, aber die Bestätigungsmail ging nicht '
-            . 'hinaus. Melden Sie sich beim Support, dann schalten wir ihn von Hand frei.',
+            shared_text('upload_mail_failed'),
             500,
             'mail_failed'
         );
     }
+}
+
+/**
+ * Ein Mailtext aus der Satzliste, mit Zeilenenden nach RFC 5322.
+ *
+ * **Die Satzliste trägt einfache Umbrüche, eine Mail braucht `CRLF`.** Der
+ * Unterschied ist unsichtbar und folgenreich: Ein Text mit reinen `\n` kommt
+ * bei manchen Empfängern als eine einzige lange Zeile an, bei anderen gar
+ * nicht. Er wird deshalb hier umgesetzt, an einer Stelle — im Quellmodul
+ * stünde `\r\n` im übersetzten Satz und jeder Übersetzer müsste daran denken.
+ */
+function shared_mail_body(string $key, array $values = []): string
+{
+    return str_replace("\n", "\r\n", shared_text($key, $values));
 }
 
 /** Der Klick aus der Mail: ab jetzt ist der Baustein öffentlich. */
@@ -245,7 +249,7 @@ function shared_confirm(): void
 {
     $token = (string) ($_GET['token'] ?? '');
     if ($token === '' || preg_match('/^[0-9a-f]{32}$/D', $token) !== 1) {
-        throw new SharedFailure('Dieser Bestätigungslink ist unvollständig.', 400, 'bad_token');
+        throw new SharedFailure(shared_text('confirm_incomplete'), 400, 'bad_token');
     }
     $database = shared_database();
     $row = $database->prepare('SELECT part_id, expires FROM pending WHERE token = ?');
@@ -253,15 +257,14 @@ function shared_confirm(): void
     $found = $row->fetch();
     if (!$found) {
         throw new SharedFailure(
-            'Diesen Bestätigungslink kennt die Börse nicht — vielleicht wurde er schon '
-            . 'benutzt. Sehen Sie in der Börse nach, ob Ihr Baustein bereits dasteht.',
+            shared_text('confirm_unknown'),
             404,
             'unknown_token'
         );
     }
     if ((int) $found['expires'] < time()) {
         throw new SharedFailure(
-            'Dieser Bestätigungslink ist abgelaufen. Laden Sie den Baustein erneut hoch.',
+            shared_text('confirm_expired'),
             410,
             'expired'
         );
@@ -275,7 +278,7 @@ function shared_confirm(): void
     shared_answer([
         'ok' => true,
         'slug' => (string) $slug->fetchColumn(),
-        'message' => 'Bestätigt. Der Baustein steht jetzt in der Börse.',
+        'message' => shared_text('confirm_done'),
     ]);
 }
 
@@ -301,8 +304,7 @@ function shared_withdraw(): void
     $key = (string) ($_GET['key'] ?? $_POST['key'] ?? '');
     if ($key === '' || preg_match('/^[0-9a-f]{64}$/D', $key) !== 1) {
         throw new SharedFailure(
-            'Dieser Rückziehlink ist unvollständig. Nehmen Sie den vollständigen Link aus '
-            . 'der Mail, die Sie beim Einreichen bekommen haben.',
+            shared_text('withdraw_incomplete'),
             400,
             'bad_key'
         );
@@ -332,8 +334,7 @@ function shared_withdraw(): void
         shared_answer([
             'ok' => true,
             'kind' => 'part',
-            'message' => 'Zurückgezogen. Der Baustein ist gelöscht, und die Verknüpfung zu '
-                . 'Ihrer Adresse mit ihm.',
+            'message' => shared_text('withdraw_part_done'),
         ]);
     }
 
@@ -345,13 +346,12 @@ function shared_withdraw(): void
         shared_answer([
             'ok' => true,
             'kind' => 'comment',
-            'message' => 'Zurückgezogen. Der Kommentar ist gelöscht.',
+            'message' => shared_text('withdraw_comment_done'),
         ]);
     }
 
     throw new SharedFailure(
-        'Zu diesem Schlüssel gibt es nichts mehr — vielleicht haben Sie den Beitrag '
-        . 'bereits zurückgezogen. Sehen Sie in der Börse nach, ob er noch dasteht.',
+        shared_text('withdraw_unknown'),
         404,
         'unknown_key'
     );
@@ -416,7 +416,7 @@ function shared_list(): void
 function shared_part_id(string $slug): int
 {
     if ($slug === '' || preg_match('/^[a-z0-9-]{1,80}$/D', $slug) !== 1) {
-        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+        throw new SharedFailure(shared_text('part_unknown'), 404, 'unknown');
     }
     $row = shared_database()->prepare(
         'SELECT id FROM parts WHERE slug = ? AND published IS NOT NULL AND hidden = 0'
@@ -424,7 +424,7 @@ function shared_part_id(string $slug): int
     $row->execute([$slug]);
     $id = $row->fetchColumn();
     if ($id === false) {
-        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+        throw new SharedFailure(shared_text('part_unknown'), 404, 'unknown');
     }
     return (int) $id;
 }
@@ -446,8 +446,7 @@ function shared_browser_mark(): string
     $mark = trim((string) ($_POST['browser'] ?? ''));
     if (preg_match('/^[A-Za-z0-9_-]{16,64}$/D', $mark) !== 1) {
         throw new SharedFailure(
-            'Diese Browser-Kennung kann die Börse nicht verwenden. Laden Sie die Seite '
-            . 'neu — sie legt dann eine neue an.',
+            shared_text('like_bad_browser_key'),
             400,
             'bad_browser'
         );
@@ -526,21 +525,24 @@ function shared_comment(): void
     $author = trim((string) ($_POST['author'] ?? ''));
     $findings = [];
     if ($body === '') {
-        $findings[] = 'Der Kommentar ist leer.';
+        $findings[] = shared_text('comment_empty');
     }
     if (mb_strlen($body) > $rules['max_doc_chars']) {
-        $findings[] = 'Der Kommentar ist länger als ' . $rules['max_doc_chars'] . ' Zeichen.';
+        $findings[] = shared_text('comment_too_long', ['limit' => $rules['max_doc_chars']]);
     }
     if (preg_match(FORBIDDEN_TEXT, $body) === 1) {
-        $findings[] = 'Der Kommentar enthält einen Link oder eine Auszeichnung.';
+        $findings[] = shared_text('comment_has_markup');
     }
     if (mb_strlen($author) > $rules['max_title_chars']) {
-        $findings[] = 'Der Name ist länger als ' . $rules['max_title_chars'] . ' Zeichen.';
+        $findings[] = shared_text(
+            'comment_name_too_long',
+            ['limit' => $rules['max_title_chars']]
+        );
     }
     // Ein Name darf nennen, wo man jemanden findet — eine Auszeichnung darf er
     // nicht einschleusen. Dieselbe Trennung wie im Kern (FORBIDDEN_MARKUP).
     if (preg_match(FORBIDDEN_MARKUP, $author) === 1) {
-        $findings[] = 'Der Name enthält eine Auszeichnung.';
+        $findings[] = shared_text('comment_name_has_markup');
     }
     if ($findings !== []) {
         throw new SharedFailure(implode(' ', $findings), 400, 'rejected');
@@ -577,36 +579,16 @@ function shared_send_comment_confirmation(
     $host = $_SERVER['HTTP_HOST'] ?? 'solidon3d.de';
     $link = 'https://' . $host . '/api/shared.php?do=confirm_comment&token=' . urlencode($token);
     $back = 'https://' . $host . '/api/shared.php?do=withdraw&key=' . urlencode($withdraw);
-    $body = "Hallo,
-
-"
-        . "Sie haben einen Kommentar in der Solidon-Tauschbörse geschrieben.
-
-"
-        . "Mit diesem Link wird er öffentlich sichtbar:
-
-"
-        . $link . "
-
-"
-        . "Der Link gilt " . SHARED_CONFIRM_HOURS . " Stunden. Wenn Sie nichts geschrieben "
-        . "haben, ignorieren Sie diese Nachricht — ohne Klick wird nichts veröffentlicht.
-"
-        . "
-"
-        . "Heben Sie diese Nachricht auf: Mit dem folgenden Link ziehen Sie Ihren "
-        . "Kommentar jederzeit selbst zurück. Er wird dann gelöscht, und die "
-        . "Verknüpfung zu Ihrer Adresse geht mit.
-
-"
-        . $back . "
-";
+    $body = shared_mail_body('mail_comment_body', [
+        'link' => $link,
+        'hours' => SHARED_CONFIRM_HOURS,
+        'withdraw' => $back,
+    ]);
     $headers = 'From: ' . SHARED_SENDER . "
 " . 'Content-Type: text/plain; charset=utf-8';
-    if (!@mail($address, 'Ihr Kommentar in der Solidon-Tauschbörse', $body, $headers)) {
+    if (!@mail($address, shared_text('mail_comment_subject'), $body, $headers)) {
         throw new SharedFailure(
-            'Die Bestätigungsmail ging nicht hinaus. Melden Sie sich beim Support, dann '
-            . 'schalten wir den Kommentar von Hand frei.',
+            shared_text('comment_mail_failed'),
             500,
             'mail_failed'
         );
@@ -630,7 +612,7 @@ function shared_confirm_comment(): void
 {
     $token = (string) ($_GET['token'] ?? '');
     if ($token === '' || preg_match('/^[0-9a-f]{32}$/D', $token) !== 1) {
-        throw new SharedFailure('Dieser Bestätigungslink ist unvollständig.', 400, 'bad_token');
+        throw new SharedFailure(shared_text('confirm_incomplete'), 400, 'bad_token');
     }
     $database = shared_database();
     $row = $database->prepare(
@@ -640,8 +622,7 @@ function shared_confirm_comment(): void
     $found = $row->fetch();
     if (!$found || !hash_equals((string) $found['confirm_token'], $token)) {
         throw new SharedFailure(
-            'Diesen Bestätigungslink kennt die Börse nicht — vielleicht wurde der '
-            . 'Kommentar schon zurückgezogen.',
+            shared_text('comment_confirm_unknown'),
             404,
             'unknown_token'
         );
@@ -651,7 +632,7 @@ function shared_confirm_comment(): void
     }
     if ((int) $found['confirm_expires'] < time()) {
         throw new SharedFailure(
-            'Dieser Bestätigungslink ist abgelaufen. Schreiben Sie den Kommentar erneut.',
+            shared_text('comment_confirm_expired'),
             410,
             'expired'
         );
@@ -666,7 +647,7 @@ function shared_download(): void
 {
     $slug = (string) ($_GET['slug'] ?? '');
     if ($slug === '' || preg_match('/^[a-z0-9-]{1,80}$/D', $slug) !== 1) {
-        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+        throw new SharedFailure(shared_text('part_unknown'), 404, 'unknown');
     }
     $database = shared_database();
     $row = $database->prepare(
@@ -675,13 +656,13 @@ function shared_download(): void
     $row->execute([$slug]);
     $id = $row->fetchColumn();
     if ($id === false) {
-        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+        throw new SharedFailure(shared_text('part_unknown'), 404, 'unknown');
     }
 
     $path = shared_file_for((int) $id);
     $bytes = @file_get_contents($path);
     if ($bytes === false) {
-        throw new SharedFailure('Die Datei zu diesem Baustein fehlt auf dem Server.', 500, 'storage');
+        throw new SharedFailure(shared_text('part_file_missing'), 500, 'storage');
     }
     $database->prepare('UPDATE parts SET downloads = downloads + 1 WHERE id = ?')->execute([$id]);
 
@@ -718,8 +699,7 @@ try {
         shared_confirm_comment();
     } else {
         throw new SharedFailure(
-            'Diese Anfrage kennt die Börse nicht. Möglich sind upload, confirm, list, '
-            . 'download, withdraw, like, comment, comments und confirm_comment.',
+            shared_text('unknown_action'),
             404,
             'unknown_action'
         );
@@ -730,7 +710,7 @@ try {
     // Der Text einer unerwarteten Ausnahme geht nicht hinaus: Er nennt Pfade
     // und Zeilennummern des Servers.
     shared_answer(
-        ['ok' => false, 'code' => 'server_error', 'error' => 'Die Börse hat einen Fehler auf dem Server.'],
+        ['ok' => false, 'code' => 'server_error', 'error' => shared_text('server_error')],
         500
     );
 }

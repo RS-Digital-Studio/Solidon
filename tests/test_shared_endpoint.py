@@ -299,10 +299,16 @@ def test_a_file_the_check_refuses_never_reaches_the_store(boerse, tmp_path: Path
 
 
 def test_an_unknown_confirmation_link_says_what_to_do(boerse) -> None:
-    """Regel 17 gilt auch hier: Ein toter Link endet nicht mit „abgelehnt"."""
+    """Regel 17 gilt auch hier: Ein toter Link endet nicht mit „abgelehnt".
+
+    **``lang=de`` ist tragend und keine Zierde.** Die API antwortet seit der
+    Sprachumstellung in der Sprache der Seite, und ohne Angabe greift der
+    englische Rückfall — ein Test, der einen deutschen Wortlaut erwartet, muss
+    Deutsch anfordern. Die deutsche Börsenseite tut dasselbe.
+    """
     basis, _, _ = boerse
 
-    status, antwort = _holen(basis + "?do=confirm&token=" + "0" * 32)
+    status, antwort = _holen(basis + "?do=confirm&lang=de&token=" + "0" * 32)
 
     assert status == 404, antwort
     assert not antwort["ok"]
@@ -361,10 +367,16 @@ def test_a_customer_can_withdraw_what_they_uploaded(boerse, tmp_path: Path) -> N
 
 
 def test_a_withdraw_key_that_belongs_to_nobody_says_what_to_do(boerse) -> None:
-    """Ein Schlüssel ohne Beitrag endet nicht mit „abgelehnt" (Regel 17)."""
+    """Ein Schlüssel ohne Beitrag endet nicht mit „abgelehnt" (Regel 17).
+
+    **``lang=de`` ist tragend und keine Zierde.** Die API antwortet seit der
+    Sprachumstellung in der Sprache der Seite, und ohne Angabe greift der
+    englische Rückfall — ein Test, der einen deutschen Wortlaut erwartet, muss
+    Deutsch anfordern. Die deutsche Börsenseite tut dasselbe.
+    """
     basis, _, _ = boerse
 
-    status, antwort = _holen(basis + "?do=withdraw&key=" + "a" * 64)
+    status, antwort = _holen(basis + "?do=withdraw&lang=de&key=" + "a" * 64)
 
     assert status == 404, antwort
     assert "zurückgezogen" in antwort["error"], (

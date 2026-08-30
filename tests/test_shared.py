@@ -518,8 +518,10 @@ def test_the_sentences_beside_the_php_are_what_the_core_says() -> None:
     from tools.make_shared_texts import written
 
     ziel = _shared_texts_file()
-    if not ziel.exists():
-        pytest.skip("shared-texts.json ist noch nicht erzeugt")
+    assert ziel.exists(), (
+        "shared-texts.json fehlt. Sie ist erzeugt und eingecheckt — einmal "
+        "`python tools/make_shared_texts.py`."
+    )
     assert ziel.read_text(encoding="utf-8") == written(), (
         "shared-texts.json ist nicht mehr das, was der Kern sagt. Einmal "
         "`python tools/make_shared_texts.py`, dann stimmt es wieder."
@@ -545,8 +547,10 @@ def test_every_sentence_the_server_asks_for_exists_and_the_other_way_round() -> 
     from pathlib import Path as _Path
 
     ziel = _shared_texts_file()
-    if not ziel.exists():
-        pytest.skip("shared-texts.json ist noch nicht erzeugt")
+    assert ziel.exists(), (
+        "shared-texts.json fehlt. Sie ist erzeugt und eingecheckt — einmal "
+        "`python tools/make_shared_texts.py`."
+    )
 
     tabellen = _json.loads(ziel.read_text(encoding="utf-8"))
     assert tabellen, "die Satzliste ist leer"
@@ -556,7 +560,16 @@ def test_every_sentence_the_server_asks_for_exists_and_the_other_way_round() -> 
     api = _Path("website/api")
     gefragt: set[str] = set()
     for datei in sorted(api.glob("*.php")):
-        gefragt |= set(_re.findall(r"shared_text\(\s*'([a-z0-9_]+)'", datei.read_text("utf-8")))
+        # **Beide Zugänge, nicht nur der offensichtliche.** Die Mailtexte
+        # laufen über ``shared_mail_body``, das ``shared_text`` ruft und die
+        # Zeilenenden umsetzt — ein Muster nur auf ``shared_text`` meldete sie
+        # als „Sätze, die niemand ausgibt", und sie standen in jeder Mail.
+        gefragt |= set(
+            _re.findall(
+                r"shared_(?:text|mail_body)\(\s*'([a-z0-9_]+)'",
+                datei.read_text("utf-8"),
+            )
+        )
 
     assert gefragt, (
         "Kein einziger shared_text()-Aufruf in website/api — dann prüft dieser "

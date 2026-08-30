@@ -82,7 +82,7 @@ function shared_data_path(string $variable, string $filename): string
         && preg_match('/^[A-Za-z]:[\\\\\/]/', $path) !== 1
     ) {
         throw new SharedFailure(
-            'Die Tauschbörse ist auf diesem Server noch nicht eingerichtet.',
+            shared_text('not_configured'),
             503,
             'service_unavailable'
         );
@@ -254,7 +254,7 @@ function shared_database(): PDO
     $folder = dirname($path);
     if (!is_dir($folder) && !@mkdir($folder, 0770, true) && !is_dir($folder)) {
         throw new SharedFailure(
-            'Die Tauschbörse kann ihren Ablageordner nicht anlegen.',
+            shared_text('store_no_folder'),
             503,
             'service_unavailable'
         );
@@ -266,7 +266,7 @@ function shared_database(): PDO
         ]);
     } catch (PDOException $error) {
         throw new SharedFailure(
-            'Die Tauschbörse erreicht ihre Datenbank nicht.',
+            shared_text('store_no_database'),
             503,
             'service_unavailable'
         );
@@ -284,7 +284,7 @@ function shared_files_folder(): string
     $folder = shared_data_path('SOLIDON_SHARED_FILES', 'shared-files');
     if (!is_dir($folder) && !@mkdir($folder, 0770, true) && !is_dir($folder)) {
         throw new SharedFailure(
-            'Die Tauschbörse kann ihren Dateiordner nicht anlegen.',
+            shared_text('store_no_files_folder'),
             503,
             'service_unavailable'
         );
@@ -338,7 +338,7 @@ function shared_contact_hash(string $address): string
         // Kein zufälliger Rückfall: Ein Hash mit wechselndem Startwert zählt
         // keine Doppeleinreichungen und meldet trotzdem Erfolg.
         throw new SharedFailure(
-            'Die Tauschbörse ist auf diesem Server noch nicht eingerichtet.',
+            shared_text('not_configured'),
             503,
             'service_unavailable'
         );
