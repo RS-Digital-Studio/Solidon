@@ -130,8 +130,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
 | Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | 3a's Erhebung nach P5 — Ist-Verhalten am Code und im echten Fenster, Gegenmessung an Fusion, dann Befunde und Schnitt |
-| Der ganze Zeichenmodus aus Kundensicht | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Zeichenmodus-Bestandsaufnahme (bedienlogik läuft) — danach Pakete Z1…, Verteilung, Review |
-| Viewport und Ansichts-Werkzeuge aus Kundensicht | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Viewport-Bestandsaufnahme (bedienlogik läuft) — danach Pakete V1…, Verteilung, Review |
+| Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 zuerst (Escape vernichtet die Zeichnung; entschieden: merken statt vernichten), dann Maß-ändern und die Ausgänge; Review je Paket |
+| Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1 zuerst (der Schnitt öffnet auf ein leeres Bild), V1/V4 bei 50 vor den Touren; Review je Paket |
+| Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
 
 ---
 
@@ -12986,6 +12987,8 @@ Steuerungs-P verwechselt):
 | D11 | 56 Druckeinstellungen ohne Suchfeld — die Geste, die jeder Slicer hat (heben, nicht filtern) | L | offen |
 | D12 | Ring-Geschwister in `install_dialog._Row` und `filament_picker` messen und umbauen | M | nach D2 |
 | D13 | Druckeinstellungen, drei Kleinfunde der Kundenfahrt (15/53, Bilder im Scratchpad): „Druckdatei speichern" grau ohne Tooltip-Grund am Element (FR5-Familie); der Dialog wächst nicht mit, wenn die Profil-Klappe nachgereicht aufgeht — die Felder stauchen sich; bei 561 px Vorgabebreite ist die Tab-Leiste angeschnitten und die achte Gruppe unsichtbar ohne Weiter-Hinweis | S | **15, beauftragt** — die Fahrt selbst war sonst ein Lob: Klappe öffnet sich selbst am richtigen Ort, Slicer-Wortschatz vorn, „Nichts einzuwenden." statt Leere |
+| D14a | Roberts Order („materialauswahl und farbe sind sinnlos, da wir nach den filamenten gehen"): Das Farbfeld der Druckeinstellungen fliegt — sein eigener note-Satz sagt „am Druck ändert sie nichts", die Spule trägt die Farbe längst; vorher messen, ob nichts sonst das Feld liest | S | **15, nach D13** |
+| D14b | Die Material-Combo weicht dem Filamentwähler: Das Dokument-Material leitet sich aus der gewählten Spule ab (Hauptslot) — die auto:-Toleranzkette, Passungen und resolve-Vorgaben hängen daran und werden umgehängt, nicht verwaist. Kernberührung: Dokumentfeld, Migration, fremde Dateien ohne Spulenwahl, Override-Dialog | M | **Konzeptnotiz vor dem Bau** (15 schreibt sie nach D14a); Baueinsatz nach Notiz-Review |
 
 Reihenfolge nach Kundenkontakt: D1, D2, D4, D5 (täglich) → D6, D3
 (jedes Fenster, jeder Fehler) → D7, D9, D10 → D8, D12 → D11.
@@ -13007,14 +13010,57 @@ Bestandsaufnahmen laufen mit derselben Drei-Fragen-Systematik
 (versteht der Slicer-Kunde es ohne Handbuch; wirkt es hochwertig;
 was ist getestet statt behauptet).
 
-- [ ] **Zeichenmodus-Bestandsaufnahme** (bedienlogik, läuft):
-      Kernwege Klick für Klick (Rechteck zu Körper zuerst),
-      Fusion-Vergleich, Pakete Z1… — 3a's Kipp-Erhebung bleibt der
-      parallele Tiefen-Teil und wird nicht gedoppelt.
-- [ ] **Viewport-Bestandsaufnahme** (bedienlogik, läuft): die acht
-      Werkzeuge je aktivieren/benutzen/verstehen/verlassen, Kamera und
-      Auswahl, Befund-Marker und Analysekarten (Regel 18), Pakete V1… —
-      transform_bar (P1) und 3a's Baustellen sind ausgenommen.
+Die **Zeichenmodus-Bestandsaufnahme ist da** (bedienlogik, 30.08.2026,
+fünf Messsonden am gebauten Fenster). Die guten Teile sind sehr gut
+(Fangmarke, Bedingungssätze aus einer Quelle, Konfliktmarker); die
+schweren Funde liegen an den Ausgängen und am Kernweg 2 — neun Pakete:
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| Z1 | **Schwer**: Escape und „Verwerfen" vernichten die Zeichnung ohne Rückweg und ohne Ansage — die Formsitzung nebenan entscheidet umgekehrt („die teuerste Taste des Programms"). **Entschieden (Kundensicht): Variante b** — die verworfene Zeichnung wird gemerkt, die Statuszeile nennt den Rückweg, Strg+Z holt sie zurück; keine Nachfrage, keine geänderte Geste | M | offen — zuerst |
+| Z2 | Ein Maß ändern kostet 8 Klicks über Lösen-und-neu-Legen (Fusion: Doppelklick auf die Zahl) — „Maß ändern …" im Kontextmenü und per Doppelklick auf die Listenzeile, Entfernen+Neusetzen in EINEM Undo-Schritt | M | offen |
+| Z3 | Es gibt kein Redo im Skizzenmodus, und der gesperrte Menüeintrag verweist auf ein Werkzeug-Redo, das nicht existiert | S | offen |
+| Z4 | Der Spline verspricht „Doppelklick oder Eingabetaste schließt" — im gefahrenen Modus geht beides nicht (der Empfänger ist der unsichtbare Canvas); der einzige echte Weg (Klick auf den letzten Punkt) steht nirgends | S | offen |
+| Z5 | Escape zweistufig: erst die laufende Kette abbrechen, dann das Werkzeug ablegen — macht den Hinweistext wahr und entschärft Esc-Esc | S | mit/nach Z1 |
+| Z6 | Der Knopf heißt „Grundform", ist das Rechteckwerkzeug und versteckt das beste Anfänger-Angebot (sechs vollbemaßte Formen) hinter einem Pfeil | S | offen |
+| Z7 | Der Kreis misst Radius, der Kunde denkt in Durchmesser (M3 → Ø3,2 getippt = Ø6,4 gedruckt): sofort „Radius" statt „Abstand" beschriften und „R" ans Maßfeld; die echte Ø-Bedingung im Kern ist der eigene Punkt darunter | S | offen |
+| Z8 | Sprach- und Hinweisreste: „Ansicht: freien Ansicht" auf der Hauptzeile, Tastenname im Katalogtext, Schichthinweis zieht bei Ebenenwechsel nicht nach | S | offen |
+| Z9 | Zwei Zeichenumgebungen für dieselbe Aufgabe: Wer aus dem Verlauf korrigiert, landet im weißen 2D-Dialog statt im Viewport-Modus — der Feldweg führt künftig ins Fenster, der Dialog bleibt Rückfall | L | nach Z1 |
+
+- [ ] Die neun Z-Pakete abarbeiten — Z1 zuerst; je Paket Zahlen,
+      Gegenproben und Review vor dem Commit.
+- [ ] **Ø-Bedingung im Kern** (aus Z7, Variante b): eine echte
+      Durchmesser-Bedingungsart in `sketch/solver.py` samt Feld,
+      Beschriftung und Migration — die Sprache des Druckers bis in die
+      Projektdatei. Eigene Entscheidung mit Formatblick, nicht
+      nebenbei.
+Zulieferung an 3a, übergeben und dort weitergeführt (Kipp-Abschnitt):
+Bei frei gekippter Kamera steht `view_plane` auf FREE_VIEW,
+`_sketch_pull_offer` vergleicht gegen `sketch.plane` und bewirbt den
+Ziehgriff, während weiter gezeichnet wird — Zeichenklick und Ziehgriff
+überlappen genau in der Lage, die die Regel vermeiden wollte (gemessen,
+Rechteck geschlossen: '' → 'ready' nach dem Kippen).
+Die **Viewport-Bestandsaufnahme ist da** (bedienlogik, 30.08.2026, im
+echten Fenster gefahren, acht Belegbilder im Scratchpad). Kernsatz:
+Die Ansicht selbst ist gut — Auswahltiefe, Bohrungs-Zielhilfe,
+Schatten, Zeigerrangfolge sind sorgfältig gebaut; was fehlt, liegt an
+den **Übergängen**: Vier der sieben Werkzeuge lassen den Kunden im
+ersten Moment nach dem Öffnen raten. Neun Pakete:
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| V1 | **Kritisch**: Der Schnitt öffnet auf ein leeres Bild — Achswechsel Z lässt den Regler auf 0,0, und alles über der Ebene fällt weg; der Kunde denkt, er hat etwas kaputt gemacht. Fix: beim Achswechsel immer zentrieren (der Kommentar im Code beschreibt die richtige Regel schon, die Bedingung davor macht sie wirkungslos) | S | **50, beauftragt — vor den Touren** |
+| V2 | Der Zeiger beim Körperzug ist der Windows-Pfeil: `set_drag_cursor("moving")` — die Rolle existiert nicht, gemeint ist `"move"`; Ein-Zeichen-Fix plus Wächter aller Literale gegen `cursors.known()` | S | offen |
+| V3 | Die Navigationstexte versprechen Tasten, die es nicht gibt („mittlere dreht" — sie schiebt in allen vier Schemata). **Entschieden (Kundensicht): Variante b** — der Code folgt den Namen: `cad` = Mitte dreht (Umschalt+Mitte schiebt), `blender` = links wählt, Mitte dreht; `slicer`/`orbit` bleiben. Wer „Wie im CAD" wählt, will CAD-Verhalten — ehrlichere Texte über falschem Verhalten wären die halbe Antwort | M | offen |
+| V4 | Schichten tut ohne Auswahl stumm nichts (nackter toter Regler): bei genau einem Körper den nehmen, sonst der Satz der Analysekarte — in der Leiste, und er zeigt aufs Teil, nicht auf den Baum | S | **50, beauftragt — vor den Touren** |
+| V5 | Messen meldet in zwei von drei Arten nichts (drei stumme return-Ausgänge; das Status-Signal ist verdrahtet und wird nur beim Winkel benutzt) — drei emit mit den Winkel-Formulierungen | S | offen |
+| V6 | Ein angeklickter Befund fliegt an eine Stelle ohne Marke (alle op.*-Befunde): vergänglicher Ring in Auswahlfarbe plus Befundtitel, `_ring_points` existiert | M | nach V1–V5 |
+| V7 | Der Schnittzeiger ist gezeichnet und wird nie gesetzt. **Entschieden: ausbauen** — der Schnitt hat keine Klickgeste, ein Zeiger wäre sachlich falsch; Zeichnung raus, Regelabsatz historisch kennzeichnen, plus Wächter „jede SHAPES-Rolle hat eine Setzstelle" (mit V2 zusammen bauen). Die Gegenidee (Schnitt per Flächenklick legen) ist ein Feature und bewusst nicht Teil des Fixes | S | offen, mit V2 |
+| V8 | Leisten bei Mindestbreite messen (sechs Sprachen, echtes Fenster) — die fehlende Messung, kein Befund; nicht vor d3's P1-Landung | S | nach V1/V4/P1 |
+| V9 | Doku und Testlücke: Regeltexte sagen acht Werkzeuge, es sind sieben (ein Platz ist frei!); und `start=` hat keinen Test — einer, der jedes Werkzeug öffnet und den arbeitenden Zustand prüft, hätte V1 und V4 gefangen | S | nach V1/V4 |
+
+- [ ] Die neun V-Pakete abarbeiten — je Paket Zahlen, Gegenproben und
+      Review vor dem Commit.
 
 ---
 
