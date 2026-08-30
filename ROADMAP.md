@@ -119,7 +119,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
-| Die zweite Slicer-Übergabeart hat keinen Aufrufer | Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026) | den Anschluss an den Druckdialog: Übergabeart wählbar, Wahl gemerkt — der Fensterweg bekommt denselben Platz wie der Konsolenlauf (55) |
+| Gespeicherte Slicer-Profile überleben den Slicer-Wechsel | Gespeicherte Slicer-Profile überleben den Slicer-Wechsel (30.08.2026) | 55: Setzen und Prüfen zum Vermerkfeld `slicer_profile_slicer`, samt Messung am echten PrusaSlicer — fb's Feldhälfte liegt |
+| Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
 | Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
 | Der Textweg verweist auf ein Modell, das kein Einrichtungspunkt bringt | Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026) | Roberts Entscheidung: SDXL als siebter Einrichtungspunkt (~7 GB, fb) oder der Satz nennt Pfad und Bild-Ausweg statt des toten Verweises (5d) |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -12575,9 +12576,61 @@ Treffer in `app/` außerhalb von `handover.py`. Eine gebaute Funktion ohne
 Anschluss ist ein Versprechen, das das Produkt noch nicht gibt — mit Ansage
 hier festgehalten statt still (eine Kette endet am letzten Glied).
 
-- [ ] Der Anschluss an den Druckdialog: die Übergabeart wählbar machen
-      (slicen lassen oder im Slicer öffnen), die Wahl merken, und der
-      Fensterweg bekommt denselben Platz im Ablauf wie der Konsolenlauf (55).
+- [x] Erledigt mit `94f976a2` (30.08.2026): „Im Slicer öffnen …" steht als
+      zweiter Knopf neben „Slicen" — zwei Handlungen, keine Betriebsart. Die
+      benutzte Art reist als `handover`-Feld in den Druckeinstellungen mit
+      (tolerant in beide Richtungen, Fremdwert fällt auf „slice") und macht
+      beim nächsten Aufbau ihren Knopf zum Hauptknopf; gemerkt wird bei
+      Nutzung, nie bei Ansicht. Ein Slicer ohne Fenster sperrt den Knopf
+      mit Grund in beiden Kodierungen. Handprobe an allen drei Familien:
+      je Datei ein eigenes Fenster, keine stille Ersetzung; ElegooSlicers
+      eigene „Load Whole File"-Nachfrage bleibt sein Dialog, die Quittung
+      sagt ehrlich „das Fenster gehört jetzt Ihnen".
+
+---
+
+## Gespeicherte Slicer-Profile überleben den Slicer-Wechsel (30.08.2026)
+
+`_remember_slicer_choice` kehrt früh zurück, wenn alle drei Auswahlfelder
+leer sind — damit eine leere Auswahl die gute nicht überschreibt. Nach
+einem Wechsel auf PrusaSlicer oder CuraEngine sind sie aber **immer**
+leer, denn die brauchen keine Profile: Der Orca-Bestand blieb gespeichert
+und wurde beim nächsten Start wieder aufgelegt (fb, gemessen über den
+Klickweg). Das Vermerkfeld `slicer_profile_slicer` in `app/ui/settings.py`
+liegt seit `83a05d38`; was fehlt, ist die andere Hälfte — samt dem Fall
+„Vermerk leer", der jede Installation von vor dem Feld beschreibt: Ohne
+diese Ausnahme verlöre jeder Bestandskunde seine Profilwahl beim ersten
+Update.
+
+- [ ] 55: Setzen und Prüfen — `_remember_slicer_choice` schreibt den
+      Slicer-Pfad zum Bestand, `remembered_setup` vergleicht ihn und
+      verwirft Fremdes; dazu die Messung, was PrusaSlicer mit einem
+      fremden Profil wirklich tut (behauptet hat es niemand). Eigenes
+      Paket mit eigener Ansage.
+
+---
+
+## Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026)
+
+Nach einem Weg-3-Erzeugungslauf meldet der Prüfbericht
+`ingest.very_large` mit dem Rat „‚Dreiecke verringern' hilft" — und
+`decimate_mesh` steht als vierter Schritt **desselben Stapels**, das
+Objekt hat längst 150 000 Dreiecke (5d, gemessen am Textweg-Lauf). Der
+Befund entsteht beim Laden, wo er mit 614 820 Dreiecken wahr ist;
+erledigt hat ihn Schritt vier derselben Kette, und der Bericht sammelt
+über alle Schritte. Der Fall ist Weg-3-eigen: Beim Import dezimiert
+nichts automatisch, nur die Erzeugungskette räumt hinter sich auf. Der
+Kunde liest einen Handlungsvorschlag für etwas, das die Anwendung im
+selben Zug getan hat — muss er raten, ob er noch klicken soll, ist es
+falsch.
+
+- [ ] Bedienentscheidung mit Konzept-Ansage vor dem Bau: Das
+      `perceive.mended`-Muster liegt nahe — ein Befund, dessen Rat ein
+      spätere Schritt derselben Transaktionskette einlöst, wird als
+      behoben ausgewiesen statt verschwiegen (die Historie bleibt ehrlich)
+      oder verschwindet, wenn der Bericht ohnehin nur den Endzustand
+      trägt. Wer baut, sagt vorher an, welche Befunde die Regel erfasst —
+      „derselbe Lauf" ist die Grenze, nicht „irgendwann später".
 
 ---
 
@@ -12637,7 +12690,11 @@ dahinter ist keiner (gemessen von 5d, unabhängig bestätigt von fb;
 seit 5ds Erzeugen-Knopf-Fix ist der Knopf dabei gesperrt statt tot). Auf
 dieser Maschine ist SDXL seit dem 30.08.2026 installiert und
 `readiness("text_to_mesh")` steht auf ready — die Maschine kann den Weg,
-das Produkt noch nicht.
+das Produkt noch nicht. Der Weg selbst ist über das Fenster gefahren und
+trägt vollständig (5d): „ein einfacher Becher" in 143 s (der Bildweg
+braucht 15), vier Stapelschritte samt Provenienz, am Ende 150 000
+Dreiecke, wasserdicht — die Dauer gehört mit in die Abwägung, denn sie
+ist das zweite Argument neben den sieben Gigabyte.
 
 - [ ] Roberts Entscheidung — rund sieben Gigabyte für jeden Kunden, der
       den Textweg will, gegen einen Satz, der ehrlich sagt, dass man ein
