@@ -123,6 +123,27 @@ was dazwischen kam — und der `post-commit`-Hook pusht ihn sofort. Also
 `git read-tree HEAD` **unmittelbar vor** dem Commit, nicht am Anfang des
 Skripts.
 
+**„Unmittelbar vor" heißt: im selben Shell-Aufruf, hinter einer maschinellen
+Erwartung.** Am 30.08.2026 haben sich zwei Sitzungen mit genau dieser Falle
+**gegenseitig** Arbeit gelöscht (`36812c6d` und `9c4ebe6e`, geheilt in
+`cd7a1dc1`): Beide hatten `read-tree HEAD` gefahren und die Sollprobe gelesen —
+aber in einem **anderen Aufruf** als den Commit, und in die Sekunden dazwischen
+fiel jeweils der Commit der anderen. Eine Sollprobe in einem eigenen Aufruf
+prüft einen Zustand, den der Commit nicht mehr vorfindet. Die tragende Form —
+alles in einem Aufruf, und committet wird nur, wenn die Probe die wörtliche
+Erwartung trifft:
+
+```
+git read-tree HEAD && git add <pfade> \
+  && IST=$(git diff --cached HEAD --numstat) \
+  && SOLL=$(printf '44\t0\tROADMAP.md')       # die angesagten Zahlen, wörtlich
+  && if [ "$IST" = "$SOLL" ]; then git commit …; \
+     else echo "SOLLPROBE ABWEICHEND — KEIN COMMIT:"; echo "$IST"; fi
+```
+
+Wer die Abweichung erst im Rückblick liest, liest sie über einem Commit, der
+schon gepusht ist.
+
 **Die Kontrolle danach gehört gegen `HEAD`, und das ist der eigentliche Fund:**
 
 ```
