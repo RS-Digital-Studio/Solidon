@@ -4109,3 +4109,48 @@ def test_with_several_bodies_the_bar_says_what_it_needs(window: MainWindow) -> N
     assert window.layer_bar.slider.isHidden(), (
         "a slider next to a note saying there is nothing to slide is a contradiction"
     )
+
+
+def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) -> None:
+    """Der Verlauf war eine reine Textspalte mit halber Nummerierung.
+
+    Siebzehn Kategoriesymbole lagen in ``icons.py`` bereit, und keine
+    Verlaufszeile trug eines — wer seine Arbeit daran entlangliest, sucht
+    „das mit der Bohrung" und findet lauter gleich aussehende Zeilen. Und die
+    Nummern trugen nur die Kinder einer mehrschrittigen Transaktion: „3" und
+    „4" eingerückt unter „Kabel und Befestigung", während „Aushöhlen" darüber
+    keine hatte, obwohl auch das genau ein Schritt ist.
+
+    Die Nummer ist keine Zierde — der Fehlerdialog nennt „Operation: 4", und
+    ein geöffneter Schritt heißt „Bohrung setzen — Operation 4". Sie steht
+    deshalb an jeder Zeile, die genau einen Schritt vertritt; eine
+    Transaktion aus mehreren bekommt keine, ihre Kinder tragen ihre eigenen.
+    """
+    from pathlib import Path
+
+    from app.ui.panels import HistoryPanel
+    from app.ui.session import Session
+
+    session = Session()
+    session.open_project(Path(__file__).parent.parent / "app" / "examples" / "dose-mit-deckel.p3d")
+    session.wait_for_idle()
+
+    panel = HistoryPanel()
+    try:
+        panel.show_document(session.project.document)
+        rows = [panel.list.item(index) for index in range(panel.list.count())]
+        assert rows, "das Beispielprojekt hat keinen Verlauf — dann prüft dieser Test nichts"
+
+        without_icon = [row.text() for row in rows if row.icon().isNull()]
+        assert not without_icon, f"Zeilen ohne Symbol: {without_icon}"
+
+        # Jede Zeile, die genau einen Schritt vertritt, nennt seine Nummer.
+        for row in rows:
+            single = row.data(Qt.ItemDataRole.UserRole)
+            if single is None:
+                continue
+            assert str(single) in row.text(), (
+                f"Schritt {single} nennt seine Nummer nicht: {row.text()!r}"
+            )
+    finally:
+        panel.deleteLater()

@@ -66,7 +66,7 @@ from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import sort_key, tr
 from app.ui.dialogs import handlers_of
-from app.ui.icons import icon
+from app.ui.icons import icon, icon_name_for
 from app.ui.labels import (
     NumberSpin,
     compact_length,
@@ -466,6 +466,23 @@ def _op_title(name: str) -> str:
         return str(REGISTRY.get(name).title)
     except AppError:
         return name
+
+
+def _op_icon_name(name: str) -> str:
+    """Das Symbol einer Operation — ihr eigenes oder das ihrer Kategorie.
+
+    Dieselbe Quelle, aus der Menü und Katalog ihre Zeichen holen
+    (:func:`icons.icon_name_for`). Der Verlauf trug bisher keine: siebzehn
+    Kategoriesymbole lagen bereit, und die Liste, an der ein Kunde seine
+    Arbeit entlangliest, war eine reine Textspalte.
+
+    Eine Operation, die das Register nicht kennt, bekommt keines statt eines
+    falschen — dieselbe Zurückhaltung wie bei ihrem Titel.
+    """
+    try:
+        return icon_name_for(REGISTRY.get(name))
+    except AppError:
+        return ""
 
 
 def _identity(finding: Finding) -> tuple[Any, ...]:
@@ -2091,6 +2108,15 @@ class HistoryPanel(QWidget):
         super().__init__(parent)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Verlauf"))
+        # **Das kleinste Symbol, das die Zeile nicht weiter treibt.** Ein
+        # Symbol kostet zwei Punkte Zeilenhöhe, gleich wie klein es ist —
+        # gemessen 38 ohne, 40 mit, und darunter ändert sich nichts mehr (bei
+        # 18 sind es 42, bei 24 schon 48). Die zwei Punkte sind bezahlt: Die
+        # linke Spalte ist ohnehin überfüllt (ihr Inhalt will 901 Punkte bei
+        # 622 bis 819 verfügbaren), acht Verlaufszeilen machen daraus 917.
+        # Das ist eine bewusste Abwägung und keine kostenlose Verbesserung —
+        # die Überfüllung selbst ist ein eigener Befund.
+        self.list.setIconSize(QSize(NORMAL * 2, NORMAL * 2))
         # **Mehrere Schritte wählbar** (§24.5): Ein Rezept nimmt beliebige
         # ``op_ids``, und solange der Verlauf nur einen Index kannte, wanderte
         # der ganze Stapel in jeden Baustein — wer einen Halter aus einem
@@ -2205,7 +2231,21 @@ class HistoryPanel(QWidget):
             # Überlegung wie beim Material im Steckbrief: genannt wird, was
             # nicht die Regel ist.
             by = f"  ({tr('Agent')})" if transaction.origin.by == "agent" else ""
-            item = QListWidgetItem(f"{transaction.title}{by}")
+            # **Die Nummer steht an jeder Zeile, die genau einen Schritt
+            # vertritt** — bisher trugen sie nur die Kinder einer
+            # mehrschrittigen Transaktion, und damit war sie eine Auszeichnung
+            # ohne Regel: „3" und „4" standen eingerückt unter „Kabel und
+            # Befestigung", während „Aushöhlen" darüber keine hatte, obwohl
+            # auch das genau ein Schritt ist. Sie ist keine Zierde: Der
+            # Fehlerdialog nennt „Operation: 4", und der Titel eines geöffneten
+            # Schritts lautet „Bohrung setzen — Operation 4". Wer von dort
+            # zurück in den Verlauf sieht, sucht diese Zahl.
+            #
+            # Eine Transaktion aus mehreren Schritten bekommt keine: Sie
+            # *vertritt* keinen einzelnen, und ihre Kinder tragen ihre eigenen.
+            single = transaction.ops[0] if len(transaction.ops) == 1 else None
+            number = f"{single}  " if single is not None else ""
+            item = QListWidgetItem(f"{number}{transaction.title}{by}")
             if stopped_at is not None and stopped_at in transaction.ops:
                 # §15.3: die betroffenen Operationen werden im Verlauf markiert.
                 item.setText(f"! {item.text()}")
@@ -2213,6 +2253,19 @@ class HistoryPanel(QWidget):
                 f"{transaction.id} · {tr('Ops')} "
                 + ", ".join(str(entry) for entry in transaction.ops)
             )
+            # **Ein Symbol je Zeile, aus derselben Quelle wie im Menü.** Der
+            # Verlauf war eine reine Textspalte, während siebzehn
+            # Kategoriesymbole in ``icons.py`` bereitlagen — wer seine Arbeit
+            # daran entlangliest, sucht „das mit der Bohrung" und findet
+            # sechzehn gleich aussehende Zeilen. Eine Transaktion aus mehreren
+            # Schritten nimmt das Symbol ihres **ersten**: Sie heißt nach dem,
+            # was sie tut, und das beginnt dort.
+            first_op = next(
+                (entry.op for entry in document.ops if entry.id in set(transaction.ops)), ""
+            )
+            symbol = _op_icon_name(first_op) if first_op else ""
+            if symbol:
+                item.setIcon(icon(symbol, self.list))
             active_ops = tuple(op_id for op_id in transaction.ops if op_id not in deleted_ids)
             if transaction.ops and not active_ops:
                 item.setText(f"{item.text()}  ({tr('gelöscht')})")
@@ -2233,6 +2286,11 @@ class HistoryPanel(QWidget):
             if len(transaction.ops) > 1:
                 for op_id in transaction.ops:
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
+                    child_symbol = _op_icon_name(
+                        next((entry.op for entry in document.ops if entry.id == op_id), "")
+                    )
+                    if child_symbol:
+                        child.setIcon(icon(child_symbol, self.list))
                     if op_id not in deleted_ids:
                         child.setData(Qt.ItemDataRole.UserRole, op_id)
                         child.setData(OPS_ROLE, (op_id,))
