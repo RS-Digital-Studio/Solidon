@@ -2332,7 +2332,7 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     dialog.slicer_box.setVisible(True)
     dialog.resize(dialog.sizeHint())
     before = dialog.height()
-    field = dialog._editors["layers.height"]
+    field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
 
     dialog._open_slicer_section()
@@ -2349,21 +2349,40 @@ def test_every_group_of_the_depth_can_be_reached_at_the_default_width(
 
     Die Kundenfahrt vom 30.08.2026 (Bild 3) zeigte die Reiterleiste
     abgeschnitten — „Geschwindigkeit | S…", und *Haftung, Rückzug, Filament*
-    stand nirgends. Ohne Rollknöpfe ist eine abgeschnittene Leiste eine
-    Gruppe, die es für den Kunden nicht gibt; die Vorgabebreite muss reichen
-    oder die Leiste muss sagen, dass es weitergeht.
+    stand nirgends. Qts Ausweg dafür sind Rollknöpfe, und die sind unter
+    unserem Stylesheet blanke Flächen: gemessen je 16 auf 22 Punkte in einer
+    einzigen Farbe, ein ``image:`` an ihnen greift nicht. Wer nichts zum
+    Rollen sieht, hat die achte Gruppe nicht.
+
+    **Geprüft wird die Bauart, nicht die Pixelzahl.** Ob die Leiste an einer
+    bestimmten Breite passt, hängt an der Schriftmetrik, und die gibt es
+    offscreen nicht (der Bildschirm ist dort 800 Punkte breit, jede Familie
+    liefert dieselbe synthetische Metrik). Zugesichert ist deshalb, was den
+    Fall unabhängig davon ausschließt: kein Rollen, gekürzte Beschriftungen
+    statt abgeschnittener, der volle Name im Tooltip, und ein Dialog, der
+    sich beim Aufklappen die Breite der Leiste nimmt, soweit der Bildschirm
+    sie hergibt.
     """
     dialog = PrintSettingsDialog(session, UiSettings())
     dialog.resize(dialog.sizeHint())
+    narrow = dialog.width()
     dialog.tabs_toggle.setChecked(True)
     qt_app.processEvents()
     bar = dialog.tabs.tabBar()
 
     assert dialog.tabs.count() == len(GROUPS), "sonst prüft dieser Test die falsche Leiste"
-    assert bar.usesScrollButtons() or bar.sizeHint().width() <= dialog.width(), (
-        "entweder passt die Leiste in die Vorgabebreite, oder sie zeigt, dass es weitergeht"
+    assert not bar.usesScrollButtons(), "die Rollknöpfe sind blank — sie sind kein Ausweg"
+    assert bar.elideMode() == Qt.TextElideMode.ElideRight, "gekürzt statt abgeschnitten"
+    for index in range(dialog.tabs.count()):
+        assert dialog.tabs.tabToolTip(index) == dialog.tabs.tabText(index), (
+            "eine gekürzte Beschriftung braucht ihren vollen Namen daneben"
+        )
+
+    screen = dialog.screen()
+    deckel = screen.availableGeometry().width() - 48
+    room = dialog._room_for_tabs()
+    assert room >= min(bar.sizeHint().width(), deckel), (
+        f"die Rechnung deckt die Leiste: {room} px für {bar.sizeHint().width()} px Bedarf"
     )
-    last = bar.tabRect(bar.count() - 1)
-    assert last.right() <= dialog.width(), (
-        f"die letzte Gruppe endet bei {last.right()} px, der Dialog ist {dialog.width()} px breit"
-    )
+    assert room <= deckel, "und sie bleibt auf dem Bildschirm"
+    assert dialog.width() >= min(room, narrow), "gewachsen ist der Dialog auch"

@@ -92,7 +92,7 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from app.ui.style import TIGHT, make_primary
+from app.ui.style import ROOMY, TIGHT, make_primary
 
 _log = get_logger(__name__)
 
@@ -1726,6 +1726,23 @@ class PrintSettingsDialog(QDialog):
             area.setWidget(page)
             area.setWidgetResizable(True)
             self.tabs.addTab(area, group_title(group))
+            self.tabs.setTabToolTip(self.tabs.count() - 1, group_title(group))
+        # **Acht Gruppen, und zwei davon waren unerreichbar.** Bei der
+        # Vorgabebreite endete die Reiterleiste nach „Geschwindigkeit"; die
+        # Rollknöpfe, die Qt dafür einblendet, sind unter unserem Stylesheet
+        # blanke Flächen — gemessen, je 16 auf 22 Punkte in einer Farbe,
+        # dieselbe Falle wie bei den Pfeilen des Zahlenfelds, nur ohne deren
+        # Ausweg: Ein ``image:`` an ihnen greift nicht (auch das gemessen).
+        # Wer nichts zum Rollen sieht, hat die achte Gruppe nicht.
+        #
+        # Also gar nicht erst rollen: Die Reiter werden gekürzt statt
+        # abgeschnitten (der volle Name steht im Tooltip darüber), und der
+        # Dialog wächst beim Aufklappen in der Breite mit — dieselbe Bewegung,
+        # die er für die Höhe schon macht.
+        bar = self.tabs.tabBar()
+        bar.setUsesScrollButtons(False)
+        bar.setElideMode(Qt.TextElideMode.ElideRight)
+        bar.setExpanding(False)
         box = collapsible(tr("Weitere Einstellungen"), self.tabs, open_now=False)
         self.tabs_toggle = _toggle_of(box)
         if self.tabs_toggle is not None:
@@ -1761,12 +1778,31 @@ class PrintSettingsDialog(QDialog):
             page = area.widget() if isinstance(area, QScrollArea) else None
             if page is not None:
                 tallest = max(tallest, page.sizeHint().height())
-        frame = self.tabs.tabBar().sizeHint().height() + 8
+        bar = self.tabs.tabBar()
+        frame = bar.sizeHint().height() + 8
         wanted = self.height() + tallest + frame + 12
         screen = self.screen()
         if screen is not None:
             wanted = min(wanted, screen.availableGeometry().height() - 48)
-        self.resize(self.width(), max(wanted, self.height()))
+        self.resize(max(self._room_for_tabs(), self.width()), max(wanted, self.height()))
+
+    def _room_for_tabs(self) -> int:
+        """Die Breite, die die Reiterleiste braucht — gedeckelt vom Bildschirm.
+
+        Eigene Methode, weil sie sonst nicht prüfbar wäre: Am gebauten Dialog
+        entscheidet die Schriftmetrik, ob das Wachstum überhaupt greift, und
+        offscreen gibt es keine (der Bildschirm ist dort 800 Punkte breit, die
+        Leiste wünscht mehr). Die **Rechnung** lässt sich dagegen an jedem
+        Bildschirm prüfen, und sie ist das, was hier zugesichert wird.
+
+        Gemessen wird die Leiste selbst und keine Zahl daneben: Was sie
+        braucht, hängt an der Schrift und an der Länge der acht Gruppennamen.
+        """
+        room = self.tabs.tabBar().sizeHint().width() + 2 * ROOMY
+        screen = self.screen()
+        if screen is not None:
+            room = min(room, screen.availableGeometry().width() - 48)
+        return room
 
     def _build_slicer(self) -> QWidget:
         """Auf welche Profile des Slicers Solidon seine Werte legt (§29).
@@ -1849,6 +1885,8 @@ class PrintSettingsDialog(QDialog):
         form.addRow(self.profile_note)
         self.slicer_box = collapsible(tr("Profile des Slicers"), self.slicer_inner, open_now=False)
         self.slicer_toggle = _toggle_of(self.slicer_box)
+        if self.slicer_toggle is not None:
+            self.slicer_toggle.toggled.connect(self._unfold_slicer)
         # Erst jetzt: die Auswahl steht, und ``_slicer_path`` ist längst gesetzt.
         self._fill_slicer_choice()
         return self.slicer_box
@@ -1932,7 +1970,19 @@ class PrintSettingsDialog(QDialog):
         QTimer.singleShot(0, self, self._grow_to_content)
 
     def _grow_to_content(self) -> None:
-        """Auf die Höhe wachsen, die der Inhalt wünscht — bis zum Bildschirm."""
+        """Auf die Höhe wachsen, die der Inhalt wünscht — bis zum Bildschirm.
+
+        **Erst die Rechnung erzwingen, dann messen.** Ein Ereignisdurchlauf
+        allein genügt hier nicht: Gemessen am aufgeklappten Abschnitt meldete
+        ``sizeHint`` weiterhin 633 Punkte, während die ehrliche Zahl nach
+        ``layout().activate()`` bei 775 lag — ein ``max`` mit der veralteten
+        Zahl wächst nicht, und der Fehlbetrag bleibt in den Feldern darüber.
+        Dieselbe Sorte Lüge wie die umbrochenen Labels in
+        ``first_run._grow_to_content``, nur eine Ebene höher.
+        """
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
         wanted = self.sizeHint().height()
         screen = self.screen()
         if screen is not None:
