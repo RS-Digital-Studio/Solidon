@@ -116,7 +116,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Nach einem Erzeugungslauf begraben 118 wortgleiche Hinweise den Prüfbericht | Wortgleiche Waisen-Hinweise fluten den Prüfbericht (30.08.2026) | eine Entscheidung über Zusammenfassen oder Deckel — in `evaluate.py` oder `panels.py`, nicht nebenbei |
-| Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
@@ -12507,9 +12506,14 @@ gleichlautenden nicht mehr zu finden.
 unter dem 20-s-Budget aus §31. Ein schlechter Maschinentag kippt die Marke
 über die Grenze, ohne dass eine Zeile langsamer wurde.
 
-- [ ] Roberts Entscheidung: das Budget anheben (etwa auf 25 s) oder die
-      Suche beschleunigen. Bis dahin ist ein Riss dieser Marke allein kein
-      Regressionsbefund.
+- [x] **Erledigt durch Nachmessung** (15/53, 30.08.2026, drei Läufe
+      unter dem Schloss): Median 12,05 s gegen 20 s Budget — die 18,7 s
+      stammten vom Stand **vor** der Einmal-je-Lage-Optimierung; seit
+      ihr hat die Marke 40 Prozent Luft, und weder Budget noch Suche
+      brauchen eine Änderung. Roberts Entscheidung erübrigt sich.
+      Ehrlichkeits-Fußnote: In historischen Sammellauf-Fenstern stehen
+      auch 15–26 s — das ist das bekannte Fremdlast-Thema; die
+      §31-Messweise ist solo, und solo hält sie.
 
 ---
 

@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: a6e000e4-7f10-4e2d-92c3-c5df9b4a17cf
-  modified: 2026-08-30T12:32:50.829Z
+  modified: 2026-08-30T12:39:55.313Z
 ---
 
 Roberts Worte: *„mach es aus kundensicht perfekt, du sollst alles was du tust
@@ -67,4 +67,8 @@ Einfachheit ist die halbe Zusage — die andere Hälfte ist Anmutung:
   gelernt hat — und wo Solidon etwas besser kann als jeder Slicer (die
   Zahl während des Zugs), das sichtbar machen statt verstecken.
 
-Gilt für jede Sitzung und jedes Gebiet, nicht nur für Bedienpakete.
+Gilt für jede Sitzung und jedes Gebiet, nicht nur für Bedienpakete —
+und ausdrücklich (Robert, 30.08.2026) *„auch für die webseite und alles
+was mit der app zu tun hat"*: Website, Handbuch, Presse, Installer,
+Update-Fenster, Fehlertexte — der ganze Auftritt, nicht nur das
+Programmfenster.
