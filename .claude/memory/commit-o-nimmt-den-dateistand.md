@@ -22,6 +22,31 @@ Meine 67 mitgenommenen `tr()`-Quellen machten `origin/main` rot, bis die
 Kataloge nachkamen — ein Fenster, das der Urheber der Kataloge nicht geöffnet
 hatte.
 
+**Und die Regel gilt nicht dem Befehl, sondern der Frage. Am 30.08.2026 (5d)
+ist sie mir genau daran durchgerutscht:** Ich habe nicht `commit -o` benutzt,
+sondern `git update-index --add <datei>` in einem privaten Index — und
+deshalb diese Notiz für nicht anwendbar gehalten. `update-index --add` nimmt
+den Dateistand aber genauso; jeder Weg, der eine **Datei** in den Index legt,
+tut es. Die Frage lautet nie „benutze ich `-o`?", sondern **„lege ich Zeilen
+oder eine Datei ab?"**
+
+Der Preis war höher als eine Zurechnung: Mitgereist sind zwei Rot-Proben einer
+Nachbarsitzung, die auf ihren noch ungebauten Fix warteten. Damit standen zwei
+rote Tests auf `origin/main` — dieselbe halbe Einheit wie oben, nur diesmal
+von der Testseite her.
+
+**Der Guard lief und hat mich nicht gehalten**, und das ist der Kern: Er zeigte
+`69/4`, wo ich `35/3` gebaut hatte. Ich habe die Zahl gelesen und committet;
+dass sie nicht stimmte, fiel mir erst danach auf. Der Zweischritt oben stand
+da, ich habe nur seine Reihenfolge umgedreht.
+
+> **Ein Guard ohne vorher genannte Erwartung ist eine Anzeige, keine Prüfung.**
+
+Praktisch heißt das: Die erwartete Zahl gehört **aufgeschrieben**, bevor der
+Befehl läuft — in die Ansage an die anderen, ins Skript, notfalls in eine
+`echo`-Zeile darüber. Eine Erwartung, die nur im Kopf steht, wird von einem
+Istwert überschrieben, ohne dass es auffällt.
+
 **How to apply:** Vor jedem `-o`-Commit ein Zweischritt, und die Reihenfolge
 ist der ganze Punkt: **erst die eigene Zahl ansagen** („ich lösche zwei
 Zeilen, füge keine ein"), **dann** `git diff HEAD --numstat -- <pfade>`
