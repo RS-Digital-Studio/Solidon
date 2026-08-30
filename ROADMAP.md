@@ -116,7 +116,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Sechs Leistungsmarken reißen einen Zähler gegen Glückstreffer-Bestwerte | Sechs Leistungsmarken rissen einen Zähler, und der Code war unschuldig (30.08.2026) | die `alone`-Bestwerte neu setzen und die Minimum-für-immer-Mechanik auf ein rollendes Fenster umbauen — fb baut, die Messverfahrens-Entscheidung wird im selben Zug in `tests.md` dokumentiert |
-| Die Parameterkarte ist im Betrieb zehn Bildpunkte breiter als ihre Zone | Die Parameterkarte war im Betrieb breiter als ihre Zone (30.08.2026) | ee's Bündel-Commit — Fixes und Tests sind gebaut und einzeln abgenommen, sie liegen noch im Baum |
+| Nach einem Erzeugungslauf begraben 118 wortgleiche Hinweise den Prüfbericht | Wortgleiche Waisen-Hinweise fluten den Prüfbericht (30.08.2026) | eine Entscheidung über Zusammenfassen oder Deckel — in `evaluate.py` oder `panels.py`, nicht nebenbei |
+| Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Solidons Slicer-Lauf scheitert an ElegooSlicer, die CLI selbst nicht | Solidons Elegoo-Lauf scheitert, die CLI selbst nicht (30.08.2026) | fb's vier Trennläufe zwischen `--arrange 0` und dem selbst geschriebenen Maschinenprofil |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -12441,8 +12442,40 @@ dieselbe Funktion, die anzeigt). Dazu die leash-Eingänge, die Nicht-Arbeiter
 abweisen — der Fremdkörper kam aus einem Test, der Suite-Pin machte den
 jahrelang latenten Fall nur sichtbar.
 
-- [ ] ee's Bündel-Commit schließt den Punkt; danach müssen die zwei
-      Reihenfolge-Tests im vollen Torlauf grün sein.
+- [x] **Geschlossen mit `acf47923`** — das Bündel ist committet, und die
+      Abnahme lief vorher im Probe-Worktree: `test_ui` plus
+      `test_interface_limits` mit 407 grünen Tests, beide Reihenfolge-Tests
+      darunter, alle sechs abgeleiteten Testfamilien einzeln je Prozess
+      Exit 0.
+
+---
+
+## Wortgleiche Waisen-Hinweise fluten den Prüfbericht (30.08.2026)
+
+Nach einem Weg-3-Erzeugungslauf stehen 123 Befunde im Prüfbericht, und 118
+davon sind wortgleich: „Ein Merkmal hat keinen Nachfolger mehr."
+(`perceive.orphaned`, je Merkmal eine eigene Zeile). Die fünf Zeilen, die
+etwas sagen — `transform.fitted`, drei `repair.*`, `arrange.below_bed` —
+gehen darin unter. Der `info`-Grad ist bewusst gewählt und in `evaluate.py`
+begründet; bedacht ist der **Grad**, nicht die **Menge**.
+
+- [ ] Eine Entscheidung über Zusammenfassen („118 Merkmale haben keinen
+      Nachfolger mehr" als eine Zeile mit Aufklappliste) oder einen Deckel —
+      sie liegt in `evaluate.py` oder `panels.py` und ist eine Bedienfrage,
+      keine Fehlerbehebung.
+
+---
+
+## Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026)
+
+`orient_200` misst 18 682 ms auf dem Stand vor dem `deferred`-Umbau und
+18 774 ms auf HEAD — stabil, keine Regression, aber nur gut sechs Prozent
+unter dem 20-s-Budget aus §31. Ein schlechter Maschinentag kippt die Marke
+über die Grenze, ohne dass eine Zeile langsamer wurde.
+
+- [ ] Roberts Entscheidung: das Budget anheben (etwa auf 25 s) oder die
+      Suche beschleunigen. Bis dahin ist ein Riss dieser Marke allein kein
+      Regressionsbefund.
 
 ---
 
