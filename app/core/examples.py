@@ -126,6 +126,16 @@ EXAMPLES: Final[tuple[Example, ...]] = (
         ),
     ),
     Example(
+        id="skizze-mit-massen",
+        title=_("Skizzieren — ein Umriss, der sich bemaßen lässt"),
+        way="",
+        doc=_(
+            "Eine runde Platte aus einer Skizze: Der Durchmesser ist eine Bedingung, "
+            "kein Punkt — ändert man den Projektparameter, folgt der Umriss. Dazu "
+            "eine Tasche, ebenfalls skizziert."
+        ),
+    ),
+    Example(
         id="drucker-kalibrieren",
         title=_("Kalibrieren — einmal drucken, dann stimmt es"),
         way="",

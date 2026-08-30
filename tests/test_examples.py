@@ -54,7 +54,20 @@ def test_the_examples_reach_most_of_the_catalogue() -> None:
     categories = {REGISTRY.get(name).category for name in used if REGISTRY.has(name)}
 
     assert len(used) >= 20, f"nur {len(used)} Operationen in allen Beispielen"
-    assert {"parts", "label", "prepare", "holes", "repair", "import"} <= categories
+    # **``sketch`` steht seit dem 31.08.2026 dabei.** Bis dahin zeigten neun
+    # Beispiele keine einzige ``sketch_*``-Operation — ein Kern mit eigenem
+    # Löser (§30.1), in den ersten fünf Minuten unsichtbar. Der Test war grün,
+    # weil er nicht danach fragte; sein eigener Zweck ist aber genau der, dass
+    # ein neuer Bereich auch ein Beispiel bekommt.
+    assert {
+        "parts",
+        "label",
+        "prepare",
+        "holes",
+        "repair",
+        "import",
+        "sketch",
+    } <= categories
 
 
 def test_all_three_are_installed() -> None:

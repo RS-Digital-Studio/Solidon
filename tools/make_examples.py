@@ -387,6 +387,63 @@ def two_colour_sign() -> Project:
     return project
 
 
+def sketched_plate() -> Project:
+    """Der Skizzenweg (§30.1): Umriss aus Bedingungen, nicht aus Punkten.
+
+    **Der einzige Bereich, für den es kein Beispiel gab.** Neun Beispiele
+    zeigten am 31.08.2026 keine einzige ``sketch_*``-Operation — ein ganzer
+    Kern mit eigenem Löser, in den ersten fünf Minuten unsichtbar.
+
+    Gezeigt wird das, was die Skizze von einer Punktliste unterscheidet: Der
+    Kreis trägt seinen Durchmesser als **Bedingung**, und die Bedingung rechnet
+    mit dem Projektparameter. Wer ``durchmesser`` auf 80 stellt, bekommt einen
+    Umriss, der wirklich rund ist — der Löser gibt eine exakte Kurve in den
+    Kern, keine Sehnenkette.
+    """
+    project = new_project()
+    document = project.document
+    document.parameters["durchmesser"] = Parameter(
+        name="durchmesser", value=60.0, unit="mm", title=_("Durchmesser")
+    )
+    document.parameters["staerke"] = Parameter(
+        name="staerke", value=8.0, unit="mm", title=_("Stärke")
+    )
+
+    history = History(document)
+    history.apply(
+        _("Runde Platte"),
+        [
+            OperationDraft(
+                op="sketch_extrude",
+                params={
+                    "shape": "circle",
+                    # Beim Kreis **ist** die Länge der Durchmesser — die Skizze
+                    # legt ihn als Abstandsbedingung zwischen Mitte und Rand ab.
+                    "length": "=@durchmesser",
+                    "height": "=@staerke",
+                    "name": "Platte",
+                },
+            )
+        ],
+    )
+    history.apply(
+        _("Tasche"),
+        [
+            OperationDraft(
+                op="sketch_pocket",
+                inputs=("obj_1",),
+                params={
+                    "shape": "rectangle",
+                    "length": "=@durchmesser/2",
+                    "width": "=@durchmesser/3",
+                    "depth": "=@staerke/2",
+                },
+            )
+        ],
+    )
+    return project
+
+
 def calibration_plate() -> Project:
     """Die drei Testkörper, mit denen ein Drucker vermessen wird (§28.3).
 
@@ -728,6 +785,7 @@ def main() -> int:
         "weg4-figur-formen": way_four,
         "gehaeuse-mit-bausteinen": housing,
         "schild-zweifarbig": two_colour_sign,
+        "skizze-mit-massen": sketched_plate,
         "drucker-kalibrieren": calibration_plate,
         "aushoehlen-und-teilen": hollow_and_split,
         "dose-mit-deckel": box_with_lid,

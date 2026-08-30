@@ -490,6 +490,48 @@ TOURS: Final[tuple[Tour, ...]] = (
         ),
     ),
     Tour(
+        example_id="skizze-mit-massen",
+        intro=_(
+            "Eine runde Platte, gezeichnet statt eingetippt. Der Unterschied "
+            "steckt nicht im Ergebnis, sondern darin, was passiert, wenn Sie ein "
+            "Maß ändern."
+        ),
+        steps=(
+            TourStep(
+                shows="viewport",
+                text=_(
+                    "Der Umriss dieser Platte ist ein Kreis mit einer Bedingung: "
+                    "„Der Rand hat vom Mittelpunkt immer denselben Abstand.“ Nicht "
+                    "eine Kette aus Punkten, die zufällig rund aussieht — der Kern "
+                    "rechnet mit der Kurve selbst."
+                ),
+            ),
+            TourStep(
+                shows="parameters",
+                text=_(
+                    "Ändern Sie „Durchmesser“ auf 80: Der Umriss folgt, die Tasche "
+                    "bleibt in ihrem Verhältnis, und beides bleibt rund. Genau "
+                    "dafür ist eine Bedingung da — sie überlebt die Änderung, ein "
+                    "Punkt nicht."
+                ),
+                done=_parameter_changed("durchmesser", 60.0),
+            ),
+            TourStep(
+                shows="history",
+                text=_(
+                    "Die Tasche ist derselbe Weg, nur abwärts: ein zweiter Umriss, "
+                    "in den Körper geschnitten. Mit einem Doppelklick auf „Tasche“ "
+                    "ändern Sie ihre Tiefe."
+                ),
+            ),
+        ),
+        closing=_(
+            "Skizzen liegen im Menü Erzeugen. Sie lohnen sich überall dort, wo ein "
+            "Maß später noch stimmen muss — bei allem anderen sind die Grundformen "
+            "schneller."
+        ),
+    ),
+    Tour(
         example_id="drucker-kalibrieren",
         intro=_(
             "Drei Prüfkörper auf einer Platte: Toleranzleiter, Wandstärkenleiter, "
