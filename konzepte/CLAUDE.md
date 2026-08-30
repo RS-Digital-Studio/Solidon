@@ -1,6 +1,6 @@
 # `konzepte/` — das Warum
 
-32 Dokumente: Konzepte, Durchsichten, Entscheidungen. **Der Index ist
+33 Dokumente: Konzepte, Durchsichten, Entscheidungen. **Der Index ist
 `konzepte/README.md`** und nennt zu jedem den Stand.
 
 ## Wozu sie da sind — und wozu nicht
