@@ -2896,7 +2896,15 @@ class ReportPanel(QWidget):
         # Dreieck bleibt ein Dreieck, auch wo die Farbe nicht ankommt.
         item.setIcon(icon(f"severity-{finding.severity}", self.list, colour=tone))
         item.setData(Qt.ItemDataRole.UserRole, finding)
-        item.setForeground(tone)
+        # **Der Satz bleibt Fließtext, die Farbe steht am Symbol.** Ein ganzer
+        # eingefärbter Satz war die lauteste Auszeichnung des Fensters für
+        # eine Auskunft, die ohnehin schon eine hat — und ausgerechnet die
+        # dringlichste Stufe traf es am härtesten: Rot bringt auf dem
+        # Listengrund 4,52, Bernstein 7,46, Blau 6,19, während der gewöhnliche
+        # Text 13,59 hätte. Der Fehler war der am schlechtesten lesbare
+        # Befund. Regel 18 bleibt gewahrt: Die Form des Symbols trägt den
+        # Schweregrad, und sie trug ihn schon vorher — Dreieck, Kreis, Punkt.
+        item.setData(Qt.ItemDataRole.UserRole + 4, tone.name())
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]

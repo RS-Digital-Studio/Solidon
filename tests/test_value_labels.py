@@ -1265,3 +1265,50 @@ def test_findings_of_the_same_matter_offer_the_same_way_out(gruppe: tuple[str, .
 
     angebote = {code: tuple(a.id for a in FINDING_ACTIONS[code]) for code in gruppe}
     assert len(set(angebote.values())) == 1, f"verschiedene Angebote: {angebote}"
+
+
+def test_a_finding_line_is_plain_text_and_its_symbol_carries_the_colour(qt_app: object) -> None:
+    """Der ganze Satz trug die Rollenfarbe — die dringlichste am schlechtesten.
+
+    Gemessen auf dem Listengrund: Rot bringt **4,52**, Bernstein 7,46, Blau
+    6,19, und der gewöhnliche Text hätte 13,59. Ein Fehler war damit der am
+    schlechtesten lesbare Befund des Berichts, und ein ganzer eingefärbter
+    Satz war zugleich die lauteste Auszeichnung des Fensters für eine
+    Auskunft, die ihre zweite Kodierung längst hat.
+
+    Die Form des Symbols trägt den Schweregrad weiter (Regel 18) — Dreieck,
+    Kreis, Punkt —, und sie trug ihn auch vorher schon; die Farbe steht dort
+    und nicht mehr im Satz.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.scene import EvaluationResult
+    from app.core.types import Finding, Report, Scene
+    from app.ui.panels import ReportPanel
+
+    panel = ReportPanel()
+    try:
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(
+                    report=Report(
+                        findings=(
+                            Finding(code="a.error", severity="error", message="Ein Fehler"),
+                            Finding(code="a.warning", severity="warning", message="Eine Warnung"),
+                            Finding(code="a.info", severity="info", message="Ein Hinweis"),
+                        )
+                    )
+                )
+            )
+        )
+        assert panel.list.count() == 3
+        for row in range(panel.list.count()):
+            item = panel.list.item(row)
+            assert not item.icon().isNull(), "der Schweregrad steht am Symbol"
+            # Keine eigene Vordergrundfarbe: Die Zeile nimmt die des Themas.
+            brush = item.foreground()
+            assert brush.style() == Qt.BrushStyle.NoBrush, (
+                f"Zeile {row} färbt ihren Satz selbst: {brush.color().name()}"
+            )
+    finally:
+        panel.deleteLater()
