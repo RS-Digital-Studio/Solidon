@@ -21,10 +21,11 @@ fragen. Vertrauenswürdig macht sie, was drumherum passiert.
 from __future__ import annotations
 
 import copy
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Container
 from dataclasses import dataclass, field
 from math import isfinite
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from app.core import activation
 from app.core.agent import checks
@@ -179,6 +180,63 @@ def _refusal_finding() -> Finding:
     )
 
 
+#: Woran ein hingeschriebener Werkzeugaufruf zu erkennen ist: ein Name in
+#: JSON-Schreibweise. Die Form deckt jede Spielart ab, in der ein Modell den
+#: Aufruf verfehlt — roh, in ``<tool_call>``-Klammern, oder als
+#: ``{"function": {"name": …}}``; entschieden wird danach am Namen selbst.
+_NAMED_IN_JSON: Final = re.compile(r'"name"\s*:\s*"([A-Za-z0-9_.]+)"')
+
+
+def _written_call(text: str, offered: Container[str]) -> str:
+    """Der Werkzeugname, den das Modell hingeschrieben statt aufgerufen hat.
+
+    Leer, wenn keiner darin steht — und das ist der Normalfall: Ein
+    Auskunftszug antwortet in Sätzen, und ein Satz trägt keinen
+    JSON-Schlüssel.
+
+    Entschieden wird am **angebotenen** Namen und nicht an der Form allein.
+    Ein Modell, das über ein Werkzeug spricht, nennt es im Fließtext; eines,
+    das den Aufruf verfehlt, schreibt ihn in der Schreibweise hin, die es
+    aufrufen sollte.
+    """
+    for name in _NAMED_IN_JSON.findall(text):
+        if name in offered:
+            return str(name)
+    return ""
+
+
+def _written_call_finding(name: str) -> Finding:
+    """Das Modell hat seinen Aufruf getippt, statt ihn zu tun.
+
+    **Der häufigste Ausfall eines lokalen Modells, und der einzige ohne
+    Auskunft.** Gemessen an ``qwen2.5-coder:14b`` (07.08.2026) und an
+    ``llama3.1:8b`` unter voller Werkzeuglast: Beide schreiben
+    ``{"name": "set_parameter", …}`` in den Textinhalt, statt den Aufruf
+    abzusetzen. Ollama kann das nicht als Aufruf lesen, ``wants_tools`` bleibt
+    falsch, und der Zug endet wie ein Auskunftszug — mit rohem JSON in der
+    Chatzeile und ohne ein Wort dazu. Ein Kunde sieht dort etwas, das nach
+    einem Fehler der Anwendung aussieht und eine Eigenschaft seines Modells
+    ist.
+
+    Der Chat-Einrichtungsdialog sagt dasselbe seit je über den Knopf
+    *Werkzeuge prüfen* — nur eben **vorher** und nur, wenn jemand ihn
+    drückt (Regel 17: der Rat steht im Text, eine Handlung gibt es hier
+    nicht — der Wechsel des Modells ist ein Weg durch einen Dialog, kein
+    Knopf an einem Befund).
+    """
+    return Finding(
+        code="agent.call_written_out",
+        severity="warning",
+        message=_(
+            "Das Modell hat seinen Werkzeugaufruf hingeschrieben, statt ihn "
+            "auszuführen — im Gespräch steht die Zeile, getan wurde nichts. Das "
+            "liegt am Modell und nicht an der Anwendung; ein anderes hilft. Ob "
+            "eines taugt, sagt „Werkzeuge prüfen“ unter „Chat einrichten …“."
+        ),
+        values={"op": name},
+    )
+
+
 def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
     """Eine Meldung, wenn genannte Objekt-IDs nicht existieren — sonst leer.
 
@@ -300,6 +358,14 @@ class AgentSession:
                 break
 
             if not reply.tool_calls:
+                # **Ein Zug ohne Aufruf ist eine Auskunft — oder ein Modell,
+                # das den Aufruf verfehlt hat.** Beide enden hier gleich, und
+                # bis hierher sahen sie auch gleich aus: Der Kunde bekam rohes
+                # JSON in seine Chatzeile und kein Wort dazu
+                # (:func:`_written_call_finding`).
+                written = _written_call(reply.text, {str(entry.get("name", "")) for entry in tools})
+                if written:
+                    proposal.findings.append(_written_call_finding(written))
                 break
 
             messages.append(

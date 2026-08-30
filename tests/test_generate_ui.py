@@ -761,3 +761,117 @@ def test_letting_the_dialog_go_stops_the_worker_too(qt_app: QApplication) -> Non
     assert worker.cancelled()
     assert worker.wait(5000)
     qt_app.processEvents()
+
+
+class LageMitZaehler:
+    """Ein Generator in einer bestimmten Lage, der mitzählt, ob er läuft.
+
+    Der Unterschied zu :class:`CountingBackend` ist die Frage: Dort geht es
+    darum, wie oft die Bereitschaft erhoben wird, hier darum, ob ein Klick auf
+    *Erzeugen* wirklich einen Wurf auslöst.
+    """
+
+    id = "comfyui"
+    available = True
+
+    def __init__(self, lage: object) -> None:
+        self._lage = lage
+        self.runs = 0
+
+    def readiness(self, workflow: str = "image_to_mesh") -> object:
+        return self._lage
+
+    def text_to_mesh(self, prompt: str, *, seed: int = 0, progress=None, cancelled=None) -> object:
+        self.runs += 1
+        raise OperationCancelled
+
+
+def test_the_generate_button_either_works_or_says_why(qt_app: QApplication) -> None:
+    """**Ein Knopf, der klickbar ist und nichts tut, ist schlimmer als einer,
+    der gesperrt ist.**
+
+    Der Knopf hing an „alles außer ABSENT", :meth:`_start` an ``available``
+    („genau READY"). Dazwischen lagen drei Lagen, in denen *Erzeugen*
+    klickbar war und der Klick folgenlos blieb: kein Wurf, kein Balken, kein
+    Satz — gemessen mit einer Attrappe je Lage.
+
+    Der gesperrte Knopf hat den Satz daneben, der ihn erklärt, und den zweiten
+    Knopf, der die Lage behebt (Regel 17). ``UNKNOWN`` bleibt klickbar: Dort
+    antwortet etwas, das wir nicht kennen, und ein gesperrter Knopf wäre eine
+    Behauptung darüber — er muss dann aber auch starten.
+    """
+    from app.core.backends import mesh
+
+    for lage, laeuft in (
+        (mesh.Readiness.READY, True),
+        (mesh.Readiness.UNKNOWN, True),
+        (mesh.Readiness.NO_NODES, False),
+        (mesh.Readiness.NO_MODEL, False),
+    ):
+        backend = LageMitZaehler(lage)
+        dialog = GenerateDialog(backend=backend)
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("ein Halter")
+
+        knopf = ok(dialog)
+        assert knopf.isEnabled() is laeuft, f"{lage}: Knopf und Wirkung müssen zusammenpassen"
+
+        # Über den Klick und nicht über ``_start``: Die Verbindung dazwischen
+        # ist der Teil, der auseinanderlaufen kann.
+        knopf.click()
+        worker = dialog._worker
+        if worker is not None:
+            worker.wait(5000)
+        qt_app.processEvents()
+
+        assert (backend.runs > 0) is laeuft, f"{lage}: geklickt heißt gelaufen, oder gesperrt"
+        if not laeuft:
+            assert not dialog.setup.isHidden(), f"{lage}: und der Weg zur Behebung steht daneben"
+        dialog.release()
+
+
+def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
+    """Der Satz verweist auf Angaben daneben — also müssen sie daneben stehen.
+
+    ``mesh._failed`` schreibt „Was es dazu sagt, steht daneben" und legt
+    Knotennamen und ComfyUIs eigene Fehlerzeile in ``values``: „Torch not
+    compiled with CUDA enabled", „No module named …", Speichermangel. Der
+    Dialog zeigte Titel, ``detail`` und die Vorschläge — die Werte fielen
+    weg, und ausgerechnet die Zeile, mit der jemand zum Support geht, kam nie
+    an. Elf Fehlerpfade in ``backends/mesh.py`` tragen solche Werte.
+    """
+    from app.core.backends import mesh
+    from app.i18n import _
+
+    grund = "Torch not compiled with CUDA enabled"
+
+    class Bricht:
+        id = "comfyui"
+        available = True
+
+        def readiness(self, workflow: str = "image_to_mesh") -> mesh.Readiness:
+            return mesh.Readiness.READY
+
+        def text_to_mesh(
+            self, prompt: str, *, seed: int = 0, progress=None, cancelled=None
+        ) -> object:
+            raise mesh.GenerationFailed(
+                title=_("Der Generator hat den Auftrag abgebrochen."),
+                detail=_("ComfyUI hat die Erzeugung mit einem Fehler beendet."),
+                values={"node": "TripoSGSampler", "reason": grund},
+            )
+
+    dialog = GenerateDialog(backend=Bricht())
+    wait_for_readiness(dialog, qt_app)
+    dialog.prompt.setText("ein Halter")
+    ok(dialog).click()
+    worker = dialog._worker
+    assert worker is not None
+    worker.wait(5000)
+    qt_app.processEvents()
+
+    gesagt = dialog.state.text()
+    assert grund in gesagt, "der Grund, mit dem jemand zum Support geht"
+    assert "TripoSGSampler" in gesagt, "und der Schritt, in dem es riss"
+    assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
+    dialog.release()

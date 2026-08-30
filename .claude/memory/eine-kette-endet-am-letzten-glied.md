@@ -47,3 +47,21 @@ Punkt 6): Wer eine Geschichte hat, die aufgeht, hört auf zu prüfen.
 4. Verwandt: [[text-gesetzt-heisst-nicht-gezeigt]] — dort ist der Wert gesetzt
    und wird nicht angezeigt; hier ist der Rückruf gesetzt und wird nicht
    gerufen. Dieselbe Familie.
+
+**Die dritte Gestalt, gefunden am 30.08.2026: der Kern verweist auf etwas, das
+die Oberfläche wegwirft.** `AppError.values` trägt Adresse, Knotenname und die
+Fehlerzeile des fremden Programms; drei Kern-Stellen schreiben in ihren
+`detail` wörtlich „steht daneben", und eine schreibt im Kommentar sogar „der
+Dialog hängt die values als eigene Zeilen darunter". Tat er nicht — `show_error`
+baute seinen Text aus `title`, `detail` und dem Rat. Der Kunde las „Der Anfang
+der Antwort steht daneben", und daneben stand nichts.
+
+Der Unterschied zu den drei Fällen oben: Hier **fehlt kein Aufruf**, hier
+endet die Zusage an einer Schichtgrenze. Der Kern hat seinen Teil getan, die
+Oberfläche ihren nicht, und keine der beiden Seiten liest die andere.
+
+Der Griff dafür ist ein anderer und ebenso billig: **Nach dem Verweis suchen,
+nicht nach dem Namen.** Wer im Kern „daneben", „darunter", „siehe dort" oder
+„die Zahlen stehen in" schreibt, hat eine Zusage an eine andere Schicht
+gegeben — `grep -rn "steht daneben" app/core/` beantwortet in einer Sekunde,
+ob sie eingelöst ist.

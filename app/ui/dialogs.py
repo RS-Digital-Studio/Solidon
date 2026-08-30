@@ -2216,6 +2216,33 @@ def unhandled_advice(
     ]
 
 
+def spoken_values(error: AppError) -> list[str]:
+    """Die Angaben des Fehlers als Zeilen — die, die etwas sagen.
+
+    **Der Kern legt sie dort ab und verweist im Satz darauf.** „Der Anfang der
+    Antwort steht daneben", „Was es dazu sagt, steht daneben", „Die Adresse
+    gehört in die Werte daneben" — dreimal wörtlich, und daneben stand nichts:
+    ``show_error`` zeigte Titel, ``detail`` und Rat, die ``values`` fielen weg.
+    Zu sehen waren sie nur über *Einzelheiten*, und den Knopf gibt es nur,
+    wenn kein anderer Vorschlag greift. Beim Sprachmodell greift immer einer
+    (``Einstellungen öffnen``), beim Generator zeigt der Dialog gar keine —
+    genau die zwei Wege, an denen der Grund allein in ``values`` steht.
+
+    **Leeres bleibt draußen.** Jeder ``ExternalToolError`` trägt ``tool`` und
+    ``exit_code`` mit, auch wenn keines von beiden gesetzt ist; ungefiltert
+    stünde unter jedem Chatfehler „Programm: " und „Rückgabewert: None". Eine
+    Null dagegen ist eine Aussage („Offene Kanten: 0") und bleibt.
+
+    Nicht der rohe Schlüssel: ``value_line`` setzt Beschriftung, Einheit und
+    das Dezimaltrennzeichen der Anzeigesprache (Regel 20, §13).
+    """
+    return [
+        value_line(key, value)
+        for key, value in error.values.items()
+        if value is not None and value != "" and value != [] and value != {}
+    ]
+
+
 def show_error(
     error: AppError,
     parent: QWidget | None = None,
@@ -2239,9 +2266,12 @@ def show_error(
     box.setIcon(QMessageBox.Icon.Warning)
     box.setWindowTitle(tr("Das hat so nicht funktioniert"))
     box.setText(str(error.title))
-    # Erst was nicht ging, dann was jetzt möglich ist (§2.7). Der zweite Teil
-    # fehlte für jeden Vorschlag ohne Handler — siehe :func:`unhandled_advice`.
+    # Erst was nicht ging, dann die Angaben dazu, dann was jetzt möglich ist
+    # (§2.7). Der letzte Teil fehlte für jeden Vorschlag ohne Handler — siehe
+    # :func:`unhandled_advice`; der mittlere fehlte für jeden Fehler, siehe
+    # :func:`spoken_values`.
     spoken = [str(error.detail)] if error.detail else []
+    spoken.extend(spoken_values(error))
     spoken.extend(unhandled_advice(error, known))
     if spoken:
         box.setInformativeText("\n".join(spoken))
@@ -2266,10 +2296,9 @@ def show_error(
 def show_details(error: AppError, parent: QWidget | None = None) -> None:
     """Was der Fehler an Zahlen mitbringt — ohne Stapelabzug (§2.7, §33.1)."""
     lines = [str(error.detail)] if error.detail else []
-    # Nicht der rohe Schlüssel: „open_edges: 6" ist ein Bezeichner, kein Satz
-    # (Regel 20). ``value_line`` setzt Beschriftung, Einheit und das
-    # Dezimaltrennzeichen der Anzeigesprache.
-    lines.extend(value_line(key, value) for key, value in error.values.items())
+    # Dieselbe Quelle wie im Fehlerdialog (:func:`spoken_values`): Zwei
+    # Antworten auf die Frage, welche Werte dem Kunden etwas sagen, driften.
+    lines.extend(spoken_values(error))
     if error.object_id:
         lines.append(f"{tr('Objekt')}: {error.object_id}")
     if error.op_id is not None:

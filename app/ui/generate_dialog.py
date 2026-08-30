@@ -40,6 +40,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
+from app.ui.dialogs import spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
@@ -345,6 +346,26 @@ class GenerateDialog(QDialog):
         """Wie weit der Generator vorbereitet ist — oder ob die Antwort läuft."""
         return self._readiness
 
+    @property
+    def _worth_starting(self) -> bool:
+        """Ob ein Wurf jetzt überhaupt eine Chance hat.
+
+        **Die eine Frage, die der Knopf und der Start stellen — vorher waren es
+        zwei.** Der Knopf hing an „alles außer ABSENT", der Start an
+        :attr:`available` („genau READY"), und dazwischen lagen drei Lagen, in
+        denen *Erzeugen* klickbar war und der Klick nichts tat: kein Lauf, kein
+        Balken, kein Satz. Ein Knopf ohne Wirkung ist schlimmer als ein
+        gesperrter, denn der gesperrte hat den Satz daneben, der ihn erklärt.
+
+        ``UNKNOWN`` zählt dazu: Dort antwortet etwas, das wir nicht kennen, und
+        ein gesperrter Knopf wäre eine Behauptung darüber. ``NO_NODES`` und
+        ``NO_MODEL`` zählen nicht — dort ist der Fehlschlag bekannt, der Satz
+        nennt ihn, und der Knopf daneben behebt ihn (Regel 17). Jemanden
+        Minuten auf einen sicheren Fehlschlag warten zu lassen wäre die
+        schlechtere von zwei Auskünften.
+        """
+        return self._readiness in (mesh.Readiness.READY, mesh.Readiness.UNKNOWN)
+
     def _workflow(self) -> str:
         """Welchen Ablauf dieser Dialog gerade fahren würde.
 
@@ -470,10 +491,11 @@ class GenerateDialog(QDialog):
         # weitertippte, machte *Erzeugen* wieder klickbar und startete einen
         # zweiten Arbeiter, der den ersten im Feld ersetzt. Die gesperrte
         # Knopfleiste hatte das verdeckt, nicht verhindert.
-        # ``UNKNOWN`` darf starten: Dort antwortet etwas, das wir nicht
-        # kennen, und ein gesperrter Knopf wäre eine Behauptung darüber.
-        possible = self._readiness is not None and self._readiness is not mesh.Readiness.ABSENT
-        ready = possible and not self._busy and bool(self.prompt.text().strip() or self._image)
+        ready = (
+            self._worth_starting
+            and not self._busy
+            and bool(self.prompt.text().strip() or self._image)
+        )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
 
     def _choose_image(self) -> None:
@@ -526,7 +548,10 @@ class GenerateDialog(QDialog):
         self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
 
     def _start(self) -> None:
-        if not self.available:
+        # Dieselbe Frage wie am Knopf (:attr:`_worth_starting`) und nicht
+        # ``available``: Wo die beiden auseinanderliefen, war *Erzeugen*
+        # klickbar und der Klick folgenlos.
+        if not self._worth_starting:
             return
         self._running(True)
         self.progress.setVisible(True)
@@ -618,6 +643,15 @@ class GenerateDialog(QDialog):
         stehen; erst das Detail nennt den Grund, und erst der Vorschlag nennt
         den Ausweg. Modal wird hier nichts: ein Fehlerdialog über einem Dialog
         ist eine Sackgasse mit Vorgeschichte.
+
+        **Und die Angaben des Fehlers, denn hier stehen die einzigen, die
+        weiterhelfen.** ``mesh._failed`` schreibt in sein ``detail`` „Was es
+        dazu sagt, steht daneben" und legt Knotennamen und ComfyUIs eigene
+        Fehlerzeile in ``values`` — „Torch not compiled with CUDA enabled",
+        „No module named …", Speichermangel. Daneben stand nichts: Der Kunde
+        las einen Verweis ins Leere, und ausgerechnet die Zeile, mit der er
+        zum Support geht, fiel weg. Elf Fehlerpfade in ``backends/mesh.py``
+        tragen solche Werte.
         """
         self.progress.setVisible(False)
         self._running(False)
@@ -628,6 +662,7 @@ class GenerateDialog(QDialog):
         lines = [str(problem.title)]
         if problem.detail is not None:
             lines.append(str(problem.detail))
+        lines.extend(spoken_values(problem))
         # „Abbrechen" ist der Ausgang, kein Rat — genannt wird, was weiterhilft.
         ways = [str(action.label) for action in problem.suggestions if action.id != CANCEL.id]
         if ways:

@@ -98,7 +98,17 @@ Dabei zwei Wegweiser, die Zeit sparen:
 
 Am 20.08.2026 zwei Fallen, die beide wie ein Absturz aussehen und keiner sind:
 
-- **Genau ein Wachhund.** Zwei gleichzeitig laufende Timer nehmen einander die
+- **Genau ein Wachhund — und er darf sich nicht selbst überholen.** Zwei
+  gleichzeitig laufende Timer nehmen einander die Dialoge weg (unten); die
+  zweite Gestalt ist ein **einzelner** Timer, dessen Bedienroutine selbst
+  `processEvents()` ruft. Dann feuert er mitten in seine eigene Arbeit hinein,
+  findet denselben Dialog noch offen und bedient ihn ein zweites Mal — die
+  innere Instanz misst einen Zustand, den die äußere gerade herstellt.
+  Gemessen am 30.08.2026: „Nach 8 s läuft der Wurf: **False**" über einem
+  Zustandssatz „Modell wird erzeugt (5 s)", und der Balken angeblich
+  unsichtbar. Mit einem Riegel (`schon_bedient`) stand dieselbe Messung auf
+  True/True. Wer eine Bedienroutine an einen Timer hängt, riegelt sie zu.
+- **Zwei Timer.** Zwei gleichzeitig laufende Timer nehmen einander die
   Dialoge weg: Was der eine wegklickt, hat der andere nie gesehen, und ein
   Dialog, der nur vom falschen beantwortet wird, bekommt die falsche Antwort.
   Die Messung wird davon nicht falsch, sondern **zufällig** — dreimal derselbe
@@ -142,6 +152,18 @@ Beide Male war die Anwendung in Ordnung und der Prüfstand nicht. Die Probe
 darauf ist billig: **Fällt der Befund, sobald der Prüfstand einen Schritt des
 echten Starts nachholt, war es der Prüfstand.** Siehe
 [[messwerkzeug-misst-sich-selbst]].
+
+**Und die dritte dieser Art, am 30.08.2026: eine Warteschleife, die nicht
+wartet.** `QTimer.singleShot(50, …)` **blockiert nicht** — es reiht einen
+Zeitgeber ein und kehrt sofort zurück. Eine Schleife, die daneben `0,05`
+addiert und `processEvents()` ruft, zählt bis 300 und wartet dabei
+Millisekunden. Gemessen: zweimal „KEIN ERGEBNIS" nach einem Erzeugungslauf,
+angeblich nach 300 Sekunden Geduld; mit `session.wait_for_idle()` — dem Weg,
+den die Anwendung selbst nimmt — stand das Ergebnis nach 15,3 Sekunden.
+
+Erkennbar ist es an der Gesamtlaufzeit: Wer 300 Sekunden zu warten glaubt und
+nach zwölf fertig ist, hat nicht gewartet. Wer eine eigene Schleife baut, misst
+mit `time.monotonic()` und nicht mit einem Zähler.
 
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].

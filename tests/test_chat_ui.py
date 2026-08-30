@@ -1433,3 +1433,104 @@ def test_the_progress_line_is_no_contribution(qt_app: QApplication) -> None:
     panel.show_document(new_project("centauri-carbon-2", "pla").document)
     assert panel.turns.count() == 0
     panel.set_busy(False)
+
+
+def test_the_error_dialog_says_what_the_model_actually_answered(
+    qt_app: QApplication,
+) -> None:
+    """**„Der Anfang der Antwort steht daneben" — und daneben stand nichts.**
+
+    Der Kern legt Adresse, Auszug und Anbieter in ``AppError.values`` und
+    verweist im Satz ausdrücklich darauf; er darf keinen Platzhalter tragen
+    (``tests/test_errors.py`` sucht danach). Gezeigt wurden Titel, ``detail``
+    und die Vorschläge — die Werte fielen weg. Zu sehen waren sie allein über
+    *Einzelheiten*, und diesen Knopf gibt es nur, wenn kein anderer Vorschlag
+    greift; beim Sprachmodell greift immer „Einstellungen öffnen".
+
+    Der Anbieter ist dabei der teuerste der drei: Ein Kunde las am 24.08.2026
+    über einem Anthropic-Schlüsselfehler „Das Sprachmodell hat nicht
+    geantwortet", während er gerade sein lokales Ollama eingerichtet hatte.
+    Der Satz stimmte und führte drei Stunden in die Irre.
+    """
+    from app.core.backends.llm import BackendAnswerUnreadable
+    from app.ui.dialogs import spoken_values
+
+    problem = BackendAnswerUnreadable(
+        url="http://192.168.1.50:11434",
+        excerpt="<!DOCTYPE html><html><head><title>502 Bad Gateway</title>",
+        provider="ollama",
+    )
+    gesagt = "\n".join(spoken_values(problem))
+
+    assert "http://192.168.1.50:11434" in gesagt, "welche Adresse gefragt wurde"
+    assert "502 Bad Gateway" in gesagt, "und was von dort kam"
+    assert "ollama" in gesagt, "und wer geantwortet hat"
+    assert "Adresse" in gesagt, "mit Beschriftung, nicht als roher Schlüssel (Regel 20)"
+
+
+def test_an_error_dialog_stays_free_of_values_that_say_nothing(
+    qt_app: QApplication,
+) -> None:
+    """Ein Wert, der nichts sagt, gehört nicht in den Dialog.
+
+    Jeder ``ExternalToolError`` trägt ``tool`` und ``exit_code`` mit, auch
+    wenn keines von beiden gesetzt ist — ungefiltert stünde unter jedem
+    Chatfehler „Programm: " und „Rückgabewert: None". Eine Null dagegen ist
+    eine Aussage und bleibt.
+    """
+    from app.core.backends.llm import BackendTooSlow
+    from app.core.errors import NotManifoldError
+    from app.ui.dialogs import spoken_values
+
+    zeilen = spoken_values(BackendTooSlow(seconds=41 * 60))
+
+    assert any("41" in zeile for zeile in zeilen), "die gemessene Zahl steht da"
+    assert not any(zeile.endswith(": ") for zeile in zeilen), "kein leerer Wert"
+    assert not any("None" in zeile for zeile in zeilen), "und kein ungesetzter"
+
+    offen = spoken_values(NotManifoldError(open_edges=0))
+    assert any("0" in zeile for zeile in offen), "eine Null ist eine Aussage"
+
+
+def test_the_error_dialog_really_shows_them(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Durchgereicht ist nicht gezeigt — gemessen am gebauten Dialog.
+
+    Die Prüfung darüber fragt die Funktion; diese fragt das Fenster. Zwischen
+    beiden liegt die Zeile, die sie verbindet, und genau die hat gefehlt: Der
+    Kern legte seine Angaben seit je in ``values``, und ``show_error`` baute
+    seinen Text aus ``title``, ``detail`` und dem Rat.
+
+    Der Dialog ist modal; gemessen wird an dem, was er vor ``exec`` gesetzt
+    hat — dasselbe, was ein Kunde liest.
+    """
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core.backends.llm import BackendAnswerUnreadable
+    from app.ui.dialogs import show_details, show_error
+
+    gelesen: list[str] = []
+
+    def statt_exec(box: QMessageBox) -> int:
+        gelesen.append(" ".join((box.text(), box.informativeText(), box.detailedText())))
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", statt_exec)
+
+    problem = BackendAnswerUnreadable(
+        url="http://192.168.1.50:11434",
+        excerpt="<!DOCTYPE html><html><head><title>502 Bad Gateway</title>",
+        provider="anthropic",
+    )
+
+    show_error(problem, None, {})
+    assert gelesen, "der Dialog wurde gebaut"
+    assert "192.168.1.50" in gelesen[-1], "die Adresse steht daneben"
+    assert "502 Bad Gateway" in gelesen[-1], "und der Anfang der Antwort"
+
+    # Und der zweite Weg zu denselben Angaben liest aus derselben Quelle —
+    # zwei Antworten auf dieselbe Frage driften.
+    show_details(problem, None)
+    assert "192.168.1.50" in gelesen[-1]
+    assert "Programm" not in gelesen[-1], "auch hier kein leerer Wert"

@@ -1459,6 +1459,53 @@ def test_a_refusal_is_not_an_empty_turn(project: Project, profile: Profile) -> N
     assert "agent.answer_refused" in {finding.code for finding in proposal.findings}
 
 
+def test_a_written_out_call_is_not_an_answer(project: Project, profile: Profile) -> None:
+    """**Der häufigste Ausfall eines lokalen Modells, und der einzige ohne
+    Auskunft.**
+
+    ``qwen2.5-coder:14b`` und ``llama3.1:8b`` unter voller Werkzeuglast
+    schreiben ``{"name": …}`` in den Textinhalt, statt den Aufruf abzusetzen.
+    Ollama liest das nicht als Aufruf, der Zug endet wie ein Auskunftszug — und
+    der Kunde bekam rohes JSON in seine Chatzeile, ohne ein Wort dazu.
+
+    Was er sieht, ist dann eine Eigenschaft seines Modells und sieht aus wie
+    ein Fehler der Anwendung.
+    """
+    agent = session(
+        project,
+        profile,
+        [Reply(text='{"name": "set_parameter", "arguments": {"name": "wall", "value": 3}}')],
+    )
+
+    proposal = agent.propose("Mach die Wandstärke 3 mm")
+
+    assert proposal.empty, "getan wurde nichts, und das bleibt so"
+    codes = {finding.code for finding in proposal.findings}
+    assert "agent.call_written_out" in codes, "aber der Kunde erfährt, warum"
+    gesagt = " ".join(str(f.message) for f in proposal.findings)
+    assert "Werkzeuge prüfen" in gesagt, "Regel 17: und was jetzt hilft"
+
+
+def test_a_real_answer_stays_an_answer(project: Project, profile: Profile) -> None:
+    """Die Gegenprobe, und sie ist der Normalfall.
+
+    Ein Auskunftszug antwortet in Sätzen. Ein Wächter, der ihn mitnimmt, wäre
+    schlimmer als keiner: Er hängte an jede Frage einen Satz über ein Modell,
+    mit dem nichts ist.
+    """
+    for antwort in (
+        "Die Wand ist 2 mm dick.",
+        'Ich könnte "set_parameter" benutzen — sag mir, welche Wand du meinst.',
+        '{"name": "kein_werkzeug_dieser_anwendung", "arguments": {}}',
+    ):
+        agent = session(project, profile, [Reply(text=antwort)])
+
+        proposal = agent.propose("Wie dick ist die Wand?")
+
+        codes = {finding.code for finding in proposal.findings}
+        assert "agent.call_written_out" not in codes, antwort
+
+
 # --- Namen aus fremden Dateien (§32) ------------------------------------------------
 
 

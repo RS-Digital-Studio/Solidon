@@ -40,6 +40,7 @@
 - [Signal passt an den falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet, was von der Stelligkeit her passt; ein Name, der als Suchtext ankommt, läuft fehlerfrei falsch — nur das Bildschirmfoto sah es.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — entscheiden zwei Konstanten dasselbe, liegt dazwischen ein Bereich, in dem beide Antworten falsch sind; besonders bei zwei Einheiten.
 - [Eine Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen, und eine zutreffende Begründung im Docstring kann eine Testlücke decken.
+- [Knopf und Handlung fragen verschieden](knopf-und-handlung-fragen-verschieden.md) — freigegeben bei A, ausgeführt bei B; dazwischen ist der Klick folgenlos. Die Ausbreitung ist gemessen und klein.
 - [Roh gegen gerendert vergleichen](roh-gegen-gerendert-vergleichen.md) — wer Quelltext in fertigem HTML sucht, prüft die Maskierung mit; der Test verwarf richtige Texte und schwieg zu falschen.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
