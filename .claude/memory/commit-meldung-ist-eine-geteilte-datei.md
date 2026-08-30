@@ -33,8 +33,25 @@ fremder Satz stand. Dieselbe Familie wie
 [[sollprobe-liest-den-fremden-commit]]: Was man am eigenen Commit prüft, muss
 den eigenen Commit meinen, und der Umfang allein weist ihn nicht aus.
 
+**Von der anderen Seite sieht es aus wie ein bekannter Fall, und das ist die
+Falle.** Bei 15 scheiterte derselbe Wettlauf mit
+`fatal: cannot lock ref 'HEAD'` — dem Fehler aus
+[[blob-commit-verliert-den-wettlauf]], dessen Regel lautet: *nicht passiert,
+Index neu bauen*. Die Regel stimmt und führt hier trotzdem in die Irre, denn
+`git log` zeigte danach **die eigene Meldung** an der Spitze. Es sah aus, als
+wäre der Commit doch gelaufen; erst `git show --numstat` nannte eine fremde
+Datei, und erst `grep` in `HEAD:app/core/manual.py` bewies, dass die eigene
+Arbeit *nicht* drin war.
+
+Der Satz dazu: **Ein gescheiterter Commit heißt „meiner ist nicht passiert",
+nicht „hier ist nichts passiert."** Wer nach dem Fehler nur den Index neu baut
+und committet, tut das Richtige — wer vorher `git log` liest und die eigene
+Meldung sieht, hört auf und hält die Arbeit für erledigt.
+
 **How to apply:** Die Zeile, die `git commit` ausgibt, **ganz** lesen — Hash,
-**Betreff** und Umfang, nicht nur die Zahl. Stimmt der Betreff nicht mit der
+**Betreff** und Umfang, nicht nur die Zahl. Und nach einem gescheiterten
+Commit nicht die Meldung im Log suchen, sondern **den Inhalt**: `git show
+--numstat <hash>` oder ein `grep` auf die Zeile, die man geschrieben hat. Stimmt der Betreff nicht mit der
 eigenen Meldung überein, hat ein Wettlauf stattgefunden; dann sofort der
 anderen Sitzung Bescheid geben, denn deren Commit ist wahrscheinlich gar nicht
 gelaufen und ihre Arbeit liegt noch im Baum. Wer es ganz vermeiden will,
