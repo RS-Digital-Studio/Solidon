@@ -2025,6 +2025,12 @@ def test_a_gallery_part_stays_in_one_piece_across_its_range(
     from app.core.scene.project import load
 
     load_operations()
+    # **`make_profile()` ohne Argumente gibt PLA**, und das ist hier kein
+    # Detail: Die erste Fassung der Rändelungsformel rechnete `clearance`
+    # ein (0,25 bei PETG, 0,20 bei PLA) und hielt deshalb nur unter dem
+    # Material, mit dem sie gemessen worden war. Ein Teil, das nur unter
+    # einem Material hält, ist genauso unsichtbar wie eines, das nur bei
+    # einem Durchmesser hält.
     ziel = Path(__file__).resolve().parent.parent / "website" / "teile" / f"{stem}.p3d"
     assert ziel.is_file(), f"das Galerieteil fehlt: {ziel}"
 
