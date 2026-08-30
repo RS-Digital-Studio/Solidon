@@ -101,6 +101,52 @@ Für eine Zeile, die nicht umbrechen kann — eine Skala, eine Knopfleiste —
 lohnt daneben die Zahl: `sizeHint().width()` gegen `width()`, **in jeder
 Sprache**. Was gequetscht wird, meldet Qt nicht.
 
+### Ein Widget, das nachgibt, darf nicht weniger verlangen
+
+Eine Leiste, die bei Enge auf Symbole umschaltet, ist die richtige Antwort auf
+zu wenig Platz — und sie schließt einen Kreis, wenn man sie naiv baut:
+
+    eng → Symbole → schmaler → kleinere Wunschbreite → Container gibt weniger
+        → immer noch „eng" → nie zurück
+
+Am 30.08.2026 an der Bewegen-Leiste gemessen: Bei einem **1600 Punkte breiten**
+Fenster stand sie auf 677 und zeigte kein einziges Wort. Der Platz war da; sie
+hat ihn nur nicht mehr verlangt.
+
+**Wer nachgibt, verlangt weiter das Volle.** `sizeHint()` meldet die Breite
+**mit** Beschriftung, auch während Symbole stehen; die gemerkte Zahl entsteht
+im breiten Zustand und wird im engen nur verglichen. Damit bekommt die Leiste
+den Platz, wo er da ist, und weicht nur, wo er wirklich fehlt.
+
+Das ist dieselbe Lehre wie bei der Höhenverteilung der Karten
+(`oberflaeche.md`, „Gerechnet wird nie mit den Höhen, die gerade gesetzt
+wurden") — hier in der Breite und mit einem Zustand statt einer Zahl.
+
+**Und zwei Nachbarn, beide am selben Tag bezahlt:**
+
+* **`SizePolicy.Fixed` schützt nicht den Knopf, sondern lähmt die Leiste.** Es
+  hebt deren Mindestbreite auf die Summe der Kinder (gemessen 1325 statt 708);
+  ein enges Fenster quetscht dann trotzdem, und die Umschaltung kommt nie zum
+  Zug. Was hilft, ist `layout.setSizeConstraint(SetNoConstraint)` — die Leiste
+  darf schmaler werden als ihre Kinder wollen, und dann greift die Regel oben.
+* **`SizePolicy.Ignored` ist keine abgeschwächte Form davon.** An den
+  Zahlenfeldern gesetzt bekamen sie **null** Punkte und verschwanden ganz —
+  schlimmer als die Quetschung, die es beheben sollte.
+
+### Ein Messwert, der zu glatt ist, ist selbst der Befund
+
+Dieselbe Leiste maß **677 in allen sechs Sprachen**, auf die Stelle genau. Die
+Wörter sind verschieden lang — „Verschieben", „Move", „Mettre à l'échelle" —,
+und eine identische Breite kann es nur geben, wenn **kein Wort mehr da ist**.
+Die Zahl war das Symptom, nicht die Entwarnung.
+
+Die Frage davor kostet nichts: **Sollte dieser Wert sich unterscheiden?** Wo
+Sprache, Schrift oder Inhalt eingehen und trotzdem dieselbe Zahl herauskommt,
+ist ein Weg abgeschnitten, den niemand abgeschnitten hat. Verwandt mit der
+Gegenprobe aus `oberflaeche.md`: „Sind zwei Bilder gleich groß, zeigen sie
+dasselbe" — dort als Beweis benutzt, hier als Alarm.
+
+
 ## Der Mauszeiger
 
 Zeiger kommen aus `app/ui/cursors.py`, nie als `Qt.CursorShape` an der

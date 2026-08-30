@@ -201,6 +201,7 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
+    LengthSpin,
     demo_line,
     display_unit,
     feature_label,
@@ -1146,7 +1147,7 @@ class MainWindow(QMainWindow):
         self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
         self.transform_bar = TransformBar(self)
-        self.transform_bar.gizmoToggled.connect(self.viewport.set_gizmo)
+        self.transform_bar.applyRequested.connect(self._apply_from_transform_bar)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
         self.viewport.sketchPointPicked.connect(self._on_sketch_point)
@@ -1238,11 +1239,13 @@ class MainWindow(QMainWindow):
             "transform",
             tr("Bewegen"),
             self.transform_bar,
-            weak_slot(self, lambda view: view.transform_bar.gizmo.setChecked(False)),
+            weak_slot(self, lambda view: view.viewport.set_gizmo(False)),
             symbol="move",
-            # „Am Griff im Bild ziehen" — und der Griff war aus. Wer ihn nicht
-            # will, klickt den Haken weg; wer das Werkzeug öffnet, will bewegen.
-            start=weak_slot(self, lambda view: view.transform_bar.gizmo.setChecked(True)),
+            # **Das Werkzeug ist der Griff.** Hier stand ein Haken „Gizmo", den
+            # das Öffnen setzte und das Schließen wegnahm — ein Schalter also,
+            # der nie in einem anderen Zustand war als das Werkzeug selbst. Er
+            # ist ersatzlos entfallen; wer *Bewegen* öffnet, will bewegen.
+            start=weak_slot(self, lambda view: view.viewport.set_gizmo(True)),
             hint=tr(
                 "Am Griff im Bild ziehen, oder Werte eintippen. Jeder Zug wird ein "
                 "Schritt im Verlauf und ist einzeln zurücknehmbar."
@@ -4620,6 +4623,18 @@ class MainWindow(QMainWindow):
         # Die Merkmalsbeschriftungen in der Überlagerung schreiben Längen ohne
         # eigene Einheit; sie brauchen nur den Anstoß, es neu zu tun.
         self.viewport.refresh_labels()
+        # **Und jedes Längenfeld im Fenster.** ``LengthSpin`` zieht von sich aus
+        # nur beim Einblenden nach (``showEvent``); eine Leiste, die gerade
+        # offen steht, behielt ihr altes Suffix, während der Rest der Anwendung
+        # umgestellt hatte. Solange die Leisten nur Anzeigen trugen, war das
+        # eine Unschönheit — seit die Bewegen-Leiste Eingabefelder hat, steht
+        # dort „mm" über einem Fenster, das in Zoll rechnet.
+        #
+        # Gesucht wird über den Widgetbaum und nicht über eine Liste von
+        # Leisten: Eine Liste vergisst die nächste. ``refresh_unit`` steigt von
+        # selbst aus, wo nichts zu tun ist.
+        for field in self.findChildren(LengthSpin):
+            field.refresh_unit()
 
     def window_commands(self) -> dict[str, tuple[str, str, Any]]:
         """Was die Palette außer den Operationen kennen muss (§2.6, §19.2).
@@ -8322,6 +8337,40 @@ class MainWindow(QMainWindow):
         self.tools.activate("analysis")
         self.analysis_bar.show_map("defects")
         self._analysis_map("defects", entry.id)
+
+    def _apply_from_transform_bar(self, op: str, params: dict[str, Any]) -> None:
+        """Ein Wert aus der Bewegen-Leiste wird ein Schritt im Verlauf.
+
+        Die Leiste rechnet nichts und ändert nichts; sie nennt eine
+        registrierte Operation und ihre Werte (Regel 2). Damit ist jeder
+        getippte Wert genauso rücknehmbar wie ein Zug am Griff — und steht im
+        Verlauf mit demselben Namen.
+
+        Ohne gewähltes Objekt sagt die Statuszeile, was fehlt. Kein Dialog:
+        Die Handlung ist rücknehmbar, und Regel 19 verbietet die Rückfrage
+        davor; der Satz kommt aus derselben Quelle wie überall
+        (:func:`_needs_objects`), damit nicht zwei Stellen verschieden
+        erklären, was dasselbe ist.
+        """
+        chosen = self.inputs_for_transform(op)
+        if not chosen:
+            self.announce(_needs_objects(0))
+            return
+        # **Ein Draft je Körper, alle in einer Transaktion.** Wer zwei Teile
+        # markiert hat, meint zwei — und ein Undo nimmt beide zusammen zurück,
+        # weil es eine Handlung war.
+        #
+        # **Und alle um denselben Punkt.** Ohne ihn drehte jedes Teil um sich
+        # selbst, und die Anordnung der Auswahl ginge verloren; bei einem
+        # einzelnen Körper bleibt :meth:`pivot_for_transform` leer, dann gilt
+        # sein eigener Schwerpunkt wie bisher. Der getippte Winkel nimmt den
+        # Punkt aus derselben Quelle wie der Zug am Griff — zwei Wege zum
+        # selben Ergebnis sind sonst zwei Ergebnisse.
+        params = {**params, **self.pivot_for_transform()}
+        self.session.apply(
+            REGISTRY.get(op).title,
+            [OperationDraft(op=op, inputs=(one,), params=params) for one in chosen],
+        )
 
     def _repair_after_error(self, error: AppError) -> None:
         """§17.1: die Reparaturkette auf den Körper, an dem es hing."""

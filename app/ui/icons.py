@@ -69,6 +69,22 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M9 6l3-3 3 3" /><path d="M9 18l3 3 3-3" />'
         '<path d="M6 9l-3 3 3 3" /><path d="M18 9l3 3-3 3" />'
     ),
+    # Ein Punkt, der im Raster sitzt: das Einrasten selbst, nicht ein Zahnrad.
+    # Ein Zahnrad hieße „Einstellungen" und stünde damit für alles; hier geht
+    # es um genau eine Sache, und die lässt sich zeichnen.
+    "snap": (
+        '<rect x="3.5" y="3.5" width="17" height="17" rx="2" />'
+        '<path d="M3.5 12h17" /><path d="M12 3.5v17" />'
+        '<circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />'
+    ),
+    # Ein Bogen mit Pfeil: das Zeichen fürs Drehen, in jedem Slicer dasselbe.
+    "rotate": ('<path d="M20 12a8 8 0 1 1-2.4-5.75" /><path d="M20 3.5V8h-4.5" />'),
+    # Ein Maß, das wächst: kleiner Rahmen, Diagonale, offene Ecke.
+    "scale": (
+        '<rect x="3.5" y="10.5" width="10" height="10" rx="1.5" />'
+        '<path d="M11 13l9.5-9.5" />'
+        '<path d="M14 3.5h6.5V10" />'
+    ),
     # Eine Karte über einer Fläche: ungleich gefüllte Felder.
     "analysis": (
         '<rect x="3.5" y="3.5" width="17" height="17" rx="2" />'
