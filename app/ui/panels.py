@@ -3238,9 +3238,9 @@ def align_forms(dialog: QWidget) -> None:
                 labels.append(widget)
     if not labels:
         return
-    breiteste = max(widget.sizeHint().width() for widget in labels)
+    widest = max(widget.sizeHint().width() for widget in labels)
     for widget in labels:
-        widget.setMinimumWidth(breiteste)
+        widget.setMinimumWidth(widest)
 
 
 def describe_selection(result: EvaluationResult | None, object_id: ObjectId | None) -> Any:
