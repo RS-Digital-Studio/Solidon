@@ -611,3 +611,157 @@ def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
     finally:
         catalog.release()
         catalog.deleteLater()
+
+
+def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_path) -> None:
+    """Der ganze Weg durch die **Oberfläche**: hinaus, herein, angesehen.
+
+    **Warum durch die Knöpfe und nicht am Kern entlang.** Mein erster Lauf
+    ging über ``for_upload`` und ``adopt`` direkt und war grün — er hat
+    bewiesen, dass der Kern kann, was er soll, und nichts darüber, ob ein
+    Klick dort ankommt. Die Notiz dazu ist älter als dieser Test: Wer den Kern
+    direkt ruft, misst eine Lage, die kein Klick herstellt.
+
+    Geprüft wird deshalb an der Kette, die ein Kunde geht — Katalog öffnen,
+    Knopf drücken, Datei entsteht; dieselbe Datei über den zweiten Knopf
+    wieder herein; Steckbrief nennt die neue Herkunft.
+
+    **Der Dateidialog wird abgefangen, nicht umgangen.** Er ist das einzige
+    Stück, das ohne Mensch nicht antwortet; alles davor und dahinter läuft
+    echt — die Signale des Katalogs, die Handler des Fensters, `for_upload`,
+    `adopt` und die Zeile im Steckbrief.
+
+    **Und ``action_catalog`` wird wirklich gerufen.** Den Katalog selbst zu
+    bauen und die Signale von Hand zu verbinden wäre derselbe Fehler eine
+    Ebene höher: Der Test bewiese dann, dass meine Testzeilen zusammenpassen,
+    und nicht, dass das Fenster sie verbindet.
+    """
+    import json
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.recipe import (
+        PUBLISHED_SOURCE,
+        Recipe,
+        register,
+        save,
+    )
+    from app.core.registry import REGISTRY
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.project import new_project
+    from app.ui.catalog import PartCatalog, detail
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    # Ein eigenes Rezept — nur ein solches darf hinaus, und genau das prüft
+    # die Gegenprobe unten.
+    project = new_project()
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 12.0})],
+    )
+    recipe = Recipe(
+        name="probeklotz",
+        title="Probeklotz",
+        group="structure",
+        document=project.document,
+        license="CC0-1.0",
+        author="Probe",
+        features={"face_1": "Grundflaeche"},
+    )
+    # **Gespeichert und registriert.** Der Handler liest die Datei aus dem
+    # Nutzerordner, weil dort das eigene Rezept liegt; nur zu registrieren
+    # ergaebe einen Baustein ohne Datei. Der erste Lauf lief genau hinein und
+    # bekam die richtige Absage — der Fehlerweg ist damit gleich mitgeprueft.
+    save(recipe)
+    register(recipe)
+
+    window = MainWindow(Session(), UiSettings())
+    ziel = tmp_path / "probeklotz.json"
+    catalogs: list[PartCatalog] = []
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    # **Auch der Fehlerdialog wird abgefangen.** Er ist modal: Geht auf dem
+    # Weg etwas schief, bliebe der Testlauf daran stehen, bis ihn jemand
+    # wegklickt — und niemand ist da. Gesammelt statt gezeigt, damit die
+    # Zusicherung unten sagt, *was* schiefging.
+    from app.ui import main_window as _mw
+
+    troubles: list[object] = []
+    original_error = _mw.show_error
+    _mw.show_error = lambda problem, parent=None: troubles.append(problem)  # type: ignore[assignment]
+
+    original_exec = PartCatalog.exec
+    original_save = QFileDialog.getSaveFileName
+    original_open = QFileDialog.getOpenFileName
+    PartCatalog.exec = instead_of_exec  # type: ignore[method-assign]
+    QFileDialog.getSaveFileName = staticmethod(  # type: ignore[method-assign]
+        lambda *args, **kwargs: (str(ziel), "")
+    )
+    QFileDialog.getOpenFileName = staticmethod(  # type: ignore[method-assign]
+        lambda *args, **kwargs: (str(ziel), "")
+    )
+    try:
+        window.action_catalog()
+        assert catalogs, "action_catalog hat keinen Katalog gebaut"
+        catalog = catalogs[0]
+
+        # --- Gegenprobe: was nicht hinaus darf, kann den Knopf nicht drücken
+        builtin = next(entry for entry in PARTS.all() if not entry.own)
+        _choose(catalog, builtin.name)
+        assert not catalog.share_part.isEnabled(), (
+            f"{builtin.name} kommt aus Python und hat keine Datei zum Weitergeben"
+        )
+        assert catalog.share_part.toolTip(), "der gesperrte Knopf sagt nicht, warum"
+
+        # --- hinaus
+        _choose(catalog, "probeklotz")
+        assert catalog.share_part.isEnabled(), "ein eigenes Rezept darf veröffentlicht werden"
+        catalog.share_part.click()
+        assert not troubles, f"der Weg hinaus meldete einen Fehler: {troubles}"
+        assert ziel.is_file(), "der Klick hat keine Datei geschrieben"
+        data = json.loads(ziel.read_text(encoding="utf-8"))
+        assert data, "die geschriebene Datei ist leer"
+
+        # --- herein, aus demselben Klickweg
+        # **Beide Register.** Ein Rezept steht im Katalog *und* als Operation;
+        # `PARTS.remove` allein ist der Rollback fuer einen halben
+        # Registrierlauf, das sagt sein Docstring. Wer nur ihn ruft, laesst
+        # `insert_probeklotz` stehen, und das naechste Einlesen scheitert an
+        # "registered twice". Entfernt wird hier, um einen **fremden** Rechner
+        # nachzustellen: Beim selben Kunden faende `adopt` denselben Stand und
+        # taete richtigerweise nichts.
+        PARTS.remove("probeklotz")
+        REGISTRY.remove("insert_probeklotz")
+        catalog.adopt_part.click()
+
+        spec = next((entry for entry in PARTS.all() if entry.name == "probeklotz"), None)
+        assert spec is not None, "nach dem Einlesen steht der Baustein nicht im Katalog"
+        assert spec.source == PUBLISHED_SOURCE, (
+            f"Herkunft {spec.source!r} statt {PUBLISHED_SOURCE!r} — "
+            "der Steckbrief nennte damit eine Projektdatei"
+        )
+        assert "Tauschbörse" in detail(spec), (
+            "der Steckbrief verschweigt, woher der Baustein kam (§32)"
+        )
+    finally:
+        _mw.show_error = original_error  # type: ignore[assignment]
+        PartCatalog.exec = original_exec  # type: ignore[method-assign]
+        QFileDialog.getSaveFileName = original_save  # type: ignore[method-assign]
+        QFileDialog.getOpenFileName = original_open  # type: ignore[method-assign]
+        window.close()
+
+
+def _choose(catalog, name: str) -> None:
+    """Eine Kachel auswählen, wie ein Klick es täte."""
+    for row in range(catalog.list.count()):
+        item = catalog.list.item(row)
+        if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
+            catalog.list.setCurrentItem(item)
+            return
+    raise AssertionError(f"{name} steht nicht im Katalog")
