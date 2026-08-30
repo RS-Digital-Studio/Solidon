@@ -35,11 +35,16 @@ Strich-Fassung sind punkt- und höhengleich (1201/67 beide). Der tragfähige
 Weg ist eine `QWidgetAction` mit Label an der Aufrufstelle (+132 Punkte
 gegenüber dem Strich) plus eine Stylesheet-Regel für die Anmutung.
 
-**B2 — Die Prozentzahl im Fortschrittsbalken wird ab der Hälfte unlesbar.**
-`style.py:558–564`: zentrierter Text auf dem Bernstein-Chunk. Kontrast heller
-Text auf Bernstein im dunklen Thema: **1,69** (AA verlangt 4,5). Das dunkle
-Thema ist die Voreinstellung, und über 10 s stünde dort laut `wartezeit.md`
-zusätzlich die Schätzung — im selben Balken.
+**B2 — gegenstandslos, gemessen (72, 30.08.2026).** Der Befund maß ein
+nacktes `QProgressBar` mit Text — ein Widget, das die Anwendung nie baut:
+Alle sieben Balken rufen `setTextVisible(False)`, der Prozentwert steht seit
+je **neben** dem Balken, und `test_style.py` trägt dafür bereits einen
+Wächter mit derselben Rechnung („eine Farbe, die auf beiden Gründen trägt,
+gibt es nicht"). Der bereits gebaute Fix hätte den Fortschritt selbst
+unsichtbar gemacht (helle Bahn 1,06 gegen den Chunk) — der eigene neue Test
+fing es, der Eingriff ist vollständig zurückgebaut.
+**Methodennotiz für die restlichen Befunde:** Ein am nackten Widget
+gemessener Kontrast gilt erst, wenn die Anwendung das Widget so auch baut.
 
 **B3 — Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie.**
 `style.py:529`: `min-height` wirkt nur senkrecht, `min-width` fehlt. Bei

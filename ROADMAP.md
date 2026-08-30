@@ -13120,12 +13120,26 @@ gewollte Schrägansicht. Die 10° liegen damit zwischen zwei Grenzen aus
 der Sache: über 7° (ein Pixel je Rasterschritt) und unter 15°
 (brauchbare Schräge). Die Zahl trägt aus eigener Herleitung.
 
-- [ ] **3a, jetzt Roberts Kernauftrag**: Ist-Verhalten des Zugs bei
-      gekippter Kamera erheben (Abbildung Mausbewegung → Höhe, Zahl
-      während des Zugs wie im Viewport), Befunde und
-      Verbesserungsschnitt vorlegen. Regeln: `zeichenflaeche.md` lädt
-      mit `sketch_editor.py`; Regel 2 bleibt (der Editor sammelt
-      Gesten, das Ergebnis entsteht bei der Auswertung).
+Der Ziehgriff selbst ist repariert (`b3801e4b`): Bei gekippter Kamera
+war er kürzer als seine eigene Trefferzone — er wächst jetzt längs mit
+der Perspektive, ohne quer aufzublähen (eigener Test für beide
+Richtungen). Und der Zug ist **gemessen, im echten Fenster, vom Fuß
+des Griffs** (erster Aufbau maß von der Bildmitte und fand 115 mm ohne
+Mausbewegung — das war der Abstand zur Achse, nicht der Zug; der
+Kontrollfall am Fuß gibt ~0): Bei 10° Kippung bedeuten zehn Pixel
+10,3 mm (1,2 Pixel je Rasterschritt — die hergeleitete Grenze, am
+Fall bestätigt), ab 15° ist es komfortabel (2,2 px/Schritt), bei 45°
+präzise (8,5). **Das Einrasten deckt den unbedienbaren Bereich ab;
+der Zug selbst braucht keine Änderung** — gemessen, nicht gebaut,
+damit etwas gebaut ist.
+
+- [ ] **3a, letzte Restfrage vor dem Schließen**: Zeigt der Zug
+      während des Ziehens eine Zahl (wie die Leisten im Viewport)?
+      Das stand im Auftragstext und ist von der Messung nicht
+      beantwortet. Zeigt er eine — Punkt zu. Zeigt er keine, ist das
+      der eine verbleibende „noch besser"-Baustein aus Roberts
+      Auftrag: Der Kunde, der 20 mm aufziehen will, soll die Zahl
+      sehen statt zu schätzen (Fusion zeigt sie). Regel 2 bleibt.
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
@@ -13176,8 +13190,8 @@ bereits als eigener Auftrag bei 50.
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
 | G1 | **Kritisch**: Jede Menü-Überschrift ist unsichtbar — **Ursache gemessen korrigiert (72)**: nicht das Stylesheet, der Windows-Stil rendert `addSection` als reinen Separator und verwirft den Text (im frischen Prozess ohne Stylesheet ebenso unsichtbar, sechs Stylesheet-Varianten wirkungslos). Der Weg: `QWidgetAction` mit Label an der Aufrufstelle plus Stylesheet-Regel für die Anmutung (B1) | S | **72** — inkl. `main_window`-Aufrufstelle, mit Ansage an 50 und Blob gegen den unmittelbaren HEAD |
-| G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | **72, Serie** |
-| G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | **72, Serie** |
+| G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | **gegenstandslos, gemessen** (72): kein Balken der Anwendung zeigt Text — alle sieben rufen `setTextVisible(False)`, der Wächter dafür existiert; der Befund maß ein Widget, das es so nicht gibt. Methodennotiz im Dokument |
+| G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | **fertig** (`fcf4e291`, 72): `min-width` neben `min-height`, Griff 2 px → 16 px; „der Befund braucht seine eigene Größenordnung“ steht im Testdocstring |
 | G4 | **Kritisch**: Der Bausteinkatalog — zehn Sekunden Textwüste ohne Wartesignal, dann Kacheln ohne Ruheform, nicht normierte Renderings, springende Titelzeilen (B4+B25) | M | offen |
 | G5 | **Kritisch**: Das Objektbaum-Vorschaubild ist ein 4-Pixel-Fleck — vergrößern oder ausbauen, halbe Größe ist keine Option (B5) | S | **50, nach G11** |
 | G6 | **Kritisch, Systemebene**: Der Akzentfarben-Haushalt — Bernstein bedeutet gleichzeitig sechs Dinge; dazu färbt der Prüfbericht ganze Sätze in Rollenfarbe und der Hauptknopf bedeutet nicht überall dasselbe (B6+B16+B22). Konzeptnotiz vor dem Bau: Wo darf der Akzent stehen, was bekommt eine leisere Form | L | offen — Notiz zuerst |
