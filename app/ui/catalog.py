@@ -128,6 +128,11 @@ class PartCatalog(QDialog):
 
     partChosen = Signal(str)
     saveRequested = Signal()
+    shareRequested = Signal()
+    """Der gewählte Baustein soll zur Tauschbörse gehen.
+
+    Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
+    entsteht und wohin sie geht, weiß das Fenster."""
     """Der Kunde will den gewählten Ausschnitt als eigenen Baustein ablegen (E4).
 
     Ein Signal und kein Aufruf: Der Katalog hat kein Dokument und keine
@@ -251,6 +256,15 @@ class PartCatalog(QDialog):
         self.save_part.clicked.connect(self.saveRequested.emit)
         self.set_can_save(False, "")
 
+        # **Neben dem Speichern und nicht in einem Menü**, aus demselben
+        # Grund: Wer sein Teil weitergeben will, denkt an die Bibliothek, in
+        # der es liegt.
+        self.share_part = buttons.addButton(
+            tr("Veröffentlichen …"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.share_part.clicked.connect(self.shareRequested.emit)
+        self.set_can_share(False, "")
+
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
@@ -292,6 +306,21 @@ class PartCatalog(QDialog):
         self.save_part.setToolTip("" if can else reason)
         self.save_hint.setText("" if can else reason)
         self.save_hint.setVisible(bool(reason) and not can)
+
+    def set_can_share(self, can: bool, reason: str = "") -> None:
+        """Ob der gewählte Baustein zur Tauschbörse darf — und warum nicht.
+
+        **Der Grund steht an drei Stellen**, weil eine davon je nach Bedienung
+        ausfällt: im Tooltip für die Maus, im ``statusTip`` für die Statuszeile
+        ohne Wartezeit und in ``accessibleDescription`` für den Bildschirmleser
+        (Regel 18 — nicht nur eine Kodierung). Ein grau gewordener Knopf ohne
+        Grund ist derselbe Fehler wie eine gesperrte Operation ohne Grund.
+        """
+        self.share_part.setEnabled(can)
+        hint = "" if can else reason
+        self.share_part.setToolTip(hint)
+        self.share_part.setStatusTip(hint)
+        self.share_part.setAccessibleDescription(hint)
 
     def set_can_insert(self, can: bool, reason: str = "") -> None:
         """Gibt das Einsetzen frei — oder sagt daneben, warum nicht.
@@ -596,6 +625,26 @@ class PartCatalog(QDialog):
                 item.setIcon(QIcon(pixmap))
                 return
 
+    def _share_state(self, spec: PartSpec | None) -> tuple[bool, str]:
+        """Ob dieser Baustein veröffentlicht werden kann, und warum nicht.
+
+        Drei Herkünfte, drei Antworten: Ein **eigenes** Rezept liegt als Datei
+        im Nutzerordner und kann hinaus. Ein **eingebauter** Baustein kommt aus
+        Python — es gibt keine Datei, die man weitergeben könnte. Ein
+        **mitgereister** gehört jemand anderem; seine Lizenz kennt nur sein
+        Autor, und die Anwendung zeigt dem Kunden nicht genug, um die
+        Entscheidung zu treffen.
+        """
+        if spec is None:
+            return False, tr("Wählen Sie einen Baustein, den Sie weitergeben möchten.")
+        if getattr(spec, "source", "") == "travelled":
+            return False, tr(
+                "Dieser Baustein kam von jemand anderem — nur eigene lassen sich veröffentlichen."
+            )
+        if not getattr(spec, "own", False):
+            return False, tr("Nur eigene Bausteine lassen sich veröffentlichen.")
+        return True, ""
+
     def _show_detail(self) -> None:
         """Was rechts steht, folgt der Auswahl links — und der Knopf auch.
 
@@ -612,6 +661,11 @@ class PartCatalog(QDialog):
             self._insert.setToolTip(reason)
         self.insert_hint.setText(reason)
         self.insert_hint.setVisible(bool(reason))
+        # Derselbe Wechsel entscheidet über den zweiten Knopf. **Hier und
+        # nicht in einem eigenen Signalpfad**: Der Zustand hängt an genau
+        # derselben Auswahl, und zwei Stellen, die dieselbe Frage
+        # beantworten, laufen auseinander.
+        self.set_can_share(*self._share_state(spec))
 
     # --- choosing ---------------------------------------------------------------
 

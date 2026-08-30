@@ -83,11 +83,13 @@ from app.core.agent.tools import (
 )
 from app.core.backends import llm
 from app.core.errors import (
+    CANCEL,
     AppError,
     ExternalToolError,
     InternalError,
     OperationCancelled,
     UserError,
+    ValidationError,
 )
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
@@ -2492,7 +2494,8 @@ class MainWindow(QMainWindow):
         #: Wie breit die Leiste mit Wörtern zuletzt sein wollte — die Marke,
         #: gegen die zurückgeschaltet wird. Ohne sie misst die Hysterese ihre
         #: eigene Wirkung und schwingt.
-        self._toolbar_full_width = 0        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
+        self._toolbar_full_width = 0
+        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
         for symbol, label, slot, source, own_hint in (
@@ -4535,6 +4538,7 @@ class MainWindow(QMainWindow):
         # aber sie sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
         catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
+        catalog.shareRequested.connect(lambda: self._share_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
@@ -4581,6 +4585,91 @@ class MainWindow(QMainWindow):
                 "die am Baustein einstellbar sein sollen."
             )
         return True, ""
+
+    def _share_part(self, catalog: PartCatalog) -> None:
+        """Schreibt den gewählten Baustein als Börsendatei.
+
+        **Geprüft wird vor dem Fragen.** ``for_upload`` erzeugt die Datei und
+        prüft sie in einem Zug; scheitert sie, hätte der Kunde sonst erst einen
+        Ordner ausgesucht, einen Namen getippt und danach eine Absage bekommen.
+        Die Reihenfolge kostet nichts und erspart genau diesen Weg.
+
+        **Geschrieben wird über ``shared.for_upload`` und nie über
+        ``json.dumps(file_data(...))``.** Die eigene Serialisierung wäre der
+        zweite Weg, der an der Prüfung vorbeiführt — und das sieht man der
+        Zeile nicht an. Die Prüfung selbst liegt im Kern, weil der Server
+        dieselbe fährt; hier steht nur der Ruf.
+
+        Der Baustein ist an dieser Stelle ein **eigenes** Rezept: Der Katalog
+        sperrt den Knopf bei allem anderen und sagt auch, warum
+        (``_share_state``). Fehlt die Datei trotzdem, ist das ein Fall für
+        einen Befund und nicht für einen Absturz — ein Rezept kann von Hand
+        aus dem Ordner genommen worden sein, während der Katalog offen stand.
+        """
+        import json
+
+        from app.core.knowledge.parts.recipe import from_data, recipes_dir
+        from app.core.knowledge.parts.shared import for_upload
+
+        name = catalog.chosen()
+        if not name:
+            return
+        source = recipes_dir() / f"{name}.json"
+        try:
+            recipe = from_data(json.loads(source.read_text(encoding="utf-8")))
+            payload = for_upload(recipe)
+        except AppError as problem:
+            # Der Regelfall: ``for_upload`` hat abgelehnt und sagt selbst,
+            # warum und was zu tun ist.
+            show_error(problem, catalog)
+            return
+        except (OSError, ValueError) as problem:
+            # Die Datei fehlt oder ist beschädigt. Das ist kein Eingabefehler,
+            # aber es endet nicht mit "fehlgeschlagen" (Regel 17): Der Kunde
+            # erfährt, welche Datei gemeint ist und dass ein erneutes
+            # Speichern sie wiederherstellt.
+            show_error(
+                ValidationError(
+                    field="title",
+                    detail=tr(
+                        "Die Datei dieses Bausteins ließ sich nicht lesen. "
+                        "Speichern Sie ihn neu, dann steht sie wieder."
+                    ),
+                    values={"file": source.name, "reason": str(problem)[:200]},
+                    constraint="recipe_unreadable",
+                    suggestions=(CANCEL,),
+                ),
+                catalog,
+            )
+            return
+
+        target, _filter = QFileDialog.getSaveFileName(
+            catalog,
+            tr("Baustein veröffentlichen"),
+            f"{name}.json",
+            tr("Börsendatei (*.json)"),
+        )
+        if not target:
+            return
+        try:
+            Path(target).write_bytes(payload)
+        except OSError as problem:
+            show_error(
+                ValidationError(
+                    field="title",
+                    detail=tr(
+                        "Die Datei ließ sich dort nicht anlegen. Wählen Sie einen anderen Ordner."
+                    ),
+                    values={"file": target, "reason": str(problem)[:200]},
+                    constraint="write_failed",
+                    suggestions=(CANCEL,),
+                ),
+                catalog,
+            )
+            return
+        self.statusBar().showMessage(
+            tr("Gespeichert. Diese Datei können Sie auf die Tauschbörse laden."), 8000
+        )
 
     def _save_as_part(self, catalog: PartCatalog) -> None:
         """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).

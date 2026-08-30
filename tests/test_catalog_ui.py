@@ -559,3 +559,55 @@ def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> No
         )
     finally:
         katalog.release()
+
+
+def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
+    """Der Veröffentlichen-Knopf ist gesperrt, und er sagt jedes Mal, warum.
+
+    **Gesperrt mit Grund, nicht versteckt.** Ein eingebauter Baustein kommt
+    aus Python — es gibt keine Datei, die man weitergeben könnte. Der Knopf
+    verschwindet trotzdem nicht: Wer ihn sucht, soll ihn finden und lesen,
+    weshalb er gerade nicht kann. Ein grauer Knopf ohne Grund ist derselbe
+    Fehler wie eine gesperrte Operation ohne Grund.
+
+    **Der Grund steht an drei Stellen**, weil je nach Bedienung eine davon
+    ausfällt: Tooltip für die Maus, ``statusTip`` für die Statuszeile ohne
+    Wartezeit, ``accessibleDescription`` für den Bildschirmleser. Regel 18
+    verlangt mehr als eine Kodierung, und ein grau gewordener Knopf ist genau
+    eine.
+
+    Zwei Lagen, zwei Sätze: ohne Auswahl fehlt der Baustein, mit einem
+    eingebauten fehlt die Datei. Ein Satz für beides wäre in einem der Fälle
+    unwahr.
+    """
+    catalog = PartCatalog()
+    try:
+        assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es nichts zu veröffentlichen"
+        leer = catalog.share_part.toolTip()
+        assert leer, "der gesperrte Knopf sagt nicht, was fehlt"
+        assert catalog.share_part.statusTip() == leer, "die Statuszeile schweigt"
+        assert catalog.share_part.accessibleDescription() == leer, (
+            "der Bildschirmleser bekommt den Grund nicht"
+        )
+
+        # Ein eingebauter Baustein: gewählt, und trotzdem gesperrt — aber mit
+        # einem **anderen** Grund als der leeren Auswahl.
+        eingebaut = next(entry for entry in PARTS.all() if not getattr(entry, "own", False))
+        for row in range(catalog.list.count()):
+            item = catalog.list.item(row)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == eingebaut.name:
+                catalog.list.setCurrentItem(item)
+                break
+        else:  # pragma: no cover - der Katalog wäre dann leer
+            raise AssertionError("kein eingebauter Baustein im Katalog")
+
+        assert not catalog.share_part.isEnabled(), (
+            f"{eingebaut.name} kommt aus Python und hat keine Datei zum Weitergeben"
+        )
+        gewaehlt = catalog.share_part.toolTip()
+        assert gewaehlt and gewaehlt != leer, (
+            "gewählt und nichts gewählt sind zwei Lagen und brauchen zwei Sätze"
+        )
+    finally:
+        catalog.release()
+        catalog.deleteLater()
