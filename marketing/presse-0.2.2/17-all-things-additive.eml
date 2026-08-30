@@ -24,8 +24,9 @@ material properties. The application writes those values into the correct 3MF
 material slot and maps them into the slicer handoff, avoiding a mismatch
 between a selected colour and another spool's process settings.
 
-The 0.2.x releases also add more capable constrained sketching, matching printable
-fasteners and reusable parametric components built from operation history.
+The 0.2.x releases also add more capable constrained sketching, matching
+printable fasteners and reusable parametric components built from operation
+history.
 Solidon is local desktop preparation software rather than a slicer or
 enterprise data platform. It runs on Windows, macOS and Linux without an
 account, telemetry or cloud project store.
