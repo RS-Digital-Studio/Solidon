@@ -309,3 +309,64 @@ def test_an_unknown_confirmation_link_says_what_to_do(boerse) -> None:
     assert "Börse" in antwort["error"] and "nach" in antwort["error"], (
         f"der Fehler nennt keinen Weg nach vorn: {antwort['error']}"
     )
+
+
+def test_a_customer_can_withdraw_what_they_uploaded(boerse, tmp_path: Path) -> None:
+    """Der zweite Link aus derselben Mail — und danach ist wirklich nichts mehr da.
+
+    `datenschutz.html` sagt zu: „Beim Hochladen und beim Kommentieren erhalten
+    Sie einen Link mit einem langen Schlüssel, über den Sie Ihren Beitrag
+    jederzeit selbst zurückziehen können; damit geht die Adresse mit."
+
+    **Die Zusage stand im Rechtstext und nicht im Code** — gefunden von 72 beim
+    Lesen des Schemas, nicht von einem Test: Beide Seiten waren für sich
+    stimmig, und genau deshalb fällt so etwas keiner Prüfung auf.
+
+    Geprüft wird die ganze Zusage und nicht nur der Statuscode: Der Baustein ist
+    aus der Liste **und** aus der Datenbank verschwunden, die Datei ist von der
+    Platte, und der Hash der Adresse ist mit ihr gegangen. Ein `hidden = 1`
+    ließe ihn stehen, und er ist ein Personenbezug, solange der Startwert lebt.
+    """
+    basis, postfach, umgebung = boerse
+
+    status, antwort = _hochladen(basis, REZEPT)
+    assert status == 200, antwort
+    for _ in range(50):
+        if postfach.nachrichten:
+            break
+        time.sleep(0.1)
+    mail = postfach.nachrichten[0]
+
+    marke = mail.split("do=confirm&token=")[1].split()[0].strip()
+    schluessel = mail.split("do=withdraw&key=")[1].split()[0].strip()
+    assert len(schluessel) == 64, f"„ein langer Schlüssel“ sind 32 Byte: {schluessel!r}"
+    assert schluessel != marke, "Bestätigung und Rückzug dürfen nicht derselbe Schlüssel sein"
+
+    _holen(basis + f"?do=confirm&token={marke}")
+    _, liste = _holen(basis + "?do=list")
+    assert liste["total"] == 1, "der bestätigte Baustein steht nicht in der Liste"
+
+    status, zurück = _holen(basis + f"?do=withdraw&key={schluessel}")
+    assert status == 200 and zurück["ok"], zurück
+    assert zurück["kind"] == "part", zurück
+
+    _, liste = _holen(basis + "?do=list")
+    assert liste["total"] == 0, "zurückgezogen und trotzdem in der Liste"
+
+    with contextlib.closing(sqlite3.connect(umgebung["SOLIDON_SHARED_DB"])) as verbindung:
+        zeilen = verbindung.execute("SELECT COUNT(*) FROM parts").fetchone()[0]
+    assert zeilen == 0, "der Datensatz steht noch, also steht auch der Adress-Hash noch"
+    ordner = Path(umgebung["SOLIDON_SHARED_FILES"])
+    assert not list(ordner.glob("*.json")), "die Datei liegt noch auf der Platte"
+
+
+def test_a_withdraw_key_that_belongs_to_nobody_says_what_to_do(boerse) -> None:
+    """Ein Schlüssel ohne Beitrag endet nicht mit „abgelehnt" (Regel 17)."""
+    basis, _, _ = boerse
+
+    status, antwort = _holen(basis + "?do=withdraw&key=" + "a" * 64)
+
+    assert status == 404, antwort
+    assert "zurückgezogen" in antwort["error"], (
+        f"der Fehler nennt den wahrscheinlichsten Grund nicht: {antwort['error']}"
+    )

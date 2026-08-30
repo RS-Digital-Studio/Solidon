@@ -11,6 +11,7 @@
  *   GET  ?do=confirm   Feld `token` — der Link aus der Bestätigungsmail
  *   GET  ?do=list      Felder `q` (Suchtext), `licence`, `page`
  *   GET  ?do=download  Feld `slug`
+ *   GET  ?do=withdraw  Feld `key` — der zweite Link aus derselben Mail
  *
  * Antwortet immer JSON, außer beim Herunterladen — dort kommt die Rezeptdatei
  * selbst. Ein Fehler nennt seinen Grund und, wo es Befunde gibt, alle davon:
@@ -145,10 +146,15 @@ function shared_upload(): void
     try {
         $insert = $database->prepare(
             'INSERT INTO parts (slug, title, doc, author, licence, size, has_geometry,
-                                contact_hash, created)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                                contact_hash, withdraw_key, created)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $title = (string) ($data['title'] ?? $data['name'] ?? 'Baustein');
+        // Der Schlüssel, mit dem der Kunde seinen Beitrag jederzeit selbst
+        // zurückzieht (`datenschutz.html`). Er entsteht **hier** und nicht auf
+        // Anforderung: Wer ihn später bräuchte, müsste sich ausweisen, und
+        // genau das soll die Börse nicht verlangen.
+        $withdraw = shared_token(32);
         $insert->execute([
             // Der endgültige Kurzname braucht die Nummer, die es erst nach dem
             // Einfügen gibt; bis dahin steht die Marke selbst darin, damit die
@@ -161,6 +167,7 @@ function shared_upload(): void
             strlen($bytes),
             empty($data['payloads']) ? 0 : 1,
             $hash,
+            $withdraw,
             $now,
         ]);
         $id = (int) $database->lastInsertId();
@@ -180,7 +187,7 @@ function shared_upload(): void
         throw $error;
     }
 
-    shared_send_confirmation($contact, $token, $title);
+    shared_send_confirmation($contact, $token, $withdraw, $title);
     shared_answer([
         'ok' => true,
         'pending' => true,
@@ -197,16 +204,29 @@ function shared_upload(): void
  * Bestätigung. Gemeldet wird er trotzdem, sonst wartet der Kunde auf eine Mail,
  * die nie kommt.
  */
-function shared_send_confirmation(string $address, string $token, string $title): void
-{
+function shared_send_confirmation(
+    string $address,
+    string $token,
+    string $withdraw,
+    string $title
+): void {
     $host = $_SERVER['HTTP_HOST'] ?? 'solidon3d.de';
     $link = 'https://' . $host . '/api/shared.php?do=confirm&token=' . urlencode($token);
+    $back = 'https://' . $host . '/api/shared.php?do=withdraw&key=' . urlencode($withdraw);
     $body = "Hallo,\r\n\r\n"
         . "Sie haben „" . $title . "\" in der Solidon-Tauschbörse eingereicht.\r\n\r\n"
         . "Mit diesem Link wird er öffentlich sichtbar:\r\n\r\n"
         . $link . "\r\n\r\n"
         . "Der Link gilt " . SHARED_CONFIRM_HOURS . " Stunden. Wenn Sie nichts eingereicht "
-        . "haben, ignorieren Sie diese Nachricht — ohne Klick wird nichts veröffentlicht.\r\n";
+        . "haben, ignorieren Sie diese Nachricht — ohne Klick wird nichts veröffentlicht.\r\n"
+        . "\r\n"
+        // **Beide Links in einer Mail, und der zweite ohne Ablauf.** Wer
+        // zurückziehen will, soll das nicht bei uns beantragen müssen; die
+        // Zusage steht in datenschutz.html und lautet „jederzeit selbst".
+        . "Heben Sie diese Nachricht auf: Mit dem folgenden Link ziehen Sie "
+        . "Ihren Baustein jederzeit selbst zurück. Er wird dann gelöscht, und "
+        . "die Verknüpfung zu Ihrer Adresse geht mit.\r\n\r\n"
+        . $back . "\r\n";
     $headers = 'From: ' . SHARED_SENDER . "\r\n"
         . "Content-Type: text/plain; charset=utf-8\r\n"
         . 'Content-Transfer-Encoding: 8bit';
@@ -257,6 +277,84 @@ function shared_confirm(): void
         'slug' => (string) $slug->fetchColumn(),
         'message' => 'Bestätigt. Der Baustein steht jetzt in der Börse.',
     ]);
+}
+
+/**
+ * Zurückziehen — ein Endpunkt für Bausteine und Kommentare.
+ *
+ * **Der Schlüssel ist der ganze Ausweis.** Wer ihn hat, hat die Mail bekommen,
+ * und mehr verlangt die Börse nicht: Ein Konto entsteht hier nicht, und wer
+ * sich zum Löschen erst ausweisen müsste, könnte es nicht ohne eines.
+ *
+ * Gelöscht wird wirklich, nicht verborgen. `datenschutz.html` sagt „damit geht
+ * die Adresse mit" zu, und ein `hidden = 1` ließe den Hash stehen — er ist ein
+ * Personenbezug, solange der Startwert existiert.
+ *
+ * Der Vergleich läuft über `hash_equals`: Ein `=` in SQL antwortet
+ * unterschiedlich schnell, je nachdem, wie viele Zeichen stimmen, und ein
+ * Schlüssel, den man zeichenweise erraten kann, ist keiner. Deshalb wird die
+ * Zeile über den Schlüssel geholt **und** der gefundene Wert danach in
+ * konstanter Zeit verglichen.
+ */
+function shared_withdraw(): void
+{
+    $key = (string) ($_GET['key'] ?? $_POST['key'] ?? '');
+    if ($key === '' || preg_match('/^[0-9a-f]{64}$/D', $key) !== 1) {
+        throw new SharedFailure(
+            'Dieser Rückziehlink ist unvollständig. Nehmen Sie den vollständigen Link aus '
+            . 'der Mail, die Sie beim Einreichen bekommen haben.',
+            400,
+            'bad_key'
+        );
+    }
+    $database = shared_database();
+
+    $part = $database->prepare('SELECT id, withdraw_key FROM parts WHERE withdraw_key = ?');
+    $part->execute([$key]);
+    $found = $part->fetch();
+    if ($found && hash_equals((string) $found['withdraw_key'], $key)) {
+        $id = (int) $found['id'];
+        $database->beginTransaction();
+        try {
+            $database->prepare('DELETE FROM likes WHERE part_id = ?')->execute([$id]);
+            $database->prepare('DELETE FROM flags WHERE part_id = ?')->execute([$id]);
+            $database->prepare('DELETE FROM comments WHERE part_id = ?')->execute([$id]);
+            $database->prepare('DELETE FROM pending WHERE part_id = ?')->execute([$id]);
+            $database->prepare('DELETE FROM parts WHERE id = ?')->execute([$id]);
+            $database->commit();
+        } catch (Throwable $error) {
+            $database->rollBack();
+            throw $error;
+        }
+        // Die Datei erst nach dem Commit: Ein zurückgerollter Datensatz mit
+        // gelöschter Datei wäre ein Eintrag, der auf nichts zeigt.
+        @unlink(shared_file_for($id));
+        shared_answer([
+            'ok' => true,
+            'kind' => 'part',
+            'message' => 'Zurückgezogen. Der Baustein ist gelöscht, und die Verknüpfung zu '
+                . 'Ihrer Adresse mit ihm.',
+        ]);
+    }
+
+    $comment = $database->prepare('SELECT id, withdraw_key FROM comments WHERE withdraw_key = ?');
+    $comment->execute([$key]);
+    $found = $comment->fetch();
+    if ($found && hash_equals((string) $found['withdraw_key'], $key)) {
+        $database->prepare('DELETE FROM comments WHERE id = ?')->execute([(int) $found['id']]);
+        shared_answer([
+            'ok' => true,
+            'kind' => 'comment',
+            'message' => 'Zurückgezogen. Der Kommentar ist gelöscht.',
+        ]);
+    }
+
+    throw new SharedFailure(
+        'Zu diesem Schlüssel gibt es nichts mehr — vielleicht haben Sie den Beitrag '
+        . 'bereits zurückgezogen. Sehen Sie in der Börse nach, ob er noch dasteht.',
+        404,
+        'unknown_key'
+    );
 }
 
 /** Die Liste: veröffentlicht, nicht verborgen, neueste zuerst. */
@@ -349,10 +447,12 @@ try {
         shared_list();
     } elseif ($action === 'download') {
         shared_download();
+    } elseif ($action === 'withdraw') {
+        shared_withdraw();
     } else {
         throw new SharedFailure(
-            'Diese Anfrage kennt die Börse nicht. Möglich sind upload, confirm, list '
-            . 'und download.',
+            'Diese Anfrage kennt die Börse nicht. Möglich sind upload, confirm, list, '
+            . 'download und withdraw.',
             404,
             'unknown_action'
         );

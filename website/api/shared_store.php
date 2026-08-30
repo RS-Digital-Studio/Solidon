@@ -99,6 +99,7 @@ function shared_create_schema(PDO $database): void
             size INTEGER NOT NULL,
             has_geometry INTEGER NOT NULL DEFAULT 0,
             contact_hash TEXT NOT NULL,
+            withdraw_key TEXT NOT NULL DEFAULT "",
             created INTEGER NOT NULL,
             published INTEGER,
             hidden INTEGER NOT NULL DEFAULT 0,
@@ -130,6 +131,7 @@ function shared_create_schema(PDO $database): void
             body TEXT NOT NULL,
             author TEXT NOT NULL DEFAULT "",
             contact_hash TEXT NOT NULL,
+            withdraw_key TEXT NOT NULL DEFAULT "",
             created INTEGER NOT NULL,
             published INTEGER,
             hidden INTEGER NOT NULL DEFAULT 0
@@ -252,8 +254,15 @@ function shared_contact_hash(string $address): string
     return hash('sha256', $seed . '|' . strtolower(trim($address)));
 }
 
-/** Eine Marke für den Bestätigungslink — 32 Byte aus dem Zufallsgenerator. */
-function shared_token(): string
+/**
+ * Eine Marke aus dem Zufallsgenerator, als Hex.
+ *
+ * 16 Byte für den Bestätigungslink, der Stunden gilt; 32 für den
+ * Rückziehschlüssel, den der Kunde behält. `datenschutz.html` sagt „ein Link
+ * mit einem langen Schlüssel" zu, und das ist keine Floskel: Der eine verfällt,
+ * der andere liegt Jahre in einem Postfach.
+ */
+function shared_token(int $bytes = 16): string
 {
-    return bin2hex(random_bytes(16));
+    return bin2hex(random_bytes($bytes));
 }
