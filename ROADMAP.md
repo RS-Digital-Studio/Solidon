@@ -124,8 +124,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. Es fehlt ein echtes Paket auf einem Mac; dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
-| SpaceMouse-Anbindung — P15 führte sie unter „wird nicht gebaut" | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept mit P15-Revision und Roberts Bau-Entscheidung — sein „wäre schon spannend" (30.08.2026) ist ein Interesse, keine Ansage. Kandidat: `pyspacemouse` (MIT, über hidapi, ohne Herstellertreiber) |
-| Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
+| SpaceMouse-Anbindung — Konzept liegt vor | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | Roberts Entscheidungen aus `konzept-3d-maus-2026-08.md` §12 — zuvorderst Gerät (~150 €) und Reihenfolge gegen die Grundsteuerung; Empfehlung: bauen unter drei Bedingungen, sonst bleibt E10 |
+| Resin-Druck — Konzept liegt vor, der Titel führte in die Irre | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | Roberts Entscheidungen aus `konzept-resin-2026-08.md` §11 — zuvorderst Stufe-1-Freigabe (aufhören, das Vorhandene mit der stillen FDM-Vorgabe zu verstellen) und Weg B: Verfahren im Druckerprofil |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
@@ -12762,24 +12762,22 @@ ab dem 01.11.2026), zwei sind Arbeit. Die Anfrage liegt in Roberts
 Postfach (R. W. D., Zeitz, 30.08.2026); der Antwortentwurf nennt beide
 Punkte als notiert — was hier steht, ist also auch zugesagt.
 
-- [ ] **SpaceMouse-Anbindung.** `konzepte/konzept-p15-konstruieren-und-zeigen.md`
-      führt sie unter „wird nicht gebaut" (E10: Nischengerät, kleine
-      Zielgruppe, Treiberprobleme je Plattform). Die Anfrage kommt aber aus
-      genau der Zielgruppe, die solche Geräte besitzt und beruflich benutzt,
-      und Robert findet die Idee „schon spannend" (30.08.2026) — ein
-      Interesse, noch keine Bau-Entscheidung. Kandidat wäre `pyspacemouse`
-      (MIT, über hidapi, ohne den 3DxWare-Treiber; macOS verlangt
-      HID-Eingaberechte). Vor dem Bau: Konzept mit P15-Revision,
-      Lizenzlisten-Eintrag (Regel 22) und Roberts Ansage.
-- [ ] **Resin-Druck: der Export kann es, das Wissen fehlt.** STL/3MF aus
-      Solidon öffnet jeder Resin-Slicer, der Weg ist heute schon gangbar.
-      Was fehlt, ist die Resin-Denke in der Druckbarkeitsprüfung:
-      Saugglocken/Cupping, Abflussbohrungen beim Aushöhlen, Punktstützen —
-      und `slicer_keys.py` kennt nur die Familien prusa/orca/cura. Der
-      Bauplan erwähnt Resin an keiner Stelle; vor jeder Umsetzung steht ein
-      Konzept, wie weit Solidon hier mitgeht. Naheliegender erster Schritt,
-      der beiden Welten nützt: die Aushöhlen-Op um eine Abflussbohrung
-      erweitern.
+- [~] **SpaceMouse-Anbindung: Konzept liegt vor**
+      (`konzepte/konzept-3d-maus-2026-08.md`, 30.08.2026) — wartet auf
+      Roberts Entscheidungen §12, zuvorderst Gerät und Reihenfolge gegen
+      die Grundsteuerung. Empfehlung des Konzepts: bauen nach den neun
+      Grundsteuerungs-Paketen, mit einem Gerät auf dem Tisch, und nur
+      wenn die Abhängigkeit festschreibbar ist — fällt eine der drei
+      Bedingungen, bleibt E10 stehen und der Kunde bekommt eine
+      begründete Absage.
+- [~] **Resin-Druck: Konzept liegt vor**
+      (`konzepte/konzept-resin-2026-08.md`, 30.08.2026) — wartet auf
+      Roberts Entscheidungen §11, zuvorderst Stufe-1-Freigabe und Weg B
+      (Verfahren im Druckerprofil). Der Punkt-Titel selbst ist laut
+      Konzept irreführend (Frage 8): Der Kernbefund heißt „Solidon setzt
+      einen FDM-Drucker voraus, ohne je zu fragen" — Stufe 1 hört auf,
+      das Vorhandene zu verstellen, Stufe 2 (Saugglocken, Öffnungen nach
+      Druckorientierung, Geltungsbereiche der Regeln) kommt danach.
 - [ ] **Die Zusagen aus der Antwort — versendet, damit scharf.** Die Mail
       ging am 30.08.2026 um 11:24 von support@solidon3d.de hinaus; fällig
       sind jetzt die Nachricht zum Verkaufsstart (spätestens 01.11.2026)
