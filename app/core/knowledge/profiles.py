@@ -218,10 +218,41 @@ def for_object(profile: Profile, entry: SceneObject | None) -> Profile:
     was aus dem Material eine Länge rechnet — Spiel, Schrumpf, Elefantenfuß —
     geht hier durch statt ``profile.material`` zu lesen: eine Dichtung aus TPU
     wird also nicht gerechnet, als wäre sie das Gehäuse um sie herum.
+
+    **Und wo nichts am Körper steht, fragt es die Spule** — „das Material kommt
+    ja auch aus dem Filament" (Robert, 30.08.2026). Die Rangfolge ist
+    Entscheidung vor Herleitung: Ein ausdrücklich gesetztes ``entry.material``
+    gewinnt, denn es hat jemand gewählt; der Materialtyp der Spule ist die
+    Antwort für alle anderen. Gemessen kostet die Frage 0,05 mm Spiel
+    (PETG 0,25, PLA 0,20) — klein, aber an einer Passung spürbar.
     """
-    if entry is None or entry.material is None or entry.material == profile.material.id:
+    if entry is None:
         return profile
-    return Profile(printer=profile.printer, material=material(entry.material))
+    chosen = entry.material or _material_of_spool(entry)
+    if chosen is None or chosen == profile.material.id:
+        return profile
+    return Profile(printer=profile.printer, material=material(chosen))
+
+
+def _material_of_spool(entry: SceneObject) -> str | None:
+    """Die Materialkennung aus der Spule des Körpers — oder ``None``.
+
+    **Slot 0 und nicht der größte Flächenanteil.** Slot 0 ist das unbemalte
+    Teil (§20), also der Körper selbst; jeder weitere Slot ist Bemalung. Ein
+    Gehäuse mit einem Schriftzug in anderer Farbe bohrt ins Gehäuse, und ein zu
+    sechzig Prozent bemaltes Teil tut das auch — die Flächenrechnung wäre
+    teurer und im Randfall falsch.
+
+    ``None`` heißt: Es bleibt beim Material des Projekts. Das ist kein
+    Sonderfall, sondern der häufigste Weg — eine frisch eingelesene STL hat
+    **keine** Spulen, und Weg 1 fängt genau dort an. Geraten wird dabei nie
+    (Regel 21): ``material_id_for_type`` gibt leer zurück, wo nichts oder mehr
+    als ein Profil passt.
+    """
+    slot = next((spool for spool in entry.material_slots if spool.index == 0), None)
+    if slot is None or not slot.material_type:
+        return None
+    return material_id_for_type(slot.material_type) or None
 
 
 #: Welche Materialgröße eine Passungsart liest (§14). Hier dokumentiert,
