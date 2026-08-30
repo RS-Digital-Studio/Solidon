@@ -1884,3 +1884,92 @@ def test_the_showpiece_shows_its_own_work() -> None:
 
     slots = {d.params.get("slot") for d in alle if d.op == "assign_slot"}
     assert len(slots) >= 2, f"zwei Farben machen aus einer grauen Kiste ein Produkt: {slots}"
+
+
+def test_the_roll_holder_uses_real_operations() -> None:
+    """Auch der zweite Aufbau nennt nur Operationen und Parameter, die es gibt.
+
+    Dasselbe wie beim Gehäuse eine Ebene darüber, mit einem Unterschied: Die
+    Schritte des Rollenhalters sind **Funktionen**, weil seine Objektkennungen
+    erst zur Laufzeit feststehen — ``union_objects`` verbraucht beide Eingänge
+    und legt einen neuen Körper an. Aufgerufen werden sie hier mit
+    Platzhaltern; geprüft wird, was dabei herauskommt.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from tools.make_showpiece import holder_steps
+
+    load_operations()
+    schritte = holder_steps()
+    assert len(schritte) >= 15, f"der Rollenhalter ist auf {len(schritte)} Schritte geschrumpft"
+
+    for title, make in schritte:
+        drafts = make("obj_1", "obj_2")
+        assert drafts, f"{title}: ein Schritt ohne Operation"
+        for draft in drafts:
+            operation = REGISTRY.get(draft.op)
+            bekannt = {
+                feld.name
+                for feld in dataclasses.fields(operation.params)
+                if dataclasses.is_dataclass(operation.params)
+            }
+            fremd = set(draft.params) - bekannt
+            assert not fremd, (
+                f"{title}: {draft.op} kennt {sorted(fremd)} nicht — es hat {sorted(bekannt)}"
+            )
+
+
+def test_the_roll_holder_stays_in_one_piece_across_its_range() -> None:
+    """Über die ganze Reglerspanne bleibt jeder Körper **ein** Stück.
+
+    **Der Anlass ist ein fremder Fehler, und genau deshalb steht der Test
+    hier.** An der Schraubdose war ``wrap_diameter`` einmal aus der Geometrie
+    abgelesen und fest eingetragen. Die Rändelung wuchs damit nicht mit dem
+    Durchmesser mit, traf den Deckel ab ⌀75 gar nicht mehr und lag als
+    Hunderte loser Stücke daneben: 553 Komponenten, wasserdicht, plausibles
+    Volumen, **kein einziger Befund**. Auf dem Galeriebild sah der fehlende
+    Griffrand aus wie eine Gestaltungsentscheidung.
+
+    Ein zerbrochener Körper wäre aufgefallen, ein unvollständiger nicht — und
+    der Rollenhalter hat dieselbe Bauart: feste Zahlen (Plattentiefe,
+    Wangenhöhe, Fensterdurchmesser) neben Formeln, die mit ``@rollenbreite``
+    wachsen.
+
+    Geprüft wird an den **Rändern und darüber hinaus**: Der Regler zieht 55
+    bis 90, ein Kunde kann den Parameter aber von Hand auf jeden Wert setzen.
+    Die Auswertung kostet dabei nichts — die erste rechnet eine halbe Sekunde,
+    jede weitere fünf Hundertstel.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import load
+
+    load_operations()
+    ziel = Path(__file__).resolve().parent.parent / "website" / "teile" / "rollenhalter.p3d"
+    assert ziel.is_file(), f"das Schaustück fehlt: {ziel}"
+
+    project = load(ziel)
+    document = project.document
+    profile = profiles.make_profile()
+
+    for breite in (40.0, 55.0, 68.0, 82.0, 90.0, 110.0):
+        document.parameters["rollenbreite"] = dataclasses.replace(
+            document.parameters["rollenbreite"], value=breite
+        )
+        result = evaluate(document, profile)
+        koerper = list(result.scene.objects.values())
+        assert len(koerper) == 3, (
+            f"{breite:.0f} mm: {len(koerper)} Körper statt drei — "
+            "eine Boolesche Operation hat einen verschluckt"
+        )
+        for objekt in koerper:
+            stuecke = int(getattr(objekt.mesh, "component_count", 1) or 1)
+            assert stuecke == 1, (
+                f"{breite:.0f} mm: {objekt.name} zerfällt in {stuecke} Stücke — "
+                "eine feste Zahl wandert beim Parameterzug nicht mit"
+            )
