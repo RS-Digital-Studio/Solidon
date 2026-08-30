@@ -464,6 +464,18 @@ def _catalogue_path(spec: OperationSpec) -> str:
 def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[OperationSpec, ...]:
     """Was ein Klick auf ein Merkmal anbietet — der kürzeste Weg vom Sehen
     zum Tun (§2.6).
+
+    **Die Rohmenge, nicht die Zeilen des Menüs.** Der Name legt das andere
+    nahe, und `tests/test_acceptance_p0.py` nagelt ausdrücklich diese Lesart
+    fest: alles, dessen ``applies_to`` die Art nennt. Was die Oberfläche daraus
+    macht, entscheidet sie — sie legt zusammengelegte Zwillinge zusammen
+    (``MENU_TWINS``), faltet nach Zeilen und vertritt die Bausteine mit Kachel
+    durch den Katalog.
+
+    Der Satz steht hier, weil die Verwechslung Geld gekostet hat: An jeder
+    Fläche stand *Bohrung setzen* zweimal, weil ``operations_for_feature`` in
+    `app/ui/panels.py` diese Menge ungefiltert weitergab und die
+    Zusammenlegung nicht kannte, die die Menüleiste seit je macht.
     """
     return (registry or REGISTRY).for_feature(feature_kind)
 

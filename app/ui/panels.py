@@ -58,7 +58,7 @@ from app.core.errors import (
 from app.core.log import get_logger
 from app.core.registry import MENU_TWINS, REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
-from app.core.registry.surfaces import catalogue_operations, folded_groups
+from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
@@ -212,6 +212,17 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Operationen bewusst nicht selbst tun — und ohne diesen Knopf muss man
     # ihn kennen, um ihn zu finden.
     "arrange.bodies_in_one_place": (ARRANGE_ON_BED,),
+    # **Derselbe Sachverhalt eine Stufe weiter, und er stand ohne Knopf da.**
+    # ``bodies_in_one_place`` meldet Körper, die genau aufeinander liegen;
+    # ``collision`` meldet die, die sich teilweise durchdringen. Zwischen
+    # beiden liegt kein Unterschied, den der Kunde träfe — er sieht zwei
+    # Teile, die am selben Ort stehen, und will sie nebeneinander haben.
+    #
+    # Gefunden hat es die Nachbarsitzung beim Zählen der Befunde ohne
+    # Handlung. Der Familientest daneben sah es nicht: Er gruppiert nach dem
+    # Namen **hinter** dem Punkt, und ``collision`` ist damit eine Familie
+    # mit einem Mitglied — immer gleich versorgt, immer grün.
+    "arrange.collision": (ARRANGE_ON_BED,),
     # Dieselbe Handlung wie bei den Nachbarn: Was aneinander liegt, wird
     # nebeneinander gelegt. Der Befund kommt aus dem Teilen selbst, weil
     # nur die Operation weiß, dass die zwei Körper zusammengehören.
@@ -1130,6 +1141,7 @@ class ObjectTree(QWidget):
         ließe sie den Nutzer suchen, wo nichts fehlt (dieselbe Entscheidung wie
         in der Menüleiste). Welche das sind, entscheidet
         :meth:`kinds_of_selection` beim Bauen des Menüs.
+
         """
         # Nach Titel sortiert, wie die Menüleiste: ``REGISTRY.all()`` liefert
         # nach dem internen englischen Namen, und im Kontextmenü stand damit
@@ -1164,8 +1176,24 @@ class ObjectTree(QWidget):
     def operations_for_feature(self, kind: str) -> tuple[Any, ...]:
         """Was eine Bohrung oder eine Fläche anbietet, direkt aus ``applies_to``
         (§10, §18.5).
+
+        **Ohne die zusammengelegten Zwillinge.** An jeder Fläche stand
+        *Bohrung setzen* zweimal — ``drill_hole`` und ``drill_brep_hole``
+        tragen denselben Titel, und der Kunde konnte nicht wissen, welche
+        Zeile er nimmt; je nach Treffer bekam er einen anderen Rechenkern.
+        Die Menüleiste legt das Paar seit je zusammen (``MENU_TWINS``): Der
+        sichtbare Partner trägt den Eintrag, der andere ist über einen
+        Umschalter in dessen Dialog erreichbar. Hier fehlte die Rechnung —
+        dieselbe Frage an zwei Stellen, und eine kannte die Antwort nicht.
+
+        **Weggelassen wird nur, wenn der Partner tatsächlich dabei ist.**
+        Ein Zwilling, dessen Partner für diese Merkmalsart gar nicht gilt,
+        wäre sonst spurlos weg statt zusammengelegt.
+
         """
-        return REGISTRY.for_feature(kind)
+        offered = REGISTRY.for_feature(kind)
+        names = {spec.name for spec in offered}
+        return tuple(spec for spec in offered if MENU_TWINS.get(spec.name) not in names)
 
     def _feature_kind(self) -> str | None:
         """Die Art des gewählten Merkmals — ``hole``, ``face``, ``edge``.
@@ -1342,32 +1370,34 @@ class ObjectTree(QWidget):
         # C++-Objekt wird eingesammelt, während es noch im Menü hängt —
         # dieselbe Falle wie in der Menüleiste.
         parts_title = str(group_title("parts"))
-        katalog = catalogue_operations()
         for title in sorted(folded):
+            if title == parts_title:
+                # **Wo die Bausteine gefaltet würden, tritt der Katalog an ihre
+                # Stelle** — auf der obersten Ebene, nicht in einem Untermenü.
+                # Er kostet dieselbe eine Zeile und zeigt Bilder statt
+                # Textnamen (§2.6); siebzehn Zeilen wie
+                # „Heat-Set-Einpressbuchse" sind genau die Darstellung, gegen
+                # die der Katalog gebaut wurde. Und er bleibt damit **einen**
+                # Klick vom gewählten Teil entfernt, wie Robert es zur
+                # Bedingung gemacht hat — ein Untermenü machte daraus zwei,
+                # und `test_a_chosen_part_reaches_the_catalogue_in_one_click`
+                # hat das gefangen.
+                #
+                # **Was er nicht zeigt, steht in der Menüleiste.** Der
+                # Katalog zeigt ``PARTS.all()``; *Deckel erzeugen* und
+                # *Drehdeckel erzeugen* haben keine Kachel und sind hier
+                # deshalb nicht erreichbar — sie stehen im Menü *Bausteine*.
+                # Sie hier danebenzustellen kostete zwei Zeilen und riss die
+                # Grenze (gemessen: 14 an einer Fläche); sie mitzufalten hieß,
+                # *Bohrung setzen* eine Ebene tiefer zu legen. Welche der
+                # beiden Fassungen die richtige ist, entscheidet Robert.
+                self._add_catalog(menu)
+                continue
             submenu = QMenu(title, menu)
             # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
             # stehen die Operationen des exakten Kerns gerade hier drin.
             submenu.setToolTipsVisible(True)
-            if title == parts_title:
-                # **Das Untermenü der Bausteine führt in den Katalog, statt
-                # ihn nachzubauen** (§2.6). Hier standen siebzehn Zeilen wie
-                # „Heat-Set-Einpressbuchse" — jede eine Vokabel statt einer
-                # Form, und genau die Darstellung, gegen die der Katalog
-                # gebaut wurde. Drinnen steht deshalb der Weg dorthin.
-                #
-                # **Und daneben, was der Katalog nicht zeigt.** Er zeigt
-                # ``PARTS.all()``; *Deckel erzeugen* und *Drehdeckel erzeugen*
-                # haben keine Kachel. Ein Untermenü, das nur den Katalog
-                # nennt, ließ beide verschwinden — an der Fläche, also genau
-                # dort, wo §18.5 sie vorsieht und die Tour sie nennt.
-                self._add_catalog(submenu)
-                own = [spec for spec in groups[title] if spec.name not in katalog]
-                if own:
-                    submenu.addSeparator()
-                    for spec in own:
-                        self._add_operation(submenu, spec, kinds)
-            else:
-                self._fill_submenu(submenu, groups[title], kinds)
+            self._fill_submenu(submenu, groups[title], kinds)
             menu.addMenu(submenu)
 
     def _fill_submenu(self, menu: QMenu, specs: Sequence[Any], kinds: Sequence[str]) -> None:
@@ -1522,10 +1552,11 @@ class ObjectTree(QWidget):
         der Katalog weiß dadurch, dass er den Hinweis auf die fehlende Stelle
         **nicht** zeigen muss.
 
-        **Er steht an der Stelle des gefalteten Bausteine-Untermenüs, nicht
-        darüber** — und das ist eine Berichtigung, keine Feinheit. Zuerst stand
-        er fest oben im Menü, also *neben* den Bausteinen statt an ihrer
-        Stelle. Am Merkmalsmenü einer Bohrung gemessen:
+        **Er steht an der Stelle, an der die Bausteine gefaltet würden — nicht
+        fest oben im Menü** (:meth:`_add_operations`). Das ist eine
+        Berichtigung, keine Feinheit: Zuerst stand er unbedingt oben, also auch
+        dort, wo die Bausteine ohnehin flach danebenstanden. Am Merkmalsmenü
+        einer Bohrung gemessen:
 
             Operationen für „hole"                  10
             Zeilen darüber (mit diesem Eintrag)      3
@@ -1542,10 +1573,19 @@ class ObjectTree(QWidget):
         trotzdem hinzu: **ein Diff zeigt seine eine Zeile, nicht die Grenze,
         die sie reißt.**
 
-        Am neuen Ort kostet er nichts, weil er ersetzt statt hinzuzufügen. Wo
-        die Bausteine flach passen, stehen sie flach und der Katalog bleibt
-        über *Datei → Bausteinkatalog …* und Strg+K erreichbar — zwei Wege, die
-        immer offen sind.
+        Am neuen Ort kostet er keine eigene Zeile: Er tritt an die Stelle des
+        Untermenüs, das die Bausteine sonst bekämen. Wo sie flach passen — an
+        einer Bohrung —, stehen sie flach und der Eintrag entfällt; der Katalog
+        bleibt dann über *Datei → Bausteinkatalog …*, über das Menü *Bausteine*
+        und über Strg+K erreichbar, also über drei Wege, die immer offen sind.
+
+        **Ein Zwischenstand legte ihn stattdessen in ein Untermenü**, und
+        dieser Docstring hat ihn eine Weile als Sollzustand beschrieben. Das
+        machte aus Roberts einem Klick zwei;
+        ``test_a_chosen_part_reaches_the_catalogue_in_one_click`` hat es
+        gefangen. Was dabei offen bleibt, steht in
+        :meth:`_add_operations` — die zwei Baustein-Operationen **ohne** Kachel
+        sind auf diesem Weg nicht erreichbar und stehen in der Menüleiste.
         """
         insert = menu.addAction(tr("Baustein einsetzen …"))
         insert.setStatusTip(

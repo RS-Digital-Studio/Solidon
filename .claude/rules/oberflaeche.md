@@ -462,11 +462,68 @@ Zwei Sätze daraus, und der zweite ist der teurere:
 * **Was der Katalog vertritt, ist genau das, was er zeigt.** Ein Untermenü
   oder ein Eintrag, der auf ihn verweist, darf nur die Ops ersetzen, die
   darin vorkommen; alles andere steht daneben.
+* **Der Katalogeintrag tritt an die Stelle der gefalteten Gruppe, auf der
+  obersten Ebene.** *Baustein einsetzen …* ist damit **einen** Klick vom
+  gewählten Teil entfernt, so hat Robert die Bedingung gestellt, und
+  `test_a_chosen_part_reaches_the_catalogue_in_one_click` führt sie wörtlich.
+  Ein Zwischenstand legte ihn in ein Untermenü *Bausteine* und machte aus dem
+  einen Klick zwei; der Test hat es gefangen. **Eine Zusage, die man dreimal
+  zitiert hat, ist damit nicht eingehalten.**
+
+**Und an dieser Stelle schließen sich vier Zusagen gegenseitig aus.** Alle vier
+sind gemessen, keine ist erfunden:
+
+| | |
+|---|---|
+| §40 (P0) | jede Operation steht im Kontextmenü |
+| §35 | höchstens zwölf Zeilen je Menü |
+| Robert | ein Klick vom gewählten Teil zum Katalog |
+| §18.5, §2.6 | am Merkmal steht alles direkt, ohne Aufklappen |
+
+An einer Fläche ergeben alle vier zusammen **vierzehn** Zeilen. Drei Fassungen
+sind durchgemessen, jede bricht genau eine:
+
+| Fassung | Preis |
+|---|---|
+| Katalog ersetzt die Gruppe | *Deckel erzeugen* fehlt im Flächenmenü |
+| die zwei Deckel daneben | vierzehn Zeilen statt zwölf |
+| die zwei Deckel mitfalten | *Bohrung setzen* eine Ebene tiefer |
+
+Gewählt ist die erste, weil ihr Preis den seltensten Fall trifft: Die beiden
+Baustein-Operationen ohne Kachel stehen im Menü *Bausteine* der Menüleiste.
+**Das ist eine Bedienentscheidung und keine Bugfrage** — sie liegt Robert vor,
+und wer sie ändert, ändert eine der vier Zusagen mit.
 * **Ein Wächter ist so scharf wie seine weiteste Ausnahme.** Der Test, der
   „jede Operation ist im Menü auffindbar" zusichert, nahm die *Kategorie* aus
   — und blieb deshalb grün, während zwei Operationen nirgends standen. Wer
   eine Ausnahme formuliert, prüft sie an ihren Rändern und nicht an ihrem
   Normalfall.
+
+**Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.** An jeder
+Fläche stand *Bohrung setzen* zweimal: `drill_hole` und `drill_brep_hole`
+tragen denselben Titel, und der Kunde traf seine Wahl blind — je nach Zeile
+bekam er einen anderen Rechenkern. Die Menüleiste legt das Paar seit je über
+`MENU_TWINS` zusammen; `panels.operations_for_feature` gab
+`REGISTRY.for_feature` ungefiltert weiter und kannte die Zusammenlegung nicht.
+**Dieselbe Frage, zwei Rechnungen** — genau der Grund, aus dem die Menütiefe in
+den Kern gewandert ist.
+
+Weggelassen wird ein Zwilling nur, wenn sein Partner tatsächlich mit angeboten
+wird; sonst wäre er spurlos weg statt zusammengelegt.
+
+`surfaces.context_menu()` bleibt dabei die **Rohmenge** — der Name legt anderes
+nahe, und `tests/test_acceptance_p0.py` nagelt diese Lesart ausdrücklich fest.
+Was daraus Zeilen werden, entscheidet die Oberfläche.
+
+**Und die Testfalle dazu, weil sie allgemeiner ist als der Fall:** Der
+bestehende Test nimmt `operations_for_feature` als *Sollmenge* („alles, was sie
+liefert, steht im Menü"). Ein Filter in dieser Methode lässt Erwartung und
+Menü gemeinsam schrumpfen — der Test bleibt grün, ganz gleich was die Methode
+tut. Das ist die Schwester von „Sollwert aus dem Prüfling": Dort erzeugt die
+geprüfte Funktion die Erwartung, hier definiert sie die Grundmenge. Gezählt
+wird deshalb am **gebauten** Menü, und die Zusage lautet nicht „*Bohrung
+setzen* genau einmal", sondern „kein Kontextmenü zeigt zwei Zeilen mit
+demselben Text" — die engere Fassung wäre am Tag des nächsten Zwillings still.
 
 **Ein Zeichen darf allein stehen, wenn es entweder ein geeinigtes Bild ist
 oder die Zahl klein und die Stelle fest bleibt.** Der Skizzeneditor lebt vom

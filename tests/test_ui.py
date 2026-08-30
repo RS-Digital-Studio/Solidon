@@ -9380,12 +9380,11 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
     entry.trigger()
     assert gerufen, "der Eintrag steht da, öffnet den Katalog aber nicht"
 
-    # Und die andere Hälfte: In der Menüleiste steht keiner mehr.
-    from app.core.registry import REGISTRY
-
-    in_bar = [
-        name
-        for name in window._op_actions
-        if REGISTRY.has(name) and REGISTRY.get(name).category == "parts"
-    ]
+    # Und die andere Hälfte: In der Menüleiste steht keiner mehr — gefragt
+    # nach der **Kachel**, nicht nach der Kategorie. Hier stand
+    # ``category == "parts"``, und das verlangte dasselbe von ``create_lid``
+    # und ``screw_lid``, die gar keine Kachel haben: Sie verschwanden aus der
+    # Leiste, ohne im Katalog aufzutauchen.
+    in_bar = [name for name in window._op_actions if name in catalogue_operations()]
+    assert catalogue_operations(), "es gibt keine Bausteine — dann prüft dieser Test nichts"
     assert not in_bar, f"Bausteine gehören in den Katalog, nicht ins Menü: {sorted(in_bar)}"

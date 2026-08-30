@@ -1101,3 +1101,44 @@ def test_a_finding_says_the_same_number_in_its_line_and_in_its_tooltip() -> None
         for key, value in finding.values.items():
             written = labels.value_text(key, value)
             assert written in line, f"{unit}: {written!r} fehlt in der Zeile {line!r}"
+
+
+#: Befunde, die denselben Sachverhalt melden und deshalb dasselbe anbieten
+#: müssen. Der Familientest darüber gruppiert nach dem Namen **hinter** dem
+#: Punkt und sieht diese Paare nicht: „collision" und „bodies_in_one_place"
+#: sind zwei Familien mit je einem Mitglied, also immer gleich versorgt.
+#:
+#: Kuratiert, wie die Stammliste in ``test_language_rules``: Wer zwei Befunde
+#: findet, die derselbe Knopf löst, trägt sie hier ein.
+GLEICHER_SACHVERHALT: tuple[tuple[str, ...], ...] = (
+    # Zwei Teile am selben Ort — einmal genau aufeinander, einmal teilweise
+    # ineinander. Der Kunde sieht in beiden Fällen zwei Körper, die er
+    # nebeneinander haben will.
+    ("arrange.collision", "arrange.bodies_in_one_place"),
+)
+
+
+@pytest.mark.parametrize("gruppe", GLEICHER_SACHVERHALT, ids=lambda g: g[0])
+def test_findings_of_the_same_matter_offer_the_same_way_out(gruppe: tuple[str, ...]) -> None:
+    """Dasselbe Problem bietet dieselben Handlungen, gleich wie es heißt.
+
+    ``arrange.collision`` stand ohne Knopf da, während sein Nachbar
+    ``arrange.bodies_in_one_place`` *Auf dem Bett anordnen* trug — dieselbe
+    Handlung, dieselbe Lage, und sie war bereits gebaut und verdrahtet.
+
+    Der Familientest oben sah es nicht, weil er nach dem Namen hinter dem Punkt
+    gruppiert: Beide bilden dort eine Familie für sich und sind damit trivial
+    gleich versorgt. Die sachliche Verwandtschaft läuft über das Präfix, und
+    die lässt sich nicht ableiten — deshalb steht sie oben als Liste.
+    """
+    from app.ui.panels import FINDING_ACTIONS
+
+    vorhanden = _finding_codes()
+    fehlend = [code for code in gruppe if code not in vorhanden]
+    assert not fehlend, f"diese Kennungen erzeugt der Kern nicht (mehr): {fehlend}"
+
+    ohne = [code for code in gruppe if not FINDING_ACTIONS.get(code)]
+    assert not ohne, f"ohne Handlung: {ohne} — die Nachbarn in {gruppe} tragen eine"
+
+    angebote = {code: tuple(a.id for a in FINDING_ACTIONS[code]) for code in gruppe}
+    assert len(set(angebote.values())) == 1, f"verschiedene Angebote: {angebote}"

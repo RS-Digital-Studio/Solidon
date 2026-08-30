@@ -523,6 +523,54 @@ def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> 
     menu.deleteLater()
 
 
+def test_no_menu_shows_the_same_line_twice(window: MainWindow) -> None:
+    """Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.
+
+    An jeder Fläche stand **Bohrung setzen** zweimal: ``drill_hole`` und
+    ``drill_brep_hole`` tragen denselben Titel, und der Kunde kann nicht
+    wissen, welche gemeint ist — die Auswahl trifft er blind, und je nach
+    Treffer bekommt er einen anderen Rechenkern.
+
+    Die Menüleiste hat das Paar seit je zusammengelegt (``MENU_TWINS``): Der
+    sichtbare Zwilling trägt den Eintrag, der andere ist über einen
+    Umschalter in dessen Dialog erreichbar. ``operations_for_feature`` gab
+    ``REGISTRY.for_feature`` ungefiltert weiter und kannte die Zusammenlegung
+    nicht. **Dieselbe Frage, zwei Rechnungen** — genau der Grund, aus dem die
+    Menütiefe in den Kern gewandert ist.
+
+    Geprüft wird die Zusage und nicht der eine Fall: Kein Kontextmenü zeigt
+    zwei Zeilen mit demselben Text, auf keiner Ebene. Ein Test auf „Bohrung
+    setzen genau einmal" wäre am Tag des nächsten Zwillings still.
+
+    Und **nicht** über ``operations_for_feature`` formuliert, obwohl der
+    Filter dort sitzt: Ein Test, der seine Erwartung aus dem Prüfling holt,
+    wird mit ihm zusammen falsch. Gezählt wird am gebauten Menü.
+    """
+    scene = window.session.last_result.scene.objects["obj_1"]
+    features = [entry.id for entry in scene.features.values()]
+    assert features, "das Testmodell hat keine Merkmale — dann prüft dieser Test nichts"
+
+    seen = 0
+    for feature_id in features:
+        window.object_tree.select_feature("obj_1", feature_id)
+        menu = window.object_tree.context_menu()
+        assert menu is not None
+        levels = [[action for action in menu.actions() if not action.isSeparator()]]
+        levels += [
+            [entry for entry in action.menu().actions() if not entry.isSeparator()]
+            for action in menu.actions()
+            if action.menu()
+        ]
+        for level in levels:
+            texts = [action.text() for action in level]
+            seen += len(texts)
+            twice = sorted({text for text in texts if texts.count(text) > 1})
+            assert not twice, f"{feature_id}: zweimal dieselbe Zeile {twice}"
+        menu.deleteLater()
+
+    assert seen > len(features), "keine Menüzeilen gezählt — dann prüft dieser Test nichts"
+
+
 def test_a_feature_without_operations_of_its_own_offers_the_body(window: MainWindow) -> None:
     """Wer genauer gezeigt hat, bekommt nicht weniger.
 

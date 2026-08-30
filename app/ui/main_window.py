@@ -1742,7 +1742,12 @@ class MainWindow(QMainWindow):
             self.action_generate,
             tr("Aus Text oder Bild ein 3D-Modell erzeugen lassen — braucht ein laufendes ComfyUI."),
         )
-        self._add_action(
+        # **Dieselbe Aktion hängt unten noch einmal im Menü *Bausteine*.**
+        # Nicht als zweite mit demselben Kürzel: Qt registriert Strg+K dann
+        # zweimal, meldet „ambiguous shortcut overload" und führt keine von
+        # beiden aus. Eine ``QAction`` darf in mehreren Menüs stehen; ihr
+        # Kürzel gehört ihr, nicht dem Menü.
+        self._catalog_action = self._add_action(
             file_menu,
             tr("Bausteinkatalog …"),
             "Ctrl+K",
@@ -1901,13 +1906,7 @@ class MainWindow(QMainWindow):
                 # suchen, findet zwei Deckel und keinen Hinweis. Der Katalog
                 # steht deshalb als erste Zeile darin — derselbe Befehl wie in
                 # *Datei*, nur an dem Ort, an dem danach gesucht wird.
-                self._add_action(
-                    group,
-                    tr("Bausteinkatalog …"),
-                    "Ctrl+K",
-                    self.action_catalog,
-                    tr("Alle Bausteine mit Bild durchsehen: Mutternfalle, Rastnase, Scharnier."),
-                )
+                group.addAction(self._catalog_action)
                 group.addSeparator()
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
             # ``group_is_flat`` für die ganze Gruppe: alles flach oder
