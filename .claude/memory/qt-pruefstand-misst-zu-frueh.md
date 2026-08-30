@@ -122,3 +122,12 @@ hätten in fremdes Gebiet gezeigt.
 Siehe auch [[messwerkzeug-misst-sich-selbst]], [[sondenbau]] und
 [[oberflaeche-von-hand-fahren]] — dieselbe Familie, andere Ebene: Dort ging es
 um die *Lage*, in der gemessen wird, hier um den *Zeitpunkt*.
+
+**Vierte Gestalt, 30.08.2026 (15, an B10): `resize(sizeHint())` misst einen
+Zustand, den kein Kunde sieht.** Der `sizeHint` der Druckeinstellungen wird
+von der **ungekürzten** Reiterleiste bestimmt (1264 Punkte), obwohl die
+Reiter seit D11 gekürzt werden können — im Betrieb entscheidet das Layout,
+und der Dialog öffnet mit 695. Ein Prüfstand, der sich auf den sizeHint
+setzt, misst also eine Breite, die es nur im Prüfstand gibt. Die Frage vor
+jeder Fenstermessung: Ist die Größe die, mit der die Anwendung wirklich
+öffnet — oder die, die ein Hint gern hätte?
