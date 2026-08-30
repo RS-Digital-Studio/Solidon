@@ -506,19 +506,19 @@ class PartCatalog(QDialog):
         # **Aus der Palette und nicht aus der Thementabelle.** Der Katalog
         # kennt seinen Themennamen nicht; die Textfarbe des Widgets kennt ihn
         # immer und folgt einem Themenwechsel ohne Zutun.
-        rand = QColor(self.palette().color(self.foregroundRole()))
+        edge = QColor(self.palette().color(self.foregroundRole()))
         # Halb durchsichtig: Der Platzhalter ist eine Ahnung und keine Aussage.
-        rand.setAlpha(70)
-        painter.setPen(QPen(rand, 1.5))
-        weite = float(size.width())
-        hoehe = float(size.height())
-        pfad = QPainterPath()
-        pfad.addRoundedRect(
-            QRectF(weite * 0.14, hoehe * 0.14, weite * 0.72, hoehe * 0.72),
-            weite * 0.08,
-            weite * 0.08,
+        edge.setAlpha(70)
+        painter.setPen(QPen(edge, 1.5))
+        width = float(size.width())
+        height = float(size.height())
+        outline = QPainterPath()
+        outline.addRoundedRect(
+            QRectF(width * 0.14, height * 0.14, width * 0.72, height * 0.72),
+            width * 0.08,
+            width * 0.08,
         )
-        painter.drawPath(pfad)
+        painter.drawPath(outline)
         painter.end()
         self._blank = pixmap
         return pixmap
