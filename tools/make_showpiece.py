@@ -288,11 +288,12 @@ HOLDER_SIZES = (
     ("achse", 14.0, "Achsdurchmesser"),
 )
 
-#: Wie weit die zwei Laufachsen auseinanderliegen, in Millimetern.
+#: Wie weit jede Laufachse von der Mitte weg liegt, in Millimetern.
 #:
-#: Vierundsechzig Millimeter tragen jede Rolle von 130 bis 210 mm Durchmesser,
-#: ohne dass sie zwischen den Achsen durchfällt.
-AXLE_GAP = 32.0
+#: Ein **Versatz**, kein Abstand: Die eine Achse steht bei -32, die andere bei
+#: +32, zwischen ihnen liegen also 64 Millimeter. Dieser Abstand trägt jede
+#: Rolle von 130 bis 210 mm Durchmesser, ohne dass sie dazwischen durchfällt.
+AXLE_OFFSET = 32.0
 WALL_HEIGHT = 48.0
 PLATE_DEPTH = 104.0
 PLATE_THICKNESS = 9.0
@@ -453,8 +454,8 @@ def holder_steps() -> list[tuple[str, HolderStep]]:
                 )
             ],
         ),
-        *_axle(-AXLE_GAP, "Vordere"),
-        *_axle(AXLE_GAP, "Hintere"),
+        *_axle(-AXLE_OFFSET, "Vordere"),
+        *_axle(AXLE_OFFSET, "Hintere"),
         (
             "Farbe",
             lambda main_id, extra_id: [
