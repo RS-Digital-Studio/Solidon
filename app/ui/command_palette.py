@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from typing import Final, cast
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeyEvent, QKeySequence
+from PySide6.QtCore import QModelIndex, QPersistentModelIndex, QRect, Qt
+from PySide6.QtGui import QKeyEvent, QKeySequence, QPainter
 from PySide6.QtWidgets import (
     QDialog,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QVBoxLayout,
     QWidget,
 )
@@ -326,6 +329,59 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     return all(stem_of(part) in haystack for part in parts if len(part) >= STEM_LENGTH)
 
 
+#: Wie weit die Tastenspalte vom rechten Rand einrückt.
+SHORTCUT_MARGIN: Final = 12
+
+
+class _Rows(QStyledItemDelegate):
+    """Zeichnet Titel links und Kürzel **rechtsbündig** in einer Spalte.
+
+    Vorher hing das Kürzel mit einem Tabulator am Titel, und Qt setzt dafür
+    ein festes Tabstopp-Raster: Bei „Abziehen" begann die Taste an einer
+    anderen Stelle als bei „Auf dem Bett anordnen" — zwei Spalten, zwischen
+    denen die Augen springen, obwohl beide dasselbe sagen. Wer die Kürzel
+    nebenbei lernen soll (§19.2), muss sie untereinander finden.
+
+    Der zweizeilige Fall bleibt, wie er war: Ein gesperrter Eintrag trägt
+    seinen Grund als zweite Zeile, und der gehört unter den Titel, nicht in
+    die Tastenspalte.
+    """
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ) -> None:
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        if "	" not in text:
+            super().paint(painter, option, index)
+            return
+
+        title, shortcut = text.split("	", 1)
+        plain = QStyleOptionViewItem(option)
+        self.initStyleOption(plain, index)
+        plain.text = title
+        style = option.widget.style() if option.widget else None
+        if style is not None:
+            style.drawControl(QStyle.ControlElement.CE_ItemViewItem, plain, painter, option.widget)
+        else:  # pragma: no cover - ohne Stil zeichnet Qt selbst
+            super().paint(painter, option, index)
+
+        painter.save()
+        painter.setPen(
+            plain.palette.color(plain.palette.currentColorGroup(), plain.palette.ColorRole.Text)
+        )
+        area = QRect(option.rect)
+        area.setRight(area.right() - SHORTCUT_MARGIN)
+        painter.drawText(
+            area,
+            int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
+            shortcut,
+        )
+        painter.restore()
+
+
 class CommandPalette(QDialog):
     """Tippen, wählen, ausführen."""
 
@@ -349,6 +405,8 @@ class CommandPalette(QDialog):
         self.search.returnPressed.connect(self.accept)
 
         self.list = QListWidget(self)
+        # Die Tastenspalte flieht rechts, statt dem Titel zu folgen (:class:`_Rows`).
+        self.list.setItemDelegate(_Rows(self.list))
         self.list.itemActivated.connect(self.accept)
 
         layout = QVBoxLayout(self)

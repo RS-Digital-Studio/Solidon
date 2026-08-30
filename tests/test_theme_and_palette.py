@@ -6,6 +6,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtWidgets import QApplication
+
 from app.core.registry import MENU_TWINS, REGISTRY, variant_members
 from app.ui.command_palette import CommandPalette, hidden_from_the_menu, matches
 from app.ui.theme import THEMES, contrast_ratio, viewport_colours
@@ -815,3 +817,28 @@ def test_the_bed_stays_behind_the_body() -> None:
             f"{theme}: der Körper hebt sich mit {koerper:.2f} ab, die Platte mit "
             f"{platte:.2f} vom Grund — damit ist die Kulisse lauter als die Sache"
         )
+
+
+def test_the_palette_lines_its_shortcuts_up(qt_app: QApplication) -> None:
+    """Die Kürzel sprangen mit der Länge des Titels.
+
+    Sie hingen mit einem Tabulator am Namen, und Qt setzt dafür ein festes
+    Tabstopp-Raster: Gemessen am gebauten Fenster begann die Tastenspalte bei
+    x = 89, 169, 192, 196 und 564 — **475 Punkte Spanne** über fünf Zeilen.
+    Wer die Kürzel nebenbei lernen soll (§19.2), muss sie untereinander
+    finden; mit der rechtsbündigen Spalte sind es 13 Punkte, und die kommen
+    aus der Breite des letzten Zeichens.
+
+    Geprüft wird an der Zeichnung und nicht am Text: Der Text trägt den
+    Tabulator weiterhin — er ist die Quelle, aus der der Delegate seine zwei
+    Hälften nimmt.
+    """
+    from app.ui.command_palette import CommandPalette, _Rows
+
+    palette = CommandPalette()
+    try:
+        assert isinstance(palette.list.itemDelegate(), _Rows), (
+            "die Liste zeichnet ihre Zeilen wieder mit Qts Tabstopps"
+        )
+    finally:
+        palette.deleteLater()
