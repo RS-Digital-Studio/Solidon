@@ -13217,7 +13217,13 @@ Belegbilder) und liegt vollständig in
 `konzepte/durchsicht-design-2026-08.md`: **40 Befunde, sechs davon
 kritisch.** Die stärksten Stellen: Startbildschirm, Kürzelfenster,
 Symbolsatz. Die schwächsten: Bausteinkatalog, Skizzenkarte, Menüleiste.
-Roberts Sichtbefund vom selben Tag („Fertig steht zweimal da") ist zu
+Roberts zweiter Sichtbefund („bei den parametern sind die eingabefelder
+jetzt manchmal zu klein", 30.08.2026 abends) läuft mit Vorrang bei 15:
+Verdacht ist das Zusammentreffen der auf Kante genähten Feldbreiten-Regel
+(`setMaximumWidth(sizeHint + Luft)`) mit den in `b220ea78` verbreiterten,
+ins Feldinnere gerückten Spinbox-Knöpfen — Messung am echten Fenster,
+Gegenprobe auf dem Stand davor, alle Geschwister der Formel.
+Roberts erster Sichtbefund („Fertig steht zweimal da") ist zu
 (`f15b91a4`, 50): Keine Leiste nennt den Knopf mehr im Hinweis daneben
 (Gegenrichtungs-grep leer), und die Ersatztexte sagen nach Roberts
 Direktkorrektur, was als Nächstes **geschieht**, nicht was der Modus
