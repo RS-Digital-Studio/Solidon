@@ -50,6 +50,7 @@
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — fragte, ob das Wörterbuch voll ist, statt was darin steht; verglich null.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler, sechs Finder, keiner davon pytest; ansehen, mutieren, durchfahren.
 - [Testprojekt trifft den Fall nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was der Test hineinlegt; acht von neun Beispielen fielen.
+- [Voraussetzung im Namen statt hergestellt](voraussetzung-im-namen-statt-hergestellt.md) — der Testname behauptet die Herkunft; fünf Korpusse waren formal sauber und beim Empfänger unbrauchbar.
 - [Prüfstand geht den Weg der Oberfläche](pruefstand-geht-den-weg-der-oberflaeche.md) — wer den Kern direkt ruft, misst eine Lage, die kein Klick herstellt.
 - [Gegenprobe bei geänderter Bauart](gegenprobe-bei-geaenderter-bauart.md) — rot wurde die Mutation erst, als sie die alte Bauart nachbaute.
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` läuft ins Leere; nach dem Ergebnis fragen.
