@@ -39,6 +39,12 @@ geom = [
   # der ``remesh_uniform`` mit einem AttributeError abbricht — geprüft hat das
   # nie jemand, weil ``constraints.txt`` längst 3.5 festschreibt.
   "manifold3d>=3.1",
+  # trimeshs Cache prüft seine Arrays bei jedem Zugriff über einen Hash und
+  # fällt ohne xxhash auf blake2b zurück — knapp 300 000 Aufrufe je Auswertung
+  # einer großen Baugruppe, gemessen acht Prozent des Einlesewegs. trimesh
+  # fragt das Paket selbst ab; hier steht es, damit auch das gebaute Paket
+  # den schnellen Weg fährt und nicht nur die Entwicklungsumgebung. BSD-2.
+  "xxhash>=3.4",
   # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
   "shapely>=2.0",
   # Konturhierarchie für denselben Schnitt: ohne den Graphen lässt sich ein

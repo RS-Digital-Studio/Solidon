@@ -181,6 +181,13 @@ hiddenimports = [
     "OCP.GeomAbs",
     "OCP.Message",
     "vhacdx",
+    # trimesh fragt xxhash in einem try/except am Modulkopf ab und fällt ohne
+    # es still auf blake2b zurück — der Kunde merkt nur, dass jede Auswertung
+    # großer Baugruppen langsamer ist. Der Modulgraph findet auch try-Importe;
+    # ausdrücklich steht es hier aus demselben Grund wie die OCP-Zeilen: als
+    # Paketvertrag, damit ein Bau ohne xxhash auffällt statt schleichend
+    # langsam zu sein.
+    "xxhash",
     # **Ohne diese Zeile konnte der Kunde seinen Schlüssel nicht ablegen.**
     # ``keyring`` wird in ``backends/keys.py`` innerhalb einer Funktion
     # importiert, PyInstaller sieht das nicht, und im gebauten Paket gab

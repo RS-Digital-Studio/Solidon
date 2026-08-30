@@ -78,3 +78,4 @@ Neu erzeugen:
 | urllib3 | MIT |
 | vhacdx | BSD-3-Clause |
 | vtk | BSD License |
+| xxhash | BSD-2-Clause |
