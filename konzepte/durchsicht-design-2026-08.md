@@ -50,11 +50,18 @@ gemessener Kontrast gilt erst, wenn die Anwendung das Widget so auch baut.
 `style.py:529`: `min-height` wirkt nur senkrecht, `min-width` fehlt. Bei
 Seitenschritt 20 von 10000 ist der Griff weder sichtbar noch greifbar.
 
-**B4 — Der Bausteinkatalog steht rund zehn Sekunden als Textwüste da.**
-27 von 29 Kacheln ohne Bild direkt nach dem Öffnen, kein Balken, kein
-Platzhalter, kein Satz — §2.6 begründet den Katalog gerade damit, dass ein
-räumliches Teil als Textzeile die schlechtere Darstellung sei; `wartezeit.md`
-verlangt ab 2 s Fortschritt mit Abbrechen.
+**B4 — Der Bausteinkatalog stand ohne Fläche da, bis sein Bild kam.**
+Erstbefund: rund zehn Sekunden Textwüste. **Nachmessung beim Bau (3a,
+30.08.2026): zwei Sekunden, nicht zehn** — nach 0,5 s trug eine von 27
+Kacheln ihr Rendering, nach 2 s alle; die Zehn stammen von einem anderen
+Lauf oder einer anderen Last. Der Rest-Befund blieb: In der ersten halben
+Sekunde sah der Katalog aus wie eine Liste (§2.6). **Behoben in
+`482a3aac`** — ein gerundeter, halb durchsichtiger Platzhalter hält von der
+ersten Millisekunde an den Platz des Bildes; ein Fortschrittsbalken wäre
+falsch gewesen (die Kette bleibt unter der 2-s-Grenze von `wartezeit.md`,
+ein Balken für eine halbe Sekunde ist Lärm). Nebeneffekt: Die
+Titelgrundlinien (Teil von B25) fluchten von Anfang an, weil Qt den Titel
+ohne Bild anders setzt.
 
 **B5 — Das Vorschaubild im Objektbaum ist ein vier Pixel großer Fleck.**
 `panels.py:3236`: Zeilenhöhe × 1,2, mindestens 18 — bei fünffacher
