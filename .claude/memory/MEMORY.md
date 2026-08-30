@@ -76,6 +76,7 @@
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
 
 - [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
+- [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
 - [Abgelesene Zahl altert still](abgelesene-zahl-altert-still.md) — sie stimmt nur in der Lage, in der sie entstand; was fehlt, sieht aus wie Absicht.
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
