@@ -25,6 +25,7 @@ from typing import Any
 
 import pytest
 
+from app.core import deferred
 from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.section import SectionPlane, cut
@@ -321,13 +322,17 @@ def measure(name: str, work: Callable[[], Any]) -> float:
 def test_reading_a_million_triangles(profile: Profile) -> None:
     """Nicht namentlich in §31, aber das Tor zu allem anderen.
 
-    Seit dem verzögerten Geometrieimport vom 29.08.2026 enthält der erste Lauf
-    rund 490 ms für ``trimesh``. Die frühere Einzelmarke lag deshalb bei
-    426 ms, die neue bei 919 ms. Das ist kein versteckter Gewinn: Bis zum
-    bedienbaren Fenster fiel derselbe Import weg, dort sank die Zeit von rund
-    2,5 auf 1,5 s. Start plus erstes Modell sind damit weiterhin etwa eine
-    halbe Sekunde schneller; beide Einzelmarken halten die Verschiebung fest.
+    Der verzögerte Geometrieimport vom 29.08.2026 fiel zunächst in diese
+    Marke: solo enthielt sie rund 500 ms ``trimesh``-Import, im Volllauf
+    hatte ihn längst ein Vorgänger bezahlt — dieselbe Marke maß je nach
+    Sammelumfang zwei verschiedene Dinge (gemessen 1072 ms allein gegen
+    427–443 im Volllauf, Register 30.08.2026). Der Import steht deshalb vor
+    der Uhr und trägt seine eigene Marke: ``deferred_geometry`` hält fest,
+    was der verzögerte Import kostet — die Verschiebung aus dem Kundenstart
+    bleibt damit messbar festgehalten, nur nicht mehr im Lesen versteckt —,
+    und ``read_dense`` misst in jedem Kontext dasselbe: das Lesen.
     """
+    measure("deferred_geometry", lambda: deferred.trimesh.__version__)
     taken = measure("read_dense", dense_mesh)
     assert taken < 30.0
 
