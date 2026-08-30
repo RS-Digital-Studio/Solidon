@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=f8cc3e2e">
+<link rel="stylesheet" href="../style.css?v=5dff6cf1">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -192,7 +192,7 @@
           <li><a href="/pt/" hreflang="pt" lang="pt">Português</a></li>
         </ul>
       </details>
-      <a class="cta" href="#pricing">Démo</a>
+      <a class="cta" href="#download">Démo</a>
     </nav>
   </div>
 </header>
@@ -209,73 +209,12 @@
         tranchage que votre pièce est prête à imprimer. Sans CAO, cloud ni
         compte.</p>
 
-        <div class="download" id="download">
-          <strong data-past-text="Essayer gratuitement — sans compte" data-release-text="Télécharger gratuitement">Télécharger gratuitement</strong>
-          <p class="countdown" data-countdown
-             data-template="Encore {rest}" aria-hidden="true" hidden></p>
-          <p>Complète et sans clé&nbsp;: pas de filigrane, pas de blocage
-          d'export, aucune fonction verrouillée. <b>Elle fonctionne jusqu'au
-          30&nbsp;octobre 2026</b> et ne démarre plus ensuite — vos fichiers
-          de projet n'en sont pas affectés.</p>
-          <p>Et ensuite&nbsp;? La version 1.0 sort le 1er novembre 2026 — un seul achat, pas d'abonnement,
-          <a href="#pricing">le prix est déjà fixé</a>.</p>
-
-          <div class="dateien" data-files data-release-show hidden>
-            <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.2.2.exe" download="Solidon3D-Setup-0.2.2.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 199 MB</a>
-            <button class="btn ghost" type="button" data-choice="linux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Linux — 2 paquets</button>
-            <dialog class="auswahl" id="wahl-linux" aria-label="Linux">
-              <h3>Linux</h3>
-              <p class="hinweis">Lequel convient dépend de votre système — tous contiennent la même application.</p>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-x86_64.AppImage" download="Solidon3D-0.2.2-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> AppImage — 391 MB</a>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-x86_64.flatpak" download="Solidon3D-0.2.2-x86_64.flatpak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Flatpak — 281 MB</a>
-              <form method="dialog"><button class="btn ghost" value="zu">Fermer</button></form>
-            </dialog>
-            <button class="btn ghost" type="button" data-choice="macos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> macOS — 2 paquets</button>
-            <dialog class="auswahl" id="wahl-macos" aria-label="macOS">
-              <h3>macOS</h3>
-              <p class="hinweis">Lequel convient dépend de votre système — tous contiennent la même application.</p>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-macos-arm64.pkg" download="Solidon3D-0.2.2-macos-arm64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Apple Silicon — 300 MB</a>
-            <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-macos-x86_64.pkg" download="Solidon3D-0.2.2-macos-x86_64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Intel — 334 MB</a>
-              <form method="dialog"><button class="btn ghost" value="zu">Fermer</button></form>
-            </dialog>
-            <p class="version">Version 0.2.2, parue le 30/08/2026.</p>
-          </div>
-          <details class="download-notes">
-            <summary>Notes d’installation et de mise à jour</summary>
-            <p class="pruefhinweis" data-release-show hidden>Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. La signature suivra dès que le certificat sera en place.</p>
-          <p class="pruefhinweis" data-release-show hidden><b>macOS.</b> Les paquets actuels ne sont pas encore notariés par Apple. Si macOS bloque l’installation ou le premier lancement, autorisez-le une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
-          <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Un Flatpak ne s'installe pas par double-clic, mais depuis un terminal&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code> dans le dossier où vous l'avez téléchargé. Solidon3D apparaît ensuite dans le menu des applications.</p>
-          <p class="pruefhinweis" data-release-show hidden><b>Nouvelles versions.</b> Solidon vérifie au démarrage s'il existe une version plus récente et la propose au téléchargement — téléchargée et installée uniquement après votre confirmation, et cela se désactive dans les réglages.</p>
-          </details>
-          <p class="pruefhinweis">Après l'installation&nbsp;: <a href="/fr/manual.html#start">Les quinze premières minutes</a> — de la fenêtre vide à la première pièce exportée.</p>
-
-          <ul class="assure">
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Développé en Allemagne
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Fonctionne hors ligne
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Aucun compte
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Aucune télémétrie
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Vos fichiers restent les vôtres
-            </li>
-            <li>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Windows, macOS, Linux
-            </li>
-          </ul>
-        </div>
+        <p class="hero-act">
+          <a class="btn hero-btn" href="#download"
+             data-release-href data-release-download
+             data-past-text="Essayer gratuitement — sans compte"
+             data-release-text="Télécharger gratuitement">Télécharger gratuitement</a>
+        </p>
       </div>
 
       <div class="hero-side">
@@ -287,17 +226,81 @@
           </div>
         </div>
 
-        <div class="donate hero-donate">
-          <div>
-            <strong>Soutenir Solidon3D</strong>
-            <p>La démo reste gratuite. Un don volontaire finance le développement, les tests et la prochaine version.</p>
-            <p class="donate-terms">Ce don n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Nous ne délivrons pas de reçu fiscal. PayPal ne traite le paiement qu’après votre clic&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
-          </div>
-          <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Faire un don avec PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
-        </div>
+        
       </div>
     </div>
+
+    <ul class="assure hero-assure">
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Développé en Allemagne
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Fonctionne hors ligne
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Aucun compte
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Aucune télémétrie
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Vos fichiers restent les vôtres
+      </li>
+      <li>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Windows, macOS, Linux
+      </li>
+    </ul>
   </div>
+
+  <section id="download">
+    <div class="wrap">
+    <div class="download">
+            <strong data-past-text="Essayer gratuitement — sans compte" data-release-text="Télécharger gratuitement">Télécharger gratuitement</strong>
+          
+            <p>Complète et sans clé&nbsp;: pas de filigrane, pas de blocage
+            d'export, aucune fonction verrouillée. <b>Elle fonctionne jusqu'au
+            30&nbsp;octobre 2026</b> et ne démarre plus ensuite — vos fichiers
+            de projet n'en sont pas affectés.</p>
+            <p>Et ensuite&nbsp;? La version 1.0 sort le 1er novembre 2026 — un seul achat, pas d'abonnement,
+            <a href="#pricing">le prix est déjà fixé</a>.</p>
+
+            <div class="dateien" data-files data-release-show hidden>
+              <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.2.2.exe" download="Solidon3D-Setup-0.2.2.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 199 MB</a>
+              <button class="btn ghost" type="button" data-choice="linux"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Linux — 2 paquets</button>
+              <dialog class="auswahl" id="wahl-linux" aria-label="Linux">
+                <h3>Linux</h3>
+                <p class="hinweis">Lequel convient dépend de votre système — tous contiennent la même application.</p>
+              <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-x86_64.AppImage" download="Solidon3D-0.2.2-x86_64.AppImage"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> AppImage — 391 MB</a>
+              <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-x86_64.flatpak" download="Solidon3D-0.2.2-x86_64.flatpak"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Flatpak — 281 MB</a>
+                <form method="dialog"><button class="btn ghost" value="zu">Fermer</button></form>
+              </dialog>
+              <button class="btn ghost" type="button" data-choice="macos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> macOS — 2 paquets</button>
+              <dialog class="auswahl" id="wahl-macos" aria-label="macOS">
+                <h3>macOS</h3>
+                <p class="hinweis">Lequel convient dépend de votre système — tous contiennent la même application.</p>
+              <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-macos-arm64.pkg" download="Solidon3D-0.2.2-macos-arm64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Apple Silicon — 300 MB</a>
+              <a class="btn" href="/api/count.php?f=Solidon3D-0.2.2-macos-x86_64.pkg" download="Solidon3D-0.2.2-macos-x86_64.pkg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Intel — 334 MB</a>
+                <form method="dialog"><button class="btn ghost" value="zu">Fermer</button></form>
+              </dialog>
+              <p class="version">Version 0.2.2, parue le 30/08/2026.</p>
+            </div>
+            <details class="download-notes">
+              <summary>Notes d’installation et de mise à jour</summary>
+              <p class="pruefhinweis" data-release-show hidden>Windows affiche un avis bleu pour une application nouvelle et encore non signée : <i>Informations complémentaires</i> → <i>Exécuter quand même</i>. La signature suivra dès que le certificat sera en place.</p>
+            <p class="pruefhinweis" data-release-show hidden><b>macOS.</b> Les paquets actuels ne sont pas encore notariés par Apple. Si macOS bloque l’installation ou le premier lancement, autorisez-le une fois dans <i>Réglages Système</i> → <i>Confidentialité et sécurité</i> → <i>Ouvrir quand même</i>.</p>
+            <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Un Flatpak ne s'installe pas par double-clic, mais depuis un terminal&nbsp;: <code>flatpak install ./Solidon3D-*.flatpak</code> dans le dossier où vous l'avez téléchargé. Solidon3D apparaît ensuite dans le menu des applications.</p>
+            <p class="pruefhinweis" data-release-show hidden><b>Nouvelles versions.</b> Solidon vérifie au démarrage s'il existe une version plus récente et la propose au téléchargement — téléchargée et installée uniquement après votre confirmation, et cela se désactive dans les réglages.</p>
+            </details>
+            <p class="pruefhinweis">Après l'installation&nbsp;: <a href="/fr/manual.html#start">Les quinze premières minutes</a> — de la fenêtre vide à la première pièce exportée.</p>
+    </div>
+    </div>
+  </section>
 
   <section class="tint">
     <div class="wrap">
@@ -495,6 +498,19 @@
     </div>
   </section>
 
+  <section id="support">
+    <div class="wrap">
+  <div class="donate">
+            <div>
+              <strong>Soutenir Solidon3D</strong>
+              <p>La démo reste gratuite. Un don volontaire finance le développement, les tests et la prochaine version.</p>
+              <p class="donate-terms">Ce don n’est ni une commande ni la contrepartie d’un service et ne sera pas déduit d’un achat ultérieur. Nous ne délivrons pas de reçu fiscal. PayPal ne traite le paiement qu’après votre clic&nbsp;; <a href="/datenschutz.html">informations sur la confidentialité</a>.</p>
+            </div>
+            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Faire un don avec PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+          </div>
+    </div>
+  </section>
+
   <section id="features" class="tint">
     <div class="wrap">
       <h2>Ce qui fait la différence</h2>
@@ -621,6 +637,8 @@
       <p class="sub">Jusqu'au 30&nbsp;octobre, Solidon3D ne coûte rien.
       Ensuite un achat unique — pas d'abonnement, pas de compte, aucune
       fonction qui s'arrête au bout de douze mois.</p>
+      <p class="countdown" data-countdown
+             data-template="Encore {rest}" aria-hidden="true" hidden></p>
       <div class="price">
         <div class="price-card">
           <div class="amount">

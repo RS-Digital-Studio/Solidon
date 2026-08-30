@@ -854,21 +854,61 @@ def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None
 
 @pytest.mark.parametrize("page", START_PAGES)
 def test_each_start_page_keeps_picture_before_support(page: str) -> None:
-    """Sichtbare und technische Leserichtung bleiben in jeder Breite gleich."""
+    """Sichtbare und technische Leserichtung bleiben in jeder Breite gleich.
+
+    **Die Zusage ist geblieben, ihre Bauart hat sich geändert** (WD2). Vorher
+    stand der ganze Download-Kasten im Aufmacher und der Spendenkasten
+    unmittelbar unter dem Produktbild — geprüft wurde damals
+    ``download < side < picture < support`` innerhalb des Heros. Der Aufmacher
+    trägt jetzt nur noch Kicker, Überschrift, Lead, **einen** Knopf und die
+    Zusagen; Download und Spende haben eigene Abschnitte.
+
+    Was bleibt, ist die eigentliche Aussage: **Die Handlung kommt vor dem
+    Bild, und um Geld wird zuletzt gebeten.** Ein Spendenkasten, den man
+    sieht, bevor man das Produkt begehrt hat, war der Befund (WB1); dass er
+    jetzt hinter dem Preis steht, macht die Zusage stärker, nicht schwächer.
+    """
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
-    download = text.index('<div class="download"')
-    side = text.index('<div class="hero-side">')
+    act = text.index('<p class="hero-act">')
     picture = text.index('<div class="shot hero-shot">')
-    support = text.index('<div class="donate hero-donate">')
+    download = text.index('<section id="download">')
+    support = text.index('<div class="donate">')
 
-    assert download < side < picture < support, (
-        f"{page}: Download, Produktbild und Unterstützung stehen nicht in ihrer Leserichtung"
+    assert act < picture < download < support, (
+        f"{page}: Handlung, Produktbild, Download und Unterstützung stehen nicht "
+        "in ihrer Leserichtung"
     )
 
 
-def test_hero_keeps_picture_and_support_in_one_column() -> None:
-    """Eine eigene Produktspalte verhindert verteilte Rasterhöhe und Fokus-Sprünge."""
+@pytest.mark.parametrize("page", START_PAGES)
+def test_no_start_page_asks_for_money_in_its_hero(page: str) -> None:
+    """Im Aufmacher wird nicht um Geld gebeten (WB1).
+
+    Der Spendenkasten stand dort unter dem Produktbild, mit Rechtstext, auf
+    Augenhöhe mit dem Download — er bat um eine Gabe, bevor irgendjemand
+    wissen konnte, wofür. Geprüft wird deshalb die **Zone** und nicht der
+    Kasten: Alles bis zum Ende des Hero-Gitters bleibt frei davon, gleich wie
+    der Kasten später einmal heißt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    hero = text[text.index('<div class="hero">') : text.index('<section id="download">')]
+
+    assert "donate" not in hero, (
+        f"{page}: der Aufmacher enthält wieder einen Spendenblock — "
+        "erst begehren lassen, dann fragen"
+    )
+    assert PAYPAL_DONATE_URL not in hero, f"{page}: PayPal-Adresse im Aufmacher"
+
+
+def test_hero_keeps_its_picture_in_one_column() -> None:
+    """Eine eigene Produktspalte verhindert verteilte Rasterhöhe und Fokus-Sprünge.
+
+    Sie trägt seit WD2 **nur** noch das Bild — die Unterstützung ist heraus.
+    Der Platz ist dabei so gebaut, dass ein ``<video>`` das ``<img>`` ersetzen
+    kann, ohne dass sich das Layout bewegt; das ist die Vorarbeit für die
+    Produkt-Loops (WD1), und deshalb steht die Regel dafür schon hier.
+    """
     styles = (WEBSITE / "style.css").read_text(encoding="utf-8")
 
     side = re.search(r"\.hero-side\s*\{([^}]*)\}", styles, re.DOTALL)
@@ -878,6 +918,10 @@ def test_hero_keeps_picture_and_support_in_one_column() -> None:
     assert '"copy picture"' not in styles
     assert "grid-area: picture" not in styles
     assert "grid-area: support" not in styles
+    assert ".hero-side .stage > video" in styles, (
+        "der Platz für einen Produkt-Loop fehlt — ein video müsste das img "
+        "ersetzen können, ohne das Layout zu bewegen"
+    )
 
 
 @pytest.mark.parametrize("page", START_PAGES)

@@ -422,7 +422,61 @@ nav.lang a.cta:hover {
   margin-top: 2rem;
 }
 
-.hero-side .donate { margin-top: 0; }
+/* **Der Aufmacher trägt eine Handlung, nicht zwölf.** Vorher stand hier der
+   ganze Download-Kasten mit Countdown, Laufzeit, Kaufmodell, fünf
+   Plattform-Knöpfen, vier Installationshinweisen und den sechs Zusagen —
+   daneben, direkt unter dem Produktbild, der Spendenkasten samt Rechtstext.
+   Er bat um Geld, bevor das Produkt begehrt war. Geblieben sind Kicker,
+   Überschrift, Lead, ein Knopf und die Zusagen als eine Zeile; alles andere
+   hat jetzt seinen eigenen Ort (Befunde WB1, WB6, WB9). */
+.hero-act {
+  margin: 1.75rem 0 0;
+}
+
+.hero-btn {
+  font-size: 1.05rem;
+  padding: 0.85rem 1.6rem;
+}
+
+/* Eine Zeile, keine Liste: Sechs kurze Zusagen unter einem Knopf sind ein
+   Band und kein Aufzählungsblock. Umbrechen dürfen sie trotzdem — auf einem
+   Telefon steht sonst die Hälfte außerhalb. */
+.hero-assure {
+  margin-top: 1.5rem;
+  gap: 0.5rem 1.4rem;
+}
+
+/* Das Produktbild steht allein in seiner Spalte. Der Platz ist so gebaut,
+   dass ein ``<video>`` das ``<img>`` ersetzen kann, ohne dass sich das
+   Layout bewegt: Die Bühne gibt das Seitenverhältnis vor, nicht der Inhalt
+   (Vorarbeit für WD1). */
+.hero-side .stage > video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Der Download hat jetzt einen eigenen Abschnitt statt einer Karte im
+   Aufmacher — die Karte selbst bleibt, sie steht nur woanders und mittig. */
+#download {
+  padding: 3rem 0 1rem;
+}
+
+#download .download {
+  margin: 0 auto;
+}
+
+/* Die Spende steht nach dem Preis: Dort ist der Unterschied zwischen Kauf
+   und freiwilliger Gabe im Kontext, und niemand wird um Geld gebeten, bevor
+   er weiß, wofür. */
+#unterstuetzen {
+  padding: 1rem 0 3rem;
+}
+
+#unterstuetzen .donate {
+  margin: 0 auto;
+  max-width: 48rem;
+}
 
 /* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
    dem Preiskasten: auf 1920 × 1080 begann es bei 770 px und war an der
