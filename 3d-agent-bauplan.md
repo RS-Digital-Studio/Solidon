@@ -891,6 +891,21 @@ Manuelle Operationen sind Einzeltransaktionen. Die Transaktion trägt Titel und
 Herkunft (§26.4) und ist die Einheit, auf die sich Verlauf, Differenzansicht
 und Chatverlauf beziehen.
 
+**Eine Ausnahme, und sie ist eng:** Aufeinanderfolgende gleichartige Züge —
+dieselbe Operation auf denselben Eingängen mit demselben Anker — verschmelzen
+zu einem Schritt; das Bündel endet mit jeder anderen Handlung. Der Grund ist
+der Kunde, der ein Teil an seinen Platz schiebt: Er zieht, sieht nach, zieht
+nach, und das ist eine Absicht und nicht drei. Ein Strg+Z nahm davon bisher ein
+Drittel zurück.
+
+**Gebündelt wird nur, wo eine Kumulationsregel steht** — das ist opt-in je
+Operation und nicht die Voreinstellung. Zwei Verschiebungen sind eine
+Vektorsumme, zwei Drehungen um dieselbe Achse eine Winkelsumme; um
+verschiedene Achsen gibt es keine gemeinsame Drehung, und der Versuch wäre ein
+stiller Geometriefehler. Skalieren bündelt vorerst nicht: Multiplikativ wäre es
+rechenbar, aber der Kundenfall ist das Nachschieben, und was fehlt, kann
+dazukommen — umgekehrt wäre es ein Rückbau.
+
 ### 15.6 Abbruch und Nebenläufigkeit
 Eine laufende Berechnung ist jederzeit abbrechbar; der Stack bleibt auf dem
 letzten vollständig gerechneten Stand — **keine halb angewandten Ops**. **Ein

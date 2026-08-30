@@ -33,6 +33,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
+from app.core.scene import bundling
 from app.core.types import (
     Document,
     DocumentChange,
@@ -45,6 +46,7 @@ from app.core.types import (
     Parameter,
     ParameterName,
     Transaction,
+    TransactionId,
 )
 from app.i18n import TranslatableText, _
 
@@ -168,6 +170,9 @@ class History:
     def __init__(self, document: Document, registry: Registry | None = None) -> None:
         self.document = document
         self._registry = registry or REGISTRY
+        self._closed_bundle: TransactionId | None = None
+        """Die Transaktion, deren Bündel geschlossen ist — ein Zug danach
+        beginnt einen neuen Schritt, auch wenn er gleichartig wäre."""
         self._undone: list[Transaction] = []
         self._undone_ops: dict[OpId, Operation] = {}
         self._reseed()
@@ -229,6 +234,7 @@ class History:
         drafts: Sequence[OperationDraft] = (),
         origin: Origin = USER_ORIGIN,
         changes: DocumentChange | ChangeFn | None = None,
+        bundle: bool = False,
     ) -> Transaction:
         """Fügt Operationen als eine Transaktion an und gibt sie zurück.
 
@@ -252,6 +258,16 @@ class History:
         # §2 C: jede Dokumentänderung braucht die Freischaltung — hier, weil
         # keine Dokumentänderung an dieser Funktion vorbeikommt (H3).
         activation.require(activation.CHANGE)
+
+        # **Der Bündelversuch steht vor der Planung**, nicht danach: Gelingt
+        # er, entsteht keine neue Operation, und die Kennungen bleiben, wie
+        # sie sind. Wer erst plant und dann verwirft, hat die Zähler schon
+        # weitergedreht — und ein Verlauf, dessen Kennungen Lücken haben,
+        # sieht aus, als sei etwas verloren gegangen.
+        if bundle and changes is None:
+            merged = self._bundle_into_last(drafts)
+            if merged is not None:
+                return merged
         if not drafts and changes is None:
             raise ValidationError(
                 field="ops",
@@ -286,6 +302,67 @@ class History:
         if settled is not None:
             restore(self.document, settled.after)
         return transaction
+
+    def _bundle_into_last(self, drafts: Sequence[OperationDraft]) -> Transaction | None:
+        """Die Züge in die vorige Transaktion aufnehmen — oder ``None``.
+
+        **Ein Kunde, der ein Teil an seinen Platz schiebt, zieht selten
+        einmal.** Er zieht, sieht nach, zieht nach — und hatte dafür einen
+        Eintrag je Zug, für eine einzige Absicht. Ein Strg+Z nahm dann ein
+        Drittel zurück (§15.5).
+
+        Gebündelt wird eng: dieselben Operationen in derselben Reihenfolge,
+        auf denselben Eingängen, mit demselben Anker, und nur wo eine
+        Kumulationsregel steht (:mod:`app.core.scene.bundling`). Alles andere
+        gibt ``None`` und wird ein eigener Schritt — ein Bündel zu wenig
+        kostet einen Eintrag, ein Bündel zu viel verfälscht Geometrie.
+
+        **Das Bündel endet von selbst.** Jede andere Handlung legt eine
+        andere Transaktion an, und die passt beim nächsten Zug nicht mehr;
+        eine andere Auswahl ändert die Eingänge. Nur der Werkzeugwechsel
+        braucht eine Ansage, und die gibt :meth:`end_bundle`.
+        """
+        if not drafts or not self.document.transactions:
+            return None
+        last = self.document.transactions[-1]
+        if last.id == self._closed_bundle:
+            return None
+        if last.origin != USER_ORIGIN or last.changes is not None:
+            return None
+        if len(last.ops) != len(drafts):
+            return None
+
+        by_id = {entry.id: entry for entry in self.document.ops}
+        planned: list[tuple[int, Operation]] = []
+        for op_id, draft in zip(last.ops, drafts, strict=True):
+            entry = by_id.get(op_id)
+            if entry is None or entry.op != draft.op or entry.inputs != tuple(draft.inputs):
+                return None
+            merged = bundling.merge_params(entry.op, entry.params, draft.params)
+            if merged is None:
+                return None
+            index = next(i for i, one in enumerate(self.document.ops) if one.id == op_id)
+            planned.append((index, dataclasses.replace(entry, params=merged)))
+
+        # Erst wenn **jeder** Zug passt, wird geschrieben. Ein halb gebündelter
+        # Schritt wäre schlimmer als zwei ganze.
+        for index, entry in planned:
+            self.document.ops[index] = entry
+        return last
+
+    def end_bundle(self) -> None:
+        """Das laufende Bündel schließen — der nächste Zug beginnt einen Schritt.
+
+        Nötig, wo eine Handlung keine Transaktion anlegt und trotzdem eine
+        ist: ein Werkzeugwechsel, das Schließen der Leiste. Ohne sie hinge ein
+        Zug von morgen am Bündel von heute.
+
+        Gemerkt wird die Transaktion und nicht ein Schalter: Ein Schalter
+        müsste beim nächsten ``apply`` zurückgesetzt werden, und wer das
+        vergisst, schließt jedes Bündel für immer.
+        """
+        if self.document.transactions:
+            self._closed_bundle = self.document.transactions[-1].id
 
     def _plan(self, draft: OperationDraft, known: set[ObjectId]) -> Operation:
         spec = self._registry.get(draft.op)

@@ -40,6 +40,7 @@ Rückfallstufe tut.
 | Datei | Rolle |
 |---|---|
 | `history.py` | Stapel, Transaktionen, Undo (§15.4, §15.5). `OperationDraft` ist der Schritt, bevor er zählt |
+| `bundling.py` | Welche Züge zu einem Schritt verschmelzen (§15.5) — **opt-in je Operation**: wer keine Kumulationsregel hat, bekommt einen eigenen Schritt |
 | `evaluate.py` | Die Auswertung (§15.1) — 1 500 Zeilen, das Herz |
 | `cache.py` | Ergebnis-Cache über dem Operations-Hash, im Speicher und auf der Platte |
 | `hashing.py` | Stabile Hashes: `operation_hash()`, `object_hash()`, `profile_key()` |

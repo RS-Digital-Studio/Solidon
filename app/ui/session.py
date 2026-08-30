@@ -566,15 +566,22 @@ class Session(QObject):
         origin: Origin | None = None,
         *,
         raise_on_error: bool = False,
+        bundle: bool = False,
     ) -> bool:
         """Eine Transaktion, dann eine frische Auswertung (§15.5).
 
         Normalerweise meldet die Sitzung eine Abweisung über ``failed``. Ein
         synchroner Oberflächenweg kann sie stattdessen nach außen reichen,
         damit Wartezeiger und Statusanzeige zuerst sicher beendet werden.
+
+        ``bundle`` bietet den Zug der vorigen Transaktion an, statt einen
+        eigenen Schritt anzulegen (§15.5) — für Handlungen, die ein Kunde als
+        eine empfindet, obwohl sie aus mehreren Zügen besteht. Ob es dazu
+        kommt, entscheidet die ``History``: Nur gleichartige Züge auf
+        denselben Eingängen mit demselben Anker verschmelzen.
         """
         try:
-            self.history.apply(title, drafts, origin or Origin(by="user"))
+            self.history.apply(title, drafts, origin or Origin(by="user"), bundle=bundle)
         except AppError as error:
             if raise_on_error:
                 raise

@@ -1560,11 +1560,120 @@ def test_a_double_click_on_a_folded_step_says_where_the_single_ones_are(
     assert not notes
 
     gefaltet = panel.list.item(1)
-    assert gefaltet.text() == "Teilung in vier"
+    # Der Titel steht dran, und mehr sagt diese Zeile nicht zu: Seit die
+    # Oberpunkte einklappen, trägt sie davor ein Dreieck (▸/▾). Ein
+    # Gleichheitsvergleich hätte hier den Ist-Zustand festgeschrieben statt
+    # der Zusage — und die lautet, dass ein Sammelschritt keine einzelne
+    # Operation öffnet.
+    assert "Teilung in vier" in gefaltet.text(), gefaltet.text()
     panel.list.itemDoubleClicked.emit(gefaltet)
     assert opened == [1], "ein Sammelschritt öffnet keine einzelne Operation"
     assert notes, "der Doppelklick blieb stumm — die Touren lehren ihn trotzdem"
     assert "einzeln" in notes[0], notes[0]
+
+
+def test_a_group_starts_folded(qt_app: QApplication) -> None:
+    """Ein Oberpunkt zeigt seine Teilschritte erst auf Wunsch.
+
+    **Roberts Anweisung vom 30.08.2026:** „oberpunkte im verlauf auch noch
+    einklappen, damit es nicht zu voll wird". Ein Verlauf, der jeden
+    Teilschritt zeigt, ist nach zehn Handlungen eine Wand aus Zeilen, und die
+    eine, die man sucht, steht irgendwo darin.
+
+    Das Dreieck ist die zweite Kodierung neben der Einrückung (Regel 18): Ein
+    Bildschirmleser liest keine Leerzeichen vor.
+    """
+    from app.core.types import Document, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Teilung in vier", ops=(1, 2, 3, 4)))
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+
+    oben = panel.list.item(0)
+    assert oben.text().startswith("▸"), f"kein Zeichen für den zugeklappten Punkt: {oben.text()!r}"
+    versteckt = [panel.list.item(row).isHidden() for row in range(1, panel.list.count())]
+    assert all(versteckt), f"Teilschritte stehen offen, obwohl zugeklappt: {versteckt}"
+
+
+def test_a_click_unfolds_and_folds_again(qt_app: QApplication) -> None:
+    """Ein Klick klappt auf, der nächste zu — ohne Rückfrage.
+
+    Regel 19: Einklappen nimmt nichts weg, es zeigt nur weniger. Ein Dialog
+    davor wäre eine Bestätigung für etwas, das der nächste Klick zurückholt.
+    """
+    from app.core.types import Document, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Teilung in vier", ops=(1, 2, 3, 4)))
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+    oben = panel.list.item(0)
+
+    panel.list.itemClicked.emit(oben)
+    assert oben.text().startswith("▾"), f"das Zeichen ist nicht mitgegangen: {oben.text()!r}"
+    assert not panel.list.item(1).isHidden(), "der Klick hat nicht aufgeklappt"
+
+    panel.list.itemClicked.emit(oben)
+    assert oben.text().startswith("▸")
+    assert panel.list.item(1).isHidden(), "der zweite Klick hat nicht zugeklappt"
+
+
+def test_a_finding_unfolds_the_group_it_points_into(qt_app: QApplication) -> None:
+    """**Die Stelle, an der der Umbau am ehesten still bricht** (V6).
+
+    Ein Klick auf einen Befund führt zu seinem Schritt (``point_at``). Liegt
+    der in einem eingeklappten Oberpunkt, wäre die Auswahl unsichtbar — der
+    Klick sähe folgenlos aus, und genau das war der Befund, den V6 behoben
+    hat. Eine versteckte Zeile auszuwählen ist dasselbe wie gar nichts zu tun.
+    """
+    from app.core.types import Document, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Teilung in vier", ops=(1, 2, 3, 4)))
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+    assert panel.list.item(2).isHidden(), "der Aufbau war schon offen — der Test misst dann nichts"
+
+    assert panel.point_at(3), "der Schritt wurde nicht gefunden"
+
+    gewaehlt = panel.list.currentItem()
+    assert gewaehlt is not None
+    assert not gewaehlt.isHidden(), (
+        "der Befund zeigt auf eine versteckte Zeile — für den Kunden ist der Klick damit folgenlos"
+    )
+
+
+def test_an_open_group_stays_open_across_a_rebuild(qt_app: QApplication) -> None:
+    """Was der Kunde aufgeklappt hat, bleibt offen.
+
+    ``show_document`` läuft nach jeder Änderung. Ein Verlauf, der dabei
+    zuklappt, nähme dem Kunden gerade das, was er sich eben aufgemacht hat —
+    und zwar in dem Moment, in dem er arbeitet.
+    """
+    from app.core.types import Document, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Teilung in vier", ops=(1, 2, 3, 4)))
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+    panel.list.itemClicked.emit(panel.list.item(0))
+    assert not panel.list.item(1).isHidden()
+
+    document.transactions.append(Transaction(id=2, title="Bohrung setzen", ops=(5,)))
+    panel.show_document(document)
+
+    assert not panel.list.item(1).isHidden(), (
+        "der Neuaufbau hat den Punkt zugeklappt, den der Kunde geöffnet hatte"
+    )
 
 
 def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:

@@ -110,6 +110,8 @@ MAX_MENU_ROWS = _MAX_MENU_ROWS
 #: hätte dort keine, die er zeigen könnte. Die Mehrfachauswahl fragt diese
 #: Rolle, weil sie die andere Frage stellt: was gehört zu dieser Zeile.
 OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+#: Die Transaktion, zu der eine Kindzeile gehört — daran hängt das Einklappen.
+GROUP_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 
 
 #: Kategorien, deren Gruppe am Merkmal sichtbar bleibt.
@@ -2114,6 +2116,13 @@ class HistoryPanel(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._open_groups: set[str] = set()
+        """Die Transaktionen, deren Teilschritte gerade offen stehen.
+
+        Gemerkt über den Neuaufbau hinweg: ``show_document`` läuft nach jeder
+        Änderung, und ein Verlauf, der bei jedem Schritt wieder zuklappt,
+        nähme dem Kunden gerade das, was er sich eben aufgemacht hat.
+        """
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Verlauf"))
         # **Das kleinste Symbol, das die Zeile nicht weiter treibt.** Ein
@@ -2133,6 +2142,11 @@ class HistoryPanel(QWidget):
         # damit Strg- und Umschalt-Klick überall dasselbe tun.
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list.itemDoubleClicked.connect(self._on_activated)
+        # **Ein einfacher Klick klappt um, ein Doppelklick öffnet den Schritt.**
+        # Beides am selben Element wäre eine Falle; hier ist es keine, denn ein
+        # Oberpunkt mit mehreren Schritten hat gar keine ``UserRole`` und
+        # öffnet deshalb ohnehin nichts (siehe :meth:`point_at`).
+        self.list.itemClicked.connect(self._toggle_group)
         self.list.setToolTip(
             tr(
                 "Doppelklick öffnet die Operation und ihre Parameter. "
@@ -2289,11 +2303,26 @@ class HistoryPanel(QWidget):
             # Doppelklick zeigen. Für die Mehrfachauswahl zählt dagegen die
             # ganze Transaktion: Wer „Teilung in vier" wählt, meint alle vier.
             item.setData(OPS_ROLE, active_ops)
+            if len(transaction.ops) > 1:
+                # **Ein Zeichen und nicht nur eine Einrückung** (Regel 18): Die
+                # Kindzeilen stehen eingerückt, aber ein Bildschirmleser liest
+                # keine Leerzeichen vor, und wer nicht scrollt, sieht sie gar
+                # nicht. Das Dreieck sagt beides — dass es hier mehr gibt und
+                # ob es gerade zu sehen ist.
+                expanded = transaction.id in self._open_groups
+                item.setText(f"{'▾' if expanded else '▸'}  {item.text()}")
+                item.setData(GROUP_ROLE, transaction.id)
+                item.setToolTip(
+                    tr("{count} Schritte — anklicken zum Auf- und Zuklappen.").format(
+                        count=len(transaction.ops)
+                    )
+                )
             self.list.addItem(item)
 
             if len(transaction.ops) > 1:
                 for op_id in transaction.ops:
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
+                    child.setData(GROUP_ROLE, transaction.id)
                     child_symbol = _op_icon_name(
                         next((entry.op for entry in document.ops if entry.id == op_id), "")
                     )
@@ -2309,6 +2338,16 @@ class HistoryPanel(QWidget):
                         child.setFont(font)
                         child.setForeground(QColor(UNDONE_COLOUR))
                     self.list.addItem(child)
+                    # **Verstecken erst, wenn die Zeile in der Liste steht.**
+                    # ``setHidden`` an einem Element ohne Liste tut nichts und
+                    # meldet auch nichts — dieselbe Familie wie „Qt lügt vor
+                    # dem Anzeigen": Der Aufruf sieht aus wie getan, und die
+                    # Zeile steht trotzdem da.
+                    #
+                    # **Vorgabe eingeklappt.** Ein Verlauf, der jeden
+                    # Teilschritt zeigt, ist nach zehn Handlungen eine Wand aus
+                    # Zeilen, und die eine, die man sucht, steht irgendwo darin.
+                    child.setHidden(transaction.id not in self._open_groups)
 
         for transaction in reversed(list(undone)):
             item = QListWidgetItem(f"{transaction.title}  ({tr('zurückgenommen')})")
@@ -2321,6 +2360,42 @@ class HistoryPanel(QWidget):
 
         self._fit()
         self.list.scrollToBottom()
+
+    def _toggle_group(self, item: QListWidgetItem) -> None:
+        """Einen Oberpunkt auf- oder zuklappen.
+
+        Kein Bestätigungsdialog und keine Rückfrage (Regel 19): Einklappen
+        nimmt nichts weg, es zeigt nur weniger, und der nächste Klick holt es
+        zurück. Zeilen, die keine Gruppe sind, bleiben unberührt — dort ist
+        der Klick eine Auswahl und sonst nichts.
+        """
+        group = item.data(GROUP_ROLE)
+        if not group or item.text().startswith("    "):
+            return
+        if group in self._open_groups:
+            self._open_groups.discard(group)
+        else:
+            self._open_groups.add(group)
+        self._reflow_groups()
+
+    def _reflow_groups(self) -> None:
+        """Zeichen und Sichtbarkeit an den gemerkten Zustand angleichen.
+
+        Ohne Neuaufbau des ganzen Verlaufs: Der kostet die Auswahl und die
+        Rollposition, und beides braucht ein Kunde gerade dann, wenn er
+        aufklappt, um etwas zu suchen.
+        """
+        for row in range(self.list.count()):
+            entry = self.list.item(row)
+            group = entry.data(GROUP_ROLE)
+            if not group:
+                continue
+            expanded = group in self._open_groups
+            if entry.text().startswith("    "):
+                entry.setHidden(not expanded)
+            else:
+                entry.setText(("▾" if expanded else "▸") + entry.text()[1:])
+        self._fit()
 
     def point_at(self, op_id: int) -> bool:
         """Die Zeile dieser Operation auswählen und ins Sichtfeld holen.
@@ -2360,6 +2435,14 @@ class HistoryPanel(QWidget):
                 first = item
         if first is None:
             return False
+        # **Eine versteckte Zeile auszuwählen zeigt ins Leere.** Ein Klick auf
+        # einen Befund, dessen Schritt in einem eingeklappten Oberpunkt liegt,
+        # führte sonst zu einer Auswahl, die niemand sieht — die Stelle, an der
+        # das Einklappen am ehesten still bricht (V6).
+        group = first.data(GROUP_ROLE)
+        if group and group not in self._open_groups:
+            self._open_groups.add(group)
+            self._reflow_groups()
         self.list.setCurrentItem(first)
         self.list.scrollToItem(first)
         return True

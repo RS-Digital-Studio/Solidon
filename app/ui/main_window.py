@@ -1626,6 +1626,13 @@ class MainWindow(QMainWindow):
         # und die Leiste des Werkzeugs lag über den Umschaltern — bei jedem
         # einzelnen, von Schnitt bis Trennen.
         self.tools.toolChanged.connect(weak_slot(self, lambda view: view.overlay.reflow()))
+        # **Ein Werkzeugwechsel beendet das Zug-Bündel** (§15.5, P9). Er legt
+        # keine Transaktion an und ist trotzdem eine Handlung — ohne diese
+        # Zeile hinge der erste Zug nach dem Wechsel am letzten davor, und ein
+        # Strg+Z nähme beide zusammen zurück.
+        self.tools.toolChanged.connect(
+            weak_slot(self, lambda view: view.session.history.end_bundle())
+        )
         # Wer *Schichten* öffnet, will Schichten sehen. Der Schalter dafür war
         # ein zweites Auswahlfeld in der Leiste selbst — ein Umschalter hinter
         # dem Umschalter, der die Leiste öffnet. Geschlossen wird über den
@@ -6774,7 +6781,12 @@ class MainWindow(QMainWindow):
                 for object_id in self.inputs_for_transform("scale_object")
             )
         if drafts:
-            self.session.apply(_("Direkt bewegt"), drafts)
+            # **Aufeinanderfolgende Züge sind eine Handlung** (§15.5, P9). Wer
+            # ein Teil an seinen Platz schiebt, zieht selten einmal: ziehen,
+            # nachsehen, nachziehen — und hatte dafür einen Eintrag je Zug,
+            # für eine einzige Absicht. Ob wirklich gebündelt wird, entscheidet
+            # die ``History``; hier steht nur das Angebot.
+            self.session.apply(_("Direkt bewegt"), drafts, bundle=True)
 
     def _on_scale_dragged(self, factor: float) -> None:
         """Ein Zug am Skalierwürfel wird eine Operation (§18.11, Regel 2).
