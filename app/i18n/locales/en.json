@@ -506,6 +506,7 @@
   "Das Modell ruft Werkzeuge auf. Es ist brauchbar.": "The model calls tools. It is usable.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "The model writes its calls out as text instead of making them — the chat answers, but nothing is carried out. A different model helps.",
   "Das Modell wird geladen und gefragt — das dauert.": "The model is being loaded and asked — this takes a while.",
+  "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken daneben und würde einzeln gedruckt. Meist ist der Durchmesser des Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an.": "The pattern is not attached to the body: it sits beside it in {loose} loose pieces and would be printed on its own. Usually the diameter of the wrapping cylinder is out of date — click the cylindrical face again.",
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper — es steht über dessen Rand hinaus. Klicken Sie die Zylinderfläche neu an, damit der Durchmesser wieder zum Körper passt.": "The pattern wraps around a cylinder wider than the body — it stands out past its edge. Click the cylindrical face again so the diameter matches the body.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "The naming scheme cannot be read; a brace is misplaced.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "The naming scheme names a placeholder that does not exist.",

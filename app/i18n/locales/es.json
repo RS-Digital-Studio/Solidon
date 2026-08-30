@@ -506,6 +506,7 @@
   "Das Modell ruft Werkzeuge auf. Es ist brauchbar.": "El modelo llama a las herramientas. Es utilizable.",
   "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft.": "El modelo escribe sus llamadas como texto en lugar de ejecutarlas — el chat responde con eso, pero no ejecuta nada. Otro modelo ayuda.",
   "Das Modell wird geladen und gefragt — das dauert.": "El modelo se está cargando y consultando — esto lleva tiempo.",
+  "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken daneben und würde einzeln gedruckt. Meist ist der Durchmesser des Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an.": "El patrón no está unido al cuerpo: queda al lado en {loose} piezas sueltas y se imprimiría por separado. Normalmente el diámetro del cilindro de envoltura está desactualizado; vuelva a hacer clic en la cara cilíndrica.",
   "Das Muster läuft um einen Zylinder, der breiter ist als der Körper — es steht über dessen Rand hinaus. Klicken Sie die Zylinderfläche neu an, damit der Durchmesser wieder zum Körper passt.": "El patrón envuelve un cilindro más ancho que el cuerpo: sobresale de su borde. Vuelva a hacer clic en la cara cilíndrica para que el diámetro coincida con el cuerpo.",
   "Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch.": "El esquema de nombres no se puede leer; una llave está mal puesta.",
   "Das Namensschema nennt einen Platzhalter, den es nicht gibt.": "El esquema de nombres menciona un marcador que no existe.",

@@ -148,8 +148,20 @@ def _run(seed: int | None = None, **params: object) -> object:
     )
 
 
-def _on_cylinder(diameter: float, **params: object) -> object:
-    """Die Operation auf einem Zylinder bekannter Breite — für den Wickelbefund."""
+def _on_cylinder(diameter: float, bore: float = 0.0, **params: object) -> object:
+    """Die Operation auf einem Rohr bekannter Breite — für die Wickelbefunde.
+
+    **96 Segmente, nicht die Vorgabe.** Ein grob aufgelöster Zylinder ist ein
+    Vielflach: Seine Flächenmitten liegen *innerhalb* des Nenndurchmessers, ein
+    exakt passender Wickel schwebte dort und fiele ab. Der Test meldete damit
+    einen Zerfall, den nur sein eigener Prüfkörper erzeugt hatte — die Galerie
+    zeichnet ihre Dose aus demselben Grund mit ``segments=96``.
+
+    ``bore`` bohrt das Rohr aus: Ein Muster, dessen Wickelzylinder kleiner ist
+    als der Körper, verschwindet in einem massiven Körper spurlos (dann meldet
+    ``boolean.without_effect``, und das ist ein anderer Befund). Erst über
+    einem Hohlraum liegt es frei und fällt ab — die Lage des ⌀75-Deckels.
+    """
     import trimesh
 
     from app.core.bootstrap import load_operations
@@ -160,11 +172,12 @@ def _on_cylinder(diameter: float, **params: object) -> object:
 
     load_operations()
     spec = REGISTRY.get("apply_texture")
-    body = SceneObject(
-        id="obj_1",
-        name="Rohr",
-        mesh=MeshData.of(trimesh.creation.cylinder(radius=diameter / 2.0, height=30.0)),
-    )
+    shape = trimesh.creation.cylinder(radius=diameter / 2.0, height=30.0, sections=96)
+    if bore > 0.0:
+        shape = trimesh.boolean.difference(
+            [shape, trimesh.creation.cylinder(radius=bore / 2.0, height=40.0, sections=96)]
+        )
+    body = SceneObject(id="obj_1", name="Rohr", mesh=MeshData.of(shape))
     return spec.fn(
         OpContext(
             scene=Scene(objects={"obj_1": body}, parameters={}),
@@ -180,18 +193,101 @@ def _on_cylinder(diameter: float, **params: object) -> object:
     )
 
 
-def _wrapped(diameter: float, wrap_diameter: float) -> object:
+def _wrapped(diameter: float, wrap_diameter: float, bore: float = 0.0) -> object:
+    """Ein umlaufendes Rändelmuster.
+
+    **Die Breite ist der Umfang, nicht irgendeine Zahl.** Ein Band, das nicht
+    genau einmal herumreicht, lässt an der Naht Elemente in der Luft stehen —
+    dann meldet die Teilezahl einen Zerfall, den nur der Prüfstand erzeugt hat.
+    Das Galerie-Rezept trägt aus demselben Grund ``width = 205.1``, was
+    π mal 65,3 ist.
+    """
     return _on_cylinder(
         diameter,
+        bore,
         pattern="knurl_diamond",
         pitch=3.0,
         depth=0.8,
         mode="raised",
         wrap="cylinder",
         wrap_diameter=wrap_diameter,
-        width=157.1,
-        height=15.0,
-        z=7.5,
+        width=math.pi * wrap_diameter,
+        height=10.0,
+        z=0.0,
+    )
+
+
+def test_a_pattern_that_falls_off_the_body_is_reported() -> None:
+    """**Die Lage, die der Durchmesser nicht sieht** (gemessen 30.08.2026).
+
+    Läuft das Muster um einen Zylinder, der *kleiner* ist als der Körper, ragt
+    nichts hinaus — :func:`_wrap_beyond_body` schweigt zu Recht. Es liegt dann
+    innerhalb der Fläche, berührt sie nirgends, und die Vereinigung legt
+    Hunderte lose Stücke daneben.
+
+    Am ⌀75-Deckel der Galerie-Dose mit dem gealterten ``wrap_diameter`` von
+    65,3 waren es **553 Komponenten**, wo eine war: wasserdicht, plausibles
+    Volumen, auf dem Vorschaubild ein glatter Deckel. Was fehlte, sah aus wie
+    eine Gestaltungsentscheidung.
+
+    Die Teilezahl ist binär statt toleranzbehaftet und fängt beide Richtungen —
+    dieselbe Bauart wie ``parts._hanging_loose``.
+    """
+    # Ein Rohr, außen 80 und innen 60: Die Wand steht zwischen Radius 30 und
+    # 40. Der Wickel läuft auf 50, also auf Radius 25 — im Loch, unter der
+    # Wand. Genau die Lage des ⌀75-Deckels, dessen Muster auf 65,3 lief,
+    # während sein Rand bei 80,3 stand.
+    result = _wrapped(80.0, 50.0, bore=60.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "texture.fell_apart" in codes, f"kein Befund, gemeldet wurde: {codes}"
+
+    apart = next(f for f in result.findings if f.code == "texture.fell_apart")
+    assert int(apart.values["before"]) == 1, "der Träger war vorher schon zerteilt"
+    assert int(apart.values["after"]) > 1, "nichts ist abgefallen — der Test misst nichts"
+    assert apart.severity == "error", "lose Stücke sind kein Schönheitsfehler"
+
+
+def test_a_pattern_that_holds_says_nothing_about_parts() -> None:
+    """Die Gegenprobe: Ein Muster, das hängt, wird nicht gemeldet.
+
+    Ohne sie bliebe der Test oben grün, auch wenn die Prüfung jede Lage
+    meldete. Und die Zahl davor muss stimmen: Wäre der Träger schon vorher
+    zerteilt, wäre jedes „zerfallen" oben aus dem falschen Grund richtig.
+    """
+    result = _wrapped(50.0, 50.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "texture.fell_apart" not in codes, f"Fehlalarm bei haltendem Muster: {codes}"
+
+
+def test_an_engraved_pattern_may_divide_the_body() -> None:
+    """Vertieft schneidet, und Schneiden darf teilen.
+
+    Dieselbe Ausnahme, die ``parts._hanging_loose`` für abziehende Bausteine
+    macht: Bei manchen Mustern ist das Teilen der Zweck, und ein Befund wäre
+    eine Warnung vor der eigenen Absicht.
+
+    **Geprüft wird die Funktion und nicht der Weg über die Operation**, und das
+    ist hier keine Bequemlichkeit: Über die Operation gibt es diese Lage nicht.
+    Ein Rändelmuster prägt Vertiefungen, keine Durchbrüche — gemessen an einem
+    Rohr mit 2 mm Wand und einem Muster von 2,5 mm Tiefe blieb der Körper ein
+    Stück. Ein Test mit einem geschnittenen Muster wäre grün geblieben, auch
+    wenn die Bedingung ``mode != "raised"`` fehlte, und hätte damit nichts
+    gehalten. Die Mutationsprobe hat genau das gezeigt.
+    """
+    from types import SimpleNamespace
+
+    from app.core.geom.texture_ops import _fell_apart
+
+    vorher = SimpleNamespace(component_count=1)
+    nachher = SimpleNamespace(component_count=42)
+
+    assert _fell_apart(vorher, nachher, "engraved") is None, (
+        "ein Schnitt, der teilt, wurde als Zerfall gemeldet"
+    )
+    assert _fell_apart(vorher, nachher, "raised") is not None, (
+        "die Gegenprobe: bei erhabenem Muster muss dieselbe Lage gemeldet werden"
     )
 
 
