@@ -155,10 +155,17 @@ flachen Silhouette, die Druckplatte ist das auffälligste Element.
 **B36** — Nachkommastellen uneinheitlich: Textur „40,000", Bohrung „4,20".
 **B37** — Werkzeugknopf im Ruhezustand rahmenlos — zwei von drei Modusknöpfen
 der Bewegen-Karte sehen nicht wie Knöpfe aus.
-**B38** — Erststart ohne vertikalen Rhythmus (60/50/20 Punkte, kein
-gemeinsames Vielfaches trotz `style.SPACE`).
-**B39** — Rechtsbündige Knöpfe fluchten nicht (Zusatzprogramme x≈553/540);
-Trennleiste mit ~200 Punkten Lücke vor den Knöpfen.
+**B38 — gegenstandslos, gemessen (15, 30.08.2026).** Jeder Abstand in
+`first_run.py` kommt aus dem Raster (`TIGHT`/`NORMAL`/`ROOMY`/`WIDE`, keine
+nackte Zahl); die 60/50/20 des Befunds waren Summen aus Rand plus Abstand
+plus Widget-Innenmaß — eine Schachtelung zweier Rasterschritte, kein
+fehlender Rhythmus. Falls je, wäre die Frage „welcher Rasterschritt gilt für
+Abschnittsränder" eine Entscheidung, keine Reparatur.
+**B39 — nicht reproduzierbar (15, Messung 30.08. abends).** Am echten Dialog
+(680 breit, modal, gelegtes Layout) endet der Knopf bei 217, nicht 553; die
+obere Knopfzeile ist linksbündig zum Abschnitt, die untere rechtsbündig mit
+sauberem Rand — zwei Rollen, zwei Ausrichtungen. Eine Trennlinie vor den
+Knöpfen fand die Messung nicht.
 **B40** — Kein Sprachlängenbruch bei 2560 Punkten; aber der Symbol-Umschalt-
 Schwellwert der Bewegen-Leiste ist sprachabhängig (Französisch schaltet
 früher auf unbeschriftete Symbole).
