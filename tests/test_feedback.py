@@ -373,3 +373,51 @@ def test_a_moving_mouse_is_not_work(qt_app: object, demo: None) -> None:
 
     assert feedback.read().used_seconds == pytest.approx(0)
     clock.stop()
+
+
+# --- Die Karte im Fenster -----------------------------------------------------
+
+
+def test_the_card_edge_is_quiet_and_the_button_keeps_the_accent() -> None:
+    """Die Karte trägt die Linienfarbe, ihr Knopf den Akzent.
+
+    **B6 der Design-Durchsicht:** Ohne dass der Kunde etwas getan hat, trugen
+    vier Elemente gleichzeitig die Akzentkante — darunter diese Karte. Eine
+    Karte ist eine Fläche und keine Aufforderung; was gefragt ist, sagt der
+    Knopf, und der behält den Akzent.
+
+    Die Trennlinie stammt aus
+    ``konzepte/konzept-akzentfarben-haushalt-2026-08.md`` und heißt
+    **flüchtig gegen dauerhaft**: Die Kartenkante steht da, bevor irgendetwas
+    geschieht, und gehört damit zu den leisen Formen.
+
+    Geprüft am Stylesheet und nicht am Bild: Welche Farbe gesetzt wird, ist
+    die Absicht; wie sie aussieht, hängt am Thema.
+    """
+    pytest.importorskip("PySide6")
+
+    from PySide6.QtWidgets import QApplication
+
+    from app.ui.survey import SurveyNotice
+    from app.ui.theme import THEMES
+
+    if QApplication.instance() is None:
+        QApplication([])
+
+    karte = SurveyNotice()
+    karte.set_theme("dark")
+    stil = karte.styleSheet()
+    farben = THEMES["dark"]
+
+    kante = [teil for teil in stil.split("}") if "#surveyNotice {" in teil]
+    assert kante, f"die Regel der Karte fehlt im Stylesheet: {stil[:120]!r}"
+    assert farben["line"] in kante[0], f"die Kartenkante muss die Linienfarbe tragen: {kante[0]!r}"
+    assert farben["highlight"] not in kante[0], (
+        "die Kartenkante darf den Akzent nicht tragen — sie leuchtete sonst, "
+        "ohne dass der Kunde etwas getan hat"
+    )
+
+    knopf = [teil for teil in stil.split("}") if "#surveyGive" in teil]
+    assert knopf and farben["highlight"] in knopf[0], (
+        "der Knopf behält den Akzent — er ist die Handlung, um die es geht"
+    )

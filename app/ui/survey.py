@@ -319,15 +319,28 @@ class SurveyNotice(QFrame):
     def set_theme(self, theme: str) -> None:
         """Farben aus dem Thema — die Karte liegt auf beiden Hintergründen.
 
-        Der Rahmen ist durchgezogen und trägt die Akzentfarbe: Anders als
-        beim Vorschaubanner ist hier nichts vorläufig, sondern etwas gefragt.
+        Der Rahmen ist durchgezogen und trägt die **Linienfarbe**. Er trug
+        einmal den Akzent, mit der Begründung „hier ist nichts vorläufig,
+        sondern etwas gefragt" — was gefragt ist, sagt aber der Knopf, und der
+        trägt den Akzent weiterhin. Die Karte selbst ist eine Fläche.
+
         Die zweite Kodierung (Regel 18) ist die halbfette Überschrift — die
-        Karte sagt in Worten, was sie ist, und hinge nie an ihrer Farbe.
+        Karte sagt in Worten, was sie ist, und hing nie an ihrer Farbe.
         """
         colours = THEMES["light" if theme == "light" else "dark"]
         self.setStyleSheet(
+            # **Die Kante trägt die Linienfarbe, nicht den Akzent.** Eine
+            # Karte ist eine Fläche und keine Aufforderung; dass sie eine
+            # Karte ist, sagt ihre Kante auch in Grau. Der Akzent bleibt dem
+            # Knopf darunter — er ist die Handlung, um die es geht.
+            #
+            # Hier stand Bernstein, und die Karte war damit eine von vier
+            # Stellen, die leuchteten, **ohne** dass der Kunde etwas getan
+            # hatte (B6 der Design-Durchsicht). Vier Dauerleuchten machen aus
+            # einem Signal eine Tapete; die Begründung steht in
+            # ``konzepte/konzept-akzentfarben-haushalt-2026-08.md``.
             f"#surveyNotice {{ background: {colours['window']};"
-            f" border: 1px solid {colours['highlight']}; border-radius: 6px; }}"
+            f" border: 1px solid {colours['line']}; border-radius: 6px; }}"
             f"#surveyNotice QLabel {{ color: {colours['text']}; background: transparent; }}"
             f"#surveyNotice #surveyTitle {{ font-weight: 600; }}"
             # **Der Hauptknopf trägt seine Farben hier und nicht aus dem
