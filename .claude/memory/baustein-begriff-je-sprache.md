@@ -22,6 +22,23 @@ und „Catalogue de blocs" im selben Absatz.
 Menüeinträge, das Handbuch und die Website. Also: es **bloque**, fr
 **bloc**, it **blocco**, pt **bloco**.
 
+**Ein Genuswechsel zieht durch den ganzen Satz, und das ist keine Fußnote.**
+`bloque`, `bloc` und `bloco` sind **maskulin**, `pieza`, `pièce` und `peça`
+**feminin**. Wer nur das Substantiv tauscht, hinterlässt einen Satz, der in
+sich nicht mehr stimmt — und das ist schlechter als der ursprüngliche Fehler,
+weil es aussieht wie eine geprüfte Übersetzung. Am 30.08.2026 an einem
+einzigen Börsensatz gemessen, mitgezogen sind:
+
+| | vorher | nachher |
+|---|---|---|
+| es | Esta pieza … la rechazaría | **Este** bloque … **lo** rechazaría |
+| fr | Cette pièce … partagée telle quelle … la refuserait | **Ce** bloc … **partagé tel quel** … **le** refuserait |
+| pt | Esta peça … partilhada … recusá-la-ia | **Este** bloco … **partilhado** … **recusá-lo-ia** |
+
+Im Italienischen fiel nichts an, weil `componente` und `blocco` beide
+maskulin sind — genau der Fall, der zu dem Fehlschluss verführt, ein
+Wörtertausch genüge.
+
 **Die Grenze, und sie trägt:** Ersetzt wurde nur, wo die deutsche Quelle
 „Baustein" sagt. `pieza`/`peça` sind zugleich die richtigen Wörter für
 „Teil" (das Werkstück), `componenti normalizzati` für Normteile,
@@ -36,6 +53,16 @@ Website zitiert Dialogtitel wörtlich; ändert sich ein Katalogtext, ziehen
 `website/{es,fr,it,pt}/index.html` und `features.html` nach, die
 Handbücher erzeugt `tools/make_manual.py` ohnehin aus den Katalogen.
 
-Verwandt: [[uebersetzung-neu-statt-flicken]] — bei Genuswechsel
-(pieza→bloque) reicht kein Wörtertausch, die Angleichung läuft durch den
-ganzen Satz (Artikel, Partizipien, Pronomen: „la suya" → „el suyo").
+**Und wo diese Notiz gelesen werden muss, ist beim Schreiben — nicht danach.**
+Am 30.08.2026 hat eine Sitzung fünf Sätze in fünf Sprachen verfasst, ohne die
+eine Datei aufzuschlagen, die genau diese Frage beantwortet; gefunden wurde es
+erst in der Durchsicht. Der Genus-Absatz oben stand dabei schon hier — als
+letzte Zeile unter „Verwandt", und dort liest ihn niemand als Anweisung. Er
+ist deshalb nach oben gewandert. **Eine Warnung am Ende eines Dokuments wirkt
+wie eine Fußnote, gleich was sie sagt**; wer eine schreibt, stellt sie vor die
+Arbeit, die sie verhindern soll.
+
+Verwandt: [[uebersetzung-neu-statt-flicken]] (dieselbe Angleichung, allgemein
+gefasst: Artikel, Partizipien, Pronomen — „la suya" → „el suyo") und
+[[katalog-schluessel-sind-woerter]], denn beide Fallen sitzen im selben Satz:
+die eine im Substantiv, die andere im Schlüssel.
