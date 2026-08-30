@@ -100,21 +100,22 @@ def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     ihren Code; aufgeklappt erklärt dieselbe Auswahl weiterhin ihre Bedeutung.
     """
     from app.core.types import Document, Parameter
-    from app.ui.overlay import LEFT_WIDTH
     from app.ui.panels import ParameterPanel
     from app.ui.theme import apply_theme
 
-    # **Gemessen wird die Betriebslage, nicht der Nullzustand.** ``app.py``
-    # legt das Stylesheet beim Start über die *Anwendung*; der Kunde sieht die
-    # Karte deshalb nie ohne. Für die Breite ist das kein Detail: Ein
-    # Zahlenfeld kostet mit Stylesheet 2 px Rahmen je Seite, Innenabstand und
-    # einen Pfeilknopf — die Karte misst **270** statt 258.
+    # **Das Thema steht hier, weil der Innenabstand daran hängt** — ``app.py``
+    # legt das Stylesheet beim Start über die *Anwendung*, der Kunde sieht die
+    # Karte also nie ohne. Was hier geprüft wird, ist die kompakte
+    # Einheitenauswahl, und die lebt von diesen Abständen.
     #
-    # Ohne diese Zeile war der Test eine Reihenfolgeabhängigkeit: allein
-    # gefahren grün (258), hinter einem Test, der ein Thema setzte, rot (270).
-    # Und die rote Fassung hatte recht — die Zone war zu schmal, auf jedem
-    # Fenster unter rund 2080 Pixeln. Wer ihn über eine Rücksetz-Fixture
-    # „stabil grün" gemacht hätte, hätte den Kundenfehler zugedeckt.
+    # **Eine Breitenprüfung stand einen halben Tag lang darunter und ist
+    # gestrichen.** Sie las ``minimumSizeHint().width() <= LEFT_WIDTH``, meldete
+    # 270 gegen eine Zone von 260 und hat die Zone verbreitern lassen — gemessen
+    # hatte sie eine Schrift, die es nicht gibt: Offscreen ist
+    # ``QFontInfo.family()`` leer und jede Familie liefert dieselbe synthetische
+    # Doppelbreite (228 Punkte gegen 111 unter Segoe UI). Am echten Bildschirm
+    # misst die Karte 166. Eine feste Familie zu setzen hilft nicht, offscreen
+    # ignoriert sie — die Prüfung ist hier grundsätzlich nicht zu haben.
     apply_theme(qt_app, "light")  # type: ignore[arg-type]
 
     document = Document(format_version=1, app_version="0.0.1")
@@ -132,7 +133,6 @@ def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     unitless = panel._unit_editors["anzahl"]
     assert unitless.currentText() == "ohne Einheit"
     assert unitless._compact_text() == ""
-    assert panel.minimumSizeHint().width() <= LEFT_WIDTH, "die Zeilen passen in die linke Karte"
 
     gerufen: list[str] = []
     panel.limitsRequested.connect(gerufen.append)

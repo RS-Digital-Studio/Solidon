@@ -356,10 +356,16 @@ def _the_language_starts_at_the_source() -> Iterator[None]:
 #: ``apply_theme`` legt es über die *Anwendung*, und ``app.py`` tut das beim
 #: Start — der Kunde sieht die Oberfläche also nie ohne. Eine Fixture, die es
 #: nach jedem Test abräumt, stellte einen Zustand her, den es im Betrieb nicht
-#: gibt, und genau das hätte am 30.08.2026 einen echten Fehler zugedeckt: Die
-#: Parameterkarte maß ohne Stylesheet 258 und mit 270, die linke Zone war 260
-#: breit. Der Test dazu war allein grün und hinter einem Fenster rot — und die
-#: **rote** Fassung hatte recht.
+#: gibt: Ein Test, der Abstände oder Innenmaße misst, bekäme Zahlen, die
+#: niemand je sieht.
+#:
+#: **Womit dieser Hinweis am 30.08.2026 begründet war, trug allerdings nicht.**
+#: Hier stand, die Parameterkarte messe ohne Stylesheet 258 und mit 270 gegen
+#: eine Zone von 260, ein Rücksetzen hätte also einen Kundenfehler zugedeckt.
+#: Beide Zahlen stammten aus einem Offscreen-Lauf, und dort hat Qt gar keine
+#: Schrift — am echten Bildschirm sind es 166 mit Stylesheet wie ohne. Der
+#: Hinweis bleibt, weil das Stylesheet Abstände wirklich verändert; die
+#: Kartenbreite ist nur kein Beleg dafür.
 #:
 #: Wer eine Rücksetzung baut, prüft deshalb zuerst: Setzt sie auf das zurück,
 #: was der Kunde hat, oder auf ein nacktes Nichts? Ein Thema, ein Stylesheet,

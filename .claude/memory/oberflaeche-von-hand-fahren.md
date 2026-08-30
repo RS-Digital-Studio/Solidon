@@ -16,6 +16,23 @@ Vorkehrungen. Ohne sie hängt der Lauf oder fotografiert leere Kästchen.
   Kästchen. `WA_DontShowOnScreen` hält das Fenster trotzdem vom Bildschirm.
   Der Viewport rendert dann allerdings **nicht** — OpenGL zeichnet nichts in
   ein Fenster, das nie sichtbar war (siehe `tools/make_figures.py`).
+
+  **Und die zweite Hälfte davon kostete am 30.08.2026 einen Commit: Offscreen
+  hat keine Schrift, also auch keine Metrik.** Nicht nur die Kästchen sind
+  leer — `QFontInfo(app.font()).family()` gibt eine leere Zeichenkette, die
+  Punktgröße ist negativ, und **jede** angeforderte Familie liefert dieselbe
+  synthetische Ersatzmetrik. Gemessen: derselbe Text 228 Punkte offscreen
+  gegen 111 unter Segoe UI, also rund das Doppelte; eine ausdrücklich gesetzte
+  Familie (`QFont("Segoe UI", 9)`) ändert daran nichts, sie wird ignoriert.
+
+  Damit ist **jede** Größe, die an Schriftmetrik hängt, offscreen unmessbar:
+  Breiten, `sizeHint`, `minimumSizeHint`, „passt das noch in seine Zone".
+  Ich habe daraufhin die linke Zone der Anwendung verbreitert, gegen einen
+  Fehler, den es nicht gab — die Karte misst am echten Bildschirm 166 statt
+  270. Wer so etwas prüfen will, fährt die echte Plattform; ein Test, der es
+  offscreen prüft, gehört gestrichen und nicht repariert. Der Wächter, der
+  „strenger" misst (Phantomschrift breiter als echt), darf stehen bleiben —
+  er kann nur falsch rot werden, nie falsch grün.
 - **Modale Dialoge abfangen.** Ohne das wartet der Lauf ewig. Betroffen sind
   `_may_discard` beim Öffnen (drei Knöpfe — ohne geklickten Knopf liest
   `confirm_unsaved` „Abbrechen", und das Öffnen findet nie statt), die
@@ -180,10 +197,35 @@ sofort und knopflos zurück: `clickedButton()` gibt `None`, `confirm_unsaved`
 liest daraus „Abbrechen", `closeEvent` ruft `event.ignore()` — und das Fenster
 lässt sich nicht mehr schließen, auch von Hand nicht. Am 30.08.2026 standen
 so vier Prüfstands-Fenster mit dem Titel der Anwendung herum, und Robert
-hielt sie für hängende Solidons. Zweierlei dagegen, beides billig: dem
-Fenster einen Prüfstands-Titel geben (`setWindowTitle("PRÜFSTAND …")`), und
-nach dem Protokollschreiben `os._exit(0)` — ein Prüfstand hat nichts zu
-retten.
+hielt sie für hängende Solidons.
+
+**Der Titel als Kennzeichen trägt dabei nicht — gemessen am selben Tag.** Die
+Anwendung überschreibt ihn, sobald ein Dokument geladen wird:
+`setWindowTitle("PRÜFSTAND …")` gefolgt von `open_path(…)` ergibt
+`'plate_holes (ungespeichert) — Solidon3D'`. Wer ihn als Kennzeichen will,
+setzt ihn **nach jedem** Öffnen neu. Was sicher wirkt, ist `os._exit(0)` nach
+dem Protokollschreiben — ein Prüfstand hat nichts zu retten —, und für einen
+Lauf, der hängen kann, ein Wachhund-Timer, der von außen zuschlägt: `os._exit`
+hinter `exec()` läuft nie, weil `exec()` im gehangenen Zustand nicht
+zurückkehrt.
+
+**Und ein Dialog-Abfänger klickt nur eigene Dialoge weg.** Am 30.08.2026
+konnte Robert keine Solidon-Instanz mehr schließen: Er klickt auf Schließen,
+die Frage *Speichern / Verwerfen / Abbrechen* geht auf und ist sofort wieder
+zu. Ursache war der Wachhund eines Prüfstands (150 ms, bedient jeden
+`activeModalWidget()`) — der fragt nicht, **wessen** Dialog er schließt, und
+ein weggeklickter liefert *Abbrechen*, worauf `closeEvent` das Schließen
+abbricht. Die Prüfung kostet nichts: `dialog.window() is mein_fenster`, sonst
+durchreichen und protokollieren. Er wirkt nur im eigenen Prozess
+(`activeModalWidget()` ist prozessweit), aber das genügt, sobald dort noch
+etwas anderes ein Fenster hat.
+
+**`os._exit` leert die Ausgabepuffer nicht.** Ein Prüfstand, der mit `print`
+misst und mit `os._exit(0)` endet, liefert Exit 0 und eine **leere** Datei —
+das liest sich wie „lief durch, nichts zu melden", mit vollständiger Messung
+dahinter. Mir am 30.08.2026 zweimal passiert. Entweder `flush=True` an jedem
+`print`, oder selbst in eine Datei schreiben (`buffering=1`), was ohnehin
+besser ist: siehe den Absatz über puffernde Pipes weiter oben.
 
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].

@@ -88,24 +88,22 @@ MOVE_MS = 160
 #: Breite der linken Zone. Breit genug für „Schraubenloch mit Senkung" in der
 #: Verlaufsliste, schmal genug, dass daneben noch ein Modell steht.
 #:
-#: **Die Zahl ist gemessen, nicht gewählt.** Hier stand 260, und die
-#: Parameterkarte braucht in der Betriebslage **270**: Sobald das Stylesheet
-#: liegt — also immer, ``app.py`` legt es beim Start —, kostet ein Zahlenfeld
-#: 2 px Rahmen je Seite, Innenabstand und einen Pfeilknopf von ``ROOMY``
-#: Breite. Ohne Stylesheet sind es 258, und genau so hat der Wächter in
-#: ``tests/test_interface_limits.py`` jahrelang gemessen: allein gefahren
-#: grün, hinter einem Test mit Thema rot.
+#: **Hier stand einen halben Tag lang 272, und die Messung dahinter war ein
+#: Phantom.** Ein Wächter maß die Parameterkarte auf 270 und damit über der
+#: Zone — offscreen. Dort hat Qt aber gar keine Schrift:
+#: ``QFontInfo(app.font()).family()`` gibt eine leere Zeichenkette, die
+#: Punktgröße ist negativ, und **jede** angeforderte Familie liefert dieselbe
+#: synthetische Metrik. Derselbe Text misst dort 228 Punkte und unter Segoe UI
+#: 111 — offscreen rechnet rund doppelt so breit wie jeder echte Bildschirm.
 #:
-#: Getroffen hat das **jedes Fenster unter rund 2080 Pixeln** — die Zone
-#: wächst erst darüber über 270 hinaus (``card_width``, 13 %). Full HD und
-#: jeder Laptop lagen also darunter; die Karte konnte nicht auf ihre Zone
-#: schrumpfen und ragte darüber hinaus.
+#: Gemessen unter echter Plattform ist die Karte **166** breit, mit Stylesheet
+#: wie ohne, und in allen sechs Sprachen gleich; eine um ein Viertel größere
+#: Systemschrift bringt sie auf 183. Sie hat nie gesprengt, auf keinem Fenster.
 #:
-#: Der Preis steht in der zweiten Hälfte der Begründung oben, und er ist
-#: gemessen: Im Vorgabefenster (1280 auf 820, ``MainWindow.resize``) bleiben dem
-#: Modell **660 statt 672** Pixel, wenn beide Spalten offen stehen — 1,8 %
-#: weniger. „Daneben steht noch ein Modell" gilt damit unverändert.
-LEFT_WIDTH = 272
+#: Wer diese Zahl ändern will, misst deshalb unter **echter** Plattform.
+#: Offscreen sagt über Schriftmetrik nichts — auch dann nicht, wenn man die
+#: Familie ausdrücklich setzt.
+LEFT_WIDTH = 260
 
 #: Breite der rechten Zone. Ein Befund ist ein Satz, kein Absatz — schmaler
 #: als links, weil hier nichts eingerückt ist.

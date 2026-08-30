@@ -48,31 +48,31 @@ Absicht — sie wird behoben, nicht unterdrückt.
 ### Isolation heißt Betriebslage, nicht Nullzustand
 
 Eine Rücksetz-Fixture stellt her, was der **Kunde** hat — nicht ein nacktes
-Nichts. Der Unterschied ist keine Feinheit: Am 30.08.2026 hat er einen echten
-Fehler drei Monate lang zugedeckt und wäre um ein Haar festgeschrieben worden.
+Nichts. `apply_theme` legt das Stylesheet über die **Anwendung**, und `app.py`
+tut das beim Start; die Oberfläche existiert im Betrieb also nie ohne. Eine
+Fixture, die es nach jedem Test abräumt, macht Tests verlässlich grün gegen
+einen Zustand, den niemand je sieht.
 
-`apply_theme` legt das Stylesheet über die **Anwendung**, und `app.py` tut das
-beim Start; die Oberfläche existiert im Betrieb also nie ohne. Die
-Parameterkarte misst deshalb:
+**Der Fall, der hier als Beleg stand, war selbst der Fehler — und deshalb ist
+er der bessere Lehrsatz.** Er lautete: Die Parameterkarte messe ohne Stylesheet
+258 und mit 270, die linke Zone sei 260 breit, also passe sie auf keinem
+Fenster unter rund 2080 Pixeln. Auf dieser Messung wurde `LEFT_WIDTH` auf 272
+erhöht und ein Wächter geschrieben.
 
-| | Breite |
-|---|---|
-| ohne Stylesheet | 258 |
-| mit Stylesheet (jeder Kunde) | **270** |
-| linke Zone (`LEFT_WIDTH`, damals) | 260 |
+Gemessen am 30.08.2026, dieselbe Karte, einziger Unterschied die Plattform:
 
-`test_parameter_rows_fit_the_left_card` baut sein Panel frei stehend. Allein
-gefahren war er grün, hinter einem Test mit Thema rot — und **die rote Fassung
-hatte recht**: Die Karte passte auf jedem Fenster unter rund 2080 Pixeln nicht
-in ihre Zone (`card_width` wächst erst darüber). Full HD und jeder Laptop lagen
-darunter.
+| Lauf | Schrift | Karte ohne / mit Stylesheet |
+|---|---|---|
+| `QT_QPA_PLATFORM=offscreen` | `QFontInfo.family()` ist **leer** | 258 / 270 |
+| echte Plattform | `Segoe UI` | **166 / 166** |
 
-Die naheliegende Reparatur wäre eine Fixture gewesen, die das Stylesheet nach
-jedem Test abräumt. Sie hätte den Test **verlässlich grün** gemacht und den
-Kundenfehler dauerhaft unsichtbar. Zwei Sitzungen hielten sie für richtig,
-bevor die Messung kam.
+**Offscreen hat gar keine Schrift.** Die Punktgröße ist negativ, und jede
+angeforderte Familie — `Segoe UI`, `DejaVu Sans`, `Sans Serif` — liefert
+dieselbe synthetische Metrik: derselbe Text 228 Punkte gegen 111. Beide Zahlen
+der Tabelle oben, 258 wie 270, stammen aus einer Schrift, die es nicht gibt.
+Die Karte hat nie gesprengt.
 
-Daraus zwei Sätze:
+Daraus **drei** Sätze, und der dritte ist der teuerste:
 
 * **Wer eine Rücksetzung baut, prüft ihren Zielzustand.** Sprache auf die
   Quellsprache, Anzeigeeinheit auf Millimeter — das *ist* der
@@ -82,10 +82,21 @@ Daraus zwei Sätze:
 * **Wer eine Breite, ein Layout oder eine Metrik misst, stellt die Betriebslage
   her** (`apply_theme` im Test), statt sie wegzuräumen. Sonst misst der Test
   etwas, das niemand je sieht.
+* **Und wer sie herstellt, stellt sie ganz her.** Das Stylesheet war die eine
+  Hälfte der Betriebslage; die andere ist die Schrift, und die kam aus dem
+  Testlauf. Eine halb hergestellte Betriebslage ist gefährlicher als gar keine:
+  Sie sieht aus wie eine Messung am Kundenzustand, trägt eine Zahl, die
+  plausibel wirkt, und bringt ihre eigene Begründung mit. **Eine Größe, die von
+  Schriftmetrik abhängt, ist offscreen nicht messbar** — auch nicht mit
+  ausdrücklich gesetzter Familie, denn offscreen ignoriert sie. Wer so etwas
+  prüfen will, fährt die echte Plattform (`WA_DontShowOnScreen` hält das
+  Fenster dabei unsichtbar) oder prüft es gar nicht.
 
 Und die allgemeine Form, weil sie über Fixtures hinausgeht: **Ein Test, der nur
 in einer Lage grün ist, die es im Betrieb nicht gibt, ist keine Zusicherung,
-sondern eine Tarnung.** Die Frage davor ist dieselbe wie überall in dieser
+sondern eine Tarnung.** Das gilt in beide Richtungen — der Wächter, der auf der
+Phantomschrift stand, war rot in einer Lage, die es nicht gibt, und hat eine
+Änderung erzwungen, die niemand brauchte. Die Frage davor ist dieselbe wie überall in dieser
 Datei — was habe ich gerade gemessen, und ist das, was der Kunde hat?
 
 **Und die Gegenrichtung, damit daraus kein Kult wird: Die Betriebslage
@@ -94,7 +105,7 @@ Richtungen sind am selben Tag gemessen worden, in derselben Datei:
 
 | Fall | Messgröße | Betriebslage herstellen? |
 |---|---|---|
-| Kartenbreite | 258 ohne, **270** mit Stylesheet | **ja** — die Zahl hängt daran |
+| Kartenbreite | hängt an der **Schrift**, und die fehlt offscreen | **gar nicht messen** — siehe oben |
 | Kürzelübersicht | „Home" ohne, „Pos1" mit Qt-Katalog | **nein** — siehe unten |
 
 Bei der Kürzelübersicht verglich der Test rohe Deklarationstexte (`VIEW_KEYS`)
