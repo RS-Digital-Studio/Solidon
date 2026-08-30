@@ -54,28 +54,41 @@ _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
 _SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM
 
 
-#: Fenster, die die Suite absichtlich bis zum Prozessende hält.
-_PINNED_WINDOWS: list[object] = []
+#: Fenster und eigenständig gebaute Viewports, die die Suite absichtlich bis
+#: zum Prozessende hält. Beide tragen VTK-Zustand; nur das Hauptfenster zu
+#: halten schützt Dateien nicht, die den Viewport als eigene Prüfeinheit bauen.
+_PINNED_UI: list[object] = []
 
 #: Steht auf True, solange ein Test Zerstörung **messen** will (Fixture
 #: ``unpinned_windows``) — dann wird nicht gepinnt.
 _PIN_PAUSED = False
 
 
-def _pin_main_window(module: object) -> None:
-    """Hängt den Pin an ``MainWindow`` — einmal, gleich wer zuerst kommt."""
-    window_type = getattr(module, "MainWindow", None)
-    if window_type is None or getattr(window_type, "_suite_pinned", False):
-        return
-    original = window_type.__init__
+def _pin_ui_widgets(module: object) -> None:
+    """Hängt den Pin an ``MainWindow`` und ``Viewport`` — je Typ einmal.
 
-    def pinning(self: object, *args: object, **kwargs: object) -> None:
-        original(self, *args, **kwargs)
-        if not _PIN_PAUSED:
-            _PINNED_WINDOWS.append(self)
+    Ein Hauptfenster hält seinen Viewport ohnehin. Einige Ansichtsprüfungen
+    bauen den Viewport aber absichtlich allein; dessen VTK-Zustand braucht
+    denselben Lebenszeitvertrag wie das ganze Fenster.
+    """
+    for type_name in ("MainWindow", "Viewport"):
+        widget_type = getattr(module, type_name, None)
+        if widget_type is None or getattr(widget_type, "_suite_pinned", False):
+            continue
+        original = widget_type.__init__
 
-    window_type.__init__ = pinning
-    window_type._suite_pinned = True
+        def pinning(
+            self: object,
+            *args: object,
+            _original: object = original,
+            **kwargs: object,
+        ) -> None:
+            _original(self, *args, **kwargs)  # type: ignore[operator]
+            if not _PIN_PAUSED:
+                _PINNED_UI.append(self)
+
+        widget_type.__init__ = pinning
+        widget_type._suite_pinned = True
 
 
 class _PinningLoader:
@@ -89,7 +102,7 @@ class _PinningLoader:
 
     def exec_module(self, module: object) -> None:
         self._wrapped.exec_module(module)  # type: ignore[attr-defined]
-        _pin_main_window(module)
+        _pin_ui_widgets(module)
 
 
 class _PinOnImport:
@@ -105,7 +118,7 @@ class _PinOnImport:
     """
 
     def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
-        if fullname != "app.ui.main_window":
+        if fullname not in {"app.ui.main_window", "app.ui.viewport"}:
             return None
         import importlib.util
 
@@ -160,9 +173,10 @@ def _windows_live_to_the_end() -> Iterator[None]:
     """
     # Der Regelfall läuft über den Import-Haken oben; dieser Griff bleibt als
     # zweiter für ein Modul, das schon vor dem Haken geladen war.
-    module = sys.modules.get("app.ui.main_window")
-    if module is not None:
-        _pin_main_window(module)
+    for module_name in ("app.ui.viewport", "app.ui.main_window"):
+        module = sys.modules.get(module_name)
+        if module is not None:
+            _pin_ui_widgets(module)
     yield
 
 
