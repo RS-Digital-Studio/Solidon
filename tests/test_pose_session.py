@@ -358,3 +358,56 @@ def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWind
         # ersten.
         window._escape()
         QApplication.processEvents()
+
+
+# --- Was die Leiste über sich selbst sagt -------------------------------------
+
+
+def test_every_button_in_the_bar_says_what_it_does(qt_app: QApplication) -> None:
+    """Jeder Knopf der Skelettleiste trägt einen Tooltip.
+
+    **Weil die Beschriftung allein zwei von dreien nicht trug.** „Letzten
+    zurück" nannte nicht, *was* zurückgeht — ein Knochen, eine Kette oder die
+    Sitzung; „Fertig" nannte nicht, dass danach ein Verlaufsschritt steht und
+    das Skelett nicht mehr im Bild zu suchen ist. Für jemanden ohne
+    CAD-Erfahrung sind das genau die Fragen, die vor dem Klick entstehen.
+
+    Der Test zählt nicht, er fragt jeden Knopf einzeln — eine Zahl wäre beim
+    vierten Knopf still wieder falsch.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.pose_bar import PoseBar
+
+    leiste = PoseBar()
+    knoepfe = leiste.findChildren(QPushButton)
+    assert len(knoepfe) >= 3, f"nur {len(knoepfe)} Knöpfe gefunden — sucht das noch richtig?"
+
+    stumm = [knopf.text() for knopf in knoepfe if not knopf.toolTip().strip()]
+    assert not stumm, "Knöpfe ohne Tooltip: " + ", ".join(stumm)
+
+
+def test_the_name_field_belongs_to_the_bone_not_to_the_pose(qt_app: QApplication) -> None:
+    """Was ein Screenreader vorliest, muss dasselbe sein wie das, was daneben steht.
+
+    **Hier stand „Name der Pose", und das Feld benennt den Knochen.** Der
+    Platzhalter sagte es richtig, der barrierefreie Name etwas anderes, und
+    ``next_name`` tut das Dritte — wer die Leiste nicht sieht, bekam die
+    falsche Auskunft (Regel 18 dem Geist nach: die zweite Kodierung muss
+    dasselbe sagen wie die erste). Eine Pose hat in dieser Anwendung überhaupt
+    keinen Namen.
+    """
+    from app.ui.pose_bar import PoseBar
+
+    leiste = PoseBar()
+    gesprochen = leiste.name.accessibleName()
+    gelesen = leiste.name.placeholderText()
+
+    assert "Pose" not in gesprochen, f"das Feld benennt den Knochen, nicht die Pose: {gesprochen!r}"
+    assert "Knochen" in gesprochen, (
+        f"der barrierefreie Name muss den Knochen nennen: {gesprochen!r}"
+    )
+    assert gesprochen == gelesen, (
+        f"gesprochen {gesprochen!r} gegen gelesen {gelesen!r} — beide beschreiben "
+        "dasselbe Feld und dürfen nicht auseinanderlaufen"
+    )

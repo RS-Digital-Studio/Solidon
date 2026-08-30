@@ -32,7 +32,12 @@ class PoseBar(QWidget):
         super().__init__(parent)
 
         self.name = QLineEdit(self)
-        self.name.setAccessibleName(tr("Name der Pose"))
+        # **Der Name gehört dem Knochen, nicht der Pose.** Hier stand „Name
+        # der Pose" — was ein Screenreader vorlas, war damit etwas anderes als
+        # das, was daneben stand (der Platzhalter sagt es richtig) und als
+        # das, was das Feld tut (``next_name`` benennt den nächsten Knochen).
+        # Eine Pose hat in dieser Anwendung überhaupt keinen Namen.
+        self.name.setAccessibleName(tr("Name des nächsten Knochens"))
         self.name.setPlaceholderText(tr("Name des nächsten Knochens"))
         self.name.setToolTip(
             tr("Leer heißt: durchnummeriert. Ein Name macht die Stellung später lesbar.")
@@ -50,9 +55,22 @@ class PoseBar(QWidget):
         self.chain.clicked.connect(self.chainBroken)
 
         self.remove = QPushButton(tr("Letzten zurück"), self)
+        # **„Zurück" allein sagt nicht, was zurückgeht.** Der Knopf nimmt
+        # genau einen Knochen weg, nicht die ganze Kette und nicht die
+        # Sitzung — und dass er einzeln arbeitet, ist der Unterschied zu
+        # Escape daneben.
+        self.remove.setToolTip(
+            tr("Nimmt den zuletzt gesetzten Knochen weg — einen, nicht die ganze Kette.")
+        )
         self.remove.clicked.connect(self.lastRemoved)
 
         self.done = QPushButton(tr("Fertig"), self)
+        # **Was nach „Fertig" passiert, stand nirgends.** Der Knopf ist das
+        # Ende der Sitzung *und* der Anfang eines Verlaufsschritts; wer das
+        # nicht weiß, sucht das Skelett anschließend im Bild statt im Verlauf.
+        self.done.setToolTip(
+            tr("Schließt den Editor und legt das Skelett als einen Schritt in den Verlauf.")
+        )
         make_primary(self.done)
         self.done.clicked.connect(self.finished)
 
