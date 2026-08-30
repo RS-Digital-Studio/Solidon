@@ -4539,6 +4539,7 @@ class MainWindow(QMainWindow):
         catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
+        catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
@@ -4585,6 +4586,71 @@ class MainWindow(QMainWindow):
                 "die am Baustein einstellbar sein sollen."
             )
         return True, ""
+
+    def _adopt_part(self, catalog: PartCatalog) -> None:
+        """Nimmt eine veröffentlichte Datei in den Katalog auf.
+
+        **Der Kern entscheidet, was mit ihr geschieht, nicht dieser Handler.**
+        ``adopt`` kennt die drei Lagen aus Konzept §17.1 — freier Name,
+        gleicher Stand, anderer Stand — und in allen dreien gilt „lokal
+        schlägt mitgereist". Geschrieben wird **nichts** in den Nutzerordner:
+        Das Rezept gehört der Datei, mit der es kam.
+
+        **Die Herkunft reist mit** (§32). ``catalog_source`` unterscheidet, ob
+        ein Rezept aus einer Projektdatei kam oder aus der Tauschbörse; der
+        Katalog macht daraus zwei verschiedene Zeilen im Steckbrief. Ohne
+        diese Angabe stünde dort „kam mit einer Projektdatei", und das wäre an
+        der Stelle falsch, an der es am meisten zählt.
+
+        **Gerufen wird ``adopt`` und nicht ``adopt_payload``.** Die zweite Tür
+        ist für ein Rezept gedacht, das noch als Text in einem Container
+        liegt, und reicht ``catalog_source`` nicht durch. Hier ist die Datei
+        selbst die Quelle, also wird sie hier gelesen — und ihr Lesefehler
+        hier behandelt: Eine unlesbare Datei ist ein Befund, kein Abbruch
+        (Regel 17), und der Kunde erfährt, dass er vielleicht die falsche
+        gewählt hat.
+        """
+        import json
+
+        from app.core.knowledge.parts.recipe import PUBLISHED_SOURCE, adopt
+
+        source, _filter = QFileDialog.getOpenFileName(
+            catalog,
+            tr("Veröffentlichten Baustein einlesen"),
+            "",
+            tr("Börsendatei (*.json)"),
+        )
+        if not source:
+            return
+        try:
+            data = json.loads(Path(source).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as problem:
+            show_error(
+                ValidationError(
+                    field="title",
+                    detail=tr("Diese Datei ließ sich nicht lesen. Ist es eine Börsendatei?"),
+                    values={"file": Path(source).name, "reason": str(problem)[:200]},
+                    constraint="not_a_shared_file",
+                    suggestions=(CANCEL,),
+                ),
+                catalog,
+            )
+            return
+
+        try:
+            findings = adopt(data, catalog_source=PUBLISHED_SOURCE)
+        except AppError as problem:
+            show_error(problem, catalog)
+            return
+
+        catalog.refresh()
+        # Die Befunde des Kerns sind die Auskunft über fremde Herkunft und
+        # über alles, was an der Datei nicht stimmte. Sie stehen im
+        # Prüfbericht, weil sie dort auch nach dem nächsten Klick noch stehen.
+        if findings:
+            self.report.add_findings(findings)
+            self.right.setCurrentWidget(self.report)
+        self.statusBar().showMessage(tr("Eingelesen. Der Baustein steht im Katalog."), 8000)
 
     def _share_part(self, catalog: PartCatalog) -> None:
         """Schreibt den gewählten Baustein als Börsendatei.

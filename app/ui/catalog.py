@@ -129,6 +129,11 @@ class PartCatalog(QDialog):
     partChosen = Signal(str)
     saveRequested = Signal()
     shareRequested = Signal()
+    adoptRequested = Signal()
+    """Eine veröffentlichte Datei soll in den Katalog.
+
+    Braucht keine Auswahl — anders als das Veröffentlichen ist das Einlesen
+    ohne Vorbedingung, und ein Knopf ohne Vorbedingung wird nicht gesperrt."""
     """Der gewählte Baustein soll zur Tauschbörse gehen.
 
     Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
@@ -264,6 +269,12 @@ class PartCatalog(QDialog):
         )
         self.share_part.clicked.connect(self.shareRequested.emit)
         self.set_can_share(False, "")
+
+        # Immer bedienbar: Zum Einlesen braucht es keinen gewählten Baustein.
+        self.adopt_part = buttons.addButton(
+            tr("Aus Datei einlesen …"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.adopt_part.clicked.connect(self.adoptRequested.emit)
 
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
@@ -637,7 +648,7 @@ class PartCatalog(QDialog):
         """
         if spec is None:
             return False, tr("Wählen Sie einen Baustein, den Sie weitergeben möchten.")
-        if getattr(spec, "source", "") == "travelled":
+        if getattr(spec, "source", "") in ("travelled", "published"):
             return False, tr(
                 "Dieser Baustein kam von jemand anderem — nur eigene lassen sich veröffentlichen."
             )
@@ -743,10 +754,22 @@ def detail(spec: PartSpec | None) -> str:
             f"{OWN_MARKER} "
             + tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr")
         )
+    # **Eine dritte Herkunft, weil es eine dritte ist.** Die Zeile darüber
+    # nennt eine Projektdatei; wer sie für eine Börsendatei übernimmt,
+    # behauptet die falsche Herkunft an genau der Stelle, an der §32 eine
+    # wahre verlangt. Und sie steht hier und nicht in einer Statuszeile: Die
+    # Auskunft, woher ein Inhalt stammt, muss auch in drei Tagen noch da sein.
+    if spec.source == "published":
+        lines.append(
+            f"{OWN_MARKER} "
+            + tr(
+                "veröffentlichter Baustein — kam aus der Tauschbörse und bleibt bei diesem Projekt"
+            )
+        )
     warning = _range_warning(spec)
     if warning:
         lines.append(f"<b>{RANGE_MARKER}</b> {warning}")
-    if spec.subtractive or spec.own or spec.source == "travelled" or warning:
+    if spec.subtractive or spec.own or spec.source in ("travelled", "published") or warning:
         lines.append("")
 
     lines.append(f"<b>{tr('Parameter')}</b>")
