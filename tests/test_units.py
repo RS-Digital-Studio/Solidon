@@ -101,6 +101,21 @@ def test_a_volume_keeps_its_meaning_at_every_size() -> None:
         "was nicht null ist, sieht nicht so aus"
     )
 
+    # **Und dieselbe Zusage in Millimetern.** Sie galt nur in Zoll, und der
+    # Fall darunter ist kein erdachter: Ein Bildmodell normiert seine Ausgabe
+    # auf einen Einheitswürfel, ein erzeugtes Netz misst also Zehntel eines
+    # Kubikmillimeters. Gemessen an einem echten Wurf durch ComfyUI: 0,125 mm³,
+    # angezeigt als „0 mm³" — neben „geschlossen" in derselben Zeile des
+    # Erzeugungsdialogs, und ein geschlossener Körper ohne Volumen ist keiner.
+    assert format_volume(0.1248) == "0.12 mm³"
+    assert format_volume(0.005) == "0.0050 mm³", "die Stellen wachsen wie in Zoll"
+    assert float(format_volume(0.1248).split()[0]) > 0.0, (
+        "was nicht null ist, sieht auch in Millimetern nicht so aus"
+    )
+    # Null bleibt null, und ab einem Kubikmillimeter ändert sich nichts.
+    assert format_volume(0.0) == "0 mm³"
+    assert format_volume(1.0) == "1 mm³"
+
 
 def test_formatting_matches_the_display_precision() -> None:
     assert format_length(4.2) == "4.20 mm"

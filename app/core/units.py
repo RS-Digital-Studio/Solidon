@@ -169,7 +169,7 @@ def round_display(value_mm: float) -> float:
 
 
 def _significant_decimals(size: float) -> int:
-    """Wie viele Nachkommastellen ein Zollmaß braucht, damit zwei geltende
+    """Wie viele Nachkommastellen ein kleines Maß braucht, damit zwei geltende
     Ziffern dastehen.
 
     Volumen und Fläche brauchen dieselbe Antwort, und sie stand bis zum
@@ -177,6 +177,11 @@ def _significant_decimals(size: float) -> int:
     Kubikzoll, einmal für Quadratzoll. Bei zwei festen Stellen sähe alles Kleine
     wie null aus: Ein Quadratmillimeter ist ein Anderthalbtausendstel
     Quadratzoll.
+
+    **Der Anlass war Zoll, die Frage ist es nicht.** Ein Kubikmillimeter unter
+    eins steht vor demselben Problem, und seit dem 30.08.2026 nimmt
+    :func:`format_volume` dieselbe Antwort auch dort — ein erzeugtes Netz kommt
+    normiert an und misst Zehntel eines Kubikmillimeters.
 
     Bei fünf Stellen ist Schluss. Wer in Zoll ein Volumen von einem
     Millionstel liest, ist mit einer Null besser bedient als mit acht.
@@ -213,6 +218,20 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
         cubic_inches = value_mm3 / UNIT_TO_MM["in"] ** 3
         decimals = _significant_decimals(abs(cubic_inches))
         return f"{cubic_inches:.{decimals}f} in³"
+    if 0.0 < abs(value_mm3) < 1.0:
+        # **Und dieselbe Zusage nach unten.** Ganze Kubikmillimeter lösen den
+        # Fall von oben („0,0 cm³" für ein Teil von zwei Millimetern) und
+        # schaffen einen neuen darunter: Ein Bildmodell normiert seine Ausgabe
+        # auf einen Einheitswürfel, und was aus dem Generator kommt, misst ein
+        # bis zwei Millimeter. Gemessen an einem echten Wurf: 0,125 mm³, im
+        # Erzeugungsdialog als „0 mm³" neben „geschlossen" — zwei Angaben in
+        # einer Zeile, die sich widersprechen, denn ein geschlossener Körper
+        # ohne Volumen ist keiner.
+        #
+        # Der Zollzweig darüber löst genau das seit je, und der Test dazu sagt
+        # es wörtlich: „was nicht null ist, sieht nicht so aus". Die Zusage
+        # galt nur in einer der beiden Einheiten.
+        return f"{value_mm3:.{_significant_decimals(abs(value_mm3))}f} mm³"
     if abs(value_mm3) < 1000.0:
         return f"{value_mm3:.0f} mm³"
     cubic_centimetres = value_mm3 / 1000.0
