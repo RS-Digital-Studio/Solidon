@@ -5276,3 +5276,84 @@ def test_the_offer_to_bring_a_sketch_back_expires(qt_app: QApplication) -> None:
         assert window._discarded_sketch is None, "an expired offer is not kept around"
     finally:
         window.deleteLater()
+
+
+def test_changing_a_dimension_is_one_step_not_two(qt_app: QApplication) -> None:
+    """Ein Maß zu ändern kostete acht Klicks — in Fusion ist es ein Doppelklick.
+
+    Der Weg war: Bedingung entfernen, beide Elemente wieder wählen, Abstand
+    neu legen, Zahl eintippen. Wer aus einem CAD kommt, sucht stattdessen die
+    Zahl selbst.
+
+    **Ein Schritt ist die eigentliche Zusage**, nicht die Bequemlichkeit:
+    ``_apply`` ist der Rückgängig-Punkt des Editors, also wären Entfernen und
+    Neusetzen zwei davon — und Strg+Z brächte den Kunden in einen Zustand, den
+    er nie hatte: die Bedingung fort, der alte Wert nicht zurück.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        canvas.add_constraint("distance", (0, 1), "30")
+        # Der Stapel heißt ``_undo``, und die Zahl wird **nicht** bedingt
+        # geprüft: Ein `if hasattr(...)` überspränge die eigentliche Zusage
+        # still, sobald jemand das Feld umbenennt — die Gegenprobe „zwei
+        # Schritte statt einem" blieb damit grün.
+        before = len(canvas._undo)
+
+        canvas.change_constraint(0, "45")
+
+        entry = canvas.sketch.constraints[0]
+        assert entry.value == "45", "the new measure is in place"
+        assert entry.kind == "distance", "and it is still the same constraint"
+        assert len(canvas.sketch.constraints) == 1, "not removed and re-added as a second one"
+        assert len(canvas._undo) == before + 1, (
+            f"one apply, one undo step — got {len(canvas._undo) - before}; "
+            "otherwise Ctrl+Z lands between the two halves"
+        )
+
+        # Und der Beweis dafür, wozu der eine Schritt da ist: ein Ctrl+Z, und
+        # das alte Maß steht wieder da — nicht eine Skizze ohne Bedingung.
+        canvas.undo()
+        assert canvas.sketch.constraints[0].value == "30", (
+            "one undo returns the old measure, not a sketch without the constraint"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_only_a_measure_offers_to_be_changed(qt_app: QApplication) -> None:
+    """Eine Bedingung ohne Zahl hat nichts zu ändern.
+
+    *Waagerecht* oder *Fest* tragen keinen Wert; ein Menüeintrag dafür öffnete
+    einen leeren Dialog — die Sackgasse, die §2.1 ausschließt. Gefragt wird am
+    Eintrag und nicht an einer Artenliste: Die altert, sobald jemand eine
+    Bedingung mit Wert dazunimmt.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        canvas.add_constraint("distance", (0, 1), "30")
+        canvas.add_constraint("horizontal", (0, 1))
+
+        with_value = [action.text() for action in panel.constraint_menu_at(0).actions()]
+        without = [action.text() for action in panel.constraint_menu_at(1).actions()]
+
+        assert any("Maß ändern" in text for text in with_value), (
+            f"a distance carries a number: {with_value}"
+        )
+        assert not any("Maß ändern" in text for text in without), (
+            f"'horizontal' has nothing to change: {without}"
+        )
+
+        # Und der Doppelklick auf eine wertlose Zeile tut nichts, statt einen
+        # leeren Dialog zu öffnen.
+        panel.change_constraint_value(1)
+        assert canvas.sketch.constraints[1].value == "", "unchanged, and no dialog was opened"
+    finally:
+        panel.deleteLater()

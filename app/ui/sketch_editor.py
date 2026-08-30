@@ -1387,6 +1387,28 @@ class SketchCanvas(QWidget):
         remaining = tuple(entry for at, entry in enumerate(self.sketch.constraints) if at != index)
         self._apply(replace(self.sketch, constraints=remaining))
 
+    def change_constraint(self, index: int, value: str) -> None:
+        """Den Wert einer Maßbedingung ändern — **ein** Schritt, nicht zwei.
+
+        Der Weg dahin war bisher Entfernen, die Elemente wieder wählen, die
+        Bedingung neu legen, Zahl eintippen: acht Klicks für eine geänderte
+        Zahl. In Fusion ist es ein Doppelklick auf das Maß, und wer von dort
+        kommt, sucht genau den.
+
+        **Ein `_apply` ist ein Rückgängig-Schritt**, und deshalb steht hier
+        eine eigene Methode statt eines Aufrufpaars aus Entfernen und
+        Anlegen: Zwei Aufrufe wären zwei Schritte, und Strg+Z brächte den
+        Kunden in einen Zustand, den er nie hatte — die Bedingung fort, der
+        alte Wert nicht zurück.
+        """
+        if not 0 <= index < len(self.sketch.constraints):
+            return
+        entries = list(self.sketch.constraints)
+        if entries[index].value == value:
+            return
+        entries[index] = replace(entries[index], value=value)
+        self._apply(replace(self.sketch, constraints=tuple(entries)))
+
     def insert_shape(
         self,
         sketch: Sketch,
@@ -4049,6 +4071,7 @@ class SketchPanel(QWidget):
         # (§2.1: eine Sackgasse hat einen Ausgang, und er ist sichtbar).
         self.constraint_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.constraint_list.customContextMenuRequested.connect(self._constraint_menu)
+        self.constraint_list.itemDoubleClicked.connect(self._constraint_double_click)
         # Umbruch, weil die Einträge jetzt sagen, woran sie hängen: „Deckung —
         # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
         # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
@@ -4866,6 +4889,20 @@ class SketchPanel(QWidget):
         if not 0 <= row < len(constraints):
             return menu
         entry = constraints[row]
+        # **Nur wo es etwas zu ändern gibt.** Eine Bedingung ohne Wert —
+        # waagerecht, deckungsgleich, fest — hat keine Zahl, und ein
+        # Menüeintrag, der eine leere Eingabe öffnet, ist eine Sackgasse.
+        # Gefragt wird am Eintrag und nicht an einer Artenliste: Die altert,
+        # sobald jemand eine Bedingung mit Wert dazunimmt.
+        if entry.value:
+            change = menu.addAction(tr("Maß ändern …  (Doppelklick)"))
+            change.setToolTip(
+                tr("Die Zahl ersetzen, ohne die Bedingung neu zu legen — ein Schritt im Verlauf.")
+            )
+            change.triggered.connect(
+                lambda _checked=False, at=row: self.change_constraint_value(at)
+            )
+            menu.addSeparator()
         remove = menu.addAction(tr("Bedingung entfernen  (Entf)"))
         # **Aus derselben Quelle wie am Knopf.** Was die Bedingung tut, sagt
         # ``_does_phrase`` an inzwischen vier Stellen; eine eigene
@@ -4873,6 +4910,43 @@ class SketchPanel(QWidget):
         remove.setToolTip(f"{_constraint_label(entry.kind)}: {_does_phrase(entry.kind)}.")
         remove.triggered.connect(lambda _checked=False, at=row: self.canvas.remove_constraint(at))
         return menu
+
+    def change_constraint_value(self, row: int) -> None:
+        """Nach dem neuen Maß fragen und es setzen.
+
+        Ein Eingabedialog und keine Bestätigung: Regel 19 verbietet die Frage
+        *vor* einer rücknehmbaren Handlung, nicht die Frage *nach* dem Wert,
+        den die Handlung braucht. Vorbelegt mit dem alten — wer nur eine Ziffer
+        tauschen will, tippt eine Ziffer.
+
+        Der Wert bleibt Text, weil er einer ist: „30" ebenso wie „breite/2".
+        Eine Zahleneingabe nähme dem Kunden die Ausdrücke weg, für die es die
+        Projektparameter gibt (§13).
+        """
+        from PySide6.QtWidgets import QInputDialog
+
+        constraints = self.canvas.sketch.constraints
+        if not 0 <= row < len(constraints):
+            return
+        entry = constraints[row]
+        if not entry.value:
+            return
+        value, agreed = QInputDialog.getText(
+            self,
+            str(tr("Maß ändern")),
+            f"{_constraint_label(entry.kind)}:",
+            text=str(entry.value),
+        )
+        if agreed and value.strip():
+            self.canvas.change_constraint(row, value.strip())
+
+    def _constraint_double_click(self, item: Any) -> None:
+        """Doppelklick auf eine Zeile — der Griff, den ein Fusion-Kunde sucht.
+
+        Auf eine Bedingung ohne Wert tut er nichts: Dort gibt es keine Zahl,
+        und ein leerer Dialog wäre die Sackgasse, die §2.1 ausschließt.
+        """
+        self.change_constraint_value(self.constraint_list.row(item))
 
     def _constraint_menu(self, position: QPoint) -> None:
         """Rechtsklick in der Bedingungsliste — der sichtbare Weg hinaus."""

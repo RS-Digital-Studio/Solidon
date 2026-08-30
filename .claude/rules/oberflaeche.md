@@ -532,8 +532,10 @@ Werkzeugleiste vom zweiten — Blatt, Ordner und Diskette sind geeinigt, „Mode
 einfügen", „Zeichnen", „Formen" und „Skelett" nicht; was sie trägt, sind
 sieben Knöpfe an unveränderlicher Position mit einem Tooltip, der Namen,
 Kürzel und Zweck in einem Satz nennt. Die Werkzeugzeile unter dem Viewport
-bleibt beschriftet: acht Umschalter, die mit dem Zustand wechseln, und für
-„Schnitt" und „Explosion" gibt es kein Bild. Regel 18 verlangt eine zweite
+bleibt beschriftet: sieben Umschalter, die mit dem Zustand wechseln, und für
+„Schnitt" und „Explosion" gibt es kein Bild. (Sieben ist der Bestand, acht die
+Grenze — ``MAX_TOOLS`` in ``test_interface_limits.py``, wo der Kommentar den
+Unterschied ebenfalls führt.) Regel 18 verlangt eine zweite
 Kodierung neben der **Farbe**, nicht eine Beschriftung neben jedem Zeichen.
 
 Wo das Wort vom Knopf verschwindet, muss es an drei Stellen weiterstehen: am
