@@ -29,8 +29,16 @@ from __future__ import annotations
 
 from typing import Final
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget, QWidgetAction
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMenu,
+    QPushButton,
+    QWidget,
+    QWidgetAction,
+)
 
 from app.ui.theme import THEMES, Theme
 
@@ -74,8 +82,74 @@ def set_level(widget: QWidget, level: str) -> None:
     Über eine Qt-Eigenschaft und nicht über ein eigenes Stylesheet je Widget:
     so steht die Gestaltung an einer Stelle, und ein Themenwechsel muss nicht
     hundert Einzelfälle einsammeln.
+
+    **Nur die vier aus** :data:`LEVELS`. Die Stufen sind **Lautstärke** —
+    Größe, Gewicht, Nebentextfarbe —, und wer hier eine Bedeutung einsetzt,
+    schreibt sie in eine Eigenschaft, die kein Selektor liest: Einunddreißig
+    Aufrufe trugen ``warning``, ``info``, ``ok`` oder ``note``, und gerendert
+    waren sie **pixelgleich** mit gar keiner Stufe. Eine Zeile, die sagt, dass
+    sie warnt, sah aus wie gewöhnlicher Text. Für Bedeutungen steht
+    :func:`set_role` daneben.
     """
+    if level not in LEVELS:
+        raise ValueError(
+            f"{level!r} ist keine Typografie-Stufe, sondern vermutlich eine Bedeutung — "
+            f"erlaubt sind {LEVELS}, für Bedeutungen gibt es set_role()"
+        )
     widget.setProperty("level", level)
+    _repolish(widget)
+
+
+def set_role(widget: QLabel, role: str, text: str) -> None:
+    """Eine Zeile, die eine Bedeutung trägt: Farbe **und** Zeichen (Regel 18).
+
+    Text und Rolle in einem Aufruf, und das ist der Punkt: Der Bestand setzte
+    beides getrennt (``setText`` und eine Zeile darunter die Stufe), und in
+    genau dieser Lücke ist die Kodierung verlorengegangen. Wer den Satz
+    schreibt, sagt hier zugleich, was er bedeutet — vergessen lässt sich das
+    nicht mehr.
+
+    Der Bildschirmleser bekommt die Bedeutung als **Wort**, nicht als Zeichen:
+    „Warnung" liest sich vor, „!" nicht.
+    """
+    import html
+
+    from app.i18n import tr
+    from app.ui.palette import ROLE_MARKS, SEVERITY_ENCODING, text_colour
+
+    if role not in ROLE_MARKS:
+        raise ValueError(f"{role!r} ist keine Bedeutung — erlaubt sind {sorted(ROLE_MARKS)}")
+
+    widget.setProperty("role", role)
+    if not text:
+        widget.setText("")
+        widget.setAccessibleDescription("")
+        _repolish(widget)
+        return
+
+    # **Die Farbe trägt das Zeichen, den Satz trägt der Fließtext** — dieselbe
+    # Entscheidung wie im Prüfbericht, und aus demselben gemessenen Grund. Die
+    # Rollenfarben sind als Schrift zu schwach: „Warnung" bringt im hellen
+    # Thema 3,76 gegen die Fensterfläche, „Hinweis" ebenfalls 3,76 und im
+    # dunklen 4,28 — WCAG 1.4.3 verlangt 4,5 für gewöhnlichen Text. Ein voll
+    # eingefärbter Satz wäre also ausgerechnet dort am schlechtesten lesbar, wo
+    # er am dringendsten ist. Als Zeichen gilt die Grenze für Grafik (1.4.11,
+    # 3,0), und die halten beide Rollen in beiden Themen.
+    ground = widget.palette().window().color().name()
+    # Die Einengung ist für mypy und für den Leser dieselbe Aussage: Genau
+    # diese zwei Rollen sind auch Schweregrade und haben deshalb eine Farbe.
+    tint = text_colour(role, ground) if role in ("warning", "info") else ""  # type: ignore[arg-type]
+    mark = html.escape(ROLE_MARKS[role])
+    painted = f'<span style="color: {tint}">{mark}</span>' if tint else mark
+    # ``html.escape`` auf dem Satz, nicht auf dem Zeichen allein: Der Text kommt
+    # aus Katalogen und aus Fehlermeldungen, und ein ``<`` darin machte aus der
+    # Zeile stillen Unsinn. Was hier gebaut wird, ist die einzige Stelle, an der
+    # die Anwendung eine Beschriftung als Auszeichnungstext setzt.
+    widget.setTextFormat(Qt.TextFormat.RichText)
+    widget.setText(f"{painted}&nbsp;&nbsp;{html.escape(text)}")
+    encoding = SEVERITY_ENCODING.get(role)
+    spoken = tr(encoding.label_key) if encoding is not None else tr("Erledigt")
+    widget.setAccessibleDescription(f"{spoken}: {text}")
     _repolish(widget)
 
 
@@ -434,6 +508,7 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     font-weight: {sizes["caption"][1]};
     color: {muted};
 }}
+
 
 /* --- Knöpfe: Haupt- und Nebenknopf sind zu unterscheiden ---------------- */
 QPushButton {{

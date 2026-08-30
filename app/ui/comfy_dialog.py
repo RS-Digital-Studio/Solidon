@@ -38,7 +38,7 @@ from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import set_level
+from app.ui.style import set_role
 
 _log = get_logger(__name__)
 
@@ -157,15 +157,16 @@ class ComfySetupDialog(QDialog):
             # gehört hier hinein" schickt jemanden suchen, ohne zu sagen,
             # wonach: ComfyUI liegt in einem Ordner, in dem „custom_nodes"
             # steht, und das ist die ganze Auskunft, die es braucht.
-            self.state.setText(
+            set_role(
+                self.state,
+                "info",
                 tr(
                     "ComfyUI ist an den üblichen Stellen nicht gefunden worden. "
                     "Gesucht wird der Ordner, in dem „custom_nodes“ und „main.py“ "
                     "liegen — bei der tragbaren Version steckt er in "
                     "„ComfyUI_windows_portable“."
-                )
+                ),
             )
-            set_level(self.state, "info")
 
     def _choose_folder(self) -> None:
         chosen = QFileDialog.getExistingDirectory(
@@ -189,7 +190,6 @@ class ComfySetupDialog(QDialog):
         self._started_at = time.monotonic()
         self._show_elapsed()
         self._tick.start()
-        set_level(self.state, "info")
 
         worker = _Worker(self.folder.text().strip(), self.weights.isChecked())
         worker.step.connect(self._note_step)
@@ -243,36 +243,40 @@ class ComfySetupDialog(QDialog):
         self._show_elapsed()
 
     def _show_elapsed(self) -> None:
-        """Der Schritt und wie lange er schon läuft."""
+        """Der Schritt und wie lange er schon läuft.
+
+        Die Rolle steht **hier** und nicht beim Start: Der Zeitgeber schreibt
+        die Zeile jede Sekunde neu, und ein einmal gesetztes Zeichen wäre beim
+        ersten Takt wieder weg. Wer einen Text laufend erneuert, erneuert seine
+        Bedeutung mit.
+        """
         seconds = time.monotonic() - self._started_at
-        self.state.setText(f"{self._step} ({seconds:.0f} s)")
+        set_role(self.state, "info", f"{self._step} ({seconds:.0f} s)")
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, comfy_setup.Result)
         self._idle()
         if not result.done:
-            self.state.setText(str(result.reason))
-            set_level(self.state, "warning")
+            set_role(self.state, "warning", str(result.reason))
             return
         # Der Neustart ist kein Detail: ComfyUI liest seine Knoten beim Start,
         # und ohne ihn bleibt die Mesh-Erzeugung ausgegraut, obwohl alles liegt.
-        self.state.setText(
-            tr("Eingerichtet. ComfyUI einmal neu starten, dann geht „Modell erzeugen“.")
+        set_role(
+            self.state,
+            "ok",
+            tr("Eingerichtet. ComfyUI einmal neu starten, dann geht „Modell erzeugen“."),
         )
-        set_level(self.state, "ok")
         _log.info("comfyui set up in %s", result.comfyui)
 
     def _refused(self, reason: str) -> None:
         self._idle()
-        self.state.setText(reason)
-        set_level(self.state, "warning")
+        set_role(self.state, "warning", reason)
 
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
         self._idle()
         _log.warning("comfy setup crashed: %s", detail)
-        self.state.setText(f"{UNEXPECTED_CRASH!s} {detail}")
-        set_level(self.state, "warning")
+        set_role(self.state, "warning", f"{UNEXPECTED_CRASH!s} {detail}")
 
     def _idle(self) -> None:
         self._tick.stop()

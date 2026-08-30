@@ -1319,3 +1319,128 @@ def test_the_active_tool_says_it_at_its_edge_and_no_longer_shouts(
         f"{theme}: der aktive Knopf schreibt in {ink}, der ruhende in {calm_ink} — "
         "wer die Schriftfarbe umschaltet, muss auch das Symbol umfärben"
     )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_meaning_paints_its_mark_and_leaves_the_sentence_alone(
+    theme: str, qt_app: QApplication
+) -> None:
+    """Bedeutung ist nicht Lautstärke — und die Farbe trägt das Zeichen.
+
+    Einunddreißig Aufrufe setzten `warning`, `info`, `ok` oder `note` als
+    **Typografie-Stufe**. Die kennt vier Werte, und keiner davon ist eine
+    Bedeutung: Gerendert waren alle vier pixelgleich mit gar keiner Stufe. Eine
+    Zeile, die sagt, dass sie warnt, sah aus wie jeder andere Satz — und weil
+    eine Qt-Eigenschaft, die kein Selektor liest, nichts meldet, konnte es
+    jahrelang so stehen.
+
+    Warum die Farbe am **Zeichen** hängt und nicht am Satz, ist gemessen: Als
+    Fließtext bringt die Warnfarbe im hellen Thema 3,76 gegen die
+    Fensterfläche, die Hinweisfarbe ebenfalls 3,76 und im dunklen 4,28 — WCAG
+    1.4.3 verlangt 4,5. Ein eingefärbter Satz wäre also dort am schlechtesten
+    lesbar, wo er am dringendsten ist. Dieselbe Entscheidung wie im
+    Prüfbericht, und aus demselben Grund.
+
+    Gesucht wird nach **Farbton** und nicht nach dem Hexwert: Ein einzelnes
+    Zeichen hat wenige Punkte, und Kantenglättung macht aus jedem davon einen
+    Zwischenton. Dieselbe Technik wie beim Fortschrittsbalken nebenan — und mit
+    derselben Falle: „irgendwie bunt" trifft auch den Grund. Die Fensterfläche
+    des dunklen Themas ist blaugrau und kam auf 31 104 Treffer, mehr als jeder
+    Text je hätte. Verglichen wird deshalb gegen den Ton, den **diese** Rolle
+    haben soll, und die Sättigung trennt ihn vom Grund (63 gegen 125 und 187).
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+    from app.ui.palette import ROLE_MARKS, text_colour
+    from app.ui.style import apply_style, set_role
+    from app.ui.theme import apply_theme
+
+    before = qt_app.styleSheet()
+    apply_theme(qt_app, theme)  # type: ignore[arg-type]
+    apply_style(qt_app, theme)  # type: ignore[arg-type]
+
+    def painted(role: str) -> tuple[int, int]:
+        """Punkte im Ton dieser Rolle und Punkte in gewöhnlicher Schrift."""
+        wanted = QColor(text_colour(role, THEMES[theme]["window"])) if role != "ok" else None
+        host = QWidget()
+        layout = QVBoxLayout(host)
+        label = QLabel(host)
+        set_role(label, role, "Dieser Rechner ist noch nicht aktiviert.")
+        layout.addWidget(label)
+        host.resize(460, 60)
+        host.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        host.show()
+        QApplication.processEvents()
+        image = host.grab().toImage()
+        ink = QColor(THEMES[theme]["text"])
+        tinted = plain = 0
+        for y in range(image.height()):
+            for x in range(image.width()):
+                colour = QColor(image.pixel(x, y))
+                hue, saturation, _value, _alpha = colour.getHsv()
+                near = wanted is not None and abs(hue - wanted.hue()) <= 20
+                if near and saturation >= 100:
+                    tinted += 1
+                elif abs(colour.red() - ink.red()) < 40 and abs(colour.blue() - ink.blue()) < 40:
+                    plain += 1
+        host.close()
+        return tinted, plain
+
+    try:
+        marks = {role: painted(role) for role in ROLE_MARKS}
+    finally:
+        qt_app.setStyleSheet(before)
+        apply_theme(qt_app, "dark")  # type: ignore[arg-type]
+
+    for role in ("warning", "info"):
+        tinted, plain = marks[role]
+        assert tinted > 0, f"{theme}: {role} zeichnet sein Zeichen ohne Farbe"
+        assert plain > tinted * 5, (
+            f"{theme}: {role} färbt den Satz mit ({plain} gewöhnliche gegen {tinted} farbige "
+            "Punkte) — die Farbe gehört dem Zeichen"
+        )
+
+    # **Und der Erfolg trägt gar keine.** Er verlangt nichts, er bestätigt; das
+    # Zeichen ist die richtige Lautstärke und eine eigene Dauerfarbe die
+    # falsche. Wer hier ein Grün nachrüstet, macht diesen Test rot — und das
+    # ist der Zweck der Zeile.
+    tinted, plain = marks["ok"]
+    assert tinted == 0, f"{theme}: der Erfolg leuchtet ({tinted} farbige Punkte)"
+    assert plain > 0, f"{theme}: der Erfolg zeichnet gar nichts"
+
+
+def test_a_meaning_can_no_longer_be_set_as_a_loudness(qt_app: QApplication) -> None:
+    """Die Stufe nimmt nur ihre vier — sonst ist sie wieder still.
+
+    Einunddreißig Aufrufe trugen `warning`, `info`, `ok` oder `note`, und
+    ``set_level`` hat jeden davon widerspruchslos in eine Qt-Eigenschaft
+    geschrieben, die kein Selektor liest. Zwei Wege führten dorthin, und beide
+    sind jetzt zu: Der Aufruf **wirft**, und wer eine Bedeutung meint, findet
+    im Text der Ausnahme den Namen der Funktion, die er sucht.
+
+    Der Quelltext-Wächter daneben ist die zweite Hälfte: Eine Stelle, die kein
+    Test je durchläuft, wirft sonst erst beim Kunden — und genau solche Stellen
+    waren es (ein Dialog für ComfyUI, drei Zustände einer Freischaltung, die
+    nur bei beschädigtem Schlüssel erscheinen).
+    """
+    import re
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.style import LEVELS, set_level
+
+    with pytest.raises(ValueError, match="set_role"):
+        set_level(QLabel(), "warning")
+
+    offenders: list[str] = []
+    for path in sorted(UI.rglob("*.py")):
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            found = re.search(r'set_level\([^,]+,\s*"([a-z_]+)"\)', line)
+            if found and found.group(1) not in LEVELS:
+                offenders.append(f"{path.name}:{number} — {found.group(1)}")
+    assert not offenders, (
+        "diese Aufrufe setzen eine Bedeutung als Typografie-Stufe und bleiben "
+        f"damit unsichtbar; für Bedeutungen gibt es set_role(): {offenders}"
+    )

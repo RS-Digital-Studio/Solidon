@@ -70,7 +70,7 @@ from app.ui.labels import (
     value_line,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level, set_role
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort.
@@ -961,19 +961,18 @@ class KeyDialog(QDialog):
             self.service_button.setVisible(False)
             return
         if state.running:
-            self.service_state.setText(tr("Ollama läuft."))
-            set_level(self.service_state, "ok")
+            set_role(self.service_state, "ok", tr("Ollama läuft."))
             self.service_button.setVisible(False)
         elif state.installed:
-            self.service_state.setText(tr("Ollama ist installiert, läuft aber nicht."))
-            set_level(self.service_state, "warning")
+            set_role(self.service_state, "warning", tr("Ollama ist installiert, läuft aber nicht."))
             self.service_button.setText(tr("Ollama starten"))
             self.service_button.setVisible(True)
         else:
-            self.service_state.setText(
-                tr("Ollama ist nicht installiert — ohne es geht der Weg über einen Schlüssel.")
+            set_role(
+                self.service_state,
+                "info",
+                tr("Ollama ist nicht installiert — ohne es geht der Weg über einen Schlüssel."),
             )
-            set_level(self.service_state, "info")
             self.service_button.setText(tr("Zusätzliche Programme …"))
             self.service_button.setVisible(True)
         self.pull_button.setEnabled(state.running)
@@ -991,8 +990,7 @@ class KeyDialog(QDialog):
             self.look()
             return
         self.service_button.setEnabled(False)
-        self.service_state.setText(tr("Ollama wird gestartet …"))
-        set_level(self.service_state, "info")
+        set_role(self.service_state, "info", tr("Ollama wird gestartet …"))
         worker = _StartWorker(tool)
         worker.done.connect(self._started)
         worker.crashed.connect(self._crashed)
@@ -1005,10 +1003,11 @@ class KeyDialog(QDialog):
         self.look()
         if running:
             return
-        self.service_state.setText(
-            tr("Ollama ließ sich nicht starten. Von Hand geht es mit „ollama serve“.")
+        set_role(
+            self.service_state,
+            "warning",
+            tr("Ollama ließ sich nicht starten. Von Hand geht es mit „ollama serve“."),
         )
-        set_level(self.service_state, "warning")
 
     # --- das Modell -------------------------------------------------------------
 
@@ -1074,8 +1073,7 @@ class KeyDialog(QDialog):
         self.pull_progress.setVisible(True)
         self.pull_button.setText(tr("Abbrechen"))
         self.probe_button.setEnabled(False)
-        self.probe_result.setText(f"{tr('Wird geholt')}: {model}")
-        set_level(self.probe_result, "info")
+        set_role(self.probe_result, "info", f"{tr('Wird geholt')}: {model}")
 
         worker = _PullWorker(model)
         worker.step.connect(self._pull_step)
@@ -1107,13 +1105,13 @@ class KeyDialog(QDialog):
             # Herunterladen ist eine Tatsache; nur die Eingabefelder warten
             # auf eine Entscheidung.
             llm.remember_ollama_model(self._chosen_model())
-            self.probe_result.setText(
-                tr("Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt.")
+            set_role(
+                self.probe_result,
+                "ok",
+                tr("Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt."),
             )
-            set_level(self.probe_result, "ok")
             return
-        self.probe_result.setText(str(problem))
-        set_level(self.probe_result, "warning")
+        set_role(self.probe_result, "warning", str(problem))
 
     def _crashed(self, detail: str) -> None:
         """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand.
@@ -1128,8 +1126,7 @@ class KeyDialog(QDialog):
         self.pull_button.setText(tr("Modell holen"))
         self.service_button.setEnabled(True)
         self.probe_button.setEnabled(True)
-        self.probe_result.setText(f"{UNEXPECTED_CRASH!s} {detail}")
-        set_level(self.probe_result, "warning")
+        set_role(self.probe_result, "warning", f"{UNEXPECTED_CRASH!s} {detail}")
 
     def _worker_finished(self) -> None:
         """Wer einen Arbeiter startet, hält ihn fest — siehe :mod:`app.ui.leash`."""
@@ -1145,8 +1142,7 @@ class KeyDialog(QDialog):
     def _probe_tools(self) -> None:
         model = self._chosen_model()
         self.probe_button.setEnabled(False)
-        self.probe_result.setText(tr("Das Modell wird geladen und gefragt — das dauert."))
-        set_level(self.probe_result, "info")
+        set_role(self.probe_result, "info", tr("Das Modell wird geladen und gefragt — das dauert."))
 
         worker = _ToolProbeWorker(model)
         worker.done.connect(self._probe_done)
@@ -1158,10 +1154,11 @@ class KeyDialog(QDialog):
     def _probe_done(self, usable: object, speed: object) -> None:
         self.probe_button.setEnabled(True)
         if usable is None:
-            self.probe_result.setText(
-                tr("Ollama hat nicht geantwortet. Läuft es? „ollama serve“ startet es.")
+            set_role(
+                self.probe_result,
+                "warning",
+                tr("Ollama hat nicht geantwortet. Läuft es? „ollama serve“ startet es."),
             )
-            set_level(self.probe_result, "warning")
             return
         # **Die Geschwindigkeit schlägt die Werkzeugfrage.** „Das Modell ruft
         # Werkzeuge auf" ist wahr und nutzlos, wenn eine Antwort einundvierzig
@@ -1170,20 +1167,21 @@ class KeyDialog(QDialog):
         # als Fehler der Anwendung erlebt.
         slow = self._speed_text(speed)
         if slow:
-            self.probe_result.setText(slow)
-            set_level(self.probe_result, "warning")
+            set_role(self.probe_result, "warning", slow)
             return
         if usable:
-            self.probe_result.setText(tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."))
-            set_level(self.probe_result, "ok")
+            set_role(
+                self.probe_result, "ok", tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar.")
+            )
             return
-        self.probe_result.setText(
+        set_role(
+            self.probe_result,
+            "warning",
             tr(
                 "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der "
                 "Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft."
-            )
+            ),
         )
-        set_level(self.probe_result, "warning")
 
     @staticmethod
     def _speed_text(speed: object) -> str:
@@ -1601,13 +1599,13 @@ class ActivationDialog(QDialog):
             # Fenster, dessen schreibende Seite zu ist — den wahren Grund
             # erfuhr er beim ersten Änderungsversuch. Das ist Regel 17 an der
             # Anzeige: Der Zustand nennt sich selbst, nicht erst die Absage.
-            self.state_label.setText(damaged_line())
-            set_level(self.state_label, "warning")
+            set_role(self.state_label, "warning", damaged_line())
         elif state.deactivation_pending:
-            self.state_label.setText(deactivation_pending_line())
-            set_level(self.state_label, "warning")
+            set_role(self.state_label, "warning", deactivation_pending_line())
         elif state.licensed and state.licence is not None and state.certificate is not None:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "info",
                 tr(
                     "Freigeschaltet für {holder} (Bestellung {order}).\n"
                     "Aktives Gerät: {device}. Danach bleibt Solidon ohne Lizenzverbindung nutzbar."
@@ -1615,12 +1613,13 @@ class ActivationDialog(QDialog):
                     holder=state.licence.holder or tr("diesen Rechner"),
                     order=state.licence.order,
                     device=state.certificate.device_name,
-                )
+                ),
             )
             self.device_name.setText(state.certificate.device_name)
-            set_level(self.state_label, "info")
         elif state.licensed and state.licence is not None:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "info",
                 tr(
                     "Freigeschaltet für {holder} (Bestellung {order}). Dieser "
                     "Bestandsschlüssel braucht keine Geräteaktivierung und bleibt "
@@ -1628,23 +1627,25 @@ class ActivationDialog(QDialog):
                 ).format(
                     holder=state.licence.holder or tr("diesen Rechner"),
                     order=state.licence.order,
-                )
+                ),
             )
-            set_level(self.state_label, "info")
         elif state.needs_activation and state.licence is not None:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "warning",
                 tr(
                     "Der Lizenzschlüssel ist gültig (Bestellung {order}). Dieser Rechner "
                     "ist noch nicht aktiviert. Wählen Sie Online oder Offline aktivieren."
-                ).format(order=state.licence.order)
+                ).format(order=state.licence.order),
             )
-            set_level(self.state_label, "warning")
         elif state.in_demo:
             # Für die Demo gibt es keinen Schlüssel — das ist keine Lücke,
             # sondern die Bauart: sie läuft ohne Eingabe und endet an einem
             # Datum. Ohne diesen Satz stünde hier ein Eingabefeld, das
             # niemand füllen kann, und der Nutzer suchte den Fehler bei sich.
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "info",
                 tr("Demo — noch {days} Tage, bis zum {date}.").format(
                     days=state.days_left, date=deadline_date(state)
                 )
@@ -1653,44 +1654,47 @@ class ActivationDialog(QDialog):
                     "Für die Demo gibt es keinen Schlüssel: sie läuft vollständig und "
                     "ohne Eingabe. Danach lässt sie sich nicht mehr starten — die "
                     "Vollversion und ihr Schlüssel kommen über die Website."
-                )
+                ),
             )
-            set_level(self.state_label, "info")
         elif state.in_trial:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "info",
                 tr("Testzeitraum: noch {days} Tage.").format(days=state.days_left)
                 + " "
                 + tr(
                     "Danach bleiben Öffnen, Ansehen, Messen und Speichern nutzbar; "
                     "Ändern, Exportieren und die Übergabe an den Slicer brauchen "
                     "einen Schlüssel."
-                )
+                ),
             )
-            set_level(self.state_label, "info")
         elif state.sale_without_trial:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "info",
                 tr(
                     "Für diese Verkaufsversion ist keine Testphase aktiv. Öffnen, Ansehen "
                     "und Messen bleiben möglich; Änderungen und Ausgaben brauchen einen "
                     "Lizenzschlüssel und die einmalige Geräteaktivierung."
-                )
+                ),
             )
-            set_level(self.state_label, "info")
         else:
-            self.state_label.setText(
+            set_role(
+                self.state_label,
+                "warning",
                 tr(
                     "Der Testzeitraum ist abgelaufen. Projekte lassen sich weiter "
                     "öffnen und ansehen."
-                )
+                ),
             )
-            set_level(self.state_label, "warning")
         if state.licence is None and (problem := activation.stored_problem()) is not None:
             # Ein abgelegter Schlüssel steht im Feld und zählt trotzdem nicht —
             # ohne den Grund daneben bliebe das unerklärt.
-            self.state_label.setText(
-                f"{self.state_label.text()}\n\n{problem.detail or problem.title}"
+            set_role(
+                self.state_label,
+                "warning",
+                f"{self.state_label.text()}\n\n{problem.detail or problem.title}",
             )
-            set_level(self.state_label, "warning")
 
     def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Die Feldhöhe steht erst, wenn die Breite steht.

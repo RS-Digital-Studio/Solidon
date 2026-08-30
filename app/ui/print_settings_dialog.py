@@ -1910,7 +1910,11 @@ class PrintSettingsDialog(QDialog):
         self.search.returnPressed.connect(self._search_forward)
         self.search.textChanged.connect(self._search_typed)
         self.search_state = QLabel(self)
-        set_level(self.search_state, "note")
+        # Nebentext und keine Bedeutung: Hier steht „1 von 5", die Trefferzahl
+        # der Suche. „note" gab es als Stufe nie — die vier heißen title,
+        # section, body und caption —, und gerendert war die Zeile deshalb
+        # gewöhnlicher Text. Gemeint war leise, und das ist „caption".
+        set_level(self.search_state, "caption")
         row.addWidget(QLabel(tr("Suchen"), self))
         row.addWidget(self.search, 1)
         row.addWidget(self.search_state)

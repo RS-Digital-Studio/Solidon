@@ -231,6 +231,27 @@ SEVERITY_ENCODING: dict[str, Encoding] = {
     "error": Encoding(ROLES["error"], "backward", "X", "Fehler"),
 }
 
+#: Das Zeichen je Bedeutung, die eine **Zeile der Oberfläche** tragen kann —
+#: die Quelle für :func:`style.set_role`.
+#:
+#: Die ersten beiden holen ihr Zeichen aus der Tabelle darüber, statt es zu
+#: wiederholen: Eine Warnung im Dialog ist dieselbe Warnung wie eine im
+#: Prüfbericht, und zwei Werte für eine Bedeutung sind schon einmal
+#: auseinandergelaufen — der Kommentar an ``ROLES`` erzählt, wie „Warnung" zu
+#: drei Farben und „Hinweis" zu fünf kam.
+#:
+#: **``ok`` steht hier und nicht darüber**, weil es keine Schwere ist: Der
+#: Prüfbericht kennt kein „in Ordnung", er meldet Befunde. Und es trägt als
+#: einzige Bedeutung **keine Farbe** — ein Erfolg ist kein Alarm, er verlangt
+#: nichts und bestätigt nur. Der Haken (U+2713) ist auf der echten Plattform
+#: gemessen darstellbar (``inFont`` wahr in Segoe UI); offscreen lässt sich das
+#: nicht prüfen, dort meldet jedes Zeichen dieselbe Phantommetrik.
+ROLE_MARKS: Final[dict[str, str]] = {
+    "info": SEVERITY_ENCODING["info"].symbol,
+    "warning": SEVERITY_ENCODING["warning"].symbol,
+    "ok": "✓",
+}
+
 
 def map_colour(fraction: float, ramp: tuple[str, ...] = VIRIDIS) -> str:
     """Farbe für einen Wert zwischen 0 und 1 auf einer wahrnehmungsgleichen
