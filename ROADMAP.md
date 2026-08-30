@@ -129,6 +129,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
+| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | 3a's Erhebung nach P5 — Ist-Verhalten am Code und im echten Fenster, Gegenmessung an Fusion, dann Befunde und Schnitt |
 
 ---
 
@@ -12989,6 +12990,27 @@ Reihenfolge nach Kundenkontakt: D1, D2, D4, D5 (täglich) → D6, D3
 - [ ] Die zwölf Pakete abarbeiten — je Paket Zahlen, Gegenproben und
       Review vor dem Commit; die Fix-Details je Befund gibt die
       Freigabe bei der Beauftragung mit.
+
+---
+
+## Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026)
+
+Roberts Auftrag: „im zeichenmodus das aufziehen, abziehen noch besser
+machen, wenn ein kunde zb manuell kippt und nicht auf seiten oder
+vorderansicht geht." Der Kunde, der die Kamera frei gedreht hat, zieht
+eine Skizze zum Körper auf — und die Zugrichtung (senkrecht zur
+Zeichenebene) liegt dann schräg im Bild: Wie gut die Geste dort trifft,
+was er meint, ist zu erheben und zu verbessern.
+
+- [ ] **3a, als Anschluss nach P5**: Ist-Verhalten am Code und im
+      echten Fenster erheben (wie bildet der Zug die Mausbewegung bei
+      gekippter Kamera auf die Höhe ab; was passiert nahe der
+      Blickrichtung-parallel-Lage; zeigt eine Zahl während des Zugs
+      wie im Viewport), gegen Fusion messen (liegt lokal —
+      `zeichnen-an-fusion-orientieren`), dann Befunde und
+      Verbesserungsschnitt vorlegen. Regeln: `zeichenflaeche.md` lädt
+      mit `sketch_editor.py`; Regel 2 bleibt (der Editor sammelt
+      Gesten, das Ergebnis entsteht bei der Auswertung).
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
