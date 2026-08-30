@@ -101,7 +101,14 @@ rm -f "$import_meldung"
 # Der Windows-Interpreter schreibt CRLF. Bleibt das ``\r`` am Dateinamen,
 # sucht pytest wörtlich nach ``tests/test_ui.py\r`` und meldet jede vorhandene
 # Fensterdatei als fehlend.
-windowed=$("$PY" tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+# Der Prüfstand will nur die Entscheidungsfunktionen (siehe den Ausstieg
+# weiter unten) und braucht die Dateiliste nicht — sie zu erheben kostet
+# einen Python-Start je Aufruf, und der Test ruft achtmal.
+if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ]; then
+  windowed=""
+else
+  windowed=$("$PY" tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+fi
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done
 
@@ -193,6 +200,31 @@ fortschritt() {
   grep -oE "^[.sFExX]+" "$protokoll" | tr -d "\n"
 }
 
+# **Ein Riss, der Tests verschluckt hat — und kein roter Test.**
+#
+# ``zaehlt_als_fehler`` beantwortet „ist dieser Lauf schlecht ausgegangen".
+# Für die Halbierung unten braucht es die schärfere Frage: Ist er schlecht
+# ausgegangen, **weil er nicht zu Ende lief**? Nur dann hilft Teilen. Bei
+# echten roten Tests hilft es nicht — sie bleiben in jeder Hälfte rot, und
+# das Skript teilte bis zur Mindestgröße, ohne etwas zu gewinnen.
+#
+# Der Unterschied ist an drei Stellen abzulesen: eine Schlusszeile mit
+# ``failed``/``error``, ein rotes Zeichen im Fortschritt, oder schlicht
+# weniger Zeichen als erwartet. Die ersten beiden sind Testfehler, das
+# dritte ist der Riss.
+nicht_gelaufen() {
+  status=$1
+  protokoll=${2:-}
+  soll=${3:-}
+  [ "$status" -eq 0 ] && return 1
+  [ -n "$protokoll" ] && [ -f "$protokoll" ] || return 1
+  [ -n "$soll" ] || return 1
+  grep -qE "[0-9]+ (failed|error)" "$protokoll" && return 1
+  zeichen=$(fortschritt "$protokoll" || true)
+  printf '%s' "$zeichen" | grep -q "[FEX]" && return 1
+  [ "${#zeichen}" -lt "$soll" ]
+}
+
 zaehlt_als_fehler() {
   status=$1
   protokoll=${2:-}
@@ -257,6 +289,14 @@ schlecht=""
 #: Prozess schon die Trennung.
 KERNE=${SUITE_KERNE:-8}
 
+# **Ein Ausstieg für den Prüfstand, und der Grund steht in ``tests.md``:** Ein
+# Prüfwerkzeug ist auch nur Code, und es war schon viermal der Fehler. Die vier
+# Funktionen darüber entscheiden, ob ein Lauf als grün, als rot oder als
+# „nie gelaufen" gilt — wer sie prüfen will, muss sie rufen können, ohne die
+# ganze Suite zu starten. ``tests/test_suite_script.py`` tut genau das:
+# sourcen, gefälschte Protokolle vorlegen, jeden Zweig einmal gehen.
+[ -n "${SUITE_NUR_FUNKTIONEN:-}" ] && return 0
+
 protokoll=$(mktemp)
 trap 'rm -f "$protokoll"' EXIT
 
@@ -289,6 +329,22 @@ fi
 #: Wer sie ändert, misst nach.
 PORTION=${SUITE_PORTION:-60}
 
+#: Wie klein eine Portion höchstens wird, bevor der Riss als Befund gilt.
+#:
+#: **Die Portionsgröße ist keine Konstante, und deshalb steht hier eine
+#: Untergrenze statt einer Liste je Datei.** Sechzig kommt bei ``test_ui.py``
+#: durch; ``test_print_settings_ui.py`` riss am 31.08.2026 schon bei vierzig,
+#: auf ruhiger Maschine, sieben von sieben. Gemessen war dort auch, dass es an
+#: keinem einzelnen Test hängt: Dreiundzwanzig rissen, vierundzwanzig nicht,
+#: vierunddreißig liefen, vierzig rissen wieder. Wer eine Zahl je Datei
+#: pflegt, pflegt sie falsch — sie verschiebt sich mit jedem Test, der
+#: dazukommt.
+#:
+#: Also halbiert das Skript selbst. Vier ist der Boden: Darunter sagt eine
+#: weitere Teilung nichts mehr über die Menge, und ein Riss bei vier Tests ist
+#: ein Befund, den jemand ansehen muss.
+MINDEST=${SUITE_MIN_PORTION:-4}
+
 # Die Testnamen einer Datei, eine je Zeile. Der Windows-Interpreter schreibt
 # CRLF; bleibt das ``\r`` am Namen, sucht pytest wörtlich danach und findet
 # nichts.
@@ -317,10 +373,27 @@ for file in $windowed; do
   # vierten Portion sagt nichts über die anderen sechs — vorher nahm er die
   # ganze Datei mit, und mit ihr die Auskunft, welche Tests überhaupt liefen.
   echo "=== $file ($anzahl Tests, Portionen zu $PORTION) ==="
+  # **Eine Warteschlange und keine feste Schrittweite.** Reißt ein Stück so,
+  # dass Tests darin nie liefen, wird es halbiert und beide Hälften kommen
+  # vorn wieder herein — dieselbe Datei, kleinere Häppchen, ohne dass jemand
+  # eine Zahl pflegt. Ein Riss beim *Abbau* (alle Zeichen da) zählt
+  # ausdrücklich nicht: Dort ist jeder Test gelaufen, und Teilen brächte nur
+  # einen zweiten Prozessstart.
+  warteschlange=()
   von=1
-  teil=0
   while [ "$von" -le "$anzahl" ]; do
     bis=$((von + PORTION - 1))
+    [ "$bis" -gt "$anzahl" ] && bis=$anzahl
+    warteschlange+=("$von:$bis")
+    von=$((bis + 1))
+  done
+
+  teil=0
+  while [ "${#warteschlange[@]}" -gt 0 ]; do
+    stueck=${warteschlange[0]}
+    warteschlange=("${warteschlange[@]:1}")
+    von=${stueck%%:*}
+    bis=${stueck##*:}
     teil=$((teil + 1))
     # **In ein Feld, nicht in eine Zeichenkette.** Parametrisierte Testnamen
     # tragen eckige Klammern (``test_x[raft-prusa]``), und eine unquotierte
@@ -335,13 +408,21 @@ for file in $windowed; do
     PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "${portion[@]}" \
       2>&1 | tee "$protokoll"
     status=${PIPESTATUS[0]}
-    echo "--> Teil $teil (Tests $von-$bis): Exit $status"
-    [ "$bis" -gt "$anzahl" ] && bis=$anzahl
-    if zaehlt_als_fehler "$status" "$protokoll" "$((bis - von + 1))"; then
+    groesse=$((bis - von + 1))
+    echo "--> Teil $teil (Tests $von-$bis, $groesse Stück): Exit $status"
+    if nicht_gelaufen "$status" "$protokoll" "$groesse" && [ "$groesse" -gt "$MINDEST" ]; then
+      # Vorn einreihen und nicht hinten: Die Hälften gehören zu dieser Datei
+      # und sollen unmittelbar folgen, damit das Protokoll in der Reihenfolge
+      # bleibt, in der jemand es liest.
+      mitte=$((von + groesse / 2 - 1))
+      warteschlange=("$von:$mitte" "$((mitte + 1)):$bis" "${warteschlange[@]}")
+      echo "--> geteilt in $von-$mitte und $((mitte + 1))-$bis (der Lauf verschluckte Tests)"
+      continue
+    fi
+    if zaehlt_als_fehler "$status" "$protokoll" "$groesse"; then
       fails=$((fails + 1))
       schlecht="$schlecht $file:Teil$teil(Exit:$status)"
     fi
-    von=$((bis + 1))
   done
 done
 
