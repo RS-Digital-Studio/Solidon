@@ -5088,6 +5088,11 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_entry(
             panel.canvas.pending_measure, panel.canvas.begin_measure_entry
         )
+        # Und der Abschluss eines begonnenen Zugs (Z4): Der Hinweis in der
+        # Leiste verspricht „Doppelklick oder Eingabetaste schließt sie", und
+        # beides kam nie an — die Empfänger sitzen im unsichtbaren
+        # Zeichenbereich.
+        self.viewport.set_sketch_stroke(self._finish_sketch_stroke)
         self.viewport.set_sketch_edit(
             panel.canvas.can_drag_on_plane,
             panel.canvas.begin_drag_on_plane,
@@ -5239,6 +5244,29 @@ class MainWindow(QMainWindow):
             return
         if not panel.choose_plane(plane):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
+
+    def _finish_sketch_stroke(self) -> bool:
+        """Einen begonnenen Zug abschließen — Doppelklick oder Eingabetaste (Z4).
+
+        **Gibt zurück, ob es etwas abzuschließen gab.** Nur dann schluckt der
+        Ereignisfilter der Ansicht das Ereignis; eine Eingabetaste, die keinen
+        Zug beendet, gehört weiter dem, der sie sonst bekäme — dem Maßfeld
+        etwa, oder dem Fenster.
+
+        Gefragt wird an derselben Stelle, an der auch der Hinweis entsteht:
+        Werkzeug „Kurve" und ein begonnener Zug. ``pending_elements`` ist die
+        öffentliche Auskunft darüber — dieselbe, aus der die Vorschau im Bild
+        entsteht; leer heißt, es ist noch kein Punkt gesetzt. Ein Spline unter
+        zwei Punkten wird von ``finish_spline`` selbst verworfen, das ist dort
+        begründet und bleibt dort.
+        """
+        panel = self._sketch_panel
+        if panel is None or panel.canvas.tool != "spline":
+            return False
+        if not panel.canvas.pending_elements():
+            return False
+        panel.canvas.finish_spline()
+        return True
 
     def _update_sketch_selection(self) -> None:
         """Die Auswahl steht ruhig am Bildrand, mit Wort statt nur Farbe."""
@@ -5787,6 +5815,7 @@ class MainWindow(QMainWindow):
         # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
         # und das Feld bliebe als Waise über dem Bild stehen.
         self.viewport.set_sketch_entry(None, None)
+        self.viewport.set_sketch_stroke(None)
         self.viewport.set_sketch_edit(None, None, None, None)
         # Aus demselben Grund wie die Zeile darüber: ``_sketch_pull_offer`` ist
         # eine gebundene Methode dieses Fensters und liest das Panel, das

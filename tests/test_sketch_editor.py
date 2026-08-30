@@ -5694,3 +5694,108 @@ def test_the_tool_hint_is_upright_too(qt_app: QApplication) -> None:
         assert strip._hint.property("level") == "caption"
     finally:
         strip.deleteLater()
+
+
+def test_enter_and_double_click_close_a_spline_in_the_viewport(qt_app: QApplication) -> None:
+    """Der Hinweis versprach zwei Wege, und beide taten nichts (Z4).
+
+    „Kurve: weiter klicken. Doppelklick oder Eingabetaste schließt sie." —
+    gemessen im gefahrenen Modus schloss keiner von beiden. Die Empfänger
+    (``mouseDoubleClickEvent``, ``keyPressEvent``) sitzen im Zeichenbereich,
+    und der ist dort unsichtbar; was hereinkommt, kommt über den
+    Ereignisfilter der Ansicht. Übrig blieb ein dritter Weg — der Klick auf
+    den letzten Punkt —, den der Hinweis nicht nennt.
+
+    **Der Filter wird direkt gefüttert, und das hat einen Grund.** Er sitzt
+    auf dem VTK-Interactor — am gebauten Fenster gemessen ist genau das der
+    Empfänger, ein `sendEvent` an das Viewport-Widget bleibt folgenlos. In der
+    Suite läuft Qt offscreen, und dort gibt es keinen Plotter und damit keinen
+    Interactor; `eventFilter` bekommt hier deshalb dieselbe Kennung, die es im
+    Lauf sähe (beides ``None``), und die Vergleichszeile im Filter trifft wie
+    im echten Fenster.
+
+    Am laufenden Fenster ist beides zusätzlich mit echten Ereignissen gemessen
+    worden: Eingabetaste 0 → 1 Element, Doppelklick 1 → 2, und ohne offenen Zug
+    bleibt es bei 2.
+
+    Jeder Weg bekommt einen frischen Zug. Sonst misst der zweite eine Lage,
+    die der erste schon aufgelöst hat, und meldet „wirkt nicht" für „war
+    nichts da".
+    """
+    from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
+    from PySide6.QtGui import QKeyEvent, QMouseEvent
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        canvas = panel.canvas
+        canvas.set_tool("spline")
+
+        plotter = getattr(window.viewport, "plotter", None)
+        ziel = getattr(plotter, "interactor", None) if plotter is not None else None
+
+        def _drei_punkte(versatz: float) -> None:
+            for punkt in ((0.0, versatz), (10.0, versatz + 5.0), (20.0, versatz)):
+                canvas.place_on_plane(punkt)
+            QApplication.processEvents()
+
+        def _eingabetaste() -> bool:
+            ereignis = QKeyEvent(
+                QEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier
+            )
+            behandelt = window.viewport.eventFilter(ziel, ereignis)
+            QApplication.processEvents()
+            return bool(behandelt)
+
+        def _doppelklick() -> bool:
+            wo = QPointF(10.0, 10.0)
+            ereignis = QMouseEvent(
+                QEvent.Type.MouseButtonDblClick,
+                wo,
+                QPoint(10, 10),
+                Qt.MouseButton.LeftButton,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+            behandelt = window.viewport.eventFilter(ziel, ereignis)
+            QApplication.processEvents()
+            return bool(behandelt)
+
+        _drei_punkte(0.0)
+        assert canvas.pending_elements(), "drei Klicks, und der Zug läuft"
+        assert _eingabetaste(), "die Ansicht nimmt die Taste an, wenn ein Zug läuft"
+        assert len(canvas.sketch.elements) == 1, "die Eingabetaste schließt die Kurve"
+        assert not canvas.pending_elements(), "und lässt keinen halben Zug stehen"
+
+        _drei_punkte(20.0)
+        assert _doppelklick(), "und den Doppelklick ebenso"
+        assert len(canvas.sketch.elements) == 2, "der Doppelklick schließt die Kurve"
+        assert not canvas.pending_elements()
+
+        # **Und die Gegenrichtung, die den Filter erst zulässig macht:** Eine
+        # Eingabetaste ohne begonnenen Zug gehört weiter dem, der sie sonst
+        # bekäme. Der Rückruf sagt selbst, ob er zuständig war.
+        assert not _eingabetaste(), "ohne offenen Zug gibt die Ansicht die Taste weiter"
+        assert len(canvas.sketch.elements) == 2, (
+            "ohne offenen Zug entsteht nichts — sonst schluckte die Ansicht jede Eingabetaste"
+        )
+
+        # **Und der Rückruf wird beim Verlassen gelöst.** Sonst hielte die
+        # Ansicht eine gebundene Methode eines Panels fest, das es nicht mehr
+        # gibt — dieselbe Sorgfalt, die ``set_sketch_entry`` in ihrem Docstring
+        # ausdrücklich nennt.
+        assert window.viewport._sketch_finish_stroke is not None, "im Modus ist er verdrahtet"
+        window.finish_sketch(keep=False)
+        QApplication.processEvents()
+        assert window.viewport._sketch_finish_stroke is None, (
+            "nach dem Modus hängt hier keine Referenz auf das gestorbene Panel mehr"
+        )
+    finally:
+        window.wait_for_workers()
+        window.deleteLater()

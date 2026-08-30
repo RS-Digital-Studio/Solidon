@@ -940,6 +940,46 @@ AXIS_Z = "#5b8fd4"
 AXIS_LABEL_DARK = "#e9e6e1"
 AXIS_LABEL_LIGHT = "#2b2a28"
 
+#: Wie hell das Frontlicht des Viewports je Thema brennt.
+#:
+#: VTK stellt fünf Lichter auf: ein *Headlight* aus der Kamerarichtung und vier
+#: Kameralichter (Haupt-, Füll- und zwei Gegenlichter). Das Headlight ist das
+#: einzige, das die zum Betrachter zeigenden Seitenwände trifft — die
+#: Kameralichter stehen über und hinter dem Teil und lassen senkrechte Flächen
+#: fast schwarz.
+#:
+#: **Warum das vom Thema abhängt.** Der Körper ist im hellen Thema ``#78828e``
+#: und im dunklen ``#b9c4d0``: 0,217 gegen 0,532 Luminanz, also **2,45-mal
+#: dunkler**. Schattierung multipliziert, und deshalb sind auf ihm auch alle
+#: Helligkeitsunterschiede 2,45-mal kleiner — gemessen am 30.08.2026 zwischen
+#: den zwei sichtbaren Außenwänden der Beispieldose: 0,0155 im hellen gegen
+#: 0,0380 im dunklen Thema. Das ist kein Fehler, sondern Multiplikation, und
+#: genau deshalb hilft dort nur mehr Licht.
+#:
+#: Gemessen wurde die ganze Reihe, an denselben Stellen desselben Bildes:
+#:
+#: | Frontlicht | Wand links | Wand rechts | Unterschied | Körper/Platte |
+#: |---|---|---|---|---|
+#: | 0,00 | 0,0129 | 0,0228 | 0,0099 | 8,62 |
+#: | 0,25 (vorher) | 0,0302 | 0,0457 | 0,0155 | 7,97 |
+#: | 0,35 | 0,0388 | 0,0569 | 0,0181 | 7,59 |
+#: | 0,45 | 0,0490 | 0,0708 | 0,0218 | 7,29 |
+#: | 0,50 | 0,0553 | 0,0768 | 0,0215 | 7,05 |
+#:
+#: Bei 0,45 ist der Unterschied am größten; darüber wächst nur noch die
+#: Grundhelligkeit, und der Körper rückt der Platte näher.
+#:
+#: **Zwei Wege, die vorher gemessen und verworfen wurden**, damit sie niemand
+#: erneut geht: Ein ambienter Anteil am Körper (0,10 bis 0,35) hebt alle
+#: Flächen gleich und macht ihn dabei *flacher* — der Wandunterschied fiel von
+#: 1,19 auf 1,12, die Abhebung von der Platte von 8,41 auf 5,75. Ein
+#: Glanzanteil (0,08 bis 0,25) ändert an den Wänden fast nichts und am Deckel
+#: gar nichts; er sitzt an Stellen, an denen dieser Körper keine hat.
+#:
+#: Das dunkle Thema bleibt bei VTKs Vorgabe: Dort ist der Körper hell, die
+#: Wände trennen sich deutlich, und mehr Licht ließe ihn nur überstrahlen.
+HEADLIGHT = {"light": 0.45, "dark": 0.25}
+
 SSAO_RADIUS = 2.0
 
 #: Wie lange die Maus stehen muss, bevor unter ihr nach einem Merkmal gesucht
@@ -2590,6 +2630,13 @@ class Viewport(QWidget):
         und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
         (ein aufbewahrter Rückruf ist eine Referenz, siehe oberflaeche.md)."""
         self._sketch_measure_begin: Callable[[Any], bool] | None = None
+        #: Was einen begonnenen Zug abschließt — Doppelklick oder Eingabetaste.
+        #:
+        #: Im gefahrenen Modus ist der Zeichenbereich unsichtbar, und seine
+        #: eigenen Empfänger (``mouseDoubleClickEvent``, ``keyPressEvent``)
+        #: bekommen deshalb nie ein Ereignis. Der Hinweis in der Leiste
+        #: versprach beides trotzdem (Z4).
+        self._sketch_finish_stroke: Callable[[], bool] | None = None
         """Die Ebene, auf die ein Klick gerade zielt — oder nichts.
 
         Sie ist der Modusschalter des Skizzenmodus in der Ansicht: Solange
@@ -3095,6 +3142,26 @@ class Viewport(QWidget):
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
             return
+
+    def _light_the_body(self, theme: str) -> None:
+        """Das Frontlicht auf den Wert dieses Themas setzen (:data:`HEADLIGHT`).
+
+        **Gesucht wird über die Art, nicht über die Stelle in der Liste.**
+        Welche Lichter pyvista aufstellt und in welcher Reihenfolge, ist seine
+        Sache und kann sich mit einer neuen Fassung ändern; dass genau eines
+        davon ein Headlight ist, ist die Eigenschaft, an der hier etwas hängt.
+        Findet sich keines, bleibt es beim Vorgabewert — ein Körper ohne
+        Frontlicht ist dunkler, aber sichtbar.
+        """
+        if self.plotter is None:
+            return
+        wanted = HEADLIGHT["light" if theme == "light" else "dark"]
+        try:
+            for light in self.plotter.renderer.lights:
+                if str(getattr(light, "light_type", "")).lower().startswith("headlight"):
+                    light.intensity = wanted
+        except Exception as problem:  # pragma: no cover - hängt am Treiber
+            _log.info("headlight unavailable: %s", problem)
 
     def _apply_render_quality(self) -> None:
         """Kantenglättung und Umgebungsverdeckung.
@@ -4257,6 +4324,7 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         self.plotter.set_background(colours["bottom"], top=colours["top"])
+        self._light_the_body(theme)
         # Die Achsenanzeige trägt eine Schriftfarbe und muss deshalb mit dem
         # Thema wechseln — eine schwarze Beschriftung auf dunklem Grund ist
         # keine Auskunft.
@@ -6607,6 +6675,22 @@ class Viewport(QWidget):
             ):
                 return True
 
+            # **Doppelklick und Eingabetaste schließen einen begonnenen Zug**
+            # (Z4). Beides stand im Hinweis der Zeichenleiste und wirkte nicht:
+            # Die Empfänger sitzen im Zeichenbereich, und der ist hier
+            # unsichtbar. Der Rückruf entscheidet selbst, ob gerade etwas
+            # abzuschließen ist — sonst fällt das Ereignis durch wie zuvor.
+            if self._sketch_finish_stroke is not None and kind in (
+                QEvent.Type.MouseButtonDblClick,
+                QEvent.Type.KeyPress,
+            ):
+                schliessend = kind == QEvent.Type.MouseButtonDblClick or event.key() in (
+                    Qt.Key.Key_Return,
+                    Qt.Key.Key_Enter,
+                )
+                if schliessend and self._sketch_finish_stroke():
+                    return True
+
         if self._drag_kind is None or kind != QEvent.Type.KeyPress:
             return False
         key = event.key()
@@ -8435,6 +8519,19 @@ class Viewport(QWidget):
         """
         self._sketch_measure_pending = pending
         self._sketch_measure_begin = begin
+
+    def set_sketch_stroke(self, finish: Callable[[], bool] | None) -> None:
+        """Verdrahtet den Abschluss eines begonnenen Zugs (Z4).
+
+        Wie :meth:`set_sketch_entry`: Das Fenster setzt den Rückruf beim
+        Betreten des Modus und löst ihn beim Verlassen, damit hier keine
+        Referenz auf ein gestorbenes Panel liegen bleibt.
+
+        Der Rückruf sagt selbst, ob er zuständig war — nur dann wird das
+        Ereignis geschluckt. Eine Eingabetaste, die keinen Zug abschließt,
+        gehört weiterhin dem, der sie sonst bekäme.
+        """
+        self._sketch_finish_stroke = finish
 
     def set_sketch_edit(
         self,
