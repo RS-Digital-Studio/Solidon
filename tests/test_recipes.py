@@ -1193,6 +1193,35 @@ def test_replace_rolls_back_when_the_disk_refuses(profile: Profile, tmp_path: Pa
     )
 
 
+def test_an_adopted_recipe_says_which_door_it_came_through(profile: Profile) -> None:
+    """Mitgereist und veröffentlicht sind zwei Herkünfte, nicht eine.
+
+    Beide Wege nehmen dasselbe :func:`adopt`, aber der Katalog schreibt eine
+    Zeile dazu: „kam mit einer Projektdatei und bleibt bei ihr". Für eine
+    Börsendatei wäre das eine **falsche** Herkunft — an genau der Stelle, an
+    der §32 eine wahre verlangt. Abgestimmt mit der Börsen-Sitzung am
+    31.08.2026; die Vorgabe bleibt der mitgereiste Weg, damit sich für den
+    bestehenden Aufrufer nichts ändert.
+    """
+    from app.core.knowledge.parts.registry import PARTS
+
+    try:
+        made = recipe.range_check(_recipe(profile), profile)
+
+        assert recipe.adopt(recipe.file_data(made)) == []
+        assert PARTS.get("probe_halter").source == recipe.TRAVELLED_SOURCE, (
+            "ohne Angabe gilt der mitgereiste Weg"
+        )
+        _clean_globals("probe_halter")
+
+        assert recipe.adopt(recipe.file_data(made), catalog_source=recipe.PUBLISHED_SOURCE) == []
+        assert PARTS.get("probe_halter").source == recipe.PUBLISHED_SOURCE, (
+            "aus der Börse eingelesen ist nicht mitgereist"
+        )
+    finally:
+        _clean_globals("probe_halter")
+
+
 def test_a_newer_travelled_version_swaps_the_older_one(profile: Profile, tmp_path: Path) -> None:
     """Zwei Projekte, zwei Fassungen desselben fremden Rezepts: Die zuletzt
     geöffnete gilt. Vorher stand hier eine Absage mit dem Rat, das andere

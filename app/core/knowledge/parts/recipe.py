@@ -119,6 +119,15 @@ RECIPE_SOURCE = "recipe"
 #: gehört der Datei, mit der es kam, nicht dieser Maschine.
 TRAVELLED_SOURCE = "travelled"
 
+#: Herkunft eines Rezepts, das aus der Tauschbörse eingelesen wurde.
+#:
+#: **Es kam nicht mit einer Projektdatei, und das ist der Unterschied.** Beide
+#: Wege nehmen dasselbe :func:`adopt`, aber die Katalogzeile sagt beim einen
+#: „kam mit einer Projektdatei und bleibt bei ihr" — für eine Börsendatei wäre
+#: das eine falsche Herkunft, an genau der Stelle, an der §32 eine wahre
+#: verlangt. Abgestimmt mit der Börsen-Sitzung am 31.08.2026.
+PUBLISHED_SOURCE = "published"
+
 #: Wo Rezepte in einer Projektdatei liegen (Konzept §17.1).
 CONTAINER_PREFIX = "recipes/"
 
@@ -842,12 +851,21 @@ def adopt(
     data: dict[str, Any],
     parts: PartRegistry | None = None,
     registry: Registry | None = None,
+    *,
+    catalog_source: str = TRAVELLED_SOURCE,
 ) -> list[Finding]:
     """Nimmt ein mitgereistes Rezept auf — „lokal schlägt mitgereist, immer".
 
-    Drei Lagen (Konzept §17.1):
+    **``catalog_source`` sagt, woher die Datei kam.** Die Vorgabe ist der
+    mitgereiste Weg, für den diese Funktion gebaut wurde; der Importweg der
+    Börse reicht :data:`PUBLISHED_SOURCE` durch. Die Aufnahme ist in beiden
+    Fällen dieselbe — was sich unterscheidet, ist die Zeile, die der Katalog
+    darüber schreibt, und die soll nicht die falsche Herkunft behaupten. Das
+    Argument heißt nicht ``source``, weil das hier schon das Register ist.
 
-    * Der Name ist frei: registrieren, als ``travelled`` gekennzeichnet.
+    Drei Lagen, unabhängig davon (Konzept §17.1):
+
+    * Der Name ist frei: registrieren, mit dieser Kennzeichnung.
       In den Nutzerordner geschrieben wird nichts — das Rezept gehört der
       Datei, mit der es kam, und reist mit ihr weiter.
     * Es gibt lokal denselben Stand (gleicher Abdruck): nichts zu tun.
@@ -906,7 +924,7 @@ def adopt(
 
                 source.remove(name)
                 (registry or REGISTRY).remove(part_ops.op_name(name))
-        register(arrived, source, registry, source=TRAVELLED_SOURCE)
+        register(arrived, source, registry, source=catalog_source)
         return announced
     except Exception as problem:  # Regel 17: Befund statt Abbruch
         _log.warning("travelled recipe failed to adopt: %s", problem)
