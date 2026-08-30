@@ -132,7 +132,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
-| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | die Bestandsaufnahme (bedienlogik läuft): Ist-Klickwege, Hürden, Pakete — danach Verteilung und Review je Paket |
+| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | neun Pakete: P3/P7 bei 3a, P8 bei 50, P1/P4 auf Roberts zwei Bedienfragen, der Rest auf P1/P3 — Review je Paket bei der Freigabe |
 
 ---
 
@@ -12856,8 +12856,26 @@ sauber abarbeiten, verteilen, Review. Der Maßstab ist der Slicer, aus
 dem diese Kunden kommen (ein Klick wählt, Move/Rotate/Scale sind je ein
 Knopf mit Griffen am Körper), nicht ein CAD.
 
-- [ ] **Bestandsaufnahme läuft** (bedienlogik, 30.08.2026):
-      Ist-Klickwege je Geste am Code, Hürden gegen die
-      Slicer-Erwartung, Soll-Vorschläge mit §-Beleg, geschnitten in
-      Pakete von höchstens einem Tagwerk. Danach: Pakete verteilen,
-      Review je Paket, dieser Punkt wird durch die Paketliste ersetzt.
+**Die Bestandsaufnahme ist da** (bedienlogik, 30.08.2026), und ihre
+erste Auskunft ist eine gute: Der Slicer-Direktzug existiert längst
+(Körper anklicken, ziehen — `827c3200`), der Griffsatz vereint alle
+drei Gesten, und die Zahl während des Zugs kann kein Slicer. Elf
+Hürden bleiben, geschnitten in neun Pakete; zwei Bedienfragen liegen
+bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
+
+| Paket | Inhalt | Größe | Stand |
+|---|---|---|---|
+| P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle, „Gizmo"-Haken entfällt | M | wartet auf Frage b |
+| P2 | Haken-Reste und Texte nachziehen | S | nach P1 |
+| P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **3a, beauftragt** |
+| P4 | Zug ohne Vorauswahl | S | wartet auf Frage a |
+| P5 | Strg+Klick wählt hinzu, ein Zug bewegt alle, eine Transaktion | M | nach P3 |
+| P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | nach P1 |
+| P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **3a, beauftragt** |
+| P8 | Verschieben/Drehen/Skalieren direkt im Kontextmenü | S | **50, beauftragt** |
+| P9 | Aufeinanderfolgende Züge werden ein Verlaufsschritt | M | nach P1 |
+
+- [ ] Die neun Pakete abarbeiten — je Paket Zahlen, Gegenproben und
+      Review vor dem Commit; achsweises Skalieren bleibt bewusst
+      hinten (verzerrt Bohrungen), die Bettebene beim Direktzug
+      bleibt, und ein Bestätigungsdialog kommt nirgends dazu.
