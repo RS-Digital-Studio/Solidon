@@ -1322,8 +1322,12 @@ def test_the_preparation_operations_are_registered_completely() -> None:
     assert resize.requires_seed, "der Mesh-Weg benutzt dieselbe Boolesche Rückfallkette"
     diameter = next(entry for entry in resize.params.spec() if entry.name == "diameter")
     feature = next(entry for entry in resize.params.spec() if entry.name == "at_feature")
-    assert diameter.placement == "front", "der einfache Weg fragt nur nach dem Zielmaß"
-    assert feature.kind == "feature" and feature.required and feature.placement == "advanced"
+    assert diameter.placement == "front", "das Zielmaß ist die häufigste Änderung"
+    assert feature.kind == "feature" and feature.required
+    # Nicht mehr „advanced": Ein Pflichtfeld hinter der Klappe war die stille
+    # Wahl der ersten Bohrung (Regel 21) — die registerweite Fassung hält
+    # test_operation_ui::test_no_required_parameter_hides_behind_the_advanced_box.
+    assert feature.placement == "front"
     assert REGISTRY.get("split_pinned").produces == 2
     assert REGISTRY.get("arrange_bed").produces == VARIABLE
     assert REGISTRY.get("check_collisions").produces == VARIABLE
