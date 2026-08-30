@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: a6e000e4-7f10-4e2d-92c3-c5df9b4a17cf
-  modified: 2026-08-23T18:35:54.978Z
+  modified: 2026-08-30T12:31:19.144Z
 ---
 
 Roberts Worte: *„mach es aus kundensicht perfekt, du sollst alles was du tust
@@ -33,3 +33,22 @@ Menüeintrag und trotzdem die richtige Antwort.
   Ziel, nach der Änderung 32 — das schlägt jede Meinung über Verständlichkeit.
 - Gilt auch dort, wo der Kunde es nie sieht: Ein Update, das ihn nicht erreicht,
   ist kein Update. Siehe [[version-vor-jedem-bau-erhoehen]].
+
+**Präzisiert am 30.08.2026, nach dem 0.2.2-Release:** *„immer daran denken
+auch alle andere session und dass auch immer in der gesamten app sie ist für
+kunden ohne cad kenntnisse und sollte einfach und schnell bedienbar sein,
+aber perfekt mit allem was wir auf der webseite versprechen."* Drei Schärfungen
+gegenüber dem Satz von oben:
+
+- **Die Zielgruppe hat keine CAD-Kenntnisse.** Der Vergleichsmaßstab für
+  Bedienung ist der Slicer, aus dem diese Kunden kommen (Cura, Prusa,
+  Elegoo/Orca) — nicht Fusion und kein CAD. Jeder Fachbegriff, jede
+  CAD-Gewohnheit (erst Werkzeug, dann Geste) ist eine Hürde.
+- **Einfach UND schnell** — beides zusammen. Ein kurzer Weg, den man suchen
+  muss, ist nicht einfach; ein einfacher Weg über fünf Klicks ist nicht
+  schnell.
+- **Die Website ist die Sollliste.** Was dort versprochen wird, muss in der
+  App perfekt eingelöst sein — Versprechen und Produkt werden gegeneinander
+  geprüft, in beide Richtungen (siehe [[texte-altern-mit-ihrer-grenze]]).
+
+Gilt für jede Sitzung und jedes Gebiet, nicht nur für Bedienpakete.

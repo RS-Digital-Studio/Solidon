@@ -132,7 +132,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
-| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | neun Pakete: P3/P7 bei 3a, P8 bei 50, P1/P4 auf Roberts zwei Bedienfragen, der Rest auf P1/P3 — Review je Paket bei der Freigabe |
+| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | acht Pakete (P4 hat Robert gestrichen: erst wählen, dann ziehen bleibt): P3/P7 bei 3a, P8 bei 50, P1 als Nächstes bei d3, der Rest auf P1/P3 — Review je Paket bei der Freigabe |
 
 ---
 
@@ -12865,10 +12865,10 @@ bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
 
 | Paket | Inhalt | Größe | Stand |
 |---|---|---|---|
-| P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle, „Gizmo"-Haken entfällt | M | wartet auf Frage b |
+| P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle in der Leiste (Robert, 30.08.2026), „Gizmo"-Haken entfällt | M | **frei — nächstes Paket für d3** |
 | P2 | Haken-Reste und Texte nachziehen | S | nach P1 |
 | P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **3a, beauftragt** |
-| P4 | Zug ohne Vorauswahl | S | wartet auf Frage a |
+| P4 | ~~Zug ohne Vorauswahl~~ **entfällt** — Robert hat entschieden (30.08.2026): erst wählen, dann ziehen bleibt | — | zu |
 | P5 | Strg+Klick wählt hinzu, ein Zug bewegt alle, eine Transaktion | M | nach P3 |
 | P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | nach P1 |
 | P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **3a, beauftragt** |
