@@ -201,3 +201,99 @@ def test_the_endpoint_is_valid_php() -> None:
     for datei in (Path("website/api/shared_common.php"), TREIBER):
         lauf = subprocess.run([php, "-l", str(datei)], capture_output=True, text=True, timeout=30)
         assert lauf.returncode == 0, f"{datei}: {lauf.stdout}\n{lauf.stderr}"
+
+
+#: 72s Grenzfälle, eingecheckt unter ``.claude/.state/``.
+#:
+#: Sie liegen dort und nicht in ``tests/data/``, weil sie ein **erzeugtes**
+#: Erzeugnis sind (``tools/make_shared_cases.py``) und weil auf drei Maschinen
+#: gearbeitet wird: Was nur auf einer liegt, ist auf den anderen nicht
+#: fortsetzbar. Dass sie altern können, hält auf der Kernseite ein eigener
+#: Wächter zusammen.
+FAELLE_ORDNER = (
+    Path(__file__).resolve().parent.parent / ".claude" / ".state" / "boersen-grenzfaelle"
+)
+
+
+def _grenzfaelle() -> list[tuple[str, bytes, list[str]]]:
+    """Name, Bytes und das erwartete Urteil der Anwendung — von der Platte."""
+    erwartet = json.loads((FAELLE_ORDNER / "erwartet.json").read_text(encoding="utf-8"))
+    return [
+        (name, (FAELLE_ORDNER / f"{name}.bin").read_bytes(), urteil)
+        for name, urteil in sorted(erwartet.items())
+    ]
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
+@pytest.mark.skipif(not FAELLE_ORDNER.is_dir(), reason="die Grenzfälle liegen nicht im Baum")
+@pytest.mark.parametrize(
+    ("name", "nutzlast", "erwartet"),
+    _grenzfaelle() if FAELLE_ORDNER.is_dir() else [],
+    ids=[fall[0] for fall in (_grenzfaelle() if FAELLE_ORDNER.is_dir() else [])],
+)
+def test_the_shared_cases_get_the_same_verdict_on_both_sides(
+    name: str, nutzlast: bytes, erwartet: list[str], tmp_path: Path
+) -> None:
+    """72s Grenzfälle, durch beide Prüfungen — dieselbe Datei, dasselbe Urteil.
+
+    **Zwei Fälle darin treffen genau die Falle, die meine Mutationsprobe
+    gefunden hat:** ``gut-titel-genau-an-der-grenze`` steht auf exakt 120
+    Zeichen und muss durchkommen, ``gut-umlaute-und-anfuehrung`` trägt Umlaute,
+    deutsche Anführungszeichen und einen Gedankenstrich. Eine Seite, die Bytes
+    statt Zeichen zählt, fällt über diese beiden und über keinen anderen.
+
+    Verglichen wird dreifach: Kern gegen PHP wörtlich, und beide gegen das
+    eingecheckte Urteil — dort nur die **Entscheidung** und die **Zahl** der
+    Gründe, weil die Texte sich ändern dürfen und die Zusage nicht. Die Zahl
+    steht mit dabei, weil ``schlecht-zwei-gruende-auf-einmal`` ausdrücklich
+    prüft, dass eine Datei mit zwei Fehlern beide nennt: Wer zweimal hochladen
+    muss, um beide Gründe zu erfahren, hat die schlechtere Prüfung.
+    """
+    load_operations()
+    kern = shared.inspect(nutzlast)
+    server = _php_befunde(nutzlast, tmp_path)
+
+    assert server == kern, (
+        f"{name}: die beiden Prüfungen sind uneins.\n"
+        f"  Kern  ({len(kern)}): {kern}\n"
+        f"  PHP   ({len(server)}): {server}"
+    )
+    assert bool(kern) == bool(erwartet), (
+        f"{name}: die Entscheidung weicht vom eingecheckten Urteil ab — "
+        f"heute {'abgelehnt' if kern else 'angenommen'}, erwartet "
+        f"{'abgelehnt' if erwartet else 'angenommen'}"
+    )
+    assert len(kern) == len(erwartet), (
+        f"{name}: heute {len(kern)} Gründe, eingecheckt {len(erwartet)}.\n"
+        f"  heute:      {kern}\n"
+        f"  eingecheckt: {erwartet}"
+    )
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
+def test_a_file_over_the_limit_is_refused_by_both_sides(tmp_path: Path) -> None:
+    """Der Größenfall — er liegt als Bauanleitung bei, nicht als Datei.
+
+    26 MB neben zwanzig Dateien, die zusammen keine 20 KB wiegen, und der
+    Ordner ist eingecheckt; deshalb wird er hier gebaut statt gelesen
+    (``hinweise.md``).
+
+    Geprüft wird, dass **beide Seiten** ihn abweisen und dass die Größe unter
+    den Gründen steht. Ob eine Seite danach noch weiterliest, ist ihre Sache —
+    verlangt ist, dass die Datei nicht durchkommt und dass der Kunde erfährt,
+    warum.
+    """
+    load_operations()
+    grenze = int(shared.rules()["max_upload_bytes"])
+    nutzlast = b'{"name": "x", "title": "' + b"z" * (grenze + 10) + b'"}'
+
+    kern = shared.inspect(nutzlast)
+    server = _php_befunde(nutzlast, tmp_path)
+
+    assert kern, "der Kern nimmt eine Datei über der Größengrenze an"
+    assert server == kern, (
+        f"über der Grenze sind die Prüfungen uneins.\n  Kern: {kern}\n  PHP:  {server}"
+    )
+    assert any("Byte groß" in befund for befund in kern), (
+        f"kein Grund nennt die Größe — der Kunde erführe nicht, was zu tun ist: {kern}"
+    )
