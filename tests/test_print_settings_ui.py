@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QSpinBox,
+    QToolButton,
     QWidget,
 )
 
@@ -620,15 +621,20 @@ def test_the_deeper_settings_fold_away_instead_of_greying_out(
     dialog.show()
     QApplication.processEvents()
 
-    gruppen = dialog.findChildren(QGroupBox)
-    # **Ohne diese Zeile prüft die nächste nichts.** Findet ``findChildren``
-    # keine Gruppe, ist ``checkable`` leer und die Zusicherung darunter grün —
-    # sie sagt dann nicht „keine ist ankreuzbar", sondern „es gibt keine".
-    # Gemessen sind es zwei („Das Wichtigste", „Was dieses Teil verlangt");
-    # geprüft wird trotzdem nur, **dass** es welche gibt, denn eine Zahl hier
-    # altert mit der nächsten Gruppe (3d-druck-33).
-    assert gruppen, "keine Gruppe im Dialog — dann sagt die Prüfung darunter nichts"
-    checkable = [box.title() for box in gruppen if box.isCheckable()]
+    # **Die Grundmenge sind die Abschnitte, nicht mehr die Gruppen.** Bis zum
+    # G12-Umbau standen hier zwei `QGroupBox` („Das Wichtigste", „Was dieses
+    # Teil verlangt"), und die Zusicherung darunter hing an ihnen: ohne Gruppe
+    # wäre `checkable` leer und der Test grün, ohne etwas geprüft zu haben.
+    # Seit alle vier Abschnitte dieselbe Aufklapper-Form tragen, gibt es keine
+    # Gruppe mehr — die Zusicherung muss also die Abschnitte zählen, sonst
+    # prüft sie ihre eigene Abschaffung.
+    abschnitte = [
+        toggle
+        for toggle in dialog.findChildren(QToolButton)
+        if toggle.objectName() == "sectionHeading"
+    ]
+    assert abschnitte, "kein Abschnitt im Dialog — dann sagt die Prüfung darunter nichts"
+    checkable = [box.title() for box in dialog.findChildren(QGroupBox) if box.isCheckable()]
     assert not checkable, f"ankreuzbar statt aufklappbar: {checkable}"
 
     for toggle, content in ((dialog.tabs_toggle, dialog.tabs), (dialog.slicer_toggle, None)):
@@ -2333,6 +2339,12 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     dialog._slicer_path = tmp_path / "orca-slicer.exe"
     dialog.slicer_box.setVisible(True)
     dialog.resize(dialog.sizeHint())
+    # **Gezeigt, sonst misst die zweite Zusicherung nichts.** Vor dem ersten
+    # Anzeigen hat kein Widget eine gelegte Höhe: Das Feld meldete 0, und
+    # „0 >= 23" ist kein Befund über Stauchung, sondern über ein Layout, das
+    # es noch nicht gibt (dieselbe Falle wie `isVisible` vor dem Anzeigen).
+    dialog.show()
+    qt_app.processEvents()
     before = dialog.height()
     field = dialog._editors["layers.layer_height"]
     tall_enough = field.sizeHint().height()
@@ -2641,3 +2653,51 @@ def test_the_search_field_sits_where_it_can_be_seen(qt_app: QApplication, sessio
     assert dialog.search.isVisibleTo(dialog), "sichtbar, auch solange alles zugeklappt ist"
     assert not dialog.tabs.isAncestorOf(dialog.search), "und nicht im Klappbereich"
     assert dialog.search.placeholderText(), "es sagt, wofür es da ist"
+
+
+def test_the_dialog_uses_one_form_of_section(qt_app: QApplication, session: Session) -> None:
+    """Zwei Abschnittsformen im selben Dialog sind eine zu viel (Befund B9).
+
+    „Das Wichtigste" und „Was dieses Teil verlangt" standen als gerahmte
+    `QGroupBox` mit eingelassenem Titel — die Qt-Form von 2010 — über den
+    rahmenlosen Aufklappern „Weitere Einstellungen" und „Profile des Slicers".
+    Zwei Formen heißen zwei Rhythmen: Der Blick sucht die Gliederung, statt
+    sie zu bekommen.
+
+    Gewonnen hat die Aufklapper-Familie, und zwar nicht aus Geschmack: Sie
+    kann, was die andere nicht kann (§2.5 verlangt zuklappbare Abschnitte),
+    und dieselbe Form trägt links im Fenster schon Objektbaum, Parameter und
+    Verlauf. Der Kunde lernt einen Griff und nicht zwei.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    kaesten = [
+        box
+        for box in dialog.findChildren(QGroupBox)
+        if box.window() is dialog and box.title().strip()
+    ]
+
+    assert not kaesten, f"noch gerahmt: {[box.title() for box in kaesten]}"
+    assert dialog.front_toggle is not None and dialog.front_toggle.isChecked(), (
+        "die Vorderseite steht offen — zuklappen darf man sie, vorfinden nicht"
+    )
+    assert dialog.advice_toggle is not None and dialog.advice_toggle.isChecked()
+
+
+def test_the_most_important_section_can_be_folded_away(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Und die Form bringt ihren Nutzen mit, sonst wäre sie nur Anstrich.
+
+    Wer nur die Vorschläge lesen will, klappt die acht Felder darüber weg —
+    genau das, was §2.5 für die linke Spalte des Fensters verlangt und was die
+    gerahmte Form nicht konnte.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    editor = dialog._editors["layers.layer_height"]
+    assert editor.isVisibleTo(dialog)
+
+    dialog.front_toggle.setChecked(False)
+    qt_app.processEvents()
+
+    assert not editor.isVisibleTo(dialog), "zugeklappt ist zu"

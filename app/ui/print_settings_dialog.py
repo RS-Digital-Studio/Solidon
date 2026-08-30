@@ -1818,11 +1818,23 @@ class PrintSettingsDialog(QDialog):
         )
 
     def _build_front(self) -> QWidget:
-        box = QGroupBox(tr("Das Wichtigste"), self)
-        form = QFormLayout(box)
+        """Die sieben Werte, die man wirklich ändert (§2.4).
+
+        **Als Aufklapper und nicht als gerahmter Kasten** (Befund B9): Der
+        Dialog mischte zwei Abschnittsformen — eingelassener Titel in einem
+        Rahmen über rahmenlosen Aufklappern —, und zwei Formen heißen zwei
+        Rhythmen. Gewonnen hat die Familie, die mehr kann: Zuklappen verlangt
+        §2.5, und links im Fenster tragen Objektbaum, Parameter und Verlauf
+        dieselbe Form. Ein Griff statt zweier.
+        """
+        inner = QWidget(self)
+        form = QFormLayout(inner)
+        form.setContentsMargins(0, 0, 0, 0)
         for field in FIELDS:
             if field.front:
                 form.addRow(self._label(field), self._editor(field))
+        box = collapsible(tr("Das Wichtigste"), inner)
+        self.front_toggle = _toggle_of(box)
         return box
 
     def _build_search(self) -> QHBoxLayout:
@@ -2858,10 +2870,15 @@ class PrintSettingsDialog(QDialog):
             self._leash.hold_until_done(worker)
 
     def _build_advice(self) -> QWidget:
-        box = QGroupBox(tr("Was dieses Teil verlangt"), self)
-        inner = QVBoxLayout(box)
+        """Was Material und Geometrie an Einstellungen nahelegen (§29).
 
-        self.advice_view = QTreeWidget(box)
+        Dieselbe Form wie die übrigen Abschnitte — siehe :meth:`_build_front`.
+        """
+        holder = QWidget(self)
+        inner = QVBoxLayout(holder)
+        inner.setContentsMargins(0, 0, 0, 0)
+
+        self.advice_view = QTreeWidget(holder)
         self.advice_view.setColumnCount(3)
         self.advice_view.setHeaderLabels([tr("Einstellung"), tr("Vorschlag"), tr("Grund")])
         self.advice_view.setRootIsDecorated(False)
@@ -2876,9 +2893,11 @@ class PrintSettingsDialog(QDialog):
         self.advice_view.setWordWrap(True)
         inner.addWidget(self.advice_view)
 
-        self.apply_button = QPushButton(tr("Vorschläge übernehmen"), box)
+        self.apply_button = QPushButton(tr("Vorschläge übernehmen"), holder)
         self.apply_button.clicked.connect(self._apply_advice)
         inner.addWidget(self.apply_button, 0, Qt.AlignmentFlag.AlignRight)
+        box = collapsible(tr("Was dieses Teil verlangt"), holder)
+        self.advice_toggle = _toggle_of(box)
         return box
 
     def _build_state(self) -> QWidget:
