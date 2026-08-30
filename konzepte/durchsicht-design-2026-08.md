@@ -46,6 +46,18 @@ fing es, der Eingriff ist vollständig zurückgebaut.
 **Methodennotiz für die restlichen Befunde:** Ein am nackten Widget
 gemessener Kontrast gilt erst, wenn die Anwendung das Widget so auch baut.
 
+**Zweite Methodennotiz (72/15, 30.08.2026, drei Belege an einem Tag):**
+**Ein Bedienelement, das im Bild nicht auftaucht, existiert für den Kunden
+nicht — auch wenn der Code es setzt.** Die Schwesterregel zur ersten: Die
+eine sagt, *wo* gemessen wird (am Einbauort), diese sagt, *was* gemessen
+wird (das Bild, nicht die Deklaration). Belege: die Menü-Überschrift (B1 —
+der Wächter fragte `action.text()`, gezeigt wurde nie), die blanken
+Rollknöpfe (DR3 — Qt baute sie ein, das Stylesheet ließ sie leer) und die
+erste Ruhekante des Werkzeugknopfs (gesetzt mit Kontrast 1,13/1,01, also
+unsichtbar — geheilt in `5f9fdcc6` auf die Linienfarbe, 2,30/2,00, gemessen
+von 15 am gerenderten Knopf). Projektweit deckt `gesetzt-heisst-nicht-
+gezeigt` dieselbe Familie.
+
 **B3 — Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie.**
 `style.py:529`: `min-height` wirkt nur senkrecht, `min-width` fehlt. Bei
 Seitenschritt 20 von 10000 ist der Griff weder sichtbar noch greifbar.
