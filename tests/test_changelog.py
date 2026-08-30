@@ -249,7 +249,7 @@ ZAEHLWORTE = (
 
 #: „insgesamt 241." — die Zahl steht auch ohne Zählwort dahinter, wenn der
 #: Satz davor schon eines genannt hat.
-NACKTE_ZAHL = re.compile(r"(?:insgesamt|contains|now contains)\s+(\d{2,4})")
+NACKTE_ZAHL = re.compile(r"(?:insgesamt|contains|now contains|accounts for)\s+(\d{2,4})")
 
 
 def test_the_press_drafts_count_the_same_changes() -> None:

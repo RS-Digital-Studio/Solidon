@@ -13,7 +13,7 @@ Solidon3D 0.2.2 has been released. It is not an industrial PLM platform or a
 slicer; it is local desktop software for the preparation gap between imported
 geometry and an external polymer-AM slicing workflow.
 
-The release adds three relevant capabilities:
+The 0.2.x releases add three relevant capabilities:
 
 * a recognised hole in imported STL or 3MF geometry can be resized while its
   original position and axis are preserved;
@@ -28,7 +28,7 @@ cannot calculate geometry or execute generated source. Editing, analysis and
 export remain available without AI, an account or an internet connection.
 
 Since the first public 0.1 demo, the release history records 261 curated
-user-facing changes; 0.2.2 itself accounts for 40. Solidon is packaged for
+user-facing changes; 0.2.2 itself accounts for 81. Solidon is packaged for
 Windows, macOS and Linux and supports a file-based activation route for
 workstations that remain offline.
 

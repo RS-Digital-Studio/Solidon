@@ -19,7 +19,7 @@ shortcut or chat. The model cannot execute source code, and executable code is
 never embedded in a project file. Reusable custom components travel as recipes
 of registered operations and values.
 
-Version 0.2.2 applies that architecture to practical preparation tasks:
+The 0.2.x releases apply that architecture to practical preparation tasks:
 
 * recognised holes in imported STL or 3MF can be resized on their original
   axis;

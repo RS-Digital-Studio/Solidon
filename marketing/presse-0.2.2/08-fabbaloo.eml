@@ -19,7 +19,7 @@ Solidon changes the recognised hole on its original axis as a reversible
 operation. A user can then add a standards-based insert or bearing seat and
 apply fit values measured from a printed calibration piece.
 
-Three changes show how the workflow has grown:
+Three additions since the first public demo show how the workflow has grown:
 
 * history steps can become a reusable parametric component, with named fields,
   a preview and a tested value range, without carrying executable code;

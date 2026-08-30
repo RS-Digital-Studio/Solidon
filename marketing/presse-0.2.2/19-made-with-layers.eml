@@ -19,7 +19,7 @@ Durchmesser auf derselben Achse ändern und die Passung aus einem zuvor
 gedruckten Kalibrierteil übernehmen. Jeder Schritt bleibt später änderbar.
 
 Der Test berührt genau die in 0.2.2 hinzugekommenen praktischen Funktionen:
-direkte Bohrungsänderung, Normsitze für Einsätze und Lager, druckbare
+direkte Bohrungsänderung, Normsitze für Kugellager, druckbare
 Schrauben und Muttern sowie maßhaltige Skizzen direkt in der 3D-Ansicht. Die
 Filamentwerte können anschließend über 3MF an den externen Slicer gehen.
 
