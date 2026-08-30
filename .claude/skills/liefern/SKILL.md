@@ -175,7 +175,11 @@ Sitzungen, darunter `.githooks/pre-commit`: ein Hook, der still verschwindet,
 fällt niemandem auf, weil sein Ausbleiben aussieht wie ein Lauf ohne
 Beanstandung. Deshalb endet **jeder** Liefern-Lauf, nicht nur einer mit neuen
 Dateien, mit der Sekunden-Kontrolle `git status --short | grep "^D "` gegen
-den Haupt-Index — sie sieht auch die Minen der anderen. Wer dort eine Datei
+den Haupt-Index — sie sieht auch die Minen der anderen. Und zwar **im selben
+Aufruf wie der Commit**, nicht erst vor dem nächsten: Die Phantome wachsen
+sofort nach (50, 30.08.2026 — d3 entschärfte auf null, ein einziger Commit
+mit zwei neuen Dateien erzeugte Minuten später zwei neue), und in der Lücke
+bis zur nächsten Prüfung genügt ein pfadloser Commit irgendeiner Sitzung. Wer dort eine Datei
 findet, die im Arbeitsbaum **und** in HEAD liegt, entschärft sie mit
 `git reset -- <pfad>`; eine Löschung, die jemand wollte, hätte die Datei
 nicht mehr im Baum.
