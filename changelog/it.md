@@ -63,6 +63,13 @@ scrive in `website/version.json`.
 - Unendo due corpi, entrambi conservano la loro descrizione del filamento con il nome. Prima la descrizione del secondo colore poteva andare persa.
 - Esportando su più piatti, i cambi di colore vengono contati per piatto. Un piatto di un solo materiale non annuncia più cambi che in stampa non avvengono.
 
+- Se lo slicer configurato fallisce, il messaggio offre il passaggio a un altro. Prima restava solo l'esportazione — anche con due slicer funzionanti lì accanto.
+- Il file di stampa finito si apre direttamente nella finestra dello slicer, con i suoi profili. Quale consegna usate viene ricordato per progetto.
+- Il file di stampa viene verificato contro l'altezza del modello. Un pezzo affondato sotto il piano si nota prima della stampa — non a metà altezza sulla stampante.
+- ElegooSlicer accetta di nuovo gli incarichi. E se uno slicer dispone i pezzi da solo, il rapporto lo dice invece di sostituire in silenzio l'occupazione del piano pianificata.
+- Il rapporto non accumula più misure vecchie: un nuovo passaggio le sostituisce, lo stesso fatto compare una sola volta, e gli avvisi nominano l'oggetto invece di un numero.
+- I profili di slicer ricordati sanno a quale slicer appartengono. Dopo un cambio, nessun profilo estraneo passa nel nuovo programma.
+
 ### Chat e generazione 3D
 
 - Le impostazioni separano chiaramente modelli cloud e locali. Prima di inserire una chiave cloud spiegano quali dati lasciano il computer.
@@ -70,6 +77,11 @@ scrive in `website/version.json`.
 - L'assegnazione degli elementi riconosciuti resta fluida sui modelli grandi. Centinaia di elementi vengono confrontati insieme invece che uno alla volta.
 - Le richieste a Ollama e ComfyUI sullo stesso computer evitano il proxy aziendale. Un servizio locale attivo non viene più indicato per errore come irraggiungibile.
 - Nel Flatpak Linux, installazione e avvio dei programmi ausiliari avvengono sul computer, non nella sandbox. ComfyUI viene trovato anche nelle posizioni comuni.
+- Il pulsante Genera è cliccabile solo se il clic avvia davvero qualcosa. Se manca qualcosa, il dialogo dice cosa — con un pulsante che porta alla soluzione.
+- Se la generazione fallisce, la riga di errore di ComfyUI stessa compare nel dialogo, insieme al passo in cui è avvenuta. È esattamente la riga che serve quando si chiede aiuto.
+- Se un modello linguistico scrive la chiamata come testo invece di eseguirla, la proposta lo spiega — con la via verso «Verifica gli strumenti». Prima restava JSON grezzo nella conversazione.
+- Il manuale ha una pagina nuova, «Quali modelli usa Solidon»: quali sono provati, da dove vengono e quanto impiegano. Per la via dal testo dice quale file va in quale cartella.
+- Un corpo generato molto piccolo mostra il suo volume reale invece di «0 mm³» accanto a «chiuso».
 
 ### Vista e comandi
 
@@ -86,6 +98,10 @@ scrive in `website/version.json`.
 - Un doppio clic su un passo raggruppato della cronologia dice dove stanno i singoli passi. Prima non faceva nulla, benché le visite guidate insegnino proprio questo gesto.
 - Se un file viene rifiutato durante la lettura, l’indicatore di caricamento sparisce. Prima restava lì come se si calcolasse ancora un file che non era stato accettato.
 - Solidon si avvia più in fretta e l’analisi degli strati calcola più spedita. Le grandi librerie di calcolo vengono caricate solo quando c’è davvero da calcolare.
+
+- I messaggi di errore mostrano i dati a cui le loro frasi rimandano. «L'inizio della risposta sta accanto» — ora c'è davvero, insieme a indirizzo e fornitore.
+- I consigli «Ridurre i triangoli» e «Aprire la pagina nel browser» ora sono pulsanti che fanno esattamente questo, invece di frasi che lo descrivono.
+- Quando un servizio non risponde, il dialogo nomina l'indirizzo da verificare nel browser e raccoglie il tentativo sotto «Dettagli». Gli avvisi rimandano solo a pulsanti esistenti.
 
 ### Piattaforme e correzioni
 

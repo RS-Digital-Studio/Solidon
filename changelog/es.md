@@ -64,6 +64,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al unir dos cuerpos, ambos conservan su descripción de filamento con su nombre. Antes podía perderse la descripción del segundo color.
 - Al exportar a varias bandejas, los cambios de color se cuentan por bandeja. Una bandeja de un solo material ya no anuncia cambios que no ocurren al imprimir.
 
+- Si el slicer configurado falla, el mensaje ofrece cambiar a otro. Antes solo quedaba exportar — incluso con dos slicers que funcionaban justo al lado.
+- El archivo de impresión terminado se abre directamente en la ventana del slicer, con sus propios perfiles. Qué entrega usa usted se recuerda por proyecto.
+- El archivo de impresión se comprueba contra la altura del modelo. Una pieza hundida bajo la placa se descubre antes de imprimir — no a media altura en la impresora.
+- ElegooSlicer vuelve a aceptar trabajos. Y si un slicer coloca las piezas por su cuenta, el informe lo dice en vez de sustituir en silencio la ocupación planeada de la placa.
+- El informe ya no apila mediciones viejas: una pasada nueva sustituye lo que vuelve a medir, el mismo hecho aparece una sola vez, y los avisos de volumen nombran el objeto en vez de un número.
+- Los perfiles de slicer recordados saben a qué slicer pertenecen. Tras un cambio, ningún perfil ajeno pasa al programa nuevo.
+
 ### Chat y generación 3D
 
 - Los ajustes separan claramente los modelos en la nube y los locales. Antes de introducir una clave de nube explican qué datos salen del ordenador.
@@ -71,6 +78,11 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La asignación de elementos detectados sigue siendo fluida en modelos grandes. Cientos de elementos se comparan juntos en lugar de uno tras otro.
 - Las solicitudes a Ollama y ComfyUI en el mismo equipo evitan el proxy de la empresa. Un servicio local activo ya no aparece por error como inaccesible.
 - En el Flatpak de Linux, la instalación y el inicio de programas auxiliares se ejecutan en el equipo, no en el aislamiento. ComfyUI también se encuentra en sus ubicaciones habituales.
+- El botón Generar solo se puede pulsar cuando el clic de verdad inicia algo. Si falta algo, el diálogo dice qué — con un botón que lleva a la solución.
+- Si la generación falla, la propia línea de error de ComfyUI aparece en el diálogo, junto con el paso en el que ocurrió. Esa línea es justo la que hace falta al pedir ayuda.
+- Si un modelo de lenguaje escribe su llamada como texto en vez de ejecutarla, la propuesta lo explica — con el camino a «Comprobar las herramientas». Antes quedaba JSON en bruto en la conversación.
+- El manual tiene una página nueva, «Qué modelos usa Solidon»: cuáles están probados, de dónde vienen y cuánto tardan. Para el camino desde texto dice qué archivo va en qué carpeta.
+- Un cuerpo generado muy pequeño muestra su volumen real en vez de «0 mm³» junto a «cerrado».
 
 ### Vista y manejo
 
@@ -87,6 +99,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un doble clic en un paso agrupado del historial dice dónde están los pasos individuales. Antes no hacía nada, aunque las visitas guiadas enseñan justo ese gesto.
 - Si un archivo se rechaza al leerlo, el indicador de carga desaparece. Antes se quedaba como si aún se calculara un archivo que no se había aceptado.
 - Solidon arranca más rápido y el análisis de capas calcula con más soltura. Las bibliotecas de cálculo grandes solo se cargan cuando realmente hay que calcular.
+
+- Los mensajes de error muestran los datos a los que sus frases se refieren. «El comienzo de la respuesta está al lado» — ahora de verdad lo está, junto con dirección y proveedor.
+- Los consejos «Reducir triángulos» y «Abrir la página en el navegador» ahora son botones que hacen exactamente eso, en vez de frases que lo describen.
+- Cuando un servicio no responde, el diálogo nombra la dirección para verla en el navegador y guarda el intento bajo «Detalles». Sus avisos solo señalan botones que existen.
 
 ### Plataformas y correcciones
 

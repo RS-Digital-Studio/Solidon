@@ -87,6 +87,12 @@ Nutzen da und sonst nichts.
 - Nach dem Teilen rücken die Hälften auseinander. Stifte und Löcher verschwinden dadurch nicht mehr zwischen zwei deckungsgleichen Schnittflächen.
 - Werden zwei Körper vereinigt, behalten beide ihre Filamentbeschreibung samt Namen. Vorher konnte die Beschreibung der zweiten Farbe dabei verlorengehen.
 - Beim Export auf mehrere Platten werden Farbwechsel je Platte gezählt. Materialreine Platten melden keine Wechsel mehr, die beim Drucken gar nicht stattfinden.
+- Scheitert der eingestellte Slicer, bietet die Meldung den Wechsel zu einem anderen an. Vorher blieb nur der Export — auch wenn zwei arbeitende Slicer daneben lagen.
+- Die fertige Druckdatei lässt sich direkt im Fenster des Slicers öffnen, mit dessen eigenen Profilen. Welche Übergabe Sie benutzen, merkt sich das Projekt.
+- Die Druckdatei wird gegen die Höhe des Modells geprüft. Ein Teil, das unter dem Druckbett steckt, fällt damit vor dem Druck auf — nicht erst an der halben Höhe am Drucker.
+- ElegooSlicer nimmt Aufträge wieder an. Und ordnet ein Slicer die Teile selbst an, steht das als Hinweis im Prüfbericht, statt die geplante Plattenbelegung stillschweigend zu ersetzen.
+- Der Prüfbericht stapelt keine alten Messwerte mehr: Ein neuer Lauf ersetzt sie, derselbe Sachverhalt steht einmal da, und Befunde nennen das Objekt beim Namen statt einer Nummer.
+- Die gemerkten Slicer-Profile wissen, zu welchem Slicer sie gehören. Nach einem Wechsel wird kein fremdes Profil mehr in das neue Programm übernommen.
 
 ### Chat und 3D-Erzeugung
 
@@ -95,6 +101,11 @@ Nutzen da und sonst nichts.
 - Die Zuordnung erkannter Merkmale bleibt auch bei großen Modellen flüssig. Hunderte Merkmale werden gemeinsam statt nacheinander verglichen.
 - Anfragen an Ollama und ComfyUI auf demselben Rechner umgehen den Firmenproxy. Ein laufender lokaler Dienst wird dadurch nicht mehr fälschlich als unerreichbar gemeldet.
 - Im Linux-Flatpak laufen Einrichtung und Start lokaler Zusatzprogramme auf dem Rechner statt im Sandkasten. ComfyUI wird auch an üblichen Linux- und macOS-Orten gefunden.
+- Der Erzeugen-Knopf ist nur klickbar, wenn der Klick auch etwas auslöst. Fehlt etwas, steht daneben, was — und ein Knopf, der zur Behebung führt.
+- Schlägt die Erzeugung fehl, steht ComfyUIs eigene Fehlerzeile im Dialog, samt dem Schritt, in dem sie entstand. Genau diese Zeile braucht, wer um Hilfe fragt.
+- Tippt ein Sprachmodell seinen Werkzeugaufruf als Text, statt ihn auszuführen, erklärt der Vorschlag das — samt dem Weg über „Werkzeuge prüfen“. Vorher stand rohes JSON im Gespräch.
+- Das Handbuch hat die neue Seite „Welche Modelle Solidon benutzt“: welche geprüft sind, woher sie kommen, wie lange sie brauchen — und welche Datei für den Textweg wohin gehört.
+- Ein sehr kleiner erzeugter Körper zeigt sein echtes Volumen statt „0 mm³“ neben „geschlossen“.
 
 ### Ansicht und Bedienung
 
@@ -111,6 +122,9 @@ Nutzen da und sonst nichts.
 - Ein Doppelklick auf einen zusammengefassten Verlaufsschritt sagt, wo die einzelnen Schritte stehen. Vorher tat er nichts, obwohl die geführten Touren genau diese Geste lehren.
 - Wird eine Datei beim Einlesen abgewiesen, verschwindet die Ladeanzeige. Vorher blieb sie stehen, als werde noch an einer Datei gerechnet, die gar nicht angenommen wurde.
 - Solidon startet schneller, und die Schichtanalyse rechnet zügiger. Die großen Rechenbibliotheken werden erst geladen, wenn wirklich gerechnet wird.
+- Fehlermeldungen zeigen die Angaben, auf die ihre Sätze verweisen. „Der Anfang der Antwort steht daneben“ — jetzt steht er wirklich daneben, samt Adresse und Anbieter.
+- Die Räte „Dreiecke verringern“ und „Seite im Browser öffnen“ sind jetzt Knöpfe, die genau das tun, statt Sätze, die es beschreiben.
+- Antwortet ein Dienst nicht, nennt der Dialog die Adresse zum Nachsehen im Browser und sammelt den Startversuch unter „Einzelheiten“. Hinweise zeigen nur auf Knöpfe, die es gerade gibt.
 
 ### Plattformen und behobene Fehler
 

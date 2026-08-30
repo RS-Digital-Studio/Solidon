@@ -64,6 +64,13 @@ dans `website/version.json`.
 - Lors de l’union de deux corps, les deux gardent leur description de filament avec son nom. La description de la seconde couleur pouvait auparavant se perdre.
 - À l’export sur plusieurs plaques, les changements de couleur sont comptés par plaque. Une plaque d’une seule matière n’annonce plus de changements qui n’ont pas lieu.
 
+- Si le slicer configuré échoue, le message propose d'en choisir un autre. Avant, il ne restait que l'export — même avec deux slicers en état de marche juste à côté.
+- Le fichier d'impression terminé s'ouvre directement dans la fenêtre du slicer, avec ses propres profils. Quelle remise vous utilisez est retenu par projet.
+- Le fichier d'impression est vérifié contre la hauteur du modèle. Une pièce enfoncée sous le plateau se remarque avant l'impression — pas à mi-hauteur sur l'imprimante.
+- ElegooSlicer accepte de nouveau les travaux. Et si un slicer dispose les pièces lui-même, le rapport le dit au lieu de remplacer en silence l'occupation du plateau prévue.
+- Le rapport n'empile plus les anciennes mesures : un nouveau passage les remplace, le même fait n'apparaît qu'une fois, et les constats nomment l'objet au lieu d'un numéro.
+- Les profils de slicer retenus savent à quel slicer ils appartiennent. Après un changement, aucun profil étranger ne passe dans le nouveau programme.
+
 ### Chat et génération 3D
 
 - Les réglages séparent clairement les modèles cloud et locaux. Avant la saisie d'une clé cloud, ils expliquent quelles données quittent l'ordinateur.
@@ -71,6 +78,11 @@ dans `website/version.json`.
 - L'affectation des éléments détectés reste fluide sur les grands modèles. Des centaines d'éléments sont comparés ensemble au lieu de l'être un par un.
 - Les requêtes vers Ollama et ComfyUI sur le même ordinateur évitent le proxy de l'entreprise. Un service local actif n'est plus signalé à tort comme inaccessible.
 - Dans le Flatpak Linux, l'installation et le lancement des programmes auxiliaires se font sur l'ordinateur et non dans le bac à sable. ComfyUI est aussi trouvé aux emplacements usuels.
+- Le bouton Générer n'est cliquable que si le clic déclenche vraiment quelque chose. S'il manque quelque chose, le dialogue dit quoi — avec un bouton qui mène à la solution.
+- Si la génération échoue, la propre ligne d'erreur de ComfyUI s'affiche dans le dialogue, avec l'étape où elle est survenue. C'est exactement la ligne qu'il faut pour demander de l'aide.
+- Si un modèle de langage écrit son appel en texte au lieu de l'exécuter, la proposition l'explique — avec le chemin vers « Vérifier les outils ». Avant, du JSON brut restait dans la conversation.
+- Le manuel a une nouvelle page, « Quels modèles Solidon utilise » : lesquels sont éprouvés, d'où ils viennent, combien de temps ils prennent — et quel fichier va où pour le texte.
+- Un corps généré très petit montre son volume réel au lieu de « 0 mm³ » à côté de « fermé ».
 
 ### Vue et utilisation
 
@@ -87,6 +99,10 @@ dans `website/version.json`.
 - Un double clic sur une étape groupée de l’historique indique où se trouvent les étapes individuelles. Auparavant il ne faisait rien, alors que les visites guidées enseignent ce geste.
 - Si un fichier est refusé à la lecture, l’indicateur de chargement disparaît. Auparavant il restait comme si l’on calculait encore un fichier qui n’avait pas été accepté.
 - Solidon démarre plus vite et l’analyse des couches calcule plus rapidement. Les grandes bibliothèques de calcul ne sont chargées que lorsqu’il y a vraiment à calculer.
+
+- Les messages d'erreur montrent les données auxquelles leurs phrases renvoient. « Le début de la réponse est affiché à côté » — maintenant il l'est vraiment, avec l'adresse et le fournisseur.
+- Les conseils « Réduire les triangles » et « Ouvrir la page dans le navigateur » sont désormais des boutons qui font exactement cela, au lieu de phrases qui le décrivent.
+- Quand un service ne répond pas, le dialogue nomme l'adresse à vérifier dans le navigateur et garde la tentative sous « Détails ». Ses indications ne renvoient qu'à des boutons existants.
 
 ### Plateformes et corrections
 

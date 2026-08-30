@@ -29,8 +29,8 @@ The main additions beyond the workflow described in your article are:
 * Linux now has an AppImage in addition to Flatpak, with more reliable local
   slicer discovery and update handling.
 
-Version 0.2.2 alone documents 61 curated user-facing changes. The complete
-history since the first 0.1 demo now contains 241.
+Version 0.2.2 alone documents 75 curated user-facing changes. The complete
+history since the first 0.1 demo now contains 255.
 
 Changelog: https://solidon3d.de/en/changelog.html
 Download: https://solidon3d.de/en/

@@ -63,6 +63,13 @@ it into `website/version.json`.
 - When two bodies are united, both keep their filament description including its name. The description of the second colour could previously be lost.
 - When exporting to several plates, colour changes are counted per plate. Plates of a single material no longer report changes that never happen while printing.
 
+- If the configured slicer fails, the message offers switching to another one. Before, only exporting remained — even with two working slicers sitting right next to it.
+- The finished print file can be opened directly in the slicer's own window, with its own profiles. Which handover you use is remembered per project.
+- The print file is checked against the model's height. A part stuck below the print bed shows up before printing — not at half height on the printer.
+- ElegooSlicer accepts jobs again. And if a slicer arranges the parts itself, the report says so instead of silently replacing your planned plate layout.
+- The report no longer stacks old measurements: a new run replaces what it measures anew, the same fact appears only once, and build-volume findings name the object instead of a number.
+- The remembered slicer profiles know which slicer they belong to. After a switch, no foreign profile is carried into the new program any more.
+
 ### Chat and 3D generation
 
 - Settings visibly separate cloud and local models. Before you enter a cloud key, they explain which data leaves the computer.
@@ -70,6 +77,11 @@ it into `website/version.json`.
 - Assigning detected features stays responsive on large models. Hundreds of features are compared together instead of one after another.
 - Requests to Ollama and ComfyUI on the same computer bypass the company proxy. A running local service is no longer falsely reported as unreachable.
 - In the Linux Flatpak, setup and launch of local helper programs run on the host rather than in the sandbox. ComfyUI is also found in common Linux and macOS locations.
+- The Generate button is only clickable when the click actually starts something. If something is missing, the dialog says what — with a button that leads to the fix.
+- If generation fails, ComfyUI's own error line appears in the dialog, together with the step it happened in. That line is exactly what you need when asking for help.
+- If a language model types its tool call as text instead of running it, the proposal now explains that — with the way to “Check tools”. Before, raw JSON sat in the conversation without a word.
+- The manual has a new page, “Which models Solidon uses”: which ones are proven, where they come from and how long they take. For the way from text it says which file belongs in which folder.
+- A very small generated body shows its real volume instead of “0 mm³” next to “closed”.
 
 ### View and controls
 
@@ -86,6 +98,10 @@ it into `website/version.json`.
 - A double-click on a combined history step says where the individual steps are. Before it did nothing, although the guided tours teach exactly this gesture.
 - If a file is refused while being read, the loading indicator disappears. Before it stayed as if a file were still being calculated that had not been accepted at all.
 - Solidon starts faster and the layer analysis calculates more quickly. The large calculation libraries are only loaded when something really needs calculating.
+
+- Error messages show the details their sentences refer to. “The start of the answer is shown alongside” — now it really is, together with address and provider.
+- The advice “Reduce triangles” and “Open the page in the browser” are now buttons that do exactly that, instead of sentences describing it.
+- When a service does not respond, the dialog names the address to check in the browser and keeps the start attempt under “Details”. Its hints only point at buttons that exist in that situation.
 
 ### Platforms and fixes
 
