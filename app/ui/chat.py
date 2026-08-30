@@ -465,12 +465,25 @@ class ChatPanel(QWidget):
             self.decision.setVisible(False)
             self.summary.setText("")
             self.cost_line.setText("")
+            # Mit dem Text gehen die Einzelheiten. Ein Hinweis, der an einer
+            # leeren Zeile hängen bleibt, gehört zum Vorschlag davor und
+            # behauptet, er sei noch da.
+            self.cost_line.setToolTip("")
+            self.cost_line.setStatusTip("")
+            self.cost_line.setAccessibleDescription("")
             self.questions_toggle.setVisible(False)
             self.questions_view.setVisible(False)
             return
         proposal = preview.proposal
         self.summary.setText(describe(preview))
         self.cost_line.setText(costs(proposal))
+        # Die Abrechnungszahlen eine Stufe tiefer (§2.4) — und an allen drei
+        # Stellen, damit sie nicht nur die Maus findet: Die Statuszeile zeigt
+        # sie ohne Wartezeit, der Bildschirmleser liest sie vor (Regel 18).
+        detail = token_detail(proposal)
+        self.cost_line.setToolTip(detail)
+        self.cost_line.setStatusTip(detail)
+        self.cost_line.setAccessibleDescription(detail)
         questions = list(proposal.questions)
         self.questions_toggle.setChecked(False)
         self.questions_toggle.setText(f"{tr('Rückfragen')} ({len(questions)}) …")
@@ -701,34 +714,42 @@ def describe(preview: Any) -> str:
 
 
 def costs(proposal: Any) -> str:
-    """Schritte, Token und — ausgeschrieben — ein Zug, der nicht zu Ende kam
-    (§26.5).
+    """Was der Zug gekostet hat und — ausgeschrieben — warum er endete (§26.5).
 
     „Grenze erreicht" stand als zwei Worte in der Zusammenfassung; was für
     eine Grenze und was das für den Vorschlag heißt, stand nirgends. Jetzt
-    steht es hier, und die Kosten daneben machen den Deckel sichtbar, bevor
-    er greift.
+    steht es hier.
+
+    **Und es steht in Kundensprache.** „1234 → 567 Token" und „Das
+    Tokenbudget ist erreicht" waren zwei Auskünfte über die Abrechnung eines
+    Sprachmodells, gestellt an jemanden, der einen Halter konstruieren
+    wollte. Ein Token ist keine Größe, die er kennt, und ein Budget, das er
+    weder sieht noch einstellen kann, ist keine, über die er entscheiden
+    kann. Die Zahlen sind deshalb nicht weg — sie stehen unter
+    :func:`token_detail` an der Zeile, wo sie findet, wer sie sucht (§2.4).
 
     Vier Gründe, nicht zwei: Neben Schritt- und Tokendeckel hält ein Zug auch
     an, wenn die Antwort des Modells abgeschnitten wurde oder das Modell
     abgelehnt hat (``stop_reason``, ``agent/session.py``). Jeder von ihnen
-    sagt, was passiert ist und was jetzt geht (Regel 17).
+    sagt, was passiert ist und was jetzt geht (Regel 17) — die ersten beiden
+    sagten bisher nur das Erste. Dass „übernehmen und weiterfragen" wirklich
+    hilft, ist am Kern gemessen: ``spent`` ist in ``run()`` eine **lokale**
+    Größe, jede neue Anfrage beginnt also mit vollem Deckel.
     """
     # Eigene Schlüssel statt des Worts „Schritt": das teilte sich seinen
     # Katalogeintrag mit dem Satzanfang der Statuszeile („Step 3/8"), und
     # eine der beiden Stellen las zwangsläufig die falsche Schreibung.
-    steps = tr("1 Schritt") if proposal.steps == 1 else tr("{n} Schritte").format(n=proposal.steps)
-    parts = [steps]
-    if proposal.input_tokens or proposal.output_tokens:
-        parts.append(f"{proposal.input_tokens} → {proposal.output_tokens} {tr('Token')}")
-    text = " · ".join(parts)
+    text = tr("1 Schritt") if proposal.steps == 1 else tr("{n} Schritte").format(n=proposal.steps)
     if proposal.stopped == "steps":
         text += "\n" + tr(
-            "Nach {n} Schritten angehalten — der Vorschlag zeigt den Stand bis hierhin."
+            "Nach {n} Schritten angehalten — der Vorschlag zeigt den Stand bis hierhin. "
+            "Übernehmen und weiterfragen führt fort."
         ).format(n=proposal.steps)
     elif proposal.stopped == "tokens":
         text += "\n" + tr(
-            "Das Tokenbudget ist erreicht — der Vorschlag zeigt den Stand bis hierhin."
+            "Diese Anfrage war umfangreich und endet hier — der Vorschlag zeigt den "
+            "Stand bis hierhin. Übernehmen und weiterfragen führt fort; jede neue "
+            "Anfrage beginnt von vorn."
         )
     elif proposal.stopped == "truncated":
         # Die zwei Zweige darunter kamen mit ``stop_reason`` dazu
@@ -748,3 +769,32 @@ def costs(proposal: Any) -> str:
             "führt weiter; an der Anwendung liegt es nicht."
         )
     return text
+
+
+def token_detail(proposal: Any) -> str:
+    """Die Abrechnungszahlen des Zuges — für den, der sie sucht.
+
+    Sie standen in der Zusammenfassung („1234 → 567 Token") und sind dort
+    für niemanden eine Entscheidungshilfe: Wer ein Teil konstruiert, kennt
+    die Größe nicht, und ändern kann er sie ohnehin nicht. Wer für ein
+    bezahltes Modell zahlt, sucht sie dagegen — deshalb stehen sie eine
+    Stufe tiefer und nicht im Papierkorb (§2.4).
+
+    **Hier darf „Token" stehen.** Es ist der Name, unter dem der Kunde die
+    Zahl auf seiner Abrechnung wiederfindet; ein erfundenes deutsches Wort
+    wäre an dieser Stelle die schlechtere Auskunft — dieselbe Begründung,
+    aus der die Druckeinstellungen „Skirt" und „Brim" stehen lassen.
+
+    Leer, wenn nichts geflossen ist: Ein Hinweis, der „0 → 0" sagt, ist eine
+    Zeile ohne Inhalt.
+    """
+    if not (proposal.input_tokens or proposal.output_tokens):
+        return ""
+    # Ohne ``localised``: Das sind ganze Zahlen, und die tragen kein
+    # Dezimaltrennzeichen, das umzuschalten wäre. Eine Tausendertrennung
+    # führt der Bestand an dieser Stelle nicht, und sie hier einzuführen
+    # hieße, sie an einer von vielen Stellen zu haben.
+    return tr("Diese Anfrage las {input} Token und schrieb {output}.").format(
+        input=proposal.input_tokens,
+        output=proposal.output_tokens,
+    )

@@ -619,9 +619,15 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
     """Konzept Agent-Vertiefung 4.2: Schritte, Token und Rückfragen werden
     längst gezählt — die Entscheidung zeigt sie jetzt auch. Eine erreichte
     Grenze steht ausgeschrieben da, nicht als zwei Worte.
+
+    **Die Tokenzahlen stehen seit D10 nicht mehr in der Zeile, sondern eine
+    Stufe tiefer.** Der Test prüfte hier ``"24512 → 1830 Token" in line`` und
+    schrieb damit genau das fest, was aus Kundensicht falsch war: eine
+    Abrechnungsgröße in der Zusammenfassung. Geprüft wird jetzt beides — dass
+    die Zeile sie **nicht** trägt und dass sie in den Einzelheiten steht.
     """
     from app.core.agent.proposal import Proposal, Question
-    from app.ui.chat import ChatPanel, costs
+    from app.ui.chat import ChatPanel, costs, token_detail
 
     proposal = Proposal(request="x")
     proposal.steps = 8
@@ -632,12 +638,19 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
 
     line = costs(proposal)
     assert "8 Schritte" in line
-    assert "24512 → 1830 Token" in line
+    assert "24512" not in line, "die Abrechnungszahl gehört nicht in die Zusammenfassung"
     assert "Nach 8 Schritten angehalten" in line
+
+    detail = token_detail(proposal)
+    assert "24512" in detail and "1830" in detail, "in den Einzelheiten stehen sie sehr wohl"
 
     panel = ChatPanel()
     panel.show_proposal(ProposalPreview(proposal=proposal))
     assert "8 Schritte" in panel.cost_line.text()
+    # Alle drei Kodierungen, nicht nur die Maus (Regel 18).
+    assert panel.cost_line.toolTip() == detail
+    assert panel.cost_line.statusTip() == detail
+    assert panel.cost_line.accessibleDescription() == detail
     assert panel.questions_toggle.text() == "Rückfragen (1) …"
     assert not panel.questions_view.isVisibleTo(panel)
     panel.questions_toggle.setChecked(True)
@@ -646,17 +659,66 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
 
     panel.show_proposal(None)
     assert panel.cost_line.text() == ""
+    # **Mit dem Text gehen die Einzelheiten.** Ein Hinweis, der an einer
+    # leeren Zeile hängen bleibt, gehört zum Vorschlag davor.
+    assert panel.cost_line.toolTip() == ""
+    assert panel.cost_line.statusTip() == ""
+    assert panel.cost_line.accessibleDescription() == ""
 
 
-def test_a_token_stop_is_spelled_out(qt_app: QApplication) -> None:
+def test_no_cost_line_talks_about_budgets_and_tokens(qt_app: QApplication) -> None:
+    """Die Zusammenfassung spricht Kundensprache — in allen vier Ausgängen.
+
+    „Das Tokenbudget ist erreicht" stand hier, und ein Test sicherte
+    ausdrücklich ``"Tokenbudget" in costs(proposal)`` zu. Beides war aus
+    Kundensicht falsch: Ein Token ist keine Größe, die jemand kennt, der
+    einen Halter konstruiert, und ein Budget, das er weder sieht noch
+    einstellen kann, ist keine, über die er entscheidet.
+
+    Geprüft wird über die **Menge** der Ausgänge und nicht an zwei Fällen —
+    ein fünfter Grund käme sonst wieder mit einem Fachwort durch. Und
+    ``token_detail`` ist ausdrücklich ausgenommen: Dort ist „Token" richtig,
+    weil es der Name ist, unter dem der Kunde die Zahl auf seiner Abrechnung
+    wiederfindet.
+    """
     from app.core.agent.proposal import Proposal
     from app.ui.chat import costs
 
-    proposal = Proposal(request="x")
-    proposal.steps = 3
-    proposal.stopped = "tokens"
+    fachworte = ("Token", "Budget", "budget", "token")
+    for reason in ("steps", "tokens", "truncated", "refused"):
+        proposal = Proposal(request="x")
+        proposal.steps = 3
+        proposal.input_tokens = 900
+        proposal.output_tokens = 120
+        proposal.stopped = reason
+        line = costs(proposal)
+        gefunden = [wort for wort in fachworte if wort in line]
+        assert not gefunden, f"{reason}: {gefunden} steht in der Zusammenfassung"
 
-    assert "Tokenbudget" in costs(proposal)
+
+def test_a_stop_says_what_helps_now(qt_app: QApplication) -> None:
+    """Jeder Ausgang sagt, was jetzt geht — nicht nur, dass Schluss ist.
+
+    Zwei der vier taten das nicht: „Nach {n} Schritten angehalten — der
+    Vorschlag zeigt den Stand bis hierhin." endete mit dem Zustand, während
+    die zwei Nachbarn („Eine kürzere Anweisung … kommt durch") einen Weg
+    nannten. Regel 17 verlangt den Weg.
+
+    Dass gerade dieser Weg hilft, ist am Kern gemessen und nicht behauptet:
+    ``spent`` ist in ``AgentSession.run`` eine **lokale** Größe, jede neue
+    Anfrage beginnt also mit vollem Deckel.
+    """
+    from app.core.agent.proposal import Proposal
+    from app.ui.chat import costs
+
+    for reason in ("steps", "tokens", "truncated", "refused"):
+        proposal = Proposal(request="x")
+        proposal.steps = 3
+        proposal.stopped = reason
+        said = costs(proposal).split("\n", 1)[1]
+        assert any(wort in said for wort in ("führt fort", "kommt durch", "führt weiter")), (
+            f"{reason}: sagt nicht, was jetzt hilft — „{said}“"
+        )
 
 
 def test_every_reason_a_turn_ends_is_spelled_out(qt_app: QApplication) -> None:
