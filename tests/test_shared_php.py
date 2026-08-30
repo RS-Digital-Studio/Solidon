@@ -41,6 +41,14 @@ TREIBER = Path(__file__).parent / "data" / "check_shared.php"
 
 #: Ein Rezept, das durchgehen muss. Ohne diesen Fall sagte der Test nichts:
 #: Eine Prüfung, die alles ablehnt, bestünde jede Ablehnungsprobe.
+#:
+#: **Es war lange keines.** ``group`` und ``features`` fehlten, und damit wäre
+#: es beim Empfänger nicht aufnehmbar gewesen — formal sauber, praktisch
+#: unbrauchbar. Aufgefallen ist das erst, als 72 die Aufnahmeprüfung einbaute
+#: (31.08.2026); bis dahin prüften alle Ablehnungsfälle „kommt durch" gegen
+#: eine Datei, die kein Empfänger hätte laden können. ``group`` trägt den
+#: **Schlüssel** und nicht die Beschriftung: ``mounting``, nicht
+#: „Befestigung" — derselbe Fehler, den 72 in ihrem eigenen Korpus fand.
 GUT: dict[str, Any] = {
     "format_version": 1,
     "name": "werkbank_halter",
@@ -48,6 +56,8 @@ GUT: dict[str, Any] = {
     "doc": "Zwei Einhänger, Rückwand 120 mm.",
     "author": "RS Digital",
     "license": "CC-BY-4.0",
+    "group": "mounting",
+    "features": ["hook_1", "hook_2"],
     "document": {
         "ops": [
             {"op": "create_box", "params": {"width": 120.0, "depth": 60.0, "height": 45.0}},
@@ -151,7 +161,24 @@ def _php_befunde(nutzlast: bytes, tmp_path: Path) -> list[str]:
         timeout=60,
     )
     assert lauf.returncode == 0, f"PHP brach ab: {lauf.stderr}"
-    return list(json.loads(lauf.stdout))
+    return [_gestalt(eintrag) for eintrag in json.loads(lauf.stdout)]
+
+
+def _gestalt(befund: object) -> tuple[str, dict[str, Any]]:
+    """Ein Befund als Paar aus Schlüssel und Werten — von beiden Seiten gleich.
+
+    **Der Satz wird nicht verglichen, und das ist der Punkt.** Solange beide
+    Seiten ihre Sätze selbst bauten, war ein Vergleich der Texte scharf: Die
+    Mutationsprobe mb_strlen → strlen machte ihn rot, weil die Zahl im
+    Satz stand. Seit beide aus shared-texts.json lesen, wäre derselbe
+    Vergleich zwei Lesevorgänge einer Datei — immer gleich, für immer grün.
+
+    Verglichen werden deshalb Schlüssel **und** Werte: die Entscheidung und die
+    Zahlen, die zu ihr geführt haben.
+    """
+    if isinstance(befund, dict):
+        return str(befund["code"]), dict(befund.get("values") or {})
+    return befund.code, dict(befund.values)
 
 
 @pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
@@ -163,7 +190,7 @@ def test_both_checks_agree_on_the_same_file(name: str, nutzlast: bytes, tmp_path
     die beide „ein Fehler" sagen und verschiedene meinen, sind nicht einig.
     """
     load_operations()
-    kern = shared.inspect(nutzlast)
+    kern = [_gestalt(befund) for befund in shared.inspect(nutzlast)]
     server = _php_befunde(nutzlast, tmp_path)
 
     assert server == kern, (
@@ -185,7 +212,7 @@ def test_the_good_recipe_passes_on_both_sides(tmp_path: Path) -> None:
     load_operations()
     nutzlast = _mit()
 
-    assert shared.inspect(nutzlast) == [], "der Kern lehnt ein gültiges Rezept ab"
+    assert not shared.inspect(nutzlast), "der Kern lehnt ein gültiges Rezept ab"
     assert _php_befunde(nutzlast, tmp_path) == [], "der Server lehnt ein gültiges Rezept ab"
 
 
@@ -250,7 +277,7 @@ def test_the_shared_cases_get_the_same_verdict_on_both_sides(
     muss, um beide Gründe zu erfahren, hat die schlechtere Prüfung.
     """
     load_operations()
-    kern = shared.inspect(nutzlast)
+    kern = [_gestalt(befund) for befund in shared.inspect(nutzlast)]
     server = _php_befunde(nutzlast, tmp_path)
 
     assert server == kern, (
@@ -287,13 +314,21 @@ def test_a_file_over_the_limit_is_refused_by_both_sides(tmp_path: Path) -> None:
     grenze = int(shared.rules()["max_upload_bytes"])
     nutzlast = b'{"name": "x", "title": "' + b"z" * (grenze + 10) + b'"}'
 
-    kern = shared.inspect(nutzlast)
+    kern = [_gestalt(befund) for befund in shared.inspect(nutzlast)]
     server = _php_befunde(nutzlast, tmp_path)
 
     assert kern, "der Kern nimmt eine Datei über der Größengrenze an"
     assert server == kern, (
         f"über der Grenze sind die Prüfungen uneins.\n  Kern: {kern}\n  PHP:  {server}"
     )
-    assert any("Byte groß" in befund for befund in kern), (
+    # **Der Schlüssel und nicht ein Stück Satz.** „Byte groß" im Text zu suchen
+    # war die Prüfung, solange Befunde Sätze waren; sie hing an einer
+    # Formulierung, die sich ändern darf. Der Schlüssel ist die Zusage: Der
+    # Kunde erfährt, dass es die Größe war.
+    assert any(code == "upload_too_large" for code, _ in kern), (
         f"kein Grund nennt die Größe — der Kunde erführe nicht, was zu tun ist: {kern}"
+    )
+    grenzbefund = next(werte for code, werte in kern if code == "upload_too_large")
+    assert grenzbefund["size"] == len(nutzlast), (
+        f"die gemeldete Größe ist nicht die der Datei: {grenzbefund}"
     )

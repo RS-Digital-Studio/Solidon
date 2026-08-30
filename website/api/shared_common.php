@@ -175,6 +175,26 @@ function array_is_list_compat(array $value): bool
 }
 
 /**
+ * Ein Befund als Schlüssel und Werte, nicht als fertiger Satz.
+ *
+ * **Der Satz entsteht am Anzeigeort, das Urteil hier.** Solange beide
+ * Prüfseiten ihre Sätze selbst bauten, war der Vergleich in
+ * `tests/test_shared_php.py` scharf: Eine Mutation, die `mb_strlen` durch
+ * `strlen` ersetzt, ließ ihn fallen, weil die Zahl **im Satz** stand — 200
+ * Zeichen gegen 400 Bytes.
+ *
+ * Mit einer gemeinsamen Textquelle wäre genau diese Schärfe verschwunden:
+ * Zwei Seiten, die denselben Satz aus derselben JSON holen, stimmen immer
+ * überein. Der Test verglich dann zwei Lesevorgänge einer Datei und wäre grün
+ * geblieben, ohne je rot zu werden (gefunden von 72 beim Lesen des
+ * Vorschlags, 31.08.2026). Deshalb trägt ein Befund **beides**.
+ */
+function shared_finding(string $code, array $values = []): array
+{
+    return ['code' => $code, 'values' => (object) $values];
+}
+
+/**
  * Prüft eine hochgeladene Rezeptdatei. Leeres Feld heißt: nimmt der Server an.
  *
  * Gibt **alle** Befunde zurück und nicht nur den ersten — eine Ablehnung, die
@@ -186,45 +206,107 @@ function shared_inspect(string $payload, array $rules): array
 
     $size = strlen($payload);
     if ($size > $rules['max_upload_bytes']) {
-        $findings[] = sprintf(
-            'Die Datei ist %d Byte groß, erlaubt sind %d.',
-            $size,
-            $rules['max_upload_bytes']
-        );
+        // Derselbe Schlüssel wie beim Upload-Fehler und kein eigener
+        // `check_*`: Es ist wörtlich derselbe Satz, und ein Satz steht einmal.
+        $findings[] = shared_finding('upload_too_large', [
+            'size' => $size,
+            'limit' => (int) $rules['max_upload_bytes'],
+        ]);
         // Weiter geht es trotzdem: Wer zwei Gründe hat, soll beide erfahren.
     }
 
     $data = json_decode($payload, true);
     if ($data === null && strtolower(trim($payload)) !== 'null') {
-        $findings[] = 'Die Datei ist kein gültiges JSON.';
+        $findings[] = shared_finding('check_not_json');
         return $findings;
     }
     if (!is_array($data) || array_is_list_compat($data)) {
-        $findings[] = 'Ein Rezept ist ein Objekt, keine Liste und keine Zahl.';
+        $findings[] = shared_finding('check_not_object');
         return $findings;
     }
 
     $unknown = array_values(array_diff(array_keys($data), $rules['recipe_keys']));
     sort($unknown);
     if ($unknown) {
-        $findings[] = 'Unbekannte Schlüssel: ' . implode(', ', $unknown) . '.';
+        $findings[] = shared_finding('check_unknown_keys', ['keys' => implode(', ', $unknown)]);
     }
 
     $version = $data['format_version'] ?? null;
     if (!in_array($version, $rules['recipe_format_versions'], true)) {
-        $findings[] = sprintf(
-            'Die Formatversion %s kennt der Server nicht — bekannt sind [%s].',
-            $version === null ? 'None' : var_export($version, true),
-            implode(', ', $rules['recipe_format_versions'])
-        );
+        // **Ohne Klammern**, und der rohe Wert statt einer Darstellung: Der
+        // Kern liefert `", ".join(str(one) for one in …)`, und beide Seiten
+        // müssen denselben Text erzeugen — sonst geht ausgerechnet dieser
+        // Befund auseinander (abgestimmt mit 72).
+        $findings[] = shared_finding('check_bad_version', [
+            'version' => $version,
+            'known' => implode(', ', $rules['recipe_format_versions']),
+        ]);
     }
 
     $findings = array_merge(
         $findings,
         shared_text_findings($data, $rules),
+        shared_adoptable_findings($data, $rules),
         shared_operation_findings($data, $rules),
         shared_payload_findings($data)
     );
+    return $findings;
+}
+
+/**
+ * Ob ein Rezept beim Empfänger überhaupt aufnehmbar ist (Konzept §3.1).
+ *
+ * **Der Anlass ist ein Ende-zu-Ende-Lauf von 3a:** `for_upload` gab dreimal
+ * eine formal saubere Datei aus, die der Empfänger danach ablehnte — Name
+ * nicht in `lower_snake_case`, Gruppe unbekannt, kein benanntes Merkmal. Der
+ * Kunde klickt „Veröffentlichen", lädt hoch, und der Erste, der sie holt,
+ * liest „ließ sich nicht aufnehmen".
+ *
+ * Die Prüfung steht deshalb **hier** und nicht beim Empfänger: Das ist die
+ * erste und einzige Instanz vor der Veröffentlichung, und was durchkommt,
+ * steht in der Galerie. Ein Server, der annimmt, was seine eigenen Nutzer
+ * nicht öffnen können, ist die schlechtere Wahl.
+ *
+ * Muster und Gruppen sind **abgeleitet und nicht abgeschrieben**: Sie stehen
+ * in `shared-rules.json`, die aus `parts/registry.py` entsteht. Ein
+ * abgeschriebenes Muster liefe beim nächsten Zuwachs auseinander.
+ */
+function shared_adoptable_findings(array $data, array $rules): array
+{
+    $findings = [];
+
+    $name = $data['name'] ?? null;
+    if (is_string($name) && !preg_match('~' . $rules['name_pattern'] . '~', $name)) {
+        $findings[] = shared_finding('check_name_not_snake_case', ['name' => $name]);
+    }
+
+    // Die Pflichtfelder stehen in der Regeldatei und sind aus den
+    // Dataclass-Feldern ohne Vorgabewert abgeleitet — was ein Rezept ohne
+    // Vorgabe braucht, braucht auch die Börse.
+    foreach ($rules['required_keys'] ?? [] as $field) {
+        if (!array_key_exists($field, $data)) {
+            $findings[] = shared_finding('check_missing_field', ['field' => $field]);
+        }
+    }
+
+    // **Nur wenn die Gruppe da ist.** Fehlt sie ganz, ist das ein fehlendes
+    // Pflichtfeld und keine unbekannte Gruppe: „Die Gruppe „None" gibt es
+    // nicht" wäre technisch wahr und schickte den Kunden los, einen
+    // Tippfehler zu suchen, den er nie gemacht hat — er sucht, findet nichts
+    // und zweifelt an seiner Datei statt an der Meldung (72, 31.08.2026).
+    $known = $rules['groups'] ?? [];
+    $group = $data['group'] ?? null;
+    if ($known && $group !== null && !in_array($group, $known, true)) {
+        $findings[] = shared_finding('check_unknown_group', [
+            'group' => $group,
+            'known' => implode(', ', $known),
+        ]);
+    }
+
+    if (!empty($rules['needs_features']) && empty($data['features'])) {
+        $findings[] = shared_finding('check_no_features');
+    }
+
     return $findings;
 }
 
@@ -239,17 +321,21 @@ function shared_text_findings(array $data, array $rules): array
             continue;
         }
         if (!is_string($text)) {
-            $findings[] = sprintf('„%s“ ist kein Text.', $key);
+            $findings[] = shared_finding('check_field_not_text', ['field' => $key]);
             continue;
         }
         // `mb_strlen` und nicht `strlen`: Ein Titel mit Umlauten wäre sonst
         // länger, als er ist, und die Grenze eine andere als in der App.
         $length = mb_strlen($text, 'UTF-8');
         if ($length > $limit) {
-            $findings[] = sprintf('„%s“ ist %d Zeichen lang, erlaubt sind %d.', $key, $length, $limit);
+            $findings[] = shared_finding('check_field_too_long', [
+                'field' => $key,
+                'length' => $length,
+                'limit' => (int) $limit,
+            ]);
         }
         if (preg_match(FORBIDDEN_TEXT, $text)) {
-            $findings[] = sprintf('„%s“ enthält einen Link oder Auszeichnung.', $key);
+            $findings[] = shared_finding('check_field_has_link', ['field' => $key]);
         }
     }
     return array_merge($findings, shared_credit_findings($data, $rules));
@@ -270,24 +356,27 @@ function shared_credit_findings(array $data, array $rules): array
     if ($licence !== null && $licence !== '') {
         $allowed = $rules['licenses'] ?? [];
         if (!is_string($licence)) {
-            $findings[] = '„license“ ist kein Text.';
+            $findings[] = shared_finding('check_licence_not_text');
         } elseif ($allowed && !in_array($licence, $allowed, true)) {
-            $findings[] = sprintf('„%s“ ist keine der erlaubten Lizenzen.', $licence);
+            $findings[] = shared_finding('check_licence_unknown', ['licence' => $licence]);
         }
     }
 
     $author = $data['author'] ?? null;
     if ($author !== null && $author !== '') {
         if (!is_string($author)) {
-            $findings[] = '„author“ ist kein Text.';
+            $findings[] = shared_finding('check_author_not_text');
         } else {
             $limit = $rules['max_title_chars'];
             $length = mb_strlen($author, 'UTF-8');
             if ($length > $limit) {
-                $findings[] = sprintf('„author“ ist %d Zeichen lang, erlaubt sind %d.', $length, $limit);
+                $findings[] = shared_finding('check_author_too_long', [
+                    'length' => $length,
+                    'limit' => (int) $limit,
+                ]);
             }
             if (preg_match(FORBIDDEN_MARKUP, $author)) {
-                $findings[] = '„author“ enthält eine Auszeichnung.';
+                $findings[] = shared_finding('check_author_has_markup');
             }
         }
     }
@@ -302,11 +391,11 @@ function shared_operation_findings(array $data, array $rules): array
         return [];
     }
     if (!is_array($document) || array_is_list_compat($document)) {
-        return ['„document“ ist kein Objekt.'];
+        return [shared_finding('check_document_not_object')];
     }
     $steps = $document['ops'] ?? [];
     if (!is_array($steps) || !array_is_list_compat($steps)) {
-        return ['„ops“ ist keine Liste.'];
+        return [shared_finding('check_ops_not_list')];
     }
 
     $findings = [];
@@ -314,25 +403,27 @@ function shared_operation_findings(array $data, array $rules): array
     foreach ($steps as $index => $step) {
         $where = sprintf('Schritt %d', $index + 1);
         if (!is_array($step) || array_is_list_compat($step)) {
-            $findings[] = $where . ' ist kein Objekt.';
+            $findings[] = shared_finding('check_step_not_object', ['n' => $index + 1]);
             continue;
         }
         $name = $step['op'] ?? null;
         if (!is_string($name) || !isset($permitted[$name])) {
-            $findings[] = sprintf(
-                '%s nennt die unbekannte Operation %s.',
-                $where,
-                $name === null ? 'None' : var_export($name, true)
-            );
+            $findings[] = shared_finding('check_step_unknown_op', [
+                'n' => $index + 1,
+                'name' => $name,
+            ]);
         }
         $params = $step['params'] ?? [];
         if (!is_array($params) || array_is_list_compat($params) && $params !== []) {
-            $findings[] = $where . ' hat Parameter, die kein Objekt sind.';
+            $findings[] = shared_finding('check_params_not_object', ['n' => $index + 1]);
             continue;
         }
         foreach ($params as $key => $value) {
             if (!shared_value_is_allowed($value)) {
-                $findings[] = sprintf('%s, Parameter „%s“ hat einen Wert, der nicht erlaubt ist.', $where, $key);
+                $findings[] = shared_finding('check_value_not_allowed', [
+                    'n' => $index + 1,
+                    'key' => $key,
+                ]);
             }
         }
     }
@@ -354,18 +445,18 @@ function shared_payload_findings(array $data): array
         return [];
     }
     if (!is_array($payloads) || (array_is_list_compat($payloads) && $payloads !== [])) {
-        return ['„payloads“ ist kein Objekt.'];
+        return [shared_finding('check_payloads_not_object')];
     }
     $findings = [];
     foreach ($payloads as $key => $value) {
         if (!is_string($value)) {
-            $findings[] = sprintf('Der Anhang „%s“ ist keine Zeichenkette.', $key);
+            $findings[] = shared_finding('check_payload_not_text', ['name' => $key]);
             continue;
         }
         // `strict` wie in Python: Ohne das schluckt PHP jedes Zeichen, das
         // nicht ins Alphabet gehört, und meldet Erfolg für Müll.
         if (base64_decode($value, true) === false) {
-            $findings[] = sprintf('Der Anhang „%s“ ist kein base64.', $key);
+            $findings[] = shared_finding('check_payload_not_base64', ['name' => $key]);
         }
     }
     return $findings;

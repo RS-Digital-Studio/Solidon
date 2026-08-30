@@ -47,12 +47,30 @@ function shared_answer(array $payload, int $status = 200): void
     exit;
 }
 
-/** Ein Fehler mit Grund — und mit allen Befunden, wo es welche gibt. */
+/**
+ * Ein Fehler mit Grund — und mit allen Befunden, wo es welche gibt.
+ *
+ * **Der Satz entsteht hier und nicht in der Prüfung.** `shared_inspect` gibt
+ * Schlüssel und Werte zurück, damit beide Prüfseiten ihr Urteil unabhängig
+ * fällen; erst am Ausgang wird daraus ein Satz in der Sprache des Besuchers.
+ *
+ * Ein Befund, der schon ein Satz ist, geht unverändert hinaus: Nicht jede
+ * Prüfung der Börse hat Werte, und ein fertiger Satz zweimal zu übersetzen
+ * wäre der teurere Fehler.
+ */
 function shared_answer_error(SharedFailure $problem): void
 {
     $payload = ['ok' => false, 'code' => $problem->errorCode, 'error' => $problem->reason];
     if ($problem->findings) {
-        $payload['findings'] = $problem->findings;
+        $payload['findings'] = array_map(
+            static function ($finding) {
+                if (is_string($finding)) {
+                    return $finding;
+                }
+                return shared_text($finding['code'], (array) ($finding['values'] ?? []));
+            },
+            $problem->findings
+        );
     }
     shared_answer($payload, $problem->status);
 }
