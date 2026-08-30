@@ -6460,14 +6460,43 @@ class MainWindow(QMainWindow):
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
         self.analysis_bar.show_legend(analysis, self._feature_names())
 
+    def _only_body(self) -> ObjectId | None:
+        """Der einzige Körper der Szene — oder nichts, wenn es mehrere sind.
+
+        Nach dem Öffnen einer Datei ist das der Normalfall: ein Teil, und der
+        Kunde hat es nie „ausgewählt", weil es nichts auszuwählen gab. Ein
+        Werkzeug, das ihn dann nach einer Auswahl fragt, fragt nach etwas,
+        das nur eine Antwort hat (§2.4).
+        """
+        result = self.session.last_result
+        if result is None or len(result.scene.objects) != 1:
+            return None
+        return next(iter(result.scene.objects))
+
     def _on_layer_changed(self, index: int) -> None:
         """Durch die Schichtanalyse fahren (§18.10) — Geometrie, keine
         Werkzeugwege.
+
+        **Ohne Auswahl tat das Werkzeug stumm nichts.** Wer *Schichten*
+        anklickte, bekam einen Regler, der sich ziehen ließ und nichts bewegte;
+        der Grund stand als „Keine Auswahl" in der Statuszeile am unteren
+        Fensterrand, also nicht dort, wo er gerade hinsah. Zwei Antworten
+        darauf, und die erste ist die wichtigere: Bei genau einem Körper
+        braucht es keine Auswahl, und sonst sagt die Leiste selbst, was fehlt.
         """
         object_id = self.object_tree.selected()
+        if object_id is None and index >= 0:
+            object_id = self._only_body()
         if index < 0 or object_id is None:
             self.viewport.set_layer(None)
+            if index >= 0:
+                # Auf das Teil zeigen, nicht auf den Baum: Wer aus einem Slicer
+                # kommt, klickt das Modell an, nicht eine Zeile in einer Liste.
+                self.layer_bar.show_note(
+                    tr("Klicken Sie das Teil an, dessen Schichten Sie sehen möchten.")
+                )
             return
+        self.layer_bar.show_note("")
         # Eine gebundene Methode statt eines Lambdas je Schritt: sie ist bei
         # jedem Aufruf dieselbe, also reiht die Warteliste sie nur einmal ein —
         # und sie liest den Schieber erst, wenn das Ergebnis da ist. Gezeigt

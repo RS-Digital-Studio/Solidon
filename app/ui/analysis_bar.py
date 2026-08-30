@@ -280,11 +280,24 @@ class LayerBar(QWidget):
         self._legend.setSpacing(NORMAL)
         """Welcher Ring im Bild was bedeutet — siehe :meth:`_show_legend`."""
 
+        self.note = QLabel("", self)
+        self.note.setWordWrap(True)
+        self.note.hide()
+        """Warum hier nichts zu sehen ist — statt eines toten Reglers.
+
+        Dieselbe Rolle wie :attr:`MapLegend.note` an der Karte daneben: Wer
+        *Schichten* anklickt und nichts gewählt hat, bekam einen Regler, der
+        sich ziehen ließ und nichts tat; der Grund stand als „Keine Auswahl" in
+        der Statuszeile am unteren Fensterrand, also nicht dort, wo der Kunde
+        gerade hinsieht.
+        """
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.readout)
         layout.addLayout(self._legend)
+        layout.addWidget(self.note, stretch=1)
         self._result: SliceResult | None = None
         self._update_enabled()
 
@@ -305,6 +318,20 @@ class LayerBar(QWidget):
         self.slider.setMaximum(max(count - 1, 0))
         self.slider.setValue(0)
         self._show_readout()
+
+    def show_note(self, note: str) -> None:
+        """Einen Grund zeigen statt der Bedienung — oder wieder zurück.
+
+        Entweder das eine oder das andere: Ein Regler neben einem Satz, der
+        sagt, dass es nichts zu regeln gibt, ist ein Widerspruch auf einer
+        Leiste. Ein leerer Text stellt die Bedienung wieder her, damit ein
+        Grund nicht stehen bleibt, wenn er nicht mehr gilt.
+        """
+        wanted = bool(note)
+        self.note.setText(note)
+        self.note.setVisible(wanted)
+        self.slider.setVisible(not wanted)
+        self.readout.setVisible(not wanted)
 
     def enabled(self) -> bool:
         return self._on

@@ -4055,3 +4055,57 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
     assert nodes[0].data(1, Qt.ItemDataRole.UserRole) is None, (
         "der Knoten ist selbst kein Merkmal — er ist ihr Dach"
     )
+
+
+def test_the_layer_tool_takes_the_only_body_there_is(window: MainWindow) -> None:
+    """Nach dem Öffnen gibt es ein Teil — und nichts auszuwählen.
+
+    Wer *Schichten* anklickte, bekam einen Regler, der sich ziehen ließ und
+    nichts bewegte. Der Grund stand als „Keine Auswahl" in der Statuszeile am
+    unteren Fensterrand, also nicht dort, wo er gerade hinsah — und er war
+    obendrein eine Frage mit nur einer möglichen Antwort: Es liegt genau ein
+    Körper in der Szene.
+    """
+    # Das Fixture öffnet ``plate_holes.stl`` bereits — genau die Lage nach dem
+    # Öffnen einer Datei, um die es hier geht. Ein zweites Laden machte daraus
+    # zwei Körper und prüfte den anderen Fall.
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    window.object_tree.tree.clearSelection()
+    assert window.object_tree.selected() is None, "nothing is selected on purpose"
+
+    window.layer_bar.set_active(True)
+    window.session.wait_for_idle()
+
+    # ``isHidden`` und nicht ``isVisible``: Ein Fenster, das nie gezeigt wurde,
+    # meldet jedes Kind als unsichtbar — geprüft wird, was *gesetzt* wurde.
+    assert window.layer_bar.note.isHidden(), (
+        f"one body needs no choosing, but the bar asks: {window.layer_bar.note.text()!r}"
+    )
+    assert not window.layer_bar.slider.isHidden(), "the slider is the point of the tool"
+
+
+def test_with_several_bodies_the_bar_says_what_it_needs(window: MainWindow) -> None:
+    """Bei mehreren Körpern muss der Kunde zeigen, welchen er meint.
+
+    Dann steht der Grund **in der Leiste**, nicht in der Statuszeile — und er
+    zeigt auf das Teil, nicht auf den Objektbaum: Wer aus einem Slicer kommt,
+    klickt das Modell an, nicht eine Zeile in einer Liste.
+    """
+    # Eines bringt das Fixture mit, das zweite kommt dazu.
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    assert len(result.scene.objects) == 2, "the point of this test is the ambiguity"
+    window.object_tree.tree.clearSelection()
+
+    window.layer_bar.set_active(True)
+    window.session.wait_for_idle()
+
+    assert not window.layer_bar.note.isHidden(), "two bodies: the bar has to ask"
+    assert "Teil" in window.layer_bar.note.text(), (
+        f"the note should point at the part: {window.layer_bar.note.text()!r}"
+    )
+    assert window.layer_bar.slider.isHidden(), (
+        "a slider next to a note saying there is nothing to slide is a contradiction"
+    )
