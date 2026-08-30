@@ -173,15 +173,66 @@ zusammenfassung() {
   grep -m1 -E "^[0-9]+ (passed|failed|error)" "$protokoll"
 }
 
+# **Die Fortschrittszeichen, wenn die Zusammenfassung fehlt.**
+#
+# Ein Riss beim Abbau verschluckt die Schlusszeile — der Prozess stirbt,
+# nachdem der letzte Test durch ist und bevor pytest sie schreibt. Was ihn
+# überlebt, sind die Zeichen davor: ein Punkt je bestandenem Test, ``F`` und
+# ``E`` für die anderen. Gemessen am 30.08.2026 an einer Portion von
+# ``test_ui.py``: sechzig Punkte, keine Zusammenfassung, Exit 127.
+#
+# Ohne diesen Leser wäre jede solche Portion ein „NICHT-GELAUFEN", also der
+# schwerste Befund, den dieses Skript kennt — für einen Lauf, in dem jeder
+# einzelne Test bestanden hat.
+#
+# Gezählt wird nur, was am Zeilenanfang steht oder auf einen Fortschrittsblock
+# folgt; ein ``F`` mitten in einem Dateinamen zählt nicht.
+fortschritt() {
+  protokoll=${1:-}
+  [ -n "$protokoll" ] && [ -f "$protokoll" ] || return 1
+  grep -oE "^[.sFExX]+" "$protokoll" | tr -d "\n"
+}
+
 zaehlt_als_fehler() {
   status=$1
   protokoll=${2:-}
+  #: Wie viele Tests der Lauf umfassen sollte. Leer heißt „unbekannt", und
+  #: dann bleibt es bei der strengen Bewertung — ein Aufrufer, der die Zahl
+  #: nicht kennt, bekommt keinen Freibrief.
+  soll=${3:-}
   [ "$status" -eq 0 ] && return 1
   [ "$status" -eq 5 ] && return 1
   if [ -n "$protokoll" ] && [ -f "$protokoll" ]; then
     if grep -qE "^[0-9]+ passed" "$protokoll" &&
        ! grep -qE "[0-9]+ (failed|error)" "$protokoll"; then
       return 1
+    fi
+    # **Und ohne Schlusszeile entscheiden die Zeichen — aber nur, wenn sie
+    # vollzählig sind.**
+    #
+    # Ein Riss beim Abbau nimmt die Zusammenfassung mit; die Punkte davor
+    # stehen noch da. Sie allein genügen jedoch nicht: Ein Riss **mitten** im
+    # Lauf hinterlässt ebenfalls nur Punkte, und dreißig gelaufene von sechzig
+    # sähen aus wie ein sauberer Durchlauf. Die beiden Fälle unterscheidet
+    # nichts als die **Anzahl** — deshalb kommt die Soll-Größe als dritter
+    # Parameter herein, und ohne sie bleibt es bei der strengen Bewertung.
+    #
+    # ``s`` (übersprungen) und ``x`` (erwartet fehlgeschlagen) zählen als
+    # gelaufen und als grün: Ein übersprungener Test ist eine Entscheidung des
+    # Tests, kein Fehlschlag. Rot sind ``F``, ``E`` und ``X`` — das große X ist
+    # ein Test, der bestehen sollte und es unerwartet tut, und auch das will
+    # jemand wissen.
+    # Grün wird hier nur, was **beides** erfüllt: keine roten Zeichen und so
+    # viele Zeichen, wie Tests erwartet wurden. Ohne bekannte Soll-Größe bleibt
+    # es bei der strengen Bewertung — ein Aufrufer, der die Zahl nicht kennt,
+    # bekommt keinen Freibrief. (Der erste Entwurf schrieb an dieser Stelle
+    # ein return 1, also grün, und der Kommentar daneben behauptete das
+    # Gegenteil. Eine zutreffende Begründung deckt eine Lücke besonders gut.)
+    zeichen=$(fortschritt "$protokoll" || true)
+    if [ -n "$zeichen" ] && ! printf '%s' "$zeichen" | grep -q "[FEX]"; then
+      if [ -n "$soll" ] && [ "${#zeichen}" -ge "$soll" ]; then
+        return 1
+      fi
     fi
   fi
   return 0
@@ -225,15 +276,73 @@ elif zaehlt_als_fehler "$status" "$protokoll"; then
   schlecht="$schlecht rest-in-einem-zug(Exit:$status)"
 fi
 
+#: Wie viele Tests eine Portion höchstens umfasst.
+#:
+#: **Ein eigener Prozess je Datei genügt nicht mehr.** Die größte Fensterdatei
+#: ist auf 372 Tests gewachsen, und sie reißt auch allein: Exit 139,
+#: Zugriffsverletzung, **keine Zusammenfassung** — der Lauf sagt gar nichts,
+#: und damit ist er der schwerste Befund, den dieses Skript kennt. Gemessen am
+#: 30.08.2026 dieselbe Datei in Portionen von sechzig: sieben Läufe, 372 von
+#: 372 bestanden, ein Abriss beim Abbau nach vollständigem Durchlauf.
+#:
+#: Sechzig ist kein Naturgesetz, sondern die Zahl, die gemessen durchkommt.
+#: Wer sie ändert, misst nach.
+PORTION=${SUITE_PORTION:-60}
+
+# Die Testnamen einer Datei, eine je Zeile. Der Windows-Interpreter schreibt
+# CRLF; bleibt das ``\r`` am Namen, sucht pytest wörtlich danach und findet
+# nichts.
+namen_von() {
+  "$PY" -m pytest --collect-only -q -m "not performance" "$1" 2>/dev/null \
+    | grep -E "^tests/" | tr -d "\r"
+}
+
 for file in $windowed; do
-  echo "=== $file ==="
-  PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"     2>&1 | tee "$protokoll"
-  status=${PIPESTATUS[0]}
-  echo "--> Exit $status"
-  if zaehlt_als_fehler "$status" "$protokoll"; then
-    fails=$((fails + 1))
-    schlecht="$schlecht $file(Exit:$status)"
+  namen=$(namen_von "$file")
+  anzahl=$(printf '%s\n' "$namen" | grep -c "::" || true)
+
+  if [ "$anzahl" -le "$PORTION" ]; then
+    echo "=== $file ==="
+    PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"     2>&1 | tee "$protokoll"
+    status=${PIPESTATUS[0]}
+    echo "--> Exit $status"
+    if zaehlt_als_fehler "$status" "$protokoll" "$anzahl"; then
+      fails=$((fails + 1))
+      schlecht="$schlecht $file(Exit:$status)"
+    fi
+    continue
   fi
+
+  # **Portionsweise, und jede Portion zählt für sich.** Ein Riss in der
+  # vierten Portion sagt nichts über die anderen sechs — vorher nahm er die
+  # ganze Datei mit, und mit ihr die Auskunft, welche Tests überhaupt liefen.
+  echo "=== $file ($anzahl Tests, Portionen zu $PORTION) ==="
+  von=1
+  teil=0
+  while [ "$von" -le "$anzahl" ]; do
+    bis=$((von + PORTION - 1))
+    teil=$((teil + 1))
+    # **In ein Feld, nicht in eine Zeichenkette.** Parametrisierte Testnamen
+    # tragen eckige Klammern (``test_x[raft-prusa]``), und eine unquotierte
+    # Zeichenkette liest die Shell als Dateimuster — sie sucht eine Datei
+    # namens ``raft`` oder ``prusa``, findet keine, und pytest bekommt einen
+    # Namen, den es nicht kennt. Gemessen am 30.08.2026: zwei Portionen mit
+    # Exit 4, und Exit 4 ist ein Kommandozeilenfehler und kein roter Test.
+    portion=()
+    while IFS= read -r name; do
+      [ -n "$name" ] && portion+=("$name")
+    done < <(printf '%s\n' "$namen" | sed -n "${von},${bis}p")
+    PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "${portion[@]}" \
+      2>&1 | tee "$protokoll"
+    status=${PIPESTATUS[0]}
+    echo "--> Teil $teil (Tests $von-$bis): Exit $status"
+    [ "$bis" -gt "$anzahl" ] && bis=$anzahl
+    if zaehlt_als_fehler "$status" "$protokoll" "$((bis - von + 1))"; then
+      fails=$((fails + 1))
+      schlecht="$schlecht $file:Teil$teil(Exit:$status)"
+    fi
+    von=$((bis + 1))
+  done
 done
 
 echo "======================================"
