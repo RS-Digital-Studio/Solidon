@@ -121,7 +121,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
 | Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
-| Der Textweg verweist auf ein Modell, das kein Einrichtungspunkt bringt | Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026) | 5ds Paket — Robert hat entschieden: anleiten statt mitliefern; Konstanten, erzeugte Modell-Übersichtsseite und konkreter NO_MODEL-Satz sind in Arbeit |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -131,7 +130,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SpaceMouse-Anbindung — P15 führte sie unter „wird nicht gebaut" | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept mit P15-Revision und Roberts Bau-Entscheidung — sein „wäre schon spannend" (30.08.2026) ist ein Interesse, keine Ansage. Kandidat: `pyspacemouse` (MIT, über hidapi, ohne Herstellertreiber) |
 | Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
-| Die ComfyUI-Modelle haben noch keine Auswahl | Die ComfyUI-Modelle bekommen eine Auswahl (30.08.2026) | 5ds Paket — Roberts Auftrag „bei beiden auswahl"; die Kern-Vorarbeit liegt gesichert, Oberfläche, Tests und Kataloge fehlen |
 
 ---
 
@@ -12715,18 +12713,16 @@ braucht 15), vier Stapelschritte samt Provenienz, am Ende 150 000
 Dreiecke, wasserdicht — die Dauer gehört mit in die Abwägung, denn sie
 ist das zweite Argument neben den sieben Gigabyte.
 
-- [~] **Roberts Entscheidung ist gefallen (30.08.2026): anleiten statt
-      mitliefern** — „vorbereiten bzw hinweise, mit welchen modellen
-      getestet wurde und wie man sie installiert einrichtet usw, eben so
-      einfach wie möglich und übersichtlich für den kunden in der app".
-      5d baut das Paket am Stück: vier Konstanten in `comfy_setup.py` als
-      die eine Quelle (Repo, Dateiname, Größe, Zielordner — samt
-      Lizenzantwort: CreativeML Open RAIL++-M, lokal unproblematisch),
-      eine **erzeugte** Handbuchseite „Welche Modelle Solidon benutzt"
-      aus `OLLAMA_SUGGESTIONS` und den Konstanten (Bauart wie
-      `rules_text`: eine zweite Liste veraltet), und der `NO_MODEL`-Satz
-      nennt Dateiname und Ordner statt „ein SDXL-Modell". fb's
-      Mitliefern-Hälfte entfällt.
+- [x] **Gebaut und gelandet, am Code nachgemessen (30.08.2026):
+      anleiten statt mitliefern**, wie Robert entschieden hat. Die eine
+      Quelle sind die `IMAGE_MODEL_*`-Konstanten in `comfy_setup.py`
+      (Repo, Ordner, Größe — nicht `SDXL_*`, eine Suche nach dem
+      Markennamen findet sie nicht); `manual.py` erzeugt daraus die
+      Seite „Welche Modelle Solidon benutzt" samt Tabelle und
+      „Das Bildmodell selbst hinlegen", und der `NO_MODEL`-Satz im
+      Erzeugungsdialog nennt Datei und Ordner aus derselben Quelle
+      (`generate_dialog.py`, Kommentar dort belegt die Absicht). fb's
+      Mitliefern-Hälfte ist entfallen.
 
 ---
 
@@ -12784,16 +12780,14 @@ ein Positionierungs-Datenpunkt fürs Marketing.
 Roberts Auftrag im Anschluss an die Modell-Hinweise: „bei beiden auswahl
 welches man nutzen wil". Beim Sprachmodell gibt es die Wahl (Combobox im
 Chat-Dialog, gemerkt über `remember_ollama_model`); bei den
-ComfyUI-Rollen entscheidet `_pick` bisher allein über `MODEL_ROLES`. 5ds
-Vorarbeit (rund 90 Zeilen in `mesh.py`: `configured_model`/
-`remember_model` je Rolle, stiller Rückfall auf die Rollenauflösung, wenn
-die gemerkte Datei nicht mehr angeboten wird, `model_choices` im selben
-Graphendurchgang wie `missing_models`) lag zum Release-Tor bewusst
-**nicht** im Baum — sie wartet in ihrem Scratchpad und kommt als
-reguläres Paket zurück. Leer heißt automatisch, nicht „keines": Ohne
-Eintrag entscheidet weiter die Rollenauflösung (§2.4 — eine gute Vorgabe
-ist mehr wert als eine Einstellung).
+ComfyUI-Rollen entschied `_pick` allein über `MODEL_ROLES`.
 
-- [ ] 5d: das Paket fertigbauen — Auswahlfelder unter „Weitere
-      Einstellungen" im Erzeugungsdialog samt Arbeiter fürs Laden der
-      Listen, Tests, Katalogzeilen — und über das Go-Verfahren einreichen.
+- [x] **Gebaut, verifiziert und gelandet** (`17c4bebb`, 30.08.2026):
+      `configured_model`/`remember_model` je Rolle in `mesh.py`
+      (`MODEL_SETTING_PREFIX`, leer heißt automatisch — ohne Eintrag
+      entscheidet weiter die Rollenauflösung, §2.4), `model_choices` im
+      selben Graphendurchgang wie `missing_models`, Auswahlfelder im
+      Erzeugungsdialog (`_fill_models`: Feld nur bei mindestens zwei
+      Dateien und vorhandenem Titel, gemerkt wird **vor** dem Wurf),
+      Tests und Katalogzeilen. Über das Go-Verfahren eingereicht und
+      von der Freigabe vollständig gelesen.
