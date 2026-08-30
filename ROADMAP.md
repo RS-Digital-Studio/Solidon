@@ -12985,6 +12985,7 @@ Steuerungs-P verwechselt):
 | D10 | „Tokenbudget" im Chat ist kein Kundenwort — Zusammenfassung in Kundensprache, Zahlen unter Einzelheiten | S | offen |
 | D11 | 56 Druckeinstellungen ohne Suchfeld — die Geste, die jeder Slicer hat (heben, nicht filtern) | L | offen |
 | D12 | Ring-Geschwister in `install_dialog._Row` und `filament_picker` messen und umbauen | M | nach D2 |
+| D13 | Druckeinstellungen, drei Kleinfunde der Kundenfahrt (15/53, Bilder im Scratchpad): „Druckdatei speichern" grau ohne Tooltip-Grund am Element (FR5-Familie); der Dialog wächst nicht mit, wenn die Profil-Klappe nachgereicht aufgeht — die Felder stauchen sich; bei 561 px Vorgabebreite ist die Tab-Leiste angeschnitten und die achte Gruppe unsichtbar ohne Weiter-Hinweis | S | **15, beauftragt** — die Fahrt selbst war sonst ein Lob: Klappe öffnet sich selbst am richtigen Ort, Slicer-Wortschatz vorn, „Nichts einzuwenden." statt Leere |
 
 Reihenfolge nach Kundenkontakt: D1, D2, D4, D5 (täglich) → D6, D3
 (jedes Fenster, jeder Fehler) → D7, D9, D10 → D8, D12 → D11.
