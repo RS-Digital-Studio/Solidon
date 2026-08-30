@@ -2366,15 +2366,15 @@ def show_error(
             if action.primary
             else QMessageBox.ButtonRole.ActionRole
         )
-        knopf = box.addButton(str(action.label), role)
+        button = box.addButton(str(action.label), role)
         # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
         # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
         # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
         # zwar Qts Akzentfarbe, aber nicht die halbfette Schrift, die neben ihr
         # die zweite Kodierung ist (Regel 18, Befund D3).
         if action.primary:
-            make_primary(knopf)
-        buttons[knopf] = action
+            make_primary(button)
+        buttons[button] = action
     abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
 
     # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das

@@ -3421,13 +3421,13 @@ def least_number_width(spin: QDoubleSpinBox) -> int:
     Eine Ziffer Reserve kommt dazu: Wer 9,99 auf 10,00 stellt, soll nicht
     zusehen, wie das Feld nachwächst.
     """
-    metrik = spin.fontMetrics()
-    laengster = max(
-        metrik.horizontalAdvance(f"{spin.minimum():.{spin.decimals()}f}"),
-        metrik.horizontalAdvance(f"{spin.maximum():.{spin.decimals()}f}"),
+    metrics = spin.fontMetrics()
+    widest = max(
+        metrics.horizontalAdvance(f"{spin.minimum():.{spin.decimals()}f}"),
+        metrics.horizontalAdvance(f"{spin.maximum():.{spin.decimals()}f}"),
     )
-    rahmen = max(0, spin.sizeHint().width() - laengster)
-    return metrik.horizontalAdvance(spin.text() + "0") + rahmen
+    frame = max(0, spin.sizeHint().width() - widest)
+    return metrics.horizontalAdvance(spin.text() + "0") + frame
 
 
 def align_forms(dialog: QWidget) -> None:

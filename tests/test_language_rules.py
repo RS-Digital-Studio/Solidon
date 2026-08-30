@@ -36,6 +36,18 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 GERMAN_WORDS = frozenset(
     {
         "abstand",
+        # Beide als ganzes Wort und nicht als Stamm: Als
+        # Teilzeichenkette träfe "anker" die englischen "banker",
+        # "tanker" und "flanker", "neu" träfe "neural" — dieselbe
+        # Falle wie bei masse/spanne/passt. Gemessen am 30.08.2026,
+        # als in bundling.py drei deutsche Namen standen und diese
+        # Prüfung dazu schwieg.
+        "anker",
+        "knopf",
+        "metrik",
+        "neu",
+        "rahmen",
+        "toleranz",
         "ecken",
         "lebende",
         "titel",
@@ -130,6 +142,7 @@ GERMAN_STEMS = (
     "bereit",
     "bohrung",
     "breit",
+    "laeng",
     "dezimier",
     "druck",
     "durchmesser",

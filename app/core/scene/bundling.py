@@ -34,7 +34,7 @@ from typing import Any
 #: Wie nah zwei Fließkommazahlen sein müssen, um als derselbe Anker zu gelten.
 #: Der Anker kommt aus der Hüllquadermitte einer Auswahl und wird bei jedem Zug
 #: neu gerechnet; identisch ist er deshalb nie, gleich schon.
-_ANKER_TOLERANZ = 1e-9
+_ANCHOR_TOLERANCE = 1e-9
 
 
 def _same_anchor(older: Mapping[str, Any], newer: Mapping[str, Any]) -> bool:
@@ -47,11 +47,11 @@ def _same_anchor(older: Mapping[str, Any], newer: Mapping[str, Any]) -> bool:
     Anker" gleichwertig und nicht etwa unbekannt.
     """
     for key in ("about", "pivot_x", "pivot_y", "pivot_z"):
-        alt, neu = older.get(key), newer.get(key)
-        if isinstance(alt, (int, float)) and isinstance(neu, (int, float)):
-            if abs(float(alt) - float(neu)) > _ANKER_TOLERANZ:
+        one, other = older.get(key), newer.get(key)
+        if isinstance(one, (int, float)) and isinstance(other, (int, float)):
+            if abs(float(one) - float(other)) > _ANCHOR_TOLERANCE:
                 return False
-        elif alt != neu:
+        elif one != other:
             return False
     return True
 
