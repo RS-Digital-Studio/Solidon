@@ -135,6 +135,25 @@ wenn beide identisch sind, ist die Reparatur verlustfrei. Und `.git/index`
 kopieren, bevor man ihn anfasst — er gehört allen Sitzungen, und die Kopie
 beantwortet hinterher die Frage, wie es dazu kam.
 
+**Und ein Werkzeug daneben verdeckt genau diesen Fall — mir am selben Tag
+passiert.** Um zu trennen, welche `MM`-Dateien echte Arbeit tragen und welche
+nur Index-Alterung sind, lief bei mir `git diff --quiet HEAD -- <pfad>` über
+die Statusliste. Für die zwei **neuen** Dateien meldete es „identisch mit
+HEAD", und damit hätte ich sie beinahe als unauffällig abgehakt — dieselben
+zwei, die als Löschung vorgemerkt waren. In einem Wegwerf-Repo nachgestellt:
+
+| Lage | `git diff --quiet HEAD -- <pfad>` | wahr ist |
+|---|---|---|
+| Datei gleich wie HEAD | Exit 0 | gleich |
+| Datei **unversioniert** | Exit 0 | git kennt sie nicht |
+| Datei **existiert gar nicht** | Exit 0 | es gibt sie nicht |
+
+Drei Lagen, eine Antwort. Der Befehl kann die Frage für zwei davon gar nicht
+stellen und sagt trotzdem „kein Unterschied" — dieselbe Familie wie
+[[suche-prueft-ihre-eigene-trefferzahl]], nur mit einem Wahrheitswert statt
+einer Trefferzahl. Wer versioniert-oder-nicht wissen will, fragt danach:
+`git ls-files --error-unmatch <pfad>`.
+
 **Vorbeugen ist derselbe Befehl wie Reparieren**, und er wirkt punktuell:
 `git reset -- <die eigenen neuen Pfade>` **ohne** `GIT_INDEX_FILE`,
 unmittelbar nach dem privaten Commit. Das setzt genau diese Einträge auf HEAD
