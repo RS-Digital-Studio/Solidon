@@ -143,3 +143,24 @@ Der praktische Unterschied ist klein, aber er zeigt sich beim nächsten neuen
 Element: Wer nach „ist das eine Auswahl?" fragt, muss bei jedem Grenzfall neu
 raten. Wer fragt „steht das auch da, wenn der Kunde nichts tut?", bekommt jedes
 Mal dieselbe Antwort.
+
+---
+
+## Präzisierung nach der B22-Messung (30.08.2026, Freigabe-Entscheid)
+
+Die Zusage „genau ein Hauptknopf je Fenster" gilt für Fenster, die eine
+**Handlung** anbieten. Ein reines Anzeigefenster (Kürzel, Über, Änderungen)
+hat folgerichtig **keinen** akzentuierten Knopf: Der Akzent lädt zur
+Handlung ein, „Schließen" ist keine empfohlene Handlung, und ein
+akzentuiertes „Schließen" wäre die Einladung, das Fenster zu verlassen,
+bevor man gelesen hat. Suchen entsteht dort nicht — es gibt nur den einen
+Knopf.
+
+Und der Bestandsbefund, der die Messung nötig machte: **Qt vergibt den
+Default von selbst** — beim ersten `show()` wird der erste
+autoDefault-Knopf zum Default und trägt die Akzentfarbe, aber nicht die
+halbfette Zweitkodierung aus `make_primary`. Neun Dialoge trugen so einen
+stillen, halben Hauptknopf; der Quelltext-Wächter gegen `setDefault(True)`
+war strukturell blind dafür, denn den ruft niemand. Gemessen wird am
+gebauten **und angezeigten** Fenster (`isDefault()` meldet vor dem `show()`
+überall False).
