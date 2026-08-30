@@ -1448,6 +1448,16 @@ class OfflineActivationDialog(QDialog):
         self.accept()
 
 
+#: Wie viele Zeilen das Schlüsselfeld mindestens und höchstens hoch wird.
+#:
+#: Der Boden hält es als Mehrzeilenfeld erkennbar, solange es leer ist. Die
+#: Decke ist großzügig gewählt: Ein Schlüssel braucht bei 558 Punkten Breite
+#: **sieben** Zeilen (242 Zeichen à 14 Punkte Zeilenhöhe, gemessen), und wer
+#: seine Systemschrift größer stellt, braucht mehr.
+KEY_LEAST_LINES: Final = 3
+KEY_MOST_LINES: Final = 9
+
+
 class ActivationDialog(QDialog):
     """Wo ein Lizenzschlüssel eingetragen wird (Konzept §2 B, §2 C).
 
@@ -1482,7 +1492,16 @@ class ActivationDialog(QDialog):
 
         self.field = QPlainTextEdit(self)
         self.field.setPlaceholderText(tr("SOLIDON3D-1-…"))
-        self.field.setFixedHeight(90)
+        # **Die Höhe folgt dem Schlüssel, sie stand fest auf 90.** Ein
+        # Lizenzschlüssel ist einzeilig und **242 Zeichen** lang; bei der
+        # Feldbreite von 558 Punkten sind das sieben umbrochene Zeilen à 14,
+        # also 110 Punkte. Wer seinen Schlüssel einfügte, sah ihn nicht ganz
+        # und bekam einen Rollbalken — an der einen Stelle der Anwendung, an
+        # der jemand prüfen will, ob er richtig kopiert hat. Ein einzeiliges
+        # Feld wäre die schlechtere Antwort gewesen: Es zeigt 45 von 242
+        # Zeichen.
+        self.field.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.field.textChanged.connect(self._fit_key_field)
         self.field.setAccessibleName(tr("Lizenzschlüssel"))
         # Sonst ist der Dialog eine Tastenfalle: Ein mehrzeiliges Feld nimmt den
         # Tabulator als Zeichen, und wer ohne Maus arbeitet, kommt aus dem Feld
@@ -1672,6 +1691,42 @@ class ActivationDialog(QDialog):
                 f"{self.state_label.text()}\n\n{problem.detail or problem.title}"
             )
             set_level(self.state_label, "warning")
+
+    def showEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Die Feldhöhe steht erst, wenn die Breite steht.
+
+        ``textChanged`` feuert beim Vorbelegen aus dem Speicher, und da hat
+        das Feld noch keine Breite — der Umbruch ist dann unbekannt, und die
+        Rechnung fiel auf ihren Boden zurück. Beim Anzeigen ist die Geometrie
+        gelegt, und dann stimmt sie.
+        """
+        super().showEvent(event)
+        self._fit_key_field()
+
+    def _fit_key_field(self) -> None:
+        """Das Feld zeigt, was darin steht — zwischen drei und neun Zeilen.
+
+        Der Boden hält es als Mehrzeilenfeld erkennbar, solange es leer ist;
+        die Decke hindert einen versehentlich eingefügten Roman daran, den
+        Dialog zu sprengen. Dazwischen rechnet es mit der **Schriftmetrik**
+        und nicht mit einer Punktzahl: Wer seine Systemschrift größer stellt,
+        bekommt größere Zeilen, und ein festes Maß schnitte dann wieder ab.
+        """
+        # **Der Umbruch muss vorher stehen, nicht die Abfrage anders lauten.**
+        # Ein erster Anlauf fragte statt des Blocks das Dokument
+        # (``setTextWidth`` plus ``size().height()``) — plausibel und
+        # wirkungslos: Beide antworten falsch, solange das Feld keine Breite
+        # hat, und beide richtig, sobald es eine hat. Die Gegenprobe hat es
+        # entlarvt, indem sie diese Zeile zurückdrehte und nichts rot wurde.
+        # Was trägt, ist das ``showEvent`` darüber.
+        block = self.field.document().firstBlock().layout()
+        lines = min(max(block.lineCount() if block else 1, KEY_LEAST_LINES), KEY_MOST_LINES)
+        # Der Rahmen zählt doppelt (oben und unten), dazu der Innenabstand aus
+        # dem Stylesheet. Aus dem Widget gefragt und nicht geschätzt — die
+        # Zahlen des Stylesheets sind hier nicht sichtbar.
+        room = self.field.contentsMargins()
+        chrome = 2 * self.field.frameWidth() + room.top() + room.bottom() + NORMAL
+        self.field.setFixedHeight(lines * self.field.fontMetrics().lineSpacing() + chrome)
 
     def _follow_field(self) -> None:
         """„Eintragen" kann nur, wenn etwas im Feld steht — und wenn es hilft.

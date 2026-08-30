@@ -10155,3 +10155,59 @@ def test_the_status_bar_leads_where_its_numbers_come_from(window: MainWindow) ->
         raise AssertionError(
             "die Lizenzzeile beschreibt weiter einen Weg, statt einer zu sein"
         ) from nothing_there
+
+
+def test_the_key_field_shows_a_whole_key(qt_app: QApplication) -> None:
+    """Wer seinen Schlüssel einfügt, will sehen, ob er vollständig ist.
+
+    Das Feld war auf 90 Punkte festgesetzt. Ein Lizenzschlüssel ist einzeilig
+    und **242 Zeichen** lang; bei der Feldbreite von 558 Punkten sind das
+    sieben umbrochene Zeilen à 14, also 110 Punkte. Es fehlten zwanzig, und
+    zwar an der einen Stelle der Anwendung, an der jemand prüfen will, ob er
+    richtig kopiert hat — mit einem Rollbalken als einziger Auskunft darüber.
+
+    Der Befund aus der Durchsicht las sich umgekehrt („90 Punkte für einen
+    einzeiligen Schlüssel"), und die naheliegende Behebung hätte den Dialog
+    verschlechtert: Ein ``QLineEdit`` zeigt an dieser Breite **45 von 242**
+    Zeichen.
+
+    Zugesichert wird deshalb nicht eine Punktzahl, sondern die Sache: Der
+    Rollweg ist null, also steht der ganze Schlüssel im Bild. Das gilt auch
+    bei größerer Systemschrift, denn beide Seiten der Rechnung — Umbruch und
+    Höhe — nehmen dieselbe Metrik.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.core.activation.key import format_key
+    from app.ui.dialogs import ActivationDialog
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme
+
+    # Die Betriebslage, und hier hängt die Messgröße wirklich an ihr: Das
+    # Stylesheet setzt den Innenabstand des Feldes, also die Breite, über die
+    # umbrochen wird. Ohne es bricht der Schlüssel anders um als beim Kunden.
+    before = QApplication.instance().styleSheet()
+    apply_theme(QApplication.instance(), "dark")
+    apply_style(QApplication.instance(), "dark")
+    dialog = ActivationDialog()
+    try:
+        dialog.field.setPlainText(format_key(b"x" * 64, b"y" * 64))
+        dialog.resize(dialog.sizeHint())
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        dialog.show()
+        QApplication.processEvents()
+
+        assert dialog.field.verticalScrollBar().maximum() == 0, (
+            "der Schlüssel steht nicht ganz im Feld — "
+            f"{dialog.field.verticalScrollBar().maximum()} Punkte Rollweg"
+        )
+
+        # Und leer bleibt es klein: Ein Feld, das immer sieben Zeilen hoch ist,
+        # bezahlt den Platz auch dann, wenn nichts darin steht.
+        voll = dialog.field.height()
+        dialog.field.setPlainText("")
+        QApplication.processEvents()
+        assert dialog.field.height() < voll, "das leere Feld ist so hoch wie das volle"
+    finally:
+        dialog.reject()
+        QApplication.instance().setStyleSheet(before)
