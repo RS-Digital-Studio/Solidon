@@ -207,8 +207,15 @@ def arrow_files(theme: Theme) -> dict[str, str] | None:
         return None
 
 
-def _arrow_rules(arrows: dict[str, str] | None) -> str:
-    """Die Stylesheet-Zeilen, die die Pfeile ins Zahlenfeld setzen."""
+def _arrow_rules(arrows: dict[str, str] | None, line: str = "", hover: str = "") -> str:
+    """Die Stylesheet-Zeilen, die die Pfeile ins Zahlenfeld und in die
+    Combobox setzen.
+
+    ``line`` und ``hover`` gehören zum Pfeilfeld der Combobox: Es steht
+    **hier** und nicht bei den übrigen Feldregeln, weil Qt den Pfeil darin
+    nicht mehr selbst zeichnet, sobald es eine eigene Regel hat — ohne
+    Pfeildateien wäre das gestaltete Feld also leer, und dann ist Qts
+    native Zeichnung das kleinere Übel."""
     if not arrows:
         return ""
     return f"""
@@ -218,6 +225,31 @@ QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{
     height: {SPACE}px;
 }}
 QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{
+    image: url("{arrows["down"]}");
+    width: {NORMAL}px;
+    height: {SPACE}px;
+}}
+/* **Das Pfeilfeld schnitt die gerundete Ecke von innen an.** Ohne eigene
+   Regel zeichnet Qt es als Rechteck bis an den Rahmen — an einem Feld mit
+   Radius liegt dann eine gerade Kante in der Rundung, und das sieht aus wie
+   ein Zeichenfehler. Es bekommt deshalb dieselben Radien wie das Feld und
+   dieselbe Trennkante wie das Zahlenfeld nebenan. */
+QComboBox::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: {WIDE}px;
+    background: transparent;
+    border-left: 1px solid {line};
+    border-top-right-radius: {SPACE}px;
+    border-bottom-right-radius: {SPACE}px;
+}}
+QComboBox::drop-down:hover {{ background: {hover}; }}
+/* Die Combobox braucht ihn aus demselben Grund: Sobald ``::drop-down`` eine
+   eigene Regel hat, hört Qt auf, den Pfeil selbst zu zeichnen. Gemessen —
+   vierzehn Farben im Pfeilfeld vorher, zwei danach, also Fläche und
+   Trennlinie und sonst nichts. Es ist derselbe Pfeil wie am Zahlenfeld;
+   zwei Zeichnungen für dieselbe Geste wären zwei, die auseinanderlaufen. */
+QComboBox::down-arrow {{
     image: url("{arrows["down"]}");
     width: {NORMAL}px;
     height: {SPACE}px;
@@ -450,10 +482,17 @@ QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabl
    Möglichkeit und die schlechtere — es müsste als Datei neben dem Paket
    liegen, und eine Datei, die beim Paketieren vergessen wird, nimmt den
    Pfeilen ihr Aussehen genauso still, wie es hier verloren ging. */
+/* **Vier Punkte breiter, und der Trennstrich rückt nach innen.** Die
+   Zielfläche war rund zehn auf elf Punkte — für eine Maus wenig, für einen
+   Stift oder eine zittrige Hand zu wenig, und die Knöpfe liegen übereinander,
+   teilen sich die Feldhöhe also. ``subcontrol-origin: border`` legte sie
+   außerdem auf den Feldrahmen, sodass ihr eigener Trennstrich unter ihm lag:
+   Man sah zwei Pfeile ohne erkennbare Flächen. Mit ``padding`` als Ursprung
+   sitzt die Kante sichtbar neben der Zahl. */
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {{
-    subcontrol-origin: border;
-    width: {ROOMY}px;
+    subcontrol-origin: padding;
+    width: {WIDE}px;
     background: transparent;
     border-left: 1px solid {line};
 }}
@@ -469,7 +508,7 @@ QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
     background: {hover};
 }}
-{_arrow_rules(arrows)}
+{_arrow_rules(arrows, line, hover)}
 QComboBox QAbstractItemView {{
     background: {base};
     border: 1px solid {line};

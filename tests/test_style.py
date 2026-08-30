@@ -115,7 +115,17 @@ def test_a_styled_control_keeps_the_parts_qt_stops_drawing() -> None:
     assert "QSpinBox::up-button" in sheet, "die Knöpfe brauchen ihre Fläche"
     for part in ("up-arrow", "down-arrow"):
         assert f"QSpinBox::{part}" in sheet, f"kein {part} — das Kästchen bliebe leer"
-    assert sheet.count("image: url(") == 2, "ein Pfeil ohne Bild ist kein Pfeil"
+
+    # **Jeder gestaltete Pfeil trägt ein Bild** — und nicht: es gibt genau
+    # zwei. Hier stand ``count("image: url(") == 2``, und das war der
+    # Ist-Zustand statt der Zusage: Als die Combobox ihr Pfeilfeld bekam und
+    # denselben Pfeil brauchte, wurde der Test rot, obwohl genau das Richtige
+    # geschah. Ein Test, der eine Menge festnagelt, sichert auch zu, was nicht
+    # darin steht.
+    arrows_drawn = re.findall(r"([\w:]+::(?:up|down)-arrow)[^{]*\{([^}]*)\}", sheet)
+    assert arrows_drawn, "kein einziger Pfeil im Stylesheet"
+    for selector, rule in arrows_drawn:
+        assert "image: url(" in rule, f"{selector}: ein Pfeil ohne Bild ist kein Pfeil"
 
 
 def test_the_arrows_follow_the_theme_and_survive_a_missing_cache() -> None:
@@ -947,3 +957,41 @@ def test_a_splitter_shows_that_it_can_be_dragged(theme: str) -> None:
         assert THEMES[theme]["line"] in rule, (  # type: ignore[index]
             f"{theme}: die Fuge nimmt nicht die Trennfarbe des Themas: {rule}"
         )
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_number_field_and_the_combo_box_can_be_hit(theme: str) -> None:
+    """Auf und Ab am Zahlenfeld waren rund zehn auf elf Punkte groß.
+
+    Die zwei Knöpfe teilen sich die Feldhöhe, also ist ihre Höhe gegeben —
+    zu holen war die Breite, und ``subcontrol-origin: border`` legte sie
+    zusätzlich auf den Feldrahmen, sodass ihre eigene Trennkante darunter
+    verschwand. Man sah zwei Pfeile ohne erkennbare Flächen.
+
+    Dieselbe Kante bekommt das Pfeilfeld der Combobox: Ohne eigene Regel
+    zeichnet Qt es als Rechteck bis an den Rahmen und schneidet die Rundung
+    von innen an.
+
+    **Und wer ein Unterelement gestaltet, verliert Qts Zeichnung darin** —
+    die Falle, die dieselbe Datei für das Zahlenfeld beschreibt und die hier
+    prompt wieder zuschnappte: Nach der ``drop-down``-Regel standen im
+    Pfeilfeld nur noch zwei Farben (Fläche und Trennlinie), gemessen gegen
+    vierzehn davor. Der Pfeil kommt deshalb aus derselben Quelle wie der des
+    Zahlenfelds — und trägt seither die Textfarbe des Themas statt Qts Grau.
+    """
+    from app.ui.style import WIDE
+
+    arrows = {"up": "up.svg", "down": "down.svg"}
+    sheet = stylesheet(theme, 10, arrows)  # type: ignore[arg-type]
+
+    button = sheet.split("QSpinBox::up-button, QDoubleSpinBox::up-button,")[1].split("}")[0]
+    width = re.search(r"width:\s*(\d+)px", button)
+    assert width and int(width.group(1)) >= WIDE, f"{theme}: die Auf/Ab-Fläche ist zu schmal"
+    assert "subcontrol-origin: padding" in button, (
+        f"{theme}: die Knöpfe liegen auf dem Feldrahmen, ihre Trennkante verschwindet darunter"
+    )
+
+    assert "QComboBox::drop-down {" in sheet, f"{theme}: das Pfeilfeld schneidet die Ecke an"
+    assert "QComboBox::down-arrow {" in sheet, (
+        f"{theme}: die Combobox hat ein gestaltetes Pfeilfeld und keinen Pfeil mehr darin"
+    )
