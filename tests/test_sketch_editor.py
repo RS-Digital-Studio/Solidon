@@ -5799,3 +5799,106 @@ def test_enter_and_double_click_close_a_spline_in_the_viewport(qt_app: QApplicat
     finally:
         window.wait_for_workers()
         window.deleteLater()
+
+
+def test_the_sketch_editor_can_redo_what_it_undid(qt_app: QApplication) -> None:
+    """Im Zeichenmodus gab es kein Wiederholen — und der Grund dafür log (Z3).
+
+    Das Fenster graut „Wiederholen" im Zeichenmodus aus und sagt dazu:
+    „Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug." Für
+    Rückgängig stimmte das — Strg+Z hängt am Panel. Für Wiederholen galt die
+    Taste **niemandem**: Der Zeichenbereich kannte sie nicht. Wer einen Strich
+    zu viel zurücknahm, musste ihn neu zeichnen.
+
+    Drei Zusagen, und die dritte ist die, die man vergisst: Eine neue Änderung
+    schließt den zurückgenommenen Zweig. Ohne sie führte ein Wiederholen nach
+    dem nächsten Strich in eine Zeichnung, die es so nie gab.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+        canvas.add_element("line", ((10.0, 0.0), (10.0, 10.0)))
+        assert len(canvas.sketch.elements) == 2
+
+        canvas.undo()
+        assert len(canvas.sketch.elements) == 1, "Rückgängig nimmt den zweiten Strich"
+        assert canvas.can_redo(), "und legt ihn zum Wiederholen zurück"
+
+        canvas.redo()
+        assert len(canvas.sketch.elements) == 2, "Wiederholen holt ihn zurück"
+        assert not canvas.can_redo(), "danach gibt es nichts mehr vorzuholen"
+
+        # **Und danach geht es wieder zurück.** Diese Zeile verdankt sich der
+        # Gegenprobe: Ohne sie blieb der Test grün, als ``redo`` seinen Stand
+        # nicht mehr auf den Rückgängig-Stapel legte — man kam vor und dann
+        # nie wieder zurück, und geprüft hatte das niemand.
+        canvas.undo()
+        assert len(canvas.sketch.elements) == 1, (
+            "nach dem Wiederholen führt der Weg auch wieder zurück"
+        )
+        canvas.redo()
+        assert len(canvas.sketch.elements) == 2, "und erneut vor"
+
+        # **Der zurückgenommene Zweig schließt sich bei der nächsten Änderung.**
+        canvas.undo()
+        assert canvas.can_redo()
+        canvas.add_element("line", ((0.0, 0.0), (0.0, 5.0)))
+        assert not canvas.can_redo(), (
+            "nach einem neuen Strich führte Wiederholen in eine Zeichnung, die es nie gab"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_the_redo_shortcut_sits_where_undo_sits(qt_app: QApplication) -> None:
+    """Und die Taste hängt am Panel, nicht am Fenster.
+
+    Der Grund steht bei ``undo`` und gilt unverändert: Den Rahmen um den
+    Editor gibt es nur auf einem der beiden Wege, die Kürzel gehören deshalb
+    an das Panel selbst. Ein Wiederholen, das nur im Dialog-Editor feuert,
+    wäre im Viewport-Modus wieder nichts — und der ist der Weg, den ein Kunde
+    geht.
+
+    Geprüft wird die Verdrahtung und nicht das Feuern: Ein ``QShortcut`` an
+    einem nie gezeigten Widget aktiviert sich nicht, und ein Test darüber
+    bliebe grün gegen einen Zweig, der nie läuft.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        belegungen = {
+            kuerzel.key().toString()
+            for kuerzel in panel.findChildren(QShortcut)
+            if not kuerzel.key().isEmpty()
+        }
+        erwartet = QKeySequence(QKeySequence.StandardKey.Redo).toString()
+        assert erwartet in belegungen, (
+            f"{erwartet} fehlt am Panel — vorhanden sind {sorted(belegungen)}"
+        )
+
+        # **Und es gilt im gefahrenen Modus.** ``use_viewport`` hebt die
+        # Kürzel des Panels auf ``WindowShortcut``, weil der Fokus dann im
+        # Viewport liegt — ein Kürzel, das nur im unsichtbaren Zeichenbereich
+        # feuert, feuert nie. Das steht dort ausdrücklich, und genau deshalb
+        # gehört diese Zeile hierher: Ein neues Kürzel, das die Liste nicht
+        # erreicht, wäre im einzigen Weg, den ein Kunde geht, wirkungslos.
+        panel.use_viewport()
+        im_fenster = {
+            kuerzel.key().toString()
+            for kuerzel in panel.findChildren(QShortcut)
+            if not kuerzel.key().isEmpty()
+            and kuerzel.context() == Qt.ShortcutContext.WindowShortcut
+        }
+        assert erwartet in im_fenster, (
+            f"{erwartet} gilt im Viewport-Modus nicht — dort liegt der Fokus, "
+            f"und nur diese gelten: {sorted(im_fenster)}"
+        )
+    finally:
+        panel.deleteLater()

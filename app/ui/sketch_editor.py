@@ -541,6 +541,13 @@ class SketchCanvas(QWidget):
         mit seinen flachen Punktindizes — „A parallel B" ist nicht „B
         parallel A"."""
         self._undo: list[Sketch] = []
+        #: Was ein Rückgängig zurückgelegt hat — der Weg wieder nach vorn.
+        #:
+        #: Es gab ihn nicht, und das Fenster begründete seinen ausgegrauten
+        #: Eintrag „Wiederholen" trotzdem mit „gilt die Taste dem Werkzeug"
+        #: (Z3). Die Taste galt niemandem: Rückgängig lag beim Panel,
+        #: Wiederholen bei keinem.
+        self._redo: list[Sketch] = []
         self._dragging: int | None = None
         self._dragging_remembered = False
         """Ob der Rückgängig-Stand des laufenden Punktzugs schon gesichert ist.
@@ -1125,10 +1132,32 @@ class SketchCanvas(QWidget):
         """Ctrl+Z gilt auch hier — der Editor ist kein Ort ohne Rückweg."""
         if not self._undo:
             return
+        self._redo.append(self.sketch)
         self.set_sketch(self._undo.pop())
+
+    def redo(self) -> None:
+        """Und Ctrl+Y wieder nach vorn (Z3).
+
+        Ohne diese Methode war „Wiederholen" im Zeichenmodus ein Eintrag ohne
+        Handlung: ausgegraut, weil die Taste angeblich dem Werkzeug gilt, und
+        das Werkzeug kannte sie nicht. Wer einen Strich zu viel zurücknahm,
+        musste ihn neu zeichnen.
+        """
+        if not self._redo:
+            return
+        self._undo.append(self.sketch)
+        self.set_sketch(self._redo.pop())
+
+    def can_redo(self) -> bool:
+        """Ob es etwas zu wiederholen gibt — für den Eintrag im Fenster."""
+        return bool(self._redo)
 
     def _apply(self, sketch: Sketch) -> None:
         self._remember()
+        # **Eine neue Änderung schließt den zurückgenommenen Zweig.** Sonst
+        # führte ein Wiederholen nach dem nächsten Strich in eine Zeichnung,
+        # die es so nie gab — dieselbe Regel wie im Verlauf des Dokuments.
+        self._redo.clear()
         self.sketch = sketch
         self._resolve()
 
@@ -4010,6 +4039,24 @@ class SketchPanel(QWidget):
         undo_button.clicked.connect(self.canvas.undo)
         tools.addWidget(undo_button)
 
+        # **Und der Weg zurück nach vorn** (Z3). Er fehlte ganz: kein Knopf,
+        # keine Taste, und der ausgegraute Eintrag des Fensters begründete
+        # sich mit „gilt die Taste dem Werkzeug" — die Taste galt niemandem.
+        #
+        # Der Knopf steht hier und nicht nur als Kürzel, aus demselben Grund
+        # wie das Kürzel am Knopf darüber: Eine Belegung ohne sichtbares Ziel
+        # findet niemand (§19.2). Der Wächter über die Kürzel hat genau das
+        # eingefordert — Strg+Y stand nirgends, und er wurde rot.
+        redo_button = QToolButton(self)
+        redo_button.setIcon(icons.icon("redo", redo_button))
+        redo_keys = QKeySequence(QKeySequence.StandardKey.Redo).toString(
+            QKeySequence.SequenceFormat.NativeText
+        )
+        redo_button.setToolTip(f"{tr('Wiederholen')}  ({redo_keys})")
+        redo_button.setAutoRaise(True)
+        redo_button.clicked.connect(self.canvas.redo)
+        tools.addWidget(redo_button)
+
         # Zehn beschriftete Knöpfe in einer Zeile passen auf keinen
         # Laptopschirm. Gemessen an Qts eigener Rechnung: bei 1366 Bildpunkten
         # Fensterbreite bekam jeder 71 von den 146, die „Abstand  D" braucht,
@@ -4372,6 +4419,15 @@ class SketchPanel(QWidget):
         undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         undo.activated.connect(self.canvas.undo)
         self._shortcuts.append(undo)
+
+        # Und der Weg zurück nach vorn, aus demselben Grund am selben Ort
+        # (Z3). ``StandardKey.Redo`` ist auf Windows und Linux Strg+Y und auf
+        # macOS Umschalt+Cmd+Z — dieselbe Taste, die das Fenster für seinen
+        # eigenen Eintrag führt, nur hier für das Blatt.
+        redo = QShortcut(QKeySequence(QKeySequence.StandardKey.Redo), self)
+        redo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        redo.activated.connect(self.canvas.redo)
+        self._shortcuts.append(redo)
 
         fit = QShortcut(QKeySequence(VIEW_KEYS["fit"]), self)
         fit.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
