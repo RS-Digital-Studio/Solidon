@@ -729,10 +729,22 @@ def test_the_same_operations_are_available_on_an_exact_body(window: MainWindow) 
 
 def test_the_register_says_which_operations_need_an_exact_body() -> None:
     """Die Auskunft steht im Register, nicht in einer Liste in der Oberfläche
-    — sonst fehlt die nächste Operation des exakten Kerns darin."""
-    for name in (*BREP_ONLY, "push_face", "sketch_pocket"):
+    — sonst fehlt die nächste Operation des exakten Kerns darin.
+
+    **``sketch_pocket`` stand hier und steht jetzt in der anderen Liste.** Bis
+    zum 30.08.2026 verlangte die Tasche einen exakten Körper und lehnte jedes
+    eingelesene Netz ab — also den häufigsten aller Fälle. Seit
+    ``geom.sketch_solid`` schneidet sie über die Boolesche Kette auch in ein
+    Netz; was dabei herauskommt, ist wieder ein Netz, und das steht im
+    ``doc``-Satz der Operation statt in einer Absage.
+
+    Der Umzug gehört in genau diesen Test und nicht daneben: Er ist die
+    Stelle, an der die Zugehörigkeit einer Operation zum exakten Kern
+    festgeschrieben wird.
+    """
+    for name in (*BREP_ONLY, "push_face"):
         assert REGISTRY.get(name).requires_kind == "brep", name
-    for name in ("drill_hole", "hollow_object", "repair"):
+    for name in ("drill_hole", "hollow_object", "repair", "sketch_pocket"):
         assert not REGISTRY.get(name).requires_kind, name
 
 
