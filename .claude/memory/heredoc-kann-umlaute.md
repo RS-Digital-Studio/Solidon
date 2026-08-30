@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: fd3340f1-dc7c-45b2-a76c-25431a7a9212
-  modified: 2026-08-27T10:59:51.660Z
+  modified: 2026-08-30T21:51:15.391Z
 ---
 
 Ein `git commit -F - <<'MELDUNG'` überträgt **Umlaute unverändert**. Gemessen
@@ -43,12 +43,27 @@ Dieselbe Familie, dritte Gestalt, am selben Tag zweimal: Ein deutsches
 beendet einen Python-String mitten im Satz. Einmal in einem Test, einmal in
 genau dem Skript, das diese Zeilen hier eintragen sollte.
 
+**Dritter Rückfall am 30.08.2026 — und er zeigt, wo die Regel bisher zu eng
+formuliert war.** Drei Commits ohne einen einzigen Umlaut (`55dadda1`,
+`b3b1bd8f`, `dc01cc3d`: „faellt", „unvollstaendiger", „Raendelung"), während
+fünf Commits desselben Abends über Write-Dateien tadellos waren
+(`42e6303d`, `9306ed26`, `afebc431`, `33c55c51`, `d50f4942`). Der Unterschied
+ist genau das Werkzeug — und diesmal war es **kein Heredoc, sondern `printf`**.
+
+Die Notiz hieß „Heredoc kann Umlaute", also las ich sie als Aussage über das
+Heredoc und nicht als Anweisung über deutschen Text. Mit einem anderen
+Bash-Werkzeug fühlte sich die Vorsicht wieder neu und begründet an. **Die
+Regel ist nicht „das Heredoc ist sicher", sondern: kein deutscher Text geht
+durch die Shell** — nicht per Heredoc, nicht per `printf`, nicht per `-m`, und
+auch nicht per `echo`.
+
 **How to apply:** Commit-Meldungen **und jedes Patchskript mit deutschem Text**
 mit dem **Write-Werkzeug** in eine Datei schreiben, dann `git commit -F <datei>`
 beziehungsweise das Skript laufen lassen. Das umgeht die Quoting-Frage
 vollständig, statt sie richtig zu beantworten — und es ist die einzige Fassung,
-die drei Anläufe überlebt hat. (Die Nachbarsitzung hat es am 28.08.2026 so
-gemacht und nachgezählt: fünf Zeilen mit echten Umlauten.)
+die vier Anläufe überlebt hat. Die Gegenprobe kostet nichts und findet den
+Rückfall sofort: `git log -1 --format=%B | grep -cE "ä|ö|ü|ß"` — steht dort
+eine Null unter einem deutschen Absatz, ist es passiert.
 
 Bleibt ein Heredoc unvermeidlich, dann `<<'ENDE'` (einfache Anführungszeichen:
 keine Expansion von `$`, Backticks oder `\`) und Umlaute direkt tippen. Wer bei
