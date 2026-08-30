@@ -215,3 +215,46 @@ def _payload_findings(data: dict[str, Any]) -> list[str]:
         except (ValueError, TypeError):
             findings.append(f"Der Anhang „{key}“ ist kein base64.")
     return findings
+
+
+def for_upload(recipe: Recipe) -> bytes:
+    """Die Datei, die zur Börse geht — geprüft, bevor sie herausgeht.
+
+    **Der Prüfer, den niemand ruft, prüft nichts.** ``inspect`` stand eine
+    Stunde lang vollständig da, mit zwölf Grenzfällen und drei Wächtern, und
+    hatte keinen einzigen Aufrufer — genau die Kette, die am letzten Glied
+    endet. Diese Funktion ist das Glied: Sie erzeugt die Datei **und** prüft
+    sie, und beides lässt sich nicht trennen.
+
+    Wer stattdessen ``json.dumps(file_data(...))`` schreibt, umgeht die
+    Prüfung. Das ist der Fall, den ein Wächter über eine gemeinsame Regelliste
+    **nicht** fängt: Zwei Prüfer aus einer Quelle sind gut, ein Weg, der an
+    beiden vorbeiführt, hebt sie auf. 50 hat denselben Fehler am selben Tag in
+    ihrem Gebiet gefunden — eine Eigenschaft, die nur im einen von zwei Zweigen
+    gefragt wurde, und der andere Zweig lieferte wasserdichte, plausible,
+    falsche Geometrie.
+
+    Wirft, statt eine Datei zurückzugeben, die der Server ohnehin abweist: Die
+    Anwendung weiß hier mehr als der Server später — sie kennt den Baustein,
+    aus dem die Datei entsteht, und kann sagen, welcher Teil das Problem ist.
+    """
+    from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
+    from app.core.knowledge.parts.recipe import file_data
+    from app.i18n import _
+
+    payload = json.dumps(file_data(recipe), ensure_ascii=False, indent=2, sort_keys=True).encode(
+        "utf-8"
+    )
+    findings = inspect(payload)
+    if findings:
+        raise ValidationError(
+            field="title",
+            detail=_(
+                "Dieser Baustein kann so nicht geteilt werden. Der Server prüft "
+                "dasselbe und würde ihn abweisen."
+            ),
+            values={"recipe": recipe.name, "findings": " ".join(findings)},
+            constraint="shared_rules",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return payload

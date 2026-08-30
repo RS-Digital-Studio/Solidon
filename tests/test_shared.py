@@ -24,6 +24,7 @@ from app.core.knowledge.parts.shared import (
     MAX_DOC_CHARS,
     MAX_TITLE_CHARS,
     MAX_UPLOAD_BYTES,
+    for_upload,
     inspect,
     rules,
 )
@@ -295,3 +296,93 @@ def test_the_rules_file_carries_what_both_sides_need() -> None:
     # steht, ist keine zweite Wahrheit, sondern dieselbe.
     assert inspect(recipe(), known=known) == []
     assert inspect(recipe(format_version=99), known=known)
+
+
+# --- Der Anschluss: die Anwendung weist ab, was die Prüfung abweist -----------
+
+
+def a_recipe(**changes: Any) -> Any:
+    """Ein Rezept als Objekt — so, wie die Anwendung es vor dem Teilen hält.
+
+    Der Baukasten oben (:func:`recipe`) baut die **Datei**; dieser baut das
+    **Objekt**, aus dem sie entsteht. Beide werden gebraucht, und zwar an den
+    zwei Enden derselben Kette: Was der Server sieht, sind Bytes; was der
+    Kunde in der Hand hat, ist ein ``Recipe``.
+    """
+    from app.core.knowledge.parts.recipe import Recipe
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.types import Document, Operation
+
+    document = Document(
+        format_version=FORMAT_VERSION,
+        app_version="test",
+        ops=[
+            Operation(
+                id=1,
+                op=changes.pop("op", "create_box"),
+                outputs=("obj_1",),
+                params={"width": 20.0, "depth": 10.0, "height": 8.0},
+            )
+        ],
+    )
+    fields: dict[str, Any] = {
+        "name": "halter",
+        "title": "Kabelhalter",
+        "group": "Befestigung",
+        "document": document,
+        "doc": "Hält ein Kabel an der Tischkante.",
+    }
+    fields.update(changes)
+    return Recipe(**fields)
+
+
+def test_the_share_file_comes_out_of_one_door_and_that_door_checks() -> None:
+    """Der gute Fall — und ohne ihn wäre der Test darunter wertlos.
+
+    Ein Wächter „nichts Verbotenes kommt heraus" ist über einer Tür, die
+    **immer** zuschlägt, genauso grün wie über einer, die richtig prüft. Also
+    steht hier zuerst die Zusicherung, dass überhaupt etwas herauskommt: echte
+    Bytes, gültiges JSON, und von der Prüfung selbst nicht beanstandet.
+    """
+    payload = for_upload(a_recipe())
+
+    assert payload, "aus einem gültigen Rezept muss eine Datei entstehen"
+    assert json.loads(payload)["name"] == "halter"
+    assert inspect(payload) == [], "die Tür gibt heraus, was ihre eigene Prüfung ablehnt"
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        pytest.param({"doc": "Mehr dazu auf http://beispiel.invalid/halter"}, id="Link im Text"),
+        pytest.param({"title": "Kabelhalter <b>neu</b>"}, id="Auszeichnung im Titel"),
+        pytest.param({"title": "H" * (MAX_TITLE_CHARS + 1)}, id="Titel zu lang"),
+        pytest.param({"doc": "H" * (MAX_DOC_CHARS + 1)}, id="Text zu lang"),
+        pytest.param({"op": "erfinde_mir_was"}, id="unbekannte Operation"),
+    ],
+)
+def test_the_application_refuses_to_hand_out_what_the_check_refuses(
+    changes: dict[str, Any],
+) -> None:
+    """Nicht „die Prüfung kann prüfen", sondern „die Anwendung weist ab".
+
+    Der Unterschied ist der ganze Punkt. ``inspect`` stand eine Stunde lang
+    vollständig da — zwölf Grenzfälle, drei Wächter, eine Regeldatei, die der
+    Server liest — und hatte **keinen einzigen Aufrufer**: gemessen mit
+    ``grep`` über den ganzen Baum, ein Treffer, und der galt ``rules``. Eine
+    Kette endet am letzten Glied, und das letzte Glied fehlte.
+
+    Deshalb wird hier **beides** gemessen und nicht eines: dass die Prüfung
+    den Fall findet, **und** dass der Ausgabeweg ihn nicht herausgibt. Wären
+    es zwei Tests, könnte einer grün bleiben, während der andere aufhört zu
+    gelten — genau die Naht, an der es schon einmal auseinanderging.
+    """
+    from app.core.errors import ValidationError
+
+    faulty = a_recipe(**changes)
+
+    with pytest.raises(ValidationError) as refused:
+        for_upload(faulty)
+
+    assert refused.value.values["findings"], "die Absage nennt den Grund nicht"
+    assert refused.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“ (Regel 17)"
