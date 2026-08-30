@@ -36,7 +36,7 @@ from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
 from app.ui.leash import stop_watching_the_dying
-from app.ui.style import NORMAL
+from app.ui.style import NORMAL, make_primary
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
 #: wichtigsten — und das sind die zwei zuerst deklarierten, denn eine
@@ -213,6 +213,21 @@ class PartCatalog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Einfügen"))
+            # **Der Akzent war die ganze Zeit da — bestellt hatte ihn
+            # niemand.** Qt macht beim ersten ``show()`` den ersten
+            # autoDefault-Knopf zum Default, und das ist hier „Einfügen". Er
+            # trug damit die Akzentfarbe, aber nicht die halbfette Schrift,
+            # die neben ihr die zweite Kodierung ist (Regel 18).
+            # ``make_primary`` macht ihn ausdrücklich zu dem, was er ohnehin
+            # war, und rechnet seine Breite gegen die Schrift, mit der er
+            # gezeichnet wird.
+            #
+            # Das ist kein Widerspruch zu dem Absatz darunter: Dort ging es um
+            # einen Knopf, der **klickbar** war, ohne etwas zu bewirken. Der
+            # Akzent auf einem gesperrten Hauptknopf ist dagegen richtig — ein
+            # Dialog ohne akzentuierten Knopf lässt suchen, und gesperrt sieht
+            # gesperrt aus.
+            make_primary(ok)
         # Er kann nichts einfügen, solange nichts gewählt ist. Vorher stand er
         # in voller Akzentfarbe da, nahm den Klick an, schloss den Dialog — und
         # setzte nichts: ``_accept`` rief ``accept()`` auch ohne Baustein. Ein

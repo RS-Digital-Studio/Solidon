@@ -224,6 +224,37 @@ Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
 wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
 `style.py`.
 
+**Und wo keiner gesetzt wird, setzt Qt selbst einen.** Das ist die stille
+Hälfte derselben Regel, und sie ist die häufigere: `QDialog` macht beim
+**ersten `show()`** den ersten Knopf mit `autoDefault` zum Default, gleich wo
+er im Fenster sitzt. Er trägt damit die Akzentfarbe aus `QPushButton:default`
+— aber **nicht** die halbfette Schrift, die `make_primary` am Widget setzt.
+Übrig bleibt Bedeutung allein über Farbe, also Regel 18.
+
+Gemessen am 30.08.2026 über vierzehn Dialoge: **vier** trugen einen
+ausdrücklichen Hauptknopf, **neun** einen von Qt vergebenen. Drei davon saßen
+auf „Schließen" (Kürzelfenster, Über, Änderungen) — dort ist der Akzent eine
+Empfehlung, das Fenster zu verlassen. Der schlimmste Fall war der
+Zusatzprogramme-Dialog: Unter seinen vierzig Knöpfen traf es Nummer eins, das
+„Installieren" der **ersten Listenzeile**. Sechs Zeilen tragen denselben Text,
+eine stand hervorgehoben da, und was wie eine Empfehlung aussah, war die
+Reihenfolge im Layout.
+
+Zwei Dinge folgen daraus:
+
+* **Ein Fenster ohne Handlung nimmt `style.no_primary()`.** Es räumt den
+  Default ab (`setAutoDefault(False)`), und das ist kein Verstoß gegen „ein
+  Hauptknopf je Fenster", sondern deren Kehrseite: Wer nichts zu tun anbietet,
+  hat auch nichts zu empfehlen. Wer eine Handlung hat, nimmt `make_primary` —
+  auch wenn der Knopf gesperrt startet.
+* **Gefunden wird das nur am angezeigten Fenster.** Vor dem `show()` meldet
+  `isDefault()` überall `False`; ein Quelltext-Wächter nach `setDefault(True)`
+  sieht gar nichts, weil es niemand ruft. `tests/test_style.py` hält deshalb
+  **beide** Richtungen — `test_every_default_button_of_the_surface_goes_
+  through_make_primary` am Text und `test_no_window_wears_an_accent_it_never_
+  asked_for` am gebauten Fenster. Der zweite hat beim ersten Lauf sofort einen
+  zehnten Fall gefunden, den die Handmessung nicht bauen konnte.
+
 **Und ein typloses Stylesheet am Vorfahren nimmt ihm seine Farben.** Eine
 Regel ohne Selektor — `setStyleSheet("background: #202225;")` an einer Karte,
 einer Leiste, einem Rahmen — gilt für den Träger **und jeden Nachkommen** und

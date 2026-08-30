@@ -45,6 +45,7 @@ from app.ui.dialogs import spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
+from app.ui.style import make_primary
 
 _log = get_logger(__name__)
 
@@ -351,6 +352,14 @@ class GenerateDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setText(tr("Erzeugen"))
+        # „Erzeugen" trug den Akzent schon, nur hatte ihn niemand gesetzt: Qt
+        # vergibt beim ersten ``show()`` den Default an den ersten
+        # autoDefault-Knopf. Die Farbe war damit da, die halbfette Schrift
+        # daneben nicht — und eine Bedeutung allein über Farbe ist Regel 18.
+        # Er startet gesperrt, bis eine Beschreibung dasteht, und trägt den
+        # Akzent trotzdem: Der Kunde soll sehen, wo es hinausgeht, bevor er
+        # weiß, was er tippen muss.
+        make_primary(self.buttons.button(QDialogButtonBox.StandardButton.Ok))
         self.buttons.accepted.connect(self._accept_or_start)
         self.buttons.rejected.connect(self.reject)
 

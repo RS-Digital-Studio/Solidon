@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.i18n import TranslatableText, _, tr
+from app.ui.style import no_primary
 from app.ui.tool_strip import strip_title
 
 #: Die Tasten, die am Fenster hängen und in keinem Menü stehen.
@@ -265,6 +266,12 @@ class ShortcutsWindow(QDialog):
         layout.addWidget(self.tree, stretch=1)
         layout.addWidget(note)
         layout.addWidget(buttons)
+        # **„Schließen" ist nie ein Hauptknopf**, und in diesem Fenster war er
+        # es: Qt vergibt den Default beim ersten ``show()`` an den ersten
+        # autoDefault-Knopf, hier den einzigen. Die Übersicht ist zum Lesen da,
+        # nicht zum Bestätigen — ein Akzent auf dem Ausgang empfiehlt, sie zu
+        # verlassen, und das ist das Gegenteil dessen, wofür sie aufgeht.
+        no_primary(self)
 
     def _refilter(self) -> None:
         """Blendet aus, was nicht passt — über Befehl **und** Taste.

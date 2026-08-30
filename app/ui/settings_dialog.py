@@ -40,6 +40,7 @@ from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import align_forms
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
+from app.ui.style import make_primary
 
 # **Diese drei Listen standen mit ``tr()`` da, und das übersetzt sofort.**
 # Auf Modulebene heißt „sofort": beim Import, in der Sprache, die dann gerade
@@ -198,6 +199,13 @@ class SettingsDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # Speichern ist die Handlung dieses Fensters, also trägt sie den
+        # Akzent — ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an
+        # denselben Knopf, aber ohne die halbfette Schrift daneben, und Farbe
+        # allein ist keine zweite Kodierung (Regel 18).
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        if save is not None:
+            make_primary(save)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 

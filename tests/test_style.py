@@ -432,6 +432,14 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     Geprüft wird am Quelltext und nicht am gebauten Fenster: Die sieben
     Hauptknöpfe leben in sieben Dateien, und sechs davon brauchen einen
     Dialog, um überhaupt zu entstehen.
+
+    **Das ist die eine Hälfte der Zusage, und allein hält sie nicht.** Wer
+    ``setDefault`` gar nicht ruft, kommt hier durch — und genau so entsteht
+    der häufigere Fall: ``QDialog`` vergibt den Default beim ersten ``show()``
+    von selbst. ``test_no_window_wears_an_accent_it_never_asked_for`` weiter
+    unten misst deshalb am **angezeigten** Fenster. Die beiden gehören
+    zusammen gelesen; getrennt ist jeder von beiden blind für das, was der
+    andere sieht.
     """
     # Der Glob ist die Grundmenge, und ein umbenannter Ordner macht ihn leer,
     # ohne dass jemand etwas merkt: Der Test bliebe grün und prüfte nichts.
@@ -450,6 +458,133 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
         f"Diese Dateien setzen den Hauptknopf noch von Hand: {offenders}. "
         "make_primary() setzt zugleich die Schrift, aus der die Breite folgt."
     )
+
+
+#: Die Dialoge, die sich ohne fremden Zustand bauen lassen, als Bauanweisungen.
+#: Gebaut wird erst im Test — ein Widget ohne ``QApplication`` bringt den
+#: ganzen Lauf mit 0xC0000409 um.
+def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
+    """Baut die Liste der prüfbaren Dialoge.
+
+    Fehlen darf hier keiner, der ohne Sitzung und ohne Projekt auskommt —
+    ``PrintSettingsDialog`` und ``FirstRunDialog`` brauchen beides und stehen
+    deshalb nicht dabei. Beide sind von Hand gemessen und in Ordnung; der
+    Wächter deckt sie nicht ab, und das steht hier, damit niemand das
+    Gegenteil annimmt.
+    """
+    from app.core.knowledge import profiles
+    from app.ui.catalog import PartCatalog
+    from app.ui.changes_dialog import ChangesDialog
+    from app.ui.dialogs import (
+        AboutDialog,
+        ActivationDialog,
+        CalibrationDialog,
+        DonationDialog,
+        KeyDialog,
+        OfflineActivationDialog,
+    )
+    from app.ui.filament_picker import NewFilamentDialog
+    from app.ui.generate_dialog import GenerateDialog
+    from app.ui.install_dialog import InstallDialog
+    from app.ui.settings import UiSettings
+    from app.ui.settings_dialog import SettingsDialog
+    from app.ui.shortcuts_window import ShortcutsWindow
+    from app.ui.support_dialog import SupportDialog
+
+    return [
+        ("Kürzelfenster", lambda: ShortcutsWindow(None)),
+        ("Bausteinkatalog", PartCatalog),
+        ("Generierung", GenerateDialog),
+        ("Rückmeldung", SupportDialog),
+        ("Freischaltung", ActivationDialog),
+        ("Freischaltung — Dateiweg", lambda: OfflineActivationDialog("PROBE")),
+        ("Schlüssel", KeyDialog),
+        ("Über", AboutDialog),
+        ("Förderung", DonationDialog),
+        ("Kalibrierung", lambda: CalibrationDialog(profiles.DEFAULT_MATERIAL)),
+        ("Änderungen", ChangesDialog),
+        ("Neues Filament", NewFilamentDialog),
+        ("Zusatzprogramme", InstallDialog),
+        ("Einstellungen", lambda: SettingsDialog(UiSettings())),
+    ]
+
+
+def test_no_window_wears_an_accent_it_never_asked_for(qt_app: object) -> None:
+    """Der Akzent gehört genau einem Knopf, und der muss ihn bestellt haben.
+
+    Dies ist die **Gegenrichtung** zu
+    ``test_every_default_button_of_the_surface_goes_through_make_primary``
+    darüber. Jener liest den Quelltext und verbietet ``setDefault(True)`` —
+    und war deshalb blind für den häufigeren Weg: ``QDialog`` vergibt beim
+    ersten ``show()`` **von selbst** einen Default an den ersten Knopf mit
+    ``autoDefault``. Neun von vierzehn Dialogen trugen so die Akzentfarbe aus
+    ``QPushButton:default``, ohne die halbfette Schrift daneben — Bedeutung
+    allein über Farbe, also gegen Regel 18. Es rief ja niemand ``setDefault``,
+    also fand der Quelltext-Wächter nichts.
+
+    Drei Dinge machen die Messung erst zu einer:
+
+    * **Angezeigt wird.** Vor dem ``show()`` meldet ``isDefault()`` überall
+      ``False``; ein Test ohne Anzeigen ist grün und prüft nichts. Dieselbe
+      Familie wie „Qt lügt vor dem Anzeigen" in ``oberflaeche.md``.
+    * **Gefragt wird nach der Rolle, nicht nach dem Text.** „Schließen" heißt
+      in sechs Sprachen sechsmal anders; ``QDialogButtonBox.buttonRole``
+      antwortet in allen.
+    * **Das Stylesheet bleibt aus, und das ist Absicht.** Beide Messgrößen —
+      ``isDefault()`` und das Schriftgewicht am Widget — hängen nicht daran:
+      ``make_primary`` setzt die Schrift am Knopf selbst. Ein ``apply_style``
+      hier wäre eine Zeile, deren Entfernen nichts rot macht.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QDialogButtonBox, QPushButton
+
+    dialoge = _the_dialogues_of_the_surface()
+    assert len(dialoge) >= 12, f"nur {len(dialoge)} Dialoge — die Liste ist geschrumpft"
+
+    gemessen: list[str] = []
+    beanstandet: list[str] = []
+
+    for name, bauen in dialoge:
+        fenster = bauen()
+        try:
+            fenster.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+            fenster.show()
+            qt_app.processEvents()  # type: ignore[attr-defined]
+
+            knoepfe = fenster.findChildren(QPushButton)
+            if not knoepfe:
+                continue
+            gemessen.append(name)
+            traeger = [knopf for knopf in knoepfe if knopf.isDefault()]
+
+            if len(traeger) > 1:
+                texte = [knopf.text() for knopf in traeger]
+                beanstandet.append(f"{name}: {len(traeger)} Hauptknöpfe — {texte}")
+                continue
+            if not traeger:
+                continue
+
+            knopf = traeger[0]
+            if knopf.font().weight() < QFont.Weight.DemiBold:
+                beanstandet.append(
+                    f"{name}: „{knopf.text()}“ trägt den Akzent ohne halbfette Schrift — "
+                    "make_primary() fehlt, und Farbe allein ist keine zweite Kodierung"
+                )
+            for box in fenster.findChildren(QDialogButtonBox):
+                if box.buttonRole(knopf) == QDialogButtonBox.ButtonRole.RejectRole:
+                    beanstandet.append(
+                        f"{name}: „{knopf.text()}“ ist der Ausgang und trägt den Akzent — "
+                        "ein Fenster ohne Handlung bekommt keinen Hauptknopf (style.no_primary)"
+                    )
+        finally:
+            fenster.hide()
+            loslassen = getattr(type(fenster), "release", None)
+            if loslassen is not None:
+                loslassen(fenster)
+
+    assert len(gemessen) >= 12, f"nur {len(gemessen)} Dialoge mit Knöpfen gebaut: {gemessen}"
+    assert not beanstandet, "\n".join(beanstandet)
 
 
 def test_no_multiline_field_swallows_the_tab_key() -> None:

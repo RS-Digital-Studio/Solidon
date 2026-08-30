@@ -70,7 +70,7 @@ from app.ui.labels import (
     value_line,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
 #: schlechter lesbar als ein Wort.
@@ -196,6 +196,13 @@ class CalibrationDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # Die gemessenen Werte zu übernehmen ist die Handlung dieses Fensters.
+        # Den Akzent trug der Knopf schon — Qt vergibt ihn beim ersten
+        # ``show()`` an den ersten autoDefault-Knopf —, aber ohne die
+        # halbfette Schrift daneben (Regel 18).
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        if save is not None:
+            make_primary(save)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 
@@ -745,6 +752,15 @@ class KeyDialog(QDialog):
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
         )
+        # Speichern ist die Handlung, also trägt sie den Akzent — und zwar
+        # ausdrücklich. Qt gab ihn beim ersten ``show()`` ohnehin an denselben
+        # Knopf, aber ohne die halbfette Schrift; Farbe allein ist keine
+        # zweite Kodierung (Regel 18). Wichtig ist das hier besonders, weil
+        # „Löschen" gleich daneben steht: Zwischen zwei gleich aussehenden
+        # Knöpfen entscheidet sonst nichts, welcher der gemeinte ist.
+        save = buttons.button(QDialogButtonBox.StandardButton.Save)
+        if save is not None:
+            make_primary(save)
         self.forget_button = buttons.addButton(
             tr("Löschen"), QDialogButtonBox.ButtonRole.DestructiveRole
         )
@@ -1309,6 +1325,14 @@ class OfflineActivationDialog(QDialog):
 
         save = QPushButton(tr("1 · Anfrage speichern …"), self)
         save.clicked.connect(self._save_request)
+        # **Drei nummerierte Schritte, und der erste ist der Hauptknopf.** Er
+        # trug den Akzent schon — Qt vergibt ihn beim ersten ``show()`` an den
+        # ersten autoDefault-Knopf, und das ist zufällig der richtige. Zufällig
+        # bleibt es aber nicht: Wer die Reihenfolge im Layout ändert, verschöbe
+        # ihn stillschweigend auf Schritt 2. Ausdrücklich gesetzt hält er, und
+        # die halbfette Schrift kommt dazu (Regel 18 — die Nummer im Text ist
+        # die dritte Kodierung und die einzige, die auch ohne Farbe trägt).
+        make_primary(save)
         website = QPushButton(tr("2 · Aktivierungsseite öffnen"), self)
         website.clicked.connect(self._open_page)
         self.page_address = QLineEdit(self.PAGE_URL, self)
@@ -2464,6 +2488,14 @@ class AboutDialog(QDialog):
         layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
         layout.addWidget(third_party, stretch=1)
         layout.addWidget(buttons)
+        # **„Schließen" ist nie ein Hauptknopf.** Qt hatte ihn beim ersten
+        # ``show()`` dazu gemacht — er ist der einzige Knopf mit autoDefault,
+        # und dann trifft es ihn. Der Akzent ist eine Empfehlung, und hier
+        # empfahl er, das Fenster zu verlassen. Ein Fenster, das nur etwas
+        # zeigt, hat keine Handlung und bekommt deshalb auch keinen
+        # akzentuierten Knopf; das ist kein Verstoß gegen „ein Hauptknopf je
+        # Fenster", sondern deren Kehrseite.
+        no_primary(self)
 
 
 def damaged_line() -> str:

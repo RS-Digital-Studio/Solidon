@@ -103,6 +103,31 @@ def make_primary(button: QPushButton) -> QPushButton:
     return button
 
 
+def no_primary(dialog: QWidget) -> None:
+    """Nimmt einem Fenster den Hauptknopf, den es nie bestellt hat.
+
+    ``QDialog`` vergibt beim **ersten** ``show()`` von selbst einen Default —
+    Qt nimmt dafür den ersten Knopf mit ``autoDefault``, gleich wo er sitzt.
+    Damit trägt er die Akzentfarbe aus ``QPushButton:default``, ohne die
+    halbfette Schrift, die :func:`make_primary` daneben setzt: Bedeutung
+    allein über Farbe, also gegen Regel 18.
+
+    Gefunden wird das nur am **angezeigten** Fenster. Vor dem ``show()``
+    meldet ``isDefault()`` überall ``False``, und ein Wächter, der den
+    Quelltext nach ``setDefault(True)`` durchsucht, sieht nichts: Es ruft ja
+    niemand.
+
+    Gedacht ist die Funktion für ein Fenster, das gar keine Handlung anbietet
+    und nur einen Ausgang hat — dort wäre der Akzent auf „Schließen" eine
+    Empfehlung, den Dialog zu verlassen. Wer eine Handlung hat, nimmt
+    :func:`make_primary`; ein Fenster ohne akzentuierten Knopf lässt sonst
+    suchen.
+    """
+    for button in dialog.findChildren(QPushButton):
+        button.setAutoDefault(False)
+        button.setDefault(False)
+
+
 #: Der Objektname, an dem das Stylesheet eine Menü-Überschrift erkennt.
 MENU_HEADING = "menuHeading"
 

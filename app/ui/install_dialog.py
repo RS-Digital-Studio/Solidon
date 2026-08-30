@@ -51,7 +51,7 @@ from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import TIGHT
+from app.ui.style import TIGHT, make_primary
 
 _log = get_logger(__name__)
 
@@ -503,6 +503,15 @@ class InstallDialog(QDialog):
         self.all_button = QPushButton(tr("Alles Fehlende installieren"), self)
         self.all_button.setVisible(False)
         self.all_button.clicked.connect(self._start_all)
+        # **Den Akzent trug bisher eine Listenzeile, und zwar die oberste.**
+        # Qt gibt den Default beim ersten ``show()`` an den ersten Knopf mit
+        # ``autoDefault``; in diesem Dialog sind das vierzig Stück, und Nummer
+        # eins ist das „Installieren" der ersten Zeile. Sechs Zeilen tragen
+        # denselben Text, eine davon stand hervorgehoben da — der Kunde liest
+        # das als Empfehlung, welches Programm zuerst dran ist, und es war die
+        # Reihenfolge im Layout. Der Hauptknopf ist der, der alles auf einmal
+        # tut; ein ausdrücklicher Default nimmt Nummer eins den ihren ab.
+        make_primary(self.all_button)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
         # Füllung wandert darunter hindurch: bei 45 % lag sie halb auf
         # Bernstein und halb auf der Spur, ab 60 % ganz auf Bernstein — mit

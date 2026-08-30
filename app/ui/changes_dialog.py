@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION
 from app.core import changes
 from app.i18n import tr
-from app.ui.style import NORMAL, set_level
+from app.ui.style import NORMAL, no_primary, set_level
 
 #: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
 #: saß vorher als ``setMaximumHeight`` auf dem Rollbereich, und wer das
@@ -185,6 +185,11 @@ class ChangesDialog(QDialog):
         # größeres Fenster soll mehr Verlauf zeigen, nicht mehr Leere.
         layout.addWidget(self.scroller, 1)
         layout.addWidget(buttons)
+        # **„Schließen" ist nie ein Hauptknopf**, und genau der stand hier im
+        # Akzent: Qt macht beim ersten ``show()`` den ersten autoDefault-Knopf
+        # zum Default, und in einem Fenster, das nur „Schließen" hat, trifft es
+        # ihn. Das Änderungsfenster zeigt, was neu ist; es verlangt nichts.
+        no_primary(self)
         self.resize(*INITIAL_SIZE)
 
     def _show_selected(self, index: int) -> None:
