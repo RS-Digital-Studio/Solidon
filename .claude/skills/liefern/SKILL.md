@@ -169,6 +169,17 @@ und `git diff --quiet HEAD -- <pfad>` taugt als Kontrolle **nicht**, denn er
 antwortet für unversionierte wie für fehlende Dateien gleichlautend
 „kein Unterschied" (siehe `geteilter-index-haelt-alten-stand.md`).
 
+**Und das Glied wird real vergessen** — am Abend des 30.08.2026 lagen acht
+Phantome gleichzeitig im Haupt-Index, aus den Commits von mindestens drei
+Sitzungen, darunter `.githooks/pre-commit`: ein Hook, der still verschwindet,
+fällt niemandem auf, weil sein Ausbleiben aussieht wie ein Lauf ohne
+Beanstandung. Deshalb endet **jeder** Liefern-Lauf, nicht nur einer mit neuen
+Dateien, mit der Sekunden-Kontrolle `git status --short | grep "^D "` gegen
+den Haupt-Index — sie sieht auch die Minen der anderen. Wer dort eine Datei
+findet, die im Arbeitsbaum **und** in HEAD liegt, entschärft sie mit
+`git reset -- <pfad>`; eine Löschung, die jemand wollte, hätte die Datei
+nicht mehr im Baum.
+
 Wer die Abweichung erst im Rückblick liest, liest sie über einem Commit, der
 schon gepusht ist.
 
