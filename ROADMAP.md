@@ -121,6 +121,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Die zweite Slicer-Übergabeart hat keinen Aufrufer | Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026) | den Anschluss an den Druckdialog: Übergabeart wählbar, Wahl gemerkt — der Fensterweg bekommt denselben Platz wie der Konsolenlauf (55) |
+| Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
+| Scheitert ein Dienststart, ist sein Protokoll weg | Der Startweg sammelt keine Einzelheiten (30.08.2026) | fb: die Prozessausgabe auch am Startweg sammeln und über den Einzelheiten-Knopf zeigen |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12575,3 +12577,45 @@ hier festgehalten statt still (eine Kette endet am letzten Glied).
 - [ ] Der Anschluss an den Druckdialog: die Übergabeart wählbar machen
       (slicen lassen oder im Slicer öffnen), die Wahl merken, und der
       Fensterweg bekommt denselben Platz im Ablauf wie der Konsolenlauf (55).
+
+---
+
+## Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026)
+
+`_invocation_key` in `tests/test_performance.py` zählt die **ausgewählten**
+Dateien — und nach `-m performance` über die ganze Suite bleibt nur
+`test_performance.py` übrig, derselbe Schlüssel wie beim Lauf der einen
+Datei. Für genau **eine** Marke sind die zwei Lagen verschieden:
+`read_dense` ist der erste Test der Datei und der einzige, der trimesh
+braucht. Beim Suitenlauf zieht das Sammeln den Import vorher; allein trägt
+ihn die Messung. fb's Messreihe (30.08.2026): 1072 ms allein gegen 427–443
+im Volllauf, beide unter `alone` — und die anderen fünf Marken sind
+nachgemessen **nicht** betroffen (sie laufen hinter `read_dense`, der
+Import ist für sie in jedem Fall bezahlt; eine 2327-ms-Zwischenzahl bei
+`subdivide_surface` war Fremdlast und fiel in zwei Wiederholungen). Der
+Docstring des Schlüssels hatte den Auswahl-Fall untersucht und mit einer
+Messung verworfen — die Messung war richtig und trug nur, solange kein
+verzögerter Import im Spiel war; seit dem `deferred`-Umbau entscheidet die
+Auswahl, wer den trimesh-Import bezahlt.
+
+- [ ] Eine Entscheidung mit Messung: den Import vor die Uhr ziehen (ein
+      Aufwärm-Import im Fixture oder in `dense_mesh`) oder den Einzelfall
+      im Docstring der Marke festhalten und die Ein-Datei-Lage meiden —
+      das erste macht die Marke zur Aussage über die Rechnung statt über
+      die Sammelreihenfolge und ist darum die bessere Hälfte.
+
+---
+
+## Der Startweg sammelt keine Einzelheiten (30.08.2026)
+
+Der Installationsweg des Zusatzprogramme-Dialogs sammelt die Ausgabe der
+Paketverwaltung in `_details` und blendet einen *Einzelheiten*-Knopf ein.
+Der **Startweg** desselben Dialogs hat beides nicht: Scheitert ein
+Dienststart, steht der Satz da (seit dem Adressen-Fix mit der Seite zum
+Nachsehen), aber das Startprotokoll des Dienstes ist weg — genau die
+Zeilen, mit denen jemand zum Support ginge.
+
+- [ ] Entscheiden und bauen (fb): Die Ausgabe des gestarteten Prozesses
+      auch am Startweg sammeln und über denselben *Einzelheiten*-Knopf
+      zeigen — mehr als eine Zeile, deshalb erst hier festgehalten statt
+      nebenbei gebaut.
