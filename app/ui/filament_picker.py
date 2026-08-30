@@ -53,6 +53,8 @@ from app.core.export import slicer_keys
 from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
+from app.ui.overlay import rows_height
+from app.ui.panels import MAX_ROWS, least_height_of, row_height_of, view_chrome
 from app.ui.style import TIGHT, make_primary, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
 
@@ -517,7 +519,97 @@ class FilamentPanel(QWidget):
 
         self._used: tuple[tuple[MaterialSlot | None, str, str, int, bool], ...] = ()
         """Slot, Name, Farbe, Zahl der Körper und eigene Druckwerte."""
+        self._room: int | None = None
+        """Was die Überlagerung dieser Karte zugeteilt hat (``set_room``)."""
         self.show_scene(())
+
+    # -- Höhe: was die Überlagerung fragt --------------------------------
+
+    def _around_the_list(self) -> int:
+        """Was fest um die Liste herum steht: Hinweis, Knöpfe, Ränder, Abstände.
+
+        Gerechnet aus den Wunschhöhen und nicht aus den gelegten — dieselbe
+        Bedingung, unter der die ganze Verteilung stillsteht (``_share_room``):
+        Wer die Höhen liest, die er gerade selbst gesetzt hat, bekommt beim
+        nächsten Durchlauf andere Zahlen und die Spalte läuft auf und ab.
+        """
+        layout = self.layout()
+        if layout is None:
+            return 0
+        margins = layout.contentsMargins()
+        gaps = max(layout.count() - 1, 0) * layout.spacing()
+        buttons = max(self.add_button.sizeHint().height(), self.settings_button.sizeHint().height())
+        return margins.top() + margins.bottom() + gaps + self.hint.sizeHint().height() + buttons
+
+    def wanted_height(self) -> int:
+        """Die Höhe, bei der jede Spule zu sehen wäre.
+
+        **Ohne diese Methode teilt die Überlagerung der Karte nichts zu.**
+        ``_share_room`` fragt nur Kinder, die das ``RoomTaker``-Protokoll
+        erfüllen; wer es nicht tut, „behält seine eigene Höhe". Diese Karte tat
+        das, und ihre Höhe war die, die Qt einer Liste ohne Zutun gibt: 30
+        Bildpunkte bei 266 gewünschten (gemessen am 30.08.2026 im echten
+        Fenster, B21). Die Liste brach mitten in einer Zeile ab, während der
+        Verlauf daneben 246 Punkte hielt und mit 96 ausgekommen wäre.
+        """
+        return self._around_the_list() + rows_height(self.list)
+
+    def least_height(self) -> int:
+        """Und die, unter die diese Karte nicht geht, was auch zugeteilt wird.
+
+        Derselbe Boden, den ``fit_to_rows`` der Liste ohnehin setzt — die
+        Überlagerung muss ihn kennen, sonst verteilt sie unter ihn und das
+        Layout drückt die Karte zusammen, bis Zeilen außerhalb liegen.
+
+        **Nie höher als der Wunsch.** Jener Boden sind drei Mindestzeilen, und
+        die sollen verhindern, dass eine Liste mit zwanzig Zeilen auf eine
+        gedrückt wird. Bei einer Karte, die überhaupt nur eine Zeile *hat* —
+        leeres Regal, kein Projektfilament —, forderte er 130 Bildpunkte für
+        128 gewünschte: Platz, den die Karte niemandem zeigen kann, während
+        die Nachbarn ihn brauchen.
+        """
+        return min(self._around_the_list() + least_height_of(self.list), self.wanted_height())
+
+    def set_room(self, pixels: int) -> None:
+        """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
+        if pixels == self._room:
+            return
+        self._room = pixels
+        self._fit()
+
+    def _fit(self) -> None:
+        """So hoch wie der Inhalt, höchstens so hoch wie zugeteilt.
+
+        Der Liste bleibt, was nach dem Beiwerk übrig ist: Ein Hinweis und zwei
+        Knöpfe stehen unter ihr, und wer ihr die volle Zuteilung gibt, schiebt
+        genau die aus der Karte heraus — die Knöpfe sind hier der einzige Weg
+        zu einer neuen Spule.
+
+        **Gerechnet wird über ``rows_height`` und nicht über ``fit_to_rows``,
+        und das ist der Kern des Befunds.** Jener Helfer nimmt die Höhe der
+        *ersten* Zeile mal die Zahl der Zeilen — richtig für einen Baum, in
+        dem jede Zeile gleich aussieht, falsch für diese Liste: Zwischen den
+        Spulen stehen zwei fette Überschriften („Im Projekt", „Im Regal"), und
+        die sind höher als eine Spulenzeile. Gemessen am 30.08.2026 bei fünf
+        Zeilen: 172 Punkte gebraucht, 156 gesetzt — die letzte Zeile fehlte,
+        und zwar auch dann, wenn die Spalte ihre volle Wunschhöhe bekam und
+        ringsum Platz frei war. ``rows_height`` misst jede Zeile einzeln.
+        """
+        wanted = rows_height(self.list)
+        if self._room is None:
+            # **Solange niemand zugeteilt hat, gilt derselbe Deckel wie in
+            # ``fit_to_rows``.** Er ist für den Augenblick vor dem ersten
+            # Zuteilen da: Ein Regal mit hundert Spulen würde die Spalte sonst
+            # schon beim Aufbau nehmen, bevor die Überlagerung überhaupt
+            # gefragt hat.
+            ceiling = view_chrome(self.list) + MAX_ROWS * row_height_of(self.list)
+        else:
+            ceiling = max(self._room - self._around_the_list(), 0)
+        self.list.setFixedHeight(max(least_height_of(self.list), min(wanted, ceiling)))
+        # Dieselbe Stelle wie im Verlauf: die Liste ist bemessen, die Karte um
+        # sie herum meldete weiter ihre Mindesthöhe und wurde zusammengedrückt.
+        self.setMinimumHeight(self.sizeHint().height())
+        self.updateGeometry()
 
     def show_scene(
         self,
@@ -627,6 +719,11 @@ class FilamentPanel(QWidget):
                 tr("Noch keine Spulen eingetragen. Was Sie anlegen, steht beim Färben zur Wahl.")
             )
         self._selection_changed(self.list.currentItem())
+        # Die Zeilenzahl hat sich geändert, also auch die Höhe, die diese
+        # Karte will. Ohne diesen Ruf bleibt die Liste auf der Höhe des vorigen
+        # Inhalts stehen, bis die Überlagerung das nächste Mal von sich aus
+        # verteilt — und das tut sie erst beim nächsten Größenwechsel.
+        self._fit()
 
     def _heading(self, text: str) -> None:
         """Eine Überschrift in der Liste — anwählbar ist sie nicht.

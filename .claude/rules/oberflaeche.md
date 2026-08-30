@@ -772,10 +772,29 @@ Drei Zusagen, und alle drei sind schon gebrochen worden:
   meldete vier Pixel Bedarf, bekam anteilig drei und setzte 112 durch. Der Boden
   hat zwei Quellen, und beide zählen — `fit_to_rows` mit seinen drei
   Mindestzeilen und der leere Zustand, dessen Höhe aus dem umbrochenen Satz
-  kommt (`fit_wrapped`) und nicht aus der Zeilenrechnung.
+  kommt (`fit_wrapped`) und nicht aus der Zeilenrechnung. **Und nie höher als
+  der Wunsch**: Eine Karte, die überhaupt nur eine Zeile *hat*, forderte über
+  jene drei Mindestzeilen 130 Punkte für 128 gewünschte — Platz, den sie
+  niemandem zeigen kann, während die Nachbarn ihn brauchen.
 
 `tests/test_overlay.py` hält alle drei: „settles on one answer",
 „moves a card once", „no card is pushed outside its section".
+
+**`fit_to_rows` rechnet mit *einer* Zeilenhöhe** — der ersten, mal der Zahl
+der Zeilen. Für einen Baum, in dem jede Zeile gleich aussieht, ist das
+richtig; für eine Liste mit fetten Zwischenüberschriften ist es zu wenig. Die
+Filamentkarte brauchte bei fünf Zeilen 172 Punkte und bekam 156, und die
+letzte Zeile fehlte auch dann, wenn die Spalte ihre volle Wunschhöhe hatte und
+ringsum Platz frei war. Wer eine Liste mit ungleichen Zeilen bemisst, nimmt
+`overlay.rows_height` — es misst jede Zeile einzeln, und `wanted_height` muss
+dieselbe Quelle nehmen wie das Setzen, sonst fordert die Karte etwas anderes,
+als sie einrichtet.
+
+**Und was unter der Liste steht, gehört in beide Rechnungen.** Hinweis und
+Knöpfe einer Karte sind kein Beiwerk der Zone, sondern Teil der Karte: Wer der
+Liste die ganze Zuteilung gibt, schiebt sie unten heraus. Bei der
+Filamentkarte waren das *Filament anlegen …* und *Druckwerte …* — der einzige
+Weg zu einer neuen Spule, und er stand außerhalb des Fensters.
 
 ## Barrierefreiheit
 

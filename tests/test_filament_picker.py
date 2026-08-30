@@ -519,3 +519,100 @@ def test_the_unpainted_swatch_follows_the_theme() -> None:
         assert theme.viewport_colours("dark")["object"] != theme.viewport_colours("light")["object"]
     finally:
         theme._ACTIVE = was
+
+
+def test_the_filament_card_shares_the_height_instead_of_taking_it(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Die Karte nimmt an der Zuteilung teil, statt sich zu bedienen.
+
+    ``OverlayHost._share_room`` verteilt die Höhe der linken Spalte nur an
+    Kinder, die das ``RoomTaker``-Protokoll erfüllen; wer es nicht erfüllt,
+    „behält seine eigene Höhe" und steht damit außerhalb der Verteilung. Diese
+    Karte tat das, und bei einem vollen Regal wurde daraus eine Schieflage:
+    Gemessen am 30.08.2026 im echten Fenster mit fünfzehn Spulen nahm sie sich
+    424 Bildpunkte, während der Verlauf daneben auf 102 gedrückt wurde und 262
+    brauchte — die Karte, die laut §2.4 jeden Arbeitsschritt begleitet, verlor
+    gegen die, die man einmal am Anfang fragt.
+    """
+    from app.ui.filament_picker import FilamentPanel
+    from app.ui.overlay import RoomTaker
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    panel = FilamentPanel()
+    assert isinstance(panel, RoomTaker), (
+        "ohne wanted_height, least_height und set_room bleibt die Karte außerhalb der Zuteilung"
+    )
+
+    # Und die Zusagen des Protokolls: Der Boden liegt unter dem Wunsch, sonst
+    # verteilt _share_room unter etwas, das die Karte selbst durchsetzt.
+    assert panel.least_height() <= panel.wanted_height(), (
+        f"Boden {panel.least_height()} über Wunsch {panel.wanted_height()}"
+    )
+    knapp = panel.least_height()
+    panel.set_room(knapp)
+    assert panel.sizeHint().height() <= knapp + 1, (
+        "eine knapp bemessene Karte muss sich auch klein machen"
+    )
+
+    # **Und solange niemand zugeteilt hat, gilt der Deckel.** Der Augenblick
+    # vor der ersten Zuteilung ist real: Das Fenster baut die Karte, bevor die
+    # Überlagerung sie das erste Mal fragt, und ein Regal mit hundert Spulen
+    # nähme die Spalte, ehe irgendjemand etwas verteilt.
+    from app.ui.panels import MAX_ROWS
+
+    for nummer in range(100):
+        filaments.remember(f"Viel {nummer:03d}", "#2980b9")
+    ungefragt = FilamentPanel()
+    assert ungefragt.list.count() > 2 * MAX_ROWS, "der Deckel wird nur bei vielen Zeilen geprüft"
+    zeile = ungefragt.list.sizeHintForRow(0)
+    assert ungefragt.list.height() <= (MAX_ROWS + 1) * zeile, (
+        f"ohne Zuteilung {ungefragt.list.height()} Punkte bei {ungefragt.list.count()} Zeilen — "
+        f"der Deckel von {MAX_ROWS} Zeilen greift nicht"
+    )
+
+
+def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Die letzte Zeile fehlte, obwohl ringsum Platz frei war.
+
+    Der Grund war eine Rechnung, die für diese Liste nicht passt:
+    ``fit_to_rows`` nimmt die Höhe der *ersten* Zeile mal die Zahl der Zeilen —
+    richtig für einen Baum, in dem jede Zeile gleich aussieht. Hier stehen
+    zwischen den Spulen zwei fette Überschriften („Im Projekt", „Im Regal"),
+    und die sind höher als eine Spulenzeile. Gemessen am 30.08.2026 bei fünf
+    Zeilen: 172 Bildpunkte gebraucht, 156 gesetzt, vier von fünf Zeilen zu
+    sehen — auch dann, wenn die Spalte ihre volle Wunschhöhe bekam.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    for nummer in range(4):
+        filaments.remember(f"Spule {nummer}", "#c0392b", material_type="PETG")
+
+    panel = FilamentPanel()
+    panel.show_scene(
+        [
+            SimpleNamespace(
+                material_slots=[MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))]
+            )
+        ]
+    )
+    panel.resize(300, 400)
+    panel.set_room(panel.wanted_height())
+
+    liste = panel.list
+    hoehen = [liste.sizeHintForRow(reihe) for reihe in range(liste.count())]
+    # **Der Kontrollfall.** Sind alle Zeilen gleich hoch, rechnen beide Wege
+    # dasselbe und dieser Test prüft nichts — die Überschriften sind der Fall,
+    # um den es geht.
+    assert len(set(hoehen)) > 1, f"gleich hohe Zeilen prüfen die Sache nicht: {hoehen}"
+
+    platz = liste.height() - 2 * liste.frameWidth()
+    assert platz >= sum(hoehen), (
+        f"{liste.count()} Zeilen brauchen {sum(hoehen)} Punkte, die Liste bietet "
+        f"{platz} — die letzten passen nicht hinein"
+    )

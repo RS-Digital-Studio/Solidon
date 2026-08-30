@@ -131,3 +131,36 @@ und der Dialog öffnet mit 695. Ein Prüfstand, der sich auf den sizeHint
 setzt, misst also eine Breite, die es nur im Prüfstand gibt. Die Frage vor
 jeder Fenstermessung: Ist die Größe die, mit der die Anwendung wirklich
 öffnet — oder die, die ein Hint gern hätte?
+
+
+**Fünfte Gestalt, 30.08.2026 (4i, an B21): `processEvents` lässt keine *Zeit*
+vergehen — und eine Animation kommt ohne Zeit nicht voran.** Die Zonen der
+Überlagerung bewegen sich auf ihre neue Höhe zu (`OverlayHost._move`). Eine
+enge `processEvents`-Schleife läuft in Millisekunden durch und fotografiert
+die Karte auf halbem Weg. Sechs Sonden lang sah das aus wie eine Rechnung, die
+ihre eigenen Ergebnisse liest:
+
+| | Spalte |
+|---|---|
+| erster Durchgang | 648 |
+| nach 4 weiteren | 717 |
+| nach 6 | 772 |
+| nach 8 | 816 |
+
+Und wo der Lauf begann, war Zufall — 648, 728, 794, 832 in vier gleichen
+Läufen. Mit `QTest.qWait(100)` statt der Schleife stand die Zahl sofort auf
+ihrem Endwert, in **jedem** Stand, und der ganze Befund („die Karte ragt 91
+Punkte aus der Spalte") war weg.
+
+**Das ist der Fall, in dem „warte, bis es still ist" oben falsch antwortet.**
+Die Bedingung fragt, ob sich zwischen zwei Durchläufen etwas ändert. Ohne
+vergehende Zeit ändert sich nichts — die Zone steht still und ist trotzdem
+nicht angekommen. Stillstand ist nur dann ein Beweis, wenn das, worauf man
+wartet, von Durchläufen getrieben wird; eine Animation wird von der Uhr
+getrieben. Wo etwas animiert ist, wartet man mit `QTest.qWait`, und die
+Rundenschleife bleibt für alles andere.
+
+**Der Kontrollfall dazu kostet eine Zeile und hat es aufgedeckt:** Bei 0 ms
+*muss* der Fehler sichtbar sein. Ist er es nicht, hat die Sonde die Lage gar
+nicht erst hergestellt, die sie prüfen soll — und ist er es bei 0 ms und bei
+2000 ms nicht mehr, war er nie einer.
