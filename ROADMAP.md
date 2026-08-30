@@ -116,7 +116,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
-| Die Entscheidung über die obere Bedienzone | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **eine Entscheidung von Robert, keine Messung.** Gemessen ist: drei Bänder, wo §2.5 eines zeichnet. **Weg A ist inzwischen gebaut** — *Erzeugen* ist flach, *Ändern* faltet nur noch vier seiner sieben Kategorien, und von den 47 Operationen, die drei Klicks tief lagen, sind **22** auf zwei gerückt; die Zahlen stehen im Abschnitt. Offen sind damit B (ein benanntes Band, groß) und C (ein Band, das der Auswahl folgt — über Fusion hinaus, `applies_to` trägt es schon), dazu die zwei Menüs, für die Flachziehen die falsche Antwort ist: *Bausteine* gehört in den Katalog mit Bildern (§2.6), *Ansicht* in die Ansicht |
+| Fünf Leistungsmarken schlagen seit dem verzögerten Geometrieimport an | Der `deferred`-Umbau verlagert den trimesh/scipy-Import in die erste Messung (29.08.2026); am 30.08. die zwölfte Überschreitung in Folge, `boolean_medium` 811 ms gegen eine Bestmarke von 451 | eine Entscheidung über das Messverfahren — Aufwärm-Aufruf vor der Marke oder neue, begründete Bestwerte —, danach der Baseline-Neustart; nur `read_dense` ist im Docstring behandelt, die übrigen vier messen gegen Werte von vor dem Umbau |
+| Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Der UI-Audit der Nacht (30.08.2026): `59 Cat_Toys_V2.3mf`, Stack in `threemf.read_objects` → `trimesh.copy` → `caching.hash_fallback`, während der Hauptthread einen Autosave schreibt; zwölf Projekte und 58 Modelle davor liefen sauber | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
+| Die Slicer-Übergabe scheitert an Roberts eigenem Slicer | Weg-Prüfung Ende zu Ende (30.08.2026): ElegooSlicer bricht mit „Slic3r::CLI::run found error", Exit −17 — auch von Hand ohne jedes Solidon-Profil; PrusaSlicer läuft denselben Weg fehlerfrei durch, die Absage trägt Regel-17-konform drei Handlungen | Roberts Blick auf sein ElegooSlicer-Maschinenprofil oder eine tiefere Diagnose; dazu die eigene Frage, ob `tools.by_id("slicer")` mit „erster Treffer gewinnt" richtig ist, wenn drei Slicer installiert sind |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12022,12 +12024,16 @@ Arbeitsbereichs-Reiter (§2.5) und die wortlose Symboldichte.
 
 Offen:
 
-- [ ] **Die Entscheidung über die obere Bedienzone.** Drei Wege stehen oben mit
-      ihren Kosten; A ist ohne Schemafrage machbar, B und C brauchen einen
-      Entwurf. Was fehlt, ist nicht die Messung — die steht — sondern die
-      Entscheidung, wie weit gegangen wird. Bis dahin wird nichts gebaut: §2.5
-      legt das Fensterschema fest, und wer es ändert, ändert Handbuch, Tour und
-      jedes Bildschirmfoto mit.
+- [x] **Die Entscheidung über die obere Bedienzone — gefallen am 29.08.2026:
+      Robert lehnt B und C ab.** Wörtlich „ich glaub ich will eher den
+      aktuellen stand aber optimiert", nachdem ihm der Merge-Umfang des
+      Bandes gezeigt worden war. Der Branch `codex/command-band-integration`
+      wird nicht gemergt; `app/ui/command_band.py` und sein Test sind aus
+      main entfernt (30.08.2026), das Konzept trägt den Stand „vorgelegt und
+      abgelehnt". Was von der Messung bleibt, ist gebaut: Weg A, die
+      Bausteine im Katalog statt im Menü, und *Ansicht* erwies sich als kein
+      Befund — seine 21 tiefen Einträge sind Einstellungen, keine
+      Operationen.
 
 **Nachtrag am 28.08.2026 — die sichere Schicht davor ist gebaut.** Roberts
 Auftrag „für Kunden ohne CAD-Kenntnisse einfach, schön und modern" lässt vier
@@ -12276,3 +12282,85 @@ Knopf gerade nicht zu dem Programm, das ein Kunde von comfy.org bekommt.
       `C:\Users\rober\AppData\Local\Programs\Comfy Desktop\Comfy Desktop.exe`,
       der Startbefehl genau diese Datei und die Backend-Adresse weiterhin
       `http://127.0.0.1:8188`.
+
+---
+
+## Teilen und Zeichnen ohne CAD-Vorwissen (29.08.2026)
+
+Robert fand an den zwei Fusion-nahen Hauptwegen dieselbe Lücke: Beim Teilen
+war nicht erkennbar, welche Ebene wirklich durch den Körper läuft, und die
+Passstifte verschwanden anschließend zwischen deckungsgleichen Hälften. Beim
+freien Zeichnen gab es Hochziehen und Abtragen zwar als Ziehgriff in der
+Querschau, aber nicht als sichtbare nächste Handlung.
+
+- [x] **Die Teilung zeigt und behält genau die gezeichnete Ebene.** Der zweite
+      Punkt friert die Ebene samt Blickrichtung ein; ein späteres Drehen der
+      Kamera ändert den Schnitt nicht mehr. Im Modell steht eine
+      durchscheinende, umrandete Fläche mit sichtbarem Überstand statt nur
+      einer Linie. Beide Punkte müssen auf demselben Teil liegen. Nach der
+      Auswertung öffnet Solidon die Hälften automatisch in der
+      Explosionsansicht und nennt ausdrücklich: Stifte an Teil A, Löcher an
+      Teil B. Dasselbe gilt für die registrierte Operation *Teilen* und die
+      automatische Bett-Teilung.
+- [x] **Hochziehen und Abtragen stehen direkt an einer geschlossenen freien
+      Skizze.** Zwei beschriftete Knöpfe mit unterschiedlichen Symbolen führen
+      ohne den Fachbegriff „Extrusion“ in die Höhen- beziehungsweise
+      Tiefenangabe. Ein offener Umriss nennt seine Bedingung am gesperrten
+      Knopf; Abtragen verlangt zusätzlich genau einen ausgewählten exakten
+      Körper und erklärt, wie ein Dreiecksnetz ersetzt werden kann. Der
+      sichtbare Ziehgriff in Vorder- oder Seitenansicht bleibt als schneller
+      Direktweg erhalten.
+- [x] **Die Viewport-Darstellung des Skizzenmodus ist vollständig nachgezogen
+      (29.08.2026).** Das Modell tritt auf 16 Prozent Deckkraft ohne Schatten
+      und Auswahlfärbung zurück. Das Raster besitzt feine Linien,
+      Fünfermarken, farbige und beschriftete Nullachsen; Skizzenkanten stehen
+      in Hinweisblau, Auswahl und Live-Vorschau in Bernstein. Unfertige
+      Linien, Kreise, Bögen, Splines und Rechtecke erscheinen zwischen den
+      Klicks im echten Viewport, Maße als lesbare Karten. Nach geschlossenem
+      Umriss führt eine Karte zur Vorder-/Seitenansicht; dort stehen
+      *Hochziehen* und *Abtragen* direkt am Pfeil/Kreuz. Die Kamera hält Profil
+      und Griff automatisch oberhalb der schwebenden Leiste. Deren leere
+      Canvas-Zeile und der umbrechende Schichthinweis sind entfernt; gemessen
+      schrumpfte sie von 292 auf 142 Bildpunkte. Drei echte Aufnahmen —
+      Draufsicht, Querschau und laufendes Rechteck — wurden nach jedem
+      Umbau angesehen, nicht nur über Actors geprüft.
+
+---
+
+## Langer Verlauf und modularer Besteckkorb (29.08.2026)
+
+Der modulare Kundenstand machte zwei Fehler gemeinsam sichtbar: Ein warmer
+Verlauf traf zwar den Geometriecache, untersuchte aber trotzdem jeden
+Zwischenkörper erneut; beim wiederholten Teilen verschwanden frühere
+Passungen, weil jede neue Naht wieder `pin_1` und `bore_1` vergab.
+
+- [x] **Merkmalcache trägt lange reale Verläufe.** Seine frühere Grenze von 32
+      war nach der Zahl fertiger Objekte begründet, tatsächlich sieht die
+      Erkennung aber das Netz nach jeder Operation. Der gemessene
+      Ausgangsstand hatte bei 163 Operationen 132 verschiedene Zwischenkörper;
+      der fertige Stand umfasst 174 Operationen. Die weiterhin feste Grenze
+      256 hält den Ausgangsverlauf vollständig: unverändert erneut 0,215 s,
+      nach einer Verschiebung 0,304 s statt vorher rund 20,5 s. Ein
+      Korpustest mit genau 132 Zwischenständen schützt gegen das LRU-Flattern.
+- [x] **Erneutes Teilen erhält bestehende Verbindungen.** Neue Verbinder
+      beginnen hinter der höchsten vorhandenen Nummer. Frühere erzeugte
+      Merkmale reisen anhand ihres Mittelpunktes auf das geometrisch richtige
+      Kindstück, und ihre Passungen werden in derselben Transaktion dorthin
+      umgehängt. Liegt ein Merkmal genau im Schnitt oder hat keinen
+      verlässlichen Mittelpunkt, bleibt die bisherige vorsichtige Antwort:
+      entfallen und melden, nicht raten.
+- [x] **Kundenprojekt vollständig über die Oberfläche neu aufgebaut.** Der
+      sichtbare Teilungsweg erzeugt sechs verständlich benannte Module, vier
+      Schwalbenschwänze je Naht, 20 geprüfte Passungen und drei tragende
+      Wandbahnen. Alle sechs Module sind wasserdicht und je eine Komponente;
+      zwei Platten halten 6,0 mm Mindestabstand. Projekt und 3MF liegen unter
+      `3D Drucker/13_Besteckkorb_Abtropfkorb/Modular/`.
+- [x] **Eigenständig geprüfte Viewports sterben erst nach der
+      Zusammenfassung.** Der Suite-Pin hielt bisher nur `MainWindow`; die
+      Ansichtsdatei baut den VTK-Viewport dagegen bewusst ohne Hauptfenster.
+      Sie endete deshalb nach 100 Prozent dreimal nacheinander mit
+      `0xC0000374` statt einer Zusammenfassung. Derselbe Lebenszeitvertrag
+      gilt jetzt für beide Typen; die drei Tests, die Freigabe absichtlich
+      messen, nehmen sich über `unpinned_windows` aus. Gegenprobe: dreimal
+      94 Tests, dreimal Exit 0; die drei betroffenen Fensterdateien danach
+      einzeln 81 Tests, Exit 0.
