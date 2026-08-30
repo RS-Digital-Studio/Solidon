@@ -129,3 +129,21 @@ lange Prüfung läuft danach; wird sie rot, wird vorwärts gefixt, was ohnehin
 die Regel ist. Ist es passiert: Inhalt prüfen (`grep -c` auf die eigenen
 Namen), Vollständigkeit feststellen, Robert berichten — **kein** Amend, kein
 Rebase, die fremde Sitzung baut schon darauf auf.
+
+**Und wer eine geteilte Datei fortschreibt, schreibt nicht „ich".** Am
+30.08.2026 hat eine fremde Sitzung meine Memory-Blöcke mitcommittet und für
+ihre eigenen Fortschreibungen gehalten — nicht aus Unachtsamkeit, sondern
+weil sie als Ich-Erzählung im Baum lagen und in einem geteilten Baum kein „ich"
+zuordenbar ist. Die Zuordnung ließ sich nachträglich klären (`grep -c` auf die
+eigenen Formulierungen, zwei Commits benannt), aber sie kostete eine Runde.
+
+Der Preis ist nicht die Ehre, sondern die **Prüfbarkeit**: Wer einen fremden
+Befund für seinen eigenen hält, kann ihn beim Weitererzählen nicht mehr an
+seiner Messung prüfen — und ergänzt dann Details, die niemand gemessen hat
+(siehe [[exakte-passung-ist-kein-beweis]]).
+
+In einer Datei, die mehreren gehört, trägt deshalb jeder Befund sein **Datum**
+und, wo es zählt, die Sitzung, die ihn gemessen hat: „Gemessen am 30.08.2026
+(5d): …". Die Erzählung im Ich bleibt richtig für alles, was nur eine Sitzung
+betrifft — die Karten und Regeln in `.claude/rules/` etwa, wo ohnehin keine
+Person spricht.
