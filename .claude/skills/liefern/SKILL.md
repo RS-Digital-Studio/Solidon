@@ -151,6 +151,24 @@ hinterlässt (frisch committete Dateien stehen dort als gelöscht), heilt man
 ohne `GIT_INDEX_FILE`, denn der würfe weg, was andere Sitzungen dort gerade
 gestaged halten.
 
+**Legt der Commit eine *neue* Datei an, ist das Phantom scharf** (belegt am
+30.08.2026, fünf Presse-Entwürfe): Der Haupt-Index hat die Datei nie gesehen,
+in HEAD steht sie — für ihn ist das eine **vorgemerkte Löschung** (`D` +
+`??`), und der nächste pfadlose Commit irgendeiner Sitzung entfernt sie aus
+dem Repository. Deshalb hat das Muster ein **viertes Glied**: Ein Commit mit
+neuen Dateien schließt im selben Aufruf mit
+
+```
+unset GIT_INDEX_FILE                                 # beide Zeilen gelten dem Haupt-Index
+git diff --name-only --diff-filter=D --cached HEAD   # nennt die Minen
+git reset -- <die eigenen neuen Pfade>               # entschärft nur die eigenen
+```
+
+ab. Die erste Zeile nennt die Minen, die zweite entschärft nur die eigenen —
+und `git diff --quiet HEAD -- <pfad>` taugt als Kontrolle **nicht**, denn er
+antwortet für unversionierte wie für fehlende Dateien gleichlautend
+„kein Unterschied" (siehe `geteilter-index-haelt-alten-stand.md`).
+
 Wer die Abweichung erst im Rückblick liest, liest sie über einem Commit, der
 schon gepusht ist.
 
