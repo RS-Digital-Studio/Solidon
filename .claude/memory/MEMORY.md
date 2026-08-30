@@ -52,9 +52,11 @@
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` um den Aufruf läuft ins Leere; nach dem Ergebnis fragen, nicht nach dem Grund.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; wer eines vergisst, misst seinen eigenen Aufbau und hält ihn für einen Fehler.
 
+- [Zufallsziehung ist keine Zuordnung](zufallsziehung-ist-keine-zuordnung.md) — sporadische Abstürze ordnet erst eine Verteilung zu; drei rote Läufe und eine grüne Gegenprobe waren zwei Ziehungen aus 7/8.
 - [Bekannte Familie erklärt nicht den Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) — „seit Commit X" verlangt die Gegenprobe auf dem Stand davor; die Familie nennt den Mechanismus, nie den Auslöser.
 - [Verursacher wird gemessen, nicht gelesen](verursacher-wird-gemessen-nicht-gelesen.md) — `git log -- a b` nennt den letzten Commit an *einer* Datei; wer einen Schuldigen nennt, hat `git show --stat` gelesen.
 
+- [Suche prüft ihre eigene Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — ein Filter, der nichts trifft, sieht aus wie einer, der nichts findet; und 265 Treffer belegen so wenig wie null.
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — 270 war exakt der französische Wert, und niemand setzte Französisch; die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — wenn ein Test nur in großen Läufen kippt, misst eine Sonde den Unterschied; sechs Bauarten, an denen sie sich selbst maß statt der Sache.

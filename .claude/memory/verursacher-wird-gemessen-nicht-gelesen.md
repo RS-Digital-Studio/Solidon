@@ -55,3 +55,22 @@ Attribution braucht `git log -S` auf den Zeileninhalt, Reproduktion braucht die
 wenn niemand sie festhält. Wer einen Befund meldet, schreibt den Aufruf mit
 hinein, solange er noch dasteht — hinterher ist eine erinnerte Zeile kein Beleg,
 sondern eine zweite Vermutung über der ersten.
+
+**Dritte Gestalt, 30.08.2026: die erfüllte Bedingung.** Eine Freigabe kam mit
+einer Auflage — „warte den Commit der anderen Sitzung ab". Im Verlauf stand ein
+Commit, dessen **Titel** genau ihre Arbeit ankündigte, und ich hielt die
+Bedingung für erfüllt. `git show <hash> --stat` hätte in einer Sekunde gezeigt,
+dass er **eine einzige Datei** trug: `ROADMAP.md`. Es war der Register-Eintrag
+über die Arbeit, nicht die Arbeit — geschrieben von der Sitzung, die auch die
+Auflage gestellt hatte.
+
+Der Schaden war null, weil die Gebiete disjunkt waren. Die Falle bleibt
+dieselbe: **Ein Titel ist eine Behauptung über einen Commit, kein Beleg über
+seinen Inhalt** — und ein Register-Commit trägt naturgemäß den Titel der Sache,
+die er ankündigt.
+
+Damit gilt der Satz für drei Fragen: *Wer hat es verursacht?* braucht
+`git log -S`. *Womit habe ich es reproduziert?* braucht die wörtliche
+Kommandozeile. **Ist die Bedingung erfüllt?** braucht `git show --stat` — nicht
+die Überschrift.
+
