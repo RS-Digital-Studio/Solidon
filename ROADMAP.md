@@ -119,10 +119,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
-| Gespeicherte Slicer-Profile überleben den Slicer-Wechsel | Gespeicherte Slicer-Profile überleben den Slicer-Wechsel (30.08.2026) | 55: Setzen und Prüfen zum Vermerkfeld `slicer_profile_slicer`, samt Messung am echten PrusaSlicer — fb's Feldhälfte liegt |
 | Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
 | Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
-| Der Textweg verweist auf ein Modell, das kein Einrichtungspunkt bringt | Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026) | Roberts Entscheidung: SDXL als siebter Einrichtungspunkt (~7 GB, fb) oder der Satz nennt Pfad und Bild-Ausweg statt des toten Verweises (5d) |
+| Der Textweg verweist auf ein Modell, das kein Einrichtungspunkt bringt | Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026) | 5ds Paket — Robert hat entschieden: anleiten statt mitliefern; Konstanten, erzeugte Modell-Übersichtsseite und konkreter NO_MODEL-Satz sind in Arbeit |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12602,11 +12601,13 @@ liegt seit `83a05d38`; was fehlt, ist die andere Hälfte — samt dem Fall
 diese Ausnahme verlöre jeder Bestandskunde seine Profilwahl beim ersten
 Update.
 
-- [ ] 55: Setzen und Prüfen — `_remember_slicer_choice` schreibt den
-      Slicer-Pfad zum Bestand, `remembered_setup` vergleicht ihn und
-      verwirft Fremdes; dazu die Messung, was PrusaSlicer mit einem
-      fremden Profil wirklich tut (behauptet hat es niemand). Eigenes
-      Paket mit eigener Ansage.
+- [x] Erledigt mit `f85c8575` (30.08.2026): `_remember_slicer_choice`
+      schreibt den Slicer-Pfad zum Bestand, `remembered_setup` verwirft
+      Fremdes; leerer Vermerk heißt „von früher", dann wird nicht
+      verglichen — die Bestandskunden-Ausnahme. Der Commit-Text nennt den
+      realen Schaden ehrlich (Export-Setup und Dialog-Vorbelegung) statt
+      des gemessen widerlegten „der Slicer lehnt ab" — die Prusa-Konsole
+      liest das fremde Maschinenprofil gar nicht.
 
 ---
 
@@ -12624,13 +12625,17 @@ Kunde liest einen Handlungsvorschlag für etwas, das die Anwendung im
 selben Zug getan hat — muss er raten, ob er noch klicken soll, ist es
 falsch.
 
-- [ ] Bedienentscheidung mit Konzept-Ansage vor dem Bau: Das
-      `perceive.mended`-Muster liegt nahe — ein Befund, dessen Rat ein
-      spätere Schritt derselben Transaktionskette einlöst, wird als
-      behoben ausgewiesen statt verschwiegen (die Historie bleibt ehrlich)
-      oder verschwindet, wenn der Bericht ohnehin nur den Endzustand
-      trägt. Wer baut, sagt vorher an, welche Befunde die Regel erfasst —
-      „derselbe Lauf" ist die Grenze, nicht „irgendwann später".
+- [ ] Konzept-Ansage vor dem Bau — die Richtung ist keine Meinungsfrage
+      mehr: `scene/evaluate.py:1198` entscheidet denselben Fall schon im
+      Bestand (`perceive.mended` — „Eine offene Stelle ist geschlossen und
+      damit fort": ausgewiesen, nicht weggelassen; 5ds Fund auf fb's
+      Vermutung). Die Frage an den Bauenden ist nur noch, warum
+      `ingest.very_large` anders sein sollte — und der echte Aufwand:
+      `mended` entsteht, wo die Behebung passiert und beide Zustände
+      sichtbar sind; `very_large` entsteht beim Laden und wird vier
+      Schritte später gegenstandslos, das Umschreiben braucht eine Stelle,
+      die den Endzustand kennt. „Derselbe Lauf" ist die Grenze, nicht
+      „irgendwann später".
 
 ---
 
@@ -12696,10 +12701,15 @@ braucht 15), vier Stapelschritte samt Provenienz, am Ende 150 000
 Dreiecke, wasserdicht — die Dauer gehört mit in die Abwägung, denn sie
 ist das zweite Argument neben den sieben Gigabyte.
 
-- [ ] Roberts Entscheidung — rund sieben Gigabyte für jeden Kunden, der
-      den Textweg will, gegen einen Satz, der ehrlich sagt, dass man ein
-      Bild mitbringt: **Für SDXL** heißt ein siebter Einrichtungspunkt in
-      `install.py` plus Ladeschritt in `comfy_setup` (fb); **gegen SDXL**
-      heißt, der Dialogsatz zeigt nicht mehr auf *Zusätzliche Programme*,
-      sondern nennt den Pfad `models/checkpoints/` und das Bild als
-      Ausweg (5d). Beide Fassungen liegen vorbereitet.
+- [~] **Roberts Entscheidung ist gefallen (30.08.2026): anleiten statt
+      mitliefern** — „vorbereiten bzw hinweise, mit welchen modellen
+      getestet wurde und wie man sie installiert einrichtet usw, eben so
+      einfach wie möglich und übersichtlich für den kunden in der app".
+      5d baut das Paket am Stück: vier Konstanten in `comfy_setup.py` als
+      die eine Quelle (Repo, Dateiname, Größe, Zielordner — samt
+      Lizenzantwort: CreativeML Open RAIL++-M, lokal unproblematisch),
+      eine **erzeugte** Handbuchseite „Welche Modelle Solidon benutzt"
+      aus `OLLAMA_SUGGESTIONS` und den Konstanten (Bauart wie
+      `rules_text`: eine zweite Liste veraltet), und der `NO_MODEL`-Satz
+      nennt Dateiname und Ordner statt „ein SDXL-Modell". fb's
+      Mitliefern-Hälfte entfällt.
