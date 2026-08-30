@@ -639,6 +639,16 @@ class InstallDialog(QDialog):
         """Einen lokalen Dienst öffnen; die Portprüfung läuft im Arbeiter."""
         if self._busy_working():
             return
+        # **Was zum vorigen Lauf gehört, gehört nicht zu diesem** — und zwar
+        # vor jedem Rückweg, nicht nur vor dem gelingenden. Der
+        # Installationszweig räumt hier auf, der Startzweig tat es nicht: Wer
+        # erst installierte und dann startete, fand unter *Details anzeigen*
+        # noch die Ausgabe der Paketverwaltung. Auch die Absage „kein lokales
+        # Startprogramm" darunter ist ein neuer Vorgang; ihr die Ausgabe des
+        # alten beizulegen wäre dieselbe Verwechslung. Dieselbe Familie wie die
+        # Ergebniszeile, die einen Slicer-Wechsel überlebte.
+        self._details = ""
+        self.details_button.setVisible(False)
         self._broke = False
         tool = tools.by_id(requirement.id)
         if tool is None or tool.start_command() is None:
@@ -850,12 +860,35 @@ class InstallDialog(QDialog):
         # nicht kennt; ein Aufruf im Browser beantwortet dieselbe Frage in zwei
         # Sekunden — läuft der Dienst oder nicht. ``StartResult`` trägt sie
         # seit je, und niemand hat gefragt, warum sie nicht zu sehen ist.
+        # **Was Solidon versucht hat, gehört in die Einzelheiten** (§33.2).
+        # Der Startweg hatte den Knopf nie gefüllt, obwohl der Befehl im
+        # Ergebnis steht: Wer meldet „es startet nicht", kann ihn kopieren und
+        # selbst ausführen — und sieht dann in einer Zeile, was das Programm
+        # dazu sagt. Ohne ihn bleibt einem Fehlerbericht nur „ging nicht".
+        self._note_start_attempt(start_result)
         page = self._browsable(start_result.address)
         if page:
             reason = f"{reason} " + str(
                 tr("Ob es inzwischen antwortet, sehen Sie unter {adresse}.")
             ).format(adresse=page)
         self.state.setText(f"{requirement.title}: {reason}")
+
+    def _note_start_attempt(self, start_result: tools.StartResult) -> None:
+        """Den Startversuch für die Einzelheiten festhalten.
+
+        Nur bei einem Fehlschlag und nur, wenn es etwas zu sagen gibt: Ein
+        gelungener Start braucht keine Nachschau, und ein leerer Kasten hinter
+        einem Knopf ist schlechter als kein Knopf.
+        """
+        lines = []
+        if start_result.command:
+            lines.append(f"{tr('Aufruf')}: {' '.join(start_result.command)}")
+        if start_result.address:
+            lines.append(f"{tr('Adresse')}: {start_result.address}")
+        if not lines:
+            return
+        self._details = "\n".join(lines)
+        self.details_button.setVisible(True)
 
     def _launch_thread_done(self) -> None:
         worker = self._launcher

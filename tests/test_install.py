@@ -1196,3 +1196,53 @@ def test_an_endpoint_is_not_offered_as_a_page(qt_app: QApplication) -> None:
     zeile = dialog.state.text()
     assert "11434" not in zeile, f"ein Endpunkt wurde als Seite angeboten: {zeile!r}"
     assert zeile, "ohne Adresse bleibt der Satz trotzdem stehen"
+
+
+def test_a_failed_start_keeps_its_command_for_the_details(qt_app: QApplication) -> None:
+    """Was Solidon versucht hat, gehört in die Einzelheiten (§33.2).
+
+    Der Startweg hatte den Knopf nie gefüllt, obwohl der Aufruf im Ergebnis
+    steht. Wer meldet „es startet nicht", kann ihn kopieren und selbst
+    ausführen — und sieht in einer Zeile, was das Programm dazu sagt. Ohne ihn
+    bleibt einem Fehlerbericht nur „ging nicht".
+    """
+    dialog = InstallDialog()
+    anforderung = next(
+        entry.requirement for entry in dialog.rows if entry.requirement.id == "comfyui"
+    )
+
+    dialog._tool_started(
+        (
+            anforderung,
+            tools.StartResult(
+                launched=True,
+                running=False,
+                command=("comfy.exe", "launch", "--background"),
+                address="http://127.0.0.1:8188",
+            ),
+        )
+    )
+
+    assert dialog.details_button.isVisible() or dialog._details, "der Knopf blieb leer"
+    assert "comfy.exe launch --background" in dialog._details
+    assert "http://127.0.0.1:8188" in dialog._details
+
+
+def test_starting_a_service_forgets_the_details_of_the_install(qt_app: QApplication) -> None:
+    """Was zum vorigen Lauf gehört, gehört nicht zu diesem.
+
+    Der Installationszweig räumt die Einzelheiten auf, der Startzweig tat es
+    nicht: Wer erst installierte und dann startete, fand unter *Details
+    anzeigen* noch die Ausgabe der Paketverwaltung — zu einem Vorgang, der
+    längst vorbei war.
+    """
+    dialog = InstallDialog()
+    anforderung = next(
+        entry.requirement for entry in dialog.rows if entry.requirement.id == "comfyui"
+    )
+    dialog._details = "pip: could not find a version that satisfies the requirement"
+    dialog.details_button.setVisible(True)
+
+    dialog._start_tool(anforderung)
+
+    assert "pip:" not in dialog._details, "die Ausgabe des vorigen Vorgangs stand noch da"
