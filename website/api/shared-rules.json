@@ -1,5 +1,10 @@
 {
   "format": 1,
+  "licenses": [
+    "CC0-1.0",
+    "CC-BY-4.0",
+    "CC-BY-SA-4.0"
+  ],
   "max_doc_chars": 2000,
   "max_title_chars": 120,
   "max_upload_bytes": 26214400,
@@ -104,12 +109,14 @@
     1
   ],
   "recipe_keys": [
+    "author",
     "doc",
     "document",
     "exposed",
     "features",
     "format_version",
     "group",
+    "license",
     "name",
     "payloads",
     "range_report",

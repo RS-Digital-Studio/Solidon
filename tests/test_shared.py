@@ -386,3 +386,63 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
 
     assert refused.value.values["findings"], "die Absage nennt den Grund nicht"
     assert refused.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“ (Regel 17)"
+
+
+# --- Lizenz und Autor: die zwei Felder, die eine Weitergabe erlauben ----------
+
+
+def test_the_licences_come_from_the_recipe_core_not_from_a_second_list() -> None:
+    """Die Wertemenge gehört dem Kern; die Börse gibt heraus, was sie vorfindet.
+
+    Andersherum — die Börse führt die Liste, der Kern liest sie — wäre der Kern
+    von der Börse abhängig, und das ist die falsche Richtung. Der Test hält die
+    Richtung fest, nicht die Werte: Wer eine vierte Lizenz zulässt, ändert eine
+    Zeile in ``recipe.py`` und diese Liste zieht nach.
+    """
+    from app.core.knowledge.parts.recipe import RECIPE_LICENSES
+
+    assert RECIPE_LICENSES, "eine leere Lizenzliste ließe jeden Wert durch"
+    assert rules()["licenses"] == list(RECIPE_LICENSES)
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        pytest.param({"license": "CC0-1.0"}, True, id="erlaubte Lizenz"),
+        pytest.param({"license": "WTFPL"}, False, id="fremde Lizenz"),
+        pytest.param({"license": 7}, False, id="Lizenz ist keine Zeichenkette"),
+        pytest.param({"author": "R. Schneider, rs-digital.de"}, True, id="Autor mit Adresse"),
+        pytest.param({"author": "R. <b>Schneider</b>"}, False, id="Autor mit Auszeichnung"),
+        pytest.param({"author": "R" * (MAX_TITLE_CHARS + 1)}, False, id="Autor zu lang"),
+    ],
+)
+def test_the_check_asks_whether_a_value_is_allowed_never_whether_it_is_there(
+    changes: dict[str, Any], expected: bool
+) -> None:
+    """Beide Felder sind freiwillig — und ein Autor darf sagen, wo man ihn findet.
+
+    Zwei Zusagen in einem Test, weil sie dieselbe Naht betreffen. **Abwesend
+    ist kein Fehler:** Ein Rezept ohne Lizenz schreibt den Schlüssel gar nicht
+    erst; eine Prüfung auf Anwesenheit wiese damit jedes zweite Rezept ab. Und
+    **eine Adresse ist keine Werbung:** ``Recipe.author`` ist ausdrücklich „ein
+    Name, ein Kürzel, eine Adresse", also gilt dort das Link-Verbot aus
+    ``FORBIDDEN_TEXT`` nicht — das ``<`` verbietet ein eigenes Muster weiter,
+    denn die Börse zeigt das Feld öffentlich.
+
+    Ein gemeinsames Muster für Titel und Autor hätte eines von beiden falsch
+    entschieden, und zwar still.
+    """
+    findings = inspect(recipe(**changes))
+
+    assert (findings == []) is expected, f"unerwartet: {findings}"
+
+
+def test_a_recipe_without_licence_or_author_passes() -> None:
+    """Die Grundmenge des Tests darüber — ohne sie prüft er die falsche Sache.
+
+    Wäre schon das Rezept **ohne** die zwei Felder beanstandet, wäre jedes
+    „False" oben aus dem falschen Grund richtig, und das „True" bei der
+    erlaubten Lizenz wäre der einzige Fall, der überhaupt etwas sagt.
+    """
+    assert "license" not in json.loads(recipe())
+    assert inspect(recipe()) == []

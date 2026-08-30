@@ -1312,3 +1312,37 @@ def test_a_finding_line_is_plain_text_and_its_symbol_carries_the_colour(qt_app: 
             )
     finally:
         panel.deleteLater()
+
+
+def test_no_value_key_speaks_german() -> None:
+    """Ein Wertschlüssel ist ein Schlüssel, und Schlüssel sind englisch.
+
+    **Die Sprachprüfung kann diese Stelle nicht sehen.** Sie liest Bezeichner
+    — Variablen, Funktionen, Parameter — und ein Wörterbuchschlüssel ist keiner
+    davon; `"grund"` stand am 30.08.2026 in ``sketch/ops.py``, während
+    ``grund`` längst in ``GERMAN_STEMS`` stand. Gefunden hat es der Test
+    darüber, und zwar aus dem falschen Grund: über die fehlende
+    **Beschriftung**, nicht über die Sprache. Wer den Schlüssel eingedeutscht
+    *und* beschriftet hätte, wäre durchgekommen.
+
+    Die Erhebung steht schon da (:func:`keys_in_source`), also kostet der
+    Wächter nichts — und er sitzt hier und nicht in
+    ``test_language_rules.py``, weil dort die Bezeichner erhoben werden und
+    hier die Schlüssel.
+    """
+    from tests.test_language_rules import GERMAN_STEMS, GERMAN_WORDS
+
+    assert GERMAN_STEMS and GERMAN_WORDS, "ohne Stammliste prüft dieser Test nichts"
+
+    found = keys_in_source()
+    assert found, "keine Wertschlüssel im Quelltext gefunden"
+
+    german = {}
+    for key, file in found.items():
+        parts = key.split("_")
+        if any(part in GERMAN_WORDS for part in parts) or any(stem in key for stem in GERMAN_STEMS):
+            german[key] = file
+    assert not german, (
+        "Ein Wertschlüssel reist in die Projektdatei und ins Protokoll — er ist "
+        f"englisch, auch wenn der Kommentar daneben deutsch ist: {german}"
+    )

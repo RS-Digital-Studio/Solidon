@@ -33,7 +33,7 @@ import json
 import re
 from typing import Any, Final
 
-from app.core.knowledge.parts.recipe import FORMAT_VERSION, Recipe
+from app.core.knowledge.parts.recipe import FORMAT_VERSION, RECIPE_LICENSES, Recipe
 from app.core.registry import REGISTRY
 
 #: Wie groß eine hochgeladene Datei höchstens sein darf (Konzept §3.6).
@@ -58,6 +58,16 @@ MAX_DOC_CHARS: Final = 2000
 #: maskiert ausgegeben. Aber Werbung braucht einen anklickbaren Link, und ohne
 #: ihn lohnt sie sich nicht.
 FORBIDDEN_TEXT: Final = re.compile(r"https?://|www\.|<[a-zA-Z/!]", re.IGNORECASE)
+
+#: Dasselbe **ohne** die Link-Hälfte — für das Autorenfeld.
+#:
+#: Ein Autor darf sagen, wo man ihn findet; ``Recipe.author`` ist ausdrücklich
+#: „ein Name, ein Kürzel, eine Adresse". Eine Auszeichnung darf er trotzdem
+#: nicht einschleusen: Die Börse zeigt das Feld öffentlich, und was für Titel
+#: und Erklärtext gilt, gilt für einen Namen genauso. Zwei Muster, weil die
+#: zwei Felder zwei verschiedene Fragen beantworten — ein gemeinsames hätte
+#: entweder die Adresse verboten oder das ``<`` durchgelassen.
+FORBIDDEN_MARKUP: Final = re.compile(r"<[a-zA-Z/!]")
 
 #: Welche Werte in einem Parameter stehen dürfen.
 #:
@@ -84,6 +94,13 @@ def rules() -> dict[str, Any]:
         "max_title_chars": MAX_TITLE_CHARS,
         "max_doc_chars": MAX_DOC_CHARS,
         "value_kinds": list(VALUE_KINDS),
+        # Die Wertemenge gehört dem Rezept-Kern, nicht der Börse: Ein Feld an
+        # ``Recipe`` mit festen zulässigen Werten ist seine Sache, und die
+        # Börse gibt heraus, was sie vorfindet. Andersherum — die Börse führt
+        # die Liste, der Kern liest sie — hätte den Kern von ihr abhängig
+        # gemacht, und das ist die falsche Richtung (abgestimmt mit d3,
+        # 30.08.2026).
+        "licenses": list(RECIPE_LICENSES),
     }
 
 
@@ -162,6 +179,41 @@ def _text_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]:
             findings.append(f"„{key}“ ist {len(text)} Zeichen lang, erlaubt sind {limit}.")
         if FORBIDDEN_TEXT.search(text):
             findings.append(f"„{key}“ enthält einen Link oder Auszeichnung.")
+    return findings + _credit_findings(data, allowed)
+
+
+def _credit_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]:
+    """Lizenz und Autor — die zwei Felder, die eine Weitergabe erst erlauben.
+
+    **Abwesend ist kein Fehler.** Ein Rezept ohne Lizenz schreibt den Schlüssel
+    gar nicht erst in die Datei; geprüft wird die *Zulässigkeit* eines Wertes,
+    nie seine Anwesenheit. Eine Pflichtangabe wäre auch die falsche Stelle —
+    ob die Börse eine Lizenz verlangt, entscheidet die Börse und nicht das
+    Dateiformat.
+
+    Der Autor darf eine Adresse nennen und keine Auszeichnung: siehe
+    :data:`FORBIDDEN_MARKUP`.
+    """
+    findings: list[str] = []
+
+    licence = data.get("license")
+    if licence not in (None, ""):
+        allowed_licences = allowed.get("licenses") or []
+        if not isinstance(licence, str):
+            findings.append("„license“ ist kein Text.")
+        elif allowed_licences and licence not in allowed_licences:
+            findings.append(f"„{licence}“ ist keine der erlaubten Lizenzen.")
+
+    author = data.get("author")
+    if author not in (None, ""):
+        if not isinstance(author, str):
+            findings.append("„author“ ist kein Text.")
+        else:
+            limit = allowed["max_title_chars"]
+            if len(author) > limit:
+                findings.append(f"„author“ ist {len(author)} Zeichen lang, erlaubt sind {limit}.")
+            if FORBIDDEN_MARKUP.search(author):
+                findings.append("„author“ enthält eine Auszeichnung.")
     return findings
 
 
