@@ -2322,6 +2322,48 @@ class HistoryPanel(QWidget):
         self._fit()
         self.list.scrollToBottom()
 
+    def point_at(self, op_id: int) -> bool:
+        """Die Zeile dieser Operation auswählen und ins Sichtfeld holen.
+
+        **Wofür:** Ein Operationsfehler im Prüfbericht trägt keinen Ort und
+        keine Merkmale — der Kern gibt ihm ``object_id`` und ``op_id``
+        (``evaluate.py``, ``op.<operation>.<Ausnahme>``). Die ``op_id`` ist
+        damit die einzige Auskunft über *welchen Schritt es war*, und ohne
+        diese Methode blieb sie ungenutzt: Ein Klick auf den Fehler war
+        folgenlos, gemessen an allen 58 Befunden der Beispielprojekte.
+
+        **Zwei Rollen, nicht eine.** Eine Transaktion aus mehreren Schritten
+        trägt bewusst **keine** ``UserRole`` — sonst müsste ein Doppelklick
+        raten, welcher der vier sich öffnen soll. Ihre Operationen stehen in
+        ``OPS_ROLE`` am Gruppenknoten. Wer nur die ``UserRole`` liest, zeigt
+        bei jedem Sammelschritt ins Leere, und das sind gerade die
+        interessanten.
+
+        Gibt zurück, ob eine Zeile gefunden wurde: Der Aufrufer soll nicht
+        behaupten müssen, etwas gezeigt zu haben.
+        """
+        first: QListWidgetItem | None = None
+        for row in range(self.list.count()):
+            # Ohne None-Wache, wie ``selected_operations`` daneben: Die Stubs
+            # kennen dort keinen leeren Rueckgabewert, und eine Pruefung darauf
+            # haelt mypy fuer unerreichbar.
+            item = self.list.item(row)
+            own = item.data(Qt.ItemDataRole.UserRole)
+            if own == op_id:
+                first = item
+                break
+            inside = item.data(OPS_ROLE) or ()
+            if op_id in tuple(inside) and first is None:
+                # Die Gruppenzeile merken, aber weitersuchen: Steht der
+                # Schritt auch als eigene Kindzeile darunter, ist die die
+                # genauere Antwort.
+                first = item
+        if first is None:
+            return False
+        self.list.setCurrentItem(first)
+        self.list.scrollToItem(first)
+        return True
+
     def selected_operations(self) -> tuple[int, ...]:
         """Die gewählten Schritte, aufsteigend und ohne Doppelte.
 

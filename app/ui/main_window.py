@@ -914,6 +914,16 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
         self._map_cache: dict[tuple[str, str, int], Any] = {}
+        self._finding_awaiting_map: Finding | None = None
+        """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
+
+        **Der erste Klick auf eine Warnung fuhr sonst ins Leere.** Der Ort
+        eines Kartenbefunds kommt aus ``_map_cache``, und der ist beim ersten
+        Klick leer — die Karte rechnet gerade erst, und die Ansicht wartet
+        ausdrücklich nicht darauf. Gemessen am 30.08.2026 über alle 58 Befunde
+        der Beispielprojekte: **keiner** löste beim ersten Klick einen Flug
+        aus. Hier steht, wofür ``_map_ready`` ihn nachholen soll.
+        """
         self._map_worker: Any = None
         """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
         """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
@@ -6834,6 +6844,21 @@ class MainWindow(QMainWindow):
         self._map_cache = {key: analysis}
         if self.analysis_bar.chosen() == key[1] and self.object_tree.selected() == object_id:
             self._show_map(analysis, object_id)
+        # **Den Flug nachholen, auf den der Klick gewartet hat.** Der Ort eines
+        # Kartenbefunds steht erst hier fest; wer ihn beim Klick sucht, findet
+        # einen leeren Cache. Nur für den Befund, der noch gilt — wer inzwischen
+        # etwas anderes angeklickt hat, will nicht dorthin.
+        waiting = self._finding_awaiting_map
+        self._finding_awaiting_map = None
+        if waiting is None or analysis is None:
+            return
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result else None
+        if entry is None:
+            return
+        target = maps.location_of(entry, waiting) or maps.focus_point(entry, analysis)
+        if target is not None:
+            self._show_finding_at(waiting, entry, target)
 
     def _show_map(self, analysis: Any, object_id: ObjectId) -> None:
         self.viewport.set_analysis_map(analysis, object_id if analysis else None)
@@ -6982,7 +7007,22 @@ class MainWindow(QMainWindow):
     def _on_finding_activated(self, finding: Finding) -> None:
         """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
         zum Ort (§18.4).
+
+        **Ein Klick auf einen Befund bleibt nie folgenlos.** Gestuft nach dem,
+        was der Befund hergibt: Wo es einen Ort gibt, fliegt die Kamera hin und
+        eine Marke steht dort; wo nur ein Körper genannt ist, wird der
+        ausgewählt; und wo ein Schritt genannt ist, zeigt der Verlauf ihn.
+        Gemessen am 30.08.2026 über alle 58 Befunde der Beispielprojekte: **58
+        lösten gar nichts aus** — auch die fünfzig mit Analysekarte, deren Ort
+        erst aus dem Kartencache kommt und der beim ersten Klick leer ist.
         """
+        # **Der Schritt zuerst, denn er gilt unabhängig vom Körper.** Ein
+        # Operationsfehler trägt eine ``op_id`` und sonst wenig; sie beantwortet
+        # die Frage, die er stellt — welcher Schritt war es? Bei einem Befund
+        # ohne Körper ist sie sogar die einzige Antwort, die es gibt.
+        if finding.op_id is not None and self.history_panel.point_at(int(finding.op_id)):
+            open_section(self.history_panel)
+
         object_id = finding.object_id or self.object_tree.selected()
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result and object_id else None
@@ -7009,7 +7049,38 @@ class MainWindow(QMainWindow):
             target = maps.location_of(entry, finding)
 
         if target is not None:
-            self.viewport.fly_to(target)
+            self._show_finding_at(finding, entry, target)
+            return
+
+        # **Ein Klick auf einen Befund bleibt nie folgenlos.** Ohne Ort gibt es
+        # keine Stelle zu zeigen — aber fast jeder Befund nennt einen Körper,
+        # und der lässt sich auswählen und ins Bild holen. Das ist die Auskunft,
+        # die möglich ist, und sie ist besser als gar keine Reaktion: Eine Zeile,
+        # auf die nichts folgt, sieht kaputt aus (§2.7).
+        if kind is not None:
+            # Die Karte rechnet noch. ``_map_ready`` holt den Flug nach, sobald
+            # sie steht; bis dahin bleibt die Auswahl die Antwort.
+            self._finding_awaiting_map = finding
+        self.object_tree.select_object(entry.id)
+
+    def _show_finding_at(self, finding: Finding, entry: Any, target: Vec3) -> None:
+        """Zur Stelle eines Befunds fliegen und sie markieren.
+
+        **Aus der Szene in die Ansicht, einmal.** Der Ort eines Befunds liegt in
+        Szenenkoordinaten; im Bild steht der Körper auf seiner Platte und
+        womöglich auseinandergezogen (§18.8, §25). Ohne die Umrechnung fliegt
+        die Kamera bei einem Körper auf Platte 2 eine Bettbreite daneben — die
+        Verwechslung, die beim Klick schon einmal eine Bohrung danebengesetzt
+        hat, hier in der Gegenrichtung.
+
+        Die Marke ist nötig, weil der Flug allein die Frage nicht beantwortet:
+        Wo eine Analysekarte läuft, färbt sie die Stelle ein; wo keine läuft,
+        stand der Kunde vor einem Teil, das überall gleich aussieht (§18.4).
+        """
+        self._finding_awaiting_map = None
+        shown = self.viewport.view_point_of(target, entry.id)
+        self.viewport.fly_to(shown)
+        self.viewport.mark_finding(target, str(finding.message), entry.id)
 
     # --- der Agent (§26) --------------------------------------------------------
 

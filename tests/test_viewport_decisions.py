@@ -3152,3 +3152,170 @@ def test_the_theme_reaches_the_shadow_and_the_drawing_reads_it() -> None:
     assert "self._shadow_opacity" in gezeichnet, (
         "das Zeichnen liest die Konstante statt des gemerkten Werts"
     )
+
+
+def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> None:
+    """Die Marke einer angeklickten Warnung — und sie bleibt nicht stehen.
+
+    Ein Klick auf einen Befund brachte die Kamera an einen Ort und sonst
+    nichts; wo eine Analysekarte läuft, färbt sie die Stelle ein, und die
+    Hälfte der Befunde hat keine. Gemessen am 30.08.2026 über alle 58 Befunde
+    der Beispielprojekte: **keiner** löste überhaupt eine sichtbare Reaktion
+    aus.
+
+    Geprüft wird ohne Fenster über eine Attrappe mit genau den Methoden, die
+    ``mark_finding`` benutzt — wie in ``test_cursors.py``. Sie zählt mit, was
+    hinzugefügt und was wieder entfernt wird; das ist die Zusage, um die es
+    geht, denn eine Marke, die stehen bleibt, wäre eine zweite Auswahl neben
+    der echten.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import FINDING_MARK_MS, Viewport
+
+    gelegt: list[str] = []
+
+    class Attrappe:
+        camera = SimpleNamespace(
+            position=(0.0, -100.0, 60.0), focal_point=(0.0, 0.0, 0.0), parallel_scale=50.0
+        )
+
+        def add_mesh(self, *args: Any, **kwargs: Any) -> str:
+            gelegt.append(str(kwargs.get("name", "mesh")))
+            return str(kwargs.get("name", "mesh"))
+
+        def add_point_labels(self, *args: Any, **kwargs: Any) -> str:
+            gelegt.append(str(kwargs.get("name", "label")))
+            return str(kwargs.get("name", "label"))
+
+        def remove_actor(self, actor: Any, render: bool = True) -> None:
+            gelegt.remove(str(actor))
+
+        def render(self) -> None:
+            pass
+
+    blind = cast(Any, Viewport.__new__(Viewport))
+    blind.plotter = Attrappe()
+    blind._finding_actors = []
+    blind._result = None
+    blind._finding_timer = SimpleNamespace(start=lambda ms: None, stop=lambda: None)
+
+    Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
+    assert gelegt == ["finding_ring", "finding_label"], (
+        f"Ring und Beschriftung gehören beide dazu: {gelegt}"
+    )
+
+    Viewport._hide_finding_mark(blind)
+    assert gelegt == [], f"nach der Frist steht nichts mehr: {gelegt}"
+    assert blind._finding_actors == [], "und die Liste ist leer"
+
+    # Die Frist ist kurz genug, dass niemand sie für einen Zustand hält, und
+    # lang genug, um die Stelle nach dem Flug zu finden.
+    assert 1000 <= FINDING_MARK_MS <= 5000, FINDING_MARK_MS
+
+
+def test_a_place_from_the_scene_is_shifted_into_the_view(qt_app: QApplication) -> None:
+    """Ein Ort aus der Szene wird für die Ansicht verschoben — beide Richtungen.
+
+    ``fly_to`` nahm seinen Punkt roh. Bei einem Körper auf Platte 2 liegt der
+    eine Bettbreite neben dem, was der Kunde sieht (§25) — dieselbe
+    Verwechslung, die beim Klick schon einmal eine Bohrung danebengesetzt hat,
+    hier in der Gegenrichtung.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    blind = cast(Any, Viewport.__new__(Viewport))
+    blind.plotter = None
+
+    # Ohne Kennung und ohne Auswertung bleibt der Punkt, wie er ist: Ein
+    # Versatz, den man nicht zuordnen kann, ist keiner.
+    blind._result = None
+    assert Viewport.view_point_of(blind, (1.0, 2.0, 3.0)) == (1.0, 2.0, 3.0)
+    assert Viewport.view_point_of(blind, (1.0, 2.0, 3.0), "obj_1") == (1.0, 2.0, 3.0)
+
+    eintrag = SimpleNamespace(id="obj_1")
+    blind._result = SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": eintrag}))
+    blind._view_offset = lambda entry, result: [220.0, 0.0, 0.0]  # eine Bettbreite
+    verschoben = Viewport.view_point_of(blind, (1.0, 2.0, 3.0), "obj_1")
+    assert verschoben == (221.0, 2.0, 3.0), verschoben
+    # Und ein unbekannter Körper verschiebt nichts — sonst versetzte ein
+    # veralteter Befund die Marke ins Nirgendwo.
+    assert Viewport.view_point_of(blind, (1.0, 2.0, 3.0), "obj_9") == (1.0, 2.0, 3.0)
+
+
+def test_the_history_can_point_at_a_single_step_and_at_a_group(
+    qt_app: QApplication,
+) -> None:
+    """``point_at`` findet den Schritt — auch wenn er in einer Transaktion steckt.
+
+    Eine Transaktion aus mehreren Operationen trägt bewusst **keine**
+    ``UserRole``: Ein Doppelklick müsste sonst raten, welcher der vier sich
+    öffnen soll. Ihre Schritte stehen in ``OPS_ROLE`` am Gruppenknoten. Wer
+    nur die ``UserRole`` liest, zeigt bei jedem Sammelschritt ins Leere — und
+    das sind gerade die interessanten.
+    """
+    from PySide6.QtCore import Qt as QtNS
+    from PySide6.QtWidgets import QListWidgetItem
+
+    from app.ui.panels import OPS_ROLE, HistoryPanel
+
+    panel = HistoryPanel()
+    einzeln = QListWidgetItem("1  Bohrung setzen")
+    einzeln.setData(QtNS.ItemDataRole.UserRole, 1)
+    einzeln.setData(OPS_ROLE, (1,))
+    gruppe = QListWidgetItem("Teilung in vier")
+    gruppe.setData(OPS_ROLE, (2, 3, 4, 5))
+    panel.list.addItem(einzeln)
+    panel.list.addItem(gruppe)
+
+    assert panel.point_at(1), "der einzelne Schritt wird über die UserRole gefunden"
+    assert panel.list.currentItem() is einzeln
+
+    assert panel.point_at(4), "ein Schritt in einer Transaktion über OPS_ROLE"
+    assert panel.list.currentItem() is gruppe, (
+        "bei einem Sammelschritt ist die Gruppenzeile die Antwort"
+    )
+
+    # Und was es nicht gibt, wird nicht behauptet: Der Aufrufer entscheidet
+    # daran, ob er den Abschnitt überhaupt aufklappt.
+    assert not panel.point_at(99)
+
+
+def test_clicking_a_finding_is_never_without_an_answer() -> None:
+    """Die Zusage von V6, an ihren drei Stufen im Quelltext festgehalten.
+
+    Gemessen am 30.08.2026 über alle 58 Befunde der Beispielprojekte: **keiner**
+    löste beim Klick eine sichtbare Reaktion aus. Zwei Ursachen — ein
+    Operationsfehler trägt weder Ort noch Merkmale (der Kern gibt ihm
+    ``object_id`` und ``op_id``), und der Ort eines Kartenbefunds steht erst
+    fest, wenn die Karte gerechnet ist, was beim ersten Klick nie der Fall ist.
+
+    Ein Test am gebauten Fenster wäre der bessere, und er liefe hier ins Leere:
+    Die Kartenrechnung braucht einen Arbeiter-Thread, und der ist offscreen
+    genau der Teil, der nicht läuft. Gelesen wird deshalb der Quelltext — wie
+    bei den Setzstellen in ``test_cursors.py``. Er hält die drei Stufen
+    auseinander; ob sie im Fenster greifen, ist gemessen und steht in der
+    Roadmap.
+    """
+    import inspect
+
+    from app.ui.main_window import MainWindow
+
+    quelle = inspect.getsource(MainWindow._on_finding_activated)
+    assert "point_at" in quelle, "Stufe 3: der Verlauf zeigt den gescheiterten Schritt"
+    assert "select_object" in quelle, "Stufe 2: ohne Ort wird der Körper ausgewählt"
+    assert "_finding_awaiting_map" in quelle, (
+        "Stufe 1: der Klick merkt sich, dass er auf eine Karte wartet"
+    )
+
+    nachgeholt = inspect.getsource(MainWindow._map_ready)
+    assert "_show_finding_at" in nachgeholt, (
+        "die fertige Karte holt den Flug nach — sonst ist der erste Klick "
+        "immer folgenlos und der zweite tut es"
+    )
+
+    zeigen = inspect.getsource(MainWindow._show_finding_at)
+    assert "view_point_of" in zeigen, "aus der Szene in die Ansicht (§25)"
+    assert "mark_finding" in zeigen, "und am Ziel steht eine Marke"

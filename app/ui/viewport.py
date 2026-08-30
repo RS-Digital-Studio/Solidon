@@ -980,6 +980,22 @@ AXIS_LABEL_LIGHT = "#2b2a28"
 #: Wände trennen sich deutlich, und mehr Licht ließe ihn nur überstrahlen.
 HEADLIGHT = {"light": 0.45, "dark": 0.25}
 
+#: Wie lange die Marke eines angeklickten Befunds stehen bleibt.
+#:
+#: Lang genug, um sie zu finden, nachdem die Kamera geflogen ist; kurz genug,
+#: dass sie nicht zur zweiten Auswahl wird. Sie ist eine **Antwort auf einen
+#: Klick** und kein Zustand — was ausgewählt ist, sagen Auswahlfarbe,
+#: Objektbaum und Statuszeile, und eine dauerhafte zweite Marke daneben wäre
+#: eine zweite Wahrheit.
+FINDING_MARK_MS = 2600
+
+#: Wie groß der Ring im Bild ist, als Anteil der sichtbaren Höhe.
+#:
+#: Am Bild bemessen und nicht am Modell: Eine Marke soll auf jedem Teil gleich
+#: groß aussehen, und ein fester Weltradius wäre an einem 200-mm-Gehäuse ein
+#: Punkt und an einer M3-Bohrung ein Reifen.
+FINDING_RING_SHARE = 0.09
+
 SSAO_RADIUS = 2.0
 
 #: Wie lange die Maus stehen muss, bevor unter ihr nach einem Merkmal gesucht
@@ -2636,6 +2652,15 @@ class Viewport(QWidget):
         self._shading: Shading = "flat"
         self._shadow_opacity = SHADOW_OPACITY["dark"]
         """Deckkraft des Kontaktschattens, von ``set_theme`` gesetzt."""
+        self._finding_actors: list[Any] = []
+        """Ring und Beschriftung der zuletzt angeklickten Warnung."""
+        # **Ein Kind und kein ``QTimer.singleShot``.** Der statische Aufruf
+        # hält bis zum Ablauf eine Referenz auf dieses Widget — genau das, was
+        # ``leash.py`` an anderer Stelle als Ursache eines Absturzes beim
+        # Schließen beschreibt. Ein Kind stirbt mit seinem Elternteil.
+        self._finding_timer = QTimer(self)
+        self._finding_timer.setSingleShot(True)
+        self._finding_timer.timeout.connect(self._hide_finding_mark)
         self._projection: Projection = "perspective"
         self._section: SectionPlane | None = None
         self._slice_thickness: float | None = None
@@ -3172,6 +3197,129 @@ class Viewport(QWidget):
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
             return
+
+    def view_point_of(self, point: Vec3, object_id: str = "") -> Vec3:
+        """Einen Ort aus der Szene dorthin rechnen, wo er im Bild liegt (§25).
+
+        **Beide Richtungen gibt es, und beide werden gebraucht.** Ein Klick
+        kommt aus der Ansicht und muss in die Szene zurück (``_from_view``);
+        ein Ort aus einem Befund kommt aus der Szene und muss in die Ansicht.
+        Für die zweite Richtung gab es keine Stelle: ``fly_to`` nimmt seinen
+        Punkt roh, und bei einem Körper auf Platte 2 liegt der eine Bettbreite
+        neben dem, was der Kunde sieht — dieselbe Verwechslung, die beim Klick
+        schon einmal eine Bohrung danebengesetzt hat.
+
+        Ohne Objektkennung oder ohne Auswertung bleibt der Punkt, wie er ist:
+        Ein Versatz, den man nicht zuordnen kann, ist keiner.
+        """
+        if not object_id or self._result is None:
+            return point
+        entry = self._result.scene.objects.get(object_id)
+        if entry is None:
+            return point
+
+        import numpy as np
+
+        shift = np.asarray(self._view_offset(entry, self._result), dtype=float)
+        moved = np.asarray(point, dtype=float) + shift
+        return (float(moved[0]), float(moved[1]), float(moved[2]))
+
+    def mark_finding(self, point: Vec3, title: str, object_id: str = "") -> None:
+        """Eine vergängliche Marke an der Stelle, die ein Befund nennt (§18.4).
+
+        **Der Flug allein beantwortet die Frage nicht.** Ein angeklickter
+        Befund bringt die Kamera an einen Ort — und dort steht der Kunde vor
+        einem Teil, das überall gleich aussieht. Wo eine Analysekarte läuft,
+        färbt sie die Stelle ein; die Hälfte der Befunde hat keine.
+
+        **Der Ring liegt in der Bildebene**, anders als der des Pinsels
+        (``_ring_points`` mit der Flächennormale). Dort ist die Neigung der
+        Fläche die Auskunft; hier ist es die Stelle, und eine Marke, die man
+        aus dem falschen Winkel als Strich sieht, zeigt nichts. Der Ort eines
+        Befunds liegt außerdem oft **im** Material — die Mitte einer Bohrung
+        etwa —, und dort gibt es gar keine Fläche, deren Normale man nehmen
+        könnte.
+
+        **Der Titel darf jede Sprache tragen.** Die ASCII-Grenze von VTK gilt
+        für ein Textarray, das man als *Dataset-Feld* setzt
+        (``data["labels"] = …``, siehe ``_show_gizmo_labels``), nicht für eine
+        Punktliste an ``add_point_labels``: gemessen am 30.08.2026 geht
+        „Face supérieure" hier durch und fällt dort.
+        """
+        if self.plotter is None:
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        self._hide_finding_mark()
+        camera = self.plotter.camera
+        towards = np.asarray(camera.position, dtype=float) - np.asarray(
+            camera.focal_point, dtype=float
+        )
+        # Wie hoch das Bild an dieser Stelle ist: orthografisch steht es als
+        # ``parallel_scale``, perspektivisch wächst es mit dem Abstand.
+        span = float(getattr(camera, "parallel_scale", 0.0) or 0.0)
+        if span <= 0.0:
+            span = float(np.linalg.norm(towards)) * 0.5
+        radius = max(span * FINDING_RING_SHARE, EPS_GEOM)
+
+        centre = np.asarray(self.view_point_of(point, object_id), dtype=float)
+        # **Der Ring wird nicht nach vorn gezogen, und das ist gemessen.** Der
+        # Ort einer Warnung liegt oft im Material — die Mitte einer Bohrung,
+        # der Schwerpunkt einer Fläche —, und der Ring verschwindet dort zur
+        # Hälfte hinter der Wand. Der naheliegende Ausweg, ihn entlang der
+        # Blickachse davorzuziehen, setzt voraus, dass die Projektion
+        # orthografisch ist; sie ist es nicht. Im Bild wanderte die Marke damit
+        # sichtbar von der Stelle weg, die sie meint, und wurde größer.
+        # **Eine Marke neben der Sache ist schlechter als eine halb verdeckte.**
+        # Die Beschriftung trägt ``always_visible`` und steht in jedem Fall.
+        ring = _ring_points(centre, towards, radius)
+        line = pv.PolyData(ring)
+        line.lines = np.hstack([[len(ring) + 1], np.arange(len(ring)), [0]])
+        self._finding_actors.append(
+            self.plotter.add_mesh(
+                line,
+                color=SELECTED_COLOUR,
+                line_width=3,
+                name="finding_ring",
+                render=False,
+                reset_camera=False,
+                pickable=False,
+            )
+        )
+        if title:
+            self._finding_actors.append(
+                self.plotter.add_point_labels(
+                    np.asarray([centre + np.array([0.0, 0.0, radius])], dtype=float),
+                    [title],
+                    text_color=SELECTED_COLOUR,
+                    font_size=12,
+                    bold=True,
+                    show_points=False,
+                    always_visible=True,
+                    shape=None,
+                    name="finding_label",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        self.plotter.render()
+        self._finding_timer.start(FINDING_MARK_MS)
+
+    def _hide_finding_mark(self) -> None:
+        """Die Marke wieder wegnehmen — nach der Zeit oder vor der nächsten."""
+        self._finding_timer.stop()
+        if self.plotter is None or not self._finding_actors:
+            return
+        import contextlib
+
+        for actor in self._finding_actors:
+            with contextlib.suppress(Exception):  # hängt am Treiber
+                self.plotter.remove_actor(actor, render=False)
+        self._finding_actors.clear()
+        self.plotter.render()
 
     def _light_the_body(self, theme: str) -> None:
         """Das Frontlicht auf den Wert dieses Themas setzen (:data:`HEADLIGHT`).

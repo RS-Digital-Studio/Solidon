@@ -877,6 +877,37 @@ Weg zu einer neuen Spule, und er stand außerhalb des Fensters.
   das der Kern genannt hat, und ersetzt ihn beim Übernehmen (§15.4). Eine
   Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
   wird ohne sie nicht angeboten.
+- **Ein Klick auf einen Befund bleibt nie folgenlos.** Er ist die Geste, die
+  §2.7 dem Prüfbericht ausdrücklich verspricht, und sie war leer: Gemessen am
+  30.08.2026 über alle 58 Befunde der Beispielprojekte löste **keiner** eine
+  sichtbare Reaktion aus. Zwei Ursachen — ein Operationsfehler trägt weder Ort
+  noch Merkmale (der Kern gibt ihm `object_id` und `op_id`), und der Ort eines
+  Kartenbefunds steht erst fest, wenn die Karte gerechnet ist, was beim ersten
+  Klick nie der Fall ist. Beim zweiten ging es, und damit sah es aus wie ein
+  Bedienfehler des Kunden.
+
+  Geantwortet wird gestuft, nach dem, was der Befund hergibt: **Ort** → die
+  Kamera fliegt hin und eine vergängliche Marke steht dort (`mark_finding`,
+  Ring in Auswahlfarbe plus Titel); **Körper** → er wird ausgewählt und trägt
+  damit Auswahlfarbe, Objektbaum und Statuszeile; **`op_id`** → der Verlauf
+  zeigt den Schritt (`HistoryPanel.point_at`). Die Stufen schließen einander
+  nicht aus; der Schritt gilt auch dann, wenn es keinen Körper gibt.
+
+  Drei Fallen dabei, alle drei gemessen: Der Ort kommt aus der **Szene** und
+  muss für die Ansicht verschoben werden (`view_point_of` — `fly_to` nahm ihn
+  roh, und bei einem Körper auf Platte 2 flog die Kamera eine Bettbreite
+  daneben). Der Ort eines Kartenbefunds wird in `_map_ready` **nachgeholt**,
+  sonst bleibt der erste Klick immer stumm. Und eine Transaktion aus mehreren
+  Schritten trägt keine `UserRole`, nur `OPS_ROLE` am Gruppenknoten — wer nur
+  die erste liest, zeigt bei jedem Sammelschritt ins Leere.
+
+  **Die Marke wird nicht nach vorn gezogen.** Der Ort einer Warnung liegt oft
+  im Material, und der Ring verschwindet dort zur Hälfte hinter der Wand; ihn
+  entlang der Blickachse davorzuziehen setzt eine orthografische Projektion
+  voraus, und die Ansicht ist perspektivisch. Im Bild wanderte die Marke damit
+  sichtbar von der Stelle weg, die sie meint. Eine Marke neben der Sache ist
+  schlechter als eine halb verdeckte; die Beschriftung trägt `always_visible`
+  und steht in jedem Fall.
 - Differenzansicht in Blau/Orange als Vorgabe, nicht Rot/Grün.
 - Analysekarten mit wahrnehmungsgleicher Palette (Viridis-Art), kein
   Regenbogen — der erzeugt Kanten, wo keine sind.
