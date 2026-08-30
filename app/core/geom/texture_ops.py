@@ -471,48 +471,6 @@ class TextureParams(BaseParams):
     )
 
 
-def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
-    """Ist der Körper unter dem Muster in Stücke zerfallen? (Regel 17)
-
-    **Der Fall, den die Durchmesserprüfung nicht sieht.** Läuft das Muster um
-    einen Zylinder, der *kleiner* ist als der Körper, ragt nichts hinaus —
-    :func:`_wrap_beyond_body` schweigt zu Recht. Es liegt dann aber *innerhalb*
-    der Fläche, berührt sie nirgends, und die Vereinigung legt Hunderte lose
-    Stücke daneben. Gemessen am ⌀75-Deckel der Galerie-Dose mit dem gealterten
-    ``wrap_diameter`` von 65,3: **553 Komponenten**, wo eine war — wasserdicht,
-    mit plausiblem Volumen, und auf dem Vorschaubild ein glatter Deckel. Was
-    fehlte, sah aus wie eine Gestaltungsentscheidung.
-
-    **Die Teilezahl lügt nicht**, und deshalb prüft sie und nicht die
-    Abweichung: Sie ist binär statt toleranzbehaftet und fängt beide
-    Richtungen — 760 Teile beim zu großen Wickelzylinder, 553 beim zu kleinen.
-    Dieselbe Bauart wie ``parts._hanging_loose``, und aus demselben Grund: Eine
-    nachgerechnete Fläche stimmt und der Körper zerfällt trotzdem.
-
-    Nur bei **erhabenem** Muster: Ein vertieftes schneidet, und Schneiden darf
-    teilen — bei manchen Mustern ist das der Zweck.
-    """
-    if mode != "raised" or after.component_count <= before.component_count:
-        return None
-    loose = after.component_count - before.component_count
-    return Finding(
-        code="texture.fell_apart",
-        severity="error",
-        # Der Vorschlag steht im Satz: Ein ``Finding`` trägt keine Aktionsliste,
-        # das kann nur eine Ausnahme — die Nachbarn machen es genauso.
-        message=_(
-            "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken "
-            "daneben und würde einzeln gedruckt. Meist ist der Durchmesser des "
-            "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an."
-        ),
-        values={
-            "loose": str(loose),
-            "before": str(before.component_count),
-            "after": str(after.component_count),
-        },
-    )
-
-
 def _wrap_beyond_body(body: Any, wrap_diameter: float) -> Finding | None:
     """Läuft das Muster um einen Zylinder, den der Körper gar nicht hat? (Regel 17)
 
@@ -725,9 +683,6 @@ def apply_texture(ctx: OpContext) -> OpResult:
     nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
-    apart = _fell_apart(body_mesh, outcome.mesh, params.mode)
-    if apart is not None:
-        findings.append(apart)
     if params.wrap == "cylinder":
         beyond = _wrap_beyond_body(body_mesh, params.wrap_diameter)
         if beyond is not None:
