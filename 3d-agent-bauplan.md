@@ -382,6 +382,9 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
+| Tauschbörse | `shared` | geteilte Bausteine auf der Website (`shared_parts`, `SharedPart`) |
+| Melden | `flag` | Beschwerde über einen fremden Beitrag der Tauschbörse |
+| Lizenz | `licence` | Nutzungsrechte an einem geteilten Baustein |
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.

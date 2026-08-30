@@ -24,9 +24,11 @@
     <p>Stand: 28. August 2026</p>
 
     <h2>Diese Website</h2>
-    <p>Diese Website besteht aus statischen Seiten. Sie setzt keine Cookies,
+    <p>Diese Website besteht aus statischen Seiten; die einzige Ausnahme ist
+    die <a href="#tauschboerse">Tauschbörse</a>, die weiter unten eigens
+    beschrieben wird. Außerhalb davon setzt sie keine Cookies,
     bindet keine Inhalte fremder Server ein und verwendet keine Analyse-
-    oder Tracking-Dienste Dritter. Es gibt keine Kontaktformulare und keine
+    oder Tracking-Dienste Dritter. Es gibt keine
     Nutzerkonten. Ein einziges Cookie gibt es doch, und es erreicht keinen
     Besucher: Die nicht öffentliche Auswertungsseite unter <code>/api/</code>
     merkt sich damit die Anmeldung des Betreibers.</p>
@@ -188,6 +190,59 @@
     nur als Ordner auf dem eigenen Rechner ab, den der Nutzer selbst
     weitergeben kann. Automatisch versendet wird nichts, und Telemetrie —
     also ein Sammeln von Nutzungsdaten ohne Zutun — gibt es nicht.</p>
+
+    <h2 id="tauschboerse">Die Tauschbörse</h2>
+    <p>In der Tauschbörse lassen sich Bausteine herunterladen, eigene
+    hochladen, vorhandene mit einem Like versehen und kommentieren. Wer nur
+    stöbert und herunterlädt, hinterlässt dabei nichts außer der Zählung, die
+    weiter oben beschrieben ist — die folgenden Absätze gelten erst, wenn Sie
+    selbst etwas beitragen.</p>
+
+    <p><b>Ein Like speichert eine Kennung in Ihrem Browser.</b> Damit dieselbe
+    Person nicht beliebig oft dasselbe Teil hochzählt, legt die Seite beim
+    ersten Like eine zufällige Kennung im lokalen Speicher Ihres Browsers ab
+    (<i>localStorage</i>) und schickt sie beim Liken mit. Sie enthält keine
+    Angaben über Sie, wird keinem Namen und keiner Adresse zugeordnet und
+    dient ausschließlich dazu, ein Like je Browser und Baustein zu zählen.
+    Auf dem Server wird nur gespeichert, dass diese Kennung dieses Teil
+    geliked hat. <b>Dauer:</b> Die Kennung bleibt im Browser, bis Sie sie
+    löschen; die Zuordnung auf dem Server bleibt, solange der Baustein steht.
+    <b>Löschung:</b> Über die Website-Daten Ihres Browsers („Websitedaten
+    löschen") verschwindet die Kennung; danach zählt derselbe Browser als
+    ein neuer. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — das
+    berechtigte Interesse an einer Zahl, die etwas aussagt. Der Zugriff auf
+    den Speicher Ihres Endgeräts ist für diese von Ihnen angeforderte
+    Funktion erforderlich (§ 25 Abs. 2 Nr. 2 TDDDG); wer nicht liked, bei dem
+    wird nichts gespeichert.</p>
+
+    <p><b>Ein Kommentar und ein Upload brauchen eine E-Mail-Adresse.</b> Sie
+    wird an die angegebene Adresse bestätigt und danach gespeichert. Der
+    Zweck ist dreifach: Sie hält den unehrlichen Fall auf, sie ist der Weg,
+    auf dem wir Sie bei einer Beschwerde über Ihren Beitrag erreichen, und
+    sie ist der Nachweis, mit dem Sie einen eigenen Beitrag zurückziehen
+    können. <b>Die Adresse wird nicht angezeigt</b> — weder an Ihrem
+    Kommentar noch an Ihrem Baustein — und nicht weitergegeben.
+    <b>Dauer:</b> Sie bleibt gespeichert, solange der zugehörige Beitrag
+    öffentlich steht, und wird mit ihm gelöscht. Eine unbestätigte Adresse
+    wird nach sieben Tagen gelöscht. <b>Löschung:</b> Beim Hochladen und beim
+    Kommentieren erhalten Sie einen Link mit einem langen Schlüssel, über den
+    Sie Ihren Beitrag jederzeit selbst zurückziehen können; damit geht die
+    Adresse mit. Ohne den Link genügt eine Nachricht an die im
+    <a href="/impressum.html">Impressum</a> genannte Stelle. Rechtsgrundlage
+    ist Art. 6 Abs. 1 lit. b DSGVO für die Bereitstellung des von Ihnen
+    gewünschten Beitrags und Art. 6 Abs. 1 lit. f DSGVO für die Abwehr von
+    Missbrauch.</p>
+
+    <p><b>Was Sie selbst schreiben, ist öffentlich.</b> Titel, Beschreibung,
+    Kommentartext und die hochgeladene Datei sind für jeden sichtbar, der die
+    Seite aufruft, und lassen sich von jedem herunterladen. Schreiben Sie dort
+    nichts hinein, was nicht öffentlich werden soll — insbesondere keine
+    Namen, Adressen oder Angaben über andere Personen.</p>
+
+    <p><b>Ein Konto entsteht dabei nicht.</b> Es gibt kein Passwort, keine
+    Anmeldung und keine Profilseite, und die Anwendung Solidon3D selbst
+    bleibt von alldem unberührt: Sie lädt nichts hoch, ruft nichts ab und
+    kennt die Tauschbörse nicht.</p>
 
     <h2>Ihre Rechte</h2>
     <p>Sie haben nach der DSGVO das Recht auf Auskunft, Berichtigung,
