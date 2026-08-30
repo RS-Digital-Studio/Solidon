@@ -9383,6 +9383,16 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       `app.py:276` sowie `shortcut_schemes.py:158` installieren auf
       `application` — die überleben alles und sind der andere Fall.
 
+      **Zweiter Fundort, 30.08.2026, im ausgelieferten Stand:** Der Torlauf
+      auf `17c4bebb` war rot an `tests/test_split_tool.py::
+      test_a_click_beside_the_model_takes_the_old_line_with_it` —
+      `AttributeError: 'QWidgetItem' object has no attribute 'rowCount'` aus
+      einem `eventFilter` heraus (`overlay.py:294`). Einzeln grün, als Datei
+      grün, auf `17c4bebb~1` ebenfalls grün — keine Regression, sondern
+      dieselbe Familie: ein Filter, der während des Abbaus Nachbarn befragt,
+      die keine mehr sind. Wer die elf angeht, nimmt diesen Fall als
+      Reproduktionsversuch mit.
+
 - [x] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt**
       — als eigener Punkt aufgelöst, die Suche läuft anderswo weiter.
       Am 24.08.2026 in `test_ui.py` gemessen, alle drei im Teardown, alle drei
