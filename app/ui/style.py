@@ -30,7 +30,7 @@ from __future__ import annotations
 from typing import Final
 
 from PySide6.QtGui import QFont
-from PySide6.QtWidgets import QApplication, QPushButton, QWidget
+from PySide6.QtWidgets import QApplication, QMenu, QPushButton, QWidget, QWidgetAction
 
 from app.ui.theme import THEMES, Theme
 
@@ -101,6 +101,53 @@ def make_primary(button: QPushButton) -> QPushButton:
     font.setWeight(QFont.Weight.DemiBold)
     button.setFont(font)
     return button
+
+
+#: Der Objektname, an dem das Stylesheet eine Menü-Überschrift erkennt.
+MENU_HEADING = "menuHeading"
+
+
+def menu_heading(menu: QMenu, title: str) -> QWidgetAction:
+    """Setzt eine **sichtbare** Kategorie-Überschrift in ein Menü.
+
+    ``QMenu.addSection`` tut das nicht: Auf Windows ist ein Abschnitt
+    derselbe Trennstrich wie ``addSeparator``, und der Text wird verworfen.
+    Gemessen an einem Menü mit zwei Einträgen, Kontrastpunkte gegen den
+    Menügrund — Überschrift **1201**, nackter Trennstrich **1201**, und
+    dieselbe Höhe: Der Titel bekam nicht einmal Platz. Dasselbe in einem
+    Prozess, der nie ein Stylesheet gesetzt hat (437 gegen 437), und
+    dasselbe mit sechs verschiedenen ``QMenu::separator``-Regeln. Das
+    Stylesheet war unschuldig; die Kategorienamen, die der Menüaufbau mit
+    fünfzehn Zeilen Begründung setzt, erschienen nie.
+
+    Ein Label in einer ``QWidgetAction`` erscheint (1333 Punkte). Und es
+    **zählt trotzdem nicht als Zeile**: ``setSeparator(True)`` hält
+    ``isSeparator()`` wahr — die Zwölf-Zeilen-Grenze aus §35 rechnet danach,
+    und eine Überschrift ist keine Zeile, die man anklickt. Beides zusammen
+    ist gemessen: zwei gezählte Zeilen statt drei, bei unverändert 439
+    hellen Punkten im Bild.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    label = QLabel(title, menu)
+    label.setObjectName(MENU_HEADING)
+    set_level(label, "caption")
+    font = label.font()
+    font.setWeight(QFont.Weight.DemiBold)
+    label.setFont(font)
+
+    action = QWidgetAction(menu)
+    action.setDefaultWidget(label)
+    # Der Text steht **auch** an der Aktion, nicht nur im Label: Der
+    # Barrierefreiheitsbaum liest ihn dort, und der Wächter, der jede
+    # Kategorie bei ihrem Namen verlangt, fragt danach. Genau dieser Wächter
+    # war grün, während der Name nie erschien — gesetzt heißt nicht gezeigt.
+    action.setText(title)
+    # Kein Klickziel: Die Überschrift benennt, sie tut nichts.
+    action.setEnabled(False)
+    action.setSeparator(True)
+    menu.addAction(action)
+    return action
 
 
 def _repolish(widget: QWidget) -> None:
@@ -608,6 +655,15 @@ QMenu {{ background: {base}; border: 1px solid {line}; padding: {TIGHT}px; }}
 QMenu::item {{ padding: {TIGHT}px {WIDE}px; border-radius: {SPACE}px; }}
 QMenu::item:selected {{ background: {highlight}; color: {on_highlight}; }}
 QMenu::separator {{ height: 1px; background: {line}; margin: {TIGHT}px {NORMAL}px; }}
+/* Die Kategorie-Überschrift (siehe :func:`menu_heading`). Sie ist ein Label
+   in einer Aktion, also greift die Trennstrich-Regel darüber nicht — was
+   gerade der Punkt ist: Qt zeichnete den Text von ``addSection`` gar nicht.
+   Leise wie Nebentext und halbfett, damit sie benennt statt mitzureden. */
+QLabel#{MENU_HEADING} {{
+    color: {muted};
+    background: transparent;
+    padding: {TIGHT}px {NORMAL}px 0 {NORMAL}px;
+}}
 QStatusBar {{ border-top: 1px solid {line}; }}
 QStatusBar::item {{ border: none; }}
 

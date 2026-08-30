@@ -248,7 +248,7 @@ from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for, plane_where
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
-from app.ui.style import NORMAL, TIGHT, make_primary, set_level
+from app.ui.style import NORMAL, TIGHT, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
@@ -1995,10 +1995,14 @@ class MainWindow(QMainWindow):
                     # eine Zwischenebene ihn trug — also genau dann, wenn der
                     # Weg einen Klick länger war.
                     #
-                    # ``addSection`` ist ein Trennstrich **mit** Beschriftung
-                    # und zählt in der Zeilengrenze deshalb weiterhin nicht mit
-                    # (``isSeparator()`` bleibt wahr, siehe
-                    # ``tests/test_interface_limits.py``). Auch vor der ersten
+                    # ``addSection`` **zeigt den Namen nicht** — auf Windows
+                    # ist ein Abschnitt derselbe Trennstrich wie
+                    # ``addSeparator``, und der Text wird verworfen; gemessen
+                    # sind Überschrift und nackter Strich punkt- und
+                    # höhengleich, auch ohne jedes Stylesheet. ``menu_heading``
+                    # setzt sie als Label in einer Aktion und hält sie über
+                    # ``setSeparator(True)`` zugleich aus der Zeilenrechnung
+                    # heraus (``tests/test_interface_limits.py``). Auch vor der ersten
                     # Kategorie: Ein Menü, dessen zweite Gruppe eine
                     # Überschrift hat und dessen erste nicht, liest sich, als
                     # gehörte der Anfang zu keiner.
@@ -2007,7 +2011,7 @@ class MainWindow(QMainWindow):
                     # Begründung, mit der ``group_is_flat`` dort nie ein
                     # Untermenü zieht: Die Überschrift wäre ein zweiter Name
                     # für dasselbe Menü („Bausteine → Bausteine").
-                    group.addSection(str(section.title))
+                    menu_heading(group, str(section.title))
                 if folded:
                     # Mit dem Fenster als Elternteil erzeugt, nicht über
                     # ``addMenu(titel)``: sonst hält nichts auf der Python-Seite

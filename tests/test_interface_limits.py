@@ -28,7 +28,7 @@ from app.core.registry import REGISTRY, VARIANT_GROUPS, catalogue_operations, pa
 pytest.importorskip("PySide6")
 
 from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication, QMenu, QToolButton
+from PySide6.QtWidgets import QApplication, QMenu, QToolButton, QWidgetAction
 
 from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.session import Session
@@ -1704,6 +1704,21 @@ def test_a_flat_group_keeps_the_names_of_its_categories(window: MainWindow) -> N
         ]
         assert len(headings) == len(present), (
             f"{title}: {len(headings)} Überschriften für {len(present)} Kategorien"
+        )
+        # **Und sie sind sichtbar.** Diese Zusicherung fehlte, und deshalb war
+        # der Test jahrelang grün über Überschriften, die niemand je gesehen
+        # hat: ``addSection`` setzt einen Text an der Aktion, und Qt zeichnet
+        # ihn auf Windows nicht — Titel und nackter Trennstrich waren im Bild
+        # punkt- und höhengleich. Ein gesetzter Text ist kein gezeigter, und
+        # gezeigt wird er erst, seit ``menu_heading`` ein Label einsetzt.
+        shown = [
+            entry.defaultWidget().text()
+            for entry in menu.actions()
+            if isinstance(entry, QWidgetAction) and entry.defaultWidget() is not None
+        ]
+        assert sorted(shown) == sorted(headings), (
+            f"{title}: {len(shown)} sichtbare Überschriften gegen {len(headings)} gesetzte — "
+            "ein Titel, den nur die Aktion trägt, erscheint nie"
         )
         rows = sum(1 for entry in menu.actions() if not entry.isSeparator())
         assert rows <= MAX_MENU_ROWS, f"{title}: {rows} Zeilen über der Grenze"
