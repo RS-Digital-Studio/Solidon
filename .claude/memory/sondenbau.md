@@ -137,6 +137,39 @@ und beide Male sah es nach einem Fund aus. Was eine Sonde misst, ist erst dann
 eine Aussage, wenn der Lauf sie zu Ende bringen konnte
 (`tools/gate_lock.py run`).
 
+## Der Kontrollfall gehört in jede Sonde, und er verdient sich vierfach
+
+Am 30.08.2026 sollte eine Sonde beantworten, ob ein Ereignis auch dann feuert,
+wenn die Maus außerhalb des Fensters losgelassen wird. Die Frage war gut, die
+erwartete Antwort plausibel — und die Sonde lieferte sie **viermal
+hintereinander falsch**:
+
+| Anlauf | Fehler im Aufbau | was sie meldete |
+|---|---|---|
+| 1 | kein Projekt geöffnet → Startbildschirm, Interactor 100 × 30 Pixel | „Ereignis 0×" |
+| 2 | Qt-Ereignisse an den Interactor — VTK hört darauf nicht | „Ereignis 0×" |
+| 3 | in der Bildmitte gegriffen (dort steht das Modell: Auswahl statt Drehung), dazu waagerecht gezogen (dreht azimutal, der gemessene Winkel bleibt gleich) | „Ereignis 0×" |
+| 4 | **linke** Maustaste — im Vorgabe-Schema wählt sie, gedreht wird rechts | „Ereignis 0×" |
+
+Jedes Mal dieselbe Zahl, jedes Mal eine perfekt aussehende Bestätigung der
+Vermutung. Gefangen hat es allein der **Kontrollfall**: derselbe Zug, nur
+innerhalb losgelassen — dort *musste* das Ereignis kommen. Kam es nicht, war
+der Aufbau kaputt und nicht die Sache.
+
+Das Ergebnis war am Ende das Gegenteil: Das Ereignis feuert in allen Fällen,
+die vermutete Lücke gibt es nicht.
+
+**Ein fünfter Fehler saß in der Größe der Geste**, und er ist die feinere
+Hälfte: Die ersten Züge drehten über dreißig Grad — weit außerhalb des
+Bereichs, um den es ging. Dass dort nichts einrastet, ist richtig und
+beantwortet die Frage nicht. Eine Sonde muss den Fall **treffen**, nicht nur
+auslösen.
+
+**How to apply:** Jede Sonde bekommt einen Fall, dessen Ausgang feststeht,
+bevor sie den Fall misst, dessen Ausgang offen ist. Steht kein solcher Fall zur
+Verfügung, misst man vorerst das Werkzeug und nicht die Sache
+([[messwerkzeug-misst-sich-selbst]]).
+
 Verwandt: [[exakte-passung-ist-kein-beweis]] — die Sonde ist das Gegengift
 gegen eine Korrelation, die exakt passt. Sie prüft die **Kette**, nicht die
 Passung.
