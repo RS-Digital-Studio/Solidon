@@ -384,7 +384,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
 | Tauschbörse | `shared` | geteilte Bausteine auf der Website (`shared_parts`, `SharedPart`) |
 | Melden | `flag` | Beschwerde über einen fremden Beitrag der Tauschbörse |
-| Lizenz | `licence` | Nutzungsrechte an einem geteilten Baustein |
+| Lizenz | `licence` | Nutzungsrechte an einem geteilten Baustein — **aber das Dataclass-Feld heißt `license`**: `shared-rules.json` leitet ihre Erlaubnisliste aus `dataclasses.fields(Recipe)` ab, der Feldname ist also zugleich Schlüssel in Regel- und Rezeptdatei, und `serialise.py` schreibt das Format schon so. Zwei Schreibungen wären dort eine Übersetzungsstelle zwischen Python und PHP. Technischer Schlüssel amerikanisch wie das Format, Oberflächentext britisch wie der Katalog (36 Substantive mit `licence` gegen 6 mit `license`, und die sechs sind Partizipien und ein Eigenname). Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.
