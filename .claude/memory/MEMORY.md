@@ -104,6 +104,7 @@
 - [Geteilter Index hält alten Stand](geteilter-index-haelt-alten-stand.md) — ein zurückliegender Index sieht aus wie fremde Arbeit und committet sie als gelöscht.
 - [Index altert zwischen Lesen und Commit](index-altert-zwischen-lesen-und-commit.md) — Sorgfalt vergrößert das Fenster, in dem ein fremder Commit fällt.
 - [Sollprobe liest den fremden Commit](sollprobe-liest-den-fremden-commit.md) — nach dem Commit gegen den eigenen Hash prüfen, nie gegen HEAD.
+- [Commit-Meldung ist eine geteilte Datei](commit-meldung-ist-eine-geteilte-datei.md) — zwei gleichzeitige Commits tauschen ihre Texte; den Betreff der Ausgabe lesen, nicht nur die Zahl.
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` zeigt im nächsten Aufruf ins Leere; ein fehlender Index committet alles als gelöscht.
 - [Privater Index hinterlässt Spuren](privater-index-hinterlaesst-spuren.md) — eine **neue** Datei steht danach im Haupt-Index als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*.
