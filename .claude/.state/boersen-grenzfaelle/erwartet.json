@@ -5,52 +5,161 @@
   "gut-titel-genau-an-der-grenze": [],
   "gut-umlaute-und-anfuehrung": [],
   "schlecht-anhang-kein-base64": [
-    "Der Anhang „netz“ ist kein base64."
+    {
+      "code": "check_payload_not_base64",
+      "values": {
+        "name": "netz"
+      }
+    }
   ],
   "schlecht-auszeichnung-im-autor": [
-    "„author“ enthält eine Auszeichnung."
+    {
+      "code": "check_author_has_markup",
+      "values": {}
+    }
   ],
   "schlecht-auszeichnung-im-text": [
-    "„doc“ enthält einen Link oder Auszeichnung."
+    {
+      "code": "check_field_has_link",
+      "values": {
+        "field": "doc"
+      }
+    }
   ],
   "schlecht-formatversion-zu-neu": [
-    "Die Formatversion 99 kennt der Server nicht — bekannt sind [1]."
+    {
+      "code": "check_bad_version",
+      "values": {
+        "known": "1",
+        "version": 99
+      }
+    }
   ],
   "schlecht-fremde-lizenz": [
-    "„WTFPL“ ist keine der erlaubten Lizenzen."
+    {
+      "code": "check_licence_unknown",
+      "values": {
+        "licence": "WTFPL"
+      }
+    }
   ],
   "schlecht-kein-json": [
-    "Die Datei ist kein gültiges JSON."
+    {
+      "code": "check_not_json",
+      "values": {}
+    }
   ],
   "schlecht-leere-datei": [
-    "Die Datei ist kein gültiges JSON."
+    {
+      "code": "check_not_json",
+      "values": {}
+    }
   ],
   "schlecht-link-im-text": [
-    "„doc“ enthält einen Link oder Auszeichnung."
+    {
+      "code": "check_field_has_link",
+      "values": {
+        "field": "doc"
+      }
+    }
   ],
   "schlecht-liste-statt-objekt": [
-    "Ein Rezept ist ein Objekt, keine Liste und keine Zahl."
+    {
+      "code": "check_not_object",
+      "values": {}
+    }
+  ],
+  "schlecht-name-kein-snake-case": [
+    {
+      "code": "check_name_not_snake_case",
+      "values": {
+        "name": "Probeklotz"
+      }
+    }
+  ],
+  "schlecht-ohne-merkmal": [
+    {
+      "code": "check_no_features",
+      "values": {}
+    }
   ],
   "schlecht-text-zu-lang": [
-    "„doc“ ist 2001 Zeichen lang, erlaubt sind 2000."
+    {
+      "code": "check_field_too_long",
+      "values": {
+        "field": "doc",
+        "length": 2001,
+        "limit": 2000
+      }
+    }
   ],
   "schlecht-titel-ein-zeichen-zu-lang": [
-    "„title“ ist 121 Zeichen lang, erlaubt sind 120."
+    {
+      "code": "check_field_too_long",
+      "values": {
+        "field": "title",
+        "length": 121,
+        "limit": 120
+      }
+    }
+  ],
+  "schlecht-unbekannte-gruppe": [
+    {
+      "code": "check_unknown_group",
+      "values": {
+        "group": "eigene",
+        "known": "calibration, fasteners, mechanics, mounting, routing, structure"
+      }
+    }
   ],
   "schlecht-unbekannte-operation": [
-    "Schritt 1 nennt die unbekannte Operation 'run_shell_command'."
+    {
+      "code": "check_step_unknown_op",
+      "values": {
+        "n": 1,
+        "name": "run_shell_command"
+      }
+    }
   ],
   "schlecht-unbekannter-schluessel": [
-    "Unbekannte Schlüssel: __class__."
+    {
+      "code": "check_unknown_keys",
+      "values": {
+        "keys": "__class__"
+      }
+    }
   ],
   "schlecht-verschachtelter-parameter": [
-    "Schritt 1, Parameter „length“ hat einen Wert, der nicht erlaubt ist."
+    {
+      "code": "check_value_not_allowed",
+      "values": {
+        "key": "length",
+        "n": 1
+      }
+    }
   ],
   "schlecht-www-ohne-schema": [
-    "„doc“ enthält einen Link oder Auszeichnung."
+    {
+      "code": "check_field_has_link",
+      "values": {
+        "field": "doc"
+      }
+    }
   ],
   "schlecht-zwei-gruende-auf-einmal": [
-    "„doc“ ist 2018 Zeichen lang, erlaubt sind 2000.",
-    "„doc“ enthält einen Link oder Auszeichnung."
+    {
+      "code": "check_field_too_long",
+      "values": {
+        "field": "doc",
+        "length": 2018,
+        "limit": 2000
+      }
+    },
+    {
+      "code": "check_field_has_link",
+      "values": {
+        "field": "doc"
+      }
+    }
   ]
 }

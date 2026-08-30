@@ -42,6 +42,13 @@ REZEPT = {
     "doc": "Zwei Einhänger, Rückwand 120 mm.",
     "author": "RS Digital",
     "license": "CC-BY-4.0",
+    # **Gruppe als Schlüssel und ein benanntes Merkmal.** Beide fehlten, und
+    # die Datei war damit eine, die jede Börsenprüfung bestand und beim ersten
+    # Empfänger scheiterte (3a, 31.08.2026, erster Ende-zu-Ende-Lauf). Die
+    # Gruppe ist `mounting` und nicht „Befestigung": Letzteres ist ihre
+    # deutsche Beschriftung aus ``GROUPS``, nicht ihr Schlüssel.
+    "group": "mounting",
+    "features": {"top": "face_top"},
     "document": {
         "ops": [{"op": "create_box", "params": {"width": 120.0, "depth": 60.0, "height": 45.0}}]
     },

@@ -169,10 +169,65 @@ MAILS: dict[str, TranslatableText] = {
 }
 
 
+#: Was die Formatprüfung an einer Datei beanstandet (Konzept §3.1, §3.2).
+#:
+#: **Diese Sätze sind ein Sonderfall unter den Servertexten.** Bei allen
+#: anderen ist es gleichgültig, ob Anwendung und Server denselben Wortlaut
+#: wählen — hier ist es die Zusage: Dieselbe Datei muss auf beiden Seiten
+#: dasselbe Urteil bekommen, sonst sucht der Kunde den Fehler bei sich. Die
+#: Anwendung nimmt seine Datei an, der Server wirft sie weg, und niemand kann
+#: ihm erklären, warum.
+#:
+#: **Feldnamen bleiben englisch, auch mitten im deutschen Satz.** „``title`` ist
+#: kein Text" liest sich hölzern, und die Alternative wäre schlimmer: Der Kunde
+#: sucht das Feld **in seiner Datei**, und dort heißt es `title`. Dieselbe
+#: Entscheidung wie bei `skirt`, `brim` und `raft` in den Druckeinstellungen —
+#: `.claude/rules/oberflaeche.md` nennt einen Wert, der anders heißt als sein
+#: Feld, „eine Fährte ins Nichts". Wer das später „aufräumt", nimmt dem Kunden
+#: die einzige Angabe, mit der er die Stelle findet.
+CHECKS: dict[str, TranslatableText] = {
+    "check_not_json": _("Die Datei ist kein gültiges JSON."),
+    "check_not_object": _("Ein Rezept ist ein Objekt, keine Liste und keine Zahl."),
+    "check_unknown_keys": _("Unbekannte Schlüssel: {keys}."),
+    "check_bad_version": _(
+        "Die Formatversion {version} kennt der Server nicht — bekannt sind {known}."
+    ),
+    "check_field_not_text": _("„{field}“ ist kein Text."),
+    "check_field_too_long": _("„{field}“ ist {length} Zeichen lang, erlaubt sind {limit}."),
+    "check_field_has_link": _("„{field}“ enthält einen Link oder Auszeichnung."),
+    "check_licence_not_text": _("„license“ ist kein Text."),
+    "check_licence_unknown": _("„{licence}“ ist keine der erlaubten Lizenzen."),
+    "check_author_not_text": _("„author“ ist kein Text."),
+    "check_author_too_long": _("„author“ ist {length} Zeichen lang, erlaubt sind {limit}."),
+    "check_author_has_markup": _("„author“ enthält eine Auszeichnung."),
+    "check_document_not_object": _("„document“ ist kein Objekt."),
+    "check_ops_not_list": _("„ops“ ist keine Liste."),
+    "check_step_not_object": _("Schritt {n} ist kein Objekt."),
+    "check_step_unknown_op": _("Schritt {n} nennt die unbekannte Operation {name}."),
+    "check_params_not_object": _("Schritt {n} hat Parameter, die kein Objekt sind."),
+    "check_value_not_allowed": _(
+        "Schritt {n}, Parameter „{key}“ hat einen Wert, der nicht erlaubt ist."
+    ),
+    "check_payloads_not_object": _("„payloads“ ist kein Objekt."),
+    "check_payload_not_text": _("Der Anhang „{name}“ ist keine Zeichenkette."),
+    "check_payload_not_base64": _("Der Anhang „{name}“ ist kein base64."),
+    "check_name_not_snake_case": _(
+        "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, "
+        "Ziffern und Unterstriche, beginnend mit einem Buchstaben."
+    ),
+    "check_missing_field": _("Das Pflichtfeld „{field}“ fehlt."),
+    "check_unknown_group": _("Die Gruppe „{group}“ gibt es nicht — bekannt sind {known}."),
+    "check_no_features": _(
+        "Der Baustein benennt kein einziges Merkmal. Ohne benanntes Merkmal "
+        "lässt er sich nicht einsetzen."
+    ),
+}
+
+
 def all_texts() -> dict[str, TranslatableText]:
     """Alles, was der Erzeuger in die JSON-Datei schreibt.
 
-    Meldungen und Mails zusammen — für ``make_shared_texts.py`` ist es eine
-    Tabelle, getrennt sind sie nur hier, wo jemand sie liest.
+    Meldungen, Mails und Prüfbefunde zusammen — für ``make_shared_texts.py``
+    ist es eine Tabelle, getrennt sind sie nur hier, wo jemand sie liest.
     """
-    return {**MESSAGES, **MAILS}
+    return {**MESSAGES, **MAILS, **CHECKS}

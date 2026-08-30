@@ -46,19 +46,33 @@ def recipe(**changes: Any) -> bytes:
     base: dict[str, Any] = {
         "name": "halter",
         "title": "Kabelhalter",
-        "group": "Befestigung",
+        "group": "mounting",
         "document": {
             "format_version": 19,
             "ops": [{"id": 1, "op": "create_box", "params": {"length": 20.0, "width": 10.0}}],
         },
         "payloads": {},
         "exposed": [],
-        "features": {},
+        # Ein Baustein ohne benanntes Merkmal lässt sich nicht einsetzen
+        # (§24.1) — ein leeres Wörterbuch war hier nie ein gültiger Wert.
+        "features": {"top": "face_top"},
         "doc": "Hält ein Kabel an der Tischkante.",
         "format_version": 1,
     }
     base.update(changes)
     return json.dumps(base, ensure_ascii=False).encode("utf-8")
+
+
+def codes(findings: list) -> set[str]:
+    """Die Schlüssel einer Befundliste.
+
+    **Geprüft wird der Schlüssel und nicht der Satz.** Ein Test auf „kein
+    gültiges JSON" wird bei jeder Umformulierung rot, ohne dass sich am
+    Verhalten etwas geändert hätte — und er ist zugleich zu weich, weil eine
+    Teilzeichenkette zufällig zutreffen kann („2" steht auch in „2,40 mm").
+    Der Schlüssel ist die Entscheidung; der Satz ist ihre Anzeige.
+    """
+    return {finding.code for finding in findings}
 
 
 def test_the_list_of_allowed_operations_comes_from_the_registry() -> None:
@@ -91,10 +105,10 @@ def test_a_recipe_the_application_wrote_is_accepted() -> None:
 def test_a_broken_file_is_named_as_broken() -> None:
     """Kein JSON, kein Objekt, keine Version — drei Wege, gar nicht erst
     anzufangen."""
-    assert "kein gültiges JSON" in " ".join(inspect(b"{ das ist kaputt"))
-    assert "kein gültiges JSON" in " ".join(inspect(b"\xff\xfe\x00"))
-    assert "ist ein Objekt" in " ".join(inspect(b"[1, 2, 3]"))
-    assert "Formatversion" in " ".join(inspect(recipe(format_version=99)))
+    assert "check_not_json" in codes(inspect(b"{ das ist kaputt"))
+    assert "check_not_json" in codes(inspect(b"\xff\xfe\x00"))
+    assert "check_not_object" in codes(inspect(b"[1, 2, 3]"))
+    assert "check_bad_version" in codes(inspect(recipe(format_version=99)))
 
 
 def test_an_unknown_key_does_not_slip_through() -> None:
@@ -111,8 +125,11 @@ def test_an_unknown_key_does_not_slip_through() -> None:
     smuggled = json.loads(recipe())
     smuggled["__class__"] = "os.system"
     findings = inspect(json.dumps(smuggled).encode("utf-8"))
-    assert any("Unbekannte Schlüssel" in entry for entry in findings), findings
-    assert any("__class__" in entry for entry in findings), findings
+    assert "check_unknown_keys" in codes(findings), findings
+    # Der Schlüssel sagt die Art, der Wert sagt **welcher** — beides gehört zur
+    # Zusage: Eine Meldung, die den Namen nicht nennt, schickt den Kunden auf
+    # die Suche.
+    assert any("__class__" in str(one.values.get("keys", "")) for one in findings), findings
 
 
 def test_an_unregistered_operation_is_refused() -> None:
@@ -128,7 +145,8 @@ def test_an_unregistered_operation_is_refused() -> None:
         "ops": [{"id": 1, "op": "run_shell_command", "params": {"cmd": "rm -rf /"}}],
     }
     findings = inspect(recipe(document=document))
-    assert any("unbekannte Operation" in entry for entry in findings), findings
+    assert "check_step_unknown_op" in codes(findings), findings
+    assert any(one.values.get("name") == "run_shell_command" for one in findings), findings
 
 
 def test_a_parameter_that_is_not_a_plain_value_is_refused() -> None:
@@ -142,7 +160,7 @@ def test_a_parameter_that_is_not_a_plain_value_is_refused() -> None:
         "format_version": 19,
         "ops": [{"id": 1, "op": "create_box", "params": {"length": {"$ref": "irgendwas"}}}],
     }
-    assert any("nicht erlaubt" in entry for entry in inspect(recipe(document=nested))), (
+    assert "check_value_not_allowed" in codes(inspect(recipe(document=nested))), (
         "ein verschachtelter Parameterwert kam durch"
     )
 
@@ -161,13 +179,20 @@ def test_an_overlong_text_and_a_link_are_both_refused() -> None:
     Gründe zu erfahren.
     """
     long_title = inspect(recipe(title="x" * (MAX_TITLE_CHARS + 1)))
-    assert any("Zeichen lang" in entry for entry in long_title), long_title
+    assert "check_field_too_long" in codes(long_title), long_title
+    # Die Zahlen gehören zur Zusage: Der Vergleich beider Prüfseiten hängt an
+    # ihnen, seit die Sätze aus einer gemeinsamen Quelle kommen.
+    assert long_title[0].values == {
+        "field": "title",
+        "length": MAX_TITLE_CHARS + 1,
+        "limit": MAX_TITLE_CHARS,
+    }, long_title[0].values
 
     linked = inspect(recipe(doc="Mehr davon auf https://beispiel.test"))
-    assert any("Link" in entry for entry in linked), linked
+    assert "check_field_has_link" in codes(linked), linked
 
     marked_up = inspect(recipe(doc="<script>irgendwas</script>"))
-    assert any("Link oder Auszeichnung" in entry for entry in marked_up), marked_up
+    assert "check_field_has_link" in codes(marked_up), marked_up
 
     both = inspect(recipe(doc="www.beispiel.test " + "y" * MAX_DOC_CHARS))
     assert len(both) >= 2, f"nur ein Grund genannt, dabei sind es zwei: {both}"
@@ -183,7 +208,7 @@ def test_a_file_over_the_size_limit_is_refused_before_anything_else() -> None:
     """
     huge = b'{"name": "x", "title": "' + b"z" * (MAX_UPLOAD_BYTES + 10) + b'"}'
     findings = inspect(huge)
-    assert any("Byte groß" in entry for entry in findings), findings
+    assert "upload_too_large" in codes(findings), findings
 
 
 def test_a_payload_that_is_not_base64_is_refused() -> None:
@@ -197,7 +222,7 @@ def test_a_payload_that_is_not_base64_is_refused() -> None:
     assert inspect(recipe(payloads={"src_1": good})) == []
 
     findings = inspect(recipe(payloads={"src_1": "das ist kein base64!!"}))
-    assert any("kein base64" in entry for entry in findings), findings
+    assert "check_payload_not_base64" in codes(findings), findings
 
 
 def test_every_finding_is_reported_at_once() -> None:
@@ -328,9 +353,13 @@ def a_recipe(**changes: Any) -> Any:
     fields: dict[str, Any] = {
         "name": "halter",
         "title": "Kabelhalter",
-        "group": "Befestigung",
+        "group": "mounting",
         "document": document,
         "doc": "Hält ein Kabel an der Tischkante.",
+        # Ohne benanntes Merkmal ließe sich der Baustein nicht einsetzen
+        # (§24.1), und ``inspect`` weist ihn ab — der Objekt-Baukasten muss
+        # dasselbe liefern wie der für die Datei.
+        "features": {"top": "face_top"},
     }
     fields.update(changes)
     return Recipe(**fields)
@@ -486,10 +515,20 @@ def test_the_cases_on_disk_still_say_what_the_check_says_today() -> None:
         "`python tools/make_shared_cases.py`, dann stimmt es wieder."
     )
 
+    def as_data(findings: list) -> list[dict[str, object]]:
+        """Dieselbe Gestalt wie in der Datei — Schlüssel und Werte, kein Satz.
+
+        Verglichen wird, was die Server-Seite vergleicht. Über die **Sätze** zu
+        vergleichen wäre seit der gemeinsamen Textquelle wertlos: Beide Seiten
+        holen dann denselben Satz aus derselben Datei, und der Vergleich
+        stimmt immer.
+        """
+        return [{"code": one.code, "values": one.values} for one in findings]
+
     drifted = {
-        path.stem: (expected[path.stem], inspect(path.read_bytes()))
+        path.stem: (expected[path.stem], as_data(inspect(path.read_bytes())))
         for path in files
-        if inspect(path.read_bytes()) != expected[path.stem]
+        if as_data(inspect(path.read_bytes())) != expected[path.stem]
     }
     assert not drifted, (
         "Das abgelegte Urteil ist nicht mehr das, was die Prüfung sagt — die "
@@ -560,13 +599,16 @@ def test_every_sentence_the_server_asks_for_exists_and_the_other_way_round() -> 
     api = _Path("website/api")
     gefragt: set[str] = set()
     for datei in sorted(api.glob("*.php")):
-        # **Beide Zugänge, nicht nur der offensichtliche.** Die Mailtexte
+        # **Alle drei Zugänge, nicht nur der offensichtliche.** Die Mailtexte
         # laufen über ``shared_mail_body``, das ``shared_text`` ruft und die
         # Zeilenenden umsetzt — ein Muster nur auf ``shared_text`` meldete sie
         # als „Sätze, die niemand ausgibt", und sie standen in jeder Mail.
+        # Dasselbe noch einmal bei den Prüfbefunden: Die PHP-Seite baut sie mit
+        # ``shared_finding('…')`` und übersetzt erst am Ausgang — der Schlüssel
+        # steht literal da, nur in einer anderen Funktion.
         gefragt |= set(
             _re.findall(
-                r"shared_(?:text|mail_body)\(\s*'([a-z0-9_]+)'",
+                r"shared_(?:text|mail_body|finding)\(\s*'([a-z0-9_]+)'",
                 datei.read_text("utf-8"),
             )
         )

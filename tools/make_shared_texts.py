@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -71,6 +72,30 @@ def texts() -> dict[str, dict[str, str]]:
     return collected
 
 
+def untranslated(source: dict[str, Any], language: str) -> list[str]:
+    """Welche Schlüssel der Katalog dieser Sprache gar nicht kennt.
+
+    **Die genauere Frage als „ist der Satz leer".** Ein Katalog kennt einen
+    Schlüssel auf drei Weisen nicht, und sie sehen verschieden aus: Er fehlt
+    ganz (dann gibt ``str()`` die deutsche Quelle zurück), er steht mit leerem
+    Wert da (dann kommt eine leere Zeichenkette), oder er trägt nur
+    Leerzeichen. Die erste ist die tückischste — sie liefert einen gültig
+    aussehenden Satz in der falschen Sprache, und ein Blick auf die Datei
+    zeigt sechs volle Spalten.
+
+    Gemessen am 31.08.2026: Nach dem Eintragen der 21 Prüfbefunde lief der
+    Erzeuger durch und schrieb 60 Sätze in sechs Sprachen — 21 davon in fünf
+    Sprachen auf Deutsch. Die Prüfung auf leere Sätze griff nicht, weil keiner
+    leer war.
+    """
+    catalog = read_catalog(language)
+    return sorted(
+        key
+        for key, text in source.items()
+        if not catalog.get(getattr(text, "msgid", str(text)), "").strip()
+    )
+
+
 def missing(collected: dict[str, dict[str, str]]) -> dict[str, list[str]]:
     """Was in einer Sprache leer geblieben ist — je Sprache die Schlüssel.
 
@@ -105,8 +130,18 @@ def written() -> str:
 
 
 def main() -> int:
+    from app.core.knowledge.parts.shared_texts import all_texts
+
+    source = all_texts()
     collected = texts()
     open_ones = missing(collected)
+    for language in available_languages():
+        if language == SOURCE_LANGUAGE:
+            continue
+        fehlend = untranslated(source, language)
+        if fehlend:
+            open_ones.setdefault(language, [])
+            open_ones[language] = sorted(set(open_ones[language]) | set(fehlend))
     if open_ones:
         for language, key in sorted(open_ones.items()):
             print(f"{language}: {len(key)} Sätze ohne Übersetzung, z. B. {key[0][:60]}")

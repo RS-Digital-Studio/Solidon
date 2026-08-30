@@ -60,14 +60,23 @@ def _base() -> dict[str, Any]:
     return {
         "name": "halter",
         "title": "Kabelhalter",
-        "group": "Befestigung",
+        # **Der Schlüssel, nicht der Anzeigename.** „Befestigung" stand hier
+        # von Anfang an und war nie gültig: ``GROUPS`` führt `mounting` als
+        # Schlüssel und „Befestigung" als seine deutsche Beschriftung. Solange
+        # ``inspect`` die Gruppe nicht prüfte, fiel es nicht auf — der ganze
+        # Korpus bestand aus Dateien, die kein Empfänger hätte laden können,
+        # und der Test hieß trotzdem „ein Rezept, das die Anwendung geschrieben
+        # hat".
+        "group": "mounting",
         "document": {
             "format_version": DOCUMENT_VERSION,
             "ops": [{"id": 1, "op": "create_box", "params": {"length": 20.0, "width": 10.0}}],
         },
         "payloads": {},
         "exposed": [],
-        "features": {},
+        # Ein Baustein ohne benanntes Merkmal lässt sich nicht einsetzen
+        # (§24.1) — ein leeres Wörterbuch war hier nie ein gültiger Wert.
+        "features": {"top": "face_top"},
         "doc": "Hält ein Kabel an der Tischkante.",
         "format_version": 1,
     }
@@ -131,6 +140,14 @@ def cases() -> dict[str, bytes]:
         "schlecht-fremde-lizenz": _with(license="WTFPL"),
         "schlecht-auszeichnung-im-autor": _with(author="R. <b>Schneider</b>"),
         "schlecht-anhang-kein-base64": _with(payloads={"netz": "kein base64!!"}),
+        # Die drei Aufnahmebedingungen (3a, 31.08.2026, erster
+        # Ende-zu-Ende-Lauf): Dateien, die jede Börsenprüfung bestanden und
+        # beim ersten Empfänger scheiterten. Sie können nicht aus unserer
+        # Anwendung stammen — dort erzwingt ``capture`` alle drei — und genau
+        # deshalb gehören sie hierher: Eine Börsendatei kommt nicht von uns.
+        "schlecht-name-kein-snake-case": _with(name="Probeklotz"),
+        "schlecht-unbekannte-gruppe": _with(group="eigene"),
+        "schlecht-ohne-merkmal": _with(features={}),
         # Der Größenfall steht bewusst **nicht** hier: Er wäre eine Datei von
         # 26 MB neben zwanzig, die zusammen keine 20 KB wiegen, und der Ordner
         # wird eingecheckt. Wie er zu bauen ist, sagt ``hinweise.md`` — die
@@ -157,10 +174,26 @@ Fall nicht abgedeckt, sondern nur seine Meldung.
 """
 
 
-def verdicts() -> dict[str, list[str]]:
-    """Das Urteil der Anwendung je Fall — die Sollwerte des Vergleichs."""
+def verdicts() -> dict[str, list[dict[str, object]]]:
+    """Das Urteil der Anwendung je Fall — die Sollwerte des Vergleichs.
+
+    **Schlüssel und Werte, nicht der fertige Satz.** Solange hier Sätze
+    standen, verglich die Server-Seite Formulierungen — und seit beide Seiten
+    ihre Sätze aus derselben Textquelle holen, wäre das ein Vergleich zweier
+    Lesevorgänge derselben Datei gewesen: immer gleich, ganz gleich was die
+    Prüfungen darunter gefunden haben.
+
+    Die Werte sind dabei der schärfere Teil. Python zählt Zeichen, PHPs
+    ``strlen`` zählt Bytes; bei einem Text mit Umlauten gehen die Zahlen
+    auseinander, und der Satz sieht in beiden Fällen gleich aus. Genau dieser
+    Fall entscheidet über eine Datei, die auf ein Zeichen genau an der Grenze
+    liegt.
+    """
     load_operations()
-    return {name: inspect(payload) for name, payload in cases().items()}
+    return {
+        name: [{"code": one.code, "values": one.values} for one in inspect(payload)]
+        for name, payload in cases().items()
+    }
 
 
 def main() -> int:

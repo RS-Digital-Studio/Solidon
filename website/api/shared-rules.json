@@ -1,5 +1,13 @@
 {
   "format": 1,
+  "groups": [
+    "calibration",
+    "fasteners",
+    "mechanics",
+    "mounting",
+    "routing",
+    "structure"
+  ],
   "licenses": [
     "CC0-1.0",
     "CC-BY-4.0",
@@ -8,6 +16,8 @@
   "max_doc_chars": 2000,
   "max_title_chars": 120,
   "max_upload_bytes": 26214400,
+  "name_pattern": "^[a-z][a-z0-9_]*$",
+  "needs_features": true,
   "operations": [
     "align_to_feature",
     "apply_texture",
@@ -120,6 +130,12 @@
     "name",
     "payloads",
     "range_report",
+    "title"
+  ],
+  "required_keys": [
+    "document",
+    "group",
+    "name",
     "title"
   ],
   "value_kinds": [

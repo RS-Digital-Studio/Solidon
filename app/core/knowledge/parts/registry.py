@@ -52,7 +52,14 @@ Parameterstellung keine Vorbereitung braucht.
 """
 
 
-_NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
+#: Wie ein Bausteinname aussehen darf.
+#:
+#: Öffentlich, weil zwei Module ihn brauchen: Diese Prüfung hier beim
+#: Einsetzen, und die Börsenprüfung, bevor eine Datei überhaupt hinausgeht
+#: (shared.rules). Als private Konstante hätte die zweite Seite ihn
+#: abschreiben müssen — und ein abgeschriebenes Muster ist eines, das beim
+#: nächsten Zuwachs auseinanderläuft.
+NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
 #: Kürzestes Wort, das die Suche ernst nimmt.
 MIN_SEARCH_WORD: Final = 4
@@ -375,7 +382,7 @@ class PartRegistry:
         self._parts.pop(name, None)
 
     def _check(self, spec: PartSpec) -> None:
-        if not _NAME_PATTERN.match(spec.name):
+        if not NAME_PATTERN.match(spec.name):
             raise InternalError(
                 detail=f"part name {spec.name!r} is not lower_snake_case",
                 values={"part": spec.name},

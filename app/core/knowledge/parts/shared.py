@@ -34,6 +34,7 @@ import re
 from typing import Any, Final
 
 from app.core.knowledge.parts.recipe import FORMAT_VERSION, RECIPE_LICENSES, Recipe
+from app.core.knowledge.parts.registry import GROUPS, NAME_PATTERN
 from app.core.registry import REGISTRY
 
 #: Wie groß eine hochgeladene Datei höchstens sein darf (Konzept §3.6).
@@ -77,6 +78,49 @@ FORBIDDEN_MARKUP: Final = re.compile(r"<[a-zA-Z/!]")
 VALUE_KINDS: Final = ("number", "string", "boolean", "list")
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Finding:
+    """Ein Befund als Schlüssel und Werte, nicht als fertiger Satz.
+
+    **Der Satz entsteht am Anzeigeort, das Urteil hier.** Beide Prüfseiten —
+    diese und ``shared_common.php`` — müssen über dieselbe Datei dasselbe
+    sagen, und ``tests/test_shared_php.py`` vergleicht das. Solange der
+    Vergleich über **Sätze** lief, war er scharf: Eine Mutation, die in PHP
+    ``mb_strlen`` durch ``strlen`` ersetzt, ließ ihn fallen, weil die Zahl im
+    Satz stand (200 Zeichen gegen 400 Bytes, gemessen von 50).
+
+    Mit einer gemeinsamen Textquelle wäre genau diese Schärfe verschwunden:
+    Zwei Seiten, die denselben Satz aus derselben JSON holen, stimmen immer
+    überein — der Test verglich zwei Lesevorgänge einer Datei und wäre grün
+    geblieben, für immer und ohne je rot zu werden. Deshalb trägt ein Befund
+    **beides**: den Schlüssel für die Übersetzung und die Werte, die zu ihm
+    geführt haben.
+
+    ``str()`` gibt den deutschen Satz — für Protokoll, Fehlermeldung und
+    Testausgabe. Wer übersetzt ausgeben will, nimmt ``code`` und ``values``.
+    """
+
+    code: str
+    values: dict[str, Any] = dataclasses.field(default_factory=dict)
+
+    def text(self) -> str:
+        """Der Satz in der eingestellten Sprache, mit gefüllten Platzhaltern."""
+        from app.core.knowledge.parts.shared_texts import CHECKS
+
+        pattern = CHECKS.get(self.code)
+        if pattern is None:
+            # Kein stiller Rückfall auf leer: Ein Befund ohne Satz ist ein
+            # Programmfehler, und der Schlüssel sagt wenigstens, welcher.
+            return self.code
+        sentence = str(pattern)
+        for name, value in self.values.items():
+            sentence = sentence.replace("{" + name + "}", str(value))
+        return sentence
+
+    def __str__(self) -> str:
+        return self.text()
+
+
 def rules() -> dict[str, Any]:
     """Die Erlaubnisliste als Daten — die eine Quelle für beide Prüfseiten.
 
@@ -101,6 +145,25 @@ def rules() -> dict[str, Any]:
         # gemacht, und das ist die falsche Richtung (abgestimmt mit d3,
         # 30.08.2026).
         "licenses": list(RECIPE_LICENSES),
+        # **Was der Empfänger braucht, um es überhaupt aufnehmen zu können.**
+        # Diese drei prüft ``PartRegistry._check`` beim Einsetzen, und wer sie
+        # verletzt, hat eine Datei, die durch jede Börsenprüfung kommt und beim
+        # ersten, der sie herunterlädt, mit „ließ sich nicht aufnehmen"
+        # scheitert. In der Anwendung kann das nicht passieren — dort kommt
+        # jedes Rezept aus ``capture``, und das erzwingt alle drei. Eine
+        # Börsendatei kommt aber gerade **nicht** von uns.
+        "name_pattern": NAME_PATTERN.pattern,
+        "groups": sorted(GROUPS),
+        "needs_features": True,
+        # Welche Felder ein Rezept haben **muss** — abgeleitet aus der
+        # Dataclass: Ein Feld ohne Vorgabewert ist eines, ohne das sich das
+        # Rezept nicht bauen lässt. Aufgezählt wäre die Liste beim nächsten
+        # Feld falsch.
+        "required_keys": sorted(
+            field.name
+            for field in dataclasses.fields(Recipe)
+            if field.default is dataclasses.MISSING and field.default_factory is dataclasses.MISSING
+        ),
     }
 
 
@@ -118,7 +181,7 @@ def _value_is_allowed(value: Any, depth: int = 0) -> bool:
     return False
 
 
-def inspect(payload: bytes, known: dict[str, Any] | None = None) -> list[str]:
+def inspect(payload: bytes, known: dict[str, Any] | None = None) -> list[Finding]:
     """Prüft eine hochgeladene Rezeptdatei. Leere Liste heißt: nimmt der Server an.
 
     Gibt **alle** Befunde zurück und nicht nur den ersten: Wer eine Datei
@@ -131,58 +194,123 @@ def inspect(payload: bytes, known: dict[str, Any] | None = None) -> list[str]:
     PHP-Dateien fährt.
     """
     allowed = known if known is not None else rules()
-    findings: list[str] = []
+    findings: list[Finding] = []
 
     if len(payload) > allowed["max_upload_bytes"]:
         findings.append(
-            f"Die Datei ist {len(payload)} Byte groß, erlaubt sind {allowed['max_upload_bytes']}."
+            Finding(
+                "upload_too_large",
+                {"size": len(payload), "limit": allowed["max_upload_bytes"]},
+            )
         )
         # Weiter geht es trotzdem: Wer zwei Gründe hat, soll beide erfahren.
 
     try:
         data = json.loads(payload)
     except (UnicodeDecodeError, ValueError):
-        findings.append("Die Datei ist kein gültiges JSON.")
+        findings.append(Finding("check_not_json"))
         return findings
     if not isinstance(data, dict):
-        findings.append("Ein Rezept ist ein Objekt, keine Liste und keine Zahl.")
+        findings.append(Finding("check_not_object"))
         return findings
 
     unknown = sorted(set(data) - set(allowed["recipe_keys"]))
     if unknown:
-        findings.append(f"Unbekannte Schlüssel: {', '.join(unknown)}.")
+        findings.append(Finding("check_unknown_keys", {"keys": ", ".join(unknown)}))
 
     version = data.get("format_version")
     if version not in allowed["recipe_format_versions"]:
         findings.append(
-            f"Die Formatversion {version!r} kennt der Server nicht — "
-            f"bekannt sind {allowed['recipe_format_versions']}."
+            Finding(
+                "check_bad_version",
+                {
+                    "version": version,
+                    # **Ohne Klammern und ohne Anführungszeichen.** Der Kunde
+                    # liest einen Satz und keine Python-Liste; „bekannt sind
+                    # [19]" erklärt ihm nichts. Das Format ist mit 50
+                    # abgestimmt, weil die PHP-Seite denselben Text erzeugen
+                    # muss — sonst geht ausgerechnet dieser Befund auseinander.
+                    "known": ", ".join(str(one) for one in allowed["recipe_format_versions"]),
+                },
+            )
         )
 
     findings.extend(_text_findings(data, allowed))
+    findings.extend(_adoptable_findings(data, allowed))
     findings.extend(_operation_findings(data, allowed))
     findings.extend(_payload_findings(data))
     return findings
 
 
-def _text_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]:
+def _adoptable_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Finding]:
+    """Ob der Empfänger den Baustein überhaupt aufnehmen kann.
+
+    **Der Fund, der diese Prüfung erzwungen hat** (3a, 31.08.2026, erster
+    Ende-zu-Ende-Lauf): ``for_upload`` gab dreimal hintereinander eine saubere
+    Datei aus, die ``adopt`` danach ablehnte — Name nicht ``lower_snake_case``,
+    Gruppe unbekannt, kein benanntes Merkmal. Aus Kundensicht klickt jemand
+    „Veröffentlichen", bekommt eine Datei, lädt sie hoch, und der Erste, der
+    sie holt, liest „Ein mitgereistes Rezept ließ sich nicht aufnehmen."
+
+    Die Frage war, ob das hierhin gehört oder zum Empfänger, und sie
+    entscheidet sich an dem, was diese Prüfung **ist**: die erste und einzige
+    vor der Veröffentlichung. Was hier durchkommt, steht in der Galerie — und
+    ein Baustein, den niemand laden kann, gehört dort nicht hin. Der Empfänger
+    prüft weiter (er muss, denn er ist die Stelle, die es einlöst), aber er
+    ist nicht mehr der Erste, der es merkt.
+
+    **In der Anwendung kann keiner der drei Fälle entstehen**: Dort kommt jedes
+    Rezept aus ``capture``, und das erzwingt alle drei. Eine Börsendatei kommt
+    aber gerade nicht von uns — sie kann von Hand geschrieben sein oder aus
+    einem anderen Programm stammen, und genau dafür gibt es diese Prüfung.
+    """
+    findings: list[Finding] = []
+
+    name = data.get("name")
+    if isinstance(name, str) and not re.match(allowed["name_pattern"], name):
+        findings.append(Finding("check_name_not_snake_case", {"name": name}))
+
+    for field in allowed.get("required_keys") or []:
+        if field not in data:
+            findings.append(Finding("check_missing_field", {"field": field}))
+
+    group = data.get("group")
+    known = allowed.get("groups") or []
+    # **Nur wenn die Gruppe da ist.** Fehlt sie ganz, ist das ein fehlendes
+    # Pflichtfeld und keine unbekannte Gruppe — „die Gruppe „None" gibt es
+    # nicht" wäre eine Meldung, die den Kunden auf die falsche Fährte setzt.
+    if known and group is not None and group not in known:
+        findings.append(Finding("check_unknown_group", {"group": group, "known": ", ".join(known)}))
+
+    if allowed.get("needs_features") and not data.get("features"):
+        findings.append(Finding("check_no_features"))
+
+    return findings
+
+
+def _text_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Finding]:
     """Titel und Beschreibung: Länge und keine Links (Konzept §3.2)."""
-    findings: list[str] = []
+    findings: list[Finding] = []
     for key, limit in (("title", allowed["max_title_chars"]), ("doc", allowed["max_doc_chars"])):
         text = data.get(key)
         if text is None:
             continue
         if not isinstance(text, str):
-            findings.append(f"„{key}“ ist kein Text.")
+            findings.append(Finding("check_field_not_text", {"field": key}))
             continue
         if len(text) > limit:
-            findings.append(f"„{key}“ ist {len(text)} Zeichen lang, erlaubt sind {limit}.")
+            findings.append(
+                Finding(
+                    "check_field_too_long",
+                    {"field": key, "length": len(text), "limit": limit},
+                )
+            )
         if FORBIDDEN_TEXT.search(text):
-            findings.append(f"„{key}“ enthält einen Link oder Auszeichnung.")
+            findings.append(Finding("check_field_has_link", {"field": key}))
     return findings + _credit_findings(data, allowed)
 
 
-def _credit_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]:
+def _credit_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Finding]:
     """Lizenz und Autor — die zwei Felder, die eine Weitergabe erst erlauben.
 
     **Abwesend ist kein Fehler.** Ein Rezept ohne Lizenz schreibt den Schlüssel
@@ -194,79 +322,78 @@ def _credit_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]
     Der Autor darf eine Adresse nennen und keine Auszeichnung: siehe
     :data:`FORBIDDEN_MARKUP`.
     """
-    findings: list[str] = []
+    findings: list[Finding] = []
 
     licence = data.get("license")
     if licence not in (None, ""):
         allowed_licences = allowed.get("licenses") or []
         if not isinstance(licence, str):
-            findings.append("„license“ ist kein Text.")
+            findings.append(Finding("check_licence_not_text"))
         elif allowed_licences and licence not in allowed_licences:
-            findings.append(f"„{licence}“ ist keine der erlaubten Lizenzen.")
+            findings.append(Finding("check_licence_unknown", {"licence": licence}))
 
     author = data.get("author")
     if author not in (None, ""):
         if not isinstance(author, str):
-            findings.append("„author“ ist kein Text.")
+            findings.append(Finding("check_author_not_text"))
         else:
             limit = allowed["max_title_chars"]
             if len(author) > limit:
-                findings.append(f"„author“ ist {len(author)} Zeichen lang, erlaubt sind {limit}.")
+                findings.append(
+                    Finding("check_author_too_long", {"length": len(author), "limit": limit})
+                )
             if FORBIDDEN_MARKUP.search(author):
-                findings.append("„author“ enthält eine Auszeichnung.")
+                findings.append(Finding("check_author_has_markup"))
     return findings
 
 
-def _operation_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[str]:
+def _operation_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Finding]:
     """Jeder Schritt nennt eine Operation, die der Server kennt (Konzept §3.1)."""
     document = data.get("document")
     if document is None:
         return []
     if not isinstance(document, dict):
-        return ["„document“ ist kein Objekt."]
+        return [Finding("check_document_not_object")]
     steps = document.get("ops", [])
     if not isinstance(steps, list):
-        return ["„ops“ ist keine Liste."]
+        return [Finding("check_ops_not_list")]
 
-    findings: list[str] = []
+    findings: list[Finding] = []
     permitted = set(allowed["operations"])
     for index, step in enumerate(steps):
-        where = f"Schritt {index + 1}"
         if not isinstance(step, dict):
-            findings.append(f"{where} ist kein Objekt.")
+            findings.append(Finding("check_step_not_object", {"n": index + 1}))
             continue
         name = step.get("op")
         if name not in permitted:
-            findings.append(f"{where} nennt die unbekannte Operation {name!r}.")
+            findings.append(Finding("check_step_unknown_op", {"n": index + 1, "name": name}))
         params = step.get("params", {})
         if not isinstance(params, dict):
-            findings.append(f"{where} hat Parameter, die kein Objekt sind.")
+            findings.append(Finding("check_params_not_object", {"n": index + 1}))
             continue
         for key, value in params.items():
             if not _value_is_allowed(value):
-                findings.append(
-                    f"{where}, Parameter „{key}“ hat einen Wert, der nicht erlaubt ist."
-                )
+                findings.append(Finding("check_value_not_allowed", {"n": index + 1, "key": key}))
     return findings
 
 
-def _payload_findings(data: dict[str, Any]) -> list[str]:
+def _payload_findings(data: dict[str, Any]) -> list[Finding]:
     """Payloads sind base64 und werden nicht ausgeführt — nur gemessen
     (Konzept §3.6)."""
     payloads = data.get("payloads")
     if payloads is None:
         return []
     if not isinstance(payloads, dict):
-        return ["„payloads“ ist kein Objekt."]
-    findings: list[str] = []
+        return [Finding("check_payloads_not_object")]
+    findings: list[Finding] = []
     for key, value in payloads.items():
         if not isinstance(value, str):
-            findings.append(f"Der Anhang „{key}“ ist keine Zeichenkette.")
+            findings.append(Finding("check_payload_not_text", {"name": key}))
             continue
         try:
             base64.b64decode(value, validate=True)
         except (ValueError, TypeError):
-            findings.append(f"Der Anhang „{key}“ ist kein base64.")
+            findings.append(Finding("check_payload_not_base64", {"name": key}))
     return findings
 
 
@@ -306,7 +433,7 @@ def for_upload(recipe: Recipe) -> bytes:
                 "Dieser Baustein kann so nicht geteilt werden. Der Server prüft "
                 "dasselbe und würde ihn abweisen."
             ),
-            values={"recipe": recipe.name, "findings": " ".join(findings)},
+            values={"recipe": recipe.name, "findings": " ".join(str(one) for one in findings)},
             constraint="shared_rules",
             suggestions=(CORRECT_INPUT, CANCEL),
         )

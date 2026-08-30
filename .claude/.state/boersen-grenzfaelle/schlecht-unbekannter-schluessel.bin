@@ -1,7 +1,7 @@
 {
   "name": "halter",
   "title": "Kabelhalter",
-  "group": "Befestigung",
+  "group": "mounting",
   "document": {
     "format_version": 19,
     "ops": [
@@ -17,7 +17,9 @@
   },
   "payloads": {},
   "exposed": [],
-  "features": {},
+  "features": {
+    "top": "face_top"
+  },
   "doc": "Hält ein Kabel an der Tischkante.",
   "format_version": 1,
   "__class__": "os.system"
