@@ -3,7 +3,8 @@
 Fünf Stellen im Kern prüfen den Freischaltzustand selbst: jede
 Dokumentänderung (``History.apply``), das Löschen von Schritten
 (``History.remove_operations``), jeder Export (``write_plan``,
-``write_assembly``), die Slicer-Übergabe (``slice_model``) und der Chat
+``write_assembly``), die Slicer-Übergabe (``slice_model``, ``open_in_slicer``)
+und der Chat
 (``AgentSession.propose``). Hier steht beides fest — dass sie mit abgelaufenem
 Testlauf ablehnen, und dass alles Lesende weiterläuft. Die zweite Hälfte ist
 die eigentliche Zusicherung: eine Testversion, die gespeicherte Arbeit
@@ -34,7 +35,7 @@ from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply
 from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import ExternalToolError, InstallationDamaged, LicenceRequired
-from app.core.export.handover import SlicerSetup, slice_model
+from app.core.export.handover import SlicerSetup, open_in_slicer, slice_model
 from app.core.export.writer import plan_export, write_assembly, write_plan
 from app.core.geom.mesh import as_mesh_data, read_mesh
 from app.core.geom.transform import place_on_bed
@@ -205,6 +206,18 @@ def test_an_expired_trial_blocks_the_slicer(
     setup = SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
     with pytest.raises(LicenceRequired) as raised:
         slice_model(tmp_path / "teil.stl", PrintSettings(), profile, setup)
+    assert raised.value.action == activation.SLICER
+
+
+def test_an_expired_trial_blocks_opening_in_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beide Übergabearten aus §29 stehen hinter derselben Grenze — auch das
+    Öffnen im Fenster, bevor irgendetwas geprüft oder gestartet wird."""
+    _lock(monkeypatch)
+    setup = SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
+    with pytest.raises(LicenceRequired) as raised:
+        open_in_slicer(tmp_path / "teil.3mf", setup)
     assert raised.value.action == activation.SLICER
 
 

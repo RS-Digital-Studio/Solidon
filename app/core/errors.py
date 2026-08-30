@@ -84,6 +84,18 @@ INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=Tru
 #: Der Satz nennt beide Hälften, weil die erste allein nicht sagt, was danach
 #: zu tun ist.
 EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen."))
+#: Die drei Geschwister von ``EXPORT_ONLY``, ein Mal übersehen: Als die sechs
+#: inline gebauten ``export_only`` zur Konstante wurden, blieben diese drei
+#: als ``Action(id=…)`` in der Übergabe zurück — Schlüsselwort-Aufrufe, die
+#: der Wächter in ``test_ui.py`` nicht sah. Gesetzt waren sie überall,
+#: verdrahtet nirgends: Der Kunde las „Einen anderen Slicer auswählen." als
+#: Satz über dem einzigen Knopf „Nur exportieren und selbst slicen."
+SHOW_SLICER_OUTPUT = Action("show_output", _("Ausgabe des Slicers ansehen."))
+CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen."))
+#: Vorne, weil er der häufigste richtige nächste Schritt ist: Scheitert der
+#: eingestellte Slicer, stehen auf vielen Rechnern zwei weitere daneben —
+#: und die Absage bot bisher keinen Weg zu ihnen an (§29, §2.1).
+CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen."), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der

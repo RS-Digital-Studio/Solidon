@@ -23,6 +23,7 @@ import json
 import math
 import re
 import subprocess
+import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -34,6 +35,8 @@ from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
     CHANGE_SELECTION,
+    CHECK_SLICER_PROFILE,
+    CHOOSE_SLICER,
     EXPORT_ONLY,
     INSTALL_MISSING,
     OPEN_SETTINGS,
@@ -41,7 +44,7 @@ from app.core.errors import (
     RETRY,
     SCALE_TO_FIT,
     SHOW_LOCATIONS,
-    Action,
+    SHOW_SLICER_OUTPUT,
     ExternalToolError,
     FileWriteError,
     OperationCancelled,
@@ -192,10 +195,7 @@ def detect(executable: Path | str) -> SlicerSetup:
         raise ExternalToolError(
             tool=path.name,
             detail=_("Solidon kennt die Kommandozeile dieses Programms nicht."),
-            suggestions=(
-                Action(id="choose_slicer", label=_("Einen anderen Slicer auswählen.")),
-                EXPORT_ONLY,
-            ),
+            suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
         )
     return SlicerSetup(executable=path, flavour=flavour)
 
@@ -1711,6 +1711,10 @@ def _run_slicer(
                     detail=_("Der Slicer hat das Zeitlimit überschritten."),
                     values={"seconds": int(timeout)},
                     suggestions=(
+                        # Derselbe Ausweg wie beim Fehlschlag ohne Druckdatei:
+                        # Wo ein zweiter Slicer daneben steht, ist der Wechsel
+                        # die echte Alternative zu fünf weiteren Minuten.
+                        CHOOSE_SLICER,
                         EXPORT_ONLY,
                         # ``RETRY`` und keine eigene Fassung: Der Katalog
                         # schlüsselt nach dem deutschen Text, und der Punkt am
@@ -1850,6 +1854,56 @@ def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Findi
     )
 
 
+#: Programme, die ``--arrange 0`` mit der Standardabsage quittieren
+#: (ElegooSlicer 1.5.3.4: Exit 127, „found error", sonst nichts — gemessen:
+#: ``--arrange 1`` läuft, die abgelehnte **Wertbelegung** ist die 0, also
+#: gerade das „nicht anordnen"). Je Sitzung gemerkt, nachdem der Rückfall es
+#: einmal gemessen hat — keine Liste von Hand, denn welche Fassung was
+#: annimmt, weiß nur das Programm selbst, und ``--help`` schweigt bei dieser
+#: Familie vollständig.
+_REFUSES_THE_ARRANGE_FLAG: Final[set[Path]] = set()
+
+
+def too_short(payload: str, model_height: float, settings: PrintSettings) -> Finding | None:
+    """Ist die Druckdatei niedriger als das Modell? (§28.2, Regel 14)
+
+    Der Fall, den keine andere Gegenprobe sieht: Ein Körper, der zur Hälfte
+    unter dem Druckbett steckt, wird von CuraEngine wortlos unter ``z = 0``
+    abgeschnitten — gemessen am 30.08.2026: 50 Schichten statt 100, halbes
+    Material, Exit 0. PrusaSlicer hebt denselben Körper selbst aufs Bett, die
+    Orca-Familie ordnet ihn an; nur der Cura-Kunde bekommt ein halbes Teil und
+    erfährt es erst am Drucker. ``off_the_bed`` schweigt dazu — die halbe Höhe
+    liegt brav im Bauraum.
+
+    Verglichen wird die gedruckte Höhe aus den Bahnen mit der Höhe des
+    höchsten Teils. Zwei Schichthöhen Luft, weil die oberste Schicht auf das
+    Raster gerundet wird und die erste dicker sein darf; ein Raft macht die
+    Datei höher, nie niedriger, und stört den Vergleich darum nicht.
+    """
+    extent = gcode.printed_extent(payload)
+    if extent is None or model_height <= 0.0:
+        return None
+    printed_height = float(extent.maximum[2])
+    allowance = 2.0 * settings.layers.layer_height
+    if printed_height >= model_height - allowance:
+        return None
+    return Finding(
+        code="gcode.shorter_than_model",
+        severity="error",
+        message=_(
+            "Die Druckdatei ist niedriger als das Modell — was unter dem "
+            "Druckbett lag, hat der Slicer nicht gedruckt."
+        ),
+        # ``printed`` und ``height`` sind vorhandene Wertnamen der Anzeige —
+        # „Gedruckt: 10 mm · Höhe: 20 mm" braucht keinen neuen Katalogeintrag.
+        values={
+            "printed_mm": printed_height,
+            "height_mm": model_height,
+        },
+        source="gcode",
+    )
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -1861,6 +1915,7 @@ def slice_model(
     keep_arrangement: bool = False,
     slots: Sequence[MaterialSlot] = (),
     cancelled: CancelToken | None = None,
+    model_height: float | None = None,
 ) -> SliceOutcome:
     """Slicen lassen und die Datei zurücklesen (§29, §28.1).
 
@@ -1930,8 +1985,14 @@ def slice_model(
                 detail=str(problem.strerror or problem),
             ) from problem
 
+        # Nicht jeder Slicer der Familie nimmt ``--arrange 0`` an:
+        # ElegooSlicer 1.5.3.4 bricht darauf mit der Standardabsage der
+        # Slic3r-Kommandozeile ab — Exit 127, „found error", kein Wort über
+        # den Grund. Gemerkt je Programm und Sitzung, damit die zweite Platte
+        # nicht wieder zweimal läuft.
+        wanted_arrangement = keep_arrangement and setup.executable not in _REFUSES_THE_ARRANGE_FLAG
         completed = _run_slicer(
-            _command(setup, models, config, target, keep_arrangement),
+            _command(setup, models, config, target, wanted_arrangement),
             workspace,
             timeout,
             setup,
@@ -1939,7 +2000,26 @@ def slice_model(
         )
         # Der Name, den wir selbst genannt haben — die Orca-Familie benennt
         # selbst, für sie bleibt es bei der jüngsten Datei.
-        produced = _find_gcode(target, "" if names_its_own_output(setup.flavour) else OUTPUT_NAME)
+        expected = "" if names_its_own_output(setup.flavour) else OUTPUT_NAME
+        produced = _find_gcode(target, expected)
+        arranged_by_slicer = keep_arrangement and not wanted_arrangement
+        if produced is None and wanted_arrangement and setup.flavour == "orca":
+            # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
+            # Bauart wie bei den Booleschen Ops, und wie dort wird die
+            # benutzte Stufe ausgewiesen statt verschwiegen. Ein Slicer, der
+            # auch so nichts schreibt, läuft in die Fehlerbehandlung darunter,
+            # mit derselben Meldung wie bisher.
+            completed = _run_slicer(
+                _command(setup, models, config, target, False),
+                workspace,
+                timeout,
+                setup,
+                cancelled,
+            )
+            produced = _find_gcode(target, expected)
+            if produced is not None:
+                _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
+                arranged_by_slicer = True
         if produced is None:
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
@@ -1951,11 +2031,7 @@ def slice_model(
                     exit_code=completed.returncode,
                     detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
                     values={"output": output},
-                    suggestions=(
-                        ARRANGE_ON_BED,
-                        SCALE_TO_FIT,
-                        Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
-                    ),
+                    suggestions=(ARRANGE_ON_BED, SCALE_TO_FIT, SHOW_SLICER_OUTPUT),
                 )
             if _says_no_layers(output):
                 raise ExternalToolError(
@@ -1966,22 +2042,18 @@ def slice_model(
                         "offene Stellen, Einheit und Wandstärke."
                     ),
                     values={"output": output},
-                    suggestions=(
-                        REPAIR_AND_RETRY,
-                        SHOW_LOCATIONS,
-                        Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
-                    ),
+                    suggestions=(REPAIR_AND_RETRY, SHOW_LOCATIONS, SHOW_SLICER_OUTPUT),
                 )
+            # ``CHOOSE_SLICER`` zuerst: Auf einem Rechner mit mehreren Slicern
+            # ist der Wechsel der kürzeste Ausweg — genau dieser Fall stand
+            # als Sackgasse da, mit zwei arbeitenden Slicern neben dem einen,
+            # der nicht wollte (§2.1, gemessen am 30.08.2026).
             raise ExternalToolError(
                 tool=setup.name,
                 exit_code=completed.returncode,
                 detail=_("Der Slicer hat keine Druckdatei geschrieben."),
                 values={"output": output},
-                suggestions=(
-                    Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
-                    Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
-                    EXPORT_ONLY,
-                ),
+                suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, CHECK_SLICER_PROFILE, EXPORT_ONLY),
             )
 
         payload = produced.read_text(encoding="utf-8", errors="replace")
@@ -2000,16 +2072,16 @@ def slice_model(
                     "der Slicer hat das Modell nicht verarbeitet."
                 ),
                 values={"output": _tail(completed.stdout, completed.stderr)},
-                suggestions=(
-                    Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
-                    Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
-                    EXPORT_ONLY,
-                ),
+                suggestions=(CHECK_SLICER_PROFILE, SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
             )
         metrics = gcode.parse(payload)
         # Und die zweite Gegenprobe, an der Geometrie statt an den Werten:
         # steht in dieser Datei ein Druck, der auf das Bett passt?
         beyond = off_the_bed(payload, profile, setup.flavour)
+        # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
+        # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
+        # er wird nie geraten.
+        short = too_short(payload, model_height, settings) if model_height is not None else None
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
@@ -2025,8 +2097,28 @@ def slice_model(
         *unreachable_overrides(settings, setup, slots),
         *ignored,
         *([beyond] if beyond is not None else []),
+        *([short] if short is not None else []),
         *gcode.findings_for(metrics),
     ]
+    if arranged_by_slicer:
+        # Regel 14 im Geist: Die Anordnung kommt dann nicht von Solidon,
+        # und das steht dabei — gemessen liegt sie um Dutzende Millimeter
+        # daneben, und der gelungene Lauf sähe ohne den Befund richtig aus.
+        # Eine verworfene Plattenbelegung, die keiner bemerkt, wäre schlimmer
+        # als der Schalter, der sie verwarf (§29).
+        findings.append(
+            Finding(
+                code="slicer.arranged_itself",
+                severity="warning",
+                message=_(
+                    "Dieser Slicer nimmt die Anordnungsvorgabe nicht an und hat die "
+                    "Teile selbst angeordnet — die Plattenbelegung aus Solidon gilt "
+                    "für diese Druckdatei nicht."
+                ),
+                values={"slicer": setup.name},
+                source="gcode",
+            )
+        )
     findings.append(
         Finding(
             code="slicer.handover",
@@ -2044,6 +2136,97 @@ def slice_model(
         findings=findings,
         seconds=time.perf_counter() - started,
     )
+
+
+#: Wie das Fenster neben einem reinen Konsolenprogramm heißt.
+#:
+#: Zwei Familien liefern getrennte Programme: Bei PrusaSlicer trägt die
+#: Konsole den Zusatz, bei Cura ist ``CuraEngine`` die Rechenmaschine und das
+#: Fenster heißt nach dem Hersteller — mit wechselnder Schreibung des ``M``.
+#: Die Orca-Familie ist ein Programm für beides und braucht keinen Eintrag.
+_WINDOW_SIBLINGS: Final[dict[str, tuple[str, ...]]] = {
+    "prusa-slicer-console": ("prusa-slicer",),
+    "curaengine": ("Ultimaker-Cura", "UltiMaker-Cura", "cura"),
+}
+
+
+def window_program(executable: Path) -> Path | None:
+    """Das Fenster derselben Installation — oder ``None``, wenn keines da ist.
+
+    Für die zweite Übergabeart aus §29: Die Datei im Slicer **öffnen** braucht
+    ein Programm mit Fenster, und das liegt bei zwei Familien neben dem
+    Konsolenprogramm im selben Ordner. Gesucht wird nur dort — ein Fenster aus
+    einer anderen Installation wäre ein anderer Slicer mit anderen Profilen.
+    """
+    names = _WINDOW_SIBLINGS.get(executable.stem.casefold())
+    if names is None:
+        return executable
+    for name in names:
+        candidate = executable.with_name(name + executable.suffix)
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
+    """Die geschriebene Datei im Fenster des Slicers öffnen (§29).
+
+    Die zweite Übergabeart neben dem Konsolenlauf: kein Profil, kein
+    Zeitlimit, kein Rücklesen — ab hier gehört der Auftrag dem Nutzer, und
+    der Slicer zeigt selbst, was er daraus macht. Sie trägt auch den Fall,
+    in dem die Kommandozeile eines Slicers nicht kann, was sein Fenster kann.
+
+    Gewartet wird nicht: Das Fenster lebt so lange, wie der Nutzer es
+    braucht, und ein Solidon, das sich beendet, nimmt es nicht mit. Nach
+    §32 bleibt es eine feste Argumentliste ohne Shell — hier läuft kein
+    fremder Quelltext, ein Programm zeigt auf eine Datei.
+    """
+    activation.require(activation.SLICER)
+    if not model.is_file():
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Die zu slicende Datei ist nicht da."),
+            values={"path": model.name},
+            suggestions=(RETRY, CANCEL),
+        )
+    program = window_program(setup.executable)
+    if program is None:
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Zu diesem Slicer ist kein Fenster installiert — er rechnet nur."),
+            suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
+        )
+    if not program.is_file():
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
+            suggestions=(INSTALL_MISSING, EXPORT_ONLY),
+        )
+    # Losgelöst und leise, dasselbe Muster wie der Dienststart in
+    # ``tools.start``: kein Konsolenfenster, kein Kindprozess, der am Ende
+    # von Solidon hängt. Und wie jeder Startpfad geht auch dieser auf den
+    # Rechner, nicht in den Sandkasten (``discover.on_host``).
+    windows = sys.platform == "win32"
+    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+    command = discover.on_host([str(program), str(model)])
+    try:
+        subprocess.Popen(
+            command,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=(no_window | detached) if windows else 0,
+            start_new_session=not windows,
+        )
+    except OSError as problem:
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der Slicer ließ sich nicht starten."),
+            values={"reason": str(problem)},
+            suggestions=(CHOOSE_SLICER, INSTALL_MISSING, EXPORT_ONLY),
+        ) from problem
+    _log.info("opened %s in %s", model.name, program.name)
 
 
 #: Wie ein Slicer seine Konfiguration in die Datei schreibt. Alle drei

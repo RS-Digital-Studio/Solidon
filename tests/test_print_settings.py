@@ -1732,6 +1732,161 @@ def test_no_layers_points_at_the_model_instead_of_the_profile(
     assert "check_profile" not in offered, "der Slicer hat das Modell benannt, nicht das Profil"
 
 
+def test_a_failed_run_offers_switching_the_slicer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.1: Scheitert der eingestellte Slicer, ist der Wechsel der kürzeste
+    Ausweg — auf dieser Maschine standen zwei arbeitende neben dem einen, der
+    nicht wollte, und die Absage bot nur „Nur exportieren" an (30.08.2026).
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_saying(monkeypatch, tmp_path, b"Slic3r::CLI::run found error, exit\n")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    offered = [action.id for action in raised.value.suggestions]
+    assert "choose_slicer" in offered
+    assert offered.index("choose_slicer") == 0, "der Wechsel steht vorn, nicht hinter dem Export"
+
+
+def test_window_program_finds_the_sibling_of_a_console(tmp_path: Path) -> None:
+    """Die zweite Übergabeart (§29) braucht ein Fenster, und das liegt bei
+    zwei Familien neben dem Konsolenprogramm — nur dort wird gesucht."""
+    console = tmp_path / "prusa-slicer-console.exe"
+    console.write_bytes(b"")
+    window = tmp_path / "prusa-slicer.exe"
+    window.write_bytes(b"")
+    assert handover.window_program(console) == window
+
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    cura = tmp_path / "Ultimaker-Cura.exe"
+    cura.write_bytes(b"")
+    assert handover.window_program(engine) == cura
+
+    orca = tmp_path / "elegoo-slicer.exe"
+    orca.write_bytes(b"")
+    assert handover.window_program(orca) == orca, "die Orca-Familie ist ihr eigenes Fenster"
+
+
+def test_open_in_slicer_without_a_window_offers_a_way_out(tmp_path: Path) -> None:
+    """Eine CuraEngine ohne Cura daneben kann die Datei nicht zeigen — die
+    Absage nennt den Wechsel und den Export, nicht nur das Scheitern."""
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    model = tmp_path / "teil.3mf"
+    model.write_bytes(b"x")
+    setup = handover.SlicerSetup(executable=engine, flavour="cura")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.open_in_slicer(model, setup)
+
+    offered = {action.id for action in raised.value.suggestions}
+    assert {"choose_slicer", "export_only"} <= offered
+
+
+def test_open_in_slicer_starts_the_window_with_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Aufruf ist eine feste Argumentliste (§32): das Fenster, die Datei,
+    sonst nichts — und gewartet wird nicht."""
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    model = tmp_path / "teil.3mf"
+    model.write_bytes(b"x")
+    started: list[list[str]] = []
+
+    class _Detached:
+        def __init__(self, command: list[str], **kwargs: object) -> None:
+            started.append(list(command))
+
+    monkeypatch.setattr(handover.subprocess, "Popen", _Detached)
+    handover.open_in_slicer(model, handover.SlicerSetup(executable=executable, flavour="orca"))
+
+    assert started == [[str(executable), str(model)]]
+
+
+def test_an_unknown_arrange_flag_falls_back_and_reports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ElegooSlicer 1.5.3.4 bricht auf ``--arrange`` mit „found error" ab —
+    Exit 127, kein Wort über den Grund (gemessen 30.08.2026). Der Rückfall
+    läuft einmal ohne den Schalter, weist die verworfene Anordnung als Befund
+    aus und merkt sich das Programm, damit die nächste Platte sofort richtig
+    läuft."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+    commands: list[list[str]] = []
+
+    def fake_run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        commands.append(list(command))
+        if "--arrange" in command:
+            failed = _Finished(b"Slic3r::CLI::run found error, exit\n")
+            failed.returncode = 127
+            return failed
+        target = Path(command[command.index("--outputdir") + 1])
+        (target / "plate_1.gcode").write_text(_gcode_printing_at(1.0, 5.0), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", fake_run)
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, keep_arrangement=True
+    )
+
+    assert len(commands) == 2, "erst mit Schalter, dann die Rückfallstufe ohne"
+    assert "--arrange" in commands[0] and "--arrange" not in commands[1]
+    assert any(entry.code == "slicer.arranged_itself" for entry in outcome.findings)
+
+    # Gemerkt: derselbe Slicer bekommt den Schalter nicht noch einmal — und
+    # der Befund bleibt, denn die Anordnung liegt weiter beim Slicer.
+    again = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, keep_arrangement=True
+    )
+    assert len(commands) == 3, "die zweite Platte läuft in einem Zug"
+    assert "--arrange" not in commands[2]
+    assert any(entry.code == "slicer.arranged_itself" for entry in again.findings)
+
+
+def test_a_print_file_shorter_than_the_model_is_an_error() -> None:
+    """CuraEngine schneidet unter ``z = 0`` wortlos ab (gemessen 30.08.2026:
+    50 Schichten statt 100 bei einem zentriert importierten Würfel, Exit 0).
+    Keine andere Gegenprobe sieht das — die halbe Höhe liegt brav im Bauraum.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    half = "G90\nM82\n" + "".join(
+        f"G1 Z{z / 10.0:g}\nG1 X10 Y0 E{z / 10.0:g}\n" for z in range(2, 102, 2)
+    )
+
+    short = handover.too_short(half, 20.0, settings)
+    assert short is not None, "10 mm Druck bei 20 mm Modell ist ein Befund"
+    assert short.severity == "error"
+    assert short.source == "gcode", "die Aussage kommt aus der Druckdatei (Regel 14)"
+
+    assert handover.too_short(half, 10.0, settings) is None, "volle Höhe: kein Befund"
+    assert handover.too_short(half, 10.3, settings) is None, (
+        "zwei Schichthöhen Luft für Rundung und erste Schicht"
+    )
+
+
+def test_open_in_slicer_reports_a_missing_file(tmp_path: Path) -> None:
+    """Die Datei ist zwischen Export und Öffnen verschwunden — derselbe Satz
+    und derselbe Ausweg wie beim Konsolenlauf."""
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="orca")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.open_in_slicer(tmp_path / "fehlt.3mf", setup)
+
+    assert any(action.id == "retry" for action in raised.value.suggestions)
+
+
 def _gcode_printing_at(*xs: float) -> str:
     """Eine kleinste Druckdatei, die genau an diesen X-Stellen Material legt."""
     lines = ["G90", "M82", "G1 Z0.2 F300"]
