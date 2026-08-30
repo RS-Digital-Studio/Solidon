@@ -148,6 +148,102 @@ def _run(seed: int | None = None, **params: object) -> object:
     )
 
 
+def _on_cylinder(diameter: float, **params: object) -> object:
+    """Die Operation auf einem Zylinder bekannter Breite — für den Wickelbefund."""
+    import trimesh
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshData
+    from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Profile, Scene, SceneObject
+
+    load_operations()
+    spec = REGISTRY.get("apply_texture")
+    body = SceneObject(
+        id="obj_1",
+        name="Rohr",
+        mesh=MeshData.of(trimesh.creation.cylinder(radius=diameter / 2.0, height=30.0)),
+    )
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={"obj_1": body}, parameters={}),
+            inputs=[body],
+            params=spec.params(**params),
+            profile=Profile(printer=NOZZLE, material=None),
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def _wrapped(diameter: float, wrap_diameter: float) -> object:
+    return _on_cylinder(
+        diameter,
+        pattern="knurl_diamond",
+        pitch=3.0,
+        depth=0.8,
+        mode="raised",
+        wrap="cylinder",
+        wrap_diameter=wrap_diameter,
+        width=157.1,
+        height=15.0,
+        z=7.5,
+    )
+
+
+def test_a_wrap_wider_than_the_body_is_reported() -> None:
+    """**Die stille Lage, an der die Galerie-Dose hing** (30.08.2026).
+
+    Der Wickeldurchmesser wird einmal aus einer angeklickten Fläche abgelesen
+    und steht danach als feste Zahl im Schritt. Ändert ein Projektparameter die
+    Geometrie, altert die Zahl mit — und das Muster läuft um einen Zylinder,
+    den es nicht mehr gibt.
+
+    Gemessen an ``schraubdose.p3d``: Ihr Rezept trägt ``wrap_diameter = 65.3``.
+    Stellt der Kunde die Dose auf 50 mm, steht die Rändelung 11,5 mm über den
+    Deckelrand. Der Druck gelingt, das Teil ist Ausschuss, und gemeldet hat es
+    vorher nichts.
+    """
+    result = _wrapped(50.0, 65.3)
+
+    codes = [finding.code for finding in result.findings]
+    assert "texture.wrap_beyond_body" in codes, f"kein Befund, gemeldet wurde: {codes}"
+
+    beyond = next(f for f in result.findings if f.code == "texture.wrap_beyond_body")
+    assert beyond.values["wrap_diameter_mm"] == pytest.approx(65.3)
+    assert beyond.values["body_diameter_mm"] == pytest.approx(50.0, abs=0.1)
+
+
+def test_a_matching_wrap_says_nothing() -> None:
+    """Die Gegenprobe: Ein Befund, der immer kommt, ist keiner.
+
+    Ohne sie bliebe der Test oben grün, auch wenn die Prüfung jede Lage
+    meldete — und der nächste Kunde läse eine Warnung, die nichts bedeutet.
+    """
+    result = _wrapped(50.0, 50.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "texture.wrap_beyond_body" not in codes, f"Fehlalarm bei passender Lage: {codes}"
+
+
+def test_a_wrap_smaller_than_the_body_is_left_alone() -> None:
+    """Der berechtigte Fall, der nicht gemeldet werden darf.
+
+    Ein Muster auf einer kleinen Zylinderfläche eines großen Körpers hat einen
+    kleineren Wickeldurchmesser als dessen Hüllquader — das ist keine gealterte
+    Zahl, sondern die richtige. Gemeldet wird nur, was hinausragen **muss**:
+    Ein Zylinder breiter als der ganze Körper kann keine seiner Flächen sein.
+    """
+    result = _wrapped(80.0, 30.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "texture.wrap_beyond_body" not in codes, f"Fehlalarm bei kleiner Fläche: {codes}"
+
+
 def test_a_raised_texture_adds_material_and_an_engraved_one_removes_it() -> None:
     """Erhaben legt auf, vertieft schneidet ein — und beides misst sich am
     Volumen gegen den nackten Körper.

@@ -29,7 +29,13 @@ from app.core.errors import CORRECT_INPUT, Action, ValidationError, require_posi
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, OpContext, OpResult, PrinterProfile
+from app.core.types import (
+    BaseParams,
+    Finding,
+    OpContext,
+    OpResult,
+    PrinterProfile,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
@@ -465,6 +471,52 @@ class TextureParams(BaseParams):
     )
 
 
+def _wrap_beyond_body(body: Any, wrap_diameter: float) -> Finding | None:
+    """Läuft das Muster um einen Zylinder, den der Körper gar nicht hat? (Regel 17)
+
+    **Der Wickeldurchmesser wird einmal abgelesen und altert dann.** Der Dialog
+    trägt ihn ein, wenn man eine Zylinderfläche anklickt — von da an steht eine
+    Zahl im Schritt, und die weiß nichts davon, dass der Körper danach kleiner
+    geworden ist. In einem parametrischen Projekt ist das der Normalfall: Wer
+    einen Projektparameter ändert, ändert die Geometrie und nicht die
+    abgelesenen Zahlen in den Schritten darüber.
+
+    Gemessen an der Galerie-Dose am 30.08.2026: Ihr Rezept trägt
+    ``wrap_diameter = 65.3`` als feste Zahl — den Deckeldurchmesser bei einer
+    Dose von 60 mm. Stellt der Kunde sie auf 50 mm, wofür ein Projektparameter
+    da ist, läuft die Rändelung um einen Zylinder, der zehn Millimeter breiter
+    ist als der Deckel, und steht 11,5 mm über dessen Rand. Der Druck gelingt
+    und ist Ausschuss. Gemeldet hat das nichts: kein Fehler, kein Befund, kein
+    Hinweis.
+
+    **Gemeldet wird nur, was hinausragen muss**, nicht jede Abweichung: Ein
+    Muster auf einer kleinen Zylinderfläche eines großen Körpers hat
+    berechtigterweise einen kleineren Wickeldurchmesser als dessen Hüllquader.
+    Umgekehrt geht es nicht — ein Zylinder, der breiter ist als der ganze
+    Körper, kann keine seiner Flächen sein.
+
+    Ein Befund und kein Fehler: Wer ein Muster bewusst überstehen lässt, darf
+    das. Er soll es nur nicht versehentlich tun.
+    """
+    size = body.bounds.size
+    widest = max(size[0], size[1])
+    if wrap_diameter <= widest + EPS_GEOM:
+        return None
+    return Finding(
+        code="texture.wrap_beyond_body",
+        severity="warning",
+        message=_(
+            "Das Muster läuft um einen Zylinder, der breiter ist als der Körper — "
+            "es steht über dessen Rand hinaus. Klicken Sie die Zylinderfläche neu "
+            "an, damit der Durchmesser wieder zum Körper passt."
+        ),
+        values={
+            "wrap_diameter_mm": round(wrap_diameter, 3),
+            "body_diameter_mm": round(widest, 3),
+        },
+    )
+
+
 def sagitta(diameter: float, pitch: float) -> float:
     """Wie weit die Sehne unter dem Bogen zurückbleibt.
 
@@ -631,6 +683,10 @@ def apply_texture(ctx: OpContext) -> OpResult:
     nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
+    if params.wrap == "cylinder":
+        beyond = _wrap_beyond_body(body_mesh, params.wrap_diameter)
+        if beyond is not None:
+            findings.append(beyond)
 
     _log.info("textured with %r, %s", params.pattern, params.mode)
     return OpResult(
