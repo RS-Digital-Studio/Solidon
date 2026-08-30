@@ -12761,8 +12761,9 @@ rudimentären Slicer, und die Lücke füllte bisher Meshmixer. Solidon als
 Vorstufe („Datei rein, repariert und angepasst raus") ist für ihn die
 Lösung; Resin-spezifische Prüfungen sind das Sahnehäubchen, nicht der
 Kern. Das Resin-Konzept aus dem zweiten Kästchen beginnt darum bei
-dieser Vorstufe, nicht bei Saugglocken. Dazu kündigt er eine
-PayPal-Spende an und will Solidon seinen Dentalkunden empfehlen — der
+dieser Vorstufe, nicht bei Saugglocken. Die angekündigte PayPal-Spende
+ist noch am selben Tag eingegangen (10 €) — die erste Einnahme des
+Projekts —, und er will Solidon seinen Dentalkunden empfehlen — der
 Multiplikator ist real, und „Meshmixer-Nachfolge im Dentalbereich" ist
 ein Positionierungs-Datenpunkt fürs Marketing.
 
