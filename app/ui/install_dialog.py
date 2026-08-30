@@ -278,15 +278,34 @@ class _Row(QWidget):
                     detail = tr("Aktiv: lokales Backend {adresse} — erreichbar.").format(
                         adresse=status.address
                     )
-                elif status.using_remote_address:
+                # **Der Satz nennt den Knopf nur, wenn es ihn gibt.** Beide
+                # Zweige darunter verwiesen auf „Lokal starten", ohne dessen
+                # Bedingung zu teilen: Der Knopf hängt an ``startable``, und das
+                # verlangt zusätzlich ein gefundenes Startprogramm. Wer einen
+                # Dienst eingetragen hat, dessen Startprogramm fehlt, las den
+                # Verweis auf einen Knopf, der nicht dastand (gemessen an beiden
+                # Diensten, 30.08.2026). Dieselbe Familie wie ein Knopf, dessen
+                # Freigabe und Ausführung Verschiedenes prüfen — hier zwischen
+                # Text und Knopf statt zwischen Knopf und Handlung.
+                elif status.using_remote_address and status.startable:
                     detail = tr(
                         "Die Web-/Netzadresse {adresse} antwortet nicht. Mit „Lokal starten“ "
                         "wechseln Sie zum lokalen Backend."
                     ).format(adresse=status.address)
-                else:
+                elif status.using_remote_address:
+                    detail = tr(
+                        "Die Web-/Netzadresse {adresse} antwortet nicht, und ein lokales "
+                        "Startprogramm ist nicht eingerichtet."
+                    ).format(adresse=status.address)
+                elif status.startable:
                     detail = tr(
                         "Lokales Backend {adresse} antwortet noch nicht — mit „Lokal "
                         "starten“ öffnen."
+                    ).format(adresse=status.address)
+                else:
+                    detail = tr(
+                        "Lokales Backend {adresse} antwortet noch nicht, und ein "
+                        "Startprogramm ist nicht eingerichtet."
                     ).format(adresse=status.address)
                 return f"{status.location}\n{detail}"
             return status.location

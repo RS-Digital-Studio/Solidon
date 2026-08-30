@@ -12,6 +12,7 @@ zur Verfügung, die Befehlszeile, die dort entstünde, schon.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -1246,3 +1247,56 @@ def test_starting_a_service_forgets_the_details_of_the_install(qt_app: QApplicat
     dialog._start_tool(anforderung)
 
     assert "pip:" not in dialog._details, "die Ausgabe des vorigen Vorgangs stand noch da"
+
+
+def test_the_text_never_names_a_button_that_is_not_there(qt_app: QApplication) -> None:
+    """Ein Satz, der auf einen Knopf zeigt, muss dessen Bedingung teilen.
+
+    Der Hinweis nannte „Lokal starten“, sobald ein Dienst da und nicht am
+    Laufen war. Der Knopf hängt aber an ``startable`` — das verlangt
+    zusätzlich ein gefundenes Startprogramm. Wer einen Dienst eingetragen
+    hatte, dessen Startprogramm fehlt, las den Verweis auf einen Knopf, der
+    nicht dastand (gemessen an beiden Diensten, 30.08.2026).
+    """
+    dialog = InstallDialog()
+    zeile = next(entry for entry in dialog.rows if entry.requirement.id == "comfyui")
+
+    ohne_starter = install.Status(
+        requirement=zeile.requirement,
+        present=True,
+        location="C:/irgendwo",
+        running=False,
+        address="http://127.0.0.1:8188",
+        startable=False,
+    )
+    text = zeile._where_text(ohne_starter)
+    assert "Lokal starten" not in text, f"Verweis auf einen fehlenden Knopf: {text!r}"
+    assert "Startprogramm" in text, "und der Grund fehlt auch noch"
+
+    mit_starter = replace(ohne_starter, startable=True)
+
+    assert "Lokal starten" in zeile._where_text(mit_starter), (
+        "mit Knopf muss der Satz ihn auch nennen"
+    )
+
+
+def test_the_remote_branch_shares_the_same_condition(qt_app: QApplication) -> None:
+    """Derselbe Fehler stand im Zweig darüber.
+
+    Wer eine Netzadresse eingetragen hatte, die nicht antwortet, bekam
+    denselben Verweis — ebenfalls ohne die Bedingung des Knopfes.
+    """
+    dialog = InstallDialog()
+    zeile = next(entry for entry in dialog.rows if entry.requirement.id == "ollama")
+
+    status = install.Status(
+        requirement=zeile.requirement,
+        present=True,
+        location="C:/irgendwo",
+        running=False,
+        using_remote_address=True,
+        address="http://fern:11434",
+        startable=False,
+    )
+
+    assert "Lokal starten" not in zeile._where_text(status)
