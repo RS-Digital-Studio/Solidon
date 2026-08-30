@@ -74,6 +74,7 @@
 - [Fehlalarm, den mehrere für einen halten](fehlalarm-den-mehrere-fuer-einen-halten.md) — „das ist doch nur eine Messung“ gilt nicht, sobald sie verrechnet wird; und die Wirkung war null, während mein Kommentar mehr behauptete.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
 
+- [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
 - [Abgelesene Zahl altert still](abgelesene-zahl-altert-still.md) — sie stimmt nur in der Lage, in der sie entstand; was fehlt, sieht aus wie Absicht.
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
