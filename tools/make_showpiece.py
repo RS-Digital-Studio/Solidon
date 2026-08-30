@@ -53,6 +53,7 @@ eine Kiste.
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -277,9 +278,261 @@ def build() -> tuple[Project, int]:
     return project, built
 
 
+#: Die Maße des Rollenhalters.
+#:
+#: Deutsch wie bei ``SIZES`` daneben, und aus demselben Grund: Parameternamen
+#: gehören dem Nutzer und erscheinen in seiner Oberfläche.
+HOLDER_SIZES = (
+    ("rollenbreite", 68.0, "Rollenbreite"),
+    ("wand", 6.0, "Wandstärke"),
+    ("achse", 14.0, "Achsdurchmesser"),
+)
+
+#: Wie weit die zwei Laufachsen auseinanderliegen, in Millimetern.
+#:
+#: Vierundsechzig Millimeter tragen jede Rolle von 130 bis 210 mm Durchmesser,
+#: ohne dass sie zwischen den Achsen durchfällt.
+AXLE_GAP = 32.0
+WALL_HEIGHT = 48.0
+PLATE_DEPTH = 104.0
+PLATE_THICKNESS = 9.0
+
+#: Wie hoch die Achsmitte über der Plattenunterkante liegt.
+AXLE_HEIGHT = PLATE_THICKNESS + WALL_HEIGHT - 6.0
+
+#: Ein Schritt des Rollenhalters.
+#:
+#: Anders als beim Gehäuse stehen die Objektkennungen hier **nicht** vorher
+#: fest: ``union_objects`` verbraucht beide Eingänge und legt einen **neuen**
+#: Körper an — ``obj_1`` und ``obj_2`` sind danach beide weg, und wer die
+#: nächste Operation auf ``obj_1`` schreibt, greift ins Leere. Jeder Schritt
+#: bekommt deshalb die Kennung des Hauptkörpers und die des zuletzt erzeugten
+#: Zusatzkörpers gereicht; ``build_holder`` liest beide nach jedem Schritt neu.
+HolderStep = Callable[[str, str], list[OperationDraft]]
+
+
+def _side_wall(side: float) -> list[tuple[str, HolderStep]]:
+    """Eine Wange: erzeugen, an ihren Platz schieben, anwachsen lassen."""
+    sign = "" if side > 0 else "-"
+    name = "Rechte" if side > 0 else "Linke"
+    return [
+        (
+            f"{name} Wange",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="create_box",
+                    params={
+                        "width": "=@wand",
+                        "depth": PLATE_DEPTH,
+                        "height": WALL_HEIGHT,
+                        "anchor": "centre",
+                        "name": "Wange",
+                    },
+                )
+            ],
+        ),
+        (
+            f"{name} Wange stellen",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="translate_object",
+                    inputs=(extra_id,),
+                    params={
+                        "dx": f"={sign}(@rollenbreite / 2 + @wand / 2)",
+                        # **``anchor="centre"`` zentriert in X und Y — in Z
+                        # steht der Quader auf null.** Ein ``dz`` von halber
+                        # Höhe hebt die Wange um genau diese halbe Höhe zu
+                        # weit, und sie schwebt über der Platte, statt darauf
+                        # zu stehen. Die Rechnung sah richtig aus; gesehen hat
+                        # es erst das Bild.
+                        "dz": PLATE_THICKNESS,
+                    },
+                )
+            ],
+        ),
+        (
+            f"{name} Wange anwachsen",
+            lambda main_id, extra_id: [
+                OperationDraft(op="union_objects", inputs=(main_id, extra_id))
+            ],
+        ),
+    ]
+
+
+def _axle(offset: float, name: str) -> list[tuple[str, HolderStep]]:
+    """Eine Laufachse quer zwischen die Wangen."""
+    return [
+        (
+            f"{name} Achse",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="create_cylinder",
+                    params={
+                        "diameter": "=@achse",
+                        "height": "=@rollenbreite + 2 * @wand",
+                        "segments": 64,
+                        "name": "Laufachse",
+                    },
+                )
+            ],
+        ),
+        (
+            f"{name} Achse legen",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="rotate_object", inputs=(extra_id,), params={"axis": "y", "angle": 90.0}
+                )
+            ],
+        ),
+        (
+            f"{name} Achse setzen",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="translate_object",
+                    inputs=(extra_id,),
+                    # **Der Zylinder steht auf z = 0 und wird um seine eigene
+                    # Mitte gedreht** — danach liegt seine Achse auf halber
+                    # Länge. Wer die Zielhöhe direkt einträgt, addiert auf
+                    # diese vierzig Millimeter darauf: Im ersten Lauf
+                    # schwebten beide Achsen über den Wangen, statt darin zu
+                    # liegen.
+                    params={
+                        "dy": offset,
+                        "dz": f"={AXLE_HEIGHT} - (@rollenbreite + 2 * @wand) / 2",
+                    },
+                )
+            ],
+        ),
+        (
+            f"{name} Achse anwachsen",
+            lambda main_id, extra_id: [
+                OperationDraft(op="union_objects", inputs=(main_id, extra_id))
+            ],
+        ),
+    ]
+
+
+def holder_steps() -> list[tuple[str, HolderStep]]:
+    """Der Rollenhalter in achtzehn Schritten."""
+    return [
+        (
+            "Grundplatte",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="create_box",
+                    params={
+                        "width": "=@rollenbreite + 2 * @wand + 26",
+                        "depth": PLATE_DEPTH,
+                        "height": PLATE_THICKNESS,
+                        "anchor": "centre",
+                        "name": "Rollenhalter",
+                    },
+                )
+            ],
+        ),
+        *_side_wall(-1.0),
+        *_side_wall(1.0),
+        (
+            "Materialfenster",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=(main_id,),
+                    # Quer durch **beide** Wangen in einem Zug: dazwischen ist
+                    # Luft, und ein Loch je Wange wäre derselbe Schnitt
+                    # zweimal. Es spart ein Drittel Filament und macht aus
+                    # zwei Brettern ein Gestell.
+                    params={
+                        "diameter": 34.0,
+                        "x": 0.0,
+                        "y": 0.0,
+                        "z": PLATE_THICKNESS + WALL_HEIGHT / 2,
+                        "axis": "x",
+                        "depth": 0.0,
+                    },
+                )
+            ],
+        ),
+        *_axle(-AXLE_GAP, "Vordere"),
+        *_axle(AXLE_GAP, "Hintere"),
+        (
+            "Farbe",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="assign_slot",
+                    inputs=(main_id,),
+                    # **Heller als der Grund, nicht dunkler.** Anthrazit
+                    # (#4d5763) war die realistischere Filamentfarbe und im
+                    # dunklen Viewport falsch: Die Beleuchtung ist auf die
+                    # Standard-Körperfarbe #b9c4d0 eingestellt, und darunter
+                    # verschwindet das Teil im Hintergrund, statt sich
+                    # abzuheben.
+                    params={"slot": 1, "name": "PETG Naturweiß", "colour": "#d5dae0"},
+                )
+            ],
+        ),
+        (
+            "Auf das Bett",
+            lambda main_id, extra_id: [OperationDraft(op="place_on_bed", inputs=(main_id,))],
+        ),
+    ]
+
+
+def build_holder() -> tuple[Project, int]:
+    """Den Rollenhalter bauen — mit Kennungen, die erst zur Laufzeit feststehen."""
+    project = new_project()
+    document = project.document
+    for name, value, title in HOLDER_SIZES:
+        document.parameters[name] = Parameter(name=name, value=value, unit="mm", title=title)
+
+    history = History(document)
+    profile = profiles.make_profile()
+    built = 0
+    main_id = ""
+    extra_id = ""
+    known: set[str] = set()
+    print(f"{'Schritt':26} {'Ergebnis':10} {'Körper':>6}")
+    for title, make in holder_steps():
+        try:
+            history.apply(title, make(main_id, extra_id))
+        except Exception as problem:
+            print(f"{title:26} {'ABGELEHNT':10} {'—':>6}  {problem}")
+            continue
+        result = evaluate(document, profile)
+        if not result.complete:
+            blamed = [
+                f"{entry.code}: {entry.message}"
+                for entry in result.scene.report.findings
+                if entry.code.startswith("op.")
+            ]
+            print(f"{title:26} {'HÄLT AN':10} {len(result.scene.objects):6}")
+            for line in blamed:
+                print(f"{'':26} {line}")
+            history.undo()
+            continue
+        built += 1
+        present = list(result.scene.objects)
+        # Der Hauptkörper ist der, der schon da war; der Zusatz der zuletzt
+        # dazugekommene. Nach einem ``union`` bleibt genau einer übrig, und
+        # der ist beides.
+        fresh = [key for key in present if key not in known]
+        known = set(present)
+        if len(present) == 1:
+            main_id = extra_id = present[0]
+        else:
+            extra_id = fresh[-1] if fresh else present[-1]
+            main_id = next(key for key in present if key != extra_id)
+        print(f"{title:26} {'gebaut':10} {len(present):6}")
+    return project, built
+
+
 def main() -> int:
-    project, built = build()
-    total = len(steps())
+    # ``rollenhalter`` als Argument wählt das zweite Schaustück. Kein eigenes
+    # Werkzeug daneben: Beide sind Teile für dieselbe Website, und zwei
+    # Programme, die dasselbe tun, laufen unweigerlich auseinander.
+    holder = "rollenhalter" in sys.argv
+    project, built = build_holder() if holder else build()
+    total = len(holder_steps()) if holder else len(steps())
     result = evaluate(project.document, profiles.make_profile())
     print(f"\n{built} von {total} Schritten, {len(result.scene.objects)} Körper")
     for entry in result.scene.objects.values():
@@ -287,7 +540,13 @@ def main() -> int:
     if built < total:
         print("\nNicht vollständig — das Schaustück wird nicht geschrieben.")
         return 1
-    target = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "website" / "schaustueck.p3d"
+    chosen = [entry for entry in sys.argv[1:] if entry.endswith(".p3d")]
+    default = (
+        ROOT / "website" / "teile" / "rollenhalter.p3d"
+        if holder
+        else ROOT / "website" / "schaustueck.p3d"
+    )
+    target = Path(chosen[0]) if chosen else default
     target.parent.mkdir(parents=True, exist_ok=True)
     save(project, target)
     print(f"\nGespeichert: {target}")
