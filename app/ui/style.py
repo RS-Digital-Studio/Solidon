@@ -526,7 +526,17 @@ QSplitter::handle:vertical {{ height: {NORMAL}px; }}
 /* --- Bildlaufleisten: schmal und still --------------------------------- */
 QScrollBar:vertical {{ background: transparent; width: {ROOMY}px; margin: 0; }}
 QScrollBar:horizontal {{ background: transparent; height: {ROOMY}px; margin: 0; }}
-QScrollBar::handle {{ background: {line}; border-radius: {SPACE}px; min-height: {WIDE}px; }}
+/* **Beide Mindestmaße, nicht eines.** ``min-height`` wirkt nur am senkrechten
+   Griff; der waagerechte schrumpfte damit auf zwei Punkte, sobald links etwas
+   Breites lag — bei einer Zeile von 4000 Punkten in einem Fenster von 300 war
+   er weder zu sehen noch zu greifen. Gemessen 12 Punkte im dunklen und 4 im
+   hellen Thema, gegen die 44, die er jetzt hat. */
+QScrollBar::handle {{
+    background: {line};
+    border-radius: {SPACE}px;
+    min-height: {WIDE}px;
+    min-width: {WIDE}px;
+}}
 QScrollBar::handle:hover {{ background: {muted}; }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}

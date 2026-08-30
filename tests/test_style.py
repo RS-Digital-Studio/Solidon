@@ -869,3 +869,23 @@ def test_a_field_keeps_the_edge_that_is_its_only_one(theme: str) -> None:
         f"{theme}: der Feldrahmen bringt {drawn:.2f} auf der Feldfläche, die Linienfarbe "
         f"des Themas {intended:.2f} — gedämpft verliert das Feld seine einzige Kante"
     )
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_scrollbar_handle_can_be_grabbed_in_both_directions(theme: str) -> None:
+    """``min-height`` wirkt nur senkrecht — der waagerechte Griff braucht sein
+    eigenes Mindestmaß.
+
+    Gemessen an einer Fläche von 296 Punkten über einem Inhalt von 30 000: Der
+    Griff war **zwei Punkte** breit, also weder zu sehen noch mit der Maus zu
+    treffen; mit ``min-width`` sind es 16. Die Zahl gehört zu einer echten
+    Lage — bei einem milderen Verhältnis (4000 zu 300) ist der Griff ohnehin
+    21 Punkte breit, und die erste Messung sah deshalb keinen Unterschied.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    rule = sheet.split("QScrollBar::handle {")[1].split("}")[0]
+    for side in ("min-height", "min-width"):
+        found = re.search(rf"{side}:\s*(\d+)px", rule)
+        assert found and int(found.group(1)) >= 16, (
+            f"{theme}: {side} fehlt oder ist zu klein — {rule}"
+        )
