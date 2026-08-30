@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: 3dprint@tech-center.com
+Reply-To: marketing@solidon3d.de
+Subject: Proposta: modificare il foro di una STL scaricata, senza CAD - interfaccia in italiano
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Gentile redazione di Italia 3D Print,
+
+Solidon3D 0.2.2 è stato pubblicato, e c'è un dettaglio pensato anche per i
+vostri lettori: l'applicazione è completamente localizzata in italiano -
+interfaccia, manuale e progetti di esempio.
+
+La storia si racconta in cinque minuti: si importa un modello scaricato con
+il foro di montaggio sbagliato, si clicca sul foro e si digita il nuovo
+diametro - senza il file CAD originale e senza ridisegnare il pezzo.
+Solidon riconosce posizione e asse del foro, anche se inclinato, e
+registra la modifica come passaggio reversibile nella cronologia. Da lì si
+possono aggiungere inserti filettati, sedi per viti o sedi per cuscinetti a
+norma, e consegnare il piatto direttamente al proprio slicer.
+
+Altri punti rilevanti della 0.2.2 e della serie 0.2.x:
+
+* schizzi con vincoli e anteprima di estrusione direttamente nella vista
+  3D;
+* componenti parametrici riutilizzabili costruiti dai passaggi della
+  cronologia, senza codice;
+* assistente IA opzionale che richiama le stesse operazioni documentate di
+  un clic - anche in locale via Ollama; la geometria la calcola sempre il
+  codice, mai il modello linguistico;
+* consegna allo slicer (PrusaSlicer, Cura, famiglia Orca) con i profili
+  giusti e rilettura del G-code come controprova;
+* Windows, macOS e Linux (Flatpak e AppImage), senza account e senza
+  cloud; acquisto una tantum, la demo completa è gratuita fino al
+  30 ottobre 2026.
+
+Download e panoramica: https://solidon3d.de/it/
+Changelog: https://solidon3d.de/it/changelog.html
+
+Posso fornire volentieri un esempio prima/dopo (STL di partenza, foro
+modificato, file di stampa risultante) e la build pubblicata per una
+verifica diretta.
+
+Cordiali saluti
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

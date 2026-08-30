@@ -1,0 +1,48 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@3dnatives.com
+Reply-To: marketing@solidon3d.de
+Subject: Pitch: Fix a downloaded STL's hole - desktop app localised in your edition languages
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear 3Dnatives team,
+
+Solidon3D 0.2.2 has been released, and there is one detail that may make it
+unusually convenient for your editions: the application ships fully localised
+in French, English, Spanish and German (plus Italian and Portuguese) -
+interface, manual and example projects alike. Whichever edition picks the
+story up, readers can follow it in their own language.
+
+The core story is a five-minute test: import a downloaded model with the
+wrong mounting hole, click the hole, and type a new diameter - without
+finding the source CAD file or rebuilding the part. Solidon preserves the
+original position and axis, including angled holes, and stores the change as
+a reversible history step. From there, readers can add standards-based
+heat-set inserts, screw seats or bearing seats and hand the plate straight
+to their own slicer.
+
+What sets it apart from both mesh editors and CAD suites:
+
+* constrained sketching with pull-to-solid previews directly in the 3D view;
+* reusable parametric components built from history steps, without code;
+* an optional AI assistant that drives the same documented operations a
+  click does - running locally via Ollama if preferred, never writing
+  geometry itself;
+* slicer hand-over with per-spool filament data carried into the right 3MF
+  material slot, and the resulting G-code read back as a cross-check;
+* Windows, macOS and Linux packages, no account, no cloud project store.
+
+Download and overview: https://solidon3d.de/en/
+Changelog: https://solidon3d.de/en/changelog.html
+
+I can provide a before/after example (source STL, changed hole, printable
+result) in any of the six languages, and the released build itself - the
+complete demo runs free until 30 October 2026, so your editors can verify
+every claim hands-on.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de
