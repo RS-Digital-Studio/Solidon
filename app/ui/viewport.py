@@ -330,6 +330,19 @@ MOST_GRID_LINES = 200
 #: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
 CURSOR_PIXELS = 10.0
 
+#: Wie weit der Ziehgriff höchstens gestreckt wird, wenn der Blick flach steht.
+#:
+#: Er zeigt entlang der Ebenennormalen und erscheint deshalb um den Sinus des
+#: Kippwinkels verkürzt. Damit er im Bild seine Länge behält, wird er im Raum
+#: gestreckt — und das wächst gegen unendlich, je flacher der Blick steht.
+#:
+#: **Sechs, und die Zahl kommt aus dem Einrasten:** Unter zehn Grad rastet die
+#: Kamera auf die nächste Hauptansicht (``_settle_sketch_view``), dort gibt es
+#: also keinen Griff mehr zu strecken. Bei genau zehn Grad ist der nötige
+#: Faktor ``1/sin(10°) = 5,76``; sechs liegt knapp darüber, damit die Grenze
+#: jenseits des Einrastens greift und nicht davor.
+PULL_HANDLE_STRETCH = 6.0
+
 #: Länge des sichtbaren Ziehgriffs in Bildpunkten.
 #:
 #: Er bleibt beim Zoomen gleich groß wie ein Werkzeuggriff. Achtunddreißig
@@ -575,14 +588,33 @@ def sketch_cursor(
 
 
 def pull_handle(
-    frame: PlaneFrame, curves: Sequence[SketchCurve], size: float
+    frame: PlaneFrame,
+    curves: Sequence[SketchCurve],
+    size: float,
+    across: float | None = None,
 ) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
     """Pfeil nach außen und Kreuz nach innen am längsten Profilrand.
 
     Der Fuß sitzt auf dem greifbaren Umriss. Pfeil und Kreuz sind die zweite
     Kodierung neben der Richtung (Regel 18): nach außen entsteht Material,
     nach innen wird es entfernt.
+
+    **Zwei Größen, weil zwei Richtungen verschieden verkürzt werden.** ``size``
+    misst entlang der Normalen — dorthin zeigt der Schaft, und genau die
+    Richtung schrumpft im Bild, je flacher der Blick auf die Ebene steht.
+    ``across`` misst die Querstücke: Pfeilflügel und Kreuz liegen **in** der
+    Ebene und werden dort nicht verkürzt.
+
+    Ohne diese Trennung ging das Strecken schief, und zwar sichtbar: Wer den
+    Schaft bei zehn Grad Kippung um das Sechsfache streckt, damit er im Bild
+    seine Länge behält, bläst Flügel und Kreuz mit auf — gemessen am
+    30.08.2026 eine Griffspanne von 156 statt 69 Bildpunkten. Aus einem Griff,
+    den man nicht findet, wurde einer, der das Profil verdeckt.
+
+    ``across`` ohne Wert heißt ``size`` — dann verhält sich die Funktion wie
+    vorher, und in der Seitenansicht sind beide ohnehin gleich.
     """
+    across = size if across is None else across
     if size <= 0.0:
         return []
     usable = [curve for curve in curves if not curve.construction and len(curve.points) > 1]
@@ -621,12 +653,12 @@ def pull_handle(
     outward = shifted(base, frame.normal, size)
     inward = shifted(base, frame.normal, -size)
     neck = shifted(outward, frame.normal, -size * 0.32)
-    arrow_a = shifted(neck, frame.x_axis, size * 0.24)
-    arrow_b = shifted(neck, frame.x_axis, -size * 0.24)
-    cross_a = shifted(inward, frame.x_axis, size * 0.18)
-    cross_b = shifted(inward, frame.x_axis, -size * 0.18)
-    cross_c = shifted(inward, frame.y_axis, size * 0.18)
-    cross_d = shifted(inward, frame.y_axis, -size * 0.18)
+    arrow_a = shifted(neck, frame.x_axis, across * 0.24)
+    arrow_b = shifted(neck, frame.x_axis, -across * 0.24)
+    cross_a = shifted(inward, frame.x_axis, across * 0.18)
+    cross_b = shifted(inward, frame.x_axis, -across * 0.18)
+    cross_c = shifted(inward, frame.y_axis, across * 0.18)
+    cross_d = shifted(inward, frame.y_axis, -across * 0.18)
     return [
         (inward, outward),
         (outward, arrow_a),
@@ -7443,6 +7475,54 @@ class Viewport(QWidget):
         span = math.dist(seen[0], seen[1])
         return span if span > EPS_GEOM else FALLBACK_SCALE
 
+    def pixels_per_mm_upright(self, frame: PlaneFrame) -> float:
+        """Wie viele Bildpunkte ein Millimeter **senkrecht** zur Ebene misst.
+
+        Das Gegenstück zu :meth:`pixels_per_mm`, und der Unterschied ist der
+        ganze Grund: Jene misst zwei Punkte *auf* der Ebene, diese zwei entlang
+        ihrer Normalen. In der Draufsicht sind das zwei verschiedene Welten —
+        die Ebene liegt in voller Größe da, ihre Normale zeigt zum Betrachter
+        und ist ein Punkt.
+
+        **Wofür das gebraucht wird:** Der Ziehgriff zeigt entlang der Normalen.
+        Seine Länge wurde bisher über die Skalierung *in* der Ebene gerechnet,
+        und damit stimmte sie nur in der Seitenansicht. Gemessen am
+        30.08.2026, bei 38 Bildpunkten Sollgröße:
+
+        | Kippung | Griff im Bild |
+        |---|---|
+        | 10° | 6,6 px |
+        | 20° | 13,0 px |
+        | 45° | 26,9 px |
+        | 90° | 38,0 px |
+
+        Bis etwa 25° war der Griff damit **kürzer als seine eigene
+        Trefferzone** (:data:`PULL_HIT_PIXELS`, 14 Bildpunkte): ein Stummel,
+        um den unsichtbar ein Ring lag, der Zeichenklicks schluckte.
+
+        Gemessen und nicht aus dem Kippwinkel gerechnet — dieselbe Begründung
+        wie bei :meth:`pixels_per_mm`: Durch die echte Projektion geschickt
+        stimmt die Zahl bei Parallel- wie bei Zentralprojektion.
+        """
+        if self.plotter is None:
+            return FALLBACK_SCALE
+        interactor = getattr(self.plotter, "interactor", None)
+        if interactor is not None:
+            size = interactor.size()
+            if min(size.width(), size.height()) < LEAST_VIEW_PIXELS:
+                return FALLBACK_SCALE
+        renderer = self.plotter.renderer
+        here = to_world(frame, (0.0, 0.0))
+        there = tuple(here[axis] + frame.normal[axis] for axis in range(3))
+        seen = []
+        for point in (here, there):
+            renderer.SetWorldPoint(point[0], point[1], point[2], 1.0)
+            renderer.WorldToDisplay()
+            spot = renderer.GetDisplayPoint()
+            seen.append((float(spot[0]), float(spot[1])))
+        span = math.dist(seen[0], seen[1])
+        return span if span > EPS_GEOM else FALLBACK_SCALE
+
     def _plane_distance(self) -> float:
         """Wie weit die Kamera von der Zeichenebene wegrückt.
 
@@ -7819,11 +7899,25 @@ class Viewport(QWidget):
         """Die sichtbare Griffgeometrie in genau der gezeichneten Größe."""
         if self._sketch_frame is None:
             return []
-        size = PULL_HANDLE_PIXELS / max(
-            self.pixels_per_mm(self._sketch_frame),
-            EPS_GEOM,
-        )
-        return pull_handle(self._sketch_frame, self._sketch_curves, size)
+        # **Gemessen senkrecht zur Ebene, denn dorthin zeigt der Griff.**
+        # Über die Skalierung *in* der Ebene gerechnet stimmte die Länge nur
+        # in der Seitenansicht; bei zehn Grad Kippung blieben von achtunddreißig
+        # Bildpunkten sechseinhalb übrig — weniger als die Trefferzone um ihn
+        # herum. Siehe :meth:`pixels_per_mm_upright`.
+        upright = self.pixels_per_mm_upright(self._sketch_frame)
+        flat = self.pixels_per_mm(self._sketch_frame)
+        # **Und eine Grenze nach oben**, sonst wächst der Griff bei flachem
+        # Blick ins Unendliche: Bei einem Zehntelgrad wäre er sechshundertmal
+        # so lang und läge quer durch den Bauraum. Unter zehn Grad rastet die
+        # Kamera ohnehin ein (:meth:`_settle_sketch_view`), und dort ist der
+        # Faktor 1/sin(10°) = 5,76 — aufgerundet sechs, damit die Grenze erst
+        # jenseits des Einrastens greift und nicht davor.
+        least = max(flat, EPS_GEOM) / PULL_HANDLE_STRETCH
+        size = PULL_HANDLE_PIXELS / max(upright, least, EPS_GEOM)
+        # **Quer bleibt quer.** Flügel und Kreuz liegen in der Ebene und
+        # werden nicht verkürzt; mitgestreckt verdeckten sie das Profil.
+        across = PULL_HANDLE_PIXELS / max(flat, EPS_GEOM)
+        return pull_handle(self._sketch_frame, self._sketch_curves, size, across)
 
     def _pull_is_offered(self) -> bool:
         """Ob der räumliche Griff in diesem Zustand eine gültige Geste ist."""

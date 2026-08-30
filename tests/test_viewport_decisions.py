@@ -2195,6 +2195,13 @@ def test_the_visible_arrow_and_cross_are_grabbable(qt_app: QApplication) -> None
     viewport.set_sketching(frame)
     viewport._sketch_curves = flat_curves()
     viewport.pixels_per_mm = lambda _frame: 1.0
+    # **Beide Maßstäbe setzen, nicht nur einen.** Der Ziehgriff misst
+    # seit dem 30.08.2026 auch senkrecht zur Ebene — dort zeigt sein
+    # Schaft, und nur diese Richtung wird im Bild verkürzt. Wer nur
+    # ``pixels_per_mm`` patcht, lässt die zweite Messung auf ihren
+    # Rückfallwert laufen und bekommt eine Griffgröße, die niemand
+    # gesetzt hat.
+    viewport.pixels_per_mm_upright = lambda _frame: 1.0
     viewport._display_of = lambda point: (float(point[0]), float(point[2]))
     handle = viewport._pull_handle_segments()
     outward = handle[0][1]
@@ -2217,6 +2224,13 @@ def test_without_an_editable_body_only_the_outward_pull_is_visible_and_valid(
     viewport.set_sketching(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
     viewport._sketch_curves = flat_curves()
     viewport.pixels_per_mm = lambda _frame: 1.0
+    # **Beide Maßstäbe setzen, nicht nur einen.** Der Ziehgriff misst
+    # seit dem 30.08.2026 auch senkrecht zur Ebene — dort zeigt sein
+    # Schaft, und nur diese Richtung wird im Bild verkürzt. Wer nur
+    # ``pixels_per_mm`` patcht, lässt die zweite Messung auf ihren
+    # Rückfallwert laufen und bekommt eine Griffgröße, die niemand
+    # gesetzt hat.
+    viewport.pixels_per_mm_upright = lambda _frame: 1.0
     viewport.set_sketch_pull(
         lambda: "ready",
         (0.1, 1000.0),
@@ -2757,3 +2771,105 @@ def test_sketch_render_state_keeps_selection_and_control_points_offscreen(
     assert viewport._sketch_selected_curves == (0,)
     assert viewport._sketch_control_points == controls
     assert viewport._sketch_selected_points == (1,)
+
+
+# --- Der Ziehgriff bei gekippter Kamera ---------------------------------------
+
+
+def _profilkurve():
+    """Ein geschlossenes Rechteck als Umriss, an dem der Griff sitzt."""
+    from app.core.sketch.profile import SketchCurve
+
+    return SketchCurve(
+        points=(
+            (-20.0, -20.0, 0.0),
+            (20.0, -20.0, 0.0),
+            (20.0, 20.0, 0.0),
+            (-20.0, 20.0, 0.0),
+            (-20.0, -20.0, 0.0),
+        )
+    )
+
+
+def test_the_handle_stretches_lengthwise_but_not_across() -> None:
+    """Der Schaft wird gestreckt, Flügel und Kreuz bleiben, wie sie waren.
+
+    **Weil nur eine der beiden Richtungen im Bild verkürzt wird.** Der Schaft
+    zeigt entlang der Ebenennormalen und schrumpft mit dem Sinus des
+    Kippwinkels; Pfeilflügel und Kreuz liegen *in* der Ebene und tun das nicht.
+    Wer beide über dieselbe Zahl bemisst, bläst beim Strecken die Querstücke
+    mit auf — gemessen am 30.08.2026 eine Griffspanne von 156 statt 69
+    Bildpunkten, aus einem Griff, den man nicht findet, wurde einer, der das
+    Profil verdeckt.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import pull_handle
+
+    rahmen = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    kurven = (_profilkurve(),)
+
+    schmal = pull_handle(rahmen, kurven, 10.0, 2.0)
+    breit = pull_handle(rahmen, kurven, 10.0, 8.0)
+    assert len(schmal) == len(breit), "die Zahl der Striche hängt nicht an der Breite"
+
+    def weiteste_quer(striche):
+        return max(abs(punkt[0]) for strich in striche for punkt in strich)
+
+    def weiteste_laengs(striche):
+        return max(abs(punkt[2]) for strich in striche for punkt in strich)
+
+    assert weiteste_quer(breit) > weiteste_quer(schmal), (
+        "eine größere Querweite muss die Flügel breiter machen"
+    )
+    assert weiteste_laengs(breit) == pytest.approx(weiteste_laengs(schmal)), (
+        "die Querweite darf den Schaft nicht verlängern — genau diese Kopplung war der Fehler"
+    )
+
+
+def test_without_a_cross_size_the_handle_behaves_as_before() -> None:
+    """``across`` ohne Wert heißt ``size`` — die alte Form bleibt erreichbar.
+
+    In der Seitenansicht sind beide Maße ohnehin gleich; ein Aufrufer, der nur
+    eine Zahl kennt, bekommt weiterhin genau das, was er bekam.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import pull_handle
+
+    rahmen = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    kurven = (_profilkurve(),)
+
+    assert pull_handle(rahmen, kurven, 7.0) == pull_handle(rahmen, kurven, 7.0, 7.0)
+
+
+def test_the_stretch_is_bounded_by_the_snap_that_precedes_it() -> None:
+    """Die Streckgrenze endet dort, wo das Einrasten beginnt.
+
+    **Eine Zahl aus der Sache und keine Streuzahl.** Der Schaft wird gestreckt,
+    damit er im Bild seine Länge behält, und das wächst gegen unendlich, je
+    flacher der Blick steht. Begrenzt wird es dort, wo es aufhört, gebraucht zu
+    werden: Unter zehn Grad rastet die Kamera auf die nächste Hauptansicht ein
+    (``_settle_sketch_view``), es gibt dort also keinen flachen Blick mehr. Bei
+    genau zehn Grad ist der nötige Faktor ``1/sin(10°) = 5,76``.
+
+    Wird die Grenze darunter gesetzt, greift sie **vor** dem Einrasten — dann
+    bleibt zwischen zehn und dem Einrastwinkel eine Lücke, in der der Griff
+    wieder zu kurz ist.
+    """
+    import math
+
+    from app.ui.viewport import PULL_HANDLE_STRETCH, sketch_view_near
+
+    noetig_bei_zehn = 1.0 / math.sin(math.radians(10.0))
+    assert noetig_bei_zehn <= PULL_HANDLE_STRETCH, (
+        f"die Streckgrenze {PULL_HANDLE_STRETCH} liegt unter den {noetig_bei_zehn:.2f}, "
+        "die bei zehn Grad nötig sind — dort wäre der Griff wieder zu kurz"
+    )
+
+    # Und die zehn Grad sind wirklich der Rand des Einrastens: knapp darunter
+    # fängt es, knapp darüber nicht.
+    for grad, erwartet in ((9.5, "plane:xy"), (10.5, None)):
+        rad = math.radians(grad)
+        kamera = (0.0, math.sin(rad) * 10.0, math.cos(rad) * 10.0)
+        assert sketch_view_near(kamera, (0.0, 0.0, 0.0)) == erwartet, (
+            f"bei {grad}° erwartet: {erwartet} — die Streckgrenze ist auf diesen Rand gerechnet"
+        )

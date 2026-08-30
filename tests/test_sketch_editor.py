@@ -3757,6 +3757,13 @@ def test_a_pointer_step_that_changes_nothing_does_not_redraw(qt_app: QApplicatio
         # Der Maßstab kommt aus dem Renderer, den es offscreen nicht gibt —
         # geprüft wird hier die Sparsamkeit und nicht seine Messung.
         viewport.pixels_per_mm = lambda _frame: 10.0  # type: ignore[method-assign]
+        # **Beide Maßstäbe setzen, nicht nur einen.** Der Ziehgriff misst
+        # seit dem 30.08.2026 auch senkrecht zur Ebene — dort zeigt sein
+        # Schaft, und nur diese Richtung wird im Bild verkürzt. Wer nur
+        # ``pixels_per_mm`` patcht, lässt die zweite Messung auf ihren
+        # Rückfallwert laufen und bekommt eine Griffgröße, die niemand
+        # gesetzt hat.
+        viewport.pixels_per_mm_upright = lambda _frame: 10.0  # type: ignore[method-assign]
         gezeichnet: list[int] = []
         viewport._draw = lambda: gezeichnet.append(1)  # type: ignore[method-assign]
 
