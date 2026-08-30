@@ -886,7 +886,11 @@ def _beyond_the_edge(
 
 
 def arrange_on_bed(
-    meshes: list[MeshData], profile: Profile, spacing: float = 5.0, plates: int = 1
+    meshes: list[MeshData],
+    profile: Profile,
+    spacing: float = 5.0,
+    plates: int = 1,
+    object_ids: Sequence[ObjectId] | None = None,
 ) -> Arrangement:
     """Legt jeden Körper an die hinterste, dann linkeste freie Stelle (§29).
 
@@ -982,7 +986,7 @@ def arrange_on_bed(
         assigned.append(plate)
         taken.append(spot)
 
-    findings.extend(check_build_volume(arranged, profile, assigned))
+    findings.extend(check_build_volume(arranged, profile, assigned, object_ids))
     if plate + 1 >= plates and _overfull(arranged, assigned, profile, spacing):
         findings.append(
             Finding(
@@ -1076,14 +1080,24 @@ def check_build_volume(
             )
         ]
         outside = [axis for axis, excess in enumerate(over) if excess > EPS_GEOM]
+        # Die Kennung des Körpers, wenn der Aufrufer eine mitgibt — dann löst
+        # der Bericht sie zum Namen auf. Der laufende Index steht nur noch als
+        # Notnagel da, wo es keine gibt: Er ist kein Kundentext, und er
+        # **verhinderte** obendrein die Namensauflösung — die Berichtszeile
+        # setzt den Objektnamen nur ein, wenn ``values`` kein ``object`` trägt
+        # (Roberts Foto vom 30.08.2026: „— 0 · 10,00 mm" statt „cube_clean").
+        object_id = (
+            object_ids[index] if object_ids is not None and index < len(object_ids) else None
+        )
         if outside:
             values: dict[str, Any] = {
-                "object": index,
                 "axes": ", ".join("xyz"[axis] for axis in outside),
                 # Wie weit — sonst steht dort eine Warnung, die zwischen einem
                 # Zehntel Millimeter und einem halben Modell nicht unterscheidet.
                 "excess": format_length(max(over)),
             }
+            if object_id is None:
+                values["object"] = index
             if plates is not None and index < len(plates):
                 values["plate"] = plates[index] + 1
             code, message = _verdict_for(bounds, allowed, outside, profile.printer.extrusion_width)
@@ -1092,29 +1106,21 @@ def check_build_volume(
                     code=code,
                     severity=_severity_for(bounds, allowed, about_to_write),
                     message=message,
-                    object_id=(
-                        object_ids[index]
-                        if object_ids is not None and index < len(object_ids)
-                        else None
-                    ),
+                    object_id=object_id,
                     values=values,
                 )
             )
         elif _floats(bounds, index, meshes, plates):
+            floating: dict[str, Any] = {"gap": format_length(float(bounds.minimum[2]))}
+            if object_id is None:
+                floating["object"] = index
             findings.append(
                 Finding(
                     code="arrange.above_bed",
                     severity="info",
                     message=_("Ein Objekt schwebt über dem Druckbett."),
-                    object_id=(
-                        object_ids[index]
-                        if object_ids is not None and index < len(object_ids)
-                        else None
-                    ),
-                    values={
-                        "object": index,
-                        "gap": format_length(float(bounds.minimum[2])),
-                    },
+                    object_id=object_id,
+                    values=floating,
                 )
             )
     return findings

@@ -165,5 +165,25 @@ Erkennbar ist es an der Gesamtlaufzeit: Wer 300 Sekunden zu warten glaubt und
 nach zwölf fertig ist, hat nicht gewartet. Wer eine eigene Schleife baut, misst
 mit `time.monotonic()` und nicht mit einem Zähler.
 
+**`setCurrentIndex` ist keine Nutzergeste.** Eine QComboBox, die über
+`activated` verbunden ist, reagiert auf `setCurrentIndex` gar nicht — das
+Signal feuert nur bei einer echten Wahl. Am 30.08.2026 „wechselte" ein
+Prüfstand so dreimal den Slicer und maß dreimal denselben: Die Anzeige stand
+auf dem neuen Eintrag, die Auswahl-Logik lief nie, und nur die unveränderten
+Profillisten daneben verrieten es. Wer programmatisch wählt, sendet
+zusätzlich `combo.activated.emit(index)` — oder prüft vorher, an welchem
+Signal die Combo hängt.
+
+**Ein Prüfstand mit echtem Fenster endet hart, oder er wird zur unschließbaren
+Anwendung.** Nach `QApplication.quit()` kehrt jedes spätere modale `exec()`
+sofort und knopflos zurück: `clickedButton()` gibt `None`, `confirm_unsaved`
+liest daraus „Abbrechen", `closeEvent` ruft `event.ignore()` — und das Fenster
+lässt sich nicht mehr schließen, auch von Hand nicht. Am 30.08.2026 standen
+so vier Prüfstands-Fenster mit dem Titel der Anwendung herum, und Robert
+hielt sie für hängende Solidons. Zweierlei dagegen, beides billig: dem
+Fenster einen Prüfstands-Titel geben (`setWindowTitle("PRÜFSTAND …")`), und
+nach dem Protokollschreiben `os._exit(0)` — ein Prüfstand hat nichts zu
+retten.
+
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].

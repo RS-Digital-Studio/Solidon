@@ -1564,6 +1564,9 @@ def _arranged_by_material(ctx: OpContext, params: ArrangeParams) -> Arrangement:
             ctx.profile,
             params.spacing,
             params.plates - start,
+            # Mit Kennungen: Der Bauraum-Befund soll den Körper beim Namen
+            # nennen, nicht beim laufenden Index (Roberts Foto, 30.08.2026).
+            object_ids=[entry.id for entry in members],
         )
         findings.extend(arranged.findings)
         for entry, mesh, plate in zip(members, arranged.meshes, arranged.plates, strict=True):
@@ -1595,7 +1598,13 @@ def arrange_bed(ctx: OpContext) -> OpResult:
     if params.by_material:
         result = _arranged_by_material(ctx, params)
     else:
-        result = arrange_on_bed(meshes, ctx.profile, params.spacing, params.plates)
+        result = arrange_on_bed(
+            meshes,
+            ctx.profile,
+            params.spacing,
+            params.plates,
+            object_ids=[entry.id for entry in ctx.inputs],
+        )
     findings = list(result.findings)
 
     # Kollisionen werden je Platte geprüft: zwei Teile an derselben Stelle auf

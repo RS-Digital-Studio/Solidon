@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom.mesh import MeshData, on_surface, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, on_surface, read_mesh
 from app.core.geom.prepare import (
     BOOLEAN_OVERLAP,
     arrange_on_bed,
@@ -685,6 +685,41 @@ def test_what_sticks_out_of_the_build_volume_is_reported(profile: Profile) -> No
 
     assert findings
     assert findings[0].code == "arrange.off_the_plate"
+
+
+def test_a_volume_finding_names_the_body_instead_of_its_index(profile: Profile) -> None:
+    """Mit Kennung kein Listenplatz im Kundentext (Roberts Foto, 30.08.2026).
+
+    ``values["object"] = 0`` war doppelt falsch: Der Index ist kein Kundentext,
+    und sein bloßes Vorhandensein verhinderte die Namensauflösung der
+    Berichtszeile — sie setzt den Objektnamen nur ein, wenn ``values`` kein
+    ``object`` trägt. Die Exportprüfung übergab Kennungen und zeigte trotzdem
+    „— 0 · 10,00 mm".
+    """
+    sunk = apply(cube(), translation((0.0, 0.0, -5.0)))
+
+    with_ids = check_build_volume([sunk], profile, object_ids=["obj_7"])
+    assert with_ids[0].object_id == "obj_7"
+    assert "object" not in with_ids[0].values, "die Kennung trägt, der Index bliebe im Weg"
+
+    without_ids = check_build_volume([sunk], profile)
+    assert without_ids[0].object_id is None
+    assert without_ids[0].values["object"] == 0, "ohne Kennung bleibt der Index als Notnagel"
+
+
+def test_arranging_carries_the_object_ids_into_its_findings(profile: Profile) -> None:
+    """Auch die Anordnung nennt den Körper beim Namen, den sie meldet.
+
+    ``arrange_on_bed`` prüfte den Bauraum ohne Kennungen — ein zu großes Teil
+    stand als Listenplatz im Bericht, obwohl der Aufrufer die Szene hat.
+    """
+    zu_gross = normalise(read_mesh((MESHES / "oversized.stl").read_bytes(), ".stl"), "mm").mesh
+    arranged = arrange_on_bed([as_mesh_data(zu_gross)], profile, object_ids=["obj_9"])
+
+    reported = [entry for entry in arranged.findings if entry.code.startswith("arrange.")]
+    assert reported, "ein Teil, das nicht passt, ist ein Befund"
+    assert reported[0].object_id == "obj_9"
+    assert "object" not in reported[0].values
 
 
 def test_a_misplaced_body_weighs_less_than_one_that_does_not_fit(profile: Profile) -> None:
