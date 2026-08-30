@@ -37,6 +37,7 @@ from app.core import updates
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
 from app.i18n import tr
+from app.ui.changes_dialog import groups_html
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary
 
@@ -126,10 +127,33 @@ class UpdateDialog(QDialog):
         # als Bild steht.
         self.changes = QLabel(self)
         self.changes.setWordWrap(True)
-        self.changes.setTextFormat(Qt.TextFormat.PlainText)
+        # **Ausgezeichnet und nicht mehr flach.** Die Punkte stehen in der
+        # Versionsdatei seit dieser Fassung gegliedert; gezeigt werden sie in
+        # derselben Bauweise wie unter *Hilfe → Neuerungen*
+        # (``changes_dialog.groups_html``), damit dieselbe Auskunft nicht an
+        # zwei Stellen verschieden aussieht.
+        #
+        # Der Rückfall liegt im Kern und nicht hier: ``Release.grouped`` gibt
+        # die flache Liste als **eine** Gruppe ohne Titel zurück, wenn eine
+        # Versionsdatei keine Gruppen mitbringt. Das Fenster muss deshalb nur
+        # einen Weg kennen.
+        self.changes.setTextFormat(Qt.TextFormat.RichText)
         self.changes.setAlignment(Qt.AlignmentFlag.AlignTop)
+        # **Keine Verweise nach draußen — und hier zählt das mehr als nebenan.**
+        # ``changes_dialog`` nennt diese Zurückhaltung sein Vorbild („dieselbe
+        # wie beim Update-Fenster"), und sie stand hier nicht: Solange der
+        # Kasten Klartext zeigte, konnte ohnehin kein Verweis wirken. Mit der
+        # Auszeichnung ändert sich das — und anders als der Verlauf, der aus
+        # dem eigenen Paket liest, zeigt dieses Fenster einen Text **vom
+        # Server**. ``groups_html`` maskiert jeden Punkt, also entsteht dort
+        # kein ``<a>``; der Schalter ist die zweite Linie und kostet nichts.
+        self.changes.setOpenExternalLinks(False)
+        # Markieren und kopieren wie im Verlauf: Wer eine Neuerung nachschlagen
+        # will, nimmt den Satz mit. Zwei Fenster, die dieselbe Auskunft zeigen,
+        # sollen sich auch gleich anfassen lassen.
+        self.changes.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         points = release.points()
-        self.changes.setText("\n".join(f"\u2022 {point}" for point in points))
+        self.changes.setText(groups_html(release.grouped()))
 
         # Ein Rollbereich mit Deckel: Acht Punkte passen, zwanzig nicht, und
         # ein Fenster, das über den Bildschirmrand wächst, verliert seine

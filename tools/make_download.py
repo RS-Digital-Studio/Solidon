@@ -656,12 +656,26 @@ def cap_for_legacy_clients(data: dict[str, object]) -> int:
     def written_size() -> int:
         return len((json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
 
-    kept = max((len(points) for points in changes.values()), default=0)
-    while kept > 0 and written_size() > budget:
-        kept -= 1
+    groups = data.get("groups")
+    grouped: dict[str, list[dict[str, object]]] = groups if isinstance(groups, dict) else {}
+
+    def shorten(kept: int) -> None:
+        """Beide Sichten auf dieselbe Punktzahl bringen.
+
+        **Synchron, sonst zeigt dieselbe Datei zwei Stände.** Wer die flache
+        Liste liest, bekäme fünf Punkte und wer die Gruppen liest, sechs — und
+        keiner der beiden könnte sagen, welcher stimmt.
+        """
         for language, points in changes.items():
             if len(points) > kept:
                 changes[language] = points[:kept]
+        for language, blocks in list(grouped.items()):
+            grouped[language] = cap_groups(blocks, kept)
+
+    kept = max((len(points) for points in changes.values()), default=0)
+    while kept > 0 and written_size() > budget:
+        kept -= 1
+        shorten(kept)
     return kept
 
 
@@ -757,6 +771,57 @@ def changes_for(version: str) -> dict[str, list[str]]:
     return found
 
 
+def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
+    """Dieselben Punkte wie :func:`changes_for`, nur gegliedert.
+
+    Je Sprache eine Liste von ``{"title", "points"}``. Ein leerer Titel ist
+    erlaubt und heißt „Vorspann" — so lesen sich die Abschnitte vor 0.2.0 und
+    alles, was vor der ersten Überschrift steht.
+
+    **Beide Sichten stehen in der Datei, und das ist kein Versehen.** Die
+    flache Liste unter ``changes`` ist das Einzige, was eine ausgelieferte
+    0.2.2 lesen kann; sie bleibt unverändert. Wer die Gliederung nicht kennt,
+    überliest ``groups`` und sieht, was er immer sah.
+
+    Ohne Rückfall auf die Quellsprache, aus demselben Grund wie bei
+    :func:`changelog_for`: Eine fehlende Sprache ist hier eine Auskunft, und
+    die Anwendung fällt selbst zurück.
+    """
+    found: dict[str, list[dict[str, object]]] = {}
+    for file in sorted(CHANGELOG.glob("*.md")):
+        if not file_of(file.stem).is_file():
+            continue
+        blocks = [
+            {"title": group.title, "points": list(group.points)}
+            for group in changes.groups_for(version, file.stem)
+            if group.points
+        ]
+        if blocks:
+            found[file.stem] = blocks
+    return found
+
+
+def cap_groups(blocks: list[dict[str, object]], kept: int) -> list[dict[str, object]]:
+    """Kürzt eine Gruppenliste auf ``kept`` Punkte — von hinten, über die Gruppen.
+
+    Dieselbe Richtung wie flach: Was vorn steht, soll der Kunde zuerst lesen.
+    Eine Gruppe, von der nichts übrig bleibt, fällt ganz weg — eine Überschrift
+    ohne Punkte darunter ist schlimmer als keine.
+    """
+    left = kept
+    capped: list[dict[str, object]] = []
+    for block in blocks:
+        points = block.get("points")
+        if left <= 0 or not isinstance(points, list):
+            break
+        taken = points[:left]
+        if not taken:
+            break
+        left -= len(taken)
+        capped.append({"title": block.get("title", ""), "points": taken})
+    return capped
+
+
 def write_version(packages: list[Package]) -> None:
     """Trägt Version und Pakete in ``website/version.json`` ein.
 
@@ -801,6 +866,13 @@ def write_version(packages: list[Package]) -> None:
     changes = changes_for(APP_VERSION)
     if changes:
         data["changes"] = changes
+        # **Vor der Kappung eingehängt**, damit sie beide Sichten sieht: Sie
+        # misst die geschriebene Datei, und die trägt dann auch die Gruppen.
+        grouped = grouped_for(APP_VERSION)
+        if grouped:
+            data["groups"] = grouped
+        else:
+            data.pop("groups", None)
         total = max((len(points) for points in changes.values()), default=0)
         kept = cap_for_legacy_clients(data)
         if kept < total:
@@ -810,6 +882,7 @@ def write_version(packages: list[Package]) -> None:
             )
     else:
         data.pop("changes", None)
+        data.pop("groups", None)
     if entries:
         data["packages"] = entries
     else:

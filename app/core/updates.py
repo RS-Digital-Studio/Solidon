@@ -48,6 +48,7 @@ from app.branding import APP_ID, APP_VERSION
 from app.core import discover
 from app.core.activation import ed25519
 from app.core.backends.llm import Transport
+from app.core.changes import Group
 from app.core.errors import (
     OPEN_DOWNLOAD_PAGE,
     RETRY,
@@ -302,6 +303,22 @@ class Release:
     changes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     """Was neu ist, in Kundensprache — je Sprache eine Liste."""
 
+    groups: Mapping[str, tuple[Group, ...]] = field(default_factory=dict)
+    """Dasselbe, gegliedert — je Sprache die Abschnitte mit ihren Überschriften.
+
+    **Ein zweites Feld neben ``changes`` und kein Ersatz.** Die Versionsdatei
+    wird von jeder ausgelieferten Fassung gelesen, und bis 0.2.2 kennt der
+    Leser nur die flache Liste; sie bleibt deshalb, was sie war. Ein Server,
+    der noch keine Gruppen schickt, ist kein Fehler — :meth:`grouped` fällt
+    dann auf ``changes`` zurück.
+
+    Wiederverwendet wird :class:`app.core.changes.Group`, nicht eine zweite
+    Klasse derselben Form: Was hier über das Netz kommt und was
+    ``changes.history`` aus der eingebauten Datei liest, ist für den Leser
+    dasselbe — eine Überschrift und ihre Punkte. Zwei Typen hätten zwei
+    Darstellungen im Fenster nach sich gezogen.
+    """
+
     def newer_than(self, current: str = APP_VERSION) -> bool:
         return _as_tuple(self.version) > _as_tuple(current)
 
@@ -314,6 +331,22 @@ class Release:
         """
         chosen = language or get_language()
         return self.changes.get(chosen) or self.changes.get(SOURCE_LANGUAGE) or ()
+
+    def grouped(self, language: str = "") -> tuple[Group, ...]:
+        """Die Punkte gegliedert — und wo nichts gegliedert ist, als ein Block.
+
+        Derselbe Sprachrückfall wie bei :meth:`points`. Fehlt das Feld ganz
+        (eine Versionsdatei, die vor dieser Fassung geschrieben wurde), kommt
+        die flache Liste als **eine** Gruppe ohne Titel zurück: Der Aufrufer
+        muss dann nicht zwei Wege kennen, und der Kunde sieht dieselbe Liste
+        wie bisher.
+        """
+        chosen = language or get_language()
+        found = self.groups.get(chosen) or self.groups.get(SOURCE_LANGUAGE)
+        if found:
+            return found
+        points = self.points(language)
+        return (Group(title="", points=points),) if points else ()
 
     def note(self, language: str = "") -> str:
         """Der Hinweistext in der Sprache des Fensters, sonst in der Quellsprache.
@@ -481,6 +514,7 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         notes_by_language=_notes(payload.get("notes_by_language")),
         packages=_packages(payload.get("packages"), origin=address),
         changes=_changes(payload.get("changes")),
+        groups=_groups(payload.get("groups")),
     )
 
 
@@ -521,6 +555,53 @@ def _changes(raw: object) -> dict[str, tuple[str, ...]]:
         )
         if points:
             found[str(key)[:16]] = points
+    return found
+
+
+def _groups(raw: object) -> dict[str, tuple[Group, ...]]:
+    """Die gegliederten Punkte aus der Antwort, mit denselben Grenzen wie flach.
+
+    Dieselbe Vorsicht wie überall hier: Der Text kommt von einem Server und
+    landet in einem Fenster. Was keine Liste von Objekten ist, fällt weg; ein
+    Titel wird auf :data:`MAX_FIELD_LENGTH` gestutzt, ein Punkt auf
+    :data:`MAX_TEXT_LENGTH`.
+
+    **Gezählt wird über die Gruppen hinweg**, nicht je Gruppe: Sonst hätte
+    eine Antwort mit fünfzig Überschriften à einem Punkt das Fünfzigfache von
+    :data:`MAX_CHANGES` im Fenster — die Grenze gilt dem, was der Kunde liest,
+    und das ist die Summe.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    found: dict[str, tuple[Group, ...]] = {}
+    for key, value in raw.items():
+        if not isinstance(value, list):
+            continue
+        blocks: list[Group] = []
+        left = MAX_CHANGES
+        for block in value:
+            if left <= 0 or not isinstance(block, dict):
+                continue
+            raw_points = block.get("points")
+            if not isinstance(raw_points, list):
+                continue
+            points = tuple(
+                _text(entry)
+                for entry in raw_points[:left]
+                if isinstance(entry, str) and entry.strip()
+            )
+            if not points:
+                continue
+            left -= len(points)
+            title = block.get("title")
+            blocks.append(
+                Group(
+                    title=str(title)[:MAX_FIELD_LENGTH] if isinstance(title, str) else "",
+                    points=points,
+                )
+            )
+        if blocks:
+            found[str(key)[:16]] = tuple(blocks)
     return found
 
 

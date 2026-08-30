@@ -54,6 +54,138 @@ def test_the_window_says_what_is_new(qt_app: QApplication, monkeypatch: pytest.M
     assert dialog.scroller.isVisible() or not dialog.isVisible()
 
 
+def shown_text(dialog: UpdateDialog) -> str:
+    """Was auf dem Schirm steht, nicht was gesetzt wurde.
+
+    Der Kasten trägt seit dieser Fassung Auszeichnung; ``label.text()`` gibt
+    dann das **HTML** zurück. Eine Prüfung darauf wäre grün, auch wenn Qt
+    daraus nichts machen kann — die bekannte Falle: gesetzt heißt nicht
+    gezeigt. ``QTextDocument`` rendert dieselbe Zeichenkette wie das Label und
+    gibt den Text, den ein Mensch liest.
+    """
+    from PySide6.QtGui import QTextDocument
+
+    document = QTextDocument()
+    document.setHtml(dialog.changes.text())
+    return document.toPlainText()
+
+
+def test_the_window_shows_the_headings_of_the_changelog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dasselbe gegliedert wie unter *Hilfe → Neuerungen* (Roberts Auftrag).
+
+    Der Parser kennt die Gruppen seit 0.2.0 und der Verlaufs-Dialog zeigt sie;
+    nur der Weg über die Versionsdatei war flach. Jetzt trägt sie beide
+    Sichten, und dieses Fenster nimmt die gegliederte.
+    """
+    from app.core.changes import Group
+
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    dialog = UpdateDialog(
+        release(
+            changes={"de": ("Vorn.", "Gezeichnet.")},
+            groups={
+                "de": (
+                    Group(title="", points=("Vorn.",)),
+                    Group(title="Zeichnen", points=("Gezeichnet.",)),
+                )
+            },
+        )
+    )
+
+    gezeigt = shown_text(dialog)
+    assert "Zeichnen" in gezeigt, f"die Überschrift kam nicht an: {gezeigt!r}"
+    assert "Gezeichnet." in gezeigt
+    assert "Vorn." in gezeigt
+    assert "<b>" not in gezeigt, "die Auszeichnung steht als Text da statt zu wirken"
+
+
+def test_a_release_without_groups_still_lists_its_points(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Rückfall, und er ist der Regelfall für jede ältere Versionsdatei.
+
+    Eine ``version.json`` ohne ``groups`` — jede, die vor dieser Fassung
+    geschrieben wurde — muss dieselbe Liste zeigen wie bisher. Der Rückfall
+    liegt im Kern (``Release.grouped``), nicht im Fenster; geprüft wird er
+    hier, weil hier steht, was der Kunde sieht.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    dialog = UpdateDialog(release())
+
+    gezeigt = shown_text(dialog)
+    assert "Der erste Punkt." in gezeigt
+    assert "Der zweite Punkt." in gezeigt
+
+
+def test_the_changelog_box_opens_no_browser_and_lets_you_copy(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Zusagen an einem Kasten, der seit dieser Fassung Auszeichnung trägt.
+
+    **Keine Verweise nach draußen.** Der Verlauf unter *Hilfe → Neuerungen*
+    nennt diese Zurückhaltung sein Vorbild („dieselbe wie beim
+    Update-Fenster") — und hier stand sie nicht. Das war harmlos, solange der
+    Kasten Klartext zeigte: Ein Verweis konnte gar nicht wirken. Mit der
+    Auszeichnung ändert sich das, und der Unterschied zum Verlauf ist die
+    Herkunft: Der liest aus dem eigenen Paket, dieser Kasten zeigt einen Text
+    **vom Server**. ``groups_html`` maskiert jeden Punkt, es entsteht also kein
+    ``<a>``; der Schalter ist die zweite Linie.
+
+    **Und markieren muss man können.** Wer eine Neuerung nachschlagen will,
+    nimmt den Satz mit — im Verlauf geht das seit je. Zwei Fenster, die
+    dieselbe Auskunft zeigen, sollen sich auch gleich anfassen lassen.
+    """
+    from PySide6.QtCore import Qt
+
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    dialog = UpdateDialog(release())
+
+    assert not dialog.changes.openExternalLinks(), (
+        "ein Verweis aus der Versionsdatei öffnete ungefragt einen Browser"
+    )
+    assert dialog.changes.textInteractionFlags() & Qt.TextInteractionFlag.TextSelectableByMouse, (
+        "der Text lässt sich nicht markieren — im Verlauf geht es"
+    )
+
+
+def test_a_link_from_the_server_stays_a_harmless_sentence(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auszeichnung aus der Antwort wird gezeigt, nicht ausgeführt.
+
+    Die erste Linie, und die tragende: ``groups_html`` maskiert. Ein Punkt, der
+    wie ein Verweis aussieht, steht danach als **Text** da — samt spitzer
+    Klammern, die man lesen kann. Das ist auch der Grund, aus dem maskiert
+    wird: Ein Satz mit einem ``<`` verschwände sonst bis zum nächsten ``>``,
+    und das ist kein Angriff, nur ein fehlender Satz.
+    """
+    from app.core.changes import Group
+
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    dialog = UpdateDialog(
+        release(
+            changes={"de": ('Ein <a href="https://fremd.test">Verweis</a>.',)},
+            groups={
+                "de": (Group(title="", points=('Ein <a href="https://fremd.test">Verweis</a>.',)),)
+            },
+        )
+    )
+
+    gezeigt = shown_text(dialog)
+    assert "fremd.test" in gezeigt, "der Satz kam gar nicht an"
+    assert "<a href=" in gezeigt, "die Auszeichnung wurde gedeutet statt gezeigt"
+
+
 def test_without_points_the_list_stays_away(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

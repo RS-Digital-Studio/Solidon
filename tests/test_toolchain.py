@@ -135,6 +135,84 @@ def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
     )
 
 
+def test_both_views_of_the_changelog_carry_the_same_points() -> None:
+    """Die Datei trägt beide Sichten — und sie müssen dasselbe sagen.
+
+    Die flache Liste unter ``changes`` ist das Einzige, was eine ausgelieferte
+    0.2.2 lesen kann; sie bleibt. Daneben steht ``groups`` für die, die
+    gliedern können. **Zwei Sichten auf dieselbe Sache dürfen nicht
+    auseinanderlaufen**: Wer die eine liest, bekäme sonst einen anderen Stand
+    als wer die andere liest, und keiner der beiden könnte sagen, welcher
+    stimmt.
+    """
+    from app.branding import APP_VERSION
+    from tools.make_download import changes_for, grouped_for
+
+    flat = changes_for(APP_VERSION)
+    grouped = grouped_for(APP_VERSION)
+    assert flat, "ohne Punkte prüft dieser Test nichts"
+    assert grouped, "die gegliederte Sicht fehlt ganz"
+
+    for language, points in flat.items():
+        blocks = grouped.get(language)
+        assert blocks, f"{language}: flach vorhanden, gegliedert nicht"
+        from_groups = [point for block in blocks for point in block["points"]]
+        assert from_groups == points, f"{language}: die zwei Sichten sagen Verschiedenes"
+
+
+def test_capping_shortens_both_views_by_the_same_amount() -> None:
+    """Gekappt wird synchron — sonst zeigt dieselbe Datei zwei Stände.
+
+    Die 64-KB-Grenze der ausgelieferten Clients zwingt zum Kürzen. Es genügt
+    nicht, die flache Liste zu stutzen: Die Gruppen tragen dieselben Punkte
+    noch einmal, und eine Datei, in der die eine Sicht fünf und die andere
+    sechs Punkte nennt, ist in sich falsch.
+
+    Gemessen wird an einem Datensatz, der die Grenze sicher reißt — echte
+    Changelogs tun das je nach Länge, und ein Test, der von ihrer Größe
+    abhängt, wird eines Tages still.
+    """
+    from tools.make_download import cap_for_legacy_clients
+
+    data: dict[str, object] = {
+        "version": "9.9.9",
+        "changes": {"de": [f"Punkt {n} " + "x" * 400 for n in range(200)]},
+        "groups": {
+            "de": [
+                {"title": "Erstens", "points": [f"Punkt {n} " + "x" * 400 for n in range(100)]},
+                {
+                    "title": "Zweitens",
+                    "points": [f"Punkt {n} " + "x" * 400 for n in range(100, 200)],
+                },
+            ]
+        },
+    }
+
+    kept = cap_for_legacy_clients(data)
+
+    assert 0 < kept < 200, f"{kept} — der Datensatz sollte die Grenze reißen"
+    flat = data["changes"]["de"]  # type: ignore[index]
+    blocks = data["groups"]["de"]  # type: ignore[index]
+    from_groups = [point for block in blocks for point in block["points"]]
+    assert len(flat) == kept
+    assert from_groups == flat, "die gekappten Sichten sagen Verschiedenes"
+
+
+def test_capping_drops_a_group_instead_of_leaving_a_lonely_heading() -> None:
+    """Eine Überschrift, unter der nichts mehr steht, ist schlimmer als keine."""
+    from tools.make_download import cap_groups
+
+    blocks: list[dict[str, object]] = [
+        {"title": "Bleibt", "points": ["a", "b"]},
+        {"title": "Fällt weg", "points": ["c", "d"]},
+    ]
+
+    capped = cap_groups(blocks, 2)
+
+    assert [block["title"] for block in capped] == ["Bleibt"]
+    assert capped[0]["points"] == ["a", "b"]
+
+
 def test_the_version_file_fits_the_clients_that_are_already_out_there() -> None:
     """Die ``version.json`` muss von den Fassungen lesbar sein, die draußen sind.
 

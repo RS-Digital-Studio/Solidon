@@ -174,6 +174,19 @@ def points_for(version: str, language: str = "") -> tuple[str, ...]:
     return ()
 
 
+def groups_for(version: str, language: str = "") -> tuple[Group, ...]:
+    """Die Gruppen genau einer Version, oder nichts.
+
+    Die Schwester zu :func:`points_for`, und aus demselben Grund getrennt: Das
+    Bauwerkzeug schreibt beide Sichten in die Versionsdatei — die flache für
+    jede ausgelieferte Fassung, die gegliederte für die, die sie lesen kann.
+    """
+    for entry in history(language):
+        if entry.version == version:
+            return entry.groups
+    return ()
+
+
 def forget_cache() -> None:
     """Vergisst die gehaltenen Dateien — für die Suite, die sie unterschiebt."""
     _read.cache_clear()

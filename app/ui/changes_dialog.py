@@ -68,14 +68,31 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
         if entry.version == current:
             title += " — " + html.escape(tr("diese Version"))
         blocks.append(f'<h3 style="margin-bottom:2px">{title}</h3>')
-        for group in entry.groups:
-            if group.title:
-                heading = html.escape(group.title)
-                blocks.append(
-                    f'<p style="margin-top:10px;margin-bottom:0"><b><u>{heading}</u></b></p>'
-                )
-            points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
-            blocks.append(f'<ul style="margin-top:4px">{points}</ul>')
+        blocks.append(groups_html(entry.groups))
+    return "".join(blocks)
+
+
+def groups_html(groups: tuple[changes.Group, ...]) -> str:
+    """Ein Bündel Gruppen als Auszeichnung — Überschrift, darunter die Punkte.
+
+    **Ausgelagert, weil zwei Fenster dasselbe zeigen.** Der Verlauf unter
+    *Hilfe → Neuerungen* gliedert seit 0.2.0 so, und das Update-Fenster zeigt
+    dieselben Punkte, nur für eine einzige Fassung — es holt sie über
+    ``updates.Release.grouped``. Zwei Formulierungen derselben Darstellung
+    wären zwei Gelegenheiten, auseinanderzulaufen; genau daran ist die
+    Menütiefe schon einmal gescheitert.
+
+    Eine Gruppe ohne Titel liest sich wie bisher: eine Liste ohne Überschrift.
+    Das ist der Vorspann eines Abschnitts, der Stand vor 0.2.0 — und der
+    Rückfall, wenn eine Versionsdatei gar keine Gruppen mitbringt.
+    """
+    blocks: list[str] = []
+    for group in groups:
+        if group.title:
+            heading = html.escape(group.title)
+            blocks.append(f'<p style="margin-top:10px;margin-bottom:0"><b><u>{heading}</u></b></p>')
+        points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
+        blocks.append(f'<ul style="margin-top:4px">{points}</ul>')
     return "".join(blocks)
 
 

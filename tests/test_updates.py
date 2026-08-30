@@ -19,6 +19,7 @@ from unittest import mock
 import pytest
 
 from app.core import updates
+from app.core.changes import Group
 from app.core.errors import ExternalToolError, OperationCancelled
 from tests.release_signing import REAL_PUBLIC_KEY, accept_test_signatures, signed
 
@@ -136,6 +137,126 @@ def test_the_points_arrive_in_the_language_of_the_window() -> None:
     assert release is not None
     assert release.points("en") == ("An English point.",)
     assert release.points("de") == ("Ein deutscher Punkt.",)
+
+
+GROUPED: dict[str, Any] = {
+    "version": "99.0.0",
+    "changes": {"de": ["Vorn.", "Mitte.", "Hinten."]},
+    "groups": {
+        "de": [
+            {"title": "", "points": ["Vorn."]},
+            {"title": "Zeichnen", "points": ["Mitte.", "Hinten."]},
+        ]
+    },
+}
+
+
+def test_the_groups_arrive_with_their_headings() -> None:
+    """Was gegliedert geschickt wird, kommt gegliedert an."""
+    release = updates.check(fetch=answering(GROUPED))
+
+    assert release is not None
+    groups = release.grouped("de")
+    assert [group.title for group in groups] == ["", "Zeichnen"]
+    assert groups[1].points == ("Mitte.", "Hinten.")
+
+
+def test_a_file_without_groups_still_shows_its_points() -> None:
+    """Der Rückfall, und er ist der Regelfall für jede ältere Versionsdatei.
+
+    Ohne ``groups`` gibt :meth:`Release.grouped` die flache Liste als **eine**
+    Gruppe ohne Titel zurück. Das Fenster muss deshalb nur einen Weg kennen —
+    und der Kunde sieht, was er immer sah.
+    """
+    release = updates.check(fetch=answering(SPEAKING))
+
+    assert release is not None
+    groups = release.grouped("de")
+    assert len(groups) == 1
+    assert groups[0].title == ""
+    assert groups[0].points == ("Ein deutscher Punkt.",)
+
+
+def test_the_groups_fall_back_to_the_source_language_like_the_points() -> None:
+    """Derselbe Rückfall wie flach — sonst spräche ein Fenster zwei Sprachen."""
+    release = updates.check(fetch=answering(GROUPED))
+
+    assert release is not None
+    assert [group.title for group in release.grouped("it")] == ["", "Zeichnen"]
+
+
+def test_a_group_from_the_server_is_trimmed_like_every_other_text() -> None:
+    """Der Text kommt von einem Server und landet in einem Fenster.
+
+    Dieselben Grenzen wie für die flache Liste: ein Punkt auf
+    ``MAX_TEXT_LENGTH``, ein Titel auf ``MAX_FIELD_LENGTH``. Und die Anzahl
+    zählt **über die Gruppen hinweg** — sonst hätte eine Antwort mit fünfzig
+    Überschriften à einem Punkt das Fünfzigfache von ``MAX_CHANGES`` im
+    Fenster. Die Grenze gilt dem, was der Kunde liest, und das ist die Summe.
+    """
+    release = updates.check(
+        fetch=answering(
+            {
+                "version": "99.0.0",
+                "groups": {
+                    "de": [
+                        {"title": "T" * 5_000, "points": ["P" * 5_000]},
+                        *[{"title": f"Nr {n}", "points": [f"Punkt {n}"]} for n in range(200)],
+                    ]
+                },
+            }
+        )
+    )
+
+    assert release is not None
+    groups = release.grouped("de")
+    assert len(groups[0].title) <= updates.MAX_FIELD_LENGTH
+    # ``+ 1`` wie beim Hinweistext daneben: ``_text`` kürzt an der Wortgrenze
+    # und hängt ein Auslassungszeichen an — wo etwas fehlt, soll es zu sehen sein.
+    assert len(groups[0].points[0]) <= updates.MAX_TEXT_LENGTH + 1
+    total = sum(len(group.points) for group in groups)
+    assert total <= updates.MAX_CHANGES, f"{total} Punkte über alle Gruppen"
+
+
+def test_a_broken_groups_field_is_ignored_and_not_fatal() -> None:
+    """Was keine Liste von Objekten ist, fällt weg — die flache Liste trägt weiter.
+
+    Eine Versionsdatei kommt über das Netz. Ein Feld, das anders aussieht als
+    erwartet, darf das Update nicht verhindern; es darf nur nicht gezeigt
+    werden.
+    """
+    release = updates.check(
+        fetch=answering(
+            {
+                "version": "99.0.0",
+                "changes": {"de": ["Der flache Punkt."]},
+                "groups": {"de": ["kein Objekt", 42, {"points": "keine Liste"}]},
+            }
+        )
+    )
+
+    assert release is not None
+    assert release.grouped("de") == (Group(title="", points=("Der flache Punkt.",)),)
+
+
+def test_a_group_without_points_does_not_become_a_lonely_heading() -> None:
+    """Eine Überschrift ohne Punkte darunter ist schlimmer als keine."""
+    release = updates.check(
+        fetch=answering(
+            {
+                "version": "99.0.0",
+                "groups": {
+                    "de": [
+                        {"title": "Leer", "points": []},
+                        {"title": "Voll", "points": ["Ein Punkt."]},
+                    ]
+                },
+            }
+        )
+    )
+
+    assert release is not None
+    assert [group.title for group in release.grouped("de")] == ["Voll"]
 
 
 def test_the_note_arrives_in_the_language_of_the_window() -> None:
