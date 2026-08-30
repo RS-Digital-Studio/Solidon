@@ -4633,7 +4633,10 @@ def test_the_viewport_toolbar_drops_its_empty_canvas_row(qt_app: QApplication) -
 @pytest.mark.parametrize(
     ("selected", "kind", "message"),
     [
-        ((), "brep", "Körper ausgewählt"),
+        # Ohne Ergebnis gibt es keine Szene — und damit auch nichts, worunter
+        # der Umriss liegen könnte. Der Satz nennt seit dem Fusion-Abgleich
+        # nicht mehr die Auswahl, sondern das, was fehlt.
+        ((), "brep", "Körper in der Szene"),
         (("body",), "mesh", "festen Dreiecken"),
     ],
 )
@@ -5403,5 +5406,68 @@ def test_the_hint_does_not_spell_out_the_button_beside_it(qt_app: QApplication) 
             assert not spelled, (
                 f"the hint spells out {spelled}, and those buttons are right beside it: {hint!r}"
             )
+    finally:
+        window.deleteLater()
+
+
+def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> None:
+    """In Fusion wählt man vor dem Abtragen keinen Körper aus.
+
+    Man zieht den Umriss nach unten, und geschnitten wird, was darunter liegt.
+    Solidon antwortete stattdessen „Zum Abtragen muss genau ein Körper
+    ausgewählt sein" — obwohl das Teil unter der Zeichnung lag und nur nicht
+    angeklickt war (Robert, 30.08.2026).
+
+    **Die Szene ist gestellt, und das hat einen gemessenen Grund.** Abtragen
+    setzt einen bearbeitbaren Körper voraus (``kind == "brep"``); ein
+    eingelesenes Netz ist keiner, und ``create_box`` liefert in dieser
+    Umgebung ebenfalls ``mesh`` — der B-Rep-Kern ist optional (§30). Ein Test,
+    der den echten Weg gehen wollte, prüfte damit die falsche Absage. Gestellt
+    wird deshalb genau das, was die Suche liest: Art und Hüllquader.
+    """
+    from types import SimpleNamespace
+
+    from app.core.types import BoundingBox, Scene
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        # Gestellt wird **nach** dem Öffnen: Der Aufbau des Modus liest die
+        # echte Szene, und eine Attrappe ohne ``features`` bricht ihn ab.
+        window.session.last_result = SimpleNamespace(
+            scene=Scene(
+                objects={
+                    "body": SimpleNamespace(
+                        kind="brep",
+                        mesh=SimpleNamespace(
+                            bounds=BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(20.0, 20.0, 5.0))
+                        ),
+                    )
+                }
+            )
+        )
+        # Ein Umriss mitten über dem Körper — dort, wo ein Kunde ihn zöge.
+        panel.canvas.add_element("line", ((2.0, 2.0), (8.0, 2.0)))
+        panel.canvas.add_element("line", ((8.0, 2.0), (8.0, 8.0)))
+        window.object_tree.selected_objects = lambda: ()
+
+        assert window._body_under_the_outline() == "body", (
+            "the drawing lies over the body, so it is the one meant"
+        )
+        assert not window._pocket_target_problem(), (
+            "and nothing stands in the way of cutting into it"
+        )
+
+        # Die Gegenrichtung: daneben gezeichnet trifft es nichts.
+        from dataclasses import replace as _replace
+
+        panel.canvas.set_sketch(_replace(panel.canvas.sketch, elements=()))
+        panel.canvas.add_element("line", ((60.0, 60.0), (70.0, 60.0)))
+        assert not window._body_under_the_outline(), "beside the body nothing is found"
     finally:
         window.deleteLater()
