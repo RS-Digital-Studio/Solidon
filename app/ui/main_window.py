@@ -1855,6 +1855,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.Undo,
             self.action_undo,
             tr("Den letzten Schritt zurücknehmen — auch einen Vorschlag des Chats, ganz."),
+            symbol="undo",
         )
         self.redo_action = self._add_action(
             edit_menu,
@@ -1862,6 +1863,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.Redo,
             self.action_redo,
             tr("Einen zurückgenommenen Schritt wieder anwenden."),
+            symbol="redo",
         )
         edit_menu.addSeparator()
         # Gemerkt, weil die Kürzelübersicht darauf verweist. Dort stand die
@@ -2119,6 +2121,7 @@ class MainWindow(QMainWindow):
                 "Home",
                 self.viewport.reset_camera,
                 tr("Rückt die Kamera so, dass die ganze Szene ins Bild passt."),
+                symbol="fit",
             )
         )
         self._add_action(
@@ -2297,6 +2300,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.HelpContents,
             self.action_manual,
             tr("Jede Operation mit ihren Werten, nach Bereichen sortiert."),
+            symbol="manual",
         )
         self._add_action(
             help_menu,
@@ -2376,6 +2380,7 @@ class MainWindow(QMainWindow):
             None,
             self.action_about,
             tr("Version, Rechteinhaber und die verwendeten Fremdbibliotheken."),
+            symbol="about",
         )
 
         toolbar = QToolBar(tr("Werkzeuge"), self)

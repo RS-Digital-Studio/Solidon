@@ -3983,14 +3983,14 @@ class SketchPanel(QWidget):
         # Kürzel: eine Belegung, zu der kein sichtbares Ziel gehört, findet
         # niemand (§19.2, Regel 18).
         fit_button = QToolButton(self)
-        fit_button.setIcon(icons.icon("sketch_fit", fit_button))
+        fit_button.setIcon(icons.icon("fit", fit_button))
         fit_button.setToolTip(f"{tr('Einpassen')}  ({VIEW_KEYS['fit']})")
         fit_button.setAutoRaise(True)
         fit_button.clicked.connect(self.canvas.fit_view)
         tools.addWidget(fit_button)
 
         undo_button = QToolButton(self)
-        undo_button.setIcon(icons.icon("sketch_undo", undo_button))
+        undo_button.setIcon(icons.icon("undo", undo_button))
         # **Das Kürzel gehört an den Knopf**, wie bei *Einpassen* darüber: Eine
         # Belegung, zu der kein sichtbares Ziel gehört, findet niemand (§19.2).
         # Von allen Kürzeln des Skizzenmodus war dieses das einzige, das

@@ -9897,3 +9897,104 @@ def test_a_parameter_field_shows_its_whole_value(window: MainWindow) -> None:
         if textraum(spin) < spin.fontMetrics().horizontalAdvance(spin.text())
     ]
     assert not eng, f"abgeschnittene Werte in der Parameterkarte: {eng}"
+
+
+def test_every_menu_indents_its_text_the_same(window: MainWindow) -> None:
+    """Die Textspalte darf beim Wandern von Menü zu Menü nicht springen.
+
+    Qt reserviert die Symbolspalte **je Menü**, sobald ein einziger Eintrag ein
+    Zeichen trägt. Drei der neun Menüs der Leiste hatten keines — Bearbeiten,
+    Ansicht und Hilfe —, und darum stand ihr Text bei 16 Bildpunkten, während
+    er in den übrigen sechs bei 36 stand. Der Grund war nicht Gestaltung,
+    sondern Herkunft: Einträge aus dem Register bringen ihr Symbol mit
+    (``icon_name_for``), von Hand geschriebene nicht. Für den Kunden sah es aus
+    wie ein Fehler, und es war einer.
+
+    Behoben wird es nicht dadurch, dass jeder Eintrag ein Bild bekommt — für
+    „Parameter anlegen" gibt es keines, auf das die Welt sich geeinigt hätte —,
+    sondern dadurch, dass jedes Menü **mindestens einen** Eintrag hat, dessen
+    Bild zweifelsfrei ist: Rückgängig und Wiederholen, Alles einpassen,
+    Handbuch und Über.
+
+    Geprüft wird die Wirkung und nicht die Ursache: nicht „jedes Menü hat ein
+    Symbol", sondern „alle fangen an derselben Stelle an". Gemessen am
+    **gezeigten** Menü, weil Qt die Geometrie seiner Einträge vorher nicht
+    kennt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QMenu
+
+    from app.ui.style import apply_style
+
+    # **Drei Vorbereitungen, und ohne jede einzelne misst der Test nichts.**
+    # Qt legt die Geometrie eines Menüs erst fest, wenn sein Fenster gezeigt
+    # wurde. Und die Suite fährt **ohne Stylesheet** — Qt zeichnet dann sein
+    # eigenes Menü, schwarz auf weiß, mit anderen Abständen als die Anwendung
+    # sie hat. Ein Test, der eine Einrückung misst, muss die Betriebslage
+    # herstellen; sonst prüft er eine Lage, die kein Kunde je sieht.
+    vorher = QApplication.instance().styleSheet()
+    apply_style(QApplication.instance(), "dark")
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    window.show()
+    QApplication.processEvents()
+
+    def text_starts_at(menu: QMenu) -> int | None:
+        """Die erste Spalte eines symbollosen Eintrags, in der etwas steht."""
+        without = [
+            entry
+            for entry in menu.actions()
+            if not entry.isSeparator() and entry.text() and entry.icon().isNull()
+        ]
+        if not without:
+            return None
+        menu.popup(window.pos())
+        QApplication.processEvents()
+        image = menu.grab(menu.actionGeometry(without[0])).toImage()
+        ground = image.pixelColor(image.width() - 3, image.height() // 2)
+        found = None
+        # Ab zwei, nicht ab null: ``actionGeometry`` ist relativ zum **Menü**,
+        # und dessen Rahmen liegt in der ersten Spalte. Er weicht vom Grund ab
+        # wie jeder Text, und die Suche fand deshalb in jedem Menü dieselbe 0.
+        for x in range(2, image.width()):
+            for y in range(image.height()):
+                here = image.pixelColor(x, y)
+                if (
+                    abs(here.red() - ground.red())
+                    + abs(here.green() - ground.green())
+                    + abs(here.blue() - ground.blue())
+                    > 60
+                ):
+                    found = x
+                    break
+            if found is not None:
+                break
+        menu.hide()
+        QApplication.processEvents()
+        return found
+
+    starts: dict[str, int] = {}
+    try:
+        for action in window.menuBar().actions():
+            menu = action.menu()
+            if not isinstance(menu, QMenu):
+                continue
+            start = text_starts_at(menu)
+            if start is not None:
+                starts[action.text()] = start
+    finally:
+        QApplication.instance().setStyleSheet(vorher)
+
+    # Ohne diese Zeile prüfte der Vergleich unten eine leere Menge — und die
+    # ist immer einig mit sich selbst. Sechs der neun Menüs bestehen nur aus
+    # Registeroperationen und tragen deshalb überhaupt keinen symbollosen
+    # Eintrag; vier ist der Bestand, drei die Grenze, unter der die Messung
+    # nichts mehr über einen *Sprung* sagen könnte.
+    assert len(starts) >= 3, f"zu wenige Menüs gemessen: {starts}"
+    # Und die zweite Hälfte derselben Zusicherung: Ein Text fängt nie bei null
+    # an, dort liegt der Rahmen. Eine Null heißt, dass die Messung nicht
+    # gemessen hat — und vier Nullen sind sich einig wie vier richtige Werte.
+    assert all(start > 0 for start in starts.values()), f"die Messung hat nichts gefunden: {starts}"
+    assert len(set(starts.values())) == 1, (
+        f"die Textspalte springt zwischen den Menüs: {starts} — "
+        "ein Menü ohne jedes Symbol reserviert die Spalte nicht"
+    )

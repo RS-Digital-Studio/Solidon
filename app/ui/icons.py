@@ -203,6 +203,22 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />'
         '<path d="M4 20 20 4" />'
     ),
+    # **Wiederholen ist Rückgängig, gespiegelt** — und zwar wörtlich: derselbe
+    # Bogen, dieselbe Pfeilspitze, an der Senkrechten geklappt. Zwei Zeichen,
+    # die ein Paar meinen und einander nicht gleichen, sind zwei Vokabeln
+    # statt einer; hier ist die Spiegelung die ganze Aussage.
+    "redo": ('<path d="M20 9.5H10a5 5 0 0 0 0 10h6" /><path d="M16 5l4 4.5-4 4.5" />'),
+    # Ein aufgeschlagenes Buch fürs Handbuch. Der Steg in der Mitte macht den
+    # Unterschied zu einem Blatt: ein Blatt ist eine Datei, ein Buch etwas
+    # zum Nachschlagen.
+    "manual": (
+        '<path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2" />'
+        '<path d="M12 6.5c2-1.5 4.5-2 8-2v13c-3.5 0-6 .5-8 2" />'
+        '<path d="M12 6.5v15" />'
+    ),
+    # Der Info-Kreis für „Über". Punkt oben, Strich darunter — die einzige
+    # Form, die weltweit dasselbe heißt.
+    "about": ('<circle cx="12" cy="12" r="8.5" /><path d="M12 11v5.5" /><path d="M12 7.8v.8" />'),
     # Ein Haken: ein erledigter Schritt der Tour. Der Text der Zeile bleibt
     # stehen (Regel 18) — das Zeichen sagt nur den Zustand.
     "done": ('<path d="M4.5 12.5l4.5 4.5L19.5 7" />'),
@@ -285,11 +301,11 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M14 13.5 19 19.5" stroke-dasharray="2.5 2" />'
     ),
     # Rückgängig: der Pfeil, der zurück in seinen Bogen zeigt.
-    "sketch_undo": ('<path d="M4 9.5h10a5 5 0 0 1 0 10h-6" /><path d="M8 5 4 9.5 8 14" />'),
+    "undo": ('<path d="M4 9.5h10a5 5 0 0 1 0 10h-6" /><path d="M8 5 4 9.5 8 14" />'),
     # Einpassen: vier Ecken, die sich um das Gezeichnete zusammenziehen. Die
     # Pfeile zeigen nach innen — ein Rahmen allein sähe aus wie ein Auswahl-
     # rechteck, und genau das tut dieser Knopf nicht.
-    "sketch_fit": (
+    "fit": (
         '<path d="M4 8.5V4.5h4" /><path d="M20 8.5V4.5h-4" />'
         '<path d="M4 15.5v4h4" /><path d="M20 15.5v4h-4" />'
         '<path d="M9 12h6" /><path d="M12 9v6" />'
