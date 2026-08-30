@@ -532,6 +532,7 @@
   "Das Paket ist größer als angekündigt.": "Il pacchetto è più grande di quanto dichiarato.",
   "Das Paket ist unvollständig angekommen.": "Il pacchetto è arrivato incompleto.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "Il pacchetto non è più dove è stato scaricato.",
+  "Das Pflichtfeld „{field}“ fehlt.": "Manca il campo obbligatorio «{field}».",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "Il programma è stato avviato, ma il servizio non risponde ancora. Verifichi l’applicazione locale e riprovi.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "Il progetto ha accoppiamenti. Calcolare la parete esterna sulla quota nominale invece che sul centro del cordone serve esattamente a questo.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "Il progetto ha accoppiamenti. Una parete esterna percorsa lentamente tiene la quota per cui sono calcolati.",

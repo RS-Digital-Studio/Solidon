@@ -532,6 +532,7 @@
   "Das Paket ist größer als angekündigt.": "The package is larger than announced.",
   "Das Paket ist unvollständig angekommen.": "The package arrived incomplete.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "The package is no longer where it was downloaded.",
+  "Das Pflichtfeld „{field}“ fehlt.": "The required field “{field}” is missing.",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "The program was started, but the service is not responding yet. Check the local application, then try again.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "The project has fits. Computing the outer wall to the nominal size instead of the path centre is what that setting is for.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "The project has fits. An outer wall driven slowly holds the dimension they are calculated for.",

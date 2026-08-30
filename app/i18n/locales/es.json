@@ -532,6 +532,7 @@
   "Das Paket ist größer als angekündigt.": "El paquete es mayor de lo anunciado.",
   "Das Paket ist unvollständig angekommen.": "El paquete ha llegado incompleto.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "El paquete ya no está donde se descargó.",
+  "Das Pflichtfeld „{field}“ fehlt.": "Falta el campo obligatorio «{field}».",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "El programa se ha iniciado, pero el servicio aún no responde. Compruebe la aplicación local y vuelva a intentarlo.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "El proyecto tiene ajustes. Calcular la pared exterior sobre la cota nominal en lugar de sobre el centro del cordón existe exactamente para eso.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "El proyecto tiene ajustes. Una pared exterior impresa despacio mantiene la cota para la que están calculados.",

@@ -532,6 +532,7 @@
   "Das Paket ist größer als angekündigt.": "Le paquet est plus gros qu'annoncé.",
   "Das Paket ist unvollständig angekommen.": "Le paquet est arrivé incomplet.",
   "Das Paket liegt nicht mehr da, wo es geladen wurde.": "Le paquet ne se trouve plus là où il a été téléchargé.",
+  "Das Pflichtfeld „{field}“ fehlt.": "Le champ obligatoire « {field} » manque.",
   "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut.": "Le programme a été démarré, mais le service ne répond pas encore. Vérifiez l’application locale, puis réessayez.",
   "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu rechnen statt auf die Bahnmitte ist genau dafür da.": "Le projet a des ajustements. Calculer la paroi extérieure à la cote nominale plutôt qu'au centre du cordon sert exactement à cela.",
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "Le projet a des ajustements. Une paroi extérieure imprimée lentement tient la cote pour laquelle ils sont calculés.",
