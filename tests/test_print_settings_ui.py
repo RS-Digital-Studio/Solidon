@@ -1953,3 +1953,55 @@ def test_the_dialog_keeps_the_handlers_of_its_window(
 
     assert "repair_and_retry" in known, "die Handlungen des Fensters gingen verloren"
     assert "export_only" in known
+
+
+def test_finding_the_profiles_twice_does_not_double_the_list(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Zweimal gefunden heißt nicht zweimal angehängt.
+
+    Aus tausend Druckerprofilen wurden im Handlauf zweitausend, jedes doppelt
+    (30.08.2026). `_profiles_found` füllte ohne zu leeren; geschützt war nur
+    der Weg über `_slicer_chosen`, der vorher `_clear_profile_choices` ruft.
+    Über `recheck_slicer` lief er ungeschützt — eine Absicherung am Aufrufer
+    lässt den nächsten Aufrufer wieder frei.
+    """
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        default_process="0.20mm Standard",
+    )
+    found = [machine, _profile("0.20mm Standard", "process")]
+
+    dialog._profiles_found(found)
+    einmal = dialog.machine_choice.count()
+    dialog._profiles_found(found)
+
+    assert dialog.machine_choice.count() == einmal, "der zweite Fund hängte an, statt zu ersetzen"
+
+
+def test_switching_the_slicer_drops_the_result_of_the_old_one(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Die Ergebniszeile des alten Slicers überlebte den Wechsel.
+
+    Frisch auf PrusaSlicer gewechselt, und die Statuszeile zeigte weiter
+    „Druckzeit: 18 min …" vom ElegooSlicer-Lauf davor — *Druckdatei speichern*
+    bot dessen Datei an. Wer dort speichert, hält einen fremden Lauf für
+    seinen eigenen (Handlauf, 30.08.2026).
+    """
+    ergebnis = tmp_path / "alt.gcode"
+    ergebnis.write_text("; vom alten Slicer")
+    dialog._gcode = [ergebnis]
+    dialog.save_button.setEnabled(True)
+    dialog.state.setText("Druckzeit: 18 min · Material: 4,7 g")
+    dialog._slicers = (tmp_path / "elegoo-slicer.exe", tmp_path / "prusa-slicer.exe")
+    dialog._slicer_path = dialog._slicers[0]
+
+    dialog._slicer_chosen(1)
+
+    assert dialog._gcode == [], "die Druckdatei des alten Slicers wurde weiter angeboten"
+    assert not dialog.save_button.isEnabled()
+    assert not dialog.state.text(), "die Kennzahlen des alten Laufs standen noch da"

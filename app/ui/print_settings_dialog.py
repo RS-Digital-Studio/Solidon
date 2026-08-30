@@ -1874,6 +1874,23 @@ class PrintSettingsDialog(QDialog):
         if self.slicer_toggle is not None:
             self.slicer_toggle.setChecked(True)
 
+    def _forget_result(self) -> None:
+        """Das Ergebnis des vorigen Slicers verwerfen.
+
+        **Der Wechsel räumte die Profile weg und das Ergebnis nicht.** Wer
+        frisch auf PrusaSlicer umstellte, las in der Statuszeile weiter
+        „Druckzeit: 18 min …" vom ElegooSlicer-Lauf davor — und *Druckdatei
+        speichern* bot dessen Datei an. Wer dort speichert, hält einen fremden
+        Lauf für seinen eigenen, und nichts auf dem Bildschirm widerspricht
+        (Handlauf, 30.08.2026).
+
+        Dieselbe Familie wie :meth:`_clear_profile_choices`: Was zum alten
+        Slicer gehört, gehört nicht zum neuen.
+        """
+        self._gcode = []
+        self.save_button.setEnabled(False)
+        self.state.setText("")
+
     def _clear_profile_choices(self) -> None:
         """Die Profilauswahl leeren, bevor eine neue Suche etwas hineinschreibt.
 
@@ -1978,6 +1995,7 @@ class PrintSettingsDialog(QDialog):
         # Vorbelegung statt einer Entscheidung — die Prüfung unten hielte den
         # ersten Eintrag des Bestands für die Wahl des Nutzers.
         already = str(self.machine_choice.currentData() or "")
+        already_shown = self.machine_choice.currentText()
         self._profiles = found
         self._profiles_pending = False
         machines = slicer_profiles.machines(found)
@@ -1996,8 +2014,23 @@ class PrintSettingsDialog(QDialog):
             return
 
         self.machine_choice.blockSignals(True)
+        # **Leeren, bevor gefüllt wird**, und zwar hier statt beim Aufrufer:
+        # Zweimal gefunden hieß bis hierhin zweimal angehängt, und aus tausend
+        # Druckerprofilen wurden zweitausend, jedes doppelt (Handlauf,
+        # 30.08.2026). Der Weg über ``_slicer_chosen`` leerte vorher, der über
+        # ``recheck_slicer`` nicht — eine Absicherung, die am Aufrufer hängt,
+        # lässt den nächsten Aufrufer wieder ungeschützt. ``_fill_processes``
+        # macht es an derselben Stelle richtig.
+        self.machine_choice.clear()
         for entry in machines:
             self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+        # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
+        # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
+        # Nutzers wegwerfen: Wer wählt, während die Suche noch läuft, hätte
+        # sonst nach ihrer Antwort ein leeres Feld — derselbe Wettlauf, den der
+        # Abschnitt darunter schon einmal gekostet hat.
+        if already and self.machine_choice.findData(already) < 0:
+            self.machine_choice.addItem(already_shown, already)
         self.machine_choice.blockSignals(False)
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
@@ -2652,6 +2685,8 @@ class PrintSettingsDialog(QDialog):
         if not 0 <= index < len(self._slicers):
             return
         chosen = self._slicers[index]
+        if chosen != self._slicer_path:
+            self._forget_result()
         discover.remember_path("slicer", str(chosen))
         self._slicer_path = chosen
         self._clear_profile_choices()
@@ -2665,7 +2700,10 @@ class PrintSettingsDialog(QDialog):
         installiert hat, soll nicht schließen und neu öffnen müssen.
         """
         discover.forget_cache()
+        before = self._slicer_path
         self._slicer_path = self._pick_slicer()
+        if self._slicer_path != before:
+            self._forget_result()
         self._show_slicer_state()
         if self._slicer_path is not None:
             self.state.setText("")
