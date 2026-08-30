@@ -599,7 +599,9 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     # **Ein Grund, kein Rückgabewert.** Ohne ihn antwortete der Dialog mit
     # „Das hat nicht geklappt." — Regel 17 verlangt, was jetzt möglich ist, und
     # die Zahl dahinter ist die Auskunft, die der Nutzer weitergeben kann. Die
-    # rohe Ausgabe bleibt in ``output``, wo sie hingehört: hinter „Details".
+    # rohe Ausgabe bleibt in ``output``, wo sie hingehört: hinter „Details
+    # anzeigen" — der Knopf heißt so, und ein Verweis, der den Namen halb
+    # trifft, ist eine kleine Suche, die niemand nötig hat.
     return InstallResult(
         requirement=requirement,
         installed=False,
@@ -607,8 +609,8 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
         reason=(
             _(
                 "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht "
-                "unter „Details“; die Seite des Herstellers führt die Datei zum "
-                "Selbstinstallieren."
+                "unter „Details anzeigen“; die Seite des Herstellers führt die Datei "
+                "zum Selbstinstallieren."
             )
             if code
             else _(

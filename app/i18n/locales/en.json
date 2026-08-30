@@ -920,7 +920,7 @@
   "Die Operation liefert eine andere Anzahl an Objekten als zuvor.": "The operation returns a different number of objects than before.",
   "Die Operation verweist auf ein Objekt, das es nicht gibt.": "The operation refers to an object that does not exist.",
   "Die Orientierungssuche hielte das Fenster an — sie läuft über den Chat oder den Dialog „Druckoptimal ausrichten“.": "The orientation search would halt the window — it runs via the chat or the “Orient for printing” dialog.",
-  "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht unter „Details“; die Seite des Herstellers führt die Datei zum Selbstinstallieren.": "The package manager stopped. What it reported is under “Details”; the vendor's page has the file to install yourself.",
+  "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht unter „Details anzeigen“; die Seite des Herstellers führt die Datei zum Selbstinstallieren.": "The package manager stopped. What it reported is under “Show details”; the vendor's page has the file to install yourself.",
   "Die Paketverwaltung lief noch, als die Zeitgrenze kam": "The package manager was still running when the time limit came",
   "Die Paketverwaltung ließ sich nicht starten.": "The package manager could not be started.",
   "Die Parameter verweisen im Kreis aufeinander.": "The parameters refer to each other in a cycle.",

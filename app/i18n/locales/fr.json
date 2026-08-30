@@ -920,7 +920,7 @@
   "Die Operation liefert eine andere Anzahl an Objekten als zuvor.": "L'opération renvoie un autre nombre d'objets qu'auparavant.",
   "Die Operation verweist auf ein Objekt, das es nicht gibt.": "L'opération renvoie à un objet qui n'existe pas.",
   "Die Orientierungssuche hielte das Fenster an — sie läuft über den Chat oder den Dialog „Druckoptimal ausrichten“.": "La recherche d'orientation bloquerait la fenêtre — elle passe par le chat ou par le dialogue « Orienter pour l'impression ».",
-  "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht unter „Details“; die Seite des Herstellers führt die Datei zum Selbstinstallieren.": "Le gestionnaire de paquets s’est arrêté. Ce qu’il a signalé est sous « Détails » ; le site de l’éditeur propose le fichier à installer soi-même.",
+  "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht unter „Details anzeigen“; die Seite des Herstellers führt die Datei zum Selbstinstallieren.": "Le gestionnaire de paquets s’est arrêté. Ce qu’il a signalé est sous « Afficher les détails » ; le site de l’éditeur propose le fichier à installer soi-même.",
   "Die Paketverwaltung lief noch, als die Zeitgrenze kam": "Le gestionnaire de paquets tournait encore quand la limite de temps est arrivée",
   "Die Paketverwaltung ließ sich nicht starten.": "Le gestionnaire de paquets n’a pas pu démarrer.",
   "Die Parameter verweisen im Kreis aufeinander.": "Les paramètres se renvoient les uns aux autres en cercle.",

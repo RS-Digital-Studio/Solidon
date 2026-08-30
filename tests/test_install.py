@@ -19,6 +19,8 @@ import pytest
 from PySide6.QtWidgets import QApplication
 
 from app.core import install, tools
+from app.i18n import SOURCE_LANGUAGE
+from app.i18n.catalog import available_languages, read_catalog
 from app.ui.install_dialog import InstallDialog
 
 
@@ -1300,3 +1302,41 @@ def test_the_remote_branch_shares_the_same_condition(qt_app: QApplication) -> No
     )
 
     assert "Lokal starten" not in zeile._where_text(status)
+
+
+#: Der Knopf, auf den der Satz darunter zeigt — sein Quelltext ist der
+#: Katalogschlüssel, und Regel 20 lässt für einen Knopfnamen nichts anderes zu.
+BUTTON_SOURCE = "Details anzeigen"
+
+#: Der Satz, der ihn nennt. Stand hier „Details" und traf damit in fünf
+#: Sprachen daneben.
+FAILURE_SOURCE = (
+    "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht "
+    "unter „Details anzeigen“; die Seite des Herstellers führt die Datei "
+    "zum Selbstinstallieren."
+)
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+)
+def test_the_failure_text_quotes_the_button_by_its_real_name(language: str) -> None:
+    """Ein Verweis, der den Namen halb trifft, ist eine kleine Suche.
+
+    Der Satz zur abgebrochenen Paketverwaltung nannte „Details“, der Knopf
+    heißt „Details anzeigen“ — und in den Übersetzungen ging die Lücke
+    weiter auf: „Detalles“ gegen „Mostrar detalles“, „Dettagli“ gegen
+    „Mostra dettagli“. In allen fünf Sprachen (Fund von 3d-druck-5d,
+    30.08.2026).
+
+    Geprüft wird je Sprache und nicht nur deutsch: Der Knopfname ist selbst
+    ein Katalogeintrag, und eine Übersetzung darf beide Seiten anders
+    formulieren — nur zueinander passen müssen sie.
+    """
+    catalog = read_catalog(language)
+    knopf = catalog[BUTTON_SOURCE]
+    satz = catalog[FAILURE_SOURCE]
+
+    assert knopf in satz, (
+        f"{language}: der Satz nennt den Knopf nicht beim Namen — Knopf {knopf!r}, Satz {satz!r}"
+    )
