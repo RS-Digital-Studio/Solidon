@@ -90,6 +90,69 @@ def test_the_tool_strip_stays_a_single_row(window: MainWindow) -> None:
     )
 
 
+def test_every_tool_hint_asks_for_the_width_of_one_line(window: MainWindow) -> None:
+    """Der Streifen verlangt die Breite, die sein Hinweis für eine Zeile braucht.
+
+    **Ein umbrechender Text verlangt von sich aus zu wenig.** ``QLabel`` meldet
+    mit ``setWordWrap(True)`` eine bescheidene bevorzugte Breite; die Karte
+    unten bekommt genau diesen Wunsch (``overlay._move``: „so breit, wie sie
+    sein muss"), und der Hinweis stand deshalb in zwei Zeilen, obwohl im
+    Fenster Platz für zwanzig war.
+
+    Bezahlt wurde das in der Höhe. Gemessen am 30.08.2026 an einem echten
+    Fenster über sechs Breiten von 600 bis 1920: Die Kartenhöhe ist konstant,
+    aber je Werkzeug verschieden — 90 Punkte bei *Explosion*, 130 bei
+    *Trennen*. Der Unterschied war genau die zweite Hinweiszeile. Danach 90
+    und 115, jeder Hinweis einzeilig, in de, fr und it dieselben Zahlen.
+
+    **Geprüft wird der Wunsch, nicht die Anzeige.** Unter ``offscreen`` gibt es
+    keine Schriftmetrik — dort misst sich jeder Text rund doppelt so breit, und
+    ein Fenster wird nie wirklich gelegt (gemessen: „braucht 1692, hat 52").
+    Beide Seiten dieser Zusage lesen dieselbe Metrik, also trägt der Vergleich
+    auch dort. Dass die Karte am Ende wirklich breit genug ist, hängt an
+    ``overlay._move``, und das ist eine eigene Zusage.
+    """
+    zu_wenig: list[str] = []
+    for key in window.tools.tools():
+        window.tools.activate(None)
+        window.tools.activate(key)
+        hint = window.tools._hint
+        text = hint.text()
+        if not text:
+            continue
+        rand = hint.contentsMargins()
+        braucht = hint.fontMetrics().horizontalAdvance(text) + rand.left() + rand.right()
+        verlangt = window.tools.sizeHint().width()
+        if verlangt < braucht:
+            zu_wenig.append(f"{key}: verlangt {verlangt}, braucht {braucht}")
+
+    assert not zu_wenig, (
+        "Der Streifen verlangt weniger, als sein Hinweis für eine Zeile braucht — "
+        f"dann bricht der Text um und das Panel wird eine Zeile höher: {zu_wenig}"
+    )
+
+
+def test_the_hint_gives_way_when_the_window_is_too_narrow(window: MainWindow) -> None:
+    """Und der Rückweg: Reicht das Fenster nicht, bricht der Text wieder um.
+
+    Die Zusage darüber wäre gefährlich ohne diese hier — ein Streifen, der
+    seine Wunschbreite *erzwingt*, schöbe bei einem schmalen Fenster die halbe
+    Karte aus dem Bild. ``overlay._move`` kürzt auf die verfügbare Breite, und
+    der umbrechende Text ist dort die richtige Antwort und kein Fehler.
+    """
+    window.resize(640, 900)
+    window.show()
+    window.tools.activate(None)
+    window.tools.activate("split")
+    for _ in range(30):
+        QApplication.processEvents()
+
+    assert window.tools.width() <= 640, (
+        f"die Werkzeugkarte ist {window.tools.width()} breit bei einem 640 breiten "
+        "Fenster — sie darf ihre Wunschbreite verlangen, nicht erzwingen"
+    )
+
+
 def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     qt_app: QApplication,
 ) -> None:

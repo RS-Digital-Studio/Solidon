@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from PySide6.QtCore import QEvent, QPoint, QRect, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
@@ -185,6 +185,45 @@ class ToolStrip(QWidget):
         self._layout.setSpacing(0)
         self._layout.addLayout(self._row)
         self._layout.addWidget(self._hint)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        """So breit, dass der Hinweis in **eine** Zeile passt.
+
+        **Ein umbrechender Text verlangt von sich aus zu wenig.** ``QLabel``
+        meldet mit ``setWordWrap(True)`` eine bescheidene bevorzugte Breite —
+        es kommt ja auch schmal zurecht, nur eben zweizeilig. Die Karte unten
+        bekommt genau diesen Wunsch (``overlay._move``: „so breit, wie sie sein
+        muss"), und deshalb stand der Hinweis in zwei Zeilen, obwohl im Fenster
+        Platz für zwanzig war.
+
+        Bezahlt wurde das in der Höhe: Gemessen am 30.08.2026 über sechs
+        Fensterbreiten von 600 bis 1920 war die Kartenhöhe **konstant** — aber
+        je Werkzeug verschieden, von 90 Punkten bei *Explosion* bis 130 bei
+        *Trennen*. Der Unterschied ist genau die zweite Hinweiszeile. Ein
+        Panel, das beim Werkzeugwechsel um vierzig Punkte springt, verdeckt mal
+        mehr und mal weniger vom Modell, und niemand weiß, warum.
+
+        Robert hat die Richtung entschieden (30.08.2026): „Wir können das ganze
+        Panel ruhig noch breiter machen, damit es in manchen Fällen nicht zu
+        hoch wird." Also verlangt der Streifen hier, was der Hinweis für eine
+        Zeile braucht. Reicht das Fenster nicht, kürzt ``overlay`` auf die
+        verfügbare Breite und der Text bricht wieder um — das ist der richtige
+        Rückweg und kein Fehler.
+
+        Dieselbe Regel wie bei der Bewegen-Leiste (``transform_bar.sizeHint``):
+        Wer bei Enge nachgibt, muss trotzdem das Volle verlangen, sonst bekommt
+        er es nie wieder.
+        """
+        hint = super().sizeHint()
+        text = self._hint.text()
+        if text and self._hint.isVisibleTo(self):
+            rand = self._hint.contentsMargins()
+            eine_zeile = (
+                self._hint.fontMetrics().horizontalAdvance(text) + rand.left() + rand.right()
+            )
+            rahmen = self.contentsMargins()
+            hint.setWidth(max(hint.width(), eine_zeile + rahmen.left() + rahmen.right()))
+        return hint
 
     def add(
         self,
