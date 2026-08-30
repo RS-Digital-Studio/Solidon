@@ -110,3 +110,15 @@ nicht nach dem Namen.** Wer im Kern „daneben", „darunter", „siehe dort" od
 „die Zahlen stehen in" schreibt, hat eine Zusage an eine andere Schicht
 gegeben — `grep -rn "steht daneben" app/core/` beantwortet in einer Sekunde,
 ob sie eingelöst ist.
+
+**Die vierte Gestalt, gefunden am 30.08.2026 (d3, G18): Der Kommentar
+behauptet die Strenge, der Code darunter tut das Gegenteil.** Im
+Protokoll-Leser von `suite-getrennt.sh` stand „ohne Soll-Größe bleibt es bei
+der strengen Bewertung" — und darunter ein `return 1`, also grün. Gefunden
+hat es **nicht das Lesen**, sondern ein gefälschtes Protokoll für genau
+diesen Zweig: „Riss mitten im Lauf, Soll unbekannt → muss Fehler sein". Die
+Lehre über die drei Gestalten oben hinaus: Gegen eine zutreffende Begründung,
+die eine Lücke deckt, hilft kein sorgfältigeres Lesen — **der Kontrollfall
+schlägt die Lektüre.** Wer einen Zweig kommentiert, baut den Fall, der den
+Kommentar beweist; zwölf gefälschte Protokolle fanden dort, was drei
+Durchsichten überlesen hätten ([[benannte-falle-schuetzt-nicht]]).
