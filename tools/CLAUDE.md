@@ -56,6 +56,9 @@ Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 `make_video.py` · `make_showpiece.py` (das Schaustück der Website — ein
 Teil, das in einem Bild beantwortet, warum man das Programm haben will;
 gebaut über die Operations-API wie von einem Nutzer) ·
+`make_gallery.py` (die Galeriebilder des Beweis-Teils: ein Teil groß, im
+Viewport mit Licht und Schatten, Karten weggeschnitten — **nicht** über die
+flache Projektion, die für Katalogvorschauen reicht und für Qualität nicht) ·
 `stamp_assets.py` (**läuft als Letztes**, siehe unten)
 
 **Bauen und Ausliefern**
