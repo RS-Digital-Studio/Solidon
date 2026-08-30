@@ -360,8 +360,38 @@ def _side_wall(side: float) -> list[tuple[str, HolderStep]]:
     ]
 
 
+def _bore(offset: float, name: str) -> list[tuple[str, HolderStep]]:
+    """Das Lagerauge für eine Laufachse — quer durch **beide** Wangen."""
+    return [
+        (
+            f"{name} Lagerauge",
+            lambda main_id, extra_id: [
+                OperationDraft(
+                    op="drill_hole",
+                    inputs=(main_id,),
+                    params={
+                        "diameter": "=@achse",
+                        "x": 0.0,
+                        "y": offset,
+                        "z": AXLE_HEIGHT,
+                        "axis": "x",
+                        "depth": 0.0,
+                    },
+                )
+            ],
+        )
+    ]
+
+
 def _axle(offset: float, name: str) -> list[tuple[str, HolderStep]]:
-    """Eine Laufachse quer zwischen die Wangen."""
+    """Eine Laufachse — ein **eigenes** Teil, das in seinem Lagerauge steckt.
+
+    Eingewachsen war sie eine Brücke von 68 mm mit rundem Querschnitt, und
+    Solidons eigene Beratung sagte dazu „die Überhänge sind zu groß, um sich
+    selbst zu tragen". Gesteckt druckt der Halter ohne eine einzige Stütze und
+    die Achse liegend ebenso — und das Teil zeigt nebenbei eine Passung, die
+    ein einzelner Körper nicht zeigen kann.
+    """
     return [
         (
             f"{name} Achse",
@@ -370,7 +400,11 @@ def _axle(offset: float, name: str) -> list[tuple[str, HolderStep]]:
                     op="create_cylinder",
                     params={
                         "diameter": "=@achse",
-                        "height": "=@rollenbreite + 2 * @wand",
+                        # Beidseitig sechs Millimeter länger als der Halter
+                        # breit ist: So gibt es an jeder Seite einen Zapfen
+                        # zum Anfassen, und man sieht im Bild, dass die Achse
+                        # ein eigenes Teil ist.
+                        "height": "=@rollenbreite + 2 * @wand + 12",
                         "segments": 64,
                         "name": "Laufachse",
                     },
@@ -399,22 +433,30 @@ def _axle(offset: float, name: str) -> list[tuple[str, HolderStep]]:
                     # liegen.
                     params={
                         "dy": offset,
-                        "dz": f"={AXLE_HEIGHT} - (@rollenbreite + 2 * @wand) / 2",
+                        "dz": f"={AXLE_HEIGHT} - (@rollenbreite + 2 * @wand + 12) / 2",
                     },
                 )
             ],
         ),
         (
-            f"{name} Achse anwachsen",
+            f"{name} Achse färben",
             lambda main_id, extra_id: [
-                OperationDraft(op="union_objects", inputs=(main_id, extra_id))
+                OperationDraft(
+                    op="assign_slot",
+                    inputs=(extra_id,),
+                    # Ein zweiter Farbtopf für die zwei Achsen: Sie sind eigene
+                    # Teile, und wer das im Bild nicht sieht, hält sie für
+                    # angewachsen — also für etwas, das mit Stützen gedruckt
+                    # werden müsste.
+                    params={"slot": 2, "name": "PETG Anthrazit", "colour": "#7b8794"},
+                )
             ],
         ),
     ]
 
 
 def holder_steps() -> list[tuple[str, HolderStep]]:
-    """Der Rollenhalter in achtzehn Schritten."""
+    """Der Rollenhalter und seine zwei gesteckten Achsen."""
     return [
         (
             "Grundplatte",
@@ -454,6 +496,8 @@ def holder_steps() -> list[tuple[str, HolderStep]]:
                 )
             ],
         ),
+        *_bore(-AXLE_OFFSET, "Vorderes"),
+        *_bore(AXLE_OFFSET, "Hinteres"),
         *_axle(-AXLE_OFFSET, "Vordere"),
         *_axle(AXLE_OFFSET, "Hintere"),
         (
