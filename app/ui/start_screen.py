@@ -518,7 +518,17 @@ class StartScreen(QWidget):
         # 1920 mal 1080 um 198 Pixel über das Sichtfeld hinausragte.
         middle.setContentsMargins(WIDE * 2, WIDE * 2, WIDE * 2, WIDE * 2)
         middle.addStretch(1)
-        middle.addWidget(column)
+        # **Mit Dehnung, sonst bleibt die Spalte bei ihrer Wunschbreite.**
+        # ``setMaximumWidth`` erlaubt nur; es zieht nicht. Zwischen zwei
+        # Stretch-Feldern ohne eigenen Faktor bekam die Spalte ihre
+        # ``sizeHint`` — gemessen 714 Pixel, und zwar bei **jeder**
+        # Fenstergröße von 1280 bis 3413. Die Rechnung in
+        # :meth:`_fit_the_columns` stellte derweil korrekt auf 1360 und drei
+        # Kachelspalten um; sie kam nur nie an. Der hohe Faktor lässt die
+        # Spalte den Überschuss holen, bis ihr Maximum sie stoppt — die beiden
+        # Stretch-Felder teilen sich, was dann noch übrig ist, und halten sie
+        # dabei in der Mitte.
+        middle.addWidget(column, 10)
         middle.addStretch(1)
 
         # In einem Rollbereich, weil die Spalte bei einem kleinen Fenster sonst

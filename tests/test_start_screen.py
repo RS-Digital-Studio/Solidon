@@ -17,6 +17,8 @@ from PySide6.QtWidgets import QApplication
 from app.core import examples
 from app.ui.start_screen import (
     COLUMN_WIDTH,
+    TILE_MIN_WIDTH,
+    WIDE_COLUMN_WIDTH,
     DropArea,
     ExampleTile,
     StartScreen,
@@ -335,4 +337,58 @@ def test_the_tiles_use_the_width_they_have(screen: StartScreen) -> None:
 
     # Und die Kacheln sind alle noch da, in der richtigen Gruppe.
     assert len(screen.tiles) == screen.examples_grid.count() + screen.more_grid.count()
+    screen.hide()
+
+
+def test_the_column_uses_the_width_it_is_allowed(screen: StartScreen) -> None:
+    """Erlaubt ist nicht benutzt — und der Test daneben merkte den Unterschied nicht.
+
+    ``_fit_the_columns`` stellt die erlaubte Breite auf
+    :data:`WIDE_COLUMN_WIDTH` und die Kachelspalten auf drei, sobald der Platz
+    da ist. Beides stimmte, und trotzdem stand der Startbildschirm bei **714
+    Pixeln** — bei jeder Fenstergröße von 1280 bis 3413. ``setMaximumWidth``
+    erlaubt nur; zwischen zwei Stretch-Feldern ohne eigenen Faktor bekam die
+    Spalte ihre ``sizeHint`` und blieb dort stehen.
+
+    Für einen Kunden ohne CAD-Erfahrung ist das der erste Eindruck der
+    Anwendung: eine schmale Spalte in der Mitte, zwei Drittel des Bildschirms
+    schwarz. Der Test darüber prüft die **Rechnung** und blieb dabei grün —
+    geprüft wird hier deshalb die **Wirkung**, und zwar an der Zusage selbst:
+    Wo Platz ist, ist die Spalte so breit, wie sie sein darf.
+
+    **Die Zahl daneben stimmt hier nicht, die Zusage schon.** Offscreen hat die
+    Suite keine Schriftmetrik, und die Phantomschrift ist breiter als eine
+    echte: Dieselbe Spalte maß hier 1216 Pixel und im sichtbaren Fenster 714.
+    Wer das Ausmaß wissen will, misst mit echter Plattform; was dieser Test
+    prüft — genommen gleich erlaubt —, hängt an keiner Schriftbreite und fällt
+    in beiden Umgebungen.
+    """
+    screen.show()
+
+    screen.resize(1920, 1000)
+    QApplication.processEvents()
+    assert screen.column.maximumWidth() == WIDE_COLUMN_WIDTH, (
+        "the wide layout should be allowed at 1920"
+    )
+    assert screen.column.width() == screen.column.maximumWidth(), (
+        f"the column may be {screen.column.maximumWidth()} wide but takes only "
+        f"{screen.column.width()} — allowed is not used"
+    )
+
+    # **Im schmalen Fenster gilt die Zusage gegen den Platz, nicht gegen die
+    # Erlaubnis.** Dort ist erlaubt mehr, als vorhanden ist — die Spalte nimmt
+    # dann, was da ist. Gemessen wird deshalb am Fenster und nicht an einer
+    # nachgerechneten Randbreite: Wer die Ränder hier nachrechnet, prüft seinen
+    # eigenen Nachbau des Layouts.
+    screen.resize(2 * TILE_MIN_WIDTH + 40, 900)
+    QApplication.processEvents()
+    assert screen.column.maximumWidth() == COLUMN_WIDTH
+    assert screen.column.width() < screen.column.maximumWidth(), (
+        "a narrow window cannot grant the full column width"
+    )
+    assert screen.column.width() > 0.8 * screen.width(), (
+        f"narrow window: the column takes {screen.column.width()} of {screen.width()} — "
+        f"it should fill everything but the margins"
+    )
+
     screen.hide()
