@@ -1401,6 +1401,8 @@ class MainWindow(QMainWindow):
         self.pose_bar.setVisible(False)
         self.viewport.boneRequested.connect(self._on_bone_point)
         self._armature_target: str | None = None
+        self._armature_step: int | None = None
+        """Der Schritt, den dieser Editor ändert — ``None`` heißt: ein neuer."""
         self._armature_bones: list[Bone] = []
         self._armature_head: tuple[float, float, float] | None = None
         """Das Gelenk eines angefangenen Knochens — zwei Klicks machen einen."""
@@ -5311,13 +5313,73 @@ class MainWindow(QMainWindow):
                 return problem
         return "ready"
 
+    def _body_under_the_outline(self) -> str:
+        """Der bearbeitbare Körper, über dem die Zeichnung liegt — oder nichts.
+
+        **In Fusion wählt man vor dem Abtragen keinen Körper aus**: Man zieht
+        den Umriss nach unten, und geschnitten wird, was darunter liegt. Wer
+        von dort kommt, zieht — und Solidon antwortete „Zum Abtragen muss genau
+        ein Körper ausgewählt sein", obwohl das Teil unter der Zeichnung lag
+        und nur nicht angeklickt war (Robert, 30.08.2026).
+
+        Gesucht wird deshalb über die Lage: Der Umriss wird auf die Ebene
+        gelegt und sein Hüllrechteck gegen die Hüllquader der Körper gehalten.
+        Trifft es genau einen bearbeitbaren, ist das der gemeinte.
+
+        **Der Hüllquader ist die grobe Antwort, und sie genügt hier.** Eine
+        genaue wäre der Schnitt des ausgetragenen Umrisses mit dem Körper —
+        die rechnet aber die Operation ohnehin, und wenn sie nichts findet,
+        sagt sie es. Was hier gebraucht wird, ist die Frage „welcher ist
+        gemeint", nicht „trifft es wirklich".
+        """
+        panel = self._sketch_panel
+        frame = self._sketch_frame()
+        result = self.session.last_result
+        if panel is None or frame is None or result is None:
+            return ""
+        points = [point for element in panel.canvas.sketch.elements for point in element.points]
+        if not points:
+            return ""
+
+        from app.core.sketch.planes import to_world
+
+        corners = [to_world(frame, point) for point in points]
+        low = tuple(min(corner[axis] for corner in corners) for axis in range(3))
+        high = tuple(max(corner[axis] for corner in corners) for axis in range(3))
+
+        hits = []
+        for object_id, entry in result.scene.objects.items():
+            if entry.kind != "brep":
+                continue
+            bounds = entry.mesh.bounds
+            # In der Zugrichtung wird nicht verglichen: Dort *soll* der Umriss
+            # außerhalb des Körpers liegen, sonst gäbe es nichts zu ziehen.
+            across = [axis for axis in range(3) if abs(frame.normal[axis]) < 0.5]
+            if all(
+                low[axis] <= bounds.maximum[axis] and high[axis] >= bounds.minimum[axis]
+                for axis in across
+            ):
+                hits.append(object_id)
+        return hits[0] if len(hits) == 1 else ""
+
     def _pocket_target_problem(self) -> str:
-        """Warum die gezeichnete Kontur gerade nichts abtragen kann."""
+        """Warum die gezeichnete Kontur gerade nichts abtragen kann.
+
+        Gefragt wird in zwei Stufen: erst der gewählte Körper — wer einen
+        anklickt, meint ihn —, dann der, über dem die Zeichnung liegt. Die
+        zweite Stufe ist die, die ein Fusion-Kunde erwartet
+        (:meth:`_body_under_the_outline`).
+        """
         selected = self.object_tree.selected_objects()
         result = self.session.last_result
-        if len(selected) != 1 or result is None or selected[0] not in result.scene.objects:
-            return str(tr("Zum Abtragen muss genau ein Körper ausgewählt sein."))
-        if result.scene.objects[selected[0]].kind != "brep":
+        if result is None:
+            return str(tr("Zum Abtragen muss ein Körper in der Szene liegen."))
+        chosen = selected[0] if len(selected) == 1 and selected[0] in result.scene.objects else ""
+        if not chosen:
+            chosen = self._body_under_the_outline()
+        if not chosen:
+            return str(tr("Unter der Zeichnung liegt kein bearbeitbarer Körper — einen auswählen."))
+        if result.scene.objects[chosen].kind != "brep":
             return str(
                 tr(
                     "Der gewählte Körper besteht bereits aus festen Dreiecken. "
@@ -5389,6 +5451,16 @@ class MainWindow(QMainWindow):
                 self.viewport.cancel_sketch_pull()
                 self.announce(problem)
                 return
+            # **Gefunden heißt noch nicht gewählt.** ``run_operation`` nimmt
+            # seine Eingänge aus dem Objektbaum; ein Körper, den nur
+            # :meth:`_body_under_the_outline` kennt, käme dort nie an, und die
+            # Operation liefe ohne Eingang. Das ist dasselbe letzte Glied, an
+            # dem heute schon zwei Befunde hingen — die Entscheidung fällt,
+            # und niemand setzt sie um.
+            if not self.object_tree.selected_objects():
+                found = self._body_under_the_outline()
+                if found:
+                    self.object_tree.select_object(found)
             self._sketch_target = POCKET_OP
             self.finish_sketch(keep=True, given={POCKET_FIELD: abs(float(height))})
             return
@@ -6025,7 +6097,13 @@ class MainWindow(QMainWindow):
             return
 
         self._armature_target = target
-        self._armature_bones = []
+        # **Ein vorhandenes Skelett kommt mit.** Wer den Editor auf einem
+        # Körper öffnet, der schon eines trägt, erwartet seine Knochen zu
+        # sehen — nicht ein leeres Blatt. Ohne das war der einzige Weg zu
+        # einem verschobenen Gelenk, das Skelett neu zu setzen, und beim
+        # „Fertig" entstand eine **zweite** Operation, die ein zweites Mal
+        # beugt.
+        self._armature_step, self._armature_bones = self._armature_of(target)
         self._armature_head = None
         self._armature_parent = ""
         self.viewport.set_boning(True)
@@ -6035,6 +6113,35 @@ class MainWindow(QMainWindow):
         self.pose_bar.show_state(0, pending=False, chain=True)
         self._update_actions()
         self.statusBar().showMessage(tr("Zwei Klicks setzen einen Knochen — Escape beendet."))
+
+    def _armature_of(self, target: str) -> tuple[int | None, list[Any]]:
+        """Der letzte Skelettschritt dieses Körpers und seine Knochen.
+
+        ``(None, [])``, wenn es keinen gibt — dann ist der Editor ein leeres
+        Blatt wie beim ersten Mal.
+
+        **Der letzte und nicht der erste:** Wer sein Skelett schon zweimal
+        geändert hat, meint die Fassung, die gerade gilt. Gelesen wird aus dem
+        Dokument und nicht aus der Szene, weil dort die *Eingabe* steht — die
+        Szene trägt das Ergebnis, und aus einem gebeugten Körper lassen sich
+        die Knochen nicht zurückrechnen.
+        """
+        from app.core.geom.pose import armature_from_text
+
+        for entry in reversed(self.session.project.document.ops):
+            if entry.op != "pose_armature" or target not in entry.inputs:
+                continue
+            text = str(entry.params.get("armature", ""))
+            if not text.strip():
+                return (None, [])
+            try:
+                return (entry.id, armature_from_text(text))
+            except AppError:
+                # Ein unlesbares Skelett ist kein Grund, den Editor zu
+                # verweigern — dann fängt er leer an, und der alte Schritt
+                # bleibt unberührt im Verlauf stehen.
+                return (None, [])
+        return (None, [])
 
     def setting_armature(self) -> bool:
         """Ob gerade ein Skelett gesetzt wird."""
@@ -6102,8 +6209,10 @@ class MainWindow(QMainWindow):
                 tr("Der Körper des Skeletts ist nicht mehr da — die Sitzung bleibt offen.")
             )
             return
+        step = self._armature_step
         self._armature_target = None
         self._armature_bones = []
+        self._armature_step = None
         self._armature_head = None
         self.viewport.set_boning(False)
         self.pose_bar.setVisible(False)
@@ -6118,9 +6227,14 @@ class MainWindow(QMainWindow):
         # Skizze vormacht: eine Operation mit leerer Stellung anzulegen hieße,
         # dass nichts geschieht und niemand erfährt, wo es weitergeht.
         self.object_tree.select_object(target)
-        self.run_operation(
-            REGISTRY.get("pose_armature"), given={"armature": armature_to_text(bones)}
-        )
+        gesetzt = {"armature": armature_to_text(bones)}
+        if step is not None:
+            # **Denselben Schritt ändern, keinen zweiten anlegen.** Zwei
+            # Skelettschritte auf einem Körper beugen ihn zweimal; der Kunde
+            # hat aber sein Skelett bearbeitet und kein weiteres gesetzt.
+            self.edit_operation(step, given=gesetzt)
+            return
+        self.run_operation(REGISTRY.get("pose_armature"), given=gesetzt)
 
     def action_sketch_free(self) -> None:
         """Der Zeichnen-Knopf der Werkzeugzeile: Skizzenmodus ohne
@@ -7597,7 +7711,9 @@ class MainWindow(QMainWindow):
             return tr("Der Wert ist schon so eingestellt.")
         return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
-    def edit_operation(self, op_id: int, field: str = "") -> None:
+    def edit_operation(
+        self, op_id: int, field: str = "", given: Mapping[str, Any] | None = None
+    ) -> None:
         """Eine Operation des Stapels wieder öffnen und ihr andere Zahlen
         geben (§15.4).
 
@@ -7610,6 +7726,12 @@ class MainWindow(QMainWindow):
         *Eingabe korrigieren* aus dem Prüfbericht kommt, hat dort einen Satz
         über **einen** Wert gelesen; der Kern nennt ihn im Befund, und ohne
         diesen Sprung müsste der Kunde ihn unter acht Zeilen wiederfinden.
+
+        ``given`` überschreibt einzelne Werte, bevor der Dialog sie zeigt —
+        für den Fall, dass eine **Geste** sie geändert hat und nicht die
+        Tastatur. Der Skeletteditor ist der erste: Wer sein Skelett mit der
+        Maus ändert, soll den Schritt ändern und keinen zweiten anlegen, der
+        ein zweites Mal beugt.
         """
         try:
             entry = self.session.history.operation(op_id)
@@ -7658,7 +7780,7 @@ class MainWindow(QMainWindow):
             REGISTRY.get(shown),
             self._object_names(),
             self,
-            values=entry.params,
+            values={**entry.params, **(given or {})},
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             features=self._feature_names(),

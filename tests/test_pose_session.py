@@ -411,3 +411,104 @@ def test_the_name_field_belongs_to_the_bone_not_to_the_pose(qt_app: QApplication
         f"gesprochen {gesprochen!r} gegen gelesen {gelesen!r} — beide beschreiben "
         "dasselbe Feld und dürfen nicht auseinanderlaufen"
     )
+
+
+# --- Ein zweites Mal an dasselbe Skelett --------------------------------------
+
+
+def test_reopening_the_editor_brings_the_bones_back(window: MainWindow) -> None:
+    """Wer den Editor erneut öffnet, sieht sein Skelett — kein leeres Blatt.
+
+    **Weil ein Kunde, der ein Skelett gesetzt hat, es ändern will und nicht
+    ersetzen.** Vorher fing der Editor jedes Mal bei null an; der einzige Weg
+    zu einem verschobenen Gelenk war, alles neu zu setzen — und beim „Fertig"
+    entstand eine **zweite** Operation, die den Körper ein zweites Mal beugt.
+
+    Gelesen wird aus dem Dokument und nicht aus der Szene: Dort steht die
+    Eingabe, die Szene trägt nur das Ergebnis, und aus einem gebeugten Körper
+    lassen sich die Knochen nicht zurückrechnen.
+    """
+    from app.core.geom.pose import Bone, armature_to_text
+    from app.core.scene.history import OperationDraft
+
+    # **Mit armature_to_text gebaut und nicht von Hand getippt.** Das Format
+    # ist JSON; ein erfundener Text wäre eine Zusage über die Schreibweise
+    # statt über das Laden — genau die Sorte Test, die am Prüfling vorbeimisst.
+    # Der erste Anlauf tat es und fiel an einer ValidationError, die mit dem
+    # Gemessenen nichts zu tun hatte.
+    gesetzt = [
+        Bone(name="arm", head=(0.0, 0.0, 0.0), tail=(0.0, 0.0, 10.0), parent=""),
+        Bone(name="hand", head=(0.0, 0.0, 10.0), tail=(0.0, 0.0, 20.0), parent="arm"),
+    ]
+    koerper = with_a_body(window)
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={"armature": armature_to_text(gesetzt), "pose": ""},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    window.start_armature(koerper)
+
+    assert len(window._armature_bones) == 2, (
+        f"das gesetzte Skelett muss im Editor stehen, dort stehen "
+        f"{len(window._armature_bones)} Knochen"
+    )
+    assert window._armature_step is not None, (
+        "der Editor muss wissen, welchen Schritt er ändert — sonst legt „Fertig“ "
+        "einen zweiten an, und der Körper wird zweimal gebeugt"
+    )
+    assert "arm" in armature_to_text(window._armature_bones), (
+        "die Namen der Knochen müssen mitkommen, sonst heißt die Stellung anders als vorher"
+    )
+
+
+def test_a_body_without_an_armature_starts_empty(window: MainWindow) -> None:
+    """Ohne gesetztes Skelett bleibt der Editor ein leeres Blatt.
+
+    Die Gegenprobe zum Laden: Wer zum ersten Mal ein Skelett setzt, darf keine
+    Knochen vorfinden, und „Fertig" legt einen neuen Schritt an statt einen
+    fremden zu ändern.
+    """
+    window.start_armature(with_a_body(window))
+
+    assert window._armature_bones == [], "ohne Skelett fängt der Editor leer an"
+    assert window._armature_step is None, (
+        "ohne vorhandenen Schritt darf keiner zum Ändern vorgemerkt sein"
+    )
+
+
+def test_an_unreadable_armature_does_not_block_the_editor(window: MainWindow) -> None:
+    """Ein unlesbares Skelett lässt den Editor leer anfangen, statt ihn zu verweigern.
+
+    Der Schritt bleibt unberührt im Verlauf stehen — eine kaputte Eingabe ist
+    kein Grund, dem Kunden das Werkzeug zu nehmen (§2.1).
+    """
+    from app.core.scene.history import OperationDraft
+
+    koerper = with_a_body(window)
+    window.session.apply(
+        "Skelett",
+        [
+            OperationDraft(
+                op="pose_armature",
+                inputs=(koerper,),
+                params={"armature": "das ist kein Skelett", "pose": ""},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    window.start_armature(koerper)
+
+    assert window.setting_armature(), "der Editor muss trotzdem aufgehen"
+    assert window._armature_bones == []
+    assert window._armature_step is None, (
+        "ein unlesbarer Schritt darf nicht zum Ändern vorgemerkt werden — sonst "
+        "überschriebe „Fertig“ ihn mit einem halben Skelett"
+    )
