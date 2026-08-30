@@ -115,7 +115,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
-| Sechs Leistungsmarken reißen einen Zähler gegen Glückstreffer-Bestwerte | Sechs Leistungsmarken rissen einen Zähler, und der Code war unschuldig (30.08.2026) | die `alone`-Bestwerte neu setzen und die Minimum-für-immer-Mechanik auf ein rollendes Fenster umbauen — fb baut, die Messverfahrens-Entscheidung wird im selben Zug in `tests.md` dokumentiert |
 | Nach einem Erzeugungslauf begraben 118 wortgleiche Hinweise den Prüfbericht | Wortgleiche Waisen-Hinweise fluten den Prüfbericht (30.08.2026) | eine Entscheidung über Zusammenfassen oder Deckel — in `evaluate.py` oder `panels.py`, nicht nebenbei |
 | Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
@@ -12409,16 +12408,18 @@ Damit löst sich auch die Registerzeile vom 26.08. („`orient_200` streut über
 die Regressionsschwelle") hier mit auf: 18,7 s auf beiden Ständen dicht unter
 dem 20-s-Budget ist eine zu knapp gesetzte Bestmarke, kein Regressionsfall.
 
-- [ ] **Bestwerte und Mechanik in einem Zug erneuern:** die `alone`-Bestwerte
-      der sechs Marken neu setzen (sie stammen aus einer Maschinenphase, die
-      es nicht mehr gibt) und die Minimum-für-immer-Mechanik auf ein
-      rollendes Fenster umbauen — Median der letzten N Läufe je Kontext statt
-      ewigem Minimum: Fremdlast verschiebt den Median weiterhin und wird
-      gefangen, ein Glückstreffer zementiert nichts mehr. Entschieden am
-      30.08.2026 auf fb's Messreihe; fb baut, und die
-      Messverfahrens-Entscheidung wird im selben Commit in
-      `.claude/rules/tests.md` dokumentiert — der Abschnitt „Die Regel fängt
-      Fremdlast…" beschreibt das alte Verhalten und altert sonst falsch.
+- [x] **Erledigt mit `b26405d0` (30.08.2026):** Median über die letzten
+      `WINDOW = 5` Läufe je Kontext statt ewigem Minimum, `MIN_RUNS = 3`
+      gegen die Migrations-Delle (der alte Bestwert zieht als einzelner
+      Lauf ein und ist selbst der Ausreißer), alle drei Altformate bleiben
+      lesbar, der Zähler beginnt beim Formatwechsel neu. Die
+      Messverfahrens-Entscheidung steht im selben Commit in
+      `.claude/rules/tests.md`; die Mechanik selbst prüft
+      `tests/test_performance_marks.py` im Tor (sechs Tests, gestellte Uhr,
+      auch die Gegenrichtung: eine echte Verlangsamung um mehr als ein
+      Viertel reißt weiterhin). Vier Läufe in Folge grün aus der migrierten
+      echten Baseline, nachverifiziert im Probe-Worktree gegen eine Kopie
+      derselben.
 
 ---
 

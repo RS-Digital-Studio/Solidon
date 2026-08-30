@@ -134,12 +134,22 @@ alles in einem Aufruf, und committet wird nur, wenn die Probe die wörtliche
 Erwartung trifft:
 
 ```
-git read-tree HEAD && git add <pfade> \
+ALT=$(git rev-parse HEAD) \
+  && git read-tree HEAD && git add <pfade> \
   && IST=$(git diff --cached HEAD --numstat) \
   && SOLL=$(printf '44\t0\tROADMAP.md')       # die angesagten Zahlen, wörtlich
-  && if [ "$IST" = "$SOLL" ]; then git commit …; \
-     else echo "SOLLPROBE ABWEICHEND — KEIN COMMIT:"; echo "$IST"; fi
+  && if [ "$IST" = "$SOLL" ] && [ "$(git rev-parse HEAD)" = "$ALT" ]; \
+     then git commit …; \
+     else echo "SOLLPROBE ABWEICHEND ODER HEAD GEWANDERT — KEIN COMMIT:"; echo "$IST"; fi
 ```
+
+Der zweite Vergleich fängt das Restfenster: Wandert HEAD zwischen `read-tree`
+und Commit **innerhalb** des Aufrufs, stimmen Zahlen gegen einen Boden, der
+sich bewegt hat. Und die Phantome, die ein privater Commit im **Haupt**-Index
+hinterlässt (frisch committete Dateien stehen dort als gelöscht), heilt man
+**je Pfad** mit `git restore --staged <pfad>` — nie mit einem `read-tree HEAD`
+ohne `GIT_INDEX_FILE`, denn der würfe weg, was andere Sitzungen dort gerade
+gestaged halten.
 
 Wer die Abweichung erst im Rückblick liest, liest sie über einem Commit, der
 schon gepusht ist.
