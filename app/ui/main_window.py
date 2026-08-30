@@ -5722,9 +5722,20 @@ class MainWindow(QMainWindow):
                 "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper."
             )
         else:
+            # **Der Halbsatz nennt die fertigen Formen** (Befund Z6). Hinter
+            # dem Pfeil des Rechteck-Knopfs liegen sechs vollbemaßte Formen —
+            # Rechteck, Langloch, Kreis, Sechseck, Lochkreis, Lochraster —,
+            # und für jemanden ohne CAD-Kenntnisse ist das die hilfreichste
+            # Stelle der ganzen Leiste. Sie war zugleich die einzige, die man
+            # nur findet, wenn man einen kleinen Pfeil trifft.
+            #
+            # Hier und nicht in der Leiste: Der Satz steht ohnehin da, wo ein
+            # Anfänger nachliest, was als Nächstes geht, und kostet keinen
+            # Bildpunkt Breite. Der häufigste Fall — jemand will ein Rechteck
+            # — bleibt damit ein Klick.
             source = tr(
-                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — "
-                "daraus wird dann ein Körper."
+                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine "
+                "fertige Form einsetzen — daraus wird dann ein Körper."
             )
         # **In der Querschau steht hier die Geste**, und zwar aus derselben
         # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst

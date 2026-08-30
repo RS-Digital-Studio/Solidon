@@ -3474,7 +3474,7 @@
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Tenons et perçages à jeu échelonné. Imprimer une fois, essayer, et la valeur est acquise — elle a ensuite sa place dans le profil de matériau, pas dans le modèle.",
   "Zeichen": "Caractère",
   "Zeichenebene:": "Plan de dessin :",
-  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — daraus wird dann ein Körper.": "Plan d’esquisse : {place} · Dessinez un contour fermé — il en naîtra un corps.",
+  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine fertige Form einsetzen — daraus wird dann ein Körper.": "Plan de dessin : {place} · Tracez un contour fermé ou insérez une forme toute prête — cela devient un corps.",
   "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper.": "Plan d’esquisse : {place} · Contour fermé — il en naît maintenant un corps.",
   "Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.": "Plan d’esquisse : {place} · Dessinez — l’opération s’ouvre sur l’esquisse.",
   "Zeichnen": "Dessiner",

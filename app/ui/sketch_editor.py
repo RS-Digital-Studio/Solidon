@@ -2676,13 +2676,37 @@ class SketchCanvas(QWidget):
         )
         self.update()
 
+    def drop_chain(self) -> bool:
+        """Verwirft eine angefangene Kette. ``True``, wenn eine lief.
+
+        **Die erste von drei Escape-Stufen** (Befund Z5). Wer eine Polylinie
+        zieht und aussteigen will, meint die halbfertige Linie — nicht das
+        Werkzeug und erst recht nicht die ganze Skizze.
+
+        Der Inhalt dieser Methode stand seit je in :meth:`keyPressEvent` und
+        war **richtig**; er lief nur nie. Escape liegt als Kürzel am Fenster
+        (`main_window._escape`), und ein Kürzel greift, bevor ein
+        ``keyPressEvent`` der Zeichenfläche es je sieht. Gemessen: Ein Punkt
+        gesetzt, Escape gedrückt — Werkzeug **und** Kette waren zugleich weg,
+        obwohl der Hinweistext eine Stufe versprach.
+
+        Dieselbe Familie wie Z4, wo ``mouseDoubleClickEvent`` nie ein Ereignis
+        bekam: **Empfänger auf der Zeichenfläche, Ereignis kommt nie an.**
+        """
+        if not self._pending_world:
+            return False
+        self._pending.clear()
+        self._pending_world.clear()
+        self._reset_measure_entry()
+        self.statusChanged.emit(self.status_text())
+        self.update()
+        return True
+
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
-        if event.key() == Qt.Key.Key_Escape and self._pending_world:
-            self._pending.clear()
-            self._pending_world.clear()
-            self._reset_measure_entry()
-            self.statusChanged.emit(self.status_text())
-            self.update()
+        # Bleibt stehen, obwohl Escape hier nicht mehr ankommt: Wer die
+        # Zeichenfläche einmal ohne das Fenster benutzt — ein Test, ein
+        # späterer eigener Dialog —, bekommt dasselbe Verhalten.
+        if event.key() == Qt.Key.Key_Escape and self.drop_chain():
             return
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self.tool == "spline":
             self.finish_spline()
@@ -3739,7 +3763,19 @@ class SketchPanel(QWidget):
         self._tool_buttons["select"].setChecked(True)
 
         shapes_button = QToolButton(self)
-        shapes_button.setText(tr("Grundform"))
+        # **Der Knopf heißt, was er tut** (Befund Z6). Er hieß „Grundform",
+        # sein eigener Tooltip sagte „Rechteck (R)", und ein Klick gab das
+        # Rechteckwerkzeug — der Name versprach die sechs fertigen Formen, die
+        # in Wahrheit hinter dem Pfeil liegen. Ein Knopf, dessen Beschriftung
+        # etwas anderes ankündigt als sein Klick, kostet genau einmal
+        # Vertrauen; danach liest niemand mehr die Leiste.
+        #
+        # Die Liste **bleibt** hinter dem Pfeil, und das ist Absicht: Wer nur
+        # ein Rechteck will, ist der häufigste Fall und soll keinen Klick mehr
+        # zahlen. Dass es die Formen gibt, sagt seit Z6 die Statuszeile des
+        # Zeichenmodus — dort sucht ein Anfänger, was als Nächstes geht
+        # (Vorschlag 50, aus derselben Durchsicht).
+        shapes_button.setText(tr("Rechteck"))
         shapes_button.setIcon(icons.icon("sketch_rectangle", shapes_button))
         shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         shapes_button.setCheckable(True)
@@ -4546,13 +4582,28 @@ class SketchPanel(QWidget):
         return True
 
     def drop_tool(self) -> bool:
-        """Legt ein laufendes Zeichenwerkzeug ab. ``True``, wenn eines lief.
+        """Nimmt eine Escape-Stufe zurück. ``True``, wenn es etwas zu nehmen gab.
 
-        Die erste Stufe von Escape: Wer eine Linie zieht und aussteigen will,
-        meint das Werkzeug und nicht die ganze Skizze. Lief keines, gibt diese
-        Methode ``False`` zurück, und das Fenster verlässt die Skizze — die
-        zweite Stufe.
+        **Drei Stufen, nicht zwei** (Befund Z5):
+
+        1. Eine angefangene **Kette** verwerfen — das Werkzeug bleibt in der
+           Hand, man zeichnet weiter.
+        2. Das **Werkzeug** ablegen, zurück auf Auswählen.
+        3. Erst dann verlässt das Fenster die **Skizze**.
+
+        Die erste fehlte. Wer eine Polylinie zog und Escape drückte, verlor
+        gemessen beides zugleich: die halbfertige Linie *und* das Werkzeug —
+        obwohl der Hinweistext eine Stufe versprach und
+        :meth:`SketchCanvas.drop_chain` sie seit je richtig umsetzt. Sie lief
+        nur nie, weil Escape als Kürzel am Fenster hängt und dort entschieden
+        wird, bevor die Zeichenfläche die Taste sieht.
+
+        Der Name bleibt ``drop_tool``: Das Fenster fragt „gab es hier noch
+        etwas zurückzunehmen?", und wie viele Stufen dahinterstehen, ist die
+        Sache des Editors.
         """
+        if self.canvas.drop_chain():
+            return True
         if self.canvas.tool == "select":
             return False
         self.choose_tool("select")

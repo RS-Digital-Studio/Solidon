@@ -3474,7 +3474,7 @@
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Pinos e furos com folga escalonada. Imprimir uma vez, experimentar, e o valor fica assente — pertence depois ao perfil de material, não ao modelo.",
   "Zeichen": "Caractere",
   "Zeichenebene:": "Plano de desenho:",
-  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — daraus wird dann ein Körper.": "Plano de esboço: {place} · Desenhe um contorno fechado — daí sairá um corpo.",
+  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine fertige Form einsetzen — daraus wird dann ein Körper.": "Plano de desenho: {place} · Desenhe um contorno fechado ou insira uma forma pronta — daí sai um corpo.",
   "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper.": "Plano de esboço: {place} · Contorno fechado — daqui sai agora um corpo.",
   "Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.": "Plano de esboço: {place} · Desenhe — a operação abre sobre o esboço.",
   "Zeichnen": "Desenhar",

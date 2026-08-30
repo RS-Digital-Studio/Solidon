@@ -6219,3 +6219,103 @@ def test_a_typed_measure_on_a_line_stays_a_distance(qt_app: QApplication) -> Non
     assert [entry.kind for entry in measured] == ["distance"], (
         f"die Linienlänge heißt {[entry.kind for entry in measured]} statt distance"
     )
+
+
+def test_escape_gives_back_one_thing_at_a_time(qt_app: QApplication) -> None:
+    """Escape nimmt drei Stufen zurück, nicht zwei auf einmal (Befund Z5).
+
+    Wer eine Polylinie zieht und aussteigen will, meint die halbfertige
+    Linie — nicht das Werkzeug und erst recht nicht die ganze Skizze.
+    Gemessen verlor er beides zugleich: ``drop_tool`` legte sofort das
+    Werkzeug ab, und die Kette ging mit.
+
+    **Der richtige Code stand die ganze Zeit da und lief nie.**
+    ``SketchCanvas.keyPressEvent`` bricht bei ``_pending_world`` genau die
+    Kette ab — aber Escape hängt als Kürzel am Fenster, und ein Kürzel
+    greift, bevor ein ``keyPressEvent`` der Zeichenfläche es sieht. Dieselbe
+    Familie wie Z4, wo ``mouseDoubleClickEvent`` nie ein Ereignis bekam:
+    Empfänger auf der Zeichenfläche, Ereignis kommt nie an.
+
+    Geprüft wird über ``drop_tool``, weil das Fenster genau diese Methode
+    ruft — nicht über die Zeichenfläche, an der der Weg vorbeiführt.
+    """
+    panel = SketchPanel()
+    try:
+        panel.choose_tool("line")
+        panel.canvas._pending_world.append((10.0, 10.0))
+        assert panel.canvas.tool == "line"
+
+        assert panel.drop_tool() is True, "die erste Stufe nimmt etwas zurück"
+        assert not panel.canvas._pending_world, "und zwar die angefangene Kette"
+        assert panel.canvas.tool == "line", (
+            "das Werkzeug bleibt in der Hand — wer die Linie verwirft, will weiterzeichnen"
+        )
+
+        assert panel.drop_tool() is True, "die zweite Stufe legt das Werkzeug ab"
+        assert panel.canvas.tool == "select"
+
+        assert panel.drop_tool() is False, (
+            "die dritte Stufe gehört dem Fenster: es verlässt die Skizze"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_the_shape_button_says_what_a_click_does(qt_app: QApplication) -> None:
+    """Der Knopf heißt, was er tut — und die Formen sind trotzdem auffindbar (Z6).
+
+    Er hieß „Grundform", sein eigener Tooltip sagte „Rechteck (R)", und ein
+    Klick gab das Rechteckwerkzeug. Ein Knopf, dessen Beschriftung etwas
+    anderes ankündigt als sein Klick, kostet einmal Vertrauen; danach liest
+    niemand mehr die Leiste.
+
+    Die sechs vollbemaßten Formen bleiben hinter dem Pfeil — wer nur ein
+    Rechteck will, ist der häufigste Fall und soll keinen Klick mehr zahlen.
+    Dass es sie gibt, sagt stattdessen die Statuszeile des Zeichenmodus, und
+    **genau das prüft die zweite Hälfte dieses Tests**: Ohne den Satz dort
+    wäre die Umbenennung nur die halbe Antwort.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    panel = SketchPanel()
+    try:
+        knopf = next(
+            (button for button in panel.findChildren(QToolButton) if button.menu() is not None),
+            None,
+        )
+        assert knopf is not None, "der Formen-Knopf mit seinem Menü fehlt"
+        assert knopf.text() == "Rechteck", (
+            f"der Knopf heißt {knopf.text()!r}, gibt beim Klick aber ein Rechteck"
+        )
+        assert knopf.text() in knopf.toolTip(), (
+            "Beschriftung und Tooltip sagen Verschiedenes — das war der Befund"
+        )
+
+        eintraege = [action.text() for action in knopf.menu().actions() if action.text()]
+        assert len(eintraege) >= 6, f"nur {len(eintraege)} fertige Formen: {eintraege}"
+    finally:
+        panel.deleteLater()
+
+    # **Die andere Hälfte, und sie wird am Quelltext geprüft.** Der erste
+    # Anlauf baute den Satz im Test selbst zusammen und fragte, ob „fertige
+    # Form" darin steht — trivial wahr, und die Mutationsprobe ließ das
+    # Entfernen aus `main_window` grün durchgehen. Ein Test, der seinen
+    # eigenen Sollwert erzeugt, prüft nichts (`tests.md`, „Sollwert aus dem
+    # Prüfling").
+    #
+    # Gelesen wird deshalb die Stelle, die den Hinweis wirklich setzt. Am
+    # gebauten Fenster wäre es der bessere Weg, aber dafür müsste der
+    # Skizzenmodus offen sein — ein ganzes Hauptfenster für einen Halbsatz.
+    quelle = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
+    leerer_hinweis = "Zeichenebene: {place} · Geschlossenen Umriss zeichnen"
+    assert leerer_hinweis in quelle, (
+        "der Hinweis der leeren Skizze steht nicht mehr in main_window — "
+        "dann prüft dieser Test die falsche Datei"
+    )
+    stelle = quelle.index(leerer_hinweis)
+    assert "fertige Form" in quelle[stelle : stelle + 200], (
+        "der Hinweis der leeren Skizze nennt die fertigen Formen nicht mehr — "
+        "dann findet sie nur noch, wer den Pfeil trifft"
+    )

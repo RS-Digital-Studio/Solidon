@@ -3474,7 +3474,7 @@
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Perni e fori con gioco scaglionato. Stampare una volta, provare, e il valore è deciso — dopo va nel profilo del materiale, non nel modello.",
   "Zeichen": "Carattere",
   "Zeichenebene:": "Piano di disegno:",
-  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — daraus wird dann ein Körper.": "Piano di schizzo: {place} · Disegni un contorno chiuso: poi ne nasce un corpo.",
+  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine fertige Form einsetzen — daraus wird dann ein Körper.": "Piano di disegno: {place} · Disegna un contorno chiuso o inserisci una forma pronta — da lì nasce un corpo.",
   "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper.": "Piano di schizzo: {place} · Contorno chiuso: ora ne nasce un corpo.",
   "Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.": "Piano di schizzo: {place} · Disegni: l’operazione si apre sullo schizzo.",
   "Zeichnen": "Disegna",

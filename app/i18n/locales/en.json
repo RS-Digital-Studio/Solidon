@@ -3474,7 +3474,7 @@
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Pins and bores with staggered play. Print once, try, and the value is settled — it belongs in the material profile afterwards, not in the model.",
   "Zeichen": "Character",
   "Zeichenebene:": "Drawing plane:",
-  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — daraus wird dann ein Körper.": "Sketch plane: {place} · Draw a closed outline — a body comes from it then.",
+  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine fertige Form einsetzen — daraus wird dann ein Körper.": "Sketch plane: {place} · Draw a closed outline or insert a ready-made shape — that becomes a body.",
   "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper.": "Sketch plane: {place} · Outline closed — a body comes from it now.",
   "Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.": "Sketch plane: {place} · Draw — the operation opens on the sketch.",
   "Zeichnen": "Draw",

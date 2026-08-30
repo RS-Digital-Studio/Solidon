@@ -3474,7 +3474,7 @@
   "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell.": "Espigas y taladros con holgura escalonada. Imprimir una vez, probar, y el valor queda fijado — después pertenece al perfil de material, no al modelo.",
   "Zeichen": "Carácter",
   "Zeichenebene:": "Plano de dibujo:",
-  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — daraus wird dann ein Körper.": "Plano de boceto: {place} · Dibuje un contorno cerrado: de ahí saldrá un cuerpo.",
+  "Zeichenebene: {place} · Geschlossenen Umriss zeichnen oder eine fertige Form einsetzen — daraus wird dann ein Körper.": "Plano de dibujo: {place} · Dibuje un contorno cerrado o inserte una forma lista — de ahí sale un cuerpo.",
   "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper.": "Plano de boceto: {place} · Contorno cerrado: de aquí sale ahora un cuerpo.",
   "Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.": "Plano de boceto: {place} · Dibuje: la operación se abre sobre el boceto.",
   "Zeichnen": "Dibujar",
