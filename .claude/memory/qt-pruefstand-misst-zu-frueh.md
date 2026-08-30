@@ -164,3 +164,28 @@ Rundenschleife bleibt für alles andere.
 *muss* der Fehler sichtbar sein. Ist er es nicht, hat die Sonde die Lage gar
 nicht erst hergestellt, die sie prüfen soll — und ist er es bei 0 ms und bei
 2000 ms nicht mehr, war er nie einer.
+
+
+**Sechste Gestalt, 30.08.2026 (3a, an B35/V6): Ein abgelesener Bildpunkt gilt
+nur für die Bildgröße, aus der er stammt.** Für die Plastizitätsmessung hatte
+ich drei Stellen des Körpers aus einem Bildschirmfoto abgelesen — 2560 Punkte
+breit, maximiert. Der nächste Lauf maximierte auf **3413**, dieselben
+Koordinaten trafen den Hintergrund, und die Sonde meldete „Wand links 0,8127"
+in einer Tabelle, in der die übrigen Zahlen stimmten. Fast weiß, an einer
+Stelle, wo ein dunkler Körper stehen sollte — und es sah aus wie ein
+Messergebnis.
+
+Zwei Sätze daraus:
+
+* **Der Kontrollfall gehört in die Sonde, nicht in ihren Docstring.** Er stand
+  dort („Wand links muss ~0,0302 sein") und hat nichts verhindert; erst als
+  dieselbe Zeile *im Code* stand und die Sonde abbrach, war die Falle zu.
+* **Wo es geht, gar nicht erst ablesen.** Die Schattenmessung desselben Tages
+  brauchte keinen einzigen Punkt: zwei Bilder derselben Szene, einmal mit dem
+  Schatten und einmal ohne, und wo sie sich unterscheiden, *ist* der Schatten.
+  Eine Differenz findet ihren Gegenstand selbst und altert mit keiner
+  Fenstergröße.
+
+Verwandt mit [[messwerkzeug-misst-sich-selbst]] und [[sondenbau]]: Dort misst
+sich das Werkzeug selbst, hier misst es einen Ort, den es nur in einem
+bestimmten Fenster gibt.
