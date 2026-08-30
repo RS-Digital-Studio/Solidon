@@ -382,6 +382,53 @@ def _loose_advice(spec: PartSpec) -> TranslatableText:
     )
 
 
+def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding | None:
+    """Ein Baustein mit einem Oben, dessen Oben nirgendwohin zeigt.
+
+    **Der Fall, den Robert am Bild gesehen hat** (30.08.2026, an den Haken
+    eines Lochwandhalters für die Website): „eigentlich sind sie falsch gesetzt
+    und man könnte sie so nie einhaken". Gemessen stimmte es — hinter der
+    Lochwand standen 0,8 mm Material statt der 3,7 mm, mit denen die Nase
+    hinter den Steg greift. Der Zapfen zeigte nach hinten statt nach oben.
+
+    Die Ursache ist eine Vorgabe, die für diese Bausteine nicht passt.
+    ``PartSpec.keeps_up`` sagt, dass ein Baustein eine Oberseite hat, und
+    :func:`_roll_upright` richtet sie auf — **aber nur entlang einer Richtung**,
+    und eine Richtung gibt es nur mit einer gewählten Fläche. Wer die Position
+    stattdessen eintippt, behält die Vorgabe *Achse = Z*: Der Baustein liegt
+    dann, als säße er auf einem Deckel, und sein eigenes -Y bleibt Welt -Y.
+
+    Das ist nicht zu reparieren, sondern zu sagen. Um Z gedreht kommt ein -Y
+    nie nach oben — die Achse liegt in der Ebene, in der es sich bewegt. Wer
+    einen Einhänger an eine Wand setzen will, wählt die Wand; sie trägt die
+    Richtung, und ``keeps_up`` erledigt den Rest. Regel 21: nie stillschweigend
+    raten, und ein Haken, der nichts hält, ist die stillste aller Antworten.
+
+    **Warnung und nicht Fehler**, anders als bei :func:`_hanging_loose`. Dort
+    zerfällt das Teil in Stücke, hier steht es da und ist druckbar; es hält nur
+    nicht. Und flach liegend ist es nicht unmöglich, nur beinahe immer
+    unbeabsichtigt — dieselbe Einschätzung, die :func:`_roll_upright` für den
+    Deckel trifft.
+    """
+    if not spec.keeps_up or direction is not None:
+        return None
+    if str(getattr(params, "axis", "z") or "z") != "z":
+        return None
+    return Finding(
+        code="parts.up_points_nowhere",
+        severity="warning",
+        # Der Vorschlag steht im Satz, wie nebenan: erst was ist, dann was hilft.
+        message=_(
+            "Dieser Baustein hat ein Oben — eingehängt trägt er nur, wenn sein "
+            "Zapfen nach oben zeigt. Waagerecht ausgerichtet zeigt er zur Seite, "
+            "und seine Nase greift hinter nichts. Klicken Sie die Fläche an, an "
+            "die er kommt: Sie gibt ihm die Richtung, und er richtet sich selbst "
+            "auf. Soll er ohne Fläche stehen, setzen Sie die Achse auf Y."
+        ),
+        values={"part": spec.name},
+    )
+
+
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
@@ -397,6 +444,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
 
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
+    flat = _lying_flat(spec, ctx.params, direction)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
     # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
     # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
@@ -490,6 +538,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             *produced.findings,
             *([nothing] if nothing else []),
             *([loose] if loose else []),
+            *([flat] if flat else []),
         ],
     )
 

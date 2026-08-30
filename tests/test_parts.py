@@ -3444,3 +3444,80 @@ def test_the_hook_still_fits_the_narrowest_slot_that_was_measured(material: str)
         f"{material}: gebauter Zapfen ist {breite:.2f} mm breit und passt nicht "
         f"in den engsten gemessenen Schlitz ({NARROWEST_MEASURED_SLOT} mm)"
     )
+
+
+def test_a_hook_placed_by_hand_says_that_its_up_points_nowhere(profile: Profile) -> None:
+    """Ein Einhänger auf getippten Koordinaten hält nichts — und sagte es nicht.
+
+    **Robert am Bild, 30.08.2026:** „eigentlich sind sie falsch gesetzt und man
+    könnte sie so nie einhaken." Nachgemessen an einem 120x60x45-Halter mit
+    zwei Haken auf *y = -30, z = 30*: hinter der Lochwand standen 0,8 mm
+    Material — die Rundung des Zapfens. Mit gewählter Fläche sind es 3,7 mm,
+    und das ist die Nase, die hinter den Steg unter dem Schlitz greift.
+
+    Die Ursache ist keine Geometrie, sondern eine Vorgabe. ``keeps_up`` richtet
+    die Oberseite entlang einer **Richtung** auf, und eine Richtung liefert nur
+    die gewählte Fläche; wer die Position eintippt, behält *Achse = Z*. Um Z
+    gedreht kommt das eigene -Y aber nie nach oben — es liegt in der Ebene, in
+    der es sich bewegt. Der Haken war also nicht knapp daneben, sondern
+    grundsätzlich anders herum, und das Ergebnis sah heil aus: wasserdicht, ein
+    Körper, plausibles Volumen. Genau der Fall für Regel 21.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Halter",
+        [OperationDraft(op="create_box", params={"width": 120.0, "depth": 60.0, "height": 45.0})],
+    )
+    History(project.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"system": "skadis", "count": 2, "y": -30.0, "z": 30.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    flat = [f for f in result.scene.report.findings if f.code == "parts.up_points_nowhere"]
+    assert flat, (
+        "zwei Haken liegen waagerecht an der Rückwand und niemand sagt, dass sie so nichts halten"
+    )
+    message = str(flat[0].message)
+    assert "Fläche" in message and "Achse" in message, (
+        f"beide Wege nach vorn müssen im Satz stehen, Regel 17: {message}"
+    )
+
+
+def test_the_two_ways_to_stand_a_hook_upright_stay_silent(profile: Profile) -> None:
+    """Und die Gegenprobe: Was richtig steht, wird nicht angemeckert.
+
+    Ein Befund, der auch im guten Fall erscheint, ist schlimmer als keiner —
+    der Kunde lernt, ihn zu überlesen. Beide Wege stehen hier, weil beide
+    gelten: die angeklickte Fläche (sie trägt die Richtung) und *Achse = Y*
+    (sie legt das eigene +Y nach unten, also -Y nach oben).
+    """
+    for params in (
+        {"system": "skadis", "count": 2, "steps": 2, "at_feature": "face_3"},
+        {"system": "skadis", "count": 2, "axis": "y", "y": -30.0, "z": 30.0},
+    ):
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply(
+            "Halter",
+            [
+                OperationDraft(
+                    op="create_box", params={"width": 120.0, "depth": 60.0, "height": 45.0}
+                )
+            ],
+        )
+        History(project.document).apply(
+            "Einhänger",
+            [OperationDraft(op="insert_pegboard_hook", inputs=("obj_1",), params=params)],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        flat = [f for f in result.scene.report.findings if f.code == "parts.up_points_nowhere"]
+        assert not flat, f"{params} steht aufrecht und wird trotzdem gemeldet: {flat}"
