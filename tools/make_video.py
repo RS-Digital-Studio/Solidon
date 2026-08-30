@@ -1658,6 +1658,31 @@ TURNTABLE_QUALITY = 80
 TURNTABLE_ZOOM = 0.62
 
 
+def hide_axis_marker(window: Any) -> None:
+    """Das Achsenkreuz in der Ecke abschalten.
+
+    Der Nachbar von :func:`hide_orientation_widget`, und er wird getrennt
+    gerufen: Im **Loop** ist die Anwendung die Aussage, dort gehören ihre
+    Bedienelemente ins Bild. In der Drehreihe ist es das **Teil**, und ein
+    Achsenkreuz, das sich mitdreht, ist Werkzeug im Schaufenster.
+
+    **Es hängt am Renderer, nicht am Plotter.** ``plotter.axes_widget`` gibt es
+    in pyvista 0.48 nicht; ein ``getattr`` darauf liefert still ``None``, und
+    das Kreuz bliebe stehen, ohne dass irgendein Aufruf sich beschwert. Der
+    Weg dorthin steht in ``app.ui.viewport.axes_widget_of`` — hier
+    nachgebildet, weil ``tools`` die Oberfläche nicht importiert.
+    """
+    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
+    renderer = getattr(plotter, "renderer", None) if plotter is not None else None
+    marker = getattr(renderer, "axes_widget", None)
+    if marker is None:
+        return
+    try:
+        marker.EnabledOff()
+    except Exception as problem:  # pragma: no cover - hängt am Treiber
+        print(f"  (Achsenkreuz blieb an: {problem})")
+
+
 def shoot_turntable(
     app: QApplication,
     out: Path,
@@ -1715,6 +1740,7 @@ def shoot_turntable(
 
     show_panels(window, False)
     hide_orientation_widget(window)
+    hide_axis_marker(window)
     settle(app, 30)
 
     frames.mkdir(parents=True, exist_ok=True)
