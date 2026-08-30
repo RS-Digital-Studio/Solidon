@@ -146,7 +146,6 @@ ist ein Weg abgeschnitten, den niemand abgeschnitten hat. Verwandt mit der
 Gegenprobe aus `oberflaeche.md`: „Sind zwei Bilder gleich groß, zeigen sie
 dasselbe" — dort als Beweis benutzt, hier als Alarm.
 
-
 ## Der Mauszeiger
 
 Zeiger kommen aus `app/ui/cursors.py`, nie als `Qt.CursorShape` an der
@@ -161,7 +160,17 @@ Drei Dinge, die man beim Zeichnen einer neuen Rolle wissen muss:
   Werkzeugzeile und war ein Fleck mit Strich; erst die grobe Form — Linie,
   darüber und darunter eine Hälfte — erzählt etwas. **Angesehen wird auf vier
   Untergründen**: Viewport dunkel, Akzent (ein gewählter Körper!), Körpergrau,
-  helles Thema.
+  helles Thema. (Der Schnittzeiger selbst ist seit dem 30.08.2026 wieder
+  ausgebaut — er war fertig gezeichnet und wurde nie gesetzt, denn der
+  Schnitt hat keine Klickgeste: seine Ebene wird an der Leiste gezogen. Die
+  Lehre über die Silhouette bleibt; die Zeichnung war ihr Anlass.)
+* **Eine gezeichnete Rolle braucht eine Setzstelle.** Der ausgebaute
+  Schnittzeiger ist der Beleg: gezeichnet, begründet, nie gesetzt — der
+  Kunde sah ihn nie, und niemand merkte es. `tests/test_cursors.py` hält
+  seither beide Richtungen: Jedes gesetzte Rollen-Literal ist bekannt
+  (sonst fällt es still auf den Systempfeil — „moving" statt „move" stand
+  an der häufigsten Zuggeste), und jede gezeichnete Rolle wird irgendwo
+  gesetzt.
 * **Jede eigene Zeichnung trägt den dunklen Saum.** Der Akzent liegt über
   einem gewählten Körper auf sich selbst und wäre ohne ihn weg. Er entsteht
   aus zwei Durchgängen über dieselben Pfade, dick dunkel und dünn im Akzent.

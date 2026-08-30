@@ -426,3 +426,68 @@ def test_a_text_field_keeps_its_own_pointer(qt_app: QApplication) -> None:
     field = QLineEdit(window)
     apply_default_cursor(window)
     assert field.cursor().shape() == Qt.CursorShape.IBeamCursor
+
+
+def _role_literals() -> dict[str, list[str]]:
+    """Jedes Rollen-Literal aus ``app/ui``, mit seinen Fundorten.
+
+    Gesammelt wird über den Syntaxbaum, nicht über eine Textsuche: „section"
+    kommt im Quelltext dutzendfach als Werkzeugname vor und nie als
+    Zeigerrolle — eine Textsuche zählte das Falsche. Rollen fließen auf drei
+    Wegen: als erstes Argument von ``set_drag_cursor``/``cursor``/``_tell``
+    und als Return-Literal in ``_resting_role``.
+    """
+    import ast
+    from pathlib import Path
+
+    found: dict[str, list[str]] = {}
+    calls = {"set_drag_cursor", "cursor", "_tell"}
+    for path in sorted((Path(__file__).parent.parent / "app" / "ui").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = getattr(node.func, "attr", None) or getattr(node.func, "id", None)
+                if name in calls and node.args:
+                    first = node.args[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        found.setdefault(first.value, []).append(f"{path.name}:{node.lineno}")
+            if isinstance(node, ast.FunctionDef) and node.name == "_resting_role":
+                # Auch unter dem Return, nicht nur direkt daran: Zeile wie
+                # ``return "feature" if … else "select"`` trägt ihre Rollen
+                # in einem ternären Ausdruck, und die Funktion gibt ohnehin
+                # nichts als Rollen zurück.
+                for inner in ast.walk(node):
+                    if isinstance(inner, ast.Return) and inner.value is not None:
+                        for leaf in ast.walk(inner.value):
+                            if isinstance(leaf, ast.Constant) and isinstance(leaf.value, str):
+                                found.setdefault(leaf.value, []).append(
+                                    f"{path.name}:{inner.lineno}"
+                                )
+    # Die Zusicherung über das Werkzeug selbst: Findet die Sammlung fast
+    # nichts, sucht sie falsch — dann prüft der Test darunter eine leere
+    # Menge und ist grün über nichts.
+    assert len(found) >= 6, f"nur {len(found)} Rollen gefunden — sammelt das noch richtig?"
+    return found
+
+
+def test_every_set_role_exists_and_every_drawn_role_is_set() -> None:
+    """Beide Richtungen zwischen Zeichnung und Setzstelle (Regel 18 daneben).
+
+    Hin: Ein gesetztes Literal, das keine Rolle ist, fällt still auf den
+    Systempfeil zurück — ``set_drag_cursor("moving")`` stand an der häufigsten
+    Zuggeste, und die zeigte den Windows-Pfeil statt des Verschiebekreuzes.
+    Zurück: Eine gezeichnete Rolle ohne Setzstelle sieht kein Kunde je — der
+    Schnittzeiger war fertig gezeichnet, begründet und wurde nie gesetzt,
+    denn der Schnitt hat keine Klickgeste. Beides sah kein Test, weil keiner
+    die beiden Bestände gegeneinander hielt.
+    """
+    found = _role_literals()
+
+    unknown = {role: places for role, places in found.items() if role not in cursors.known()}
+    assert not unknown, f"gesetzte Rollen, die es nicht gibt: {unknown}"
+
+    never_set = sorted(role for role in cursors.SHAPES if role not in found)
+    assert not never_set, (
+        f"gezeichnete Rollen ohne Setzstelle: {never_set} — entweder anschließen "
+        "oder ausbauen, ein Zeiger ins Leere ist beides nicht"
+    )

@@ -111,14 +111,11 @@ SHAPES: Final[dict[str, tuple[str, tuple[float, float]]]] = {
         '<path d="M16 3v9M16 20v9M3 16h9M20 16h9" /><circle cx="16" cy="16" r="2.4" />',
         (16.0, 16.0),
     ),
-    # Schnitt: die Schnittlinie quer durchs Bild, darüber und darunter je eine
-    # Hälfte, die auseinandergeht. Der Körper aus dem Werkzeugsymbol war die
-    # bessere Bildidee und die schlechtere Silhouette — bei Zeigergröße blieb
-    # ein Sechseck mit Strich, das nichts mehr erzählte.
-    "section": (
-        '<path d="M2 16h28" /><path d="M9 11 16 5l7 6" /><path d="M9 21 16 27l7-6" />',
-        (16.0, 16.0),
-    ),
+    # (Die Rolle „section" stand hier mit fertig gezeichneter Schnittlinie —
+    # und wurde nie gesetzt: Der Schnitt hat keine Klickgeste, seine Ebene
+    # wird an der Leiste gezogen. Ausgebaut am 30.08.2026; der Wächter in
+    # tests/test_cursors.py verlangt seither für jede gezeichnete Rolle eine
+    # Setzstelle, damit kein zweiter Zeiger ins Leere entsteht.)
     # Formen: ein Ring auf der Spitze eines Stiels — der Pinsel greift eine
     # Fläche, kein einzelner Punkt. (Die Rolle „paint" stand daneben, bis der
     # Punkt-Radius-Pinsel fiel — Färben ist seither eine Operation am
