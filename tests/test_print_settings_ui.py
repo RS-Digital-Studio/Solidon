@@ -787,8 +787,11 @@ def test_a_dialog_built_after_a_language_change_speaks_that_language(
         gebaut = PrintSettingsDialog(session, UiSettings())
         hoehe = next(f for f in FIELDS if f.path == "layers.layer_height")
         texte = {label.text() for label in gebaut.findChildren(QLabel)}
-        assert f"{tr(source_text(hoehe.title))} [mm]" in texte
-        assert f"{source_text(hoehe.title)} [mm]" not in texte
+        # Ohne Einheit in der Klammer, seit sie am Wert steht (B12) — der
+        # Titel selbst ist der ganze Text der Beschriftung.
+        assert tr(source_text(hoehe.title)) in texte
+        assert source_text(hoehe.title) not in texte
+        assert gebaut._editors[hoehe.path].suffix().strip() == "mm"
         assert gebaut._editors[hoehe.path].statusTip() == tr(source_text(hoehe.note))
     finally:
         set_language(vorher)

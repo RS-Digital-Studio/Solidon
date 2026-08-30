@@ -25,7 +25,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QMenu, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QMenu, QWidget
 
 from app.core import bootstrap
 from app.core.errors import ValidationError
@@ -1319,9 +1319,15 @@ def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWind
 
     # Der gezeigte Wert ist umgerechnet …
     assert field.spin.value() == pytest.approx(default_mm / 25.4, abs=1e-4)
-    # … und die Beschriftung sagt es. Sonst wäre die Zahl eine Behauptung.
+    # … und das Feld sagt es. Sonst wäre die Zahl eine Behauptung.
+    #
+    # **Am Wert und nicht in der Beschriftung** (B12, 30.08.2026): Die Einheit
+    # stand als „[in]" über dem Feld und wanderte bei der Umschaltung nicht
+    # mit; sie steht jetzt als Suffix dort, wo die Zahl steht. Die Zeile prüft
+    # dieselbe Zusage an ihrem neuen Ort.
+    assert field.spin.suffix().strip() == "in", field.spin.suffix()
     label = dialog._rows[entry.name].labelForField(field)
-    assert label is not None and "[in]" in label.text(), label.text() if label else "kein Label"
+    assert label is not None and "[" not in label.text(), label.text()
 
     # Was der Stapel bekommt, ist Millimeter (§11.1).
     assert dialog.values()[entry.name] == pytest.approx(default_mm, abs=1e-6)
@@ -2214,3 +2220,39 @@ def test_no_dialog_shows_a_millimetre_to_the_thousandth(window: MainWindow) -> N
 
     assert REGISTRY.all(), "ohne Register prüft das hier nichts"
     assert not zu_fein, f"Millimeter auf ein Tausendstel: {zu_fein}"
+
+
+def test_the_unit_lives_in_the_value_not_in_the_caption(qt_app: QApplication) -> None:
+    """Die Einheit gehört in den Wert (Befund B12, `oberflaeche.md`).
+
+    „Durchmesser [mm]" über einem Feld mit „4,20" ist die Schreibweise, die
+    das Haus an jeder anderen Stelle abgelegt hat: Die Leisten schreiben
+    „20,00 mm" in den Wert, und der Befundwert holt seine Einheit aus
+    `value_text`. Im Dialog stand sie in der Klammer — und wanderte bei der
+    Umschaltung auf Zoll nicht mit: Über einem Feld, das Zoll annahm, stand
+    weiter „[mm]".
+
+    Geprüft wird beides: keine Klammer in der Beschriftung, und die Einheit
+    steht am Wert, wo sie mit der Umschaltung geht.
+    """
+    from app.ui.labels import set_display_unit
+
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, [], None)
+    laenge = next(entry for entry in spec.params.spec() if entry.unit == "mm")
+
+    beschriftungen = [label.text() for label in dialog.findChildren(QLabel) if label.text()]
+    with_klammer = [text for text in beschriftungen if "[" in text and "]" in text]
+    assert not with_klammer, f"Einheit in der Beschriftung: {with_klammer}"
+
+    editor = dialog._editors[laenge.name]
+    assert editor.spin.suffix().strip() == "mm", editor.spin.suffix()
+
+    set_display_unit("in")
+    try:
+        in_zoll = OperationDialog(spec, [], None)
+        feld = in_zoll._editors[laenge.name]
+        assert feld.spin.suffix().strip() == "in", "die Einheit wandert mit der Umschaltung"
+        assert not [t for t in (lbl.text() for lbl in in_zoll.findChildren(QLabel)) if "[mm]" in t]
+    finally:
+        set_display_unit("mm")

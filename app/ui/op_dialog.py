@@ -178,6 +178,15 @@ class ValueField(QWidget):
             # wäre ein Sprung über den ganzen Wertebereich einer Wandstärke.
             self.spin.setSingleStep(from_mm(1.0, self._shown))
 
+        # **Die Einheit steht am Wert, nicht über ihm** (§19.3, Befund B12).
+        # „Durchmesser [mm]" über einem Feld mit „4,20" ist die Schreibweise,
+        # die das Haus überall sonst abgelegt hat — und die Klammer wanderte
+        # bei der Umschaltung auf Zoll nicht mit, stand also über einem Feld,
+        # das Zoll annahm. Am Suffix geht sie mit.
+        shown = self._shown or entry.unit
+        if shown:
+            self.spin.setSuffix(f" {shown}")
+
         # Auch hier der Deckel: Das Drehfeld hat die Größenrichtlinie
         # ``Expanding`` und wuchs deshalb mit dem Dialog — 270 Pixel für einen
         # Wunsch von 156, gemessen an *Kopien in Reihe oder Kreis*. Der
@@ -214,7 +223,11 @@ class ValueField(QWidget):
         self.parameter_button = QToolButton(self)
         self.parameter_button.setText(expressions.REFERENCE_PREFIX)
         self.parameter_button.setAutoRaise(True)
-        self.parameter_button.setToolTip(tr("@name setzt einen Projektparameter ein."))
+        self.parameter_button.setToolTip(
+            tr("Ein benanntes Maß des Projekts einsetzen — änderbar an einer Stelle.")
+        )
+        self.parameter_button.setStatusTip(self.parameter_button.toolTip())
+        self.parameter_button.setAccessibleDescription(self.parameter_button.toolTip())
         self.parameter_button.setAccessibleName(tr("Parameter"))
         parameter_menu = QMenu(self.parameter_button)
         for name in sorted(self._parameter_values):
@@ -230,7 +243,16 @@ class ValueField(QWidget):
         self.toggle.setText(self.TOGGLE_TEXT)
         self.toggle.setCheckable(True)
         self.toggle.setAutoRaise(True)
-        self.toggle.setToolTip(tr("Statt einer Zahl einen Parameterausdruck eintragen."))
+        # **Der Satz sagt, was der Knopf tut, nicht wie die Sache heißt.**
+        # „fx" kennt, wer aus einem CAD kommt; für alle anderen ist es ein
+        # abgeschnittenes Etikett (Befund B13). Was hier steht, muss deshalb
+        # ohne das Wort „Parameterausdruck" auskommen — es erklärt einen
+        # Fachbegriff mit einem zweiten.
+        self.toggle.setToolTip(
+            tr("Statt einer festen Zahl rechnen lassen — zum Beispiel die halbe Breite.")
+        )
+        self.toggle.setStatusTip(self.toggle.toolTip())
+        self.toggle.setAccessibleDescription(self.toggle.toolTip())
         # Ein Umschalter, der nur anders aussieht, wäre Bedeutung allein über
         # Farbe (Regel 18). Der gedrückte Zustand *und* das sichtbar andere
         # Feld sagen dasselbe, und der Hinweis darunter sagt es ein drittes Mal.
@@ -1003,13 +1025,9 @@ class OperationDialog(QDialog):
             editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
             self._watch(editor)
+            # **Ohne Einheit in der Klammer** (B12): Sie steht am Wert, wo sie
+            # mit der Umschaltung geht — ``ValueField`` setzt sie als Suffix.
             label = f"{entry.title}"
-            if entry.unit:
-                # Die Einheit, in der das Feld wirklich spricht: Bei „mm" ist
-                # das die eingestellte Anzeigeeinheit, sonst der Wert aus dem
-                # Schema. Ein Feld, das Zoll nimmt und „[mm]" darüber trägt,
-                # wäre die Umschaltung mit einer Lüge darin.
-                label = f"{label} [{shown_unit(entry) or entry.unit}]"
             # Ein eingetragener Wert gehört vor den Nutzer, auch wenn das Schema
             # ihn nach hinten legt: er ist der, der gerade entschieden wurde —
             # die angeklickte Fläche, die vorgewählte Position (§18.5).

@@ -28,6 +28,7 @@ from typing import Any, Final, Literal, cast
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -1111,6 +1112,13 @@ def _make_setting_editor(
         number.setDecimals(field.decimals)
         number.valueChanged.connect(changed)
         editor = number
+
+    # **Die Einheit steht am Wert, nicht in der Beschriftung** (§19.3, B12).
+    # „Schichthöhe [mm]" über einem Feld mit „0,200" war die eine Schreibweise,
+    # die das Haus überall sonst abgelegt hat — die Leisten schreiben
+    # „20,00 mm" in den Wert. Am Suffix steht sie dort, wo der Wert steht.
+    if field.unit and isinstance(editor, QAbstractSpinBox):
+        editor.setSuffix(f" {field.unit}")
 
     limit = FIELD_WIDTH.get(field.kind)
     if limit is not None:
@@ -3182,8 +3190,9 @@ class PrintSettingsDialog(QDialog):
         die Sprache trägt, die beim **Bauen** des Dialogs gilt — und nicht die
         vom Import.
         """
-        title = str(field.title)
-        label = QLabel(f"{title} [{field.unit}]" if field.unit else title, self)
+        # **Ohne Einheit in der Klammer** (B12): Sie steht am Wert selbst, den
+        # ``_make_setting_editor`` mit ihr beschriftet.
+        label = QLabel(str(field.title), self)
         note = str(field.note)
         if note:
             label.setToolTip(note)
