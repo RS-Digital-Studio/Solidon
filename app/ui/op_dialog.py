@@ -1847,17 +1847,47 @@ class SketchUseDialog(QDialog):
         self._list.itemDoubleClicked.connect(weak_slot(self, SketchUseDialog.accept))
 
         buttons = QDialogButtonBox(self)
-        use = buttons.addButton(tr("Weiter"), QDialogButtonBox.ButtonRole.AcceptRole)
-        make_primary(use)
+        self._use = buttons.addButton(tr("Weiter"), QDialogButtonBox.ButtonRole.AcceptRole)
+        make_primary(self._use)
         # Kein „Abbrechen", das Arbeit vernichtet: der Weg zurück führt in
         # den Skizzenmodus, die Zeichnung bleibt (§2.1, keine Sackgassen).
         buttons.addButton(tr("Zurück zum Zeichnen"), QDialogButtonBox.ButtonRole.RejectRole)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        # **„Weiter" ohne Auswahl führte nirgendwohin** (Befund D5). Gemessen:
+        # Wer die Markierung aufhebt — ein Strg-Klick genügt —, bekommt
+        # ``chosen() == ""`` und einen Knopf, der trotzdem in voller
+        # Akzentfarbe dasteht, den Klick annimmt und den Dialog schließt. Ein
+        # Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
+        # Art, jemanden ratlos zu machen; derselbe Fall wie beim Einfügen im
+        # Bausteinkatalog.
+        #
+        # Gesperrt **mit Grund**, nicht bloß gesperrt: Ein grauer Knopf ohne
+        # Erklärung ist die zweite Sackgasse hinter der ersten (Regel 19,
+        # §2.7). Den Akzent behält er dabei — ein Dialog ohne akzentuierten
+        # Knopf lässt suchen, und gesperrt sieht gesperrt aus.
+        self._list.currentRowChanged.connect(weak_slot(self, SketchUseDialog._follow_choice))
+        self._follow_choice()
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._list)
         layout.addWidget(buttons)
+
+    def _follow_choice(self, *_ignored: object) -> None:
+        """Sperrt „Weiter", solange nichts gewählt ist — und sagt, warum.
+
+        Der Grund steht an **beiden** Hälften der Auskunft: im Tooltip für die
+        Maus, im ``statusTip`` für die Statuszeile und in der
+        ``accessibleDescription`` für den Bildschirmleser. Ein Grund, den nur
+        das Überfahren zeigt, erreicht genau die nicht, die ihn brauchen
+        (Regel 18).
+        """
+        picked = bool(self.chosen())
+        self._use.setEnabled(picked)
+        reason = "" if picked else str(tr("Wählen Sie zuerst, was aus der Zeichnung werden soll."))
+        self._use.setToolTip(reason)
+        self._use.setStatusTip(reason)
+        self._use.setAccessibleDescription(reason)
 
     def _preselect(self, name: str) -> None:
         """Den Normalfall markieren, nicht den ersten Eintrag."""

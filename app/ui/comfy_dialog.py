@@ -38,7 +38,7 @@ from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
-from app.ui.style import set_role
+from app.ui.style import make_primary, set_role
 
 _log = get_logger(__name__)
 
@@ -135,6 +135,13 @@ class ComfySetupDialog(QDialog):
 
         self.start_button = QPushButton(tr("Einrichten"), self)
         self.start_button.clicked.connect(self._start)
+        # **Der Akzent lag auf „Ordner wählen …", und niemand hatte ihn dorthin
+        # gesetzt.** ``QDialog`` macht beim ersten ``show()`` den ersten Knopf
+        # mit ``autoDefault`` zum Default; das ist hier die Zeile über der
+        # Handlung. Gemessen am angezeigten Fenster: „Ordner wählen …" trug den
+        # Akzent, „Einrichten" nichts — der Hinweis zeigte auf die Vorbereitung
+        # statt auf die Sache (Befund D3).
+        make_primary(self.start_button)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)

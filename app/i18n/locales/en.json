@@ -3448,6 +3448,7 @@
   "Wählen Sie eine Bohrung oder eine Fläche.": "Choose a bore or a face.",
   "Wählen Sie einen Baustein — hier steht dann, was er tut.": "Choose a part — what it does will be shown here.",
   "Wählen Sie zuerst ein Objekt im Objektbaum.": "Select an object in the object tree first.",
+  "Wählen Sie zuerst, was aus der Zeichnung werden soll.": "First choose what the drawing should become.",
   "Wände": "Walls",
   "Wände nicht überfahren": "Avoid crossing walls",
   "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker wirklich noch Material legt — die Grundlage für die Mindestwandstärke.": "Walls from one to several extrusion widths. Shows where the printer still lays down material — the basis for the minimum wall thickness.",

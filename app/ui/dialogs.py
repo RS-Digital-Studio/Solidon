@@ -2366,8 +2366,26 @@ def show_error(
             if action.primary
             else QMessageBox.ButtonRole.ActionRole
         )
-        buttons[box.addButton(str(action.label), role)] = action
-    box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
+        knopf = box.addButton(str(action.label), role)
+        # **Welcher Knopf der Hauptknopf ist, stand schon im Datenmodell** —
+        # ``Action.primary`` entscheidet zwei Zeilen darüber die Rolle. Es
+        # fehlte nur das letzte Glied: Ohne ``make_primary`` bekam der Knopf
+        # zwar Qts Akzentfarbe, aber nicht die halbfette Schrift, die neben ihr
+        # die zweite Kodierung ist (Regel 18, Befund D3).
+        if action.primary:
+            make_primary(knopf)
+        buttons[knopf] = action
+    abbrechen = box.addButton(str(CANCEL.label), QMessageBox.ButtonRole.RejectRole)
+
+    # **Bleibt nur „Abbrechen" übrig, trägt niemand den Akzent.** Das
+    # passiert, wenn das Fenster für keinen Vorschlag einen Handler hat
+    # (:func:`offered_actions`) — dann macht Qt den einzigen Knopf zum
+    # Default, und der Ausgang steht im Akzent da. „Schließen ist nie ein
+    # Hauptknopf" gilt auch, wenn er der einzige ist: Der Akzent lädt zu einer
+    # Handlung ein, und Abbrechen ist keine.
+    if not offered:
+        abbrechen.setAutoDefault(False)
+        abbrechen.setDefault(False)
 
     box.exec()
     chosen = buttons.get(box.clickedButton())

@@ -475,6 +475,7 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
     from app.core.knowledge import profiles
     from app.ui.catalog import PartCatalog
     from app.ui.changes_dialog import ChangesDialog
+    from app.ui.comfy_dialog import ComfySetupDialog
     from app.ui.dialogs import (
         AboutDialog,
         ActivationDialog,
@@ -506,6 +507,11 @@ def _the_dialogues_of_the_surface() -> list[tuple[str, object]]:
         ("Neues Filament", NewFilamentDialog),
         ("Zusatzprogramme", InstallDialog),
         ("Einstellungen", lambda: SettingsDialog(UiSettings())),
+        # Seit D3 mit dabei: Er trug den Akzent auf „Ordner wählen …" statt auf
+        # „Einrichten" — dem ersten autoDefault-Knopf, nicht der Handlung.
+        # Dass er in der ersten B22-Runde fehlte, ist der Grund, warum es
+        # stehen blieb; eine Liste ist so scharf wie ihre Lücken.
+        ("ComfyUI einrichten", ComfySetupDialog),
     ]
 
 
@@ -1443,4 +1449,75 @@ def test_a_meaning_can_no_longer_be_set_as_a_loudness(qt_app: QApplication) -> N
     assert not offenders, (
         "diese Aufrufe setzen eine Bedeutung als Typografie-Stufe und bleiben "
         f"damit unsichtbar; für Bedeutungen gibt es set_role(): {offenders}"
+    )
+
+
+def test_the_error_dialog_accents_the_action_and_never_the_way_out(qt_app: object) -> None:
+    """Der Fehlerdialog hebt die Handlung hervor — und im Zweifel gar nichts.
+
+    Er entsteht nicht wie die anderen aus einem Konstruktor, sondern in
+    :func:`app.ui.dialogs.show_error` aus den Vorschlägen einer Ausnahme; die
+    Liste oben kann ihn deshalb nicht bauen, und genau darum stand er in der
+    ersten B22-Runde nicht darin (Befund D3).
+
+    **Welcher Knopf der Hauptknopf ist, stand längst im Datenmodell:**
+    ``Action.primary`` entscheidet über die ``AcceptRole``. Es fehlte nur das
+    letzte Glied — ohne ``make_primary`` bekam der Knopf Qts Akzentfarbe, aber
+    nicht die halbfette Schrift daneben.
+
+    Und der zweite Fall ist der, den man übersieht: Hat das Fenster für
+    **keinen** Vorschlag einen Handler, bleibt nur „Abbrechen" übrig
+    (``offered_actions``) — dann macht Qt den einzigen Knopf zum Default, und
+    der Ausgang stünde im Akzent. „Schließen ist nie ein Hauptknopf" gilt auch
+    dann, wenn er der einzige ist.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QMessageBox, QPushButton
+
+    from app.core.errors import ARRANGE_ON_BED, CANCEL, CHOOSE_PRINTER, AppError
+    from app.ui import dialogs
+
+    fehler = AppError(
+        title="Probe", detail="x", suggestions=(ARRANGE_ON_BED, CHOOSE_PRINTER, CANCEL)
+    )
+
+    # **Die Boxen müssen leben, solange ihre Knöpfe gelesen werden.** Ohne
+    # diese Liste räumt Python die erste Box ab, sobald die zweite entsteht —
+    # und der Zugriff auf ihre Knöpfe endet mit „Internal C++ object already
+    # deleted". Die Python-Hülle hält das C++-Objekt, nicht umgekehrt.
+    am_leben: list[QMessageBox] = []
+
+    def gezeigt(handlers: dict[str, object]) -> list[QPushButton]:
+        """Fängt die Box ab, bevor sie modal wird, und zeigt sie unsichtbar."""
+        echt = QMessageBox.exec
+        gefangen: list[QMessageBox] = []
+        QMessageBox.exec = lambda self: (gefangen.append(self), 0)[1]  # type: ignore[method-assign]
+        try:
+            dialogs.show_error(fehler, handlers=handlers)  # type: ignore[arg-type]
+        finally:
+            QMessageBox.exec = echt  # type: ignore[method-assign]
+        assert gefangen, "show_error hat keine Box gebaut"
+        box = gefangen[0]
+        am_leben.append(box)
+        box.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        box.show()
+        qt_app.processEvents()  # type: ignore[attr-defined]
+        return box.findChildren(QPushButton)
+
+    mit = gezeigt({"arrange_on_bed": lambda _e: None, "choose_printer": lambda _e: None})
+    akzent = [knopf for knopf in mit if knopf.isDefault()]
+    assert len(akzent) == 1, f"nicht genau ein Hauptknopf: {[k.text() for k in akzent]}"
+    assert "anordnen" in akzent[0].text(), (
+        f"der Akzent sitzt auf {akzent[0].text()!r}, gemeint war die primäre Handlung"
+    )
+    assert akzent[0].font().weight() >= QFont.Weight.DemiBold, (
+        "der Hauptknopf trägt die Akzentfarbe ohne die halbfette Schrift — "
+        "Farbe allein ist keine zweite Kodierung (Regel 18)"
+    )
+
+    ohne = gezeigt({})
+    assert ohne, "auch ohne Handler steht ein Knopf da"
+    assert not [knopf for knopf in ohne if knopf.isDefault()], (
+        f"{ohne[0].text()!r} trägt den Akzent, obwohl es der einzige Ausgang ist"
     )

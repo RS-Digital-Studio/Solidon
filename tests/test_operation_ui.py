@@ -25,6 +25,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QLabel, QMenu, QWidget
 
 from app.core import bootstrap
@@ -2314,3 +2315,58 @@ def test_a_number_field_never_shrinks_below_its_value(window: MainWindow) -> Non
 
     assert dialog._editors, "ohne Felder prüft das hier nichts"
     assert not eng, f"abgeschnittene Werte: {eng}"
+
+
+def test_the_sketch_use_dialog_locks_its_button_until_something_is_chosen(
+    qt_app: QApplication,
+) -> None:
+    """„Weiter" ohne Auswahl führte nirgendwohin (Befund D5).
+
+    Der Dialog fragt nach dem Zeichnen, was aus der Skizze werden soll, und
+    wählt den Normalfall vor. Wer die Markierung aufhebt — ein Strg-Klick
+    genügt —, bekam gemessen ``chosen() == ""`` und einen Knopf, der trotzdem
+    in voller Akzentfarbe dastand, den Klick annahm und den Dialog schloss.
+    Ein Knopf, der eine Wirkung verspricht und keine hat, ist die stillste Art,
+    jemanden ratlos zu machen.
+
+    Geprüft wird beides: **gesperrt** und **begründet**. Ein grauer Knopf ohne
+    Erklärung wäre die zweite Sackgasse hinter der ersten (Regel 19, §2.7).
+    Und der Grund steht an allen drei Stellen — Tooltip, Statuszeile,
+    Bildschirmleser —, denn ein Hinweis, den nur das Überfahren zeigt,
+    erreicht genau die nicht, die ihn brauchen (Regel 18).
+
+    Den Akzent behält der Knopf dabei: Ein Dialog ohne akzentuierten Knopf
+    lässt suchen, und gesperrt sieht gesperrt aus (B22).
+    """
+    from app.ui.op_dialog import SketchUseDialog
+
+    dialog = SketchUseDialog()
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+
+    assert dialog._list.count() >= 3, "ohne Einträge prüft dieser Test nichts"
+    assert dialog.chosen(), "der Normalfall ist vorgewählt"
+    assert dialog._use.isEnabled(), "mit Auswahl geht es weiter"
+    assert not dialog._use.toolTip(), "ein Grund, wo es keinen gibt, ist Lärm"
+
+    dialog._list.clearSelection()
+    dialog._list.setCurrentRow(-1)
+    qt_app.processEvents()
+
+    assert not dialog.chosen(), "ohne Markierung gibt es keine Wahl"
+    assert not dialog._use.isEnabled(), (
+        "Weiter nimmt den Klick an, obwohl nichts gewählt ist — und tut nichts"
+    )
+    assert dialog._use.isDefault(), "gesperrt heißt nicht unsichtbar: der Akzent bleibt"
+    for was, hinweis in (
+        ("Tooltip", dialog._use.toolTip()),
+        ("Statuszeile", dialog._use.statusTip()),
+        ("Bildschirmleser", dialog._use.accessibleDescription()),
+    ):
+        assert len(hinweis) > 20, f"{was}: kein Grund, warum der Knopf gesperrt ist"
+
+    dialog._list.setCurrentRow(0)
+    qt_app.processEvents()
+    assert dialog._use.isEnabled(), "die Sperre löst sich wieder"
+    assert not dialog._use.toolTip(), "und der Grund verschwindet mit ihr"

@@ -3448,6 +3448,7 @@
   "Wählen Sie eine Bohrung oder eine Fläche.": "Choisissez un perçage ou une face.",
   "Wählen Sie einen Baustein — hier steht dann, was er tut.": "Choisissez un bloc — ce qu'il fait s'affiche alors ici.",
   "Wählen Sie zuerst ein Objekt im Objektbaum.": "Sélectionnez d'abord un objet dans l'arbre des objets.",
+  "Wählen Sie zuerst, was aus der Zeichnung werden soll.": "Choisissez d'abord ce que le dessin doit devenir.",
   "Wände": "Parois",
   "Wände nicht überfahren": "Ne pas traverser les parois",
   "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker wirklich noch Material legt — die Grundlage für die Mindestwandstärke.": "Des parois d'une à plusieurs largeurs d'extrusion. Montre à partir de quand l'imprimante dépose encore vraiment de la matière — la base de l'épaisseur de paroi minimale.",
