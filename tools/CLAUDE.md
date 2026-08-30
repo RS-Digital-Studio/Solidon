@@ -45,7 +45,9 @@ wirklich auf?) · `check_support.py` (kommt die Rückmeldung an?) ·
 Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
 Serverzustand lesen und Geräteplätze verwalten) ·
 `qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
-`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen)
+`list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen) ·
+`window_bench.py` (Beispiel im **echten** Fenster öffnen und die Wartezeit in
+Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
