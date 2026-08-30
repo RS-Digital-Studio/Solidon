@@ -77,6 +77,51 @@ def test_every_text_is_translated(language: str) -> None:
     assert not orphaned, f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
 
 
+#: Ein Platzhalter im Quelltext: ``{name}``, nicht ``{}`` und nicht ``{0}``.
+#: Die Oberfläche setzt sie namentlich (``.format(adresse=…)`` oder
+#: ``.replace("{slicer}", …)``), und beide Wege brauchen den Namen.
+PLACEHOLDER = re.compile(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}")
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+)
+def test_every_translation_keeps_its_placeholders(language: str) -> None:
+    """Eine Übersetzung, die einen Platzhalter verliert, ist ein Kundenfehler.
+
+    Die Prüfung darüber sagt, dass **eine** Übersetzung dasteht — nicht, dass
+    sie einsetzbar ist. Wer ``{anzahl}`` verschreibt oder wegübersetzt, dessen
+    Text zeigt beim Kunden entweder die Klammer wörtlich oder eine Zahl, die
+    fehlt; welches von beiden, entscheidet allein die Einsetzweise:
+    ``.format`` wirft bei einem **fremden** Namen und schweigt bei einem
+    **fehlenden**, ``.replace`` schweigt in beiden Fällen. Keiner der beiden
+    Wege bemerkt es also von selbst.
+
+    Der Kern führt denselben Fehler seit je als Erinnerung — Platzhalter, die
+    in ``detail`` und ``title`` stehen blieben. Für die Kataloge gab es die
+    Prüfung nicht, und bei sechs Sprachen ist das eine Klasse, die wiederkommt.
+
+    Verglichen werden **Mengen** und nicht Reihenfolgen: Eine Sprache darf ihre
+    Satzstellung ändern. Nur fehlen darf keiner, und dazukommen auch nicht — ein
+    Platzhalter, den die Quelle nicht kennt, wird nie gefüllt und steht als
+    Klammer da.
+    """
+    catalog = read_catalog(language)
+    assert catalog, f"{language}: leerer Katalog — sonst prüft dieser Test nichts"
+
+    with_placeholders = [key for key in catalog if PLACEHOLDER.search(key)]
+    assert with_placeholders, "keine Texte mit Platzhaltern — Muster prüfen"
+
+    broken = []
+    for key in sorted(with_placeholders):
+        wanted = set(PLACEHOLDER.findall(key))
+        found = set(PLACEHOLDER.findall(str(catalog[key])))
+        if wanted != found:
+            broken.append(f"  soll {sorted(wanted)} ist {sorted(found)}\n    {key}")
+
+    assert not broken, f"{language}: {len(broken)} mit falschen Platzhaltern\n" + "\n".join(broken)
+
+
 def test_a_broken_catalog_file_does_not_end_the_start(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
