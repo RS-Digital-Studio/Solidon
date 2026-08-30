@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -966,6 +967,45 @@ def test_the_promise_is_read_from_both_name_fields() -> None:
 
 
 # --- Läuft die Automatik überhaupt? (tools/check_env.py) -------------------------------
+
+
+def test_every_hook_is_executable_in_the_repository() -> None:
+    """Ein Hook ohne Ausführungsrecht ist ein Hook, den niemand ruft.
+
+    Die zweite Hälfte der Zusicherung aus ``.claude/rules/tests.md``: Dort
+    steht seit dem 23.08.2026, zu einer Automatik gehöre die Prüfung, dass
+    ``core.hooksPath`` auf ``.githooks`` zeigt **und jede Datei darin
+    ausführbar ist**. Geprüft wurde bis heute nur das Erste.
+
+    Gemessen am 30.08.2026 stand ``post-commit`` mit Modus ``100644`` im
+    Repository. Auf Windows fällt das nicht auf — Git Bash führt ein Skript
+    mit Shebang trotzdem aus. Auf Linux und macOS läuft es nicht, und zwar
+    **stumm**: Git meldet einen nicht ausführbaren Hook nicht, es überspringt
+    ihn. Genau die Sorte Automatik, deren Ausbleiben niemandem auffällt.
+
+    Gefragt wird der Modus in **HEAD** und nicht der auf der Platte: Ein
+    frischer Klon bekommt sein Ausführungsrecht aus dem Commit, und nur was
+    dort steht, reist mit. Auch nicht der Index — der ist im geteilten
+    Arbeitsbaum eine lokale Zwischenstufe, die altern kann, während HEAD für
+    alle dasselbe sagt.
+    """
+    wurzel = Path(__file__).parent.parent
+    zeilen = subprocess.run(
+        ["git", "ls-tree", "-r", "HEAD", ".githooks/"],
+        cwd=wurzel,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert len(zeilen) >= 2, f"nur {len(zeilen)} Hooks gefunden — falscher Pfad oder leerer Ordner?"
+
+    stumm = [zeile.split("\t", 1)[1] for zeile in zeilen if not zeile.startswith("100755")]
+    assert not stumm, (
+        f"Diese Hooks sind im Repository nicht ausführbar: {stumm}. "
+        "Auf Linux und macOS überspringt Git sie wortlos. "
+        "Zu beheben mit: git update-index --chmod=+x <pfad>"
+    )
 
 
 def test_the_hook_check_notices_when_git_never_looks_at_them(

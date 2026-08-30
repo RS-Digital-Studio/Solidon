@@ -287,6 +287,17 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   anderen zweien nicht existiert. Der Hook holt und rebasiert **nicht** — ist
   die Gegenstelle weiter, scheitert er und sagt, was zu tun ist.
   `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab.
+- **Vor jedem Commit an `app/` oder `tools/` laufen die zwei
+  Sprachprüfungen.** `.githooks/pre-commit` fährt `test_language_rules` und
+  `test_translations` — rund zehn Sekunden — und bricht ab, wenn eine Datei
+  **aus diesem Commit** darin genannt ist. Der Anlass: Am 30.08.2026 ging
+  dreimal derselbe Fehler nach origin, weil er im eigenen Diff unsichtbar ist
+  — ein fehlender Katalogeintrag steht in fünf Dateien, die man gerade *nicht*
+  angefasst hat. Liegt der Befund in **fremder** Arbeit im geteilten Baum,
+  lässt er durch und sagt es; `SOLIDON_KEIN_TOR=1` schaltet ihn ganz ab.
+  Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
+  meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,
+  dass jeder Hook im Repository ausführbar ist.
 - **Bei zwei Sitzungen im selben Arbeitsbaum**: vorher sagen, welche Dateien
   man anfasst, und mit privatem Index committen (`GIT_INDEX_FILE`,
   `git commit -o -- <pfade>`). Sonst nimmt der eigene Commit fremde Arbeit

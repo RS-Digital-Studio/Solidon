@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Vor jedem Commit, der app/ oder tools/ berührt: die zwei Sprachprüfungen.
+#
+# Warum gerade diese zwei und warum als Hook: Am 30.08.2026 ist dreimal
+# dieselbe Sache schiefgegangen — einmal mittags, einmal abends, einmal in
+# einer dritten Sitzung. Jedes Mal ging ein neuer `tr()`-Text oder ein
+# deutscher Bezeichner nach origin, jedes Mal stand das Tor danach für alle
+# rot, und jedes Mal war der Grund derselbe: **Der Fehler ist im eigenen Diff
+# unsichtbar.** Ein fehlender Katalogeintrag steht in fünf Dateien, die man
+# gerade *nicht* angefasst hat; die angesagte Zeilenzahl je Datei kann ihn
+# also nicht fangen. Ein Reflex, der dreimal an einem Tag versagt, gehört ins
+# Werkzeug und nicht in drei Köpfe.
+#
+# Zusammen kosten die beiden Läufe rund zehn Sekunden. Ein fremder Torlauf,
+# der an einer roten Sprachprüfung stirbt, kostet eine halbe Stunde.
+#
+# **Was dieser Hook ausdrücklich nicht tut: fremde Arbeit anrechnen.** An
+# diesem Projekt arbeiten bis zu fünf Sitzungen im selben Arbeitsbaum. Die
+# Tests laufen gegen den Baum und sehen deshalb auch, was andere gerade
+# ungestaged liegen haben. Ein Hook, der darauf blockiert, hielte jemanden von
+# seinem eigenen, sauberen Commit ab — und wäre nach dem zweiten Mal
+# dauerhaft abgeschaltet. Er prüft deshalb bei jedem Befund, ob die
+# betroffene Datei **in diesem Commit** steht, und bricht nur dann ab.
+
+set -u
+
+if [ "${SOLIDON_KEIN_TOR:-}" = "1" ]; then
+  echo "pre-commit: SOLIDON_KEIN_TOR=1, keine Sprachprüfung." >&2
+  exit 0
+fi
+
+# Was dieser Commit mitnimmt. `--cached` und nicht der Arbeitsbaum: Im
+# geteilten Baum ist genau das der Unterschied zwischen meiner Arbeit und der
+# aller anderen.
+gestaged=$(git diff --cached --name-only --diff-filter=ACMR)
+[ -n "$gestaged" ] || exit 0
+
+# Nur wenn ausgelieferter Code betroffen ist. Ein Commit an ROADMAP.md,
+# konzepte/ oder tests/ kann keinen deutschen Bezeichner in app/ einführen und
+# keinen Katalogtext schuldig bleiben.
+if ! printf '%s\n' "$gestaged" | grep -qE '^(app|tools)/.*\.py$'; then
+  exit 0
+fi
+
+python=".venv/Scripts/python.exe"
+[ -x "$python" ] || python=".venv/bin/python"
+[ -x "$python" ] || {
+  echo "pre-commit: keine .venv gefunden, keine Sprachprüfung." >&2
+  exit 0
+}
+
+protokoll=$(mktemp)
+trap 'rm -f "$protokoll"' EXIT
+
+echo "pre-commit: Sprachprüfungen …" >&2
+"$python" -m pytest tests/test_language_rules.py tests/test_translations.py \
+  -q --no-header -p no:randomly > "$protokoll" 2>&1
+code=$?
+
+if [ "$code" -eq 0 ]; then
+  echo "pre-commit: Bezeichner und Kataloge sind in Ordnung." >&2
+  exit 0
+fi
+
+# Ab hier ist etwas rot. Die Frage ist nur noch, ob es zu diesem Commit
+# gehört. Gesucht wird nach Dateinamen in der Ausgabe — `test_language_rules`
+# nennt sie im Parameter (`[main_window.py]`) und in der Meldung selbst.
+echo "" >&2
+echo "pre-commit: die Sprachprüfung ist rot. Ausgabe:" >&2
+grep -E "^(E |FAILED)" "$protokoll" | head -20 >&2
+echo "" >&2
+
+# **Gesucht wird nur in den Fehlerzeilen, nicht im ganzen Protokoll.** Der
+# erste Anlauf tat Letzteres und brach bei einem sauberen Commit ab: pytest
+# listet jede parametrisierte Datei, auch die grünen, und `loading.py` stand
+# dort als bestandener Test. Der Hook meldete sie als Verursacherin, während
+# der echte Fehler in einer fremden, ungestagten Datei lag — genau der Fall,
+# für den die Unterscheidung überhaupt gebaut ist.
+#
+# `grep -a`, weil pytest Steuerzeichen ausgibt: Ohne das meldet grep „Binary
+# file matches" und beantwortet eine andere Frage als die gestellte.
+schuld=$(grep -a -E "^(E |FAILED)" "$protokoll" || true)
+
+meine=""
+for pfad in $gestaged; do
+  name=$(basename "$pfad")
+  if printf '%s' "$schuld" | grep -aqF "$name"; then
+    meine="$meine $name"
+  fi
+done
+
+# **Die Übersetzungsprüfung nennt den fehlenden Text, nicht seine Datei.**
+# Der Namensvergleich oben kann sie deshalb nie finden — im ersten Anlauf ging
+# genau der Fall durch, für den dieser Hook gebaut wurde.
+#
+# Gefragt wird deshalb der Diff und nicht die Meldung: Ein fehlender
+# Katalogeintrag entsteht dadurch, dass jemand einen `tr()`-Text hinzufügt.
+# Tut dieser Commit das, während die Übersetzungsprüfung rot ist, gehört der
+# Verdacht ihm. Das ist absichtlich die vorsichtige Richtung — einmal zu viel
+# anhalten kostet einen Blick, einmal zu wenig kostet einen fremden Torlauf.
+#
+# Und ausdrücklich **ohne Umlaut im Suchmuster**: Der erste Anlauf grepte nach
+# „ohne Übersetzung" und fand es nie, weil die Locale der Hook-Shell eine
+# andere ist als die der pytest-Ausgabe. Ein Muster, das an der Kodierung
+# scheitert, meldet dasselbe wie eines, das nichts findet.
+if grep -aq "test_every_text_is_translated" "$protokoll"; then
+  if git diff --cached -U0 -- 'app/*.py' | grep -aqE '^\+.*(tr\(|_\()'; then
+    meine="$meine [dieser Commit legt tr()-Texte an]"
+  fi
+fi
+
+if [ -n "$meine" ]; then
+  echo "pre-commit: ABGEBROCHEN — betroffen sind Dateien aus diesem Commit:" >&2
+  echo "pre-commit:  $meine" >&2
+  echo "pre-commit: Behebe es und committe erneut." >&2
+  exit 1
+fi
+
+# Kein gestagter Dateiname taucht in der Ausgabe auf. Das ist der häufige Fall
+# im geteilten Baum: Eine andere Sitzung hat etwas liegen. Durchlassen — aber
+# nicht schweigend, denn wer es liest, kann es weitergeben.
+echo "pre-commit: keine Datei dieses Commits ist darin genannt — das sieht" >&2
+echo "pre-commit: nach fremder Arbeit im geteilten Baum aus. Der Commit läuft" >&2
+echo "pre-commit: durch; sag der Sitzung Bescheid, der es gehört." >&2
+exit 0
