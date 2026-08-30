@@ -34,6 +34,20 @@ kennt „Sollwert aus dem Prüfling" und „ein Verbotstest über eine leere Men
 Beide entstehen **beim Schreiben** des Tests. Dieser hier entsteht später, an
 einer ganz anderen Stelle, durch eine Änderung, die für sich richtig ist.
 
+**Und es gibt drei Gestalten davon, nicht eine.** 72 hat in derselben Nacht
+zwei weitere gefunden, und zusammen ergeben sie das Muster:
+
+| Was geprüft wurde | statt |
+|---|---|
+| **Anwesenheit** — „ist der Katalogeintrag leer?" | ob er übersetzt ist. Ein *fehlender* Eintrag ist nicht leer: `str()` gibt die deutsche Quelle zurück. 21 Sätze standen in fünf Sprachen auf Deutsch. |
+| **Wortlaut** — zwei Sätze auf Gleichheit | ob zwei Urteile übereinstimmen. Nach der Umstellung waren es zwei Lesevorgänge derselben Datei. |
+| **Form** — „ist die Datei formal gültig?" | ob sie brauchbar ist. Fünf Testkorpusse in drei Dateien waren formal sauber und beim Empfänger nicht ladbar — jahrelang grün. |
+
+Der dritte ist der schwerste, weil er am vollständigsten aussieht: Ein Korpus
+mit 24 Fällen, davon 5 „gute", wirkt gründlich. Dass die fünf guten nie
+gebraucht werden konnten, fällt erst auf, wenn jemand sie wirklich benutzt —
+hier ein Ende-zu-Ende-Lauf, der die Datei nach dem Hochladen wieder öffnete.
+
 **How to apply:**
 
 * **Vor einer Umstellung fragen, was der Test danach noch vergleicht** — nicht
