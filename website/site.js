@@ -323,6 +323,118 @@
  *
  * Der Kasten kommt aus tools/make_download.py; hier steht nur das Aufmachen.
  */
+/* Das Teil zum Drehen — 36 Bilder einer Umdrehung an einer Ziehgeste.
+ *
+ * **Warum keine 3D-Bibliothek.** Ein echtes Modell im Browser bräuchte
+ * three.js oder model-viewer, also drei- bis sechshundert Kilobyte fremden
+ * Code auf einer Seite, die heute genau ein eigenes Skript lädt. Eine
+ * Bilderreihe sieht für den Betrachter genauso aus — er dreht ein Teil und
+ * sieht es von allen Seiten —, kostet 0,2 MB und braucht diese Zeilen hier.
+ *
+ * **Warum überhaupt drehen.** Ein Loop läuft, eine Reihe gehorcht: Wer selbst
+ * dreht, entscheidet, wo er hinsieht — an der Kabeldurchführung, an den
+ * Rastnasen, an der Wandstärke. Das ist der Unterschied zwischen Zusehen und
+ * Anfassen, und er ist der Grund, warum dieser Block existiert.
+ *
+ * **Ohne Skript bleibt das erste Bild stehen.** Es ist ein gewöhnliches
+ * `<img>` im Markup; wer das Skript blockt, sieht das Teil, nur unbeweglich.
+ * Dasselbe gilt für `prefers-reduced-motion`: Dort wird nichts vorgeladen und
+ * nichts getauscht — eine Bewegung, die der Besucher abbestellt hat, gibt es
+ * nicht, auch nicht auf seine Geste hin.
+ */
+(() => {
+  "use strict";
+
+  const stage = document.querySelector(".turntable");
+  if (!stage) return;
+  const view = stage.querySelector("img");
+  const pattern = stage.dataset.src;
+  const count = Number(stage.dataset.frames || 0);
+  if (!view || !pattern || count < 2) return;
+
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return;
+  }
+
+  const source = (index) => pattern.replace("{n}", String(index).padStart(2, "0"));
+
+  /* Vorgeladen wird erst beim ersten Anfassen, nicht beim Laden der Seite.
+     Sechsunddreißig Bilder sind zusammen so groß wie ein mittleres Foto —
+     aber wer die Seite nur überfliegt, soll sie nicht bezahlen. */
+  let ready = false;
+  const preload = () => {
+    if (ready) return;
+    ready = true;
+    for (let index = 0; index < count; index += 1) {
+      const image = new Image();
+      image.src = source(index);
+    }
+  };
+
+  let frame = 0;
+  let dragging = false;
+  let last = 0;
+  let carry = 0;
+
+  const show = (index) => {
+    const wrapped = ((index % count) + count) % count;
+    if (wrapped === frame) return;
+    frame = wrapped;
+    view.src = source(frame);
+  };
+
+  /* Wie weit man ziehen muss, damit sich das Teil um ein Bild dreht.
+     Zwölf Bildpunkte: eine ganze Umdrehung passt damit in eine Bewegung von
+     gut vierhundert Punkten, und das ist ungefähr die Breite, die eine Hand
+     auf einem Trackpad bequem zurücklegt. */
+  const STEP = 12;
+
+  const begin = (x) => {
+    dragging = true;
+    last = x;
+    carry = 0;
+    preload();
+    stage.classList.add("is-turning");
+  };
+
+  const move = (x) => {
+    if (!dragging) return;
+    carry += x - last;
+    last = x;
+    const steps = Math.trunc(carry / STEP);
+    if (steps === 0) return;
+    carry -= steps * STEP;
+    show(frame - steps);
+  };
+
+  const end = () => {
+    dragging = false;
+    stage.classList.remove("is-turning");
+  };
+
+  stage.addEventListener("pointerdown", (event) => {
+    begin(event.clientX);
+    /* Der Zeiger gehört ab jetzt dieser Fläche: Ohne das endet die Drehung,
+       sobald die Maus den Rand überquert — und genau das tut sie beim
+       Ziehen. */
+    if (stage.setPointerCapture) stage.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  stage.addEventListener("pointermove", (event) => move(event.clientX));
+  stage.addEventListener("pointerup", end);
+  stage.addEventListener("pointercancel", end);
+
+  /* Und für die Tastatur, weil eine Geste, die nur die Maus kennt, die
+     Hälfte der Besucher ausschließt. Die Fläche ist im Markup fokussierbar
+     (`tabindex="0"`), hier kommt nur die Bewegung dazu. */
+  stage.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    preload();
+    show(frame + (event.key === "ArrowRight" ? 1 : -1));
+    event.preventDefault();
+  });
+})();
+
 (() => {
   "use strict";
 
