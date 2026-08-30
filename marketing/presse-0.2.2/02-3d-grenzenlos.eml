@@ -27,8 +27,8 @@ Für Heimanwender sind in 0.2.2 außerdem besonders relevant:
 * Druckwerte je realer Filamentspule bis in 3MF und externen Slicer,
 * ein AppImage zusätzlich zu Flatpak, Windows- und macOS-Paketen.
 
-0.2.2 umfasst 81 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
-0.1-Demo dokumentiert der Changelog insgesamt 261. Solidon bleibt ohne Konto
+0.2.2 umfasst 83 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
+0.1-Demo dokumentiert der Changelog insgesamt 263. Solidon bleibt ohne Konto
 und Cloud-Ablage nutzbar und ist kein Slicer, sondern bereitet Modelle für den
 vorhandenen Slicer vor.
 

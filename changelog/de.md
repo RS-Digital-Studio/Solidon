@@ -130,6 +130,8 @@ Nutzen da und sonst nichts.
 - Die Aufklapplisten der Leisten unter der Ansicht bleiben offen, bis Sie wählen. Vorher konnte sich eine Liste sofort wieder schließen, weil sie sich unter dem Zeiger wegschob.
 - Das Dickenfeld der Schnittleiste wartet, bis Sie zu Ende getippt haben. Vorher schnitt es bei jedem Tastendruck — erst mit 3 mm und dann mit 30.
 - Der Prüfbericht wählt nach dem Öffnen den obersten Befund mit einer Handlung vor. „Auf das Bett setzen“ steht damit sofort als Knopf da, ohne dass man die Listenzeile erst anklicken muss.
+- Der Hinweis auf sehr kleine Einzelteile bietet jetzt den Knopf „Kleine Teile entfernen“ an. Vorher sagte er nur, dass nichts gelöscht wurde, und ließ Sie den Weg selbst suchen.
+- Erledigte Reparaturen beim Einlesen stehen als Hinweis im Prüfbericht, nicht mehr als Warnung. Der Bericht ging sonst bei jedem zweiten Modell gelb auf, obwohl es nichts zu tun gab.
 - Der Hinweis zur abgebrochenen Paketverwaltung nennt den Knopf bei seinem vollen Namen — in allen sechs Sprachen. „Details“ allein war in fünf davon eine kleine Suche.
 
 ### Plattformen und behobene Fehler

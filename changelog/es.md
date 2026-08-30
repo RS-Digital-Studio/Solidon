@@ -108,6 +108,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las listas desplegables de las barras bajo la vista quedan abiertas hasta que usted elige. Antes, una lista podía cerrarse al instante porque se apartaba de debajo del puntero.
 - El campo de grosor de la barra de corte espera a que termine de teclear. Antes cortaba con cada pulsación — primero con 3 mm y luego con 30.
 - Tras abrir, el informe preselecciona el primer aviso que ofrece una acción. «Colocar sobre la placa» está ahí como botón de inmediato, sin tener que pulsar antes la fila.
+- El aviso sobre piezas sueltas muy pequeñas ahora ofrece el botón «Eliminar las piezas pequeñas». Antes solo decía que no se había borrado nada y le dejaba buscar el camino a usted.
+- Las reparaciones ya realizadas al importar aparecen como nota en el informe, no como advertencia. Antes el informe se abría en amarillo en uno de cada dos modelos, sin nada que hacer.
 - El aviso sobre la gestión de paquetes cancelada nombra el botón por su nombre completo — en los seis idiomas. «Detalles» a secas era una pequeña búsqueda en cinco de ellos.
 
 ### Plataformas y correcciones

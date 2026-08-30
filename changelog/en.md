@@ -107,6 +107,8 @@ it into `website/version.json`.
 - The drop-down lists in the bars below the view stay open until you choose. Before, a list could close itself right away because it moved out from under the pointer.
 - The thickness field of the section bar waits until you finish typing. Before, it cut on every keystroke — first with 3 mm, then with 30.
 - After opening, the report preselects the topmost finding that offers an action. “Place on the bed” is there as a button right away, without first clicking the list row.
+- The notice about very small loose parts now offers the button “Remove small parts”. Before, it only said that nothing was deleted and left you to find the way yourself.
+- Repairs already done during import appear as a note in the report, no longer as a warning. The report used to open in yellow on every other model although there was nothing left to do.
 - The note about a cancelled package manager calls the button by its full name — in all six languages. “Details” alone was a small search in five of them.
 
 ### Platforms and fixes

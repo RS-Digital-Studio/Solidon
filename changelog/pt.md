@@ -107,6 +107,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As listas pendentes das barras sob a vista ficam abertas até escolher. Antes, uma lista podia fechar-se logo, porque deslizava de debaixo do ponteiro.
 - O campo de espessura da barra de corte espera até acabar de escrever. Antes cortava a cada tecla — primeiro com 3 mm e depois com 30.
 - Depois de abrir, o relatório pré-seleciona o primeiro aviso que oferece uma ação. “Pousar na mesa” fica logo ali como botão, sem ter de clicar primeiro na linha.
+- O aviso sobre peças soltas muito pequenas agora oferece o botão «Remover as peças pequenas». Antes dizia apenas que nada foi apagado e deixava que você procurasse o caminho.
+- As reparações já concluídas na importação aparecem como nota no relatório, não mais como aviso. Antes o relatório abria em amarelo num de cada dois modelos, sem nada a fazer.
 - O aviso sobre a gestão de pacotes cancelada chama o botão pelo nome completo — nas seis línguas. “Detalhes” sozinho era uma pequena procura em cinco delas.
 
 ### Plataformas e correções

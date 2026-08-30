@@ -13,8 +13,8 @@ Texte erklären den für die jeweilige Redaktion notwendigen Kontext aus sich
 heraus.
 
 „Seit 0.1“ bedeutet in den Anschreiben: Seit der ersten öffentlichen
-0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **261 ausgewählte,
-für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 81 Punkte bis
+0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **263 ausgewählte,
+für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 83 Punkte bis
 einschließlich 0.2.2. Die Zahl ist kein Commit-Zähler und wird in den Mails auch
 nicht so dargestellt.
 

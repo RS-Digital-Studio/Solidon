@@ -108,6 +108,8 @@ dans `website/version.json`.
 - Les listes déroulantes des barres sous la vue restent ouvertes jusqu'à votre choix. Avant, une liste pouvait se refermer aussitôt parce qu'elle glissait hors du pointeur.
 - Le champ d'épaisseur de la barre de coupe attend la fin de la saisie. Avant, il coupait à chaque frappe — d'abord à 3 mm, puis à 30.
 - Après l'ouverture, le rapport présélectionne le premier constat qui offre une action. « Poser sur le plateau » est là comme bouton tout de suite, sans devoir cliquer d'abord la ligne.
+- L'avis sur les très petites pièces détachées propose désormais le bouton « Supprimer les petites pièces ». Avant, il disait seulement que rien n'avait été supprimé, sans indiquer de chemin.
+- Les réparations déjà effectuées à l'import apparaissent comme note dans le rapport, non plus comme avertissement. Sinon il s'ouvrait en jaune un modèle sur deux, sans rien à faire.
 - L'avis sur le gestionnaire de paquets annulé nomme le bouton par son nom complet — dans les six langues. « Détails » tout seul était une petite recherche dans cinq d'entre elles.
 
 ### Plateformes et corrections

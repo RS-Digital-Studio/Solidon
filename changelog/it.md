@@ -107,6 +107,8 @@ scrive in `website/version.json`.
 - Le liste a discesa delle barre sotto la vista restano aperte finché non scegliete. Prima una lista poteva richiudersi subito, perché scivolava via da sotto il puntatore.
 - Il campo di spessore della barra di taglio aspetta la fine della digitazione. Prima tagliava a ogni tasto — prima con 3 mm e poi con 30.
 - Dopo l'apertura, il rapporto preseleziona il primo avviso che offre un'azione. «Posare sul piano» sta lì come pulsante da subito, senza dover prima cliccare la riga.
+- L'avviso sulle parti staccate molto piccole ora offre il pulsante «Rimuovi le parti piccole». Prima diceva solo che nulla era stato eliminato e lasciava a voi la ricerca della via.
+- Le riparazioni già eseguite all'importazione appaiono come nota nel rapporto, non più come avvertenza. Altrimenti il rapporto si apriva in giallo un modello su due, senza nulla da fare.
 - L'avviso sulla gestione pacchetti annullata chiama il pulsante col suo nome completo — in tutte e sei le lingue. «Dettagli» da solo era una piccola ricerca in cinque di esse.
 
 ### Piattaforme e correzioni
