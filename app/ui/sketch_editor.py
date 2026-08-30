@@ -5142,6 +5142,14 @@ class SketchEditorDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             ok.setText(tr("Übernehmen"))
+            # **Der Akzent stand hier per Zufall** (B22): ``QDialog`` vergibt
+            # beim ersten ``show()`` selbst einen Default, und Qt nahm den
+            # ersten Knopf mit ``autoDefault``. Dass das der richtige war, ist
+            # Glück — wer die Knopfreihenfolge ändert, verschiebt ihn
+            # stillschweigend. ``make_primary`` macht daraus eine Entscheidung
+            # und rechnet nebenbei die Breite für die halbfette Schrift, die
+            # das Stylesheet dem Hauptknopf gibt.
+            style.make_primary(ok)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
 

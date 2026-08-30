@@ -5917,3 +5917,47 @@ def test_the_redo_shortcut_sits_where_undo_sits(qt_app: QApplication) -> None:
         )
     finally:
         panel.deleteLater()
+
+
+def test_the_sketch_dialog_owns_its_primary_button(qt_app: QApplication) -> None:
+    """Der Akzent auf „Übernehmen" stand dort per Zufall (B22).
+
+    ``QDialog`` vergibt beim ersten ``show()`` selbst einen Default — Qt nimmt
+    den ersten Knopf mit ``autoDefault``, gleich wo er sitzt. Hier traf das
+    zufällig den richtigen: „Übernehmen" *ist* die Handlung dieses Fensters.
+    Genau deshalb war es ein Befund und kein Glücksfall — wer die
+    Knopfreihenfolge ändert, verschiebt den Akzent stillschweigend, und
+    niemand merkt es, weil ihn nie jemand gesetzt hat.
+
+    ``make_primary`` macht daraus eine Entscheidung. Es setzt die halbfette
+    Schrift, die das Stylesheet dem Hauptknopf ohnehin zeichnet — damit ist
+    die Bedeutung nicht mehr allein über Farbe getragen (Regel 18) — und
+    rechnet die Breite dafür.
+
+    **Was dieser Test nicht misst:** die Breite. Die Suite fährt offscreen,
+    und dort ist die Schriftmetrik synthetisch; jede Breitenaussage wäre
+    wertlos. Gemessen wurde sie unter echter Plattform mit
+    ``WA_DontShowOnScreen`` — 95 Punkte Knopf, 69 Punkte Text in beiden
+    Schnitten. Hier steht, was auch offscreen wahr ist: dass der Knopf sein
+    Gewicht trägt und es jemand gesetzt hat.
+    """
+    from PySide6.QtWidgets import QDialogButtonBox, QPushButton
+
+    from app.ui.sketch_editor import SketchEditorDialog
+
+    dialog = SketchEditorDialog()
+    try:
+        box = dialog.findChild(QDialogButtonBox)
+        assert box is not None
+        ok = box.button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None
+
+        assert ok.isDefault(), "der Hauptknopf ist gesetzt, nicht von Qt geraten"
+        assert ok.font().bold(), (
+            "das Stylesheet zeichnet den Default halbfett — ohne die Schrift am Widget "
+            "trüge er die Bedeutung allein über Farbe"
+        )
+        fett = [knopf.text() for knopf in dialog.findChildren(QPushButton) if knopf.font().bold()]
+        assert fett == [ok.text()], f"genau ein Hauptknopf je Fenster (B22), gefunden: {fett}"
+    finally:
+        dialog.deleteLater()
