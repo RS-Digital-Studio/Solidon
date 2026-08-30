@@ -205,8 +205,21 @@ Fenstertests teilen sich mit diesem hier den Code und sonst nichts Belegtes;
 geprüft am 23.08.2026 an vier Testdateien, und die Fensterzahl erklärt sie
 nicht (40 reißt konsistent, 118 nie).
 
-Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess.**
-Gemessen läuft ein Lauf mit einer einzelnen Sprache sauber durch:
+Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess** —
+eine Sprache je Aufruf. Es ist das beste verfügbare Mittel und keine Garantie:
+
+**Auch ein Ein-Sprachen-Lauf stirbt.** Am 31.08.2026 riss `make_figures.py es`
+in seinem eigenen Prozess nach **drei von neun** Bildern mit Segmentation
+fault; die übrigen sechs blieben acht Stunden alt stehen. Fünf andere Sprachen
+liefen in derselben Reihe beim ersten Anlauf sauber durch, `es` beim zweiten.
+Hier stand vorher, ein einzelsprachiger Lauf laufe „gemessen sauber durch" —
+das war die Messung eines Abends und keine Eigenschaft des Werkzeugs, dieselbe
+Falle wie bei den Zahlen darüber.
+
+**Was daraus folgt, ist keine andere Aufrufweise, sondern eine
+Wiederholung mit Prüfung:** Nach jedem Lauf die Zeitstempel zählen, und bei
+einer alten Datei denselben Aufruf noch einmal. Der Exit-Code trägt das nicht
+— die Shell meldete 139, und 139 sagt so wenig wie die 127 darüber.
 
 ```
 .venv\Scripts\python.exe tools/make_figures.py    de en

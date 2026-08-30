@@ -22,6 +22,13 @@ Segmentation fault, nach der ersten Sprache. Ein Prozess je Sprache — dieselbe
 Antwort wie bei der Testsuite. Eine Hintergrund-Hülle meldet darüber „exit
 code 0"; der Beweis ist der Bildbestand, nicht der Rückgabewert.
 
+**Und auch ein Ein-Sprachen-Lauf stirbt.** Am 31.08.2026 riss der spanische
+nach drei von neun Bildern; die übrigen sechs blieben acht Stunden alt stehen,
+und die Shell meldete 139. Fünf andere Sprachen liefen in derselben Reihe beim
+ersten Anlauf durch. Ein Prozess je Sprache senkt die Wahrscheinlichkeit, er
+beseitigt sie nicht — **nach jedem Lauf die Zeitstempel zählen und bei einer
+alten Datei denselben Aufruf wiederholen.**
+
 Der Ablauf steht im Skill `/erzeugen`, dort auch die Falle mit den fehlenden
 Schriften.
 
