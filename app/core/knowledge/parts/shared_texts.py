@@ -89,7 +89,8 @@ MESSAGES: dict[str, TranslatableText] = {
     "part_file_missing": _("Die Datei zu diesem Baustein fehlt auf dem Server."),
     # Like
     "like_bad_browser_key": _(
-        "Diese Browser-Kennung kann die Börse nicht verwenden. Laden Sie die Seite neu."
+        "Diese Browser-Kennung kann die Börse nicht verwenden. Laden Sie die Seite "
+        "neu — sie legt dann eine neue an."
     ),
     # Kommentieren
     "comment_empty": _("Der Kommentar ist leer."),
