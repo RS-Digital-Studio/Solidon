@@ -212,3 +212,11 @@ sieben) war zum Zeitpunkt der Meldung bereits behoben (`258999b6`).
    zerfallen ist.
 3. **Die Menüleiste** — jede Kategoriebenennung wird vom eigenen Stylesheet
    verschluckt.
+
+**Dritte Methodennotiz (15, 30.08.2026):** Ein fehlendes
+`accessibleDescription` ist kein Befund, solange ein Tooltip steht — Qt
+reicht ihn von sich aus als Description an den Bildschirmleser durch.
+Gemessen wird am `QAccessible`-Interface, nicht am Attribut; sonst fassen
+zwei Sitzungen unabhängig dieselben 36 heilen Stellen an (so knapp am
+30.08. geschehen — die Messung am Interface verhinderte 36 redundante
+Änderungen).
