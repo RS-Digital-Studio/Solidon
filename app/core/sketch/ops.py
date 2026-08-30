@@ -249,6 +249,11 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     exakten Körper aus und gibt ein Netz zurück, und die drei Taschen danach
     liefen ins Leere. Der Satz nennt jetzt den Ausweg — ``shell_exact`` hätte
     den Körper exakt gelassen.
+
+    **Für die Tasche gilt dieser Fall seit dem 30.08.2026 nicht mehr:**
+    ``sketch_pocket`` schneidet auch in ein Netz und ruft diese Funktion nicht
+    mehr. Was hier bleibt, sind die Operationen, die wirklich einzeln
+    bearbeitbare Flächen brauchen — ``push_face`` und seinesgleichen.
     """
     require()
     source = ctx.inputs[0]

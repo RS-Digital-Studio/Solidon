@@ -296,7 +296,13 @@ def test_a_pocket_on_a_mesh_cuts_instead_of_refusing() -> None:
 
     * Der Fall aus ``puppenhaus_fertig``: ``hollow_object`` höhlt den exakten
       Körper aus und gibt ein Netz zurück, und die drei Taschen danach liefen
-      ins Leere. Sie schneiden jetzt.
+      ins Leere. **Nachgemessen am echten Projekt, und die erste Fassung dieses
+      Satzes war zu großzügig:** Die heutige Datei hat die Reihenfolge längst
+      getauscht (Taschen vor dem Aushöhlen) und schnitt deshalb schon vorher
+      exakt. Der Beleg ist die Fassung daneben, ``…p3d.vor-reparatur``, die
+      genau die beschriebene Reihenfolge trägt: Sie läuft jetzt vollständig
+      durch — alle sechs Schritte, kein ``stopped_at`` —, und die drei Taschen
+      tragen 11 778,4 mm³ aus dem ausgehöhlten Netz ab.
     * Und die Absage selbst, die dem Kunden eine Eigenschaft der Bauart als
       seinen Fehler auslegte.
 

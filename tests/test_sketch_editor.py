@@ -4631,25 +4631,30 @@ def test_the_viewport_toolbar_drops_its_empty_canvas_row(qt_app: QApplication) -
 
 
 @pytest.mark.parametrize(
-    ("selected", "kind", "message"),
+    ("aufbau", "message"),
     [
         # Ohne Ergebnis gibt es keine Szene — und damit auch nichts, worunter
         # der Umriss liegen könnte. Der Satz nennt seit dem Fusion-Abgleich
         # nicht mehr die Auswahl, sondern das, was fehlt.
-        ((), "brep", "Körper in der Szene"),
-        (("body",), "mesh", "festen Dreiecken"),
+        ("keine szene", "Körper in der Szene"),
+        # **Der zweite Fall hieß bis zum 30.08.2026 „festen Dreiecken"** und
+        # stellte einen Körper mit ``kind="mesh"``: Ein Netz war kein Ziel. Das
+        # gilt nicht mehr — ``sketch_pocket`` schneidet auch in ein Netz. Der
+        # Ablehnungsgrund, der geblieben ist, ist der örtliche: Die Zeichnung
+        # liegt neben dem Teil. Damit prüft dieser Test weiter **beide** Wege,
+        # auf denen ein Zug abgelehnt werden kann, und nicht nur noch einen.
+        ("körper daneben", "kein bearbeitbarer Körper"),
     ],
 )
 def test_a_rejected_inward_pull_clears_its_preview(
     qt_app: QApplication,
-    selected: tuple[str, ...],
-    kind: str,
+    aufbau: str,
     message: str,
 ) -> None:
-    """Fehlende oder ungeeignete Körper lassen keinen alten Drahtkäfig stehen."""
+    """Fehlende oder unerreichbare Körper lassen keinen alten Drahtkäfig stehen."""
     from types import SimpleNamespace
 
-    from app.core.types import Scene
+    from app.core.types import BoundingBox, Scene
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -4659,11 +4664,28 @@ def test_a_rejected_inward_pull_clears_its_preview(
     said: list[str] = []
     try:
         window.start_sketch("")
-        window.object_tree.selected_objects = lambda: selected
-        if selected:
+        window.object_tree.selected_objects = lambda: ()
+        if aufbau == "körper daneben":
+            # Ein echtes Teil, aber fünfhundert Millimeter weiter — die Suche
+            # unter der Zeichnung findet es nicht, und genau das soll sie.
             window.session.last_result = SimpleNamespace(
-                scene=Scene(objects={"body": SimpleNamespace(kind=kind)})
+                scene=Scene(
+                    objects={
+                        "body": SimpleNamespace(
+                            kind="mesh",
+                            mesh=SimpleNamespace(
+                                bounds=BoundingBox(
+                                    minimum=(500.0, 500.0, 0.0), maximum=(510.0, 510.0, 5.0)
+                                )
+                            ),
+                        )
+                    }
+                )
             )
+            panel = window._sketch_panel
+            assert panel is not None
+            panel.canvas.add_element("line", ((0.0, 0.0), (6.0, 0.0)))
+            panel.canvas.add_element("line", ((6.0, 0.0), (6.0, 6.0)))
         window.viewport.cancel_sketch_pull = lambda: cleaned.append(True)
         window.announce = said.append
 
@@ -5524,6 +5546,74 @@ def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
             "festen Dreiecken“, und damit war der häufigste Fall ausgeschlossen"
         )
         assert window._sketch_cut_available(), "der Griff bietet das Abtragen also an"
+    finally:
+        window.wait_for_workers()
+        window.deleteLater()
+
+
+def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication) -> None:
+    """Und der Zug selbst geht durch — nicht nur der Griff wäre bereit.
+
+    Zwischen „das Abtragen ist freigegeben" und „das Abtragen läuft" liegt eine
+    zweite Abfrage: ``_on_sketch_pulled`` fragt ``_pocket_target_problem``
+    **noch einmal**, und bei einer Antwort bricht es den Zug ab
+    (``cancel_sketch_pull``) und sagt den Satz an. Freigegeben bei A und
+    ausgeführt bei B — dazwischen war der Zug schon einmal folgenlos.
+
+    Geprüft wird bis unmittelbar vor den Dialog: Was ``finish_sketch``
+    übergeben bekommt, ist die ganze Entscheidung — welche Operation, welche
+    Tiefe. Der Dialog selbst wäre modal und hielte den Lauf an.
+    """
+    from app.ui.main_window import POCKET_FIELD, POCKET_OP, MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+        window.session.wait_for_idle()
+        result = window.session.evaluate_now()
+        entry = next(iter(result.scene.objects.values()))
+
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        low, high = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+        mid = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
+        panel.canvas.add_element(
+            "line", ((mid[0] - 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] - 3.0))
+        )
+        panel.canvas.add_element(
+            "line", ((mid[0] + 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] + 3.0))
+        )
+        window.object_tree.selected_objects = lambda: ()
+
+        gesagt: list[str] = []
+        uebergeben: list[tuple[bool, dict[str, float]]] = []
+        gewaehlt: list[str] = []
+        window.announce = lambda text, *rest, **kw: gesagt.append(str(text))
+        window.finish_sketch = lambda keep=True, given=None, **kw: uebergeben.append(
+            (keep, dict(given or {}))
+        )
+        window.object_tree.select_object = lambda object_id: gewaehlt.append(object_id)
+
+        window._on_sketch_pulled(-4.0)
+
+        assert not gesagt, f"der Zug wurde mit einem Satz abgebrochen: {gesagt}"
+        assert uebergeben, "und zwar ohne dass die Operation überhaupt angestoßen wurde"
+        keep, given = uebergeben[0]
+        assert keep, "die Zeichnung reist mit — sie ist der Umriss der Tasche"
+        assert given.get(POCKET_FIELD) == pytest.approx(4.0), "vier Millimeter nach unten"
+        assert window._sketch_target == POCKET_OP, "nach unten gezogen heißt abtragen"
+        # **Gefunden ist nicht gewählt** — und diese Zeile steht hier, weil die
+        # Gegenprobe sie verlangt hat: Ohne sie blieb der Test grün, als der
+        # Griff den Körper zwar fand, ihn aber nicht mehr in den Objektbaum
+        # setzte. ``run_operation`` nimmt seine Eingänge von dort; ein Körper,
+        # den nur die Suche kennt, käme nie an, und die Operation liefe ohne
+        # Eingang. Genau davor warnt der Kommentar an der Stelle selbst.
+        assert gewaehlt == [entry.id], (
+            f"der gefundene Körper muss im Objektbaum ankommen, gewählt wurde {gewaehlt}"
+        )
     finally:
         window.wait_for_workers()
         window.deleteLater()
