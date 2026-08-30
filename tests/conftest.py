@@ -249,8 +249,21 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese
     # Zeile fragt ein solcher Test die Attrappe darüber und ist grün, ohne
     # etwas geprüft zu haben — die Attrappe protokolliert zum Beispiel nie.
+    def only_what_was_set_plural(tool_id: str, names: object) -> object:
+        single = only_what_was_set(tool_id, names)
+        return () if single is None else (single,)
+
     monkeypatch.setattr(discover, "unpatched_find_program", discover.find_program, raising=False)
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
+    # **Die Mehrzahl braucht denselben Riegel**, und ohne ihn war er weg: Seit
+    # der Slicer-Auswahl fragt der Dialog :func:`discover.find_programs`, und
+    # die suchte an der Attrappe vorbei auf der echten Maschine. Ein
+    # Entwicklerrechner mit drei Slicern sah damit etwas anderes als der
+    # Bauserver mit keinem — genau die Abhängigkeit, die diese Fixture
+    # ausschließt (§38). Aufgefallen an zwei Tests, die ohne Fund rechneten
+    # und plötzlich ElegooSlicer vorfanden (30.08.2026).
+    monkeypatch.setattr(discover, "unpatched_find_programs", discover.find_programs, raising=False)
+    monkeypatch.setattr(discover, "find_programs", only_what_was_set_plural)
     discover.forget_cache()
 
 

@@ -1390,7 +1390,11 @@ def test_switching_the_slicer_empties_the_profile_choice(
 
     engine = tmp_path / "CuraEngine.exe"
     engine.write_text("")
-    monkeypatch.setattr(discover, "find_program", lambda *_args, **_kwargs: engine)
+    # `recheck_slicer` fragt die **Mehrzahl** — seit der Slicer-Auswahl geht
+    # jeder Weg zum Slicer über `_pick_slicer`. Ein Patch auf `find_program`
+    # ging hier ins Leere und war nur deshalb grün, weil die ungepatchte Suche
+    # auf dieser Maschine ohne Profilbestand endete (30.08.2026).
+    monkeypatch.setattr(discover, "find_programs", lambda *_args, **_kwargs: (engine,))
 
     dialog.recheck_slicer()
 
