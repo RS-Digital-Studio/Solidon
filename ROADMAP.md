@@ -115,7 +115,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Kommt xxhash im gebauten Paket an? | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | den nächsten CI-Bau — die Diagnose ist durch (kein Hänger am frischen Prozess; jeder Kunde hashte 50-mal zu langsam, behoben mit `dedd2b8d`), aber die Kundenwirkung belegt erst das Paket selbst |
-| Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
+| Die Chat-Grundlast frisst drei Viertel des Fensters vor dem ersten Objekt | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | ein Paket „kompakte Werkzeugschemata" — die Messreihe ist durch (74 % Grundlast, ~600 Token je Zug, ~14–15 Züge Tragweite), die Stellschraube ist benannt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12637,10 +12637,20 @@ ehrliche Messweg ist `prompt_eval_count` aus der Ollama-Antwort, nicht eine
 eigene Token-Schätzung (dieselbe Falle wie jede Zählung, die der Prüfling
 selbst liefert).
 
-- [ ] Eine Messreihe über mehrere Objekte und Züge mit `prompt_eval_count`:
-      Wächst die Belegung je Objekt linear, ist bei drei bis vier Objekten
-      Schluss — dann braucht der Steckbrief eine Kürzungsstrategie, bevor
-      ein Kunde sie als „der Chat vergisst alles" erlebt.
+- [x] **Messreihe gefahren** (72, 30.08.2026 — qwen3:14b, num_ctx
+      32 768, echter AgentSession-Weg, `prompt_eval_count` vom Backend):
+      Grundlast **24 120 Token = 74 % VOR dem ersten Objekt**; Zug 1:
+      24 475 (75 %), Zug 5 bei 7 Ops: 26 870 (82 %) — Wachstum ~600
+      Token je Zug. „Nach drei bis vier Objekten Schluss" ist damit
+      widerlegt: Das Fenster trägt ~14–15 Züge, und die Stellschraube
+      ist die **Grundlast** (Werkzeugschemata, Systemprompt,
+      Regelsammlung), nicht der Steckbrief.
+- [ ] **Die Grundlast senken** — kompakte Werkzeugschemata zuerst
+      (Empfehlung der Freigabe, 30.08.2026: Grundlast vor
+      Kürzungsstrategie, denn sie wirkt auf jeden Zug ab dem ersten);
+      eine Kürzungsstrategie ab Zug ~12 bleibt die Rückfallebene.
+      Messlatte: dieselbe Reihe, gleiche Züge, Grundlast deutlich
+      unter 24 120.
 
 ---
 
@@ -12922,11 +12932,11 @@ bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
 |---|---|---|---|
 | P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle in der Leiste (Robert, 30.08.2026), „Gizmo"-Haken entfällt | M | **frei — nächstes Paket für d3** |
 | P2 | Haken-Reste und Texte nachziehen | S | nach P1 |
-| P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **3a, beauftragt** |
+| P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **fertig** (`cb78bd58`): Zug bewegt alle Gewählten in einer Transaktion, die Statuszeile sagt es vorher; Drehen/Skalieren siehe P5 |
 | P4 | ~~Zug ohne Vorauswahl~~ **entfällt** — Robert hat entschieden (30.08.2026): erst wählen, dann ziehen bleibt | — | zu |
-| P5 | Strg+Klick wählt hinzu, ein Zug bewegt alle, eine Transaktion | M | nach P3 |
+| P5 | Mehrkörper-Drehen/Skalieren um den gemeinsamen Punkt | M | **3a, Weg B entschieden** (30.08.2026, beratschlagt): `rotate_object`/`scale_object` lernen einen optionalen expliziten Punkt — ein Zug bleibt ein Schritt je Körper, der Verlauf erzählt die Geste; Migrations-Auflagen: alte Beispieldateien identisch, Alt-App-Messung am Tag-Code; Ziel 0.2.3, Punkt-Vorgabe gemeinsame Hüllquadermitte (mit d3 abgestimmt) |
 | P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | nach P1 |
-| P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **3a, beauftragt** |
+| P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **fertig** (`d5eda37c`) — mit ehrlichem Umweg: Die erste Fassung schrieb den Namen an den Griff, und VTK nimmt in einem `vtkStringArray` nur ASCII — auf Französisch (`Face supérieure`, `Côté gauche` …) wäre das ein Kundenabsturz gewesen, den ein deutscher Torlauf nie sieht (gefunden d3, gegengeprüft 72). Jetzt: Marke am Griff, Name in der Statusleiste, ASCII-Wächter `test_nothing_on_the_gizmo_leaves_ascii` mit genau den vier Namen, Regel in `ansicht.md` |
 | P8 | Verschieben/Drehen/Skalieren direkt im Kontextmenü | S | **fertig** (`fa694cf1`): 7 → 10 von 12 Zeilen, „Ändern" 30 → 27, Slicer-Reihenfolge und Grenze am gebauten Menü getestet, zwei Gegenproben gefallen |
 | P9 | Aufeinanderfolgende Züge werden ein Verlaufsschritt | M | nach P1 |
 
@@ -12988,5 +12998,18 @@ echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
       Wirkung, Gegenprobe ohne Dehnung fällt. FR6 (gestrichelter
       Fokusring) fiel beim Nachmessen: Roberts eigene
       Review-Entscheidung vom 25.08. mit dreifach getesteter
-      Regel-18-Kette — kein Befund. FR3/FR4/FR5/FR7 baut 50, FR1 ist
-      Resin-Konzept-Stufe-1.
+      Regel-18-Kette — kein Befund. FR1 ist Resin-Konzept-Stufe-1.
+
+- [x] **Der Erststart lässt den Kunden an vier Stellen nicht mehr
+      raten** (50, `c06de19e` — FR3/FR4/FR5/FR7 aus der Bedienfahrt).
+      Unter dem Druckerfeld steht der Ausweg für ein Gerät, das nicht
+      in der Liste ist; die Platzhalter benennen, worauf sie warten
+      („Zusatzprogramme — wird nachgesehen …"), womit auch der Grund
+      für den kurz gesperrten Knopf direkt darüber steht — der
+      Grundsatz „kein Knopf auf eine Vermutung" blieb unangetastet,
+      verteidigt von seinem eigenen Test. Die doppelnde Zusammenfassung
+      trägt nur noch den Scheiter-Fall; Waisen (Feld, Funktion, Import,
+      zwei Katalogzeilen) sind mit heraus. Test misst am gebauten
+      Dialog vor der Erhebung und verlangt, dass zwei Platzhalter nie
+      gleich lauten; vier Gegenproben, je ein Befund zurückgedreht,
+      fallen einzeln.
