@@ -130,6 +130,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SpaceMouse-Anbindung — P15 führte sie unter „wird nicht gebaut" | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept mit P15-Revision und Roberts Bau-Entscheidung — sein „wäre schon spannend" (30.08.2026) ist ein Interesse, keine Ansage. Kandidat: `pyspacemouse` (MIT, über hidapi, ohne Herstellertreiber) |
 | Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
+| `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 
 ---
 
@@ -12800,3 +12801,21 @@ ComfyUI-Rollen entschied `_pick` allein über `MODEL_ROLES`.
       Dateien und vorhandenem Titel, gemerkt wird **vor** dem Wurf),
       Tests und Katalogzeilen. Über das Go-Verfahren eingereicht und
       von der Freigabe vollständig gelesen.
+
+---
+
+## Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026)
+
+Beim Aufräumen der Worktrees (Sitzung 50, Roberts Auftrag) fiel als
+Nebenbefund `website/dl/` auf: **11 GB in 40 Dateien**, Pakete aller
+Versionen ab 0.1.1. Angeboten werden im Download-Kasten stets nur die
+vier Pakete der aktuellen Fassung; die Update-Prüfung zeigt ebenfalls
+nur auf die neueste. Alles Ältere ist entweder ein bewusstes
+Rollback-Archiv oder totes Gewicht — und was davon auch auf dem Server
+liegt, ist bisher nicht gezählt.
+
+- [ ] **Roberts Produktentscheidung:** alte Pakete behalten oder auf
+      die angebotene Fassung eindampfen. Falls eindampfen: erst den
+      Serverbestand zählen, dann lokal und oben in einem Zug räumen —
+      und die Reihenfolge-Regel des Veröffentlichens gilt auch hier
+      (nie löschen, worauf eine noch liegende `version.json` zeigt).
