@@ -13217,8 +13217,11 @@ Belegbilder) und liegt vollständig in
 `konzepte/durchsicht-design-2026-08.md`: **40 Befunde, sechs davon
 kritisch.** Die stärksten Stellen: Startbildschirm, Kürzelfenster,
 Symbolsatz. Die schwächsten: Bausteinkatalog, Skizzenkarte, Menüleiste.
-Roberts Sichtbefund vom selben Tag („Fertig steht zweimal da") läuft
-bereits als eigener Auftrag bei 50.
+Roberts Sichtbefund vom selben Tag („Fertig steht zweimal da") ist zu
+(`f15b91a4`, 50): Keine Leiste nennt den Knopf mehr im Hinweis daneben
+(Gegenrichtungs-grep leer), und die Ersatztexte sagen nach Roberts
+Direktkorrektur, was als Nächstes **geschieht**, nicht was der Modus
+**ist** — „daraus wird jetzt ein Körper" statt einer Modusbeschreibung.
 
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
