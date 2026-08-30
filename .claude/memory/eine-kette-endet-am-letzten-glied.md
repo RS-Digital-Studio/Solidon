@@ -33,6 +33,25 @@ Lücke deckt, liest sich wie eine Erklärung und beendet die Suche. Das ist
 dieselbe Falle wie bei einer eleganten Ursache ([[messwerkzeug-misst-sich-selbst]],
 Punkt 6): Wer eine Geschichte hat, die aufgeht, hört auf zu prüfen.
 
+**Und die Probe darauf ist zweiteilig — die zweite Hälfte hatte ich lange
+nicht.** Am 30.08.2026 habe ich zwei solcher Lücken geschlossen und beide mit
+einer Mutation belegt: Griff zurückgebaut, Test wird rot, fertig. Das war die
+halbe Antwort. Ein roter Test beweist, dass **mein** Test etwas merkt — nicht,
+dass ihn jemand braucht. Erst die Frage „was tut dabei der **bestehende**
+Test?" trennt die geschlossene Lücke von der doppelten Absicherung:
+
+| Mutation | `test_units` (bestand) | der neue Test |
+|---|---|---|
+| `format_volume` verliert kleine Werte *(erstes Glied)* | rot | rot |
+| `_show_tries` rechnet wieder selbst in cm³ *(letztes Glied)* | **grün** | rot |
+
+Die erste Zeile hätte für sich genommen bewiesen, dass der neue Test
+überflüssig ist. Die zweite ist der ganze Grund für ihn: Der Bestand sah einen
+Bruch am letzten Glied nicht, und dem Kunden stand dabei `· 0.0 cm³ ·
+geschlossen` da. **Eine Mutationsprobe an einer Kette braucht deshalb einen
+Angriff je Glied, nicht einen für die Kette** — und die Zeile, auf die es
+ankommt, ist die mit dem *grünen* Altbestand.
+
 **How to apply:**
 
 1. **Nach dem Bauen den Namen im Rumpf zählen**, der ihn rufen müsste. Ein
