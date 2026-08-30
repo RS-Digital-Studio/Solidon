@@ -57,3 +57,26 @@ Die brauchbare Frage ist deshalb nicht „wer ruft das", sondern: **Wer würde r
 wenn das Gegenteil gälte?** Praktisch heißt das, nach der *Wirkung* zu suchen
 (hier: nach dem Namen des Knopfes, nach `icon()`, nach der Farbe) und nicht nur
 nach dem Bezeichner.
+
+## Und wenn die Wirkung eine Registereigenschaft ist
+
+Am 30.08.2026 lag ein Test stundenlang rot auf `main`, und der Grund war
+dieselbe Suchgewohnheit. Ich hatte `sketch_pocket` das `requires_kind="brep"`
+genommen (die Tasche schneidet jetzt auch in ein Netz) und danach gefahren, was
+nach dem Thema klingt: `test_sketch_ops`, `test_sketch_solid`,
+`test_translations`, `test_directory_docs`, `test_errors`. Die Zusage stand in
+`test_operation_ui.py` — der Name klingt nach Dialogen, und dort steht die
+Liste, welche Operationen einen exakten Körper verlangen.
+
+**Wer eine Registereigenschaft ändert, sucht die Tests über die Eigenschaft:**
+
+    grep -rn "requires_kind" tests/
+
+Eine Sekunde, und die Stelle steht da. Nach Dateinamen zu suchen heißt zu
+raten, welchem Thema jemand anders eine Zusage zugeordnet hat — und
+Registereigenschaften werden dort geprüft, wo sie *wirken*, nicht wo sie
+*gesetzt* werden.
+
+Gefunden hat es am Ende der getrennte Suite-Lauf, den ich aus einem anderen
+Grund gestartet hatte. Das ist kein Ersatz für die Suche: Er kam Stunden später
+und nur zufällig.
