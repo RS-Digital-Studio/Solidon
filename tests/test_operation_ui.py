@@ -2127,3 +2127,41 @@ def _stem_of(op: str, feld: str) -> str:
     """
     titel = str(next(entry.title for entry in REGISTRY.get(op).params.spec() if entry.name == feld))
     return titel.split()[0].rstrip(",.:").lower()[:6]
+
+
+def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -> None:
+    """Der Weg vom Bericht zur Wahl — und er muss im Fenster ankommen.
+
+    Die Kopfzeile der Druckeinstellungen berichtet, woraus sich das Material
+    ergibt; gewählt wird es am Filamentwähler in der linken Spalte. Der ist
+    einklappbar und im Regelfall zu, also genügt kein Aufleuchten: Der
+    Abschnitt geht auf, sonst zeigt der Rahmen auf eine Kopfzeile, unter der
+    nichts steht (dieselbe Zusage wie beim Tourschritt).
+    """
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = PrintSettingsDialog(window.session, window.settings, window)
+    dialog.filamentsRequested.connect(lambda: window._show_filaments(dialog))
+    section = window.filaments.parentWidget()
+    assert section is not None
+
+    dialog.material_link.click()
+
+    assert not window.filaments.isHidden(), "der Abschnitt steht offen"
+    assert dialog.isVisible() or not dialog.isHidden(), "und der Dialog ist wieder da"
+    dialog.deleteLater()
+
+
+def test_the_window_wires_the_filament_shortcut_itself() -> None:
+    """Die Hälfte, die der Test darüber nicht prüfen kann.
+
+    Er verbindet das Signal selbst, um den modalen ``exec``-Lauf zu umgehen —
+    und bleibt damit grün, wenn das Fenster es gar nicht verbindet (die
+    „am Weg vorbei"-Falle, gemessen an genau dieser Mutation). Geprüft wird
+    deshalb am Quelltext, dass ``action_print_settings`` die Verbindung
+    herstellt; zusammen sichern beide den ganzen Weg.
+    """
+    source = inspect.getsource(MainWindow.action_print_settings)
+
+    assert "filamentsRequested" in source, "der Dialog meldet, das Fenster muss zuhören"
+    assert "_show_filaments" in source

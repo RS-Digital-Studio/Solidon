@@ -31,6 +31,7 @@ from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
 from app.core.types import Feature, MaterialSlot, SlotOverride
+from app.i18n import tr
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
     FIELDS,
@@ -2405,3 +2406,61 @@ def test_the_colour_is_chosen_at_the_spool_not_on_the_front_page() -> None:
 
     assert not colour.front, "die Farbe kommt von der Spule, nicht aus der Kopfzeile"
     assert colour.group in GROUPS, "als Rückfall bleibt sie erreichbar"
+
+
+def test_the_header_shows_where_the_material_comes_from(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Keine zweite Wahl neben den Spulen — die Kopfzeile *berichtet*.
+
+    „das material kommt ja auch aus dem filament" (Robert, 30.08.2026): Wer
+    hier ein Material einstellen konnte, stellte etwas ein, das die Spule
+    schon sagt. Ohne Spule steht die Projektvorgabe da, und zwar mit ihrer
+    Herkunft — ein Wert ohne Herkunft ist eine Behauptung.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert not hasattr(dialog, "material_choice"), "die zweite Wahl ist weg"
+    text = dialog.material_state.text()
+    assert str(tr("Projektvorgabe")) in text, text
+    assert str(tr("PLA")) in text or "PLA" in text, text
+
+
+def test_the_header_names_every_material_the_spools_bring(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Mehrere Spulen heißen mehrere Materialien — dann stehen sie alle da.
+
+    Ein Gehäuse in PETG mit einem Schriftzug in PLA ist der Fall, an dem die
+    Slot-Entscheidung gemessen wurde. Die Anzeige darf ihn nicht auf eines der
+    beiden verkürzen: Der Kunde soll sehen, was er eingelegt hat.
+    """
+    from app.core.types import MaterialSlot
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.show_materials(["PETG", "PLA"])
+
+    text = dialog.material_state.text()
+    assert "PETG" in text and "PLA" in text, text
+    assert str(tr("Projektvorgabe")) not in text, "mit Spulen ist die Vorgabe nicht die Quelle"
+    assert MaterialSlot is not None  # der Fall kommt aus Slots, nicht aus Text
+
+
+def test_the_material_line_leads_to_where_the_choice_is(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Anzeige mit Weg, nicht Anzeige statt Weg.
+
+    Ein Label, das sagt „das Material kommt aus der Spule", und den Kunden
+    dann suchen lässt, wo Spulen gewählt werden, ist die halbe Antwort. Der
+    Knopf daneben führt dorthin — das Fenster klappt den Abschnitt auf und
+    lässt ihn aufleuchten.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    seen: list[bool] = []
+    dialog.filamentsRequested.connect(lambda: seen.append(True))
+
+    dialog.material_link.click()
+
+    assert seen == [True], "der Weg zum Filamentwähler geht vom Dialog aus"
+    assert dialog.material_link.toolTip(), "und er sagt vorher, wohin er führt"

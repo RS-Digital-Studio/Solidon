@@ -1487,6 +1487,13 @@ class PrintSettingsDialog(QDialog):
     in die Liste der zusätzlichen Programme, und danach sieht der Dialog noch
     einmal nach (:meth:`recheck_slicer`)."""
 
+    filamentsRequested = Signal()
+    """Die Kopfzeile berichtet das Material, gewählt wird es an der Spule.
+
+    Ein Label, das auf den Filamentwähler verweist und den Kunden dann suchen
+    lässt, ist die halbe Antwort — das Fenster klappt den Abschnitt auf und
+    lässt ihn aufleuchten."""
+
     def __init__(
         self,
         session: Session,
@@ -1613,19 +1620,69 @@ class PrintSettingsDialog(QDialog):
         _select_data(self.printer_choice, document.printer or profiles.DEFAULT_PRINTER)
         self.printer_choice.currentIndexChanged.connect(self._scene_profile_changed)
 
-        self.material_choice = QComboBox(self)
-        for key, material in by_title(profiles.material_profiles()):
-            self.material_choice.addItem(str(material.title), key)
-        _select_data(self.material_choice, document.material or profiles.DEFAULT_MATERIAL)
-        self.material_choice.currentIndexChanged.connect(self._scene_profile_changed)
+        # **Das Material wird hier nicht mehr gewählt, sondern berichtet.**
+        # Es kommt aus der Spule (``profiles.for_object``), und eine zweite
+        # Wahl daneben hieße, etwas einzustellen, was das Filament schon sagt —
+        # „das material kommt ja auch aus dem filament" (Robert, 30.08.2026).
+        # Der Wert steht mit seiner Herkunft da: Ohne Spule ist es die
+        # Projektvorgabe, und das gehört dazugesagt.
+        self.material_state = QLabel(self)
+        self.material_state.setTextFormat(Qt.TextFormat.PlainText)
+        # Kein totes Label: Gewählt wird im Filamentwähler, und von hier führt
+        # ein Weg dorthin (Regel 17 in ihrer freundlichen Gestalt — sagen, was
+        # jetzt möglich ist, statt nur zu berichten).
+        self.material_link = QPushButton(tr("Filamente …"), self)
+        self.material_link.setToolTip(
+            tr("Öffnet links den Abschnitt „Filamente“ — dort wird die Spule gewählt.")
+        )
+        self.material_link.setStatusTip(self.material_link.toolTip())
+        self.material_link.setAccessibleDescription(self.material_link.toolTip())
+        self.material_link.clicked.connect(self.filamentsRequested)
+        self.refresh_materials()
 
         row.addWidget(QLabel(tr("Qualität"), self))
         row.addWidget(self.quality, 1)
         row.addWidget(QLabel(tr("Drucker"), self))
         row.addWidget(self.printer_choice, 1)
         row.addWidget(QLabel(tr("Material"), self))
-        row.addWidget(self.material_choice, 1)
+        row.addWidget(self.material_state, 1)
+        row.addWidget(self.material_link)
         return row
+
+    def show_materials(self, materials: Sequence[str]) -> None:
+        """Woraus sich das Material ergibt — mit Spulen die Liste, sonst die
+        Vorgabe samt Herkunft.
+
+        Mehrere Spulen heißen mehrere Materialien, und die Anzeige verkürzt
+        das nicht auf eines: Der Kunde soll sehen, was er eingelegt hat. Für
+        die *Toleranz* entscheidet weiterhin Slot 0 (§20) — das ist eine
+        Rechnung und keine Anzeige.
+        """
+        names = [name for name in dict.fromkeys(materials) if name]
+        if names:
+            self.material_state.setText(" + ".join(names))
+            self.material_state.setToolTip(
+                tr("Kommt aus den eingelegten Spulen. Zum Ändern die Spule wechseln.")
+            )
+        else:
+            fallback = self.session.project.document.material or profiles.DEFAULT_MATERIAL
+            title = str(profiles.material(fallback).title)
+            self.material_state.setText(f"{title} — {tr('Projektvorgabe')}")
+            self.material_state.setToolTip(
+                tr("Noch keine Spule gewählt — solange gilt die Vorgabe des Projekts.")
+            )
+        self.material_state.setStatusTip(self.material_state.toolTip())
+        self.material_state.setAccessibleDescription(self.material_state.toolTip())
+
+    def refresh_materials(self) -> None:
+        """Die Anzeige aus den Spulen der gewählten Platten neu setzen.
+
+        Dieselbe Quelle wie die Slot-Zeilen der Profilzuordnung
+        (:meth:`_plate_slots`) — zwei Wege zu derselben Auskunft wären einer zu
+        viel. Was hier steht, ist die Materialart der Spule, nicht ihr Name:
+        „PETG" beantwortet die Frage, „Schwarz matt" nicht.
+        """
+        self.show_materials([slot.material_type or "" for slot in self._plate_slots()])
 
     def _scene_profile_changed(self) -> None:
         """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.
@@ -1633,6 +1690,10 @@ class PrintSettingsDialog(QDialog):
         Sofort statt beim Schließen: die Vorschläge in diesem Dialog hängen an
         Maschine und Material, und sie stehen lassen, während oben etwas
         anderes gewählt ist, wäre eine Anzeige, die nicht mehr stimmt.
+
+        **Das Material bleibt dabei, wie es ist.** Es wird hier nicht mehr
+        gewählt (es kommt aus der Spule), und der Drucker geht es nichts an —
+        wer die Maschine wechselt, wechselt nicht das Filament.
 
         **Was der Kunde selbst gesetzt hat, überlebt den Wechsel.** Hier stand
         ein blankes ``resolve``, und das warf jeden übersteuerten und jeden
@@ -1660,8 +1721,10 @@ class PrintSettingsDialog(QDialog):
             )
         }
 
+        document = self.session.project.document
         self.session.change_scene_profile(
-            str(self.printer_choice.currentData()), str(self.material_choice.currentData())
+            str(self.printer_choice.currentData()),
+            document.material or profiles.DEFAULT_MATERIAL,
         )
         settings = self._resolved(self.settings.quality)
         for path, value in chosen.items():
@@ -2463,6 +2526,10 @@ class PrintSettingsDialog(QDialog):
         Fehler wäre erst am fertigen Druck zu sehen.
         """
         self._build_slot_rows(self.slot_form)
+        # Und die Kopfzeile mit: Eine andere Platte kann andere Spulen tragen,
+        # also auch ein anderes Material — genau der Fehler, den der Docstring
+        # oben für die Filamentzeilen beschreibt, eine Zeile höher.
+        self.refresh_materials()
         self._show_slicer_state()
 
     def _plate_slots(self) -> list[MaterialSlot]:

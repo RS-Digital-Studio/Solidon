@@ -3812,6 +3812,24 @@ class MainWindow(QMainWindow):
         self.action_install_extras()
         dialog.recheck_slicer()
 
+    def _show_filaments(self, dialog: PrintSettingsDialog) -> None:
+        """Aus den Druckeinstellungen zum Filamentwähler in der linken Spalte.
+
+        Der Abschnitt ist einklappbar und im Regelfall zu; ein Aufleuchten
+        allein zeigte auf eine Kopfzeile, unter der nichts steht — dieselbe
+        Zusage wie beim Tourschritt (:meth:`_flash_area`).
+
+        Der Dialog bleibt dabei offen und tritt nur zurück: Er ist modal, also
+        wäre der Weg dorthin sonst einer, den man nicht gehen kann. Beim
+        Zurückkommen liest die Kopfzeile neu, was die Spulen jetzt sagen.
+        """
+        dialog.hide()
+        open_section(self.filaments)
+        self.filaments.setStyleSheet(f"border: 2px solid {ROLES['select']};")
+        QTimer.singleShot(FLASH_MS, self, lambda: self.filaments.setStyleSheet(""))
+        dialog.show()
+        dialog.refresh_materials()
+
     def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
         from app.ui.comfy_dialog import ComfySetupDialog
@@ -3919,6 +3937,9 @@ class MainWindow(QMainWindow):
         # an — an der Stelle, an der jemand gerade slicen wollte. Von hier
         # führt der Weg in die Liste, und danach sieht der Dialog neu nach.
         dialog.setupRequested.connect(lambda: self._offer_slicer_setup(dialog))
+        # Dasselbe Muster für das Material: Die Kopfzeile berichtet, woher es
+        # kommt, und der Knopf daneben führt dorthin, wo es gewählt wird.
+        dialog.filamentsRequested.connect(lambda: self._show_filaments(dialog))
         dialog.exec()
         self._settings_dialog = None
 
