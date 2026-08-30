@@ -62,6 +62,26 @@ class UiSettings:
     lehnt den Prozess als unverträglich ab. Leer heißt „von früher", dann wird
     nicht verglichen: eine Einstellung aus einer älteren Version ist keine
     falsche."""
+    slicer_profile_slicer: str = ""
+    """Zu welchem Slicer die drei Profile darüber gehören (§29).
+
+    Der Vermerk daneben hält den **Drucker** fest, und die Begründung dort
+    gilt für den Slicer wörtlich genauso: Ein Maschinenprofil aus dem Bestand
+    der Orca-Familie ist für PrusaSlicer kein Maschinenprofil, sondern eine
+    fremde Datei.
+
+    Nötig geworden ist er durch eine Schutzmaßnahme, die nach hinten losgeht:
+    ``_remember_slicer_choice`` kehrt früh zurück, wenn alle drei
+    Auswahlfelder leer sind — „leer ist, was der Nutzer leer sieht", damit
+    eine leere Auswahl die gute nicht überschreibt. Nach einem Wechsel auf
+    PrusaSlicer oder CuraEngine sind die Felder aber **immer** leer, denn die
+    brauchen keine Profile. Damit überlebte der Orca-Bestand den Wechsel und
+    wurde beim nächsten Start wieder aufgelegt (gemessen am 30.08.2026).
+
+    Der volle Pfad und nicht der Name: Zwei Installationen desselben Programms
+    unterscheiden sich am Ordner, und ihre Profilbestände sind verschieden.
+    Leer heißt „von früher", dann wird nicht verglichen — eine Einstellung aus
+    einer älteren Version ist keine falsche."""
     slicer_filament_per_material: dict[str, str] = field(default_factory=dict)
     """Welche Spule zuletzt für welches Material gewählt wurde (§29).
 
