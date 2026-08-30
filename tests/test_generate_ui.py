@@ -885,3 +885,113 @@ def test_the_dialog_shows_what_comfyui_said(qt_app: QApplication) -> None:
     assert "TripoSGSampler" in gesagt, "und der Schritt, in dem es riss"
     assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
     dialog.release()
+
+
+class MitAuswahl:
+    """Ein ComfyUI, das für zwei Rollen mehrere Dateien anbietet."""
+
+    id = "comfyui"
+    available = True
+
+    def __init__(self, choices: dict[str, tuple[str, ...]]) -> None:
+        self._choices = choices
+
+    def readiness(self, workflow: str = "image_to_mesh") -> object:
+        from app.core.backends import mesh
+
+        return mesh.Readiness.READY
+
+    def model_choices(self, workflow: str = "image_to_mesh") -> dict[str, tuple[str, ...]]:
+        return dict(self._choices)
+
+    def text_to_mesh(self, prompt: str, *, seed: int = 0, progress=None, cancelled=None) -> object:
+        from app.core.errors import OperationCancelled
+
+        raise OperationCancelled
+
+
+def test_a_role_with_a_real_choice_gets_a_field(qt_app: QApplication) -> None:
+    """**Wie beim Sprachmodell: Die Wahl gehört dem Kunden.**
+
+    Die Rollenauflösung trifft das Übliche, und wer drei Feintunings
+    nebeneinander hat, hat sie aus einem Grund, der in keinem Muster steht.
+
+    Ein Feld gibt es nur, wo es wirklich etwas zu wählen gibt: Eine Auswahl
+    ohne Alternative ist keine (§2.4), und eine Rolle ohne Namen wäre eine
+    Frage nach einem Schlüssel (Regel 20).
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    dialog = GenerateDialog(
+        backend=MitAuswahl(
+            {
+                "image": ("a_sdxl.safetensors", "b_sdxl.safetensors"),
+                "shape": ("nur_triposg.safetensors",),
+                "shape_vae": ("eins.safetensors", "zwei.safetensors"),
+            }
+        )
+    )
+    wait_for_readiness(dialog, qt_app)
+
+    assert "image" in dialog._model_fields, "zwei Dateien, also eine Wahl"
+    assert "shape" not in dialog._model_fields, "eine Datei ist keine Wahl"
+    assert "shape_vae" not in dialog._model_fields, "eine Rolle ohne Namen steht nicht zur Wahl"
+
+    box = dialog._model_fields["image"]
+    assert isinstance(box, QComboBox)
+    assert box.itemData(0) == "", "die Vorgabe steht zuerst und heißt „Automatisch“"
+    assert [box.itemData(i) for i in range(1, box.count())] == [
+        "a_sdxl.safetensors",
+        "b_sdxl.safetensors",
+    ], "in ComfyUIs Reihenfolge, nicht in unserer"
+    dialog.release()
+
+
+def test_the_choice_is_remembered_before_the_run(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemerkt wird **vor** dem Wurf, denn der Wurf liest sie.
+
+    ``ComfyBackend._pick`` holt die Wahl aus den Einstellungen und nicht aus
+    diesem Dialog — der Kern kennt kein Fenster (§7). Ein zweiter Weg, ihm den
+    Wert mitzugeben, wäre ein zweiter Weg zu derselben Sache.
+    """
+    from app.core.backends import mesh
+
+    gemerkt: dict[str, str] = {}
+    monkeypatch.setattr(mesh, "remember_model", lambda role, name: gemerkt.update({role: name}))
+    monkeypatch.setattr(mesh, "configured_model", lambda role: "")
+
+    dialog = GenerateDialog(
+        backend=MitAuswahl({"image": ("a_sdxl.safetensors", "b_sdxl.safetensors")})
+    )
+    wait_for_readiness(dialog, qt_app)
+    dialog.prompt.setText("ein Halter")
+
+    box = dialog._model_fields["image"]
+    box.setCurrentIndex(box.findData("b_sdxl.safetensors"))
+    ok(dialog).click()
+    worker = dialog._worker
+    if worker is not None:
+        worker.wait(5000)
+    qt_app.processEvents()
+
+    assert gemerkt == {"image": "b_sdxl.safetensors"}, (
+        "die Wahl liegt vor dem Wurf in den Einstellungen"
+    )
+    dialog.release()
+
+
+def test_no_choice_no_section(qt_app: QApplication) -> None:
+    """Ein leerer Abschnitt in „Weitere Einstellungen“ wäre ein Versprechen
+    ohne Inhalt.
+
+    Der Testdoppel kennt die Frage gar nicht — ein Backend nach §27 muss sie
+    nicht beantworten, und dann gibt es nichts zu wählen.
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b""))
+    wait_for_readiness(dialog, qt_app)
+
+    assert not dialog._model_fields
+    assert dialog._models.isHidden() or not dialog.isVisible()
+    dialog.release()

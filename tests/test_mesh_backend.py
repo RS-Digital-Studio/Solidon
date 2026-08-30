@@ -1777,3 +1777,115 @@ def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyP
     assert "unterbrochen" in satz.lower(), "und der Satz nennt, was geschah"
     # Regel 17: nie ohne Weg. Der Grund steht daneben, nicht im Satz.
     assert str(gefangen.value.detail)
+
+
+def test_a_chosen_model_beats_every_pattern(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**Die Rollenauflösung rät gut und rät trotzdem.**
+
+    ``prefer`` trifft das Übliche: Wer ein Juggernaut liegen hat, will es vor
+    dem Basismodell. Aber wer drei Feintunings nebeneinander hat, hat sie aus
+    einem Grund, und keiner davon steht in einem Muster — das eine zeichnet
+    Produktfotos, das andere Comicfiguren. Genau wie beim Sprachmodell gehört
+    die Wahl dem Kunden.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    gemerkt: dict[str, str] = {}
+    monkeypatch.setattr(
+        mesh_module, "configured_model", lambda role: gemerkt.get(role, mesh_module.AUTOMATIC)
+    )
+
+    backend = mesh_module.ComfyBackend()
+    angeboten = {
+        "CheckpointLoaderSimple.ckpt_name": [
+            "sd_xl_base_1.0.safetensors",
+            "juggernautXL_v9.safetensors",
+            "comicDiffusionXL.safetensors",
+        ]
+    }
+
+    # Ohne Wahl gewinnt das Muster: ``juggernaut`` steht in ``prefer`` vorn.
+    ohne = backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", dict(angeboten))
+    assert ohne == "juggernautXL_v9.safetensors"
+
+    # Mit Wahl gewinnt der Kunde — auch gegen die eigene Rangfolge.
+    gemerkt["image"] = "comicDiffusionXL.safetensors"
+    mit = backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", dict(angeboten))
+    assert mit == "comicDiffusionXL.safetensors"
+
+
+def test_a_chosen_model_that_is_gone_falls_back_quietly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine gemerkte Datei kann gelöscht oder umbenannt worden sein.
+
+    Dann ist der stille Rückfall auf die Rollenauflösung besser als ein
+    Auftrag, der an einem Namen scheitert, den niemand mehr kennt — der Kunde
+    hat die Datei bewegt, nicht Solidon.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    monkeypatch.setattr(mesh_module, "configured_model", lambda role: "gibtsnichtmehr.safetensors")
+
+    backend = mesh_module.ComfyBackend()
+    angeboten = {"CheckpointLoaderSimple.ckpt_name": ["sd_xl_base_1.0.safetensors"]}
+
+    assert (
+        backend._pick("image", "CheckpointLoaderSimple", "ckpt_name", angeboten)
+        == "sd_xl_base_1.0.safetensors"
+    )
+
+
+def test_the_choices_come_from_the_same_walk_as_the_missing_ones(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wer eine Rolle in den Ablauf schreibt, taucht in beiden Antworten auf.
+
+    ``missing_models`` sagt, welche Rolle **keine** Datei hat;
+    ``model_choices`` sagt, **welche** sie hat. Zwei Durchgänge über denselben
+    Graphen wären zwei Gelegenheiten auseinanderzulaufen.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    backend = mesh_module.ComfyBackend()
+    monkeypatch.setattr(
+        mesh_module.ComfyBackend,
+        "_offered",
+        lambda self, kind, field: (
+            ["eins.safetensors", "zwei.safetensors"]
+            if kind == "CheckpointLoaderSimple"
+            else ["nur_eins.safetensors"]
+        ),
+    )
+
+    choices = backend.model_choices("text_to_mesh")
+
+    assert "image" in choices, "der Textweg nennt die Bildrolle"
+    assert choices["image"] == ("eins.safetensors", "zwei.safetensors")
+    # Rollen mit nur einer Datei kommen mit — „nur eine" ist nicht „keine".
+    assert all(files for files in choices.values())
+    assert set(choices) >= {"image", "shape", "background"}
+
+
+def test_every_role_that_can_be_chosen_has_a_name() -> None:
+    """Ein Auswahlfeld ohne Namen fragt nach einem Schlüssel (Regel 20).
+
+    ``shape_vae`` trägt bewusst keinen: Die Rolle gehört zu einem Ablauf, den
+    Solidon nicht mitliefert, und ein Feld dafür wäre eine Frage nach etwas,
+    das niemand hat.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    benutzt: set[str] = set()
+    for name in ("image_to_mesh", "text_to_mesh"):
+        graph = json.loads((mesh_module.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        for node in graph.values():
+            for value in (node.get("inputs") or {}).values():
+                if isinstance(value, str):
+                    found = mesh_module._MODEL_PLACEHOLDER.match(value)
+                    if found is not None:
+                        benutzt.add(found.group(1))
+
+    for role in benutzt:
+        spec = mesh_module.MODEL_ROLES[role]
+        assert str(spec.title), f"die Rolle {role} steht in einem Ablauf und braucht einen Namen"

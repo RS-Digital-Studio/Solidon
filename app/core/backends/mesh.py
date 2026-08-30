@@ -125,6 +125,18 @@ class ModelRole:
 
     prefer: tuple[str, ...]
     avoid: tuple[str, ...] = ()
+    title: TranslatableText | str = ""
+    """Wie die Rolle heißt, wenn ein Mensch sie wählen soll.
+
+    **Hier und nicht in der Oberfläche**, aus demselben Grund, aus dem die
+    Muster hier stehen: Wer eine Rolle hinzufügt, gibt ihr ihren Namen mit.
+    Eine Tabelle daneben wäre am Tag der nächsten Rolle unvollständig, und der
+    Kunde läse dort ihren Schlüssel — „shape_vae" ist kein Wort (Regel 20).
+
+    Leer heißt: nicht zur Wahl stellen. ``shape_vae`` ist so ein Fall — die
+    Rolle gehört zu einem Ablauf, den Solidon nicht mitliefert, und ein Feld
+    dafür wäre eine Frage nach etwas, das niemand hat.
+    """
 
 
 #: Die Rollen, die ein mitgelieferter Graph benennen darf. Wer einen eigenen
@@ -134,6 +146,7 @@ MODEL_ROLES: Final[dict[str, ModelRole]] = {
     "image": ModelRole(
         prefer=("juggernaut", "dreamshaper", "sd_xl", "sdxl", "xl"),
         avoid=("hunyuan", "3d", "vae", "refiner", "inpaint", "turbo"),
+        title=_("Bild aus Text"),
     ),
     # TripoSG steht vorn, weil der mitgelieferte Graph es benutzt und weil es
     # das einzige der drei ist, dessen Lizenz hier keine Frage aufwirft. Die
@@ -145,13 +158,49 @@ MODEL_ROLES: Final[dict[str, ModelRole]] = {
     "shape": ModelRole(
         prefer=("triposg", "tripo", "step1x", "hunyuan3d-dit", "hunyuan3d", "hunyuan"),
         avoid=("vae", "scribble"),
+        title=_("Körper aus Bild"),
     ),
     "shape_vae": ModelRole(prefer=("hunyuan3d-vae", "hunyuan3d", "vae"), avoid=("dit",)),
     # Freistellen. ``lucida`` steht vorn, weil es die feinere Kante zieht und
     # doppelt so groß ist — wer beides hat, will das bessere; wer nur
     # ``birefnet`` hat, bekommt es. Beide sind BiRefNet-Gewichte unter MIT.
-    "background": ModelRole(prefer=("lucida", "birefnet")),
+    "background": ModelRole(prefer=("lucida", "birefnet"), title=_("Freistellen")),
 }
+
+
+#: Woran eine gemerkte Modellwahl hängt — je Rolle ein eigener Schlüssel.
+#:
+#: **Die Rollenauflösung rät gut und rät trotzdem.** ``prefer`` und ``avoid``
+#: treffen das Übliche: Wer ein Juggernaut liegen hat, will es vor dem
+#: Basismodell. Aber wer drei SDXL-Feintunings nebeneinander hat, hat sie aus
+#: einem Grund, und keiner davon steht in einem Muster — das eine zeichnet
+#: Produktfotos, das andere Comicfiguren. Genau wie beim Sprachmodell gehört
+#: die Wahl dem Kunden, und genau wie dort bleibt sie gemerkt (§38).
+MODEL_SETTING_PREFIX: Final = "comfy_model_"
+
+#: Was „nimm, was passt" heißt — der Wert, bei dem :func:`configured_model`
+#: nichts zurückgibt und die Rollenauflösung entscheidet.
+AUTOMATIC: Final = ""
+
+
+def configured_model(role: str) -> str:
+    """Die gemerkte Wahl für diese Rolle, sonst leer.
+
+    Leer heißt **automatisch** und nicht „keines": Ohne Eintrag entscheidet
+    :data:`MODEL_ROLES`, und das ist die Vorgabe, mit der Solidon ausgeliefert
+    wird. Eine gute Vorgabe ist mehr wert als eine Einstellmöglichkeit (§2.4) —
+    die Einstellung ist für den Fall, dass die Vorgabe das Falsche trifft.
+    """
+    from app.core import discover
+
+    return str(discover.remembered(f"{MODEL_SETTING_PREFIX}{role}") or AUTOMATIC)
+
+
+def remember_model(role: str, name: str) -> None:
+    """Eine Wahl merken. Leer stellt auf automatisch zurück."""
+    from app.core import discover
+
+    discover.remember(f"{MODEL_SETTING_PREFIX}{role}", name.strip())
 
 
 def _silent(fraction: float, text: str) -> None:
@@ -590,6 +639,47 @@ class ComfyBackend:
                     missing.append(role)
         return tuple(missing)
 
+    def model_choices(self, workflow: str = "image_to_mesh") -> dict[str, tuple[str, ...]]:
+        """Was für jede Rolle dieses Ablaufs zur Wahl steht.
+
+        Je Rolle die Dateien, die ComfyUI dafür anbietet — in **seiner**
+        Reihenfolge, nicht in unserer: Was Solidon bevorzugt, entscheidet
+        :meth:`_pick`, und wer selbst wählt, will die Liste sehen, wie sie ist.
+
+        **Rollen mit nur einer Datei kommen mit.** Eine Wahl ohne Alternative
+        ist keine, und die Oberfläche lässt sie weg — aber sie hier schon
+        auszusortieren hieße, dem Aufrufer die Auskunft zu nehmen, *dass* die
+        Rolle besetzt ist. Das ist der Unterschied zwischen „nur eine" und
+        „keine", und :meth:`missing_models` beantwortet nur die zweite Frage.
+
+        Derselbe Graphendurchgang wie dort, und das ist Absicht: Wer eine Rolle
+        in den Ablauf schreibt, taucht in beiden Antworten auf, ohne dass
+        jemand eine Liste pflegt.
+        """
+        graph = self._read_graph(workflow)
+        if graph is None:
+            return {}
+        offered: dict[str, list[str]] = {}
+        choices: dict[str, tuple[str, ...]] = {}
+        for node in graph.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            kind = str(node.get("class_type", ""))
+            for field_name, value in inputs.items():
+                if not isinstance(value, str):
+                    continue
+                found = _MODEL_PLACEHOLDER.match(value)
+                if found is None:
+                    continue
+                key = f"{kind}.{field_name}"
+                if key not in offered:
+                    offered[key] = self._offered(kind, field_name)
+                choices[found.group(1)] = tuple(offered[key])
+        return choices
+
     def missing_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
         """Welche Knoten des Ablaufs dieses ComfyUI **nicht** kennt.
 
@@ -736,6 +826,17 @@ class ComfyBackend:
                 ),
                 values={"role": role, "node": class_type},
             )
+
+        # **Die Wahl des Kunden schlägt jedes Muster** (:func:`configured_model`).
+        # Geprüft wird sie gegen das, was ComfyUI **jetzt** anbietet: Eine
+        # gemerkte Datei kann gelöscht oder umbenannt worden sein, und dann ist
+        # der stille Rückfall auf die Rollenauflösung besser als ein Auftrag,
+        # der an einem Namen scheitert, den niemand mehr kennt.
+        chosen = configured_model(role)
+        if chosen and chosen in options:
+            return chosen
+        if chosen:
+            _log.info("chosen model %s for role %s is gone, falling back", chosen, role)
 
         usable = [
             entry for entry in options if not any(bad in entry.lower() for bad in wanted.avoid)

@@ -20,6 +20,7 @@ from typing import Final
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
@@ -160,7 +161,15 @@ class _ReadinessWorker(Worker):
     wenig in den Oberflächen-Thread wie die Erzeugung selbst (§2.8).
     """
 
-    done = Signal(str, object)
+    done = Signal(str, object, object)
+    """``(ablauf, bereitschaft, auswahl)`` — die drei Auskünfte eines Rundgangs.
+
+    **Zusammen und nicht getrennt.** Die Bereitschaft und die Modellwahl
+    kommen aus denselben HTTP-Aufrufen: ``readiness`` fragt, *ob* eine Rolle
+    besetzt ist, ``model_choices`` fragt, *womit*. Zwei Arbeiter dafür wären
+    zwei Zeitlimits auf einer langsamen Leitung, und die Antworten könnten
+    auseinanderlaufen.
+    """
 
     def __init__(self, backend: MeshBackend, workflow: str) -> None:
         super().__init__()
@@ -168,7 +177,11 @@ class _ReadinessWorker(Worker):
         self._workflow = workflow
 
     def work(self) -> None:
-        self.done.emit(self._workflow, _look(self._backend, self._workflow))
+        self.done.emit(
+            self._workflow,
+            _look(self._backend, self._workflow),
+            _choices(self._backend, self._workflow),
+        )
 
 
 def _look(backend: MeshBackend, workflow: str = "image_to_mesh") -> mesh.Readiness:
@@ -196,6 +209,31 @@ def _look(backend: MeshBackend, workflow: str = "image_to_mesh") -> mesh.Readine
         assert isinstance(found, mesh.Readiness)
         return found
     return mesh.Readiness.READY if backend.available else mesh.Readiness.ABSENT
+
+
+def _choices(backend: MeshBackend, workflow: str) -> dict[str, tuple[str, ...]]:
+    """Was je Rolle zur Wahl steht — leer, wenn das Backend die Frage nicht kennt.
+
+    Dieselbe Vorsicht wie bei :func:`_look`: Die Schnittstelle aus §27 kennt
+    zwei Aufrufe und ``available``; ``model_choices`` gehört zu ComfyUI. Ein
+    Testdoppel oder ein späterer gehosteter Dienst bekommt hier ein leeres
+    Wörterbuch und damit keine Auswahlfelder — was richtig ist, denn er hat
+    nichts zu wählen.
+    """
+    ask = getattr(backend, "model_choices", None)
+    if not callable(ask):
+        return {}
+    try:
+        found = ask(workflow)
+    except TypeError:
+        found = ask()
+    except AppError:
+        # Eine Auswahl ist eine Zugabe. Antwortet ComfyUI darauf nicht, steht
+        # der Dialog trotzdem — die Bereitschaft daneben sagt ohnehin, was los
+        # ist (Leitprinzip 8).
+        _log.info("model choices unavailable", exc_info=True)
+        return {}
+    return dict(found) if isinstance(found, dict) else {}
 
 
 class GenerateDialog(QDialog):
@@ -276,6 +314,22 @@ class GenerateDialog(QDialog):
         advanced_form = QFormLayout(advanced)
         advanced_form.setContentsMargins(0, 0, 0, 0)
         advanced_form.addRow(tr("Startwert"), self.seed)
+
+        # **Welches Modell die Arbeit macht** — wie beim Sprachmodell, wo die
+        # Wahl im Chat-Dialog steht. Hier hinten und nicht vorn: Wer erzeugen
+        # will, tippt einen Satz; das Modell hat eine Vorgabe, die trägt, und
+        # eine Vorgabe ist mehr wert als eine Einstellmöglichkeit (§2.4).
+        #
+        # Die Felder entstehen erst, wenn ComfyUI geantwortet hat — was zur
+        # Wahl steht, weiß nur der Rechner, auf dem es läuft
+        # (:meth:`_fill_models`).
+        self._models = QWidget(self)
+        self._models_form = QFormLayout(self._models)
+        self._models_form.setContentsMargins(0, 0, 0, 0)
+        self._models.setVisible(False)
+        self._model_fields: dict[str, QComboBox] = {}
+        advanced_form.addRow(self._models)
+
         self.advanced = collapsible(tr("Weitere Einstellungen"), advanced, open_now=False)
 
         self.state = QLabel(self)
@@ -397,14 +451,67 @@ class GenerateDialog(QDialog):
         self._readiness_worker = worker
         self._leash.start(worker)
 
-    def _readiness_done(self, workflow: str, found: object) -> None:
+    def _readiness_done(self, workflow: str, found: object, choices: object) -> None:
         """Nur die Antwort für den noch sichtbaren Text- oder Bildweg nehmen."""
         if workflow != self._workflow():
             self._readiness_pending = True
             return
         assert isinstance(found, mesh.Readiness)
         self._readiness = found
+        self._fill_models(choices if isinstance(choices, dict) else {})
         self._update_state()
+
+    def _fill_models(self, choices: dict[str, tuple[str, ...]]) -> None:
+        """Ein Auswahlfeld je Rolle, die wirklich eine Wahl hat.
+
+        **Wo nur eine Datei liegt, steht kein Feld.** Eine Auswahl ohne
+        Alternative ist keine, und ein Aufklappmenü mit einem Eintrag ist eine
+        Frage, auf die es nur eine Antwort gibt (§2.4). Genauso wenig steht ein
+        Feld für eine Rolle ohne Namen — ``shape_vae`` gehört zu einem Ablauf,
+        den Solidon nicht mitliefert.
+
+        Gebaut wird bei jeder Antwort neu: Bild- und Textweg brauchen
+        verschiedene Rollen, und wer zwischendurch ein Modell dazulegt, soll es
+        nach dem nächsten Nachsehen in der Liste finden.
+        """
+        while self._models_form.rowCount():
+            self._models_form.removeRow(0)
+        self._model_fields.clear()
+
+        for role, files in choices.items():
+            spec = mesh.MODEL_ROLES.get(role)
+            if spec is None or not str(spec.title) or len(files) < 2:
+                continue
+            box = QComboBox(self)
+            # Die Vorgabe zuerst und ohne Dateinamen: Sie ist das, was ohne
+            # Zutun passiert, und der Name dahinter wechselt mit dem Bestand.
+            box.addItem(tr("Automatisch"), mesh.AUTOMATIC)
+            for name in files:
+                box.addItem(name, name)
+            chosen = mesh.configured_model(role)
+            at = box.findData(chosen) if chosen else 0
+            box.setCurrentIndex(max(at, 0))
+            box.setToolTip(
+                tr("Welches Modell diese Aufgabe übernimmt. „Automatisch“ nimmt das, was passt.")
+            )
+            self._models_form.addRow(str(spec.title), box)
+            self._model_fields[role] = box
+
+        # Die Überschrift verschwindet mit den Feldern: ein leerer Abschnitt in
+        # „Weitere Einstellungen“ wäre ein Versprechen ohne Inhalt.
+        self._models.setVisible(bool(self._model_fields))
+
+    def _remember_models(self) -> None:
+        """Die getroffene Wahl behalten (§38) — vor dem Wurf, nicht danach.
+
+        Vorher, weil der Wurf sie benutzt: :meth:`ComfyBackend._pick` liest sie
+        aus den Einstellungen und nicht aus diesem Dialog. Der Kern kennt kein
+        Fenster (§7), und ein zweiter Weg, ihm die Wahl mitzugeben, wäre ein
+        zweiter Weg zu demselben Wert.
+        """
+        for role, box in self._model_fields.items():
+            value = box.currentData()
+            mesh.remember_model(role, str(value) if isinstance(value, str) else mesh.AUTOMATIC)
 
     def _readiness_crashed(self, detail: str) -> None:
         """Eine unerwartete Antwort beendet den Wartezustand und lässt einen Versuch zu."""
@@ -563,6 +670,7 @@ class GenerateDialog(QDialog):
         # klickbar und der Klick folgenlos.
         if not self._worth_starting:
             return
+        self._remember_models()
         self._running(True)
         self.progress.setVisible(True)
         self.progress.setValue(0)
