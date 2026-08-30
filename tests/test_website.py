@@ -1981,16 +1981,17 @@ def test_the_roll_holder_stays_in_one_piece_across_its_range() -> None:
 #: Börse landet in einem fremden Projekt, und dort setzt jemand den Wert von
 #: Hand. Was nur im gezeigten Punkt hält, hält nicht.
 GALERIETEILE = (
-    # **110 und nicht 80, und das ist eine Messung, keine Bequemlichkeit.**
-    # Das Gehäuse zerfällt unterhalb von 110 mm: seine vier Gewindebuchsen
-    # sitzen auf festen Positionen und fallen aus der schmaler werdenden
-    # Wand — 5 Stücke bei 90, 3 bei 100, ab 110 einer. Nach oben hält es.
-    # Die untere Grenze ist an 3a gemeldet; sie gehört zum Schaustück und
-    # nicht zu diesem Test, und ein Test, der sie überdeckte, verspräche
-    # eine Parametrik, die das Teil nicht hat.
-    ("gehaeuse", "breite", (110.0, 120.0, 200.0)),
+    # 70 bis 200: Das Gehäuse zerfiel bis `bcca1207` unterhalb von 110 mm,
+    # weil Schraubdome, Standfüße, Rastnasen und Rippen auf Zahlen saßen,
+    # die zur Vorgabe 120 mal 80 gerechnet waren. Sie sind Formeln geworden;
+    # die Spanne steht deshalb wieder unter der alten Grenze.
+    ("gehaeuse", "breite", (70.0, 120.0, 200.0)),
     ("schraubdose", "durchmesser", (50.0, 75.0, 120.0)),
     ("lochwandhalter", "breite", (80.0, 120.0, 200.0)),
+    # 3as Aufmacher-Teil. Es steht hier und nicht in einem eigenen Test,
+    # damit dieselbe Zusage nur einmal geprüft wird; die Spanne geht über
+    # den Regler (55 bis 90) hinaus, weil ein Kunde den Wert von Hand setzt.
+    ("rollenhalter", "rollenbreite", (40.0, 68.0, 110.0)),
 )
 
 
