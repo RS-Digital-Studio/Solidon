@@ -2754,3 +2754,35 @@ def test_every_form_row_of_a_dialog_starts_at_one_line(
     assert len(breiten) == 1, f"{len(breiten)} Beschriftungsbreiten: {sorted(breiten)}"
     for block in kanten_je_block:
         assert len(block) == 1, f"in einem Block springen die Kanten: {sorted(block)}"
+
+
+def test_every_group_holds_one_subject(qt_app: QApplication, session: Session) -> None:
+    """Drei Themen in einem Gruppennamen sind kein Titel (Befund B10).
+
+    „Haftung, Rückzug, Filament" hieß der achte Reiter, und er trug sechzehn
+    Felder — fast dreimal so viele wie der Schnitt, und mehr als die drei
+    kleinsten Gruppen zusammen. Wer den Rückzug sucht, liest erst eine
+    Aufzählung und dann sechzehn Zeilen.
+
+    Die Teilung stand schon im Datenmodell: Jedes Feld trägt seinen Bereich im
+    Pfad (`adhesion.brim_width`, `retraction.z_hop`, `filament.density`), und
+    vierzig von sechsundfünfzig Feldern lagen längst in dem Reiter, den ihr
+    Pfad nennt. Nur die sechzehn der Sammelgruppe wichen ab.
+
+    Geprüft wird deshalb die Deckung selbst: Der Reiter eines Feldes ist sein
+    Bereich, nicht eine zweite Zuordnung daneben, die auseinanderlaufen kann.
+    """
+    from app.ui.print_settings_dialog import GROUPS
+
+    abweichung = [
+        f"{field.path} → {field.group}"
+        for field in FIELDS
+        if field.path.partition(".")[0] != field.group
+    ]
+
+    assert FIELDS, "ohne Felder prüft das hier nichts"
+    assert not abweichung, f"Reiter und Bereich laufen auseinander: {abweichung}"
+    assert "other" not in GROUPS, "die Sammelgruppe ist aufgelöst"
+
+    groesste = max(sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS)
+    assert groesste <= 9, f"die größte Gruppe trägt {groesste} Felder"

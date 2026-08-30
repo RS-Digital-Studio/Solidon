@@ -161,7 +161,25 @@ FITTING_OPS: frozenset[str] = frozenset(
 )
 
 #: Gruppen in der Reihenfolge, in der sie erscheinen.
-GROUPS = ("layers", "shell", "infill", "temperature", "cooling", "speed", "support", "other")
+#: Die Reiter der Tiefe, in der Reihenfolge, in der sie stehen.
+#:
+#: **Ein Reiter, ein Thema** (Befund B10): Bis zum 30.08.2026 sammelte
+#: ``other`` unter dem Titel „Haftung, Rückzug, Filament" sechzehn Felder —
+#: fast dreimal so viele wie der Schnitt, und drei Themen in einem Namen sind
+#: kein Titel, sondern eine Aufzählung. Die Teilung stand längst im Pfad
+#: jedes Feldes; jetzt ist der Reiter eines Feldes sein Bereich.
+GROUPS = (
+    "layers",
+    "shell",
+    "infill",
+    "temperature",
+    "cooling",
+    "speed",
+    "support",
+    "adhesion",
+    "retraction",
+    "filament",
+)
 
 #: Wie breit ein Feld höchstens wird, je Art des Werts. Ein Haken steht nicht
 #: dabei: bei ihm ist die breite Fläche ein größeres Ziel und kein gedehnter
@@ -210,7 +228,9 @@ def group_title(group: str) -> str:
         "cooling": tr("Kühlung"),
         "speed": tr("Geschwindigkeit"),
         "support": tr("Stützen"),
-        "other": tr("Haftung, Rückzug, Filament"),
+        "adhesion": tr("Haftung"),
+        "retraction": tr("Rückzug"),
+        "filament": tr("Filament"),
     }.get(group, group)
 
 
@@ -734,11 +754,11 @@ FIELDS: tuple[Field, ...] = (
             "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
         ),
     ),
-    # --- Haftung, Rückzug, Filament ---
+    # --- Haftung ---
     Field(
         "adhesion.kind",
         _("Druckbetthaftung"),
-        "other",
+        "adhesion",
         kind="enum",
         choices=("none", "skirt", "brim", "raft"),
         note=_(
@@ -750,7 +770,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "adhesion.skirt_loops",
         _("Skirt-Runden"),
-        "other",
+        "adhesion",
         kind="int",
         minimum=0,
         maximum=20,
@@ -759,7 +779,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "adhesion.skirt_distance",
         _("Skirt-Abstand"),
-        "other",
+        "adhesion",
         unit="mm",
         minimum=0.0,
         maximum=50.0,
@@ -770,7 +790,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "adhesion.brim_width",
         _("Brim-Breite"),
-        "other",
+        "adhesion",
         unit="mm",
         minimum=0.0,
         maximum=50.0,
@@ -784,16 +804,17 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "adhesion.raft_layers",
         _("Raft-Schichten"),
-        "other",
+        "adhesion",
         kind="int",
         minimum=0,
         maximum=20,
         note=_("Wie viele Schichten die Unterlage hat, auf der das Teil steht."),
     ),
+    # --- Rückzug ---
     Field(
         "retraction.length",
         _("Rückzug"),
-        "other",
+        "retraction",
         unit="mm",
         minimum=0.0,
         maximum=10.0,
@@ -807,7 +828,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "retraction.speed",
         _("Rückzugstempo"),
-        "other",
+        "retraction",
         unit="mm/s",
         minimum=1.0,
         maximum=200.0,
@@ -821,7 +842,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "retraction.z_hop",
         _("Z-Sprung"),
-        "other",
+        "retraction",
         unit="mm",
         minimum=0.0,
         maximum=5.0,
@@ -835,20 +856,21 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "retraction.wipe",
         _("Abstreifen"),
-        "other",
+        "retraction",
         kind="bool",
         note=_("Wischt die Düse am Teil ab, bevor sie wegfährt. Weniger Nasen, etwas mehr Zeit."),
     ),
     Field(
         "retraction.avoid_crossing_walls",
         _("Wände nicht überfahren"),
-        "other",
+        "retraction",
         kind="bool",
         note=_(
             "Führt Leerfahrten um Wände herum statt darüber. Weniger Narben auf der Oberfläche, "
             "längere Wege."
         ),
     ),
+    # --- Filament ---
     # **Nicht vorn**, und der Grund ist die Spule: Sobald ein Teil einen
     # Materialslot mit eigener Farbe trägt, überschreibt ``handover`` diesen
     # Wert damit — die Farbe gehört dorthin, wo sie gewählt wird. Zwei Orte für
@@ -858,7 +880,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.colour",
         _("Farbe ohne eigene Spule"),
-        "other",
+        "filament",
         kind="colour",
         note=_(
             "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit "
@@ -869,7 +891,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.diameter",
         _("Filamentdurchmesser"),
-        "other",
+        "filament",
         unit="mm",
         minimum=1.0,
         maximum=4.0,
@@ -880,7 +902,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.density",
         _("Dichte"),
-        "other",
+        "filament",
         unit="g/cm³",
         minimum=0.5,
         maximum=3.0,
@@ -891,7 +913,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.flow_ratio",
         _("Flussfaktor"),
-        "other",
+        "filament",
         minimum=0.5,
         maximum=1.5,
         step=0.01,
@@ -904,7 +926,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.max_flow",
         _("Höchster Volumenstrom"),
-        "other",
+        "filament",
         unit="mm³/s",
         minimum=0.5,
         maximum=60.0,
@@ -918,7 +940,7 @@ FIELDS: tuple[Field, ...] = (
     Field(
         "filament.cost_per_kg",
         _("Preis je Kilogramm"),
-        "other",
+        "filament",
         minimum=0.0,
         maximum=1000.0,
         step=1.0,
