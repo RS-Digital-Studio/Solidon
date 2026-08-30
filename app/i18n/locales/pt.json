@@ -625,6 +625,7 @@
   "Der Bauraum muss aus drei Maßen bestehen.": "O volume de impressão tem de ser composto por três cotas.",
   "Der Baustein bekommt den ganzen Verlauf: {steps}.": "O bloco recebe todo o histórico: {steps}.",
   "Der Baustein bekommt {steps} von {total}: {numbers}": "O bloco recebe {steps} de {total}: {numbers}",
+  "Der Baustein benennt kein einziges Merkmal. Ohne benanntes Merkmal lässt er sich nicht einsetzen.": "O bloco não nomeia nenhuma característica. Sem uma característica com nome não pode ser inserido.",
   "Der Baustein braucht einen Namen.": "O bloco precisa de um nome.",
   "Der Baustein liegt auf dem Server, aber die Bestätigungsmail ging nicht hinaus. Melden Sie sich beim Support, dann schalten wir ihn von Hand frei.": "O bloco está no servidor, mas a mensagem de confirmação não saiu. Contacte o apoio e libertá-lo-emos à mão.",
   "Der Baustein ließ sich nicht anlegen.": "Não foi possível criar o bloco.",
@@ -921,6 +922,7 @@
   "Die Geräteabmeldung hat das falsche Format.": "O pedido de desativação do dispositivo tem um formato incorreto.",
   "Die Geräteidentität hat sich während der Aktivierung geändert.": "A identidade do dispositivo mudou durante a ativação.",
   "Die Geräteidentität ließ sich nicht sicher ablegen.": "Não foi possível guardar em segurança a identidade do dispositivo.",
+  "Die Gruppe „{group}“ gibt es nicht — bekannt sind {known}.": "O grupo «{group}» não existe; conhecidos são {known}.",
   "Die Größe, zum Beispiel M4 oder 6x3.": "O tamanho, por exemplo M4 ou 6x3.",
   "Die Höhe von Hand eintragen": "Introduzir a altura à mão",
   "Die Höhe wieder als Zahl eintragen": "Voltar a inserir a altura como número",
@@ -3904,6 +3906,7 @@
   "„{field}“ ist kein Text.": "«{field}» não é texto.",
   "„{field}“ ist {length} Zeichen lang, erlaubt sind {limit}.": "«{field}» tem {length} caracteres; são permitidos {limit}.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "«{licence}» não é nenhuma das licenças permitidas.",
+  "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "«{name}» não é um nome de bloco válido: são permitidas minúsculas, algarismos e sublinhados, começando por uma letra.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes.",
   "🔒": "🔒"
 }

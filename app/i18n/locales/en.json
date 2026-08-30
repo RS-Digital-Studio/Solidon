@@ -625,6 +625,7 @@
   "Der Bauraum muss aus drei Maßen bestehen.": "A build volume needs three dimensions.",
   "Der Baustein bekommt den ganzen Verlauf: {steps}.": "The part gets the whole history: {steps}.",
   "Der Baustein bekommt {steps} von {total}: {numbers}": "The part gets {steps} of {total}: {numbers}",
+  "Der Baustein benennt kein einziges Merkmal. Ohne benanntes Merkmal lässt er sich nicht einsetzen.": "The part names no feature at all. Without a named feature it cannot be inserted.",
   "Der Baustein braucht einen Namen.": "The part needs a name.",
   "Der Baustein liegt auf dem Server, aber die Bestätigungsmail ging nicht hinaus. Melden Sie sich beim Support, dann schalten wir ihn von Hand frei.": "The part is on the server, but the confirmation mail did not go out. Get in touch with support and we will release it by hand.",
   "Der Baustein ließ sich nicht anlegen.": "The part could not be created.",
@@ -921,6 +922,7 @@
   "Die Geräteabmeldung hat das falsche Format.": "The device deactivation request has the wrong format.",
   "Die Geräteidentität hat sich während der Aktivierung geändert.": "The device identity changed during activation.",
   "Die Geräteidentität ließ sich nicht sicher ablegen.": "The device identity could not be stored securely.",
+  "Die Gruppe „{group}“ gibt es nicht — bekannt sind {known}.": "There is no group “{group}” — known are {known}.",
   "Die Größe, zum Beispiel M4 oder 6x3.": "The size, for example M4 or 6x3.",
   "Die Höhe von Hand eintragen": "Enter the height by hand",
   "Die Höhe wieder als Zahl eintragen": "Enter the height as a number again",
@@ -3904,6 +3906,7 @@
   "„{field}“ ist kein Text.": "“{field}” is not text.",
   "„{field}“ ist {length} Zeichen lang, erlaubt sind {limit}.": "“{field}” is {length} characters long; {limit} are allowed.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "“{licence}” is not one of the permitted licences.",
+  "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "“{name}” is not a valid part name — allowed are lowercase letters, digits and underscores, beginning with a letter.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
   "🔒": "🔒"
 }

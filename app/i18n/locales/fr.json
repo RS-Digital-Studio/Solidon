@@ -625,6 +625,7 @@
   "Der Bauraum muss aus drei Maßen bestehen.": "Le volume d'impression doit comporter trois cotes.",
   "Der Baustein bekommt den ganzen Verlauf: {steps}.": "Le bloc reçoit tout l’historique : {steps}.",
   "Der Baustein bekommt {steps} von {total}: {numbers}": "Le bloc reçoit {steps} sur {total} : {numbers}",
+  "Der Baustein benennt kein einziges Merkmal. Ohne benanntes Merkmal lässt er sich nicht einsetzen.": "Le bloc ne nomme aucune caractéristique. Sans caractéristique nommée, il ne peut pas être inséré.",
   "Der Baustein braucht einen Namen.": "Le bloc a besoin d'un nom.",
   "Der Baustein liegt auf dem Server, aber die Bestätigungsmail ging nicht hinaus. Melden Sie sich beim Support, dann schalten wir ihn von Hand frei.": "Le bloc est sur le serveur, mais le courriel de confirmation n'est pas parti. Contactez le support et nous le publierons à la main.",
   "Der Baustein ließ sich nicht anlegen.": "Le bloc n'a pas pu être créé.",
@@ -921,6 +922,7 @@
   "Die Geräteabmeldung hat das falsche Format.": "La demande de désactivation de l’appareil a un format incorrect.",
   "Die Geräteidentität hat sich während der Aktivierung geändert.": "L’identité de l’appareil a changé pendant l’activation.",
   "Die Geräteidentität ließ sich nicht sicher ablegen.": "L’identité de l’appareil n’a pas pu être enregistrée de manière sûre.",
+  "Die Gruppe „{group}“ gibt es nicht — bekannt sind {known}.": "Le groupe « {group} » n'existe pas — connus sont {known}.",
   "Die Größe, zum Beispiel M4 oder 6x3.": "La taille, par exemple M4 ou 6x3.",
   "Die Höhe von Hand eintragen": "Saisir la hauteur à la main",
   "Die Höhe wieder als Zahl eintragen": "Saisir de nouveau la hauteur comme nombre",
@@ -3904,6 +3906,7 @@
   "„{field}“ ist kein Text.": "« {field} » n'est pas du texte.",
   "„{field}“ ist {length} Zeichen lang, erlaubt sind {limit}.": "« {field} » fait {length} caractères ; {limit} sont autorisés.",
   "„{licence}“ ist keine der erlaubten Lizenzen.": "« {licence} » n'est aucune des licences autorisées.",
+  "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "« {name} » n'est pas un nom de bloc valide — sont autorisés les minuscules, les chiffres et les tirets bas, en commençant par une lettre.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes.",
   "🔒": "🔒"
 }
