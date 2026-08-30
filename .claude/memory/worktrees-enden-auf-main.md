@@ -23,6 +23,12 @@ Prüfung nie.
 - Probe- und Mess-Worktrees (Mutationsproben, Gegenmessungen, Alt-Stände)
   sind Wegwerf-Werkzeug: nach Gebrauch `git worktree remove`, spätestens am
   Ende der Arbeitswelle. Nicht „für später" stehen lassen.
+- **Vor `remove --force` den Status lesen — als eigenen Befehl.** Am
+  30.08.2026 standen `status` und `remove --force` in einer Kette: Der Status
+  zeigte drei veränderte Dateien, und der Befehl lief trotzdem, weil er schon
+  abgeschickt war. Entwarnung kam erst hinterher (überholte Zwischenstände).
+  Dieselbe Kausalitäts-Regel wie in [[commit-o-nimmt-den-dateistand]]: Die
+  Antwort muss den Befehl noch ändern können.
 - Arbeits-Worktrees (`claude --worktree`) münden per Commit in main und
   werden danach entfernt — kein Stand bleibt dort liegen.
 - Am Ende einer Sitzung oder eines Pakets gilt: `git worktree list` zeigt
