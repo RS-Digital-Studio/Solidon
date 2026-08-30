@@ -250,6 +250,39 @@ Praktisch: **Beim Melden eines Laufs gehört die Zahl der `F` dazu, nicht nur di
 Zusammenfassung.** Ein Riss verschluckt die Zusammenfassung, in der die Namen
 stünden; die Fortschrittszeichen davor überleben ihn.
 
+### Und die dritte Gestalt, die tückischste: die Tests *nach* dem Abriss
+
+Die zwei Richtungen oben handeln davon, ein `F` und einen Riss zu verwechseln.
+Die dritte verwechselt gar nichts — sie zählt richtig und schließt falsch.
+
+Am 30.08.2026 endete ein Torlauf über `test_ui.py` am bekannten Abriss:
+
+    ........................................................................ [ 19%]
+    ........................................................................ [ 39%]
+    ..............Windows fatal exception: access violation
+
+Gezählt wurden 158 Fortschrittszeichen und **null `F`**, und daraus wurde
+„grün". Die Datei hat 372 Tests. **Acht davon waren rot**, und sie standen
+hinter der Abrissstelle — sie sind nie gelaufen. Sie lagen danach über zwei
+Stunden rot auf `main`, bis eine andere Sitzung einen Lauf schaffte, der
+durchkam.
+
+> **Ein Lauf, der abbricht, hat nicht bestanden, sondern aufgehört.** Die Zahl
+> der gelaufenen Tests gehört neben den Exit-Code, und zwar als Bruch: 124 von
+> 372 ist keine Aussage über die übrigen 248.
+
+Der Handgriff dagegen kostet nichts: `pytest --collect-only -q | wc -l` nennt
+die Sollzahl, und die Fortschrittszeichen nennen die Istzahl. Sind sie
+ungleich, ist das Ergebnis **unvollständig** und nicht grün — dann fährt man
+die fehlende Hälfte einzeln (`-k` auf die Namen dahinter) oder in einem
+eigenen Worktree, wo der Abriss nicht auftritt.
+
+Und der Grund, aus dem gerade diese Gestalt so leicht durchgeht: Die beiden
+anderen fühlen sich wie ein Urteil an — man entscheidet, ob ein Zeichen ein
+Fehler ist. Diese hier fühlt sich wie gar keine Entscheidung an. Man liest
+eine Zahl, die stimmt, und ergänzt still eine zweite, die man nicht gemessen
+hat.
+
 ## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
 
 `tests/.performance.json` hält die Bestwerte, gegen die die 25-%-Schwelle
