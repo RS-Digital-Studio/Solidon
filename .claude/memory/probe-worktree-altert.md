@@ -32,3 +32,19 @@ vergleichen. Weicht sie ab, nicht committen. Nach dem Commit die gemeldete
 Dateizahl lesen — `86 files changed` statt `34` ist der Alarm, und er steht in
 der Ausgabe, die man ohnehin sieht. Siehe [[geteilter-baum-misst-zeitpunkt]],
 [[commit-o-nimmt-den-dateistand]] und [[privater-index-fester-name]].
+
+**Dieselbe Alterung trifft eine Blob-Fassung.** Wer im geteilten Baum eine
+Datei committen will, die fremde laufende Arbeit mitträgt, baut sich den
+eigenen Stand als Blob aus `git show HEAD:<pfad>` plus den eigenen Zeilen und
+legt ihn per `git hash-object -w` + `git update-index --cacheinfo` in den
+privaten Index. Das ist richtig — aber der Blob ist ein **vollständiger
+Zustand**, genau wie der Worktree-Baum: Landet zwischen Bau und Commit ein
+fremder Commit in derselben Datei, committet er ihn als Löschung. Am
+30.08.2026 zweimal knapp (72): Katalog-Blobs, gebaut vor d3s P1-Landung,
+hätten elf fremde Schlüssel entfernt (gefangen durch d3s Zuruf); zweiter
+Anlauf vor einer Filament-Landung ebenso (gefangen durch die eigene
+Sollprobe). **How to apply:** Blob **unmittelbar** vor dem Commit bauen, die
+Zusicherung im selben Skript gegen denselben HEAD ziehen (`added == meine
+Schlüssel and not changed`), und die Sollprobe im Index gegen den aktuellen
+HEAD lesen. Und: Zeigt `git diff HEAD --numstat` genau die eigene Zahl, ist
+der Baumstand der sicherere Weg — kein Blob nötig.
