@@ -135,6 +135,33 @@ def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
     )
 
 
+def test_the_version_file_fits_the_clients_that_are_already_out_there() -> None:
+    """Die ``version.json`` muss von den Fassungen lesbar sein, die draußen sind.
+
+    Jede ausgelieferte Fassung bis einschließlich 0.2.1 liest höchstens
+    64 KB (``MAX_ANSWER_BYTES`` stand dort fest auf ``64 * 1024``) und meldet
+    alles darüber als „Die Seite war nicht erreichbar" — der Kunde erfährt
+    dann **nie** von einem Update, und genau die Kunden mit alter Fassung sind
+    die einzigen Leser dieser Datei. Diese Grenze ist draußen unveränderlich;
+    ein Fix im neuen Code erreicht die Installationen nicht, die ihn brauchen.
+
+    Am 30.08.2026 live passiert: Die 0.2.2 ging mit 85 580 Bytes hinauf
+    (83 Punkte in sechs Sprachen plus Unterschrift), und Roberts installierte
+    0.2.1 sah die neue Fassung nicht. ``make_download`` kappt die Punkteliste
+    seither unter das Budget; gemessen wird hier die **eingecheckte** Datei —
+    also die, die tatsächlich hinausgeht, mitsamt Unterschrift.
+    """
+    from tools.make_download import LEGACY_ANSWER_BYTES
+
+    version_file = _ROOT / "website" / "version.json"
+    size = version_file.stat().st_size
+    assert size <= LEGACY_ANSWER_BYTES, (
+        f"website/version.json wiegt {size} Bytes — mehr als die {LEGACY_ANSWER_BYTES}, "
+        "die eine ausgelieferte 0.2.1 überhaupt liest. Kein Bestandskunde sähe "
+        "dieses Update; make_download muss die Punkteliste stärker kappen."
+    )
+
+
 # --- der festgeschriebene Versionssatz -------------------------------------------
 #
 # `constraints.txt` hält fest, *in welcher* Version ein Paket installiert wird.

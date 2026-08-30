@@ -620,6 +620,51 @@ def write_pages(packages: list[Package]) -> None:
 #: gibt — und seit §37.2 auch, wo es liegt und woran man es erkennt.
 VERSION_FILE = WEBSITE / "version.json"
 
+#: Wie viel eine **ausgelieferte** Fassung von dieser Datei höchstens liest.
+#:
+#: Bis einschließlich 0.2.1 stand ``updates.MAX_ANSWER_BYTES`` fest auf
+#: ``64 * 1024``, und alles darüber meldet die Anwendung dort als „Die Seite
+#: war nicht erreichbar" — der Kunde erfährt dann nie von einem Update. Die
+#: Grenze ist draußen unveränderlich: Ein Fix im neuen Code erreicht genau die
+#: Installationen nicht, die ihn brauchen, denn die einzigen Leser dieser
+#: Datei sind die **alten** Fassungen. Am 30.08.2026 einmal live passiert —
+#: 85 580 Bytes, und keine 0.2.1 sah die 0.2.2.
+LEGACY_ANSWER_BYTES = 64 * 1024
+
+#: Luft unter der Grenze: Die Unterschrift (§37.2) hängt nach dem Schreiben
+#: noch einmal rund vier Kilobyte an, und ein künftiges Feld soll die Datei
+#: nicht über die Kante schieben.
+SIGNATURE_RESERVE_BYTES = 6 * 1024
+
+
+def cap_for_legacy_clients(data: dict[str, object]) -> int:
+    """Kürzt die Punkteliste, bis die Datei unter die Lesegrenze passt.
+
+    Gekappt wird je Sprache gleich viel und von hinten — die Changelogs
+    ordnen ihre Abschnitte nach Gewicht, vorn steht, was der Kunde zuerst
+    lesen soll. Die vollständige Liste trägt die Changelog-Seite der
+    Website; das Update-Fenster zeigt ohnehin eine Auswahl (§37.2).
+
+    Gibt zurück, wie viele Punkte je Sprache übrig geblieben sind, damit der
+    Aufrufer eine Kappung melden kann statt still zu kürzen.
+    """
+    changes = data.get("changes")
+    if not isinstance(changes, dict) or not changes:
+        return 0
+    budget = LEGACY_ANSWER_BYTES - SIGNATURE_RESERVE_BYTES
+
+    def written_size() -> int:
+        return len((json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
+
+    kept = max((len(points) for points in changes.values()), default=0)
+    while kept > 0 and written_size() > budget:
+        kept -= 1
+        for language, points in changes.items():
+            if len(points) > kept:
+                changes[language] = points[:kept]
+    return kept
+
+
 #: Welcher Paketschlüssel in der Versionsdatei zu welcher Datei gehört.
 #:
 #: **Nur was sich einspielen lässt, steht dort.** Ein ``.zip`` entpackt sich
@@ -756,6 +801,13 @@ def write_version(packages: list[Package]) -> None:
     changes = changes_for(APP_VERSION)
     if changes:
         data["changes"] = changes
+        total = max((len(points) for points in changes.values()), default=0)
+        kept = cap_for_legacy_clients(data)
+        if kept < total:
+            print(
+                f"  version.json: {kept} von {total} Punkten je Sprache — mehr liest "
+                "eine ausgelieferte 0.2.1 nicht; die volle Liste steht im Web-Changelog"
+            )
     else:
         data.pop("changes", None)
     if entries:
