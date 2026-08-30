@@ -1287,6 +1287,125 @@ def reset_morph(session: Any) -> None:
     session.evaluate_now()
 
 
+#: Die Grenzen eines Website-Loops (WD1).
+#:
+#: **Ein Loop ist keine kleine Fassung des Videos.** Er läuft stumm, endlos und
+#: neben Text, den jemand gerade liest — er soll zeigen, dass sich etwas
+#: bewegt, und nicht erzählen. Daraus folgt jede Zahl hier:
+#:
+#: * **720p statt 1080p.** Auf der Seite steht er in einer Spalte, nie im
+#:   Vollbild. Die Hälfte der Datenmenge für einen Unterschied, den man an
+#:   dieser Größe nicht sieht.
+#: * **Kein Ton.** Ein Video, das ungefragt spricht, ist der schnellste Weg
+#:   zum Zurück-Knopf. Ohne Tonspur spielt es außerdem in jedem Browser von
+#:   selbst — ``autoplay`` gilt nur für stumme Videos.
+#: * **Zwei Formate.** ``webm`` (VP9) ist kleiner, ``mp4`` (H.264) versteht
+#:   jeder. Der Browser nimmt das erste, das er kann; wer nur eines liefert,
+#:   liefert manchem gar nichts.
+#: * **Ein Standbild.** Es steht, bis das Video geladen ist — und bei
+#:   ``prefers-reduced-motion`` ist es das einzige, was der Besucher je sieht.
+#:   Ohne poster zeigt der Browser dort ein schwarzes Rechteck.
+LOOP_HEIGHT = 720
+
+#: Wie lang ein Loop läuft, in Sekunden.
+#:
+#: Zwölf ist die Mitte der Spanne, die das Konzept nennt (5 bis 15): lang
+#: genug für vier Szenen, kurz genug, dass ein Besucher den Anfang noch kennt,
+#: wenn er wieder anfängt. Wer das ändert, prüft die Dateigröße mit — sie
+#: wächst linear mit.
+LOOP_SECONDS = 12.0
+
+#: Wie stark der Loop gerechnet wird, je Format.
+#:
+#: Gemessen wird am Ziel: 2 bis 5 MB je Loop. Der Upload schafft 1,8 MB/s, und
+#: fünf Loops sind damit eine halbe Minute — der Besucher lädt einen davon,
+#: aber die Seite muss auch hochgehen.
+LOOP_CRF_H264 = 26
+LOOP_CRF_VP9 = 34
+
+
+def encode_loop(shot: Shot, stem: Path) -> tuple[Path, Path, Path]:
+    """Einen Website-Loop schreiben: ``webm``, ``mp4`` und sein Standbild.
+
+    ``stem`` ist der Pfad **ohne** Endung; zurück kommen die drei Dateien in
+    der Reihenfolge, in der sie im HTML stehen sollten — erst ``webm``, dann
+    ``mp4``, dann das Standbild.
+
+    **Das Standbild ist das erste Bild und nicht irgendeines.** Es steht, bis
+    das Video geladen ist, und muss deshalb genau das zeigen, womit der Loop
+    anfängt; ein Standbild aus der Mitte lässt das Bild springen, sobald die
+    Wiedergabe einsetzt.
+
+    **Kein Ton, und das ist mehr als eine Auslassung:** ``-an`` macht aus dem
+    Loop ein Video, das der Browser von selbst abspielen darf. Mit Tonspur —
+    auch mit stiller — verlangt jeder Browser eine Nutzergeste.
+    """
+    scaled = f"scale=-2:{LOOP_HEIGHT}:flags=lanczos"
+    webm = stem.with_suffix(".webm")
+    mp4 = stem.with_suffix(".mp4")
+    poster = stem.with_suffix(".png")
+
+    run_ffmpeg(
+        [
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(shot.frames / "%05d.png"),
+            "-an",
+            "-vf",
+            scaled,
+            "-c:v",
+            "libvpx-vp9",
+            "-crf",
+            str(LOOP_CRF_VP9),
+            "-b:v",
+            "0",
+            "-row-mt",
+            "1",
+            str(webm),
+        ]
+    )
+    run_ffmpeg(
+        [
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(shot.frames / "%05d.png"),
+            "-an",
+            "-vf",
+            scaled,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            str(LOOP_CRF_H264),
+            "-preset",
+            "slow",
+            # Damit der Browser mit dem Abspielen beginnen kann, bevor die
+            # Datei ganz da ist: der Index gehört an den Anfang.
+            "-movflags",
+            "+faststart",
+            str(mp4),
+        ]
+    )
+    run_ffmpeg(
+        [
+            "-i",
+            str(shot.frames / "00000.png"),
+            "-vf",
+            scaled,
+            "-frames:v",
+            "1",
+            str(poster),
+        ]
+    )
+    for written in (webm, mp4, poster):
+        megabytes = written.stat().st_size / 1024 / 1024
+        print(f"  Loop  → {written.name}  {megabytes:.1f} MB")
+    return webm, mp4, poster
+
+
 def encode_landscape(shot: Shot, target: Path, audio: Path | None = None) -> None:
     """Das Querformat: die Bilder, wie sie sind."""
     run_ffmpeg(
@@ -1466,10 +1585,18 @@ def main() -> int:
     # Modul-Video tut das, und ein Druckprojekt wohnt nicht im Repository.
     chosen = [entry for entry in arguments if entry.endswith(".p3d")]
     project = Path(chosen[0]) if chosen else None
+    # ``loop`` schaltet auf die Website-Fassung um: stumm, 720p, kurz, in
+    # zwei Formaten samt Standbild. Kein eigenes Werkzeug daneben — es ist
+    # dieselbe Aufnahme aus demselben Drehbuch, nur anders ausgegeben, und
+    # zwei Programme, die dasselbe Fenster filmen, laufen unweigerlich
+    # auseinander.
+    as_loop = "loop" in arguments
     wanted = [
-        entry for entry in arguments if entry not in SCRIPTS and not entry.endswith(".p3d")
+        entry
+        for entry in arguments
+        if entry not in SCRIPTS and entry != "loop" and not entry.endswith(".p3d")
     ] or list(script)
-    print(f"Drehbuch: {name}")
+    print(f"Drehbuch: {name}{' (Website-Loop)' if as_loop else ''}")
     if project is not None:
         print(f"Projekt:  {project}")
 
@@ -1485,10 +1612,229 @@ def main() -> int:
         if qt_translator is not None:
             app.removeTranslator(qt_translator)
         qt_translator = install_qt_translations(app, language)
+        if as_loop:
+            shoot_loop(
+                app,
+                language,
+                out,
+                frames / f"{name}-{language}",
+                script[language],
+                f"{name}-{language}",
+                chosen=project,
+            )
+            continue
         shoot_language(app, language, out, frames / f"{name}-{language}", script, project)
 
     print(f"\nFertig: {out}")
     return 0
+
+
+#: Wie viele Bilder eine Umdrehung hat.
+#:
+#: Sechsunddreißig sind zehn Grad je Bild — fein genug, dass eine Ziehgeste
+#: rund wirkt, und grob genug, dass die Reihe klein bleibt. Bei
+#: vierundsiebzig (fünf Grad) sieht man den Unterschied nicht mehr und lädt
+#: die doppelte Datenmenge.
+TURNTABLE_STEPS = 36
+
+#: Wie breit ein Bild der Reihe ist.
+#:
+#: Der Loop ist 1280 breit, weil er die ganze Anwendung zeigt. Hier steht nur
+#: das **Teil** im Bild, und das steht auf der Seite in einer Spalte — 800
+#: reichen, und sie sind bei sechsunddreißig Bildern der Unterschied zwischen
+#: anderthalb und vier Megabyte.
+TURNTABLE_WIDTH = 800
+
+#: Wie stark die Bilder gerechnet werden (WebP, 0 bis 100).
+#:
+#: Achtzig ist die Schwelle, unter der bei Flächen mit weichem Verlauf — und
+#: ein schattierter Körper ist genau das — Streifen sichtbar werden.
+TURNTABLE_QUALITY = 80
+
+#: Wie nah die Kamera am Teil steht (Faktor auf den Abstand).
+#:
+#: Gemessen: Bei 1,0 fuellt das Schaustueck knapp ein Drittel des Bildes, und
+#: die Kabeldurchfuehrung ist ein Fleck von vier Bildpunkten.
+TURNTABLE_ZOOM = 0.62
+
+
+def shoot_turntable(
+    app: QApplication,
+    out: Path,
+    frames: Path,
+    stem: str,
+    steps: int = TURNTABLE_STEPS,
+    chosen: Path | None = None,
+) -> list[Path]:
+    """Eine Umdrehung des Teils als Bildreihe — zum Ziehen auf der Website.
+
+    **Warum eine Reihe und kein Video:** Ein Video läuft, eine Reihe gehorcht.
+    Der Besucher zieht mit der Maus und entscheidet selbst, wo er hinsieht —
+    an der Bohrung von der Seite, an der Senkung von oben, an der Wandstärke
+    an der Kante. Das ist mehr, als eine Kamerafahrt zeigen kann, und es
+    braucht auf der Seite **keine fremde Bibliothek**: Bilder tauschen ist
+    fünfzehn Zeilen.
+
+    **Die Bedienzonen sind aus**, anders als beim Loop. Dort ist die
+    Anwendung die Aussage; hier ist es das Teil, und ein Objektbaum, der sich
+    mitdreht, gibt es nicht — er stünde still, während das Teil sich dreht,
+    und das sieht aus wie ein Fehler.
+
+    Zurück kommen die Bilddateien in der Reihenfolge der Umdrehung.
+    """
+    from app.core import examples
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    window.resize(*WINDOW)
+    window.show()
+    settle(app, 60)
+
+    project = chosen if chosen is not None else examples.directory() / EXAMPLE
+    if not project.is_file():
+        raise SystemExit(f"Projekt fehlt: {project}")
+    session.open_project(project)
+    if not await_result(app, session):
+        raise SystemExit(f"Das Projekt rechnete nicht fertig: {project}")
+
+    # Dieselbe Wache wie beim Loop: Ohne Körper dreht sich ein leerer Raum.
+    result = getattr(session, "last_result", None)
+    bodies = len(result.scene.objects) if result is not None else 0
+    if not bodies:
+        raise SystemExit(f"Kein Körper in der Szene ({project.name}).")
+
+    show_panels(window, False)
+    hide_orientation_widget(window)
+    settle(app, 30)
+
+    frames.mkdir(parents=True, exist_ok=True)
+    for old in frames.glob("*.png"):
+        old.unlink()
+    print(f"  Projekt: {project.name}, {bodies} Körper, {steps} Bilder")
+    # **Naeher heran als beim Video.** Dort steht das Teil in einem Fenster
+    # mit Baum und Verlauf; hier hat es das Bild fuer sich, und bei Faktor 1
+    # fuellte es knapp ein Drittel davon. Ein Teil, das man drehen soll, muss
+    # gross genug sein, dass man beim Drehen etwas erkennt.
+    record(window, app, frames, 0, steps, orbit_step(window, app, TURNTABLE_ZOOM, 1.0))
+
+    left, top, width, height = viewport_rect(window)
+    written: list[Path] = []
+    out.mkdir(parents=True, exist_ok=True)
+    for index in range(steps):
+        target = out / f"{stem}-{index:02d}.webp"
+        run_ffmpeg(
+            [
+                "-i",
+                str(frames / f"{index:05d}.png"),
+                # Erst den Viewport ausschneiden, dann auf die Zielbreite:
+                # Zuschneiden nach dem Skalieren träfe andere Bildpunkte.
+                "-vf",
+                f"crop={width}:{height}:{left}:{top},scale={TURNTABLE_WIDTH}:-2:flags=lanczos",
+                "-quality",
+                str(TURNTABLE_QUALITY),
+                str(target),
+            ]
+        )
+        written.append(target)
+    total = sum(entry.stat().st_size for entry in written) / 1024 / 1024
+    print(f"  Reihe → {stem}-00…{steps - 1:02d}.webp  {total:.1f} MB zusammen")
+    release_viewport(window)
+    return written
+
+
+def loop_timing(
+    scenes: tuple[tuple[str, str], ...], seconds: float
+) -> list[tuple[str, Path, float]]:
+    """Die Szenen eines Drehbuchs auf eine feste Gesamtdauer verteilen.
+
+    **Ein Loop hat keine Stimme, also braucht er eine andere Uhr.** Im Video
+    dauert eine Szene so lang wie der Satz, der sie begleitet
+    (:func:`speak_storyboard`); ohne Ton gibt es diesen Satz nicht, und die
+    Dauer muss von außen kommen.
+
+    Verteilt wird gleichmäßig. Das ist grob und für den Zweck richtig: Ein
+    Loop zeigt, **dass** sich etwas bewegt — wer eine Szene betonen will,
+    schneidet ein eigenes Drehbuch, statt hier Gewichte einzuführen.
+
+    Der Pfad im Ergebnis ist ein Platzhalter. ``shoot_storyboard`` liest von
+    jedem Eintrag nur Namen und Dauer; die Tonspur ignoriert es (``_path``).
+    """
+    if not scenes:
+        return []
+    per_scene = seconds / len(scenes)
+    return [(key, Path(), per_scene) for key, _text in scenes]
+
+
+def shoot_loop(
+    app: QApplication,
+    language: str,
+    out: Path,
+    frames: Path,
+    scenes: tuple[tuple[str, str], ...],
+    stem: str,
+    seconds: float = LOOP_SECONDS,
+    chosen: Path | None = None,
+) -> tuple[Path, Path, Path]:
+    """Ein Drehbuch als Website-Loop aufnehmen und ausgeben.
+
+    Dieselbe Aufnahme wie beim Video — sichtbares Fenster, Bild für Bild,
+    ``grabWindow`` — nur ohne Ton, ohne Hochformat und mit fester Dauer. Was
+    dabei herauskommt, sind die drei Dateien aus :func:`encode_loop`.
+
+    **Die Bedienzonen bleiben im Bild**, anders als beim Hochformat. Ein Loop
+    auf der Website soll das *Produkt* zeigen und nicht einen Körper im
+    Nichts: Objektbaum, Verlauf und Prüfbericht sind das, was Solidon von
+    einem Betrachter unterscheidet.
+    """
+    from app.core import examples
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    session = Session()
+    window = MainWindow(session, UiSettings())
+    window.resize(*WINDOW)
+    window.show()
+    settle(app, 60)
+
+    # **Ohne Projekt filmt man den Startbildschirm.** Beim ersten Lauf war
+    # genau das das Ergebnis: 360 Bilder, 0,29 MB, beide Kontrollfälle grün —
+    # und das Standbild zeigte eine leere Ablagefläche mit vier Kacheln. Für
+    # eine Website ist das die schlechteste denkbare erste Sekunde. Dieselbe
+    # Vorgabe wie beim Video (:func:`shoot_language`).
+    project = chosen if chosen is not None else examples.directory() / EXAMPLE
+    if not project.is_file():
+        raise SystemExit(f"Projekt fehlt: {project}")
+    session.open_project(project)
+    if not await_result(app, session):
+        raise SystemExit(f"Das Projekt rechnete nicht fertig: {project}")
+    settle(app, 30)
+
+    # **Die Wache, die den ersten Lauf gefangen hätte.** Sie fragt nicht nach
+    # der Bildzahl und nicht nach der Dateigröße — beide waren grün —, sondern
+    # danach, ob überhaupt ein Körper im Bild steht.
+    result = getattr(session, "last_result", None)
+    bodies = len(result.scene.objects) if result is not None else 0
+    if not bodies:
+        raise SystemExit(
+            f"Kein Körper in der Szene ({project.name}) — der Loop zeigte den Startbildschirm."
+        )
+    print(f"  Projekt: {project.name}, {bodies} Körper")
+
+    print(f"Aufnahme Loop {stem} ({seconds:.0f} s):")
+    shot = shoot_storyboard(
+        window, app, session, frames, loop_timing(scenes, seconds), language=language
+    )
+    files = encode_loop(shot, out / stem)
+    # Ein Fenster je Aufnahme, und der Viewport wird ausdrücklich
+    # losgelassen: Ohne das behält das ``QtInteractor`` des ersten seinen
+    # OpenGL-Kontext, und im zweiten Loop liegt der Orientierungswürfel
+    # als handtellergroßes Achsenkreuz quer über dem Modell.
+    release_viewport(window)
+    return files
 
 
 def shoot_language(

@@ -53,7 +53,10 @@ Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
-`make_video.py` · `stamp_assets.py` (**läuft als Letztes**, siehe unten)
+`make_video.py` · `make_showpiece.py` (das Schaustück der Website — ein
+Teil, das in einem Bild beantwortet, warum man das Programm haben will;
+gebaut über die Operations-API wie von einem Nutzer) ·
+`stamp_assets.py` (**läuft als Letztes**, siehe unten)
 
 **Bauen und Ausliefern**
 

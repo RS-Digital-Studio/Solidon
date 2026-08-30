@@ -1,0 +1,298 @@
+"""Das Schaustück für die Website — ein Teil, das zeigt, was die App kann.
+
+    .venv\\Scripts\\python.exe tools/make_showpiece.py [ziel.p3d]
+
+**Warum nicht eines der Beispielprojekte.** Die haben ihren Zweck und
+erfüllen ihn: Sie führen durch die vier Wege und zeigen je eine Sache ohne
+Ablenkung. Der Gehäuseboden aus ``make_examples.housing`` etwa ist eine
+flache Platte mit vier Bausteinen — als Lehrstück richtig, weil nichts vom
+Wesentlichen ablenkt.
+
+Auf einer Website ist genau das falsch. Wer dort eine flache Platte sieht,
+denkt „das kann jeder" und liest nicht weiter. Ein Schaustück muss in einem
+einzigen Bild beantworten, warum man dieses Programm haben will — und dafür
+darf es alles auf einmal zeigen.
+
+**Was es zeigt, und warum jedes Stück darin steht:**
+
+| Schritt | Was man sieht |
+|---|---|
+| B-Rep-Quader statt Netz | Voraussetzung für alles Weitere, unsichtbar aber tragend |
+| Kanten verrundet | Der Unterschied zwischen „gedruckt" und „hergestellt" |
+| Ausgehöhlt | Die Wandstärke ist an der offenen Seite ablesbar |
+| Heat-Set-Buchsen | Ein Normteil, das aus der Tabelle kommt, nicht aus der Hand |
+| Kabeldurchführung | Ein Bauteil, das man sonst eine halbe Stunde konstruiert |
+| Versteifungsrippen | Dass jemand an Steifigkeit gedacht hat |
+| Standfüße, Rastnasen | Dass das Teil in die Hand genommen werden soll |
+| Deckel danebengelegt | **Der wichtigste Schritt** — aufgesetzt verdeckt er alles |
+| Zwei Materialfarben | Aus einer grauen Kiste wird ein Produkt |
+| Erhabener Schriftzug | Dass Text Geometrie ist und kein Aufkleber |
+
+**Der Deckel liegt daneben, und das ist keine Kosmetik.** Der erste Aufbau
+setzte ihn auf, und das Bild zeigte eine geschlossene Kiste mit runden
+Kanten: Schraubdome, Rippen, Wandstärke und Aushöhlung — die ganze Arbeit —
+waren unsichtbar. Ein Schaustück, das seine eigene Arbeit versteckt, zeigt
+eine Kiste.
+
+**Drei Fallen beim Bauen, alle drei einmal zugeschnappt:**
+
+* ``fillet_edges`` braucht einen **B-Rep**-Körper. Mit ``create_box`` hält die
+  Kette an, und die Fehlermeldung sagt es genau: „Aktiviere bei einer
+  Grundform die Option „Flächen und Kanten später bearbeiten“."
+* Die Feldnamen stehen im **Register**, nicht in der Vermutung. Der erste
+  Anlauf verlor vier von neun Schritten an geratenen Namen (``thickness``
+  statt ``wall``) und Werten außerhalb ihrer Grenzen (``vents=12`` bei einem
+  Maximum von sechs). Gelesen werden sie über ``dataclasses.fields`` am
+  Parametertyp der Operation.
+* **Eine Höhe gilt nur so lange, wie das Teil dort steht.** Der Schriftzug
+  stand zuerst vor dem Umlegen im Drehbuch und landete an der *Unterkante*
+  des Deckels: Der lag zu dem Zeitpunkt bei z 41 bis 47, danach bei 0 bis
+  6,4. Er ist deshalb der letzte Schritt.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from app.core.bootstrap import load_operations  # noqa: E402
+
+load_operations()
+
+from app.core.knowledge import profiles  # noqa: E402
+from app.core.scene import History, OperationDraft, evaluate  # noqa: E402
+from app.core.scene.project import Project, new_project, save  # noqa: E402
+from app.core.types import Parameter  # noqa: E402
+
+#: Die Maße des Gehäuses, als benannte Projektparameter.
+#:
+#: Deutsch, und das ist kein Versehen: Parameternamen gehören dem Nutzer und
+#: erscheinen in seiner Oberfläche. Dieselbe Entscheidung wie in
+#: ``make_examples.housing``.
+SIZES = (
+    ("breite", 120.0, "Breite"),
+    ("tiefe", 80.0, "Tiefe"),
+    ("hoehe", 45.0, "Höhe"),
+    ("wand", 2.4, "Wandstärke"),
+)
+
+#: Wie weit der Deckel neben dem Gehäuse liegt, in Millimetern.
+#:
+#: Nach **x** und nicht nach y: Ein Bild ist breiter als hoch, und bei 105 mm
+#: nach hinten stand der Deckel zur Hälfte außerhalb der Ansicht.
+LID_OFFSET = 135.0
+
+
+def steps() -> list[tuple[str, list[OperationDraft]]]:
+    """Die zwölf Schritte, in der Reihenfolge, in der sie aufeinander aufbauen."""
+    return [
+        (
+            "Gehäusekörper",
+            [
+                OperationDraft(
+                    op="create_brep_box",
+                    params={
+                        "width": "=@breite",
+                        "depth": "=@tiefe",
+                        "height": "=@hoehe",
+                        "name": "Gehäuse",
+                    },
+                )
+            ],
+        ),
+        (
+            "Kanten verrunden",
+            [OperationDraft(op="fillet_edges", inputs=("obj_1",), params={"radius": 4.0})],
+        ),
+        (
+            "Aushöhlen",
+            [
+                OperationDraft(
+                    op="hollow_object",
+                    inputs=("obj_1",),
+                    # ``open_top`` und ``vents`` schließen einander aus: Lüftung
+                    # gibt es nur im geschlossenen Körper. Hier kommt der Deckel
+                    # oben drauf, also bleibt es offen.
+                    params={"wall": "=@wand", "open_top": True, "vents": 0},
+                )
+            ],
+        ),
+        (
+            "Schraubdome",
+            [
+                OperationDraft(
+                    op="insert_heatset_m4",
+                    inputs=("obj_1",),
+                    params={"size": "M3", "x": x, "y": y, "z": "=@wand"},
+                )
+                for x, y in ((-50.0, -30.0), (50.0, -30.0), (-50.0, 30.0), (50.0, 30.0))
+            ],
+        ),
+        (
+            "Kabeldurchführung",
+            [
+                OperationDraft(
+                    op="insert_cable_gland",
+                    inputs=("obj_1",),
+                    params={"diameter": 6.0, "x": 0.0, "y": -40.0, "z": 22.0},
+                )
+            ],
+        ),
+        (
+            "Versteifungsrippen",
+            [
+                OperationDraft(
+                    op="insert_rib",
+                    inputs=("obj_1",),
+                    params={
+                        "length": 60.0,
+                        "height": 14.0,
+                        "thickness": 2.4,
+                        "fillet": 2.0,
+                        "x": x,
+                        "y": 0.0,
+                        "z": "=@wand",
+                        "axis": "y",
+                    },
+                )
+                for x in (-30.0, 30.0)
+            ],
+        ),
+        (
+            "Standfüße",
+            [
+                OperationDraft(
+                    op="insert_foot", inputs=("obj_1",), params={"x": x, "y": y, "z": 0.0}
+                )
+                for x, y in ((-52.0, -32.0), (52.0, -32.0), (-52.0, 32.0), (52.0, 32.0))
+            ],
+        ),
+        (
+            "Deckel",
+            [OperationDraft(op="create_lid", inputs=("obj_1",), params={"thickness": "=@wand"})],
+        ),
+        (
+            "Rastnasen",
+            [
+                OperationDraft(
+                    op="insert_latch",
+                    inputs=("obj_1",),
+                    params={
+                        "width": 12.0,
+                        "height": 3.0,
+                        "x": x,
+                        "y": 39.0,
+                        "z": 40.0,
+                        "axis": "y",
+                    },
+                )
+                for x in (-30.0, 30.0)
+            ],
+        ),
+        (
+            "Farben",
+            [
+                OperationDraft(
+                    op="assign_slot",
+                    inputs=("obj_1",),
+                    params={"slot": 1, "name": "PETG Hellgrau", "colour": "#b6bcc4"},
+                ),
+                OperationDraft(
+                    op="assign_slot",
+                    inputs=("obj_2",),
+                    params={"slot": 2, "name": "PETG Orange", "colour": "#f0a54a"},
+                ),
+            ],
+        ),
+        (
+            "Deckel danebenlegen",
+            [
+                OperationDraft(op="translate_object", inputs=("obj_2",), params={"dx": LID_OFFSET}),
+                OperationDraft(op="place_on_bed", inputs=("obj_1",)),
+                OperationDraft(op="place_on_bed", inputs=("obj_2",)),
+            ],
+        ),
+        (
+            "Schriftzug auf dem Deckel",
+            [
+                OperationDraft(
+                    op="label_text",
+                    inputs=("obj_2",),
+                    params={
+                        "text": "SOLIDON",
+                        "size": 12.0,
+                        "depth": 0.8,
+                        "mode": "raised",
+                        "x": LID_OFFSET,
+                        "y": 0.0,
+                        "z": 6.4,
+                        "nz": 1.0,
+                    },
+                )
+            ],
+        ),
+    ]
+
+
+def build() -> tuple[Project, int]:
+    """Das Schaustück bauen — Schritt für Schritt, jeder einzeln geprüft.
+
+    Ein Schritt, der die Kette anhält, wird zurückgenommen und gemeldet; er
+    wird **nicht** stillschweigend übergangen. Sonst steht am Ende ein halbes
+    Teil, das aussieht, als wäre es so gemeint.
+    """
+    project = new_project()
+    document = project.document
+    for name, value, title in SIZES:
+        document.parameters[name] = Parameter(name=name, value=value, unit="mm", title=title)
+
+    history = History(document)
+    profile = profiles.make_profile()
+    built = 0
+    print(f"{'Schritt':26} {'Ergebnis':10} {'Körper':>6}")
+    for title, drafts in steps():
+        try:
+            history.apply(title, drafts)
+        except Exception as problem:
+            print(f"{title:26} {'ABGELEHNT':10} {'—':>6}  {problem}")
+            continue
+        result = evaluate(document, profile)
+        if not result.complete:
+            blamed = [
+                f"{entry.code}: {entry.message}"
+                for entry in result.scene.report.findings
+                if entry.code.startswith("op.")
+            ]
+            print(f"{title:26} {'HÄLT AN':10} {len(result.scene.objects):6}")
+            for line in blamed:
+                print(f"{'':26} {line}")
+            history.undo()
+            continue
+        built += 1
+        print(f"{title:26} {'gebaut':10} {len(result.scene.objects):6}")
+    return project, built
+
+
+def main() -> int:
+    project, built = build()
+    total = len(steps())
+    result = evaluate(project.document, profiles.make_profile())
+    print(f"\n{built} von {total} Schritten, {len(result.scene.objects)} Körper")
+    for entry in result.scene.objects.values():
+        print(f"   {entry.name:26} {entry.mesh.triangle_count:7} Dreiecke")
+    if built < total:
+        print("\nNicht vollständig — das Schaustück wird nicht geschrieben.")
+        return 1
+    target = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "website" / "schaustueck.p3d"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    save(project, target)
+    print(f"\nGespeichert: {target}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

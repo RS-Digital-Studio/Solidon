@@ -1742,3 +1742,134 @@ def test_a_video_and_its_poster_both_carry_a_stamp() -> None:
     ]
     for zeile in daneben:
         assert not LINK.search(zeile), f"hätte nicht treffen dürfen: {zeile}"
+
+
+#: Tags, die ohne schließendes Gegenstück stehen dürfen (HTML-Leerelemente).
+#: Alles andere ist paarig, und wo ein Partner fehlt, hat jemand beim Umbauen
+#: einen Block falsch geschnitten.
+VOID_TAGS = frozenset(
+    {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "source",
+        "track",
+        "wbr",
+    }
+)
+
+#: Die Container, deren Balance zählt. Genau sie tragen die Seitenstruktur,
+#: und genau bei ihnen kostet ein fehlender Partner die Anordnung.
+PAIRED_TAGS = ("div", "section", "ul", "ol", "li", "details", "dialog", "form", "p")
+
+
+@pytest.mark.parametrize("page", ALL_PAGES)
+def test_every_page_closes_the_tags_it_opens(page: str) -> None:
+    """Ein fehlendes ``</div>`` sieht im Browser aus wie gar nichts.
+
+    **Der Anlass, am 30.08.2026 gemessen.** Der Umbau des Aufmachers (WD2)
+    verschob ganze Blöcke; in der englischen Fassung fing die Endmarke des
+    Download-Kastens **zwei** schließende Tags, und nur eines gehörte ihm. Die
+    Seite hatte danach ein ``</div>`` zu wenig — und sah im Browser
+    **vollständig heil aus**: Ein Browser repariert unbalanciertes Markup
+    stillschweigend und ohne ein Wort in der Konsole.
+
+    Kein bestehender Test hätte es gemeldet. Diese Datei prüft Verweise,
+    Zahlen, Bildgrößen, Stempel und Sprungmarken — alles Dinge, die von einer
+    verschobenen Verschachtelung unberührt bleiben. Gefunden hat es eine
+    Zählung von Hand, gefahren an *einer* Sprache, bevor die anderen vier
+    liefen; ohne diesen Zwischenschritt wären fünf Dateien beschädigt gewesen.
+
+    Gezählt wird und nicht geparst: Ein vollständiger HTML-Parser wäre hier
+    die schwerere Antwort auf eine leichtere Frage. Was schiefgeht, wenn
+    jemand Blöcke verschiebt, ist die **Anzahl** — ein Partner fehlt oder
+    steht doppelt.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    # Kommentare heraus: Sie tragen Beispiel-Markup, das nichts öffnet.
+    ohne_kommentar = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+    schief = []
+    for tag in PAIRED_TAGS:
+        assert tag not in VOID_TAGS, f"{tag} ist ein Leerelement und hat nie einen Partner"
+        auf = len(re.findall(rf"<{tag}\b", ohne_kommentar))
+        zu = len(re.findall(rf"</{tag}>", ohne_kommentar))
+        if auf != zu:
+            schief.append(f"{tag}: {auf} geöffnet, {zu} geschlossen")
+
+    assert not schief, (
+        f"{page}: die Verschachtelung geht nicht auf — {', '.join(schief)}. "
+        "Im Browser fällt das nicht auf, er repariert es stumm."
+    )
+
+
+def test_the_showpiece_only_uses_operations_that_exist() -> None:
+    """Jeder Schritt des Schaustücks nennt eine Operation, die es gibt.
+
+    Das Schaustück wird **nicht** in der Suite gebaut: Die zwölf Schritte
+    rechnen achtzigtausend Dreiecke, und eine Verrundung über den exakten Kern
+    dauert. Was hier geprüft wird, ist deshalb das, was ohne Rechnen prüfbar
+    ist und trotzdem der häufigste Fehler war — ein Operationsname, den es
+    nicht gibt, und ein Parameter, den die Operation nicht kennt.
+
+    Beim Bauen kostete genau das vier Anläufe: ``thickness`` statt ``wall``,
+    ``vents=12`` bei einem Maximum von sechs, ``create_box`` statt
+    ``create_brep_box``. Die Namen stehen im Register; wer sie rät, merkt es
+    erst an der angehaltenen Kette.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from tools.make_showpiece import steps
+
+    load_operations()
+    schritte = steps()
+    assert len(schritte) >= 10, f"das Schaustück ist auf {len(schritte)} Schritte geschrumpft"
+
+    for title, drafts in schritte:
+        assert drafts, f"{title}: ein Schritt ohne Operation"
+        for draft in drafts:
+            operation = REGISTRY.get(draft.op)
+            bekannt = {
+                feld.name
+                for feld in dataclasses.fields(operation.params)
+                if dataclasses.is_dataclass(operation.params)
+            }
+            fremd = set(draft.params) - bekannt
+            assert not fremd, (
+                f"{title}: {draft.op} kennt {sorted(fremd)} nicht — es hat {sorted(bekannt)}"
+            )
+
+
+def test_the_showpiece_shows_its_own_work() -> None:
+    """Der Deckel liegt daneben, und beide Körper tragen eine eigene Farbe.
+
+    **Der erste Aufbau setzte den Deckel auf**, und das Bild zeigte eine
+    geschlossene Kiste: Schraubdome, Rippen, Wandstärke und Aushöhlung — die
+    ganze Arbeit — waren unsichtbar. Ein Schaustück, das seine eigene Arbeit
+    versteckt, zeigt eine Kiste, und dafür braucht niemand ein CAD-Programm.
+
+    Geprüft wird die Absicht am Drehbuch, nicht am gerechneten Teil: dass ein
+    Schritt den Deckel versetzt, und dass zwei verschiedene Materialslots
+    vergeben werden.
+    """
+    from tools.make_showpiece import steps
+
+    alle = [draft for _title, drafts in steps() for draft in drafts]
+
+    versetzt = [d for d in alle if d.op == "translate_object"]
+    assert versetzt, "ohne Versatz liegt der Deckel auf dem Gehäuse und verdeckt alles"
+    assert any(abs(float(d.params.get("dx", 0) or 0)) > 50 for d in versetzt), (
+        "der Versatz ist zu klein, um den Deckel neben das Gehäuse zu legen"
+    )
+
+    slots = {d.params.get("slot") for d in alle if d.op == "assign_slot"}
+    assert len(slots) >= 2, f"zwei Farben machen aus einer grauen Kiste ein Produkt: {slots}"
