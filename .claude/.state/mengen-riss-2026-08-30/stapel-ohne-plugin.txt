@@ -1,0 +1,9 @@
+Current thread 0x0006c8a8 (most recent call first):
+  File "F:\3D Druck\app\ui\print_settings_dialog.py", line 3242 in _label
+  File "F:\3D Druck\app\ui\print_settings_dialog.py", line 2054 in _build_tabs
+  File "F:\3D Druck\app\ui\print_settings_dialog.py", line 1633 in __init__
+  File "F:\3D Druck\tests\test_print_settings_ui.py", line 57 in dialog
+  File "F:\3D Druck\.venv\Lib\site-packages\_pytest\fixtures.py", line 1005 in call_fixture_func
+  File "F:\3D Druck\.venv\Lib\site-packages\_pytest\fixtures.py", line 1328 in pytest_fixture_setup
+  File "F:\3D Druck\.venv\Lib\site-packages\pluggy\_callers.py", line 121 in _multicall
+  File "F:\3D Druck\.venv\Lib\site-packages\pluggy\_manager.py", line 120 in _hookexec
