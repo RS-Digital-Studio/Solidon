@@ -131,6 +131,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
+| Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
 
 ---
 
@@ -12819,3 +12820,27 @@ liegt, ist bisher nicht gezählt.
       Serverbestand zählen, dann lokal und oben in einem Zug räumen —
       und die Reihenfolge-Regel des Veröffentlichens gilt auch hier
       (nie löschen, worauf eine noch liegende `version.json` zeigt).
+
+---
+
+## Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026)
+
+Robert sah nach dem 0.2.2-Release die 56 Punkte im Update-Fenster als
+flache Liste, während Website und Verlaufs-Dialog dieselben Punkte unter
+`###`-Überschriften gliedern. Der Parser kennt `Entry.groups` seit
+0.2.0, `changes_dialog.py` liest sie — nur `make_download` schreibt die
+flache Sicht (`entry.points`) in die `version.json`, und das
+Update-Fenster zeigt, was ankommt. Roberts Auftrag: „gleich abarbeiten
+bzw verteilen und review".
+
+- [ ] **d3 baut das Paket** (beauftragt 30.08.2026): `groups` je Sprache
+      zusätzlich in die `version.json` (das flache `changes` bleibt für
+      die Clients draußen), die Kappung kürzt beide Kopien synchron
+      unter das 64-KB-Budget, `updates.Release` liest die Gruppen
+      tolerant mit Herkunfts-Grenzen, der Dialog rendert sie in der
+      Optik des Verlaufs-Dialogs, Tests je Zusage. Sichtbar wird die
+      Gliederung beim Update **auf** die übernächste Fassung — der
+      Dialog reist ja mit der App. Der Changelog-Punkt dazu entsteht
+      erst beim 0.2.3-Zug, sonst zeigte die Website eine ungebaute
+      Version. Review und Alt-Client-Messung (v0.2.1-Code gegen eine
+      Datei mit `groups`-Feld) liegen bei der Freigabe.
