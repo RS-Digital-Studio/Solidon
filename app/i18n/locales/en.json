@@ -435,6 +435,8 @@
   "Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.": "Something went wrong here that nobody accounted for.",
   "Dafür braucht Solidon einen Lizenzschlüssel und die einmalige Geräteaktivierung (Hilfe → Solidon freischalten …).": "Solidon needs a licence key and one-time device activation for this (Help → Unlock Solidon …).",
   "Dafür braucht Solidon hier eine Paketverwaltung, und sie ist nicht eingerichtet": "For that Solidon needs a package manager here, and none is set up",
+  "Dafür braucht es ein erkanntes Merkmal am gewählten Teil.": "That needs a detected feature on the selected part.",
+  "Dafür braucht es eine erkannte Bohrung am gewählten Teil.": "That needs a detected bore on the selected part.",
   "Dafür braucht es eine passende Auswahl.": "This needs a matching selection.",
   "Dafür braucht es einen Körper in der Szene.": "That needs a body in the scene.",
   "Dafür braucht es einen ausgewählten Körper.": "That needs a selected body.",

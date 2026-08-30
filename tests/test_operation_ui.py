@@ -33,6 +33,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.core.sketch import shapes
 from app.core.sketch.serialize import sketch_to_text
+from app.i18n import tr
 from app.ui.main_window import LID_OPS, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import Session
@@ -218,6 +219,68 @@ def test_a_filled_in_value_is_not_hidden_behind_the_advanced_box(qt_app: QApplic
     dialog = OperationDialog(spec, [], None, values={"depth": 4.0})
 
     assert dialog.values()["depth"] == pytest.approx(4.0)
+
+
+def test_no_required_parameter_hides_behind_the_advanced_box() -> None:
+    """Ein Pflichtfeld hinter der Klappe ist eine stille Wahl (Regel 21).
+
+    „Bohrung ändern" über das Menü geöffnet zeigte nur „Durchmesser"; das
+    Pflichtfeld ``at_feature`` lag zugeklappt hinten und stand — weil ein
+    Pflichtfeld keinen „— keines —"-Eintrag bekommt — vorausgewählt auf der
+    ersten Bohrung. Der Kunde entschied damit etwas, das er nie gesehen hat.
+    Was der Dialog verlangt, steht vorn; die Klappe ist für das, was eine gute
+    Vorgabe hat (§2.4).
+    """
+    specs = REGISTRY.all()
+    assert specs, "ohne geladenes Register prüft das hier nichts"
+    offenders = [
+        f"{spec.name}.{entry.name}"
+        for spec in specs
+        for entry in spec.params.spec()
+        if entry.required and entry.placement == "advanced"
+    ]
+    assert not offenders, f"Pflichtfelder hinter der Klappe: {offenders}"
+
+
+def test_a_body_without_the_needed_feature_says_so(window: MainWindow) -> None:
+    """„Bohrung ändern" an einem Körper ohne Bohrung ist grau und begründet.
+
+    Die Operation verlangt eine erkannte Bohrung (``at_feature`` ist Pflicht);
+    ein Würfel hat keine. Ohne den Grund öffnete das Menü einen Dialog, dessen
+    Pflicht-Auswahl leer ist — die Sackgasse, die Regel 19 verbietet. Dieselbe
+    Kette (`_reason_locked`) beliefert Menü, Kontextmenü, Palette und den
+    Zwillingshaken; ein Körper **mit** Bohrungen bleibt frei, und eine
+    Operation ohne Merkmalspflicht (Bohren) bleibt es auf dem Würfel auch.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    tree = window.object_tree.tree
+    assert tree.topLevelItemCount() >= 2, "der Würfel kam nicht als zweites Objekt an"
+
+    def choose(index: int) -> None:
+        tree.clearSelection()
+        item = tree.topLevelItem(index)
+        assert item is not None
+        item.setSelected(True)
+
+    result = window.session.last_result
+    spec = REGISTRY.get("resize_hole")
+
+    choose(1)  # der Würfel — keine Bohrung
+    cube_id = window.object_tree.selected()
+    assert cube_id is not None
+    cube_features = {f.kind for f in result.scene.objects[cube_id].features.values()}
+    assert "hole" not in cube_features, "sonst prüft dieser Test nichts"
+    reason = window._reason_locked(spec, window.object_tree.kinds_of_selection(), 2, 1)
+    assert reason is not None, "ohne Bohrung braucht der Eintrag einen Grund"
+    assert str(tr("Bohrung")).lower() in reason.lower()
+
+    drill = REGISTRY.get("drill_hole")
+    assert window._reason_locked(drill, window.object_tree.kinds_of_selection(), 2, 1) is None
+
+    choose(0)  # die Platte — vier Bohrungen, der Eintrag bleibt frei
+    reason = window._reason_locked(spec, window.object_tree.kinds_of_selection(), 2, 1)
+    assert reason is None, reason
 
 
 # --- Ein Maß, das an einem Projektparameter hängt (§13) ---------------------------

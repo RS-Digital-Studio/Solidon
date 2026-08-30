@@ -9,7 +9,7 @@ Leitprinzip 5).
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from typing import Any, Final
 
 from PySide6.QtCore import QLocale, Qt, Signal
@@ -494,6 +494,11 @@ def colour_name(value: str) -> str:
 _CHOICE_NAMES: dict[str, TranslatableText] = {
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
+    # Bei Mehrfachauswahl setzt das Fenster ihn auf die Mitte der
+    # gemeinsamen Hülle; im Dialog trägt ihn ein, wer eine bestimmte
+    # Stelle im Sinn hat. „Genannter Punkt" und nicht „Pivot": Das
+    # Fachwort kennt, wer aus dem CAD kommt, und sonst niemand.
+    "point": _("Genannter Punkt"),
     # Die acht Texturmuster standen als „knurl_diamond" und „voronoi" im
     # Dialog: englische Schlüssel, unübersetzt, und damit gegen Regel 20 dem
     # Geist nach. Die Namen kommen aus dem Abbildungskatalog, der dieselben
@@ -622,6 +627,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     # Fixpunkt von Drehen und Skalieren — und der Satz muss an allen dreien
     # wahr sein (flache Tabelle, wie beim Namen darüber).
     "centre": _("Die Mitte als Bezug — nach beiden Seiten geht es gleich weit."),
+    "point": _(
+        "Eine Stelle, die Sie selbst angeben — dieselbe für alle gewählten Teile, "
+        "damit ihre Anordnung erhalten bleibt."
+    ),
     # Die acht Texturmuster — der Dialog zeigt die Kachel dazu, der Satz sagt,
     # wofür das Muster taugt.
     "rib": _("Parallele Rillen quer über die Fläche — griffig und schnell gedruckt."),
@@ -1110,6 +1119,32 @@ def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> s
             "diese Flächen und Kanten ebenfalls mit."
         )
     )
+
+
+def feature_requirement(spec: Any, feature_kinds: Collection[str]) -> str | None:
+    """Warum diese Operation ohne passendes Merkmal nicht geht — oder ``None``.
+
+    Die Schwester von :func:`kind_requirement`, eine Frage weiter: Eine
+    Operation, deren Pflichtfeld ein Merkmal benennt (etwa die Bohrung beim
+    Ändern ihres Durchmessers), kann auf einem Körper ohne ein solches Merkmal
+    nichts anfangen. Ohne diesen Satz öffnete das Menü einen Dialog, dessen
+    Pflicht-Auswahl leer ist — die Sackgasse aus Regel 19, nur ein Feld
+    später. Der Satz steht hier, weil dieselbe Auskunft über
+    ``_reason_locked`` an Menü, Kontextmenü, Palette und Zwillingshaken geht.
+
+    Welche Art passt, sagt ``applies_to`` — die Zuordnung, über die auch das
+    Kontextmenü am Merkmal die Operation findet (§18.5). Eine Operation ohne
+    diese Angabe wird nicht gesperrt: Raten wäre schlechter als Anbieten.
+    """
+    needs_feature = any(entry.required and entry.kind == "feature" for entry in spec.params.spec())
+    if not needs_feature:
+        return None
+    wanted = tuple(spec.applies_to or ())
+    if not wanted or any(kind in feature_kinds for kind in wanted):
+        return None
+    if "hole" in wanted:
+        return str(tr("Dafür braucht es eine erkannte Bohrung am gewählten Teil."))
+    return str(tr("Dafür braucht es ein erkanntes Merkmal am gewählten Teil."))
 
 
 def by_title(entries: Mapping[str, Any]) -> list[tuple[str, Any]]:

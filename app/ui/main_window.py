@@ -204,6 +204,7 @@ from app.ui.labels import (
     demo_line,
     display_unit,
     feature_label,
+    feature_requirement,
     kind_requirement,
     length,
     localised,
@@ -2890,7 +2891,28 @@ class MainWindow(QMainWindow):
             )
         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
         # auch, und zwei Stellen mit derselben Auskunft driften.
-        return kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
+        reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
+        if reason is not None:
+            return reason
+        # Und zuletzt das Merkmal: Eine Operation, deren Pflichtfeld eine
+        # Bohrung benennt, ist auf einem Körper ohne Bohrung eine Sackgasse —
+        # der Dialog öffnete mit leerer Pflicht-Auswahl (Regel 19).
+        return feature_requirement(spec, self._feature_kinds_of_selection())
+
+    def _feature_kinds_of_selection(self) -> frozenset[str]:
+        """Die Arten der erkannten Merkmale am gewählten Körper.
+
+        Dieselbe Erhebung wie :meth:`_feature_names`, nur auf die Frage des
+        Sperr-Grunds verengt: nicht *welche* Bohrung, sondern *ob* eine da ist.
+        """
+        result = self.session.last_result
+        chosen = self.object_tree.selected()
+        if result is None or chosen is None:
+            return frozenset()
+        entry = result.scene.objects.get(chosen)
+        if entry is None:
+            return frozenset()
+        return frozenset(feature.kind for feature in entry.features.values())
 
     def _lock_twin_toggle(self, toggle: QCheckBox, hidden: str, objects: int, chosen: int) -> None:
         """Den Umschalter sperren, wo sein Zwilling auf dieser Auswahl nicht

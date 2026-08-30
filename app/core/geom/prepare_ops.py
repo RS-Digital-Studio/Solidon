@@ -272,7 +272,11 @@ class ResizeHoleParams(BaseParams):
         default="",
         kind="feature",
         required=True,
-        placement="advanced",
+        # Vorn, nicht hinter der Klappe: Ein Pflichtfeld ohne „— keines —"
+        # steht vorausgewählt auf der ersten Bohrung, und zugeklappt wäre das
+        # eine stille Wahl (Regel 21) — über das Menü geöffnet sah der Kunde
+        # nur den Durchmesser.
+        placement="front",
         doc=_(
             "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf "
             "die Bohrung trägt sie ein."
