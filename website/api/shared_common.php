@@ -67,6 +67,74 @@ function shared_rules(): array
     return $rules;
 }
 
+//: Die Sätze, die der Server an den Kunden schickt — erzeugt aus dem Kern.
+const TEXTS_FILE = __DIR__ . '/shared-texts.json';
+
+//: Die Sprache, in der geantwortet wird, wenn die gewünschte fehlt.
+//:
+//: Nicht Deutsch: Wer auf `es/shared.html` steht und Spanisch nicht bekommt,
+//: versteht Englisch eher als Deutsch. Die Quellsprache ist die des Codes,
+//: nicht die des Kunden.
+const TEXTS_FALLBACK = 'en';
+
+/**
+ * Die Satztabelle einer Sprache.
+ *
+ * **Die Liste der Sprachen steht in der Datei und nicht hier.** Eine
+ * aufgezählte Whitelist in PHP wäre die Stelle, an der eine siebte Sprache
+ * hängen bliebe: `available_languages()` liest das Katalogverzeichnis, der
+ * Erzeuger schreibt jede gefundene Sprache, und dieser Server nimmt, was da
+ * ist. Wer eine Sprache einlegt, legt eine Datei ab — mehr nicht.
+ *
+ * Geprüft wird die Gestalt des Parameters trotzdem, und zwar bevor er als
+ * Schlüssel dient: Ein `lang` aus der Adresszeile ist Kundeneingabe.
+ */
+function shared_texts(?string $language = null): array
+{
+    static $tables = null;
+    if ($tables === null) {
+        $raw = @file_get_contents(TEXTS_FILE);
+        if ($raw === false) {
+            throw new RuntimeException('Die Satzliste shared-texts.json fehlt auf dem Server.');
+        }
+        $tables = json_decode($raw, true);
+        if (!is_array($tables) || !isset($tables[TEXTS_FALLBACK])) {
+            throw new RuntimeException('Die Satzliste shared-texts.json ist unvollständig.');
+        }
+    }
+
+    $wanted = $language ?? (string) ($_GET['lang'] ?? $_POST['lang'] ?? '');
+    if (preg_match('/^[a-z]{2}$/D', $wanted) !== 1 || !isset($tables[$wanted])) {
+        $wanted = TEXTS_FALLBACK;
+    }
+    return $tables[$wanted];
+}
+
+/**
+ * Ein Satz in der Sprache des Kunden, mit gefüllten Platzhaltern.
+ *
+ * **Ein Platzhalter, den niemand füllt, steht beim Kunden so da.** Deshalb
+ * bleibt kein `{…}` übrig: Was `$values` nicht kennt, wird nicht durchgereicht,
+ * sondern der Satz fällt auf die Fallback-Sprache zurück und, wenn auch die
+ * ihn nicht hat, auf den Schlüssel selbst — der ist häßlich, aber er sagt
+ * wenigstens, was fehlt.
+ *
+ * Benannte Platzhalter und nicht `%s`: Die Wortstellung wechselt je Sprache,
+ * im Deutschen steht eine Grenze hinten, im Französischen kann sie vorn stehen.
+ */
+function shared_text(string $key, array $values = []): string
+{
+    $table = shared_texts();
+    $sentence = $table[$key] ?? '';
+    if ($sentence === '') {
+        $sentence = shared_texts(TEXTS_FALLBACK)[$key] ?? $key;
+    }
+    foreach ($values as $name => $value) {
+        $sentence = str_replace('{' . $name . '}', (string) $value, $sentence);
+    }
+    return $sentence;
+}
+
 /**
  * Ob ein Parameterwert eine der erlaubten Formen hat.
  *

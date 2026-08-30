@@ -495,3 +495,78 @@ def test_the_cases_on_disk_still_say_what_the_check_says_today() -> None:
         "Das abgelegte Urteil ist nicht mehr das, was die Prüfung sagt — die "
         f"Server-Seite vergliche gegen einen alten Stand: {sorted(drifted)}"
     )
+
+
+# --- Die Sätze, die der Server spricht ---------------------------------------
+
+
+def _shared_texts_file():
+    from tools.make_shared_texts import TARGET
+
+    return TARGET
+
+
+def test_the_sentences_beside_the_php_are_what_the_core_says() -> None:
+    """Eine erzeugte Datei, die niemand neu erzeugt, ist beim nächsten Satz falsch.
+
+    Dieselbe Zusicherung wie für ``shared-rules.json`` und aus demselben Grund
+    — nur wiegt sie hier schwerer: Die Regeldatei entscheidet, was abgewiesen
+    wird, diese hier entscheidet, **was der Kunde liest**. Ein Satz, der im
+    Kern geändert und hier nicht nachgezogen wurde, steht auf dem Server in
+    seiner alten Fassung, und keine Prüfung dort merkt es.
+    """
+    from tools.make_shared_texts import written
+
+    ziel = _shared_texts_file()
+    if not ziel.exists():
+        pytest.skip("shared-texts.json ist noch nicht erzeugt")
+    assert ziel.read_text(encoding="utf-8") == written(), (
+        "shared-texts.json ist nicht mehr das, was der Kern sagt. Einmal "
+        "`python tools/make_shared_texts.py`, dann stimmt es wieder."
+    )
+
+
+def test_every_sentence_the_server_asks_for_exists_and_the_other_way_round() -> None:
+    """Beide Richtungen, und die zweite ist die, die sonst niemand prüft.
+
+    Ein **fehlender** Schlüssel ist eine leere Meldung beim Kunden: PHP fragt
+    ``shared_text('comment_empty')``, die Datei kennt ihn nicht, und der Kunde
+    liest den Schlüsselnamen statt eines Satzes. Ein **überzähliger** ist
+    Arbeit für sechs Sprachen ohne Leser — billiger, aber er wächst, und in
+    einem Jahr weiß niemand mehr, welche der 39 Sätze noch jemand ausgibt.
+
+    **Die Grundmenge wird gezählt, bevor gefiltert wird.** Solange die
+    PHP-Seite ihre Sätze noch als deutsche Literale trägt, findet die Suche
+    null Aufrufe — und ein Verbotstest über einer leeren Menge ist immer grün.
+    Er hält deshalb an und sagt es, statt zu bestehen.
+    """
+    import json as _json
+    import re as _re
+    from pathlib import Path as _Path
+
+    ziel = _shared_texts_file()
+    if not ziel.exists():
+        pytest.skip("shared-texts.json ist noch nicht erzeugt")
+
+    tabellen = _json.loads(ziel.read_text(encoding="utf-8"))
+    assert tabellen, "die Satzliste ist leer"
+    vorhanden = set(next(iter(tabellen.values())))
+    assert vorhanden, "die Satzliste kennt keinen einzigen Schlüssel"
+
+    api = _Path("website/api")
+    gefragt: set[str] = set()
+    for datei in sorted(api.glob("*.php")):
+        gefragt |= set(_re.findall(r"shared_text\(\s*'([a-z0-9_]+)'", datei.read_text("utf-8")))
+
+    assert gefragt, (
+        "Kein einziger shared_text()-Aufruf in website/api — dann prüft dieser "
+        "Test nichts. Trägt die PHP-Seite ihre Sätze noch als Literale?"
+    )
+
+    fehlend = sorted(gefragt - vorhanden)
+    assert not fehlend, (
+        f"PHP fragt Sätze an, die es nicht gibt — der Kunde liest den Schlüssel: {fehlend}"
+    )
+
+    tot = sorted(vorhanden - gefragt)
+    assert not tot, f"Sätze, die niemand ausgibt — sechs Sprachen ohne Leser: {tot}"
