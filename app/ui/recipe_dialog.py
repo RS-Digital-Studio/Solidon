@@ -445,10 +445,31 @@ class RecipeDialog(QDialog):
         self.doc.setPlaceholderText(tr("Ein Satz: wofür ist das Teil"))
         self.doc.setAccessibleName(tr("Beschreibung"))
 
+        # **Die Lizenz steht im Klartext, nicht als Kennung.** „CC-BY-SA-4.0"
+        # sagt einem Kunden ohne CAD-Vergangenheit nichts; was er wissen muss,
+        # ist, was ein anderer mit seinem Teil tun darf. Die Kennung reist in
+        # der Datei, der Satz steht im Dialog.
+        #
+        # Die Vorgabe ist **keine** Lizenz: Wer nichts wählt, hat nichts
+        # angegeben, und das ist ein zulässiger Zustand (siehe
+        # ``Recipe.license``) — kein stillschweigend gesetzter Wert, der
+        # später wie eine Zusage aussieht.
+        self.licence = QComboBox(self)
+        self.licence.addItem(tr("Nicht angegeben"), "")
+        for key, label in recipes.LICENCE_LABELS.items():
+            self.licence.addItem(str(label), key)
+        self.licence.setAccessibleName(tr("Lizenz für die Weitergabe"))
+
+        self.author = QLineEdit(self)
+        self.author.setPlaceholderText(tr("Ihr Name oder Kürzel"))
+        self.author.setAccessibleName(tr("Autor"))
+
         head = QFormLayout()
         head.addRow(tr("Name:"), self.title)
         head.addRow(tr("Gruppe:"), self.group)
         head.addRow(tr("Beschreibung:"), self.doc)
+        head.addRow(tr("Lizenz:"), self.licence)
+        head.addRow(tr("Autor:"), self.author)
 
         self._params = [_ParamRow(entry, self) for entry in document.parameters.values()]
         self._features = [_FeatureRow(entry, self) for entry in features]
@@ -730,6 +751,8 @@ class RecipeDialog(QDialog):
             if row.take.isChecked()
         }
         doc = self.doc.text().strip()
+        licence = str(self.licence.currentData() or "")
+        author = self.author.text().strip()
 
         # **Erst nachsehen, ob der Name frei ist — vor dem Schneiden, vor dem
         # Schreiben und vor dem Warten.** ``recipes.save`` legt die Datei unter
@@ -751,6 +774,8 @@ class RecipeDialog(QDialog):
                 exposed=exposed,
                 features=features,
                 doc=doc,
+                licence=licence,
+                author=author,
                 profile=self._profile,
             )
 

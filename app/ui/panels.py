@@ -3422,9 +3422,19 @@ def least_number_width(spin: QDoubleSpinBox) -> int:
     zusehen, wie das Feld nachwächst.
     """
     metrics = spin.fontMetrics()
+    # **Gemessen wird, was dasteht — mit Komma, wenn das Fenster deutsch ist.**
+    # ``spin.text()`` unten liefert den lokalisierten Text, die beiden Grenzen
+    # kamen mit Punkt, und die Differenz landete über ``frame`` im Ergebnis.
+    #
+    # **Wie groß sie ist, hängt an der Schrift, und heute ist sie null**: In
+    # der Standardschrift sind Punkt und Komma gleich breit (gemessen am
+    # 30.08.2026, de_DE und en_GB, beide 108 px). Die Zeile steht trotzdem so,
+    # denn genau davon soll die Rechnung nicht abhängen — eine schmalere
+    # Ziffernschrift, eine andere Sprache mit anderem Trennzeichen, und aus
+    # der Null wird ein Pixel, den niemand mehr sucht.
     widest = max(
-        metrics.horizontalAdvance(f"{spin.minimum():.{spin.decimals()}f}"),
-        metrics.horizontalAdvance(f"{spin.maximum():.{spin.decimals()}f}"),
+        metrics.horizontalAdvance(localised(f"{spin.minimum():.{spin.decimals()}f}")),
+        metrics.horizontalAdvance(localised(f"{spin.maximum():.{spin.decimals()}f}")),
     )
     frame = max(0, spin.sizeHint().width() - widest)
     return metrics.horizontalAdvance(spin.text() + "0") + frame

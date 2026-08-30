@@ -67,7 +67,7 @@ from app.core.types import (
     Profile,
     Quality,
 )
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -91,7 +91,21 @@ RECIPES_DIRNAME = "recipes"
 #: Kunde herunterlädt, darf er drucken und verkaufen. Was sie unterscheiden,
 #: ist die Nennung des Autors und die Frage, ob eine Abwandlung wieder unter
 #: dieselbe Lizenz muss.
-RECIPE_LICENSES: Final = ("CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
+#:
+#: **Der Satz steht neben der Kennung, nicht in der Oberfläche.** „CC-BY-SA-4.0"
+#: sagt einem Kunden ohne CAD-Vergangenheit nichts; was er wissen muss, ist,
+#: was ein anderer mit seinem Teil tun darf. Die Kennung reist in der Datei,
+#: der Satz steht im Dialog — und weil beides hier zusammenliegt, kann die
+#: Liste der erlaubten Werte nicht von der Liste der erklärten abweichen.
+LICENCE_LABELS: Final[dict[str, TranslatableText]] = {
+    "CC0-1.0": _("Gemeinfrei — jeder darf alles, ohne Bedingung"),
+    "CC-BY-4.0": _("Namensnennung — mein Name muss dabeistehen"),
+    "CC-BY-SA-4.0": _("Namensnennung, und Abwandlungen unter derselben Lizenz"),
+}
+
+#: Die zulässigen Werte — abgeleitet, nicht aufgezählt. Wer eine Lizenz
+#: hinzufügt, ändert diese Liste, ohne sie anzufassen.
+RECIPE_LICENSES: Final = tuple(LICENCE_LABELS)
 
 #: Kennzeichnung im Katalog (§24.5): ein Rezept ist weder ``shipped`` noch
 #: eine ``user``-``.py``. Der Unterschied trägt: ``travelling_parts`` warnt

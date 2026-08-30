@@ -207,6 +207,100 @@ def test_what_the_dialog_hands_to_the_core(qt_app: QApplication) -> None:
         dialog.deleteLater()
 
 
+def test_the_licence_choice_starts_at_not_specified(qt_app: QApplication) -> None:
+    """Wer nichts wählt, hat nichts angegeben — kein stillschweigend gesetzter Wert.
+
+    Eine vorgewählte Lizenz wäre eine Zusage, die der Kunde nie gegeben hat,
+    und sie stünde später am geteilten Baustein, als hätte er sie gemacht.
+    """
+    dialog = _dialog(qt_app)
+    try:
+        assert dialog.licence.currentData() == "", (
+            "der Dialog hat eine Lizenz vorgewählt, die niemand gewählt hat"
+        )
+        assert dialog.author.text() == ""
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_licences_read_as_sentences_not_as_identifiers(qt_app: QApplication) -> None:
+    """**Für einen Kunden ohne CAD-Vergangenheit.**
+
+    „CC-BY-SA-4.0" sagt ihm nichts; was er wissen muss, ist, was ein anderer
+    mit seinem Teil tun darf. Die Kennung reist in der Datei, der Satz steht
+    im Dialog — und es gibt nur **eine** Liste, aus der beides kommt.
+    """
+    from app.core.knowledge.parts import recipe as recipes
+
+    dialog = _dialog(qt_app)
+    try:
+        angebot = [dialog.licence.itemData(row) for row in range(dialog.licence.count())]
+        assert angebot == ["", *recipes.RECIPE_LICENSES], (
+            "das Angebot weicht von der Liste des Kerns ab"
+        )
+
+        for row in range(1, dialog.licence.count()):
+            satz = dialog.licence.itemText(row)
+            assert satz != dialog.licence.itemData(row), (
+                f"Zeile {row} zeigt die Kennung statt eines Satzes: {satz!r}"
+            )
+            assert len(satz) > 15, f"das ist kein erklärender Satz: {satz!r}"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_dialog_hands_the_identifier_to_the_core_not_the_sentence(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Die Kette endet am letzten Glied** — und zwar mit der Kennung.
+
+    Der Dialog zeigt „Namensnennung — mein Name muss dabeistehen", die Datei
+    trägt „CC-BY-4.0". Wer beim Ablesen ``currentText()`` statt
+    ``currentData()`` nimmt, schreibt den deutschen Satz in eine Datei, die
+    eine PHP-Gegenstelle gegen eine Kennungsliste prüft — und der Fehler fiele
+    erst dort auf, wo niemand mehr weiß, woher er kommt.
+
+    **Gewartet wird auf den Arbeiter**, denn ``_store`` schneidet abseits des
+    Oberflächen-Threads (§2.8). Ohne das Warten misst der Test einen Zustand,
+    den es noch nicht gibt, und meldet einen Fehler, der keiner ist — beim
+    ersten Bauen genau einmal passiert.
+    """
+    import threading
+
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import recipe as recipes
+
+    dialog = _dialog(qt_app)
+    angekommen: dict[str, object] = {}
+    gerufen = threading.Event()
+
+    def merken(*args: object, **kwargs: object) -> object:
+        angekommen.update(kwargs)
+        gerufen.set()
+        # Ein Fehler statt eines Rezepts: Der Test will das Abgelesene messen,
+        # nicht den Bereichstest danach mitrechnen.
+        raise ValidationError(field="op_ids", detail="Probe", constraint="empty")
+
+    monkeypatch.setattr(recipes, "capture", merken)
+    try:
+        dialog.title.setText("Halter für die Werkbank")
+        dialog.licence.setCurrentIndex(dialog.licence.findData("CC-BY-4.0"))
+        dialog.author.setText("RS Digital")
+
+        dialog._store()
+        assert gerufen.wait(5.0), "der Kern wurde nie gerufen"
+
+        assert angekommen.get("licence") == "CC-BY-4.0", (
+            f"am Kern kam {angekommen.get('licence')!r} an — erwartet die Kennung"
+        )
+        assert angekommen.get("author") == "RS Digital"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_the_button_says_what_is_missing_instead_of_greying_out(qt_app: QApplication) -> None:
     """§2.7: Ein gesperrter Knopf ohne Grund ist eine Sackgasse.
 
