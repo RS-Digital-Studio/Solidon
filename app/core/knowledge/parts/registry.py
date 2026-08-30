@@ -212,6 +212,30 @@ class PartSpec:
     kein Träger zusammen, und die Spalte dazwischen ist der Sinn der Sache.
     """
 
+    lies_flat: bool = False
+    """Wahr für einen Baustein, dessen **Festigkeit an der Druckrichtung hängt**.
+
+    Ein Filmscharnier ist das einzige seiner Art im Katalog: Seine dünne Stelle
+    hält nur, solange die Schichten quer zur Biegung laufen. Steht es senkrecht
+    auf der Platte, laufen sie längs, und es bricht beim ersten Öffnen — das
+    steht in seinem ``caveat``, seit es ihn gibt, und die Einsetz-Operation
+    wusste nichts davon.
+
+    **Nicht zu verwechseln mit** :attr:`keeps_up`. Dort geht es um das *Oben*
+    eines Bausteins, der sonst nicht hält: Ein Einhänger, der zur Seite zeigt,
+    greift hinter nichts. Hier hält der Baustein in jeder Lage — er *bricht*
+    nur, und zwar später, beim Kunden.
+
+    Gemessen an der Klappbox der Galerie am 31.08.2026: Sie setzt das Scharnier
+    mit ``axis="x"``, weil das nach der Biegeachse klingt. ``axis`` ist aber die
+    Richtung, in die der Baustein *zeigt* — die Hülle der Box sprang damit von
+    28 mm Höhe auf 90, das Scharnier stand hochkant. Die Operation lief ohne
+    einen einzigen Befund durch.
+
+    Ist das Feld gesetzt, prüft :func:`_standing_on_edge` die Lage und meldet
+    sie. Gedreht wird nichts: Eine Lage, die der Kunde ausdrücklich angegeben
+    hat, still zu korrigieren wäre schlimmer als sie zu benennen (Regel 21)."""
+
     keeps_up: bool = False
     """Wahr für einen Baustein, der ein **Oben** hat, das die Schwerkraft meint.
 
@@ -461,6 +485,7 @@ def register_part(
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
+    lies_flat: bool = False,
     joined_by_host: bool = False,
     bodies: int = 1,
     features: Iterable[str] = (),
@@ -500,6 +525,7 @@ def register_part(
                 bodies=bodies,
                 at_face=at_face,
                 keeps_up=keeps_up,
+                lies_flat=lies_flat,
                 joined_by_host=joined_by_host,
                 features=tuple(features),
                 doc=doc,

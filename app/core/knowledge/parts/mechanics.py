@@ -353,6 +353,7 @@ class HingeParams(BaseParams):
     group="mechanics",
     params=HingeParams,
     features=["hinge"],
+    lies_flat=True,
     doc=_(
         "Zwei Flügel, verbunden durch eine dünne Stelle. Die Schichten laufen quer "
         "zur Biegung, sonst bricht das Scharnier beim ersten Öffnen."

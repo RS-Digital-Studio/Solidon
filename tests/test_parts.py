@@ -3446,6 +3446,148 @@ def test_the_hook_still_fits_the_narrowest_slot_that_was_measured(material: str)
     )
 
 
+def _klappbox(achse: str) -> object:
+    """Die Klappbox der Galerie, mit wählbarer Achse fürs Scharnier."""
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Box",
+        [OperationDraft(op="create_box", params={"width": 90.0, "depth": 60.0, "height": 28.0})],
+    )
+    History(project.document).apply(
+        "Aushöhlen",
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=("obj_1",),
+                params={"wall": 2.0, "open_top": True, "vents": 0},
+            )
+        ],
+    )
+    History(project.document).apply(
+        "Scharnier",
+        [
+            OperationDraft(
+                op="insert_living_hinge",
+                inputs=("obj_1",),
+                params={
+                    "width": 90.0,
+                    "leaf": 26.0,
+                    "thickness": 2.0,
+                    "film": 0.4,
+                    "axis": achse,
+                    "y": -30.0,
+                    "z": 28.0,
+                },
+            )
+        ],
+    )
+    return project
+
+
+def test_a_hinge_standing_on_edge_says_that_it_will_break(profile: Profile) -> None:
+    """**Der Fall, an dem die Klappbox aus der Galerie flog** (31.08.2026).
+
+    Ihr Rezept setzt das Filmscharnier mit ``axis="x"``, weil das nach der
+    Biegeachse klingt. ``axis`` ist aber die Richtung, in die der Baustein
+    *zeigt*: Die Hülle der Box sprang damit von 28 mm Höhe auf 90 — das
+    Scharnier stand hochkant, seine Schichten liefen längs der Biegung statt
+    quer, und es bricht beim ersten Öffnen.
+
+    Das steht seit jeher in seinem ``caveat``, und die Einsetz-Operation wusste
+    nichts davon: kein Fehler, kein Befund, ein wasserdichter Körper. Genau der
+    Fall für Regel 21 — dieselbe Familie wie der Einhänger, dessen Oben nirgends
+    hinzeigte, nur schlimmer: Der hält nicht, dieses hier *bricht*, und zwar
+    später beim Kunden.
+    """
+    project = _klappbox("x")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    edge = [f for f in result.scene.report.findings if f.code == "parts.standing_on_edge"]
+    assert edge, "das Scharnier steht hochkant und niemand sagt, dass es beim ersten Öffnen bricht"
+    message = str(edge[0].message)
+    assert "waagerecht" in message and "Achse" in message, (
+        f"beide Wege nach vorn müssen im Satz stehen, Regel 17: {message}"
+    )
+
+
+def test_a_hinge_lying_flat_stays_silent(profile: Profile) -> None:
+    """Die Gegenprobe: Was flach liegt, wird nicht angemeckert.
+
+    Ein Befund, der auch im guten Fall erscheint, ist schlimmer als keiner —
+    der Kunde lernt, ihn zu überlesen.
+    """
+    project = _klappbox("z")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    edge = [f for f in result.scene.report.findings if f.code == "parts.standing_on_edge"]
+    assert not edge, f"Fehlalarm bei flach liegendem Scharnier: {[str(f.message) for f in edge]}"
+
+
+def test_only_a_part_whose_strength_depends_on_direction_is_checked(
+    profile: Profile,
+) -> None:
+    """Dieselbe Achse an einem Baustein ohne ``lies_flat`` schweigt.
+
+    Sonst prüfte die Operation nicht die Eigenschaft, sondern den Zufall: Eine
+    Rippe darf liegen, wie die Fläche es vorgibt, und ein Fuß ebenso. Der
+    Befund gehört an die Bausteine, deren Festigkeit an der Druckrichtung
+    hängt — heute genau einer.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Box",
+        [OperationDraft(op="create_box", params={"width": 90.0, "depth": 60.0, "height": 28.0})],
+    )
+    History(project.document).apply(
+        "Rippe",
+        [
+            OperationDraft(
+                op="insert_rib",
+                inputs=("obj_1",),
+                params={"axis": "x", "y": -30.0, "z": 28.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    edge = [f for f in result.scene.report.findings if f.code == "parts.standing_on_edge"]
+    assert not edge, "eine Rippe darf hochkant stehen — sie bricht davon nicht"
+
+
+def test_a_chosen_face_does_not_excuse_a_standing_hinge() -> None:
+    """**Der Unterschied zum Einhänger, und der Grund für die zweite Hälfte.**
+
+    Bei ``keeps_up`` löst eine angeklickte Fläche das Problem: Sie trägt die
+    Richtung, und der Baustein richtet sich daran auf. Hier nicht — eine
+    senkrechte Wand legt das Scharnier genau so hin, wie es nicht darf. Ein
+    Befund, der bei gewählter Fläche schwiege, ließe den halben Fehler durch.
+
+    Geprüft wird die Funktion direkt, weil die Lage über ein echtes Projekt ein
+    Merkmal an einer senkrechten Wand bräuchte — das prüfte dann die
+    Merkmalszuordnung mit und nicht mehr diese Entscheidung.
+    """
+    from types import SimpleNamespace
+
+    from app.core.knowledge.parts.ops import _standing_on_edge
+
+    spec = SimpleNamespace(lies_flat=True, name="living_hinge")
+    params = SimpleNamespace(axis="z")
+
+    senkrecht = _standing_on_edge(spec, params, (1.0, 0.0, 0.0))
+    assert senkrecht is not None, "an einer senkrechten Wand liegt das Scharnier hochkant"
+
+    waagerecht = _standing_on_edge(spec, params, (0.0, 0.0, 1.0))
+    assert waagerecht is None, "auf einer waagerechten Fläche liegt es richtig"
+
+    kopfueber = _standing_on_edge(spec, params, (0.0, 0.0, -1.0))
+    assert kopfueber is None, "unter einer Decke ebenso — die Schichten laufen quer"
+
+    andere = SimpleNamespace(lies_flat=False, name="rib")
+    assert _standing_on_edge(andere, params, (1.0, 0.0, 0.0)) is None
+
+
 def test_a_hook_placed_by_hand_says_that_its_up_points_nowhere(profile: Profile) -> None:
     """Ein Einhänger auf getippten Koordinaten hält nichts — und sagte es nicht.
 

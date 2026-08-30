@@ -382,6 +382,58 @@ def _loose_advice(spec: PartSpec) -> TranslatableText:
     )
 
 
+#: Ab welchem Anteil der Senkrechten eine Fläche als waagerecht gilt.
+#: cos(30°) — darunter laufen genug Schichten längs der Biegung, dass
+#: die dünne Stelle eines Filmscharniers reißt.
+_FLAT_ENOUGH = 0.866
+
+
+def _standing_on_edge(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding | None:
+    """Steht ein Baustein hochkant, dessen Festigkeit an der Druckrichtung hängt?
+
+    **Der Fall, den die Klappbox gezeigt hat** (31.08.2026). Sie setzt ihr
+    Filmscharnier mit ``axis="x"``, weil das nach der Biegeachse klingt;
+    ``axis`` ist aber die Richtung, in die der Baustein *zeigt*. Die Hülle der
+    Box sprang damit von 28 mm Höhe auf 90 — das Scharnier stand hochkant, und
+    seine Schichten liefen längs der Biegung statt quer. Es bricht beim ersten
+    Öffnen, und die Operation lief ohne einen Befund durch.
+
+    Anders als bei :func:`_lying_flat` **hilft hier eine gewählte Fläche nicht
+    von selbst**: Sie gibt dem Baustein ihre Normale, und eine senkrechte Wand
+    legt ihn genau so hin, wie er nicht darf. Geprüft werden deshalb beide
+    Wege — die eingetippte Achse und die Normale der Fläche.
+
+    **Warnung und nicht Fehler**, wie beim Nachbarn: Das Teil entsteht, ist
+    wasserdicht und druckt. Es hält nur nicht, und das sieht man ihm nicht an.
+    Wer es bewusst hochkant will, darf das — er soll es nur nicht
+    versehentlich tun.
+    """
+    if not spec.lies_flat:
+        return None
+    if direction is None:
+        if str(getattr(params, "axis", "z") or "z") == "z":
+            return None
+    else:
+        # Waagerecht heißt: Die Normale zeigt nach oben oder unten. Alles
+        # dazwischen legt das Scharnier auf die Kante, und ab etwa dreißig Grad
+        # laufen genug Schichten längs, dass die dünne Stelle reißt.
+        if abs(float(direction[2])) >= _FLAT_ENOUGH:
+            return None
+    return Finding(
+        code="parts.standing_on_edge",
+        severity="warning",
+        # Der Vorschlag steht im Satz, wie bei den Nachbarn.
+        message=_(
+            "Dieser Baustein hält nur flach gedruckt: Seine dünne Stelle trägt, "
+            "solange die Schichten quer zur Biegung laufen. Hochkant laufen sie "
+            "längs, und er bricht beim ersten Öffnen. Setzen Sie ihn auf eine "
+            "waagerechte Fläche — oder lassen Sie die Achse auf Z, wenn Sie die "
+            "Stelle eintippen."
+        ),
+        values={"part": spec.name},
+    )
+
+
 def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding | None:
     """Ein Baustein mit einem Oben, dessen Oben nirgendwohin zeigt.
 
@@ -445,6 +497,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
     flat = _lying_flat(spec, ctx.params, direction)
+    on_edge = _standing_on_edge(spec, ctx.params, direction)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
     # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
     # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
@@ -539,6 +592,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             *([nothing] if nothing else []),
             *([loose] if loose else []),
             *([flat] if flat else []),
+            *([on_edge] if on_edge else []),
         ],
     )
 
