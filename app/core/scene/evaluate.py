@@ -666,6 +666,17 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     # ein frischer Befund da, und hinter dem kommt kein Heiler
     # (``test_a_decimation_that_stays_too_large_does_not_settle_the_warning``).
     "perceive.too_large": frozenset({"mesh.deviation"}),
+    # Der Rat vom Laden — „Dreiecke verringern hilft" — verschwindet, wenn
+    # dieselbe Kette ihn befolgt hat: Nach einem Weg-3-Lauf stand er über
+    # einem Objekt, das der vierte Schritt desselben Stapels längst auf
+    # 150 000 Dreiecke gebracht hatte (Register, 30.08.2026). Anders als
+    # ``perceive.too_large`` wird dieser Befund nur beim Laden erhoben; die
+    # Sicherung gegen eine unzureichende Dezimierung trägt der frische
+    # ``too_large`` am Dezimier-Schritt. Was dabei bewusst entfällt, ist der
+    # Dauer-Rat für die Zone zwischen Karten- und Erkennungsgrenze — die
+    # Analysekarten melden ihre Ablehnung beim Klick selbst, und ein halb
+    # erledigter Rat kostet mehr Vertrauen, als er nützt.
+    "ingest.very_large": frozenset({"mesh.deviation"}),
 }
 
 

@@ -801,6 +801,55 @@ def test_a_decimation_below_the_limit_settles_the_warning() -> None:
     assert [entry.code for entry in kept] == ["mesh.deviation"]
 
 
+def test_the_load_advice_goes_once_the_chain_has_decimated() -> None:
+    """Der Rat vom Laden verschwindet, wenn dieselbe Kette ihn befolgt hat.
+
+    Nach einem Weg-3-Erzeugungslauf stand ``ingest.very_large`` mit dem Rat
+    „‚Dreiecke verringern' hilft" im Bericht — und ``decimate_mesh`` war der
+    vierte Schritt desselben Stapels, das Objekt längst bei 150 000 Dreiecken
+    (Register, 30.08.2026). Der Kunde las einen Handlungsvorschlag für etwas,
+    das die Anwendung im selben Zug getan hatte — muss er raten, ob er noch
+    klicken soll, ist es falsch. Dieselbe Entscheidung wie bei
+    ``perceive.too_large``: gestrichen, nicht herabgestuft.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("ingest.very_large", "warning", 1),
+            _finding("mesh.deviation", "info", 4),
+        ]
+    )
+
+    assert [entry.code for entry in kept] == ["mesh.deviation"]
+
+
+def test_an_insufficient_decimation_keeps_the_fresh_size_finding() -> None:
+    """Und wer über der Erkennungsgrenze bleibt, verliert die Auskunft nicht.
+
+    Eine Dezimierung von 614 000 auf 450 000 streicht den Lade-Rat — der
+    beschrieb den Zustand vor ihr —, aber die Auswertung misst nach jeder
+    Operation, und der frische ``perceive.too_large`` am Dezimier-Schritt
+    trägt die Geschichte weiter: hinter ihm kommt kein Heiler mehr. Die
+    Lücke dazwischen (unter der Erkennungs-, über der Kartengrenze) ist
+    entschieden: Die Analysekarten melden ihre Ablehnung beim Klick selbst,
+    und ein halb erledigter Dauer-Rat kostet mehr Vertrauen, als er nützt.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("ingest.very_large", "warning", 1),
+            _finding("mesh.deviation", "info", 2),
+            _finding("perceive.too_large", "info", 2),
+        ]
+    )
+
+    codes = [entry.code for entry in kept]
+    assert "ingest.very_large" not in codes, "der befolgte Rat gehört gestrichen"
+    assert codes.count("perceive.too_large") == 1, "die frische Auskunft bleibt"
+
+
 def test_the_report_of_a_real_run_carries_each_sentence_once(
     document: Document, profile: Profile
 ) -> None:
