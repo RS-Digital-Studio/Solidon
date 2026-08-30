@@ -995,3 +995,27 @@ def test_the_number_field_and_the_combo_box_can_be_hit(theme: str) -> None:
     assert "QComboBox::down-arrow {" in sheet, (
         f"{theme}: die Combobox hat ein gestaltetes Pfeilfeld und keinen Pfeil mehr darin"
     )
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_locked_control_looks_locked_and_a_button_looks_like_one(theme: str) -> None:
+    """Zwei Zustände, die man nicht sah.
+
+    Der Werkzeugknopf trug im Ruhezustand eine **durchsichtige** Kante — in
+    der Bewegen-Karte stehen drei Modusknöpfe nebeneinander, und nur der
+    gewählte hatte eine Fläche; die anderen beiden las man als Beschriftungen.
+    Und für das Ankreuzfeld gab es gar keine Regel: Qt zeichnet das Kästchen
+    dann in beiden Zuständen gleich, während nur die Beschriftung daneben
+    verblasst — ein Haken, der gesetzt aussieht und sich nicht setzen lässt.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+
+    resting = sheet.split("QToolButton {")[1].split("}")[0]
+    assert "transparent" not in resting, (
+        f"{theme}: der Werkzeugknopf ist im Ruhezustand rahmenlos: {resting}"
+    )
+
+    for control in ("QCheckBox", "QRadioButton"):
+        assert f"{control}::indicator:disabled" in sheet, (
+            f"{theme}: {control} sieht gesperrt aus wie bedienbar"
+        )
