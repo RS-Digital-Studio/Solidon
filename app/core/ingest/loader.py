@@ -469,7 +469,17 @@ def normalise(
             findings.append(
                 Finding(
                     code="ingest.degenerate_removed",
-                    severity="warning",
+                    # **Hinweis, nicht Warnung — die Sache ist erledigt.** Eine
+                    # Warnung fragt nach einer Handlung, und hier gibt es
+                    # keine: Die entarteten Dreiecke sind weg, drei Zeilen
+                    # weiter oben. Ihre zwei Geschwister sagen dasselbe seit je
+                    # als Hinweis — ``ingest.welded`` zwanzig Zeilen darüber
+                    # und ``repair.degenerate_removed`` mit **demselben Satz**
+                    # (``geom/repair.py:349``). Gemessen am Korpus stand die
+                    # Warnung bei fünf von zwanzig Modellen und ließ den
+                    # Prüfbericht bei jedem zweiten Import gelb aufgehen, ohne
+                    # dass jemand etwas tun konnte.
+                    severity="info",
                     message=_("Entartete Dreiecke wurden entfernt."),
                     values={"removed": removed},
                 )

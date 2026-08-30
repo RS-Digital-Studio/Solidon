@@ -8050,6 +8050,7 @@ class MainWindow(QMainWindow):
             # eben nur die Notlösung für Kennungen, die niemand einlösen kann.
             "cancel_split": lambda _error: self.session.cancel_split(),
             "repair_and_retry": self._repair_after_error,
+            "remove_small_parts": self._remove_small_parts,
             "split_model": self._split_after_error,
             "scale_to_fit": self._scale_after_error,
             "place_on_bed": self._place_on_bed_after_error,
@@ -8217,6 +8218,31 @@ class MainWindow(QMainWindow):
         self.session.apply(
             REGISTRY.get("repair").title,
             [OperationDraft(op="repair", inputs=(object_id,))],
+        )
+
+    def _remove_small_parts(self, error: AppError) -> None:
+        """Dieselbe Operation wie die Reparatur — aber mit dem Schalter, der wirkt.
+
+        ``repair`` kann die kleinen Einzelteile entfernen und lässt sie in der
+        Vorgabe stehen (``small_components: bool = False``). Wer hier
+        :meth:`_repair_after_error` wiederverwendet, bekommt einen Knopf, der
+        durchläuft, Erfolg meldet und nichts tut.
+
+        Kein Bestätigungsdialog (Regel 19): Die Handlung ist eine Operation im
+        Verlauf, und Strg+Z nimmt sie zurück.
+        """
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        self.session.apply(
+            REGISTRY.get("repair").title,
+            [
+                OperationDraft(
+                    op="repair",
+                    inputs=(object_id,),
+                    params={"small_components": True},
+                )
+            ],
         )
 
     def _split_after_error(self, error: AppError) -> None:

@@ -108,6 +108,16 @@ CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen."), p
 #: mitreist, und ``QDesktopServices`` öffnet sie.
 DECIMATE_MESH = Action("decimate_mesh", _("Dreiecke verringern."), primary=True)
 OPEN_IN_BROWSER = Action("open_in_browser", _("Seite im Browser öffnen"))
+#: Die kleinen Einzelteile wegwerfen, die beim Einlesen aufgefallen sind.
+#:
+#: **Eigene Handlung und nicht ``REPAIR_AND_RETRY``**, obwohl beide
+#: dieselbe Operation rufen: Der bestehende Reparatur-Handler ruft
+#: ``repair`` ohne Parameter, und ``small_components`` steht dort auf
+#: ``False`` (``geom/repair.py``). Der Knopf wäre durchgelaufen, hätte
+#: Erfolg gemeldet und die Teile stehen gelassen — ein Knopf ohne Wirkung
+#: ist schlimmer als keiner, und ein Klickweg-Test hätte es nicht
+#: gefangen: Die Operation läuft ja.
+REMOVE_SMALL_PARTS = Action("remove_small_parts", _("Kleine Teile entfernen"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der

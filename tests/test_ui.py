@@ -1406,6 +1406,66 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     )
 
 
+def test_the_small_parts_button_removes_them_and_not_merely_runs(window: MainWindow) -> None:
+    """Der Knopf zu „sehr kleine Einzelteile" entfernt sie wirklich.
+
+    Der Befund sagte „Gelöscht wurde nichts." und bot nichts an — gemessen am
+    Korpus bei zwei von zwanzig Modellen. Die Anwendung **kann** es:
+    ``repair`` trägt einen Schalter ``small_components``.
+
+    **Der naheliegende Fix wäre ein Knopf ohne Wirkung gewesen.** Den Befund an
+    das vorhandene ``REPAIR_AND_RETRY`` zu hängen, hätte zehn Sekunden
+    gedauert: ``_repair_after_error`` ruft ``repair`` ohne Parameter, und der
+    Schalter steht dort auf ``False`` (``geom/repair.py``). Der Knopf wäre
+    durchgelaufen, hätte einen Schritt in den Verlauf gelegt und die Teile
+    stehen gelassen.
+
+    **Deshalb zählt dieser Test Komponenten und nicht Schritte.** Ein Test auf
+    „die Operation lief" wäre gegen genau diesen Fehler blind — sie läuft ja.
+    Die Zahl der Komponenten ist dabei die eine Größe, die der parameterlose
+    Aufruf **nicht** bewegt: ``weld``, ``degenerate``, ``normals`` und
+    ``holes`` stehen in der Vorgabe auf ``True`` und ändern Ecken, Dreiecke und
+    Normalen — die Fragmente lassen sie stehen.
+    """
+    from app.core.geom.mesh import face_components
+    from app.ui.panels import actions_for, as_error
+
+    window.open_path(MESHES / "two_components.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+
+    findings = list(result.scene.report.findings)
+    small = next((f for f in findings if f.code == "ingest.small_components"), None)
+    assert small is not None, (
+        "dieses Modell soll den Befund auslösen — sonst prüft der Test nichts: "
+        f"{[f.code for f in findings]}"
+    )
+
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh is not None
+    before = len(face_components(body.mesh.raw))
+    assert before > 1, "ohne mehrere Komponenten gibt es nichts zu entfernen"
+
+    handlers = window.error_handlers()
+    offered = [action for action in actions_for(small) if action.id in handlers]
+    assert [action.id for action in offered] == ["remove_small_parts"], (
+        f"der Befund bietet {[a.id for a in offered]} an"
+    )
+    handlers["remove_small_parts"](as_error(small))
+    window.session.wait_for_idle()
+
+    after_result = window.session.last_result
+    assert after_result is not None
+    after_body = next(iter(after_result.scene.objects.values()))
+    assert after_body.mesh is not None
+    after = len(face_components(after_body.mesh.raw))
+    assert after < before, (
+        f"{before} Komponenten vorher, {after} nachher — der Knopf lief, "
+        "ohne die kleinen Teile zu entfernen"
+    )
+
+
 def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
     """Eine Wahl des Kunden überschreibt die Vorauswahl nicht (§2.4).
 
@@ -1424,6 +1484,50 @@ def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
 
     kept = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole).code
     assert kept == standing, "die Vorauswahl hat eine getroffene Wahl überschrieben"
+
+
+def test_a_double_click_on_a_folded_step_says_where_the_single_ones_are(
+    qt_app: QApplication,
+) -> None:
+    """Eine Geste, die sechs Touren lehren, darf nicht stumm bleiben (Regel 17).
+
+    Ein Doppelklick im Verlauf öffnet den Schritt — außer der Schritt fasst
+    mehrere Operationen zusammen: Dann trägt die Zeile keine ``UserRole``, denn
+    welche der vier sollte sich öffnen. Der Tooltip der Liste verspricht die
+    Geste trotzdem ohne Einschränkung, und sechs der neun Beispieltouren lehren
+    sie als *den* Weg zum Ändern.
+
+    Geprüft wird über das Signal der Liste und nicht über ``_on_activated``:
+    Was ein Doppelklick auslöst, entscheidet die Verbindung, und die ist Teil
+    der Zusage.
+    """
+    from app.core.types import Document, Transaction
+    from app.ui.panels import HistoryPanel
+
+    document = Document(format_version=7, app_version="0.0.1")
+    document.transactions.append(Transaction(id=1, title="Bohrung setzen", ops=(1,)))
+    document.transactions.append(Transaction(id=2, title="Teilung in vier", ops=(2, 3, 4, 5)))
+
+    panel = HistoryPanel()
+    panel.show_document(document)
+
+    notes: list[str] = []
+    opened: list[int] = []
+    panel.noteRequested.connect(notes.append)
+    panel.operationActivated.connect(opened.append)
+
+    einzeln = panel.list.item(0)
+    assert einzeln.text() == "Bohrung setzen"
+    panel.list.itemDoubleClicked.emit(einzeln)
+    assert opened == [1], "ein einzelner Schritt öffnet sich weiterhin"
+    assert not notes
+
+    gefaltet = panel.list.item(1)
+    assert gefaltet.text() == "Teilung in vier"
+    panel.list.itemDoubleClicked.emit(gefaltet)
+    assert opened == [1], "ein Sammelschritt öffnet keine einzelne Operation"
+    assert notes, "der Doppelklick blieb stumm — die Touren lehren ihn trotzdem"
+    assert "einzeln" in notes[0], notes[0]
 
 
 def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:

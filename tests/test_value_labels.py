@@ -436,6 +436,76 @@ def test_the_same_problem_offers_the_same_actions(qt_app: object) -> None:
     assert not uneven, "\n".join(uneven)
 
 
+def test_the_same_sentence_weighs_the_same() -> None:
+    """Zwei Melder mit demselben Satz melden dasselbe — also gleich schwer.
+
+    „Entartete Dreiecke wurden entfernt." stand beim Einlesen als **Warnung**
+    und in der Reparatur, mit genau diesem Satz, als **Hinweis**
+    (``geom/repair.py``). Am Korpus gemessen traf es fünf von zwanzig
+    Modellen: Der Prüfbericht ging bei jedem vierten Import gelb auf, und
+    niemand konnte etwas tun — die Dreiecke waren zu diesem Zeitpunkt weg.
+
+    **Eine Warnung fragt nach einer Handlung.** Wo keine gehört, weil die
+    Sache erledigt ist, ist der Befund ein Hinweis. Das ist derselbe Gedanke
+    wie in ``test_the_same_problem_offers_the_same_actions`` eine Ebene
+    darüber, nur über das Gewicht statt über die Hilfe.
+
+    **Geprüft wird über den Satz, nicht über die Familie.** Der Name hinter
+    dem Punkt wäre zu grob: ``export.empty`` ist ein Fehler und
+    ``sculpt.empty`` ein Hinweis, ``boolean.without_effect`` eine Warnung und
+    ``transform.without_effect`` ein Hinweis — dieselbe Kennung, verschiedene
+    Sache, zu Recht verschieden schwer. Gemessen wären das drei Fehlalarme.
+    Ein **identischer Satz** dagegen behauptet Gleichheit selbst; wer ihn
+    zweimal schreibt und verschieden gewichtet, hat sich an einer der beiden
+    Stellen geirrt.
+    """
+    import ast
+
+    import app.core
+
+    def sentence(node: ast.AST) -> str | None:
+        """Der Satz aus ``message=`` — auch durch ``_()`` hindurch."""
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            return node.value
+        if isinstance(node, ast.Call) and node.args:
+            return sentence(node.args[0])
+        return None
+
+    by_sentence: dict[str, dict[str, set[str]]] = {}
+    for path in Path(app.core.__file__).parent.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover - nur bei kaputtem Baum
+            continue
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "Finding"
+            ):
+                continue
+            code = severity = message = None
+            for keyword in node.keywords:
+                if keyword.arg == "code" and isinstance(keyword.value, ast.Constant):
+                    code = keyword.value.value
+                if keyword.arg == "severity" and isinstance(keyword.value, ast.Constant):
+                    severity = keyword.value.value
+                if keyword.arg == "message":
+                    message = sentence(keyword.value)
+            if code and severity and message:
+                by_sentence.setdefault(message, {}).setdefault(severity, set()).add(code)
+
+    assert by_sentence, "ohne gefundene Befunde prüft dieser Test nichts"
+
+    uneven = [
+        f"{message!r}: "
+        + ", ".join(f"{rank} bei {sorted(codes)}" for rank, codes in sorted(ranks.items()))
+        for message, ranks in sorted(by_sentence.items())
+        if len(ranks) > 1
+    ]
+    assert not uneven, "derselbe Satz, verschiedenes Gewicht:\n" + "\n".join(uneven)
+
+
 # --- Längenfelder sprechen die Anzeigeeinheit (§19.3) ---------------------------
 
 

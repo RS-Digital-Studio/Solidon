@@ -46,6 +46,7 @@ from app.core.errors import (
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     PLACE_ON_BED,
+    REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
     SHOW_HISTORY,
@@ -241,6 +242,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "gcode.off_the_bed": (ARRANGE_ON_BED, SCALE_TO_FIT),
     "export.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     "ingest.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # **Der Satz sagte, dass nichts geschah — und bot nichts an.** „Es gibt
+    # sehr kleine Einzelteile. Gelöscht wurde nichts.“ stand ohne Handlung
+    # da, während ``repair`` sie mit ``small_components=True`` entfernt.
+    # Gemessen am Korpus: zwei von zwanzig Modellen, beide Male eine
+    # Warnung ohne Weg.
+    "ingest.small_components": (REMOVE_SMALL_PARTS,),
     # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
     # geschlossen" meldet der Kern an drei Stellen: beim Einlesen, beim
     # Exportieren und nach jedem Zug des Agenten (``agent.not_watertight``,
