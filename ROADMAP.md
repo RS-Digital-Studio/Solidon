@@ -132,6 +132,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
+| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | die Bestandsaufnahme (bedienlogik läuft): Ist-Klickwege, Hürden, Pakete — danach Verteilung und Review je Paket |
 
 ---
 
@@ -12844,3 +12845,19 @@ bzw verteilen und review".
       erst beim 0.2.3-Zug, sonst zeigte die Website eine ungebaute
       Version. Review und Alt-Client-Messung (v0.2.1-Code gegen eine
       Datei mit `groups`-Feld) liegen bei der Freigabe.
+
+---
+
+## Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026)
+
+Roberts Auftrag nach dem 0.2.2-Release: „steuerung für nicht cad kunden
+einfach machen, verschieben, auswählen, rotieren, skalieren usw" —
+sauber abarbeiten, verteilen, Review. Der Maßstab ist der Slicer, aus
+dem diese Kunden kommen (ein Klick wählt, Move/Rotate/Scale sind je ein
+Knopf mit Griffen am Körper), nicht ein CAD.
+
+- [ ] **Bestandsaufnahme läuft** (bedienlogik, 30.08.2026):
+      Ist-Klickwege je Geste am Code, Hürden gegen die
+      Slicer-Erwartung, Soll-Vorschläge mit §-Beleg, geschnitten in
+      Pakete von höchstens einem Tagwerk. Danach: Pakete verteilen,
+      Review je Paket, dieser Punkt wird durch die Paketliste ersetzt.
