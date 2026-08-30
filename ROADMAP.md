@@ -13207,7 +13207,7 @@ bereits als eigener Auftrag bei 50.
 | G9 | Einheiten und Zeichen-Knöpfe: „[mm]" aus den Beschriftungen in die Werte (die eigene Regel in `oberflaeche.md` verlangt es), „fx" und „…" als erkennbare Knöpfe mit Bezug zur Zeile (B12/B13/B14) | M | offen |
 | G10 | Leere- und Wartezustände: Chat-Begrüßung statt schwarzem Kasten (und der Modellname weg von der prominentesten Stelle), Generierungsdialog, Freischaltung, vier nackte Warte-Textzeilen gegen `wartezeit.md` (B17/B18/B26/B29) | M | offen |
 | G11 | Skizzenkarte neu setzen (zerfallener Textblock, doppelter Hinweis, schwebende Kapsel) und die kursiven Kartenhinweise aufrecht (B19/B20) | S | **50** — dockt an den Fertig-Fix an |
-| G12 | Druckeinstellungen: eine Abschnittsform statt QGroupBox-2010 über rahmenlosen Aufklappern (B9) | S | **15** — bewusst aus D11 herausgehalten, damit der Diff nicht wächst; jetzt eigenes Paket |
+| G12 | Druckeinstellungen: eine Abschnittsform statt QGroupBox-2010 über rahmenlosen Aufklappern (B9) | S | **fertig** (`b3a419fa`, 15): „Das Wichtigste“ und „Was dieses Teil verlangt“ sind jetzt Aufklapper wie ihre Nachbarn — eine Form, eine Sprache; die B9-Begründung steht als Docstring an der Stelle |
 | G13 | Kleinserie: Filamentkarten-Höhe, Befehlspaletten-Spalten, Statuszeilen-Verschmelzung, Startbildschirm-Resthöhe, Filamentdialog (Farbfeld winzig, „OK"), Verlauf ohne Symbole, Menü-Icon-Lücken, Handbuch-Ränder, helle Kanten, sprachabhängiger Symbol-Schwellwert (B21/B23/B24/B27/B28/B31/B33/B34/B35/B40) | M | offen — nach den großen |
 
 Roberts Order zur Erhebung (30.08.2026): „das ganze dokument soll
