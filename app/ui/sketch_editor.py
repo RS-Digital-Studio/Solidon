@@ -5206,11 +5206,49 @@ class SketchField(QWidget):
         self.edit_button = QPushButton(tr("Zeichnen …"), self)
         self.edit_button.clicked.connect(self._edit)
 
+        #: Was den Weg in den Raum geht — gesetzt von dem, der den Schritt kennt.
+        #:
+        #: **Der Knopf steht nur da, wo es etwas zu ändern gibt** (Z9): beim
+        #: Korrigieren aus dem Verlauf. Beim Anlegen kommt man ohnehin aus dem
+        #: Zeichenmodus, und ein Knopf zurück dorthin wäre ein Kreis.
+        self._in_space: Callable[[str], None] | None = None
+        self.space_button = QPushButton(tr("Im Raum zeichnen …"), self)
+        self.space_button.setToolTip(
+            tr(
+                "Zeichnet die Skizze dort, wo sie liegt — mit Ziehgriff, Maßeingabe im "
+                "Bild und den Ebenen des Körpers. Dieser Dialog geht dabei zu; die "
+                "übrigen Werte bleiben am Schritt."
+            )
+        )
+        self.space_button.setVisible(False)
+        self.space_button.clicked.connect(self._draw_in_space)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.summary, stretch=1)
+        layout.addWidget(self.space_button)
         layout.addWidget(self.edit_button)
         self._describe()
+
+    def offer_space(self, go: Callable[[str], None]) -> None:
+        """Den Weg in den Zeichenmodus anbieten (Z9).
+
+        Gerufen von der Stelle, die den Verlaufsschritt kennt — das Feld selbst
+        weiß nicht, welche Operation es füllt. Ohne diesen Aufruf bleibt der
+        Knopf verborgen, und der Dialog ist der einzige Weg wie zuvor.
+        """
+        self._in_space = go
+        self.space_button.setVisible(True)
+
+    def _draw_in_space(self) -> None:
+        """Der Dialog gibt ab: Was er zeigt, zeichnet der Kunde im Raum weiter.
+
+        Übergeben wird der **aktuelle** Feldtext und nicht der beim Öffnen —
+        wer im Dialog gezeichnet und dann gewechselt hat, verlöre sonst genau
+        die Striche, die ihn zum Wechseln bewogen haben.
+        """
+        if self._in_space is not None:
+            self._in_space(self._text)
 
     def text(self) -> str:
         return self._text

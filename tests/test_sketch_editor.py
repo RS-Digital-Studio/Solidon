@@ -5961,3 +5961,116 @@ def test_the_sketch_dialog_owns_its_primary_button(qt_app: QApplication) -> None
         assert fett == [ok.text()], f"genau ein Hauptknopf je Fenster (B22), gefunden: {fett}"
     finally:
         dialog.deleteLater()
+
+
+def test_a_sketch_step_can_be_redrawn_in_space(qt_app: QApplication) -> None:
+    """Dieselbe Operation, zwei Umgebungen — je nach Weg dorthin (Z9).
+
+    Wer eine Skizzen-Operation über das Menü **anlegt**, landet im
+    Zeichenmodus: Ziehgriff, Maßeingabe im Bild, Ebenenkarten, und die
+    Zeichnung liegt am Körper. Wer dieselbe Operation aus dem Verlauf
+    **ändert**, bekam ein weißes Blatt im Dialog — ohne all das. Der schwerste
+    Verlust war der Ziehgriff: Eine Tasche ließ sich dort nicht ziehen,
+    obwohl genau diese Geste sie erzeugt hat.
+
+    Der Knopf „Im Raum zeichnen" schließt die Lücke, und er schließt den
+    Dialog **endgültig** — statt ihn später wiederzubringen. Ein modales
+    Fenster, das sich schließt und nach einem Moduswechsel zurückkehrt, wäre
+    eine Zustandsmaschine mehr; die übrigen Feldwerte stehen ohnehin am
+    Schritt und reisen von dort mit.
+
+    Die entscheidende Zusage ist die letzte: **„Fertig" ändert denselben
+    Schritt.** Ein zweiter im Verlauf wäre genau der Fehler, den der Umweg
+    vermeiden soll — dieselbe Entscheidung, die der Skeletteditor schon trägt.
+    """
+    from app.core.scene import OperationDraft
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.sketch_editor import SketchField
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.start_new()
+        window.session.apply(
+            "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
+        )
+        window.session.wait_for_idle()
+        body = next(iter(window.session.evaluate_now().scene.objects))
+        window.object_tree.select_object(body)
+        window.session.apply(
+            "Tasche",
+            [
+                OperationDraft(
+                    op="sketch_pocket",
+                    inputs=[body],
+                    params={"length": 6.0, "sketch": sketch_to_text(shapes.rectangle(12.0, 8.0))},
+                )
+            ],
+        )
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+
+        step = window.session.history.operations[-1].id
+        window.edit_operation(step)
+        QApplication.processEvents()
+
+        dialog = window._op_dialog
+        assert dialog is not None, "der Operationsdialog steht offen"
+        fields = dialog.findChildren(SketchField)
+        assert len(fields) == 1
+        assert not fields[0].space_button.isHidden(), (
+            "beim Korrigieren aus dem Verlauf steht der Weg in den Raum offen"
+        )
+
+        before = len(window.session.history.operations)
+        fields[0].space_button.click()
+        QApplication.processEvents()
+
+        assert window._op_dialog is None, "der Dialog gibt ab, er wartet nicht"
+        assert window._sketch_panel is not None, "und der Zeichenmodus steht"
+        assert window._sketch_step == step, "er weiß, welchen Schritt er ändert"
+        assert window._sketch_target == "sketch_pocket"
+        assert len(window._sketch_panel.canvas.sketch.elements) == 4, (
+            "die vier Seiten des Rechtecks sind mitgekommen — ein leeres Blatt wäre "
+            "genau der Verlust, den der Knopf vermeiden soll"
+        )
+
+        window._sketch_panel.canvas.add_element("line", ((0.0, 0.0), (5.0, 0.0)))
+        window.finish_sketch(keep=True)
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+
+        assert len(window.session.history.operations) == before, (
+            "Fertig ändert den Schritt und legt keinen zweiten an"
+        )
+        assert window._op_dialog is not None, "und bringt seinen Dialog zurück"
+        assert str(step) in window._op_dialog.windowTitle(), (
+            f"denselben Schritt: {window._op_dialog.windowTitle()}"
+        )
+    finally:
+        window.wait_for_workers()
+        window.deleteLater()
+
+
+def test_a_fresh_sketch_operation_offers_no_way_back_into_space(qt_app: QApplication) -> None:
+    """Beim Anlegen steht der Knopf nicht da, und das ist Absicht.
+
+    Wer eine Skizzen-Operation neu anlegt, kommt aus dem Zeichenmodus — dort
+    hat er gezeichnet, „Fertig" hat den Dialog geöffnet. Ein Knopf zurück
+    dorthin wäre ein Kreis, und ein Kreis in einer Oberfläche ist keine Wahl,
+    sondern eine Frage ohne Antwort.
+
+    Geprüft wird an dem Weg, der ihn setzt: ``offer_space`` ruft nur
+    ``edit_operation``. Ohne den Aufruf bleibt der Knopf verborgen — die
+    Vorgabe ist also der alte Zustand, und nicht umgekehrt.
+    """
+    from app.ui.sketch_editor import SketchField
+
+    field = SketchField()
+    try:
+        assert field.space_button.isHidden(), "ohne einen Schritt gibt es nichts zu ändern"
+    finally:
+        field.deleteLater()

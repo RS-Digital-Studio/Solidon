@@ -245,7 +245,13 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog
 from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
-from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for, plane_where
+from app.ui.sketch_editor import (
+    SketchField,
+    SketchPanel,
+    Surroundings,
+    grid_step_for,
+    plane_where,
+)
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, divider, make_primary, menu_heading, set_level
@@ -1448,6 +1454,13 @@ class MainWindow(QMainWindow):
         self.viewport.boneRequested.connect(self._on_bone_point)
         self._armature_target: str | None = None
         self._armature_step: int | None = None
+        #: Der Verlaufsschritt, den der Zeichenmodus gerade ändert (Z9).
+        #:
+        #: Gesetzt, wenn jemand aus dem Dialog eines vorhandenen Schritts „Im
+        #: Raum zeichnen“ gewählt hat. Dann legt „Fertig“ **keinen** neuen
+        #: Schritt an, sondern öffnet denselben mit der neuen Zeichnung —
+        #: derselbe Weg, den der Skeletteditor geht.
+        self._sketch_step: int | None = None
         """Der Schritt, den dieser Editor ändert — ``None`` heißt: ein neuer."""
         self._armature_bones: list[Bone] = []
         self._armature_head: tuple[float, float, float] | None = None
@@ -3741,7 +3754,6 @@ class MainWindow(QMainWindow):
             self.progress.setVisible(False)
         self.status_message.setText(self._announcement)
 
-
     def action_generate(self) -> None:
         """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
         self._generate(None)
@@ -5108,7 +5120,9 @@ class MainWindow(QMainWindow):
         objects = result.scene.objects.values() if result else ()
         return frame_for_plane(plane, objects)
 
-    def start_sketch(self, op_name: str, text: str = "", plane: str = "") -> None:
+    def start_sketch(
+        self, op_name: str, text: str = "", plane: str = "", *, step: int | None = None
+    ) -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
 
         Der mittlere Bereich zeigt die Zeichenfläche statt der Ansicht; die
@@ -5148,6 +5162,9 @@ class MainWindow(QMainWindow):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
         self._sketch_panel = panel
         self._sketch_target = op_name
+        # Beim Korrigieren aus dem Verlauf trägt der Modus die Kennung des
+        # Schritts, den er ändert (Z9). Beim Anlegen bleibt sie leer.
+        self._sketch_step = step
         """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
         Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
         # **Der Schnitt (§30.1, P4): Die Ansicht bleibt stehen.** Früher stand
@@ -5867,6 +5884,7 @@ class MainWindow(QMainWindow):
         """
         panel = self._sketch_panel
         target = self._sketch_target
+        step = self._sketch_step
         if panel is None:
             return
         text = panel.sketch_text()
@@ -5891,6 +5909,7 @@ class MainWindow(QMainWindow):
         # Zeile (gemessen, Segmentierungsfehler in ``test_ui.py``).
         self._sketch_panel = None
         self._sketch_target = None
+        self._sketch_step = None
         self.viewport.set_sketching(None)
         # Die Maßeingabe abklemmen und das Feld heimholen, **bevor** das Panel
         # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
@@ -5943,7 +5962,17 @@ class MainWindow(QMainWindow):
             if target:
                 values: dict[str, Any] = {_sketch_param(target): text}
                 values.update(given or {})
-                self.run_operation(REGISTRY.get(target), given=values)
+                if step is not None:
+                    # **Derselbe Schritt, andere Zeichnung** (Z9). Wer aus dem
+                    # Dialog eines vorhandenen Schritts in den Raum gewechselt
+                    # ist, will ihn ändern und keinen zweiten anlegen, der
+                    # dasselbe noch einmal tut — dieselbe Entscheidung wie beim
+                    # Skeletteditor. Die übrigen Feldwerte stehen am Schritt und
+                    # reisen von dort mit; ``given`` überschreibt nur die
+                    # Zeichnung.
+                    self.edit_operation(step, given=values)
+                else:
+                    self.run_operation(REGISTRY.get(target), given=values)
             else:
                 # Freies Zeichnen (Weg 2): erst jetzt fällt die Entscheidung,
                 # was aus der Skizze wird — mit der fertigen Zeichnung vor
@@ -7944,6 +7973,22 @@ class MainWindow(QMainWindow):
             return tr("Der Wert ist schon so eingestellt.")
         return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
+    def _draw_sketch_in_space(self, op_id: int, op_name: str, dialog: QDialog, text: str) -> None:
+        """Vom Dialog in den Zeichenmodus, für einen vorhandenen Schritt (Z9).
+
+        **Der Dialog geht endgültig zu**, statt zu warten und später
+        wiederzukommen: Ein modales Fenster, das sich schließt und nach einem
+        Moduswechsel zurückkehrt, wäre eine Zustandsmaschine mehr, und die
+        übrigen Feldwerte stehen ohnehin am Schritt und reisen von dort mit.
+        „Fertig" im Modus öffnet denselben Dialog wieder — mit der neuen
+        Zeichnung und ohne einen zweiten Schritt im Verlauf.
+
+        Der Knopf sagt das vorher; sein Hinweis nennt beides, was er bringt
+        und was er kostet.
+        """
+        dialog.reject()
+        self.start_sketch(op_name, text=text, step=op_id)
+
     def edit_operation(
         self, op_id: int, field: str = "", given: Mapping[str, Any] | None = None
     ) -> None:
@@ -8025,6 +8070,14 @@ class MainWindow(QMainWindow):
             slots=self._slots_of_selection(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
+        # **Der Weg in den Raum, und nur von hier aus** (Z9): Wer eine Skizze
+        # aus dem Verlauf korrigiert, saß bisher vor einem weißen Blatt ohne
+        # Ziehgriff, ohne Maßeingabe im Bild und ohne den Körper darunter —
+        # dieselbe Operation, eine andere Umgebung, je nachdem ob man sie
+        # anlegt oder ändert. Das Feld kennt seinen Schritt nicht; diese
+        # Stelle kennt ihn, also verdrahtet sie ihn.
+        for field in dialog.findChildren(SketchField):
+            field.offer_space(partial(self._draw_sketch_in_space, op_id, entry.op, dialog))
         if exact is not None:
             exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
             exact.toggled.connect(dialog.valuesChanged)
