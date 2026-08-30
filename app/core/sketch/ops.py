@@ -15,7 +15,7 @@ Der Befund über Freiheitsgrade gehört zur gezeichneten Skizze des Editors.
 from __future__ import annotations
 
 import dataclasses
-from typing import cast
+from typing import Any, cast
 
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
@@ -23,7 +23,7 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import CORRECT_INPUT, Action, GeometryError, NeedsSolidError, ValidationError
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.sketch import shapes
+from app.core.sketch import planes, shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
 from app.core.sketch.profile import (
     Profile,
@@ -146,13 +146,21 @@ def _along(point: tuple[float, float, float], normal: tuple[float, float, float]
     return point[0] * normal[0] + point[1] * normal[1] + point[2] * normal[2]
 
 
-def _span_along(body: Solid, normal: tuple[float, float, float]) -> tuple[float, float]:
+def _span_along(body: Any, normal: tuple[float, float, float]) -> tuple[float, float]:
     """Wie weit ein Körper entlang dieser Normalen reicht.
 
     Aus den acht Ecken des Hüllquaders — für die Tasche genügt das: Sie
     braucht eine Ober- und eine Durchstoßgrenze, keine exakte Silhouette.
+
+    **Beide Arten von Körper.** Der exakte kennt seine Grenzen über den Kern,
+    ein Netz über ``bounds``; die Rechnung darüber ist dieselbe, und die Tasche
+    hat keinen Grund, sie zweimal zu führen.
     """
-    xmin, ymin, zmin, xmax, ymax, zmax = profiles.bounds(body)
+    if isinstance(body, Solid):
+        xmin, ymin, zmin, xmax, ymax, zmax = profiles.bounds(body)
+    else:
+        box = body.bounds
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = box.minimum, box.maximum
     marks = [
         _along((x, y, z), normal) for x in (xmin, xmax) for y in (ymin, ymax) for z in (zmin, zmax)
     ]
@@ -431,9 +439,96 @@ class SketchPocketParams(BaseParams):
     )
 
 
+def _pocket_in_mesh(
+    ctx: OpContext,
+    source: SceneObject,
+    regions: list[Profile],
+    frame: PlaneFrame,
+    top: float,
+    depth: float,
+    through: bool,
+) -> OpResult:
+    """Dieselbe Tasche in einem Netz — über die Boolesche Rückfallkette.
+
+    **Der Weg, den ein heruntergeladenes Modell nimmt.** Ein eingelesenes STL
+    hat keine Flächen im CAD-Sinn, und bis zum 30.08.2026 endete das Abtragen
+    dort an einem Satz: „Der gewählte Körper besteht bereits aus festen
+    Dreiecken." In Fusion geht es, und es ist der häufigste aller Fälle
+    (Robert, 30.08.2026).
+
+    Gerechnet wird wie jede andere Mesh-Operation: Umriss aufziehen
+    (:func:`app.core.geom.sketch_solid.extrude_profile`), Werkzeuge vereinen,
+    abziehen. Was entsteht, ist ein Netz — der Verlauf trägt denselben Schritt,
+    das Ergebnis hat nur keine einzeln bearbeitbaren Flächen mehr, und das
+    hatte der Eingang auch nicht.
+    """
+    from dataclasses import replace as _replace
+
+    from app.core.geom import boolean as mesh_boolean
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.sketch_solid import extrude_profile
+
+    # **Die Tiefe zählt von der Oberkante nach unten**, wie im exakten Weg.
+    # ``through`` greift über den ganzen Körper hinaus, damit die Differenz
+    # sicher durchtrennt statt eine hauchdünne Haut stehen zu lassen.
+    reach = depth if not through else depth + 2.0 * BOOLEAN_OVERLAP
+    # Ausgeschrieben statt als ``tuple(...)`` über einen Bereich:
+    # ``PlaneFrame`` verlangt genau drei Zahlen, und eine Folge unbekannter
+    # Länge ist etwas anderes — mypy sagt das zu Recht.
+    lifted = _replace(
+        frame,
+        origin=(
+            frame.origin[0] + frame.normal[0] * top,
+            frame.origin[1] + frame.normal[1] * top,
+            frame.origin[2] + frame.normal[2] * top,
+        ),
+    )
+
+    tools = []
+    for one in regions:
+        try:
+            tools.append(MeshData.of(extrude_profile(one, -reach, lifted)))
+        except ValueError as problem:
+            raise GeometryError(
+                detail=_("Aus diesem Umriss entsteht kein Körper."),
+                suggestions=(CORRECT_INPUT,),
+                values={"grund": str(problem)},
+            ) from problem
+    if not tools:
+        raise GeometryError(
+            detail=_("Die Zeichnung enthält keinen geschlossenen Umriss."),
+            suggestions=(CORRECT_INPUT,),
+        )
+
+    tool = tools[0]
+    if len(tools) > 1:
+        joined = mesh_boolean.boolean("union", tools, quality=ctx.quality, seed=ctx.seed)
+        tool = joined.mesh
+    outcome = mesh_boolean.boolean(
+        "difference",
+        # Der Aufrufer kommt aus der Weiche in ``sketch_pocket`` und hat dort
+        # geprüft, dass hier kein exakter Körper liegt.
+        [cast(MeshData, source.mesh), tool],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    nothing = without_effect(source.mesh, outcome.mesh, "difference", ctx.profile)
+    # **Die benutzte Rückfallstufe reist mit** (Regel: sie wird in die Operation
+    # geschrieben) — und die Befunde der Kette ebenso, sonst verschwiegen sie
+    # eine Notlösung.
+    return OpResult(
+        # Leeres Wörterbuch, nicht die alten Merkmale: Die Kanten, auf die sie
+        # zeigten, hat der Schnitt gerade verändert.
+        outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
+        findings=[*outcome.findings, *([nothing] if nothing is not None else [])],
+        solver=outcome.solver,
+    )
+
+
 @register_op(
     name="sketch_pocket",
-    requires_kind="brep",
     title=_("Tasche schneiden"),
     category="sketch",
     params=SketchPocketParams,
@@ -441,14 +536,21 @@ class SketchPocketParams(BaseParams):
     produces=1,
     applies_to=("face",),
     doc=_(
-        "Schneidet eine Grundform als Tasche in einen Körper mit einzeln "
-        "bearbeitbaren Flächen — von der Oberkante senkrecht nach unten, auf "
-        "Wunsch durchgehend. Ein Klick auf eine Fläche trägt den Ort vorab ein."
+        "Schneidet eine Grundform als Tasche in einen Körper — von der "
+        "Oberkante senkrecht nach unten, auf Wunsch durchgehend. Ein Klick auf "
+        "eine Fläche trägt den Ort vorab ein. An einem exakten Körper bleiben "
+        "Flächen und Kanten erhalten; an einem eingelesenen Netz entsteht ein "
+        "Netz."
     ),
 )
 def sketch_pocket(ctx: OpContext) -> OpResult:
     params = cast(SketchPocketParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source = ctx.inputs[0]
+    # **Der Körper ist in beiden Fällen derselbe Wert.** ``_span_along`` fragt
+    # ihn nach seinen Grenzen und weiß mit beiden Arten umzugehen; ihn hier
+    # wegzuwerfen, nur weil er kein ``Solid`` ist, nähme der Rechnung darunter
+    # die Spanne, aus der Oberkante und Durchstoß entstehen.
+    body = source.mesh
     # **Die Ebene der Zeichnung zählt** — wie bei ``sketch_extrude``, dessen
     # Fix hier fehlte: Auf einer Seitenwand gezeichnet schnitt die Tasche
     # trotzdem von oben (Welt-Z), und eine falsche Ebene sah aus wie eine
@@ -490,6 +592,26 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
         bottom, reach = low_s - 1.0, (high_s - low_s) + 2.0
     else:
         bottom, reach = top - params.depth, params.depth + 1.0
+    # Die Prüfung steht hier und nicht oben als Wahrheitswert: So verengt sie
+    # den Typ für alles, was darunter folgt — der exakte Zweig rechnet danach
+    # mit einem ``Solid`` und muss es nicht behaupten.
+    if not isinstance(body, Solid):
+        # **Der Mesh-Weg beginnt hier**, mit denselben Zahlen: Oberkante und
+        # Tiefe sind oben schon entschieden, und ob der Körper exakt ist,
+        # ändert daran nichts.
+        # **Ohne Flächenklick gibt es keinen Rahmen** — dann steht die Ebene
+        # nur als Name da, und ``frame_for_plane`` macht daraus denselben
+        # Rahmen, den der exakte Weg über ``profiles.PLANES`` benutzt.
+        #
+        # Dass dabei etwas herauskommt, ist keine Hoffnung: Beide Wörterbücher
+        # tragen dieselben drei Standardebenen, und ein unbekannter Name wäre
+        # oben an ``profiles.PLANES[plane]`` schon aufgeschlagen. Kein eigener
+        # Fehlertext also — er wäre für eine Lage geschrieben, die es nicht
+        # gibt. ``test_sketch_solid`` hält die beiden Listen deckungsgleich.
+        on = frame if frame is not None else planes.frame_for_plane(plane)
+        assert on is not None, f"{plane} steht in PLANES, aber nicht in frame_for_plane"
+        return _pocket_in_mesh(ctx, source, chosen, on, top, top - bottom, params.through)
+
     lifted = bottom - plane_s
     tools = [
         edit.moved(

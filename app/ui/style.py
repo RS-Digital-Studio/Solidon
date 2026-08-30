@@ -374,15 +374,8 @@ QPushButton:focus {{
     padding: {TIGHT - 1}px {ROOMY - 1}px;
 }}
 
-/* **Rahmenlos sah nicht nach Knopf aus.** Der Ruhezustand trug eine
-   durchsichtige Kante, sichtbar wurde sie erst beim Überfahren — und in der
-   Bewegen-Karte stehen drei Modusknöpfe nebeneinander, von denen nur der
-   gewählte eine Fläche hat: Die anderen beiden las man als Beschriftungen.
-   Die Ruhekante nimmt deshalb die Zebrafarbe: leiser als die Trennlinie,
-   und doch eine Kante. Wer keine will, setzt sie wie die Kopfzeile unten
-   ausdrücklich auf ``none``. */
 QToolButton {{
-    border: 1px solid {hover};
+    border: 1px solid transparent;
     border-radius: {SPACE}px;
     padding: {TIGHT}px {NORMAL}px;
 }}
@@ -391,21 +384,6 @@ QToolButton:checked {{ background: {highlight}; color: {on_highlight}; border-co
 QToolButton:focus {{
     border: 2px solid {focus};
     padding: {TIGHT - 1}px {NORMAL - 1}px;
-}}
-
-/* **Gesperrt war nicht zu erkennen.** Für das Ankreuzfeld gab es gar keine
-   Regel; Qt zeichnet das Kästchen dann nativ und in beiden Zuständen
-   gleich, während die Beschriftung daneben über die Palette verblasste —
-   ein Haken, der gesetzt aussieht und sich nicht setzen lässt. Beides fällt
-   jetzt zusammen auf die Sperrfarbe, und der Rahmen des Kästchens mit. */
-QCheckBox:disabled, QRadioButton:disabled {{ color: {disabled}; }}
-QCheckBox::indicator, QRadioButton::indicator {{
-    width: {ROOMY}px;
-    height: {ROOMY}px;
-}}
-QCheckBox::indicator:disabled, QRadioButton::indicator:disabled {{
-    border: 1px solid {disabled};
-    background: transparent;
 }}
 
 /* Panel-Kopfzeilen sind dauerhaft „gedrückt"; eingefärbt wären sie die

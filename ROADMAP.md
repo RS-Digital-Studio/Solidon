@@ -13043,6 +13043,27 @@ schweren Funde liegen an den Ausgängen und am Kernweg 2 — neun Pakete:
       Beschriftung und Migration — die Sprache des Druckers bis in die
       Projektdatei. Eigene Entscheidung mit Formatblick, nicht
       nebenbei.
+- [x] **Abtragen an eingelesenen Netzen** (Robert, 30.08.2026: „abtragen
+      auch an importierten netzen, mach es vollständig komplett und
+      sauber"). `sketch_pocket` verlangte einen exakten Körper und
+      antwortete sonst „Der gewählte Körper besteht bereits aus festen
+      Dreiecken" — damit war der **häufigste aller Fälle** ausgeschlossen:
+      Wer ein Modell herunterlädt, hat ein Netz, und in Fusion schneidet
+      man hinein. Neu ist `geom/sketch_solid.py` (Umriss abtasten, senkrecht
+      aufziehen, auf die Ebene drehen, 72 Ecken je Kreis mit begründeter
+      Sehnenhöhe); `sketch_pocket` bekam eine Weiche und rechnet über die
+      Boolesche Rückfallkette, `requires_kind="brep"` ist gefallen. In der
+      Oberfläche fielen zwei Sperren: `_body_under_the_outline` sprang über
+      jedes Netz hinweg, `_pocket_target_problem` sagte ab. Gemessen:
+      144,0 mm³ an einem 40×30×10-Netz (6×6×4), durchgehend 80,0 mm³, und
+      **auch ohne den optionalen B-Rep-Kern** — eigener Prozess mit
+      gesperrtem `OCP`, weil die Gruppe optional ist (§30). Vierzehn Tests,
+      vier Gegenproben, alle vier rot. Der Testfehler unterwegs ist die
+      Lehre wert: Der Prüfquader lag von 0 bis 40, `shapes.rectangle`
+      zentriert im Ursprung — gemessen 36 statt 144, und der Code hatte
+      recht. Nebenwirkung: Die drei Taschen in `puppenhaus_fertig`, die
+      nach dem Aushöhlen ins Leere liefen (`hollow_object` gibt ein Netz
+      zurück), schneiden jetzt.
 Zulieferung an 3a, übergeben und dort weitergeführt (Kipp-Abschnitt):
 Bei frei gekippter Kamera steht `view_plane` auf FREE_VIEW,
 `_sketch_pull_offer` vergleicht gegen `sketch.plane` und bewirbt den

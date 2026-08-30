@@ -17,7 +17,7 @@ import pytest
 
 from app.core.brep.kernel import Solid, available
 from app.core.brep.profiles import _lift_frame
-from app.core.errors import AppError, NeedsSolidError, ValidationError
+from app.core.errors import AppError, ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
@@ -282,27 +282,40 @@ def test_a_through_pocket_ignores_the_depth() -> None:
     assert solid_of(result).volume == pytest.approx(24000.0 - math.pi * 25.0 * 20.0, rel=1e-9)
 
 
-def test_a_pocket_on_a_mesh_says_it_needs_a_brep_body() -> None:
+def test_a_pocket_on_a_mesh_cuts_instead_of_refusing() -> None:
+    """An einem Netz wird geschnitten, nicht abgelehnt — seit dem 30.08.2026.
+
+    **Hier stand die Gegenprobe zu genau dem Gegenteil.** Der Test hieß
+    ``…_says_it_needs_a_brep_body`` und sicherte zu, dass eine Tasche an einem
+    Netz mit ``NeedsSolidError`` endet. Der Satz war gut geschrieben, nannte
+    einen gangbaren Weg und war trotzdem eine Sackgasse: Wer ein
+    heruntergeladenes STL öffnet — der häufigste aller Fälle —, konnte darin
+    nichts abtragen, und in Fusion kann er es.
+
+    Zwei Dinge werden dadurch heil, die vorher als eigene Fehler herumlagen:
+
+    * Der Fall aus ``puppenhaus_fertig``: ``hollow_object`` höhlt den exakten
+      Körper aus und gibt ein Netz zurück, und die drei Taschen danach liefen
+      ins Leere. Sie schneiden jetzt.
+    * Und die Absage selbst, die dem Kunden eine Eigenschaft der Bauart als
+      seinen Fehler auslegte.
+
+    Was bleibt, ist der ehrliche Unterschied: Aus einem Netz wird ein Netz.
+    Flächen und Kanten hat es danach nicht, und das sagt der ``doc``-Satz der
+    Operation.
+    """
     import trimesh
 
     from app.core.geom.mesh import MeshData
 
     cube = MeshData.of(trimesh.creation.box(extents=(10, 10, 10)))
     entry = SceneObject(id="obj_1", name="mesh cube", mesh=cube)
-    # ``NeedsSolidError`` und nicht ``ValidationError``: der Titel des einen
-    # lautet „Ein Wert liegt außerhalb des zulässigen Bereichs", und hier ist
-    # kein Wert außerhalb eines Bereichs — der Körper hat die falsche Art. Im
-    # Prüfbericht von ``puppenhaus_fertig`` stand deshalb eine Meldung über
-    # Zahlen, wo keine Zahl schuld war.
-    with pytest.raises(NeedsSolidError) as raised:
-        run("sketch_pocket", entry, shape="rectangle", length=5, width=5, depth=2)
-    # Regel 17: der Satz muss einen Weg nennen, nicht nur den Zustand — und
-    # der Weg muss es geben. „Exakt aushöhlen" stand hier, bis ``shell_exact``
-    # als Zwilling zu ``hollow_object`` zusammengelegt wurde (MENU_TWINS): Der
-    # Menüeintrag ist seitdem weg, und ein Vorschlag, der auf ihn zeigt, wäre
-    # eine Sackgasse. Genannt wird deshalb der Haken, über den die Operation
-    # heute erreichbar ist.
-    assert "Flächen und Kanten später bearbeiten" in str(raised.value)
+
+    result = run("sketch_pocket", entry, shape="rectangle", length=5, width=5, depth=2)
+
+    cut = result.outputs[0].mesh
+    assert cube.volume - cut.volume == pytest.approx(50.0, rel=0.02), "5 × 5 × 2"
+    assert not isinstance(cut, Solid), "aus einem Netz entsteht kein exakter Körper"
 
 
 @pytest.mark.parametrize(

@@ -5418,12 +5418,15 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
     ausgewählt sein" — obwohl das Teil unter der Zeichnung lag und nur nicht
     angeklickt war (Robert, 30.08.2026).
 
-    **Die Szene ist gestellt, und das hat einen gemessenen Grund.** Abtragen
-    setzt einen bearbeitbaren Körper voraus (``kind == "brep"``); ein
-    eingelesenes Netz ist keiner, und ``create_box`` liefert in dieser
-    Umgebung ebenfalls ``mesh`` — der B-Rep-Kern ist optional (§30). Ein Test,
-    der den echten Weg gehen wollte, prüfte damit die falsche Absage. Gestellt
-    wird deshalb genau das, was die Suche liest: Art und Hüllquader.
+    **Die Szene ist gestellt**, weil dieser Test nur die Suche prüft — welcher
+    Körper unter der Zeichnung liegt —, und dafür genügt, was sie liest: Art
+    und Hüllquader. Der Test darunter geht den echten Weg mit einer
+    eingelesenen Datei.
+
+    Der ursprüngliche Grund für das Stellen ist übrigens weggefallen: Hier
+    stand, Abtragen setze ``kind == "brep"`` voraus, und ein eingelesenes Netz
+    sei keiner. Das galt bis zum 30.08.2026 und gilt nicht mehr — seither
+    schneidet ``sketch_pocket`` auch in ein Netz.
     """
     from types import SimpleNamespace
 
@@ -5470,4 +5473,57 @@ def test_a_body_under_the_drawing_needs_no_selecting(qt_app: QApplication) -> No
         panel.canvas.add_element("line", ((60.0, 60.0), (70.0, 60.0)))
         assert not window._body_under_the_outline(), "beside the body nothing is found"
     finally:
+        window.deleteLater()
+
+
+def test_an_imported_mesh_is_a_target_for_cutting(qt_app: QApplication) -> None:
+    """Der Fall, den Robert genannt hat: abtragen an einem heruntergeladenen Modell.
+
+    Kein gestellter Namespace, sondern eine echte Datei durch den echten Weg —
+    denn genau hier lag der Fehler, und er lag an der **Art** des Körpers. Wer
+    ein STL öffnet, bekommt ``kind == "mesh"``, und beide Stellen der
+    Oberfläche sprangen darüber hinweg: ``_body_under_the_outline`` zählte nur
+    exakte Körper, und ``_pocket_target_problem`` antwortete „besteht bereits
+    aus festen Dreiecken".
+
+    Ein gestellter Körper hätte das nicht gefangen — er trägt die Art, die der
+    Test hineinschreibt. Die Datei trägt die, die die Anwendung erzeugt.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(Path(__file__).parent / "data" / "meshes" / "plate_holes.stl")
+        window.session.wait_for_idle()
+        result = window.session.evaluate_now()
+        entry = next(iter(result.scene.objects.values()))
+        assert entry.kind == "mesh", "eine eingelesene Datei ist ein Netz — darum ging es"
+
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        # Mitten über das Teil gezeichnet, aus seinem eigenen Hüllquader
+        # gerechnet: Ein fester Ort träfe eine andere Datei nicht mehr.
+        low, high = entry.mesh.bounds.minimum, entry.mesh.bounds.maximum
+        mid = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
+        panel.canvas.add_element(
+            "line", ((mid[0] - 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] - 3.0))
+        )
+        panel.canvas.add_element(
+            "line", ((mid[0] + 3.0, mid[1] - 3.0), (mid[0] + 3.0, mid[1] + 3.0))
+        )
+        window.object_tree.selected_objects = lambda: ()
+
+        assert window._body_under_the_outline() == entry.id, (
+            "das eingelesene Netz liegt unter der Zeichnung und ist gemeint"
+        )
+        assert not window._pocket_target_problem(), (
+            "und es abzulehnen war der Fehler — hier stand „besteht bereits aus "
+            "festen Dreiecken“, und damit war der häufigste Fall ausgeschlossen"
+        )
+        assert window._sketch_cut_available(), "der Griff bietet das Abtragen also an"
+    finally:
+        window.wait_for_workers()
         window.deleteLater()

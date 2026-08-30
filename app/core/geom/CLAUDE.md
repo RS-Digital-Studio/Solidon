@@ -45,7 +45,15 @@ in Flucht bringen)
 `primitive_ops.py` · `blend.py` (weiches Verschmelzen) · `displace.py`
 (Höhenfeld) · `lattice.py` (Gitterfüllung) · `texture_ops.py`
 (Oberflächentexturen als echte Geometrie) · `sculpt.py` · `pose.py`
-(Skelett und Stellung)
+(Skelett und Stellung) · `sketch_solid.py` (einen Skizzenumriss zu einem Netz
+aufziehen)
+
+`sketch_solid.py` ist das Gegenstück zu `brep/profiles.extrude` für den Fall,
+dass kein exakter Körper vorliegt — und dieser Fall ist der häufigste: Wer ein
+heruntergeladenes STL öffnet, hat ein Netz. Bis zum 30.08.2026 endete das
+Abtragen dort an einem Satz („besteht bereits aus festen Dreiecken"); seitdem
+schneidet `sketch_pocket` über die Boolesche Kette auch in ein Netz. Was dabei
+entsteht, ist wieder ein Netz — der Unterschied bleibt, die Absage nicht.
 
 `sculpt.py` und `pose.py` sind **Sammelparameter-Ops**: viele Gesten, ein
 Schritt. Das Ergebnis folgt vollständig aus den Parametern, was das Fenster

@@ -5353,8 +5353,10 @@ class MainWindow(QMainWindow):
 
         hits = []
         for object_id, entry in result.scene.objects.items():
-            if entry.kind != "brep":
-                continue
+            # **Jede Art zählt.** Bis zum 30.08.2026 sprang die Schleife über
+            # jedes Netz hinweg, weil nur ein exakter Körper abtragbar war —
+            # jetzt ist er es nicht mehr allein, und wer ein heruntergeladenes
+            # STL geöffnet hat, ist der Normalfall, nicht die Ausnahme.
             bounds = entry.mesh.bounds
             # In der Zugrichtung wird nicht verglichen: Dort *soll* der Umriss
             # außerhalb des Körpers liegen, sonst gäbe es nichts zu ziehen.
@@ -5383,13 +5385,12 @@ class MainWindow(QMainWindow):
             chosen = self._body_under_the_outline()
         if not chosen:
             return str(tr("Unter der Zeichnung liegt kein bearbeitbarer Körper — einen auswählen."))
-        if result.scene.objects[chosen].kind != "brep":
-            return str(
-                tr(
-                    "Der gewählte Körper besteht bereits aus festen Dreiecken. "
-                    "Zum Abtragen eine bearbeitbare Grundform oder eine STEP-Datei verwenden."
-                )
-            )
+        # **Kein dritter Grund mehr.** Hier stand bis zum 30.08.2026 „Der
+        # gewählte Körper besteht bereits aus festen Dreiecken" — und damit war
+        # Abtragen für jedes eingelesene Modell ausgeschlossen. Seit
+        # ``geom.sketch_solid`` schneidet die Operation auch in ein Netz; was
+        # dabei herauskommt, ist wieder ein Netz, und das ist die richtige
+        # Antwort und nicht eine Absage.
         return ""
 
     def _sketch_cut_available(self) -> bool:
