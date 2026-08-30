@@ -941,7 +941,10 @@ def test_starting_comfyui_waits_outside_the_gui_thread(
         lambda _tool: ["Comfy Desktop.exe"],
     )
 
-    def started(_tool: tools.ExternalTool) -> tools.StartResult:
+    def started(_tool: tools.ExternalTool, *_args: object, **_kwargs: object) -> tools.StartResult:
+        # ``*_args``/``**_kwargs``: Der Arbeiter reicht seit dem 30.08.2026
+        # ``cancelled`` mit — ein Patch mit fester Stelligkeit stünde sonst
+        # als leere Liste da und meldete „läuft im Qt-Thread".
         seen.append(threading.get_ident())
         return tools.StartResult(launched=True, running=True)
 
@@ -1008,3 +1011,138 @@ def test_a_failed_launch_says_that_the_program_was_not_opened(qt_app: QApplicati
     assert "Zugriff verweigert" in dialog.state.text()
     assert "erneut" in dialog.state.text()
     dialog.release()
+
+
+def test_a_slow_service_says_how_long_it_will_take(qt_app: QApplication) -> None:
+    """Wer zwei Minuten wartet, soll das vorher wissen — nicht danach raten.
+
+    Bis zum 30.08.2026 galt für jeden Dienst dieselbe Zahl: zwanzig Sekunden.
+    Für Ollama stimmt sie, es antwortet in wenigen. ComfyUI Desktop lädt in
+    der Zeit noch seine Plugins — gemessen antwortete es nach gut zwei
+    Minuten, und Solidon meldete nach zwanzig Sekunden einen Fehlschlag über
+    einen laufenden Start.
+
+    Die Erwartung steht **vom ersten Tick an** da und nicht erst nach einer
+    Weile: Wer den Knopf drückt und sofort liest, dass es zwei Minuten dauert,
+    wartet ruhig; wer es nach dreißig Sekunden erfährt, hat dreißig Sekunden
+    gerätselt, ob etwas kaputt ist.
+    """
+    import time
+
+    dialog = InstallDialog()
+    for kennung, erwartet in (("comfyui", True), ("ollama", False)):
+        werkzeug = tools.by_id(kennung)
+        assert werkzeug is not None
+        dialog._running_title = str(werkzeug.title)
+        dialog._running_action = "start"
+        dialog._expected_seconds = werkzeug.start_seconds
+        dialog._started_at = time.monotonic() - 5
+        dialog._show_elapsed()
+        zeile = dialog.state.text()
+        assert "(5 s)" in zeile, f"{kennung}: die verstrichene Zeit fehlt"
+        gesagt = "ein bis zwei Minuten" in zeile
+        assert gesagt is erwartet, (
+            f"{kennung}: Erwartung {'fehlt' if erwartet else 'steht fälschlich'} in {zeile!r}"
+        )
+
+
+def test_a_long_wait_can_be_stopped_without_stopping_the_service(
+    qt_app: QApplication,
+) -> None:
+    """Abbrechen gehört zu jeder Wartezeit über zwei Sekunden (`wartezeit.md`).
+
+    Solange zwanzig Sekunden gewartet wurde, fiel der fehlende Ausgang nicht
+    auf. Bei einem Dienst, der zwei Minuten hochfährt, ist ein Dialog ohne
+    Ausstieg eine Sackgasse (§2.1).
+
+    Und der Satz danach muss stimmen: Abgebrochen wird das **Warten**, nicht
+    der Dienst — ein gestarteter Prozess gehört Solidon nicht und wird von ihm
+    nie beendet. Der Text sagt außerdem, wer die Zusage einlöst; „findet
+    Solidon von selbst" stand hier einen Entwurf lang und war zu stark, denn
+    nachgesehen wird beim Öffnen des Erzeugen-Dialogs.
+    """
+    dialog = InstallDialog()
+    dialog._running_title = "ComfyUI"
+    dialog.stop_waiting.setVisible(True)
+
+    dialog._stop_waiting()
+
+    zeile = dialog.state.text()
+    assert "ComfyUI" in zeile
+    assert "Hintergrund" in zeile, "der Dienst läuft weiter — das muss dastehen"
+    assert "Modell erzeugen" in zeile, "und wer die Zusage einlöst"
+    assert not dialog.stop_waiting.isVisibleTo(dialog), (
+        "der Knopf gehört weg, sobald nicht mehr gewartet wird"
+    )
+
+
+def test_every_service_carries_its_own_start_time() -> None:
+    """Die Wartezeit steht am Dienst, nicht als gemeinsame Zahl im Modul.
+
+    Ein Wert für alle war der Grund des Fehlers: Er kann nur entweder für den
+    schnellen oder für den langsamen Dienst stimmen. Der Test hält beide Enden
+    fest, damit niemand sie später wieder zusammenzieht.
+    """
+    zeiten = {tool.id: tool.start_seconds for tool in tools.TOOLS if tool.kind == "service"}
+    assert zeiten, "keine Dienste — dann prüft der Test nichts"
+    assert zeiten["ollama"] == tools.START_TIMEOUT_SECONDS, (
+        "Ollama antwortet in Sekunden und bleibt beim gemeinsamen Wert"
+    )
+    assert zeiten["comfyui"] >= 120.0, "ComfyUI Desktop braucht gemessen über zwei Minuten"
+
+
+def test_a_service_that_wins_the_race_does_not_swallow_the_next_failure(
+    qt_app: QApplication,
+) -> None:
+    """Das Rennen zwischen Abbruch und Antwort darf nichts hinterlassen.
+
+    Der Ablauf, den 3d-druck-4c beim Lesen des Diffs fand: Der Kunde drückt
+    „Nicht mehr warten", aber der Dienst antwortet, bevor der Arbeiter das
+    Abbruchzeichen sieht. Solange der Abbruch ein **Merkmal des Fensters** war,
+    blieb es dabei stehen — der running-Zweig kehrt vorher zurück —, und beim
+    nächsten **echten** Fehlschlag griff „abgebrochen, also kein Fehler": Der
+    Balken verschwand, und kein Satz sagte, warum.
+
+    Seit der Zustand am Ergebnis hängt (:attr:`StartResult.stopped`), kann das
+    nicht mehr passieren: Ein Ergebnis trägt seine eigene Wahrheit.
+    """
+    dialog = InstallDialog()
+    anforderung = next(
+        entry.requirement for entry in dialog.rows if entry.requirement.id == "comfyui"
+    )
+
+    # Erst gewinnt der Dienst das Rennen gegen den Abbruch.
+    dialog._stop_waiting()
+    dialog._tool_started((anforderung, tools.StartResult(launched=True, running=True)))
+    assert "läuft jetzt" in dialog.state.text()
+
+    # Und danach ein echter Fehlschlag — er muss zu sehen sein.
+    dialog._tool_started((anforderung, tools.StartResult(launched=True, running=False)))
+    zeile = dialog.state.text()
+    assert "nicht geantwortet" in zeile, f"der Fehlschlag wurde verschluckt: {zeile!r}"
+
+
+def test_a_late_reply_does_not_paint_over_a_newer_run(qt_app: QApplication) -> None:
+    """Ein abgebrochener Arbeiter lebt weiter — seine Meldung gehört ihm allein.
+
+    Nach dem Abbruch gibt der Dialog die Knöpfe sofort frei, während der alte
+    Arbeiter noch bis zu seinem nächsten Poll läuft. Startet der Kunde
+    inzwischen etwas anderes, träfe dessen Meldung einen fremden Lauf und
+    überschriebe seinen Zustandstext.
+
+    Verglichen wird der **Absender**, nicht der Inhalt — dasselbe Muster wie
+    ``Session._outdated`` (`wartezeit.md`).
+    """
+    dialog = InstallDialog()
+    anforderung = next(
+        entry.requirement for entry in dialog.rows if entry.requirement.id == "comfyui"
+    )
+    alt = object()
+    dialog._launcher = None
+    dialog.state.setText("Wird gestartet: Ollama (3 s)")
+
+    dialog._tool_started((anforderung, tools.StartResult(launched=True, running=False), alt))
+
+    assert dialog.state.text() == "Wird gestartet: Ollama (3 s)", (
+        "die Meldung eines fremden Arbeiters hat den laufenden Text überschrieben"
+    )

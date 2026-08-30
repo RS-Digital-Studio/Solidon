@@ -46,6 +46,8 @@
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — „assert gebaut“ fragte, ob das Wörterbuch voll ist, statt ob Operationen darin stehen; der Test verglich null und blieb in der Mutationsprobe grün.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
 - [Testprojekt trifft den Fall nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was der Test hineinlegt; ausgeliefert enthält, was die Anwendung erzeugt — acht von neun Beispielen fielen, der grüne Test sah keines.
+- [Prüfstand geht den Weg der Oberfläche](pruefstand-geht-den-weg-der-oberflaeche.md) — wer den Kern direkt ruft, misst eine Lage, die kein Klick herstellt; vier Fehlbefunde an einem Tag.
+- [Gegenprobe bei geänderter Bauart](gegenprobe-bei-geaenderter-bauart.md) — die Mutation an der neuen Zeile blieb grün; rot wurde sie erst, als sie die alte Bauart nachbaute.
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` um den Aufruf läuft ins Leere; nach dem Ergebnis fragen, nicht nach dem Grund.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; wer eines vergisst, misst seinen eigenen Aufbau und hält ihn für einen Fehler.
 
@@ -53,6 +55,7 @@
 - [Verursacher wird gemessen, nicht gelesen](verursacher-wird-gemessen-nicht-gelesen.md) — `git log -- a b` nennt den letzten Commit an *einer* Datei; wer einen Schuldigen nennt, hat `git show --stat` gelesen.
 
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
+- [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — 270 war exakt der französische Wert, und niemand setzte Französisch; die Messung stimmte, die Kette dahinter war erfunden.
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — drei gefallene Befunde an einem Tag; beim dritten war die Messung echt und galt nur woanders.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — eine Auflage nannte „die Agenten-Werkzeugbeschreibungs-Tests“, ich fuhr test_agent.py; der gemeinte hieß test_agent_suite.py und war schon auf HEAD rot.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy lief vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
@@ -65,6 +68,7 @@
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab für alles: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument.
+- [Review immer vollständig](review-immer-vollstaendig.md) — Roberts Vorgabe für die Freigabe-Rolle: jeden Diff ganz lesen, keine Stichproben-Ökonomie; Sollprobe, Nachmessung und Katalogfrage bleiben zusätzlich.
 - [Übersetzung neu statt geflickt](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz eigenständig ist und die alte Fassung trägt; sonst neu.
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen

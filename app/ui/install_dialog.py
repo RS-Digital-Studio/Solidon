@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Final
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
@@ -71,6 +72,11 @@ PENDING = "?"
 #: ist die Zeit, und die sagt genau das, was jemand wissen will.
 TICK_MS = 1000
 
+#: Ab wann ein Start lange genug dauert, um die Erwartung mitzusagen.
+#: `wartezeit.md` nennt zehn Sekunden als Grenze, ab der eine Schätzung
+#: dazugehört — darunter ist die laufende Zahl selbst die Auskunft.
+SLOW_START_SECONDS: Final = 30.0
+
 
 class _Survey(Worker):
     """Die Erhebung: Registry, Installationsordner, Ports.
@@ -103,7 +109,13 @@ class _Worker(Worker):
 
 
 class _LaunchWorker(Worker):
-    """Einen gefundenen Dienst öffnen und abseits der Oberfläche auf ihn warten."""
+    """Einen gefundenen Dienst öffnen und abseits der Oberfläche auf ihn warten.
+
+    **Abbrechbar**, weil das Warten Minuten dauern kann: ComfyUI Desktop
+    antwortet erst nach gut zwei Minuten, und ein Dialog, der so lange keinen
+    Ausstieg hat, ist eine Sackgasse (§2.1, `wartezeit.md`). Abgebrochen wird
+    dabei das Warten und nicht der Dienst — er gehört Solidon nicht.
+    """
 
     done = Signal(object)
 
@@ -111,9 +123,29 @@ class _LaunchWorker(Worker):
         super().__init__()
         self._requirement = requirement
         self._tool = tool
+        self._stopped = False
+
+    def stop_waiting(self) -> None:
+        """Aus dem Qt-Thread heraus: nicht mehr warten.
+
+        Ein einfaches Merkmal genügt — gelesen wird es im Arbeiter, gesetzt in
+        der Oberfläche, und beide Richtungen sind für einen Wahrheitswert
+        atomar. Ein Schloss hier wäre Aufwand ohne Gewinn.
+        """
+        self._stopped = True
 
     def work(self) -> None:
-        self.done.emit((self._requirement, tools.start_detailed(self._tool)))
+        # Der Absender reist mit: Nach einem Abbruch gibt der Dialog die
+        # Knöpfe sofort frei, während dieser Arbeiter noch bis zum nächsten
+        # Poll lebt. Startet der Kunde inzwischen etwas anderes, träfe seine
+        # Meldung einen fremden Lauf (`wartezeit.md`, ``Session._outdated``).
+        self.done.emit(
+            (
+                self._requirement,
+                tools.start_detailed(self._tool, cancelled=lambda: self._stopped),
+                self,
+            )
+        )
 
 
 class _Row(QWidget):
@@ -374,6 +406,9 @@ class InstallDialog(QDialog):
         self.setMinimumWidth(760)
         self._worker: _Worker | None = None
         self._launcher: _LaunchWorker | None = None
+        self._expected_seconds = tools.START_TIMEOUT_SECONDS
+        """Wie lange der laufende Start haben darf — bestimmt, ob die
+        Erwartung im Satz steht."""
         self._survey: _Survey | None = None
         self._queue: list[install.Requirement] = []
         """Was „Alles Fehlende installieren" noch vor sich hat."""
@@ -443,6 +478,16 @@ class InstallDialog(QDialog):
         self.progress.setRange(0, 0)
         self.progress.setVisible(True)
 
+        # **Abbrechen gehört zu jeder Wartezeit über zwei Sekunden**
+        # (`wartezeit.md`). Solange nur zwanzig Sekunden gewartet wurde, fiel
+        # das nicht auf; bei einem Dienst, der zwei Minuten hochfährt, ist ein
+        # Dialog ohne Ausstieg eine Sackgasse (§2.1). Abgebrochen wird das
+        # **Warten**, nicht der Dienst: Er gehört Solidon nicht und wird von
+        # ihm nie beendet — der Satz danach sagt genau das.
+        self.stop_waiting = QPushButton(tr("Nicht mehr warten"), self)
+        self.stop_waiting.setVisible(False)
+        self.stop_waiting.clicked.connect(self._stop_waiting)
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
@@ -453,6 +498,7 @@ class InstallDialog(QDialog):
             layout.addWidget(row)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
+        layout.addWidget(self.stop_waiting, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.all_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.details_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(buttons)
@@ -604,8 +650,10 @@ class InstallDialog(QDialog):
         self._running_title = str(requirement.title)
         self._running_action = "start"
         self._started_at = time.monotonic()
+        self._expected_seconds = tool.start_seconds
         self._show_elapsed()
         self._tick.start()
+        self.stop_waiting.setVisible(True)
 
         worker = _LaunchWorker(requirement, tool)
         worker.done.connect(self._tool_started)
@@ -654,10 +702,50 @@ class InstallDialog(QDialog):
     def _show_elapsed(self) -> None:
         """„Wird installiert: OrcaSlicer (45 s)" — dasselbe Muster wie beim
         Erzeugen eines Modells (``mesh.py``).
+
+        **Und bei einem Dienst, der lange braucht, die Erwartung dazu — vom
+        ersten Tick an, nicht erst nach einer Weile.** `wartezeit.md` verlangt
+        über zehn Sekunden eine Schätzung „wenn möglich"; die Schätzung hier
+        ist aber nicht die verstrichene Zeit, sondern die **erwartete**, und
+        die steht schon beim Drücken fest (:attr:`ExternalTool.start_seconds`).
+
+        Sie später einzublenden wäre die schlechtere Bedienung: Wer den Knopf
+        drückt und sofort liest, dass es ein bis zwei Minuten dauert, wartet
+        ruhig. Wer es erst nach dreißig Sekunden erfährt, hat dreißig Sekunden
+        lang gerätselt, ob etwas kaputt ist — und genau daran hat der
+        Startknopf für ComfyUI seinen schlechten Ruf verdient.
+
+        Bei Ollama bleibt der Satz weg: Es antwortet in Sekunden, und ein
+        Hinweis auf zwei Minuten wäre dort schlicht falsch.
         """
         seconds = time.monotonic() - self._started_at
         action = tr("Wird gestartet") if self._running_action == "start" else tr("Wird installiert")
-        self.state.setText(f"{action}: {self._running_title} ({seconds:.0f} s)")
+        line = f"{action}: {self._running_title} ({seconds:.0f} s)"
+        if self._running_action == "start" and self._expected_seconds > SLOW_START_SECONDS:
+            line += " — " + tr("das dauert beim ersten Mal ein bis zwei Minuten")
+        self.state.setText(line)
+
+    def _stop_waiting(self) -> None:
+        """Nicht mehr auf den Dienst warten — er läuft weiter.
+
+        Abgebrochen wird das **Warten** und nicht der Dienst: Ein gestarteter
+        Prozess gehört Solidon nicht und wird von ihm nie beendet
+        (:func:`app.core.tools.start_detailed`). Der Satz sagt genau das,
+        damit niemand glaubt, der Start sei zurückgenommen — und er nennt den
+        Weg zurück, statt in einer Sackgasse zu enden (§2.1).
+        """
+        if self._launcher is not None:
+            self._launcher.stop_waiting()
+        self._tick.stop()
+        self.stop_waiting.setVisible(False)
+        self._busy(False)
+        self.state.setText(
+            tr(
+                "{name} startet weiter im Hintergrund — Solidon beendet es nicht. "
+                "Beim nächsten Öffnen von „Modell erzeugen“ wird nachgesehen, "
+                "ob es inzwischen antwortet."
+            ).format(name=self._running_title)
+        )
 
     def _busy_installing(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
@@ -668,15 +756,40 @@ class InstallDialog(QDialog):
         )
 
     def _tool_started(self, result: object) -> None:
-        """Die verständliche Antwort auf den Startversuch zeigen."""
-        assert isinstance(result, tuple) and len(result) == 2
-        requirement, start_result = result
+        """Die verständliche Antwort auf den Startversuch zeigen.
+
+        **Nur, wenn sie zum laufenden Versuch gehört.** Ein abgebrochener
+        Arbeiter lebt bis zu seinem nächsten Poll weiter; seine Meldung darf
+        den Zustandstext eines inzwischen gestarteten Laufs nicht übermalen.
+        Dasselbe Muster wie ``Session._outdated`` — verglichen wird der
+        Absender, nicht der Inhalt.
+        """
+        assert isinstance(result, tuple) and len(result) in (2, 3)
+        requirement, start_result = result[0], result[1]
+        # Ohne Absender gilt die Meldung als aktuell — dieselbe Regel wie in
+        # ``Session._outdated``: Tests rufen den Slot direkt, und ein Aufruf
+        # ohne Arbeiter ist dort keine Nachzüglermeldung, sondern der Normalfall.
+        sender = result[2] if len(result) == 3 else None
         assert isinstance(requirement, install.Requirement)
         assert isinstance(start_result, tools.StartResult)
+        if sender is not None and sender is not self._launcher:
+            return
         self._tick.stop()
+        self.stop_waiting.setVisible(False)
         self._busy(False)
         if start_result.running:
             self.state.setText(f"{requirement.title}: {tr('Lokales Backend läuft jetzt.')}")
+            return
+        if start_result.stopped:
+            # Der Kunde hat das Warten beendet. Sein Satz steht schon da; ihn
+            # jetzt mit „antwortet nicht" zu überschreiben hieße, seine eigene
+            # Handlung als Fehlschlag zu melden.
+            #
+            # **Am Ergebnis abgelesen und nicht an einem Merkmal des Fensters.**
+            # Als Merkmal blieb es stehen, wenn der Dienst das Rennen gegen den
+            # Abbruch gewann: Der running-Zweig darüber kehrt vorher zurück,
+            # das Merkmal blieb wahr, und der nächste **echte** Fehlschlag
+            # verschwand wortlos — Balken weg, kein Satz, kein Grund.
             return
         self._broke = True
         if not start_result.launched:
@@ -701,10 +814,16 @@ class InstallDialog(QDialog):
                     "noch nicht. Prüfen Sie die ComfyUI-Protokolle und versuchen Sie es erneut."
                 )
             else:
+                # **Nach der vollen Wartezeit, nicht nach zwanzig Sekunden.**
+                # Solange gewartet wird, steht der laufende Zustand da; dieser
+                # Satz gilt erst, wenn die am Dienst kalibrierte Zeit um ist —
+                # und dann gehört die Zahl hinein, sonst liest er sich wie die
+                # alte Fehlmeldung nach einem Augenblick (Regel 17: warum).
                 reason = tr(
-                    "ComfyUI ist geöffnet, aber das Backend antwortet noch nicht. Öffnen Sie "
-                    "dort die lokale Installation und versuchen Sie es erneut."
-                )
+                    "ComfyUI ist geöffnet, hat aber in {minuten} Minuten nicht geantwortet. "
+                    "Es läuft weiter — öffnen Sie dort die lokale Installation, oder sehen "
+                    "Sie in den ComfyUI-Protokollen nach, woran es hängt."
+                ).format(minuten=f"{self._expected_seconds / 60:.0f}")
         else:
             reason = tr(
                 "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. "

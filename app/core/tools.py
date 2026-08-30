@@ -28,6 +28,7 @@ from __future__ import annotations
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
@@ -40,6 +41,12 @@ from app.i18n import TranslatableText, _
 _log = get_logger(__name__)
 
 Kind = Literal["program", "service"]
+
+
+#: Wie lange auf einen gestarteten Dienst gewartet wird, bevor gesagt wird,
+#: dass er nicht antwortet. Ollama lädt beim Start seine Modellliste; eine
+#: Sekunde ist zu wenig, eine Minute wäre ein Hänger.
+START_TIMEOUT_SECONDS: Final = 20.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +74,21 @@ class ExternalTool:
     Comfy Desktop wird ohne Argument geöffnet; die offizielle ``comfy``-CLI
     startet denselben Dienst mit ``launch --background``. Beides ist
     dokumentiert, nichts davon wird aus einem Installationsordner geraten.
+    """
+    start_seconds: float = START_TIMEOUT_SECONDS
+    """Wie lange dieser Dienst zum Hochfahren haben darf.
+
+    **Am gemessenen Startweg kalibriert, nicht geraten.** Zwanzig Sekunden
+    waren der gemeinsame Wert für alle, und für Ollama stimmen sie: Es
+    antwortet in wenigen Sekunden. ComfyUI Desktop lädt in derselben Zeit noch
+    seine Plugins — gemessen am 30.08.2026 antwortete es nach gut zwei
+    Minuten, und Solidon meldete nach zwanzig Sekunden einen Fehlschlag über
+    einen laufenden Start.
+
+    Das Limit bleibt hart, es gilt nur dem echten Hänger (`kern.md`: „Ein
+    Zeitlimit gilt dem Hängen, nicht der Langsamkeit"). Was sich ändert, ist
+    die Zahl **und** dass die Wartezeit sichtbar wird — ein stummer Dialog
+    über drei Minuten wäre die schlechtere Hälfte des Fehlers (§2.8).
     """
 
     def path(self) -> Path | None:
@@ -188,6 +210,9 @@ TOOLS: Final[tuple[ExternalTool, ...]] = (
         url=mesh.DEFAULT_COMFY_URL,
         start_arguments=(),
         start_argument_overrides=(("comfy", ("launch", "--background")),),
+        # Gemessen: Comfy Desktop antwortet auf dieser Maschine nach gut zwei
+        # Minuten. Drei sind der Abstand, ab dem es wirklich hängt.
+        start_seconds=180.0,
     ),
 )
 
@@ -247,6 +272,15 @@ class StartResult:
     launched: bool = False
     running: bool = False
     reason: str = ""
+    stopped: bool = False
+    """Ob **das Warten** abgebrochen wurde — der Dienst läuft weiter.
+
+    Am Ergebnis und nicht als Merkmal am Dialog, und das ist der Unterschied
+    zwischen einer Wahrheit und einer Vermutung: Ein Merkmal am Fenster gilt
+    für den *nächsten* Rückruf mit, auch wenn der zu einem anderen Lauf
+    gehört. Ein Ergebnis trägt seine eigene Herkunft — auch ein Nachzügler,
+    der eintrifft, wenn längst etwas anderes läuft.
+    """
 
 
 def state_of(tool: ExternalTool) -> ToolState:
@@ -279,13 +313,12 @@ def set_address(tool_id: str, address: str) -> None:
     discover.remember_address(tool_id, address)
 
 
-#: Wie lange auf einen gestarteten Dienst gewartet wird, bevor gesagt wird,
-#: dass er nicht antwortet. Ollama lädt beim Start seine Modellliste; eine
-#: Sekunde ist zu wenig, eine Minute wäre ein Hänger.
-START_TIMEOUT_SECONDS: Final = 20.0
-
-
-def start_detailed(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> StartResult:
+def start_detailed(
+    tool: ExternalTool,
+    wait_seconds: float | None = None,
+    progress: Callable[[float, float], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> StartResult:
     """Einen lokalen Dienst öffnen und das Ergebnis vollständig beschreiben.
 
     **Warum das hier steht und nicht in einem Satz.** „Ollama antwortet nicht.
@@ -341,7 +374,11 @@ def start_detailed(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECON
         )
 
     _log.info("started %s, waiting for %s", tool.id, target_address)
-    deadline = time.monotonic() + wait_seconds
+    # Ohne ausdrückliche Angabe die am Dienst kalibrierte Zeit — nicht die
+    # gemeinsame Zahl, die für Ollama passt und für ComfyUI nicht.
+    limit = tool.start_seconds if wait_seconds is None else wait_seconds
+    begun = time.monotonic()
+    deadline = begun + limit
     while time.monotonic() < deadline:
         if target_address and discover.reachable(target_address):
             discover.use_local_address(tool.id)
@@ -352,6 +389,19 @@ def start_detailed(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECON
                 launched=True,
                 running=True,
             )
+        if cancelled is not None and cancelled():
+            # Abgebrochen heißt: Solidon wartet nicht mehr. Der Dienst läuft
+            # weiter — er gehört uns nicht und wird von uns nie beendet.
+            return StartResult(
+                program=program,
+                command=tuple(command),
+                address=target_address,
+                launched=True,
+                stopped=True,
+                reason=str(_("Das Warten wurde abgebrochen. Der Dienst startet weiter.")),
+            )
+        if progress is not None:
+            progress(time.monotonic() - begun, limit)
         time.sleep(_POLL_SECONDS)
     running = bool(target_address) and discover.reachable(target_address)
     if running:
@@ -365,7 +415,7 @@ def start_detailed(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECON
     )
 
 
-def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bool:
+def start(tool: ExternalTool, wait_seconds: float | None = None) -> bool:
     """Kompatible Kurzantwort für bestehende Einrichtungswege."""
     return start_detailed(tool, wait_seconds).running
 
