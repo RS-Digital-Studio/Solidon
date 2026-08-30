@@ -82,7 +82,7 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     nicht in den Kopf der Datei, sonst braucht diese Datei Qt schon beim
     Einsammeln der Tests.
     """
-    from app.core import tools, updates
+    from app.core import install, tools, updates
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY
     from app.core.types import Parameter, ParamSpec
@@ -92,8 +92,9 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     from app.ui.command_palette import CommandPalette
     from app.ui.dialogs import AskDialog, CalibrationDialog, KeyDialog, ParameterDialog
     from app.ui.explode_bar import ExplodeBar
+    from app.ui.filament_picker import NewFilamentDialog
     from app.ui.first_run import FirstRunDialog, ToolRow
-    from app.ui.install_dialog import InstallDialog
+    from app.ui.install_dialog import InstallDialog, _Row
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import (
         ArmatureField,
@@ -206,6 +207,13 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ("FirstRunDialog", lambda: FirstRunDialog(UiSettings())),
         ("ToolRow", lambda: ToolRow(tools.ToolState(tools.TOOLS[0], None))),
         ("InstallDialog", InstallDialog),
+        # Der Dialog-Bauer darüber sah die Ringe seiner Zeilen nicht: Eine
+        # ``_Row``, deren Knopf-Lambda ``self`` fängt, hält sich selbst — der
+        # Dialog stirbt trotzdem, gezählt wird er, und die Zombie-Zeilen
+        # blieben unsichtbar. Deshalb die Zeile selbst, und der Filament-Dialog
+        # mit demselben Muster daneben.
+        ("InstallRow", lambda: _Row(install.REQUIREMENTS[0])),
+        ("NewFilamentDialog", NewFilamentDialog),
         ("PartCatalog", PartCatalog),
         ("ArmatureField", lambda: ArmatureField(["a", "b"])),
         ("ArmatureSummary", lambda: ArmatureSummary("t", ["a"])),

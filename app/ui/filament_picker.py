@@ -228,8 +228,13 @@ class NewFilamentDialog(QDialog):
         assert self._ok_button is not None
         make_primary(self._ok_button)
         self._ok_button.setEnabled(bool(name.strip()))
-        self.name.textChanged.connect(lambda text: self._ok_button.setEnabled(bool(text.strip())))
+        # Gebundene Methode statt Lambda — dasselbe Ring-Muster wie in
+        # ``install_dialog._Row``: Das Lambda fing ``self`` am eigenen Kind.
+        self.name.textChanged.connect(self._name_changed)
         self.name.setFocus()
+
+    def _name_changed(self, text: str) -> None:
+        self._ok_button.setEnabled(bool(text.strip()))
 
     def _pick_colour(self) -> None:
         chosen = QColorDialog.getColor(QColor(self._colour), self, tr("Farbe des Filaments"))

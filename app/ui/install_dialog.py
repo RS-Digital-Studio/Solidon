@@ -178,7 +178,11 @@ class _Row(QWidget):
         self.where.setTextFormat(Qt.TextFormat.PlainText)
 
         self.action = QPushButton(tr("Installieren"), self)
-        self.action.clicked.connect(lambda: self.startRequested.emit(requirement))
+        # Gebundene Methoden, keine Lambdas: Ein Lambda, das ``self`` fängt,
+        # an einem Knopf, der Kind von ``self`` ist, schließt den Ring aus
+        # ``wartezeit.md`` — die Zeile lebte dann bis zum Prozessende. Das
+        # Requirement steht als Feld, die Methoden lesen es dort.
+        self.action.clicked.connect(self._request_start)
         self.action.setVisible(False)
         # **Der zweite Schritt.** Ollama installiert bringt kein Modell mit,
         # ComfyUI installiert kennt die Knoten nicht — beides stand in einem
@@ -186,10 +190,10 @@ class _Row(QWidget):
         # kann. Wo das Requirement einen ``follow_up`` trägt, steht hier der
         # Knopf dafür, sobald das Programm da ist.
         self.follow = QPushButton(str(requirement.follow_up_title), self)
-        self.follow.clicked.connect(lambda: self.followUpRequested.emit(requirement))
+        self.follow.clicked.connect(self._request_follow_up)
         self.follow.setVisible(False)
         self.launch = QPushButton(tr("Lokal starten"), self)
-        self.launch.clicked.connect(lambda: self.toolStartRequested.emit(requirement))
+        self.launch.clicked.connect(self._request_tool_start)
         self.launch.setToolTip(
             tr("Öffnet die lokale Anwendung und verbindet Solidon mit ihrem Backend.")
         )
@@ -231,6 +235,15 @@ class _Row(QWidget):
         layout.setSpacing(TIGHT)
         layout.addLayout(head)
         layout.addWidget(self.where)
+
+    def _request_start(self) -> None:
+        self.startRequested.emit(self.requirement)
+
+    def _request_follow_up(self) -> None:
+        self.followUpRequested.emit(self.requirement)
+
+    def _request_tool_start(self) -> None:
+        self.toolStartRequested.emit(self.requirement)
 
     def show_status(self, status: install.Status) -> None:
         """Den erhobenen Zustand zeigen. Der einzige Weg, diese Zeile zu füllen."""
