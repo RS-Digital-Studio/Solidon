@@ -58,6 +58,8 @@
 - [Zufallsziehung ist keine Zuordnung](zufallsziehung-ist-keine-zuordnung.md) — sporadische Abstürze ordnet erst eine Verteilung zu, keine Einzelbeobachtung.
 - [Bekannte Familie erklärt nicht den Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) — „seit Commit X" verlangt die Gegenprobe auf dem Stand davor.
 - [Verursacher wird gemessen, nicht gelesen](verursacher-wird-gemessen-nicht-gelesen.md) — `git log -- a b` nennt den letzten Commit an *einer* Datei; `git show --stat` lesen.
+- [Absturz-Frame ist die nächste Allokation](absturz-frame-ist-die-naechste-allokation.md) — wandert der oberste Frame zwischen Stellen, die Speicher anfordern, ist keine davon die Ursache; und gemessen läuft dabei gar nichts voll.
+- [Zwei Zeilen sind nicht die Funktion](zwei-zeilen-sind-nicht-die-funktion.md) — „Fehlalarm" verlangt, dass man liest, was mit dem Rückgabewert geschieht; drei Sitzungen stimmten derselben Verkürzung zu.
 
 - [Suche prüft ihre eigene Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — ein Filter, der nichts trifft, sieht aus wie einer, der nichts findet.
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend.
