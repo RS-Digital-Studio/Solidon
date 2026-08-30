@@ -82,6 +82,8 @@
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
+- [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — fast keinen Fehler, der zählte, fand sein Urheber; Melden schlägt Sorgfalt, weil der eigene Blick von der eigenen Absicht gelenkt wird.
+
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
 - [Benannte Falle schützt nicht](benannte-falle-schuetzt-nicht.md) — ein Modul, das eine Gefahr richtig beschreibt, fällt trotzdem hinein; der Satz liest sich als Beleg und verhindert die Prüfung.
 - [mypy prüft die laufende Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen verschiedene Fehler; ein grüner Bau sagt nichts über den lokalen Lauf.
