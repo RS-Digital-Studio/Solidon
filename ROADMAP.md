@@ -128,6 +128,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. Es fehlt ein echtes Paket auf einem Mac; dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
+| SpaceMouse-Anbindung — P15 führte sie unter „wird nicht gebaut" | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept mit P15-Revision und Roberts Bau-Entscheidung — sein „wäre schon spannend" (30.08.2026) ist ein Interesse, keine Ansage. Kandidat: `pyspacemouse` (MIT, über hidapi, ohne Herstellertreiber) |
+| Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
+| Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Versand der Antwort, dann den Verkaufsstart — spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
+| Die ComfyUI-Modelle haben noch keine Auswahl | Die ComfyUI-Modelle bekommen eine Auswahl (30.08.2026) | 5ds Paket — Roberts Auftrag „bei beiden auswahl"; die Kern-Vorarbeit liegt gesichert, Oberfläche, Tests und Kataloge fehlen |
 
 ---
 
@@ -12713,3 +12717,60 @@ ist das zweite Argument neben den sieben Gigabyte.
       `rules_text`: eine zweite Liste veraltet), und der `NO_MODEL`-Satz
       nennt Dateiname und Ordner statt „ein SDXL-Modell". fb's
       Mitliefern-Hälfte entfällt.
+
+---
+
+## Eine Kundenanfrage aus dem Dentalbereich (30.08.2026)
+
+Ein Kunde mit FDM- und Resindrucker — beruflich exocad und 3shape, privat
+Fusion 360 und Solid Edge — hat vier Fragen geschickt: SpaceMouse,
+Resin-Drucker, Lizenzmodell, Kaufen. Zwei davon beantwortet der Bestand
+(ein Schlüssel für alle eigenen Rechner, genau einer aktiv; verkauft wird
+ab dem 01.11.2026), zwei sind Arbeit. Die Anfrage liegt in Roberts
+Postfach (R. W. D., Zeitz, 30.08.2026); der Antwortentwurf nennt beide
+Punkte als notiert — was hier steht, ist also auch zugesagt.
+
+- [ ] **SpaceMouse-Anbindung.** `konzepte/konzept-p15-konstruieren-und-zeigen.md`
+      führt sie unter „wird nicht gebaut" (E10: Nischengerät, kleine
+      Zielgruppe, Treiberprobleme je Plattform). Die Anfrage kommt aber aus
+      genau der Zielgruppe, die solche Geräte besitzt und beruflich benutzt,
+      und Robert findet die Idee „schon spannend" (30.08.2026) — ein
+      Interesse, noch keine Bau-Entscheidung. Kandidat wäre `pyspacemouse`
+      (MIT, über hidapi, ohne den 3DxWare-Treiber; macOS verlangt
+      HID-Eingaberechte). Vor dem Bau: Konzept mit P15-Revision,
+      Lizenzlisten-Eintrag (Regel 22) und Roberts Ansage.
+- [ ] **Resin-Druck: der Export kann es, das Wissen fehlt.** STL/3MF aus
+      Solidon öffnet jeder Resin-Slicer, der Weg ist heute schon gangbar.
+      Was fehlt, ist die Resin-Denke in der Druckbarkeitsprüfung:
+      Saugglocken/Cupping, Abflussbohrungen beim Aushöhlen, Punktstützen —
+      und `slicer_keys.py` kennt nur die Familien prusa/orca/cura. Der
+      Bauplan erwähnt Resin an keiner Stelle; vor jeder Umsetzung steht ein
+      Konzept, wie weit Solidon hier mitgeht. Naheliegender erster Schritt,
+      der beiden Welten nützt: die Aushöhlen-Op um eine Abflussbohrung
+      erweitern.
+- [ ] **Die Zusagen aus der Antwort.** Der Entwurf verspricht dem Kunden
+      eine kurze Nachricht zum Verkaufsstart und ein „Sie hören von mir",
+      falls die SpaceMouse kommt. Sobald die Mail versendet ist, sind das
+      Termine: spätestens zum 01.11.2026 fällig, unabhängig davon, was aus
+      den zwei Punkten darüber wird.
+
+---
+
+## Die ComfyUI-Modelle bekommen eine Auswahl (30.08.2026)
+
+Roberts Auftrag im Anschluss an die Modell-Hinweise: „bei beiden auswahl
+welches man nutzen wil". Beim Sprachmodell gibt es die Wahl (Combobox im
+Chat-Dialog, gemerkt über `remember_ollama_model`); bei den
+ComfyUI-Rollen entscheidet `_pick` bisher allein über `MODEL_ROLES`. 5ds
+Vorarbeit (rund 90 Zeilen in `mesh.py`: `configured_model`/
+`remember_model` je Rolle, stiller Rückfall auf die Rollenauflösung, wenn
+die gemerkte Datei nicht mehr angeboten wird, `model_choices` im selben
+Graphendurchgang wie `missing_models`) lag zum Release-Tor bewusst
+**nicht** im Baum — sie wartet in ihrem Scratchpad und kommt als
+reguläres Paket zurück. Leer heißt automatisch, nicht „keines": Ohne
+Eintrag entscheidet weiter die Rollenauflösung (§2.4 — eine gute Vorgabe
+ist mehr wert als eine Einstellung).
+
+- [ ] 5d: das Paket fertigbauen — Auswahlfelder unter „Weitere
+      Einstellungen" im Erzeugungsdialog samt Arbeiter fürs Laden der
+      Listen, Tests, Katalogzeilen — und über das Go-Verfahren einreichen.
