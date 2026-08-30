@@ -67,6 +67,7 @@ from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
     Finding,
+    HandoverKind,
     MaterialSlot,
     PrintSettings,
     Profile,
@@ -2553,9 +2554,20 @@ class PrintSettingsDialog(QDialog):
         if close is not None:
             close.setText(tr("Schließen"))
         self.slice_button = QPushButton(tr("Slicen"), self)
-        make_primary(self.slice_button)
         self.slice_button.clicked.connect(self._slice)
         buttons.addButton(self.slice_button, QDialogButtonBox.ButtonRole.ActionRole)
+        # Die zweite Übergabeart aus §29: nicht rechnen lassen, sondern die
+        # Datei im Fenster des Slicers öffnen. Zwei Handlungen, keine
+        # Betriebsart — und keine Profilpflicht, denn das Fenster bringt
+        # seine eigenen Profile mit.
+        self.open_button = QPushButton(tr("Im Slicer öffnen …"), self)
+        self.open_button.clicked.connect(self._open_in_slicer)
+        buttons.addButton(self.open_button, QDialogButtonBox.ButtonRole.ActionRole)
+        # Der gemerkte Weg ist der Hauptknopf (§29: die Übergabeart wird je
+        # Projekt gemerkt) — entschieden beim Aufbau, nicht live: ein
+        # Hauptknopf, der unter dem Zeiger wechselt, wäre Bewegung ohne
+        # Auftrag.
+        make_primary(self.open_button if self.settings.handover == "open" else self.slice_button)
         self.save_button = QPushButton(tr("Druckdatei speichern …"), self)
         self.save_button.setEnabled(False)
         self.save_button.clicked.connect(self._save_gcode)
@@ -2632,6 +2644,19 @@ class PrintSettingsDialog(QDialog):
         self.slice_button.setToolTip(reason)
         self.slice_button.setStatusTip(reason)
         self.slice_button.setAccessibleDescription(reason)
+        # Der Öffnen-Weg hat andere Bedingungen als der Rechen-Weg: Profile
+        # braucht er nie (das Fenster bringt seine mit), dafür ein Programm
+        # mit Fenster — CuraEngine allein rechnet nur. Lizenz und laufender
+        # Auftrag gelten für beide.
+        open_reason = ""
+        if not state.unlocked:
+            open_reason = licence_lock_line(state)
+        elif found is not None and handover.window_program(found) is None:
+            open_reason = str(tr("Zu diesem Slicer ist kein Fenster installiert — er rechnet nur."))
+        self.open_button.setEnabled(found is not None and not open_reason and not running)
+        self.open_button.setToolTip(open_reason)
+        self.open_button.setStatusTip(open_reason)
+        self.open_button.setAccessibleDescription(open_reason)
         self.setup_button.setVisible(found is None)
         if found is None:
             self.state.setText(
@@ -2650,6 +2675,11 @@ class PrintSettingsDialog(QDialog):
             # Ergebnis des letzten Laufs, und das wäre hier nicht zu
             # überschreiben, sondern stehen zu lassen.
             self.state.setText(str(reason))
+        elif open_reason and self.settings.handover == "open":
+            # Dieselbe Regel für den Öffnen-Weg — aber nur, wenn er der
+            # gemerkte Hauptweg dieses Projekts ist: Der Grund eines
+            # Nebenknopfs verdrängt keine Ergebniszeile.
+            self.state.setText(open_reason)
 
     def _pick_slicer(self) -> Path | None:
         """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
@@ -3028,6 +3058,97 @@ class PrintSettingsDialog(QDialog):
                 filament
             )
 
+    def _current_setup(self) -> handover.SlicerSetup | None:
+        """Der eingestellte Slicer mit der Profilwahl aus den Feldern (§29).
+
+        Was in der Auswahl steht, gilt — sie ist automatisch vorbelegt, aber
+        der Nutzer darf abweichen, und dann zählt seine Wahl. Eine Stelle für
+        beide Übergabearten: Der Rechen-Weg und der Öffnen-Weg lesen dieselben
+        Felder, und zwei Abschriften davon drifteten auseinander.
+        """
+        found = self._slicer_path
+        if found is None:
+            return None
+        try:
+            setup = handover.detect(found)
+        except AppError as problem:
+            show_error(problem, self)
+            return None
+        return replace(
+            setup,
+            machine_profile=str(self.machine_choice.currentData() or ""),
+            base_process=str(self.process_choice.currentData() or ""),
+            base_filament=str(self.filament_choice.currentData() or ""),
+        )
+
+    def _remember_handover(self, kind: HandoverKind) -> None:
+        """Die benutzte Übergabeart merken (§29) — bei Nutzung, nie bei Ansicht.
+
+        Über :attr:`settings` reist sie mit ``set_print_settings`` ins
+        Projekt; der gemerkte Weg wird beim nächsten Aufbau der Hauptknopf.
+        """
+        if self.settings.handover != kind:
+            self.settings = replace(self.settings, handover=kind)
+
+    def _open_in_slicer(self) -> None:
+        """Die zweite Übergabeart aus §29: die Platten im Fenster des Slicers.
+
+        Kein Profil, kein Zeitlimit, kein Rücklesen — ab dem Öffnen gehört
+        der Auftrag dem Nutzer. Geschrieben wird derselbe Plattenaufbau wie
+        beim Rechen-Weg (:meth:`_plate_run`), nur in den Austauschordner
+        statt in einen Arbeitsordner, der mit dem Dialog verschwindet: Das
+        Fenster des Slicers braucht Sekunden zum Laden, und eine Datei, die
+        vorher verschwindet, wäre eine Übergabe ins Leere.
+
+        Synchron und ohne Zeiger, wie der Bestand den Plattenaufbau in
+        :meth:`_slice` hält — gerechnet wird hier nichts, geschrieben in
+        Zehntelsekunden.
+        """
+        result = self.session.last_result
+        objects = list(result.scene.objects.values()) if result is not None else []
+        if not objects:
+            self.state.setText(tr("Es ist nichts da, was sich öffnen ließe."))
+            return
+        setup = self._current_setup()
+        if setup is None:
+            return
+        self._remember_slicer_choice(require_machine=False)
+        self._remember_handover("open")
+
+        folder = discover.exchange_dir() / "open-in-slicer"
+        name = self.session.path.stem if self.session.path else "solidon"
+        plates = self._chosen_plates()
+        findings: list[Finding] = []
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            # ``plates`` ist nie leer, solange es Objekte gibt: ``_all_plates``
+            # ist nur ohne ``last_result`` leer, und genau dann hat der frühe
+            # Rückweg über ``objects`` oben schon geantwortet — dieselbe
+            # Quelle, zwei Ecken. Ohne diese Kette stünde unten „0 Platten".
+            runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
+            for run in runs:
+                handover.open_in_slicer(run.model, setup)
+                findings.extend(run.findings)
+        except AppError as problem:
+            show_error(problem, self)
+            return
+        if findings:
+            # Die Vorprüfung gehört in den Bericht wie beim Rechen-Weg —
+            # nur dass es hier nie einen G-Code-Rückweg geben wird.
+            self.reported.emit(findings)
+        # Die Handlung quittiert sich (§2.8): Das fremde Fenster braucht
+        # Sekunden, und ein Knopf ohne Antwort wäre für genau diese
+        # Sekunden ein Knopf, der nichts tut.
+        self.state.setText(
+            tr("An {slicer} übergeben — das Fenster gehört jetzt Ihnen.").replace(
+                "{slicer}", _slicer_title(setup.executable)
+            )
+            if len(runs) == 1
+            else tr("An {slicer} übergeben — {anzahl} Platten, je eine Datei.")
+            .replace("{slicer}", _slicer_title(setup.executable))
+            .replace("{anzahl}", str(len(runs)))
+        )
+
     def _slice(self) -> None:
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
@@ -3035,22 +3156,9 @@ class PrintSettingsDialog(QDialog):
             self.state.setText(tr("Es ist nichts da, was sich slicen ließe."))
             return
 
-        found = self._slicer_path
-        if found is None:
+        setup = self._current_setup()
+        if setup is None:
             return
-        try:
-            setup = handover.detect(found)
-        except AppError as problem:
-            show_error(problem, self)
-            return
-        # Was in der Auswahl steht, gilt — sie ist automatisch vorbelegt, aber
-        # der Nutzer darf abweichen, und dann zählt seine Wahl (§29).
-        setup = replace(
-            setup,
-            machine_profile=str(self.machine_choice.currentData() or ""),
-            base_process=str(self.process_choice.currentData() or ""),
-            base_filament=str(self.filament_choice.currentData() or ""),
-        )
         # Nur die Orca-Familie: PrusaSlicer läuft mit Solidons vollständiger
         # ini, und CuraEngine bekommt die Maschine aus dem Kern selbst
         # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
@@ -3071,6 +3179,9 @@ class PrintSettingsDialog(QDialog):
             self.state.setText(self._process_missing_line())
             return
         self._remember_slicer_choice(require_machine=False)
+        # Gemerkt bei Nutzung, nie bei Ansicht (§29): Wer rechnet, dessen
+        # Hauptweg ist das Rechnen — der Öffnen-Weg merkt sich genauso.
+        self._remember_handover("slice")
 
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)

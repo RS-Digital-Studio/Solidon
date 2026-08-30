@@ -1214,6 +1214,28 @@ def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
     assert serialise.print_settings_from_data(alt).slot_overrides == ()
 
 
+def test_the_handover_kind_travels_with_the_project() -> None:
+    """§29 wörtlich: Die Übergabeart wird je Projekt gemerkt — sie reist in
+    den Druckeinstellungen. Eine ältere Datei ohne das Feld bleibt auf
+    „slice", dem bisher einzigen Weg, und ein fremder Wert fällt dorthin
+    zurück, statt bis in die Knopfleiste zu reisen."""
+    from dataclasses import replace
+
+    from app.core.scene import serialise
+
+    settings = replace(print_settings.resolve(profiles.make_profile()), handover="open")
+
+    zurueck = serialise.print_settings_from_data(
+        json.loads(json.dumps(serialise.print_settings_to_data(settings)))
+    )
+    assert zurueck.handover == "open"
+
+    alt = serialise.print_settings_to_data(settings)
+    del alt["handover"]
+    assert serialise.print_settings_from_data(alt).handover == "slice"
+    assert serialise.print_settings_from_data({"handover": "quatsch"}).handover == "slice"
+
+
 def test_the_orca_machine_profile_is_written_out_not_referenced(tmp_path: Path) -> None:
     """Solidon schreibt das Maschinenprofil aus, statt auf eines zu verweisen.
 

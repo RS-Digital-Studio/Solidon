@@ -811,6 +811,90 @@ def test_slicing_without_a_scene_says_what_is_missing(dialog: PrintSettingsDialo
     assert dialog.state.text()
 
 
+# --- die zweite Übergabeart (§29) ----------------------------------------------------
+
+
+def test_opening_hands_the_plates_to_the_window_and_remembers(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Der Öffnen-Knopf schreibt die Platten und ruft das Fenster — und die
+    benutzte Übergabeart wird gemerkt (§29), damit sie beim nächsten Aufbau
+    der Hauptweg ist."""
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    written = tmp_path / "platte.3mf"
+    written.write_bytes(b"x")
+    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    # ``last_result`` ist ein schlichtes Instanzattribut — direkt setzen,
+    # wie es die Auswertung selbst tut.
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(
+        dialog,
+        "_plate_run",
+        lambda objects, plate, folder, name, setup: module.PlateRun(
+            plate=plate, model=written, slots=(), keep_arrangement=False, findings=()
+        ),
+    )
+    opened: list[tuple[Path, object]] = []
+    monkeypatch.setattr(
+        module.handover, "open_in_slicer", lambda model, setup: opened.append((model, setup))
+    )
+
+    assert dialog.settings.handover == "slice", "die Vorgabe ist der bisherige Weg"
+    dialog._open_in_slicer()
+
+    assert opened and opened[0][0] == written, "das Fenster bekommt die geschriebene Datei"
+    assert dialog.settings.handover == "open", "die benutzte Art ist gemerkt"
+    assert dialog.state.text(), "die Handlung quittiert sich (§2.8)"
+
+
+def test_opening_is_not_remembered_by_merely_looking(dialog: PrintSettingsDialog) -> None:
+    """Gemerkt wird bei Nutzung, nie bei Ansicht: Der Dialog steht offen, und
+    die Übergabeart bleibt, was sie war."""
+    assert dialog.settings.handover == "slice"
+
+
+def test_the_remembered_handover_makes_its_button_primary(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der gemerkte Weg ist der Hauptknopf — entschieden beim Aufbau (§29)."""
+    from dataclasses import replace
+
+    from app.core.knowledge import print_settings as knowledge_settings
+
+    stored = replace(knowledge_settings.resolve(session.profile), handover="open")
+    session.project.document.print_settings = stored
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        assert dialog.open_button.isDefault(), "der gemerkte Weg trägt den Hauptknopf"
+        assert not dialog.slice_button.isDefault()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_opening_needs_a_window_and_says_so(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """CuraEngine allein rechnet nur — der Öffnen-Knopf sperrt mit Grund an
+    beiden Kodierungen (Regel 18), der Rechen-Knopf bleibt davon unberührt."""
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    dialog._slicer_path = engine
+
+    dialog._show_slicer_state()
+
+    assert not dialog.open_button.isEnabled()
+    assert "Fenster" in dialog.open_button.toolTip()
+    assert dialog.open_button.accessibleDescription()
+    assert dialog.slice_button.isEnabled(), "der Rechen-Weg kann, was er konnte"
+
+
 class WaitingWorker:
     """Ein Arbeiter, der nur Buch führt: läuft, bis jemand auf ihn wartet.
 

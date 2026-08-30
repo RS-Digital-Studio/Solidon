@@ -510,6 +510,10 @@ WallGenerator = Literal["classic", "arachne"]
 AdhesionType = Literal["none", "skirt", "brim", "raft"]
 QualityPreset = Literal["draft", "standard", "fine", "strong"]
 
+#: Die zwei Übergabearten aus §29: den Slicer im Konsolenmodus rechnen lassen
+#: („slice") oder die geschriebene Datei in seinem Fenster öffnen („open").
+HandoverKind = Literal["slice", "open"]
+
 
 @dataclass(frozen=True, slots=True)
 class LayerSettings:
@@ -734,6 +738,15 @@ class PrintSettings:
     id: str = "standard"
     title: str = "Standard"
     quality: QualityPreset = "standard"
+    handover: HandoverKind = "slice"
+    """Die gemerkte Übergabeart (§29): rechnen lassen oder im Fenster öffnen.
+
+    Je Projekt und nicht je Rechner — die Art ist eine Präferenz des
+    Projekts, während der Slicer-**Pfad** beim Gerät bleibt (der andere
+    Rechner hat einen anderen Slicer, aber dieselbe Gewohnheit). Eine
+    ältere Datei ohne das Feld bleibt auf „slice", dem bisherigen einzigen
+    Weg.
+    """
     layers: LayerSettings = field(default_factory=LayerSettings)
     shell: ShellSettings = field(default_factory=ShellSettings)
     infill: InfillSettings = field(default_factory=InfillSettings)

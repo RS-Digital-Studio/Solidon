@@ -626,6 +626,11 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         "id": settings.id,
         "title": settings.title,
         "quality": settings.quality,
+        # Die Übergabeart (§29): „je Projekt gemerkt" heißt, sie reist hier
+        # mit. Ein älterer Leser übergeht den Schlüssel, ein älterer
+        # Schreiber lässt ihn weg — beides landet auf „slice", dem
+        # bisherigen einzigen Weg.
+        "handover": settings.handover,
         # Die Zuordnung Slot zu Filament (§20). Als Liste, weil JSON kein
         # Tupel kennt — beim Lesen wird wieder eines daraus.
         "slot_profiles": list(settings.slot_profiles),
@@ -657,6 +662,10 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         id=str(data.get("id", "standard")),
         title=str(data.get("title", "")),
         quality=data.get("quality", "standard"),
+        # Nur die zwei bekannten Arten: Was eine fremde oder künftige Datei
+        # sonst hineinschreibt, fällt auf „slice" zurück, statt als
+        # unbekannter Wert bis in die Knopfleiste zu reisen.
+        handover="open" if data.get("handover") == "open" else "slice",
         slot_profiles=tuple(str(one) for one in data.get("slot_profiles", ())),
         slot_overrides=tuple(_override_from_data(one) for one in data.get("slot_overrides", ())),
         **groups,
