@@ -225,3 +225,15 @@ war: Die Zeile stand in HEAD, der Verweis zeigte ins Leere.
 Und der Fall gehört zu [[benannte-falle-schuetzt-nicht]]: Diese Notiz hier
 beschreibt die Falle seit einem Tag genau richtig, und ich bin in derselben
 Sitzung hineingelaufen, in der ich drei Nachbarsitzungen davor gewarnt habe.
+
+**Und `-o` nimmt keine Modusänderung mit.** Am 31.08.2026: `.githooks/commit-msg`
+stand mit `100644` im Repository und lief auf Linux und macOS wortlos nicht.
+`git update-index --chmod=+x` setzte den Modus im Index, `git commit -o -- <pfad>`
+committete ihn nicht — `-o` nimmt den **Dateistand**, und der Inhalt war
+unverändert. Der Commit ging durch, meldete Erfolg und enthielt die Datei nicht.
+
+Das ist die gefährliche Gestalt: Er sah aus, als hätte er funktioniert. Ein
+reiner Modus-Commit braucht den Index ohne `-o` (`read-tree HEAD`,
+`update-index --chmod=+x`, `commit` ohne Pfadliste) — und danach `git show
+--raw HEAD`, das den Moduswechsel als `:100644 100755` zeigt. Die Zeilenzahl
+sagt dort nichts: Sie ist `0 0`.
