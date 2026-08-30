@@ -37,6 +37,7 @@ it into `website/version.json`.
 - Escape takes back whatever you are in the middle of: first the line you started, then the tool, then the sketch.
 - The button for the basic shapes is named after what a click on it does. The other shapes are still behind the arrow beside it.
 - The sketch hint names both ways: draw an outline, or insert a ready-made shape.
+- A new example project shows drawing with dimensions and constraints. Anyone working through the examples now meets it right at the start.
 
 ### When something will not hold, it says so now
 

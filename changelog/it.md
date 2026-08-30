@@ -37,6 +37,7 @@ scrive in `website/version.json`.
 - Esc ritira ciò a cui sta lavorando: prima la linea iniziata, poi lo strumento, poi lo schizzo.
 - Il pulsante delle forme di base porta il nome di ciò che fa un clic su di esso. Le altre forme restano dietro la freccia accanto.
 - L'avviso dello schizzo nomina entrambe le strade: disegnare un contorno oppure inserire una forma già pronta.
+- Un nuovo progetto di esempio mostra il disegno con misure e vincoli. Chi percorre gli esempi lo incontra già all'inizio.
 
 ### Quando qualcosa non terrà, adesso lo dice
 

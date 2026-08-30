@@ -38,6 +38,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Escape retira aquello en lo que está: primero la línea empezada, luego la herramienta, luego el boceto.
 - El botón de las formas básicas se llama como lo que hace un clic en él. Las demás formas siguen tras la flecha de al lado.
 - El aviso del boceto nombra los dos caminos: dibujar un contorno o insertar una forma ya hecha.
+- Un nuevo proyecto de ejemplo muestra el dibujo con medidas y restricciones. Quien recorre los ejemplos se topa con él ya al principio.
 
 ### Cuando algo no va a sujetar, ahora lo dice
 

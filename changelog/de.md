@@ -43,7 +43,7 @@ Nutzen da und sonst nichts.
 ## 0.2.3
 
 
-### Bausteine teilen
+### Bausteine weitergeben
 
 - Einen selbst gebauten Baustein geben Sie als Rezept weiter, und fremde übernehmen Sie genauso. Ein Rezept ist die Liste Ihrer Schritte mit ihren Werten.
 - Wer ein Rezept übernimmt, bekommt keine fertige Form, sondern Ihre Schritte — und kann jede Zahl darin ändern.
@@ -62,6 +62,7 @@ Nutzen da und sonst nichts.
 - Escape nimmt zurück, woran Sie gerade sind: erst die angefangene Linie, dann das Werkzeug, dann die Skizze.
 - Der Knopf für die Grundformen heißt nach dem, was ein Klick darauf tut. Die übrigen Formen stehen weiter hinter dem Pfeil daneben.
 - Der Skizzenhinweis nennt beide Wege: einen Umriss zeichnen oder eine fertige Form einsetzen.
+- Ein neues Beispielprojekt zeigt das Zeichnen mit Maßen und Bedingungen. Wer die Beispiele durchgeht, begegnet ihm jetzt gleich zu Anfang.
 
 ### Wenn etwas nicht hält, sagt es das jetzt
 

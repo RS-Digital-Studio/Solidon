@@ -37,6 +37,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Escape retira aquilo em que está: primeiro a linha começada, depois a ferramenta, depois o esboço.
 - O botão das formas básicas chama-se pelo que um clique nele faz. As outras formas continuam atrás da seta ao lado.
 - O aviso do esboço nomeia os dois caminhos: desenhar um contorno ou inserir uma forma já feita.
+- Um novo projeto de exemplo mostra o desenho com medidas e restrições. Quem percorre os exemplos encontra-o logo no início.
 
 ### Quando algo não vai segurar, agora di-lo
 

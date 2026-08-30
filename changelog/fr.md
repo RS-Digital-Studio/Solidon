@@ -38,6 +38,7 @@ dans `website/version.json`.
 - Échap retire ce que vous êtes en train de faire : d'abord la ligne commencée, puis l'outil, puis l'esquisse.
 - Le bouton des formes de base porte le nom de ce qu'un clic dessus fait. Les autres formes restent derrière la flèche à côté.
 - L'indication de l'esquisse nomme les deux voies : dessiner un contour ou insérer une forme toute faite.
+- Un nouveau projet d'exemple montre le dessin avec cotes et contraintes. Qui parcourt les exemples le rencontre dès le début.
 
 ### Quand quelque chose ne tiendra pas, il le dit maintenant
 
