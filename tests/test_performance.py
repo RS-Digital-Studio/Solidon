@@ -26,6 +26,7 @@ from typing import Any
 import pytest
 
 from app.core import deferred
+from app.core.export.threemf import AssemblyPart, read_objects, write_assembly
 from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.section import SectionPlane, cut
@@ -341,6 +342,43 @@ def test_the_input_stage_on_a_million_triangles() -> None:
     mesh = dense_mesh()
     taken = measure("ingest_dense", lambda: normalise(mesh, "mm"))
     assert taken < 60.0, "welding and cleaning a million triangles"
+
+
+def large_assembly() -> bytes:
+    """25 Teile mit zusammen gut 500 000 Dreiecken, als eine 3MF-Baugruppe.
+
+    Die Bauart der Kundendatei aus dem Register („Eine Kunden-3MF hängt vier
+    Minuten im Hash", 30.08.2026): nicht ein dichter Körper, sondern viele
+    mittlere in einer Datei — jedes Teil wird einzeln gelesen, über seine
+    Platzierungsmatrix verschoben und normalisiert, und trimeshs Cache hasht
+    dabei je Teil. ``ingest_dense`` sieht diesen Weg nicht: ein Körper, eine
+    Kopie, ein Hash. Die Kundendatei selbst bleibt draußen — fremde Lizenz,
+    und der Korpus trägt keine 10-MB-Fremdmodelle.
+    """
+    parts = []
+    for n in range(25):
+        body = deferred.trimesh.creation.icosphere(subdivisions=5, radius=8.0)
+        body.apply_translation((n % 5 * 20.0, n // 5 * 20.0, 8.0))
+        parts.append(AssemblyPart(mesh=MeshData.of(body), name=f"part_{n + 1}"))
+    return write_assembly(parts)
+
+
+def test_the_input_stage_on_a_large_assembly() -> None:
+    """Der Einleseweg einer Kunden-3MF mit vielen Teilen bleibt im Budget.
+
+    Gemessen wird ab dem fertigen Dateipuffer: Erzeugen und Schreiben der
+    Baugruppe liegen **vor** der Uhr, wie bei ``read_dense`` der
+    trimesh-Import — sonst misst die Marke solo den Aufbau mit und im
+    Volllauf nicht (Register 30.08.2026). Das Budget ist eine absolute
+    Zusage mit viel Luft (gemessen 1,8 s am 30.08.2026, mit xxhash);
+    eine Regression fängt der Median dieser Maschine.
+    """
+    payload = large_assembly()
+    taken = measure(
+        "ingest_assembly",
+        lambda: [normalise(part.mesh, "mm") for part in read_objects(payload)],
+    )
+    assert taken < 30.0, "reading and normalising 25 parts from one 3MF"
 
 
 def test_the_section_cut_stays_interactive() -> None:
