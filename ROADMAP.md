@@ -12563,9 +12563,11 @@ schreibt. Das ist ein Leistungsbefund, kein Absturz.
       Weg. Behoben mit `dedd2b8d`: xxhash (BSD-2-Clause) nach der
       Abhängigkeits-Checkliste, in der Spec ausdrücklich als
       Paketvertrag; Gegenmessung 14,0 statt 15,2 s. Die Kundendatei
-      bleibt draußen (fremde Lizenz); die Leistungsmarke „große Baugruppe
-      durch die Eingangsstufe" mit erzeugter Geometrie folgt in
-      `test_performance.py` (Weg b, mit 15/53 abgestimmt).
+      bleibt draußen (fremde Lizenz); die Leistungsmarke ist gebaut
+      (`905eb4ff`): `ingest_assembly`, 25 Teile / gut 500 000 Dreiecke
+      zur Laufzeit erzeugt, Aufbau vor der Uhr, Budget 30 s absolut bei
+      gemessenen 1,8 s — samt Gegenprobe, dass der threemf-Kopfimport
+      trimesh nicht vorzeitig lädt.
 - [ ] **Prüfpunkt nächster CI-Bau**: Liegt xxhash im gebauten Paket?
       Erst dann ist die Kundenwirkung belegt, nicht nur die der
       Entwicklungsumgebung.
