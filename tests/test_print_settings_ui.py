@@ -1105,6 +1105,49 @@ def test_an_old_settings_file_still_carries_its_profile(monkeypatch: pytest.Monk
     assert setup.machine_profile == "Centauri Carbon 0.4"
 
 
+def test_a_profile_of_another_slicer_is_not_reused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dieselbe Regel wie beim Drucker, für den Slicer: Ein Maschinenprofil
+    aus dem Orca-Bestand ist für PrusaSlicer eine fremde Datei.
+
+    Gemessen am 30.08.2026: Der frühe Rückweg von ``_remember_slicer_choice``
+    ließ den Orca-Bestand jeden Wechsel überleben (nach einem Wechsel auf
+    Prusa oder Cura sind die Auswahlfelder immer leer), und beim nächsten
+    Start bekam PrusaSlicer das Elegoo-Profil aufgelegt.
+    """
+    from app.ui.print_settings_dialog import remembered_setup
+
+    _pretend_a_slicer(monkeypatch)
+    settings = UiSettings()
+    settings.slicer_machine_profile = "Centauri Carbon 0.4"
+    settings.slicer_profile_slicer = r"C:\anderswo\prusa-slicer.exe"
+
+    assert remembered_setup(settings, "petg") is None, "anderer Slicer, nichts gilt"
+
+    settings.slicer_profile_slicer = "elegoo-slicer.exe"
+    same = remembered_setup(settings, "petg")
+    assert same is not None, "derselbe Slicer, alles gilt"
+
+    # Ohne Vermerk kein Vergleich — der Zustand jeder Installation, die vor
+    # diesem Feld eingerichtet wurde (dieselbe Zusage wie beim Drucker).
+    settings.slicer_profile_slicer = ""
+    assert remembered_setup(settings, "petg") is not None
+
+
+def test_remembering_profiles_also_notes_their_slicer(
+    monkeypatch: pytest.MonkeyPatch, dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Wer Profile speichert, speichert wessen sie sind — sonst überlebt der
+    Bestand des alten Slicers den Wechsel in den Einstellungen."""
+    executable = tmp_path / "elegoo-slicer.exe"
+    executable.write_bytes(b"")
+    dialog._slicer_path = executable
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle", "ECC2.json")
+
+    dialog._remember_slicer_choice(require_machine=False)
+
+    assert dialog.ui_settings.slicer_profile_slicer == str(executable)
+
+
 def test_the_project_settings_win_over_the_preset(qt_app: QApplication) -> None:
     """§29: was eingestellt wurde, gilt beim nächsten Öffnen weiter — sonst
     wäre der Dialog eine Sitzung lang gültig und danach vergessen."""

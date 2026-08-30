@@ -974,6 +974,10 @@ def remembered_setup(
     sähe vollständig aus und zeigte auf die falsche Maschine. Ohne Vermerk
     (Einstellungen aus einer älteren Version) wird nicht verglichen.
 
+    Und dieselbe Frage an den **Slicer**: Weicht der gefundene vom
+    vermerkten ab, gelten die Profile nicht — sie stammen aus dem Bestand
+    eines anderen Programms. Auch hier gilt: ohne Vermerk kein Vergleich.
+
     ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
     Programm geht über PATH, Registry und die üblichen Orte und kostet eine
     halbe Sekunde. Wer den Slicer nie eingerichtet hat, bekäme dafür ein Setup
@@ -986,6 +990,14 @@ def remembered_setup(
         return None
     found = discover.find_program("slicer", tools.SLICERS)
     if found is None:
+        return None
+    # Dieselbe Regel für den Slicer wie für den Drucker: Die Profile gehören
+    # zu dem Programm, mit dem sie gewählt wurden — ein Orca-Maschinenprofil
+    # ist für PrusaSlicer eine fremde Datei. Leer heißt „von früher", dann
+    # wird nicht verglichen: Bestandskunden verlören sonst ihre Profilwahl
+    # mit der ersten Aktualisierung (Begründung am Feld in settings.py).
+    chosen_with = settings.slicer_profile_slicer
+    if chosen_with and str(found) != chosen_with:
         return None
     try:
         setup = handover.detect(found)
@@ -3051,6 +3063,13 @@ class PrintSettingsDialog(QDialog):
         # Zu welchem Drucker die drei gehören. Ohne den Vermerk trägt das
         # nächste Projekt auf einer anderen Maschine dieselben Profile.
         self.ui_settings.slicer_profile_printer = self.session.profile.printer.id
+        # Und zu welchem Slicer: Ein Orca-Maschinenprofil ist für PrusaSlicer
+        # keine Auskunft, sondern eine fremde Datei — und der frühe Rückweg
+        # oben ließ den Orca-Bestand jeden Wechsel überleben, denn nach einem
+        # Wechsel auf Prusa oder Cura sind die Felder immer leer (gemessen
+        # 30.08.2026, Begründung am Feld in settings.py).
+        if self._slicer_path is not None:
+            self.ui_settings.slicer_profile_slicer = str(self._slicer_path)
         # Und je Material: „petg" allein sagt nicht, welche der sieben Spulen
         # gemeint war, und nach einem TPU-Teil stünde die falsche da.
         if filament:
