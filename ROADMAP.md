@@ -129,7 +129,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
-| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | 3a's Erhebung nach P5 — Ist-Verhalten am Code und im echten Fenster, Gegenmessung an Fusion, dann Befunde und Schnitt |
+| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | Roberts Einrasten ist gebaut (`edfb89b9`, sechs Achsenansichten am Modell); bei 3a bleiben drei Messungen (EndInteractionEvent am Fensterrand, Fusion-Fangbereich) und danach der eigentliche Zug bei gekippter Kamera |
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 zuerst (Escape vernichtet die Zeichnung; entschieden: merken statt vernichten), dann Maß-ändern und die Ausgänge; Review je Paket |
 | Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1 ist zu (`7d46a87f`), V4 bei 50, V2/V5/V7 bei 72; Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
@@ -12985,7 +12985,7 @@ Steuerungs-P verwechselt):
 | D9 | Skelettleiste: falscher AccessibleName, fehlende Tooltips, drei Kleinigkeiten aus B12 | S | offen |
 | D10 | „Tokenbudget" im Chat ist kein Kundenwort — Zusammenfassung in Kundensprache, Zahlen unter Einzelheiten | S | offen |
 | D11 | 56 Druckeinstellungen ohne Suchfeld — die Geste, die jeder Slicer hat (heben, nicht filtern) | L | offen |
-| D12 | Ring-Geschwister in `install_dialog._Row` und `filament_picker` messen und umbauen | M | nach D2 |
+| D12 | **Vier Knöpfe hielten ihre Zeile fest, nach dem Muster, vor dem sie warnten.** Lambdas an Kind-Knöpfen fingen `self` — der Ring aus `wartezeit.md`, dieselbe Familie wie D2; jetzt gebundene Methoden, und der Lebensdauer-Test zählt die Zeile selbst statt des Dialogs, der auch mit Zombie-Zeilen starb | M | **fertig** (`1a04d00c`, 72) |
 | D13 | Druckeinstellungen, drei Kleinfunde der Kundenfahrt (15/53, Bilder im Scratchpad): „Druckdatei speichern" grau ohne Tooltip-Grund am Element (FR5-Familie); der Dialog wächst nicht mit, wenn die Profil-Klappe nachgereicht aufgeht — die Felder stauchen sich; bei 561 px Vorgabebreite ist die Tab-Leiste angeschnitten und die achte Gruppe unsichtbar ohne Weiter-Hinweis | S | **15, beauftragt** — die Fahrt selbst war sonst ein Lob: Klappe öffnet sich selbst am richtigen Ort, Slicer-Wortschatz vorn, „Nichts einzuwenden." statt Leere |
 | D14a | Roberts Order („materialauswahl und farbe sind sinnlos, da wir nach den filamenten gehen"): Das Farbfeld der Druckeinstellungen fliegt — sein eigener note-Satz sagt „am Druck ändert sie nichts", die Spule trägt die Farbe längst; vorher messen, ob nichts sonst das Feld liest | S | **15, nach D13** |
 | D14b | Die Material-Combo weicht dem Filamentwähler: Das Dokument-Material leitet sich aus der gewählten Spule ab (Hauptslot) — die auto:-Toleranzkette, Passungen und resolve-Vorgaben hängen daran und werden umgehängt, nicht verwaist. Kernberührung: Dokumentfeld, Migration, fremde Dateien ohne Spulenwahl, Override-Dialog | M | **Konzeptnotiz vor dem Bau** (15 schreibt sie nach D14a); Baueinsatz nach Notiz-Review |
@@ -13073,15 +13073,33 @@ eine Skizze zum Körper auf — und die Zugrichtung (senkrecht zur
 Zeichenebene) liegt dann schräg im Bild: Wie gut die Geste dort trifft,
 was er meint, ist zu erheben und zu verbessern.
 
-- [ ] **3a, als Anschluss nach P5**: Ist-Verhalten am Code und im
-      echten Fenster erheben (wie bildet der Zug die Mausbewegung bei
-      gekippter Kamera auf die Höhe ab; was passiert nahe der
-      Blickrichtung-parallel-Lage; zeigt eine Zahl während des Zugs
-      wie im Viewport), gegen Fusion messen (liegt lokal —
-      `zeichnen-an-fusion-orientieren`), dann Befunde und
-      Verbesserungsschnitt vorlegen. Regeln: `zeichenflaeche.md` lädt
-      mit `sketch_editor.py`; Regel 2 bleibt (der Editor sammelt
-      Gesten, das Ergebnis entsteht bei der Auswertung).
+Der erste Teil ist gefallen, und Robert hat den Weg selbst gesetzt
+(direkt an 3a, 30.08.2026): „die seitenansicht, vorderansicht und
+draufsicht sollten in der nähe einrasten." 3a's Messung dazu: Nahe der
+Draufsicht bedeuten zehn Pixel Mausbewegung bei 1° Kippung rund 70 mm
+Höhe (Faktor 57 zur Seitenansicht), und die einzige Grenze im Code war
+eine numerische (0,057°). Das Einrasten mit 10° Fangbereich gab es im
+Skizzenmodus bereits und deckt den unbrauchbaren Bereich (< ~7°,
+hergeleitet) vollständig — **`edfb89b9` baut es auch am Modell**: sechs
+Achsenansichten (`iso` bewusst nicht — die schräge Ansicht liegt mitten
+im Drehraum), gemeinsamer Unterbau `_nearest_view`, vier Tests mit zwei
+greifenden Gegenproben (iso aufgenommen → Ausnahme-Test rot; Fangbereich
+auf 5° gesenkt → Deckungs-Test rot). Keine zweite Schwelle neben dem
+Einrasten — der `axis_hit`-Kommentar behält recht.
+
+- [ ] **3a, Rest in drei Messungen, dann der eigentliche Zug**:
+      (1) Feuert `EndInteractionEvent` auch beim Loslassen außerhalb
+      des Fensters? Die Schwung-Geste ist der wahrscheinlichste Weg in
+      die Lage, die das Einrasten nie sieht — `window_bench`, beide
+      Fälle (drinnen als Kontrolle der Sonde). (2) Fusion-Gegenmessung
+      zur Fangbereichsgröße (Erwartung vorher notiert: Fusion fängt
+      nicht und setzt auf den ViewCube). (3) Dann Roberts Kernauftrag:
+      Ist-Verhalten des Zugs bei gekippter Kamera erheben (Abbildung
+      Mausbewegung → Höhe, Zahl während des Zugs wie im Viewport),
+      Befunde und Verbesserungsschnitt vorlegen. Regeln:
+      `zeichenflaeche.md` lädt mit `sketch_editor.py`; Regel 2 bleibt
+      (der Editor sammelt Gesten, das Ergebnis entsteht bei der
+      Auswertung).
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
