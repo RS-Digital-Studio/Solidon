@@ -9391,6 +9391,15 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       die keine mehr sind. Wer die elf angeht, nimmt diesen Fall als
       Reproduktionsversuch mit.
 
+      **Dritter Fundort, Release-Kontrolle vom 30.08.2026:** Im vollen
+      Torlauf auf `4807f3f2` fiel `test_split_tool.py::
+      test_a_changed_document_drops_the_line` — ein anderer Test als beim
+      zweiten Fundort, dieselbe Zeile `overlay.py:294`, erreicht über
+      `LayoutRequest` → `eventFilter` → `_place` → `rows_in` auf einem
+      Nachbarn, der keiner mehr ist. Einzeln gefahren: 29 passed, Exit 0.
+      Das einzige `F` des gesamten Torlaufs; die Familie meldet sich unter
+      Last inzwischen an drei Tests derselben zwei Dateien.
+
 - [x] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt**
       — als eigener Punkt aufgelöst, die Suche läuft anderswo weiter.
       Am 24.08.2026 in `test_ui.py` gemessen, alle drei im Teardown, alle drei
