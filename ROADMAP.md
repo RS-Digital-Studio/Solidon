@@ -122,8 +122,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. Es fehlt ein echtes Paket auf einem Mac; dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
-| SpaceMouse-Anbindung — Konzept liegt vor | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | Roberts Entscheidungen aus `konzept-3d-maus-2026-08.md` §12 — zuvorderst Gerät (~150 €) und Reihenfolge gegen die Grundsteuerung; Empfehlung: bauen unter drei Bedingungen, sonst bleibt E10 |
-| Resin-Druck — Konzept liegt vor, der Titel führte in die Irre | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | Roberts Entscheidungen aus `konzept-resin-2026-08.md` §11 — zuvorderst Stufe-1-Freigabe (aufhören, das Vorhandene mit der stillen FDM-Vorgabe zu verstellen) und Weg B: Verfahren im Druckerprofil |
+| 3D-Maus — die Zehn-Minuten-Messung läuft, das Gerät bleibt Roberts Punkt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | die Falle-1-Messung (15/53, läuft: ist die Abhängigkeit festschreibbar?) und danach nur noch Roberts Gerätekauf (~150 €) — alles andere ist nach seiner Delegations-Order beratschlagt entschieden: bauen nach der Grundsteuerung, unter den drei Konzept-Bedingungen |
+| Resin Stufe 1 — entschieden: bauen als nächste Serie | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Serienstart nach der Panels-Welle (D1–D12) — Weg B mit zwei beratschlagten Präzisierungen (zwei generische Geräte, B4 in Stufe 1); Paketschnitt bei Start |
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
@@ -12823,14 +12823,20 @@ Punkte als notiert — was hier steht, ist also auch zugesagt.
       wenn die Abhängigkeit festschreibbar ist — fällt eine der drei
       Bedingungen, bleibt E10 stehen und der Kunde bekommt eine
       begründete Absage.
-- [~] **Resin-Druck: Konzept liegt vor**
-      (`konzepte/konzept-resin-2026-08.md`, 30.08.2026) — wartet auf
-      Roberts Entscheidungen §11, zuvorderst Stufe-1-Freigabe und Weg B
-      (Verfahren im Druckerprofil). Der Punkt-Titel selbst ist laut
-      Konzept irreführend (Frage 8): Der Kernbefund heißt „Solidon setzt
-      einen FDM-Drucker voraus, ohne je zu fragen" — Stufe 1 hört auf,
-      das Vorhandene zu verstellen, Stufe 2 (Saugglocken, Öffnungen nach
-      Druckorientierung, Geltungsbereiche der Regeln) kommt danach.
+- [~] **Resin Stufe 1: entschieden und beratschlagt — bauen, als
+      nächste Serie nach der Panels-Welle** (Freigabe + Konzept-Autorin
+      15/53, 30.08.2026, nach Roberts Delegations-Order). Weg B
+      (Verfahren im Druckerprofil), mit zwei beratschlagten
+      Präzisierungen gegenüber dem Konzept: **zwei** generische
+      Resin-Geräte im Startbestand (klein ~130×80, groß ~220×120 —
+      die Bauraumfrage ist die häufigste Resin-Fehlerquelle, ein
+      einzelnes Generikum beantwortete sie wieder still), und **B4
+      wandert in Stufe 1** (die FDM-Regeln bekommen ihren
+      Geltungsbereich sofort — sonst bekommt ein Resin-Profil weiter
+      Brim-Ratschläge und die stille Vorgabe ist nur eine Ebene tiefer
+      gerutscht). Cupping/Drains bleiben Stufe 2; der Dental-Kunde
+      wird über die zugesagte Mail nach seinem Gerät gefragt. Ziel:
+      0.2.3-Zyklus, Paketschnitt bei Serienstart.
 - [ ] **Die Zusagen aus der Antwort — versendet, damit scharf.** Die Mail
       ging am 30.08.2026 um 11:24 von support@solidon3d.de hinaus; fällig
       sind jetzt die Nachricht zum Verkaufsstart (spätestens 01.11.2026)
@@ -12967,10 +12973,10 @@ Steuerungs-P verwechselt):
 | D1 | Der Bericht zerlegt sein eigenes Bündel: `_resort`/`add_findings` bauen Zeilen ohne `_bundled` — nach einem Nachschub stehen 118 Namen in der Zeile und die Kopfzeile zählt 1 statt 118 | S | offen |
 | D2 | Speicherring gemessen: ein angeklickter Befund hält das Fenster (10 von 10 überleben) — `weak_slot` statt Lambda auf Fenster-Handlern | S | offen |
 | D3 | Fehlerdialog und ComfyUI-Dialog haben keinen/den falschen Hauptknopf | S | offen |
-| D4 | „Bohrung ändern" wählt still `hole_1` von vieren — `at_feature` nach vorn, plus Wächter „kein required-Parameter hinten" | S | offen |
+| D4 | „Bohrung ändern" wählt still `hole_1` von vieren — `at_feature` nach vorn, plus Wächter „kein required-Parameter hinten" | S | **fertig** (`6c705a64`): Feld vorn, `_reason_locked` kennt „verlangt Merkmal, keines gewählt" (`labels.feature_requirement`), Register-Wächter steht; `paint_slot` als Zweitfall gemessen und korrekt frei |
 | D5 | Leere Pflichtliste lässt den Hauptknopf aktiv — sperren und begründen, Grund aus `_needs_phrase` | M | offen |
 | D6 | Die Kopfzeile verschwindet unter 2330 px Fensterbreite ins unbeschriftete Überlaufmenü — kürzen statt verschwinden | M | offen |
-| D7 | Der Platzhalter-Wächter ist ASCII-blind: `{maß}` kann aus fünf Katalogen fallen, Test bleibt grün | S | offen |
+| D7 | Der Platzhalter-Wächter ist ASCII-blind: `{maß}` kann aus fünf Katalogen fallen, Test bleibt grün | S | **fertig** (`acbeffb3`): Regex auf Unicode, Mutationsprobe (`{maß}` aus en.json gelöscht) fiel rot | 
 | D8 | Platzhalternamen vereinheitlichen (vier Namen für „Anzahl"), Doppelsatz „Knochen" zusammenlegen | M | nach D7 |
 | D9 | Skelettleiste: falscher AccessibleName, fehlende Tooltips, drei Kleinigkeiten aus B12 | S | offen |
 | D10 | „Tokenbudget" im Chat ist kein Kundenwort — Zusammenfassung in Kundensprache, Zahlen unter Einzelheiten | S | offen |
