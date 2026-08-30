@@ -164,8 +164,14 @@ class SectionBar(QWidget):
         self._update_enabled()
 
     def _axis_changed(self) -> None:
-        """Andere Achse, anderer Weg — und dann erst rechnen."""
-        self._apply_range()
+        """Andere Achse, anderer Weg — und dann erst rechnen.
+
+        Dass die Achse gewechselt hat, weiß nur diese Stelle: Jeder Weg dorthin
+        geht über ``currentIndexChanged``, auch der aus dem Fenster beim
+        Öffnen der Leiste. Deshalb sagt sie es weiter, statt dass
+        :meth:`_apply_range` es sich aus einem gemerkten Feld herleitet.
+        """
+        self._apply_range(axis_changed=True)
         self._emit()
 
     # --- state ------------------------------------------------------------------
@@ -181,7 +187,7 @@ class SectionBar(QWidget):
         self._ranges = dict(ranges)
         self._apply_range()
 
-    def _apply_range(self) -> None:
+    def _apply_range(self, axis_changed: bool = False) -> None:
         """Setzt den Weg auf die gewählte Achse, mit etwas Luft an den Enden."""
         axis = self.axis.currentData()
         low, high = self._ranges.get(axis, (-100.0, 100.0))
@@ -193,7 +199,22 @@ class SectionBar(QWidget):
         # Die Achse zu wechseln heißt, an einer anderen Stelle zu schneiden —
         # der alte Wert gehörte zur alten Achse. In die Mitte, das ist die
         # Stelle, an der ein Schnitt am ehesten etwas zeigt.
-        if not (low - margin <= was <= high + margin):
+        #
+        # **Der Satz stand hier schon, und die Bedingung darunter machte ihn
+        # wirkungslos.** Geprüft wurde, ob der alte Wert *außerhalb* der neuen
+        # Spanne liegt — und 0,0 liegt bei einem Teil, das auf dem Bett steht
+        # (z von 0 bis Höhe), immer innerhalb. Das Fenster öffnet die Leiste
+        # mit Achse Z, der Regler blieb also auf 0,0 stehen, und weil alles
+        # oberhalb der Ebene wegfällt, sah der Kunde einen **leeren Bauraum**.
+        # Wer nicht weiß, was ein Schnitt tut, hält das für einen Fehler, den
+        # er selbst gemacht hat.
+        #
+        # Beim Achswechsel wird deshalb immer zentriert. Die Prüfung auf
+        # „außerhalb" bleibt für den anderen Aufrufer: ``set_ranges`` bringt
+        # neue Spannen für dasselbe Teil, und dort gehört der eingestellte Wert
+        # noch zur richtigen Achse — ihn dann in die Mitte zu ziehen, wäre eine
+        # Bewegung ohne Auftrag.
+        if axis_changed or not (low - margin <= was <= high + margin):
             self.readout.set_value_mm((low + high) / 2.0)
 
     def plane(self) -> SectionPlane | None:
