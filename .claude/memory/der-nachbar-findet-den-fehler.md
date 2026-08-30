@@ -18,7 +18,10 @@ Nachbarsitzung sucht woanders — nicht weil sie klüger ist, sondern weil ihr
 Blick nicht von der eigenen Absicht gelenkt wird. Deshalb sind Sitzungen,
 die einander ihre Funde **melden**, mehr wert als Sitzungen, die sorgfältiger
 arbeiten: Sorgfalt skaliert nicht über den eigenen blinden Fleck hinaus,
-Melden schon.
+Melden schon. Und der Grund ist nicht Fleiß, sondern **Blickrichtung**:
+Sorgfältiger zu arbeiten hätte keinen der Fälle des Tages gefangen — anders
+hinzusehen schon, **und das kann man sich nicht selbst verordnen** (50,
+30.08.2026).
 
 **How to apply:**
 - Ein Fund in fremdem Gebiet wird **gemeldet, nie stillschweigend geheilt** —
