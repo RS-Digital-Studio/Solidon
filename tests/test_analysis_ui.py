@@ -2903,6 +2903,19 @@ def test_a_list_in_the_bottom_bar_opens_upwards_when_it_has_to() -> None:
     Die Leisten unter dem Viewport sitzen an der Unterkante der Anwendung —
     ihre Listen klappten über das Fenster hinaus auf den Schreibtisch und
     verdeckten, was dort lag. Gerechnet wird in Bildschirmkoordinaten.
+
+    **Der mittlere Zweig las sich einmal „sonst darüber", und das war ein Wort
+    zu viel.** Das Ziel dieser Rechnung ist, die Liste im *Fenster* zu halten;
+    dass sie dabei über dem Feld endet statt an dessen Unterkante, war die
+    naheliegende Lesart von „nicht darunter" und keine eigene Zusage. Sie hat
+    die Liste unbedienbar gemacht: Verschoben wird erst, **nachdem** Qt sie
+    geöffnet hat, und wer eine Liste öffnet, hält die Maustaste über dem Feld.
+    Endet sie an der Oberkante, liegt der Zeiger beim Loslassen außerhalb — und
+    Qt schließt eine Aufklappliste, die ihren Zeiger verloren hat. Sie ging auf
+    und sofort wieder zu (Roberts Fehlerbericht, 30.08.2026; an seiner
+    Fenstergröße gerechnet lag der Zeiger bei 777 und die Liste endete bei
+    767). Das Feld zu überdecken kostet nichts: Was dort steht, steht auch in
+    der Liste, als der gewählte Eintrag.
     """
     from PySide6.QtCore import QRect
 
@@ -2914,7 +2927,9 @@ def test_a_list_in_the_bottom_bar_opens_upwards_when_it_has_to() -> None:
     assert list_top(roomy, 200, window) == roomy.bottom(), "passt darunter — dann darunter"
 
     cramped = QRect(120, 640, 160, 24)  # unten bei 663, darunter nur 36
-    assert list_top(cramped, 200, window) == cramped.top() - 200, "sonst darüber"
+    assert list_top(cramped, 200, window) == cramped.bottom() - 200, (
+        "sonst nach oben — bündig mit der Unterkante des Feldes, nicht darüber"
+    )
 
     tall = list_top(cramped, 700, window)
     assert tall == window.top(), "passt nirgends: dann bündig, nicht über den Rand"

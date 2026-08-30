@@ -61,7 +61,17 @@ def list_top(field: QRect, height: int, window: QRect) -> int:
     """
     if field.bottom() + height <= window.bottom():
         return field.bottom()
-    above = field.top() - height
+    # **Bündig mit der Unterkante des Feldes, nicht darüber.** Verschoben wird
+    # erst, nachdem Qt die Liste geöffnet hat — und wer sie öffnet, hält die
+    # Maustaste über dem Feld. Endete die Liste an der *Oberkante*, läge der
+    # Zeiger beim Loslassen außerhalb, und Qt schließt eine Aufklappliste, die
+    # ihren Zeiger verloren hat: Sie ging auf und sofort wieder zu (Roberts
+    # Fehlerbericht, 30.08.2026; gerechnet an seiner Fenstergröße lag der
+    # Zeiger bei 777 und die Liste endete bei 767).
+    #
+    # Das Feld zu überdecken ist dabei kein Verlust: Was dort steht, steht auch
+    # in der Liste, und zwar als der gewählte Eintrag.
+    above = field.bottom() - height
     if above >= window.top():
         return above
     # Weder darüber noch darunter: dann bündig an die Unterkante. Oben
