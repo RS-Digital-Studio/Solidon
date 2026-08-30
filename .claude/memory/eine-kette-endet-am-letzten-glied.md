@@ -52,6 +52,32 @@ geschlossen` da. **Eine Mutationsprobe an einer Kette braucht deshalb einen
 Angriff je Glied, nicht einen für die Kette** — und die Zeile, auf die es
 ankommt, ist die mit dem *grünen* Altbestand.
 
+**Die schärfste Gestalt bisher, gemessen am 30.08.2026 (5d): Der Test, der
+die Rechnung prüft, trug die Begründung des Wirkungsfehlers in seiner eigenen
+Assert-Meldung.**
+
+Der Startbildschirm — das Erste, was ein Kunde sieht — blieb bei 714 Pixeln
+Breite, bei jeder Fenstergröße von 1280 bis 3413. Die Rechnung dahinter war
+richtig: `_fit_the_columns` stellte auf 1360 und drei Kachelspalten um, sobald
+der Platz da war. Nur **zieht `setMaximumWidth` nicht**, es erlaubt; zwischen
+zwei Stretch-Feldern ohne eigenen Faktor bekam die Spalte ihre `sizeHint`.
+
+Dafür gab es einen Test. Er prüfte `_columns == 3`, und seine Assert-Meldung
+lautete:
+
+> „die Breite ist da und wird nicht benutzt"
+
+Genau das geschah, während er grün war. Der Satz beschreibt den Zustand, den
+der Test nicht messen konnte — er misst die Entscheidung, nicht ihre Folge.
+
+**Was daraus folgt, ist eine Frage an jeden Test mit einer erklärenden
+Assert-Meldung:** Prüft er, was sein Satz behauptet? Wo der Satz von einer
+*Wirkung* spricht („wird benutzt", „steht da", „kommt an") und die Zusicherung
+eine *Entscheidung* liest (ein Flag, ein Zähler, eine gesetzte Eigenschaft),
+liegt genau ein Glied dazwischen. Bei Qt ist dieses Glied besonders oft leer:
+`setMaximumWidth`, `setEnabled`, `setVisible` und `setToolTip` sagen alle,
+was erlaubt oder gesetzt **ist** — nicht, was der Kunde sieht.
+
 **How to apply:**
 
 1. **Nach dem Bauen den Namen im Rumpf zählen**, der ihn rufen müsste. Ein
