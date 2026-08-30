@@ -131,8 +131,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
 | Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | Roberts Einrasten ist gebaut (`edfb89b9`), Fensterrand-Lücke widerlegt, Fangbereichs-Kosten gemessen (10° schluckt nur Lagen ohne Nutzwert); bei 3a bleibt der eigentliche Zug bei gekippter Kamera |
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 ist zu (`20838a37`: Escape kostet nichts mehr), dann Maß-ändern und die Ausgänge; Review je Paket |
-| Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1/V2/V4/V5/V7/V9 sind zu, V3 bei 72 (danach V6), V8 bei d3; Review je Paket |
+| Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — sieben von neun sind zu (zuletzt V3, `60e89828`), V6 bei 72, V8 bei d3 (Messliste kommt); Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
+| Dreizehn G-Pakete des Designs | Design und Anmutung bekommen ihre eigene Durchsicht (30.08.2026) | die Abarbeitung — 40 Befunde, sechs kritisch (`konzepte/durchsicht-design-2026-08.md`): G1 zuerst (Menü-Überschriften unsichtbar), G6 nur über die Konzeptnotiz zum Akzent-Haushalt; je Paket Belegbild vorher/nachher und Review |
 
 ---
 
@@ -13051,7 +13052,7 @@ ersten Moment nach dem Öffnen raten. Neun Pakete:
 |---|---|---|---|
 | V1 | **Der Schnitt öffnet nicht mehr auf ein leeres Bild.** `_apply_range` zentrierte nur, wenn der alte Wert *außerhalb* der neuen Spanne lag — bei einem Teil auf dem Bett (z ∈ [0, h]) liegt 0,0 immer darin; der Kommentar über der Zeile beschrieb die richtige Regel bereits vollständig. Jetzt zentriert der Achswechsel immer (`_axis_changed` reicht es als Parameter weiter, weil jeder Weg zur Achse über `currentIndexChanged` läuft); `set_ranges` behält die alte Prüfung, damit ein neu geladenes Teil den Regler nicht verschiebt. Zwei Tests über `plane()`, zwei Mutationen in beide Richtungen | S | **fertig** (`7d46a87f`, 50) |
 | V2 | **Der Zeiger beim Körperzug stimmt wieder** — der Ein-Zeichen-Fix (`"moving"`→`"move"`) ritt im Dateistand von `edfb89b9` mit (Zurechnung geklärt, 3a führt ihn nicht als ihren); der Wächter dazu ist `d91798b3`: AST über die Call-Argumente von `set_drag_cursor`/`cursor`/`_tell` **und** die Return-Literale von `_resting_role` (auch unter ternären Ausdrücken — er fing beim Bau prompt seine eigene Sammellücke), beide Richtungen mutiert | S | **fertig** (`edfb89b9`/`d91798b3`, 72) |
-| V3 | Die Navigationstexte versprechen Tasten, die es nicht gibt („mittlere dreht" — sie schiebt in allen vier Schemata). **Entschieden (Kundensicht): Variante b** — der Code folgt den Namen: `cad` = Mitte dreht (Umschalt+Mitte schiebt), `blender` = links wählt, Mitte dreht; `slicer`/`orbit` bleiben. Wer „Wie im CAD" wählt, will CAD-Verhalten — ehrlichere Texte über falschem Verhalten wären die halbe Antwort | M | **72, beauftragt** — danach V6 |
+| V3 | **Zwei Schemata hielten ihren eigenen Namen nicht** — und der Kernbefund war größer: Die mittlere Maustaste hatte gar keinen Beobachter, VTKs Basisverhalten schob. Jetzt ist die Zuordnung eine reine Tabelle (`_NAVIGATION` + `navigation_action()`, testbar ohne Fenster — genau deshalb konnte der falsche Satz zwei Schemata lang stehen: die VTK-Tastenkette lief offscreen nie); `cad` = Mitte dreht, Umschalt+Mitte schiebt, links wählt; `blender` = links wählt, Mitte dreht; `slicer`/`orbit` unverändert (eigens geprüft, dass der neue Beobachter ihnen das Schieben nicht nimmt). Dialog- und Menütexte sagen dasselbe wie der Code, das Handbuch verliert den seit je falschen Satz „rechte oder mittlere dreht"; drei Tests, vier Mutationsproben, ein Beinahe-Fehlbefund als Warnung im Testdocstring (Klick ohne Zug geht an `on_pick`) | M | **fertig** (`60e89828`, 72) — danach V6 |
 | V4 | **„Schichten" tut ohne Auswahl nicht mehr stumm nichts.** Bei genau einem Körper nimmt das Werkzeug diesen (`_only_body()`) — nach dem Öffnen der Normalfall, und eine Frage mit nur einer möglichen Antwort ist keine; bei mehreren steht der Grund in der Leiste (`LayerBar.show_note()` nach dem Vorbild von `MapLegend.note`), aufs Teil zeigend statt auf den Baum. Regler und Hinweis schließen einander aus. Zwei Tests, zwei Gegenproben je eine Hälfte | S | **fertig** (`4c584b51`, 50) |
 | V5 | **Das Messen endet nicht mehr wortlos**: drei `measurementStatus.emit` im Ton des Winkel-Pfads (§2.7) — Danebenklicken, keine Wandstärke messbar, erster Punkt gewählt; Katalogeinträge in allen fünf Sprachen mit den Bestandsbegriffen, Test misst am Signal, drei Emit-Mutationen einzeln rot | S | **fertig** (`e7cbbfbe`, 72) |
 | V6 | Ein angeklickter Befund fliegt an eine Stelle ohne Marke (alle op.*-Befunde): vergänglicher Ring in Auswahlfarbe plus Befundtitel, `_ring_points` existiert | M | nach V1–V5 |
@@ -13146,3 +13147,39 @@ echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
       Dialog vor der Erhebung und verlangt, dass zwei Platzhalter nie
       gleich lauten; vier Gegenproben, je ein Befund zurückgedreht,
       fallen einzeln.
+
+---
+
+## Design und Anmutung bekommen ihre eigene Durchsicht (30.08.2026)
+
+Roberts Frage („die panels und dialoge wurden jetzt alle mal gründlich
+geprüft auf design, layout, modern, innovativ, übersichtlichkeit?")
+deckte auf: Die D-Serie prüfte Funktion und Bedienung — die visuelle
+Achse war nur Beifang. Die Erhebung ist gefahren (echte Qt-Plattform,
+beide Themen, Deutsch und Französisch, Arbeits- und Leerzustände, 158
+Belegbilder) und liegt vollständig in
+`konzepte/durchsicht-design-2026-08.md`: **40 Befunde, sechs davon
+kritisch.** Die stärksten Stellen: Startbildschirm, Kürzelfenster,
+Symbolsatz. Die schwächsten: Bausteinkatalog, Skizzenkarte, Menüleiste.
+Roberts Sichtbefund vom selben Tag („Fertig steht zweimal da") läuft
+bereits als eigener Auftrag bei 50.
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| G1 | **Kritisch**: Jede Menü-Überschrift ist unsichtbar — `QMenu::separator` im Stylesheet frisst die `addSection`-Titel; 114 Einträge stehen in unbenannten Blöcken (B1) | S | offen — zuerst |
+| G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | offen |
+| G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | offen |
+| G4 | **Kritisch**: Der Bausteinkatalog — zehn Sekunden Textwüste ohne Wartesignal, dann Kacheln ohne Ruheform, nicht normierte Renderings, springende Titelzeilen (B4+B25) | M | offen |
+| G5 | **Kritisch**: Das Objektbaum-Vorschaubild ist ein 4-Pixel-Fleck — vergrößern oder ausbauen, halbe Größe ist keine Option (B5) | S | offen |
+| G6 | **Kritisch, Systemebene**: Der Akzentfarben-Haushalt — Bernstein bedeutet gleichzeitig sechs Dinge; dazu färbt der Prüfbericht ganze Sätze in Rollenfarbe und der Hauptknopf bedeutet nicht überall dasselbe (B6+B16+B22). Konzeptnotiz vor dem Bau: Wo darf der Akzent stehen, was bekommt eine leisere Form | L | offen — Notiz zuerst |
+| G7 | Widget-Grundformen in `style.py`: Slider ungestylt, Spinbox-Pfeile 10×11 mit verdecktem Trennstrich, Splitter-Fuge Kontrast 1,0, gesperrte Zustände kaum unterscheidbar, Werkzeugknopf rahmenlos (B7/B15/B30/B32/B37) | M | offen |
+| G8 | Formular-Raster der Dialoge: springende Feldkanten im Operationsdialog, zwei Raster im Einstellungsdialog, halbleere Gruppen der Druckeinstellungen, uneinheitliche Nachkommastellen, fehlender Rhythmus im Erststart (B8/B10/B11/B36/B38/B39) | M | offen |
+| G9 | Einheiten und Zeichen-Knöpfe: „[mm]" aus den Beschriftungen in die Werte (die eigene Regel in `oberflaeche.md` verlangt es), „fx" und „…" als erkennbare Knöpfe mit Bezug zur Zeile (B12/B13/B14) | M | offen |
+| G10 | Leere- und Wartezustände: Chat-Begrüßung statt schwarzem Kasten (und der Modellname weg von der prominentesten Stelle), Generierungsdialog, Freischaltung, vier nackte Warte-Textzeilen gegen `wartezeit.md` (B17/B18/B26/B29) | M | offen |
+| G11 | Skizzenkarte neu setzen (zerfallener Textblock, doppelter Hinweis, schwebende Kapsel) und die kursiven Kartenhinweise aufrecht (B19/B20) | S | offen — dockt an 50s Fertig-Fix an |
+| G12 | Druckeinstellungen: eine Abschnittsform statt QGroupBox-2010 über rahmenlosen Aufklappern (B9) | S | offen — dockt an D11 an |
+| G13 | Kleinserie: Filamentkarten-Höhe, Befehlspaletten-Spalten, Statuszeilen-Verschmelzung, Startbildschirm-Resthöhe, Filamentdialog (Farbfeld winzig, „OK"), Verlauf ohne Symbole, Menü-Icon-Lücken, Handbuch-Ränder, helle Kanten, sprachabhängiger Symbol-Schwellwert (B21/B23/B24/B27/B28/B31/B33/B34/B35/B40) | M | offen — nach den großen |
+
+- [ ] Die dreizehn G-Pakete abarbeiten — je Paket Belegbild vorher und
+      nachher, Zahlen und Review vor dem Commit; G1 zuerst, G6 nur
+      über die Konzeptnotiz.
