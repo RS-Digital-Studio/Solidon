@@ -91,6 +91,7 @@
 - [Patchskript schneidet Fremdes weg](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" ersetzen löscht, was die Nachbarsitzung dort einfügte; `--stat` sieht aus wie Umformatierung.
 - [Geteilter Index hält alten Stand](geteilter-index-haelt-alten-stand.md) — fünf Dateien als `MM`, alle fünf identisch mit HEAD; ein Index, der zurückliegt, sieht aus wie fremde laufende Arbeit und committet sie als gelöscht.
 - [Index altert zwischen Lesen und Commit](index-altert-zwischen-lesen-und-commit.md) — der private Index war korrekt aus HEAD gelesen; in den Minuten fürs Prüfen fiel ein fremder Commit, und der Index nahm ihn zurück. Sorgfalt vergrößert das Fenster.
+- [Blob-Commit verliert den Wettlauf](blob-commit-verliert-den-wettlauf.md) — „cannot lock ref HEAD" heißt: nicht passiert, Blob neu aus dem jetzigen HEAD bauen; der harte Fehler ist der Schutz, den `-o` nicht hat.
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
 - [Sicherung ist eine Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — eine Kopie vom Anfang einer Mutationsreihe spielt am Ende den ganzen Dateistand von damals zurück; dreimal getan, gutgegangen nur weil sie zufällig jünger war als der fremde Commit.
