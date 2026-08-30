@@ -93,6 +93,7 @@ Nutzen da und sonst nichts.
 - ElegooSlicer nimmt Aufträge wieder an. Und ordnet ein Slicer die Teile selbst an, steht das als Hinweis im Prüfbericht, statt die geplante Plattenbelegung stillschweigend zu ersetzen.
 - Der Prüfbericht stapelt keine alten Messwerte mehr: Ein neuer Lauf ersetzt sie, derselbe Sachverhalt steht einmal da, und Befunde nennen das Objekt beim Namen statt einer Nummer.
 - Die gemerkten Slicer-Profile wissen, zu welchem Slicer sie gehören. Nach einem Wechsel wird kein fremdes Profil mehr in das neue Programm übernommen.
+- Ein Sperr-Grund unter den Druckeinstellungen verschwindet, sobald er nicht mehr gilt. Vorher blieb „braucht ein Druckerprofil“ neben einem längst freien Knopf stehen.
 
 ### Chat und 3D-Erzeugung
 
@@ -106,6 +107,7 @@ Nutzen da und sonst nichts.
 - Tippt ein Sprachmodell seinen Werkzeugaufruf als Text, statt ihn auszuführen, erklärt der Vorschlag das — samt dem Weg über „Werkzeuge prüfen“. Vorher stand rohes JSON im Gespräch.
 - Das Handbuch hat die neue Seite „Welche Modelle Solidon benutzt“: welche geprüft sind, woher sie kommen, wie lange sie brauchen — und welche Datei für den Textweg wohin gehört.
 - Ein sehr kleiner erzeugter Körper zeigt sein echtes Volumen statt „0 mm³“ neben „geschlossen“.
+- Bei den KI-Modellen fürs Erzeugen wählen Sie je Aufgabe selbst, welches rechnet — wie beim Sprachmodell. „Automatisch“ bleibt die Vorgabe und nimmt das, was passt.
 
 ### Ansicht und Bedienung
 
@@ -125,6 +127,10 @@ Nutzen da und sonst nichts.
 - Fehlermeldungen zeigen die Angaben, auf die ihre Sätze verweisen. „Der Anfang der Antwort steht daneben“ — jetzt steht er wirklich daneben, samt Adresse und Anbieter.
 - Die Räte „Dreiecke verringern“ und „Seite im Browser öffnen“ sind jetzt Knöpfe, die genau das tun, statt Sätze, die es beschreiben.
 - Antwortet ein Dienst nicht, nennt der Dialog die Adresse zum Nachsehen im Browser und sammelt den Startversuch unter „Einzelheiten“. Hinweise zeigen nur auf Knöpfe, die es gerade gibt.
+- Die Aufklapplisten der Leisten unter der Ansicht bleiben offen, bis Sie wählen. Vorher konnte sich eine Liste sofort wieder schließen, weil sie sich unter dem Zeiger wegschob.
+- Das Dickenfeld der Schnittleiste wartet, bis Sie zu Ende getippt haben. Vorher schnitt es bei jedem Tastendruck — erst mit 3 mm und dann mit 30.
+- Der Prüfbericht wählt nach dem Öffnen den obersten Befund mit einer Handlung vor. „Auf das Bett setzen“ steht damit sofort als Knopf da, ohne dass man die Listenzeile erst anklicken muss.
+- Der Hinweis zur abgebrochenen Paketverwaltung nennt den Knopf bei seinem vollen Namen — in allen sechs Sprachen. „Details“ allein war in fünf davon eine kleine Suche.
 
 ### Plattformen und behobene Fehler
 

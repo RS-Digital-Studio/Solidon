@@ -69,6 +69,7 @@ scrive in `website/version.json`.
 - ElegooSlicer accetta di nuovo gli incarichi. E se uno slicer dispone i pezzi da solo, il rapporto lo dice invece di sostituire in silenzio l'occupazione del piano pianificata.
 - Il rapporto non accumula più misure vecchie: un nuovo passaggio le sostituisce, lo stesso fatto compare una sola volta, e gli avvisi nominano l'oggetto invece di un numero.
 - I profili di slicer ricordati sanno a quale slicer appartengono. Dopo un cambio, nessun profilo estraneo passa nel nuovo programma.
+- Un motivo di blocco sotto le impostazioni di stampa sparisce appena non vale più. Prima, «serve un profilo di stampante» restava accanto a un pulsante ormai libero.
 
 ### Chat e generazione 3D
 
@@ -82,6 +83,7 @@ scrive in `website/version.json`.
 - Se un modello linguistico scrive la chiamata come testo invece di eseguirla, la proposta lo spiega — con la via verso «Verifica gli strumenti». Prima restava JSON grezzo nella conversazione.
 - Il manuale ha una pagina nuova, «Quali modelli usa Solidon»: quali sono provati, da dove vengono e quanto impiegano. Per la via dal testo dice quale file va in quale cartella.
 - Un corpo generato molto piccolo mostra il suo volume reale invece di «0 mm³» accanto a «chiuso».
+- Per i modelli IA della generazione scegliete per compito quale calcola — come per il modello linguistico. «Automatico» resta l'impostazione predefinita e prende ciò che è adatto.
 
 ### Vista e comandi
 
@@ -102,6 +104,10 @@ scrive in `website/version.json`.
 - I messaggi di errore mostrano i dati a cui le loro frasi rimandano. «L'inizio della risposta sta accanto» — ora c'è davvero, insieme a indirizzo e fornitore.
 - I consigli «Ridurre i triangoli» e «Aprire la pagina nel browser» ora sono pulsanti che fanno esattamente questo, invece di frasi che lo descrivono.
 - Quando un servizio non risponde, il dialogo nomina l'indirizzo da verificare nel browser e raccoglie il tentativo sotto «Dettagli». Gli avvisi rimandano solo a pulsanti esistenti.
+- Le liste a discesa delle barre sotto la vista restano aperte finché non scegliete. Prima una lista poteva richiudersi subito, perché scivolava via da sotto il puntatore.
+- Il campo di spessore della barra di taglio aspetta la fine della digitazione. Prima tagliava a ogni tasto — prima con 3 mm e poi con 30.
+- Dopo l'apertura, il rapporto preseleziona il primo avviso che offre un'azione. «Posare sul piano» sta lì come pulsante da subito, senza dover prima cliccare la riga.
+- L'avviso sulla gestione pacchetti annullata chiama il pulsante col suo nome completo — in tutte e sei le lingue. «Dettagli» da solo era una piccola ricerca in cinque di esse.
 
 ### Piattaforme e correzioni
 

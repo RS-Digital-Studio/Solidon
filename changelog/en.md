@@ -69,6 +69,7 @@ it into `website/version.json`.
 - ElegooSlicer accepts jobs again. And if a slicer arranges the parts itself, the report says so instead of silently replacing your planned plate layout.
 - The report no longer stacks old measurements: a new run replaces what it measures anew, the same fact appears only once, and build-volume findings name the object instead of a number.
 - The remembered slicer profiles know which slicer they belong to. After a switch, no foreign profile is carried into the new program any more.
+- A blocking reason under the print settings disappears as soon as it no longer applies. Before, “needs a printer profile” stayed next to a button that had long been free.
 
 ### Chat and 3D generation
 
@@ -82,6 +83,7 @@ it into `website/version.json`.
 - If a language model types its tool call as text instead of running it, the proposal now explains that — with the way to “Check tools”. Before, raw JSON sat in the conversation without a word.
 - The manual has a new page, “Which models Solidon uses”: which ones are proven, where they come from and how long they take. For the way from text it says which file belongs in which folder.
 - A very small generated body shows its real volume instead of “0 mm³” next to “closed”.
+- For the AI models used in generating, you choose per task which one computes — just like the language model. “Automatic” remains the default and takes what fits.
 
 ### View and controls
 
@@ -102,6 +104,10 @@ it into `website/version.json`.
 - Error messages show the details their sentences refer to. “The start of the answer is shown alongside” — now it really is, together with address and provider.
 - The advice “Reduce triangles” and “Open the page in the browser” are now buttons that do exactly that, instead of sentences describing it.
 - When a service does not respond, the dialog names the address to check in the browser and keeps the start attempt under “Details”. Its hints only point at buttons that exist in that situation.
+- The drop-down lists in the bars below the view stay open until you choose. Before, a list could close itself right away because it moved out from under the pointer.
+- The thickness field of the section bar waits until you finish typing. Before, it cut on every keystroke — first with 3 mm, then with 30.
+- After opening, the report preselects the topmost finding that offers an action. “Place on the bed” is there as a button right away, without first clicking the list row.
+- The note about a cancelled package manager calls the button by its full name — in all six languages. “Details” alone was a small search in five of them.
 
 ### Platforms and fixes
 

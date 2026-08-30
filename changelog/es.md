@@ -70,6 +70,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - ElegooSlicer vuelve a aceptar trabajos. Y si un slicer coloca las piezas por su cuenta, el informe lo dice en vez de sustituir en silencio la ocupación planeada de la placa.
 - El informe ya no apila mediciones viejas: una pasada nueva sustituye lo que vuelve a medir, el mismo hecho aparece una sola vez, y los avisos de volumen nombran el objeto en vez de un número.
 - Los perfiles de slicer recordados saben a qué slicer pertenecen. Tras un cambio, ningún perfil ajeno pasa al programa nuevo.
+- Un motivo de bloqueo bajo los ajustes de impresión desaparece en cuanto deja de valer. Antes, «necesita un perfil de impresora» seguía junto a un botón ya libre.
 
 ### Chat y generación 3D
 
@@ -83,6 +84,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si un modelo de lenguaje escribe su llamada como texto en vez de ejecutarla, la propuesta lo explica — con el camino a «Comprobar las herramientas». Antes quedaba JSON en bruto en la conversación.
 - El manual tiene una página nueva, «Qué modelos usa Solidon»: cuáles están probados, de dónde vienen y cuánto tardan. Para el camino desde texto dice qué archivo va en qué carpeta.
 - Un cuerpo generado muy pequeño muestra su volumen real en vez de «0 mm³» junto a «cerrado».
+- En los modelos de IA para generar, usted elige por tarea cuál calcula — como con el modelo de lenguaje. «Automático» sigue siendo la opción por defecto y toma lo que encaja.
 
 ### Vista y manejo
 
@@ -103,6 +105,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los mensajes de error muestran los datos a los que sus frases se refieren. «El comienzo de la respuesta está al lado» — ahora de verdad lo está, junto con dirección y proveedor.
 - Los consejos «Reducir triángulos» y «Abrir la página en el navegador» ahora son botones que hacen exactamente eso, en vez de frases que lo describen.
 - Cuando un servicio no responde, el diálogo nombra la dirección para verla en el navegador y guarda el intento bajo «Detalles». Sus avisos solo señalan botones que existen.
+- Las listas desplegables de las barras bajo la vista quedan abiertas hasta que usted elige. Antes, una lista podía cerrarse al instante porque se apartaba de debajo del puntero.
+- El campo de grosor de la barra de corte espera a que termine de teclear. Antes cortaba con cada pulsación — primero con 3 mm y luego con 30.
+- Tras abrir, el informe preselecciona el primer aviso que ofrece una acción. «Colocar sobre la placa» está ahí como botón de inmediato, sin tener que pulsar antes la fila.
+- El aviso sobre la gestión de paquetes cancelada nombra el botón por su nombre completo — en los seis idiomas. «Detalles» a secas era una pequeña búsqueda en cinco de ellos.
 
 ### Plataformas y correcciones
 

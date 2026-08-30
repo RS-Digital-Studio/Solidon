@@ -70,6 +70,7 @@ dans `website/version.json`.
 - ElegooSlicer accepte de nouveau les travaux. Et si un slicer dispose les pièces lui-même, le rapport le dit au lieu de remplacer en silence l'occupation du plateau prévue.
 - Le rapport n'empile plus les anciennes mesures : un nouveau passage les remplace, le même fait n'apparaît qu'une fois, et les constats nomment l'objet au lieu d'un numéro.
 - Les profils de slicer retenus savent à quel slicer ils appartiennent. Après un changement, aucun profil étranger ne passe dans le nouveau programme.
+- Un motif de blocage sous les réglages d'impression disparaît dès qu'il ne vaut plus. Avant, « a besoin d'un profil d'imprimante » restait à côté d'un bouton depuis longtemps libre.
 
 ### Chat et génération 3D
 
@@ -83,6 +84,7 @@ dans `website/version.json`.
 - Si un modèle de langage écrit son appel en texte au lieu de l'exécuter, la proposition l'explique — avec le chemin vers « Vérifier les outils ». Avant, du JSON brut restait dans la conversation.
 - Le manuel a une nouvelle page, « Quels modèles Solidon utilise » : lesquels sont éprouvés, d'où ils viennent, combien de temps ils prennent — et quel fichier va où pour le texte.
 - Un corps généré très petit montre son volume réel au lieu de « 0 mm³ » à côté de « fermé ».
+- Pour les modèles d'IA de la génération, vous choisissez par tâche lequel calcule — comme pour le modèle de langage. « Automatique » reste le réglage par défaut et prend ce qui convient.
 
 ### Vue et utilisation
 
@@ -103,6 +105,10 @@ dans `website/version.json`.
 - Les messages d'erreur montrent les données auxquelles leurs phrases renvoient. « Le début de la réponse est affiché à côté » — maintenant il l'est vraiment, avec l'adresse et le fournisseur.
 - Les conseils « Réduire les triangles » et « Ouvrir la page dans le navigateur » sont désormais des boutons qui font exactement cela, au lieu de phrases qui le décrivent.
 - Quand un service ne répond pas, le dialogue nomme l'adresse à vérifier dans le navigateur et garde la tentative sous « Détails ». Ses indications ne renvoient qu'à des boutons existants.
+- Les listes déroulantes des barres sous la vue restent ouvertes jusqu'à votre choix. Avant, une liste pouvait se refermer aussitôt parce qu'elle glissait hors du pointeur.
+- Le champ d'épaisseur de la barre de coupe attend la fin de la saisie. Avant, il coupait à chaque frappe — d'abord à 3 mm, puis à 30.
+- Après l'ouverture, le rapport présélectionne le premier constat qui offre une action. « Poser sur le plateau » est là comme bouton tout de suite, sans devoir cliquer d'abord la ligne.
+- L'avis sur le gestionnaire de paquets annulé nomme le bouton par son nom complet — dans les six langues. « Détails » tout seul était une petite recherche dans cinq d'entre elles.
 
 ### Plateformes et corrections
 

@@ -69,6 +69,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O ElegooSlicer volta a aceitar trabalhos. E se um slicer dispuser as peças por conta própria, o relatório di-lo em vez de substituir em silêncio a ocupação da mesa planeada.
 - O relatório já não acumula medições antigas: uma nova passagem substitui o que mede de novo, o mesmo facto aparece uma só vez, e os avisos de volume nomeiam o objeto em vez de um número.
 - Os perfis de slicer registados sabem a que slicer pertencem. Depois de uma mudança, nenhum perfil alheio passa para o programa novo.
+- Um motivo de bloqueio sob as definições de impressão desaparece assim que deixa de valer. Antes, “precisa de um perfil de impressora” ficava ao lado de um botão há muito livre.
 
 ### Chat e geração 3D
 
@@ -82,6 +83,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se um modelo de linguagem escrever a chamada como texto em vez de a executar, a proposta explica-o — com o caminho para “Verificar as ferramentas”. Antes ficava JSON em bruto na conversa.
 - O manual tem uma página nova, “Que modelos o Solidon usa”: quais estão testados, de onde vêm e quanto demoram. Para o caminho a partir de texto diz que ficheiro pertence a que pasta.
 - Um corpo gerado muito pequeno mostra o seu volume real em vez de “0 mm³” ao lado de “fechado”.
+- Nos modelos de IA da geração escolhe por tarefa qual calcula — como no modelo de linguagem. “Automático” continua a ser a predefinição e toma o que serve.
 
 ### Vista e utilização
 
@@ -102,6 +104,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As mensagens de erro mostram os dados a que as suas frases se referem. “O início da resposta está ao lado” — agora está mesmo, junto com endereço e fornecedor.
 - Os conselhos “Reduzir triângulos” e “Abrir a página no navegador” agora são botões que fazem exatamente isso, em vez de frases que o descrevem.
 - Quando um serviço não responde, o diálogo nomeia o endereço para ver no navegador e guarda a tentativa em “Detalhes”. Os avisos só apontam para botões que existem.
+- As listas pendentes das barras sob a vista ficam abertas até escolher. Antes, uma lista podia fechar-se logo, porque deslizava de debaixo do ponteiro.
+- O campo de espessura da barra de corte espera até acabar de escrever. Antes cortava a cada tecla — primeiro com 3 mm e depois com 30.
+- Depois de abrir, o relatório pré-seleciona o primeiro aviso que oferece uma ação. “Pousar na mesa” fica logo ali como botão, sem ter de clicar primeiro na linha.
+- O aviso sobre a gestão de pacotes cancelada chama o botão pelo nome completo — nas seis línguas. “Detalhes” sozinho era uma pequena procura em cinco delas.
 
 ### Plataformas e correções
 
