@@ -1040,3 +1040,36 @@ def test_no_choice_no_section(qt_app: QApplication) -> None:
     assert not dialog._model_fields
     assert dialog._models.isHidden() or not dialog.isVisible()
     dialog.release()
+
+
+def test_the_check_shows_that_it_is_running(qt_app: QApplication) -> None:
+    """„Generator wird geprüft …" stand als nackte Zeile im leeren Dialog.
+
+    Ob die Prüfung läuft oder hängengeblieben ist, sah man ihr nicht an —
+    gemessen am gebauten Dialog: eine Wartezeile, **null** sichtbare Balken.
+    Zum Vergleich hat der Zusatzprogramme-Dialog daneben einen laufenden;
+    deshalb bekommt nur diese Stelle einen, und nicht alle vier Wartezeilen
+    der Anwendung einen zweiten Anzeiger.
+
+    Unbestimmt, weil eine Prüfung keinen Fortschritt hat, den jemand ehrlich
+    beziffern könnte — und danach zurückgestellt: Der Erzeugungslauf setzt
+    nur ``setValue`` und erbte sonst einen Balken, der bei fünfzig Prozent
+    weiterläuft, als wüsste er nichts.
+    """
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog()
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        assert dialog.progress.isVisibleTo(dialog), "die Prüfung läuft ohne jedes Zeichen"
+        assert dialog.progress.minimum() == dialog.progress.maximum() == 0, (
+            "ein Balken mit Prozenten behauptet einen Fortschritt, den niemand kennt"
+        )
+    finally:
+        dialog.hide()
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        for _ in range(3):
+            qt_app.processEvents()

@@ -547,6 +547,21 @@ class GenerateDialog(QDialog):
         # gestartet hatte, ohne sie einzurichten, tippte seinen Satz, drückte
         # *Erzeugen*, wartete, und erfuhr es danach. Die Auskunft war die ganze
         # Zeit einen HTTP-Aufruf entfernt.
+        # **Solange geprüft wird, läuft der Balken.** Der Satz stand als
+        # nackte Zeile in zwei Dritteln leerer Fläche: Ob die Prüfung noch
+        # läuft oder hängengeblieben ist, sah man ihm nicht an. Der Balken
+        # ist derselbe, der später den Fortschritt der Erzeugung zeigt —
+        # unbestimmt, weil eine Prüfung keinen Fortschritt hat, den jemand
+        # ehrlich beziffern könnte (§2.8).
+        # Zurückgestellt wird ausdrücklich: Der Erzeugungslauf setzt nur
+        # ``setValue`` und erbte sonst den unbestimmten Bereich — ein Balken,
+        # der bei fünfzig Prozent weiterläuft, als wüsste er nichts.
+        checking = self._readiness is None
+        if checking:
+            self.progress.setRange(0, 0)
+        else:
+            self.progress.setRange(0, 100)
+        self.progress.setVisible(checking)
         if self._readiness is None:
             self.state.setText(tr("Generator wird geprüft …"))
             self.setup.setText(tr("Zusätzliche Programme …"))
