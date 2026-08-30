@@ -87,10 +87,17 @@ def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
     je Einheit steht im Kern (``units.decimals_for``), die Feinheitsregel hier —
     beides zusammen, sonst verliert ein feines Feld in Zoll genau die Stelle,
     für die es fein ist.
+
+    **Gefragt wird die Obergrenze, nicht die größere der beiden Grenzen.**
+    Bis zum 30.08.2026 stand hier ``max(minimum, maximum)``, und wo eine
+    Obergrenze fehlt, entschied damit die Untergrenze allein: „Breite der
+    Textur, mindestens 0,5 mm, nach oben offen" galt als fein, und im Dialog
+    stand **40,000** mm neben einer Bohrung mit **4,20** (Befund B36). Ein
+    Feld ohne Obergrenze ist nach oben offen und gerade deshalb nicht fein;
+    betroffen waren sechs von 360 Zahlenfeldern.
     """
     base = decimals_for(unit) if unit else 2
-    bounds = [abs(value) for value in (entry.minimum, entry.maximum) if value]
-    if bounds and max(bounds) <= _FINE_BELOW:
+    if entry.maximum is not None and abs(entry.maximum) <= _FINE_BELOW:
         return base + 1
     return base
 

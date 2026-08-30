@@ -2165,3 +2165,52 @@ def test_the_window_wires_the_filament_shortcut_itself() -> None:
 
     assert "filamentsRequested" in source, "der Dialog meldet, das Fenster muss zuhören"
     assert "_show_filaments" in source
+
+
+def test_an_open_ended_field_is_not_treated_as_a_fine_one() -> None:
+    """Eine Untergrenze sagt nichts über die Feinheit (Befund B36).
+
+    Die Feinheitsregel gibt Feldern eine dritte Stelle, deren Werte unter
+    einem Millimeter leben — Toleranzen, Spiele. Gefragt hat sie nach der
+    **größeren** von Unter- und Obergrenze, und wo eine Obergrenze fehlt,
+    entschied damit die Untergrenze allein: „Breite der Textur, mindestens
+    0,5 mm, nach oben offen" galt als fein, und im Dialog stand **40,000** mm
+    neben einer Bohrung mit **4,20**.
+
+    Ein Feld ohne Obergrenze ist nach oben offen und damit gerade nicht fein.
+    Gemessen waren es sechs von 360 Zahlenfeldern — Textur (Breite, Höhe,
+    Teilung, Tiefe) und Gitterfüllung (Zelle, Wandstärke), alle mit Vorgaben
+    von 0,6 bis 40 Millimetern.
+    """
+    from app.core.types import ParamSpec
+    from app.ui.op_dialog import _decimals_for
+
+    offen = ParamSpec(name="width", kind="float", title="Breite", minimum=0.5, maximum=None)
+    toleranz = ParamSpec(name="play", kind="float", title="Spiel", minimum=0.0, maximum=0.5)
+
+    assert _decimals_for(offen, "mm") == 2, "nach oben offen heißt nicht fein"
+    assert _decimals_for(toleranz, "mm") == 3, "eine kleine Obergrenze schon"
+
+
+def test_no_dialog_shows_a_millimetre_to_the_thousandth(window: MainWindow) -> None:
+    """Und die Probe am ganzen Register, nicht an einem Fall.
+
+    Drei Nachkommastellen in Millimetern versprechen eine Genauigkeit, die
+    kein Drucker hält — ein Tausendstelmillimeter ist ein Vierzigstel einer
+    Düsenbahn. Erlaubt bleiben sie, wo der Wert selbst dort lebt: unter einem
+    Millimeter, mit Obergrenze.
+    """
+    from app.ui.op_dialog import _decimals_for
+
+    zu_fein = [
+        f"{spec.name}.{entry.name}"
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.kind == "float"
+        and entry.unit == "mm"
+        and _decimals_for(entry, "mm") > 2
+        and (entry.maximum is None or abs(entry.maximum) > 1.0)
+    ]
+
+    assert REGISTRY.all(), "ohne Register prüft das hier nichts"
+    assert not zu_fein, f"Millimeter auf ein Tausendstel: {zu_fein}"
