@@ -150,8 +150,17 @@ Kategoriesymbole in `icons.py` ungenutzt), kein Zebra.
 teilen …"); Menüs ohne Symbolspalte sind 22 Punkte anders eingerückt.
 **B34** — Handbuch: Verzeichniseinträge ohne Auslassungszeichen abgeschnitten,
 Fließtext ohne rechten Rand bei ~110 Zeichen Zeilenlänge.
-**B35** — Helles Thema: `object` und `edge` zu nah — der Körper wird zur
-flachen Silhouette, die Druckplatte ist das auffälligste Element.
+**B35 — behoben, mit gedrehter Ursache** (3a, `5a921d07`): Die Kanten waren
+in beiden Themen gleich gut (4,45/4,47) — der Körper verschwand in der
+**Platte** (Körper/Fläche 2,05, Raster 1,41). Jetzt rückt die Platte vom
+Körper weg und an den Grund heran (3,36/2,35), Kante und dunkles Thema
+unangetastet; damit ist die Platte auch nicht mehr das auffälligste Element.
+Das Niveau des dunklen Themas (7,50) ist im hellen rechnerisch unerreichbar —
+der Körper liegt dort zwischen heller Platte und dunkler Kante, und bei
+„Fläche ≥ 4,0" bleibt keine Kombination, die die vier Bestandszusagen hält
+(bei ≥ 3,0 sind es 273; die Rechnung steht im Code). Zwei neue Tests halten
+die Abstände in beiden Themen und die Rangfolge (die Platte nie lauter als
+der Körper).
 **B36** — Nachkommastellen uneinheitlich: Textur „40,000", Bohrung „4,20".
 **B37** — Werkzeugknopf im Ruhezustand rahmenlos — zwei von drei Modusknöpfen
 der Bewegen-Karte sehen nicht wie Knöpfe aus.
