@@ -324,3 +324,26 @@ ein Möbel im Nebenzimmer. Siehe [[pruefstand-geht-den-weg-der-oberflaeche]].
 
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].
+
+## Betriebslage ist zweierlei, und man kann eine Hälfte herstellen
+
+Am 30.08.2026 hat eine Nachbarsitzung gemessen, dass **die Suite ohne
+Stylesheet fährt** — `apply_style` steht in `app.py` und in keiner Fixture.
+Wer am gebauten Fenster misst, muss es also selbst setzen.
+
+Ich habe genau das getan, `apply_style(app, "dark")`, und trotzdem acht
+Knöpfe als abgeschnitten gemeldet, die es nicht sind: „Rechtwinklig" mit 100
+von 170 Punkten. In echter Plattform sind es **null von zwölf**. Der Grund
+stand oben, seit dieser Notiz — ich hatte `QT_QPA_PLATFORM=offscreen` gesetzt
+und dachte, mit dem Stylesheet sei die Betriebslage hergestellt.
+
+**Sie besteht aus zwei Teilen, und beide fehlen unabhängig voneinander:**
+
+| Fehlt | Folge |
+|---|---|
+| Stylesheet (`apply_style`) | Abstände, Farben, Rahmen sind Qts eigene |
+| echte Plattform (kein `offscreen`) | Schriftmetrik ist synthetisch, jede Breite falsch |
+
+Eine Messung an Größen braucht beide. Und die Falle ist hier ausdrücklich
+benannt — sie hat mich trotzdem erwischt, weil ich die eine Hälfte für das
+Ganze hielt. Siehe [[benannte-falle-schuetzt-nicht]].
