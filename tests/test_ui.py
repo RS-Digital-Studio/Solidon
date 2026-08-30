@@ -1357,6 +1357,75 @@ def test_the_report_puts_the_heavy_findings_first(qt_app: QApplication) -> None:
     assert order == ["error", "warning", "info", "info"]
 
 
+def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWindow) -> None:
+    """Die Knopfzeile des Prüfberichts steht ohne einen Klick da (§2.7).
+
+    Sie zeigt die Handlungen des **gewählten** Befunds — und gewählt war nach
+    dem Öffnen keiner. Der Kunde sah eine Liste und darunter nichts; dass ein
+    Klick auf eine Listenzeile Knöpfe freischaltet, muss man wissen. §2.7
+    verspricht anklickbare Handlungen, nicht auffindbare.
+
+    Gemessen am ersten Öffnen eines Modells, also am Weg, den jeder geht:
+    ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der Bericht meldet
+    ``arrange.below_bed``, und *Auf das Bett setzen* löst es mit einem Klick.
+    Vorher standen dort **null** Knöpfe und ``currentRow()`` auf −1.
+
+    Zwei Entscheidungen im Testaufbau, beide notwendig:
+
+    * **Am gebauten Fenster**, nicht an einem freistehenden ``ReportPanel``.
+      ``_preselect`` fragt ``handlers_of``, und ein Panel ohne Fenster darüber
+      hat keine Handler — der Test wäre grün gegen eine Zeile, die beim Kunden
+      nichts tut.
+    * **Die Knöpfe werden gezählt, nicht auf ``isVisible`` geprüft.** In einem
+      nie gezeigten Fenster antwortet Qt darauf falsch; die Knöpfe existieren
+      dagegen nur, wenn ``_show_offers`` sie gebaut hat, und das tut es allein
+      für einen gewählten Befund.
+    """
+    from PySide6.QtWidgets import QAbstractButton
+
+    window.open_path(MESHES / "block_with_rounded_edge.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+
+    codes = [
+        window.report.list.item(row).data(Qt.ItemDataRole.UserRole).code
+        for row in range(window.report.list.count())
+    ]
+    assert "arrange.below_bed" in codes, "dieses Modell steckt unter dem Bett"
+
+    assert window.report.list.currentRow() >= 0, "kein Befund ist vorgewählt"
+    offered = [
+        button.text().replace("&", "")
+        for button in window.report._offers.findChildren(QAbstractButton)
+    ]
+    assert offered, "ohne einen Klick steht keine Handlung als Knopf da"
+
+    chosen = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole)
+    assert chosen.code == "arrange.below_bed", (
+        f"vorgewählt ist {chosen.code!r} — der Befund ohne Handlung nützt hier nichts"
+    )
+
+
+def test_a_chosen_finding_survives_a_second_report(window: MainWindow) -> None:
+    """Eine Wahl des Kunden überschreibt die Vorauswahl nicht (§2.4).
+
+    Befunde kommen nach — die G-Code-Gegenprobe, die Kollisionsprüfung. Wer
+    inzwischen selbst eine Zeile gewählt hat, behält sie; eine Vorauswahl, die
+    sich über eine getroffene Wahl legt, wäre schlimmer als gar keine.
+    """
+    window.open_path(MESHES / "block_with_rounded_edge.stl")
+    window.session.wait_for_idle()
+    window._on_scene(window.session.evaluate_now())
+
+    window.report.list.setCurrentRow(0)
+    standing = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole).code
+
+    window.report._preselect()
+
+    kept = window.report.list.currentItem().data(Qt.ItemDataRole.UserRole).code
+    assert kept == standing, "die Vorauswahl hat eine getroffene Wahl überschrieben"
+
+
 def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
     """§26.4: die Herkunft steht dran, wo sie vom Üblichen abweicht.
 
@@ -2978,6 +3047,21 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
 
     Und die Zeile bleibt leer, wo nichts zu tun ist: „Doppelte Punkte wurden
     verschweißt" braucht keinen Knopf.
+
+    **Der erste Zustand hat sich seither verschoben — in dieselbe Richtung.**
+    Dieser Test hat die Knopfzeile durchgesetzt: Vorher hingen die Handlungen
+    an einem Rechtsklick, den dort niemand probiert, danach standen sie
+    sichtbar unter der Liste. Nur begann die Zeile **leer** und füllte sich
+    erst, wenn jemand eine Listenzeile anklickte — und dass ein Klick dort
+    Knöpfe freischaltet, muss man genauso wissen wie den Rechtsklick davor.
+    Hier stand deshalb „ohne gewählten Befund steht dort nichts": Das beschrieb
+    den Zwischenstand, nicht das Ziel.
+
+    ``ReportPanel._preselect`` wählt jetzt den obersten Befund vor, der eine
+    Handlung anbietet — Rechtsklick, Knopfzeile, Vorauswahl sind drei Schritte
+    **einer** Bewegung, und §2.7 ist am Ende von ihr eingelöst. Was dieser Test
+    darunter prüft — welcher Befund welchen Knopf bekommt und welcher keinen —
+    ist davon unberührt und die eigentliche Zusage.
     """
     from PySide6.QtWidgets import QPushButton
 
@@ -2994,7 +3078,9 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
         row = report._offers
         return [b.text() for b in row.findChildren(QPushButton)] if not row.isHidden() else []
 
-    assert offered() == [], "ohne gewählten Befund steht dort nichts"
+    assert offered() == [str(errors.PLACE_ON_BED.label)], (
+        "die Vorauswahl zeigt die Handlung, bevor jemand klickt"
+    )
 
     def choose(code: str) -> None:
         for row in range(report.list.count()):

@@ -2535,6 +2535,8 @@ class ReportPanel(QWidget):
         self._refilter()
         self._show_controls()
         self._grew()
+        # Nach dem Filtern, denn eine ausgeblendete Zeile ist keine Antwort.
+        self._preselect()
 
     def add_findings(self, findings: list[Finding], *, replacing_source: str | None = None) -> None:
         """Hängt Befunde an, die nicht aus der Auswertung kamen — die
@@ -2629,6 +2631,46 @@ class ReportPanel(QWidget):
         self.list.clear()
         for finding in _by_severity(findings):
             self._append(finding)
+
+    def _preselect(self) -> None:
+        """Den obersten Befund vorwählen, der eine Handlung anbietet.
+
+        Die Knopfzeile unter der Liste zeigt die Handlungen des **gewählten**
+        Befunds — und gewählt war nach dem Öffnen keiner. Der Kunde sah damit
+        eine Liste und darunter nichts; dass ein Klick auf eine Listenzeile
+        Knöpfe freischaltet, muss man wissen, und §2.7 verspricht anklickbare
+        Handlungen und nicht auffindbare.
+
+        Gemessen am häufigsten Fall überhaupt, dem ersten Öffnen eines
+        Modells: ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der
+        Bericht meldet ``arrange.below_bed``, und *Auf das Bett setzen* löst es
+        mit einem Klick. Vor der Vorauswahl standen dort null Knöpfe, nach
+        einem Klick auf die Zeile einer — der Weg zur Lösung war einen Klick
+        länger als nötig, und dieser Klick stand nirgends geschrieben.
+
+        Drei Bedingungen, und jede hat ihren Grund:
+
+        * **Nur ohne bestehende Wahl.** Eine Auswahl des Kunden zu
+          überschreiben wäre schlimmer als keine Vorauswahl (§2.4).
+        * **Nur sichtbare Zeilen.** ``_refilter`` blendet aus, was nicht zum
+          Filter passt; eine versteckte Zeile vorzuwählen zeigt Knöpfe zu einem
+          Befund, den niemand sieht.
+        * **Nur mit angebotener Handlung.** Der oberste Befund ist der
+          schwerste, aber nicht immer der, der etwas anzubieten hat —
+          ``ingest.welded`` steht regelmäßig darüber und hat keine. Ihn
+          vorzuwählen ließe die Zeile wieder leer.
+        """
+        if self.list.selectedItems():
+            return
+        handlers = handlers_of(self)
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item.isHidden():
+                continue
+            finding = item.data(Qt.ItemDataRole.UserRole)
+            if any(action.id in handlers for action in actions_for(finding)):
+                self.list.setCurrentRow(row)
+                return
 
     def _show_first_of(self, keys: list[tuple[Any, ...]]) -> None:
         """Zum obersten der genannten Befunde scrollen."""

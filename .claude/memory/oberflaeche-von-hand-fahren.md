@@ -203,11 +203,31 @@ hielt sie für hängende Solidons.
 Anwendung überschreibt ihn, sobald ein Dokument geladen wird:
 `setWindowTitle("PRÜFSTAND …")` gefolgt von `open_path(…)` ergibt
 `'plate_holes (ungespeichert) — Solidon3D'`. Wer ihn als Kennzeichen will,
-setzt ihn **nach jedem** Öffnen neu. Was sicher wirkt, ist `os._exit(0)` nach
-dem Protokollschreiben — ein Prüfstand hat nichts zu retten —, und für einen
-Lauf, der hängen kann, ein Wachhund-Timer, der von außen zuschlägt: `os._exit`
-hinter `exec()` läuft nie, weil `exec()` im gehangenen Zustand nicht
-zurückkehrt.
+setzt ihn **nach jedem** Öffnen neu.
+
+**Und `os._exit(0)` am Skriptende ist eine Zusage für den guten Fall, keine
+für den schlechten.** Am selben Tag, zwanzig Minuten nachdem ich vier
+Sitzungen wegen stehengebliebener Fenster angeschrieben hatte, stand eines von
+mir auf Roberts Bildschirm: `timeout 400 python …`, Shell meldet Exit 143 —
+und danach ein Fenster mit dem Titel „Unbenannt - Solidon3D". **`timeout`
+tötet den Wrapper, nicht den Qt-Prozess dahinter**, und die Zeile am
+Skriptende wird bei einem Abbruch nie erreicht. Dasselbe gilt für einen
+Hänger: `os._exit` hinter `exec()` läuft nie, weil `exec()` im gehangenen
+Zustand nicht zurückkehrt.
+
+Was **von innen** wirkt, sind zwei Zeilen, und sie gehören zusammen:
+
+| Zeile | Wogegen |
+|---|---|
+| `threading.Timer(240.0, lambda: os._exit(9)).start()` | Hänger und Abbruch — läuft im eigenen Thread, weiß von `exec()` nichts |
+| `fenster.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)` | Verwechslung — was nie erscheint, hält niemand für Solidon |
+
+Der Timer gehört **gleich nach dem Aufbau**, besser noch vor die Importe: Ein
+Hänger im Import läge sonst außerhalb seiner Reichweite (5d, 30.08.2026). Und
+die Trennlinie, welche der beiden Zeilen für wen gilt: **Wer rendert, kann das
+Attribut nicht setzen** — OpenGL zeichnet nichts in ein Fenster, das nie
+sichtbar war (siehe oben, `tools/make_figures.py`) —, für den bleibt allein
+der Timer. Wer nur Zustände liest, nimmt beide.
 
 **Und ein Dialog-Abfänger klickt nur eigene Dialoge weg.** Am 30.08.2026
 konnte Robert keine Solidon-Instanz mehr schließen: Er klickt auf Schließen,
@@ -226,6 +246,55 @@ das liest sich wie „lief durch, nichts zu melden", mit vollständiger Messung
 dahinter. Mir am 30.08.2026 zweimal passiert. Entweder `flush=True` an jedem
 `print`, oder selbst in eine Datei schreiben (`buffering=1`), was ohnehin
 besser ist: siehe den Absatz über puffernde Pipes weiter oben.
+
+**Und wer ein GPU-Backend anfasst, gibt den Speicher zurück, bevor er geht.**
+Am 30.08.2026 hielt ein Prüfstand von mir nach dem Abbruch 9,5 GB
+Grafikspeicher fest; Roberts Rechner war zwanzig Minuten lang träge, und die
+Ursache sah nach allem aus, nur nicht nach einem beendeten Testlauf. ComfyUI
+gibt auf Verlangen frei, es tut es aber nicht von selbst:
+
+```
+POST /free   {"free_memory": true, "unload_models": true}
+```
+
+Der Aufruf gehört ans Ende **jedes** Laufs, der ein Modell geladen hat — auch
+ans Ende eines gescheiterten. Er kostet unter einer Sekunde, und die Gegenprobe
+ist eine Zeile: `nvidia-smi --query-gpu=memory.used --format=csv,noheader`.
+Steht sie danach bei ein bis zwei GB, ist der Kontext weg; steht sie bei zehn,
+hält noch jemand fest. Das ist die dritte Zeile zu der Tabelle oben — der Timer
+schützt den Rechner vor dem Prozess, das Attribut den Nutzer vor der
+Verwechslung, und `/free` den Rechner vor dem, was der Prozess in der Karte
+liegen lässt.
+
+**Tastendrücke erreichen ein nie aktiviertes Fenster nicht.** `QTest.keyClicks`
+stellt über das Fokus-Widget des Fensters zu, und ein Fenster mit
+`WA_DontShowOnScreen`, das nie aktiviert wurde, hat keines —
+`QApplication.focusWidget()` bleibt `None`, die Tasten verpuffen, und der
+Ereignisfilter auf dem Ziel sieht sie nie. Gemessen an der Ziffernweiche des
+Skizzenmodus (30.08.2026): Erst als die `QKeyEvent`s per
+`QApplication.sendEvent` direkt an den Interactor gingen, lief die Weiche.
+Dabei den echten Weg nachbilden: Nur die **erste** Ziffer geht an die Ansicht
+(die Weiche reicht sie ans Maßfeld weiter), Folgeziffern und Enter gehen an
+das Feld beziehungsweise den Spin — beim Kunden hält das Feld ab der ersten
+Ziffer den Fokus, und eine zweite Ziffer über die Weiche liefe durch deren
+`selectAll()` in eine Ersetzung statt einer Anfügung.
+
+**Exportiert wird die Auswahl, ohne Auswahl alles** (`action_export`, so
+dokumentiert und gewollt). Ein Prüfstand, der vorher Objekte ausgewählt hat,
+exportiert damit ein Teilprojekt und liest daraus Fehlbefunde — „von zwei
+Spulen kommt nur eine in der 3MF an" war am 30.08.2026 genau das, dreimal
+hintereinander mit wechselnden Erklärungen. Vor dem Export
+`object_tree.select_object(None)`.
+
+**Ein modaler `exec()`-Dialog ist bedienbar, wenn der Timer vor ihm steht.**
+`QTimer.singleShot(400, bediene)`, geplant **vor** dem Auslösen, feuert in
+der exec-Schleife: die Kachel im Bausteinkatalog wählen und „Einfügen"
+klicken, Haken und Wert im Druckwerte-Dialog setzen und „Übernehmen"
+drücken — echte Klicks statt Attrappen (30.08.2026). Zweierlei dazu: Der
+eigene Wachhund braucht den Dialogtitel in seiner Ausnahmemenge, sonst räumt
+er ab, was der Timer bedienen will. Und die Bedienroutine prüft zuerst, ob
+der aktive Dialog wirklich der erwartete ist, und reiht sich sonst neu ein —
+sonst bedient sie den Falschen.
 
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].

@@ -1,6 +1,6 @@
 ---
 name: sondenbau
-description: "Eine Sonde ist ein pytest-Plugin, das nur bei Änderung meldet und in eine Datei schreibt. Sechs Bauarten, an denen sie am 30.08.2026 gescheitert ist — jede sah nach einem Befund aus."
+description: "Eine Sonde ist ein pytest-Plugin, das nur bei Änderung meldet und in eine Datei schreibt. Sieben Bauarten, an denen sie am 30.08.2026 gescheitert ist — jede sah nach einem Befund aus."
 metadata: 
   node_type: memory
   type: feedback
@@ -38,7 +38,7 @@ def pytest_runtest_teardown(item):
 eine Rate zu liefern. Schweigt die Sonde über den ganzen Lauf, ist die
 Hypothese widerlegt, und zwar vollständig.
 
-## Fünf Arten, sich selbst zu messen
+## Sieben Arten, sich selbst zu messen
 
 * **Der Startwert darf nicht vom ersten Test kommen.** `_letzte = None` und
   „beim ersten Mal übernehmen" verschweigt genau den, der den Wert gesetzt
@@ -89,6 +89,46 @@ Hypothese widerlegt, und zwar vollständig.
   weg, und ein leerer `git diff --stat` beweist bei einer untracked Datei
   nichts. (Der Wächter liest `rglob` zur Laufzeit — dass er die erzeugte
   Datei fand, spricht für ihn, nicht gegen die Probe.)
+
+* **Und der Rückkehr-Anker muss eindeutig sein — mit einer Zählung danach.**
+  Eine Mutationsprobe an `app/ui/panels.py` nahm `if self.list.selectedItems():
+  return` heraus und wollte es über den Anker `handlers = handlers_of(self)`
+  zurückschreiben. Den gibt es in der Datei **zweimal**: Das Skript brach mit
+  `AssertionError` ab, und der Code blieb ohne die Sicherung stehen.
+
+  Drei Dinge trafen dabei zusammen, und jedes einzelne sah nach Entwarnung aus.
+  `ruff check` meldete „All checks passed" — ein Formprüfer sieht keine
+  fehlende Bedingung. Die Probe selbst war **rot gewesen, wie sie sollte**, war
+  also gerade als Erfolg abgehakt. Und der Abbruch stand am Ende einer langen
+  Ausgabe, unter der grünen Zeile des Testlaufs. Gefangen hat es allein ein
+  `grep -c` hinterher.
+
+  Zwei Regeln, und die zweite ist die teurere: Der Anker trägt genug Kontext,
+  um einmalig zu sein — hier genügte das Docstring-Ende darüber. **Und nach
+  jeder Rückkehr wird gezählt, nicht geglaubt.** Eine Mutation, die stehen
+  bleibt, sieht aus wie ein sauberer Stand, denn die Probe hat ja geliefert,
+  was sie sollte. Siehe [[was-die-suite-nicht-findet]].
+
+* **Ein Filter, der nichts findet, und ein Filter, der nichts trifft, sehen
+  gleich aus.** `pytest -k "list_top or drop"` meldete **4 passed** — der
+  gemeinte Test heißt `test_a_list_in_the_bottom_bar_opens_upwards_when_it_
+  has_to` und enthält keines der beiden Wörter. „Mein Fix bricht nichts" wäre
+  die Meldung gewesen, und die Frage war nie gestellt (fb, 30.08.2026).
+
+  Dieselbe Familie, am selben Tag, in der anderen Richtung: Ein
+  Hintergrundlauf meldete *„completed (exit code 0)"* über einer Datei, in der
+  `1 failed, 360 passed` stand. Der Aufruf endete auf
+  `pytest … > datei; echo "Exit: $?"`, und der Status einer Kette ist der
+  ihres **letzten** Befehls — `echo` gelingt immer. Die Hausordnung kennt die
+  Falle für `| tail`; sie gilt für jedes nachgestellte Kommando und für die
+  Fertigmeldung, die den Kettenstatus weiterreicht.
+
+  Die Kontrolle ist billig und in beiden Fällen dieselbe: **die Zahl der
+  gesammelten Tests lesen** (`-k` mit `--collect-only`, oder die
+  `N deselected` in der Schlusszeile gegen die Erwartung halten), und **die
+  Rohdatei lesen statt der Meldung darüber**. Wer prüft, ob eine Änderung
+  etwas bricht, prüft zuerst, dass sein Muster den gemeinten Test überhaupt
+  fängt.
 
 ## Und der Lauf braucht das Schloss
 
