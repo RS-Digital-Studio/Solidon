@@ -122,6 +122,43 @@ unterscheidet sie niemand mehr von den tragenden. Die Frage lautet also nicht
 „habe ich die Betriebslage hergestellt", sondern: **Hängt das, was ich messe,
 an ihr?**
 
+### Und bei einer Farbe hängt es immer an ihr — die Suite fährt ohne Stylesheet
+
+Der Abschnitt oben liest sich als Frage an eine **Fixture**. Am 30.08.2026 ist
+dieselbe Frage vier Sitzungen an vier verschiedenen Stellen begegnet, und
+keine davon war eine Fixture-Frage: `apply_theme` und `apply_style` stehen in
+`app.py` und in **keiner** Fixture. Jeder Test, der eine Farbe, eine Breite
+oder eine Einrückung misst, misst deshalb Windows, solange er die Betriebslage
+nicht selbst herstellt.
+
+| Was gemessen wurde | ohne Thema und Stylesheet | in der Betriebslage |
+|---|---|---|
+| Symbol des aktiven Werkzeugs | `#000000` (Systemschrift) | `#e6e9ee` |
+| verglichen mit `palette().highlight()` | Systemakzent | die Farbe des Themas |
+| Texteinrückung im Menü | Qts eigene Abstände | die des Stylesheets |
+| `isDefault()` eines Dialogknopfs | überall `False` vor `show()` | neun von vierzehn wahr |
+
+Die Zeile mit dem Symbol ist die lehrreichste, weil der Test **grün** war: Er
+verglich eine Systemfarbe mit einer zweiten Systemfarbe, und ihr Verhältnis lag
+zufällig über der Schwelle, die er forderte. Zwei falsche Werte, deren
+Verhältnis stimmt, sind von zwei richtigen nicht zu unterscheiden — und ein
+Test, der so grün wird, wird es jahrelang.
+
+Praktisch, und es sind drei Zeilen:
+
+```
+before = QApplication.instance().styleSheet()
+apply_theme(QApplication.instance(), "dark")
+apply_style(QApplication.instance(), "dark")
+...                                    # messen
+QApplication.instance().setStyleSheet(before)   # ins finally
+```
+
+**Und wo die Messgröße von der Schriftmetrik abhängt, hilft auch das nicht** —
+offscreen gibt es keine Schrift, und der Abschnitt darüber sagt, dass so etwas
+gar nicht offscreen zu messen ist. Farben sind der Fall, der sich herstellen
+lässt; Breiten sind es nicht.
+
 Für eine Warnung aus **Fremdcode**, die sich nicht beheben lässt, stehen
 darunter Ausnahmen — eng, und nur unter drei Bedingungen: sie nennen den
 Meldungstext *und* das auslösende Modul, nicht bloß die Kategorie; der eigene

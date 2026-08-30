@@ -43,3 +43,17 @@ ein Geschwister, hier hat der *Schutz* eines verloren. Verwandt mit
 [[waechter-reichweite-nur-im-kommentar]] — dort deckt der Schutz weniger, als
 sein Kommentar behauptet; hier deckt er weniger, als er einmal deckte.
 Siehe auch [[waechter-zaehlt-das-falsche]].
+
+**Und die Grenze dieser Notiz, am 30.08.2026 gemessen: Ein Wächter über ein
+*Verhalten* trägt den Namen der Funktion nirgends.** Ich habe `_recolour`
+ersatzlos entfernt und vorher durch `app/` und `tests/` gegrept — null Treffer
+außerhalb der Datei. Rot wurde trotzdem etwas: `test_the_open_tool_keeps_its_
+symbol_readable` sicherte zu, dass das Symbol des aktiven Werkzeugs eine
+**andere Farbe** hat als die ruhenden, also genau das, was `_recolour` tat. Der
+Name kam darin nicht vor, und der Test stand in `test_ui.py`, nicht in
+`test_tool_strip.py`.
+
+Die brauchbare Frage ist deshalb nicht „wer ruft das", sondern: **Wer würde rot,
+wenn das Gegenteil gälte?** Praktisch heißt das, nach der *Wirkung* zu suchen
+(hier: nach dem Namen des Knopfes, nach `icon()`, nach der Farbe) und nicht nur
+nach dem Bezeichner.

@@ -38,6 +38,7 @@
 - [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s, und mehrere Pakete am Stück reißen die Verbindung; ein halbes Paket sieht ganz aus.
 - [Gesetzt heißt nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips; ein Test über den Wert eines Hinweises sagt nichts über seine Sichtbarkeit.
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — setExpanded, isVisible und hasFocus antworten falsch, solange nichts angezeigt ist; der Test bleibt grün gegen einen Zweig, der nie läuft.
+- [Die Suite fährt ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — kein Fixture setzt Thema und Stylesheet; ein Farbtest misst Windows, und zwei falsche Werte mit stimmendem Verhältnis sind von zwei richtigen nicht zu unterscheiden.
 - [Signal passt an den falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet, was von der Stelligkeit her passt; ein Name, der als Suchtext ankommt, läuft fehlerfrei falsch — nur das Bildschirmfoto sah es.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — entscheiden zwei Konstanten dasselbe, liegt dazwischen ein Bereich, in dem beide Antworten falsch sind; besonders bei zwei Einheiten.
 - [Eine Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen, und eine zutreffende Begründung im Docstring kann eine Testlücke decken.
@@ -89,6 +90,7 @@
 - [Index altert zwischen Lesen und Commit](index-altert-zwischen-lesen-und-commit.md) — der private Index war korrekt aus HEAD gelesen; in den Minuten fürs Prüfen fiel ein fremder Commit, und der Index nahm ihn zurück. Sorgfalt vergrößert das Fenster.
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
+- [Sicherung ist eine Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — eine Kopie vom Anfang einer Mutationsreihe spielt am Ende den ganzen Dateistand von damals zurück; dreimal getan, gutgegangen nur weil sie zufällig jünger war als der fremde Commit.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
 - [Ein Probe-Worktree altert](probe-worktree-altert.md) — sein Baum ist ein vollständiger Zustand, kein Diff; übertragen nimmt er jeden Commit zurück, der seit dem Abzweig kam. Index-Diff gegen den **aktuellen** HEAD prüfen, nicht gegen die Basis.

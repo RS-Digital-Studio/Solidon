@@ -42,3 +42,14 @@ die Familie den Mechanismus, nie den Auslöser) und
 [[leistungstests-fremdlast]]. Die Schwester in der Zeitmessung steht in
 `.claude/rules/tests.md` unter „Die Regel fängt Fremdlast — sie fängt keinen
 Wert, der um die Schwelle streut".
+
+**Und die Umkehrung, die am 30.08.2026 fast teurer war: Ein einzelner *grüner*
+Lauf ist so wenig eine Basisrate wie ein einzelner roter.** `test_widget_lifetime.py`
+gab in meinem Baum zweimal 127; der allererste Lauf in einem frischen Worktree
+auf reinem HEAD war **grün**. Zwei Läufe lang sah es damit aus, als hätte meine
+Änderung den Absturz verursacht — die Zuordnung stand schon, und ich hätte sie
+gemeldet. Vier Läufe auf reinem HEAD: einer grün, drei mit 127.
+
+Wer eine Änderung entlasten will, misst die Basisrate mit derselben Sorgfalt wie
+den Verdacht. Ein grüner Vergleichslauf beweist nichts, er ist nur eine Ziehung
+aus einer Verteilung, die man noch nicht kennt.
