@@ -12943,3 +12943,20 @@ selbsterklärend, die Website als Sollliste).
       Danach: Pakete schneiden und verteilen, Review je Paket; die
       frisch gebauten Stände (P1, P8, Waisen-Bündelung,
       Update-Gliederung) sind Maßstab, nicht Prüfgegenstand.
+
+Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
+echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
+
+- [x] **Der Startbildschirm nutzt die Breite, die er sich selbst
+      erlaubt** (50, `654fb940`; unabhängig auch von 15's Fahrt als
+      FR8 belegt) — er blieb bei 714 Pixeln auf jeder Fensterbreite
+      von 1280 bis 3413: `setMaximumWidth` erlaubt nur, und die Spalte
+      saß ohne eigenen Dehnfaktor zwischen zwei Stretch-Feldern. Der
+      bestehende Test prüfte die Rechnung (`_columns == 3`) und war
+      grün, während seine eigene Assert-Meldung („die Breite ist da
+      und wird nicht benutzt") wörtlich eintrat; der neue misst die
+      Wirkung, Gegenprobe ohne Dehnung fällt. FR6 (gestrichelter
+      Fokusring) fiel beim Nachmessen: Roberts eigene
+      Review-Entscheidung vom 25.08. mit dreifach getesteter
+      Regel-18-Kette — kein Befund. FR3/FR4/FR5/FR7 baut 50, FR1 ist
+      Resin-Konzept-Stufe-1.
