@@ -2746,7 +2746,15 @@ class SketchCanvas(QWidget):
         # Kontextmenü ist der Ort, an dem man nachsieht, was mit *dem hier*
         # geht. Das Kürzel steht daneben — so lernt man es nebenbei.
         if self.selection:
-            remove = menu.addAction(tr("Löschen  (Entf)"))
+            # **Der Tastenname steht nicht im übersetzbaren Text** (Z8):
+            # „Entf" heißt auf Englisch „Del", und ein Übersetzer müsste die
+            # Belegung raten. ``QKeySequence`` kennt die Schreibweise der
+            # Anzeigesprache und kommt aus derselben Quelle wie die Bindung —
+            # dieselbe Regel, der die Knöpfe der Leiste schon folgen.
+            entfernen = QKeySequence(QKeySequence.StandardKey.Delete).toString(
+                QKeySequence.SequenceFormat.NativeText
+            )
+            remove = menu.addAction(f"{tr('Löschen')}  ({entfernen})")
             remove.triggered.connect(lambda _checked=False: self.remove_selected())
             menu.addSeparator()
 
@@ -3531,7 +3539,9 @@ def plane_where(plane: str) -> str:
     if plane == FREE_VIEW:
         return str(tr("freien Ansicht"))
     full = dict(plane_choices()).get(plane, "")
-    return str(full).split(" — ")[0] if full else str(tr("der gewählten Fläche"))
+    # Ohne eigenen Artikel: Beide Sätze, die diese Funktion benutzen, setzen
+    # „der" davor. Mit ihm stand dort „aus der der gewählten Fläche" (Z8).
+    return str(full).split(" — ")[0] if full else str(tr("gewählten Fläche"))
 
 
 #: Wie breit ein Zahlenfeld der Werkzeugzeile höchstens wird.
@@ -4124,7 +4134,11 @@ class SketchPanel(QWidget):
 
         self.constraint_list = QListWidget(self)
         self.constraint_list.setToolTip(
-            tr("Rechtsklick oder Entf entfernt die gewählte Bedingung.")
+            tr("Rechtsklick oder {key} entfernt die gewählte Bedingung.").format(
+                key=QKeySequence(QKeySequence.StandardKey.Delete).toString(
+                    QKeySequence.SequenceFormat.NativeText
+                )
+            )
         )
         # **Der Weg hinaus stand nur auf einer Taste.** Wer seine Skizze in
         # einen Widerspruch geklickt hatte, musste eine Bedingung wieder los
@@ -4922,7 +4936,11 @@ class SketchPanel(QWidget):
                 # Hinweis vollständig und nahm sie mit (gefunden von der
                 # Review-Sitzung, 27.08.2026).
                 item.setToolTip(
-                    tr("Diese Bedingung widerspricht einer anderen. Entf entfernt sie.")
+                    tr("Diese Bedingung widerspricht einer anderen. {key} entfernt sie.").format(
+                        key=QKeySequence(QKeySequence.StandardKey.Delete).toString(
+                            QKeySequence.SequenceFormat.NativeText
+                        )
+                    )
                     + f"\n{_does_phrase(entry.kind)}.\n({numbers})"
                 )
             self.constraint_list.addItem(item)

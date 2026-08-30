@@ -5628,7 +5628,12 @@ class MainWindow(QMainWindow):
         # laufen, der keine Vorlage mehr ist.
         line = source.format(place=place)
         if panel.canvas.view_plane != panel.canvas.sketch.plane:
-            line = tr("Ansicht: {view} · {instruction}").format(
+            # **„Ansicht: freien Ansicht“ war kein Satz** (Z8). plane_where
+            # liefert die Dativform, gebaut für „Sie sehen die Zeichnung aus
+            # der …“ — hinter einem Doppelpunkt steht sie im falschen Fall.
+            # Der Artikel gehört deshalb in den Satz, nicht in die Wortliste:
+            # So passen alle drei Antworten, die die Funktion geben kann.
+            line = tr("Blick aus der {view} · {instruction}").format(
                 view=plane_where(panel.canvas.view_plane), instruction=line
             )
         offer = self._sketch_pull_offer()

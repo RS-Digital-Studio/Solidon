@@ -2492,7 +2492,19 @@ def test_the_context_menu_offers_deleting(qt_app: QApplication) -> None:
     entries = [action.text() for action in menu.actions()]
 
     assert any("Löschen" in entry for entry in entries), entries
-    assert any("Entf" in entry for entry in entries), "das Kürzel steht daneben"
+    # **Der Tastenname kommt aus Qt und nicht aus dem Katalog** (Z8): „Entf"
+    # heißt auf Englisch „Del", und im Text stehend müsste ein Übersetzer die
+    # Belegung raten. Geprüft wird deshalb gegen dieselbe Quelle, aus der auch
+    # die Bindung kommt — ein fest getipptes „Entf" wäre hier grün und beim
+    # englischen Kunden falsch.
+    from PySide6.QtGui import QKeySequence
+
+    taste = QKeySequence(QKeySequence.StandardKey.Delete).toString(
+        QKeySequence.SequenceFormat.NativeText
+    )
+    assert any(taste in entry for entry in entries), (
+        f"das Kürzel steht daneben — erwartet {taste!r} in {entries}"
+    )
 
     before = len(canvas.sketch.elements)
     for action in menu.actions():
@@ -4366,7 +4378,10 @@ def test_camera_view_signal_updates_the_combo_and_keeps_the_drawing_plane(
         assert panel.plane_choice.currentData() == "plane:xz"
         assert panel.canvas.view_plane == "plane:xz"
         assert panel.canvas.sketch.plane == "plane:xy"
-        assert "Ansicht:" in window._sketch_hint.text()
+        # „Ansicht: freien Ansicht" war kein Satz — ``plane_where`` liefert die
+        # Dativform, und hinter einem Doppelpunkt steht sie im falschen Fall
+        # (Z8). Der Artikel steht jetzt im Satz, nicht in der Wortliste.
+        assert "Blick aus der" in window._sketch_hint.text()
         assert "Zeichenebene:" in window._sketch_hint.text()
     finally:
         window.finish_sketch(keep=False)
