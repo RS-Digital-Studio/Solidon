@@ -217,16 +217,20 @@
       </div>
 
       <div class="hero-side">
-        <div class="shot hero-shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-pt.png?v=5f7dcc51"><img src="../bilder/beleg-fenster-pt.png?v=5f7dcc51" width="1400" height="860" fetchpriority="high"
-                 alt="A janela principal do Solidon3D: à esquerda a árvore de objetos com parâmetros e histórico, ao centro a vista 3D, à direita o relatório de verificação"></a>
-          </div>
+        <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="Um suporte para bobinas de filamento, construído no Solidon3D: placa de base, duas laterais, dois eixos de rolamento. Arraste-o ou use as setas para o rodar."></div>
         </div>
+        <p class="turn-hint">Suporte de bobinas, feito em 18 passos — deslocar a página roda-o, ou arraste-o</p>
 
-        
+        <div class="dial">
+          <label for="rollenbreite">Largura da bobina</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55,0 mm</output>
+        </div>
       </div>
+
     </div>
 
     <ul class="assure hero-assure">
@@ -504,6 +508,60 @@
             </div>
             <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Doar com PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
           </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap">
+      <h2>O que acaba na mesa</h2>
+      <p class="sub">Três peças, construídas e verificadas no Solidon3D. Cada uma tem algo que nenhum editor de cubos lhe dá: casquilhos que seguram um parafuso, uma rosca que agarra, um gancho que engancha mesmo. Todas foram feitas com os mesmos menus que você usa — passo a passo, e cada passo pode ser desfeito.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
+               alt="Uma caixa para eletrónica com arestas arredondadas, casquilhos roscados nos cantos, um bucim na parede lateral e a tampa pousada ao lado">
+          <figcaption><b>Caixa para eletrónica</b> Casquilhos roscados nos cantos, bucim, nervuras de reforço — e uma tampa que encaixa. Doze passos, 79 134 triângulos.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-schraubdose.webp?v=02fc94ab" width="900" height="578" loading="lazy"
+               alt="Um frasco cilíndrico com rosca exterior impressa no gargalo e, ao lado, a tampa roscada de bordo serrilhado">
+          <figcaption><b>Frasco de tampa roscada</b> A rosca do gargalo e a da tampa saem do mesmo passo, e a folga entre as duas do perfil do material. Põe a tampa e ela assenta.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
+               alt="Um tabuleiro de oficina aberto com dois ganchos para painel perfurado no topo da parede traseira, cada um com espigão e lingueta elástica">
+          <figcaption><b>Tabuleiro de oficina</b> Dois ganchos a 80 mm, cada um com lingueta elástica: ao tirar alguma coisa levanta o tabuleiro — e ele fica na parede à mesma.</figcaption>
+        </figure>
+      </div>
+
+      <h3>E o que acontece a um modelo que assim não dá para imprimir</h3>
+      <p class="sub">Uma malha gerada parece sã e raramente está. À esquerda como chegou, à direita depois de reparada — o mesmo ficheiro, dois cliques pelo meio.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+               alt="Um modelo gerado em malha de arame: em vários sítios abrem-se buracos na superfície e há arestas que acabam no nada">
+          <figcaption><b>Como chegou</b> Arestas abertas, buracos na malha. Um fatiador enche-os a seu gosto ou desiste — de qualquer maneira só dá por isso na impressora.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/verwandlung-nachher.svg?v=45d4e88b" width="420" height="420" loading="lazy"
+               alt="O mesmo modelo depois de reparado: a superfície está fechada e cada aresta tem vizinha">
+          <figcaption><b>Depois da reparação</b> Fechado, de uma só peça, com paredes mais grossas do que o seu bico. O Solidon3D diz-lhe antes o que mudou.</figcaption>
+        </figure>
+      </div>
+
+      <h3>E é assim que se faz</h3>
+      <p class="sub">A árvore de objetos à esquerda, a vista 3D ao centro, o relatório de verificação à direita. Cada passo fica no histórico e pode ser mudado — mesmo dez passos depois.</p>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a href="../bilder/beleg-fenster-pt.png?v=5f7dcc51"><img src="../bilder/beleg-fenster-pt.png?v=5f7dcc51" width="1400" height="860" loading="lazy"
+               alt="A janela principal do Solidon3D: à esquerda a árvore de objetos com parâmetros e histórico, ao centro a vista 3D, à direita o relatório de verificação"></a>
+        </div>
+      </div>
+
+      <a class="btn ghost" href="#features">Todas as funções num relance</a>
     </div>
   </section>
 

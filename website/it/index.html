@@ -218,16 +218,20 @@
       </div>
 
       <div class="hero-side">
-        <div class="shot hero-shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-it.png?v=2818f14f"><img src="../bilder/beleg-fenster-it.png?v=2818f14f" width="1400" height="860" fetchpriority="high"
-                 alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica"></a>
-          </div>
+        <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="Un supporto per bobine di filamento, costruito in Solidon3D: piastra di base, due fianchi, due assi di rotolamento. Trascinalo o usa le frecce per girarlo."></div>
         </div>
+        <p class="turn-hint">Portabobine, costruito in 18 passi — lo scorrimento lo gira, oppure trascinalo</p>
 
-        
+        <div class="dial">
+          <label for="rollenbreite">Larghezza bobina</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55,0 mm</output>
+        </div>
       </div>
+
     </div>
 
     <ul class="assure hero-assure">
@@ -505,6 +509,60 @@
             </div>
             <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Dona con PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
           </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap">
+      <h2>Che cosa finisce sul piatto</h2>
+      <p class="sub">Tre pezzi, costruiti e verificati in Solidon3D. Ognuno porta un dettaglio che nessun editor di cubi ti dà: boccole che tengono una vite, una filettatura che fa presa, un gancio che aggancia davvero. Tutti sono nati con gli stessi menu che usi tu — passo dopo passo, e ogni passo si può annullare.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
+               alt="Una custodia per elettronica con spigoli raccordati, boccole filettate negli angoli, un passacavo nella parete laterale e il coperchio posato accanto">
+          <figcaption><b>Custodia per elettronica</b> Boccole filettate negli angoli, passacavo, nervature di rinforzo — e un coperchio che scatta in sede. Dodici passi, 79 134 triangoli.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-schraubdose.webp?v=02fc94ab" width="900" height="578" loading="lazy"
+               alt="Un barattolo cilindrico con filettatura esterna stampata sul collo e, accanto, il coperchio a vite con bordo zigrinato">
+          <figcaption><b>Barattolo a vite</b> La filettatura del collo e quella del coperchio nascono dallo stesso passo, il gioco fra le due dal profilo del materiale. Metti il coperchio e tiene.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
+               alt="Un vassoio da officina aperto con due ganci da pannello forato in alto sulla parete posteriore, ciascuno con perno e linguetta elastica">
+          <figcaption><b>Vassoio da officina</b> Due ganci a 80 mm, ciascuno con linguetta elastica: quando prendi qualcosa sollevi il vassoio — e resta appeso lo stesso.</figcaption>
+        </figure>
+      </div>
+
+      <h3>E che cosa succede a un modello che così non si può stampare</h3>
+      <p class="sub">Una mesh generata sembra sana e raramente lo è. A sinistra com’è arrivata, a destra dopo la riparazione — lo stesso file, due clic in mezzo.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+               alt="Un modello generato a reticolo: in più punti si aprono buchi nella superficie e alcuni spigoli finiscono nel vuoto">
+          <figcaption><b>Com’è arrivata</b> Spigoli aperti, buchi nella mesh. Uno slicer li riempie a modo suo oppure si ferma — in entrambi i casi te ne accorgi alla stampante.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/verwandlung-nachher.svg?v=45d4e88b" width="420" height="420" loading="lazy"
+               alt="Lo stesso modello dopo la riparazione: la superficie è chiusa e ogni spigolo ha un vicino">
+          <figcaption><b>Dopo la riparazione</b> Chiusa, un pezzo solo, con pareti più spesse del tuo ugello. Solidon3D ti dice prima che cosa ha cambiato.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Ed ecco dove nasce</h3>
+      <p class="sub">L’albero degli oggetti a sinistra, la vista 3D al centro, il rapporto di verifica a destra. Ogni passo resta nella cronologia e si può cambiare, anche dieci passi dopo.</p>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a href="../bilder/beleg-fenster-it.png?v=2818f14f"><img src="../bilder/beleg-fenster-it.png?v=2818f14f" width="1400" height="860" loading="lazy"
+               alt="La finestra principale di Solidon3D: a sinistra l'albero degli oggetti con parametri e cronologia, al centro la vista 3D, a destra il rapporto di verifica"></a>
+        </div>
+      </div>
+
+      <a class="btn ghost" href="#features">Tutte le funzioni in breve</a>
     </div>
   </section>
 

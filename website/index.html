@@ -221,14 +221,20 @@
       </div>
 
       <div class="hero-side">
-        <div class="shot hero-shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="bilder/beleg-fenster.png?v=1eda7cf6"><img src="bilder/beleg-fenster.png?v=1eda7cf6" width="1400" height="860" fetchpriority="high"
-                 alt="Das Hauptfenster von Solidon3D: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht"></a>
-          </div>
+        <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="Ein Halter für Filamentrollen, in Solidon3D konstruiert: Grundplatte, zwei Wangen, zwei Laufachsen. Ziehen oder Pfeiltasten drehen ihn."></div>
+        </div>
+        <p class="turn-hint">Rollenhalter, in 18 Schritten gebaut — scrollen dreht ihn, oder ziehen</p>
+
+        <div class="dial">
+          <label for="rollenbreite">Rollenbreite</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55,0 mm</output>
         </div>
       </div>
+
     </div>
 
     <ul class="assure hero-assure">
@@ -502,6 +508,76 @@
         </div>
         <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Mit PayPal spenden <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
       </div>
+    </div>
+  </section>
+
+  <section id="ergebnisse">
+    <div class="wrap">
+      <h2>Was am Ende auf dem Bett liegt</h2>
+      <p class="sub">Drei Teile, in Solidon3D konstruiert und geprüft. Jedes
+      trägt ein Merkmal, das kein Würfel-Editor hergibt: Buchsen, die eine
+      Schraube halten, ein Gewinde, das greift, ein Einhänger, der wirklich
+      einhakt. Konstruiert wurde jedes über dieselben Menüs, die du auch
+      benutzt — Schritt für Schritt, jeder davon rücknehmbar.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
+               alt="Ein Elektronikgehäuse mit verrundeten Kanten, Gewindebuchsen in den Ecken, einer Kabeldurchführung in der Seitenwand und dem Deckel danebengelegt">
+          <figcaption><b>Elektronikgehäuse</b> Gewindebuchsen in den Ecken,
+          Kabeldurchführung, Versteifungsrippen — und ein Deckel, der
+          einrastet. Zwölf Schritte, 79 134 Dreiecke.</figcaption>
+        </figure>
+        <figure>
+          <img src="bilder/galerie-schraubdose.webp?v=02fc94ab" width="900" height="578" loading="lazy"
+               alt="Eine zylindrische Vorratsdose mit gedrucktem Außengewinde am Hals, daneben der passende Schraubdeckel mit gerändeltem Rand">
+          <figcaption><b>Vorratsdose</b> Das Gewinde am Hals und das im Deckel
+          kommen aus derselben Steigung, das Spiel dazwischen aus dem
+          Materialprofil. Deckel drauf, und er sitzt.</figcaption>
+        </figure>
+        <figure>
+          <img src="bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
+               alt="Ein offenes Werkstattfach, an dessen Rückwand oben zwei Einhänger für eine Lochwand sitzen, jeder mit Zapfen und federnder Rastzunge">
+          <figcaption><b>Werkstattfach</b> Zwei Einhänger im Achtzigerabstand,
+          mit federnder Rastzunge: Wer etwas herausnimmt, hebt das Fach an —
+          und es bleibt trotzdem hängen.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Und was mit einem Modell passiert, das so nicht druckbar ist</h3>
+      <p class="sub">Ein erzeugtes Netz sieht heil aus und ist es selten. Links
+      wie es ankam, rechts nach dem Aufbereiten — dieselbe Datei, zwei Klicks
+      dazwischen.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+               alt="Ein erzeugtes Modell als Drahtnetz: an mehreren Stellen klaffen Löcher in der Oberfläche, Kanten enden im Nichts">
+          <figcaption><b>Wie es ankam</b> Offene Kanten, Löcher im Netz. Ein
+          Slicer füllt hier nach Gutdünken oder bricht ab — beides merkst du
+          erst am Drucker.</figcaption>
+        </figure>
+        <figure>
+          <img src="bilder/verwandlung-nachher.svg?v=45d4e88b" width="420" height="420" loading="lazy"
+               alt="Dasselbe Modell nach dem Aufbereiten: die Oberfläche ist geschlossen, alle Kanten haben einen Nachbarn">
+          <figcaption><b>Nach dem Aufbereiten</b> Geschlossen, aus einem Stück,
+          mit Wandstärken über der Düsenbreite. Solidon3D sagt dir vorher, was
+          es geändert hat.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Und so entsteht das</h3>
+      <p class="sub">Objektbaum links, 3D-Ansicht in der Mitte, Prüfbericht rechts. Jeder Schritt steht im Verlauf und lässt sich ändern — auch zehn Schritte später.</p>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a href="bilder/beleg-fenster.png?v=1eda7cf6"><img src="bilder/beleg-fenster.png?v=1eda7cf6" width="1400" height="860" loading="lazy"
+               alt="Das Hauptfenster von Solidon3D: links der Objektbaum mit Parametern und Verlauf, in der Mitte die 3D-Ansicht, rechts der Prüfbericht"></a>
+        </div>
+      </div>
+
+      <a class="btn ghost" href="#funktionen">Alle Funktionen im Überblick</a>
     </div>
   </section>
 

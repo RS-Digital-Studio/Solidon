@@ -871,7 +871,18 @@ def test_each_start_page_keeps_picture_before_support(page: str) -> None:
     text = (WEBSITE / page).read_text(encoding="utf-8")
 
     act = text.index('<p class="hero-act">')
-    picture = text.index('<div class="shot hero-shot">')
+    # **Die Bauart des Produktbilds hat zum zweiten Mal gewechselt** (WD1):
+    # Aus dem stehenden Bildschirmfoto (``shot hero-shot``) wurde eine
+    # Drehbühne, und die ist kein ``<img>``, sondern ein Sprite im Stylesheet.
+    # Geprüft wird deshalb, was von beiden dort **steht** — die Zusage ist der
+    # Ort im Lesefluss, nicht die Klasse, mit der er gebaut ist.
+    stages = [
+        text.index(mark)
+        for mark in ('<div class="turn-wrap">', '<div class="shot hero-shot">')
+        if mark in text
+    ]
+    assert stages, f"{page}: im Aufmacher steht kein Produktbild"
+    picture = min(stages)
     download = text.index('<section id="download">')
     support = text.index('<div class="donate">')
 

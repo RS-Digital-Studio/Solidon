@@ -218,16 +218,20 @@
       </div>
 
       <div class="hero-side">
-        <div class="shot hero-shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-fr.png?v=074e69d1"><img src="../bilder/beleg-fenster-fr.png?v=074e69d1" width="1400" height="860" fetchpriority="high"
-                 alt="La fenêtre principale de Solidon3D&nbsp;: à gauche l'arbre des objets avec les paramètres et l'historique, au centre la vue 3D, à droite le rapport de contrôle"></a>
-          </div>
+        <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="Un support pour bobines de filament, construit dans Solidon3D&nbsp;: plaque de base, deux joues, deux axes de roulement. Faites-le glisser ou utilisez les flèches pour le tourner."></div>
         </div>
+        <p class="turn-hint">Support de bobines, construit en 18 étapes — le défilement le tourne, ou faites-le glisser</p>
 
-        
+        <div class="dial">
+          <label for="rollenbreite">Largeur de bobine</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55,0 mm</output>
+        </div>
       </div>
+
     </div>
 
     <ul class="assure hero-assure">
@@ -508,6 +512,60 @@
             </div>
             <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Faire un don avec PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
           </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap">
+      <h2>Ce qui finit sur le plateau</h2>
+      <p class="sub">Trois pièces, construites et vérifiées dans Solidon3D. Chacune porte un détail qu’aucun éditeur de cubes ne vous donne&nbsp;: des inserts qui tiennent une vis, un filetage qui prend, un crochet qui accroche vraiment. Toutes ont été faites avec les mêmes menus que les vôtres — étape par étape, et chaque étape peut être annulée.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
+               alt="Un boîtier électronique aux arêtes arrondies, avec des inserts filetés dans les coins, un passe-câble dans la paroi latérale et le couvercle posé à côté">
+          <figcaption><b>Boîtier électronique</b> Inserts filetés dans les coins, passe-câble, nervures de renfort — et un couvercle qui s’encliquette. Douze étapes, 79 134 triangles.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-schraubdose.webp?v=02fc94ab" width="900" height="578" loading="lazy"
+               alt="Un pot cylindrique avec un filetage extérieur imprimé sur le col et, à côté, le couvercle vissant à bord moleté">
+          <figcaption><b>Pot à couvercle vissant</b> Le filetage du col et celui du couvercle viennent du même pas, et le jeu entre les deux du profil de matériau. Vous posez le couvercle&nbsp;: il tient.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
+               alt="Un bac d’atelier ouvert avec deux crochets pour panneau perforé en haut de sa paroi arrière, chacun avec un ergot et une languette ressort">
+          <figcaption><b>Bac d’atelier</b> Deux crochets à 80 mm, chacun avec une languette ressort&nbsp;: quand vous sortez quelque chose, vous soulevez le bac — et il reste accroché.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Et ce qui arrive à un modèle qui n’est pas imprimable tel quel</h3>
+      <p class="sub">Un maillage généré a l’air sain et l’est rarement. À gauche tel qu’il est arrivé, à droite après réparation — le même fichier, deux clics entre les deux.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+               alt="Un modèle généré en fil de fer&nbsp;: à plusieurs endroits, des trous s’ouvrent dans la surface et des arêtes finissent dans le vide">
+          <figcaption><b>Tel qu’il est arrivé</b> Arêtes ouvertes, trous dans le maillage. Un trancheur les comble à sa guise ou renonce — dans les deux cas, vous l’apprenez à l’imprimante.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/verwandlung-nachher.svg?v=45d4e88b" width="420" height="420" loading="lazy"
+               alt="Le même modèle après réparation&nbsp;: la surface est fermée, chaque arête a une voisine">
+          <figcaption><b>Après réparation</b> Fermé, d’un seul tenant, avec des parois plus épaisses que votre buse. Solidon3D vous dit à l’avance ce qu’il a changé.</figcaption>
+        </figure>
+      </div>
+
+      <h3>Et voici où cela se passe</h3>
+      <p class="sub">L’arbre des objets à gauche, la vue 3D au centre, le rapport de contrôle à droite. Chaque étape reste dans l’historique et peut être modifiée — même dix étapes plus tard.</p>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a href="../bilder/beleg-fenster-fr.png?v=074e69d1"><img src="../bilder/beleg-fenster-fr.png?v=074e69d1" width="1400" height="860" loading="lazy"
+               alt="La fenêtre principale de Solidon3D&nbsp;: à gauche l'arbre des objets avec les paramètres et l'historique, au centre la vue 3D, à droite le rapport de contrôle"></a>
+        </div>
+      </div>
+
+      <a class="btn ghost" href="#features">Toutes les fonctions en un coup d’œil</a>
     </div>
   </section>
 

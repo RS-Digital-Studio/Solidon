@@ -220,16 +220,20 @@
       </div>
 
       <div class="hero-side">
-        <div class="shot hero-shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-fenster-en.png?v=ec42aa21"><img src="../bilder/beleg-fenster-en.png?v=ec42aa21" width="1400" height="860" fetchpriority="high"
-                 alt="The Solidon3D main window: object tree with parameters and history on the left, the 3D view in the middle, the inspection report on the right"></a>
-          </div>
+        <div class="turn-wrap">
+          <div class="turntable" tabindex="0" role="img" data-frames="36"
+               aria-label="A holder for filament spools, built in Solidon3D: base plate, two cheeks, two rollers. Drag it or use the arrow keys to turn it."></div>
         </div>
+        <p class="turn-hint">Spool holder, built in 18 steps — scrolling turns it, or drag it</p>
 
-        
+        <div class="dial">
+          <label for="rollenbreite">Spool width</label>
+          <input id="rollenbreite" type="range" min="0" max="23" value="0" step="1"
+                 data-dial="../bilder/regler-{n}.webp" data-from="55" data-to="90" data-stops="24">
+          <output for="rollenbreite" data-dial-value>55.0 mm</output>
+        </div>
       </div>
+
     </div>
 
     <ul class="assure hero-assure">
@@ -500,6 +504,60 @@
             </div>
             <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Donate with PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
           </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap">
+      <h2>What ends up on the bed</h2>
+      <p class="sub">Three parts, built and checked in Solidon3D. Each carries a feature no box editor gives you: inserts that hold a screw, a thread that grips, a hook that actually hooks. Every one of them was built through the same menus you use — step by step, and every step can be taken back.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/galerie-gehaeuse.webp?v=0af90a22" width="900" height="578" loading="lazy"
+               alt="An electronics enclosure with rounded edges, threaded inserts in the corners, a cable gland in the side wall and the lid placed beside it">
+          <figcaption><b>Electronics enclosure</b> Threaded inserts in the corners, a cable gland, stiffening ribs — and a lid that snaps on. Twelve steps, 79,134 triangles.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-schraubdose.webp?v=02fc94ab" width="900" height="578" loading="lazy"
+               alt="A cylindrical storage jar with a printed external thread on its neck, the matching screw lid with a knurled rim beside it">
+          <figcaption><b>Storage jar</b> The thread on the neck and the one in the lid come from the same pitch, the clearance between them from the material profile. Put the lid on and it sits.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/galerie-lochwandhalter.webp?v=c8a4623e" width="900" height="578" loading="lazy"
+               alt="An open workshop tray with two pegboard hooks at the top of its back wall, each with a peg and a sprung latch">
+          <figcaption><b>Workshop tray</b> Two hooks 80 mm apart, each with a sprung latch: take something out and you lift the tray — and it stays on the wall anyway.</figcaption>
+        </figure>
+      </div>
+
+      <h3>And what happens to a model that is not printable as it is</h3>
+      <p class="sub">A generated mesh looks sound and rarely is. On the left as it arrived, on the right after repair — same file, two clicks in between.</p>
+
+      <div class="weg">
+        <figure>
+          <img src="../bilder/verwandlung-vorher.svg?v=593124c2" width="420" height="420" loading="lazy"
+               alt="A generated model as a wireframe: holes gape in the surface in several places, edges end in nothing">
+          <figcaption><b>As it arrived</b> Open edges, holes in the mesh. A slicer fills them as it sees fit or gives up — either way you find out at the printer.</figcaption>
+        </figure>
+        <figure>
+          <img src="../bilder/verwandlung-nachher.svg?v=45d4e88b" width="420" height="420" loading="lazy"
+               alt="The same model after repair: the surface is closed, every edge has a neighbour">
+          <figcaption><b>After repair</b> Closed, one solid, walls thicker than your nozzle. Solidon3D tells you beforehand what it changed.</figcaption>
+        </figure>
+      </div>
+
+      <h3>And this is where it happens</h3>
+      <p class="sub">Objects on the left, the 3D view in the middle, the check report on the right. Every step stays in the history and can be changed — ten steps later too.</p>
+
+      <div class="shot">
+        <div class="stage">
+          <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a href="../bilder/beleg-fenster-en.png?v=ec42aa21"><img src="../bilder/beleg-fenster-en.png?v=ec42aa21" width="1400" height="860" loading="lazy"
+               alt="The Solidon3D main window: object tree with parameters and history on the left, the 3D view in the middle, the inspection report on the right"></a>
+        </div>
+      </div>
+
+      <a class="btn ghost" href="#features">All features at a glance</a>
     </div>
   </section>
 

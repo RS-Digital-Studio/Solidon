@@ -63,11 +63,18 @@ ZOOM = 1.4
 #: Ein Teil, das von hinten flach gesehen wird, füllt mehr Breite als dasselbe
 #: Teil von schräg oben. 1,4 schnitt den Lochwandhalter an.
 ZOOMS: dict[str, float] = {
-    "lochwandhalter": 1.0,
+    # Am fertigen Seitenausschnitt gemessen: In einer 288 Punkte breiten
+    # Kachel waren die Einhänger bei 1,0 nicht mehr zu erkennen — und sie
+    # sind der Grund, warum das Teil dasteht.
+    "lochwandhalter": 1.45,
     "klappbox": 1.15,
     # Zwei Körper nebeneinander, und ``reset_camera`` rahmt beide mit Luft:
-    # Bei 0,95 stand das halbe Druckbett samt Maßzahlen im Bild.
-    "schraubdose": 1.35,
+    # Bei 0,95 stand das halbe Druckbett samt Maßzahlen im Bild. **Der Wert
+    # hing am Gizmo**: Solange es in der Szene stand, rahmte ``reset_camera``
+    # weiter, und 1,35 traf. Ohne Gizmo rahmt sie enger, und derselbe Wert
+    # schnitt die Dose zu einem Ausschnitt ihrer Wand zusammen — sichtbar nur
+    # daran, dass man plötzlich die roten Innenflächen des Gewindes sah.
+    "schraubdose": 1.05,
 }
 
 #: Abstand des Zuschnitts zu den Karten, in Bildpunkten.
@@ -161,6 +168,13 @@ def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     marker = axes_widget_of(view.plotter) if view.plotter is not None else None
     if marker is not None:
         marker.SetEnabled(0)
+    # **Und das Verschiebe-Gizmo, aus demselben Grund** — gefunden erst am
+    # fertigen Seitenausschnitt: Auf dem Bild der Klappbox stand der blaue
+    # Pfeil mitten im Teil, dazu der rote und der grüne Ring. Es erscheint,
+    # sobald ein Objekt ausgewählt ist, und nach dem Öffnen einer Projektdatei
+    # ist manchmal eines ausgewählt. In der Anwendung ist es die Handhabe zum
+    # Ziehen; auf einem Galeriebild ist es Werkzeug im Schaufenster.
+    view.set_gizmo(False)
 
     view.reset_camera()
     settle(app, 20)
