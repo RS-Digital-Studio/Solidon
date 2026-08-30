@@ -1554,7 +1554,7 @@ def test_a_double_click_on_a_folded_step_says_where_the_single_ones_are(
     panel.operationActivated.connect(opened.append)
 
     einzeln = panel.list.item(0)
-    assert einzeln.text() == "Bohrung setzen"
+    assert einzeln.text() == "1  Bohrung setzen"
     panel.list.itemDoubleClicked.emit(einzeln)
     assert opened == [1], "ein einzelner Schritt öffnet sich weiterhin"
     assert not notes
@@ -1586,7 +1586,13 @@ def test_the_history_names_only_what_differs(qt_app: QApplication) -> None:
     panel.show_document(document)
 
     lines = [panel.list.item(row).text() for row in range(panel.list.count())]
-    assert lines[0] == "Bohrung setzen", "der Regelfall bleibt unkommentiert"
+    # Die führende Zahl ist die Schrittnummer und keine Herkunftsangabe: Sie
+    # steht an jeder Zeile, die genau eine Operation vertritt, damit der
+    # Fehlerdialog („Operation: 4") und der Verlauf dieselbe Zahl nennen. Was
+    # dieser Test zusichert, ist die Abwesenheit eines *Kommentars* — „(Agent)"
+    # steht an der zweiten Zeile und an der ersten nicht.
+    assert lines[0] == "1  Bohrung setzen", "der Regelfall bleibt unkommentiert"
+    assert "Agent" not in lines[0]
     assert "Agent" in lines[1]
 
 
