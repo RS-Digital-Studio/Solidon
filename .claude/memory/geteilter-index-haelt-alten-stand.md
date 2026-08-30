@@ -182,3 +182,31 @@ dass der Arbeitsbaum unverändert ist. Privater Index bleibt trotzdem Pflicht,
 solange der Baum geteilt ist — siehe [[privater-index-fester-name]] und
 [[commit-o-nimmt-den-dateistand]]. Verwandt:
 [[parallele-sitzung-im-arbeitsbaum]], [[geteilter-baum-misst-zeitpunkt]].
+
+## Und damit ist `git diff HEAD` kein Messinstrument mehr
+
+Die Folgerung fehlte hier, und sie hat am 30.08.2026 abends eine halbe Stunde
+gekostet. `git diff HEAD --numstat` meldete:
+
+    0  207  app/core/geom/sketch_solid.py
+    0  360  tests/test_sketch_solid.py
+
+Beide Dateien waren **committet und vorhanden**, mit genau diesen Zeilenzahlen.
+Der Haupt-Index führte sie als gelöscht, weil sie über private Indizes
+entstanden waren — und `git diff HEAD` liest den Index mit. Daneben standen
+Zahlen für fremde Dateien, die ebenso wenig stimmten.
+
+**Wer im gemeinsamen Baum misst, misst mit einem eigenen Index:**
+
+    GIT_INDEX_FILE=<eigener> git read-tree HEAD && git diff HEAD --numstat
+
+Erst damit kamen plausible Zahlen — und erst darin war zu erkennen, dass 165
+Zeilen in `main_window.py` und 79 in `tests/test_ui.py` fremde laufende Arbeit
+waren. Zehn rote Tests hatte ich vorher der bekannten VTK-Familie zugeschrieben;
+sie waren der halbe Bau einer Nachbarsitzung. Siehe
+[[geteilter-baum-misst-zeitpunkt]] — die Regel gilt, aber sie nützt nichts, wenn
+das Messgerät selbst verstellt ist.
+
+**Den Haupt-Index dabei nicht heilen.** Ein `read-tree` darauf würde
+Vormerkungen anderer Sitzungen wegwerfen. Der eigene Index kostet eine Zeile
+und fasst nichts an.
