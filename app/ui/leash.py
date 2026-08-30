@@ -21,7 +21,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any, Final
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QThread, QTimer, Signal
 from shiboken6 import isValid
 
 from app.core.log import get_logger
@@ -386,6 +386,74 @@ def weak_slot[Owner: QObject](
             call(found, *bound, *(sent if forward else ()))
 
     return slot
+
+
+def stop_watching_the_dying(watcher: QObject, watched: QObject, event: QEvent) -> bool:
+    """Bestellt den Filter ab, wenn das überwachte Objekt stirbt.
+
+    Gibt zurück, ob das Ereignis damit erledigt ist — eine Aufrufstelle
+    schreibt::
+
+        if stop_watching_the_dying(self, watched, event):
+            return False
+
+    **Ein Filter hängt am überwachten Objekt und bleibt dort, bis eine Seite
+    ihn entfernt.** Solange kein Fenster starb, fiel das nicht auf; seit sie
+    sterben können (`acb0dd5`, ``weak_slot`` weiter oben), läuft der Filter in
+    den Abbau hinein und fragt halb abgeräumte Widgets nach ihrer Geometrie::
+
+        libshiboken: Internal C++ object (OverlayHost/ObjectTree) already deleted.
+
+    Qt schickt ``Destroy``, **bevor** die C++-Seite weg ist: der letzte Takt,
+    in dem das Abbestellen noch möglich ist.
+
+    **Die Richtung ist der ganze Punkt.** Stirbt das *Filterobjekt*, räumt Qt
+    selbst auf — das ist gemessen und hält, und es ist der Grund, warum die
+    reine Zählung ``installEventFilter`` gegen ``removeEventFilter`` lange
+    keine Aussage war. Gefährlich ist die andere Richtung: Stirbt das
+    *überwachte* Objekt, läuft der Filter des Überlebenden weiter.
+
+    Gemessen an ``tests/test_first_run.py`` für den ersten Fall
+    (``overlay.py``), je sechs Läufe: **vier von sechs** mit einem
+    Teardown-Fehler ohne diese Zeilen, **null von sechs** mit ihnen.
+
+    **Was nicht half, und das gehört dazu:** Zwei Wachen am Eingang der
+    Rechnung — ``isValid`` auf Wirt, Ansicht und Zonen — senkten die Quote
+    nicht (drei bis vier von sechs blieben rot). Eine Prüfung am Eingang
+    gewinnt keinen Wettlauf, der **während** des Aufrufs entschieden wird. Das
+    Abbestellen dagegen sorgt dafür, dass der Aufruf gar nicht erst kommt.
+
+    ``QCoreApplication`` als überwachtes Objekt braucht das nicht — sie
+    überlebt jeden Filter. Die vier Stellen, die dort installieren, rufen diese
+    Funktion deshalb nicht.
+
+    **Wie weit das trägt, ist gemessen, und die Zahl ist ernüchternd.** Ein
+    Zähler in dieser Funktion, über vier Fensterdateien am 30.08.2026:
+
+    | Datei | Aufrufe | davon ``Destroy`` | wer |
+    |---|---|---|---|
+    | ``test_first_run`` | 507 807 | **6** | nur ``OverlayHost`` |
+    | ``test_overlay`` | 25 786 | **0** | — |
+    | ``test_ui`` | 3 489 045 | **113** | nur ``OverlayHost`` |
+
+    Von den sieben Aufrufstellen schlägt in vier Millionen Ereignissen **eine**
+    an — und das ist die, für die der Griff ursprünglich gebaut wurde. Der
+    Grund steht in der Lebensdauer: Wo ein Elternteil sein eigenes Kind
+    beobachtet (``chat.py``, ``catalog.py``, ``op_dialog.py``,
+    ``sketch_editor.py``), sterben beide zusammen, und Qt räumt selbst auf.
+
+    **Die sechs anderen bleiben trotzdem, und zwar als Vorsorge und nicht als
+    Behebung** — so steht es auch im Register. Sie kosten einen Typvergleich je
+    Ereignis, sie decken den Fall „ein Kind geht einzeln" (Layoutwechsel,
+    ``deleteLater``), und der Wächter in ``tests/test_widget_lifetime.py`` sorgt
+    dafür, dass die nächste Filterstelle den Griff mitbekommt. Wer sie streichen
+    will, hat die Zahl auf seiner Seite; wer sie behält, den Fall, den die Suite
+    nicht fährt. Was nicht geht, ist sie für eine Behebung zu halten.
+    """
+    if event.type() != QEvent.Type.Destroy:
+        return False
+    watched.removeEventFilter(watcher)
+    return True
 
 
 @contextmanager

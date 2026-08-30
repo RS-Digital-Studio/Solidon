@@ -36,7 +36,7 @@ from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
-from app.ui.leash import weak_slot
+from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.style import NORMAL, set_level
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
@@ -500,6 +500,8 @@ class ChatPanel(QWidget):
         der ein mehrzeiliges Feld nicht heißt, dass man zum Senden zur Maus
         greift.
         """
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if watched is self.input and event.type() == QEvent.Type.KeyPress:
             enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
             if enter and not event.modifiers() & Qt.KeyboardModifier.ShiftModifier:

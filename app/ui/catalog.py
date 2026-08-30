@@ -35,6 +35,7 @@ from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts.preview import SIZE, render
 from app.core.knowledge.parts.registry import PartSpec
 from app.i18n import tr
+from app.ui.leash import stop_watching_the_dying
 from app.ui.style import NORMAL
 
 #: Wie viele Parameter ein Katalogeintrag zeigt. §24.3 verlangt die zwei
@@ -433,6 +434,8 @@ class PartCatalog(QDialog):
         self._stretch_headings()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if watched is self.list and event.type() == QEvent.Type.Resize:
             # Ein Filter sieht das Ereignis vor dem Ziel — der Viewport hat
             # hier noch die alte Breite. Erst nach der Verarbeitung messen.

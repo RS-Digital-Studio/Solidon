@@ -810,3 +810,52 @@ def test_no_card_is_pushed_outside_its_section(window: MainWindow) -> None:
     assert tree.visualItemRect(deepest).bottom() <= viewport.height(), (
         "am Rollbalkenende bleibt die letzte Zeile außerhalb"
     )
+
+
+def test_a_view_whose_model_turned_into_a_stranger_still_answers(
+    qt_app: QApplication,
+) -> None:
+    """Ein fremder Wrapper unter recyceltem Zeiger darf die Karte nicht sprengen.
+
+    **Der Fall, den das ``Destroy``-Abbestellen nicht deckt.** Zweimal am
+    30.08.2026 in einem vollen Torlauf gefallen, beide Male dieselbe Zeile in
+    ``rows_height``::
+
+        AttributeError: 'QWidgetItem' object has no attribute 'rowCount'
+
+    Erreicht über ``LayoutRequest`` → ``eventFilter`` → ``_place``, also über
+    eine Zone, die **noch lebt**, hin zu einer Ansicht, die schon geht. Der
+    Griff aus :func:`app.ui.leash.stop_watching_the_dying` stand zu beiden
+    Zeitpunkten bereits in ``overlay.py`` und half nicht: Wer abbestellt, hört
+    auf, ein sterbendes Objekt zu beobachten — wer über seine *Nachbarn*
+    rechnet, muss zusätzlich fragen, was er da vor sich hat.
+
+    ``isValid`` fragt das Falsche. Ein recycelter Zeiger trägt ein
+    **lebendiges** Objekt, nur eines vom falschen Typ; dieselbe Beobachtung
+    steht seit dem 25.08.2026 in ``shortcut_schemes.py``, wo ein ``QWidgetItem``
+    als ``watched`` ankam.
+
+    **Was dieser Test ist und was nicht.** Er ist eine Sonde: Er stellt den
+    fremden Wrapper her, statt auf ihn zu warten. Der echte Absturz kommt nur
+    unter Last und nur manchmal — reproduzieren lässt er sich nicht auf Zuruf.
+    Was hier geprüft wird, ist deshalb nicht „der Absturz ist weg", sondern
+    „diese Eingabe wirft nicht mehr". Das ist weniger, und es ist das, was ein
+    Test an dieser Stelle leisten kann.
+    """
+    from PySide6.QtWidgets import QListWidget, QWidgetItem
+
+    class ReturnsAStranger(QListWidget):
+        """Eine Liste, deren Modell unter einem recycelten Zeiger fremd wurde."""
+
+        def model(self) -> object:  # type: ignore[override]
+            return QWidgetItem(QWidget())
+
+    view = ReturnsAStranger()
+    view.addItem("ein Befund")
+
+    height = overlay.rows_height(view)  # type: ignore[arg-type]
+
+    assert height > 0, (
+        "eine Liste, deren Modell fremd geworden ist, muss eine Ersatzhöhe "
+        f"bekommen statt null — sonst fällt die Karte zusammen (bekam {height})"
+    )

@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.core import feedback
 from app.core.log import get_logger
+from app.ui.leash import stop_watching_the_dying
 from app.ui.style import ROOMY, SPACE, make_primary
 from app.ui.theme import THEMES
 
@@ -344,6 +345,8 @@ class SurveyNotice(QFrame):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
         """Bleibt an seinem Platz, wenn das Fenster seine Größe ändert."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if event.type() == QEvent.Type.Resize and watched is self.parentWidget():
             self.place()
         return super().eventFilter(watched, event)

@@ -78,7 +78,7 @@ from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
 from app.ui.labels import display_unit, feature_label, length, localised
-from app.ui.leash import weak_slot
+from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -6326,6 +6326,8 @@ class Viewport(QWidget):
         von beiden Seiten. VTKs eigene Tastenkürzel bleiben unangetastet —
         geschluckt wird nur, was zum Zug gehört, und nur solange einer läuft.
         """
+        if stop_watching_the_dying(self, watched, event):
+            return False
         kind = event.type()
         # Der Zeiger zuerst, und immer: Er hängt an der Mausbewegung und nicht
         # daran, ob gerade ein Zug läuft. Nichts davon wird geschluckt — VTK

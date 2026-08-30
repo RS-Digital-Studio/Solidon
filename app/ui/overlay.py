@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Protocol, runtime_checkable
 
 from PySide6.QtCore import (
+    QAbstractItemModel,
     QEasingCurve,
     QEvent,
     QModelIndex,
@@ -39,6 +40,7 @@ from PySide6.QtGui import QPainterPath, QRegion
 from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QWidget
 from shiboken6 import isValid
 
+from app.ui.leash import stop_watching_the_dying
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
 
@@ -263,10 +265,27 @@ def rows_height(view: QAbstractItemView) -> int:
     Zeile, nicht als seine Kinder.
     """
     model = view.model()
-    if model is None:
-        # Die Stubs behaupten, das könne nicht sein — eine Liste, die gerade
-        # aufgebaut wird, hat aber keines. Eine Höhe von null ließe die Karte
-        # zusammenfallen; dieselbe Antwort wie für eine leere Liste.
+    if not isinstance(model, QAbstractItemModel):
+        # **Zwei Fälle, eine Antwort.** Die Stubs behaupten, ein fehlendes
+        # Modell könne es nicht geben — eine Liste, die gerade aufgebaut wird,
+        # hat aber keines. Und im Abbau kommt der zweite dazu: shiboken kann
+        # unter einem recycelten Zeiger einen **fremden Wrapper** liefern, und
+        # der ist kein totes Objekt, sondern ein lebendiges vom falschen Typ.
+        # ``isValid`` sagt dazu ja; nur die Frage nach der Art trifft es.
+        #
+        # Belegt am 30.08.2026 in zwei Torläufen, beide Male dieselbe Zeile:
+        #
+        #     AttributeError: 'QWidgetItem' object has no attribute 'rowCount'
+        #
+        # Erreicht über ``LayoutRequest`` → ``eventFilter`` → ``_place``, also
+        # über eine Zone, die noch lebt, hin zu einer Ansicht, die schon geht.
+        # Das ``Destroy``-Abbestellen deckt das **nicht** ab — es stand zu
+        # beiden Zeitpunkten bereits in dieser Datei. Wer abbestellt, hört auf,
+        # ein sterbendes Objekt zu beobachten; wer über seine Nachbarn rechnet,
+        # muss zusätzlich fragen, was er da vor sich hat.
+        #
+        # Eine Höhe von null ließe die Karte zusammenfallen; dieselbe Antwort
+        # wie für eine leere Liste.
         return int(view.fontMetrics().height() + 2 * SPACE)  # type: ignore[unreachable]
     tree = view if isinstance(view, QTreeView) else None
 
@@ -504,27 +523,14 @@ class OverlayHost(QWidget):
         Karte so hoch, wie sie beim Aufbau war — und der Objektbaum wäre nach
         dem Öffnen eines Projekts genauso leer aussehend wie davor.
 
-        **Wer stirbt, wird nicht weiter beobachtet.** Ein Filter wird am
-        überwachten Objekt installiert und bleibt dort, bis eine Seite ihn
-        entfernt — ``_watch`` tat das nie. Solange kein Fenster starb, fiel es
-        nicht auf; seit sie sterben können (`acb0dd5`), läuft der Filter in den
-        Abbau hinein und fragt halb abgeräumte Widgets nach ihrer Geometrie.
-        Qt schickt ``Destroy``, **bevor** die C++-Seite weg ist: der letzte
-        Takt, in dem das Abbestellen noch möglich ist.
-
-        Gemessen an ``tests/test_first_run.py``, je sechs Läufe: **vier von
-        sechs** mit einem Teardown-Fehler ohne diese drei Zeilen, **null von
-        sechs** mit ihnen.
-
-        Zwei Wachen am Eingang von ``_place`` — auf ``isValid`` von Wirt,
-        Ansicht und Zonen — standen hier zuerst und sind wieder weg: Sie
-        senkten die Quote nicht (drei bis vier von sechs blieben rot), denn
-        eine Prüfung am Eingang gewinnt keinen Wettlauf, der **während**
-        ``_lay_out`` entschieden wird. Das Abbestellen dagegen sorgt dafür,
-        dass ``_lay_out`` gar nicht erst gerufen wird.
+        **Wer stirbt, wird nicht weiter beobachtet** — ``_watch`` bestellte
+        nie ab, und seit die Fenster sterben können, lief der Filter in ihren
+        Abbau hinein. Der Griff dagegen und seine Messung stehen bei
+        :func:`~app.ui.leash.stop_watching_the_dying`; er wird hier zuerst
+        gefragt, weil ein sterbendes Objekt keine Geometrie mehr hat, nach der
+        sich rechnen ließe.
         """
-        if event.type() == QEvent.Type.Destroy:
-            watched.removeEventFilter(self)
+        if stop_watching_the_dying(self, watched, event):
             return False
         if event.type() in (
             QEvent.Type.Resize,

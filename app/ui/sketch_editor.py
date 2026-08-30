@@ -71,7 +71,7 @@ from app.core.units import EPS_DISPLAY
 from app.i18n import tr
 from app.ui import cursors, icons, style
 from app.ui.labels import LengthSpin, length, localised
-from app.ui.leash import weak_slot
+from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
 from app.ui.viewport import MEASURE_GAP
 
@@ -4890,6 +4890,8 @@ class SketchPanel(QWidget):
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         from PySide6.QtCore import QEvent
 
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if (
             watched is self.constraint_list
             and event.type() == QEvent.Type.KeyPress

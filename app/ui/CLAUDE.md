@@ -60,7 +60,8 @@ Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 
 **Brücke zum Kern**
 
-`session.py` (§7, §15.6) · `leash.py` (die Halteleine für Arbeiter-Threads)
+`session.py` (§7, §15.6) · `leash.py` (die Halteleine für Arbeiter-Threads — und für Ereignisfilter,
+die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 
 **Ansicht**
 

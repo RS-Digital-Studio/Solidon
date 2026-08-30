@@ -300,6 +300,76 @@ sie nicht — `gc.get_referrers` schon.
 *jedes* Objekt; eine Eins ist ein Zeiger auf genau eine Referenz, und die
 findet man, statt sie für Streuung zu halten.
 
+### Ein Filter auf einem sterblichen Widget bestellt beim `Destroy` ab
+
+```python
+def eventFilter(self, watched, event):
+    if stop_watching_the_dying(self, watched, event):
+        return False
+    ...
+```
+
+**Die Richtung entscheidet, nicht die Zählung.** Stirbt das *Filterobjekt*,
+räumt Qt selbst auf — gemessen und haltend. Gefährlich ist die Gegenrichtung:
+Stirbt das *überwachte* Objekt, läuft der Filter des Überlebenden in dessen
+Abbau hinein und fragt halb abgeräumte Widgets nach ihrer Geometrie. Qt schickt
+`Destroy`, **bevor** die C++-Seite weg ist; das ist der letzte Takt, in dem das
+Abbestellen geht.
+
+Deshalb war die Zählung `installEventFilter` gegen `removeEventFilter` nie eine
+Aussage — sie stand zwei Tage als Registerpunkt, bevor jemand die Richtung
+fragte. Wer auf der `QCoreApplication` installiert, braucht den Griff nicht: Sie
+überlebt jeden Filter.
+
+**Was er trägt, ist gemessen und kleiner als erwartet.** Ein Zähler in der
+Funktion, 30.08.2026, vier Fensterdateien:
+
+| Datei | Filteraufrufe | davon `Destroy` |
+|---|---|---|
+| `test_first_run` | 507 807 | 6 |
+| `test_overlay` | 25 786 | 0 |
+| `test_ui` | 3 489 045 | 113 |
+
+Alle 119 in `OverlayHost` — der einen Stelle, für die der Griff gebaut wurde.
+Die sechs anderen Aufrufstellen schlugen nie an, und der Grund steht in der
+Lebensdauer: Wo ein Elternteil sein eigenes Kind beobachtet, sterben beide
+zusammen. **Sie bleiben trotzdem** — ein Muster, das an jeder sterblichen
+Filterstelle gleich aussieht, schlägt sechs Einzelbegründungen, warum gerade
+diese Stelle es nicht braucht. Aber es ist Vorsorge und keine Behebung, und so
+steht es im Docstring.
+
+`tests/test_widget_lifetime.py` prüft beides: sieben Filterklassen einzeln
+(`Destroy` muss abbestellen) und ein `ast`-Wächter, der eine neue Stelle ohne
+Griff findet. Der Wächter fragt nach dem **Filterargument**, nicht nach der
+Datei — bei `main_window.py:1552` steht `self.sketch_bar.installEventFilter(
+self.overlay)`, und der Filter wohnt woanders. Seine erste Fassung wurde daran
+falsch rot.
+
+### `isValid` beantwortet nicht, was für ein Objekt das ist
+
+Ein recycelter Zeiger trägt kein totes Objekt, sondern ein **lebendiges vom
+falschen Typ**. `shiboken` liefert dann einen fremden Wrapper, und `isValid`
+sagt dazu ja. Zweimal am 30.08.2026 im Torlauf gefallen, beide Male in
+`overlay.rows_height`:
+
+```
+AttributeError: 'QWidgetItem' object has no attribute 'rowCount'
+```
+
+Erreicht über `LayoutRequest` → `eventFilter` → `_place`, also über eine Zone,
+die **noch lebt**, hin zu einer Ansicht, die schon geht. Das `Destroy`-
+Abbestellen deckt das nicht ab — es stand zu beiden Zeitpunkten bereits in der
+Datei. Wer abbestellt, hört auf, ein sterbendes Objekt zu beobachten; wer über
+seine **Nachbarn** rechnet, muss zusätzlich fragen, was er da vor sich hat.
+Dieselbe Beobachtung steht seit dem 25.08.2026 in `shortcut_schemes.py`, wo ein
+`QWidgetItem` als `watched` ankam.
+
+Der Griff ist eine Typprüfung (`isinstance`) mit demselben Rückfall wie für ein
+fehlendes Objekt. Sie ist nicht dasselbe wie die zwei `isValid`-Wachen, die am
+24.08. am Eingang von `_place` standen und die Quote nicht senkten: Eine Prüfung
+am Eingang gewinnt keinen Wettlauf, der **während** des Aufrufs entschieden
+wird — diese hier steht an der Stelle, an der der Wert angefasst wird.
+
 ### Wer eine `WorkerLeash` hält, hat ein `release()`
 
 Wie man einem Fenster sagt, dass Schluss ist, hieß an jeder Klasse anders —

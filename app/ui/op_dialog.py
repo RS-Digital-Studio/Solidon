@@ -49,7 +49,7 @@ from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.labels import NumberSpin, choice_label, display_unit, explain_choices
-from app.ui.leash import weak_slot
+from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
@@ -361,6 +361,8 @@ class ValueField(QWidget):
         dort wäre ein Zeichen, das plötzlich ein Textfeld aufmacht, ein
         Rätsel. Hier gehört es zur Sache — neben dem Feld steht der fx-Knopf.
         """
+        if stop_watching_the_dying(self, watched, event):
+            return False
         if watched is self.spin and event.type() == QEvent.Type.KeyPress:
             typed = getattr(event, "text", lambda: "")()
             if typed in (expressions.EXPRESSION_PREFIX, expressions.REFERENCE_PREFIX):

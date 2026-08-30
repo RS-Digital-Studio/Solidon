@@ -291,3 +291,177 @@ def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
                     without.append(f"{name} ({path.name})")
 
     assert not without, "hält Arbeiter, kennt aber kein release(): " + ", ".join(without)
+
+
+# --- Filter, die den Tod ihres Überwachten überleben ---------------------------
+
+
+class _NotesWhoStopsWatching(QWidget):
+    """Ein Widget, das mitschreibt, wer aufhört, es zu beobachten.
+
+    Qt gibt seine Filterliste nicht heraus — man kann ein Widget nicht fragen,
+    wer es beobachtet. Was man fragen kann, ist das Gegenteil: Wer bestellt ab?
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.dropped: list[object] = []
+
+    def removeEventFilter(self, obj: object) -> None:  # noqa: N802 — Qt gibt den Namen
+        self.dropped.append(obj)
+        super().removeEventFilter(obj)  # type: ignore[arg-type]
+
+
+def _watchers() -> list[tuple[str, Callable[[], object]]]:
+    """Die Filter, die auf einem **sterblichen** Widget sitzen.
+
+    Nicht dabei sind die vier, die auf der ``QCoreApplication`` installieren
+    (``app.py``, ``shortcut_schemes.py``, ``survey.py:194``,
+    ``viewport.py:5720``): Die Anwendung stirbt zuletzt, ein ``Destroy`` von
+    ihr gibt es zu Lebzeiten des Filters nicht.
+    """
+    from app.core.types import ParamSpec
+    from app.ui.catalog import PartCatalog
+    from app.ui.chat import ChatPanel
+    from app.ui.op_dialog import ValueField
+    from app.ui.overlay import OverlayHost
+    from app.ui.sketch_editor import SketchPanel
+    from app.ui.survey import SurveyNotice
+    from app.ui.viewport import Viewport
+
+    return [
+        ("PartCatalog", PartCatalog),
+        ("ChatPanel", ChatPanel),
+        ("ValueField", lambda: ValueField(ParamSpec(name="w", kind="number", title="Breite"))),
+        ("SketchPanel", SketchPanel),
+        ("SurveyNotice", SurveyNotice),
+        ("Viewport", Viewport),
+        ("OverlayHost", lambda: OverlayHost(QWidget())),
+    ]
+
+
+@pytest.mark.parametrize("name,build", _watchers())
+def test_a_filter_stops_watching_what_dies(
+    name: str,
+    build: Callable[[], object],
+    qt_app: QApplication,
+    unpinned_windows: None,
+) -> None:
+    """Ein ``Destroy`` am Überwachten muss den Filter abbestellen.
+
+    **Die Richtung ist der ganze Punkt** (siehe
+    :func:`app.ui.leash.stop_watching_the_dying`): Stirbt das *Filterobjekt*,
+    räumt Qt selbst auf. Stirbt das *überwachte* Objekt, läuft der Filter des
+    Überlebenden in dessen Abbau hinein und fragt halb abgeräumte Widgets nach
+    ihrer Geometrie.
+
+    **Was dieser Test nicht behauptet.** Bei den Stellen, an denen Filter und
+    Überwachter dieselbe Lebensdauer haben — ein Elternteil, der sein eigenes
+    Kind beobachtet, wie in ``chat.py`` oder ``op_dialog.py`` —, sterben beide
+    zusammen, und dann rettet das Abbestellen nichts. Es trägt dort für den
+    anderen Fall: ein Kind, das **einzeln** geht, weil ein Layout wechselt oder
+    jemand ``deleteLater`` ruft.
+
+    **Wie oft der Zweig wirklich läuft, ist gemessen** — in vier
+    Fensterdateien mit vier Millionen Filteraufrufen schlägt er 119 Mal an, und
+    jedes Mal in ``OverlayHost``. Die Tabelle steht bei
+    :func:`app.ui.leash.stop_watching_the_dying`. Dieser Test hält die sieben
+    Stellen deshalb nicht für behoben, sondern für vorgesorgt: Er sichert, dass
+    der Griff *wirkt*, wenn der Fall eintritt — nicht, dass er eintritt.
+    """
+    from PySide6.QtCore import QEvent
+
+    watcher = build()
+    dying = _NotesWhoStopsWatching()
+    handled = watcher.eventFilter(dying, QEvent(QEvent.Type.Destroy))  # type: ignore[attr-defined]
+
+    assert dying.dropped == [watcher], (
+        f"{name} bestellt beim Destroy des Überwachten nicht ab — abbestellt wurde: {dying.dropped}"
+    )
+    assert handled is False, (
+        f"{name} verschluckt das Destroy (gab {handled!r}) — es muss weiterlaufen, "
+        "sonst sieht der Rest der Kette den Abbau nicht"
+    )
+
+
+def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
+    """Wer neu installiert, bestellt auch ab — oder installiert auf der Anwendung.
+
+    Der Wächter zu den sieben oben: Der parametrisierte Test kennt seine
+    Klassen und sieht eine achte nicht. Dieser hier liest den Quelltext und
+    schlägt an, sobald ``installEventFilter`` an einer Stelle steht, deren
+    Filter nicht abbestellt.
+
+    **Gefragt wird nach dem Filter, nicht nach der Datei** — und das ist der
+    Unterschied, an dem die erste Fassung dieses Tests falsch rot wurde. Sie
+    verlangte den Ruf in der Datei, in der ``installEventFilter`` steht; bei
+    ``main_window.py:1552`` steht dort aber ``self.sketch_bar.installEventFilter(
+    self.overlay)``, und der Filter ist ein ``OverlayHost`` aus einer anderen
+    Datei. Die Stelle war gedeckt, der Wächter zählte das Falsche.
+
+    Deshalb zwei Gruppen:
+
+    * ``x.installEventFilter(self)`` — der Filter ist die Klasse dieser Datei,
+      also muss der Ruf hier stehen. Streng geprüft.
+    * ``x.installEventFilter(<etwas anderes>)`` — der Filter lebt woanders und
+      ist statisch nicht aufzulösen. Getragen wird die Stelle vom
+      parametrisierten Test darüber; hier wird nur die Zahl festgehalten,
+      damit eine neue Stelle dieser Art auffällt.
+
+    **Die Sollprobe steht in beiden Zahlen**, und sie hat einen Grund: Ein
+    Muster, das nichts findet, sieht aus wie eines, das nichts zu beanstanden
+    hat.
+    """
+    import ast
+    from pathlib import Path
+
+    #: Was auf der ``QCoreApplication`` installiert, braucht kein Abbestellen —
+    #: sie überlebt jeden Filter. Erkannt am Namen des Empfängers, nicht an
+    #: einer Liste von Dateien: Eine neue Stelle dieser Art soll durchgehen.
+    immortal = ("application", "app", "instance")
+
+    own: list[str] = []
+    foreign: list[str] = []
+    for path in sorted(Path("app/ui").glob("*.py")):
+        source = path.read_text(encoding="utf-8")
+        if "installEventFilter" not in source:
+            continue
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr != "installEventFilter" or not node.args:
+                continue
+            root = node.func.value
+            while isinstance(root, ast.Attribute):
+                root = root.value
+            if isinstance(root, ast.Name) and root.id in immortal:
+                continue
+            where = f"{path.name}:{node.lineno}"
+            argument = node.args[0]
+            if isinstance(argument, ast.Name) and argument.id == "self":
+                own.append(where)
+            else:
+                foreign.append(where)
+
+    assert len(own) >= 7, (
+        f"nur {len(own)} Filter fanden sich, die sich selbst auf ein sterbliches "
+        f"Widget setzen ({own}) — sucht das noch richtig? Am 30.08.2026 waren es sieben"
+    )
+    assert len(foreign) >= 1, (
+        f"kein Filter mehr, der auf einem fremden Objekt sitzt ({foreign}) — "
+        "main_window.py:1552 war einer; wenn er weg ist, gehört diese Zahl nachgezogen"
+    )
+
+    without = sorted(
+        {
+            place.split(":")[0]
+            for place in own
+            if "stop_watching_the_dying"
+            not in (Path("app/ui") / place.split(":")[0]).read_text(encoding="utf-8")
+        }
+    )
+    assert not without, (
+        "setzt sich als Filter auf ein sterbliches Widget, bestellt aber nie ab: "
+        + ", ".join(without)
+        + " — siehe app/ui/leash.py:stop_watching_the_dying"
+    )
