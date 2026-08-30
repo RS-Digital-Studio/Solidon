@@ -133,7 +133,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 ist zu (`20838a37`: Escape kostet nichts mehr), dann Maß-ändern und die Ausgänge; Review je Paket |
 | Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — sieben von neun sind zu (zuletzt V3, `60e89828`), V6 bei 72, V8 bei d3 (Messliste kommt); Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
-| Dreizehn G-Pakete des Designs | Design und Anmutung bekommen ihre eigene Durchsicht (30.08.2026) | die Abarbeitung — 40 Befunde, sechs kritisch (`konzepte/durchsicht-design-2026-08.md`): G1 zuerst (Menü-Überschriften unsichtbar), G6 nur über die Konzeptnotiz zum Akzent-Haushalt; je Paket Belegbild vorher/nachher und Review |
+| Dreizehn G-Pakete des Designs | Design und Anmutung bekommen ihre eigene Durchsicht (30.08.2026) | **die vollständige Abarbeitung — Roberts Order (30.08.2026): das ganze Dokument, alle 40 Befunde**, nicht nur die kritischen. Die style.py-Pakete G1/G2/G3/G7 als Serie in einer Hand (72), G11 bei 50, G12 dockt an D11 (15); je Paket Belegbild vorher/nachher und Review |
 
 ---
 
@@ -13179,6 +13179,12 @@ bereits als eigener Auftrag bei 50.
 | G11 | Skizzenkarte neu setzen (zerfallener Textblock, doppelter Hinweis, schwebende Kapsel) und die kursiven Kartenhinweise aufrecht (B19/B20) | S | offen — dockt an 50s Fertig-Fix an |
 | G12 | Druckeinstellungen: eine Abschnittsform statt QGroupBox-2010 über rahmenlosen Aufklappern (B9) | S | offen — dockt an D11 an |
 | G13 | Kleinserie: Filamentkarten-Höhe, Befehlspaletten-Spalten, Statuszeilen-Verschmelzung, Startbildschirm-Resthöhe, Filamentdialog (Farbfeld winzig, „OK"), Verlauf ohne Symbole, Menü-Icon-Lücken, Handbuch-Ränder, helle Kanten, sprachabhängiger Symbol-Schwellwert (B21/B23/B24/B27/B28/B31/B33/B34/B35/B40) | M | offen — nach den großen |
+
+Roberts Order zur Erhebung (30.08.2026): „das ganze dokument soll
+vollständig abgearbeitet werden" — alle 40 Befunde, auch die
+kosmetischen. Die Verteilung bündelt nach Dateien statt nach Schwere:
+G1/G2/G3/G7 sind alle `style.py` und gehen als Serie an eine Hand,
+damit nicht drei Sitzungen dieselbe Datei bewegen.
 
 - [ ] Die dreizehn G-Pakete abarbeiten — je Paket Belegbild vorher und
       nachher, Zahlen und Review vor dem Commit; G1 zuerst, G6 nur
