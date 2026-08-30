@@ -248,7 +248,7 @@ from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
 from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for, plane_where
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
-from app.ui.style import NORMAL, TIGHT, make_primary, menu_heading, set_level
+from app.ui.style import NORMAL, TIGHT, divider, make_primary, menu_heading, set_level
 from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
@@ -1702,6 +1702,14 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.measurements, 1)
         bar.addPermanentWidget(self.alert_button)
         bar.addPermanentWidget(self.trial_line)
+        # **Zwei Auskünfte, nicht ein Satz.** Links steht, wie lange die
+        # Fassung noch läuft, rechts, was das Teil kostet — dazwischen lag
+        # nur ein Wortabstand, und „… bis zum 30.10.2026  51 g · 3 h 30 min"
+        # las sich als eine Aussage. Der Mittelpunkt trennt weiter *innerhalb*
+        # einer Auskunft; zwischen zweien steht die Linie.
+        self.trial_divider = divider(self)
+        self.trial_divider.setVisible(False)
+        bar.addPermanentWidget(self.trial_divider)
         bar.addPermanentWidget(self.facts)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
@@ -3218,6 +3226,9 @@ class MainWindow(QMainWindow):
             message = licence_lock_line(state)
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
+        # Die Linie trennt zwei Auskünfte — steht links keine, trennt sie
+        # nichts und wäre ein Strich ohne Anlass.
+        self.trial_divider.setVisible(bool(message))
         self._trial_message = message
 
     def _connect_session(self) -> None:
@@ -5093,6 +5104,13 @@ class MainWindow(QMainWindow):
         # 24.08.2026 als „die Klicks sind woanders" gemeldet.
         panel.pointerMoved.connect(self._on_sketch_pointer)
         panel.canvas.selectionChanged.connect(self._update_sketch_selection)
+        # **Auch die Zeichnung entscheidet über die Kapsel**, nicht nur die
+        # Auswahl: Ob „Keine Auswahl" etwas aussagt, hängt daran, ob es
+        # überhaupt etwas zu wählen gibt. Ohne diese Verbindung bliebe die
+        # Einblendung nach dem ersten Strich stumm, bis der Kunde zum ersten
+        # Mal etwas anklickt und wieder abwählt — eine Lage, die dann von der
+        # Reihenfolge abhinge statt von der Sache.
+        panel.sketchChanged.connect(self._update_sketch_selection)
         panel.canvas.selectionChanged.connect(self._redraw_sketch)
         # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
         # aus dem man auf einer Fläche zeichnet — verstecken hieße, die Frage
@@ -5198,7 +5216,14 @@ class MainWindow(QMainWindow):
             self.viewport.show_sketch_selection("")
             return
         count = len(panel.canvas.selection)
-        if count == 0:
+        if count == 0 and not panel.canvas.sketch.elements:
+            # **Eine Kapsel, die nur sagt, dass nichts ist, ist Rauschen** (B20).
+            # Sie schwebte über dem leeren Blatt, bevor der Kunde den ersten
+            # Strich gezogen hatte — eine Verneinung ohne Gegenstück. Sobald
+            # etwas da ist, das man anklicken könnte, sagt sie etwas: Dann
+            # heißt „Keine Auswahl", dass der Klick nichts getroffen hat.
+            note = ""
+        elif count == 0:
             note = tr("Keine Auswahl")
         elif count == 1:
             kind = panel.canvas.selection[0][0]
@@ -5745,6 +5770,7 @@ class MainWindow(QMainWindow):
         panel.pointerMoved.disconnect(self._on_sketch_pointer)
         panel.planeChanged.disconnect(self._sketch_plane_changed)
         panel.canvas.selectionChanged.disconnect(self._update_sketch_selection)
+        panel.sketchChanged.disconnect(self._update_sketch_selection)
         panel.canvas.selectionChanged.disconnect(self._redraw_sketch)
         # Die dritte Verbindung aus derselben Zeilengruppe wie die zwei
         # darüber — heute folgenlos (der unsichtbare Canvas ruft fit_view

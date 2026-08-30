@@ -150,6 +150,33 @@ def menu_heading(menu: QMenu, title: str) -> QWidgetAction:
     return action
 
 
+#: Der Objektname, an dem das Stylesheet eine Trennlinie erkennt.
+DIVIDER = "divider"
+
+
+def divider(parent: QWidget) -> QWidget:
+    """Eine senkrechte Linie zwischen zwei Auskünften, die einander nicht
+    erklären.
+
+    Statuszeile und Kopfzeile reihen Labels nebeneinander, und der Abstand
+    dazwischen ist derselbe wie der zwischen den Wörtern einer Zeile:
+    „… bis zum 30.10.2026  51 g · 3 h 30 min" liest sich als **ein** Satz,
+    obwohl links der Lizenzstand steht und rechts der Materialverbrauch. In
+    der Kopfzeile dasselbe mit „… 220 mm   PLA".
+
+    Innerhalb einer Auskunft trennt weiter der Mittelpunkt („51 g · 3 h"):
+    Was zusammengehört, bleibt in einer Zeile; was verschiedene Fragen
+    beantwortet, bekommt diese Linie.
+    """
+    from PySide6.QtWidgets import QFrame
+
+    line = QFrame(parent)
+    line.setObjectName(DIVIDER)
+    line.setFrameShape(QFrame.Shape.VLine)
+    line.setFixedWidth(1)
+    return line
+
+
 def _repolish(widget: QWidget) -> None:
     """Qt liest dynamische Eigenschaften nur beim Aufbau — hier noch einmal."""
     style = widget.style()
@@ -732,6 +759,10 @@ QLabel#{MENU_HEADING} {{
 }}
 QStatusBar {{ border-top: 1px solid {line}; }}
 QStatusBar::item {{ border: none; }}
+/* Die Trennlinie zwischen zwei Auskünften (siehe :func:`divider`) — Qts
+   eigene Item-Rahmen sind oben ausgeschaltet, und ein 3D-Rahmen wäre
+   ohnehin die falsche Form. */
+QFrame#{DIVIDER} {{ color: {line}; background: {line}; border: none; }}
 
 /* Der Hinweis unter dem Zeiger war das letzte Element ohne eigene Form: Qt
    zeichnete ihn kantig und randlos, während daneben jedes Feld seinen Radius

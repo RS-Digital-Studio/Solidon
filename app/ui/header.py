@@ -25,7 +25,7 @@ from app.core.types import Profile
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.labels import length
-from app.ui.style import NORMAL, ROOMY, set_level
+from app.ui.style import NORMAL, ROOMY, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
 
@@ -108,6 +108,11 @@ class HeaderBar(QWidget):
         row.addStretch(1)
         row.addWidget(self.plate_label)
         row.addWidget(self.plates)
+        # Dieselbe Trennung wie in der Statuszeile: Plattenwahl links,
+        # Drucker und Material rechts — „… 220 mm   PLA" stand sonst als ein
+        # Satz da, obwohl das eine eine Auswahl ist und das andere ein
+        # Bericht.
+        row.addWidget(divider(self))
         row.addWidget(self.printer)
         row.addWidget(self.material)
 

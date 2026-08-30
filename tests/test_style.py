@@ -1037,3 +1037,38 @@ def test_a_locked_control_looks_locked_and_a_button_looks_like_one(theme: str) -
         assert f"{control}::indicator:disabled" in sheet, (
             f"{theme}: {control} sieht gesperrt aus wie bedienbar"
         )
+
+
+def test_two_answers_do_not_read_as_one_sentence(qt_app: QApplication) -> None:
+    """Lizenzstand und Materialverbrauch standen ohne Grenze nebeneinander.
+
+    „… bis zum 30.10.2026  51 g · 3 h 30 min" las sich als **ein** Satz,
+    obwohl links steht, wie lange die Fassung läuft, und rechts, was das
+    Teil kostet — getrennt nur durch einen Wortabstand. In der Kopfzeile
+    dasselbe mit „… 220 mm   PLA".
+
+    Der Mittelpunkt trennt weiter *innerhalb* einer Auskunft; zwischen zwei
+    Auskünften steht jetzt eine Linie. Sie folgt der Lizenzzeile: Steht links
+    nichts, trennt sie nichts und wäre ein Strich ohne Anlass.
+    """
+    from PySide6.QtWidgets import QFrame
+
+    from app.core.bootstrap import load_operations
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.style import DIVIDER
+
+    load_operations()
+    window = MainWindow(Session(), UiSettings())
+    try:
+        lines = [frame for frame in window.findChildren(QFrame) if frame.objectName() == DIVIDER]
+        assert len(lines) >= 2, (
+            f"nur {len(lines)} Trennlinien — Statuszeile und Kopfzeile brauchen je eine"
+        )
+        assert window.trial_divider.isVisibleTo(window) == window.trial_line.isVisibleTo(window), (
+            "die Linie steht ohne die Auskunft, die sie abgrenzt"
+        )
+    finally:
+        window.close()
+        window.release()
