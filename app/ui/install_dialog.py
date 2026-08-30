@@ -755,6 +755,22 @@ class InstallDialog(QDialog):
             self._launcher is not None and self._launcher.isRunning()
         )
 
+    def _browsable(self, address: str) -> str:
+        """Eine Adresse, die man im Browser öffnen kann — sonst nichts.
+
+        ComfyUI horcht auf ``http://127.0.0.1:8188`` und zeigt dort seine
+        Oberfläche. Ollamas Adresse ist ``http://localhost:11434/api/chat``,
+        ein Endpunkt, der auf einen Browseraufruf mit einem Fehler antwortet —
+        wer den Kunden dorthin schickt, zeigt ihm eine Fehlerseite und lässt
+        ihn glauben, der Dienst sei kaputt.
+
+        Unterschieden wird **am Pfad und nicht am Dienst**: Was keinen hat, ist
+        eine Seite. Das kommt ohne Wissen über das jeweilige Programm aus und
+        gilt damit auch für das nächste, das dazukommt.
+        """
+        rest = address.partition("://")[2]
+        return "" if "/" in rest.rstrip("/") else address
+
     def _tool_started(self, result: object) -> None:
         """Die verständliche Antwort auf den Startversuch zeigen.
 
@@ -829,6 +845,16 @@ class InstallDialog(QDialog):
                 "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. "
                 "Prüfen Sie die lokale Anwendung und versuchen Sie es dann erneut."
             )
+        # **Die Adresse lag die ganze Zeit vor und stand nirgends.** „Sehen Sie
+        # in den Protokollen nach" schickt den Kunden an einen Ort, den er
+        # nicht kennt; ein Aufruf im Browser beantwortet dieselbe Frage in zwei
+        # Sekunden — läuft der Dienst oder nicht. ``StartResult`` trägt sie
+        # seit je, und niemand hat gefragt, warum sie nicht zu sehen ist.
+        page = self._browsable(start_result.address)
+        if page:
+            reason = f"{reason} " + str(
+                tr("Ob es inzwischen antwortet, sehen Sie unter {adresse}.")
+            ).format(adresse=page)
         self.state.setText(f"{requirement.title}: {reason}")
 
     def _launch_thread_done(self) -> None:

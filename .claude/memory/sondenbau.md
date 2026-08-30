@@ -1,11 +1,9 @@
 ---
 name: sondenbau
-description: "Eine Sonde ist ein pytest-Plugin, das nur bei Änderung meldet und in eine Datei schreibt. Sechs Bauarten, an denen sie am 30.08.2026 gescheitert ist — jede sah nach einem Befund aus."
-metadata: 
+description: "Eine Sonde ist ein pytest-Plugin, das nur bei Änderung meldet und in eine Datei schreibt. Fünf Bauarten, an denen sie am 30.08.2026 gescheitert ist — jede sah nach einem Befund aus."
+metadata:
   node_type: memory
   type: feedback
-  originSessionId: 9c480190-d910-460e-bc5c-c2d37eab6361
-  modified: 2026-08-30T07:45:57.828Z
 ---
 
 Wenn ein Test in großen Läufen kippt und einzeln grün ist, ist die Frage nicht
@@ -76,19 +74,6 @@ Hypothese widerlegt, und zwar vollständig.
 * **Als Plugin, nicht als Testdatei.** Eine `tests/test_zz_probe.py` liegt
   Sekunden später als Waise im Baum, und eine Nachbarsitzung fragt zu Recht,
   wem sie gehört.
-
-* **`>>` erzeugt die Datei, und `git checkout --` setzt Erzeugtes nicht
-  zurück.** Eine Mutations-Sonde an `app/ui/blend.py` — die Datei gab es
-  nicht — legte sie an, der Wächter fand die Probe trotzdem (gut), aber die
-  „Rücksetzung" per `checkout` lief bei einer untracked Datei ins Leere:
-  Die zweite Probe maß beide Kennungen, und ruff/format meldeten danach
-  zwei Fehler, die die Sonde selbst war. Die Nachbarsonde am selben Tag
-  mutierte eine **vorhandene** Datei (`app/core/geom/blend.py`) und kam
-  sauber zurück — der Unterschied ist genau die Existenzfrage. Vor dem
-  Anhängen prüfen, ob die Zieldatei existiert; Erzeugtes räumt nur `rm`
-  weg, und ein leerer `git diff --stat` beweist bei einer untracked Datei
-  nichts. (Der Wächter liest `rglob` zur Laufzeit — dass er die erzeugte
-  Datei fand, spricht für ihn, nicht gegen die Probe.)
 
 ## Und der Lauf braucht das Schloss
 
