@@ -1658,3 +1658,43 @@ def test_a_new_offline_request_clears_every_previous_answer() -> None:
     file_handler = script.split('file.addEventListener("change"', 1)[1]
     assert file_handler.index("resetResult();") < file_handler.index("chosen.size")
     assert 'text.addEventListener("input", () =>' in script
+
+
+def test_a_video_and_its_poster_both_carry_a_stamp() -> None:
+    """Ein Loop ist die größte Datei der Seite — und sein Standbild das erste.
+
+    Beide brauchen den Inhaltsstempel, und beide fielen bisher durch:
+    ``mp4``/``webm`` standen nicht in ``SUFFIXES``, und das Standbild hängt an
+    einem **eigenen Attribut**. Ein Video trägt es in ``poster=``, nicht in
+    ``src=`` — der Ausdruck kannte nur ``src`` und ``href``.
+
+    Was das kostet, wenn es fehlt: Ein Besucher, der die Seite kennt, bekommt
+    beim nächsten Besuch den **alten** Loop aus dem Browser-Cache, während die
+    Seite drumherum neu ist. Und bei ``prefers-reduced-motion`` ist das
+    Standbild das einzige, was er überhaupt sieht.
+    """
+    from tools.stamp_assets import LINK, SUFFIXES
+
+    assert "mp4" in SUFFIXES and "webm" in SUFFIXES, SUFFIXES
+
+    trifft = [
+        '<source src="bilder/hero.mp4" type="video/mp4">',
+        '<source src="bilder/hero.webm" type="video/webm">',
+        '<video poster="bilder/hero-standbild.png" muted loop>',
+        # Und das Bestehende bleibt, wie es war.
+        '<img src="bilder/beleg-eins.png" alt="x">',
+        '<link href="style.css" rel="stylesheet">',
+    ]
+    for zeile in trifft:
+        assert LINK.search(zeile), f"ungestempelt: {zeile}"
+
+    # Die Gegenprobe, sonst prüfte der Test einen Ausdruck, der alles trifft:
+    # Fremde Adressen und eingebettete Daten bleiben außen vor.
+    daneben = [
+        '<source src="https://fremd.example/hero.mp4">',
+        '<video poster="data:image/png;base64,AAAA">',
+        '<a href="#preis">',
+        '<img src="/api/count.php">',
+    ]
+    for zeile in daneben:
+        assert not LINK.search(zeile), f"hätte nicht treffen dürfen: {zeile}"

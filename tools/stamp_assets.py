@@ -46,13 +46,34 @@ WEBSITE = ROOT / "website"
 #: Was gestempelt wird. HTML steht nicht dabei (siehe Modul-Docstring), und
 #: ``.php`` auch nicht: Was der Server ausführt, liefert bei jedem Aufruf eine
 #: eigene Antwort.
-SUFFIXES = ("css", "js", "png", "jpg", "jpeg", "webp", "avif", "svg", "woff2")
+#:
+#: **``mp4`` und ``webm`` gehören dazu, seit die Wege sich bewegen** (WD1).
+#: Ein Loop ist die größte Datei der Seite; wer ihn ohne Stempel ausliefert,
+#: lässt einen Besucher, der die Seite kennt, den alten sehen — und merkt es
+#: nicht, weil die Seite drumherum neu ist.
+SUFFIXES = (
+    "css",
+    "js",
+    "png",
+    "jpg",
+    "jpeg",
+    "webp",
+    "avif",
+    "svg",
+    "woff2",
+    "mp4",
+    "webm",
+)
 
 #: Ein Verweis auf eine **eigene** Datei. Fremde Adressen, Sprungmarken,
 #: ``mailto:`` und der Zähler unter ``/api/`` bleiben außen vor — der letzte,
 #: weil seine Antwort von der Anfrage abhängt und nicht vom Dateiinhalt.
+#: **``poster`` gehört dazu, und das ist leicht zu übersehen.** Ein Video
+#: trägt sein Standbild nicht in ``src``, sondern in einem eigenen Attribut;
+#: ohne es hier bliebe genau das Bild ungestempelt, das ein Besucher **zuerst**
+#: sieht — und bei ``prefers-reduced-motion`` das einzige, das er je sieht.
 LINK = re.compile(
-    r'((?:src|href)=")((?!https?:|mailto:|data:|#|/api/)[^"?]+\.(?:'
+    r'((?:src|href|poster)=")((?!https?:|mailto:|data:|#|/api/)[^"?]+\.(?:'
     + "|".join(SUFFIXES)
     + r'))(\?v=[0-9a-f]{8})?(")'
 )
