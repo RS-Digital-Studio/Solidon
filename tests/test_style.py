@@ -889,3 +889,37 @@ def test_a_scrollbar_handle_can_be_grabbed_in_both_directions(theme: str) -> Non
         assert found and int(found.group(1)) >= 16, (
             f"{theme}: {side} fehlt oder ist zu klein — {rule}"
         )
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_slider_wears_the_theme_and_shows_when_it_is_locked(theme: str) -> None:
+    """Der Regler war das letzte Bedienelement ohne eigene Form.
+
+    Gemessen am **Einbauort** — dem Schnittregler der Werkzeugleiste, den ein
+    Kunde wirklich zieht, nicht an einem freistehenden Widget: Er trug in
+    beiden Themen dieselben einundzwanzig Farben (#454545, #1e1e1e, #626262),
+    und keine davon steht in ``theme.py``. Das waren Qts Vorgaben, also ein
+    kantiges Rechteck im dunklen und ein weißer Kreis im hellen Thema. Nach
+    der Regel unterscheiden sich die Farben zwischen den Themen.
+
+    Drei Regler hängen daran (Schnittebene, Schichthöhe, Explosionsweite), und
+    alle drei werden **gezogen** — deshalb prüft der Test auch die Größe des
+    Griffs: Ein Ziel von zehn Punkten trifft niemand zuverlässig.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    assert "QSlider::handle:horizontal {" in sheet, f"{theme}: der Regler hat keine eigene Form"
+
+    rule = sheet.split("QSlider::handle:horizontal {")[1].split("}")[0]
+    width = re.search(r"width:\s*(\d+)px", rule)
+    assert width and int(width.group(1)) >= 12, (
+        f"{theme}: der Griff ist zu klein zum Ziehen: {rule}"
+    )
+
+    # Gesperrt heißt gesperrt: Ein Regler, den nichts bewegt, darf nicht
+    # aussehen wie einer, der sich ziehen lässt.
+    assert "QSlider::handle:horizontal:disabled" in sheet, (
+        f"{theme}: gesperrt sieht aus wie bedienbar"
+    )
+    # Und der zurückgelegte Teil sagt, wo der Wert steht — dieselbe Aussage
+    # wie beim Fortschrittsbalken, in derselben Farbe.
+    assert "QSlider::sub-page:horizontal {" in sheet, f"{theme}: der Regler zeigt seinen Wert nicht"

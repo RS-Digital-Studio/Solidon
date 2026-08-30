@@ -523,6 +523,44 @@ QSplitter::handle:hover {{ background: {accent_line}; }}
 QSplitter::handle:horizontal {{ width: {NORMAL}px; }}
 QSplitter::handle:vertical {{ height: {NORMAL}px; }}
 
+/* --- Regler ------------------------------------------------------------- */
+/* **Das letzte Bedienelement ohne eigene Form.** Gemessen an der Leiste, an
+   der ihn ein Kunde wirklich zieht: Der Schnittregler trug in **beiden**
+   Themen dieselben einundzwanzig Farben — #454545, #1e1e1e, #626262 —, und
+   keine davon steht in ``theme.py``. Es waren Qts Vorgaben, also ein
+   kantiges Rechteck im dunklen und ein weißer Kreis im hellen Thema, mitten
+   in einer Leiste, deren übrige Teile dem Thema folgen. Drei Regler hängen
+   daran: Schnittebene, Schichthöhe, Explosionsweite.
+
+   Der Griff ist rund und **breiter als hoch gedacht**: Er wird gezogen, und
+   ein Ziel von zehn Punkten trifft niemand zuverlässig. Der zurückgelegte
+   Teil der Rille trägt den Akzent — er sagt, wo der Wert steht, und das ist
+   dieselbe Aussage wie beim Fortschritt.
+
+   Gesperrt heißt hier wirklich gesperrt: Griff und gefüllte Rille fallen auf
+   die Sperrfarbe, sonst sieht ein Regler bedienbar aus, den nichts bewegt. */
+QSlider::groove:horizontal {{
+    height: {SPACE}px;
+    background: {line};
+    border-radius: {SPACE // 2}px;
+}}
+QSlider::sub-page:horizontal {{
+    background: {accent_line};
+    border-radius: {SPACE // 2}px;
+}}
+QSlider::handle:horizontal {{
+    background: {muted};
+    border: 1px solid {line};
+    width: {ROOMY}px;
+    height: {ROOMY}px;
+    margin: -{NORMAL}px 0;
+    border-radius: {ROOMY // 2}px;
+}}
+QSlider::handle:horizontal:hover {{ background: {text}; }}
+QSlider::handle:horizontal:pressed {{ background: {accent_line}; }}
+QSlider::handle:horizontal:disabled {{ background: {disabled}; border-color: {disabled}; }}
+QSlider::sub-page:horizontal:disabled {{ background: {disabled}; }}
+
 /* --- Bildlaufleisten: schmal und still --------------------------------- */
 QScrollBar:vertical {{ background: transparent; width: {ROOMY}px; margin: 0; }}
 QScrollBar:horizontal {{ background: transparent; height: {ROOMY}px; margin: 0; }}
