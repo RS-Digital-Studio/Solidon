@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QLineEdit,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -87,12 +88,14 @@ from app.ui.labels import (
     choice_label,
     colour_name,
     explain_choices,
+    localised,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.palette import ROLES
 from app.ui.panels import collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from app.ui.style import ROOMY, TIGHT, make_primary
+from app.ui.style import ROOMY, TIGHT, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -1511,6 +1514,12 @@ class PrintSettingsDialog(QDialog):
         self.setMinimumSize(560, 640)
 
         self._editors: dict[str, QWidget] = {}
+        self._labels: dict[str, QLabel] = {}
+        #: Wo die Suche gerade steht — Begriff, Trefferliste, Platz darin.
+        self._search_term = ""
+        self._search_hits: list[str] = []
+        self._search_at = -1
+        self._lifted = ""
         self._fields: dict[str, Field] = {}
         self._loading = False
         self._worker: _SliceWorker | None = None
@@ -1565,6 +1574,11 @@ class PrintSettingsDialog(QDialog):
         self._make_plate_row()
         layout.addLayout(self._build_head())
         layout.addWidget(self._build_front())
+        # **Über der Klappe, nicht darin.** Wer sucht, weiß gerade nicht, wo
+        # das Gesuchte steht — ein Suchfeld in „Weitere Einstellungen" fände
+        # nur, wer den Bereich schon offen hat. Es steht deshalb frei darüber
+        # und klappt selbst auf, wenn der Treffer dahinter liegt.
+        layout.addLayout(self._build_search())
         layout.addWidget(self._build_tabs(), 1)
         layout.addWidget(self._build_slicer())
         layout.addWidget(self._build_advice())
@@ -1810,6 +1824,145 @@ class PrintSettingsDialog(QDialog):
             if field.front:
                 form.addRow(self._label(field), self._editor(field))
         return box
+
+    def _build_search(self) -> QHBoxLayout:
+        """Die Zeile, mit der man eine von sechsundfünfzig Einstellungen findet.
+
+        Der Dialog trägt acht Gruppen, und bis hierhin half nur Aufklappen und
+        Lesen — die Geste, die jeder Slicer mitbringt, fehlte als einzige.
+        """
+        row = QHBoxLayout()
+        self.search = QLineEdit(self)
+        self.search.setClearButtonEnabled(True)
+        self.search.setPlaceholderText(tr("Einstellung suchen …"))
+        self.search.setToolTip(
+            tr("Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.")
+        )
+        self.search.setStatusTip(self.search.toolTip())
+        self.search.setAccessibleDescription(self.search.toolTip())
+        self.search.returnPressed.connect(self._search_forward)
+        self.search.textChanged.connect(self._search_typed)
+        self.search_state = QLabel(self)
+        set_level(self.search_state, "note")
+        row.addWidget(QLabel(tr("Suchen"), self))
+        row.addWidget(self.search, 1)
+        row.addWidget(self.search_state)
+        return row
+
+    def search_hits(self, term: str) -> list[str]:
+        """Welche Einstellungen zu diesem Begriff passen, in Dialogreihenfolge.
+
+        Gesucht wird über das, was der Kunde liest: Titel, Satz darunter und
+        Name der Gruppe. Der **Satz** gehört ausdrücklich dazu, und das ist
+        gemessen: „Überhänge" steht in drei Sätzen und in keinem Titel. Der
+        **Gruppenname** ebenso — „Stützen" ist die Frage, mit der ein
+        Slicer-Kunde ankommt, und sie findet alle sieben Zeilen.
+
+        Die **Einheit** steht bewusst nicht darin: „mm" träfe zweiundzwanzig
+        von sechsundfünfzig Zeilen, ohne dass eine davon gemeint wäre — ein
+        Treffer, der ein Drittel des Dialogs trifft, ist keiner.
+
+        Gefaltet wie in der Befehlspalette (``command_palette.fold``): „ä" wird
+        zu „ae", damit „aushoehlen" und „Aushöhlen" dasselbe finden. Zwei
+        Aufgaben, eine Tabelle — nicht zu verwechseln mit der Sortierfaltung,
+        wo „ä" wie „a" zählt.
+        """
+        from app.ui.command_palette import fold
+
+        wanted = fold(term).strip()
+        if not wanted:
+            return []
+        hits = []
+        for field in FIELDS:
+            haystack = fold(" ".join((str(field.title), str(field.note), group_title(field.group))))
+            if wanted in haystack:
+                hits.append(field.path)
+        return hits
+
+    def highlighted(self) -> str:
+        """Welche Zeile gerade hervorgehoben ist — leer, wenn keine."""
+        return self._lifted
+
+    def jump_to(self, term: str) -> None:
+        """Zum nächsten Treffer springen und ihn hervorheben.
+
+        **Heben und nicht filtern.** Eine Liste, die sich beim Tippen umbaut,
+        nimmt dem Kunden die Übersicht, die er gerade gewinnt: Wer „Temperatur"
+        sucht, will sehen, *wo* sie steht, um beim nächsten Mal direkt
+        hinzugehen. Also bleibt jede Gruppe stehen; der Weg dorthin wird
+        freigeräumt (Klappe auf, Reiter gewählt, Zeile in den Blick gerollt)
+        und die Zeile leuchtet auf — dieselbe Bauart wie
+        ``MainWindow._flash_area``, nur bleibend, solange die Suche steht.
+        """
+        if term != self._search_term:
+            self._search_term = term
+            self._search_hits = self.search_hits(term)
+            self._search_at = -1
+        if not self._search_hits:
+            self._lift("")
+            self._show_search_state()
+            return
+        self._search_at = (self._search_at + 1) % len(self._search_hits)
+        self._lift(self._search_hits[self._search_at])
+        self._show_search_state()
+
+    def _search_typed(self, term: str) -> None:
+        """Beim Tippen zählen, aber nicht springen.
+
+        Der Sprung gehört an die Eingabetaste: Wer „Tem" tippt, ist noch nicht
+        fertig, und ein Dialog, der bei jedem Buchstaben den Reiter wechselt,
+        ist Unruhe statt Hilfe. Die Zahl daneben aktualisiert sich trotzdem —
+        so sieht man beim Tippen, ob der Begriff trägt.
+        """
+        self._search_term = term
+        self._search_hits = self.search_hits(term)
+        self._search_at = -1
+        if not term:
+            self._lift("")
+        self._show_search_state()
+
+    def _search_forward(self) -> None:
+        self.jump_to(self.search.text())
+
+    def _show_search_state(self) -> None:
+        """„2 von 4" — ohne Zähler weiß niemand, ob er alles gesehen hat."""
+        if not self._search_term:
+            self.search_state.setText("")
+            return
+        if not self._search_hits:
+            self.search_state.setText(tr("kein Treffer"))
+            return
+        place = max(self._search_at, 0) + 1
+        self.search_state.setText(
+            tr("{platz} von {anzahl}")
+            .replace("{platz}", localised(str(place)))
+            .replace("{anzahl}", localised(str(len(self._search_hits))))
+        )
+
+    def _lift(self, path: str) -> None:
+        """Eine Zeile in den Blick holen und hervorheben — höchstens eine."""
+        for old in (self._lifted, path):
+            if old and old in self._labels:
+                self._labels[old].setStyleSheet("")
+        self._lifted = path
+        if not path:
+            return
+        field = next((entry for entry in FIELDS if entry.path == path), None)
+        editor = self._editors.get(path)
+        label = self._labels.get(path)
+        if field is None or editor is None or label is None:
+            return
+        if not field.front:
+            if self.tabs_toggle is not None and not self.tabs_toggle.isChecked():
+                self.tabs_toggle.setChecked(True)
+            index = GROUPS.index(field.group) if field.group in GROUPS else -1
+            if index >= 0:
+                self.tabs.setCurrentIndex(index)
+                area = self.tabs.widget(index)
+                if isinstance(area, QScrollArea):
+                    area.ensureWidgetVisible(editor)
+        label.setStyleSheet(f"color: {ROLES['select']}; font-weight: 600;")
+        editor.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _build_tabs(self) -> QWidget:
         """Die hinteren sechsundvierzig Felder, hinter einem Dreieck.
@@ -3012,6 +3165,10 @@ class PrintSettingsDialog(QDialog):
         if note:
             label.setToolTip(note)
             label.setStatusTip(note)
+        # Abgelegt wie der Editor daneben: Die Suche hebt beide Hälften der
+        # Zeile hervor, und wer eine Zeile sucht, sucht ihr Wort — das steht
+        # links (:meth:`_lift`).
+        self._labels[field.path] = label
         return label
 
     def _editor(self, field: Field) -> QWidget:

@@ -40,6 +40,7 @@ from app.ui.print_settings_dialog import (
     FilamentOverrideDialog,
     PrintSettingsDialog,
     _ColourButton,
+    group_title,
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -2538,3 +2539,105 @@ def test_a_body_without_anything_falls_back_and_says_so(
     dialog.show_materials(dialog._materials_of([plain]))
 
     assert str(tr("Projektvorgabe")) in dialog.material_state.text()
+
+
+# --- Suchen statt scrollen (D11) ----------------------------------------------------
+
+
+def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: Session) -> None:
+    """56 Einstellungen in acht Gruppen, und die Geste, die jeder Slicer hat.
+
+    Gesucht wird über das, was der Kunde liest: Titel, Einheit, Gruppenname
+    und den Satz darunter. Der **Satz** gehört ausdrücklich dazu, und das ist
+    gemessen: „Überhänge" steht in drei note-Sätzen und in keinem einzigen
+    Titel. Wer das Wort kennt, sucht danach — und fände ohne den Satz nichts.
+
+    Gefaltet wie in der Befehlspalette, damit „aushoehlen" und „Aushöhlen"
+    dasselbe finden.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert dialog.search_hits("Fülldichte") == ["infill.density"]
+    assert dialog.search_hits("fuelldichte") == ["infill.density"], "gefaltet gesucht"
+    assert "adhesion.brim_width" in dialog.search_hits("brim"), "der Slicer-Begriff steht im Titel"
+
+    aus_dem_satz = dialog.search_hits("Überhänge")
+    assert "shell.outer_wall_first" in aus_dem_satz, "das Wort steht nur im Satz darunter"
+    assert not any("überhäng" in str(field.title).casefold() for field in FIELDS), (
+        "sonst prüft diese Zeile den Titel und nicht den Satz"
+    )
+
+    # Und der Gruppenname trägt: „Wo sind die Stützen-Einstellungen" ist die
+    # Frage, mit der ein Slicer-Kunde ankommt — sie findet alle sieben.
+    stuetzen = dialog.search_hits(group_title("support"))
+    assert {field.path for field in FIELDS if field.group == "support"} <= set(stuetzen)
+
+    assert dialog.search_hits("") == [], "eine leere Suche hebt nichts"
+    assert dialog.search_hits("gibtesnicht") == []
+
+
+def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Heben, nicht filtern — die Slicer-Antwort, nicht die CAD-Antwort.
+
+    Eine Liste, die sich beim Tippen umbaut, nimmt dem Kunden die Übersicht,
+    die er gerade gewonnen hat: Wer „Temperatur" sucht, will sehen, **wo** sie
+    steht, um beim nächsten Mal direkt hinzugehen. Also bleibt jede Gruppe
+    stehen, die Klappe geht auf, der Reiter wechselt, und der Treffer wird
+    hervorgehoben.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    assert dialog.tabs_toggle is not None and not dialog.tabs_toggle.isChecked()
+
+    # „Bügeln" liegt hinter der Klappe und trifft genau eine Zeile — an einem
+    # Begriff mit acht Treffern (etwa „Bett", das in fünf note-Sätzen steht)
+    # prüfte der Test die Reihenfolge statt das Heben.
+    assert dialog.search_hits("Bügeln") == ["shell.ironing"]
+
+    dialog.jump_to("Bügeln")
+    qt_app.processEvents()
+
+    assert dialog.tabs_toggle.isChecked(), "die Tiefe klappt auf, wenn der Treffer dort liegt"
+    assert dialog.tabs.count() == len(GROUPS), "keine Gruppe ist verschwunden"
+    assert dialog.tabs.tabText(dialog.tabs.currentIndex()) == group_title("shell")
+    assert dialog.highlighted() == "shell.ironing", dialog.highlighted()
+
+
+def test_the_search_walks_through_its_hits_and_counts_them(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Vier Treffer heißen vier — und ein zweites Drücken führt zum nächsten.
+
+    Ohne Zähler weiß niemand, ob er alles gesehen hat; ohne Weitergehen ist
+    der zweite Treffer unerreichbar, und beides zusammen ist die Geste, die
+    ein Slicer-Kunde mitbringt.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    hits = dialog.search_hits("Linienbreite")
+    assert len(hits) >= 2, hits
+
+    dialog.jump_to("Linienbreite")
+    first = dialog.highlighted()
+    dialog.jump_to("Linienbreite")
+    second = dialog.highlighted()
+
+    assert first != second, "das zweite Drücken führt weiter"
+    assert {first, second} <= set(hits)
+    # Der ganze Satz, nicht eine Ziffer darin: „2" steht auch in „1 von 2",
+    # und genau daran blieb die Mutationsprobe zuerst grün.
+    assert dialog.search_state.text() == f"2 von {len(hits)}", dialog.search_state.text()
+
+
+def test_the_search_field_sits_where_it_can_be_seen(qt_app: QApplication, session: Session) -> None:
+    """Nicht hinter der Klappe, die es aufmachen soll.
+
+    Wer sucht, weiß gerade nicht, wo das Gesuchte steht — ein Suchfeld in
+    „Weitere Einstellungen" fände nur, wer den Bereich schon offen hat.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert dialog.search.isVisibleTo(dialog), "sichtbar, auch solange alles zugeklappt ist"
+    assert not dialog.tabs.isAncestorOf(dialog.search), "und nicht im Klappbereich"
+    assert dialog.search.placeholderText(), "es sagt, wofür es da ist"
