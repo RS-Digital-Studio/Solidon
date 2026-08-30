@@ -70,8 +70,11 @@
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders und war schon auf HEAD rot.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt sich später" setzt jemanden voraus, der heilen kann.
+- [Rezept ist der Fund, die Op ist die Ursache](rezept-ist-der-fund-op-ist-die-ursache.md) — zwei „Bausteinfehler“ lagen im Rezept, und beide Male fehlte in Wahrheit eine Prüfung in der Operation; dazu: der Boden verrät, was die Hüllgröße verschweigt.
 - [Fehlalarm, den mehrere für einen halten](fehlalarm-den-mehrere-fuer-einen-halten.md) — „das ist doch nur eine Messung“ gilt nicht, sobald sie verrechnet wird; und die Wirkung war null, während mein Kommentar mehr behauptete.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
+
+- [Abgelesene Zahl altert still](abgelesene-zahl-altert-still.md) — sie stimmt nur in der Lage, in der sie entstand; was fehlt, sieht aus wie Absicht.
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
 
