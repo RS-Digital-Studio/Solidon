@@ -157,6 +157,43 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M13 4.5 20 8.5v7l-7 4-7-4v-7z" stroke-dasharray="3 2" />'
         '<path d="M2.5 12h7" /><path d="M6.5 9l3 3-3 3" />'
     ),
+    # **Export: derselbe Körper, der Pfeil andersherum.** Das Zeichen für
+    # „Modell einfügen" zeigt nach innen; hier geht es hinaus, und die
+    # gestrichelte Kontur bleibt — es ist dasselbe Ding, das die Richtung
+    # wechselt. Zwei Symbole, die gegenläufige Wege meinen und einander nicht
+    # ähneln, wären zwei Vokabeln statt einer.
+    "export": (
+        '<path d="M11 4.5 18 8.5v7l-7 4-7-4v-7z" stroke-dasharray="3 2" />'
+        '<path d="M14.5 12h7" /><path d="M18.5 9l3 3-3 3" />'
+    ),
+    # Beenden: eine offene Tür mit einem Pfeil hinaus — die übliche
+    # Metapher, und die einzige Zeile im Datei-Menü, die die Anwendung
+    # verlässt. Ohne sie stand sie als letzte Lücke in einer sonst
+    # vollständigen Symbolspalte.
+    "quit": (
+        '<path d="M14 4.5H6.5v15H14" /><path d="M11 12h9.5" /><path d="M17.5 8.5 21 12l-3.5 3.5" />'
+    ),
+    # Netz: eine Kugel mit Breitenkreis und Meridian. Woher ein Modell kommt,
+    # ist die Frage — nicht, was es wird.
+    "network": (
+        '<circle cx="12" cy="12" r="8" />'
+        '<path d="M4 12h16" /><path d="M12 4c2.5 2.6 2.5 12.4 0 16" />'
+        '<path d="M12 4c-2.5 2.6-2.5 12.4 0 16" />'
+    ),
+    # Erzeugen (Weg 3): ein Körper, aus dem es funkt. Kein Zauberstab — die
+    # Anwendung verspricht kein Wunder, sondern einen Vorschlag.
+    "generate": (
+        '<path d="M12 7.5 17 10v5l-5 2.5-5-2.5v-5z" />'
+        '<path d="M19 4v4M17 6h4" /><path d="M5.5 5v2.5M4.2 6.2h2.6" />'
+    ),
+    # Druckeinstellungen: Schichten mit einer Stellschraube darüber. Das
+    # Schichtsymbol allein gehört der Analyse; hier geht es um die Werte, mit
+    # denen gedruckt wird.
+    "print_settings": (
+        '<path d="M4 16.5h16" /><path d="M4 19.5h16" />'
+        '<circle cx="9" cy="8" r="2.2" /><path d="M4 8h2.8M11.2 8H20" />'
+        '<circle cx="16" cy="12.5" r="2.2" /><path d="M4 12.5h9.8M18.2 12.5H20" />'
+    ),
     # Ein durchgestrichenes Auge für einen Körper, der da ist und nicht
     # gezeichnet wird. Das Wort „ausgeblendet" steht daneben (Regel 18) — das
     # Zeichen unterscheidet die Zeile auf einen Blick, es trägt sie nicht.

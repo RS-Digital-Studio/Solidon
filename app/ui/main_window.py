@@ -1732,6 +1732,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.New,
             self.action_new,
             tr("Zum Startbildschirm: leeres Projekt, ein Beispiel, oder zuletzt Geöffnetes."),
+            symbol="new",
         )
         self.open_action = self._add_action(
             file_menu,
@@ -1739,6 +1740,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.Open,
             self.action_open,
             tr("Ein gespeichertes Projekt öffnen (.p3d)."),
+            symbol="open",
         )
         self.save_action = self._add_action(
             file_menu,
@@ -1746,6 +1748,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.Save,
             self.action_save,
             tr("Projekt mit Geometrie, Verlauf und Parametern in eine Datei schreiben."),
+            symbol="save",
         )
         self._add_action(
             file_menu,
@@ -1753,6 +1756,7 @@ class MainWindow(QMainWindow):
             QKeySequence.StandardKey.SaveAs,
             self.action_save_as,
             tr("Das Projekt unter einem anderen Namen ablegen."),
+            symbol="save",
         )
         file_menu.addSeparator()
         self.import_action = self._add_action(
@@ -1764,6 +1768,7 @@ class MainWindow(QMainWindow):
                 "Eine Modelldatei oder flache Zeichnung laden. Eine 3MF-Baugruppe "
                 "kommt als einzelne Körper an."
             ),
+            symbol="import",
         )
         self.import_url_action = self._add_action(
             file_menu,
@@ -1774,6 +1779,7 @@ class MainWindow(QMainWindow):
                 "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie "
                 "noch nicht auf dem Bett liegt."
             ),
+            symbol="network",
         )
         self.generate_action = self._add_action(
             file_menu,
@@ -1781,6 +1787,7 @@ class MainWindow(QMainWindow):
             "Ctrl+G",
             self.action_generate,
             tr("Aus Text oder Bild ein 3D-Modell erzeugen lassen — braucht ein laufendes ComfyUI."),
+            symbol="generate",
         )
         # **Dieselbe Aktion hängt unten noch einmal im Menü *Bausteine*.**
         # Nicht als zweite mit demselben Kürzel: Qt registriert Strg+K dann
@@ -1793,6 +1800,7 @@ class MainWindow(QMainWindow):
             "Ctrl+K",
             self.action_catalog,
             tr("Alle Bausteine durchsehen: Mutternfalle, Rastnase, Scharnier und die anderen."),
+            symbol="category.parts",
         )
         self.export_action = self._add_action(
             file_menu,
@@ -1803,6 +1811,7 @@ class MainWindow(QMainWindow):
                 "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — "
                 "mit der Prüfung aus dem Bericht davor."
             ),
+            symbol="export",
         )
         self._add_action(
             file_menu,
@@ -1810,6 +1819,7 @@ class MainWindow(QMainWindow):
             "Ctrl+P",
             self.action_print_settings,
             tr("Schichten, Temperaturen, Farbe und Stützen einstellen — und slicen lassen."),
+            symbol="print_settings",
         )
         self._add_action(
             file_menu,
@@ -1817,6 +1827,7 @@ class MainWindow(QMainWindow):
             None,
             self.action_check_gcode,
             tr("Eine Datei aus dem Slicer lesen und ihre Zahlen neben die eigenen stellen."),
+            symbol="layers",
         )
         file_menu.addSeparator()
         # Ohne Kürzel: QKeySequence.StandardKey.Quit liefert auf Windows die
@@ -1830,6 +1841,7 @@ class MainWindow(QMainWindow):
             None,
             self.close,
             tr("Solidon schließen. Ungesichertes wird vorher erfragt."),
+            symbol="quit",
         )
 
         edit_menu = self._menu(tr("Bearbeiten"))
@@ -2075,6 +2087,7 @@ class MainWindow(QMainWindow):
                 "Ein zu großes Teil zerschneiden, bis jedes Stück auf das Bett passt — "
                 "mit Passstiften in jeder Schnittfläche."
             ),
+            symbol="split",
         )
 
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
@@ -2590,13 +2603,23 @@ class MainWindow(QMainWindow):
                 key or None,
                 weak_slot(self, MainWindow.run_operation, first),
                 str(group.doc),
+                # Die Gruppe hat kein eigenes Zeichen, ihre Mitglieder schon —
+                # und der Dialog öffnet mit dem ersten. Ohne das stand sie als
+                # einzige Lücke in der Symbolspalte von *Erzeugen*.
+                symbol=icon_name_for(first),
             )
             if key:
                 self._scope_shortcut(action, key)
             self._variant_actions[group.members[0]] = action
 
     def _add_action(
-        self, menu: Any, label: str, shortcut: Any, slot: Any, hint: str = ""
+        self,
+        menu: Any,
+        label: str,
+        shortcut: Any,
+        slot: Any,
+        hint: str = "",
+        symbol: str = "",
     ) -> QAction:
         """Ein Menüeintrag mit dem Satz, der sagt, was er tut.
 
@@ -2604,8 +2627,16 @@ class MainWindow(QMainWindow):
         suchen: in der Statusleiste, wo er beim Durchgehen mitläuft, und als
         Tooltip, wo er beim Zögern erscheint. Ohne beides ist ein Menü mit
         vierzehn Einträgen eine Liste von Vermutungen.
+
+        ``symbol`` ist für die Einträge, die **keine** Registeroperation sind
+        und deshalb nicht über :func:`icon_name_for` an ihr Zeichen kommen.
+        Drei gab es davon, alle drei in Menüs, deren übrige Zeilen eines
+        tragen: *Aus Skizze erzeugen*, *Automatisch teilen* und
+        *Bausteinkatalog* standen als Lücke in einer Symbolspalte.
         """
         action = QAction(label, self)
+        if symbol:
+            action.setIcon(icon(symbol, self))
         if shortcut is not None:
             action.setShortcut(
                 shortcut
