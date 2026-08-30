@@ -1535,3 +1535,43 @@ def test_the_error_dialog_really_shows_them(
     show_details(problem, None)
     assert "192.168.1.50" in gelesen[-1]
     assert "Programm" not in gelesen[-1], "auch hier kein leerer Wert"
+
+
+def test_the_empty_chat_greets_instead_of_showing_a_dark_box(qt_app: QApplication) -> None:
+    """Wer den Reiter zum ersten Mal öffnet, sah einen leeren Kasten.
+
+    Hundertneunzig Punkte dunkle Fläche, darüber als **erste Zeile** „Modell:
+    ollama:qwen3:14b" — die Auskunft, die den Kunden am wenigsten angeht, an
+    der prominentesten Stelle des Reiters. Erklärt wurde nirgends, wofür der
+    Chat da ist; die vier Beispielanfragen standen unter dem Kasten.
+
+    Die Begrüßung steht deshalb **über** der Liste und verschwindet, sobald
+    ein Zug darin steht — sie erklärt den Ort, sie ist kein Gesprächsbeitrag.
+    Die Modellzeile steht zuletzt.
+    """
+    from app.core.types import ChatEntry
+    from app.ui.chat import ChatPanel
+
+    panel = ChatPanel()
+    try:
+        document = new_project().document
+        panel.show_document(document)
+        assert panel.welcome.isVisibleTo(panel), "der leere Chat begrüßt nicht"
+        assert "Maßen" in panel.welcome.text(), panel.welcome.text()
+
+        layout = panel.layout()
+        assert layout is not None
+        order = [layout.itemAt(index).widget() for index in range(layout.count())]
+        assert order.index(panel.welcome) < order.index(panel.turns), (
+            "die Begrüßung steht unter der Liste"
+        )
+        assert order.index(panel.hint) > order.index(panel.turns), (
+            "die Modellzeile steht wieder vor dem Gespräch"
+        )
+
+        # Sobald ein Zug darin steht, erklärt sich der Ort von selbst.
+        document.chat.append(ChatEntry(id="c1", role="user", text="Halter, 60 auf 40"))
+        panel.show_document(document)
+        assert not panel.welcome.isVisibleTo(panel), "die Begrüßung bleibt über dem Gespräch stehen"
+    finally:
+        panel.deleteLater()

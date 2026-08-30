@@ -131,6 +131,25 @@ class ChatPanel(QWidget):
         # den Reiter öffnet, sieht so nicht, wofür er gedacht ist.
         self.turns.setMinimumHeight(EMPTY_TURNS_HEIGHT)
 
+        # **Der leere Kasten sagte nichts.** Wer den Reiter zum ersten Mal
+        # öffnet, sah einen hundertneunzig Punkte hohen dunklen Block, und
+        # darüber als erste Zeile „Modell: ollama:qwen3:14b" — die Auskunft,
+        # die ihn am wenigsten angeht, an der prominentesten Stelle. Die
+        # Begrüßung liegt **über** der Liste und verschwindet, sobald ein Zug
+        # darin steht: Sie erklärt den Ort, sie ist kein Gesprächsbeitrag.
+        self.welcome = QLabel(
+            tr(
+                "Beschreiben Sie, was entstehen oder sich ändern soll — "
+                "in einem Satz, mit Maßen, so wie Sie es einem Kollegen sagen "
+                "würden. Was daraus wird, sehen Sie erst als Vorschlag und "
+                "übernehmen es dann."
+            ),
+            self,
+        )
+        self.welcome.setWordWrap(True)
+        self.welcome.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.welcome.setObjectName("chatWelcome")
+
         self.hint = QLabel("", self)
         self.hint.setWordWrap(True)
         # §2.7: ein Hinweis, der nur feststellt, was fehlt, lässt den
@@ -269,14 +288,21 @@ class ChatPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        layout.addWidget(self.hint)
         layout.addWidget(self.notice)
         layout.addWidget(self.setup)
         layout.addWidget(self.unlock)
+        layout.addWidget(self.welcome)
         layout.addWidget(self.turns, stretch=1)
         layout.addWidget(self.starters)
         layout.addWidget(self.decision)
         layout.addLayout(entry_row)
+        # **Zuletzt, nicht zuerst.** „Modell: ollama:qwen3:14b" stand als
+        # oberste Zeile des Reiters; es beantwortet eine Frage, die niemand
+        # als erste stellt, und der Satz daneben — „Der Chat braucht einen
+        # Zugang zu einem Sprachmodell" — ist die Ausnahme: Er steht bei
+        # fehlendem Zugang neben seinem Knopf und wird deshalb mit ihm
+        # zusammen sichtbar.
+        layout.addWidget(self.hint)
 
         self._available = False
         self._busy = False
@@ -404,8 +430,11 @@ class ChatPanel(QWidget):
             self.turns.addItem(_item(entry, is_discarded(entry, document)))
         self.turns.scrollToBottom()
         # Die Beispiele gelten dem leeren Gespräch. Sobald etwas darin steht,
-        # weiß der Nutzer, wofür der Chat da ist.
+        # weiß der Nutzer, wofür der Chat da ist — und dasselbe gilt für die
+        # Begrüßung darüber: Sie erklärt einen Ort, den man nach dem ersten
+        # Zug kennt.
         self.starters.setVisible(not document.chat)
+        self.welcome.setVisible(not document.chat)
 
     def show_applied(self, preview: Any, transaction_id: str) -> None:
         """Die Übernommen-Leiste (§26.5): der Vorschlag ist schon angewandt,
