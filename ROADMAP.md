@@ -114,12 +114,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
-| `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
-| Fünf Leistungsmarken schlagen seit dem verzögerten Geometrieimport an | Der `deferred`-Umbau verlagert den trimesh/scipy-Import in die erste Messung (29.08.2026); am 30.08. die zwölfte Überschreitung in Folge, `boolean_medium` 811 ms gegen eine Bestmarke von 451 | eine Entscheidung über das Messverfahren — Aufwärm-Aufruf vor der Marke oder neue, begründete Bestwerte —, danach der Baseline-Neustart; nur `read_dense` ist im Docstring behandelt, die übrigen vier messen gegen Werte von vor dem Umbau |
-| Die Parameterkarte ist im Betrieb zehn Bildpunkte breiter als ihre Zone | Die Reihenfolge-Untersuchung vom 29./30.08.2026 hat sich umgedreht: `test_parameter_rows_fit_the_left_card…` kippt nicht, **er sagt die Wahrheit, sobald die Bedingungen stimmen.** Gemessen: ohne Stylesheet 258, mit dem Stylesheet aus `apply_theme` 270 in beiden Themen, Grenze 260 — und `apply_theme` legt das Stylesheet über die QApplication (`main_window.py:4527`, `:6901`), im Betrieb gibt es die Lage „ohne" nie. Der grüne Einzellauf misst einen Zustand, den kein Kunde hat; genau der Fall, den §2.5 mit den Zonen verhindern will. Zwei falsche Erklärungen sind unterwegs gefallen (hängengebliebene Sprache — 270 entsprach zufällig exakt dem französischen Wert, eine Sonde über 407 Tests fand null Sprachwechsel; hängengebliebener Zustand als bloßes Aufräumproblem — eine Rücksetz-Fixture hätte den Kundenfehler dauerhaft zugedeckt) | zwei Arbeiten, nicht eine: (a) die Karte in ihre Zone bringen — die Herkunftsmessung der zehn Punkte läuft und entscheidet zwischen Stylesheet-Paddings, Zonenbreite und Zeilenlayout; (b) der Test misst künftig IMMER die Betriebslage mit Stylesheet, sonst lügt er allein. Daneben, unabhängig: die `set_language`-Rücksetzung in `conftest.py` (auf Deutsch als Auslieferungszustand, nicht auf ein nacktes Nichts) und die offene Ursache des zweiten Tests (`['Home']`, Verdacht Suite-Pin mit über 6000 gehaltenen Widgets, ungemessen) | Für das `['Home']` des zweiten fehlt die Ursache noch — die Sprache erklärt ihn nicht. Und eine Wegwerf-Sonde vom 30.08. lieferte im Vorbeigehen eine Spur zur Exit-127-Familie: Ein `Viewport()` **ohne Elternfenster** reißt den Prozess mit Exit 127 weg, ohne eine Zeile Ausgabe — die Markierung abzufragen genügt und tut das nicht. Wer nachmisst: nur unter dem Schloss (ohne riss der Lauf zweimal mit Zugriffsverletzung ab), und die zwei reproduzieren **nur** mit dem vollständigen `test_ui.py` davor — einzeln, zu viert und in kleiner Kombination sind sie grün. Vergleichsbaum: `git worktree add --detach <pfad> e8dc8651`, dann mit `cd` hinein statt `--rootdir`, sonst importiert der Lauf `app` aus dem Hauptbaum |
-| Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Der UI-Audit der Nacht (30.08.2026): `59 Cat_Toys_V2.3mf`, Stack in `threemf.read_objects` → `trimesh.copy` → `caching.hash_fallback`, während der Hauptthread einen Autosave schreibt; zwölf Projekte und 58 Modelle davor liefen sauber | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
-| ElegooSlicers Kommandozeile nimmt keinen Auftrag an — auch ohne Solidon | Weg-Prüfung Ende zu Ende und Roberts Auftrag (30.08.2026). Der Rest des Auftrags ist erledigt: Die Auswahl bei mehreren Slicern ist gebaut (`67a54a8c` — einer je Installationsordner, die Wahl bleibt gemerkt, der Wechsel leert die Profile des alten Slicers), PrusaSlicer und CuraEngine laufen Ende zu Ende mit gemessenen G-Code-Kennzahlen. ElegooSlicers `--slice` scheitert dagegen auch mit seinen **eigenen** Systemprofilen aus `resources/profiles/Elegoo`, ohne jede Beteiligung von Solidon — im Fenster lässt sich slicen, über die Kommandozeile nicht, auch nicht bei laufender Instanz. Ein `layer_gcode` mit `G92 E0` lässt die eine erklärende Meldung verschwinden, dahinter steht ein zweiter, stummer Fehler; eingebaut wird das nicht — Robert: „den gcode wollen wir nicht verändern, nur die vorgaben bei den slicern" (§22), die Entscheidung steht auch in der Commit-Meldung von `67a54a8c` | eine Erklärung des zweiten, stummen CLI-Fehlers — er liegt beim Slicer, nicht bei uns — oder eine neue ElegooSlicer-Fassung; bis dahin trägt die Absage ihre drei Handlungen samt „Nur exportieren und selbst slicen" |
+| Sechs Leistungsmarken reißen einen Zähler gegen Glückstreffer-Bestwerte | Sechs Leistungsmarken rissen einen Zähler, und der Code war unschuldig (30.08.2026) | die `alone`-Bestwerte neu setzen und die Minimum-für-immer-Mechanik auf ein rollendes Fenster umbauen — fb baut, die Messverfahrens-Entscheidung wird im selben Zug in `tests.md` dokumentiert |
+| Die Parameterkarte ist im Betrieb zehn Bildpunkte breiter als ihre Zone | Die Parameterkarte war im Betrieb breiter als ihre Zone (30.08.2026) | ee's Bündel-Commit — Fixes und Tests sind gebaut und einzeln abgenommen, sie liegen noch im Baum |
+| Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
+| Solidons Slicer-Lauf scheitert an ElegooSlicer, die CLI selbst nicht | Solidons Elegoo-Lauf scheitert, die CLI selbst nicht (30.08.2026) | fb's vier Trennläufe zwischen `--arrange 0` und dem selbst geschriebenen Maschinenprofil |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -10785,12 +10784,13 @@ Lauf und ist als Vergleichspunkt zu scharf, oder der Pfad ist tatsächlich
 langsamer geworden. Im Pfad liegen mehrere Commits der letzten Tage, darunter
 `202739ae` und `3c1b7306`.
 
-- [ ] **`orient_200` gegen einen älteren Stand messen.** Je fünf Läufe auf
-  einem Stand vor `202739ae` und auf dem heutigen, beide in einem eigenen
-  Arbeitsbaum und auf ruhiger Maschine. Liegen beide Reihen gleich, ist die
-  Bestmarke zu scharf und gehört ersetzt; liegt die alte tiefer, ist der Pfad
-  langsamer geworden und die Ursache steckt in den Commits dazwischen. Ein
-  weiterer Lauf gegen den heutigen Stand allein entscheidet nichts.
+- [x] **`orient_200` gegen einen älteren Stand messen — gemessen am
+  30.08.2026, und die Bestmarke war zu scharf.** Die Messreihe lief gegen
+  `1f3426eb` in zwei eigenen Arbeitsbäumen auf ruhiger Maschine: 18 682 ms
+  alt gegen 18 774 ms neu — beide Reihen liegen gleich, der Pfad ist nicht
+  langsamer geworden. Die Auflösung samt der Mechanik dahinter steht im
+  Abschnitt „Sechs Leistungsmarken rissen einen Zähler, und der Code war
+  unschuldig (30.08.2026)".
 
 **Ausgeschlossen ist die Marker-Härtung vom selben Tag** (`3ef11e6e`): gemessen
 kostet `trial_days_left` kalt 86 ms und warm unter 6 ms, und die
@@ -12365,3 +12365,126 @@ Passungen, weil jede neue Naht wieder `pin_1` und `bore_1` vergab.
       messen, nehmen sich über `unpinned_windows` aus. Gegenprobe: dreimal
       94 Tests, dreimal Exit 0; die drei betroffenen Fensterdateien danach
       einzeln 81 Tests, Exit 0.
+
+---
+
+## Sechs Leistungsmarken rissen einen Zähler, und der Code war unschuldig (30.08.2026)
+
+Sechs Marken standen rot, und zwei Erklärungen sind nacheinander an der
+Messung gefallen: Es waren keine Budgetverletzungen (fünf der sechs reißen den
+Regressionszähler `strikes` bei teils dreißigfach unterschrittenem Budget —
+`sculpt_replay_1000` misst 69 ms gegen 2000 erlaubte), und es war nicht der
+`deferred`-Import (die frühere Registerzeile behauptete das; die Messreihe
+gegen `1f3426eb`, den Stand **vor** dem Umbau, widerlegt es).
+
+Die Messreihe, zwei Worktrees mit geleerter `.performance.json`, freie
+Maschine, Kontext `alone`:
+
+| Marke | vor `deferred` | HEAD | Baseline-Bestwert | Budget |
+|---|---|---|---|---|
+| sculpt_replay_1000 | 70 ms | 72 ms | 46 ms | 2000 ms |
+| sculpt_apply_1000 | 97 ms | 100 ms | 64 ms | 2000 ms |
+| subdivide_surface | 1893 ms | 1863 ms | 1173 ms | 3000 ms |
+| remesh_uniform | 1565 ms | 1538 ms | 947 ms | 3000 ms |
+| boolean_medium | 854 ms | 834 ms | 451 ms | 20000 ms |
+| orient_200 | 18682 ms | 18774 ms | — | 20000 ms |
+
+Alt und neu liegen unter drei Prozent auseinander, vier von sechs sind auf
+HEAD schneller. Die Bestwerte dagegen sind auf **keinem** der beiden Stände
+reproduzierbar — Faktor 1,5 bis 1,9 darunter, gleichmäßig über alle Marken.
+Keine Code-Änderung macht fünf verschiedene Rechnungen gleichmäßig um zwei
+Drittel langsamer; eine günstige Maschinenphase erklärt genau das. Beide
+Stände sind in sich stabil (Zweitläufe je unter drei Prozent Abweichung).
+
+**Der eigentliche Fehler ist die Mechanik, nicht die Zahlen:** Ein Bestwert
+als Minimum über alle Läufe kann nur sinken, nie steigen — ein einziger
+günstiger Lauf legt ihn für immer fest, und jeder normale danach gilt als
+Regression. Der `alone`-Kontext ist der einzige mit Strikes; neun weitere
+Kontexte stehen bei null, ihre Bestwerte liegen 30 bis 50 Prozent höher.
+Damit löst sich auch die Registerzeile vom 26.08. („`orient_200` streut über
+die Regressionsschwelle") hier mit auf: 18,7 s auf beiden Ständen dicht unter
+dem 20-s-Budget ist eine zu knapp gesetzte Bestmarke, kein Regressionsfall.
+
+- [ ] **Bestwerte und Mechanik in einem Zug erneuern:** die `alone`-Bestwerte
+      der sechs Marken neu setzen (sie stammen aus einer Maschinenphase, die
+      es nicht mehr gibt) und die Minimum-für-immer-Mechanik auf ein
+      rollendes Fenster umbauen — Median der letzten N Läufe je Kontext statt
+      ewigem Minimum: Fremdlast verschiebt den Median weiterhin und wird
+      gefangen, ein Glückstreffer zementiert nichts mehr. Entschieden am
+      30.08.2026 auf fb's Messreihe; fb baut, und die
+      Messverfahrens-Entscheidung wird im selben Commit in
+      `.claude/rules/tests.md` dokumentiert — der Abschnitt „Die Regel fängt
+      Fremdlast…" beschreibt das alte Verhalten und altert sonst falsch.
+
+---
+
+## Die Parameterkarte war im Betrieb breiter als ihre Zone (30.08.2026)
+
+Der Reihenfolge-Befund hat sich beim Messen umgedreht: Der rot geglaubte Test
+sagte die Wahrheit. Mit dem Stylesheet aus `apply_theme` — das jedes Fenster
+über die QApplication legt, die Lage „ohne" gibt es beim Kunden nie — misst
+die Parameterkarte 270 Bildpunkte in einer Zone von 260; ohne Stylesheet 258,
+und nur so, allein gefahren, war der Test grün. Zwei falsche Erklärungen
+fielen unterwegs: die hängengebliebene Sprache (270 entsprach zufällig exakt
+dem französischen Wert — eine Sonde über 407 Tests fand null Sprachwechsel)
+und das bloße Aufräumproblem (eine Rücksetz-Fixture hätte den Kundenfehler
+dauerhaft zugedeckt). Die Regel dazu steht in `.claude/rules/tests.md` unter
+„Isolation heißt Betriebslage, nicht Nullzustand".
+
+Gebaut und einzeln abgenommen, im Baum wartend auf ee's Bündel-Commit:
+`LEFT_WIDTH` 260 → 272 (gemessen, mit 1280er-Gegenprobe: dem Modell bleiben
+660 Bildpunkte), der Test stellt die Betriebslage selbst her, die
+`set_language`-Rücksetzung nach dem Muster der Anzeigeeinheit, und der
+`['Home']`-Fall des Kürzeltests (Qt übersetzt Tastennamen über seine eigene
+Locale — auf Deutsch heißt die Taste „Pos1"; verglichen wird jetzt über
+dieselbe Funktion, die anzeigt). Dazu die leash-Eingänge, die Nicht-Arbeiter
+abweisen — der Fremdkörper kam aus einem Test, der Suite-Pin machte den
+jahrelang latenten Fall nur sichtbar.
+
+- [ ] ee's Bündel-Commit schließt den Punkt; danach müssen die zwei
+      Reihenfolge-Tests im vollen Torlauf grün sein.
+
+---
+
+## Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026)
+
+Der UI-Audit der Nacht fuhr zwölf Projekte und 58 Modelle ohne eine einzige
+Ausnahme — nur `59 Cat_Toys_V2.3mf` brach nach vier Minuten mit Timeout ab.
+Der Stack steht in `threemf.read_objects` → `trimesh.copy` →
+`caching.hash_fallback`, während der Hauptthread gleichzeitig einen Autosave
+schreibt. Das ist ein Leistungsbefund, kein Absturz.
+
+- [ ] Diagnose des Hashing-Pfads unter gleichzeitigem Autosave, und dazu
+      eine Korpusdatei, die den Fall festhält — ein neues Fehlerbild wird
+      eine Testdatei, kein Sonderfall im Code.
+
+---
+
+## Solidons Elegoo-Lauf scheitert, die CLI selbst nicht (30.08.2026)
+
+Der Auftrag „mit allen Slicern ohne Probleme" ist bis auf diesen Fall
+erledigt: Die Auswahl bei mehreren Slicern ist gebaut (`67a54a8c` — einer je
+Installationsordner, die Wahl bleibt gemerkt, der Wechsel leert die Profile
+des alten Slicers), PrusaSlicer und CuraEngine laufen Ende zu Ende mit
+gemessenen G-Code-Kennzahlen.
+
+Bei ElegooSlicer widersprachen sich zwei Messungen auf derselben Maschine,
+und die zweite hat die erste widerlegt: Solidons Lauf brach mit
+`Slic3r::CLI::run found error`, Exit −17 — aber die CLI selbst slicet
+einwandfrei (55, zweimal: Elegoos eigene Systemprofile ECC2/0.4/0.20/PLA,
+Exit 0, 1577 mm Filament, 18 min 26 s, stimmig neben der
+PrusaSlicer-Referenz, Version 1.5.3.4). Die frühere Fassung „scheitert auch
+ohne Solidon" beruhte auf einer erinnerten Kommandozeile, die niemand
+aufgehoben hatte — eine erinnerte Zeile ist kein Beleg.
+
+Solidons Aufruf (`handover.py:1524–1545`) ist strukturell identisch mit der
+funktionierenden Handzeile bis auf zwei messbare Unterschiede: `--arrange 0`
+(ob 1.5.3.4 den Schalter kennt, steht nirgends — ein unbekannter Schalter
+endet bei dieser Familie erfahrungsgemäß im stillen Abbruch; Hauptverdacht)
+und das von `write_config` selbst geschriebene Maschinenprofil statt Elegoos
+Original. Ein `layer_gcode` mit `G92 E0` wird nicht eingebaut — Robert: „den
+gcode wollen wir nicht verändern, nur die vorgaben bei den slicern" (§22).
+
+- [ ] fb's vier Trennläufe zwischen den zwei Unterschieden, mit wörtlich
+      festgehaltenen Kommandozeilen — danach der Fix an Solidons Aufruf oder
+      die belegte Auskunft, dass es am Slicer liegt.
