@@ -212,6 +212,28 @@ das *neben* dem Testlauf stand.
   auch für `suite-getrennt.sh`: Es zählt „Läufe mit Fehler: N" und gibt sie als
   Exit zurück. Wer die Zeile liest statt `$?`, misst wieder einen Filter.
 
+* **`$?` in derselben Zeile, die auch etwas anderes ausführt, ist kein `$?`
+  mehr.** Die Falle darüber kennt die Pipe und das nachgestellte `echo`; dies
+  ist ihre dritte Gestalt, und sie sieht harmlos aus:
+
+      echo "Lauf $i: Exit=$?  $(grep -c passed datei)"
+
+  Die Kommandosubstitution läuft mit, bevor die Zeile steht, und `$?` trägt
+  danach ihren Status. Am 31.08.2026 meldete genau diese Zeile zweimal
+  „Exit=0", während die Shell daneben `Segmentation fault` schrieb — und die
+  Messreihe, die darauf aufbaute, war eine Stunde Arbeit für nichts.
+
+  Der Griff ist eine Zeile mehr: **den Code als allerersten Befehl in eine
+  Variable**, dann alles übrige.
+
+      "$py" -m pytest … > "$log" 2>&1
+      code=$?
+      zeichen=$(head -c 3000 "$log" | …)
+      echo "Exit=$code  gelaufen=$zeichen"
+
+  Die allgemeine Form dahinter ist immer dieselbe und steht schon in dieser
+  Datei: **`$?` gehört dem letzten Befehl, und „letzter" heißt wörtlich.**
+
 * **Ein Hintergrundlauf meldet den Status seiner Hülle, nicht den des Programms
   darin.** Am 22.08.2026 dreimal an einem Abend, in drei Sitzungen: Die
   Abschlussmeldung sagte „completed (exit code 0)" — einmal über einem Lauf,
