@@ -129,7 +129,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch drei Pakete: P2 (Haken-Reste), P6 (aufs Bett setzen) und P9 (Züge bündeln) — P1/P3/P5/P7/P8 sind fertig, P4 gestrichen; Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | noch fünf Pakete: D3, D5, D6, D8, D10 — neun sind zu (zuletzt D9, D11, D13, D14a/b), dazu der Skeletteditor-Lader auf Roberts Wort; Review je Paket |
-| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | Roberts Einrasten ist gebaut (`edfb89b9`), Fensterrand-Lücke widerlegt, Fangbereichs-Kosten gemessen (10° schluckt nur Lagen ohne Nutzwert); bei 3a bleibt der eigentliche Zug bei gekippter Kamera |
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 ist zu (`20838a37`: Escape kostet nichts mehr), dann Maß-ändern und die Ausgänge; Review je Paket |
 | Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — sieben von neun sind zu (zuletzt V3, `60e89828`), V6 bei 72, V8 bei d3 (Messliste kommt); Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
@@ -13133,13 +13132,21 @@ präzise (8,5). **Das Einrasten deckt den unbedienbaren Bereich ab;
 der Zug selbst braucht keine Änderung** — gemessen, nicht gebaut,
 damit etwas gebaut ist.
 
-- [ ] **3a, letzte Restfrage vor dem Schließen**: Zeigt der Zug
-      während des Ziehens eine Zahl (wie die Leisten im Viewport)?
-      Das stand im Auftragstext und ist von der Messung nicht
-      beantwortet. Zeigt er eine — Punkt zu. Zeigt er keine, ist das
-      der eine verbleibende „noch besser"-Baustein aus Roberts
-      Auftrag: Der Kunde, der 20 mm aufziehen will, soll die Zahl
-      sehen statt zu schätzen (Fusion zeigt sie). Regel 2 bleibt.
+- [x] **Der Zug zeigt seine Zahl** — gemessen im echten Fenster mit
+      echtem Zug bei 10/20/45/90° („gesetzt heißt nicht gezeigt"),
+      nicht am Code. Vier Eigenschaften über „eine Zahl ist da"
+      hinaus: Sie folgt dem Zeiger (dieselbe Leiste wie beim Bewegen),
+      sagt die Richtung als Wort („Höhe"/„Tiefe" — zweite Kodierung
+      neben dem Vorzeichen, Regel 18), zeigt den gefangenen Wert
+      statt des Rohmaßes (der Kunde sieht 12,00 und bekommt 12,00)
+      und steht in der Anzeigeeinheit bei Millimeter-Kern. Getippt
+      übernimmt die erste Ziffer den Zug, ohne Fang — wer tippt,
+      meint es exakt.
+
+**Damit ist das Kipp-Gebiet vollständig** (30.08.2026): Die Kamera
+landet nie in der unbrauchbaren Lage (`edfb89b9`), der Griff ist bei
+jedem Winkel sichtbar und greifbar (`b3801e4b`), und der Zug ist
+bedienbar und zeigt seine Zahl — gemessen, keine Änderung nötig.
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
@@ -13192,9 +13199,9 @@ bereits als eigener Auftrag bei 50.
 | G1 | **Kritisch**: Jede Menü-Überschrift ist unsichtbar — **Ursache gemessen korrigiert (72)**: nicht das Stylesheet, der Windows-Stil rendert `addSection` als reinen Separator und verwirft den Text (im frischen Prozess ohne Stylesheet ebenso unsichtbar, sechs Stylesheet-Varianten wirkungslos). Der Weg: `QWidgetAction` mit Label an der Aufrufstelle plus Stylesheet-Regel für die Anmutung (B1) | S | **72** — inkl. `main_window`-Aufrufstelle, mit Ansage an 50 und Blob gegen den unmittelbaren HEAD |
 | G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | **gegenstandslos, gemessen** (72): kein Balken der Anwendung zeigt Text — alle sieben rufen `setTextVisible(False)`, der Wächter dafür existiert; der Befund maß ein Widget, das es so nicht gibt. Methodennotiz im Dokument |
 | G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | **fertig** (`fcf4e291`, 72): `min-width` neben `min-height`, Griff 2 px → 16 px; „der Befund braucht seine eigene Größenordnung“ steht im Testdocstring |
-| G4 | **Kritisch**: Der Bausteinkatalog — zehn Sekunden Textwüste ohne Wartesignal, dann Kacheln ohne Ruheform, nicht normierte Renderings, springende Titelzeilen (B4+B25) | M | offen |
+| G4 | **Kritisch**: Der Bausteinkatalog — zehn Sekunden Textwüste ohne Wartesignal, dann Kacheln ohne Ruheform, nicht normierte Renderings, springende Titelzeilen (B4+B25) | M | **3a, beauftragt** — Vorschaurender-Kette ist ihr Gebiet |
 | G5 | **Kritisch**: Das Objektbaum-Vorschaubild ist ein 4-Pixel-Fleck — vergrößern oder ausbauen, halbe Größe ist keine Option (B5) | S | **50, nach G11** |
-| G6 | **Kritisch, Systemebene**: Der Akzentfarben-Haushalt — Bernstein bedeutet gleichzeitig sechs Dinge; dazu färbt der Prüfbericht ganze Sätze in Rollenfarbe und der Hauptknopf bedeutet nicht überall dasselbe (B6+B16+B22). Konzeptnotiz vor dem Bau: Wo darf der Akzent stehen, was bekommt eine leisere Form | L | offen — Notiz zuerst |
+| G6 | **Kritisch, Systemebene**: Der Akzentfarben-Haushalt — Bernstein bedeutet gleichzeitig sechs Dinge; dazu färbt der Prüfbericht ganze Sätze in Rollenfarbe und der Hauptknopf bedeutet nicht überall dasselbe (B6+B16+B22). Konzeptnotiz vor dem Bau: Wo darf der Akzent stehen, was bekommt eine leisere Form | L | **3a, Notiz nach G4** |
 | G7 | Widget-Grundformen in `style.py`: Slider ungestylt, Spinbox-Pfeile 10×11 mit verdecktem Trennstrich, Splitter-Fuge Kontrast 1,0, gesperrte Zustände kaum unterscheidbar, Werkzeugknopf rahmenlos (B7/B15/B30/B32/B37) | M | **72, Serie** |
 | G8 | Formular-Raster der Dialoge: springende Feldkanten im Operationsdialog, zwei Raster im Einstellungsdialog, halbleere Gruppen der Druckeinstellungen, uneinheitliche Nachkommastellen, fehlender Rhythmus im Erststart (B8/B10/B11/B36/B38/B39) | M | **15, nach G12** |
 | G9 | Einheiten und Zeichen-Knöpfe: „[mm]" aus den Beschriftungen in die Werte (die eigene Regel in `oberflaeche.md` verlangt es), „fx" und „…" als erkennbare Knöpfe mit Bezug zur Zeile (B12/B13/B14) | M | offen |
