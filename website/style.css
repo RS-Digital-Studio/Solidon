@@ -2901,6 +2901,157 @@ p.footnote {
 
 .weg figcaption b { color: var(--ink); }
 
+/* --- Tauschbörse ---------------------------------------------------------
+   Die Börsen-Seiten (`boerse.html`, `<sprache>/exchange.html`) bringen zwei
+   Formulare und eine Kachelliste mit — Bauteile, die es auf den übrigen Seiten
+   nicht gibt. Deshalb stehen die Regeln hier zusammen und nicht verstreut.
+
+   Zwei Konventionen des Hauses gelten dabei, beide von 3a mitgegeben und beide
+   aus einem Fall, der schon einmal zugeschnappt ist: **Kein typloses
+   Stylesheet an einem Träger** — eine Regel ohne Selektor gilt für jeden
+   Nachkommen und ersetzt dort die Regeln darüber; und **ein Zustand wechselt
+   die Farbe, nicht die Rahmenbreite** — ein zweiter Rahmenpunkt im Fokus
+   verschiebt alles darin um einen. */
+
+/* Der Aufmacher der Börse hat kein Bild daneben, also auch kein
+   zweispaltiges `.hero`. Was ihm damit fehlt, ist dessen Abstand nach oben:
+   Ohne diese Regel klebt der Kicker am Kopf. */
+.wrap > .hero-text {
+  padding-top: clamp(2rem, 6vw, 4.5rem);
+  padding-bottom: clamp(1.5rem, 4vw, 3rem);
+}
+
+.boerse-suche,
+.boerse-hochladen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem 1.25rem;
+  margin-top: 1.75rem;
+}
+
+.boerse-suche p,
+.boerse-hochladen p {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+/* Das Feld wächst, der Rest nicht: Ein Suchfeld, das so breit ist wie sein
+   Beschriftungswort, nimmt keine zwei Wörter auf. */
+.boerse-suche p:first-of-type { flex: 1 1 18rem; }
+
+.boerse-suche label,
+.boerse-hochladen label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.boerse-suche input,
+.boerse-suche select,
+.boerse-hochladen input {
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--card);
+  color: var(--fg);
+  font: inherit;
+  transition: border-color var(--step), box-shadow var(--step);
+}
+
+/* Farbe und ein Schein, **keine** zweite Rahmenbreite: Der Rahmen bleibt bei
+   einem Punkt, sonst rückt der Inhalt beim Hineinklicken um einen Punkt. */
+.boerse-suche input:focus,
+.boerse-suche select:focus,
+.boerse-hochladen input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Die Dateiauswahl bringt ihren eigenen Knopf mit, und der gehorcht keiner
+   der Regeln darüber. Er bekommt deshalb den Geisterknopf-Stil von Hand. */
+.boerse-hochladen input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Der Hinweis unter dem Mailfeld gehört zum Feld und nicht in die Zeile
+   daneben: `span.sub` steht sonst hinter dem Eingabefeld statt darunter. */
+.boerse-hochladen .sub {
+  flex-basis: 100%;
+  max-width: 34rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.boerse-hochladen button,
+.boerse-suche button { margin-top: 0; }
+
+/* Solange die Liste lädt, steht hier ein Satz; danach die Kacheln. Ohne eine
+   Mindesthöhe springt die Seite in dem Moment, in dem die Antwort ankommt. */
+#ergebnis {
+  min-height: 8rem;
+  margin-top: 1.75rem;
+}
+
+.boerse-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1.25rem;
+}
+
+/* An der Klasse und nicht am Container: Eine Regel am Träger gälte auch für
+   alles, was später einmal darin steht. */
+.boerse-liste li {
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem 1.25rem 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  background: var(--card);
+}
+
+.boerse-liste h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
+}
+
+.boerse-liste p {
+  margin: 0 0 0.6rem;
+  font-size: 0.92rem;
+  line-height: 1.55;
+}
+
+/* Die Zeile mit Autor, Lizenz und dem Hinweis auf eingebettete Geometrie.
+   Sie steht unten, direkt über dem Knopf — und `margin-top: auto` hält sie
+   dort, gleich wie lang der Erklärtext darüber ist: Kacheln in einer Reihe
+   haben dann ihre Knöpfe auf einer Linie. */
+.boerse-liste .sub {
+  margin-top: auto;
+  margin-bottom: 0.25rem;
+  font-size: 0.84rem;
+}
+
+.boerse-liste .btn {
+  align-self: flex-start;
+  margin-top: 0.75rem;
+  margin-left: 0;
+}
+
 @media (prefers-color-scheme: dark) {
   .schau img,
   .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
