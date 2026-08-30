@@ -12,7 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from app.core import examples
 from app.ui.start_screen import (
@@ -151,7 +151,12 @@ def test_every_example_is_a_tile_with_its_sentence(screen: StartScreen) -> None:
         texts = [label.text() for label in tile.findChildren(QLabel)]
         assert str(tile.entry.title) in texts
         assert str(tile.entry.doc) in texts, "der Satz gehört auf die Kachel"
-        assert "Geführte Tour · Schritt für Schritt" in texts, (
+        # **Dass eine Führung dahinter beginnt, steht seit B27 über der
+        # Gruppe** — viermal derselbe Satz untereinander war einmal Information
+        # und dreimal Rauschen. Die Kachel sagt es weiterhin, aber dort, wo es
+        # ohne Blick auf die Überschrift ankommt: in ihrer Beschreibung, die
+        # der Bildschirmleser vorliest.
+        assert "ührte Tour" in tile.accessibleDescription(), (
             "eine Beispielkachel muss sagen, dass hinter ihr eine Führung beginnt"
         )
 
@@ -392,3 +397,64 @@ def test_the_column_uses_the_width_it_is_allowed(screen: StartScreen) -> None:
     )
 
     screen.hide()
+
+
+def test_the_tour_note_stands_once_above_the_tiles(qt_app: QApplication) -> None:
+    """Viermal derselbe Satz ist einmal Information und dreimal Rauschen (B27).
+
+    Unter jedem der vier Kacheltitel stand „Geführte Tour · Schritt für
+    Schritt" — dieselbe Aussage über dieselbe Sache, viermal untereinander im
+    selben Blickfeld. Was für alle vier gilt, gehört über die Gruppe: Die
+    Überschrift „Wo fange ich an?" ist der Ort, an dem der Satz einmal steht
+    und trotzdem für jede Kachel gilt.
+
+    Am Bildschirmleser ändert das nichts — dort trägt jede Kachel den Hinweis
+    weiter in ihrer Beschreibung, weil ein Vorleser nicht sieht, was darüber
+    steht.
+    """
+    from app.ui.start_screen import StartScreen
+
+    screen = StartScreen()
+    screen.show()
+    qt_app.processEvents()
+
+    # Gesucht wird der Wortstamm, nicht der ganze Satz: Über der Gruppe heißt
+    # es „Vier geführte Touren", in der Kachelbeschreibung „Geführte Tour" —
+    # dieselbe Auskunft, zwei Beugungen.
+    sichtbar = [
+        label.text()
+        for label in screen.findChildren(QLabel)
+        if label.isVisibleTo(screen) and "ührte Tour" in label.text()
+    ]
+    beschreibungen = [
+        widget.accessibleDescription()
+        for widget in screen.findChildren(QWidget)
+        if "Geführte Tour" in widget.accessibleDescription()
+    ]
+
+    assert len(sichtbar) <= 1, f"{len(sichtbar)}-mal derselbe Satz: {sichtbar[:3]}"
+    assert sichtbar, "einmal muss er dastehen — sonst weiß niemand, dass es Touren sind"
+    assert len(beschreibungen) >= 4, "jede Kachel sagt es dem Bildschirmleser weiter"
+
+
+def test_the_manual_button_names_its_action(qt_app: QApplication) -> None:
+    """Ein Knopf, der einen Satz trägt, sprengt seine Nachbarn (B27).
+
+    Gemessen: 249 Punkte gegen 99 und 113 der beiden Nachbarn — mehr als
+    doppelt so breit, weil er „Handbuch — die ersten fünfzehn Minuten" trug.
+    Der Knopf nennt seine Handlung, der Zusatz gehört in den Hinweis daneben;
+    so hält es die Anwendung an jeder anderen Stelle.
+    """
+    from app.ui.start_screen import StartScreen
+
+    screen = StartScreen()
+    screen.show()
+    qt_app.processEvents()
+
+    knopf = screen.manual_button
+    nachbarn = [screen.new_button.sizeHint().width(), screen.open_button.sizeHint().width()]
+
+    assert knopf.sizeHint().width() <= 2 * max(nachbarn), (
+        f"{knopf.text()!r} misst {knopf.sizeHint().width()}, die Nachbarn {nachbarn}"
+    )
+    assert "fünfzehn" in knopf.toolTip(), "was wegfällt, steht im Hinweis"

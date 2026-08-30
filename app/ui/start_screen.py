@@ -283,10 +283,6 @@ class ExampleTile(QFrame):
         doc.setWordWrap(True)
         set_level(doc, "caption")
 
-        tour_note = QLabel(guided, self)
-        tour_note.setWordWrap(True)
-        set_level(tour_note, "caption")
-
         # Das Bild kommt aus dem Beispiel selbst, gerendert von
         # `tools/make_examples.py` beim Bauen. Fehlt es, steht die Kachel wie
         # vorher da: ein frisch ausgecheckter Baum hat die Bilder erst, wenn
@@ -315,7 +311,6 @@ class ExampleTile(QFrame):
         text.setContentsMargins(0, 0, 0, 0)
         text.setSpacing(TIGHT)
         text.addWidget(title)
-        text.addWidget(tour_note)
         text.addWidget(doc)
         # Der Überschuss sammelt sich unten, nicht zwischen Titel und Satz:
         # eine Kachel wächst auf die Höhe ihrer Nachbarin, und ohne diese
@@ -468,7 +463,13 @@ class StartScreen(QWidget):
         # Start noch niemand gesehen hat. Der Verweis gehört hierher, und zwar
         # neben die Knöpfe: am anderen Fensterrand gehörte er sichtbar zu
         # nichts.
-        self.manual_button = QPushButton(tr("Handbuch — die ersten fünfzehn Minuten"), self)
+        # **Der Knopf nennt seine Handlung, der Zusatz steht daneben** (B27):
+        # Mit dem ganzen Satz maß er 249 Punkte gegen 99 und 113 seiner zwei
+        # Nachbarn — mehr als doppelt so breit, und eine Knopfzeile, in der
+        # einer heraussticht, sieht nach Rangordnung aus, wo keine ist.
+        self.manual_button = QPushButton(tr("Handbuch"), self)
+        self.manual_button.setToolTip(tr("Die ersten fünfzehn Minuten, von vorn erklärt."))
+        self.manual_button.setStatusTip(self.manual_button.toolTip())
         self.manual_button.setFlat(True)
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_button.clicked.connect(self.manualRequested)
@@ -490,7 +491,15 @@ class StartScreen(QWidget):
         inner.addWidget(title)
         inner.addWidget(drop)
         inner.addLayout(buttons)
-        inner.addWidget(_caption(tr("Wo fange ich an?"), self))
+        # **Einmal über der Gruppe, nicht viermal darin** (Befund B27).
+        # Unter jedem der vier Kacheltitel stand „Geführte Tour · Schritt für
+        # Schritt" — dieselbe Aussage über dieselbe Sache, viermal im selben
+        # Blickfeld. Was für alle gilt, gehört über die Gruppe; in der
+        # Beschreibung jeder Kachel bleibt der Satz, denn ein Vorleser sieht
+        # nicht, was darüber steht.
+        inner.addWidget(
+            _caption(tr("Wo fange ich an? Vier geführte Touren, Schritt für Schritt."), self)
+        )
         inner.addWidget(self.examples_area)
         # **Die fünf weiteren Beispiele klappen zu, die vier Wege nicht.**
         # Auf 1600x900 — der häufigsten Laptop-Auflösung — brauchte der
@@ -509,7 +518,19 @@ class StartScreen(QWidget):
         inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
         inner.addWidget(self.recent_empty)
         inner.addWidget(self.recent_list)
-        inner.addStretch(1)
+        # **Ausbalanciert, nicht oben angedockt** (Befund B27). Der ganze
+        # Überschuss sammelte sich unten: Auf einem hohen Fenster endete der
+        # Inhalt bei genau der halben Höhe, und darunter war nichts — das las
+        # sich nicht als Ruhe, sondern als Abbruch. Zwei Dehnfelder teilen ihn
+        # jetzt, oben weniger als unten: Die Spalte steht dann etwas über der
+        # Mitte, wo der Blick sie sucht, und die Fläche darunter wirkt gewollt.
+        #
+        # Gefüllt wird sie ausdrücklich nicht. „Zuletzt geöffnet" wächst von
+        # selbst, sobald jemand arbeitet; der leere Neuzustand ist die
+        # Ausnahme, und neue Inhalte dafür zu erfinden wäre eine Pflegefläche
+        # ohne Auftrag.
+        inner.insertStretch(0, 1)
+        inner.addStretch(3)
 
         centred = QWidget(self)
         middle = QHBoxLayout(centred)
