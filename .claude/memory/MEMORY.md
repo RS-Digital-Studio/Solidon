@@ -73,6 +73,7 @@
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab für alles: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument.
+- [Ein Druckziel, vier Wege, ein Vertrauensmodell](solidon-ist-die-vorstufe-vor-dem-slicer.md) — Produktkern aus dem Dental-Kundenfeedback: fremdes Modell, Konstruieren, Generieren und Formen führen in derselben Szene nachvollziehbar bis zur ehrlichen Slicer-Übergabe; alle Sitzungen und Website-Versprechen zusammen denken.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Konzeptlinie für die gesamte App: Kundenerlebnis als Qualitätsvertrag, begrenzte und messbare KI, gezielte Bibliotheken und reproduzierbare Updates; keine Arbeitsliste und keine Roadmap-Änderung.
 - [Review immer vollständig](review-immer-vollstaendig.md) — Roberts Vorgabe für die Freigabe-Rolle: jeden Diff ganz lesen, keine Stichproben-Ökonomie; Sollprobe, Nachmessung und Katalogfrage bleiben zusätzlich.
 - [Übersetzung neu statt geflickt](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz eigenständig ist und die alte Fassung trägt; sonst neu.
