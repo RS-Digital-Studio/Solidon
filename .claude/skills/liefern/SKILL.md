@@ -153,6 +153,12 @@ daran, dass zwischen `read-tree` und `commit` noch etwas geschah — einmal das
 Schreiben der Meldung, zweimal eine Sollprobe. Ein zweimal frisch gebauter
 Index mit gefangenem erstem Wettlauf hat nicht gereicht. Die Meldung entsteht
 als Datei **vor** der Kette; Bau, Guard und Commit folgen ohne Unterbrechung.
+Und die dritte Stufe (15, nach dem Stempellauf-Fall): **Alles, was in der
+Meldung als Behauptung steht („24 von 24 rein Stempel"), wird im selben
+Aufruf gemessen wie der Commit** — eine Prüfung aus einem früheren Aufruf
+behauptet einen Zustand, der beim Commit schon vergangen sein kann, und eine
+falsche Behauptung in der History ist schlimmer als mitgenommener Inhalt,
+weil sie niemanden mehr misstrauisch macht.
 Bei einer **geteilten** Datei (Kataloge, `MEMORY.md`, `ROADMAP.md`,
 `3d-agent-bauplan.md`) zusätzlich vor dem Commit den **eigenen Block grepen**
 — die Dateizahl-Kontrolle fängt eine Datei zu viel, aber keine fremde Zeile
