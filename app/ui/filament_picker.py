@@ -371,7 +371,7 @@ class FilamentField(QComboBox):
             # dort läge eine Spule.
             return tr("Ohne Filament — Farbe des Teils")
         if not name:
-            return tr("Filament {nummer} — noch keines").format(nummer=index)
+            return tr("Filament {number} — noch keines").format(number=index)
         suffix = (
             f" · {material_type}"
             if material_type and material_type.casefold() not in name.casefold()
@@ -703,7 +703,7 @@ class FilamentPanel(QWidget):
             item.setData(_MATERIAL_TYPE_ROLE, entry.material_type)
             item.setData(_PROFILE_ROLE, entry.slicer_profile)
             profile_hint = (
-                tr("Slicer-Profil: {profil}").replace("{profil}", entry.slicer_profile)
+                tr("Slicer-Profil: {profile}").replace("{profile}", entry.slicer_profile)
                 if entry.slicer_profile
                 else tr("Ohne Slicer-Profil")
             )

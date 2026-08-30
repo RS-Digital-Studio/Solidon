@@ -290,12 +290,12 @@ class _Row(QWidget):
         if status.present:
             if self.tool is not None and self.tool.kind == "service":
                 if status.running and status.using_remote_address:
-                    detail = tr("Aktiv: Web-/Netzadresse {adresse} — erreichbar.").format(
-                        adresse=status.address
+                    detail = tr("Aktiv: Web-/Netzadresse {address} — erreichbar.").format(
+                        address=status.address
                     )
                 elif status.running:
-                    detail = tr("Aktiv: lokales Backend {adresse} — erreichbar.").format(
-                        adresse=status.address
+                    detail = tr("Aktiv: lokales Backend {address} — erreichbar.").format(
+                        address=status.address
                     )
                 # **Der Satz nennt den Knopf nur, wenn es ihn gibt.** Beide
                 # Zweige darunter verwiesen auf „Lokal starten", ohne dessen
@@ -308,24 +308,24 @@ class _Row(QWidget):
                 # Text und Knopf statt zwischen Knopf und Handlung.
                 elif status.using_remote_address and status.startable:
                     detail = tr(
-                        "Die Web-/Netzadresse {adresse} antwortet nicht. Mit „Lokal starten“ "
+                        "Die Web-/Netzadresse {address} antwortet nicht. Mit „Lokal starten“ "
                         "wechseln Sie zum lokalen Backend."
-                    ).format(adresse=status.address)
+                    ).format(address=status.address)
                 elif status.using_remote_address:
                     detail = tr(
-                        "Die Web-/Netzadresse {adresse} antwortet nicht, und ein lokales "
+                        "Die Web-/Netzadresse {address} antwortet nicht, und ein lokales "
                         "Startprogramm ist nicht eingerichtet."
-                    ).format(adresse=status.address)
+                    ).format(address=status.address)
                 elif status.startable:
                     detail = tr(
-                        "Lokales Backend {adresse} antwortet noch nicht — mit „Lokal "
+                        "Lokales Backend {address} antwortet noch nicht — mit „Lokal "
                         "starten“ öffnen."
-                    ).format(adresse=status.address)
+                    ).format(address=status.address)
                 else:
                     detail = tr(
-                        "Lokales Backend {adresse} antwortet noch nicht, und ein "
+                        "Lokales Backend {address} antwortet noch nicht, und ein "
                         "Startprogramm ist nicht eingerichtet."
-                    ).format(adresse=status.address)
+                    ).format(address=status.address)
                 return f"{status.location}\n{detail}"
             return status.location
         if status.by_hand:
@@ -374,21 +374,21 @@ class _Row(QWidget):
         example = self.tool.url if self.tool else ""
         if self.tool is not None and self.tool.startable:
             sentence = tr(
-                "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
+                "Adresse, unter der der Dienst antwortet — zum Beispiel {example}\n\n"
                 "Hier gehört die Webadresse eines bereits laufenden ComfyUI oder "
                 "Ollama hin, auch auf einem anderen Rechner — kein Ordner und keine "
                 "Programmdatei. Für eine lokale App wählen Sie stattdessen „Lokale "
                 "App auswählen …“.\n"
                 "Leer lassen heißt: wieder die Vorgabe benutzen."
-            ).format(beispiel=example)
+            ).format(example=example)
         else:
             sentence = tr(
-                "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
+                "Adresse, unter der der Dienst antwortet — zum Beispiel {example}\n\n"
                 "Solidon spricht über das Netz mit ihm. Hier gehört deshalb kein "
                 "Ordner und keine Programmdatei hin, sondern die Adresse, die das "
                 "Programm beim Start selbst nennt.\n"
                 "Leer lassen heißt: wieder die Vorgabe benutzen."
-            ).format(beispiel=example)
+            ).format(example=example)
         return f"{problem}\n\n{sentence}" if problem else sentence
 
     def _choose_address(self) -> None:
@@ -870,9 +870,9 @@ class InstallDialog(QDialog):
             self.state.setText(
                 f"{requirement.title}: "
                 + tr(
-                    "Das lokale Programm konnte nicht geöffnet werden: {grund}. "
+                    "Das lokale Programm konnte nicht geöffnet werden: {reason}. "
                     "Prüfen Sie den gespeicherten Ort oder wählen Sie die App erneut aus."
-                ).format(grund=reason)
+                ).format(reason=reason)
             )
             return
         if requirement.id == "comfyui":
@@ -893,10 +893,10 @@ class InstallDialog(QDialog):
                 # und dann gehört die Zahl hinein, sonst liest er sich wie die
                 # alte Fehlmeldung nach einem Augenblick (Regel 17: warum).
                 reason = tr(
-                    "ComfyUI ist geöffnet, hat aber in {minuten} Minuten nicht geantwortet. "
+                    "ComfyUI ist geöffnet, hat aber in {minutes} Minuten nicht geantwortet. "
                     "Es läuft weiter — öffnen Sie dort die lokale Installation, oder sehen "
                     "Sie in den ComfyUI-Protokollen nach, woran es hängt."
-                ).format(minuten=f"{self._expected_seconds / 60:.0f}")
+                ).format(minutes=f"{self._expected_seconds / 60:.0f}")
         else:
             reason = tr(
                 "Das Programm wurde gestartet, aber der Dienst antwortet noch nicht. "
@@ -916,8 +916,8 @@ class InstallDialog(QDialog):
         page = self._browsable(start_result.address)
         if page:
             reason = f"{reason} " + str(
-                tr("Ob es inzwischen antwortet, sehen Sie unter {adresse}.")
-            ).format(adresse=page)
+                tr("Ob es inzwischen antwortet, sehen Sie unter {address}.")
+            ).format(address=page)
         self.state.setText(f"{requirement.title}: {reason}")
 
     def _note_start_attempt(self, start_result: tools.StartResult) -> None:

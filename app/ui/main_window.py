@@ -3104,9 +3104,9 @@ class MainWindow(QMainWindow):
         if not later:
             return hint
         warning = tr(
-            "Darüber liegen {zahl} Schritte, die einzeln bearbeitbare Flächen und "
+            "Darüber liegen {count} Schritte, die einzeln bearbeitbare Flächen und "
             "Kanten brauchen. Ohne diese Option halten sie an."
-        ).format(zahl=len(later))
+        ).format(count=len(later))
         return f"{hint}\n\n{warning}"
 
     @staticmethod
@@ -6133,9 +6133,9 @@ class MainWindow(QMainWindow):
             self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
             return
         self.sculpt_bar.show_warning(
-            tr("{zahl} Stellen dünner als {maß}")
-            .replace("{zahl}", str(thin))
-            .replace("{maß}", length(minimum))
+            tr("{count} Stellen dünner als {minimum}")
+            .replace("{count}", str(thin))
+            .replace("{minimum}", length(minimum))
         )
 
     def _remember_discarded(self, target: str | None, text: str, panel: Any) -> None:
@@ -9108,7 +9108,7 @@ class MainWindow(QMainWindow):
         # mehr gibt, ist schlechter als keiner. Er ist auch aus den fünf
         # Katalogen entfernt — ein Schlüssel, den niemand mehr benutzt, meldet
         # sich sonst in ``test_translations`` als „nicht mehr gebraucht".
-        name = described[0] if len(meshes) == 1 else tr("{zahl} Teile").format(zahl=len(meshes))
+        name = described[0] if len(meshes) == 1 else tr("{count} Teile").format(count=len(meshes))
         bounds = bounding_box_of(meshes)
         self.measurements.show_object(name, bounds.size, volume_of(meshes))
 

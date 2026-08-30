@@ -470,9 +470,8 @@ class CommandPalette(QDialog):
             # für die Vorauswahl darüber unsichtbar.
             nothing = QListWidgetItem(
                 tr(
-                    "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name "
-                    "und Beschreibung."
-                ).format(begriff=query.strip())
+                    "Kein Befehl passt zu „{term}“. Gesucht wird in Titel, Name und Beschreibung."
+                ).format(term=query.strip())
             )
             nothing.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(nothing)

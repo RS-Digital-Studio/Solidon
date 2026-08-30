@@ -602,11 +602,11 @@ class GenerateDialog(QDialog):
                 tr(
                     "ComfyUI läuft und kennt die Knoten, aber für den Weg aus Text "
                     "fehlt das Bildmodell. Ein Bild zu wählen umgeht es. Sonst: "
-                    "„{datei}“ nach „{ordner}“ legen und ComfyUI neu starten — im "
+                    "„{file}“ nach „{folder}“ legen und ComfyUI neu starten — im "
                     "Handbuch steht es unter „Welche Modelle Solidon benutzt“."
                 ).format(
-                    datei=comfy_setup.IMAGE_MODEL_FILE,
-                    ordner=comfy_setup.IMAGE_MODEL_FOLDER,
+                    file=comfy_setup.IMAGE_MODEL_FILE,
+                    folder=comfy_setup.IMAGE_MODEL_FOLDER,
                 )
             )
             self.setup.setText(tr("Zusätzliche Programme …"))

@@ -190,9 +190,9 @@ class SculptBar(QWidget):
             self.state.setText(tr("Noch kein Zug."))
             return
         self.state.setText(
-            tr("{striche} Züge, {etappen} Etappen")
-            .replace("{striche}", str(strokes))
-            .replace("{etappen}", str(stages))
+            tr("{strokes} Züge, {stages} Etappen")
+            .replace("{strokes}", str(strokes))
+            .replace("{stages}", str(stages))
         )
 
     def show_warning(self, text: str, refinable: bool = False) -> None:

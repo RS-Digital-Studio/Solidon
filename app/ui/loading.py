@@ -143,8 +143,8 @@ def remaining_time(started: float | None, fraction: float) -> str:
     if left < 5.0:
         return tr("gleich fertig")
     if left < 90.0:
-        return tr("noch etwa {sekunden} s").format(sekunden=round(left / 5.0) * 5)
-    return tr("noch etwa {minuten} min").format(minuten=round(left / 60.0))
+        return tr("noch etwa {seconds} s").format(seconds=round(left / 5.0) * 5)
+    return tr("noch etwa {minutes} min").format(minutes=round(left / 60.0))
 
 
 class LoadingVeil(QWidget):

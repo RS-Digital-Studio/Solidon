@@ -2001,9 +2001,9 @@ class PrintSettingsDialog(QDialog):
             return
         place = max(self._search_at, 0) + 1
         self.search_state.setText(
-            tr("{platz} von {anzahl}")
-            .replace("{platz}", localised(str(place)))
-            .replace("{anzahl}", localised(str(len(self._search_hits))))
+            tr("{position} von {count}")
+            .replace("{position}", localised(str(place)))
+            .replace("{count}", localised(str(len(self._search_hits))))
         )
 
     def _lift(self, path: str) -> None:
@@ -2633,7 +2633,7 @@ class PrintSettingsDialog(QDialog):
             box = QComboBox(self.slicer_inner)
             box.setEnabled(bool(self._profiles))
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
-            caption = str(slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1)))
+            caption = str(slot.name or tr("Slot {number}").replace("{number}", str(index + 1)))
             self._slot_names.append(caption)
             label = QLabel(f"   {caption}", self.slicer_inner)
             # **Die Farbe steht daneben** — hier wird zugeordnet, welche Spule
@@ -2744,11 +2744,11 @@ class PrintSettingsDialog(QDialog):
             self.plate_row.setVisible(False)
             return
         self.plate_choice.addItem(
-            tr("Alle Platten ({anzahl})").replace("{anzahl}", str(len(plates))), None
+            tr("Alle Platten ({count})").replace("{count}", str(len(plates))), None
         )
         for plate in plates:
             self.plate_choice.addItem(
-                tr("Platte {nummer}").replace("{nummer}", str(plate + 1)), plate
+                tr("Platte {number}").replace("{number}", str(plate + 1)), plate
             )
         self.plate_choice.setCurrentIndex(0)
         self.plate_row.setVisible(True)
@@ -2874,13 +2874,13 @@ class PrintSettingsDialog(QDialog):
         names[position] = chosen
         self.settings = replace(self.settings, slot_profiles=tuple(names))
         self.state.setText(
-            tr("{slot} druckt mit {profil}.")
+            tr("{slot} druckt mit {profile}.")
             # Aus den Daten und nicht aus der Beschriftung: Die Zeile trägt
             # jetzt ein Farbfeld neben dem Text, ist also ein Container ohne
             # ``text()`` — und die Anzeige war ohnehin die falsche Quelle für
             # eine Meldung (dieselbe Lehre wie bei ``currentText()`` darüber).
             .replace("{slot}", self._slot_names[position])
-            .replace("{profil}", chosen)
+            .replace("{profile}", chosen)
         )
 
     def _filament_chosen(self, _index: int) -> None:
@@ -2910,8 +2910,8 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self.state.setText(
-            tr("Werte aus {profil} übernommen.").replace(
-                "{profil}", self.filament_choice.currentText()
+            tr("Werte aus {profile} übernommen.").replace(
+                "{profile}", self.filament_choice.currentText()
             )
         )
         _log.info("adopted %d values from %s", len(values), chosen)
@@ -3608,9 +3608,9 @@ class PrintSettingsDialog(QDialog):
                 "{slicer}", _slicer_title(setup.executable)
             )
             if len(runs) == 1
-            else tr("An {slicer} übergeben — {anzahl} Platten, je eine Datei.")
+            else tr("An {slicer} übergeben — {count} Platten, je eine Datei.")
             .replace("{slicer}", _slicer_title(setup.executable))
-            .replace("{anzahl}", str(len(runs)))
+            .replace("{count}", str(len(runs)))
         )
 
     def _slice(self) -> None:
@@ -3761,9 +3761,9 @@ class PrintSettingsDialog(QDialog):
         if count > 1:
             self.progress.setValue(index - 1)
             self.state.setText(
-                tr("Der Slicer rechnet — Platte {nummer} von {anzahl} …")
-                .replace("{nummer}", str(index))
-                .replace("{anzahl}", str(count))
+                tr("Der Slicer rechnet — Platte {number} von {count} …")
+                .replace("{number}", str(index))
+                .replace("{count}", str(count))
             )
 
     def _cancel_slice(self) -> None:

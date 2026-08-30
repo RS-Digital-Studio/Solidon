@@ -889,12 +889,12 @@ def _space_or_stop(where: Path) -> None:
     raise SetupFailed(
         str(
             _(
-                "Auf dem Datenträger von {ort} sind {frei:.1f} GB frei, gebraucht "
+                "Auf dem Datenträger von {drive} sind {frei:.1f} GB frei, gebraucht "
                 "werden {noetig:.0f}. Schaffen Sie dort Platz — geladen wird in den "
                 "Zwischenordner, und von dort wandern die Gewichte nach "
                 "models/triposg; beide Orte müssen sie fassen."
             )
-        ).format(ort=where, frei=free, noetig=NEEDED_GIGABYTES)
+        ).format(drive=where, frei=free, noetig=NEEDED_GIGABYTES)
     )
 
 

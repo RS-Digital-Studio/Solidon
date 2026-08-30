@@ -455,10 +455,10 @@ def _catalogue_path(spec: OperationSpec) -> str:
         None,
     )
     if part_group is not None and part_group in GROUPS:
-        return str(_("{weg}, dort unter {gruppe}: {titel}")).format(
-            weg=where, gruppe=GROUPS[part_group], titel=spec.title
+        return str(_("{path}, dort unter {group}: {title}")).format(
+            path=where, group=GROUPS[part_group], title=spec.title
         )
-    return str(_("{weg}, dort: {titel}")).format(weg=where, titel=spec.title)
+    return str(_("{path}, dort: {title}")).format(path=where, title=spec.title)
 
 
 def context_menu(feature_kind: str, registry: Registry | None = None) -> tuple[OperationSpec, ...]:

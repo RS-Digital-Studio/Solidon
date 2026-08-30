@@ -395,7 +395,7 @@ class PartCatalog(QDialog):
             # hängt — und die Detailspalte daneben forderte weiter auf, einen
             # Baustein zu wählen, den es hier nicht gibt.
             nothing = QListWidgetItem(
-                tr("Kein Baustein passt zu „{begriff}“.").format(begriff=text.strip())
+                tr("Kein Baustein passt zu „{term}“.").format(term=text.strip())
             )
             nothing.setFlags(Qt.ItemFlag.NoItemFlags)
             self.list.addItem(nothing)

@@ -553,3 +553,74 @@ def test_translated_manual_pages_keep_their_paragraph_structure(language: str) -
     assert not troubles, f"{language}: Absatzstruktur weicht von der Quelle ab\n" + "\n".join(
         troubles
     )
+
+
+#: Deutsche Stämme, die als **Platzhaltername** nicht vorkommen dürfen.
+#:
+#: Platzhalter sind Schlüssel, und Schlüssel sind laut ``AGENTS.md`` englisch —
+#: anders als der Text drumherum, dessen Quelle deutsch ist. Am 30.08.2026
+#: standen hier 22 deutsche Namen in 38 Quelltexten, sieben davon neben ihrem
+#: englischen Zwilling im selben Katalog: ``{adresse}`` siebenmal neben
+#: ``{address}`` viermal, ``{anzahl}`` und ``{zahl}`` neben ``{count}``. Ein
+#: Satz trug beide Sorten zugleich — „Platte {nummer} von {anzahl}".
+#:
+#: **Kuratiert wie ``GERMAN_STEMS``, nicht erraten.** Der automatische Weg
+#: scheitert an der Überlappung technischer Wörter; wer ein deutsches Wort in
+#: einem Platzhalter findet, trägt es hier ein.
+GERMAN_PLACEHOLDERS = frozenset(
+    {
+        "adresse",
+        "anzahl",
+        "begriff",
+        "beispiel",
+        "datei",
+        "etappen",
+        "grund",
+        "gruppe",
+        "maß",
+        "minuten",
+        "nummer",
+        "ordner",
+        "ort",
+        "platz",
+        "profil",
+        "quelle",
+        "sekunden",
+        "striche",
+        "stufe",
+        "titel",
+        "weg",
+        "zahl",
+    }
+)
+
+
+def test_no_placeholder_name_speaks_german() -> None:
+    """Ein Platzhaltername ist ein Schlüssel und darf deshalb nicht deutsch sein.
+
+    Der Text um ihn herum ist es sehr wohl — die Quelle dieser Anwendung ist
+    Deutsch. Der Name in der Klammer aber ist ein Bezeichner: Er steht
+    unverändert in jeder der fünf Übersetzungen und im ``format()``-Aufruf
+    daneben. ``{anzahl}`` im französischen Katalog ist so wenig Französisch
+    wie Deutsch.
+
+    **Die Liste ist die Messgrenze, nicht der Bestand** — deshalb steht
+    unten die Zusicherung über die Zahl der überhaupt gefundenen Namen. Beim
+    Aufstellen dieser Prüfung meldete eine kuratierte Wortliste 13 Verstöße;
+    erst das Auflisten *aller* 81 Namen zeigte neun weitere (``etappen``,
+    ``gruppe``, ``minuten``, ``ordner``, ``sekunden``, ``striche``, ``stufe``,
+    ``titel``, ``weg``). Wer diesen Test erweitert, lässt sich die
+    Vollauflistung ausgeben und liest sie, statt der Liste zu glauben.
+    """
+    catalog = read_catalog("en")
+    names = {name for key in catalog for name in PLACEHOLDER.findall(key)}
+    assert len(names) > 50, (
+        f"nur {len(names)} Platzhalternamen im Katalog — die Grundmenge ist leer "
+        "oder das Muster trifft nicht mehr"
+    )
+
+    offenders = sorted(names & GERMAN_PLACEHOLDERS)
+    assert not offenders, (
+        f"Deutsche Platzhalternamen: {offenders}. Ein Platzhalter ist ein Schlüssel "
+        f"und bleibt englisch. Alle {len(names)} vorhandenen Namen: {sorted(names)}"
+    )

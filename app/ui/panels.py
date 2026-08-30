@@ -2659,12 +2659,12 @@ class ReportPanel(QWidget):
         term = self.search.text().strip()
         level = self.severity.currentText().strip()
         if term and wanted:
-            sentence = tr("Kein Befund passt zu „{begriff}“ und „{stufe}“.")
+            sentence = tr("Kein Befund passt zu „{term}“ und „{severity}“.")
         elif term:
-            sentence = tr("Kein Befund passt zu „{begriff}“.")
+            sentence = tr("Kein Befund passt zu „{term}“.")
         else:
-            sentence = tr("Kein Befund dieser Stufe: „{stufe}“.")
-        self._nothing.setText(str(sentence).format(begriff=term, stufe=level))
+            sentence = tr("Kein Befund dieser Stufe: „{severity}“.")
+        self._nothing.setText(str(sentence).format(term=term, severity=level))
         self._nothing.setVisible(True)
 
     def show_result(

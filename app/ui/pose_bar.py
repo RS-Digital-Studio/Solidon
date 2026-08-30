@@ -108,6 +108,6 @@ class PoseBar(QWidget):
             self.state.setText(tr("Noch kein Knochen."))
             return
         self.state.setText(
-            tr("{zahl} Knochen").replace("{zahl}", str(bones))
+            tr("{count} Knochen").replace("{count}", str(bones))
             + ("" if chain else f" · {tr('neue Kette')}")
         )

@@ -1963,15 +1963,15 @@ def models_text() -> str:
             "",
             str(
                 _(
-                    "Geprüft ist **{datei}** aus dem Verzeichnis *{quelle}* auf "
-                    "Hugging Face. Die Datei gehört nach *{ordner}* im Ordner von "
+                    "Geprüft ist **{file}** aus dem Verzeichnis *{source}* auf "
+                    "Hugging Face. Die Datei gehört nach *{folder}* im Ordner von "
                     "ComfyUI; danach ComfyUI einmal neu starten, und *Modell "
                     "erzeugen* nimmt auch einen Satz statt eines Bildes an."
                 )
             ).format(
-                datei=comfy_setup.IMAGE_MODEL_FILE,
-                quelle=comfy_setup.IMAGE_MODEL_REPO,
-                ordner=comfy_setup.IMAGE_MODEL_FOLDER,
+                file=comfy_setup.IMAGE_MODEL_FILE,
+                source=comfy_setup.IMAGE_MODEL_REPO,
+                folder=comfy_setup.IMAGE_MODEL_FOLDER,
             ),
             "",
             str(

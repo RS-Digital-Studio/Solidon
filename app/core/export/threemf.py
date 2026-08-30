@@ -1058,7 +1058,7 @@ def _material_at(
     # Übersetzt, denn der Name landet in der Pinselleiste (Regel 20). Die
     # zwei Schreibstellen weiter unten bleiben roh: Dateiinhalt für fremde
     # Slicer ist keine Oberfläche.
-    return (str(_("Slot {nummer}")).format(nummer=position), DEFAULT_COLOUR)
+    return (str(_("Slot {number}")).format(number=position), DEFAULT_COLOUR)
 
 
 def _matrix(text: str | None) -> np.ndarray:
@@ -1113,7 +1113,7 @@ def _slots_for(mesh: MeshData, slots: list[MaterialSlot] | None) -> list[Materia
     known = {entry.index: entry for entry in (slots or [])}
     return [
         known.get(
-            index, MaterialSlot(index=index, name=str(_("Slot {nummer}")).format(nummer=index))
+            index, MaterialSlot(index=index, name=str(_("Slot {number}")).format(number=index))
         )
         for index in used_slots(mesh)
     ]
