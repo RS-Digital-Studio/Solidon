@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-08-30T13:12:35.865Z
+  modified: 2026-08-30T13:50:46.256Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -108,3 +108,20 @@ git ls-files --error-unmatch $(grep -oE '\(([a-z0-9-]+\.md)\)' \
 Jede Datei, die der Befehl nicht kennt, ist entweder fremde ungelandete
 Arbeit (Zeile herauslassen — Blob-Technik) oder die eigene vergessene
 Neuanlage (Datei mitcommitten).
+
+**Die Sitzungsstart-Gestalt, 30.08.2026 (53, `6c705a64`):** Noch älter als
+ces „zwischen Messung und add liegen Minuten" — die Freiheits-Prüfung
+(„labels.py steht bei niemandem im Status") stammte vom **Sitzungsstart**,
+Stunden vor dem `update-index --add`. Dazwischen hatte 3a zwei Blöcke
+geschrieben, und sie ritten mit hinaus: Quellen in HEAD, Kataloge nicht,
+origin fünffach rot. Zwei Dinge trugen, eines nicht: Der Guard davor gab
+`labels.py +36/−1`, wo die eigene Funktion ~29 Zeilen maß — und die Zahl
+wurde als plausibel **abgenickt** statt gegen eine vorher notierte Ansage
+gehalten (genau der Fehler aus dem Kopf dieser Notiz). Gefangen hat es der
+**Probe-Worktree auf dem Commit-Stand** — der Baum war grün, nur der Commit
+rot, und diesen Unterschied sieht kein Lauf im geteilten Baum. Also: Die
+Freiheits-Prüfung läuft unmittelbar vor dem `update-index` (dieselbe
+Kausalitäts-Regel wie beim Schloss: die Antwort muss den Befehl noch ändern
+können), die Zeilen-Ansage steht **vorher notiert** da, und nach jedem
+Commit mit Dateistands-Anteil läuft die Probe auf dem Commit — nicht auf
+dem Baum.
