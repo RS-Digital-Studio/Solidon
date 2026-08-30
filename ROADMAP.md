@@ -128,7 +128,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
-| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | acht Pakete (P4 hat Robert gestrichen: erst wählen, dann ziehen bleibt): P3/P7 bei 3a, P8 bei 50, P1 als Nächstes bei d3, der Rest auf P1/P3 — Review je Paket bei der Freigabe |
+| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
+| Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | die Bestandsaufnahme (bedienlogik läuft) — danach Pakete, Verteilung, Review; op_dialog und Prüfbericht zuerst |
 
 ---
 
@@ -12880,10 +12881,29 @@ bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
 | P5 | Strg+Klick wählt hinzu, ein Zug bewegt alle, eine Transaktion | M | nach P3 |
 | P6 | Nach dem Drehen aufs Bett setzen (Haken, Vorgabe an, ein Undo) | S | nach P1 |
 | P7 | Flächen-Gizmo beschriftet sich vor dem Zug | S | **3a, beauftragt** |
-| P8 | Verschieben/Drehen/Skalieren direkt im Kontextmenü | S | **50, beauftragt** |
+| P8 | Verschieben/Drehen/Skalieren direkt im Kontextmenü | S | **fertig** (`fa694cf1`): 7 → 10 von 12 Zeilen, „Ändern" 30 → 27, Slicer-Reihenfolge und Grenze am gebauten Menü getestet, zwei Gegenproben gefallen |
 | P9 | Aufeinanderfolgende Züge werden ein Verlaufsschritt | M | nach P1 |
 
 - [ ] Die neun Pakete abarbeiten — je Paket Zahlen, Gegenproben und
       Review vor dem Commit; achsweises Skalieren bleibt bewusst
       hinten (verzerrt Bohrungen), die Bettebene beim Direktzug
       bleibt, und ein Bestätigungsdialog kommt nirgends dazu.
+
+---
+
+## Alle Panels und Dialoge aus Kundensicht (30.08.2026)
+
+Roberts Auftrag nach der Steuerung: „alle panels und dialoge auch mal
+sauber und gründlich durchgehen, optimieren und verifizieren aus
+kundensicht wie immer" — mit dem vollen Leitsatz als Maßstab (Kunde
+ohne CAD-Kenntnisse, einfach und schnell, hochwertig und
+selbsterklärend, die Website als Sollliste).
+
+- [ ] **Bestandsaufnahme läuft** (bedienlogik, 30.08.2026): je
+      Panel/Dialog drei Fragen — versteht ein Slicer-Kunde ohne
+      Handbuch, was zu tun ist; wirkt es hochwertig; welche Zusagen
+      sind getestet statt behauptet. Priorisiert nach
+      Kundenkontakt-Häufigkeit (op_dialog und Prüfbericht zuerst).
+      Danach: Pakete schneiden und verteilen, Review je Paket; die
+      frisch gebauten Stände (P1, P8, Waisen-Bündelung,
+      Update-Gliederung) sind Maßstab, nicht Prüfgegenstand.
