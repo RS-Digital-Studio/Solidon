@@ -16,8 +16,10 @@ dort nichts, und die Maße erscheinen erst, wenn es etwas zu messen gibt.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from typing import Any
+
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
 
 from app.branding import PROJECT_SUFFIX
 from app.core.scene import EvaluationResult
@@ -65,6 +67,87 @@ def bounds_text(result: EvaluationResult | None, unit: LengthUnit) -> str:
 #: ``explode_bar``, wo der Wähler herkommt — der Viewport kennt ihn.
 ALL_PLATES = -1
 
+#: Wie schmal ein kürzbares Feld der Kopfzeile werden darf, bevor es aufhört,
+#: etwas zu sagen. Vier Zeichen und die Auslassung — darunter steht dort „…",
+#: und das ist keine Auskunft mehr.
+LEAST_CHARACTERS = 5
+
+
+class _EphemeralLabel(QLabel):
+    """Ein Label, das seinen Text kürzt, statt seine Zeile zu sprengen.
+
+    **Der Grund steht in der Messung** (Befund D6). Die Kopfzeile lebt als
+    Widget in der Werkzeugleiste, und Qt gibt einem Widget dort entweder seine
+    ``sizeHint``-Breite oder gar keinen Platz: Wer nicht hineinpasst, wandert
+    ins Erweiterungsmenü hinter dem Pfeil. Ein ``QLabel`` meldet als
+    Mindestbreite die volle Textbreite — gemessen an einem geöffneten Projekt
+    waren das 273 px für den Namen, 275 für die Maße und 330 für den Drucker,
+    zusammen 968 px für die ganze Zeile. Die Leiste wünschte damit 2283 px.
+
+    Was daraus folgte, sah kein Test: **Auf einem 1920er Bildschirm war die
+    Kopfzeile weg**, sobald jemand ein Projekt öffnete — Projektname, Maße,
+    Druckplatte, Drucker und Material zusammen, verschwunden hinter einem
+    unbeschrifteten Pfeil. Mit leerem Projekt passierte das nicht (dort will
+    sie 103 px), und genau deshalb fällt es beim Ausprobieren nicht auf.
+
+    Ein gekürzter Name ist eine schlechtere Auskunft als der ganze. **Keine
+    Auskunft ist die schlechteste**: Der volle Text bleibt im Tooltip, und wer
+    das Fenster breit zieht, bekommt ihn zurück.
+    """
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._full = text
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        # **Auch der Text aus dem Konstruktor bekommt seinen Tooltip.** Er lief
+        # an :meth:`setText` vorbei, und damit hätte ein so gebautes Label
+        # gekürzt, ohne dass irgendwo noch stünde, was da eigentlich steht. In
+        # dieser Datei starten alle Labels leer, der Fall trat also nie ein —
+        # eine Zusage, die nur zufällig hält, hält nicht.
+        if text:
+            self.setToolTip(text)
+
+    def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
+        """Merkt sich den ganzen Text und zeigt, was hineinpasst."""
+        self._full = text
+        self.setToolTip(text)
+        self._fit()
+
+    def full_text(self) -> str:
+        """Was dastünde, wenn der Platz reichte — für Tests und Vorleser."""
+        return self._full
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Fünf Zeichen statt der vollen Breite.
+
+        Das ist die eine Zeile, an der D6 hängt: Solange hier die volle
+        Textbreite steht, kann die Leiste nicht kürzen, sondern nur
+        wegnehmen.
+        """
+        height = super().minimumSizeHint().height()
+        return QSize(self.fontMetrics().averageCharWidth() * LEAST_CHARACTERS, height)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().resizeEvent(event)
+        self._fit()
+
+    def _fit(self) -> None:
+        """Kürzt auf die aktuelle Breite — aber nur, wenn es eine gibt.
+
+        **Vor dem ersten Layout ist ``width()`` winzig**, und wer dann kürzt,
+        kürzt auf nichts: Gemessen stand nach dem Öffnen eines Projekts ``''``
+        im Titel, obwohl der Name gesetzt war. Ein Label, das seinen Text beim
+        Setzen verliert, ist schlimmer als eines, das die Zeile sprengt —
+        gefunden hat es die Nachmessung, kein Test hätte danach gefragt.
+        """
+        room = self.width()
+        if room <= self.fontMetrics().averageCharWidth() * LEAST_CHARACTERS:
+            super().setText(self._full)
+            return
+        super().setText(
+            self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, room)
+        )
+
 
 class HeaderBar(QWidget):
     """Projekt links, Zustand rechts — eine Zeile, die immer steht.
@@ -83,9 +166,14 @@ class HeaderBar(QWidget):
         super().__init__(parent)
         self.setObjectName("headerBar")
 
-        self.title = QLabel("", self)
+        # **Die drei langen kürzen, die kurzen nicht** (Befund D6). Name, Maße
+        # und Drucker tragen zusammen 878 der 968 Pixel, die diese Zeile
+        # wünschte; „Druckplatte" und „PLA" sind kurz und fest. Wer alles
+        # kürzbar macht, bekommt eine Zeile, in der auch das Material zu „P…"
+        # wird, ohne dass es je nötig wäre.
+        self.title = _EphemeralLabel("", self)
         set_level(self.title, "section")
-        self.bounds = QLabel("", self)
+        self.bounds = _EphemeralLabel("", self)
         set_level(self.bounds, "caption")
 
         self.plate_label = QLabel(tr("Druckplatte"), self)
@@ -95,7 +183,7 @@ class HeaderBar(QWidget):
         self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
         self.plates.currentIndexChanged.connect(self._on_plate)
 
-        self.printer = QLabel("", self)
+        self.printer = _EphemeralLabel("", self)
         set_level(self.printer, "caption")
         self.material = QLabel("", self)
         set_level(self.material, "caption")

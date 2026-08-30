@@ -319,6 +319,13 @@ MODEL_SUFFIXES: Final = _CORE_MODEL_SUFFIXES
 #: Standen sie doppelt, liefen sie auseinander (27.08.2026).
 GCODE_SUFFIXES: Final = _CORE_GCODE_SUFFIXES
 
+#: Wie viel mehr Platz die Werkzeugleiste braucht, bevor sie ihre Wörter
+#: zurückbekommt (D6). Zwei Schwellen statt einer: Wäre es dieselbe, flackerte
+#: die Leiste, sobald jemand das Fenster genau an der Grenze zieht — der
+#: Bereich, in dem beide Antworten stimmen, ist der, in dem beide falsch
+#: aussehen.
+TOOLBAR_HYSTERESIS: Final = 80
+
 #: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
 #: Pinsel zu verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug
@@ -2463,7 +2470,22 @@ class MainWindow(QMainWindow):
         # bleibt eine Zeile hoch; auf schmalen Fenstern sammelt Qt den
         # Überstand wie bei jeder Werkzeugleiste im Pfeilmenü ein.
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
+        # **Und wenn der Platz nicht reicht, kürzen sie, statt zu
+        # verschwinden** (Befund D6). Qt sammelt den Überstand einer
+        # Werkzeugleiste hinter einem unbeschrifteten Pfeil ein — was dort
+        # landet, ist für den Kunden weg. Gemessen an einem geöffneten
+        # Projekt wünschte diese Leiste 2283 Pixel; auf einem 1920er
+        # Bildschirm fiel die ganze Kopfzeile hinein, also Projektname, Maße,
+        # Druckplatte, Drucker und Material zusammen. Bei leerem Projekt
+        # passierte das nicht, und deshalb fällt es beim Ausprobieren nicht
+        # auf. Ein Zeichen ohne Wort ist eine schwächere Auskunft als beides;
+        # gar keins ist keine. :meth:`_fit_toolbar` entscheidet das bei jeder
+        # Größenänderung neu.
+        self._toolbar_wide = True
+        #: Wie breit die Leiste mit Wörtern zuletzt sein wollte — die Marke,
+        #: gegen die zurückgeschaltet wird. Ohne sie misst die Hysterese ihre
+        #: eigene Wirkung und schwingt.
+        self._toolbar_full_width = 0        # Vier der sieben haben ein Menüpendant; von ihm kommen Satz und
         # Kürzel (``source``). Die drei anderen gibt es nur hier und tragen
         # ihren Satz selbst.
         for symbol, label, slot, source, own_hint in (
@@ -10080,6 +10102,45 @@ class MainWindow(QMainWindow):
         # Zeile, also ist beides kein Fehler.
         with suppress(RuntimeError, TypeError):
             self.session.disconnect(self)
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt name
+        super().resizeEvent(event)
+        self._fit_toolbar()
+
+    def _fit_toolbar(self) -> None:
+        """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6).
+
+        Passt die Leiste in ihrer breiten Form nicht mehr ins Fenster,
+        verlieren die Knöpfe ihr Wort und behalten ihr Zeichen. Der Name geht
+        dabei nicht verloren — er steht am ``QAction``, im Tooltip und im
+        ``statusTip``, also dort, wo ihn Bildschirmleser und Statuszeile
+        ohnehin lesen (`oberflaeche.md`, „Ein Zeichen darf allein stehen").
+
+        **Zwei Schwellen, nicht eine.** Umgeschaltet wird bei knapp, zurück
+        erst bei deutlich mehr Platz; sonst flackert die Leiste, wenn jemand
+        das Fenster genau an der Grenze zieht. Dieselbe Vorsicht wie bei jeder
+        Hysterese: Ein Rand, an dem zwei Antworten stimmen, ist ein Rand, an
+        dem beide falsch aussehen.
+        """
+        room = self.toolbar.width()
+        if room <= 0:
+            return
+        if self._toolbar_wide:
+            wanted = self.toolbar.sizeHint().width()
+            if wanted > room:
+                # **Die Breite der Wortform merken, bevor sie verschwindet.**
+                # Der erste Anlauf verglich den Platz mit der Wunschbreite des
+                # *aktuellen* Stils — und die ist ohne Wörter kleiner. Die
+                # Leiste schaltete deshalb sofort zurück, wurde wieder zu
+                # breit, schaltete wieder um: gemessen sprang sie über sieben
+                # Fensterbreiten viermal hin und her. Eine Hysterese, die ihre
+                # eigene Wirkung misst, ist keine.
+                self._toolbar_full_width = wanted
+                self._toolbar_wide = False
+                self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        elif room > self._toolbar_full_width + TOOLBAR_HYSTERESIS:
+            self._toolbar_wide = True
+            self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher

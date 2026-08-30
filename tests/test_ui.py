@@ -10224,3 +10224,97 @@ def test_the_key_field_shows_a_whole_key(qt_app: QApplication) -> None:
     finally:
         dialog.reject()
         QApplication.instance().setStyleSheet(before)
+
+
+def test_the_header_survives_a_narrow_window(window: MainWindow, tmp_path: Path) -> None:
+    """Die Kopfzeile kürzt, statt hinter dem Pfeil zu verschwinden (D6).
+
+    **Was gemessen war.** Die Kopfzeile lebt als Widget in der
+    Werkzeugleiste, und Qt gibt einem Widget dort entweder seine
+    ``sizeHint``-Breite oder gar keinen Platz. Mit **offenem** Projekt wollte
+    sie 968 Pixel (Name 273, Maße 275, Drucker 330), die Leiste damit 2283 —
+    und auf einem **1920er Bildschirm war die ganze Zeile weg**: Projektname,
+    Maße, Druckplatte, Drucker und Material zusammen, hinter einem
+    unbeschrifteten Pfeil.
+
+    **Mit leerem Projekt passiert das nicht** (dort will sie 103 px), und
+    genau deshalb fällt es beim Ausprobieren nicht auf. Der Test öffnet
+    deshalb ein Beispiel, statt das leere Fenster zu messen — sonst prüfte er
+    die Lage, in der der Fehler nie auftrat.
+
+    Zwei Zusagen: Die Zeile **bleibt** in jeder Breite, und ihr Text geht
+    dabei nicht verloren — gekürzt wird die Anzeige, der volle Wortlaut steht
+    weiter in ``full_text()`` und im Tooltip.
+    """
+    # **Angezeigt werden muss es.** Ohne ``show()`` antwortet ``isVisible``
+    # für jedes Kind falsch, und der Test prüfte eine Lage, die kein Kunde hat
+    # (`oberflaeche.md`, „Qt lügt vor dem Anzeigen"). ``WA_DontShowOnScreen``
+    # hält das Fenster dabei unsichtbar.
+    window.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    window.show()
+    QApplication.processEvents()
+
+    beispiele = sorted((Path(__file__).parent.parent / "app" / "examples").glob("*.p3d"))
+    assert beispiele, "ohne Beispielprojekt misst dieser Test die leere Lage"
+    window.session.open_project(beispiele[0])
+    window.session.wait_for_idle()
+    window._on_project()
+
+    voller_name = window.header.title.full_text()
+    assert voller_name, "die Kopfzeile trägt den Projektnamen"
+
+    for breite in (1920, 1600, 1366, 1280, 1100):
+        window.resize(breite, 900)
+        window.toolbar.updateGeometry()
+        QApplication.processEvents()
+
+        assert window.header.isVisible(), (
+            f"bei {breite} px ist die Kopfzeile im Überlaufmenü — "
+            "Projektname, Drucker und Platte sind für den Kunden weg"
+        )
+        assert window.header.title.full_text() == voller_name, (
+            f"bei {breite} px hat die Kopfzeile ihren Text verloren, statt ihn zu kürzen"
+        )
+
+
+def test_a_header_label_can_shrink_without_losing_its_text(qt_app: QApplication) -> None:
+    """Das kürzbare Label meldet eine kleine Mindestbreite — daran hängt D6.
+
+    Der Fehler war nicht, dass die Kopfzeile zu lang war, sondern dass sie
+    **nicht schmaler werden konnte**: Ein ``QLabel`` gibt als Mindestbreite
+    die volle Textbreite an, und ein Widget in einer Werkzeugleiste bekommt
+    dann entweder diese Breite oder gar keinen Platz. Gemessen waren es 273
+    Pixel für den Projektnamen allein.
+
+    Geprüft wird hier direkt am Label und nicht am Fenster, und das hat einen
+    Grund: Im gebauten Fenster **greift die Kürzung nie** — die Leiste gibt
+    der Kopfzeile genug Raum, seit sie selbst kürzt. Die Zusage gilt trotzdem,
+    sie ist die Vorsorge für den Tag, an dem der Platz doch knapp wird. Ein
+    Test über das Fenster bliebe grün, auch wenn das Label seine volle Breite
+    zurückverlangte — die Mutationsprobe hat genau das gezeigt.
+    """
+    from app.ui.header import LEAST_CHARACTERS, _EphemeralLabel
+
+    label = _EphemeralLabel("Allgemeiner FDM-Drucker 220 mm")
+    voll = label.sizeHint().width()
+    schmal = label.minimumSizeHint().width()
+
+    assert voll > 100, "ohne einen langen Text prüft dieser Test nichts"
+    assert schmal < voll / 3, (
+        f"das Label verlangt {schmal} px Mindestbreite bei {voll} px Wunsch — "
+        "damit kann die Kopfzeile nicht kürzen, sondern nur verschwinden"
+    )
+    assert schmal <= label.fontMetrics().averageCharWidth() * LEAST_CHARACTERS + 2
+
+    label.resize(60, 20)
+    QApplication.processEvents()
+    assert label.full_text() == "Allgemeiner FDM-Drucker 220 mm", "der ganze Text bleibt bekannt"
+    assert label.toolTip() == label.full_text(), "und er steht im Tooltip"
+
+    # **Beide Wege, nicht nur einer.** Der Text kommt im Betrieb über
+    # ``setText`` und nur im Test aus dem Konstruktor; eine Probe, die den
+    # zweiten prüft und den ersten nicht, ließ die Mutation „Tooltip aus
+    # setText entfernen" grün durchgehen.
+    label.setText("Ein anderer, ebenfalls sehr langer Druckername")
+    assert label.full_text() == "Ein anderer, ebenfalls sehr langer Druckername"
+    assert label.toolTip() == label.full_text(), "auch der gesetzte Text steht im Tooltip"
