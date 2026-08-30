@@ -622,7 +622,12 @@ class SketchCanvas(QWidget):
         self.measure_field.setToolTip(
             tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
         )
-        self.measure_field.setAccessibleName(tr("Abstand"))
+        # **„Maß" und nicht „Abstand".** Dasselbe Feld nimmt die Länge einer
+        # Linie und den Durchmesser eines Kreises; der Tooltip zwei Zeilen
+        # darüber sagt das seit je, der Name für den Bildschirmleser sagte
+        # „Abstand". Wer nicht sieht, was er zeichnet, tippte seinen Ø damit in
+        # ein Feld, dessen Name eine dritte Sache meint.
+        self.measure_field.setAccessibleName(tr("Maß"))
         self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.second_measure_field = LengthSpin(self)
         """Das zweite Maß eines Rechtecks — Höhe nach Breite.
@@ -3245,7 +3250,10 @@ class ExpressionDialog(QDialog):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Abstand"))
+        # Derselbe Dialog öffnet für jedes Maß mit Wert — Länge, Radius,
+        # Durchmesser. „Abstand" stand als Titel über allen dreien und war bei
+        # zweien schlicht falsch.
+        self.setWindowTitle(tr("Maß"))
         self.setMinimumWidth(320)
         self._values = dict(parameter_values)
 
@@ -3390,8 +3398,14 @@ class PointDialog(QDialog):
 #: eine falsche Auswahl mit einem Fehler zu quittieren.
 _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
     "distance": (("point", "point"),),
-    "radius": (("point", "point"),),
-    "diameter": (("point", "point"),),
+    # **Radius und Durchmesser stehen hier bewusst nicht.** Sie gelten nicht
+    # für zwei beliebige Punkte, sondern für Mittelpunkt und Rand **desselben**
+    # Kreises — als Zweipunktmuster eingetragen bot die Leiste sie bei jeder
+    # Auswahl an, und wer sie dort nahm, bekam eine Bedingung ohne Sinn (der
+    # Bestandstest hat es gefangen). Sie entstehen auf dem Weg, auf dem der
+    # Kunde sie meint: beim Zeichnen eines Kreises mit getipptem Maß, und beim
+    # Ändern dieses Maßes. Ein Knopf, der sie nachträglich an einen bestehenden
+    # Kreis hängt, wäre ein eigener Bedienentwurf und keine Zeile hier.
     "coincident": (("point", "point"),),
     "horizontal": (("line",),),
     "vertical": (("line",),),

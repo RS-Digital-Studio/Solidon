@@ -1367,16 +1367,28 @@ def test_a_diameter_measures_the_whole_circle_and_a_radius_half_of_it() -> None:
 
     Beide neuen Arten rechnen dieselbe Gleichung; sie unterscheiden sich in
     einem Faktor und darin, was sie **heißen**. Geprüft wird deshalb nicht die
-    Gleichung, sondern das Ergebnis: Derselbe Wert 3,2 ergibt als Radius einen
-    Kreis von 3,2 und als Durchmesser einen von 1,6 — die Hälfte, wie es sich
-    gehört.
+    Gleichung, sondern das Ergebnis — und **jede Zahl trägt hier ihr Maß**:
+    Derselbe Wert 3,2 ergibt als Radius-Bedingung einen Kreis mit **Radius**
+    3,2, als Durchmesser-Bedingung einen mit **Radius 1,6**, und der misst dann
+    3,2 im Durchmesser, wie der Kunde es getippt hat.
+
+    Hier stand zuerst „Ø 3,2 ist ein Kreis von 1,6", und das ist genau der
+    Fehler, gegen den dieses Paket gebaut ist: eine Zahl ohne ihr Maß. Ein
+    Kreis mit Ø 3,2 **ist** ein Kreis von 3,2 — 1,6 ist sein Radius. Robert hat
+    den Satz beim Lesen gefangen (31.08.2026).
     """
     import math
 
     from app.core.sketch.solver import solve_sketch
     from app.core.types import Sketch, SketchConstraint, SketchElement
 
-    def circle_of(kind: str, value: str) -> float:
+    def radius_of(kind: str, value: str) -> float:
+        """Der Abstand vom Mittelpunkt zum Rand — also der **Radius**.
+
+        Der Name nennt das Maß, und das ist keine Förmlichkeit: ``circle_of``
+        hieß er zuerst, und aus „ein Kreis von 1,6" wurde dadurch ein Satz, der
+        zwei Maße verwechselt.
+        """
         sketch = Sketch(
             plane="xy",
             elements=(SketchElement("circle", ((0.0, 0.0), (1.0, 0.0))),),
@@ -1389,11 +1401,15 @@ def test_a_diameter_measures_the_whole_circle_and_a_radius_half_of_it() -> None:
         centre, rim = solved.elements[0].points
         return math.hypot(rim[0] - centre[0], rim[1] - centre[1])
 
-    assert abs(circle_of("radius", "3.2") - 3.2) < 1e-6, "R 3,2 ist ein Kreis von 3,2"
-    assert abs(circle_of("diameter", "3.2") - 1.6) < 1e-6, "Ø 3,2 ist ein Kreis von 1,6"
+    assert abs(radius_of("radius", "3.2") - 3.2) < 1e-6, "R 3,2 muss einen Radius von 3,2 ergeben"
+    assert abs(radius_of("diameter", "3.2") - 1.6) < 1e-6, (
+        "Ø 3,2 muss einen Radius von 1,6 ergeben — der Kreis misst dann 3,2 im Durchmesser"
+    )
     # Und die alte Art bleibt, was sie war — sonst änderte die Migration doch
     # noch Geometrie, nur an anderer Stelle.
-    assert abs(circle_of("distance", "3.2") - 3.2) < 1e-6, "der Abstand bleibt der Abstand"
+    assert abs(radius_of("distance", "3.2") - 3.2) < 1e-6, (
+        "der alte Abstand bleibt einer: 3,2 vom Mittelpunkt zum Rand"
+    )
 
 
 def test_both_lists_of_constraint_kinds_stay_the_same() -> None:
