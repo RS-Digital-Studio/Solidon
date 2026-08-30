@@ -127,9 +127,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
-| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
+| Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch drei Pakete: P2 (Haken-Reste), P6 (aufs Bett setzen) und P9 (Züge bündeln) — P1/P3/P5/P7/P8 sind fertig, P4 gestrichen; Review je Paket bei der Freigabe |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
-| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | Roberts Einrasten ist gebaut (`edfb89b9`, sechs Achsenansichten am Modell); bei 3a bleiben drei Messungen (EndInteractionEvent am Fensterrand, Fusion-Fangbereich) und danach der eigentliche Zug bei gekippter Kamera |
+| Aufziehen/Absenken bei gekippter Kamera | Aufziehen und Absenken sollen auch gekippt präzise sein (30.08.2026) | Roberts Einrasten ist gebaut (`edfb89b9`), Fensterrand-Lücke widerlegt, Fangbereichs-Kosten gemessen (10° schluckt nur Lagen ohne Nutzwert); bei 3a bleibt der eigentliche Zug bei gekippter Kamera |
 | Neun Z-Pakete des Zeichenmodus | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — Z1 zuerst (Escape vernichtet die Zeichnung; entschieden: merken statt vernichten), dann Maß-ändern und die Ausgänge; Review je Paket |
 | Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | die Abarbeitung — V1 ist zu (`7d46a87f`), V4 bei 50, V2/V5/V7 bei 72; Review je Paket |
 | Ø-Bedingung im Kern | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | eine eigene Format-Entscheidung nach Z7a — Durchmesser als echte Bedingungsart bis in die Projektdatei, mit Migrationsblick |
@@ -12940,7 +12940,7 @@ bei Robert (Zug ohne Vorauswahl; Ort der Zahlenfelder).
 
 | Paket | Inhalt | Größe | Stand |
 |---|---|---|---|
-| P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle in der Leiste (Robert, 30.08.2026), „Gizmo"-Haken entfällt | M | **frei — nächstes Paket für d3** |
+| P1 | Transformleiste wird Slicer-Leiste: drei Rollenknöpfe, Zahlenfelder je Rolle in der Leiste (Robert, 30.08.2026), „Gizmo"-Haken entfällt — das Werkzeug ist der Griff; `LengthSpin` zieht bei Einheitenwechsel auch in offenen Leisten nach; Fang-Menü hinter Raster-Symbol | M | **fertig** (`b43aab74`, d3; 391 Testzeilen, Handbuchabsatz nennt den Tipp-Weg) |
 | P2 | Haken-Reste und Texte nachziehen | S | nach P1 |
 | P3 | Mehrfachauswahl ehrlich: Zug bewegt nie still nur einen | S | **fertig** (`cb78bd58`): Zug bewegt alle Gewählten in einer Transaktion, die Statuszeile sagt es vorher; Drehen/Skalieren siehe P5 |
 | P4 | ~~Zug ohne Vorauswahl~~ **entfällt** — Robert hat entschieden (30.08.2026): erst wählen, dann ziehen bleibt | — | zu |
@@ -13087,19 +13087,35 @@ greifenden Gegenproben (iso aufgenommen → Ausnahme-Test rot; Fangbereich
 auf 5° gesenkt → Deckungs-Test rot). Keine zweite Schwelle neben dem
 Einrasten — der `axis_hit`-Kommentar behält recht.
 
-- [ ] **3a, Rest in drei Messungen, dann der eigentliche Zug**:
-      (1) Feuert `EndInteractionEvent` auch beim Loslassen außerhalb
-      des Fensters? Die Schwung-Geste ist der wahrscheinlichste Weg in
-      die Lage, die das Einrasten nie sieht — `window_bench`, beide
-      Fälle (drinnen als Kontrolle der Sonde). (2) Fusion-Gegenmessung
-      zur Fangbereichsgröße (Erwartung vorher notiert: Fusion fängt
-      nicht und setzt auf den ViewCube). (3) Dann Roberts Kernauftrag:
-      Ist-Verhalten des Zugs bei gekippter Kamera erheben (Abbildung
-      Mausbewegung → Höhe, Zahl während des Zugs wie im Viewport),
-      Befunde und Verbesserungsschnitt vorlegen. Regeln:
-      `zeichenflaeche.md` lädt mit `sketch_editor.py`; Regel 2 bleibt
-      (der Editor sammelt Gesten, das Ergebnis entsteht bei der
-      Auswertung).
+Die Fensterrand-Frage ist gemessen und zu (3a, 30.08.2026, echtes
+Fenster, maximiert): `EndInteractionEvent` feuert auch beim Loslassen
+außerhalb (oben, links, weit unterhalb), und die Kamera rastet in
+jedem Fall exakt ein — die Schwung-Geste über den Rand landet nicht in
+der unbrauchbaren Lage. Der Weg dorthin brauchte vier Anläufe, und der
+**Kontrollfall (Loslassen innerhalb) fing jeden einzelnen**: winziger
+Interactor ohne Projekt, Qt-Ereignisse statt VTK, Griff in der
+Bildmitte (Auswahl statt Drehung) und waagerechter Zug, falsche
+Maustaste im Slicer-Schema. Ohne Kontrolle wäre viermal in Folge eine
+perfekt aussehende Bestätigung der Lücke herausgekommen — der Fall
+geht als Beleg in `sondenbau.md`.
+
+Die Fusion-Gegenmessung ist begründet entfallen (Entscheidung mit
+Freigabe, 30.08.2026): Fusion klickt Ansichten am ViewCube an, ein
+Fangbereich beim freien Drehen ist dort nicht bekannt — der Vergleich
+hätte „nicht vergleichbar" ergeben. Stattdessen ist gemessen, **was der
+Fangbereich den Kunden kostet**: Unter 10° Kippung sieht man an einem
+40-mm-Teil 6,9 mm Bauhöhe (17 %) — praktisch eine Draufsicht, die
+niemand absichtlich hält; bei 15° schon ein Viertel, das wäre eine
+gewollte Schrägansicht. Die 10° liegen damit zwischen zwei Grenzen aus
+der Sache: über 7° (ein Pixel je Rasterschritt) und unter 15°
+(brauchbare Schräge). Die Zahl trägt aus eigener Herleitung.
+
+- [ ] **3a, jetzt Roberts Kernauftrag**: Ist-Verhalten des Zugs bei
+      gekippter Kamera erheben (Abbildung Mausbewegung → Höhe, Zahl
+      während des Zugs wie im Viewport), Befunde und
+      Verbesserungsschnitt vorlegen. Regeln: `zeichenflaeche.md` lädt
+      mit `sketch_editor.py`; Regel 2 bleibt (der Editor sammelt
+      Gesten, das Ergebnis entsteht bei der Auswertung).
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
