@@ -4759,6 +4759,10 @@ class Viewport(QWidget):
 
         mesh = self._nearest_mesh(picked)
         if mesh is None:
+            # Kein stiller Ausgang: Wer am Messen ist und danebenklickt,
+            # sieht sonst einfach nichts — derselbe Grund, aus dem der
+            # Winkel-Pfad seine Sätze führt (§2.7).
+            self.measurementStatus.emit(tr("Zum Messen einen Körper anklicken."))
             return
         snapped = snap(mesh, picked)
 
@@ -4766,10 +4770,15 @@ class Viewport(QWidget):
             thickness = wall_thickness(mesh, snapped.point)
             if thickness is not None:
                 self._add(Measurement(kind="thickness", value=thickness, points=(snapped.point,)))
+            else:
+                self.measurementStatus.emit(
+                    tr("Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.")
+                )
             return
 
         if self._pending_point is None:
             self._pending_point = snapped.point
+            self.measurementStatus.emit(tr("Erster Punkt gewählt — zweiten Punkt anklicken."))
             return
         self._add(
             Measurement(

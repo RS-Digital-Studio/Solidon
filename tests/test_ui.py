@@ -792,6 +792,43 @@ def test_angle_measurement_uses_two_detected_planes(
     assert viewport.measurements.entries[0].value == pytest.approx(90.0)
 
 
+def test_measuring_never_ends_in_silence(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die drei stummen Ausgänge des Messens melden sich jetzt (§2.7).
+
+    Der Winkel-Pfad machte es seit je vor; Distanz und Wandstärke hatten
+    drei ``return`` ohne ein Wort — Klick ins Leere, Wand ohne Messwert,
+    erster Punkt gesetzt. Wer am Messen war und danebenklickte, sah einfach
+    nichts und hielt das Werkzeug für kaputt.
+    """
+    import trimesh as raw_trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    statuses: list[str] = []
+    viewport.measurementStatus.connect(statuses.append)
+    viewport._measure_mode = "distance"
+
+    monkeypatch.setattr(viewport, "_nearest_mesh", lambda point: None)
+    viewport._on_picked((0.0, 0.0, 0.0))
+    assert statuses and "Körper anklicken" in statuses[-1], statuses
+
+    box = MeshData.of(raw_trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    monkeypatch.setattr(viewport, "_nearest_mesh", lambda point: box)
+    viewport._on_picked((5.0, 0.0, 0.0))
+    assert "zweiten Punkt anklicken" in statuses[-1], statuses
+    assert viewport._pending_point is not None
+
+    viewport._measure_mode = "thickness"
+    monkeypatch.setattr("app.ui.viewport.wall_thickness", lambda mesh, point: None)
+    viewport._on_picked((5.0, 0.0, 0.0))
+    assert "Wand" in statuses[-1], statuses
+    assert len(viewport.measurements) == 0, "gemeldet heißt nicht gemessen"
+
+
 def test_opening_a_model_leaves_the_start_screen(window: MainWindow) -> None:
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
