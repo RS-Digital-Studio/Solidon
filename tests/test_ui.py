@@ -2551,6 +2551,82 @@ def test_the_undo_sweep_warning_offers_the_history(window: MainWindow) -> None:
         assert action.id in known, f"{action.id} hat keinen Handler"
 
 
+def test_the_too_large_map_offers_the_operation_that_helps(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Hauptvorschlag zu „Modell zu groß" löst die Operation wirklich aus.
+
+    Geprüft wird der **Klickweg**, nicht die Funktion: Der Handler wird über
+    ``error_handlers()`` geholt und mit dem echten Fehler gerufen — so, wie
+    der Dialog es tut. Ein Test, der ``run_operation`` direkt aufriefe, bliebe
+    grün, wenn der Draht dazwischen fehlt, und genau der fehlte hier.
+
+    ``decimate_mesh`` stand bis zum 30.08.2026 nur als Satz da, obwohl die
+    Operation gleichen Namens im Register liegt — ein verschenkter Klickweg
+    beim häufigsten Rat dieser Meldung.
+    """
+    from app.core.perceive.maps import MapTooLarge
+
+    gerufen: list[str] = []
+    monkeypatch.setattr(
+        type(window), "run_operation", lambda self, spec, given=None: gerufen.append(spec.name)
+    )
+
+    fehler = MapTooLarge(triangles=9_000_000)
+    angeboten = [action.id for action in fehler.suggestions]
+    assert "decimate_mesh" in angeboten, "der Fehler bietet den Rat überhaupt an"
+
+    handler = window.error_handlers()
+    assert "decimate_mesh" in handler, "und die Oberfläche kennt ihn"
+    handler["decimate_mesh"](fehler)
+
+    assert gerufen == ["decimate_mesh"], f"die Operation wurde nicht ausgelöst: {gerufen}"
+
+
+def test_an_unreachable_address_opens_that_address_not_the_product_page(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Browser-Knopf öffnet die Adresse aus dem Fehler.
+
+    **Und ausdrücklich nicht die Produktseite.** ``open_website`` liegt
+    daneben und wäre die bequeme Verwechslung: Der Kunde wollte zu *seiner*
+    Datei, deren Adresse er selbst eingegeben hat und die in ``values["url"]``
+    mitreist.
+
+    Geprüft am Klickweg über ``error_handlers()``, mit gemocktem
+    ``QDesktopServices`` — die Zusage ist „diese Adresse geht auf", nicht
+    „irgendetwas geht auf".
+    """
+    from PySide6.QtGui import QDesktopServices
+
+    from app.ui import main_window as modul
+
+    geoeffnet: list[str] = []
+    monkeypatch.setattr(
+        modul.QDesktopServices,
+        "openUrl",
+        staticmethod(lambda url: geoeffnet.append(url.toString())),
+        raising=True,
+    )
+    assert QDesktopServices is not None  # der Import oben ist die geprüfte Stelle
+
+    adresse = "https://beispiel.test/teil.stl"
+    fehler = errors.ValidationError(
+        "url",
+        "Diese Adresse führt auf eine Webseite, nicht auf eine Datei.",
+        value=adresse,
+        constraint="web_page",
+        values={"url": adresse, "name": "teil.stl", "type": "text/html"},
+        suggestions=[errors.OPEN_IN_BROWSER],
+    )
+
+    handler = window.error_handlers()
+    assert "open_in_browser" in handler, "die Oberfläche kennt den Rat"
+    handler["open_in_browser"](fehler)
+
+    assert geoeffnet == [adresse], f"geöffnet wurde: {geoeffnet}"
+
+
 def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     """Regel 17 hat zwei Hälften, und die zweite fehlte.
 
@@ -2600,6 +2676,17 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
 #: ``Session.cancel_split`` gab es die ganze Zeit. Der Fehler war nicht
 #: „kein Handler", sondern **dass niemand gefragt hat**.
 #:
+#: **Und diese Menge ist selbst schon einmal daran vorbeigelaufen.** Als sie
+#: am 30.08.2026 von vier auf 32 Einträge wuchs, wurde sie **pauschal**
+#: befüllt — die Regel darüber stand im selben Commit und wurde auf keinen
+#: einzigen Namen angewandt. Der Release-Durchgang eine Stunde später fand
+#: zwei, für die es sehr wohl eine Einlösung gab: ``decimate_mesh`` (die
+#: Operation liegt im Register) und ``open_in_browser`` (die Adresse reist im
+#: Fehler mit). Beide sind jetzt Konstanten mit Handler.
+#:
+#: Wer diese Menge erweitert, prüft **jeden** Namen einzeln. Eine Liste, die
+#: in einem Zug entsteht, entsteht ungeprüft.
+#:
 #: Die zweite Gruppe darunter ist gemessen und nicht geraten: 32 Kennungen an
 #: 44 Fundstellen, von denen 26 in ``suggestions=`` eines geworfenen Fehlers
 #: stehen und **keine einzige** einen Handler hat. Das ist kein Befund, sondern
@@ -2621,10 +2708,8 @@ ACTIONS_WITHOUT_A_CONSTANT = {
     "check_input",
     "coarser_pitch",
     "decimate_first",
-    "decimate_mesh",
     "fewer_iterations",
     "fix_parent",
-    "open_in_browser",
     "open_sketch",
     "pick_face",
     "pick_feature",

@@ -24,7 +24,7 @@ from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, Action, UserError
+from app.core.errors import CANCEL, DECIMATE_MESH, UserError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
@@ -145,7 +145,7 @@ class MapTooLarge(UserError):
 
     default_title = _("Für eine Analysekarte ist dieses Modell zu groß.")
     default_suggestions = (
-        Action(id="decimate_mesh", label=_("Dreiecke verringern."), primary=True),
+        DECIMATE_MESH,
         CANCEL,
     )
 

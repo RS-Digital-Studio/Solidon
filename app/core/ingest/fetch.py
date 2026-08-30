@@ -33,7 +33,7 @@ from pathlib import PurePosixPath
 from typing import Final
 from urllib.parse import unquote, urlsplit
 
-from app.core.errors import Action, ExternalToolError, ValidationError
+from app.core.errors import OPEN_IN_BROWSER, ExternalToolError, ValidationError
 from app.core.ingest.loader import MAX_FILE_BYTES
 from app.core.ingest.plan import MODEL_SUFFIXES
 from app.core.log import get_logger
@@ -274,7 +274,4 @@ def _reject_web_page(answer: object, name: str, url: str) -> None:
 
 #: Der Ausweg, der bei beiden Adressfehlern gilt: die Seite im Browser
 #: öffnen und dort herunterladen.
-_DOWNLOAD_YOURSELF: Final = Action(
-    id="open_in_browser",
-    label=_("Seite im Browser öffnen"),
-)
+_DOWNLOAD_YOURSELF: Final = OPEN_IN_BROWSER

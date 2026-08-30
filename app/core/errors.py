@@ -96,6 +96,18 @@ CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen."))
 #: eingestellte Slicer, stehen auf vielen Rechnern zwei weitere daneben —
 #: und die Absage bot bisher keinen Weg zu ihnen an (§29, §2.1).
 CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen."), primary=True)
+#: Zwei verschenkte Klickwege, gefunden beim Release-Durchgang am 30.08.2026 —
+#: und zwar in der Ausnahmemenge des Wächters, die eine Stunde zuvor pauschal
+#: befüllt worden war. Beide standen als **Satz** da, was ehrlich ist
+#: (``dialogs.unhandled_advice``), aber an diesen zwei Stellen zu wenig: Der
+#: naheliegendste Rat soll ein Knopf sein, wo die Anwendung ihn einlösen kann.
+#:
+#: ``decimate_mesh`` ist der Hauptvorschlag zu „Für eine Analysekarte ist
+#: dieses Modell zu groß" — und die Operation gleichen Namens liegt im
+#: Register. ``open_in_browser`` nennt eine Adresse, die in ``values["url"]``
+#: mitreist, und ``QDesktopServices`` öffnet sie.
+DECIMATE_MESH = Action("decimate_mesh", _("Dreiecke verringern."), primary=True)
+OPEN_IN_BROWSER = Action("open_in_browser", _("Seite im Browser öffnen"))
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der

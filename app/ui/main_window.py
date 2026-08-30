@@ -21,11 +21,12 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final, cast
 
-from PySide6.QtCore import QObject, QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QCloseEvent,
+    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -3015,6 +3016,28 @@ class MainWindow(QMainWindow):
         elif stored is not None:
             action.setStatusTip(str(stored))
             action.setToolTip(str(stored))
+
+    def _open_error_url(self, error: AppError) -> None:
+        """Öffnet die Adresse, die im Fehler mitreist — nicht die Produktseite.
+
+        ``open_website`` wäre hier falsch: Der Kunde wollte zu **seiner**
+        Datei, und ihre Adresse steht in ``values["url"]``. Der Rat „Seite im
+        Browser öffnen" stand bis zum 30.08.2026 nur als Satz da, obwohl die
+        Anwendung ihn einlösen kann.
+
+        Fehlt die Adresse, geschieht nichts — ein Knopf, der ins Leere führt,
+        wäre schlimmer als der Satz, den er ersetzt. Angeboten wird er
+        ohnehin nur zu den zwei Adressfehlern, die sie mitgeben.
+
+        **Woher die Adresse kommt**, damit der nächste Leser die Frage nicht
+        neu stellt: aus der Eingabe des Import-Dialogs — der Kunde hat sie
+        selbst getippt oder eingefügt, und ``fetch`` reicht sie unverändert in
+        ``values`` durch. Geöffnet wird also nichts, was er nicht schon vor
+        sich hatte.
+        """
+        adresse = str(error.values.get("url", "")) if error.values else ""
+        if adresse:
+            QDesktopServices.openUrl(QUrl(adresse))
 
     def _say_why(self, action: QAction, reason: str) -> None:
         """Schreibt den Grund einer Sperre an den Eintrag — und nimmt ihn zurück.
@@ -8074,6 +8097,20 @@ class MainWindow(QMainWindow):
             # Druckeinstellungen. Befunde und Fassungen von 3d-druck-fb.
             "show_output": lambda error: show_details(error, self),
             "check_profile": lambda _error: self.action_print_settings(),
+            # **Zwei verschenkte Klickwege, gefunden beim Release-Durchgang.**
+            # Beide standen als Satz da — ehrlich, aber an diesen Stellen zu
+            # wenig: Der naheliegendste Rat soll ein Knopf sein, wo die
+            # Anwendung ihn einlösen kann.
+            #
+            # *Dreiecke verringern* ist der Hauptvorschlag zu „Für eine
+            # Analysekarte ist dieses Modell zu groß", und die Operation
+            # gleichen Namens liegt im Register — der Weg dorthin ist der
+            # Dialog, den jede Operation bekommt.
+            "decimate_mesh": lambda _error: self.run_operation(REGISTRY.get("decimate_mesh")),
+            # Und die Adresse reist im Fehler mit (``values["url"]``): Der
+            # Knopf öffnet **sie**, nicht die Produktseite. ``open_website``
+            # wäre hier falsch — der Kunde wollte zu *seiner* Datei.
+            "open_in_browser": lambda error: self._open_error_url(error),
             # **Sechsmal angeboten, nie ausgeführt.** Wenn der Slicer fehlt,
             # abbricht oder seine Kommandozeile unbekannt ist, schlägt die
             # Übergabe vor, nur zu exportieren und selbst zu slicen — an sechs
