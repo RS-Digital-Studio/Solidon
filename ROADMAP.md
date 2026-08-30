@@ -121,7 +121,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Die zweite Slicer-Übergabeart hat keinen Aufrufer | Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026) | den Anschluss an den Druckdialog: Übergabeart wählbar, Wahl gemerkt — der Fensterweg bekommt denselben Platz wie der Konsolenlauf (55) |
 | Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
-| Scheitert ein Dienststart, ist sein Protokoll weg | Der Startweg sammelt keine Einzelheiten (30.08.2026) | fb: die Prozessausgabe auch am Startweg sammeln und über den Einzelheiten-Knopf zeigen |
+| Der Textweg verweist auf ein Modell, das kein Einrichtungspunkt bringt | Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026) | Roberts Entscheidung: SDXL als siebter Einrichtungspunkt (~7 GB, fb) oder der Satz nennt Pfad und Bild-Ausweg statt des toten Verweises (5d) |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12616,7 +12616,33 @@ Dienststart, steht der Satz da (seit dem Adressen-Fix mit der Seite zum
 Nachsehen), aber das Startprotokoll des Dienstes ist weg — genau die
 Zeilen, mit denen jemand zum Support ginge.
 
-- [ ] Entscheiden und bauen (fb): Die Ausgabe des gestarteten Prozesses
-      auch am Startweg sammeln und über denselben *Einzelheiten*-Knopf
-      zeigen — mehr als eine Zeile, deshalb erst hier festgehalten statt
-      nebenbei gebaut.
+- [x] Erledigt mit `eb64c90f` (30.08.2026): Der Startweg füllt die
+      Einzelheiten mit Aufruf und Adresse — und der ungesuchte zweite
+      Befund gleich mit: `_start_tool` räumt die Ausgabe des vorigen
+      Vorgangs jetzt vor jedem Rückweg ab, statt die pip-Ausgabe der
+      Installation unter *Details anzeigen* stehen zu lassen.
+
+---
+
+## Der Textweg nennt ein Modell, das kein Weg beschafft (30.08.2026)
+
+Weg 3 aus Text: `missing_models("text_to_mesh")` meldet die Bildrolle —
+TripoSG und BiRefNet liegen da, ein SDXL-Modell nicht. `comfy_setup`
+richtet den Bildweg vollständig ein (7,5 GB TripoSG, 445 MB BiRefNet) und
+den Textweg nicht, und keiner der sechs Punkte in `install.REQUIREMENTS`
+bringt ein Bildmodell mit. Der Kunde liest die ehrliche Auskunft „ComfyUI
+braucht ein SDXL-Modell unter models/checkpoints", drückt *Zusätzliche
+Programme …* — und findet dort nichts dafür. Die Auskunft stimmt, der Weg
+dahinter ist keiner (gemessen von 5d, unabhängig bestätigt von fb;
+seit 5ds Erzeugen-Knopf-Fix ist der Knopf dabei gesperrt statt tot). Auf
+dieser Maschine ist SDXL seit dem 30.08.2026 installiert und
+`readiness("text_to_mesh")` steht auf ready — die Maschine kann den Weg,
+das Produkt noch nicht.
+
+- [ ] Roberts Entscheidung — rund sieben Gigabyte für jeden Kunden, der
+      den Textweg will, gegen einen Satz, der ehrlich sagt, dass man ein
+      Bild mitbringt: **Für SDXL** heißt ein siebter Einrichtungspunkt in
+      `install.py` plus Ladeschritt in `comfy_setup` (fb); **gegen SDXL**
+      heißt, der Dialogsatz zeigt nicht mehr auf *Zusätzliche Programme*,
+      sondern nennt den Pfad `models/checkpoints/` und das Bild als
+      Ausweg (5d). Beide Fassungen liegen vorbereitet.
