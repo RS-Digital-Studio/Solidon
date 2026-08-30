@@ -119,7 +119,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
-| Die `read_dense`-Marke hängt am Sammelumfang | Die read_dense-Marke misst je nach Sammelumfang zwei verschiedene Dinge (30.08.2026) | eine Entscheidung mit Messung: den trimesh-Import vor die Uhr ziehen — fb's Beleg: 1072 ms allein gegen 427–443 im Volllauf, nur diese eine Marke betroffen |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12685,11 +12684,14 @@ Messung verworfen — die Messung war richtig und trug nur, solange kein
 verzögerter Import im Spiel war; seit dem `deferred`-Umbau entscheidet die
 Auswahl, wer den trimesh-Import bezahlt.
 
-- [ ] Eine Entscheidung mit Messung: den Import vor die Uhr ziehen (ein
-      Aufwärm-Import im Fixture oder in `dense_mesh`) oder den Einzelfall
-      im Docstring der Marke festhalten und die Ein-Datei-Lage meiden —
-      das erste macht die Marke zur Aussage über die Rechnung statt über
-      die Sammelreihenfolge und ist darum die bessere Hälfte.
+- [x] **Erledigt** (15/53, `d4cea5fd`, 30.08.2026): Der verzögerte
+      Geometrieimport steht vor der Uhr und trägt seine eigene Marke
+      `deferred_geometry` (solo 505/483 ms); `read_dense` misst seither
+      in jedem Kontext dasselbe — solo 436/444 ms gegen 427–443 im
+      Volllauf, vorher 1072 solo. Die Import-Verschiebung aus dem
+      Kundenstart bleibt über die neue Marke messbar. Betriebsnotiz:
+      Die frische Marke durchläuft je Maschine die dokumentierte
+      MIN_RUNS-Delle — die ersten zwei Läufe sind bewusst blind.
 
 ---
 

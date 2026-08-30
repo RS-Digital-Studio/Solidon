@@ -55,37 +55,7 @@
       "Bausteine stehen im Katalog mit Vorschaubildern statt als Liste im Menü. Ein Rechtsklick auf das gewählte Teil führt hin.",
       "Der Katalog sagt schon vor dem Einsetzen, wenn die Stelle am Körper fehlt. Die meisten Bausteine brauchen eine gewählte Fläche oder Bohrung.",
       "Jede Filamentspule kann eigene Temperaturen, Kühlung, Rückzug und Materialwerte tragen. Die Werte bleiben auch erhalten, wenn Sie die Qualitätsstufe wechseln.",
-      "Die Werte der einzelnen Spulen erreichen 3MF-Datei und Slicer für den richtigen Materialplatz. Eine Farbe nimmt nicht mehr versehentlich die Druckwerte einer anderen mit.",
-      "Beim ersten Start übernimmt Solidon die im Slicer eingelegten Filamente mit Name, Typ, Farbe und Herstellerprofil. Die Spulen müssen nicht noch einmal angelegt werden.",
-      "Mitgelieferte Beispiele überschreiben den gewählten Drucker und das Material nicht mehr mit den Einstellungen, mit denen ihre Vorschaubilder gebaut wurden.",
-      "Im Linux-Flatpak findet und startet Solidon Slicer auf dem Rechner, auch als AppImage. Der gemeinsame Arbeitsordner ist für beide Programme erreichbar.",
-      "Beim Teilen entstehen Passstifte an der einen Hälfte und die passenden Löcher an der anderen. Die Meldung nennt ihre Zahl oder sagt, dass die Schnittfläche dafür zu klein ist.",
-      "Nach dem Teilen rücken die Hälften auseinander. Stifte und Löcher verschwinden dadurch nicht mehr zwischen zwei deckungsgleichen Schnittflächen.",
-      "Werden zwei Körper vereinigt, behalten beide ihre Filamentbeschreibung samt Namen. Vorher konnte die Beschreibung der zweiten Farbe dabei verlorengehen.",
-      "Beim Export auf mehrere Platten werden Farbwechsel je Platte gezählt. Materialreine Platten melden keine Wechsel mehr, die beim Drucken gar nicht stattfinden.",
-      "Scheitert der eingestellte Slicer, bietet die Meldung den Wechsel zu einem anderen an. Vorher blieb nur der Export — auch wenn zwei arbeitende Slicer daneben lagen.",
-      "Die fertige Druckdatei lässt sich direkt im Fenster des Slicers öffnen, mit dessen eigenen Profilen. Welche Übergabe Sie benutzen, merkt sich das Projekt.",
-      "Die Druckdatei wird gegen die Höhe des Modells geprüft. Ein Teil, das unter dem Druckbett steckt, fällt damit vor dem Druck auf — nicht erst an der halben Höhe am Drucker.",
-      "ElegooSlicer nimmt Aufträge wieder an. Und ordnet ein Slicer die Teile selbst an, steht das als Hinweis im Prüfbericht, statt die geplante Plattenbelegung stillschweigend zu ersetzen.",
-      "Der Prüfbericht stapelt keine alten Messwerte mehr: Ein neuer Lauf ersetzt sie, derselbe Sachverhalt steht einmal da, und Befunde nennen das Objekt beim Namen statt einer Nummer.",
-      "Die gemerkten Slicer-Profile wissen, zu welchem Slicer sie gehören. Nach einem Wechsel wird kein fremdes Profil mehr in das neue Programm übernommen.",
-      "Ein Sperr-Grund unter den Druckeinstellungen verschwindet, sobald er nicht mehr gilt. Vorher blieb „braucht ein Druckerprofil“ neben einem längst freien Knopf stehen.",
-      "Die Einstellungen trennen Cloud- und lokale Modelle sichtbar. Bevor ein Cloud-Schlüssel eingetragen wird, steht dort, welche Daten den Rechner verlassen.",
-      "Die Prüfung eines langsamen 3D-Generators hält den Dialog nicht mehr fest. Währenddessen steht dort, was geprüft wird und wie zusätzliche Programme eingerichtet werden.",
-      "Die Zuordnung erkannter Merkmale bleibt auch bei großen Modellen flüssig. Hunderte Merkmale werden gemeinsam statt nacheinander verglichen.",
-      "Anfragen an Ollama und ComfyUI auf demselben Rechner umgehen den Firmenproxy. Ein laufender lokaler Dienst wird dadurch nicht mehr fälschlich als unerreichbar gemeldet.",
-      "Im Linux-Flatpak laufen Einrichtung und Start lokaler Zusatzprogramme auf dem Rechner statt im Sandkasten. ComfyUI wird auch an üblichen Linux- und macOS-Orten gefunden.",
-      "Der Erzeugen-Knopf ist nur klickbar, wenn der Klick auch etwas auslöst. Fehlt etwas, steht daneben, was — und ein Knopf, der zur Behebung führt.",
-      "Schlägt die Erzeugung fehl, steht ComfyUIs eigene Fehlerzeile im Dialog, samt dem Schritt, in dem sie entstand. Genau diese Zeile braucht, wer um Hilfe fragt.",
-      "Tippt ein Sprachmodell seinen Werkzeugaufruf als Text, statt ihn auszuführen, erklärt der Vorschlag das — samt dem Weg über „Werkzeuge prüfen“. Vorher stand rohes JSON im Gespräch.",
-      "Das Handbuch hat die neue Seite „Welche Modelle Solidon benutzt“: welche geprüft sind, woher sie kommen, wie lange sie brauchen — und welche Datei für den Textweg wohin gehört.",
-      "Ein sehr kleiner erzeugter Körper zeigt sein echtes Volumen statt „0 mm³“ neben „geschlossen“.",
-      "Bei den KI-Modellen fürs Erzeugen wählen Sie je Aufgabe selbst, welches rechnet — wie beim Sprachmodell. „Automatisch“ bleibt die Vorgabe und nimmt das, was passt.",
-      "Die Parameterleiste zeigt Maße kompakt und dauerhaft. Einheit, Grenzen und Ausdruck lassen sich dort rücknehmbar ändern, ohne dass die eigentliche Zahl aus dem Blick rutscht.",
-      "Eigene Werkzeugzeiger folgen auf Windows, macOS und Linux der eingestellten Systemgröße. Ihr Klickpunkt liegt wieder an der gezeichneten Spitze statt daneben.",
-      "Darüberfahren und Auswählen sind in der Ansicht klar verschieden markiert. Analyse- und Unterschiedsfarben bleiben dabei wichtiger als eine Ganzkörpermarkierung.",
-      "Menüs, Hinweise und Handbuch verwenden einheitliche Wörter für Einsteiger. Fachbegriffe werden dort erklärt, wo sie zum ersten Mal gebraucht werden.",
-      "Der Unterstützen-Dialog erklärt vor dem Öffnen von PayPal, dass die Zahlung freiwillig ist und keine Funktionen freischaltet. Scheitert der Browser, lässt sich der Link kopieren."
+      "Die Werte der einzelnen Spulen erreichen 3MF-Datei und Slicer für den richtigen Materialplatz. Eine Farbe nimmt nicht mehr versehentlich die Druckwerte einer anderen mit."
     ],
     "en": [
       "In sketch mode, points, lines, circles and outlines can be selected and dragged directly in the view. A marker and handle also show what will move.",
@@ -113,37 +83,7 @@
       "Parts live in the catalogue with preview images instead of as a list in the menu. A right-click on the selected body leads there.",
       "The catalogue says before inserting when the place on the body is missing. Most parts need a selected face or hole; before, the catalogue allowed what the operation then refused.",
       "Each filament spool can carry its own temperatures, cooling, retraction and material values. These values remain when you change the quality level.",
-      "Values from individual spools reach the 3MF file and slicer in the correct material slot. One colour no longer picks up another colour's print values by mistake.",
-      "On first launch, Solidon imports the filaments loaded in the slicer with their name, type, colour and manufacturer profile. Spools do not need to be entered again.",
-      "Included examples no longer replace your chosen printer and material with the settings used to build their preview images.",
-      "In the Linux Flatpak, Solidon finds and starts slicers on the host, including AppImages. Both programs can reach the shared working folder.",
-      "Splitting now puts dowel pins on one half and the matching holes on the other. The message gives their number, or says the cut face is too small for them.",
-      "After splitting, the halves move apart. Pins and holes no longer disappear between two coincident cut faces.",
-      "When two bodies are united, both keep their filament description including its name. The description of the second colour could previously be lost.",
-      "When exporting to several plates, colour changes are counted per plate. Plates of a single material no longer report changes that never happen while printing.",
-      "If the configured slicer fails, the message offers switching to another one. Before, only exporting remained — even with two working slicers sitting right next to it.",
-      "The finished print file can be opened directly in the slicer's own window, with its own profiles. Which handover you use is remembered per project.",
-      "The print file is checked against the model's height. A part stuck below the print bed shows up before printing — not at half height on the printer.",
-      "ElegooSlicer accepts jobs again. And if a slicer arranges the parts itself, the report says so instead of silently replacing your planned plate layout.",
-      "The report no longer stacks old measurements: a new run replaces what it measures anew, the same fact appears only once, and build-volume findings name the object instead of a number.",
-      "The remembered slicer profiles know which slicer they belong to. After a switch, no foreign profile is carried into the new program any more.",
-      "A blocking reason under the print settings disappears as soon as it no longer applies. Before, “needs a printer profile” stayed next to a button that had long been free.",
-      "Settings visibly separate cloud and local models. Before you enter a cloud key, they explain which data leaves the computer.",
-      "Checking a slow 3D generator no longer holds the dialog open. It shows what is being checked and how to set up additional programs.",
-      "Assigning detected features stays responsive on large models. Hundreds of features are compared together instead of one after another.",
-      "Requests to Ollama and ComfyUI on the same computer bypass the company proxy. A running local service is no longer falsely reported as unreachable.",
-      "In the Linux Flatpak, setup and launch of local helper programs run on the host rather than in the sandbox. ComfyUI is also found in common Linux and macOS locations.",
-      "The Generate button is only clickable when the click actually starts something. If something is missing, the dialog says what — with a button that leads to the fix.",
-      "If generation fails, ComfyUI's own error line appears in the dialog, together with the step it happened in. That line is exactly what you need when asking for help.",
-      "If a language model types its tool call as text instead of running it, the proposal now explains that — with the way to “Check tools”. Before, raw JSON sat in the conversation without a word.",
-      "The manual has a new page, “Which models Solidon uses”: which ones are proven, where they come from and how long they take. For the way from text it says which file belongs in which folder.",
-      "A very small generated body shows its real volume instead of “0 mm³” next to “closed”.",
-      "For the AI models used in generating, you choose per task which one computes — just like the language model. “Automatic” remains the default and takes what fits.",
-      "The parameter bar keeps dimensions compact and visible. Unit, limits and expression can be changed there with undo, without hiding the value itself.",
-      "Solidon's tool cursors follow the configured system size on Windows, macOS and Linux. Their click point is back on the drawn tip instead of beside it.",
-      "Hovering and selection are clearly different in the view. Analysis and difference colours still take priority over a whole-body highlight.",
-      "Menus, hints and the manual use consistent words for beginners. Specialist terms are explained where they are first needed.",
-      "The Support dialog explains before opening PayPal that payment is voluntary and unlocks no features. If the browser fails, the link can be copied."
+      "Values from individual spools reach the 3MF file and slicer in the correct material slot. One colour no longer picks up another colour's print values by mistake."
     ],
     "es": [
       "En el modo de boceto puede seleccionar y arrastrar puntos, líneas, círculos y contornos directamente en la vista. Una marca y un tirador indican además qué se moverá.",
@@ -171,37 +111,7 @@
       "Los bloques están en el catálogo con imágenes de vista previa en lugar de como lista en el menú. Un clic derecho sobre la pieza elegida lleva allí.",
       "El catálogo avisa antes de insertar cuando falta el lugar en el cuerpo. La mayoría de los bloques necesitan una cara o un taladro seleccionado.",
       "Cada bobina puede tener sus propias temperaturas, refrigeración, retracción y valores de material. Se conservan al cambiar el nivel de calidad.",
-      "Los valores de cada bobina llegan al archivo 3MF y al slicer en la posición de material correcta. Un color ya no toma por error los valores de impresión de otro.",
-      "En el primer inicio, Solidon importa los filamentos cargados en el slicer con nombre, tipo, color y perfil del fabricante. No tiene que volver a crear las bobinas.",
-      "Los ejemplos incluidos ya no sustituyen la impresora y el material elegidos por los ajustes usados para crear sus imágenes de vista previa.",
-      "En el Flatpak de Linux, Solidon encuentra e inicia slicers del equipo, incluidos AppImages. Ambos programas pueden acceder a la carpeta de trabajo compartida.",
-      "Al dividir se colocan pasadores en una mitad y los agujeros correspondientes en la otra. El mensaje indica cuántos son o avisa de que la cara de corte es demasiado pequeña.",
-      "Tras dividir, las mitades se separan. Los pasadores y los agujeros ya no desaparecen entre dos caras de corte coincidentes.",
-      "Al unir dos cuerpos, ambos conservan su descripción de filamento con su nombre. Antes podía perderse la descripción del segundo color.",
-      "Al exportar a varias bandejas, los cambios de color se cuentan por bandeja. Una bandeja de un solo material ya no anuncia cambios que no ocurren al imprimir.",
-      "Si el slicer configurado falla, el mensaje ofrece cambiar a otro. Antes solo quedaba exportar — incluso con dos slicers que funcionaban justo al lado.",
-      "El archivo de impresión terminado se abre directamente en la ventana del slicer, con sus propios perfiles. Qué entrega usa usted se recuerda por proyecto.",
-      "El archivo de impresión se comprueba contra la altura del modelo. Una pieza hundida bajo la placa se descubre antes de imprimir — no a media altura en la impresora.",
-      "ElegooSlicer vuelve a aceptar trabajos. Y si un slicer coloca las piezas por su cuenta, el informe lo dice en vez de sustituir en silencio la ocupación planeada de la placa.",
-      "El informe ya no apila mediciones viejas: una pasada nueva sustituye lo que vuelve a medir, el mismo hecho aparece una sola vez, y los avisos de volumen nombran el objeto en vez de un número.",
-      "Los perfiles de slicer recordados saben a qué slicer pertenecen. Tras un cambio, ningún perfil ajeno pasa al programa nuevo.",
-      "Un motivo de bloqueo bajo los ajustes de impresión desaparece en cuanto deja de valer. Antes, «necesita un perfil de impresora» seguía junto a un botón ya libre.",
-      "Los ajustes separan claramente los modelos en la nube y los locales. Antes de introducir una clave de nube explican qué datos salen del ordenador.",
-      "Comprobar un generador 3D lento ya no deja sujeto el diálogo. Indica qué se está comprobando y cómo instalar los programas adicionales.",
-      "La asignación de elementos detectados sigue siendo fluida en modelos grandes. Cientos de elementos se comparan juntos en lugar de uno tras otro.",
-      "Las solicitudes a Ollama y ComfyUI en el mismo equipo evitan el proxy de la empresa. Un servicio local activo ya no aparece por error como inaccesible.",
-      "En el Flatpak de Linux, la instalación y el inicio de programas auxiliares se ejecutan en el equipo, no en el aislamiento. ComfyUI también se encuentra en sus ubicaciones habituales.",
-      "El botón Generar solo se puede pulsar cuando el clic de verdad inicia algo. Si falta algo, el diálogo dice qué — con un botón que lleva a la solución.",
-      "Si la generación falla, la propia línea de error de ComfyUI aparece en el diálogo, junto con el paso en el que ocurrió. Esa línea es justo la que hace falta al pedir ayuda.",
-      "Si un modelo de lenguaje escribe su llamada como texto en vez de ejecutarla, la propuesta lo explica — con el camino a «Comprobar las herramientas». Antes quedaba JSON en bruto en la conversación.",
-      "El manual tiene una página nueva, «Qué modelos usa Solidon»: cuáles están probados, de dónde vienen y cuánto tardan. Para el camino desde texto dice qué archivo va en qué carpeta.",
-      "Un cuerpo generado muy pequeño muestra su volumen real en vez de «0 mm³» junto a «cerrado».",
-      "En los modelos de IA para generar, usted elige por tarea cuál calcula — como con el modelo de lenguaje. «Automático» sigue siendo la opción por defecto y toma lo que encaja.",
-      "La barra de parámetros mantiene las medidas compactas y visibles. Unidad, límites y expresión se cambian allí con deshacer, sin ocultar el propio valor.",
-      "Los cursores de Solidon siguen el tamaño configurado del sistema en Windows, macOS y Linux. El punto de clic vuelve a estar en la punta dibujada y no a su lado.",
-      "Pasar el puntero y seleccionar se marcan de forma claramente distinta. Los colores de análisis y diferencias siguen teniendo prioridad sobre el resaltado del cuerpo.",
-      "Los menús, avisos y el manual usan palabras coherentes para principiantes. Los términos especializados se explican donde se necesitan por primera vez.",
-      "El diálogo Apoyar explica antes de abrir PayPal que el pago es voluntario y no desbloquea funciones. Si falla el navegador, puede copiar el enlace."
+      "Los valores de cada bobina llegan al archivo 3MF y al slicer en la posición de material correcta. Un color ya no toma por error los valores de impresión de otro."
     ],
     "fr": [
       "En mode esquisse, sélectionnez et déplacez points, lignes, cercles et contours directement dans la vue. Un repère et une poignée indiquent aussi ce qui va bouger.",
@@ -229,37 +139,7 @@
       "Les blocs se trouvent dans le catalogue avec des aperçus au lieu d’une liste dans le menu. Un clic droit sur la pièce choisie y mène.",
       "Le catalogue prévient avant l’insertion lorsque l’endroit sur le corps manque. La plupart des blocs ont besoin d’une face ou d’un perçage sélectionné.",
       "Chaque bobine peut porter ses propres températures, refroidissement, rétraction et valeurs de matière. Elles restent en place lors d'un changement de qualité.",
-      "Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre.",
-      "Au premier démarrage, Solidon reprend les filaments chargés dans le trancheur avec leur nom, type, couleur et profil du fabricant. Les bobines ne sont pas à recréer.",
-      "Les exemples fournis ne remplacent plus l'imprimante et le matériau choisis par les réglages qui ont servi à créer leurs aperçus.",
-      "Dans le Flatpak Linux, Solidon trouve et lance les trancheurs de l'ordinateur, y compris les AppImages. Les deux programmes accèdent au dossier de travail partagé.",
-      "La séparation pose des goupilles sur une moitié et les trous correspondants sur l’autre. Le message en donne le nombre ou signale que la face de coupe est trop petite.",
-      "Après la séparation, les moitiés s’écartent. Goupilles et trous ne disparaissent plus entre deux faces de coupe confondues.",
-      "Lors de l’union de deux corps, les deux gardent leur description de filament avec son nom. La description de la seconde couleur pouvait auparavant se perdre.",
-      "À l’export sur plusieurs plaques, les changements de couleur sont comptés par plaque. Une plaque d’une seule matière n’annonce plus de changements qui n’ont pas lieu.",
-      "Si le slicer configuré échoue, le message propose d'en choisir un autre. Avant, il ne restait que l'export — même avec deux slicers en état de marche juste à côté.",
-      "Le fichier d'impression terminé s'ouvre directement dans la fenêtre du slicer, avec ses propres profils. Quelle remise vous utilisez est retenu par projet.",
-      "Le fichier d'impression est vérifié contre la hauteur du modèle. Une pièce enfoncée sous le plateau se remarque avant l'impression — pas à mi-hauteur sur l'imprimante.",
-      "ElegooSlicer accepte de nouveau les travaux. Et si un slicer dispose les pièces lui-même, le rapport le dit au lieu de remplacer en silence l'occupation du plateau prévue.",
-      "Le rapport n'empile plus les anciennes mesures : un nouveau passage les remplace, le même fait n'apparaît qu'une fois, et les constats nomment l'objet au lieu d'un numéro.",
-      "Les profils de slicer retenus savent à quel slicer ils appartiennent. Après un changement, aucun profil étranger ne passe dans le nouveau programme.",
-      "Un motif de blocage sous les réglages d'impression disparaît dès qu'il ne vaut plus. Avant, « a besoin d'un profil d'imprimante » restait à côté d'un bouton depuis longtemps libre.",
-      "Les réglages séparent clairement les modèles cloud et locaux. Avant la saisie d'une clé cloud, ils expliquent quelles données quittent l'ordinateur.",
-      "La vérification d'un générateur 3D lent ne retient plus la fenêtre. Elle indique ce qui est vérifié et comment installer les programmes supplémentaires.",
-      "L'affectation des éléments détectés reste fluide sur les grands modèles. Des centaines d'éléments sont comparés ensemble au lieu de l'être un par un.",
-      "Les requêtes vers Ollama et ComfyUI sur le même ordinateur évitent le proxy de l'entreprise. Un service local actif n'est plus signalé à tort comme inaccessible.",
-      "Dans le Flatpak Linux, l'installation et le lancement des programmes auxiliaires se font sur l'ordinateur et non dans le bac à sable. ComfyUI est aussi trouvé aux emplacements usuels.",
-      "Le bouton Générer n'est cliquable que si le clic déclenche vraiment quelque chose. S'il manque quelque chose, le dialogue dit quoi — avec un bouton qui mène à la solution.",
-      "Si la génération échoue, la propre ligne d'erreur de ComfyUI s'affiche dans le dialogue, avec l'étape où elle est survenue. C'est exactement la ligne qu'il faut pour demander de l'aide.",
-      "Si un modèle de langage écrit son appel en texte au lieu de l'exécuter, la proposition l'explique — avec le chemin vers « Vérifier les outils ». Avant, du JSON brut restait dans la conversation.",
-      "Le manuel a une nouvelle page, « Quels modèles Solidon utilise » : lesquels sont éprouvés, d'où ils viennent, combien de temps ils prennent — et quel fichier va où pour le texte.",
-      "Un corps généré très petit montre son volume réel au lieu de « 0 mm³ » à côté de « fermé ».",
-      "Pour les modèles d'IA de la génération, vous choisissez par tâche lequel calcule — comme pour le modèle de langage. « Automatique » reste le réglage par défaut et prend ce qui convient.",
-      "La barre de paramètres garde les cotes compactes et visibles. Unité, limites et expression s'y modifient avec annulation sans masquer la valeur elle-même.",
-      "Les curseurs de Solidon suivent la taille système réglée sous Windows, macOS et Linux. Leur point de clic revient sur la pointe dessinée au lieu d'être à côté.",
-      "Le survol et la sélection sont nettement distingués dans la vue. Les couleurs d'analyse et de différence restent prioritaires sur la surbrillance du corps entier.",
-      "Les menus, indications et le manuel emploient des mots cohérents pour les débutants. Les termes spécialisés sont expliqués lors de leur premier emploi.",
-      "La fenêtre Soutenir explique avant d'ouvrir PayPal que le paiement est volontaire et ne débloque aucune fonction. Si le navigateur échoue, le lien peut être copié."
+      "Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre."
     ],
     "it": [
       "In modalità schizzo può selezionare e trascinare punti, linee, cerchi e contorni direttamente nella vista. Un segno e una maniglia indicano anche cosa si muoverà.",
@@ -287,37 +167,7 @@
       "I blocchi stanno nel catalogo con immagini di anteprima invece che come elenco nel menu. Un clic destro sul pezzo scelto porta lì.",
       "Il catalogo avvisa già prima di inserire quando manca il punto sul corpo. La maggior parte dei blocchi ha bisogno di una faccia o di un foro selezionato.",
       "Ogni bobina può avere temperature, raffreddamento, ritrazione e valori del materiale propri. Questi valori restano quando cambia il livello di qualità.",
-      "I valori delle singole bobine arrivano al file 3MF e allo slicer nel posto materiale corretto. Un colore non prende più per errore i valori di stampa di un altro.",
-      "Al primo avvio, Solidon importa i filamenti caricati nello slicer con nome, tipo, colore e profilo del produttore. Non deve ricreare le bobine.",
-      "Gli esempi inclusi non sostituiscono più stampante e materiale scelti con le impostazioni usate per creare le loro anteprime.",
-      "Nel Flatpak Linux, Solidon trova e avvia gli slicer del computer, incluse le AppImage. Entrambi i programmi raggiungono la cartella di lavoro condivisa.",
-      "Dividendo si creano spine su una metà e i fori corrispondenti sull’altra. Il messaggio ne indica il numero o avvisa che la faccia di taglio è troppo piccola.",
-      "Dopo la divisione, le metà si allontanano. Spine e fori non spariscono più fra due facce di taglio coincidenti.",
-      "Unendo due corpi, entrambi conservano la loro descrizione del filamento con il nome. Prima la descrizione del secondo colore poteva andare persa.",
-      "Esportando su più piatti, i cambi di colore vengono contati per piatto. Un piatto di un solo materiale non annuncia più cambi che in stampa non avvengono.",
-      "Se lo slicer configurato fallisce, il messaggio offre il passaggio a un altro. Prima restava solo l'esportazione — anche con due slicer funzionanti lì accanto.",
-      "Il file di stampa finito si apre direttamente nella finestra dello slicer, con i suoi profili. Quale consegna usate viene ricordato per progetto.",
-      "Il file di stampa viene verificato contro l'altezza del modello. Un pezzo affondato sotto il piano si nota prima della stampa — non a metà altezza sulla stampante.",
-      "ElegooSlicer accetta di nuovo gli incarichi. E se uno slicer dispone i pezzi da solo, il rapporto lo dice invece di sostituire in silenzio l'occupazione del piano pianificata.",
-      "Il rapporto non accumula più misure vecchie: un nuovo passaggio le sostituisce, lo stesso fatto compare una sola volta, e gli avvisi nominano l'oggetto invece di un numero.",
-      "I profili di slicer ricordati sanno a quale slicer appartengono. Dopo un cambio, nessun profilo estraneo passa nel nuovo programma.",
-      "Un motivo di blocco sotto le impostazioni di stampa sparisce appena non vale più. Prima, «serve un profilo di stampante» restava accanto a un pulsante ormai libero.",
-      "Le impostazioni separano chiaramente modelli cloud e locali. Prima di inserire una chiave cloud spiegano quali dati lasciano il computer.",
-      "Il controllo di un generatore 3D lento non trattiene più la finestra. Mostra cosa viene controllato e come installare i programmi aggiuntivi.",
-      "L'assegnazione degli elementi riconosciuti resta fluida sui modelli grandi. Centinaia di elementi vengono confrontati insieme invece che uno alla volta.",
-      "Le richieste a Ollama e ComfyUI sullo stesso computer evitano il proxy aziendale. Un servizio locale attivo non viene più indicato per errore come irraggiungibile.",
-      "Nel Flatpak Linux, installazione e avvio dei programmi ausiliari avvengono sul computer, non nella sandbox. ComfyUI viene trovato anche nelle posizioni comuni.",
-      "Il pulsante Genera è cliccabile solo se il clic avvia davvero qualcosa. Se manca qualcosa, il dialogo dice cosa — con un pulsante che porta alla soluzione.",
-      "Se la generazione fallisce, la riga di errore di ComfyUI stessa compare nel dialogo, insieme al passo in cui è avvenuta. È esattamente la riga che serve quando si chiede aiuto.",
-      "Se un modello linguistico scrive la chiamata come testo invece di eseguirla, la proposta lo spiega — con la via verso «Verifica gli strumenti». Prima restava JSON grezzo nella conversazione.",
-      "Il manuale ha una pagina nuova, «Quali modelli usa Solidon»: quali sono provati, da dove vengono e quanto impiegano. Per la via dal testo dice quale file va in quale cartella.",
-      "Un corpo generato molto piccolo mostra il suo volume reale invece di «0 mm³» accanto a «chiuso».",
-      "Per i modelli IA della generazione scegliete per compito quale calcola — come per il modello linguistico. «Automatico» resta l'impostazione predefinita e prende ciò che è adatto.",
-      "La barra dei parametri mantiene le misure compatte e visibili. Unità, limiti ed espressione si modificano lì con annullamento, senza nascondere il valore.",
-      "I cursori di Solidon seguono la dimensione di sistema su Windows, macOS e Linux. Il loro punto di clic torna sulla punta disegnata invece che accanto.",
-      "Passaggio del puntatore e selezione sono segnati in modo chiaramente diverso. I colori di analisi e differenza restano prioritari sull'evidenziazione del corpo.",
-      "Menu, indicazioni e manuale usano parole coerenti per chi inizia. I termini specialistici vengono spiegati dove servono per la prima volta.",
-      "La finestra Sostieni spiega prima di aprire PayPal che il pagamento è volontario e non sblocca funzioni. Se il browser non parte, il link può essere copiato."
+      "I valori delle singole bobine arrivano al file 3MF e allo slicer nel posto materiale corretto. Un colore non prende più per errore i valori di stampa di un altro."
     ],
     "pt": [
       "No modo de esboço pode selecionar e arrastar pontos, linhas, círculos e contornos diretamente na vista. Uma marca e uma pega indicam também o que vai mover-se.",
@@ -345,37 +195,7 @@
       "Os blocos estão no catálogo com imagens de pré-visualização em vez de como lista no menu. Um clique direito sobre a peça escolhida leva lá.",
       "O catálogo avisa antes de inserir quando falta o sítio no corpo. A maioria dos blocos precisa de uma face ou de um furo selecionado; antes o catálogo permitia o que a operação depois recusava.",
       "Cada bobina pode ter temperaturas, arrefecimento, retração e valores de material próprios. Esses valores mantêm-se quando muda o nível de qualidade.",
-      "Os valores de cada bobina chegam ao ficheiro 3MF e ao slicer no lugar de material correto. Uma cor já não recebe por engano os valores de impressão de outra.",
-      "No primeiro arranque, o Solidon importa os filamentos carregados no slicer com nome, tipo, cor e perfil do fabricante. Não precisa de voltar a criar as bobinas.",
-      "Os exemplos incluídos já não substituem a impressora e o material escolhidos pelas definições usadas para criar as respetivas pré-visualizações.",
-      "No Flatpak Linux, o Solidon encontra e inicia slicers do computador, incluindo AppImages. Ambos os programas conseguem aceder à pasta de trabalho partilhada.",
-      "Ao dividir são colocados pinos de posicionamento numa metade e os furos correspondentes na outra. A mensagem indica quantos são ou avisa que a face de corte é pequena demais.",
-      "Depois de dividir, as metades afastam-se. Os pinos e os furos já não desaparecem entre duas faces de corte coincidentes.",
-      "Ao unir dois corpos, ambos mantêm a sua descrição de filamento com o nome. Antes, a descrição da segunda cor podia perder-se.",
-      "Ao exportar para várias placas, as mudanças de cor são contadas por placa. Uma placa de um só material já não anuncia mudanças que não ocorrem na impressão.",
-      "Se o slicer configurado falhar, a mensagem oferece a mudança para outro. Antes só restava exportar — mesmo com dois slicers a funcionar mesmo ao lado.",
-      "O ficheiro de impressão pronto abre-se diretamente na janela do slicer, com os perfis dele. Qual entrega usa fica registado por projeto.",
-      "O ficheiro de impressão é verificado contra a altura do modelo. Uma peça enterrada sob a mesa nota-se antes da impressão — não a meia altura na impressora.",
-      "O ElegooSlicer volta a aceitar trabalhos. E se um slicer dispuser as peças por conta própria, o relatório di-lo em vez de substituir em silêncio a ocupação da mesa planeada.",
-      "O relatório já não acumula medições antigas: uma nova passagem substitui o que mede de novo, o mesmo facto aparece uma só vez, e os avisos de volume nomeiam o objeto em vez de um número.",
-      "Os perfis de slicer registados sabem a que slicer pertencem. Depois de uma mudança, nenhum perfil alheio passa para o programa novo.",
-      "Um motivo de bloqueio sob as definições de impressão desaparece assim que deixa de valer. Antes, “precisa de um perfil de impressora” ficava ao lado de um botão há muito livre.",
-      "As definições separam claramente modelos na cloud e locais. Antes de introduzir uma chave da cloud explicam que dados saem do computador.",
-      "A verificação de um gerador 3D lento já não prende a janela. Mostra o que está a ser verificado e como instalar os programas adicionais.",
-      "A atribuição dos elementos detetados continua fluida em modelos grandes. Centenas de elementos são comparados em conjunto em vez de um a um.",
-      "Os pedidos ao Ollama e ao ComfyUI no mesmo computador evitam o proxy da empresa. Um serviço local ativo já não é indicado por engano como inacessível.",
-      "No Flatpak Linux, a instalação e o início de programas auxiliares decorrem no computador, não na sandbox. O ComfyUI também é encontrado nos locais habituais.",
-      "O botão Gerar só está clicável quando o clique inicia mesmo alguma coisa. Se faltar algo, o diálogo diz o quê — com um botão que leva à solução.",
-      "Se a geração falhar, a própria linha de erro do ComfyUI aparece no diálogo, junto com o passo em que aconteceu. É exatamente a linha de que se precisa ao pedir ajuda.",
-      "Se um modelo de linguagem escrever a chamada como texto em vez de a executar, a proposta explica-o — com o caminho para “Verificar as ferramentas”. Antes ficava JSON em bruto na conversa.",
-      "O manual tem uma página nova, “Que modelos o Solidon usa”: quais estão testados, de onde vêm e quanto demoram. Para o caminho a partir de texto diz que ficheiro pertence a que pasta.",
-      "Um corpo gerado muito pequeno mostra o seu volume real em vez de “0 mm³” ao lado de “fechado”.",
-      "Nos modelos de IA da geração escolhe por tarefa qual calcula — como no modelo de linguagem. “Automático” continua a ser a predefinição e toma o que serve.",
-      "A barra de parâmetros mantém as medidas compactas e visíveis. Unidade, limites e expressão podem ser alterados ali com anulação, sem esconder o próprio valor.",
-      "Os cursores do Solidon seguem o tamanho configurado no sistema em Windows, macOS e Linux. O ponto de clique volta à ponta desenhada em vez de ficar ao lado.",
-      "Passar o ponteiro e selecionar são marcados de forma claramente diferente. As cores de análise e diferenças continuam prioritárias sobre o realce do corpo inteiro.",
-      "Menus, indicações e manual usam palavras coerentes para principiantes. Os termos especializados são explicados onde são necessários pela primeira vez.",
-      "A janela Apoiar explica antes de abrir o PayPal que o pagamento é voluntário e não desbloqueia funções. Se o navegador falhar, o link pode ser copiado."
+      "Os valores de cada bobina chegam ao ficheiro 3MF e ao slicer no lugar de material correto. Uma cor já não recebe por engano os valores de impressão de outra."
     ]
   },
   "notes_by_language": {
@@ -386,5 +206,295 @@
     "it": "L’aggiornamento più grande finora. Soprattutto: i passi della cronologia diventano un blocco tuo, che inserisci come ogni altro e trasmetti insieme al progetto. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
     "pt": "A maior atualização até agora. Sobretudo: os passos do histórico tornam-se um bloco seu, que coloca como qualquer outro e partilha dentro do projeto. A demo continua completa e sem chave, até 30 de outubro de 2026."
   },
-  "signature": "42357b99b919b01ad0cc67ddd4e374cc9c777787b20e7d58679d6dd7d95eb0b8a87ce0c15b393bf845a06efa91aa85c16437bd12a1ade83f66172757deeb9a07"
+  "groups": {
+    "de": [
+      {
+        "title": "Zeichnen und Formen",
+        "points": [
+          "Im Skizzenmodus lassen sich Punkte, Linien, Kreise und Konturen direkt in der Ansicht auswählen und ziehen. Markierung und Griff zeigen zusätzlich, was bewegt wird.",
+          "Die Zeichenebene bleibt im Raum stehen, wenn Sie zwischen Drauf-, Vorder- und Seitenansicht wechseln. So erkennen Sie ihre wirkliche Lage statt dreimal dasselbe Bild zu sehen.",
+          "Ein Rechteck lässt sich mit eingetippter Breite und Höhe fertigstellen. Die Maße bleiben als Bedingungen erhalten, statt nach dem Zeichnen wieder verloren zu gehen.",
+          "In der Vorder- oder Seitenansicht ziehen Sie einen geschlossenen Umriss zur Höhe auf. Zahl und Drahtvorschau wachsen mit; ein eingetippter Wert setzt die Höhe genau.",
+          "Ziehen Sie den Umriss nach außen, entsteht ein Körper; ziehen Sie ihn nach innen, entsteht eine sichtbare Tasche. Pfeil und Kreuz machen beide Richtungen greifbar.",
+          "Beim Erzeugen eines Quaders, Zylinders oder Skizzenkörpers erscheint die Vorschau schon während der Eingabe. Neue Körper blieben vorher bis zum Anwenden unsichtbar.",
+          "Zeichenwerkzeuge sagen, was der nächste Klick bewirkt. Bedingungen erklären ihre Wirkung und die Auswahl; die Freiheitsgrade stehen in verständlichen Sätzen da.",
+          "Quader, Zylinder, Bohrung und Aushöhlen stehen nur noch einmal im Menü. Das Häkchen „Flächen und Kanten später bearbeiten“ ersetzt den zweiten Eintrag, der vorher „exakt“ hieß.",
+          "Dieses Häkchen hält Fasen, Verrundungen, Formschrägen, versetzte Flächen und den STEP-Export offen. Der Dialog nennt den Nutzen, statt nach einem Rechenkern zu fragen.",
+          "Die Leiste beim Zeichnen benennt den nächsten Schritt: Hochziehen, Abtragen oder Fertig. Fehlt ein geschlossener Umriss oder ein ausgewählter Körper, steht auch das dort.",
+          "Eine gesetzte Bedingung nimmt ein zweiter Klick auf denselben Knopf zurück; ein Rechtsklick auf den Punkt zeigt, was an ihm hängt. Vorher kam jedes Mal eine weitere dazu, bis nichts mehr ging.",
+          "Die Bedingungsleiste zeigt nur, was zur getroffenen Auswahl passt. Ist nichts ausgewählt, steht dort ein Satz statt zehn ausgegrauter Fachwörter.",
+          "Grundkörper entstehen „auf dem Druckbett“ statt „auf Z = 0“, und das Zeichenwerkzeug heißt „Kurve“ wie das, was es zeichnet."
+        ]
+      },
+      {
+        "title": "Bohrungen und Merkmale",
+        "points": [
+          "Den Durchmesser einer erkannten Bohrung in einem importierten Modell ändern Sie direkt, ohne die Bohrung neu zu zeichnen oder ein CAD-Programm zu öffnen.",
+          "Die geänderte Bohrung behält Lage und Richtung und funktioniert an Netzen wie an exakten Körpern. Auch eine schräge Bohrung bleibt auf ihrer ursprünglichen Achse.",
+          "Merkmalsmarkierungen folgen nach einer Neuberechnung der sichtbaren Geometrie. Eine markierte Bohrung bleibt dabei offen und wird nicht von ihrer Markierung verdeckt.",
+          "Häufige Werkzeuge wie Bohrung, Vereinigen und Abziehen liegen im Menü einen Klick näher. Überschriften halten die Gruppen trotzdem verständlich auseinander."
+        ]
+      },
+      {
+        "title": "Bausteine und Normteile",
+        "points": [
+          "Druckbare Schrauben und Muttern kommen mit zueinander passendem Gewinde aus dem Katalog. Kopf, Länge, Größe und Spiel lassen sich passend zum Druck wählen.",
+          "Für gängige Kugellager gibt es einen Lagersitz mit Normmaß. Das Lager kann wechselbar mit Spiel oder fest als Presspassung eingesetzt werden.",
+          "Ein Schraubenloch kann jetzt einen Senkkopf oder eine passende Unterlegscheibe einlassen. Die Kopftiefe bestimmt, wie weit beides im Teil verschwindet.",
+          "Die Normtabellen enthalten mehr Unterlegscheiben, Gewindeeinsätze und Kugellager. Technische Größen stehen mit einer Erklärung in der Auswahl statt als rätselhafter Code.",
+          "Magnettaschen, Kabelclips und Kabeldurchführungen nehmen auch eigene Maße an. Zusatzfelder erscheinen nur, wenn die gewählte Variante sie wirklich benutzt.",
+          "Bausteine stehen im Katalog mit Vorschaubildern statt als Liste im Menü. Ein Rechtsklick auf das gewählte Teil führt hin.",
+          "Der Katalog sagt schon vor dem Einsetzen, wenn die Stelle am Körper fehlt. Die meisten Bausteine brauchen eine gewählte Fläche oder Bohrung."
+        ]
+      },
+      {
+        "title": "Drucken und Filament",
+        "points": [
+          "Jede Filamentspule kann eigene Temperaturen, Kühlung, Rückzug und Materialwerte tragen. Die Werte bleiben auch erhalten, wenn Sie die Qualitätsstufe wechseln.",
+          "Die Werte der einzelnen Spulen erreichen 3MF-Datei und Slicer für den richtigen Materialplatz. Eine Farbe nimmt nicht mehr versehentlich die Druckwerte einer anderen mit."
+        ]
+      }
+    ],
+    "en": [
+      {
+        "title": "Drawing and shaping",
+        "points": [
+          "In sketch mode, points, lines, circles and outlines can be selected and dragged directly in the view. A marker and handle also show what will move.",
+          "The sketch plane stays in space when you switch between top, front and side views. You see its real position instead of the same picture three times.",
+          "A rectangle can be completed by typing its width and height. The dimensions remain as constraints instead of being lost after drawing.",
+          "In the front or side view, pull a closed outline to give it height. The number and wire preview grow with it; typing a value sets the exact height.",
+          "Pull the outline outwards to create a body or inwards to create a visible pocket. An arrow and cross make both directions grabbable.",
+          "A box, cylinder or sketched body appears in the preview while you enter its dimensions. New bodies previously stayed invisible until you applied the step.",
+          "Drawing tools say what the next click will do. Constraints explain their effect and required selection, and degrees of freedom are described in plain language.",
+          "Cuboid, cylinder, bore and hollowing now appear only once in the menu. The tick “Keep faces and edges editable later” replaces the second entry, formerly called “exact”.",
+          "That tick keeps chamfers, fillets, draft angles, offset faces and the STEP export available. The dialogue names the benefit instead of asking for a geometry engine.",
+          "While sketching, the bar names the next step: Pull up, Carve or Done. If a closed outline or a selected body is missing, it says so as well.",
+          "A constraint is taken back by a second click on the same button, and a right-click on the point shows what is attached to it. Before, every click added another one until nothing moved.",
+          "The constraint bar only shows what fits the current selection. When nothing is selected, a single sentence stands there instead of ten greyed-out technical terms.",
+          "Basic bodies are placed “on the print bed” instead of “at Z = 0”, and the drawing tool is called “curve”, like the thing it draws."
+        ]
+      },
+      {
+        "title": "Holes and features",
+        "points": [
+          "Change the diameter of a detected hole in an imported model directly, without redrawing the hole or opening a CAD program.",
+          "The changed hole keeps its position and direction and works on meshes as well as exact bodies. A slanted hole also stays on its original axis.",
+          "Feature markers follow the visible geometry after recalculation. A marked hole stays open instead of being covered by its marker.",
+          "Frequent tools such as Hole, Union and Subtract are one click closer in the menu. Headings still keep the groups easy to tell apart."
+        ]
+      },
+      {
+        "title": "Building blocks and standard parts",
+        "points": [
+          "Printable screws and nuts come from the catalogue with matching threads. Choose head, length, size and clearance to suit the print.",
+          "Common bearings now have a seat built to their standard dimensions. The bearing can remain removable with clearance or be held by a press fit.",
+          "A screw hole can recess a countersunk head or matching washer. Head depth controls how far either one disappears into the part.",
+          "The standard tables contain more washers, threaded inserts and bearings. Technical sizes are explained in the choice instead of appearing as cryptic codes.",
+          "Magnet pockets, cable clips and cable glands also accept custom dimensions. Extra fields appear only when the selected variant actually uses them.",
+          "Parts live in the catalogue with preview images instead of as a list in the menu. A right-click on the selected body leads there.",
+          "The catalogue says before inserting when the place on the body is missing. Most parts need a selected face or hole; before, the catalogue allowed what the operation then refused."
+        ]
+      },
+      {
+        "title": "Printing and filament",
+        "points": [
+          "Each filament spool can carry its own temperatures, cooling, retraction and material values. These values remain when you change the quality level.",
+          "Values from individual spools reach the 3MF file and slicer in the correct material slot. One colour no longer picks up another colour's print values by mistake."
+        ]
+      }
+    ],
+    "es": [
+      {
+        "title": "Dibujo y modelado",
+        "points": [
+          "En el modo de boceto puede seleccionar y arrastrar puntos, líneas, círculos y contornos directamente en la vista. Una marca y un tirador indican además qué se moverá.",
+          "El plano de dibujo permanece en el espacio al cambiar entre las vistas superior, frontal y lateral. Así ve su posición real en lugar de tres imágenes iguales.",
+          "Puede terminar un rectángulo escribiendo su anchura y altura. Las medidas permanecen como restricciones en vez de perderse después de dibujarlo.",
+          "En la vista frontal o lateral, tire de un contorno cerrado para darle altura. La cifra y la vista de alambre crecen con él; un valor escrito fija la altura exacta.",
+          "Tire del contorno hacia fuera para crear un cuerpo o hacia dentro para crear un vaciado visible. Una flecha y una cruz permiten agarrar ambas direcciones.",
+          "La vista previa muestra el prisma, cilindro o cuerpo de boceto mientras introduce sus medidas. Antes, los cuerpos nuevos no aparecían hasta aplicar el paso.",
+          "Las herramientas de dibujo indican qué hará el siguiente clic. Las restricciones explican su efecto y selección, y los grados de libertad se describen con palabras claras.",
+          "El cubo, el cilindro, el taladro y el vaciado aparecen una sola vez en el menú. La casilla «Editar caras y aristas más adelante» sustituye a la segunda entrada, antes llamada «exacto».",
+          "Esa casilla mantiene disponibles chaflanes, redondeos, ángulos de desmoldeo, caras desplazadas y la exportación STEP. El diálogo nombra la ventaja, no el motor de cálculo.",
+          "Al dibujar, la barra nombra el paso siguiente: Elevar, Rebajar o Terminado. Si falta un contorno cerrado o un cuerpo seleccionado, también lo indica.",
+          "Una restricción se quita con un segundo clic en el mismo botón, y un clic derecho sobre el punto muestra qué depende de él. Antes cada clic añadía otra hasta que nada se movía.",
+          "La barra de restricciones solo muestra lo que encaja con la selección actual. Si no hay nada seleccionado, allí hay una frase en lugar de diez términos técnicos en gris.",
+          "Los cuerpos básicos se colocan «sobre la placa de impresión» en lugar de «en Z = 0», y la herramienta de dibujo se llama «curva», como lo que dibuja."
+        ]
+      },
+      {
+        "title": "Taladros y elementos",
+        "points": [
+          "Cambie directamente el diámetro de un taladro detectado en un modelo importado, sin volver a dibujarlo ni abrir un programa CAD.",
+          "El taladro modificado conserva su posición y dirección y funciona en mallas y cuerpos exactos. Incluso un taladro inclinado permanece en su eje original.",
+          "Las marcas de los elementos siguen la geometría visible después de recalcular. Un taladro marcado permanece abierto y la marca no tapa su abertura.",
+          "Las herramientas frecuentes como Taladro, Unir y Restar están un clic más cerca en el menú. Los títulos siguen separando claramente los grupos."
+        ]
+      },
+      {
+        "title": "Bloques y piezas normalizadas",
+        "points": [
+          "El catálogo ofrece tornillos y tuercas imprimibles con roscas compatibles. Puede elegir cabeza, longitud, tamaño y holgura según la impresión.",
+          "Los rodamientos habituales tienen un asiento con sus medidas normalizadas. Pueden quedar extraíbles con holgura o sujetos mediante ajuste a presión.",
+          "Un taladro para tornillo puede alojar una cabeza avellanada o su arandela. La profundidad de cabeza decide cuánto se hunden en la pieza.",
+          "Las tablas incluyen más arandelas, insertos roscados y rodamientos. Los tamaños técnicos se explican en la selección en vez de aparecer como códigos enigmáticos.",
+          "Los alojamientos de imanes, clips y pasacables también aceptan medidas propias. Los campos adicionales solo aparecen si la variante elegida los utiliza.",
+          "Los bloques están en el catálogo con imágenes de vista previa en lugar de como lista en el menú. Un clic derecho sobre la pieza elegida lleva allí.",
+          "El catálogo avisa antes de insertar cuando falta el lugar en el cuerpo. La mayoría de los bloques necesitan una cara o un taladro seleccionado."
+        ]
+      },
+      {
+        "title": "Impresión y filamento",
+        "points": [
+          "Cada bobina puede tener sus propias temperaturas, refrigeración, retracción y valores de material. Se conservan al cambiar el nivel de calidad.",
+          "Los valores de cada bobina llegan al archivo 3MF y al slicer en la posición de material correcta. Un color ya no toma por error los valores de impresión de otro."
+        ]
+      }
+    ],
+    "fr": [
+      {
+        "title": "Dessin et mise en forme",
+        "points": [
+          "En mode esquisse, sélectionnez et déplacez points, lignes, cercles et contours directement dans la vue. Un repère et une poignée indiquent aussi ce qui va bouger.",
+          "Le plan de dessin reste dans l'espace quand vous passez entre les vues de dessus, de face et de côté. Vous voyez sa position réelle au lieu de trois images identiques.",
+          "Un rectangle peut être terminé en saisissant sa largeur et sa hauteur. Les cotes restent des contraintes au lieu de disparaître après le dessin.",
+          "Dans la vue de face ou de côté, tirez un contour fermé pour lui donner une hauteur. La cote et l'aperçu filaire grandissent ; une valeur saisie fixe la hauteur exacte.",
+          "Tirez le contour vers l'extérieur pour créer un corps ou vers l'intérieur pour créer une poche visible. Une flèche et une croix rendent les deux directions saisissables.",
+          "L'aperçu affiche le pavé, cylindre ou corps esquissé pendant la saisie de ses cotes. Les nouveaux corps restaient auparavant invisibles jusqu'à l'application.",
+          "Les outils de dessin annoncent l'effet du prochain clic. Les contraintes expliquent leur effet et la sélection, et les degrés de liberté sont décrits simplement.",
+          "Le pavé, le cylindre, le perçage et l’évidement n’apparaissent plus qu’une fois dans le menu. La case « Modifier les faces et les arêtes plus tard » remplace l’entrée « exact ».",
+          "Cette case garde disponibles les chanfreins, les congés, les dépouilles, les faces décalées et l’export STEP. Le dialogue nomme l’intérêt plutôt que le moteur de calcul.",
+          "Pendant le dessin, la barre nomme l’étape suivante : Élever, Creuser ou Terminé. S’il manque un contour fermé ou un corps sélectionné, elle le dit aussi.",
+          "Une contrainte se retire d’un deuxième clic sur le même bouton, et un clic droit sur le point montre ce qui en dépend. Auparavant, chaque clic en ajoutait une autre jusqu’au blocage.",
+          "La barre des contraintes n’affiche que ce qui correspond à la sélection. Si rien n’est sélectionné, une phrase y figure au lieu de dix termes techniques en gris.",
+          "Les corps de base sont posés « sur le plateau d’impression » au lieu de « à Z = 0 », et l’outil de dessin s’appelle « courbe », comme ce qu’il dessine."
+        ]
+      },
+      {
+        "title": "Perçages et éléments",
+        "points": [
+          "Modifiez directement le diamètre d'un perçage détecté dans un modèle importé, sans le redessiner ni ouvrir un logiciel de CAO.",
+          "Le perçage modifié garde sa position et sa direction sur les maillages comme sur les corps exacts. Même un perçage incliné reste sur son axe d'origine.",
+          "Les repères d'éléments suivent la géométrie visible après recalcul. Un perçage repéré reste ouvert au lieu d'être masqué par son repère.",
+          "Les outils fréquents comme Perçage, Union et Soustraction sont accessibles avec un clic de moins. Les titres continuent de séparer clairement les groupes."
+        ]
+      },
+      {
+        "title": "Blocs et pièces normalisées",
+        "points": [
+          "Le catalogue propose des vis et écrous imprimables avec des filetages assortis. Choisissez tête, longueur, taille et jeu selon l'impression.",
+          "Les roulements courants disposent d'un logement aux dimensions normalisées. Le roulement peut rester démontable avec du jeu ou tenir par ajustement serré.",
+          "Un perçage de vis peut loger une tête fraisée ou sa rondelle. La profondeur de tête règle jusqu'où l'une ou l'autre s'enfonce dans la pièce.",
+          "Les tables contiennent davantage de rondelles, inserts filetés et roulements. Les tailles techniques sont expliquées dans le choix au lieu de rester des codes obscurs.",
+          "Les poches d'aimant, clips et passe-câbles acceptent aussi des dimensions personnalisées. Les champs supplémentaires n'apparaissent que si la variante les utilise.",
+          "Les blocs se trouvent dans le catalogue avec des aperçus au lieu d’une liste dans le menu. Un clic droit sur la pièce choisie y mène.",
+          "Le catalogue prévient avant l’insertion lorsque l’endroit sur le corps manque. La plupart des blocs ont besoin d’une face ou d’un perçage sélectionné."
+        ]
+      },
+      {
+        "title": "Impression et filament",
+        "points": [
+          "Chaque bobine peut porter ses propres températures, refroidissement, rétraction et valeurs de matière. Elles restent en place lors d'un changement de qualité.",
+          "Les valeurs de chaque bobine arrivent dans le fichier 3MF et le trancheur au bon emplacement de matière. Une couleur ne reprend plus par erreur les valeurs d'une autre."
+        ]
+      }
+    ],
+    "it": [
+      {
+        "title": "Disegno e modellazione",
+        "points": [
+          "In modalità schizzo può selezionare e trascinare punti, linee, cerchi e contorni direttamente nella vista. Un segno e una maniglia indicano anche cosa si muoverà.",
+          "Il piano di disegno resta nello spazio passando tra vista dall'alto, frontale e laterale. Così vede la posizione reale invece della stessa immagine tre volte.",
+          "Un rettangolo si completa digitando larghezza e altezza. Le misure restano come vincoli invece di perdersi dopo il disegno.",
+          "Nella vista frontale o laterale trascini un contorno chiuso per dargli altezza. Quota e anteprima a filo crescono insieme; un valore digitato fissa l'altezza esatta.",
+          "Trascini il contorno verso l'esterno per creare un corpo o verso l'interno per creare una tasca visibile. Freccia e croce rendono afferrabili entrambe le direzioni.",
+          "L'anteprima mostra il parallelepipedo, cilindro o corpo dello schizzo mentre inserisce le misure. Prima i nuovi corpi restavano invisibili fino all'applicazione.",
+          "Gli strumenti di disegno dicono cosa farà il clic successivo. I vincoli spiegano effetto e selezione, e i gradi di libertà sono descritti con parole chiare.",
+          "Cubo, cilindro, foro e svuotamento compaiono una sola volta nel menu. La casella «Modifica facce e spigoli in seguito» sostituisce la seconda voce, prima chiamata «esatto».",
+          "Questa casella mantiene disponibili smussi, raccordi, angoli di sformo, facce spostate e l’esportazione STEP. Il dialogo nomina il vantaggio, non il motore di calcolo.",
+          "Durante il disegno, la barra nomina il passo successivo: Solleva, Scava o Fatto. Se manca un contorno chiuso o un corpo selezionato, lo dice anche.",
+          "Un vincolo si toglie con un secondo clic sullo stesso pulsante, e un clic destro sul punto mostra che cosa vi è appeso. Prima ogni clic ne aggiungeva un altro, fino al blocco.",
+          "La barra dei vincoli mostra solo ciò che si adatta alla selezione. Se non è selezionato nulla, lì c’è una frase invece di dieci termini tecnici in grigio.",
+          "I corpi di base nascono «sul piano di stampa» invece che «a Z = 0», e lo strumento di disegno si chiama «curva», come ciò che disegna."
+        ]
+      },
+      {
+        "title": "Fori ed elementi",
+        "points": [
+          "Modifichi direttamente il diametro di un foro riconosciuto in un modello importato, senza ridisegnarlo né aprire un programma CAD.",
+          "Il foro modificato conserva posizione e direzione e funziona su mesh e corpi esatti. Anche un foro inclinato resta sul proprio asse originale.",
+          "I segni degli elementi seguono la geometria visibile dopo un nuovo calcolo. Un foro segnato resta aperto e non viene coperto dal proprio segno.",
+          "Gli strumenti frequenti come Foro, Unione e Sottrazione sono un clic più vicini nel menu. I titoli mantengono comunque ben distinti i gruppi."
+        ]
+      },
+      {
+        "title": "Blocchi e componenti standard",
+        "points": [
+          "Il catalogo offre viti e dadi stampabili con filettature abbinate. Scelga testa, lunghezza, misura e gioco adatti alla stampa.",
+          "I cuscinetti comuni hanno una sede costruita sulle misure standard. Il cuscinetto può restare estraibile con gioco o essere fissato a pressione.",
+          "Un foro per vite può incassare una testa svasata o la rondella abbinata. La profondità della testa regola quanto entrano nel pezzo.",
+          "Le tabelle comprendono più rondelle, inserti filettati e cuscinetti. Le misure tecniche sono spiegate nella scelta invece di apparire come codici oscuri.",
+          "Tasche per magneti, clip e passacavi accettano anche misure personalizzate. I campi aggiuntivi compaiono solo se la variante scelta li usa davvero.",
+          "I blocchi stanno nel catalogo con immagini di anteprima invece che come elenco nel menu. Un clic destro sul pezzo scelto porta lì.",
+          "Il catalogo avvisa già prima di inserire quando manca il punto sul corpo. La maggior parte dei blocchi ha bisogno di una faccia o di un foro selezionato."
+        ]
+      },
+      {
+        "title": "Stampa e filamento",
+        "points": [
+          "Ogni bobina può avere temperature, raffreddamento, ritrazione e valori del materiale propri. Questi valori restano quando cambia il livello di qualità.",
+          "I valori delle singole bobine arrivano al file 3MF e allo slicer nel posto materiale corretto. Un colore non prende più per errore i valori di stampa di un altro."
+        ]
+      }
+    ],
+    "pt": [
+      {
+        "title": "Desenho e modelação",
+        "points": [
+          "No modo de esboço pode selecionar e arrastar pontos, linhas, círculos e contornos diretamente na vista. Uma marca e uma pega indicam também o que vai mover-se.",
+          "O plano de desenho fica no espaço ao alternar entre as vistas de cima, frente e lado. Assim vê a posição real em vez da mesma imagem três vezes.",
+          "Um retângulo pode ser concluído escrevendo a largura e a altura. As medidas ficam como restrições em vez de se perderem depois do desenho.",
+          "Na vista de frente ou de lado, puxe um contorno fechado para lhe dar altura. A medida e a pré-visualização em arame crescem; um valor escrito fixa a altura exata.",
+          "Puxe o contorno para fora para criar um corpo ou para dentro para criar uma bolsa visível. Uma seta e uma cruz tornam ambas as direções agarráveis.",
+          "A pré-visualização mostra o bloco, cilindro ou corpo do esboço enquanto introduz as medidas. Antes, os corpos novos ficavam invisíveis até aplicar o passo.",
+          "As ferramentas de desenho dizem o que fará o próximo clique. As restrições explicam o efeito e a seleção, e os graus de liberdade são descritos de forma clara.",
+          "Cubo, cilindro, furo e esvaziamento aparecem uma só vez no menu. A caixa «Editar faces e arestas mais tarde» substitui a segunda entrada, antes chamada «exato».",
+          "Esta caixa mantém disponíveis chanfros, arredondamentos, ângulos de saída, faces deslocadas e a exportação STEP. O diálogo nomeia a vantagem, não o motor de cálculo.",
+          "Ao desenhar, a barra nomeia o passo seguinte: Elevar, Rebaixar ou Concluído. Se faltar um contorno fechado ou um corpo selecionado, também o indica.",
+          "Uma restrição retira-se com um segundo clique no mesmo botão, e um clique direito sobre o ponto mostra o que depende dele. Antes, cada clique acrescentava outra até tudo bloquear.",
+          "A barra de restrições mostra apenas o que combina com a seleção. Se nada estiver selecionado, está lá uma frase em vez de dez termos técnicos a cinzento.",
+          "Os corpos básicos assentam «na mesa de impressão» em vez de «em Z = 0», e a ferramenta de desenho chama-se «curva», como aquilo que desenha."
+        ]
+      },
+      {
+        "title": "Furos e elementos",
+        "points": [
+          "Altere diretamente o diâmetro de um furo detetado num modelo importado, sem voltar a desenhá-lo nem abrir um programa CAD.",
+          "O furo alterado mantém posição e direção e funciona em malhas e corpos exatos. Mesmo um furo inclinado continua no eixo original.",
+          "As marcas dos elementos seguem a geometria visível após novo cálculo. Um furo marcado continua aberto e não fica tapado pela própria marca.",
+          "As ferramentas frequentes como Furo, União e Subtração ficam um clique mais perto no menu. Os títulos continuam a separar claramente os grupos."
+        ]
+      },
+      {
+        "title": "Blocos e peças normalizadas",
+        "points": [
+          "O catálogo oferece parafusos e porcas imprimíveis com roscas correspondentes. Escolha cabeça, comprimento, tamanho e folga adequados à impressão.",
+          "Os rolamentos comuns têm um alojamento com medidas normalizadas. O rolamento pode ficar removível com folga ou preso por ajuste à pressão.",
+          "Um furo de parafuso pode alojar uma cabeça escareada ou a anilha correspondente. A profundidade da cabeça regula quanto entram na peça.",
+          "As tabelas incluem mais anilhas, insertos roscados e rolamentos. Os tamanhos técnicos são explicados na escolha em vez de surgirem como códigos misteriosos.",
+          "Bolsas de ímanes, clipes e passa-cabos também aceitam medidas próprias. Os campos adicionais só aparecem se a variante escolhida os utilizar.",
+          "Os blocos estão no catálogo com imagens de pré-visualização em vez de como lista no menu. Um clique direito sobre a peça escolhida leva lá.",
+          "O catálogo avisa antes de inserir quando falta o sítio no corpo. A maioria dos blocos precisa de uma face ou de um furo selecionado; antes o catálogo permitia o que a operação depois recusava."
+        ]
+      },
+      {
+        "title": "Impressão e filamento",
+        "points": [
+          "Cada bobina pode ter temperaturas, arrefecimento, retração e valores de material próprios. Esses valores mantêm-se quando muda o nível de qualidade.",
+          "Os valores de cada bobina chegam ao ficheiro 3MF e ao slicer no lugar de material correto. Uma cor já não recebe por engano os valores de impressão de outra."
+        ]
+      }
+    ]
+  },
+  "signature": "4e4445dac121e4c52ee48b67011ed6531437eb47ced3ffb57f8e27f29461949cbc09ee031532f18d633d3414da24dd99169b3946f9c53fe1b3ebbd3367bfa90f"
 }
