@@ -94,6 +94,7 @@
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
 - [Sicherung ist eine Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — eine Kopie vom Anfang einer Mutationsreihe spielt am Ende den ganzen Dateistand von damals zurück; dreimal getan, gutgegangen nur weil sie zufällig jünger war als der fremde Commit.
+- [Privater Index hinterlässt Spuren](privater-index-hinterlaesst-spuren.md) — eine **neue** Datei steht danach im Haupt-Index als gelöscht, und die Umfangsprobe zählt Zeilen statt Urheber; beides an einem Abend passiert, beides von Nachbarn gefunden.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
 - [Probe mit Commits schaltet den Push ab](probe-die-commits-erzeugt-schaltet-push-ab.md) — der post-commit ist committet und läuft in jedem Worktree; zwei Probe-Commits landeten als eigener Zweig auf origin.
