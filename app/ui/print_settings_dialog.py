@@ -1515,6 +1515,16 @@ class PrintSettingsDialog(QDialog):
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
+        self._state_shows_reason = False
+        """Ob in der Zustandszeile gerade ein **Sperr-Grund** steht.
+
+        Die Zeile trägt zweierlei: das Ergebnis des letzten Laufs und den
+        Grund, warum gerade nicht geslicet werden kann. Beide sind verschieden
+        alt — ein Ergebnis bleibt gültig, bis ein neuer Lauf es ersetzt, ein
+        Grund gilt nur, solange er zutrifft. Ohne diese Unterscheidung blieb
+        „Dieser Slicer braucht ein Druckerprofil" nach dem Wechsel auf
+        PrusaSlicer stehen, während der Knopf schon frei war — ein Widerspruch
+        auf demselben Bildschirm (Handlauf 3d-druck-55, 30.08.2026)."""
         self._settled = False
         """Ob schon aufgeräumt wurde — es gibt drei Wege hinaus (siehe
         :meth:`_settle`)."""
@@ -2687,11 +2697,21 @@ class PrintSettingsDialog(QDialog):
             # Ergebnis des letzten Laufs, und das wäre hier nicht zu
             # überschreiben, sondern stehen zu lassen.
             self.state.setText(str(reason))
+            self._state_shows_reason = True
         elif open_reason and self.settings.handover == "open":
             # Dieselbe Regel für den Öffnen-Weg — aber nur, wenn er der
             # gemerkte Hauptweg dieses Projekts ist: Der Grund eines
             # Nebenknopfs verdrängt keine Ergebniszeile.
             self.state.setText(open_reason)
+            self._state_shows_reason = True
+        elif self._state_shows_reason:
+            # **Ein Grund, der nicht mehr gilt, muss weichen.** Der Zweig
+            # darüber schützt ein *Ergebnis* davor, überschrieben zu werden —
+            # ein veralteter *Grund* ist davon nicht gedeckt. Nach dem Wechsel
+            # von der Orca-Familie auf PrusaSlicer stand sonst weiter „braucht
+            # ein Druckerprofil" da, während der Knopf längst frei war.
+            self.state.setText("")
+            self._state_shows_reason = False
 
     def _pick_slicer(self) -> Path | None:
         """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
@@ -3365,6 +3385,8 @@ class PrintSettingsDialog(QDialog):
         # Ohne diesen Knopf wäre der ganze Lauf eine Zahl auf dem Bildschirm
         # und nichts, was auf einen Drucker geht.
         self._gcode = [entry.gcode_path for entry in outcomes]
+        # Ab hier trägt die Zeile ein Ergebnis und keinen Grund.
+        self._state_shows_reason = False
         self.save_button.setEnabled(True)
         outcomes[0].findings = [*self._pending_findings, *outcomes[0].findings]
         self._pending_findings = []

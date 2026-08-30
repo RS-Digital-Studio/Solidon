@@ -2241,3 +2241,42 @@ def test_the_worker_hands_the_height_to_the_slicer(
     worker.run()
 
     assert gesehen == [42.5], "die Höhe kam beim Slicer nicht an"
+
+
+def test_a_stale_reason_leaves_the_state_line(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Ein Grund, der nicht mehr gilt, muss weichen.
+
+    Nach dem Wechsel von der Orca-Familie auf PrusaSlicer stand weiter
+    „Dieser Slicer braucht ein Druckerprofil“ da, während der Knopf schon
+    frei war — ein Widerspruch auf demselben Bildschirm. Der Schutz, der
+    ein *Ergebnis* vor dem Überschreiben bewahrt, deckte versehentlich auch
+    einen veralteten *Grund* (Handlauf 3d-druck-55, 30.08.2026).
+    """
+    dialog._slicer_path = tmp_path / "elegoo-slicer.exe"
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+    dialog._show_slicer_state()
+    assert dialog.state.text(), "erst muss der Grund dastehen"
+
+    # Wechsel auf einen Slicer ohne Profilpflicht
+    dialog._needs_profiles = False
+    dialog._slicer_path = tmp_path / "prusa-slicer.exe"
+    dialog._show_slicer_state()
+
+    assert dialog.slice_button.isEnabled(), "ohne Profilpflicht ist der Knopf frei"
+    assert not dialog.state.text(), f"der alte Grund stand noch da: {dialog.state.text()!r}"
+
+
+def test_a_result_survives_a_state_refresh(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
+    """Die Gegenrichtung: Ein Ergebnis darf dabei nicht mitgerissen werden.
+
+    Die Zeile trägt zweierlei, und nur das eine ist alt geworden.
+    """
+    dialog._slicer_path = tmp_path / "prusa-slicer.exe"
+    dialog._needs_profiles = False
+    dialog.state.setText("Druckzeit: 18 min · Material: 4,7 g")
+
+    dialog._show_slicer_state()
+
+    assert dialog.state.text() == "Druckzeit: 18 min · Material: 4,7 g"
