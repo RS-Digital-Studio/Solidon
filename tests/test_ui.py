@@ -9840,3 +9840,54 @@ def test_a_chosen_part_reaches_the_catalogue_in_one_click(window: MainWindow) ->
     in_bar = [name for name in window._op_actions if name in catalogue_operations()]
     assert catalogue_operations(), "es gibt keine Bausteine — dann prüft dieser Test nichts"
     assert not in_bar, f"Bausteine gehören in den Katalog, nicht ins Menü: {sorted(in_bar)}"
+
+
+def test_a_parameter_field_shows_its_whole_value(window: MainWindow) -> None:
+    """„die eingabefelder sind jetzt manchmal zu klein" (Robert, 30.08.2026).
+
+    Die Wertfelder der Parameterkarte tragen `SizePolicy.Ignored`, und das mit
+    gutem Grund: Ihr Wertebereich geht bis ±100 000, und danach bemessen wäre
+    jedes Feld 156 Punkte breit, auch für eine 40. Ohne Boden schrumpfen sie
+    aber unter das Maß, das ihren **aktuellen** Wert zeigt — gemessen 92 Punkte
+    für ein Feld, dessen Zahl mit Auf- und Ab-Knopf 118 braucht. Auf dem
+    Bildschirm stand „2,4" statt „2,40" und „1234" statt „1234,56", ohne dass
+    etwas rot wird: Qt schneidet stumm.
+
+    Der Boden ist deshalb der aktuelle Wert, nicht der Wertebereich.
+    """
+    from PySide6.QtWidgets import QAbstractSpinBox, QStyle, QStyleOptionSpinBox
+
+    from app.core.types import Parameter
+
+    document = window.session.project.document
+    for name, value in (("breite", 1234.56), ("wandstaerke", 2.4)):
+        document.parameters[name] = Parameter(name=name, value=value, unit="mm")
+    window.parameters.show_document(document)
+    window.parameters.grab()  # erzwingt das Legen der Zeilen
+    QApplication.processEvents()
+
+    def textraum(spin: QAbstractSpinBox) -> int:
+        opt = QStyleOptionSpinBox()
+        opt.initFrom(spin)
+        return (
+            spin.style()
+            .subControlRect(
+                QStyle.ComplexControl.CC_SpinBox, opt, QStyle.SubControl.SC_SpinBoxEditField, spin
+            )
+            .width()
+        )
+
+    felder = [
+        spin
+        for spin in window.parameters.findChildren(QAbstractSpinBox)
+        if spin.isVisibleTo(window.parameters)
+    ]
+    assert felder, "ohne Felder prüft das hier nichts"
+
+    eng = [
+        f"{spin.text()!r}: {spin.fontMetrics().horizontalAdvance(spin.text())} nötig, "
+        f"{textraum(spin)} da"
+        for spin in felder
+        if textraum(spin) < spin.fontMetrics().horizontalAdvance(spin.text())
+    ]
+    assert not eng, f"abgeschnittene Werte in der Parameterkarte: {eng}"

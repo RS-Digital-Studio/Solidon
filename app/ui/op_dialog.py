@@ -192,6 +192,14 @@ class ValueField(QWidget):
         # Wunsch von 156, gemessen an *Kopien in Reihe oder Kreis*. Der
         # Umschalter bleibt rechts stehen, damit die Felder untereinander eine
         # Kante haben; gewachsen wäre allein die leere Fläche vor ihm.
+        # **Und ein Boden dazu.** Der Deckel allein ließ die Zeile entscheiden,
+        # wie schmal es wird: Im Bohrdialog blieben den Positionsfeldern
+        # gemessene 65 Punkte Textraum, während „1234,56 mm" 64 braucht — ein
+        # Zeichen mehr, und der Wert stand abgeschnitten da, ohne dass etwas
+        # rot wird (Robert, 30.08.2026: „die eingabefelder sind jetzt manchmal
+        # zu klein"). Der Wunsch des Feldes ist genau das Maß, das seinen Wert
+        # zeigt; darunter darf es nicht.
+        self.spin.setMinimumWidth(self.spin.sizeHint().width())
         self.spin.setMaximumWidth(self.spin.sizeHint().width() + NUMBER_AIR)
 
         self.text = QLineEdit(self)
@@ -928,6 +936,9 @@ def _kept_narrow(editor: QWidget) -> QWidget:
     hat ein Widget seine Vorgabegröße, und ein Deckel daraus wäre eine andere
     Zahl bei jedem Öffnen.
     """
+    # Boden und Deckel, siehe ``ValueField``: Ein Feld soll nicht wachsen,
+    # aber auch nicht unter das Maß schrumpfen, das seinen Wert zeigt.
+    editor.setMinimumWidth(editor.sizeHint().width())
     editor.setMaximumWidth(editor.sizeHint().width() + NUMBER_AIR)
     return editor
 

@@ -2069,6 +2069,14 @@ class ParameterPanel(QWidget):
             # In der festen linken Karte darf das Feld schrumpfen und nutzt den
             # Platz, der nach Einheit und Mehr-Knopf übrig bleibt.
             editor.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            # **Aber nicht unter den eigenen Wert** (Robert, 30.08.2026: „die
+            # eingabefelder sind jetzt manchmal zu klein"). ``Ignored`` hält
+            # den Wertebereich aus der Breite heraus — und ließ das Feld
+            # zugleich unter das Maß schrumpfen, das seine **aktuelle** Zahl
+            # zeigt: gemessen 92 Punkte, wo „1234,56" mit den zwei Knöpfen 118
+            # braucht. Auf dem Bildschirm stand „2,4" statt „2,40", und Qt
+            # schneidet dabei stumm.
+            editor.setMinimumWidth(least_number_width(editor))
             editor.valueChanged.connect(
                 lambda value, key=name: self._queue_parameter_edit(key, value)
             )
@@ -3262,6 +3270,31 @@ def open_section(content: QWidget) -> None:
             if not child.isChecked():
                 child.setChecked(True)
             return
+
+
+def least_number_width(spin: QDoubleSpinBox) -> int:
+    """Wie schmal ein Zahlenfeld werden darf, ohne seinen Wert zu verstecken.
+
+    Nicht der Wunsch des Feldes: Der bemisst sich am **Wertebereich**, und ein
+    Parameter, der bis 100 000 gehen darf, verlangte damit 156 Punkte für eine
+    40. Nicht die reine Textbreite: Rechts sitzen die zwei Knöpfe, und was sie
+    verdecken, ist kein Platz.
+
+    Gerechnet wird deshalb der heutige Text plus das, was das Feld **um**
+    seinen Text herum braucht — die Differenz zwischen seinem Wunsch und der
+    Breite seines längsten möglichen Werts. Damit wächst der Boden mit
+    Schriftgröße und Knopfbreite, ohne den Wertebereich mitzuschleppen.
+
+    Eine Ziffer Reserve kommt dazu: Wer 9,99 auf 10,00 stellt, soll nicht
+    zusehen, wie das Feld nachwächst.
+    """
+    metrik = spin.fontMetrics()
+    laengster = max(
+        metrik.horizontalAdvance(f"{spin.minimum():.{spin.decimals()}f}"),
+        metrik.horizontalAdvance(f"{spin.maximum():.{spin.decimals()}f}"),
+    )
+    rahmen = max(0, spin.sizeHint().width() - laengster)
+    return metrik.horizontalAdvance(spin.text() + "0") + rahmen
 
 
 def align_forms(dialog: QWidget) -> None:

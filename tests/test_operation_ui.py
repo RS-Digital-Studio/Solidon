@@ -2256,3 +2256,49 @@ def test_the_unit_lives_in_the_value_not_in_the_caption(qt_app: QApplication) ->
         assert not [t for t in (lbl.text() for lbl in in_zoll.findChildren(QLabel)) if "[mm]" in t]
     finally:
         set_display_unit("mm")
+
+
+def test_a_number_field_never_shrinks_below_its_value(window: MainWindow) -> None:
+    """Ein Feld, das seinen Wert nicht ganz zeigt, ist kaputt (Robert, 30.08.2026).
+
+    Die Zahlenfelder trugen einen Deckel — höchstens so breit wie ihr Wunsch
+    plus Luft —, aber keinen Boden. Was das Layout ihnen ließ, entschied
+    damit die Zeile: Im Bohrdialog blieben den Positionsfeldern gemessene
+    **65** Punkte Textraum, während „1234,56 mm" **64** braucht. Ein Zeichen
+    mehr, eine längere Einheit oder eine andere Sprache, und der Wert steht
+    abgeschnitten da — ohne dass etwas rot wird, denn Qt schneidet stumm.
+
+    Der Wunsch des Feldes ist genau das Maß, das seinen Wert zeigt; er ist
+    deshalb der Boden. Der Deckel bleibt daneben stehen: Ein Feld soll nicht
+    wachsen, nur nicht schrumpfen.
+    """
+    from PySide6.QtWidgets import QStyle, QStyleOptionSpinBox
+
+    spec = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(spec, [], window)
+    dialog.show()
+    QApplication.processEvents()
+
+    def textraum(spin: object) -> int:
+        opt = QStyleOptionSpinBox()
+        opt.initFrom(spin)
+        return (
+            spin.style()
+            .subControlRect(
+                QStyle.ComplexControl.CC_SpinBox, opt, QStyle.SubControl.SC_SpinBoxEditField, spin
+            )
+            .width()
+        )
+
+    eng = []
+    for name, feld in dialog._editors.items():
+        spin = getattr(feld, "spin", None)
+        if spin is None:
+            continue
+        spin.setValue(1234.56)
+        noetig = spin.fontMetrics().horizontalAdvance(spin.text())
+        if textraum(spin) < noetig:
+            eng.append(f"{name}: {noetig} nötig, {textraum(spin)} da")
+
+    assert dialog._editors, "ohne Felder prüft das hier nichts"
+    assert not eng, f"abgeschnittene Werte: {eng}"
