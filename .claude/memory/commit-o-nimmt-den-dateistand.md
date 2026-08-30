@@ -183,3 +183,23 @@ gerade davor, den Widerspruch zwischen `--numstat 132/10` und einem leeren
 `git diff` zu jagen. **Ein stiller Mitnahme-Commit ist der schlechteste
 Fall** — der Betroffene sucht sonst später, warum sein Diff kleiner ist als
 seine Arbeit.
+
+## Der Schritt davor: die Board-Liste
+
+Am 30.08.2026 ist mir dieselbe Sache noch einmal passiert, in der eigenen
+Variante: `git update-index --add app/ui/viewport.py` nahm 3as
+Beleuchtungsarbeit mit — rund 60 von 97 Zeilen. `update-index --add` nimmt den
+Dateistand genauso wie `commit -o`; der private Index hält fremde **Dateien**
+heraus, nicht den fremden Stand einer **gemeinsamen**.
+
+Die erwartete Zahl hat es gefangen (35 erwartet, 97 gesehen) — aber erst
+*nach* dem Commit. Davor hätte eine Sekunde gereicht:
+
+> **`python tools/session_board.py list` vor dem Stagen**, nicht nur beim
+> Ankommen. Dort steht, welche Dateien gerade jemand anderes hält. Für die
+> baut man eine Blob-Fassung aus dem unmittelbaren HEAD plus den eigenen
+> Zeilen; für alle übrigen genügt `update-index`.
+
+Die Liste altert schnell — in sechs Stunden hatten fünf Sitzungen ihre Gebiete
+mehrfach gewechselt. Sie beim Ankommen zu lesen und dann vier Stunden später
+zu stagen, ist dasselbe wie sie nicht zu lesen.
