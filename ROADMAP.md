@@ -120,6 +120,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Solidons Slicer-Lauf scheitert an ElegooSlicer, die CLI selbst nicht | Solidons Elegoo-Lauf scheitert, die CLI selbst nicht (30.08.2026) | fb's vier Trennläufe zwischen `--arrange 0` und dem selbst geschriebenen Maschinenprofil |
+| Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
+| Die zweite Slicer-Übergabeart hat keinen Aufrufer | Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026) | den Anschluss an den Druckdialog: Übergabeart wählbar, Wahl gemerkt — der Fensterweg bekommt denselben Platz wie der Konsolenlauf (55) |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12459,6 +12461,12 @@ etwas sagen — `transform.fitted`, drei `repair.*`, `arrange.below_bed` —
 gehen darin unter. Der `info`-Grad ist bewusst gewählt und in `evaluate.py`
 begründet; bedacht ist der **Grad**, nicht die **Menge**.
 
+Warum die Menge zählt, obwohl jede Zeile für sich stimmt: `arrange.below_bed`
+nach einem Erzeugungslauf ist **richtig** (§17.1, geprüft am 30.08.2026 — der
+erzeugte Körper liegt wirklich unter dem Bett, bis die Übernahme ihn hebt).
+Gerade der korrekte Hinweis, den der Kunde lesen sollte, ist neben 118
+gleichlautenden nicht mehr zu finden.
+
 - [ ] Eine Entscheidung über Zusammenfassen („118 Merkmale haben keinen
       Nachfolger mehr" als eine Zeile mit Aufklappliste) oder einen Deckel —
       sie liegt in `evaluate.py` oder `panels.py` und ist eine Bedienfrage,
@@ -12521,3 +12529,39 @@ gcode wollen wir nicht verändern, nur die vorgaben bei den slicern" (§22).
 - [ ] fb's vier Trennläufe zwischen den zwei Unterschieden, mit wörtlich
       festgehaltenen Kommandozeilen — danach der Fix an Solidons Aufruf oder
       die belegte Auskunft, dass es am Slicer liegt.
+
+---
+
+## Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026)
+
+5ds Ollama-Messung an Weg 3 (30.08.2026): Nach einem einzigen erzeugten
+Objekt meldet das Modell rund 76 Prozent seines Kontextfensters als belegt.
+Die Notiz im Code rechnet mit etwa 13 500 Token Grundlast — die Beobachtung
+sagt, dass Steckbrief und Werkzeugantworten schneller wachsen, als diese
+Zahl vermuten lässt. Eine einzelne Beobachtung, keine Messreihe; der
+ehrliche Messweg ist `prompt_eval_count` aus der Ollama-Antwort, nicht eine
+eigene Token-Schätzung (dieselbe Falle wie jede Zählung, die der Prüfling
+selbst liefert).
+
+- [ ] Eine Messreihe über mehrere Objekte und Züge mit `prompt_eval_count`:
+      Wächst die Belegung je Objekt linear, ist bei drei bis vier Objekten
+      Schluss — dann braucht der Steckbrief eine Kürzungsstrategie, bevor
+      ein Kunde sie als „der Chat vergisst alles" erlebt.
+
+---
+
+## Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026)
+
+`open_in_slicer` (§29) öffnet die geschriebene Druckdatei im Fenster des
+Slicers — für den Fall, dass die Kommandozeile eines Slicers nicht kann, was
+sein Fenster kann, und für den Kunden, der im Slicer selbst weiterarbeiten
+will. Lizenzgrenze, Fehlerwege mit Handlungsvorschlägen und Tests stehen
+(Commit A von 55, 30.08.2026); die Fenster-Suche kennt die getrennten
+Programme der Prusa- und Cura-Familie. Was fehlt, ist der Aufrufer: kein
+Treffer in `app/` außerhalb von `handover.py`. Eine gebaute Funktion ohne
+Anschluss ist ein Versprechen, das das Produkt noch nicht gibt — mit Ansage
+hier festgehalten statt still (eine Kette endet am letzten Glied).
+
+- [ ] Der Anschluss an den Druckdialog: die Übergabeart wählbar machen
+      (slicen lassen oder im Slicer öffnen), die Wahl merken, und der
+      Fensterweg bekommt denselben Platz im Ablauf wie der Konsolenlauf (55).
