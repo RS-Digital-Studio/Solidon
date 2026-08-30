@@ -95,6 +95,46 @@ Gleicher Hash = Phantom, der Index ist alt. Vor der Heilung des Haupt-Index
 weiterhin prüfen, ob echtes fremdes Staging darin liegt (siehe die Warnung im
 liefern-Skill) — erst aussortieren, dann heilen.
 
+**Und am 30.08.2026 die scharfe Gestalt davon: bei einer *neuen* Datei wird
+aus dem alten Index eine vorgemerkte Löschung.** Nach einem Neustart standen
+zwei frisch committete Erinnerungen so da:
+
+```
+D  .claude/memory/zufallsziehung-ist-keine-zuordnung.md   ← Index: Löschung vorgemerkt
+??                    dieselbe Datei                       ← Baum: da, 44 Zeilen
+```
+
+Beide in HEAD, beide im Baum — und der nächste `git commit` **ohne Pfadliste**
+hätte sie aus dem Repository entfernt.
+
+**Die Ursache ist das private-Index-Verfahren selbst**, also genau das, was
+dieses Projekt zum Schutz fremder Arbeit vorschreibt. Wer über
+`GIT_INDEX_FILE` committet, bringt die Datei nach HEAD, ohne dass der
+Haupt-Index je von ihr erfährt — belegt an einer Kopie des Index vor der
+Reparatur: `git ls-files` auf die beiden Pfade antwortete leer. Eine Datei in
+HEAD, die im Index fehlt, **ist** definitionsgemäß eine vorgemerkte Löschung.
+
+Der Unterschied zum Fall oben ist der, auf den es ankommt:
+
+| im Haupt-Index fehlt | Status | Folge eines pfadlosen Commits |
+|---|---|---|
+| eine **Änderung** an bekannter Datei | `MM` | Zeilen fallen zurück — sichtbar im Diff |
+| eine **neue** Datei | `D ` + `??` | die Datei wird **gelöscht** |
+
+**Nach jedem privaten-Index-Commit, der eine neue Datei anlegt**, deshalb eine
+Zeile:
+
+```
+git diff --name-only --diff-filter=D --cached HEAD
+```
+
+Steht dort etwas, das gerade erst committet wurde, ist es diese Mine.
+Entschärft wird sie mit `git reset -- <pfad>` — nur Index, Arbeitsbaum
+unberührt. **Vorher** aber `git hash-object` auf Baum und HEAD vergleichen: Nur
+wenn beide identisch sind, ist die Reparatur verlustfrei. Und `.git/index`
+kopieren, bevor man ihn anfasst — er gehört allen Sitzungen, und die Kopie
+beantwortet hinterher die Frage, wie es dazu kam.
+
 **Wie anwenden:** Bevor man ein `MM` für fremde Arbeit hält, die eine Zeile
 fahren, die es entscheidet:
 
