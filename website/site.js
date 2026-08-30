@@ -461,7 +461,18 @@
     stage.style.background =
       'url("' + picture(index) + '") center / cover no-repeat';
     const value = from + (to - from) * (index / (stops - 1));
-    readout.textContent = value.toFixed(1).replace(".", ",") + " mm";
+    /* **Das Trennzeichen kommt aus der Sprache der Seite, nicht aus einem
+       festen Tausch.** `replace(".", ",")` schrieb in jeder Fassung ein
+       Komma — im englischen Aufmacher stand damit „55.0 mm" als Startwert
+       und „90,0 mm", sobald jemand den Regler anfasste. Zwei Schreibweisen
+       in einem Feld, und die zweite war die falsche. Dieselbe Regel wie in
+       der Anwendung: eine Zahl, eine Schreibweise, und sie folgt der
+       Sprache. */
+    readout.textContent =
+      value.toLocaleString(document.documentElement.lang || "de", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }) + " mm";
   });
 })();
 
