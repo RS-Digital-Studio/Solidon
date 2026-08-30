@@ -3141,6 +3141,73 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
         panel.deleteLater()
 
 
+def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> None:
+    """Der Nachschub-Weg zerlegte die Sammelzeile — und bündelte selbst nie.
+
+    ``add_findings`` (G-Code-Gegenprobe, Kollisions-, Exportprüfung) baute
+    die Liste über die *Zeilen* neu statt über die Befunde: ``_resort`` las
+    das ersetzte Bündel-Finding aus dem ``UserRole`` und hängte es als
+    Einzelzeile wieder an — die Kopfzeile zählte 1 statt 118, und die
+    Namensliste aus dem Tooltip stand plötzlich in der Zeile. Seitdem hält
+    das Panel die rohen Befunde und baut Zeilen immer über dieselbe
+    Bündelung. Der Weg-3-Fall aus dem Register ist genau diese Folge:
+    erst die Auswertung mit den Waisen, dann die Gegenprobe obendrauf.
+    """
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    orphan_text = "Ein Merkmal hat keinen Nachfolger mehr"
+    orphans = tuple(
+        Finding(
+            code="perceive.orphaned",
+            severity="info",
+            message=orphan_text,
+            values={"feature": f"hole_{n}"},
+        )
+        for n in range(118)
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=orphans))))
+        assert panel.list.count() == 1
+
+        panel.add_findings(
+            [
+                Finding(
+                    code="gcode.print_time",
+                    severity="info",
+                    message="Die Druckzeit steht in der Druckdatei",
+                    source="gcode",
+                )
+            ]
+        )
+        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert len(texts) == 2, f"die Sammelzeile übersteht den Nachschub: {texts!r}"
+        assert f"118 × {orphan_text}" in texts
+        assert f"119 × {tr('Hinweis')}" in panel.summary.text(), panel.summary.text()
+
+        # Und der Nachschub-Weg bündelt selbst: vier wortgleiche Warnungen
+        # aus einer Prüfung sind eine Zeile, keine vier.
+        panel.add_findings(
+            [
+                Finding(
+                    code="check.collision",
+                    severity="warning",
+                    message="Zwei Objekte berühren sich",
+                    values={"feature": f"pair_{n}"},
+                )
+                for n in range(4)
+            ]
+        )
+        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert "4 × Zwei Objekte berühren sich" in texts, texts
+        assert len(texts) == 3, texts
+        assert f"4 × {tr('Warnung')}" in panel.summary.text(), panel.summary.text()
+    finally:
+        panel.deleteLater()
+
+
 def test_identical_findings_below_the_threshold_keep_their_own_lines(
     qt_app: QApplication,
 ) -> None:

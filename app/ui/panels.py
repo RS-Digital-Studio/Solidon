@@ -2394,6 +2394,11 @@ class ReportPanel(QWidget):
         self._document: Document | None = None
         """Nur für die Herkunftszeile im Tooltip — welcher Schritt das gemeldet
         hat. Der Bericht braucht das Dokument für nichts anderes."""
+        self._findings: list[Finding] = []
+        """Die rohen Befunde hinter den Zeilen. Die Liste im Fenster ist eine
+        *Darstellung* davon (gebündelt, sortiert) — wer Zeilen aus Zeilen neu
+        baut, liest ersetzte Bündel-Findings zurück und zerlegt die Bündelung.
+        Genau das tat ``_resort`` nach dem ersten ``add_findings``."""
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
@@ -2609,11 +2614,8 @@ class ReportPanel(QWidget):
             if result
             else {}
         )
-        self.list.clear()
-        for finding, members in _bundled(
-            _by_severity(result.scene.report.findings if result else ())
-        ):
-            self._append(finding, members=members)
+        self._findings = list(result.scene.report.findings) if result else []
+        self._rebuild()
         self._count_up()
         self._measure_up(result)
         self._refilter()
@@ -2642,11 +2644,8 @@ class ReportPanel(QWidget):
         Historie, sondern Irreführung.
         """
         if replacing_source is not None:
-            for row in range(self.list.count() - 1, -1, -1):
-                entry = self.list.item(row).data(Qt.ItemDataRole.UserRole)
-                if entry is not None and entry.source == replacing_source:
-                    self.list.takeItem(row)
-        # Je Identität die Zeile, nicht nur die Menge: Derselbe Sachverhalt
+            self._findings = [entry for entry in self._findings if entry.source != replacing_source]
+        # Je Identität der Befund, nicht nur die Menge: Derselbe Sachverhalt
         # kann mit zwei Gewichten eintreffen — die Auswertung meldet „unter dem
         # Druckbett" als Hinweis (ein Klick behebt es), die Exportprüfung beim
         # Schreiben als Warnung (der Klick ist nicht passiert). Die schwerere
@@ -2654,27 +2653,24 @@ class ReportPanel(QWidget):
         # obwohl längst nur noch der Hinweis gilt — deshalb ersetzt auch die
         # leichtere die schwerere, sobald derselbe Sachverhalt leichter
         # wiederkommt. Was gleich schwer ist, bleibt wie bisher stehen.
-        rows = {
-            _identity(self.list.item(row).data(Qt.ItemDataRole.UserRole)): row
-            for row in range(self.list.count())
-        }
+        #
+        # Gearbeitet wird auf den **rohen** Befunden, nie auf den Zeilen: Eine
+        # Zeile kann ein Bündel vertreten, und ihr ``UserRole`` trägt dann ein
+        # ersetztes Finding — wer damit weiterrechnet, zählt 1, wo 118 sind.
+        standing = {_identity(entry): index for index, entry in enumerate(self._findings)}
         fresh = []
         for finding in findings:
             key = _identity(finding)
-            found_at = rows.get(key)
+            found_at = standing.get(key)
             if found_at is not None:
-                standing = self.list.item(found_at).data(Qt.ItemDataRole.UserRole)
-                if standing.severity == finding.severity:
+                if self._findings[found_at].severity == finding.severity:
                     continue
-                self.list.takeItem(found_at)
-                rows = {
-                    _identity(self.list.item(index).data(Qt.ItemDataRole.UserRole)): index
-                    for index in range(self.list.count())
-                }
-            self._append(finding)
-            rows[key] = self.list.count() - 1
+                self._findings[found_at] = finding
+            else:
+                self._findings.append(finding)
+                standing[key] = len(self._findings) - 1
             fresh.append(key)
-        self._resort()
+        self._rebuild()
         self._count_up()
         self._refilter()
         # Auch hier: ein Befund, der nachkommt, bringt die Filterzeile mit —
@@ -2702,19 +2698,19 @@ class ReportPanel(QWidget):
         self.updateGeometry()
         self.contentGrew.emit()
 
-    def _resort(self) -> None:
-        """Die ganze Liste nach Schwere ordnen.
+    def _rebuild(self) -> None:
+        """Die Zeilen aus den rohen Befunden bauen — sortiert und gebündelt.
 
-        Nach jedem Anhängen und nicht nur beim Aufbau: ein Fehler, der über
-        ``add_findings`` nachkommt, gehört nach oben und nicht ans Ende
-        dessen, was schon dasteht.
+        Der eine Weg von Befunden zu Zeilen, für Auswertung und Nachschub
+        gleichermaßen: ein Fehler, der über ``add_findings`` nachkommt, gehört
+        nach oben und in dieselbe Bündelung wie alles andere. Die Vorgängerin
+        ``_resort`` las die Befunde aus den *Zeilen* zurück — und bekam für
+        eine Sammelzeile das ersetzte Bündel-Finding statt seiner 118
+        Mitglieder.
         """
-        findings = [
-            self.list.item(row).data(Qt.ItemDataRole.UserRole) for row in range(self.list.count())
-        ]
         self.list.clear()
-        for finding in _by_severity(findings):
-            self._append(finding)
+        for finding, members in _bundled(_by_severity(self._findings)):
+            self._append(finding, members=members)
 
     def _preselect(self) -> None:
         """Den obersten Befund vorwählen, der eine Handlung anbietet.
@@ -2757,7 +2753,14 @@ class ReportPanel(QWidget):
                 return
 
     def _show_first_of(self, keys: list[tuple[Any, ...]]) -> None:
-        """Zum obersten der genannten Befunde scrollen."""
+        """Zum obersten der genannten Befunde scrollen.
+
+        Geht ein frischer Befund in einer Sammelzeile auf, findet ihn diese
+        Suche nicht — das Bündel-Finding trägt eine andere Identität — und es
+        wird nicht gescrollt. Bewusst so: Nachschub ist praktisch nie
+        wortgleich mit 118 Bestandszeilen, und ein falscher Sprung wäre
+        schlimmer als keiner.
+        """
         for row in range(self.list.count()):
             item = self.list.item(row)
             if _identity(item.data(Qt.ItemDataRole.UserRole)) in keys:
