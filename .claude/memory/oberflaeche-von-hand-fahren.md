@@ -296,5 +296,31 @@ er ab, was der Timer bedienen will. Und die Bedienroutine prüft zuerst, ob
 der aktive Dialog wirklich der erwartete ist, und reiht sich sonst neu ein —
 sonst bedient sie den Falschen.
 
+**Ein Widget misst sich freistehend anders als im Fenster — und im Fenster
+anders als im Betrieb.** Am 30.08.2026 dreimal dieselbe Leiste, dreimal eine
+andere Zahl, und die ersten beiden waren Prüfstandslagen:
+
+| Aufbau | Leiste bekommt | was die Zahl wert ist |
+|---|---|---|
+| freistehend (`TransformBar()`) | **855 von 855** | nichts — sie bekommt immer, was sie will |
+| im Fenster, **ohne Modell** | **100**, Kinder auf 3 px | nichts — sie liegt im ungesehenen Zweig |
+| im Fenster, **mit Modell** | 855 von 855 | die Auskunft |
+
+Der mittlere Fall ist der gefährliche, weil er nach einem Fund aussieht: „alle
+Knöpfe auf drei Pixeln" liest sich wie ein schwerer Layoutfehler. In Wahrheit
+zeigt das Fenster ohne geladenes Modell den **Startbildschirm**; der Viewport
+mitsamt seinen Leisten ist die andere Seite eines `QStackedWidget`, und was
+dort liegt, wird nie gelegt. Zwei Sitzungen haben daraus unabhängig
+Kundenfehler gemeldet, die keine waren.
+
+**Die Probe darauf ist eine Zeile:** `bar.isVisible()`. Ist sie falsch, misst
+der Prüfstand nichts — und ein Test, der eine Breite prüft, gehört mit genau
+dieser Zusicherung eröffnet.
+
+Und die Lehre daneben, weil sie über Leisten hinausgeht: **Was ein Kunde nie
+tut, misst niemand richtig.** Ein Fenster ohne Modell ist kein Zustand der
+Anwendung, sondern ihr Startbildschirm; wer dort ein Werkzeug abfragt, fragt
+ein Möbel im Nebenzimmer. Siehe [[pruefstand-geht-den-weg-der-oberflaeche]].
+
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].
