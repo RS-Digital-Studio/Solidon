@@ -53,6 +53,20 @@ class Candidate:
 
     direction: Vec3
     support_volume: float
+    """Der gestützte **Raum** in mm³, nicht das Stützmaterial darin.
+
+    Gemeint ist das Volumen unter den Überhängen bis zum nächsten Material
+    oder zur Platte (:func:`app.core.slice.analysis._support_volume`). Eine
+    gedruckte Stütze füllt diesen Raum nur zu ihrer Dichte —
+    :func:`app.core.slice.estimate.support_material` rechnet sie hinein, und
+    erst dort steht, was der Drucker wirklich verbraucht.
+
+    Die Zahl ist absolut belastbar und nicht nur relativ: An einem Pilz (Hut
+    40 auf 40 über einem Stiel 10 auf 10, 20 mm hoch) beträgt der Sollwert von Hand
+    30 000 mm³, gemessen wurden 29 986,7 — die Differenz ist die halbe
+    Schichthöhe an der Unterkante, die unten benannt ist. Ein Quader meldet
+    null, weil er keine Überhänge hat, und derselbe Umriss massiv gefüllt
+    ebenfalls: Das ist die Definition und nicht ihre Verletzung."""
     first_layer_area: float
     height: float
 
