@@ -12974,8 +12974,8 @@ Steuerungs-P verwechselt):
 
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
-| D1 | Der Bericht zerlegt sein eigenes Bündel: `_resort`/`add_findings` bauen Zeilen ohne `_bundled` — nach einem Nachschub stehen 118 Namen in der Zeile und die Kopfzeile zählt 1 statt 118 | S | offen |
-| D2 | Speicherring gemessen: ein angeklickter Befund hält das Fenster (10 von 10 überleben) — `weak_slot` statt Lambda auf Fenster-Handlern | S | offen |
+| D1 | Der Bericht zerlegt sein eigenes Bündel: `_resort`/`add_findings` bauen Zeilen ohne `_bundled` — jetzt ist `self._findings` die eine Quelle und `_rebuild()` baut jede Sicht daraus | S | **fertig** (`e833e938`, 72; Einzelheiten im Kästchen des Bericht-Abschnitts) |
+| D2 | Speicherring gemessen: ein angeklickter Befund hielt das Fenster (10 von 10 überlebten) — `weak_slot` statt Lambda auf Fenster-Handlern, `_run_action` liest zur Klickzeit | S | **fertig** (`ad4c83f0`, 72) |
 | D3 | Fehlerdialog und ComfyUI-Dialog haben keinen/den falschen Hauptknopf | S | offen |
 | D4 | „Bohrung ändern" wählt still `hole_1` von vieren — `at_feature` nach vorn, plus Wächter „kein required-Parameter hinten" | S | **fertig** (`6c705a64`): Feld vorn, `_reason_locked` kennt „verlangt Merkmal, keines gewählt" (`labels.feature_requirement`), Register-Wächter steht; `paint_slot` als Zweitfall gemessen und korrekt frei |
 | D5 | Leere Pflichtliste lässt den Hauptknopf aktiv — sperren und begründen, Grund aus `_needs_phrase` | M | offen |
