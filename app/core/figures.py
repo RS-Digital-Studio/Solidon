@@ -1358,6 +1358,15 @@ FIGURES: Final[tuple[Figure, ...]] = (
         kind="shot",
     ),
     Figure(
+        key="print-settings",
+        alt=_(
+            "Die Druckeinstellungen: vorn die Felder mit ihren Erklärungen, unten "
+            "die Knöpfe „Slicen“, „Im Slicer öffnen“ und „Druckdatei speichern“."
+        ),
+        caption=_("Der Slicer rechnet — bedient wird er von hier."),
+        kind="shot",
+    ),
+    Figure(
         key="catalog",
         alt=_(
             "Der Bausteinkatalog: Vorschaubilder statt einer Namensliste, nach Gruppen geordnet."

@@ -125,8 +125,8 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         title=_("Die ersten fünfzehn Minuten"),
         body=_(
             "Wer noch nie mit einem Konstruktionsprogramm gearbeitet hat, fängt "
-            "hier an. Ein heruntergeladenes Modell bekommt ein Loch und geht "
-            "danach in den Slicer — der häufigste aller Fälle, in acht "
+            "hier an. Ein heruntergeladenes Modell bekommt ein Loch und wird "
+            "danach gedruckt — der häufigste aller Fälle, in acht "
             "Schritten.\n\n"
             "**1. Beim ersten Start zwei Fragen beantworten.** Sprache und Drucker. "
             "Die eingelegten Filamente übernimmt Solidon samt Typ und Farbe aus "
@@ -175,9 +175,11 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**7. Sitzt das Loch falsch, wird es verschoben, nicht neu gebohrt.** "
             "Ein Doppelklick auf den Schritt im Verlauf öffnet ihn wieder. Zahl "
             "ändern, übernehmen, fertig. Das gilt auch noch nächste Woche.\n\n"
-            "**8. Exportieren.** *Datei → Exportieren*, dann 3MF, wenn der Slicer "
-            "es kann — sonst STL. Diese Datei kommt in den Slicer, und der macht "
-            "daraus den G-Code.\n\n"
+            "**8. Drucken.** *Datei → Druckeinstellungen*, dann *Slicen*: Der "
+            "Slicer rechnet die Druckdatei, ohne dass man ihn zu sehen "
+            "bekommt, und *Druckdatei speichern* legt sie ab. Wer lieber im "
+            "Slicer weiterarbeitet, nimmt *Im Slicer öffnen* — oder "
+            "*Datei → Exportieren* für eine 3MF ohne alles.\n\n"
             "Mehr braucht der erste Durchgang nicht. Alles Übrige in diesem "
             "Handbuch ist Ausbau davon."
         ),
@@ -849,8 +851,52 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
         ),
     ),
     Page(
-        key="printing",
-        summary=_("Vom fertigen Modell zur Übergabe an den Slicer."),
+        key="print",
+        summary=_("Vom fertigen Modell zur Druckdatei, ohne Solidon zu verlassen."),
+        title=_("Drucken"),
+        body=_(
+            "*Datei → Druckeinstellungen* (Strg+P) ist der Weg vom Modell zur "
+            "Druckdatei. Der Slicer rechnet sie — aber bedient wird er von "
+            "hier, und in aller Regel bekommt man ihn nicht mehr zu sehen.\n\n"
+            "![](figure:print-settings)\n\n"
+            "**Vorn stehen die Werte, die man wirklich ändert** — Schichthöhe, "
+            "Füllung, Stützen, Haftung. Jedes Feld erklärt in einem Satz, was "
+            "es bewirkt, und was die Geometrie selbst verlangt, schlägt die "
+            "Analyse mit Begründung vor: Stützen unter dem gemessenen "
+            "Überhang, eine Mindestzeit je Schicht, wenn das Teil spitz "
+            "zuläuft.\n\n"
+            "**Welcher Slicer rechnet, steht unter „Profile des Slicers“.** "
+            "Sind mehrere installiert, wählt eine Liste, und die Wahl bleibt "
+            "gemerkt. PrusaSlicer und Cura brauchen keine Profile — Solidon "
+            "beschreibt die Maschine selbst. Die Orca-Familie (OrcaSlicer, "
+            "Bambu Studio, ElegooSlicer) verlangt Drucker- und Prozessprofil "
+            "aus ihrem eigenen Bestand; solange eines fehlt, sagt die "
+            "Statuszeile, welches.\n\n"
+            "**Slicen** schreibt die Platte, lässt den Slicer rechnen und "
+            "liest die Druckdatei zurück: Druckzeit, Material und Schichten "
+            "stehen danach im Dialog, die Messwerte im Prüfbericht — als "
+            "gemessen ausgewiesen, nie mit der Schätzung vermischt. "
+            "*Druckdatei speichern* legt den G-Code dorthin, wo man ihn haben "
+            "will; bei mehreren Platten je Platte eine Datei.\n\n"
+            "**Im Slicer öffnen** ist der zweite Weg: Die Platte geht als "
+            "Datei in das Fenster des Slicers, und ab dort gehört der Auftrag "
+            "Ihnen — für den letzten Handgriff im gewohnten Programm, oder "
+            "wenn ein Slicer von außen nicht annimmt, was sein Fenster kann. "
+            "Profile braucht dieser Weg nie. Welchen der beiden Wege Sie "
+            "zuletzt benutzt haben, merkt sich das Projekt: Er trägt beim "
+            "nächsten Öffnen den Hauptknopf.\n\n"
+            "**Schlägt ein Lauf fehl, endet er nie mit „fehlgeschlagen“.** "
+            "Die Absage nennt den Grund und bietet an, was jetzt hilft — "
+            "einen anderen Slicer wählen, die Ausgabe des Slicers ansehen, "
+            "das Maschinenprofil prüfen oder nur exportieren. Und die "
+            "Druckdatei wird nachgemessen: Fährt sie über den Bauraum hinaus "
+            "oder ist sie niedriger als das Modell, steht das als Fehler im "
+            "Prüfbericht, bevor der Drucker es zeigt."
+        ),
+    ),
+    Page(
+        key="export",
+        summary=_("Anordnen, prüfen, exportieren — und was jedes Format mitnimmt."),
         title=_("Auf das Bett und hinaus"),
         body=_(
             "**Auf dem Bett anordnen** legt die Objekte nebeneinander und "
@@ -880,10 +926,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "keine Einheit —, sondern zum Verschicken: Farben und Name reisen "
             "mit, und der Empfänger dreht das Teil im Browser, ohne irgendetwas "
             "zu installieren.\n\n"
-            "**Der Slicer bleibt außen.** Die Schichtanalyse sucht und bewertet "
-            "— Inseln, Spannweiten, dünne Stellen, die beste Lage —, aber die "
-            "Druckdatei schreibt der Slicer. Wo beide Zahlen nennen, wird immer "
-            "ausgewiesen, welche woher kommt.\n\n"
+            "**Der Slicer bleibt außen — bedient wird er trotzdem von hier.** "
+            "Die Schichtanalyse sucht und bewertet — Inseln, Spannweiten, "
+            "dünne Stellen, die beste Lage —, die Druckdatei schreibt der "
+            "Slicer; wie das ohne Programmwechsel geht, steht im Kapitel "
+            "*Drucken*. Wo beide Zahlen nennen, wird immer ausgewiesen, "
+            "welche woher kommt.\n\n"
             "![](figure:layers)"
         ),
     ),
@@ -1097,7 +1145,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "## Der Slicer\n\n"
             "Für die Druckdatei und die Gegenprobe aus dem G-Code. Erkannt wird "
             "jeder der üblichen — PrusaSlicer, OrcaSlicer, ElegooSlicer, "
-            "BambuStudio, Cura. Solidon liest auch sein Druckerprofil aus und "
+            "BambuStudio, Cura. Sind mehrere installiert, wählt man in den "
+            "Druckeinstellungen, welcher rechnet; die Wahl bleibt gemerkt. "
+            "Solidon liest auch sein Druckerprofil aus und "
             "schlägt beim ersten Start den Drucker vor, den der Slicer zuletzt "
             "hatte.\n\n"
             "## Ollama — für den Chat ohne eigenen Schlüssel\n\n"

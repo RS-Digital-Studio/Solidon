@@ -495,3 +495,59 @@ def test_two_catalogue_groups_never_read_almost_the_same(language: str) -> None:
             seen[stem] = key
 
     assert not clashes, f"{language}: catalogue groups too alike\n" + "\n".join(clashes)
+
+
+@pytest.mark.parametrize(
+    "language", [entry for entry in available_languages() if entry != SOURCE_LANGUAGE]
+)
+def test_translated_manual_pages_keep_their_paragraph_structure(language: str) -> None:
+    """Eine übersetzte Handbuchseite hat die Absatzstruktur ihrer Quelle.
+
+    Die Falle dahinter ist am 30.08.2026 zugeschnappt: Beim Tauschen eines
+    geänderten Absatzes traf ein positionsbasiertes Skript in fünf Sprachen
+    den falschen — der GLB-Absatz war überschrieben, der alte Slicer-Absatz
+    stand doppelt neben dem neuen, und kein Test sah es. Gefunden hat es die
+    Lektüre der Freigabe, nicht die Suite.
+
+    Geprüft wird die Struktur, nicht die Wortstellung: gleiche Absatzzahl,
+    Abbildungen an denselben Positionen mit derselben Kennung, und kein
+    fetter Absatzkopf doppelt. Wo ein Kopf im Satz wandern darf („Bewährt
+    hat sich **qwen3:14b**" gegen „**qwen3:14b** has proven itself"), bleibt
+    das erlaubt — genau dieser Fall war der Fehlalarm der ersten Sonde.
+    """
+    from app.core import manual
+
+    catalog = read_catalog(language)
+    troubles: list[str] = []
+    for page in manual.INTRODUCTION:
+        source = str(page.body)
+        translated = catalog.get(source)
+        if not translated:
+            # Fehlende Übersetzungen meldet ``test_every_text_is_translated``.
+            continue
+        source_parts = source.split("\n\n")
+        translated_parts = translated.split("\n\n")
+        if len(source_parts) != len(translated_parts):
+            troubles.append(
+                f"{page.key}: {len(translated_parts)} Absätze statt {len(source_parts)}"
+            )
+            continue
+        for index, (original, other) in enumerate(zip(source_parts, translated_parts, strict=True)):
+            original_figure = original.strip().startswith("![](")
+            other_figure = other.strip().startswith("![](")
+            if original_figure != other_figure:
+                troubles.append(f"{page.key}[{index}]: Abbildung an falscher Position")
+            elif original_figure and original.strip() != other.strip():
+                troubles.append(f"{page.key}[{index}]: andere Abbildung")
+        heads = [
+            part.split("**")[1]
+            for part in translated_parts
+            if part.startswith("**") and part.count("**") >= 2
+        ]
+        doubled = sorted({head for head in heads if heads.count(head) > 1})
+        if doubled:
+            troubles.append(f"{page.key}: doppelte Absatzköpfe {doubled}")
+
+    assert not troubles, f"{language}: Absatzstruktur weicht von der Quelle ab\n" + "\n".join(
+        troubles
+    )

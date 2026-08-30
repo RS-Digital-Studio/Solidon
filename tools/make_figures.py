@@ -203,7 +203,7 @@ def frame_sketch(window: Any, app: QApplication) -> None:
         raise SystemExit("nichts gerechnet — kein Bild vom Skizzenmodus")
 
     topmost: list[tuple[float, float, str]] = []
-    for body in result.scene.objects.values():
+    for object_id, body in result.scene.objects.items():
         for feature_id, feature in body.features.items():
             normal = feature.params.get("normal", (0.0, 0.0, 0.0))
             if feature.kind != "face" or float(normal[2]) < 0.9:
@@ -217,7 +217,12 @@ def frame_sketch(window: Any, app: QApplication) -> None:
                 (
                     float(centre[2]),
                     float(feature.params.get("area", 0.0)),
-                    feature_id,
+                    # Vollqualifiziert, seit §15.7 zwei Körper denselben
+                    # Merkmalsnamen tragen dürfen: Die Ebenen-Wahl führt
+                    # ``feature:<objekt>:<merkmal>``, und die Kurzform fiel
+                    # kommentarlos auf die Grundebene zurück — der Wächter
+                    # darunter hat es gefangen (30.08.2026).
+                    f"{object_id}:{feature_id}",
                 )
             )
     if not topmost:
@@ -642,6 +647,43 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(recipe, "own-part", language)
     recipe.release()
     recipe.close()
+
+    # Die Druckeinstellungen — das Kapitel „Drucken" zeigt sie. Gezeigt wird
+    # der PrusaSlicer-Fall: keine Profilpflicht, alle drei Knöpfe der
+    # Übergabe frei — der Zustand, den das Kapitel beschreibt. Dafür wird die
+    # gemerkte Wahl für die Dauer des Schusses vorgetäuscht statt gesetzt:
+    # ``make_figures`` läuft ohne Profil-Isolierung, und ein echtes
+    # ``remember_path`` überschriebe die Slicer-Wahl des Rechners, auf dem
+    # es läuft. Liegt kein PrusaSlicer vor, bleibt der erste Fund — das Bild
+    # entsteht ohnehin auf der Maschine, die die Bilder eincheckt.
+    from app.core import discover
+    from app.core import tools as external_tools
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    found = discover.find_programs("slicer", external_tools.SLICERS)
+    wanted = next((one for one in found if "prusa" in one.name.lower()), None)
+    kept_remembered = discover.remembered_path
+    kept_remember = discover.remember_path
+    if wanted is not None:
+        discover.remembered_path = lambda tool_id: str(wanted)  # type: ignore[assignment]
+    discover.remember_path = lambda tool_id, value: None  # type: ignore[assignment]
+    try:
+        print_dialog = prepared(
+            PrintSettingsDialog(session, window.settings), DIALOG, fit_height=True
+        )
+        # Die Profilsuche läuft im Arbeiter; ein Bild mit „wird
+        # durchgesehen …" zeigte einen Moment, keinen Zustand.
+        for _ in range(100):
+            if not print_dialog._profiles_pending:
+                break
+            settle(app, 2)
+        settle(app)
+        shoot(print_dialog, "print-settings", language)
+        print_dialog.release()
+        print_dialog.close()
+    finally:
+        discover.remembered_path = kept_remembered  # type: ignore[assignment]
+        discover.remember_path = kept_remember  # type: ignore[assignment]
 
     window.close()
 
