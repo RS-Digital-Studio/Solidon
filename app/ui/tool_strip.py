@@ -217,12 +217,12 @@ class ToolStrip(QWidget):
         hint = super().sizeHint()
         text = self._hint.text()
         if text and self._hint.isVisibleTo(self):
-            rand = self._hint.contentsMargins()
-            eine_zeile = (
-                self._hint.fontMetrics().horizontalAdvance(text) + rand.left() + rand.right()
+            inner = self._hint.contentsMargins()
+            one_line = (
+                self._hint.fontMetrics().horizontalAdvance(text) + inner.left() + inner.right()
             )
-            rahmen = self.contentsMargins()
-            hint.setWidth(max(hint.width(), eine_zeile + rahmen.left() + rahmen.right()))
+            outer = self.contentsMargins()
+            hint.setWidth(max(hint.width(), one_line + outer.left() + outer.right()))
         return hint
 
     def add(
