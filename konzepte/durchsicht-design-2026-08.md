@@ -187,9 +187,16 @@ Abschnittsränder" eine Entscheidung, keine Reparatur.
 obere Knopfzeile ist linksbündig zum Abschnitt, die untere rechtsbündig mit
 sauberem Rand — zwei Rollen, zwei Ausrichtungen. Eine Trennlinie vor den
 Knöpfen fand die Messung nicht.
-**B40** — Kein Sprachlängenbruch bei 2560 Punkten; aber der Symbol-Umschalt-
-Schwellwert der Bewegen-Leiste ist sprachabhängig (Französisch schaltet
-früher auf unbeschriftete Symbole).
+**B40 — kein Befund, sondern der Mechanismus** (nachgetragen 30.08.2026):
+Kein Sprachlängenbruch bei 2560 Punkten; dass der Symbol-Umschalt-Schwellwert
+der Bewegen-Leiste sprachabhängig ist, ist **so gebaut und richtig so**. Die
+Leiste schaltet auf unbeschriftete Symbole, sobald ihre Beschriftungen nicht
+mehr passen — und französische Beschriftungen sind länger als deutsche, also
+schaltet sie dort früher. Ein fester Schwellwert wäre der Fehler: Er hieße
+entweder, dass eine Sprache abgeschnittene Wörter trägt, oder dass eine andere
+Symbole zeigt, obwohl Platz für Wörter da wäre. Wer die Zahl vereinheitlichen
+will, macht die Leiste in genau einer Sprache richtig. Steht hier, damit die
+Beobachtung nicht ein zweites Mal als Bug gemeldet wird.
 
 Der Nebenbefund der Erhebung (Regeltext „acht Umschalter", gebaut sind
 sieben) war zum Zeitpunkt der Meldung bereits behoben (`258999b6`).

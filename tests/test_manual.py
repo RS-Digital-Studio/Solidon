@@ -1027,8 +1027,15 @@ def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> N
         )
         # Ohne Rücksicht auf die Großschreibung: Der Knopf schreibt „… die
         # ersten fünfzehn Minuten" mitten im Satz, die Seite „Die ersten …".
-        assert str(page.title).casefold() in window.start_screen.manual_button.text().casefold(), (
-            f"der Knopf sagt {window.start_screen.manual_button.text()}, "
+        #
+        # **Und seit B27 im Hinweis statt auf dem Knopf**: Der ganze Satz
+        # machte ihn mehr als doppelt so breit wie seine Nachbarn, er heißt
+        # jetzt „Handbuch". Die Zusage hat damit ihren Ort gewechselt, nicht
+        # ihren Inhalt — wohin er führt, muss er weiterhin sagen.
+        knopf = window.start_screen.manual_button
+        sagt = f"{knopf.text()} {knopf.toolTip()}".casefold()
+        assert str(page.title).casefold() in sagt, (
+            f"der Knopf sagt {knopf.text()!r} mit Hinweis {knopf.toolTip()!r}, "
             f"die Seite heisst {page.title}"
         )
     finally:
@@ -1157,3 +1164,65 @@ def test_the_model_page_is_a_chapter_of_its_own() -> None:
     page = seiten["models"]
     assert page.generated, "erzeugt, nicht geschrieben"
     assert str(page.title) in str(page.body), "die Überschrift trägt den Anker"
+
+
+def test_the_text_column_keeps_a_readable_line_length(qt_app: QApplication) -> None:
+    """Achtundneunzig Zeichen je Zeile sind keine Textspalte (Befund B34).
+
+    Der Fließtext lief über die ganze Fensterbreite: gemessen 674 Punkte für
+    rund 96 Zeichen, wo Typografie 60 bis 80 nennt. Wer eine Zeile zu Ende
+    liest, findet den Anfang der nächsten nicht mehr — das ist der Grund für
+    die Regel, nicht Geschmack.
+
+    Der Rand wächst mit dem Fenster: Auf einem breiten Bildschirm bleibt die
+    Spalte lesbar, auf einem schmalen nimmt sie sich alles, was da ist.
+    """
+    from PySide6.QtWidgets import QTextBrowser
+
+    from app.ui.manual_window import ManualWindow
+
+    fenster = ManualWindow()
+    fenster.resize(1600, 900)
+    fenster.show()
+    qt_app.processEvents()
+
+    ansicht = fenster.findChild(QTextBrowser)
+    assert ansicht is not None
+    # Der Sichtbereich, nicht die Dokumentbreite: Was der Kunde liest, ist
+    # das, was zwischen den Rändern steht.
+    breite = ansicht.viewport().width()
+    zeichen = ansicht.fontMetrics().horizontalAdvance("n")
+    je_zeile = breite / max(zeichen, 1)
+
+    assert je_zeile <= 85, (
+        f"{je_zeile:.0f} Zeichen je Zeile bei {ansicht.viewport().width()} Punkten"
+    )
+    fenster.close()
+
+
+def test_a_contents_entry_that_is_cut_says_so(qt_app: QApplication) -> None:
+    """Ein abgeschnittener Eintrag ohne Auslassungszeichen sieht aus wie ein
+    kurzer Titel (Befund B34).
+
+    Im Verzeichnis stand „Ausprobieren statt raten: Varianten und Kalibriere"
+    — mitten im Wort zu Ende, ohne Zeichen dafür. Wer das liest, hält es für
+    den ganzen Namen; die drei Punkte sind der Unterschied zwischen „zu Ende"
+    und „geht weiter".
+    """
+    from PySide6.QtCore import Qt as QtCore_Qt
+    from PySide6.QtWidgets import QListWidget
+
+    from app.ui.manual_window import ManualWindow
+
+    fenster = ManualWindow()
+    fenster.show()
+    qt_app.processEvents()
+
+    liste = fenster.findChild(QListWidget)
+    assert liste is not None and liste.count() > 0
+
+    assert liste.textElideMode() == QtCore_Qt.TextElideMode.ElideRight
+    lang = max(range(liste.count()), key=lambda i: len(liste.item(i).text()))
+    eintrag = liste.item(lang)
+    assert eintrag.toolTip() == eintrag.text(), "der volle Name steht im Hinweis"
+    fenster.close()

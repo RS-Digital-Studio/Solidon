@@ -145,9 +145,36 @@ class PageView(QTextBrowser):
     def _theme(self) -> drawing.Theme:
         return "dark" if self._dark() else "light"
 
+    #: Wie viele Zeichen eine Zeile höchstens trägt.
+    #:
+    #: Typografie nennt sechzig bis achtzig; gemessen liefen es 96, weil der
+    #: Text die ganze Fensterbreite nahm (Befund B34). Wer eine so lange Zeile
+    #: zu Ende liest, findet den Anfang der nächsten nicht mehr wieder — das
+    #: ist der Grund für die Regel und keine Geschmacksfrage. Achtzig, weil ein
+    #: Handbuch Code-Zeilen und Tabellen trägt, denen die enge Fassung wehtut.
+    MAX_CHARACTERS = 80
+
+    def _fit_the_column(self) -> None:
+        """Der Textspalte einen Rand geben, wo das Fenster ihr zu viel lässt.
+
+        Über ``setViewportMargins`` und nicht über die Dokumentbreite: Der
+        Rand gehört zur Ansicht, und ein Dokument, dessen Breite von der
+        Fenstergröße abweicht, rollt waagerecht. Symmetrisch, damit die Spalte
+        in der Mitte bleibt statt links zu kleben.
+        """
+        fits = self.MAX_CHARACTERS * max(self.fontMetrics().horizontalAdvance("n"), 1)
+        margin = max(0, (self.width() - fits) // 2)
+        self.setViewportMargins(margin, 0, margin, 0)
+        # **Und die Dokumentbreite mit.** Qt zieht sie nicht selbst nach:
+        # Gemessen blieb sie bei 1294, während der Sichtbereich auf 942 ging —
+        # der Text hätte waagerecht gerollt, was schlimmer ist als eine lange
+        # Zeile.
+        self.document().setTextWidth(float(self.viewport().width()))
+
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 — Qt gibt den Namen vor
         """Eine breitere Spalte verlangt größere Abbildungen (§19.2)."""
         super().resizeEvent(event)
+        self._fit_the_column()
         if self._asked and self._column() != self._column_width:
             self._refit_timer.start()
 
@@ -238,11 +265,18 @@ class ManualWindow(QMainWindow):
             item = QListWidgetItem(str(page.title))
             # Die erzeugten Kapitel bilden die zweite Hälfte des Handbuchs; der
             # Hinweis sagt, dass dort die vollständige Liste steht.
-            item.setToolTip(
+            # **Der volle Name im Hinweis, die Art dahinter.** „Ausprobieren
+            # statt raten: Varianten und Kalibriere" stand im Verzeichnis —
+            # mitten im Wort zu Ende und ohne Auslassungszeichen, also wie ein
+            # kurzer Titel (Befund B34). Die Kürzung selbst ist richtig; was
+            # fehlte, war der Weg zum ganzen Namen.
+            art = (
                 tr("Alle Operationen dieses Bereichs")
                 if page.generated
                 else tr("Erklärung, kein Nachschlagewerk")
             )
+            item.setToolTip(str(page.title))
+            item.setStatusTip(f"{page.title} — {art}")
             self.contents.addItem(item)
         if self._visible:
             self.contents.setCurrentRow(0)
