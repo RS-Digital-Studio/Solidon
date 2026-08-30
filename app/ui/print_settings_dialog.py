@@ -1650,19 +1650,19 @@ class PrintSettingsDialog(QDialog):
         return row
 
     def show_materials(self, materials: Sequence[str]) -> None:
-        """Woraus sich das Material ergibt — mit Spulen die Liste, sonst die
-        Vorgabe samt Herkunft.
+        """Woraus sich das Material ergibt — die Liste, sonst die Vorgabe
+        samt Herkunft.
 
-        Mehrere Spulen heißen mehrere Materialien, und die Anzeige verkürzt
-        das nicht auf eines: Der Kunde soll sehen, was er eingelegt hat. Für
-        die *Toleranz* entscheidet weiterhin Slot 0 (§20) — das ist eine
-        Rechnung und keine Anzeige.
+        Mehrere Materialien werden aufgezählt und nicht auf eines verkürzt:
+        Der Kunde soll sehen, was wirklich gedruckt wird. Für die *Toleranz*
+        entscheidet je Körper Slot 0 (§20) — das ist eine Rechnung und keine
+        Anzeige.
         """
         names = [name for name in dict.fromkeys(materials) if name]
         if names:
             self.material_state.setText(" + ".join(names))
             self.material_state.setToolTip(
-                tr("Kommt aus den eingelegten Spulen. Zum Ändern die Spule wechseln.")
+                tr("Kommt aus den Körpern der Szene. Zum Ändern die Spule wechseln.")
             )
         else:
             fallback = self.session.project.document.material or profiles.DEFAULT_MATERIAL
@@ -1675,14 +1675,52 @@ class PrintSettingsDialog(QDialog):
         self.material_state.setAccessibleDescription(self.material_state.toolTip())
 
     def refresh_materials(self) -> None:
-        """Die Anzeige aus den Spulen der gewählten Platten neu setzen.
+        """Die Anzeige aus den Körpern der gewählten Platten neu setzen."""
+        self.show_materials(self._materials_of(self._plate_bodies()))
 
-        Dieselbe Quelle wie die Slot-Zeilen der Profilzuordnung
-        (:meth:`_plate_slots`) — zwei Wege zu derselben Auskunft wären einer zu
-        viel. Was hier steht, ist die Materialart der Spule, nicht ihr Name:
-        „PETG" beantwortet die Frage, „Schwarz matt" nicht.
+    def _materials_of(self, bodies: Sequence[SceneObject]) -> list[str]:
+        """In welchen Materialien diese Körper wirklich gedruckt werden.
+
+        **Gefragt wird dasselbe wie bei der Toleranz** (:func:`profiles.for_object`)
+        — eigenes Material des Körpers, sonst seine Spule, sonst die Vorgabe des
+        Projekts. Zwei Wege zu derselben Auskunft wären einer zu viel, und der
+        erste Anlauf hier war genau das: Er las nur die Spulen und schrieb
+        daneben „PLA — Projektvorgabe", während ein Körper aus TPU auf dem Bett
+        lag (Robert, 30.08.2026: „warum aber noch material pla falls einer
+        unterschiedliche materialien hat").
+
+        Die **weiteren** Spulen eines Körpers kommen dazu: Für die Toleranz
+        entscheidet Slot 0, gedruckt wird trotzdem auch der Schriftzug daneben,
+        und wer wissen will, was er einlegen muss, will beide sehen. Leer heißt:
+        Es gibt nichts anzuzeigen — dann nennt :meth:`show_materials` die
+        Vorgabe und sagt dazu, dass sie eine ist.
         """
-        self.show_materials([slot.material_type or "" for slot in self._plate_slots()])
+        project = self.session.profile
+        names: list[str] = []
+        for body in bodies:
+            # ``for_object`` gibt das **übergebene** Profil unverändert zurück,
+            # wo der Körper nichts Eigenes hat — daran hängt hier die
+            # Unterscheidung: hergeleitet wird genannt, Vorgabe nennt sich
+            # unten selbst als solche. Ein Körper, der ausdrücklich das
+            # Projektmaterial trägt, zählt zur Vorgabe, und das ist wahr.
+            chosen = profiles.for_object(project, body)
+            if chosen is not project:
+                names.append(str(chosen.material.title))
+            for slot in body.material_slots:
+                if slot.index == 0 or not slot.material_type:
+                    continue
+                known = profiles.material_id_for_type(slot.material_type)
+                names.append(str(profiles.material(known).title) if known else slot.material_type)
+        return names
+
+    def _plate_bodies(self) -> list[SceneObject]:
+        """Die Körper der gewählten Platten — dieselbe Auswahl wie
+        :meth:`_plate_slots`, nur eine Ebene davor."""
+        result = self.session.last_result
+        if result is None:
+            return []
+        wanted = set(self._chosen_plates())
+        return [entry for entry in result.scene.objects.values() if entry.plate in wanted]
 
     def _scene_profile_changed(self) -> None:
         """Ein anderer Drucker heißt andere Vorgaben — und eine Neuauswertung.

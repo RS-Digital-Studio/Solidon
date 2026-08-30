@@ -2464,3 +2464,77 @@ def test_the_material_line_leads_to_where_the_choice_is(
 
     assert seen == [True], "der Weg zum Filamentwähler geht vom Dialog aus"
     assert dialog.material_link.toolTip(), "und er sagt vorher, wohin er führt"
+
+
+def test_the_header_names_the_material_a_body_really_prints_in(
+    qt_app: QApplication, session: Session
+) -> None:
+    """„warum aber noch material pla falls einer unterschiedliche materialien
+    hat" (Robert, 30.08.2026) — und er hatte recht.
+
+    Ein Körper trägt sein Material auch **ohne** Spule: ``SceneObject.material``
+    ist der Weg, über den eine TPU-Dichtung im PETG-Gehäuse gerechnet wird
+    (§12). Die Anzeige las nur die Spulen und schrieb daneben unbeirrt „PLA —
+    Projektvorgabe" — ein Material, in dem kein einziger Körper gedruckt wird.
+
+    Zwei Körper aus zwei Materialien stehen beide da; gefragt wird dasselbe,
+    was auch die Toleranz fragt (``profiles.for_object``), also eine Quelle
+    und nicht zwei.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    def body(name: str, material: str) -> SceneObject:
+        mesh = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        return SceneObject(id=name, name=name, mesh=MeshData.of(mesh), material=material)
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    dialog.show_materials(dialog._materials_of([body("obj_1", "tpu-95a")]))
+    single = dialog.material_state.text()
+    assert "TPU" in single, single
+    assert str(tr("Projektvorgabe")) not in single, "es gibt ein Material, also keine Vorgabe"
+
+    mixed = dialog._materials_of([body("obj_1", "petg"), body("obj_2", "tpu-95a")])
+    dialog.show_materials(mixed)
+    text = dialog.material_state.text()
+    assert "PETG" in text and "TPU" in text, text
+
+    # Und die zweite Spule desselben Körpers: Für die Toleranz entscheidet
+    # Slot 0, gedruckt wird der Schriftzug daneben trotzdem — wer wissen will,
+    # was er einlegen muss, will beide sehen.
+    from app.core.types import MaterialSlot
+
+    painted = replace(
+        body("obj_1", ""),
+        material=None,
+        material_slots=[
+            MaterialSlot(index=0, name="Gehäuse", material_type="PETG"),
+            MaterialSlot(index=1, name="Schrift", material_type="PLA"),
+        ],
+    )
+    dialog.show_materials(dialog._materials_of([painted]))
+    both = dialog.material_state.text()
+    assert "PETG" in both and "PLA" in both, both
+
+
+def test_a_body_without_anything_falls_back_and_says_so(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der häufigste Fall überhaupt: eingelesene Datei, kein Material, keine
+    Spule. Dann gilt die Projektvorgabe — und sie nennt sich beim Namen,
+    damit niemand sie für eine Messung hält."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    mesh = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    plain = SceneObject(id="obj_1", name="Import", mesh=MeshData.of(mesh))
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    dialog.show_materials(dialog._materials_of([plain]))
+
+    assert str(tr("Projektvorgabe")) in dialog.material_state.text()

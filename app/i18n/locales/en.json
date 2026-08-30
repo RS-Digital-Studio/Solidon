@@ -2080,7 +2080,7 @@
   "Knoten hinlegen": "Putting the nodes in place",
   "Knoten und Modell einrichten …": "Set up nodes and model …",
   "Kollisionen prüfen": "Check collisions",
-  "Kommt aus den eingelegten Spulen. Zum Ändern die Spule wechseln.": "Comes from the spools loaded. To change it, change the spool.",
+  "Kommt aus den Körpern der Szene. Zum Ändern die Spule wechseln.": "Comes from the bodies in the scene. To change it, change the spool.",
   "Komponenten": "Components",
   "Komponenten zählen": "Counting components",
   "Kontur": "Contour",
