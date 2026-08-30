@@ -8833,6 +8833,13 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
 
     In dem Fall hilft kein Haken. Die Auswertung weiß, welcher Schritt es war
     (``evaluate.exact_became_mesh``), und der Satz nennt ihn.
+
+    **Gemessen wird das an ``fillet_edges`` und nicht mehr an ``sketch_pocket``.**
+    Die Tasche stand hier als Beispiel für ein gesperrtes Werkzeug, bis sie am
+    30.08.2026 auch in Netze schneiden lernte — sie ist keins mehr. Die Zusage
+    selbst ist davon unberührt und gilt weiter für die sieben Operationen, die
+    den exakten Kern wirklich brauchen; Verrunden ist eine davon und hängt an
+    keiner Flächenauswahl.
     """
     window.session.start_new()
     window.session.apply(
@@ -8847,7 +8854,7 @@ def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWi
 
     window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
     window._update_actions()
-    hint = window._op_actions["sketch_pocket"].toolTip()
+    hint = window._op_actions["fillet_edges"].toolTip()
 
     assert str(REGISTRY.get("drill_hole").title) in hint, hint
     assert "Nimm die Schritte ab dort zurück" in hint, "der Satz nennt eine Handlung, die es gibt"

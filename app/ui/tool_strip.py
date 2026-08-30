@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
 from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
 from app.ui.palette import ROLES, readable_on
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, set_level
 
 
 def list_top(field: QRect, height: int, window: QRect) -> int:
@@ -173,9 +173,12 @@ class ToolStrip(QWidget):
         self._hint.setWordWrap(True)
         self._hint.setVisible(False)
         self._hint.setContentsMargins(NORMAL, 0, NORMAL, TIGHT)
-        font = self._hint.font()
-        font.setItalic(True)
-        self._hint.setFont(font)
+        # Aufrecht statt kursiv (B19). Die Erklärsätze der Werkzeugkarten waren
+        # zusammen mit dem Schichthinweis der Skizze die einzigen kursiven Texte
+        # der Anwendung — zwei bis drei Zeilen schräg auf dunklem Grund. Die
+        # Absicht war „das ist Nebentext", und dafür gibt es die Stufe
+        # „caption": kleiner und gedämpft, wie überall sonst im Haus.
+        set_level(self._hint, "caption")
 
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)

@@ -4582,10 +4582,17 @@ def test_selecting_a_body_updates_the_visible_cut_button_immediately(
         window.deleteLater()
 
 
-def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
+def test_the_free_sketch_starts_with_three_plane_cards_and_a_quiet_corner(
     qt_app: QApplication,
 ) -> None:
-    """Die erste Entscheidung steht im Bild; die allgemeine Leiste tritt zurück."""
+    """Die erste Entscheidung steht im Bild; die allgemeine Leiste tritt zurück.
+
+    **Und die Auswahl-Kapsel schweigt, solange nichts da ist.** Sie stand hier
+    bis zum 30.08.2026 als „Keine Auswahl" über dem leeren Blatt — eine
+    Verneinung ohne Gegenstück, gleich neben der Frage nach der Ebene, die der
+    Kunde gerade beantworten soll (B20). Sobald ein Strich liegt, sagt derselbe
+    Satz etwas: Dann heißt er, dass der Klick nichts getroffen hat.
+    """
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -4601,10 +4608,19 @@ def test_the_free_sketch_starts_with_three_plane_cards_and_a_selection_note(
             "plane:yz",
         }
         assert window.toolbar.isHidden()
-        assert window.viewport.sketch_selection.text() == "Keine Auswahl"
+        assert window.viewport.sketch_selection.text() == "", (
+            "über dem leeren Blatt sagt der Satz nichts, was nicht schon zu sehen wäre"
+        )
 
         panel = window._sketch_panel
         assert panel is not None
+        # Ein Strich, und die Kapsel bekommt ihren Gegenstand.
+        panel.canvas.add_element("line", ((0.0, 0.0), (10.0, 0.0)))
+        QApplication.processEvents()
+        assert window.viewport.sketch_selection.text() == "Keine Auswahl", (
+            "jetzt gibt es etwas zu wählen, und der Satz sagt, dass nichts gewählt ist"
+        )
+
         panel.choose_plane("plane:xy")
         assert window.viewport.plane_picker.isHidden(), (
             "auch die bereits vorausgewählte Draufsicht beantwortet die Frage"
@@ -5617,3 +5633,64 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
     finally:
         window.wait_for_workers()
         window.deleteLater()
+
+
+def test_the_layer_hint_is_a_readable_line_not_a_column(qt_app: QApplication) -> None:
+    """Der Erklärsatz der Skizzenkarte steht als Satz da, nicht als Punktsäule.
+
+    **Gemessen war er ein Bildpunkt breit und 176 hoch** (B20). Gezeichnet
+    wurde daraus eine senkrechte Punktreihe neben dem Ebenenfeld — kein Text,
+    den jemand lesen kann, und dazu drei Viertel der Kartenhöhe für nichts.
+
+    Zwei Ursachen, und die zweite ist die überraschende: Er stand *neben* der
+    Wahl statt darunter, und ``setMinimumWidth(1)`` ließ Qt seine Höhe aus
+    ``heightForWidth(1)`` rechnen. Dieselben 176 Punkte hätte er auch in einer
+    eigenen Zeile behalten — die Breite war es nicht allein.
+
+    Geprüft wird an Zahlen und nicht am Aussehen: breiter als das halbe Panel,
+    niedriger als drei Zeilen. Ein Satz, der wieder gegen eine Mindestbreite
+    gerechnet wird, fällt an der Höhe auf, auch wenn er zufällig breit ist.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    panel.resize(520, 760)
+    panel.show()
+    try:
+        QApplication.processEvents()
+        note = panel.layer_note
+
+        assert not note.isHidden(), "der Satz gehört in die Karte — im Viewport blendet er sich aus"
+        assert note.width() > panel.width() // 2, (
+            f"der Satz ist {note.width()} von {panel.width()} Punkten breit — "
+            "gemessen war er einmal genau einer"
+        )
+        assert note.height() < 60, (
+            f"{note.height()} Punkte hoch für einen Satz: das ist die alte Rechnung gegen "
+            "eine Mindestbreite von einem Punkt (176), nicht die gegen die echte"
+        )
+        assert not note.font().italic(), "kursiv war die einzige Schriftlage der Anwendung (B19)"
+        assert note.property("level") == "caption", (
+            "Nebentext trägt die Stufe, die einunddreißig andere Stellen schon benutzen"
+        )
+    finally:
+        panel.close()
+        panel.deleteLater()
+
+
+def test_the_tool_hint_is_upright_too(qt_app: QApplication) -> None:
+    """Und die zweite kursive Stelle der Anwendung, aus demselben Befund.
+
+    B19 nennt die Erklärsätze der Werkzeugkarten — sie und der Schichthinweis
+    der Skizze waren zusammen die einzigen kursiven Texte im ganzen Programm.
+    Wer eine wegräumt und die andere stehen lässt, hat den Befund halb
+    erledigt und die Unstimmigkeit vergrößert.
+    """
+    from app.ui.tool_strip import ToolStrip
+
+    strip = ToolStrip()
+    try:
+        assert not strip._hint.font().italic()
+        assert strip._hint.property("level") == "caption"
+    finally:
+        strip.deleteLater()

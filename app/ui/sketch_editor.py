@@ -3763,19 +3763,36 @@ class SketchPanel(QWidget):
         # stünde er, nachdem alles fertig ist.
         self.layer_note = QLabel(self.canvas.layer_note(), self)
         self.layer_note.setWordWrap(True)
-        # Der Satz darf umbrechen und bestimmt nicht die Mindestbreite der
-        # gesamten Anwendung. Das Feld, Raster und Werkzeuge bleiben greifbar;
-        # der erklärende Text nimmt den Raum, der danach noch übrig ist.
-        self.layer_note.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
-        self.layer_note.setMinimumWidth(1)
-        note_font = self.layer_note.font()
-        note_font.setItalic(True)
-        self.layer_note.setFont(note_font)
+        # **Eine eigene Zeile unter der Wahl, nicht daneben.** „Der Raum, der
+        # danach noch übrig ist" waren gemessen **ein** Bildpunkt: Qt rechnete
+        # den umbrechenden Satz gegen die Mindestbreite und hielt dafür 176
+        # Punkte Höhe frei — im Bild eine senkrechte Punktsäule neben dem Feld,
+        # kein Satz (B20). ``use_viewport`` beschreibt genau das seit je und
+        # versteckt ihn deshalb dort; in der Karte stand er weiter so.
+        #
+        # Unter der Wahl hat er die volle Breite und bestimmt die Mindestbreite
+        # trotzdem nicht — dafür sorgt dieselbe ``Ignored``-Politik wie zuvor,
+        # nur ohne Nachbarn, die ihm den Platz nehmen.
+        # ``Ignored`` waagerecht hält ihn davon ab, die Mindestbreite der Karte
+        # zu bestimmen — das war und bleibt richtig. Die zusätzliche
+        # ``setMinimumWidth(1)`` dagegen war die eigentliche Quelle des
+        # Schadens: Qt rechnet die Höhe eines umbrechenden Labels aus
+        # ``heightForWidth`` **der Mindestbreite**, und ein Satz in einem
+        # Bildpunkt Breite braucht 176 Punkte Höhe. Genau diese 176 standen
+        # vorher als Punktsäule neben dem Feld und danach als leerer Block
+        # darunter — dieselbe Zahl, zweimal dasselbe Missverständnis.
+        policy = QSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Minimum)
+        policy.setHeightForWidth(True)
+        self.layer_note.setSizePolicy(policy)
+        # Aufrecht statt kursiv (B19): Kursiv war die einzige Schriftlage der
+        # ganzen Anwendung und trug zwei bis drei Zeilen auf dunklem Grund.
+        # „caption" ist das Haus-Muster für Nebentext — kleiner und gedämpft,
+        # dieselbe Stufe, die einunddreißig andere Stellen schon benutzen.
+        style.set_level(self.layer_note, "caption")
         self.canvas.sketchChanged.connect(self._show_layer_note)
         # Auch ein Blickwechsel ändert den Satz — er ist kein Dokumentwechsel
         # und kommt deshalb über sein eigenes Signal.
         self.canvas.viewPlaneChanged.connect(self._show_layer_note)
-        plane_row.addWidget(self.layer_note, stretch=1)
 
         # Der Rasterfang, an derselben Zeile wie die Ebene: beides entscheidet
         # man vor dem ersten Strich, nicht mittendrin. Ein Haken und eine
@@ -4123,6 +4140,11 @@ class SketchPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addLayout(tools)
         layout.addLayout(plane_row)
+        # Der Schichthinweis steht unter der Zeile, auf die er sich bezieht —
+        # siehe die Begründung bei seinem Aufbau. Im Viewport-Modus nimmt ihn
+        # ``use_viewport`` wieder heraus, dort trägt der Tooltip am Feld die
+        # Auskunft.
+        layout.addWidget(self.layer_note)
         layout.addWidget(self.selection_tools)
         layout.addWidget(constraints_box)
         layout.addLayout(middle, stretch=1)
