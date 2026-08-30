@@ -303,6 +303,59 @@ def test_a_finding_reaches_the_handlers_that_expect_an_error(qt_app: object) -> 
     assert str(error.title) == "Das Objekt steht über den Bauraum hinaus."
 
 
+def test_the_offer_button_click_reaches_the_handler(qt_app: object) -> None:
+    """Gedrückt, nicht die Methode dahinter gerufen.
+
+    Der Speicherring-Umbau hat den Klickweg der Knopfzeile verlegt: Am Knopf
+    hängt nichts mehr — Befund und Handler liest erst der Klick, über
+    ``weak_slot``. Damit prüft kein bestehender Test mehr die ganze Kette
+    Knopf → gewählte Zeile → Handler des Fensters; dieser hier drückt.
+    """
+    from PySide6.QtWidgets import QPushButton, QWidget
+
+    from app.core.errors import AppError
+    from app.core.scene import EvaluationResult
+    from app.core.types import Finding, Report, Scene
+    from app.ui.panels import ReportPanel
+
+    received: list[AppError] = []
+
+    class Host(QWidget):
+        def error_handlers(self) -> dict[str, object]:
+            return {"place_on_bed": received.append}
+
+    host = Host()
+    panel = ReportPanel(host)
+    try:
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(
+                    report=Report(
+                        findings=(
+                            Finding(
+                                code="arrange.below_bed",
+                                severity="info",
+                                message="Ein Objekt liegt unter dem Druckbett",
+                                object_id="obj_1",
+                            ),
+                        )
+                    )
+                )
+            )
+        )
+        panel.list.setCurrentRow(0)
+        buttons = panel._offers.findChildren(QPushButton)
+        assert len(buttons) == 1, "der below_bed-Befund bietet genau eine Handlung"
+
+        buttons[0].click()
+        assert len(received) == 1, "der Klick erreicht den Handler des Fensters"
+        assert isinstance(received[0], AppError)
+        assert received[0].object_id == "obj_1"
+    finally:
+        panel.deleteLater()
+        host.deleteLater()
+
+
 def test_the_estimate_reaches_the_status_bar_too() -> None:
     """Die Schaetzung ueber zehn Sekunden gab es nur bei leerem Bild.
 

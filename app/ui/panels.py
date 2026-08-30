@@ -83,6 +83,7 @@ from app.ui.labels import (
     value_text,
     volume,
 )
+from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import NORMAL, TIGHT, make_primary, set_level
@@ -2520,13 +2521,30 @@ class ReportPanel(QWidget):
             button.setToolTip(str(finding.message) if finding is not None else "")
             if action.primary:
                 make_primary(button)
-            button.clicked.connect(
-                lambda _checked=False, chosen=action, entry=finding: handlers[chosen.id](
-                    as_error(entry)
-                )
-            )
+            # ``weak_slot`` und nicht ein Lambda: ``handlers`` hält gebundene
+            # Methoden des Fensters, und ein Lambda, das es fängt, schließt
+            # den Ring Panel → Knopf → Handler → Fenster — gemessen hielten
+            # zehn von zehn Wirten mit gewähltem Befund ihr Loslassen aus.
+            # Die Handler holt der Klick deshalb selbst, frisch.
+            button.clicked.connect(weak_slot(self, ReportPanel._run_action, action.id))
             row.addWidget(button)
         self._offers.setVisible(bool(offered))
+
+    def _run_action(self, action_id: str) -> None:
+        """Führt die Handlung des gewählten Befunds aus.
+
+        Erst beim Klick werden Befund und Handler gelesen — nichts davon darf
+        am Knopf hängen (siehe die ``weak_slot``-Begründung am Aufbau). Dass
+        die Wahl zwischen Bau und Klick dieselbe ist, sichert Qt: Jede
+        Wahländerung baut die Knopfzeile über ``itemSelectionChanged`` neu.
+        """
+        items = self.list.selectedItems()
+        if len(items) != 1:
+            return
+        finding: Finding | None = items[0].data(Qt.ItemDataRole.UserRole)
+        handler = handlers_of(self).get(action_id)
+        if finding is not None and handler is not None:
+            handler(as_error(finding))
 
     def _show_controls(self) -> None:
         """Filterzeile und Liste nur, wenn es etwas zu filtern gibt.

@@ -124,6 +124,47 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     spec = REGISTRY.all()[0]
     release = updates.Release(version="9.9.9", url="https://example.invalid/")
 
+    def report_with_offer() -> QWidget:
+        """Ein Prüfbericht mit gewähltem Befund und Handlungsknopf, im Wirt.
+
+        Der nackte ``ReportPanel``-Bauer darunter sah den Ring nie: Erst die
+        Knopfzeile unter der Liste verband ein Lambda, das die gebundenen
+        Handler des Fensters fing — zehn von zehn Wirten mit gewähltem Befund
+        überlebten ihr Loslassen (30.08.2026). Der Wirt spielt das Fenster:
+        ``handlers_of`` sucht ``error_handlers`` die Eltern hinauf.
+        """
+        from app.core.errors import AppError
+        from app.core.scene import EvaluationResult
+        from app.core.types import Finding, Report, Scene
+
+        class Host(QWidget):
+            def error_handlers(self) -> dict[str, Callable[[AppError], None]]:
+                return {"place_on_bed": self._handle}
+
+            def _handle(self, error: AppError) -> None:
+                """Nie gerufen — es zählt, dass ein Knopf auf ihn zeigt."""
+
+        host = Host()
+        panel = ReportPanel(host)
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(
+                    report=Report(
+                        findings=(
+                            Finding(
+                                code="arrange.below_bed",
+                                severity="info",
+                                message="Ein Objekt liegt unter dem Druckbett",
+                                object_id="obj_1",
+                            ),
+                        )
+                    )
+                )
+            )
+        )
+        panel.list.setCurrentRow(0)
+        return host
+
     return [
         ("Viewport", Viewport),
         ("SketchPanel", SketchPanel),
@@ -151,6 +192,7 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ("ParameterPanel", ParameterPanel),
         ("HistoryPanel", HistoryPanel),
         ("ReportPanel", ReportPanel),
+        ("ReportPanelWithOffer", report_with_offer),
         # **Die zweiundzwanzig, die Argumente brauchen.** Sie fehlten hier,
         # und zwar nicht zufällig: Was sich ohne Argumente bauen lässt, ist
         # meist ein Bedienelement; was welche braucht, steht mitten in einem
