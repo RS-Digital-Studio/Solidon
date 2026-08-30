@@ -2993,6 +2993,7 @@ def test_without_a_slicer_the_dialog_offers_a_way_to_one(
     from app.ui.settings import UiSettings
 
     monkeypatch.setattr(discover, "find_program", lambda *_args: None)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
     dialog = PrintSettingsDialog(Session(), UiSettings())
 
     assert not dialog.slice_button.isEnabled(), "ohne Slicer gibt es nichts zu starten"
@@ -3072,12 +3073,14 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     from app.ui.settings import UiSettings
 
     monkeypatch.setattr(discover, "find_program", lambda *_args: None)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: ())
     dialog = PrintSettingsDialog(Session(), UiSettings())
     assert not dialog.slice_button.isEnabled()
 
     program = tmp_path / "prusa-slicer.exe"
     program.write_text("")
     monkeypatch.setattr(discover, "find_program", lambda *_args: program)
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: (program,))
 
     dialog.recheck_slicer()
 
@@ -3293,3 +3296,89 @@ def test_the_dialog_writes_time_and_mass_like_the_status_line() -> None:
     # dieselbe Aussage wie „18 g", und die kürzere liest sich im Vorbeigehen.
     assert mass(18.44) == "18 g"
     assert mass(250.0) == "250 g"
+
+
+def test_several_slicers_become_a_choice(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Wer drei Slicer installiert hat, soll wählen können.
+
+    Bis zum 30.08.2026 entschied die Suchreihenfolge: ``find_program`` hört
+    beim ersten Treffer auf. Auf dieser Maschine fand sie ElegooSlicer und
+    bot PrusaSlicer und Cura nicht an, obwohl beide danebenstanden — und als
+    ElegooSlicers Kommandozeile nicht slicen wollte, war das eine Sackgasse
+    statt einer Wahl (Robert: „auswahl bei mehreren slicern wäre auch
+    sinnvoll").
+
+    Geprüft wird beides: dass drei zu einer Auswahl werden **und** dass einer
+    keine wird. Eine Zeile mit einem einzigen Eintrag ist eine Frage ohne
+    Antwortmöglichkeit (§2.4) — ohne die zweite Hälfte wäre der Test auch
+    grün, wenn das Feld immer erschiene.
+    """
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    drei = tuple(
+        tmp_path / name / f"{name}.exe" for name in ("ElegooSlicer", "PrusaSlicer", "Cura")
+    )
+    for entry in drei:
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_bytes(b"")
+
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool: "")
+    monkeypatch.setattr(discover, "find_program", lambda *_args: drei[0])
+
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: drei)
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.slicer_choice.count() == 3, "drei Slicer, drei Zeilen"
+    assert [dialog.slicer_choice.itemText(i) for i in range(3)] == [
+        "ElegooSlicer",
+        "PrusaSlicer",
+        "Cura",
+    ], "benannt nach dem Installationsordner, nicht nach der Datei"
+    assert dialog._slicer_path == drei[0]
+
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: drei[:1])
+    einer = PrintSettingsDialog(Session(), UiSettings())
+    assert einer.slicer_choice.count() == 1
+    assert not einer.slicer_choice.isVisibleTo(einer), "bei einem gibt es nichts zu wählen"
+
+
+def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein Wechsel nimmt die Profile nicht mit.
+
+    Maschinen- und Prozessprofil gehören dem Slicer, aus dessen Bestand sie
+    stammen. Ein Elegoo-Druckerprofil an PrusaSlicer zu reichen wäre kein
+    Fehler, den jemand sähe — der Slicer lehnte still ab oder rechnete mit
+    etwas anderem, als im Feld steht.
+    """
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    zwei = tuple(tmp_path / name / f"{name}.exe" for name in ("ElegooSlicer", "PrusaSlicer"))
+    for entry in zwei:
+        entry.parent.mkdir(parents=True, exist_ok=True)
+        entry.write_bytes(b"")
+
+    gemerkt: list[str] = []
+    monkeypatch.setattr(discover, "remembered_path", lambda _tool: "")
+    monkeypatch.setattr(discover, "find_program", lambda *_args: zwei[0])
+    monkeypatch.setattr(discover, "find_programs", lambda *_args: zwei)
+    monkeypatch.setattr(discover, "remember_path", lambda _tool, value: gemerkt.append(value))
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    dialog.machine_choice.addItem("Elegoo Centauri Carbon 2 0.4 nozzle")
+    dialog.process_choice.addItem("0.20mm Standard @Elegoo CC2 0.4 nozzle")
+
+    dialog._slicer_chosen(1)
+
+    assert dialog._slicer_path == zwei[1], "der gewählte gilt"
+    assert gemerkt == [str(zwei[1])], "und er wird gemerkt"
+    assert dialog.machine_choice.count() == 0, "das Druckerprofil des alten ist weg"
+    assert dialog.process_choice.count() == 0, "das Prozessprofil auch"

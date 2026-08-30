@@ -3179,6 +3179,7 @@
   "Welcher Bereich des Fensters welche Frage beantwortet.": "Which part of the window answers which question.",
   "Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb hebt und senkt — der Unterschied zwischen Stempel und Prägung.": "Which grey value leaves the surface alone. Zero only adds; a half raises and lowers — the difference between a stamp and an embossing.",
   "Welcher Punkt beim Skalieren stehen bleibt.": "Which point stays put while scaling.",
+  "Welcher Slicer die Druckdatei rechnet. Die Wahl bleibt gemerkt und gilt auch beim nächsten Mal; die Profile darunter richten sich nach ihr.": "Which slicer computes the print file. The choice is remembered and applies next time too; the profiles below follow it.",
   "Welches Filament die Fläche bekommt. Im 3MF bleibt es demselben Farbwechselplatz zugeordnet.": "Which filament the face gets. In the 3MF it stays assigned to the same colour-change position.",
   "Welches Filament diese Fläche bekommt. Die Vorwahl steht darunter — was der Körper schon trägt, ganz oben.": "Which filament this face gets. The pre-selection is below — what the body already carries is at the top.",
   "Welches Material dieses Teil ist. Leer heißt: das des Projekts.": "Which material this part is made of. Empty means: the project's.",

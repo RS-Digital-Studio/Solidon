@@ -388,6 +388,91 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
     return found_path
 
 
+def find_programs(tool_id: str, names: Iterable[str]) -> tuple[Path, ...]:
+    """**Alle** installierten Fassungen dieses Programms, nicht nur die erste.
+
+    :func:`find_program` beantwortet „wo liegt es" und hört beim ersten Treffer
+    auf — richtig, solange es nur eine Antwort gibt. Auf einem Rechner mit drei
+    Slicern ist die erste aber eine Zufallsentscheidung der Suchreihenfolge:
+    Gemessen am 30.08.2026 fand Solidon ElegooSlicer und bot PrusaSlicer und
+    Cura nicht an, obwohl beide danebenstanden — und als ElegooSlicers
+    Kommandozeile nicht slicen wollte, war das eine Sackgasse statt einer Wahl.
+
+    Der gemerkte Pfad steht vorn, sofern er noch existiert: Was der Nutzer
+    gewählt hat, ist die erste Antwort und nicht eine unter mehreren.
+    Doppelte Funde fallen weg — dieselbe Datei über PATH und über den
+    Installationsordner ist ein Programm, keine zwei.
+    """
+    candidates = tuple(names)
+    found: list[Path] = []
+
+    def keep(entry: Path | None) -> None:
+        if entry is None:
+            return
+        resolved = entry.resolve() if entry.exists() else entry
+        if all(
+            resolved != other.resolve() if other.exists() else resolved != other for other in found
+        ):
+            found.append(entry)
+
+    chosen = remembered_path(tool_id)
+    if chosen and "://" not in chosen and Path(chosen).is_file():
+        keep(Path(chosen))
+
+    for name in candidates:
+        located = shutil.which(name)
+        if located:
+            keep(Path(located))
+
+    keep(_from_registry(candidates))
+    keep(_from_flatpak(candidates))
+    for entry in _all_from_folders(candidates):
+        keep(entry)
+    keep(_from_appimage(candidates))
+    keep(_from_host(candidates))
+    return _one_per_installation(found, candidates)
+
+
+def _one_per_installation(found: list[Path], names: tuple[str, ...]) -> tuple[Path, ...]:
+    """Je Installationsordner ein Eintrag — eine Wahl, keine Dateiliste.
+
+    Eine Installation bringt mehrere Startprogramme mit: PrusaSlicer legt
+    ``prusa-slicer.exe`` und ``prusa-slicer-console.exe`` nebeneinander, Cura
+    das Fenster und ``CuraEngine.exe``. Das sind zwei Wege in dasselbe
+    Programm und nicht zwei Programme — wer wählen soll, bekommt sonst fünf
+    Zeilen für drei Slicer und muss raten, welche zusammengehören.
+
+    Welcher Eintrag den Ordner vertritt, entscheidet die Reihenfolge in
+    ``names``: Sie steht in :data:`app.core.tools.SLICERS` und nennt die
+    Kommandozeilenfassung dort, wo eine gebraucht wird.
+    """
+    rank = {plain_name(name): index for index, name in enumerate(names)}
+    best: dict[Path, Path] = {}
+    for entry in found:
+        folder = entry.parent
+        current = best.get(folder)
+        if current is None or rank.get(plain_name(entry.name), len(rank)) < rank.get(
+            plain_name(current.name), len(rank)
+        ):
+            best[folder] = entry
+    return tuple(best[folder] for folder in dict.fromkeys(entry.parent for entry in found))
+
+
+def _all_from_folders(names: tuple[str, ...]) -> tuple[Path, ...]:
+    """Wie :func:`_from_folders`, aber ohne beim ersten Treffer aufzuhören."""
+    found: list[Path] = []
+    for root in _install_roots():
+        for folder in _folders_in(root):
+            for candidate in _below(folder, names):
+                if candidate.is_file():
+                    found.append(candidate)
+            for inner in _folders_in(folder):
+                for candidate in _below(inner, names):
+                    if candidate.is_file():
+                        found.append(candidate)
+    return tuple(found)
+
+
 def plain_name(name: str) -> str:
     """Ein Programmname ohne Schreibweise: klein, ohne Trenner, ohne Endung.
 

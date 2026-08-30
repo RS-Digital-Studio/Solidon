@@ -1424,6 +1424,18 @@ class _ProfileWorker(Worker):
             self.done.emit([])
 
 
+def _slicer_title(path: Path) -> str:
+    """Ein Name, den ein Mensch wiedererkennt — der Installationsordner.
+
+    „elegoo-slicer.exe" und „prusa-slicer-console.exe" sind Dateinamen; was
+    auf der Packung steht, ist „ElegooSlicer" und „PrusaSlicer". Der Ordner
+    trägt genau das, und bei Cura sogar die Version („UltiMaker Cura 5.13.0"),
+    was bei zwei installierten Fassungen der Unterschied ist.
+    """
+    folder = path.parent.name
+    return folder or path.stem
+
+
 class PrintSettingsDialog(QDialog):
     """Alle Druckeinstellungen, die Vorschläge dazu, und der Weg zum G-Code."""
 
@@ -1498,7 +1510,7 @@ class PrintSettingsDialog(QDialog):
         # Registry und die üblichen Installationsorte und kostet eine halbe
         # Sekunde — dreimal wäre die Hälfte der Zeit, die der Dialog zum
         # Aufgehen braucht.
-        self._slicer_path = discover.find_program("slicer", tools.SLICERS)
+        self._slicer_path = self._pick_slicer()
 
         layout = QVBoxLayout(self)
         # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
@@ -1741,6 +1753,36 @@ class PrintSettingsDialog(QDialog):
         self.slicer_inner = QWidget(self)
         form = QFormLayout(self.slicer_inner)
 
+        # **Welcher Slicer**, wenn mehr als einer installiert ist. Ohne diese
+        # Zeile entschied die Suchreihenfolge: `find_program` hört beim ersten
+        # Treffer auf, und auf einem Rechner mit ElegooSlicer, PrusaSlicer und
+        # Cura war das eine Zufallsentscheidung. Wollte dieser eine nicht,
+        # stand der Kunde vor einer Sackgasse statt vor einer Wahl (Robert,
+        # 30.08.2026).
+        #
+        # Die Zeile erscheint nur bei mehreren — bei einem wäre sie ein
+        # Auswahlfeld mit einem Eintrag, also eine Frage ohne Antwortmöglichkeit
+        # (§2.4).
+        self.slicer_choice = QComboBox(self.slicer_inner)
+        self.slicer_choice.activated.connect(self._slicer_chosen)
+        slicer_note = tr(
+            "Welcher Slicer die Druckdatei rechnet. Die Wahl bleibt gemerkt und gilt "
+            "auch beim nächsten Mal; die Profile darunter richten sich nach ihr."
+        )
+        self.slicer_choice.setToolTip(slicer_note)
+        self.slicer_choice.setStatusTip(slicer_note)
+        self.slicer_choice.setAccessibleDescription(slicer_note)
+        self.slicer_choice.setAccessibleName(tr("Slicer"))
+        # Der Satz gehört an beide Hälften der Zeile: Wer eine Zeile nicht
+        # versteht, zeigt auf das Wort davor und nicht auf den Kasten daneben.
+        slicer_label = QLabel(tr("Slicer"), self.slicer_inner)
+        slicer_label.setToolTip(slicer_note)
+        slicer_label.setStatusTip(slicer_note)
+        slicer_label.setAccessibleDescription(slicer_note)
+        form.addRow(slicer_label, self.slicer_choice)
+        self.slicer_choice.setVisible(False)
+        slicer_label.setVisible(False)
+
         self.machine_choice = QComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
@@ -1774,6 +1816,8 @@ class PrintSettingsDialog(QDialog):
         form.addRow(self.profile_note)
         self.slicer_box = collapsible(tr("Profile des Slicers"), self.slicer_inner, open_now=False)
         self.slicer_toggle = _toggle_of(self.slicer_box)
+        # Erst jetzt: die Auswahl steht, und ``_slicer_path`` ist längst gesetzt.
+        self._fill_slicer_choice()
         return self.slicer_box
 
     def _open_slicer_section(self) -> None:
@@ -2509,6 +2553,68 @@ class PrintSettingsDialog(QDialog):
                 tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
             )
 
+    def _pick_slicer(self) -> Path | None:
+        """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
+
+        Ein Rechner kann drei haben. Bis hierhin gewann der erste Treffer der
+        Suchreihenfolge, und wollte der nicht, war das eine Sackgasse: Der
+        Dialog bot keinen zweiten an, obwohl zwei danebenstanden.
+
+        **Ohne Widget**, weil das hier aus dem Konstruktor läuft und die
+        Auswahlfelder erst danach entstehen — dieselbe Reihenfolgefalle, die
+        die Bedingungsliste des Skizzeneditors schon einmal leer ließ. Das
+        Füllen macht :meth:`_fill_slicer_choice` am Ende des Aufbaus.
+        """
+        found = discover.find_programs("slicer", tools.SLICERS)
+        self._slicers = found
+        remembered = discover.remembered_path("slicer")
+        return next((entry for entry in found if str(entry) == remembered), None) or (
+            found[0] if found else None
+        )
+
+    def _fill_slicer_choice(self) -> None:
+        """Die Auswahl füllen — sichtbar nur, wenn es etwas zu wählen gibt.
+
+        Eine Zeile mit einem einzigen Eintrag ist eine Frage ohne
+        Antwortmöglichkeit (§2.4); bei einem Slicer bleibt sie weg. Der volle
+        Pfad steht im Tooltip: Zwei Installationen desselben Programms
+        unterscheiden sich am Ordner, nicht am Namen.
+        """
+        self.slicer_choice.blockSignals(True)
+        self.slicer_choice.clear()
+        for entry in self._slicers:
+            self.slicer_choice.addItem(_slicer_title(entry), str(entry))
+            self.slicer_choice.setItemData(
+                self.slicer_choice.count() - 1, str(entry), Qt.ItemDataRole.ToolTipRole
+            )
+        if self._slicer_path is not None and self._slicer_path in self._slicers:
+            self.slicer_choice.setCurrentIndex(self._slicers.index(self._slicer_path))
+        self.slicer_choice.blockSignals(False)
+
+        several = len(self._slicers) > 1
+        self.slicer_choice.setVisible(several)
+        layout = self.slicer_inner.layout()
+        if isinstance(layout, QFormLayout):
+            label = layout.labelForField(self.slicer_choice)
+            if label is not None:
+                label.setVisible(several)
+
+    def _slicer_chosen(self, index: int) -> None:
+        """Ein anderer Slicer: merken und die Profile neu durchsehen.
+
+        Gemerkt wird über `discover.remember_path`, also dort, wo auch ein von
+        Hand eingetragener Pfad steht — die Wahl überlebt damit den Neustart
+        und gilt für jeden, der nach dem Slicer fragt.
+        """
+        if not 0 <= index < len(self._slicers):
+            return
+        chosen = self._slicers[index]
+        discover.remember_path("slicer", str(chosen))
+        self._slicer_path = chosen
+        self._clear_profile_choices()
+        self._show_slicer_state()
+        self._start_profile_search()
+
     def recheck_slicer(self) -> None:
         """Noch einmal nachsehen, ob jetzt ein Slicer da ist.
 
@@ -2516,7 +2622,7 @@ class PrintSettingsDialog(QDialog):
         installiert hat, soll nicht schließen und neu öffnen müssen.
         """
         discover.forget_cache()
-        self._slicer_path = discover.find_program("slicer", tools.SLICERS)
+        self._slicer_path = self._pick_slicer()
         self._show_slicer_state()
         if self._slicer_path is not None:
             self.state.setText("")

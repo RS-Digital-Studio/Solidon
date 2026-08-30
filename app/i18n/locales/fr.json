@@ -3179,6 +3179,7 @@
   "Welcher Bereich des Fensters welche Frage beantwortet.": "Quelle zone de la fenêtre répond à quelle question.",
   "Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb hebt und senkt — der Unterschied zwischen Stempel und Prägung.": "Quelle valeur de gris laisse la surface tranquille. Zéro ne fait qu’ajouter ; un demi soulève et creuse — la différence entre un tampon et un gaufrage.",
   "Welcher Punkt beim Skalieren stehen bleibt.": "Quel point reste fixe lors de la mise à l'échelle.",
+  "Welcher Slicer die Druckdatei rechnet. Die Wahl bleibt gemerkt und gilt auch beim nächsten Mal; die Profile darunter richten sich nach ihr.": "Quel slicer calcule le fichier d’impression. Le choix est retenu et vaut aussi la prochaine fois ; les profils en dessous s’y règlent.",
   "Welches Filament die Fläche bekommt. Im 3MF bleibt es demselben Farbwechselplatz zugeordnet.": "Quel filament reçoit la face. Dans le 3MF, il reste affecté à la même position de changement de couleur.",
   "Welches Filament diese Fläche bekommt. Die Vorwahl steht darunter — was der Körper schon trägt, ganz oben.": "Quel filament reçoit cette face. La présélection est en dessous — ce que le corps porte déjà se trouve tout en haut.",
   "Welches Material dieses Teil ist. Leer heißt: das des Projekts.": "De quel matériau est cette pièce. Vide signifie : celui du projet.",
