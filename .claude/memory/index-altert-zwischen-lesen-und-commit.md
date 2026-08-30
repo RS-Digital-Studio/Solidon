@@ -33,6 +33,38 @@ Der Riss zeigt sich in der Zeile, die man ohnehin liest: `git commit` meldete
 (840 statt 839 Zusätze, 98 statt 51 Rücknahmen) — die Rücknahmen sind der
 Verräter, nicht die Zusätze.
 
+**Und die Regel „unmittelbar davor" reicht nicht, weil ein Befehl
+dazwischenliegt, den man nicht sieht: der pre-commit-Hook.** Am 30.08.2026
+nahm `73e3060d` d5s Fortschreibung an ROADMAP-Zeile P9 zurück — obwohl genau
+nach Vorschrift gearbeitet war: `read-tree HEAD`, sieben `update-index`,
+sofort `commit`, kein Prüfen, kein Nachrechnen. Der Hook fährt Sprachprüfung
+und Kataloge, das dauert Sekunden bis Minuten, und er läuft **nachdem** der
+Index steht. Dieses Fenster lässt sich nicht wegkürzen: Es ist kein Fehler in
+der Arbeitsweise, sondern ein Rennen, das jeder Commit eingeht.
+
+Was bleibt, ist die Prüfung **danach**, und die ist billig: die eigene
+Dateizahl gegen `git show --numstat --format="" HEAD`. Sieben erwartet, acht
+bekommen — die achte war fremd, und der ganze Fall stand in einer Zeile.
+
+**Und ein gefangener erster Wettlauf schützt nicht vor dem zweiten.** Am
+31.08.2026 nahm `4c51a81a` 45 Zeilen aus `texture_ops.py` und 107 aus seinem
+Test zurück — obwohl ich den Index **zweimal** frisch gelesen hatte. Beim
+ersten Mal fiel der Wettlauf am Guard auf (acht Dateien statt sechs,
+`ROADMAP.md` und `orientation.py` darunter), ich las neu, der Guard zeigte
+sechs. Genau in dem Fenster zwischen dieser Prüfung und dem Commit fiel der
+nächste fremde Commit.
+
+Das ist die gefährlichere Lage, weil sie sich wie Sorgfalt anfühlt: Wer einen
+Wettlauf gefangen hat, hält den zweiten Bau für abgesichert — und hat in
+Wahrheit nur bewiesen, dass Wettläufe in diesem Baum gerade häufig sind.
+**Ein Guard, der nichts findet, sagt nichts über die nächste Sekunde.**
+
+Dieser Fall ist außerdem der Beleg, dass die Notiz nicht am Inhalt scheitert:
+Sie stand vollständig hier, mit genau der Anweisung, die gefehlt hat. Was
+fehlte, war kein Satz, sondern dass jemand sie vor dem Commit aufschlägt —
+dieselbe Sorte Lücke wie bei [[baustein-begriff-je-sprache]], nur ohne den
+Trost, dass die Warnung schlecht platziert gewesen wäre.
+
 **How to apply:**
 
 * `git read-tree HEAD` **unmittelbar** vor `git commit` — kein Prüfen, kein
