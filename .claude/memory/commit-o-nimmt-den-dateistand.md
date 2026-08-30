@@ -203,3 +203,25 @@ Die erwartete Zahl hat es gefangen (35 erwartet, 97 gesehen) — aber erst
 Die Liste altert schnell — in sechs Stunden hatten fünf Sitzungen ihre Gebiete
 mehrfach gewechselt. Sie beim Ankommen zu lesen und dann vier Stunden später
 zu stagen, ist dasselbe wie sie nicht zu lesen.
+
+**Am 31.08.2026 dieselbe Falle in einer Datei, die ich nicht auf der Liste
+hatte: `.claude/memory/MEMORY.md`.** Ich hatte für `app/i18n/locales/` in
+derselben Nacht dreimal sorgfältig das Blob-Verfahren gefahren — und dann
+`git add .claude/memory/MEMORY.md` geschrieben, ohne hineinzusehen. Der Commit
+nahm die Indexzeile einer Nachbarsitzung mit, deren Datei noch nicht committet
+war: Die Zeile stand in HEAD, der Verweis zeigte ins Leere.
+
+**Zwei Lehren, beide über die alte hinaus:**
+
+- **`MEMORY.md` ist eine geteilte Datei wie die Kataloge und `ROADMAP.md`.**
+  Sie liest sich wie „meine Notizen", aber jede Sitzung schreibt hinein. Wer
+  eine Zeile einträgt, nimmt das Blob-Verfahren wie überall sonst.
+- **Die Kettenregel fängt es nicht.** „Eigene Dateizahl gegen
+  `git show --numstat HEAD`" fängt eine Datei zu viel — nicht eine **Zeile** zu
+  viel in einer richtigen Datei. Bei den Katalogen hatte ich zusätzlich auf
+  einen bekannten fremden Satz gegrept und deshalb null gemessen; hier nicht.
+  Die Sollprobe muss den **Inhalt** prüfen, nicht die Zahl.
+
+Und der Fall gehört zu [[benannte-falle-schuetzt-nicht]]: Diese Notiz hier
+beschreibt die Falle seit einem Tag genau richtig, und ich bin in derselben
+Sitzung hineingelaufen, in der ich drei Nachbarsitzungen davor gewarnt habe.
