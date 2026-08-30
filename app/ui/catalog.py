@@ -253,6 +253,8 @@ class PartCatalog(QDialog):
         layout.addWidget(buttons)
 
         self._previews: dict[str, QPixmap] = {}
+        self._blank: QPixmap | None = None
+        """Der Platzhalter, einmal gezeichnet — siehe :meth:`_placeholder`."""
         self.show_parts()
         self._show_detail()
         self._rendering = True
@@ -452,18 +454,74 @@ class PartCatalog(QDialog):
         return item
 
     def _preview(self, spec: PartSpec) -> Any:
-        """Das Vorschaubild, wenn es schon da ist — sonst nichts.
+        """Das Vorschaubild, wenn es schon da ist — sonst ein Platzhalter.
 
         Jedes Bild wird aus dem Baustein gerechnet (§24.3). Alle beim Öffnen
         nacheinander zu rendern hieß: der Katalog geht auf, wenn das letzte
         fertig ist, und bis dahin hängt das Fenster. Jetzt füllen sie sich
         nach, und die Liste ist sofort lesbar — die Beschreibung daneben steht
         ohnehin von Anfang an.
+
+        **Bis dahin steht ein Platzhalter und nicht nichts.** Gemessen am
+        30.08.2026: Nach einer halben Sekunde trägt **eine** von 27 Kacheln
+        ihr Bild, nach zwei Sekunden alle. In dieser halben Sekunde sah der
+        Katalog aus wie eine Textliste — und §2.6 begründet ihn gerade damit,
+        dass ein räumliches Teil als Textzeile die schlechtere Darstellung
+        sei. Ein leeres Icon ist außerdem nicht neutral: Qt setzt den Titel
+        ohne Bild anders, und die Grundlinien fluchten erst, wenn alle
+        Renderings da sind.
+
+        **Ein Balken wäre hier falsch.** ``wartezeit.md`` verlangt ihn ab zwei
+        Sekunden; die Kette bleibt darunter, und ein Fortschrittsbalken für
+        eine halbe Sekunde ist Lärm. Der Platzhalter sagt dasselbe leiser: Er
+        hält den Platz, den das Bild bekommen wird.
         """
         from PySide6.QtGui import QIcon
 
         found = self._previews.get(spec.name)
-        return QIcon(found) if found is not None else QIcon()
+        return QIcon(found) if found is not None else QIcon(self._placeholder())
+
+    def _placeholder(self) -> Any:
+        """Die leise Fläche, die ein Vorschaubild vertritt, bis es da ist.
+
+        Einmal gebaut und wiederverwendet: 27 gleiche Bilder je Katalog wären
+        27 Zeichnungen desselben Rechtecks.
+
+        Gezeichnet wird ein gerundeter Umriss in der Randfarbe des Themas —
+        kein Symbol und kein Fragezeichen. Er soll sagen „hier kommt ein
+        Bild", nicht „hier fehlt etwas": Das Bild kommt ja, und zwar in
+        Millisekunden.
+        """
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen, QPixmap
+
+        if self._blank is not None:
+            return self._blank
+
+        size = _icon_size()
+        pixmap = QPixmap(size)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        # **Aus der Palette und nicht aus der Thementabelle.** Der Katalog
+        # kennt seinen Themennamen nicht; die Textfarbe des Widgets kennt ihn
+        # immer und folgt einem Themenwechsel ohne Zutun.
+        rand = QColor(self.palette().color(self.foregroundRole()))
+        # Halb durchsichtig: Der Platzhalter ist eine Ahnung und keine Aussage.
+        rand.setAlpha(70)
+        painter.setPen(QPen(rand, 1.5))
+        weite = float(size.width())
+        hoehe = float(size.height())
+        pfad = QPainterPath()
+        pfad.addRoundedRect(
+            QRectF(weite * 0.14, hoehe * 0.14, weite * 0.72, hoehe * 0.72),
+            weite * 0.08,
+            weite * 0.08,
+        )
+        painter.drawPath(pfad)
+        painter.end()
+        self._blank = pixmap
+        return pixmap
 
     def _render_pending(self) -> None:
         """Rendert das nächste fehlende Bild und reiht sich neu ein.

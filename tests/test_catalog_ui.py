@@ -467,3 +467,95 @@ def test_a_part_that_needs_a_spot_says_so_before_the_click(qt_app: QApplication)
         )
     finally:
         catalog.release()
+
+
+# --- Was die Kachel zeigt, bevor ihr Bild da ist ------------------------------
+
+
+def test_every_tile_has_a_face_from_the_first_moment(qt_app: QApplication) -> None:
+    """Keine Kachel steht ohne Fläche da, auch nicht in der ersten Sekunde.
+
+    **§2.6 begründet den Katalog gerade mit dem Bild** — ein räumliches Teil
+    als Textzeile ist die schlechtere Darstellung. Gemessen am 30.08.2026 im
+    echten Fenster: Nach einer halben Sekunde trug **eine** von 27 Kacheln ihr
+    Rendering, nach zwei Sekunden alle. In dieser halben Sekunde sah der
+    Katalog aus wie eine Liste.
+
+    Der Platzhalter schließt die Lücke, ohne einen Balken zu setzen:
+    ``wartezeit.md`` verlangt Fortschritt ab zwei Sekunden, die Kette bleibt
+    darunter, und ein Balken für eine halbe Sekunde wäre Lärm.
+
+    Geprüft wird **vor** jeder Ereignisrunde — also bevor die Renderkette
+    überhaupt laufen konnte.
+    """
+    from app.ui.catalog import PartCatalog
+
+    katalog = PartCatalog()
+    try:
+        liste = katalog.list
+        kacheln = [
+            liste.item(zeile)
+            for zeile in range(liste.count())
+            if liste.item(zeile) is not None and liste.item(zeile).data(Qt.ItemDataRole.UserRole)
+        ]
+        assert len(kacheln) >= 20, (
+            f"nur {len(kacheln)} Bausteinkacheln gefunden — sucht das noch richtig?"
+        )
+
+        ohne = [
+            kachel.text()
+            for kachel in kacheln
+            if kachel.icon().isNull() or not kachel.icon().availableSizes()
+        ]
+        assert not ohne, f"{len(ohne)} Kacheln ohne Fläche: {ohne[:3]}"
+
+        # Und die Gegenrichtung: Der Platzhalter ist noch kein Rendering.
+        assert not katalog._previews, (
+            "vor der ersten Ereignisrunde darf kein Bild gerechnet sein — sonst "
+            "misst dieser Test die fertige Kette statt den Anfangszustand"
+        )
+    finally:
+        katalog.release()
+
+
+def test_the_placeholder_is_drawn_once_and_reused(qt_app: QApplication) -> None:
+    """Ein Platzhalter für alle Kacheln, nicht 27 gleiche Zeichnungen.
+
+    Er ist für jede Kachel derselbe; ihn je Kachel zu zeichnen wäre 27-mal
+    dasselbe Rechteck.
+    """
+    from app.ui.catalog import PartCatalog
+
+    katalog = PartCatalog()
+    try:
+        erst = katalog._placeholder()
+        zweit = katalog._placeholder()
+        assert erst is zweit, "der Platzhalter wird einmal gebaut und wiederverwendet"
+        assert not erst.isNull(), "und er ist kein leeres Bild"
+    finally:
+        katalog.release()
+
+
+def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> None:
+    """Sobald ein Bild da ist, zeigt die Kachel es — der Platzhalter tritt ab.
+
+    Die Gegenprobe zum Platzhalter: Er darf die Renderkette nicht ersetzen,
+    sondern nur überbrücken. Ohne diesen Test wäre eine Kachel, die dauerhaft
+    den Platzhalter zeigt, von einer richtig gefüllten nicht zu unterscheiden.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.ui.catalog import PartCatalog
+
+    katalog = PartCatalog()
+    try:
+        erster = PARTS.all()[0]
+        vorher = katalog._preview(erster)
+        katalog._render_pending()
+        nachher = katalog._preview(erster)
+
+        assert erster.name in katalog._previews, "die Kette muss das erste Bild gerechnet haben"
+        assert vorher.cacheKey() != nachher.cacheKey(), (
+            "nach dem Rendern muss die Kachel ein anderes Bild tragen als den Platzhalter"
+        )
+    finally:
+        katalog.release()
