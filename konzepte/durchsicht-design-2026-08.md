@@ -21,13 +21,19 @@ von `ROADMAP.md` und nirgends sonst.
 
 ## Kritisch
 
-**B1 — Jede Menü-Überschrift ist unsichtbar; das Stylesheet frisst sie.**
-`app/ui/style.py:541` (`QMenu::separator`) gegen `main_window.py:2008`
-(`addSection`). In *Erzeugen*, *Ändern*, *Vorbereiten*, *Ansicht* stehen
-zwischen den Gruppen nackte Trennstriche; die Kategorienamen, die der Code mit
-fünfzehn Zeilen Begründung setzt, erscheinen nie. Gegenprobe gemessen: dasselbe
-Menü mit und ohne Anwendungs-Stylesheet — mit fehlt der Text restlos. 114
+**B1 — Jede Menü-Überschrift ist unsichtbar.**
+`main_window.py:2008` (`addSection`): In *Erzeugen*, *Ändern*, *Vorbereiten*,
+*Ansicht* stehen zwischen den Gruppen nackte Trennstriche; die Kategorienamen,
+die der Code mit fünfzehn Zeilen Begründung setzt, erscheinen nie. 114
 Menüeinträge stehen in unbenannten Blöcken.
+**Ursachen-Korrektur (72, 30.08.2026, gemessen):** Die erste Zuschreibung ans
+Stylesheet war falsch — im frischen Prozess ohne jedes Stylesheet ist der
+Titel ebenso unsichtbar (437 gegen 437 Kontrastpunkte), und keine von sechs
+Stylesheet-Varianten macht ihn sichtbar. Der **Windows-Stil** rendert
+`addSection` als reinen Separator und verwirft den Text; Titel- und
+Strich-Fassung sind punkt- und höhengleich (1201/67 beide). Der tragfähige
+Weg ist eine `QWidgetAction` mit Label an der Aufrufstelle (+132 Punkte
+gegenüber dem Strich) plus eine Stylesheet-Regel für die Anmutung.
 
 **B2 — Die Prozentzahl im Fortschrittsbalken wird ab der Hälfte unlesbar.**
 `style.py:558–564`: zentrierter Text auf dem Bernstein-Chunk. Kontrast heller
