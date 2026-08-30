@@ -46,6 +46,7 @@
 - [Roh gegen gerendert vergleichen](roh-gegen-gerendert-vergleichen.md) — wer Quelltext in fertigem HTML sucht, prüft die Maskierung mit; der Test verwarf richtige Texte und schwieg zu falschen.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
+- [Wächter sieht nur das Getane](waechter-sieht-nur-das-getane.md) — ein Quelltext-Wächter ist blind für das, was ein Framework von selbst tut; neun Dialoge trugen einen Akzent, den niemand gesetzt hatte.
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — „assert gebaut“ fragte, ob das Wörterbuch voll ist, statt ob Operationen darin stehen; der Test verglich null und blieb in der Mutationsprobe grün.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
 - [Testprojekt trifft den Fall nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was der Test hineinlegt; ausgeliefert enthält, was die Anwendung erzeugt — acht von neun Beispielen fielen, der grüne Test sah keines.
@@ -95,6 +96,8 @@
 - [Sicherung ist eine Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — eine Kopie vom Anfang einer Mutationsreihe spielt am Ende den ganzen Dateistand von damals zurück; dreimal getan, gutgegangen nur weil sie zufällig jünger war als der fremde Commit.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
+- [Probe mit Commits schaltet den Push ab](probe-die-commits-erzeugt-schaltet-push-ab.md) — der post-commit ist committet und läuft in jedem Worktree; zwei Probe-Commits landeten als eigener Zweig auf origin.
+- [Deutsches Schlusszeichen beendet den String](deutsches-schlusszeichen-beendet-den-string.md) — `„…"` ist kein Paar, sondern ein Syntaxfehler; dreimal an einem Tag, und `!r` in Assert-Meldungen ist der Ausweg.
 - [Ein Probe-Worktree altert](probe-worktree-altert.md) — sein Baum ist ein vollständiger Zustand, kein Diff; übertragen nimmt er jeden Commit zurück, der seit dem Abzweig kam. Index-Diff gegen den **aktuellen** HEAD prüfen, nicht gegen die Basis.
 - [Ein Fix, der nicht grün macht](fix-der-nicht-gruen-macht.md) — bleibt der Test nach der Behebung rot, war die Diagnose falsch, nicht die Behebung unvollständig; die plausible Erzählung ging sonst ungeprüft bis in einen fremden Bericht.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
