@@ -30,6 +30,11 @@ const SHARED_CONFIRM_HOURS = 48;
 /** Wie viele Einreichungen eine Adresse am Tag schafft. */
 const SHARED_MAX_PER_DAY = 20;
 
+//: Wie lange ein unbestätigter Beitrag liegen bleibt, bevor er samt dem
+//: Prüfwert seiner Adresse verschwindet — die Frist steht so in
+//: `datenschutz.html` und ist deshalb keine frei wählbare Zahl.
+const SHARED_KEEP_UNCONFIRMED_DAYS = 7;
+
 /**
  * Ein Fehler mit Grund, Status und stabiler Kennung.
  *
@@ -132,6 +137,8 @@ function shared_create_schema(PDO $database): void
             author TEXT NOT NULL DEFAULT "",
             contact_hash TEXT NOT NULL,
             withdraw_key TEXT NOT NULL DEFAULT "",
+            confirm_token TEXT NOT NULL DEFAULT "",
+            confirm_expires INTEGER NOT NULL DEFAULT 0,
             created INTEGER NOT NULL,
             published INTEGER,
             hidden INTEGER NOT NULL DEFAULT 0
@@ -148,7 +155,92 @@ function shared_create_schema(PDO $database): void
             PRIMARY KEY (part_id, browser)
         )'
     );
+    // Was nach dem ersten Auslieferungsstand dazugekommen ist, erreicht eine
+    // vorhandene Datenbank nur hierüber — siehe shared_add_column.
+    shared_add_column($database, 'parts', 'withdraw_key', 'TEXT NOT NULL DEFAULT ""');
+    shared_add_column($database, 'comments', 'withdraw_key', 'TEXT NOT NULL DEFAULT ""');
+    shared_add_column($database, 'comments', 'confirm_token', 'TEXT NOT NULL DEFAULT ""');
+    shared_add_column($database, 'comments', 'confirm_expires', 'INTEGER NOT NULL DEFAULT 0');
     $database->exec('CREATE INDEX IF NOT EXISTS parts_published ON parts (published, hidden)');
+}
+
+/**
+ * Ergänzt eine Spalte, die es in einer älteren Datenbank noch nicht gibt.
+ *
+ * **`CREATE TABLE IF NOT EXISTS` ändert eine vorhandene Tabelle nicht.** Das
+ * ist der ganze Grund für diese Funktion, und der Fehler war nicht zu sehen:
+ * Der Prüfstand legt seine Datenbank je Lauf neu an (`SOLIDON_SHARED_DB` in
+ * einem Temp-Ordner), dort entsteht das Schema immer vollständig. Im Betrieb
+ * ist die Datenbank per Definition alt — `withdraw_key` wäre dort nie
+ * entstanden, und `?do=withdraw` hätte an einer Spalte gescheitert, die es
+ * nach jedem Testlauf gibt.
+ *
+ * Eine nachgezogene `NOT NULL`-Spalte **braucht** ein `DEFAULT`; ohne eines
+ * weigert sich SQLite, weil die vorhandenen Zeilen sonst keinen Wert hätten.
+ *
+ * Protokolliert wird, was wirklich ergänzt wurde: Eine Migration, die
+ * stillschweigend läuft, ist von einer, die gar nicht läuft, im Betrieb nicht
+ * zu unterscheiden.
+ */
+function shared_add_column(PDO $database, string $table, string $column, string $type): void
+{
+    $vorhanden = $database->query('PRAGMA table_info(' . $table . ')')->fetchAll();
+    foreach ($vorhanden as $spalte) {
+        if (($spalte['name'] ?? '') === $column) {
+            return;
+        }
+    }
+    $database->exec('ALTER TABLE ' . $table . ' ADD COLUMN ' . $column . ' ' . $type);
+    error_log('Solidon-Börse: Spalte ' . $table . '.' . $column . ' nachgezogen.');
+}
+
+/**
+ * Räumt weg, was nach sieben Tagen unbestätigt liegengeblieben ist.
+ *
+ * **Eine Löschzusage ist eine Zusage, keine Beschreibung.** `datenschutz.html`
+ * verspricht öffentlich: „Eine unbestätigte Adresse wird nach sieben Tagen
+ * gelöscht." Die Spalten `pending.expires` und `comments.confirm_expires`
+ * standen dafür da, und gelöscht hat sie niemand — es gab kein einziges
+ * `DELETE` darauf.
+ *
+ * **Zwei Fristen, und sie sind nicht dasselbe.** Der Bestätigungs*link* gilt
+ * SHARED_CONFIRM_HOURS (48 Stunden); danach ist er wertlos, aber der Datensatz
+ * steht noch, damit ein später Klick eine ehrliche Auskunft bekommt („dieser
+ * Link ist abgelaufen") statt „kennt die Börse nicht". Der *Datensatz* fällt
+ * nach sieben Tagen, und das ist die Frist aus der Datenschutzerklärung.
+ *
+ * **Aufgeräumt wird beim Zugriff, nicht von einem Zeitgeber.** Die Börse liegt
+ * auf einem gewöhnlichen Webhosting ohne Cron; ein Wartungs-Endpunkt bräuchte
+ * einen Rufer, und ein Rufer, den niemand baut, ist die Zusage von vorhin noch
+ * einmal. Jeder Aufruf räumt, und weil die Abfrage über einen Zeitstempel
+ * läuft, kostet sie im Regelfall nichts.
+ */
+function shared_sweep_unconfirmed(PDO $database): void
+{
+    $grenze = time() - SHARED_KEEP_UNCONFIRMED_DAYS * 86400;
+
+    // Erst die Bausteine: Ihre Datei liegt neben der Datenbank und geht mit.
+    $alt = $database->prepare(
+        'SELECT id FROM parts WHERE published IS NULL AND created < ?'
+    );
+    $alt->execute([$grenze]);
+    foreach ($alt->fetchAll() as $zeile) {
+        $id = (int) $zeile['id'];
+        @unlink(shared_file_for($id));
+        $database->prepare('DELETE FROM pending WHERE part_id = ?')->execute([$id]);
+        $database->prepare('DELETE FROM likes WHERE part_id = ?')->execute([$id]);
+        $database->prepare('DELETE FROM flags WHERE part_id = ?')->execute([$id]);
+        $database->prepare('DELETE FROM comments WHERE part_id = ?')->execute([$id]);
+        $database->prepare('DELETE FROM parts WHERE id = ?')->execute([$id]);
+    }
+
+    // Und die Kommentare, die nie bestätigt wurden — mit ihnen der Prüfwert
+    // der Adresse, denn genau der ist der Gegenstand der Zusage.
+    $database->prepare('DELETE FROM comments WHERE published IS NULL AND created < ?')
+        ->execute([$grenze]);
+
+    // Eine Marke ohne ihren Datensatz wäre ein Link, der ins Leere zeigt.
+    $database->exec('DELETE FROM pending WHERE part_id NOT IN (SELECT id FROM parts)');
 }
 
 /** Die Datenbank, angelegt beim ersten Zugriff. */

@@ -405,6 +405,262 @@ function shared_list(): void
     ]);
 }
 
+/**
+ * Die Kennung eines Baustein-Datensatzes zu seinem Kurznamen.
+ *
+ * Veröffentlicht und nicht verborgen — wer einen zurückgezogenen oder noch
+ * unbestätigten Baustein liked oder kommentiert, liked ins Leere. Die Prüfung
+ * steht hier und nicht in jedem Aufrufer: Sie ist dieselbe Frage, und eine
+ * zweite Formulierung wäre eine zweite Gelegenheit, auseinanderzulaufen.
+ */
+function shared_part_id(string $slug): int
+{
+    if ($slug === '' || preg_match('/^[a-z0-9-]{1,80}$/D', $slug) !== 1) {
+        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+    }
+    $row = shared_database()->prepare(
+        'SELECT id FROM parts WHERE slug = ? AND published IS NOT NULL AND hidden = 0'
+    );
+    $row->execute([$slug]);
+    $id = $row->fetchColumn();
+    if ($id === false) {
+        throw new SharedFailure('Diesen Baustein kennt die Börse nicht.', 404, 'unknown');
+    }
+    return (int) $id;
+}
+
+/**
+ * Die Browser-Kennung aus dem Formular.
+ *
+ * Der Datenschutztext beschreibt genau, was sie ist: „eine zufällige Kennung
+ * im lokalen Speicher Ihres Browsers", die „keine Angaben über Sie enthält".
+ * Der Server prüft deshalb nur die **Gestalt** und nie den Inhalt — er darf
+ * gar nicht wissen, was darin steht, und eine Kennung, die er nicht versteht,
+ * ist ihm so recht wie eine, die er versteht.
+ *
+ * Die Untergrenze ist kein Schönheitsmaß: Wer acht Zeichen schickt, teilt
+ * sich seine Kennung mit anderen, und dann zählt ein Like fremde Klicks mit.
+ */
+function shared_browser_mark(): string
+{
+    $mark = trim((string) ($_POST['browser'] ?? ''));
+    if (preg_match('/^[A-Za-z0-9_-]{16,64}$/D', $mark) !== 1) {
+        throw new SharedFailure(
+            'Diese Browser-Kennung kann die Börse nicht verwenden. Laden Sie die Seite '
+            . 'neu — sie legt dann eine neue an.',
+            400,
+            'bad_browser'
+        );
+    }
+    return $mark;
+}
+
+/**
+ * Ein Like: ein Klick je Browser-Kennung und Baustein.
+ *
+ * **Die Eindeutigkeit steht im Index, nicht in einer Abfrage davor** — zwei
+ * gleichzeitige Klicks gewinnen sonst beide. `INSERT OR IGNORE` lässt den
+ * zweiten stillschweigend fallen, und genau das ist die Zusage aus
+ * `datenschutz.html`: „ein Like je Browser und Baustein".
+ *
+ * Zurück kommt die **Zahl danach** und nicht ein bloßes ok. Wer nur „ok"
+ * bekommt, muss die Liste neu laden, um zu sehen, was sein Klick bewirkt hat —
+ * und im häufigsten Fall (der zweite Klick derselben Kennung) bewirkt er
+ * nichts, was die Seite ohne die Zahl nicht sagen könnte.
+ */
+function shared_like(): void
+{
+    $id = shared_part_id((string) ($_POST['slug'] ?? ''));
+    $mark = shared_browser_mark();
+    $database = shared_database();
+    $database->prepare(
+        'INSERT OR IGNORE INTO likes (part_id, browser, created) VALUES (?, ?, ?)'
+    )->execute([$id, $mark, time()]);
+
+    $count = $database->prepare('SELECT COUNT(*) FROM likes WHERE part_id = ?');
+    $count->execute([$id]);
+    shared_answer(['ok' => true, 'likes' => (int) $count->fetchColumn()]);
+}
+
+/**
+ * Die Kommentare eines Bausteins — was öffentlich steht und sonst nichts.
+ *
+ * Die Spaltenliste ist **aufgezählt und nicht `*`**, und das ist hier keine
+ * Stilfrage: `comments` trägt `contact_hash`, `withdraw_key` und
+ * `confirm_token`. Ein `SELECT *` reichte alle drei an die Seite durch —
+ * den Rückziehschlüssel eines fremden Kommentars an jeden Leser.
+ */
+function shared_comments(): void
+{
+    $id = shared_part_id((string) ($_GET['slug'] ?? ''));
+    $rows = shared_database()->prepare(
+        'SELECT id, body, author, published FROM comments
+          WHERE part_id = ? AND published IS NOT NULL AND hidden = 0
+          ORDER BY published ASC'
+    );
+    $rows->execute([$id]);
+    shared_answer(['ok' => true, 'comments' => $rows->fetchAll()]);
+}
+
+/**
+ * Ein Kommentar wird eingereicht — sichtbar wird er erst nach dem Mailklick.
+ *
+ * Dieselbe Hürde wie beim Baustein und aus demselben Grund: Ohne sie kostet
+ * ein Kommentar nichts, und was nichts kostet, kommt in Mengen. Die Adresse
+ * wird **nicht** im Klartext abgelegt (`shared_contact_hash`), sie ist der
+ * Weg für die Bestätigung und danach nur noch ein Merkmal, an dem sich
+ * Doppeleinreichungen zählen lassen.
+ *
+ * Der Rückziehschlüssel entsteht **hier** und nicht beim Bestätigen: Er steht
+ * in derselben Mail wie der Bestätigungslink, und wer den Kommentar doch
+ * nicht will, soll ihn wegwerfen können, ohne ihn vorher veröffentlicht zu
+ * haben.
+ */
+function shared_comment(): void
+{
+    $id = shared_part_id((string) ($_POST['slug'] ?? ''));
+    $contact = shared_contact();
+    $rules = shared_rules();
+
+    $body = trim((string) ($_POST['body'] ?? ''));
+    $author = trim((string) ($_POST['author'] ?? ''));
+    $findings = [];
+    if ($body === '') {
+        $findings[] = 'Der Kommentar ist leer.';
+    }
+    if (mb_strlen($body) > $rules['max_doc_chars']) {
+        $findings[] = 'Der Kommentar ist länger als ' . $rules['max_doc_chars'] . ' Zeichen.';
+    }
+    if (preg_match(FORBIDDEN_TEXT, $body) === 1) {
+        $findings[] = 'Der Kommentar enthält einen Link oder eine Auszeichnung.';
+    }
+    if (mb_strlen($author) > $rules['max_title_chars']) {
+        $findings[] = 'Der Name ist länger als ' . $rules['max_title_chars'] . ' Zeichen.';
+    }
+    // Ein Name darf nennen, wo man jemanden findet — eine Auszeichnung darf er
+    // nicht einschleusen. Dieselbe Trennung wie im Kern (FORBIDDEN_MARKUP).
+    if (preg_match(FORBIDDEN_MARKUP, $author) === 1) {
+        $findings[] = 'Der Name enthält eine Auszeichnung.';
+    }
+    if ($findings !== []) {
+        throw new SharedFailure(implode(' ', $findings), 400, 'rejected');
+    }
+
+    $now = time();
+    $token = shared_token();
+    $withdraw = shared_token(32);
+    shared_database()->prepare(
+        'INSERT INTO comments (part_id, body, author, contact_hash, withdraw_key,
+                               confirm_token, confirm_expires, created)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([
+        $id,
+        $body,
+        $author,
+        shared_contact_hash($contact),
+        $withdraw,
+        $token,
+        $now + SHARED_CONFIRM_HOURS * 3600,
+        $now,
+    ]);
+
+    shared_send_comment_confirmation($contact, $token, $withdraw);
+    shared_answer(['ok' => true, 'pending' => true]);
+}
+
+/** Die Mail zum Kommentar: der Bestätigungslink und der Rückzieh-Link. */
+function shared_send_comment_confirmation(
+    string $address,
+    string $token,
+    string $withdraw
+): void {
+    $host = $_SERVER['HTTP_HOST'] ?? 'solidon3d.de';
+    $link = 'https://' . $host . '/api/shared.php?do=confirm_comment&token=' . urlencode($token);
+    $back = 'https://' . $host . '/api/shared.php?do=withdraw&key=' . urlencode($withdraw);
+    $body = "Hallo,
+
+"
+        . "Sie haben einen Kommentar in der Solidon-Tauschbörse geschrieben.
+
+"
+        . "Mit diesem Link wird er öffentlich sichtbar:
+
+"
+        . $link . "
+
+"
+        . "Der Link gilt " . SHARED_CONFIRM_HOURS . " Stunden. Wenn Sie nichts geschrieben "
+        . "haben, ignorieren Sie diese Nachricht — ohne Klick wird nichts veröffentlicht.
+"
+        . "
+"
+        . "Heben Sie diese Nachricht auf: Mit dem folgenden Link ziehen Sie Ihren "
+        . "Kommentar jederzeit selbst zurück. Er wird dann gelöscht, und die "
+        . "Verknüpfung zu Ihrer Adresse geht mit.
+
+"
+        . $back . "
+";
+    $headers = 'From: ' . SHARED_SENDER . "
+" . 'Content-Type: text/plain; charset=utf-8';
+    if (!@mail($address, 'Ihr Kommentar in der Solidon-Tauschbörse', $body, $headers)) {
+        throw new SharedFailure(
+            'Die Bestätigungsmail ging nicht hinaus. Melden Sie sich beim Support, dann '
+            . 'schalten wir den Kommentar von Hand frei.',
+            500,
+            'mail_failed'
+        );
+    }
+}
+
+/**
+ * Der Klick aus der Mail: ab jetzt steht der Kommentar da.
+ *
+ * **Verglichen wird in konstanter Zeit.** Die Zeile wird über den Schlüssel
+ * geholt und der gefundene Wert danach mit `hash_equals` geprüft — ein `=`
+ * allein antwortet unterschiedlich schnell, je nachdem, wie viele Zeichen
+ * stimmen. Dieselbe Bauart wie beim Rückziehweg.
+ *
+ * Die Marke bleibt nach dem Klick stehen und wird nicht geleert: Wer denselben
+ * Link zweimal anklickt, soll dieselbe Antwort bekommen und nicht „kennt die
+ * Börse nicht" — der zweite Klick ist der häufigste Fall überhaupt, wenn
+ * jemand die Mail wiederfindet.
+ */
+function shared_confirm_comment(): void
+{
+    $token = (string) ($_GET['token'] ?? '');
+    if ($token === '' || preg_match('/^[0-9a-f]{32}$/D', $token) !== 1) {
+        throw new SharedFailure('Dieser Bestätigungslink ist unvollständig.', 400, 'bad_token');
+    }
+    $database = shared_database();
+    $row = $database->prepare(
+        'SELECT id, confirm_token, confirm_expires, published FROM comments WHERE confirm_token = ?'
+    );
+    $row->execute([$token]);
+    $found = $row->fetch();
+    if (!$found || !hash_equals((string) $found['confirm_token'], $token)) {
+        throw new SharedFailure(
+            'Diesen Bestätigungslink kennt die Börse nicht — vielleicht wurde der '
+            . 'Kommentar schon zurückgezogen.',
+            404,
+            'unknown_token'
+        );
+    }
+    if ($found['published'] !== null) {
+        shared_answer(['ok' => true, 'already' => true]);
+    }
+    if ((int) $found['confirm_expires'] < time()) {
+        throw new SharedFailure(
+            'Dieser Bestätigungslink ist abgelaufen. Schreiben Sie den Kommentar erneut.',
+            410,
+            'expired'
+        );
+    }
+    $database->prepare('UPDATE comments SET published = ? WHERE id = ?')
+        ->execute([time(), (int) $found['id']]);
+    shared_answer(['ok' => true]);
+}
+
 /** Die Rezeptdatei selbst — das Einzige, was nicht JSON antwortet. */
 function shared_download(): void
 {
@@ -437,6 +693,9 @@ function shared_download(): void
 }
 
 try {
+    // Jeder Aufruf räumt zuerst weg, was seine Frist überschritten hat
+    // (siehe shared_sweep_unconfirmed) — es gibt keinen Zeitgeber, der es täte.
+    shared_sweep_unconfirmed(shared_database());
     $action = (string) ($_GET['do'] ?? '');
     $post = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
     if ($action === 'upload' && $post) {
@@ -449,10 +708,18 @@ try {
         shared_download();
     } elseif ($action === 'withdraw') {
         shared_withdraw();
+    } elseif ($action === 'like' && $post) {
+        shared_like();
+    } elseif ($action === 'comments') {
+        shared_comments();
+    } elseif ($action === 'comment' && $post) {
+        shared_comment();
+    } elseif ($action === 'confirm_comment') {
+        shared_confirm_comment();
     } else {
         throw new SharedFailure(
             'Diese Anfrage kennt die Börse nicht. Möglich sind upload, confirm, list, '
-            . 'download und withdraw.',
+            . 'download, withdraw, like, comment, comments und confirm_comment.',
             404,
             'unknown_action'
         );
