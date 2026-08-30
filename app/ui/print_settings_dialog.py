@@ -845,16 +845,21 @@ FIELDS: tuple[Field, ...] = (
             "längere Wege."
         ),
     ),
+    # **Nicht vorn**, und der Grund ist die Spule: Sobald ein Teil einen
+    # Materialslot mit eigener Farbe trägt, überschreibt ``handover`` diesen
+    # Wert damit — die Farbe gehört dorthin, wo sie gewählt wird. Zwei Orte für
+    # dieselbe Auskunft heißen raten, welcher gilt (Robert, 30.08.2026). Im
+    # Modell bleibt sie: Ein Teil ganz ohne Spule hat sonst keine Farbe für den
+    # Slicer, und ein Rückfall gehört nach hinten, nicht auf die Vorderseite.
     Field(
         "filament.colour",
-        _("Farbe"),
+        _("Farbe ohne eigene Spule"),
         "other",
         kind="colour",
-        front=True,
         note=_(
-            "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. "
-            "Sie gilt dem ganzen Teil: Mehrfarbig wird es über *Fläche färben* im Menü an "
-            "der Fläche, je gefärbter Bereich ein Filament."
+            "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit "
+            "der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über "
+            "*Fläche färben* arbeiten, gilt die Spule."
         ),
     ),
     Field(

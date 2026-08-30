@@ -64,9 +64,15 @@ von Hand gewählt, obwohl die Spule es schon sagt.
 Projekt betreffen.
 
 **2. Das Material eines Körpers kommt aus seiner Spule.** Trägt ein Körper
-Slots, bestimmt `material_type` des ersten belegten Slots sein
-`SceneObject.material`. Mehrere Slots heißen mehrere Materialien — das ist der
-Normalfall, keine Ausnahme.
+Slots, bestimmt `material_type` seiner Spule das `SceneObject.material`.
+Mehrere Slots heißen mehrere Materialien — das ist der Normalfall, keine
+Ausnahme.
+
+> **Welche Spule das bei mehreren ist, ist hier ausdrücklich noch nicht
+> entschieden** — siehe „Was offen bleibt". Wer diesen Punkt allein liest,
+> baut sonst „der erste Slot", und genau das steht zur Frage. Eindeutig ist
+> nur der häufige Fall: **ein** belegter Slot, **ein** Material. Der Rest
+> dieses Entwurfs hängt nicht daran und kann davor gebaut werden.
 
 **3. `Document.material` bleibt und wird zum ehrlichen Rückfall.** Ein Körper
 ohne Spule braucht trotzdem Toleranzen; die Alternative wäre eine Passung ohne
@@ -105,10 +111,16 @@ Fünf Stellen, alle gemessen — sie sind die Abnahmeliste:
 - **Welcher Slot gilt, wenn mehrere verschiedene Materialien tragen?** Für die
   *Toleranz* eines Körpers braucht es eine Antwort. Vorschlag: der Slot mit dem
   größten Flächenanteil, ersatzweise Slot 0 — zu entscheiden mit einem Bild vor
-  Augen, nicht auf dem Papier.
-- **Ob die Kopfzeile den Drucker behält.** Er hat dieselbe Frage nicht (ein
-  Projekt hat einen Drucker), aber die Zeile wird schmaler; das ist eine
-  Layoutfrage für den Bau.
+  Augen, nicht auf dem Papier. **Gebaut wird der Toleranz-Teil erst danach**;
+  Entwurfspunkt 2 steht unter diesem Vorbehalt.
+
+## Was entschieden ist
+
+- **Der Drucker bleibt in der Kopfzeile** (30.08.2026, aus Kundensicht). Ein
+  Projekt hat einen Drucker, die Frage dieses Konzepts stellt sich für ihn
+  also nicht; und jeder, der aus einem Slicer kommt, erwartet Drucker und
+  Qualität oben. Dass die Zeile ohne die Material-Auswahl schmaler wird, ist
+  eine Layoutfrage für den Bau und kein Grund, etwas zu entfernen.
 
 ## Abnahme
 

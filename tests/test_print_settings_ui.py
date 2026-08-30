@@ -2386,3 +2386,22 @@ def test_every_group_of_the_depth_can_be_reached_at_the_default_width(
     )
     assert room <= deckel, "und sie bleibt auf dem Bildschirm"
     assert dialog.width() >= min(room, narrow), "gewachsen ist der Dialog auch"
+
+
+def test_the_colour_is_chosen_at_the_spool_not_on_the_front_page() -> None:
+    """Zwei Orte für dieselbe Farbe, und einer davon wusste es besser.
+
+    Die Vorderseite trug ein Farbfeld, das für das **ganze** Teil galt; die
+    Spule trägt ihre eigene, und `handover` überschreibt damit den Feldwert,
+    sobald es einen Slot gibt. Wer beides sieht, muss raten, welches zählt —
+    „die materialauswahl und farbe sind sinnlos, da wir ja nach den filamenten
+    gehen" (Robert, 30.08.2026).
+
+    Der Wert selbst bleibt im Modell: Ein Teil ganz ohne Spule hat sonst keine
+    Farbe für den Slicer (`test_the_colour_reaches_the_slicer`). Er ist der
+    Rückfall und gehört damit nach hinten, nicht nach vorn.
+    """
+    colour = next(field for field in FIELDS if field.path == "filament.colour")
+
+    assert not colour.front, "die Farbe kommt von der Spule, nicht aus der Kopfzeile"
+    assert colour.group in GROUPS, "als Rückfall bleibt sie erreichbar"
