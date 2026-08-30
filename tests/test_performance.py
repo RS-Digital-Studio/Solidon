@@ -20,6 +20,7 @@ import json
 import time
 from collections.abc import Callable
 from pathlib import Path
+from statistics import median
 from typing import Any
 
 import pytest
@@ -65,6 +66,29 @@ REGRESSION_LIMIT = 1.25
 #: bisher von Hand ausgeführt. Ein Ausschlag ist Last, zwei sind eine Richtung
 #: — und der zweite Lauf kostet nichts, weil er ohnehin kommt.
 REGRESSION_STRIKES = 2
+MIN_RUNS = 3
+"""Ab wie vielen Läufen überhaupt verglichen wird.
+
+**Zwei Läufe bewusst blind sind ehrlicher als zwei Läufe falsch rot.** Ein
+Median aus einem oder zwei Werten ist keiner: Steht ein Ausreißer darin — und
+der migrierte alte Bestwert *ist* einer, er war das Minimum über alle Läufe —,
+zieht er die Marke nach unten und meldet zwei Überschreitungen, bevor das
+Fenster ihn überstimmen kann. Gemessen am 30.08.2026 an ``boolean_medium``:
+
+    Lauf 1   Marke 451 ms (nur der alte Bestwert)   gemessen 849 → Strike 1
+    Lauf 2   Marke 650 ms (451 und 849)             gemessen 838 → Strike 2, rot
+    Lauf 3   Marke 838 ms (451, 838, 849)           ab hier trägt sie
+
+Ab dem dritten Wert steht der Ausreißer außen und bestimmt den Median nicht
+mehr — das ist genau die Eigenschaft, wegen der hier ein Median steht."""
+
+WINDOW = 5
+"""Über wie viele Läufe die Marke gebildet wird.
+
+Fünf: genug, damit ein einzelner günstiger Lauf sie nicht bestimmt, und wenig
+genug, dass sie einer echten Änderung in wenigen Läufen folgt. Bei einer
+Verlangsamung um mehr als ein Viertel schlägt der Vergleich zu, bevor der
+Median nachgezogen ist — die Reihenfolge ist wichtig und nicht zufällig."""
 
 
 #: Unter welchem Schlüssel die Marken aus der Zeit vor der Trennung nach
@@ -118,16 +142,37 @@ def _invocation(request: pytest.FixtureRequest) -> None:
         _context = _invocation_key(request.session)
 
 
+def _runs_of(entry: dict[str, Any]) -> list[float]:
+    """Die Läufe eines Eintrags — auch aus der Zeit, als nur einer gemerkt wurde.
+
+    ``best`` war bis zum 30.08.2026 das Minimum über alle Läufe. Es zieht als
+    einzelner Lauf ein statt wegzufallen: Eine Marke, die bei null anfängt,
+    ist bis zum Fenster voll blind, und blind ist schlechter als ungenau.
+    """
+    stored = entry.get("runs")
+    if isinstance(stored, list) and stored:
+        return [float(one) for one in stored][-WINDOW:]
+    if "best" in entry:
+        return [float(entry["best"])]
+    return []
+
+
 def _read_marks() -> dict[str, dict[str, dict[str, Any]]]:
     """Die Marken dieser Maschine, nach Aufrufkontext geordnet.
 
-    Je Kontext ein Bestwert und ein Zähler: ``{"best": Sekunden, "strikes": n}``.
-    Zwei ältere Fassungen der Datei werden mitgelesen — eine flache Zahl je
-    Name stammt aus der Zeit vor der Trennung nach Kontext und wandert unter
-    ``UNKNOWN_CONTEXT``, eine Zahl je Kontext aus der Zeit vor dem Zähler.
-    Beides bleibt lesbar für die dritte Spalte von §31; verglichen wird gegen
-    ``UNKNOWN_CONTEXT`` nie wieder, denn zu welchem Kontext er gehört, weiß
-    niemand.
+    Je Kontext die letzten Läufe und ein Zähler:
+    ``{"runs": [Sekunden, …], "strikes": n}``.
+
+    **Drei** ältere Fassungen werden mitgelesen — eine flache Zahl je Name aus
+    der Zeit vor der Trennung nach Kontext (sie wandert unter
+    ``UNKNOWN_CONTEXT``), eine Zahl je Kontext aus der Zeit vor dem Zähler,
+    und ``{"best": …}`` aus der Zeit vor dem Median (30.08.2026). Ein
+    Bestwert zieht als **einzelner** Lauf ein: Die Marke fällt damit nicht
+    weg, und der Vergleich greift ab dem nächsten Lauf statt erst in fünf.
+
+    Verglichen wird gegen ``UNKNOWN_CONTEXT`` nie wieder, denn zu welchem
+    Kontext er gehört, weiß niemand; er bleibt lesbar für die dritte Spalte
+    von §31.
     """
     if not BASELINE.is_file():
         return {}
@@ -135,13 +180,21 @@ def _read_marks() -> dict[str, dict[str, dict[str, Any]]]:
     marks: dict[str, dict[str, dict[str, Any]]] = {}
     for name, value in raw.items():
         if not isinstance(value, dict):
-            marks[name] = {UNKNOWN_CONTEXT: {"best": float(value), "strikes": 0}}
+            marks[name] = {UNKNOWN_CONTEXT: {"runs": [float(value)], "strikes": 0}}
             continue
         marks[name] = {
             context: (
-                {"best": float(entry["best"]), "strikes": int(entry.get("strikes", 0))}
+                {
+                    "runs": _runs_of(entry),
+                    # **Der Zähler beginnt von vorn, wenn die Marke wechselt.**
+                    # Er zählte Überschreitungen gegen das alte Minimum; gegen
+                    # den Median sagt dieselbe Zahl nichts. Ihn mitzunehmen
+                    # hieße, einen Test beim ersten Lauf nach dem Umbau rot zu
+                    # melden, ohne dass je gegen die neue Marke gemessen wurde.
+                    "strikes": int(entry.get("strikes", 0)) if "runs" in entry else 0,
+                }
                 if isinstance(entry, dict)
-                else {"best": float(entry), "strikes": 0}
+                else {"runs": [float(entry)], "strikes": 0}
             )
             for context, entry in value.items()
         }
@@ -162,27 +215,45 @@ def dense_mesh() -> MeshData:
 
 
 def measure(name: str, work: Callable[[], Any]) -> float:
-    """Einmal laufen lassen, die Sekunden festhalten, mit dem **besten** Lauf
-    desselben Aufrufkontexts auf dieser Maschine vergleichen.
+    """Einmal laufen lassen, die Sekunden festhalten, mit dem **Median der
+    letzten Läufe** desselben Aufrufkontexts auf dieser Maschine vergleichen.
 
-    Gemerkt wird der schnellste bekannte Wert, nicht der letzte, und er wird
-    je Aufrufkontext gemerkt (§31, ``_invocation_key``) — sonst gilt der Wert
+    Je Aufrufkontext gemerkt (§31, ``_invocation_key``) — sonst gilt der Wert
     des saubersten Laufs für alle, und jeder Lauf in Gesellschaft misst
-    dagegen zu langsam. Das ist kein
-    Schönrechnen, sondern die einzige Zahl, die etwas über den *Code* sagt:
-    Eine Messung ist nach oben beliebig verrauschbar — eine Datei mit
-    Leistungstests unmittelbar davor genügt schon — und nach unten nicht. Wer
-    den letzten Wert merkt, hat beides falsch: Ein Lauf unter Fremdlast lässt
-    den Test scheitern, obwohl nichts langsamer wurde, *und* er hebt danach
-    die Marke an, sodass eine echte Verlangsamung um zwanzig Prozent
-    unbemerkt durchginge. An dieser Datei gemessen: `sketch_solve_200`
-    braucht allein 114 ms und hinter `test_slice.py` 162 — dieselbe Rechnung,
-    dasselbe Ergebnis, achtunddreißig Prozent Unterschied.
+    dagegen zu langsam. An dieser Datei gemessen: `sketch_solve_200` braucht
+    allein 114 ms und hinter `test_slice.py` 162 — dieselbe Rechnung, dasselbe
+    Ergebnis, achtunddreißig Prozent Unterschied.
 
-    Die Kehrseite ist gewollt: Wer ein Verfahren bewusst durch ein teureres
-    ersetzt, bekommt einen dauerhaft roten Test, bis er die Marke verwirft.
-    Genau dann soll jemand hinsehen — und die Marke fällt mit einer Begründung
-    im Commit, nicht stillschweigend beim nächsten Lauf.
+    **Der Median über die letzten** :data:`WINDOW` **Läufe, nicht das Minimum
+    über alle.** Das Minimum stand hier bis zum 30.08.2026 mit einem guten
+    Argument: Eine Messung ist nach oben beliebig verrauschbar — eine Datei
+    mit Leistungstests unmittelbar davor genügt schon — und nach unten nicht.
+    Das stimmt für **Fremdlast** und nicht für den **Maschinenzustand**: Ein
+    Rechner mit hohem Takt und ohne Hintergrunddienst ist schneller, und
+    dieser Zustand ist nicht wiederherstellbar. Ein Minimum kann nur sinken,
+    nie steigen; ein einziger günstiger Lauf nagelt es für immer fest.
+
+    Gemessen, als es so weit war: Fünf Marken meldeten zwölf bis vierzehn
+    Überschreitungen in Folge. Eine Messreihe gegen den Stand vor dem
+    verzögerten Geometrieimport zeigte, dass **keine** davon langsamer
+    geworden war — `subdivide_surface` braucht dort 1893 ms und hier 1863,
+    `boolean_medium` dort 854 und hier 834. Reproduzierbar waren die alten
+    Bestwerte auf keinem der beiden Stände. Der Test meldete also über zwei
+    Wochen eine Regression, die es nicht gab, und das ist schlimmer als eine
+    verpasste: Wer einen Wächter zweimal umsonst prüft, sieht beim dritten Mal
+    nicht mehr hin.
+
+    Ein Median verschiebt sich mit dem Maschinenzustand und nicht mit einem
+    einzelnen Ausreißer — Fremdlast fängt er weiterhin, denn sie hebt die
+    Mehrzahl der Läufe. Und er verdeckt keine echte Verlangsamung: Wer eine
+    Rechnung um mehr als ein Viertel teurer macht, reißt die Schwelle sofort,
+    und :data:`REGRESSION_STRIKES` schlägt zu, bevor der Median nachgezogen
+    ist.
+
+    Die Kehrseite bleibt gewollt: Wer ein Verfahren bewusst durch ein teureres
+    ersetzt, bekommt einen roten Test, bis er die Marke verwirft. Genau dann
+    soll jemand hinsehen — und die Marke fällt mit einer Begründung im Commit,
+    nicht stillschweigend beim nächsten Lauf.
 
     **Vor der Uhr wird aufgeräumt**, und das ist der Grund, warum der Absatz
     oben von achtunddreißig Prozent sprechen konnte. Nachgemessen am
@@ -214,20 +285,24 @@ def measure(name: str, work: Callable[[], Any]) -> float:
     marks = _read_marks()
     per_context = marks.setdefault(name, {})
     entry = per_context.get(context)
-    previous: float | None = entry["best"] if entry is not None else None
+    # Ältere Marken trugen nur ``best``; sie ziehen als einzelner Lauf ein,
+    # damit eine gewachsene Baseline nicht wegfällt und der Vergleich nicht
+    # erst nach fünf Läufen wieder greift.
+    runs: list[float] = _runs_of(entry) if entry is not None else []
+    previous: float | None = median(runs) if len(runs) >= MIN_RUNS else None
     strikes = entry["strikes"] if entry is not None else 0
 
     over = previous is not None and previous > 0.02 and taken > previous * REGRESSION_LIMIT
     strikes = strikes + 1 if over else 0
     per_context[context] = {
-        "best": taken if previous is None else min(previous, taken),
+        "runs": [*runs, taken][-WINDOW:],
         "strikes": strikes,
     }
     BASELINE.write_text(json.dumps(marks, indent=2, sort_keys=True), encoding="utf-8")
 
     print(
         f"\n{name} [{context}]: {taken * 1000:.0f} ms"
-        + (f" (bester Lauf dieses Kontexts bisher {previous * 1000:.0f} ms)" if previous else "")
+        + (f" (Marke dieses Kontexts {previous * 1000:.0f} ms)" if previous else "")
         + (
             f" — {strikes}. Überschreitung"
             + (", beim nächsten Lauf rot" if strikes < REGRESSION_STRIKES else "")
@@ -236,7 +311,7 @@ def measure(name: str, work: Callable[[], Any]) -> float:
         )
     )
     assert strikes < REGRESSION_STRIKES, (
-        f"{name} is slower than the best run in this context ({context}) on this machine, "
+        f"{name} is slower than the mark of this context ({context}) on this machine, "
         f"{REGRESSION_STRIKES} runs in a row — this time {taken * 1000:.0f} ms "
         f"against {(previous or 0.0) * 1000:.0f} ms"
     )

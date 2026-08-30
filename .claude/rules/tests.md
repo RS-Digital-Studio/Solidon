@@ -273,6 +273,64 @@ Bestätigung gehalten. Eine zweite Sitzung maß 2,46 und 2,57 s, ein späterer
 Solo-Lauf war grün. Was die Regel oben verlangt, ist nicht „zweimal", sondern
 **zweimal unter anderen Bedingungen**.
 
+### Die Messreihe wurde gefahren, und sie entschied gegen die Bestmarke
+
+Am 30.08.2026 stand der Fall aus dem Abschnitt darüber in fünffacher
+Ausführung: Fünf Marken meldeten zwölf bis vierzehn Überschreitungen in Folge.
+Die Registerzeile machte den `deferred`-Umbau dafür verantwortlich.
+
+**Zwei Worktrees, beide mit geleerter Baseline, gleicher Kontext, freie
+Maschine** — der Stand vor dem Umbau gegen HEAD:
+
+| Marke | vor `deferred` | HEAD | Bestmarke | Budget |
+|---|---|---|---|---|
+| `sculpt_replay_1000` | 70 ms | 72 ms | 46 ms | 2000 ms |
+| `sculpt_apply_1000` | 97 ms | 100 ms | 64 ms | 2000 ms |
+| `subdivide_surface` | 1893 ms | 1863 ms | 1173 ms | 3000 ms |
+| `remesh_uniform` | 1565 ms | 1538 ms | 947 ms | 3000 ms |
+| `boolean_medium` | 854 ms | 834 ms | 451 ms | 20 000 ms |
+| `orient_200` | 18 682 ms | 18 774 ms | — | 20 000 ms |
+
+Unter drei Prozent Unterschied, bei vier von sechs ist der **neue** Stand der
+schnellere. Kein Code war langsamer geworden; die Bestmarken waren auf keinem
+der beiden Stände reproduzierbar. **Und kein einziges Budget war gerissen** —
+`sculpt_replay_1000` lag bei 3,5 Prozent seines Budgets. Rot war der
+Regressionszähler, und die Zusicherung dazu liest sich als `assert 13 < 2`, was
+wie eine Zeitangabe aussieht und keine ist.
+
+**Daraus folgte der Umbau von Minimum auf Median** (`measure`, `WINDOW`,
+`MIN_RUNS`). Das Argument fürs Minimum war: Eine Messung ist nach oben beliebig
+verrauschbar und nach unten nicht. Das stimmt für **Fremdlast** und nicht für
+den **Maschinenzustand** — ein Rechner mit hohem Takt und ohne
+Hintergrunddienst ist schneller, und dieser Zustand ist nicht
+wiederherstellbar. Ein Minimum kann nur sinken; ein einziger günstiger Lauf
+nagelt es für immer fest.
+
+Ein Median über die letzten fünf Läufe verschiebt sich mit dem
+Maschinenzustand und nicht mit einem Ausreißer. Fremdlast fängt er weiter, denn
+sie hebt die Mehrzahl der Läufe. Und er verdeckt keine echte Verlangsamung: Wer
+eine Rechnung um mehr als ein Viertel teurer macht, reißt die Schwelle sofort,
+und `REGRESSION_STRIKES` schlägt zu, bevor der Median nachgezogen ist.
+
+**Der Umbau hatte eine Delle, und sie zeigte sich erst im zweiten Lauf.** Der
+migrierte alte Bestwert ist selbst ein Ausreißer und zieht den Median nach
+unten, solange das Fenster halb leer ist:
+
+    Lauf 1   Marke 451 ms (nur der alte Bestwert)   gemessen 849 → Strike 1
+    Lauf 2   Marke 650 ms (451 und 849)             gemessen 838 → Strike 2, rot
+    Lauf 3   Marke 838 ms (451, 838, 849)           ab hier trägt sie
+
+Der erste Lauf nach dem Umbau war 26 von 26 grün und sah fertig aus. Deshalb
+`MIN_RUNS = 3`: **Zwei Läufe bewusst blind sind ehrlicher als zwei Läufe falsch
+rot.** Ab dem dritten Wert steht der Ausreißer außen und bestimmt den Median
+nicht mehr — genau die Eigenschaft, wegen der dort ein Median steht.
+
+Für den nächsten, der eine Marke prüft: **Die Baseline ist maschinenlokal**
+(`tests/.performance.json`, in `.gitignore`). Sie zurückzusetzen betrifft
+niemanden sonst, und nach einem begründeten Verfahrenswechsel ist es richtig —
+ein Zähler, der Überschreitungen gegen eine alte Marke zählte, sagt gegen die
+neue nichts.
+
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
