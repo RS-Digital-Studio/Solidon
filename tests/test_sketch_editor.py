@@ -5193,3 +5193,79 @@ def test_a_button_that_would_take_a_constraint_back_says_so(qt_app: QApplication
         assert "zurück" in fest.toolTip(), fest.toolTip()
     finally:
         panel.deleteLater()
+
+
+def test_a_discarded_sketch_can_be_brought_back(qt_app: QApplication) -> None:
+    """Escape war die teuerste Taste des Programms.
+
+    Eine halbe Stunde Zeichnung, ein Tastendruck, kein Rückweg — und kein
+    Dialog davor, weil Regel 19 keinen zulässt, solange die Handlung
+    rücknehmbar ist. Sie war es nicht: ``finish_sketch(keep=False)`` warf den
+    Text weg, ohne ihn auch nur zu lesen.
+
+    Jetzt ist sie es. Die Geste bleibt, wie sie war, die Statuszeile nennt den
+    Rückweg, und Strg+Z geht ihn — dieselbe Trennung wie beim Pinselzug: Der
+    Editor hat sein eigenes Rückgängig, der Verlauf bekommt nur, was fertig
+    ist (Regel 2, Regel 16).
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        drawn = panel.sketch_text()
+        assert drawn, "the test needs something to lose"
+
+        window.finish_sketch(keep=False)
+        assert not window.sketching(), "discarding leaves the mode"
+        assert not window.session.history.transactions, (
+            "a discarded sketch never was a document state (rule 2)"
+        )
+
+        window.action_undo()
+
+        assert window.sketching(), "Ctrl+Z brings the drawing back"
+        back = window._sketch_panel
+        assert back is not None
+        assert back.sketch_text() == drawn, "and it is the same drawing, not an empty sheet"
+    finally:
+        window.deleteLater()
+
+
+def test_the_offer_to_bring_a_sketch_back_expires(qt_app: QApplication) -> None:
+    """Das Angebot gilt für den nächsten Griff, nicht für immer.
+
+    Wer nach dem Verwerfen etwas anderes tut, meint mit Strg+Z das andere.
+    Ohne diese Grenze holte er nach drei Operationen noch immer die alte
+    Zeichnung zurück statt der Operation davor — und der Verlauf, der oben
+    steht, wäre nicht mehr das, was Strg+Z anfasst.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        window.finish_sketch(keep=False)
+        assert window._discarded_sketch is not None, "the offer stands"
+
+        # Der Verlauf geht weiter — hier von Hand, wie es sonst eine Operation
+        # täte. Was danach kommt, gehört dem Verlauf.
+        from dataclasses import replace
+
+        window._discarded_sketch = replace(window._discarded_sketch, steps=-1)
+
+        assert not window.restore_discarded_sketch(), "the offer has expired"
+        assert not window.sketching(), "and no editor opens behind the customer's back"
+        assert window._discarded_sketch is None, "an expired offer is not kept around"
+    finally:
+        window.deleteLater()

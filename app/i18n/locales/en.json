@@ -3458,6 +3458,8 @@
   "Zeichnen …": "Draw …",
   "Zeichnen, dann Fertig — die Operation öffnet auf der Skizze.": "Draw, then Done — the operation opens on the sketch.",
   "Zeichnung hochziehen": "Extrude a drawing",
+  "Zeichnung verworfen — Strg+Z holt sie zurück.": "Drawing discarded — Ctrl+Z brings it back.",
+  "Zeichnung zurückgeholt.": "Drawing brought back.",
   "Zeigt nur die Objekte einer Platte.": "Shows only the objects of one plate.",
   "Zelle vergrößern": "Enlarge the cell",
   "Zelle verkleinern": "Reduce the cell",

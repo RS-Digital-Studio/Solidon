@@ -873,6 +873,29 @@ def _face_side(normal: Any) -> str:
     return tr("hinten") if y >= 0.0 else tr("vorn")
 
 
+@dataclass(frozen=True, slots=True)
+class _DiscardedSketch:
+    """Eine verworfene Zeichnung — Editorzustand, kein Dokumentzustand.
+
+    Regel 2 zieht die Grenze: Was der Editor sammelt, wird erst bei der
+    Auswertung zu Geometrie. Eine Zeichnung, die nie „Fertig" gesehen hat,
+    war nie im Dokument — sie gehört deshalb nicht in den Verlauf, sondern
+    hierher, und ``action_undo`` behandelt sie wie einen Pinselzug: eigenes
+    Rückgängig vor dem des Verlaufs.
+
+    ``steps`` ist die Zahl der Verlaufsschritte im Augenblick des Verwerfens.
+    Sie beantwortet die Frage, wie lange das Angebot gilt: Sobald der Kunde
+    etwas anderes tut, meint sein Strg+Z das andere. Ohne diese Zahl holte er
+    nach drei Operationen noch immer die alte Zeichnung zurück statt der
+    Operation davor.
+    """
+
+    op_name: str
+    text: str
+    plane: str
+    steps: int
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -1415,6 +1438,8 @@ class MainWindow(QMainWindow):
         Viertelsekunde zu verzögern, damit eine Zahl aktuell ist, die sich beim
         nächsten Zug wieder ändert."""
         self._sculpt_strokes: list[Stroke] = []
+        self._discarded_sketch: _DiscardedSketch | None = None
+        """Die zuletzt verworfene Zeichnung, solange Strg+Z sie noch meint."""
         """Die Züge dieser Sitzung. Das Rückgängig des Editors läuft auf
         dieser Liste und nicht über den Verlauf: Der Verlauf bekommt die
         Sitzung als *eine* Transaktion, wenn sie fertig ist (Regel 16)."""
@@ -3754,7 +3779,7 @@ class MainWindow(QMainWindow):
         # nicht die Operation davor. Dieselbe Trennung wie beim
         # Skizzeneditor: Der Editor hat sein eigenes Rückgängig, der Verlauf
         # bekommt die Sitzung als eine Transaktion (Regel 16).
-        if self.undo_sculpt_stroke() or self.undo_bone():
+        if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
             return
         self.session.undo()
 
@@ -5579,7 +5604,14 @@ class MainWindow(QMainWindow):
         target = self._sketch_target
         if panel is None:
             return
-        text = panel.sketch_text() if keep else ""
+        text = panel.sketch_text()
+        if not keep:
+            # **Verworfen heißt nicht vernichtet.** Escape war die teuerste
+            # Taste des Programms: eine halbe Stunde Zeichnung, ein Tastendruck,
+            # kein Rückweg — und kein Dialog davor, weil Regel 19 keinen
+            # zulässt, solange die Handlung rücknehmbar ist. Sie ist es jetzt.
+            self._remember_discarded(target, text, panel)
+            text = ""
         # Die Ansicht stand die ganze Zeit — zurückzuschalten gibt es nichts
         # mehr (§30.1, P4). Was geht, sind die Zeichnung aus der Szene und
         # das Panel aus der Leiste.
@@ -5846,6 +5878,52 @@ class MainWindow(QMainWindow):
             .replace("{zahl}", str(thin))
             .replace("{maß}", length(minimum))
         )
+
+    def _remember_discarded(self, target: str | None, text: str, panel: Any) -> None:
+        """Die verworfene Zeichnung aufheben und den Rückweg ansagen.
+
+        Angesagt wird in der Statuszeile und nicht in einem Dialog: Die Geste
+        bleibt, wie sie war (Regel 19), und wer bewusst verwirft, soll nicht
+        aufgehalten werden. Wer es nicht wollte, findet den Weg zurück da, wo
+        er ohnehin hinsieht, nachdem etwas verschwunden ist.
+
+        Eine leere Zeichnung wird nicht gemerkt — ein Angebot, nichts
+        zurückzuholen, wäre eine Meldung ohne Inhalt.
+        """
+        if not text:
+            self._discarded_sketch = None
+            return
+        plane = ""
+        chooser = getattr(panel, "plane_choice", None)
+        if chooser is not None:
+            plane = str(chooser.currentData() or "")
+        self._discarded_sketch = _DiscardedSketch(
+            op_name=target or "",
+            text=text,
+            plane=plane,
+            steps=len(self.session.history.operations),
+        )
+        self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
+
+    def restore_discarded_sketch(self) -> bool:
+        """Die verworfene Zeichnung zurückholen — der erste Griff von Strg+Z.
+
+        Dieselbe Trennung wie bei :meth:`undo_sculpt_stroke`: eigenes
+        Rückgängig des Editors vor dem des Verlaufs. Das Angebot gilt, solange
+        der Kunde nichts anderes getan hat; hat er inzwischen eine Operation
+        angewandt oder zurückgenommen, meint sein Strg+Z diese.
+        """
+        discarded = self._discarded_sketch
+        if discarded is None:
+            return False
+        self._discarded_sketch = None
+        if len(self.session.history.operations) != discarded.steps:
+            # Der Verlauf ist weitergegangen — das Angebot ist verfallen, und
+            # dieser Griff gehört dem Verlauf.
+            return False
+        self.start_sketch(discarded.op_name, text=discarded.text, plane=discarded.plane)
+        self.announce(tr("Zeichnung zurückgeholt."))
+        return True
 
     def undo_sculpt_stroke(self) -> bool:
         """Das Rückgängig des Editors: ein Zug, nicht die Sitzung.
