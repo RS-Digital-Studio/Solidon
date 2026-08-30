@@ -72,7 +72,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| `weg4-figur-formen` kostet 56 Sekunden, und keine davon liegt im Kern | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen Prüfstand im echten Fenster für VTK und Aktoraufbau; offscreen öffnet dasselbe Projekt in 0,82 s und misst diesen Anteil nicht |
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und den AVV im CCP. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -104,7 +103,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels`. **Vierte Messung am 27.08.2026 (30):** Die Datei trägt inzwischen **307** statt 303 Tests, und der Satz „mit `-p no:randomly` laufen alle durch" gilt nicht mehr — drei Läufe unter dem Schloss, mit fester Reihenfolge, gaben **1 von 3**: einmal Zugriffsverletzung bei 70 Prozent, zweimal 307 passed. Stelle wie gehabt `panels.py` unter `_show_scene`, diesmal `show_result`, ausgelöst aus `_with_two_objects` über `wait_for_idle`. Damit ist die Reihenfolge als Bedingung **widerlegt** und die Zusammensetzung bestätigt: Vier Tests mehr genügen, um die Mine auch bei fester Reihenfolge scharf zu machen. Eine Zuschreibung an die Commits des Tages ist bei dieser Rate nicht führbar — sie bräuchte viele Läufe je Seite —, und der Absturzstapel führt durch `main_window.py`, das während der Messung von einer anderen Sitzung geändert wurde. `test_operation_ui.py` riss im selben Torlauf mit und lief einzeln mit 67 passed durch: dort war es Fremdlast |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
-| Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
+| Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | nur noch die Entscheidung, **welche Zusagen** an der Messstelle geprüft werden — die Messstelle selbst existiert seit `e2102440` (`tools/window_bench.py`, echtes Fenster, Posten-Zerlegung). `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 43 Texte stehen wortgleich in mehreren Dateien | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Wirkt die Typprüfung an `overlay.py:294` gegen den Torlauf-Riss? | Was niemand las, und was zweimal dastand (24.08.2026) | den nächsten Torlauf unter Last als Wirkungsnachweis — die Serie selbst ist erledigt (`bce88ff8`): Der Griff steht einmal (`leash.stop_watching_the_dying`), gemessen schlägt er nur in `OverlayHost` an (119 von vier Millionen Filteraufrufen, die sechs anderen Stellen null Mal — sie bleiben als Vorsorge), und der zweite Fund fällt aus anderem Grund: ein fremder Wrapper unter recyceltem Zeiger, gegen den `isValid` nichts sagt |
@@ -129,7 +128,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Das Update-Fenster zeigt die Punkte ohne ihre Gruppen | Das Update-Fenster verliert die Gliederung auf dem Transport (30.08.2026) | d3s Paket — `groups` in die `version.json` (synchron gekappt), `updates.Release` liest sie, der Dialog gliedert wie der Verlaufs-Dialog; Review und Alt-Client-Messung bei der Freigabe |
 | Die Grundsteuerung verlangt CAD-Gewohnheiten | Die Grundsteuerung soll sich wie im Slicer anfühlen (30.08.2026) | noch sechs Pakete (P4 gestrichen, P8 fertig): P1 bei d3 (Fang wandert hinters Zahnrad, Robert-Linie), P3/P7 bei 3a nach den Eventfiltern, P2/P5/P6/P9 dahinter — Review je Paket bei der Freigabe |
-| Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | die Bestandsaufnahme (bedienlogik läuft) — danach Pakete, Verteilung, Review; op_dialog und Prüfbericht zuerst |
+| Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | zwölf Pakete D1–D12 aus der Bestandsaufnahme — D1/D2 (Bericht bündelt beim Nachschub nicht, gemessener Speicherring) zuerst, dann D4/D5 am Operationsdialog; Verteilung läuft, Review je Paket |
 
 ---
 
@@ -10679,7 +10678,18 @@ Offen bleibt daraus:
       jede Matrixkomponente dagegen, einschließlich richtungsloser Achsen,
       gerichteter Normalen und `KIND_PENALTY`. `match_800` hält die Laufzeit im
       Leistungsbestand fest.
-- [ ] **`weg4-figur-formen` kostet 56 Sekunden, und keine davon liegt im
+- [x] **Erledigt durch Nachmessung mit neuem Prüfstand** (72,
+      `e2102440`, 30.08.2026): `tools/window_bench.py` öffnet ein
+      Beispiel im echten, maximierten Fenster und zerlegt die Wartezeit
+      in Posten. Gemessen: weg4-figur-formen **6,1 s** (gegen 56 am
+      26.08.), weg3-generiert-aufbereiten 5,8 s (gegen 145), Dose 4,4 s
+      (gegen 13) — die vektorisierte Zuordnung und die Folgearbeiten
+      haben den Oberflächenanteil mitgenommen; die alte Aufteilung war
+      eine Messung vor diesen Umbauten. Kontrollmessung mit 8-s-Schwelle:
+      identische Zähler. Der vierte Punkt des Tages, der durchs Messen
+      fällt. Ursprünglicher Wortlaut:
+
+      **`weg4-figur-formen` kostet 56 Sekunden, und keine davon liegt im
       Kern.** Über `Session.open_project` offscreen gemessen sind es **0,82 s**;
       der Rest liegt in der Oberfläche (VTK, Aktoraufbau) und ist offscreen
       nicht messbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Das
@@ -12935,14 +12945,34 @@ kundensicht wie immer" — mit dem vollen Leitsatz als Maßstab (Kunde
 ohne CAD-Kenntnisse, einfach und schnell, hochwertig und
 selbsterklärend, die Website als Sollliste).
 
-- [ ] **Bestandsaufnahme läuft** (bedienlogik, 30.08.2026): je
-      Panel/Dialog drei Fragen — versteht ein Slicer-Kunde ohne
-      Handbuch, was zu tun ist; wirkt es hochwertig; welche Zusagen
-      sind getestet statt behauptet. Priorisiert nach
-      Kundenkontakt-Häufigkeit (op_dialog und Prüfbericht zuerst).
-      Danach: Pakete schneiden und verteilen, Review je Paket; die
-      frisch gebauten Stände (P1, P8, Waisen-Bündelung,
-      Update-Gliederung) sind Maßstab, nicht Prüfgegenstand.
+Die **Bestandsaufnahme ist da** (bedienlogik, 30.08.2026, alles
+gemessen statt geschätzt): Eine lange Nicht-anfassen-Liste (457 von
+457 Parametern erklärt, 95 von 95 Hauptknöpfen unbeschnitten, die
+leeren Zustände nennen den Weg heraus) und zwölf Befunde, geschnitten
+in zwölf Pakete **D1–D12** (D, damit niemand sie mit den
+Steuerungs-P verwechselt):
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| D1 | Der Bericht zerlegt sein eigenes Bündel: `_resort`/`add_findings` bauen Zeilen ohne `_bundled` — nach einem Nachschub stehen 118 Namen in der Zeile und die Kopfzeile zählt 1 statt 118 | S | offen |
+| D2 | Speicherring gemessen: ein angeklickter Befund hält das Fenster (10 von 10 überleben) — `weak_slot` statt Lambda auf Fenster-Handlern | S | offen |
+| D3 | Fehlerdialog und ComfyUI-Dialog haben keinen/den falschen Hauptknopf | S | offen |
+| D4 | „Bohrung ändern" wählt still `hole_1` von vieren — `at_feature` nach vorn, plus Wächter „kein required-Parameter hinten" | S | offen |
+| D5 | Leere Pflichtliste lässt den Hauptknopf aktiv — sperren und begründen, Grund aus `_needs_phrase` | M | offen |
+| D6 | Die Kopfzeile verschwindet unter 2330 px Fensterbreite ins unbeschriftete Überlaufmenü — kürzen statt verschwinden | M | offen |
+| D7 | Der Platzhalter-Wächter ist ASCII-blind: `{maß}` kann aus fünf Katalogen fallen, Test bleibt grün | S | offen |
+| D8 | Platzhalternamen vereinheitlichen (vier Namen für „Anzahl"), Doppelsatz „Knochen" zusammenlegen | M | nach D7 |
+| D9 | Skelettleiste: falscher AccessibleName, fehlende Tooltips, drei Kleinigkeiten aus B12 | S | offen |
+| D10 | „Tokenbudget" im Chat ist kein Kundenwort — Zusammenfassung in Kundensprache, Zahlen unter Einzelheiten | S | offen |
+| D11 | 56 Druckeinstellungen ohne Suchfeld — die Geste, die jeder Slicer hat (heben, nicht filtern) | L | offen |
+| D12 | Ring-Geschwister in `install_dialog._Row` und `filament_picker` messen und umbauen | M | nach D2 |
+
+Reihenfolge nach Kundenkontakt: D1, D2, D4, D5 (täglich) → D6, D3
+(jedes Fenster, jeder Fehler) → D7, D9, D10 → D8, D12 → D11.
+
+- [ ] Die zwölf Pakete abarbeiten — je Paket Zahlen, Gegenproben und
+      Review vor dem Commit; die Fix-Details je Befund gibt die
+      Freigabe bei der Beauftragung mit.
 
 Parallel zur Aufnahme ist der **Erststart** bereits gefahren (15/53 im
 echten Fenster, Belegbilder) und in einer Hand (50). Erledigt daraus:
