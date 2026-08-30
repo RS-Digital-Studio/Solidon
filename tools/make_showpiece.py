@@ -130,7 +130,16 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                     inputs=("obj_1",),
                     params={"size": "M3", "x": x, "y": y, "z": "=@wand"},
                 )
-                for x, y in ((-50.0, -30.0), (50.0, -30.0), (-50.0, 30.0), (50.0, 30.0))
+                # **Zehn Millimeter vom Rand, gerechnet statt eingetragen.**
+                # Auf festem ±50 fielen die vier Buchsen unterhalb von 110 mm
+                # Breite aus der Wand: fünf lose Stücke bei 70 bis 90, drei
+                # bei 100 — wasserdicht, plausibles Volumen, kein Befund.
+                for x, y in (
+                    ("=-(@breite / 2 - 10)", "=-(@tiefe / 2 - 10)"),
+                    ("=@breite / 2 - 10", "=-(@tiefe / 2 - 10)"),
+                    ("=-(@breite / 2 - 10)", "=@tiefe / 2 - 10"),
+                    ("=@breite / 2 - 10", "=@tiefe / 2 - 10"),
+                )
             ],
         ),
         (
@@ -150,7 +159,7 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                     op="insert_rib",
                     inputs=("obj_1",),
                     params={
-                        "length": 60.0,
+                        "length": "=@tiefe - 20",
                         "height": 14.0,
                         "thickness": 2.4,
                         "fillet": 2.0,
@@ -160,7 +169,7 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                         "axis": "y",
                     },
                 )
-                for x in (-30.0, 30.0)
+                for x in ("=-@breite / 4", "=@breite / 4")
             ],
         ),
         (
@@ -169,7 +178,14 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                 OperationDraft(
                     op="insert_foot", inputs=("obj_1",), params={"x": x, "y": y, "z": 0.0}
                 )
-                for x, y in ((-52.0, -32.0), (52.0, -32.0), (-52.0, 32.0), (52.0, 32.0))
+                # Acht Millimeter vom Rand — dieselbe Rechnung wie bei den
+                # Schraubdomen, nur weiter außen.
+                for x, y in (
+                    ("=-(@breite / 2 - 8)", "=-(@tiefe / 2 - 8)"),
+                    ("=@breite / 2 - 8", "=-(@tiefe / 2 - 8)"),
+                    ("=-(@breite / 2 - 8)", "=@tiefe / 2 - 8"),
+                    ("=@breite / 2 - 8", "=@tiefe / 2 - 8"),
+                )
             ],
         ),
         (
@@ -186,12 +202,14 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                         "width": 12.0,
                         "height": 3.0,
                         "x": x,
-                        "y": 39.0,
+                        # Einen Millimeter vor der Wand, auf der Viertelbreite:
+                        # bei der Vorgabe dieselben ±30 und 39 wie zuvor.
+                        "y": "=@tiefe / 2 - 1",
                         "z": 40.0,
                         "axis": "y",
                     },
                 )
-                for x in (-30.0, 30.0)
+                for x in ("=-@breite / 4", "=@breite / 4")
             ],
         ),
         (
