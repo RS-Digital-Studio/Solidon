@@ -24,6 +24,77 @@ Aufräumung. Zwei Sitzungen sind an einem Tag darüber gestolpert, eine davon
 hatte vorher `--numstat` gelesen und nur „plausible Zeilenzahlen" gesehen,
 weil die Zahlen ja stimmen; falsch ist das Vorzeichen.
 
+**Am 30.08.2026 dieselbe Sache in groß, und mit zwei Verschärfungen.** Der
+Haupt-Index lag bei **95 Dateien** hinter HEAD, nicht bei fünf — ROADMAP.md mit
+512 Zeilen, `handover.py` mit 210, `manual.py` mit 169, dazu alles, was eine
+Stunde zuvor frisch committet worden war.
+
+**Erste Verschärfung: `git diff --numstat` misst gegen den Index, nicht gegen
+HEAD.** Das ist an einem gesunden Baum dasselbe und an einem alten Index nicht.
+Ich habe an einem Nachmittag zweimal eine Zahl gemessen, sie „gegen HEAD"
+beschriftet und einer anderen Sitzung gemeldet — 124/1 und 154/1, während die
+Datei gegen HEAD 74/5 trug. Aufgefallen ist es erst, weil die Gegenseite eine
+andere Zahl hatte und **die Minus-Seite nicht zusammenpasste**: Eine Datei, die
+nur wächst, ändert ihre Minus-Seite nicht. Wer das nicht bemerkt, schreibt die
+falsche Zahl in eine Commit-Meldung, wo sie stehenbleibt.
+
+| Befehl | Vergleicht | Taugt für |
+|---|---|---|
+| `git diff --numstat` | Baum ↔ **Index** | nichts, solange der Index alt ist |
+| `git diff --numstat HEAD` | Baum ↔ **HEAD** | jede Zahl, die man ansagt |
+| `git diff --numstat --cached HEAD` | Index ↔ HEAD | den Schaden sichtbar machen |
+
+**Zweite Verschärfung — und die Lehre daran ist nicht die, die ich zuerst
+gezogen habe.** Vier Dateien lebten ausschließlich im Index, weder in HEAD noch
+im Arbeitsbaum: `app/ui/command_band.py` (7 433 Bytes),
+`tests/test_command_band.py` (3 414) und zwei Artefakte eines Betriebsreviews.
+Ich las das als angefangene Arbeit, die jemand gestaget und im Baum verloren
+hatte, sicherte alle vier aus dem Objektspeicher und meldete, hier brauche es
+eine Entscheidung von Robert, bevor irgendwer aufräumt.
+
+**Es war das Gegenteil.** Beide Dateien waren am selben Tag auf Roberts
+ausdrücklichen Auftrag gelöscht worden:
+
+```
+git log --oneline --diff-filter=D -1 -- app/ui/command_band.py
+  5d68c933 Das abgelehnte Befehlsband hinterließ ein Modul ohne Anschluss
+  3350341f Eine Betriebsreview-Präsentation lag neben pyproject.toml
+```
+
+Die Index-Einträge waren Reste von **vor** diesen Lösch-Commits — genau das,
+was ein alter Index eben enthält. Meine Rettung war folgenlos, meine Anfrage an
+Robert überflüssig, und die Erzählung „ein Zwischenstand, den jemand angelegt
+hat" war plausibel und ungeprüft.
+
+Was bleibt, ist der Reflex ohne die Erzählung: **erst nachsehen, was nur im
+Index lebt — und dann im Log fragen, warum.**
+
+```
+git diff --name-status --cached HEAD | grep ^A        ← was nur dort lebt
+git log --oneline --diff-filter=D -1 -- <pfad>        ← wurde es absichtlich gelöscht?
+```
+
+Die zweite Zeile antwortet in einer Sekunde und entscheidet den Fall. Sichern
+kostet nichts und schadet nie — aber es ersetzt die Frage nicht, und eine
+Sicherung, die man für einen Fund hält, erzeugt Arbeit bei anderen.
+
+**Dritte Beobachtung, selber Tag: Die Heilung ist keine einmalige.** Der
+Haupt-Index altert nach **jedem** Commit-Schub erneut — wer ihn mittags mit
+`read-tree HEAD` geheilt hat, findet ihn nach den nächsten zwei Commits wieder
+zurückliegend. Bei **Binärdateien ohne diff-Attribut** sieht das im Stat wie
+`-> 0 bytes`-Artefakte aus (sechs PNG „weichen ab", die byte-identisch mit
+HEAD sind); der Textdiff hilft dort nicht, der **Blob-Hash-Vergleich**
+entscheidet in Sekunden:
+
+```
+git hash-object <datei>                       ← Baum
+git rev-parse HEAD:<pfad>                     ← HEAD
+```
+
+Gleicher Hash = Phantom, der Index ist alt. Vor der Heilung des Haupt-Index
+weiterhin prüfen, ob echtes fremdes Staging darin liegt (siehe die Warnung im
+liefern-Skill) — erst aussortieren, dann heilen.
+
 **Wie anwenden:** Bevor man ein `MM` für fremde Arbeit hält, die eine Zeile
 fahren, die es entscheidet:
 
