@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: a6e000e4-7f10-4e2d-92c3-c5df9b4a17cf
-  modified: 2026-08-30T12:31:19.144Z
+  modified: 2026-08-30T12:32:50.829Z
 ---
 
 Roberts Worte: *„mach es aus kundensicht perfekt, du sollst alles was du tust
@@ -50,5 +50,21 @@ gegenüber dem Satz von oben:
 - **Die Website ist die Sollliste.** Was dort versprochen wird, muss in der
   App perfekt eingelöst sein — Versprechen und Produkt werden gegeneinander
   geprüft, in beide Richtungen (siehe [[texte-altern-mit-ihrer-grenze]]).
+
+Und unmittelbar danach die vierte Schärfung: *„alles auch komplett
+hochwertig, schön, modern, innovativ, selbsterklärend und intuitiv."*
+Einfachheit ist die halbe Zusage — die andere Hälfte ist Anmutung:
+
+- **Hochwertig und schön** ist kein Beiwerk, sondern Kaufgrund (Roberts
+  globale Vorgabe: visuell hochwertig = zahlende Kunden). Ein Feature,
+  das funktioniert und billig aussieht, ist nicht fertig.
+- **Selbsterklärend und intuitiv** heißt: Die Grundwege brauchen kein
+  Handbuch. Ein Bedienelement sieht aus wie das, was es tut; was
+  klickbar ist, wirkt klickbar; der nächste Schritt liegt da, wo die
+  Hand schon ist.
+- **Modern und innovativ** heißt nicht Effekthascherei, sondern: keine
+  Bedienmuster aus Gewohnheit übernehmen, die der Slicer-Kunde nie
+  gelernt hat — und wo Solidon etwas besser kann als jeder Slicer (die
+  Zahl während des Zugs), das sichtbar machen statt verstecken.
 
 Gilt für jede Sitzung und jedes Gebiet, nicht nur für Bedienpakete.
