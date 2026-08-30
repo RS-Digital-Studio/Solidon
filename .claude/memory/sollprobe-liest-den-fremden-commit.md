@@ -36,3 +36,14 @@ Umfangsprobe, `--numstat`, `--stat`. Nie gegen `HEAD`. Dasselbe gilt für
 Sollprobe eine fremde Datei, ist die erste Frage nicht „was habe ich falsch
 gemacht", sondern `git log --oneline -3`: Steht der eigene Commit dort nicht
 mehr an erster Stelle, hat die Probe jemand anderen gemessen.
+
+Zwei Nachträge von 15, die denselben Fall am selben Abend unabhängig
+aufgeschrieben hatte (ihre Notiz ist zugunsten dieser gelöscht):
+
+* **`HEAD~2` ist genauso beweglich wie `HEAD`** — es zählt Positionen, nicht
+  Urheber. Wer den vorletzten eigenen Commit nachsehen will, nimmt auch dort
+  den Hash.
+* **Der billigste Beleg steht schon da:** die Zeile, die `git commit` selbst
+  ausgibt („1 file changed, 58 insertions(+)"). Sie entsteht über den gerade
+  erzeugten Commit und kann gar nichts anderes meinen — wer sie liest, braucht
+  die Nachprüfung nur noch für das, was sie nicht zeigt (die Dateinamen).
