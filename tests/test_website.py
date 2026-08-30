@@ -1921,60 +1921,6 @@ def test_the_roll_holder_uses_real_operations() -> None:
             )
 
 
-def test_the_roll_holder_stays_in_one_piece_across_its_range() -> None:
-    """Über die ganze Reglerspanne bleibt jeder Körper **ein** Stück.
-
-    **Der Anlass ist ein fremder Fehler, und genau deshalb steht der Test
-    hier.** An der Schraubdose war ``wrap_diameter`` einmal aus der Geometrie
-    abgelesen und fest eingetragen. Die Rändelung wuchs damit nicht mit dem
-    Durchmesser mit, traf den Deckel ab ⌀75 gar nicht mehr und lag als
-    Hunderte loser Stücke daneben: 553 Komponenten, wasserdicht, plausibles
-    Volumen, **kein einziger Befund**. Auf dem Galeriebild sah der fehlende
-    Griffrand aus wie eine Gestaltungsentscheidung.
-
-    Ein zerbrochener Körper wäre aufgefallen, ein unvollständiger nicht — und
-    der Rollenhalter hat dieselbe Bauart: feste Zahlen (Plattentiefe,
-    Wangenhöhe, Fensterdurchmesser) neben Formeln, die mit ``@rollenbreite``
-    wachsen.
-
-    Geprüft wird an den **Rändern und darüber hinaus**: Der Regler zieht 55
-    bis 90, ein Kunde kann den Parameter aber von Hand auf jeden Wert setzen.
-    Die Auswertung kostet dabei nichts — die erste rechnet eine halbe Sekunde,
-    jede weitere fünf Hundertstel.
-    """
-    import dataclasses
-
-    from app.core.bootstrap import load_operations
-    from app.core.knowledge import profiles
-    from app.core.scene import evaluate
-    from app.core.scene.project import load
-
-    load_operations()
-    ziel = Path(__file__).resolve().parent.parent / "website" / "teile" / "rollenhalter.p3d"
-    assert ziel.is_file(), f"das Schaustück fehlt: {ziel}"
-
-    project = load(ziel)
-    document = project.document
-    profile = profiles.make_profile()
-
-    for breite in (40.0, 55.0, 68.0, 82.0, 90.0, 110.0):
-        document.parameters["rollenbreite"] = dataclasses.replace(
-            document.parameters["rollenbreite"], value=breite
-        )
-        result = evaluate(document, profile)
-        koerper = list(result.scene.objects.values())
-        assert len(koerper) == 3, (
-            f"{breite:.0f} mm: {len(koerper)} Körper statt drei — "
-            "eine Boolesche Operation hat einen verschluckt"
-        )
-        for objekt in koerper:
-            stuecke = int(getattr(objekt.mesh, "component_count", 1) or 1)
-            assert stuecke == 1, (
-                f"{breite:.0f} mm: {objekt.name} zerfällt in {stuecke} Stücke — "
-                "eine feste Zahl wandert beim Parameterzug nicht mit"
-            )
-
-
 #: Die Galerieteile und der Parameter, an dem ein Kunde zuerst dreht.
 #:
 #: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus der
