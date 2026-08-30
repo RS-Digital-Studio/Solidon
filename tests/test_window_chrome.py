@@ -109,6 +109,15 @@ def test_a_theme_change_repaints_what_already_stands(qt_app: QApplication, monke
             "ein Themenwechsel hat die offenen Fenster nicht nachgezogen — "
             "dann trägt die Titelleiste die Farbe des alten Themas"
         )
+        # **Und genau einmal.** Qt stellt ``ApplicationPaletteChange`` jedem
+        # Empfänger einzeln zu, nicht einmal je Wechsel: gemessen sechs
+        # Feuerungen bei zwei Fenstern und zwanzig Kindern. Gemalt werden
+        # müssen die Fenster aber einmal — bei neunzehn offenen Dialogen wären
+        # es sonst einige hundert DWM-Aufrufe für dasselbe Ergebnis.
+        assert len(repainted) == 1, (
+            f"der Themenwechsel hat {len(repainted)}-mal nachgezogen statt einmal — "
+            "das Ereignis kommt je Empfänger an, gemalt wird am Anwendungsobjekt"
+        )
     finally:
         qt_app.removeEventFilter(watcher)
         apply_theme(qt_app, "dark")

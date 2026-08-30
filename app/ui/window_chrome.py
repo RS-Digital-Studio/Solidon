@@ -76,6 +76,23 @@ def available() -> bool:
     return version is not None and version().build >= _MIN_BUILD
 
 
+#: Einmal geladen, nicht je Fenster. Bei neunzehn offenen Dialogen wären es
+#: sonst neunzehn Ladevorgänge je Themenwechsel — für dieselbe Bibliothek.
+_library: Any = None
+
+
+def _dwm() -> Any:
+    """dwmapi beim ersten Mal laden und behalten."""
+    global _library
+    if _library is None:
+        try:
+            _library = ctypes.WinDLL("dwmapi")
+        except OSError:  # pragma: no cover — auf Windows ist sie da
+            _log.debug("dwmapi not available", exc_info=True)
+            return None
+    return _library
+
+
 def _colorref(colour: QColor) -> int:
     """Qt hält RGB, Windows will ``0x00BBGGRR`` — die Reihenfolge dreht sich."""
     return (colour.blue() << 16) | (colour.green() << 8) | colour.red()
@@ -92,15 +109,17 @@ def paint_chrome(window: QWidget) -> bool:
     if not available() or not window.isWindow():
         return False
     palette = window.palette()
+    library = _dwm()
+    if library is None:
+        return False
     try:
-        dwm = ctypes.WinDLL("dwmapi")
         handle = wintypes.HWND(int(window.winId()))
         for attribute, role in (
             (_CAPTION_COLOR, QPalette.ColorRole.Window),
             (_TEXT_COLOR, QPalette.ColorRole.WindowText),
         ):
             value = ctypes.c_int(_colorref(palette.color(role)))
-            dwm.DwmSetWindowAttribute(
+            library.DwmSetWindowAttribute(
                 handle, ctypes.c_uint(attribute), ctypes.byref(value), ctypes.sizeof(value)
             )
     except Exception:  # pragma: no cover — eine fehlende dwmapi ist kein Grund
@@ -137,7 +156,12 @@ class ChromeWatcher(QObject):
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt-Name
         kind = event.type()
         if kind == QEvent.Type.ApplicationPaletteChange:
-            paint_every_window()
+            # **Nur am Anwendungsobjekt.** Qt stellt das Ereignis jedem
+            # Empfänger einzeln zu — gemessen sechs Feuerungen bei zwei
+            # Fenstern und zwanzig Kindern. Gemalt werden müssen die Fenster
+            # aber einmal, nicht einmal je Widget, das zufällig zuhört.
+            if watched is QApplication.instance():
+                paint_every_window()
         elif kind == QEvent.Type.Show and isinstance(watched, QWidget) and watched.isWindow():
             paint_chrome(watched)
         return False
