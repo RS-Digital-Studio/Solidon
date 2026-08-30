@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.backends import mesh
+from app.core.backends import comfy_setup, mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
@@ -460,12 +460,22 @@ class GenerateDialog(QDialog):
             )
             self.setup.setText(tr("Knoten und Modell einrichten …"))
         elif self._readiness is mesh.Readiness.NO_MODEL:
+            # **Der Satz nannte, was fehlt, und ließ offen, welches.** „Ein
+            # SDXL-Modell unter models/checkpoints" ist wahr und schickt
+            # jemanden suchen, der nicht weiß, wonach — es gibt Dutzende, und
+            # die Hälfte davon löst eine andere Aufgabe. Der Name steht seit
+            # dem 30.08.2026 in ``comfy_setup``, damit Dialog und Handbuch
+            # dieselbe Datei nennen; hier wird er eingesetzt, denn ein
+            # Platzhalter ist in der Oberfläche richtig und nur im Kern falsch.
             self.state.setText(
                 tr(
-                    "ComfyUI läuft und kennt die Knoten, aber für diesen Weg fehlt "
-                    "ein Modell. Ein Bild zu wählen umgeht es — aus Text wird erst "
-                    "ein Bild, und dafür braucht ComfyUI ein SDXL-Modell unter "
-                    "„models/checkpoints“."
+                    "ComfyUI läuft und kennt die Knoten, aber für den Weg aus Text "
+                    "fehlt das Bildmodell. Ein Bild zu wählen umgeht es. Sonst: "
+                    "„{datei}“ nach „{ordner}“ legen und ComfyUI neu starten — im "
+                    "Handbuch steht es unter „Welche Modelle Solidon benutzt“."
+                ).format(
+                    datei=comfy_setup.IMAGE_MODEL_FILE,
+                    ordner=comfy_setup.IMAGE_MODEL_FOLDER,
                 )
             )
             self.setup.setText(tr("Zusätzliche Programme …"))

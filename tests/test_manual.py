@@ -1102,3 +1102,58 @@ def _document_widths(view: object) -> list[tuple[str, int]]:
         if isinstance(held, QImage) and not held.isNull():
             found.append((key, round(held.width() / (held.devicePixelRatio() or 1.0))))
     return found
+
+
+def test_the_model_page_names_every_model_the_customer_needs() -> None:
+    """**Die Auskunft gab es, verteilt auf vier Stellen.**
+
+    Der Chat-Dialog nannte Größe und Trefferquote, das Handbuch eines davon im
+    Fließtext, der Erzeugungsdialog für den Textweg gar keines („ein
+    SDXL-Modell" — welches, stand nirgends), und was Solidon selbst einrichtet,
+    stand in den Konstanten von ``comfy_setup``. Wer wissen wollte, was er
+    braucht, bevor er anfängt, fand vier Teilantworten.
+    """
+    from app.core.backends import comfy_setup
+    from app.core.backends.llm import OLLAMA_SUGGESTIONS
+
+    seite = manual.models_text()
+
+    for name, _gigabytes, _note in OLLAMA_SUGGESTIONS:
+        assert name in seite, f"das Sprachmodell {name} fehlt"
+    for modell in ("TripoSG", "BiRefNet", "SDXL"):
+        assert modell in seite, f"das Erzeugungsmodell {modell} fehlt"
+
+    # Und für das eine, das der Kunde selbst holt: Name, Quelle, Ordner.
+    assert comfy_setup.IMAGE_MODEL_FILE in seite, "der Dateiname des Bildmodells"
+    assert comfy_setup.IMAGE_MODEL_REPO in seite, "woher es kommt"
+    assert comfy_setup.IMAGE_MODEL_FOLDER in seite, "wohin es gehört"
+
+
+def test_the_model_page_comes_from_the_code_and_not_from_a_second_list() -> None:
+    """Eine zweite Liste veraltet — dieselbe Zusage wie bei Regeln und Profilen.
+
+    Geprüft wird an der **Wirkung** und nicht am Quelltext: Wer eine Zeile in
+    ``OLLAMA_SUGGESTIONS`` ändert, muss sie auf der Seite wiederfinden. Ein
+    Test, der nur nach dem Namen der Konstante sucht, bliebe grün, wenn jemand
+    die Tabelle danebenschriebe.
+    """
+    from app.core.backends.llm import DEFAULT_OLLAMA_MODEL, OLLAMA_SUGGESTIONS
+
+    seite = manual.models_text()
+
+    # Die Bewertung steht neben dem Namen, nicht nur der Name.
+    for name, _gigabytes, note in OLLAMA_SUGGESTIONS:
+        assert str(note) in seite, f"die Messung zu {name}"
+
+    # Die Vorgabe ist als solche erkennbar.
+    assert f"**{DEFAULT_OLLAMA_MODEL}**" in seite, "die Vorgabe steht hervorgehoben"
+
+
+def test_the_model_page_is_a_chapter_of_its_own() -> None:
+    """Sie muss auffindbar sein — über das Verzeichnis, nicht über die Suche."""
+    seiten = {page.key: page for page in manual.pages()}
+
+    assert "models" in seiten, "die Seite steht im Handbuch"
+    page = seiten["models"]
+    assert page.generated, "erzeugt, nicht geschrieben"
+    assert str(page.title) in str(page.body), "die Überschrift trägt den Anker"

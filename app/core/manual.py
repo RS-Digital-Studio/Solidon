@@ -1790,6 +1790,168 @@ def messages_text() -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def models_text() -> str:
+    """Welche Modelle Solidon benutzt, woher sie kommen und was sie leisten.
+
+    **Die Auskunft gab es, verteilt auf vier Stellen.** Die Modellauswahl im
+    Chat-Dialog nannte Größe und Trefferquote, das Handbuch nannte eines davon
+    im Fließtext, der Erzeugungsdialog nannte für den Textweg gar keines („ein
+    SDXL-Modell“ — welches, stand nirgends), und was Solidon selbst einrichtet,
+    stand in den Konstanten von ``comfy_setup``. Wer wissen wollte, was er
+    braucht, bevor er anfängt, fand vier Teilantworten.
+
+    Erzeugt und nicht geschrieben, aus demselben Grund wie die Regeln und die
+    Profile: Eine zweite Liste veraltet. Kommt ein Modell dazu oder ändert sich
+    eine Messung, ändert sich diese Seite mit — sonst stünde hier eine
+    Empfehlung, die niemand mehr gibt.
+    """
+    from app.core.backends import comfy_setup
+    from app.core.backends.llm import (
+        DEFAULT_OLLAMA_MODEL,
+        OLLAMA_MIN_PARAMETERS,
+        OLLAMA_SUGGESTIONS,
+    )
+    from app.i18n import format_decimal as decimal
+
+    lines = [
+        str(
+            _(
+                "Solidon rechnet Geometrie selbst und braucht dafür nichts. Zwei "
+                "Dinge kommen von außen, und jedes davon braucht ein Modell: der "
+                "Chat und das Erzeugen aus Text oder Bild. Ohne beides läuft alles "
+                "andere — Einlesen, Ändern, Prüfen, Exportieren."
+            )
+        ),
+        "",
+        f"## {_('Für den Chat: ein Sprachmodell')}",
+        "",
+        str(
+            _(
+                "Läuft auf diesem Rechner, über Ollama. Geholt wird es in "
+                "*Bearbeiten → Chat einrichten*: ein Knopf startet den Dienst, "
+                "einer lädt das Modell, einer prüft es. Statt eines lokalen "
+                "Modells geht auch ein eigener Schlüssel für ein gehostetes."
+            )
+        ),
+        "",
+        f"| {_('Modell')} | {_('Größe')} | {_('Was gemessen wurde')} |",
+        "|---|---|---|",
+    ]
+    for name, gigabytes, note in OLLAMA_SUGGESTIONS:
+        marke = f"**{name}**" if name == DEFAULT_OLLAMA_MODEL else name
+        lines.append(f"| {marke} | {decimal(gigabytes, 1)} GB | {note} |")
+    lines.extend(
+        [
+            "",
+            str(
+                _(
+                    "Fett steht die Vorgabe. Gemessen wurde an fünf Anfragen, die je "
+                    "einen Werkzeugaufruf verlangen — ein Modell, das nur darüber "
+                    "schreibt, statt ihn auszuführen, antwortet im Chat und tut "
+                    "nichts. Deshalb der Knopf *Werkzeuge prüfen*: Weder Größe noch "
+                    "Anbieter sagen es voraus."
+                )
+            ),
+            "",
+            str(
+                _(
+                    "Unterhalb von {n} Milliarden Parametern scheitern die Aufrufe "
+                    "reproduzierbar. Und die Grafikkarte entscheidet über die Zeit: "
+                    "Wo Ollama sie nicht anspricht, rechnet es auf dem Prozessor, "
+                    "und das ist keine andere Geschwindigkeit, sondern eine andere "
+                    "Größenordnung."
+                )
+            ).format(n=decimal(OLLAMA_MIN_PARAMETERS, 0)),
+            "",
+            f"## {_('Für das Erzeugen: drei Modelle')}",
+            "",
+            str(
+                _(
+                    "Laufen in ComfyUI, nebeneinander. Zwei davon richtet Solidon "
+                    "selbst ein — in der Liste der zusätzlichen Programme steht in "
+                    "der Zeile von ComfyUI *Knoten und Modell einrichten …*. Das "
+                    "dritte brauchen Sie nur für den Weg aus Text."
+                )
+            ),
+            "",
+            f"| {_('Wofür')} | {_('Modell')} | {_('Größe')} | {_('Woher')} |",
+            "|---|---|---|---|",
+            "| {wofuer} | TripoSG | {groesse} | {woher} |".format(
+                wofuer=_("Aus einem Bild einen Körper"),
+                groesse=f"{decimal(comfy_setup.WEIGHT_GIGABYTES, 1)} GB",
+                woher=_("richtet Solidon ein"),
+            ),
+            "| {wofuer} | BiRefNet | {groesse} | {woher} |".format(
+                wofuer=_("Das Objekt freistellen"),
+                groesse=f"{comfy_setup.BACKGROUND_MEGABYTES} MB",
+                woher=_("richtet Solidon ein"),
+            ),
+            "| {wofuer} | SDXL | {groesse} | {woher} |".format(
+                wofuer=_("Aus Text erst ein Bild"),
+                groesse=f"{decimal(comfy_setup.IMAGE_MODEL_GIGABYTES, 1)} GB",
+                woher=_("selbst, siehe unten"),
+            ),
+            "",
+            f"### {_('Das Bildmodell selbst hinlegen')}",
+            "",
+            str(
+                _(
+                    "Nur für den Weg aus Text. Wer ein Foto oder eine Zeichnung "
+                    "mitbringt, braucht es nie — und sieben Gigabyte für einen Weg, "
+                    "den ein vorhandenes Bild umgeht, lädt Solidon niemandem "
+                    "ungefragt herunter."
+                )
+            ),
+            "",
+            str(
+                _(
+                    "Geprüft ist **{datei}** aus dem Verzeichnis *{quelle}* auf "
+                    "Hugging Face. Die Datei gehört nach *{ordner}* im Ordner von "
+                    "ComfyUI; danach ComfyUI einmal neu starten, und *Modell "
+                    "erzeugen* nimmt auch einen Satz statt eines Bildes an."
+                )
+            ).format(
+                datei=comfy_setup.IMAGE_MODEL_FILE,
+                quelle=comfy_setup.IMAGE_MODEL_REPO,
+                ordner=comfy_setup.IMAGE_MODEL_FOLDER,
+            ),
+            "",
+            str(
+                _(
+                    "Ein anderes SDXL-Modell geht auch: Solidon nimmt, was im Ordner "
+                    "liegt, und bevorzugt dabei *juggernaut* und *dreamshaper* vor "
+                    "dem Basismodell. Nicht genommen werden Modelle mit *refiner*, "
+                    "*inpaint* oder *turbo* im Namen — sie lösen eine andere "
+                    "Aufgabe."
+                )
+            ),
+            "",
+            f"### {_('Wie lange es dauert')}",
+            "",
+            str(
+                _(
+                    "Gemessen auf einer RTX 4080: aus einem **Bild** rund fünfzehn "
+                    "Sekunden, aus **Text** rund zweieinhalb Minuten. Der "
+                    "Unterschied ist das Bildmodell — es lädt erst sieben Gigabyte "
+                    "in den Grafikspeicher und rechnet dann ein Bild, bevor "
+                    "überhaupt ein Körper entsteht. Danach kommt in beiden Fällen "
+                    "dieselbe Kette: auf Arbeitsgröße bringen, reparieren, und bei "
+                    "sehr feinen Netzen die Dreiecke verringern."
+                )
+            ),
+            "",
+            str(
+                _(
+                    "Ohne passende Grafikkarte dauert beides ein Vielfaches. Was "
+                    "abbricht, ist ein Fehler und keine Langsamkeit — dann steht der "
+                    "Satz von ComfyUI im Dialog, samt dem Schritt, in dem es riss."
+                )
+            ),
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def knowledge_pages() -> tuple[Page, ...]:
     """Die zwei Seiten, die zeigen, *wonach* gerechnet wird.
 
@@ -1813,7 +1975,14 @@ def knowledge_pages() -> tuple[Page, ...]:
     profiles_title = _("Material, Drucker, Normteile")
     remote_title = _("Die Werkzeuge der Fernsteuerung")
     messages_title = _("Meldungen im Wortlaut")
+    models_title = _("Welche Modelle Solidon benutzt")
     return (
+        Page(
+            key="models",
+            title=models_title,
+            body=titled(models_title, models_text()),
+            generated=True,
+        ),
         Page(
             key="rules",
             title=rules_title,

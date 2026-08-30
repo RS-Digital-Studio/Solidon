@@ -68,6 +68,32 @@ WEIGHTS_REPO: Final = "VAST-AI/TripoSG"
 BACKGROUND_REPO: Final = "Comfy-Org/BiRefNet"
 BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
 
+#: Das Bildmodell für den **Textweg** — und der einzige Posten dieser Liste,
+#: den Solidon **nicht** selbst holt.
+#:
+#: **Warum es hier steht, obwohl nichts es lädt.** Aus Text wird erst ein Bild,
+#: und dafür braucht ComfyUI ein SDXL-Modell unter ``models/checkpoints``. Wer
+#: nur Bilder mitbringt, braucht es nie — sieben Gigabyte für einen Weg, den
+#: ein vorhandenes Foto umgeht, gehören nicht in jede Installation. Bis zum
+#: 30.08.2026 stand deshalb nirgends, **welches**: Der Erzeugungsdialog sagte,
+#: dass eines fehlt, das Handbuch nannte es „ComfyUIs eigene Sache", und der
+#: Kunde stand vor einer Auskunft ohne Weg.
+#:
+#: Genannt wird das Basismodell und kein Feintuning: Es ist das, was die
+#: Rollenauflösung in :data:`app.core.backends.mesh.MODEL_ROLES` über ``sd_xl``
+#: sicher trifft, es ist die Referenz, und seine Lizenz
+#: (CreativeML Open RAIL++-M) wirft für den lokalen Gebrauch keine Frage auf —
+#: anders als bei Hunyuan, dessen Lizenz die EU ausnimmt. Wer ein anderes
+#: bevorzugt, legt es daneben: ``juggernaut`` und ``dreamshaper`` stehen in der
+#: Rangfolge davor und gewinnen dann.
+IMAGE_MODEL_REPO: Final = "stabilityai/stable-diffusion-xl-base-1.0"
+IMAGE_MODEL_FILE: Final = "sd_xl_base_1.0.safetensors"
+IMAGE_MODEL_GIGABYTES: Final = 6.9
+
+#: Wohin es gehört, von ComfyUIs Ordner aus gerechnet. Als Konstante, weil
+#: derselbe Pfad in drei Sätzen steht — Dialog, Handbuch, Fehlermeldung.
+IMAGE_MODEL_FOLDER: Final = "models/checkpoints"
+
 #: Wie groß die Freistell-Gewichte sind — 444 MB gegen 7,5 GB, also nennt der
 #: Schritt sie zusammen und nicht getrennt.
 #:

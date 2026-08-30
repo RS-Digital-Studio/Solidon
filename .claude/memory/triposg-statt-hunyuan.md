@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: cb9b39e7-6deb-4fb2-a5ba-c8e29524d1b0
-  modified: 2026-08-20T08:15:37.683Z
+  modified: 2026-08-30T08:19:15.415Z
 ---
 
 Der mitgelieferte Erzeuger-Ablauf benutzt **TripoSG** (VAST-AI-Research, MIT
@@ -58,12 +58,24 @@ Körper von 1,57. Das sah aus wie ein sporadischer Generator-Ausfall (Startwert
 567 590 Dreiecke in zwanzig Teilen. Wer so ein Bild sieht, prüft zuerst die
 Stufe *hinter* dem Verdächtigen.
 
-**Grenzen, die nicht zusammenpassen** (Stand 20.08.2026, unverändert):
-`FEATURE_LIMIT_TRIANGLES` in `scene/evaluate.py` ist 200 000, die Automatik in
-`generate.py` dezimiert aber erst ab 500 000. Was dazwischen liegt, verliert
-die Merkmalserkennung. Der Kommentar dort nennt `agent.analysis.TRIANGLE_LIMIT`
-(500 000) als Grund — das ist die Grenze des Steckbriefs, nicht die der
-Erkennung.
+~~**Grenzen, die nicht zusammenpassen** (Stand 20.08.2026): `FEATURE_LIMIT_TRIANGLES`
+in `scene/evaluate.py` ist 200 000, die Automatik in `generate.py` dezimiert
+aber erst ab 500 000.~~
+
+**Erledigt, nachgemessen am 30.08.2026.** `generate.GENERATED_TRIANGLE_LIMIT`
+ist heute wörtlich `FEATURE_LIMIT_TRIANGLES` (200 000), und
+`GENERATED_TRIANGLE_TARGET` sind drei Viertel davon (150 000) — als Anteil und
+nicht als eigene Zahl, damit der Abstand mitwandert. Ein echter Textweg-Lauf
+bestätigt es: 614 820 Dreiecke aus TripoSG, vierter Stapelschritt
+`decimate_mesh`, Ergebnis 150 000 und damit unter der Erkennungsgrenze.
+
+**Was an der Stelle geblieben ist, ist ein anderer Fall:** Der Prüfbericht
+zeigt danach `ingest.very_large` — „Analysekarten und Merkmalserkennung lehnen
+ab; ‚Dreiecke verringern‘ hilft". Der Befund entsteht in `ingest/loader.py`
+beim **Laden** (614 820) und gilt für diesen Zeitpunkt; erledigt hat ihn der
+vierte Schritt derselben Kette. Der Kunde liest einen Rat, den die Anwendung
+im selben Zug schon befolgt hat — und der Reiter schickt ihn hin
+(„Prüfbericht · 1").
 
 **`decimate` zerlegt glatte Körper**: Vase 607 k → 200 k ergab 60 Teile und
 `is_watertight=False`; das kantige Gehäuse überstand dieselbe Stufe unversehrt.

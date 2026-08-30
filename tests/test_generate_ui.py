@@ -660,6 +660,16 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     assert "Bild zu wählen" in gesagt, "Regel 17: was jetzt hilft"
     assert dialog.setup.isVisible() or not dialog.isVisible(), "und ein Knopf dazu"
 
+    # **Und er nennt, welches Modell.** „Ein SDXL-Modell unter
+    # models/checkpoints" ist wahr und schickt jemanden suchen, der nicht
+    # weiß, wonach — es gibt Dutzende, und die Hälfte davon löst eine andere
+    # Aufgabe. Name und Ordner kommen aus ``comfy_setup``, damit Dialog und
+    # Handbuch dieselbe Datei nennen.
+    from app.core.backends import comfy_setup
+
+    assert comfy_setup.IMAGE_MODEL_FILE in gesagt, "welche Datei"
+    assert comfy_setup.IMAGE_MODEL_FOLDER in gesagt, "und wohin sie gehört"
+
 
 class WaitingBackend:
     """Ein Generator, der wartet, bis jemand abbricht — wie ComfyUI beim Fragen.
