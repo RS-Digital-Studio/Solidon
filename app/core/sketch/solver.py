@@ -47,6 +47,8 @@ _ELEMENT_MINIMUM: Final[dict[str, int]] = {"spline": 2}
 #: Wie viele Zielpunkte eine Bedingung je ``kind`` nimmt.
 _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
     "distance": 2,
+    "radius": 2,
+    "diameter": 2,
     "coincident": 2,
     "horizontal": 2,
     "vertical": 2,
@@ -62,6 +64,20 @@ _CONSTRAINT_TARGETS: Final[dict[str, int]] = {
 #: falsche Zielzahl bleibt ein Fehler — aber sie kommen nie ins
 #: Gleichungssystem: ein Referenzmaß misst (§30.1).
 _MEASURING_ONLY: Final[frozenset[str]] = frozenset({"reference"})
+
+#: Bedingungen mit Zahl — und womit die Zahl in einen Abstand umgerechnet wird.
+#:
+#: **Der Kunde denkt in Durchmesser, der Kreis maß Radius.** Ein Kreis wird über
+#: Mittelpunkt und Randpunkt bemaßt; bis hierher war das eine ``distance`` und
+#: hieß in der Oberfläche „Abstand". Wer für eine M3-Bohrung 3,2 tippte, bekam
+#: ein Loch mit **6,4 mm** — und nichts an der Bedienung sagte ihm, dass er
+#: einen Radius eingibt. Beide Arten rechnen dieselbe Gleichung; sie
+#: unterscheiden sich in einem Faktor und darin, was sie **heißen**.
+_LENGTH_FACTOR: Final[dict[str, float]] = {
+    "distance": 1.0,
+    "radius": 1.0,
+    "diameter": 0.5,
+}
 
 _ResidualFn = Callable[[np.ndarray], tuple[float, ...]]
 _GradientFn = Callable[[np.ndarray, np.ndarray], None]
@@ -303,7 +319,9 @@ def _constraint_equation(
     """Übersetzt eine Bedingung in Residuen, Ableitung und Zeilenzahl."""
     kind = constraint.kind
     targets = constraint.targets
-    if kind == "distance":
+    if kind in _LENGTH_FACTOR:
+        # Eine Gleichung für drei Arten: Der Faktor steckt schon in ``length``
+        # (siehe :data:`_LENGTH_FACTOR`), hier bleibt der Abstand zweier Punkte.
         return 1, *_distance_equation(targets[0], targets[1], length)
     if kind == "coincident":
         return 2, *_coincident_equation(targets[0], targets[1])
@@ -383,7 +401,7 @@ def _build_equations(
                     constraint="unknown_target",
                 )
         length = 0.0
-        if constraint.kind == "distance":
+        if constraint.kind in _LENGTH_FACTOR:
             if not constraint.value:
                 raise ValidationError(
                     field, _("Ein Maß braucht einen Wert."), constraint="required"
@@ -396,6 +414,10 @@ def _build_equations(
                     value=length,
                     constraint="negative",
                 )
+            # **Erst prüfen, dann umrechnen.** Die Meldung nennt sonst den
+            # halbierten Wert, und der Kunde sucht eine Zahl, die er nie
+            # getippt hat.
+            length *= _LENGTH_FACTOR[constraint.kind]
         elif constraint.value:
             raise ValidationError(
                 field,

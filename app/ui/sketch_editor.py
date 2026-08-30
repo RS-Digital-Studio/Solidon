@@ -192,6 +192,8 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
     allein (Regel 18)."""
     return {
         "distance": tr("Abstand"),
+        "radius": tr("Radius"),
+        "diameter": tr("Durchmesser"),
         "coincident": tr("Deckung"),
         "horizontal": tr("Waagerecht"),
         "vertical": tr("Senkrecht"),
@@ -2349,10 +2351,19 @@ class SketchCanvas(QWidget):
         first = self._pending_world[0]
         dx, dy = self._pointer[0] - first[0], self._pointer[1] - first[1]
         span = math.hypot(dx, dy)
+        # **Am Kreis meint die getippte Zahl den Durchmesser.** Ein Kreis wird
+        # über Mittelpunkt und Randpunkt gezeichnet, also über seinen Radius —
+        # und genau der stand hier bis Format 18 als „Abstand" in der Datei.
+        # Wer für eine M3-Bohrung 3,2 tippte, bekam ein Loch mit 6,4 mm; das
+        # Wort „Radius" kam in der ganzen Bedienung nicht vor, es gab also
+        # nicht einmal einen Anlass zu stutzen. Der Drucker spricht in
+        # Durchmessern und die Norm auch, deshalb ist Ø hier die Vorgabe.
+        measured_kind = "diameter" if self.tool == "circle" else "distance"
+        reach = value / 2.0 if measured_kind == "diameter" else value
         # Ohne Richtung nach rechts: eine Länge ohne Richtung ist keine Linie,
         # und die Waagerechte ist die Antwort, die niemanden überrascht.
         direction = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
-        second = (first[0] + direction[0] * value, first[1] + direction[1] * value)
+        second = (first[0] + direction[0] * reach, first[1] + direction[1] * reach)
 
         begin = len(edit.flat_points(self.sketch))
         element = SketchElement(self.tool, (first, second))  # type: ignore[arg-type]
@@ -2361,7 +2372,11 @@ class SketchCanvas(QWidget):
             for local, flat in enumerate(self._pending)
             if flat >= 0
         )
-        measured = SketchConstraint("distance", (begin, begin + 1), value=f"{value:.9f}")
+        measured = SketchConstraint(
+            measured_kind,  # type: ignore[arg-type]
+            (begin, begin + 1),
+            value=f"{value:.9f}",
+        )
         self._pending.clear()
         self._pending_world.clear()
         self._apply(
@@ -3375,6 +3390,8 @@ class PointDialog(QDialog):
 #: eine falsche Auswahl mit einem Fehler zu quittieren.
 _NEEDS: dict[SketchConstraintKind, tuple[tuple[str, ...], ...]] = {
     "distance": (("point", "point"),),
+    "radius": (("point", "point"),),
+    "diameter": (("point", "point"),),
     "coincident": (("point", "point"),),
     "horizontal": (("line",),),
     "vertical": (("line",),),
@@ -3401,6 +3418,8 @@ def _needs_phrase(kind: SketchConstraintKind) -> str:
     """
     return {
         "distance": tr("zwei Punkte"),
+        "radius": tr("Mittelpunkt und Rand eines Kreises"),
+        "diameter": tr("Mittelpunkt und Rand eines Kreises"),
         "coincident": tr("zwei Punkte"),
         "horizontal": tr("eine Linie"),
         "vertical": tr("eine Linie"),
@@ -3433,6 +3452,8 @@ def _does_phrase(kind: SketchConstraintKind) -> str:
     """
     return {
         "distance": tr("hält zwei Punkte auf einem festen Abstand"),
+        "radius": tr("hält den Kreis auf einem festen Radius — halb so groß wie sein Ø"),
+        "diameter": tr("hält den Kreis auf einem festen Durchmesser — so bohrt man M3"),
         "coincident": tr("legt zwei Punkte genau aufeinander"),
         "horizontal": tr("legt eine Linie waagerecht"),
         "vertical": tr("stellt eine Linie senkrecht"),

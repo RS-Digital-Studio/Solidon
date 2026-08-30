@@ -1355,3 +1355,62 @@ def test_a_hole_in_an_island_stays_a_hole() -> None:
 
     expected = ((40.0 * 40.0 - 30.0 * 30.0) + (20.0 * 20.0 - 10.0 * 10.0)) * 5.0
     assert body.volume == pytest.approx(expected, rel=1e-6)
+
+
+def test_a_diameter_measures_the_whole_circle_and_a_radius_half_of_it() -> None:
+    """Der Kunde denkt in Durchmesser, der Kreis maß Radius (Z7a).
+
+    Ein Kreis wird über Mittelpunkt und Randpunkt bemaßt. Bis Format 18 war das
+    eine ``distance`` und hieß in der Oberfläche „Abstand" — wer für eine
+    M3-Bohrung 3,2 tippte, bekam ein Loch mit **6,4 mm**, und das Wort „Radius"
+    kam in der ganzen Bedienung nicht vor.
+
+    Beide neuen Arten rechnen dieselbe Gleichung; sie unterscheiden sich in
+    einem Faktor und darin, was sie **heißen**. Geprüft wird deshalb nicht die
+    Gleichung, sondern das Ergebnis: Derselbe Wert 3,2 ergibt als Radius einen
+    Kreis von 3,2 und als Durchmesser einen von 1,6 — die Hälfte, wie es sich
+    gehört.
+    """
+    import math
+
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+
+    def circle_of(kind: str, value: str) -> float:
+        sketch = Sketch(
+            plane="xy",
+            elements=(SketchElement("circle", ((0.0, 0.0), (1.0, 0.0))),),
+            constraints=(
+                SketchConstraint("fixed", (0,)),
+                SketchConstraint(kind, (0, 1), value=value),  # type: ignore[arg-type]
+            ),
+        )
+        solved = solve_sketch(sketch, {})
+        centre, rim = solved.elements[0].points
+        return math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+
+    assert abs(circle_of("radius", "3.2") - 3.2) < 1e-6, "R 3,2 ist ein Kreis von 3,2"
+    assert abs(circle_of("diameter", "3.2") - 1.6) < 1e-6, "Ø 3,2 ist ein Kreis von 1,6"
+    # Und die alte Art bleibt, was sie war — sonst änderte die Migration doch
+    # noch Geometrie, nur an anderer Stelle.
+    assert abs(circle_of("distance", "3.2") - 3.2) < 1e-6, "der Abstand bleibt der Abstand"
+
+
+def test_both_lists_of_constraint_kinds_stay_the_same() -> None:
+    """Zwei Listen derselben Arten, und keine kennt die andere.
+
+    Der Löser braucht zu jeder Art die Zahl ihrer Zielpunkte, der Serializer
+    prüft eine **fremde Datei**, bevor daraus ein Modell wird. Beide führen
+    deshalb eine eigene Aufzählung — und laufen auseinander, sobald jemand nur
+    eine anfasst. Beim Einbau von ``radius`` und ``diameter`` ist genau das
+    passiert: Der Löser konnte rechnen, und das Einlesen wies die Datei ab.
+    """
+    from app.core.sketch.serialize import _CONSTRAINT_KINDS
+    from app.core.sketch.solver import _CONSTRAINT_TARGETS
+
+    assert set(_CONSTRAINT_TARGETS) == set(_CONSTRAINT_KINDS), (
+        "nur im Löser: "
+        f"{sorted(set(_CONSTRAINT_TARGETS) - set(_CONSTRAINT_KINDS))}, "
+        "nur beim Einlesen: "
+        f"{sorted(set(_CONSTRAINT_KINDS) - set(_CONSTRAINT_TARGETS))}"
+    )

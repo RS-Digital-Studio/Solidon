@@ -12,6 +12,7 @@ von der allerersten Version an weiter.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
@@ -24,7 +25,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 18
+FORMAT_VERSION: Final = 19
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,6 +332,89 @@ def _allow_a_named_pivot(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _name_the_radius_a_radius(data: dict[str, Any]) -> dict[str, Any]:
+    """18 → 19: Was an einem Kreis gemessen wurde, heißt jetzt ``radius``.
+
+    **Der Kunde denkt in Durchmesser, der Kreis maß Radius.** Ein Kreis wird
+    über Mittelpunkt und Randpunkt bemaßt; bis v18 war das eine ``distance``
+    und hieß in der Oberfläche „Abstand". Wer für eine M3-Bohrung 3,2 tippte,
+    bekam ein Loch mit 6,4 mm — und das Wort „Radius" kam in der ganzen
+    Bedienung nicht vor, es gab also nicht einmal einen Anlass zu stutzen.
+
+    Ab v19 gibt es ``radius`` und ``diameter`` als eigene Arten. Diese
+    Migration ändert **keine gespeicherte Zahl**: Sie deutet um, was der
+    Bestand ohnehin meinte, und die Geometrie bleibt Punkt für Punkt dieselbe.
+    Ein Kreis, der mit 3,2 gespeichert wurde, steht danach als „R 3,2" da und
+    nicht als „Ø 3,2" — die Bemaßung heißt, was sie ist.
+
+    **Umgedeutet wird nur, was eindeutig ist** (Auflage aus der Freigabe): die
+    beiden Punkte müssen Mittelpunkt und Rand **desselben** Kreises sein, und
+    zwar in dieser Reihenfolge und ohne dass ein weiteres Element dieselben
+    Indizes belegt. Im Zweifel bleibt ``distance`` stehen. Ein stehen
+    gebliebenes ist eine kosmetische Restzweisprachigkeit im Einzelfall; ein
+    falsch umgedeutetes wäre eine falsche Beschriftung an einer
+    Kundenbemaßung, und die fällt niemandem auf.
+    """
+    for operation in data.get("ops", []):
+        params = operation.get("params")
+        if not isinstance(params, dict):
+            continue
+        for key, value in params.items():
+            if key != "sketch" or not isinstance(value, str) or not value:
+                continue
+            params[key] = _rename_circle_measures(value)
+    return data
+
+
+def _rename_circle_measures(text: str) -> str:
+    """Der eigentliche Griff — auf dem Text der Skizze, nicht auf dem Modell.
+
+    Eine Migration läuft **vor** dem Einlesen: Zu diesem Zeitpunkt ist die
+    Skizze eine Zeichenkette im Parameter, und ein Modell daraus zu bauen hieße,
+    den Leser des neuen Formats auf eine Datei des alten loszulassen.
+    """
+    try:
+        sketch = json.loads(text)
+    except (TypeError, ValueError):
+        return text
+    if not isinstance(sketch, dict):
+        return text
+    elements = sketch.get("elements")
+    constraints = sketch.get("constraints")
+    if not isinstance(elements, list) or not isinstance(constraints, list):
+        return text
+
+    # Welcher flache Punktindex gehört zu welchem Element? Die Zählung ist
+    # dieselbe wie in ``edit.flat_points``: Elemente in ihrer Reihenfolge,
+    # jedes mit seinen Punkten.
+    circles: dict[tuple[int, int], bool] = {}
+    taken: set[int] = set()
+    cursor = 0
+    for element in elements:
+        if not isinstance(element, dict):
+            return text
+        points = element.get("points")
+        if not isinstance(points, list):
+            return text
+        count = len(points)
+        if element.get("kind") == "circle" and count == 2:
+            circles[(cursor, cursor + 1)] = True
+        taken.update(range(cursor, cursor + count))
+        cursor += count
+
+    changed = False
+    for constraint in constraints:
+        if not isinstance(constraint, dict) or constraint.get("kind") != "distance":
+            continue
+        targets = constraint.get("targets")
+        if not isinstance(targets, list) or len(targets) != 2:
+            continue
+        if circles.get((targets[0], targets[1])):
+            constraint["kind"] = "radius"
+            changed = True
+    return json.dumps(sketch, ensure_ascii=False) if changed else text
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -350,6 +434,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=15, to_version=16, apply=_keep_reports_without_suggestions_valid),
     Step(from_version=16, to_version=17, apply=_allow_removed_operations),
     Step(from_version=17, to_version=18, apply=_allow_a_named_pivot),
+    Step(from_version=18, to_version=19, apply=_name_the_radius_a_radius),
 )
 
 

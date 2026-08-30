@@ -1450,6 +1450,8 @@ class SliceResult:
 SketchElementKind = Literal["point", "line", "arc", "circle", "spline"]
 SketchConstraintKind = Literal[
     "distance",
+    "radius",
+    "diameter",
     "coincident",
     "horizontal",
     "vertical",

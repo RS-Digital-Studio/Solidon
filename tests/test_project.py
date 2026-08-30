@@ -1021,3 +1021,96 @@ def test_a_code_parameter_title_travels_as_message_id(tmp_path: Path) -> None:
     typed = Parameter(name="w", value=30.0, title="meine Breite")
     plain = parameter_to_data(typed)
     assert plain.get("title_translatable") is None, "Getipptes wird nie übersetzt"
+
+
+def test_a_circle_measured_before_the_diameter_rebuild_keeps_its_size() -> None:
+    """18 → 19: Der Radius heißt Radius, und der Kreis bleibt derselbe.
+
+    **Der Kunde denkt in Durchmesser, der Kreis maß Radius.** Bis v18 wurde ein
+    Kreis über eine ``distance`` zwischen Mittelpunkt und Randpunkt bemaßt, und
+    die Oberfläche nannte das „Abstand". Wer für eine M3-Bohrung 3,2 tippte,
+    bekam ein Loch mit 6,4 mm — das Wort „Radius" kam in der ganzen Bedienung
+    nicht vor, es gab also nicht einmal einen Anlass zu stutzen.
+
+    Was diese Migration **nicht** tut, ist der Kern der Zusage: Sie ändert
+    keine gespeicherte Zahl. Aus 3,2 wird nicht 6,4 — aus „Abstand 3,2" wird
+    „R 3,2", und die Geometrie bleibt Punkt für Punkt dieselbe. Eine Migration,
+    die Kundenwerte verdoppelt, wäre der teurere Weg gewesen: Ein Fehler in der
+    Erkennung verdoppelte eine Bohrung, und das sieht niemand vor dem Druck.
+
+    Die Datei ist am 31.08.2026 mit der v18-Anwendung erzeugt worden, auf dem
+    Weg, den die Anwendung selbst nimmt — ``SketchCanvas.place_measured``, also
+    dieselbe Methode wie ein Klick in der Zeichenfläche. Danach konnte kein
+    Code sie mehr bauen.
+    """
+    import json
+    import math
+
+    from app.core.sketch.serialize import sketch_from_text
+    from app.core.sketch.solver import solve_sketch
+
+    project = load(Path(__file__).parent / "data" / "projects" / "circle_v18.p3d")
+    assert project.document.format_version == FORMAT_VERSION
+
+    text = project.document.ops[0].params["sketch"]
+    raw = json.loads(text)
+    kinds = [entry["kind"] for entry in raw["constraints"]]
+    assert kinds == ["radius"], f"die Bemaßung heißt noch {kinds}"
+    assert [entry["value"] for entry in raw["constraints"]] == ["3.200000000"], (
+        "die gespeicherte Zahl hat sich geändert — die Migration deutet um, sie rechnet nicht"
+    )
+
+    # Und die Geometrie: Der gelöste Kreis hat weiterhin 3,2 Radius, nicht 1,6
+    # und nicht 6,4. Das ist die Zusage „öffnet und rechnet korrekt" (§16.2) —
+    # der Name allein sagte nichts darüber, was der Löser daraus macht.
+    solved = solve_sketch(sketch_from_text(text), {})
+    circle = next(entry for entry in solved.elements if entry.kind == "circle")
+    centre, rim = circle.points
+    span = math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+    assert abs(span - 3.2) < 1e-6, f"der Kreis misst {span:.4f} statt 3,2"
+
+
+def test_the_migration_leaves_a_distance_alone_when_it_is_not_a_circle() -> None:
+    """Im Zweifel bleibt „Abstand" stehen — eine falsche Beschriftung ist teurer.
+
+    Umgedeutet wird nur, was **eindeutig** Mittelpunkt und Randpunkt desselben
+    Kreises ist. Alles andere behält seine Art: ein Abstand zwischen zwei
+    Linienpunkten, einer zwischen zwei Kreisen, einer in umgekehrter
+    Reihenfolge. Ein stehen gebliebenes ``distance`` ist eine kosmetische
+    Restzweisprachigkeit im Einzelfall; ein falsch umgedeutetes wäre eine
+    falsche Beschriftung an einer Kundenbemaßung, und die fällt niemandem auf.
+    """
+    import json
+
+    from app.core.scene.migrations import _rename_circle_measures
+
+    def constraints(text: str) -> list[str]:
+        return [entry["kind"] for entry in json.loads(text)["constraints"]]
+
+    def sketch(elements: list[dict[str, object]], targets: list[int]) -> str:
+        return json.dumps(
+            {
+                "plane": "xy",
+                "elements": elements,
+                "constraints": [{"kind": "distance", "targets": targets, "value": "3.2"}],
+            }
+        )
+
+    circle = {"kind": "circle", "points": [[0.0, 0.0], [3.2, 0.0]]}
+    line = {"kind": "line", "points": [[0.0, 0.0], [5.0, 0.0]]}
+
+    assert constraints(_rename_circle_measures(sketch([circle], [0, 1]))) == ["radius"], (
+        "der eindeutige Fall wird nicht umgedeutet"
+    )
+    assert constraints(_rename_circle_measures(sketch([line], [0, 1]))) == ["distance"], (
+        "eine Linienlänge ist kein Radius"
+    )
+    assert constraints(_rename_circle_measures(sketch([circle], [1, 0]))) == ["distance"], (
+        "verkehrte Reihenfolge: der zweite Punkt ist der Mittelpunkt, nicht der Rand"
+    )
+    assert constraints(_rename_circle_measures(sketch([circle, circle], [1, 2]))) == ["distance"], (
+        "quer über zwei Kreise gemessen ist kein Radius"
+    )
+    assert constraints(_rename_circle_measures(sketch([line, circle], [2, 3]))) == ["radius"], (
+        "der Kreis dahinter wird nicht gefunden — die Punktzählung stimmt nicht"
+    )

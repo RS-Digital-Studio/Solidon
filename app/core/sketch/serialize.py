@@ -30,9 +30,16 @@ from app.core.types import (
 from app.i18n import _
 
 _ELEMENT_KINDS: frozenset[str] = frozenset(("point", "line", "arc", "circle", "spline"))
+#: **Eine Liste, die es zweimal gibt, und deshalb steht hier warum.** Der Löser
+#: führt seine eigene (``_CONSTRAINT_TARGETS``), weil er zu jeder Art die Zahl
+#: der Zielpunkte braucht; diese hier prüft eine **fremde Datei**, bevor
+#: irgendetwas daraus ein Modell wird. Wer eine Art hinzufügt, trägt sie an
+#: beiden Stellen ein — ``tests/test_sketch.py`` hält sie deckungsgleich.
 _CONSTRAINT_KINDS: frozenset[str] = frozenset(
     (
         "distance",
+        "radius",
+        "diameter",
         "coincident",
         "horizontal",
         "vertical",

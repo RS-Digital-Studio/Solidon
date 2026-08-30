@@ -6154,3 +6154,68 @@ def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> 
     finally:
         window.wait_for_workers()
         window.deleteLater()
+
+
+def test_a_typed_measure_on_a_circle_is_its_diameter(qt_app: QApplication) -> None:
+    """Wer 3,2 für eine M3 tippt, bekommt 3,2 — nicht 6,4 (Z7a).
+
+    Der Kreis wird über Mittelpunkt und Randpunkt gezeichnet, die getippte Zahl
+    landete also als **Radius** in der Skizze und hieß in der Bedingungsliste
+    „Abstand". Ein Kunde, der eine M3-Bohrung setzen will, tippt 3,2 und bekam
+    ein Loch mit **6,4 mm** — sichtbar erst im Slicer oder auf dem Bett. Das
+    Wort „Radius" kam in der ganzen Bedienung nicht vor; es gab nicht einmal
+    einen Anlass zu stutzen.
+
+    Gemessen wird die Geometrie und nicht die Beschriftung: Der Abstand vom
+    Mittelpunkt zum Rand muss die **Hälfte** der getippten Zahl sein. Und die
+    Bedingung heißt jetzt, was sie ist — daran hängt, was der Löser rechnet,
+    wenn jemand den Wert später ändert.
+    """
+    import math
+
+    canvas = SketchCanvas()
+    canvas.set_tool("circle")
+    canvas._pending_world.append((0.0, 0.0))
+    canvas._pointer = (1.0, 0.0)
+    canvas.place_measured(3.2)
+
+    circle = next(entry for entry in canvas.sketch.elements if entry.kind == "circle")
+    centre, rim = circle.points
+    span = math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+    assert abs(span - 1.6) < 1e-6, (
+        f"aus Ø 3,2 wurde ein Kreis mit Radius {span:.3f} — gebohrt würden {span * 2:.1f} mm"
+    )
+
+    measured = [entry for entry in canvas.sketch.constraints if entry.value]
+    assert [entry.kind for entry in measured] == ["diameter"], (
+        f"die Bemaßung heißt {[entry.kind for entry in measured]} statt diameter"
+    )
+    assert measured[0].value == "3.200000000", (
+        "gespeichert wird, was der Kunde getippt hat — nicht die halbierte Zahl"
+    )
+
+
+def test_a_typed_measure_on_a_line_stays_a_distance(qt_app: QApplication) -> None:
+    """Und die Linie bleibt, was sie war — eine Länge ist kein Durchmesser.
+
+    Die Gegenrichtung zur Zusage darüber: Der Umbau am Kreis darf die
+    Linienbemaßung nicht mitnehmen. Sie misst zwei Punkte, und zwei Punkte
+    haben keinen Radius.
+    """
+    import math
+
+    canvas = SketchCanvas()
+    canvas.set_tool("line")
+    canvas._pending_world.append((0.0, 0.0))
+    canvas._pointer = (1.0, 0.0)
+    canvas.place_measured(5.0)
+
+    line = next(entry for entry in canvas.sketch.elements if entry.kind == "line")
+    begin, end = line.points
+    assert abs(math.hypot(end[0] - begin[0], end[1] - begin[1]) - 5.0) < 1e-6, (
+        "die Linie ist nicht 5 lang"
+    )
+    measured = [entry for entry in canvas.sketch.constraints if entry.value]
+    assert [entry.kind for entry in measured] == ["distance"], (
+        f"die Linienlänge heißt {[entry.kind for entry in measured]} statt distance"
+    )
