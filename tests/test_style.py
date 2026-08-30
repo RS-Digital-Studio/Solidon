@@ -923,3 +923,27 @@ def test_the_slider_wears_the_theme_and_shows_when_it_is_locked(theme: str) -> N
     # Und der zurückgelegte Teil sagt, wo der Wert steht — dieselbe Aussage
     # wie beim Fortschrittsbalken, in derselben Farbe.
     assert "QSlider::sub-page:horizontal {" in sheet, f"{theme}: der Regler zeigt seinen Wert nicht"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_a_splitter_shows_that_it_can_be_dragged(theme: str) -> None:
+    """Die Fuge trug die Fensterfarbe — Kontrast 1,00 gegen ihre Umgebung.
+
+    Dass sich die Spalten verschieben lassen, erfuhr damit nur, wer zufällig
+    mit der Maus darüberfuhr: Erst beim Überfahren nahm der Griff den Akzent.
+    Für einen Kunden ohne CAD-Gewohnheiten ist das eine Entdeckung, die
+    ausbleibt.
+
+    Gemessen am gebauten Splitter, Griff ausgeschnitten: 2,11 im dunklen und
+    1,84 im hellen Thema gegen das Fenster. Die Linie ist schmal — acht
+    Punkte Trennfarbe zwischen zwei Panels wären ein Balken statt einer Fuge.
+    """
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    for direction in ("horizontal", "vertical"):
+        rule = sheet.split(f"QSplitter::handle:{direction} {{")[1].split("}")[0]
+        assert "qlineargradient" in rule, (
+            f"{theme}: die {direction}e Fuge ist einfarbig und damit unsichtbar: {rule}"
+        )
+        assert THEMES[theme]["line"] in rule, (  # type: ignore[index]
+            f"{theme}: die Fuge nimmt nicht die Trennfarbe des Themas: {rule}"
+        )

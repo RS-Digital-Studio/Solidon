@@ -518,7 +518,28 @@ QGroupBox::title {{
    wer die Detailspalte des Katalogs verbreitern wollte, zielte auf einen
    Pixel. Jetzt ist sie so breit, dass ein Zeiger sie findet, und färbt sich
    beim Überfahren, damit sie sagt, dass sie sich ziehen lässt. */
+/* **Die Fuge war unsichtbar, bis man sie traf.** Der Griff trug die
+   Fensterfarbe, also Kontrast 1,00 — dass die Spalten sich verschieben
+   lassen, erfuhr nur, wer zufällig mit der Maus darüberfuhr. Für einen
+   Kunden ohne CAD-Gewohnheiten ist das keine Entdeckung, sondern eine, die
+   ausbleibt.
+
+   Sichtbar wird sie über eine schmale Mittellinie in der Trennfarbe des
+   Themas (2,30 im dunklen, 2,00 im hellen gegen das Fenster) — nicht über
+   die volle Fläche: Acht Punkte Linienfarbe zwischen zwei Panels wären ein
+   Balken, keine Fuge. Beim Überfahren nimmt der ganze Griff den Akzent, wie
+   bisher. */
 QSplitter::handle {{ background: {window}; }}
+QSplitter::handle:horizontal {{
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 {window}, stop: 0.42 {window}, stop: 0.42 {line},
+        stop: 0.58 {line}, stop: 0.58 {window}, stop: 1 {window});
+}}
+QSplitter::handle:vertical {{
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+        stop: 0 {window}, stop: 0.42 {window}, stop: 0.42 {line},
+        stop: 0.58 {line}, stop: 0.58 {window}, stop: 1 {window});
+}}
 QSplitter::handle:hover {{ background: {accent_line}; }}
 QSplitter::handle:horizontal {{ width: {NORMAL}px; }}
 QSplitter::handle:vertical {{ height: {NORMAL}px; }}
