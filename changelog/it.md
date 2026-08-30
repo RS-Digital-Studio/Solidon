@@ -20,10 +20,10 @@ scrive in `website/version.json`.
 
 ### Condividere blocchi
 
-- Un blocco che ha costruito lei si passa come ricetta, e quelli altrui si riprendono allo stesso modo. Una ricetta è l'elenco dei suoi passi con i loro valori.
-- Chi riprende una ricetta non riceve una forma finita, ma i suoi passi — e può cambiarne ogni numero.
-- Nel passarlo sceglie che cosa possono farne gli altri: usarlo liberamente, citarla, oppure citarla e ricondividere alle stesse condizioni.
-- Un blocco ripreso resta segnalato come altrui. Se uno dei suoi porta lo stesso nome, il suo ha la precedenza.
+- Un blocco che hai costruito tu si passa come ricetta, e quelli altrui si riprendono allo stesso modo. Una ricetta è l'elenco dei tuoi passi con i loro valori.
+- Chi riprende una ricetta non riceve una forma finita, ma i tuoi passi — e può cambiarne ogni numero.
+- Nel passarlo scegli che cosa possono farne gli altri: usarlo liberamente, citarti, oppure citarti e ricondividere alle stesse condizioni.
+- Un blocco ripreso resta segnalato come altrui. Se uno dei tuoi porta lo stesso nome, il tuo ha la precedenza.
 
 ### Cronologia e annulla
 
@@ -33,15 +33,15 @@ scrive in `website/version.json`.
 
 ### Disegno e misure
 
-- Un cerchio chiede il suo diametro e non il raggio. Quello che digita è il numero che misurerà sul pezzo finito.
-- Esc ritira ciò a cui sta lavorando: prima la linea iniziata, poi lo strumento, poi lo schizzo.
+- Un cerchio chiede il suo diametro e non il raggio. Quello che digiti è il numero che misurerai sul pezzo finito.
+- Esc ritira ciò a cui stai lavorando: prima la linea iniziata, poi lo strumento, poi lo schizzo.
 - Il pulsante delle forme di base porta il nome di ciò che fa un clic su di esso. Le altre forme restano dietro la freccia accanto.
 - L'avviso dello schizzo nomina entrambe le strade: disegnare un contorno oppure inserire una forma già pronta.
 - Un nuovo progetto di esempio mostra il disegno con misure e vincoli. Chi percorre gli esempi lo incontra già all'inizio.
 
 ### Quando qualcosa non terrà, adesso lo dice
 
-- Un gancio da pannello forato il cui perno non punta verso l'alto lo dice quando lo posa. Prima nasceva un pezzo che sembrava giusto e non teneva.
+- Un gancio da pannello forato il cui perno non punta verso l'alto lo dice quando lo posi. Prima nasceva un pezzo che sembrava giusto e non teneva.
 - Una cerniera a film messa di taglio nel pezzo viene segnalata invece che stampata. Stampata così si rompe alla prima apertura.
 - Un motivo di superficie che manca il corpo lo dice. Prima restavano pezzi staccati accanto senza che nulla lo segnalasse.
 
