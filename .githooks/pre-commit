@@ -103,10 +103,21 @@ done
 # „ohne Übersetzung" und fand es nie, weil die Locale der Hook-Shell eine
 # andere ist als die der pytest-Ausgabe. Ein Muster, das an der Kodierung
 # scheitert, meldet dasselbe wie eines, das nichts findet.
+# **Verschärft am 31.08.2026: nicht „legt Texte an", sondern „legt *diesen*
+# Text an".** Die alte Fassung hielt jeden auf, der irgendeinen `tr()`-Text
+# hinzufügte, während irgendwo im geteilten Baum ein **fremder** Text
+# unübersetzt lag. In einer Nacht ist das fünfmal passiert; zweimal war der
+# eigene Text längst vollständig, und die Sitzung wartete trotzdem.
+#
+# `check_new_texts.py` fragt den Diff gegen die Kataloge statt die Ausgabe —
+# der Grund steht zwei Absätze höher: Ein Muster über die pytest-Ausgabe ist
+# schon einmal an der Kodierung gescheitert, und ein Muster, das daran
+# scheitert, meldet dasselbe wie eines, das nichts findet.
 if grep -aq "test_every_text_is_translated" "$protokoll"; then
-  if git diff --cached -U0 -- 'app/*.py' | grep -aqE '^\+.*(tr\(|_\()'; then
-    meine="$meine [dieser Commit legt tr()-Texte an]"
-  fi
+  neu_und_offen=$("$python" tools/check_new_texts.py 2>&1) || {
+    meine="$meine [neue Texte ohne Übersetzung]"
+    echo "$neu_und_offen" >&2
+  }
 fi
 
 if [ -n "$meine" ]; then
