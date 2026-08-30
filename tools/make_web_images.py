@@ -400,6 +400,90 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     return written
 
 
+def take_transformation() -> tuple[Path, Path]:
+    """Das Vorher/Nachher für den Beweis-Teil der Startseite (WD3, M10).
+
+    Links, wie ein erzeugtes oder heruntergeladenes Modell ankommt: nicht
+    geschlossen, mit Löchern, die man im Bild sieht. Rechts, wie es die Platte
+    verlässt. Transformation ist die überzeugendste Bildform für „aus kaputt
+    wird druckbar", und dieses Paar zeigt sie ohne ein Wort.
+
+    **Ohne Fenster, ohne Qt, ohne VTK** — als einziges Motiv dieser Datei.
+    ``drawing.project`` zeichnet das Netz als SVG, dieselbe Projektion, aus der
+    auch die Vorschaubilder der Bausteine entstehen. Damit hängt das Bild an
+    keiner Bildschirmgröße, keiner Schriftmetrik und keiner Betriebslage; es
+    ist auf jedem Rechner dasselbe, und die drei Fallen, an denen die übrigen
+    Motive hier hängen, gibt es nicht.
+
+    **Der Stoff kommt aus einem ausgelieferten Beispielprojekt**, nicht aus
+    einem Prüfkörper. Das ist keine Bequemlichkeit, sondern der einzige
+    ehrliche Weg: Die beiden kaputten Modelle des Testkorpus sind ein Quader
+    ohne Deckel und ein sich selbst durchdringender Würfel — beide belegen eine
+    Rechenregel und überzeugen niemanden. Und das Beispiel zu Weg 1 taugt
+    ebenso wenig, obwohl es einen ``repair``-Schritt trägt: Sein Modell ist
+    beim Einlesen bereits geschlossen, die Reparatur hat nichts zu tun.
+    Gemessen zeigt allein ``weg3-generiert-aufbereiten`` die Sache — nicht
+    geschlossen mit 3372 Dreiecken, danach geschlossen.
+
+    Ohne Sprache: Das Bild trägt keinen Text. Was dazu zu sagen ist, steht als
+    Bildunterschrift im HTML und wird dort übersetzt.
+    """
+    import dataclasses
+
+    from app.core import drawing
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import ResultCache, evaluate
+    from app.core.scene.project import ProjectSources, load
+
+    # **Das Register selbst füllen, statt es vorauszusetzen.** Die übrigen
+    # Motive hier laufen nur über ``main``, das es lädt; dieses kommt ohne
+    # Fenster aus und wird deshalb auch einzeln gerufen. Ohne Register wertet
+    # ``evaluate`` keinen einzigen Schritt aus, die Szene bleibt leer, und der
+    # nächste Griff endete mit ``StopIteration`` — die schlechteste denkbare
+    # Auskunft für „die Operationen fehlen" (Regel 17). Der Aufruf ist
+    # unschädlich, wenn das Register schon steht.
+    load_operations()
+
+    example = Path(__file__).resolve().parent.parent / "app" / "examples"
+    project = load(example / "weg3-generiert-aufbereiten.p3d")
+    document = project.document
+    profile = profiles.make_profile(
+        document.printer or "centauri-carbon-2", document.material or "petg"
+    )
+    last = max(step.id for step in document.ops)
+
+    written: list[Path] = []
+    for until, stem in ((1, "verwandlung-vorher"), (last, "verwandlung-nachher")):
+        part = dataclasses.replace(document, ops=[s for s in document.ops if s.id <= until])
+        result = evaluate(part, profile, cache=ResultCache(), sources=ProjectSources(project))
+        bodies = list(result.scene.objects.values())
+        if not bodies:
+            raise SystemExit(
+                f"{stem}: die Auswertung hat keinen Körper geliefert. "
+                f"Steht das Beispielprojekt noch unter {example}, und trägt es "
+                f"die Schritte 1 bis {last}?"
+            )
+        body = bodies[0]
+        colours = drawing.palette("light")
+        target = TARGET / f"{stem}.svg"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            drawing.project(
+                body.mesh.raw,
+                420,
+                colours.solid,
+                theme="light",
+                edges=True,
+                around=-35.0,
+                down=25.0,
+            ),
+            encoding="utf-8",
+        )
+        written.append(target)
+    return written[0], written[1]
+
+
 def take_generated(app: QApplication, language: str) -> Path:
     """Ein erzeugtes Modell in der Anwendung — der Aufmacher von `ki-modelle`.
 
@@ -505,6 +589,11 @@ def main() -> int:
             *take_windows(app, language),
             take_generated(app, language),
         )
+        if language == SOURCE_LANGUAGE:
+            # Das Verwandlungspaar trägt keinen Text und entsteht deshalb
+            # einmal, nicht je Sprache (WD3).
+            for target in take_transformation():
+                print(f"  {target.name:<26} SVG")
         for target in motive:
             image = QImage(str(target))
             print(f"  {target.name:<26} {image.width()}x{image.height()}")
