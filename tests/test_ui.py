@@ -9102,6 +9102,53 @@ def test_a_hole_does_not_offer_to_be_drawn_on(window: MainWindow) -> None:
     assert "Auf dieser Fläche zeichnen" not in labels, f"steht an einer Bohrung: {labels}"
 
 
+def test_the_three_slicer_handles_stand_in_the_menu_itself(window: MainWindow) -> None:
+    """Verschieben, Drehen, Skalieren stehen direkt da — nicht zwei Klicks tief.
+
+    **Der Maßstab ist der Slicer, nicht ein CAD-Programm.** Wer Solidon öffnet,
+    kommt von Cura oder PrusaSlicer, und dort liegen diese drei auf der
+    Werkzeugleiste. Hier lagen sie unter „Ändern" zwischen dreißig anderen
+    Einträgen: Rechtsklick, aufklappen, suchen (§2.6, §18.5).
+
+    **Gezählt wird am gebauten Menü**, nicht an ``operations_for_object()``.
+    Die Auskunft, welche Operation sich anbietet, ist eine andere als die,
+    welche Zeile ein Kunde sieht — dazwischen liegt die Gruppenfaltung, und
+    genau die war das Problem. Ein Test gegen die Registerliste wäre grün
+    geblieben, während die drei im Untermenü stecken.
+
+    Die Reihenfolge gehört zur Zusage: Sie ist die des Slicers und nicht die
+    des Registers.
+    """
+    window.session.import_model(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id = next(iter(result.scene.objects))
+
+    window.object_tree.select_object(object_id)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    rows = [action for action in menu.actions() if not action.isSeparator()]
+    direct = [action.text().replace("&", "") for action in rows if action.menu() is None]
+
+    for wanted in ("Verschieben", "Drehen", "Skalieren"):
+        assert wanted in direct, (
+            f"'{wanted}' is not a row of the menu itself, only these are: {direct}"
+        )
+
+    at = [direct.index(name) for name in ("Verschieben", "Drehen", "Skalieren")]
+    assert at == sorted(at), f"the three keep the slicer's order, got {direct}"
+
+    # Und die Grenze hält weiterhin: drei Zeilen mehr oben heißt, dass die
+    # Faltung darunter sie mitzählen muss.
+    from app.ui.panels import MAX_MENU_ROWS
+
+    assert len(rows) <= MAX_MENU_ROWS, (
+        f"the menu grew to {len(rows)} rows, the limit is {MAX_MENU_ROWS}: "
+        f"{[action.text() for action in rows]}"
+    )
+
+
 def test_the_sketch_mode_leaves_the_view_standing(window: MainWindow) -> None:
     """**Der Schnitt (§30.1, P4).** Robert am 24.08.2026: „am viewport ändert
     sich nichts, bei draufsicht, seitenansicht usw sieht man auch keinen

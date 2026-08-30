@@ -130,6 +130,23 @@ OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 KEEP_VISIBLE: Final = ("colour", "holes")
 
 
+#: Operationen, die im Kontextmenü **immer** direkt stehen, in dieser
+#: Reihenfolge.
+#:
+#: Verschieben, Drehen und Skalieren sind die drei Griffe, die ein Kunde aus
+#: seinem Slicer mitbringt — dort liegen sie auf der Werkzeugleiste, hier lagen
+#: sie zwei Klicks tief unter „Ändern", zwischen siebenundzwanzig anderen. Für
+#: jemanden ohne CAD-Erfahrung ist das der Unterschied zwischen „ich kann das
+#: Teil drehen" und „ich finde es nicht" (§2.6, §18.5).
+#:
+#: **Einzeln herausgezogen und nicht über die Gruppe**, denn „Ändern" bündelt
+#: sieben Kategorien mit dreißig Einträgen; sie stehen zu lassen hieße, ein
+#: Menü mit dreißig Zeilen zu bauen. Sie stehen deshalb vor der
+#: Gruppenrechnung im Menü — und werden von ihr als feste Zeilen mitgezählt,
+#: ohne dass jemand eine Zahl pflegen muss.
+ALWAYS_DIRECT: Final = ("translate_object", "rotate_object", "scale_object")
+
+
 def groups_to_keep(entries: Sequence[Any]) -> set[str]:
     """Die Gruppentitel, die sichtbar bleiben sollen (:data:`KEEP_VISIBLE`)."""
     return {
@@ -1396,6 +1413,19 @@ class ObjectTree(QWidget):
         ``folded_groups`` an der Reihenfolge der Menüleiste; hier steht nur die
         Zahl, gegen die es rechnet.
         """
+        # **Die drei Slicer-Griffe zuerst, und zwar immer.** Vor der
+        # Gruppenrechnung, damit ``fixed`` sie unten als Zeilen mitzählt: So
+        # bleibt die Grenze gewahrt, ohne dass hier eine Zahl steht, die
+        # altert. Sortiert nach :data:`ALWAYS_DIRECT`, nicht nach dem
+        # Register — gesucht wird in der Reihenfolge, in der ein Slicer sie
+        # anbietet.
+        upfront = [spec for spec in entries if str(spec.name) in ALWAYS_DIRECT]
+        if upfront:
+            for spec in sorted(upfront, key=lambda s: ALWAYS_DIRECT.index(str(s.name))):
+                self._add_operation(menu, spec, kinds)
+            menu.addSeparator()
+            entries = [spec for spec in entries if str(spec.name) not in ALWAYS_DIRECT]
+
         fixed = sum(1 for action in menu.actions() if not action.isSeparator())
         if len(entries) + fixed <= MAX_MENU_ROWS:
             for spec in entries:
