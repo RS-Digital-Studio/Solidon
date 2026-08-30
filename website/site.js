@@ -323,53 +323,45 @@
  *
  * Der Kasten kommt aus tools/make_download.py; hier steht nur das Aufmachen.
  */
-/* Das Teil zum Drehen — 36 Bilder einer Umdrehung an einer Ziehgeste.
+/* Das Teil zum Drehen — und der Regler, der sein Maß ändert.
+ *
+ * **Die Drehung selbst steht im Stylesheet, nicht hier.** Die
+ * sechsunddreißig Aufnahmen liegen als **ein** Bild übereinander, und die
+ * Bildlaufposition verschiebt den Ausschnitt (`animation-timeline: scroll()`).
+ * Das rechnet der Compositor; ein Skript müsste bei jedem Bildlauf aufwachen.
+ * Ein Sheet statt sechsunddreißig Dateien ist dabei kein Detail: Beim
+ * Scrollen darf nichts nachgeladen werden, sonst ruckelt genau die Bewegung,
+ * die flüssig sein soll.
  *
  * **Warum keine 3D-Bibliothek.** Ein echtes Modell im Browser bräuchte
  * three.js oder model-viewer, also drei- bis sechshundert Kilobyte fremden
- * Code auf einer Seite, die heute genau ein eigenes Skript lädt. Eine
- * Bilderreihe sieht für den Betrachter genauso aus — er dreht ein Teil und
- * sieht es von allen Seiten —, kostet 0,2 MB und braucht diese Zeilen hier.
+ * Code auf einer Seite, die genau ein eigenes Skript lädt. Eine Bilderreihe
+ * sieht für den Betrachter genauso aus — er dreht ein Teil und sieht es von
+ * allen Seiten —, kostet 0,25 MB und braucht diese Zeilen hier.
  *
- * **Warum überhaupt drehen.** Ein Loop läuft, eine Reihe gehorcht: Wer selbst
- * dreht, entscheidet, wo er hinsieht — an der Kabeldurchführung, an den
- * Rastnasen, an der Wandstärke. Das ist der Unterschied zwischen Zusehen und
- * Anfassen, und er ist der Grund, warum dieser Block existiert.
+ * **Was dieses Skript hinzufügt, sind zwei Dinge, die CSS nicht kann:**
+ * die Ziehgeste und den Regler. Ohne Skript dreht sich das Teil beim Scrollen
+ * trotzdem — nur greifen kann man es nicht.
  *
- * **Ohne Skript bleibt das erste Bild stehen.** Es ist ein gewöhnliches
- * `<img>` im Markup; wer das Skript blockt, sieht das Teil, nur unbeweglich.
- * Dasselbe gilt für `prefers-reduced-motion`: Dort wird nichts vorgeladen und
- * nichts getauscht — eine Bewegung, die der Besucher abbestellt hat, gibt es
- * nicht, auch nicht auf seine Geste hin.
+ * **Der Regler ändert ein Maß, keinen Winkel**, und das ist der Unterschied
+ * zwischen einem Ansichtsspielzeug und der Aussage des Produkts: Die
+ * vierundzwanzig Bilder sind einzeln **gerechnet**, nicht skaliert. Man sieht
+ * es an den Laufachsen — eine gedehnte Aufnahme hätte hier Ellipsen.
+ *
+ * `prefers-reduced-motion` schaltet beides ab: Wer Bewegung abbestellt hat,
+ * bekommt keine, auch nicht auf seine Geste hin.
  */
 (() => {
   "use strict";
 
   const stage = document.querySelector(".turntable");
   if (!stage) return;
-  const view = stage.querySelector("img");
-  const pattern = stage.dataset.src;
   const count = Number(stage.dataset.frames || 0);
-  if (!view || !pattern || count < 2) return;
+  if (count < 2) return;
 
   if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return;
   }
-
-  const source = (index) => pattern.replace("{n}", String(index).padStart(2, "0"));
-
-  /* Vorgeladen wird erst beim ersten Anfassen, nicht beim Laden der Seite.
-     Sechsunddreißig Bilder sind zusammen so groß wie ein mittleres Foto —
-     aber wer die Seite nur überfliegt, soll sie nicht bezahlen. */
-  let ready = false;
-  const preload = () => {
-    if (ready) return;
-    ready = true;
-    for (let index = 0; index < count; index += 1) {
-      const image = new Image();
-      image.src = source(index);
-    }
-  };
 
   let frame = 0;
   let dragging = false;
@@ -377,10 +369,12 @@
   let carry = 0;
 
   const show = (index) => {
-    const wrapped = ((index % count) + count) % count;
-    if (wrapped === frame) return;
-    frame = wrapped;
-    view.src = source(frame);
+    frame = ((index % count) + count) % count;
+    /* Die Scroll-Animation übersteuern, sobald jemand selbst dreht — sonst
+       zieht die Zeitachse das Bild beim nächsten Bildlauf zurück, und die
+       Geste wäre folgenlos. */
+    stage.style.animation = "none";
+    stage.style.backgroundPositionY = (frame / (count - 1)) * 100 + "%";
   };
 
   /* Wie weit man ziehen muss, damit sich das Teil um ein Bild dreht.
@@ -389,38 +383,30 @@
      auf einem Trackpad bequem zurücklegt. */
   const STEP = 12;
 
-  const begin = (x) => {
-    dragging = true;
-    last = x;
-    carry = 0;
-    preload();
-    stage.classList.add("is-turning");
-  };
-
-  const move = (x) => {
-    if (!dragging) return;
-    carry += x - last;
-    last = x;
-    const steps = Math.trunc(carry / STEP);
-    if (steps === 0) return;
-    carry -= steps * STEP;
-    show(frame - steps);
-  };
-
-  const end = () => {
-    dragging = false;
-    stage.classList.remove("is-turning");
-  };
-
   stage.addEventListener("pointerdown", (event) => {
-    begin(event.clientX);
+    dragging = true;
+    last = event.clientX;
+    carry = 0;
+    stage.classList.add("is-turning");
     /* Der Zeiger gehört ab jetzt dieser Fläche: Ohne das endet die Drehung,
        sobald die Maus den Rand überquert — und genau das tut sie beim
        Ziehen. */
     if (stage.setPointerCapture) stage.setPointerCapture(event.pointerId);
     event.preventDefault();
   });
-  stage.addEventListener("pointermove", (event) => move(event.clientX));
+  stage.addEventListener("pointermove", (event) => {
+    if (!dragging) return;
+    carry += event.clientX - last;
+    last = event.clientX;
+    const steps = Math.trunc(carry / STEP);
+    if (steps === 0) return;
+    carry -= steps * STEP;
+    show(frame - steps);
+  });
+  const end = () => {
+    dragging = false;
+    stage.classList.remove("is-turning");
+  };
   stage.addEventListener("pointerup", end);
   stage.addEventListener("pointercancel", end);
 
@@ -429,9 +415,45 @@
      (`tabindex="0"`), hier kommt nur die Bewegung dazu. */
   stage.addEventListener("keydown", (event) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    preload();
     show(frame + (event.key === "ArrowRight" ? 1 : -1));
     event.preventDefault();
+  });
+
+  /* Der Regler. Seine Spanne steht im Markup und nicht hier — sie gehört zum
+     Teil, das gerade gezeigt wird, und ein zweites Teil wäre sonst eine
+     Änderung an zwei Dateien. */
+  const dial = document.querySelector("[data-dial]");
+  const readout = document.querySelector("[data-dial-value]");
+  if (!dial || !readout) return;
+
+  const from = Number(dial.dataset.from || 0);
+  const to = Number(dial.dataset.to || 0);
+  const stops = Number(dial.dataset.stops || 0);
+  const pattern = dial.dataset.dial || "";
+  if (!pattern || stops < 2 || to <= from) return;
+
+  const picture = (index) => pattern.replace("{n}", String(index).padStart(2, "0"));
+
+  /* Vorgeladen wird beim ersten Anfassen, nicht beim Laden der Seite: Wer die
+     Seite nur überfliegt, soll die vierundzwanzig Bilder nicht bezahlen. */
+  let ready = false;
+  const preload = () => {
+    if (ready) return;
+    ready = true;
+    for (let index = 0; index < stops; index += 1) {
+      new Image().src = picture(index);
+    }
+  };
+  dial.addEventListener("pointerdown", preload, { once: true });
+  dial.addEventListener("focus", preload, { once: true });
+
+  dial.addEventListener("input", () => {
+    const index = Number(dial.value);
+    stage.style.animation = "none";
+    stage.style.background =
+      'url("' + picture(index) + '") center / cover no-repeat';
+    const value = from + (to - from) * (index / (stops - 1));
+    readout.textContent = value.toFixed(1).replace(".", ",") + " mm";
   });
 })();
 

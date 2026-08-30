@@ -1665,6 +1665,7 @@ def shoot_turntable(
     stem: str,
     steps: int = TURNTABLE_STEPS,
     chosen: Path | None = None,
+    zoom: float = TURNTABLE_ZOOM,
 ) -> list[Path]:
     """Eine Umdrehung des Teils als Bildreihe — zum Ziehen auf der Website.
 
@@ -1679,6 +1680,12 @@ def shoot_turntable(
     Anwendung die Aussage; hier ist es das Teil, und ein Objektbaum, der sich
     mitdreht, gibt es nicht — er stünde still, während das Teil sich dreht,
     und das sieht aus wie ein Fehler.
+
+    **Der Abstand hängt am Motiv, nicht am Werkzeug.** ``TURNTABLE_ZOOM`` ist
+    am Elektronikgehäuse gemessen, und das ist ein hohes, schmales Teil. Ein
+    breites — der Rollenhalter ist 128 mm breit — ragt bei demselben Wert oben
+    und rechts aus dem Bild. Wer ein anderes Teil aufnimmt, gibt seinen Wert
+    mit, statt die Konstante zu verstellen: Sie gehört dem Schaustück.
 
     Zurück kommen die Bilddateien in der Reihenfolge der Umdrehung.
     """
@@ -1718,7 +1725,7 @@ def shoot_turntable(
     # mit Baum und Verlauf; hier hat es das Bild fuer sich, und bei Faktor 1
     # fuellte es knapp ein Drittel davon. Ein Teil, das man drehen soll, muss
     # gross genug sein, dass man beim Drehen etwas erkennt.
-    record(window, app, frames, 0, steps, orbit_step(window, app, TURNTABLE_ZOOM, 1.0))
+    record(window, app, frames, 0, steps, orbit_step(window, app, zoom, 1.0))
 
     left, top, width, height = viewport_rect(window)
     written: list[Path] = []
