@@ -4607,6 +4607,7 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
         sliced = Signal(object)
         reported = Signal(object)
         setupRequested = Signal()  # noqa: N815 - bildet das echte Qt-Signal nach
+        filamentsRequested = Signal()  # noqa: N815 - dasselbe für den Weg zu den Spulen
 
         def __init__(
             self,
@@ -4623,6 +4624,16 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
         def exec(self) -> int:
             self.reported.emit([finding])
             return 0
+
+        def refresh_materials(self) -> None:
+            """Was ``_show_filaments`` beim Zurückkommen ruft.
+
+            Heute unerreicht — ``exec`` sendet nur ``reported``. Die Methode
+            steht trotzdem hier: Sobald jemand den Weg zum Filamentwähler über
+            diese Attrappe fährt, wäre ihr Fehlen ein ``AttributeError``, und
+            genau so ist ``filamentsRequested`` eine Zeile weiter oben schon
+            einmal aufgeschlagen.
+            """
 
     monkeypatch.setattr(module, "PrintSettingsDialog", FailingDialog)
 
