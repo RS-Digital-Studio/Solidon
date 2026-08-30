@@ -807,6 +807,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "field": _("Feld"),
     "file": _("Datei"),
     "file_version": _("Dateiversion"),
+    "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
     "format": _("Format"),

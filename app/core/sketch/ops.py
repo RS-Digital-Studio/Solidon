@@ -498,7 +498,7 @@ def _pocket_in_mesh(
             raise GeometryError(
                 detail=_("Aus diesem Umriss entsteht kein Körper."),
                 suggestions=(CORRECT_INPUT,),
-                values={"grund": str(problem)},
+                values={"reason": str(problem)},
             ) from problem
     if not tools:
         raise GeometryError(
