@@ -91,6 +91,7 @@
 - [Ein Fix, der nicht grün macht](fix-der-nicht-gruen-macht.md) — bleibt der Test nach der Behebung rot, war die Diagnose falsch, nicht die Behebung unvollständig; die plausible Erzählung ging sonst ungeprüft bis in einen fremden Bericht.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
+- [Worktrees enden auf main](worktrees-enden-auf-main.md) — Roberts Regel: Probe-Bäume fallen nach Gebrauch, am Ende zeigt `git worktree list` nur den Hauptbaum, und alles Gebaute ist auf main.
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
 - [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
 - [Messung iterierte die Schlüssel](messung-iterierte-die-schluessel.md) — `for o in <dict>` gibt Zeichenketten, `getattr` darauf gibt `None`, und `None == None` liest sich wie Gleichheit; neun grüne Zeilen und eine verkehrte Entwarnung.
@@ -99,6 +100,7 @@
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc + Python-Patchskript faltet Escape-Folgen; Mehrzeiliges ohne Backslashes bauen, dreimal an einem Abend zugeschnappt.
 - [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sie sauber, und die Verallgemeinerung war die eigentliche Falle.
+- [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) — eine Messung, die den Bestand verändert, gehört in einen eigenen Worktree; der Syntaxfehler war nicht das Problem, sondern der Ort.
 - [Wächter lesen Kommentare mit](waechter-lesen-kommentare-mit.md) — Quelltext-Wächter treffen auch Docstrings/Kommentare; verbotene Muster umschreiben, nie zitieren.
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
 - [Merkmalsmehrdeutigkeit: erledigt](merkmalsmehrdeutigkeit-entwurf.md) — §15.7 ist seit eb77658 gebaut und angeschlossen; die Notiz führte ihn zwei Tage zu lange als offen.
