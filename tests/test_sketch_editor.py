@@ -5357,3 +5357,51 @@ def test_only_a_measure_offers_to_be_changed(qt_app: QApplication) -> None:
         assert canvas.sketch.constraints[1].value == "", "unchanged, and no dialog was opened"
     finally:
         panel.deleteLater()
+
+
+def test_the_hint_does_not_spell_out_the_button_beside_it(qt_app: QApplication) -> None:
+    """„es steht auch 2 mal fertig da" (Robert, 30.08.2026, am Bild gesehen).
+
+    Im Zeichenmodus stand *Fertig* zweimal im selben Blickfeld: als Knopf und
+    im Hinweis daneben („Zeichnen, dann Fertig — …"). Der Knopf ist sichtbar
+    und beschriftet; ein Text, der ihn buchstabiert, sagt nichts dazu und
+    kostet die Zeile, in der etwas stehen könnte.
+
+    **Geprüft wird gegen die Knöpfe, die wirklich dastehen**, nicht gegen eine
+    Wortliste: Wer einen Knopf umbenennt, ändert damit auch, was der Hinweis
+    nicht sagen darf. Eine Liste im Test wüsste davon nichts.
+
+    Escape bleibt ausdrücklich erlaubt — eine Taste ist kein Knopf, und dass
+    sie herausführt, sieht man ihr nicht an (§2.1).
+    """
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        bar = window.sketch_bar
+        buttons = {
+            button.text().strip()
+            for button in bar.findChildren(QPushButton)
+            if button.text().strip() and not button.isHidden()
+        }
+        assert buttons, "the bar has buttons — otherwise this test checks nothing"
+
+        hints = [
+            label.text()
+            for label in bar.findChildren(QLabel)
+            if label.text().strip() and not label.isHidden()
+        ]
+        assert hints, "and it has a hint line"
+
+        for hint in hints:
+            spelled = sorted(name for name in buttons if name in hint)
+            assert not spelled, (
+                f"the hint spells out {spelled}, and those buttons are right beside it: {hint!r}"
+            )
+    finally:
+        window.deleteLater()

@@ -1366,7 +1366,7 @@ class MainWindow(QMainWindow):
         set_level(sketch_title, "section")
         sketch_heading.addWidget(sketch_title)
         self._sketch_hint = QLabel(
-            tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze."), self.sketch_bar
+            tr("Zeichnen — die Operation öffnet auf der Skizze."), self.sketch_bar
         )
         self._sketch_hint.setWordWrap(True)
         sketch_heading.addWidget(self._sketch_hint, stretch=1)
@@ -5440,19 +5440,15 @@ class MainWindow(QMainWindow):
                 place,
             )
         if self._sketch_target:
-            source = tr(
-                "Zeichenebene: {place} · Zeichnen, dann Fertig — "
-                "die Operation öffnet auf der Skizze."
-            )
+            source = tr("Zeichenebene: {place} · Zeichnen — die Operation öffnet auf der Skizze.")
         elif panel.canvas.outline:
             source = tr(
-                "Zeichenebene: {place} · Umriss geschlossen — jetzt Hochziehen, "
-                "Abtragen oder Fertig wählen."
+                "Zeichenebene: {place} · Umriss geschlossen — daraus wird jetzt ein Körper."
             )
         else:
             source = tr(
-                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — danach "
-                "Hochziehen, Abtragen oder Fertig wählen."
+                "Zeichenebene: {place} · Geschlossenen Umriss zeichnen — "
+                "daraus wird dann ein Körper."
             )
         # **In der Querschau steht hier die Geste**, und zwar aus derselben
         # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst
@@ -5741,7 +5737,9 @@ class MainWindow(QMainWindow):
         self.sculpt_bar.show_count(0, 0)
         self.sculpt_bar.show_warning(self._sculpt_resolution_hint(mesh), refinable=True)
         self._update_actions()
-        self.statusBar().showMessage(tr("Formen — Escape oder Fertig beendet die Sitzung."))
+        self.statusBar().showMessage(
+            tr("Mit dem Pinsel über den Körper ziehen — Escape beendet die Sitzung.")
+        )
 
     def sculpting(self) -> bool:
         """Ob gerade geformt wird statt betrachtet."""
@@ -6036,7 +6034,7 @@ class MainWindow(QMainWindow):
         self.pose_bar.setVisible(True)
         self.pose_bar.show_state(0, pending=False, chain=True)
         self._update_actions()
-        self.statusBar().showMessage(tr("Skelett setzen — Escape oder Fertig beendet."))
+        self.statusBar().showMessage(tr("Zwei Klicks setzen einen Knochen — Escape beendet."))
 
     def setting_armature(self) -> bool:
         """Ob gerade ein Skelett gesetzt wird."""
