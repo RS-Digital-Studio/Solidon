@@ -10104,3 +10104,54 @@ def test_no_wait_cursor_survives_a_second_run(window: MainWindow) -> None:
         window._patience.timeout.emit()  # ein zweiter Anlauf derselben Stufe
         window.session.busyChanged.emit(False)
     assert QApplication.overrideCursor() is None, "nach drei Läufen steht ein Zeiger im Weg"
+
+
+def test_the_status_bar_leads_where_its_numbers_come_from(window: MainWindow) -> None:
+    """Eine Auskunft, die eine Frage aufwirft, kennt den Weg zu ihrer Antwort.
+
+    Zwei Zeilen der Statusleiste taten das nicht. „51 g · 3 h 30 min" ist
+    geschätzt, und wer sie ändern oder nachrechnen will, braucht die
+    Druckeinstellungen — der Weg dorthin stand nur im Menü, und im Menü sucht
+    ihn niemand, der gerade auf die Zahl sieht. Die Lizenzzeile war der
+    deutlichere Fall: Sie **nannte** ihren Weg, „Hilfe → Solidon freischalten
+    …", und ließ den Kunden ihn zu Fuß gehen.
+
+    Geprüft wird über das Signal beziehungsweise den Klick und nicht über die
+    Methode dahinter: Was ein Klick auslöst, entscheidet die Verbindung.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    # **Erst fragen, ob die Verbindung steht — sie ist die Zusage.** Danach
+    # wird sie gelöst und durch eine Attrappe ersetzt: Der echte Empfänger
+    # öffnet einen modalen Dialog, und ein Test, der ihn aufgehen lässt, wartet
+    # bis zum Zeitablauf. Beides in dieser Reihenfolge, sonst prüft der Klick
+    # nur noch die Attrappe, die der Test selbst angehängt hat.
+    try:
+        window.facts.clicked.disconnect()
+    except (RuntimeError, TypeError) as nothing_there:  # pragma: no cover — die Zusage
+        raise AssertionError("ein Klick auf den Verbrauch bleibt folgenlos") from nothing_there
+    opened: list[str] = []
+    window.facts.clicked.connect(lambda: opened.append("settings"))
+
+    # Geklickt und nicht ``mousePressEvent`` gerufen: Wer die Methode direkt
+    # aufruft, prüft die Methode und nicht den Klick — und genau dazwischen lag
+    # der Fehler, den dieser Test festhält.
+    QTest.mouseClick(window.facts, Qt.MouseButton.LeftButton)
+    assert opened == ["settings"], "der Klick erreicht das Signal nicht"
+
+    # Und der Zeiger sagt es, bevor jemand klickt: Eine Zeile, die auf Klicks
+    # reagiert und wie Text aussieht, ist eine versteckte Funktion.
+    assert window.facts.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    assert window.facts.accessibleDescription(), "kein Satz für den, der nichts sieht"
+
+    assert window.trial_line.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    # Die Lizenzzeile hängt an ihrer eigenen Handlung, nicht an einem Menüweg
+    # im Text. Geprüft am Empfänger des Signals, denn genau die Verbindung war
+    # das, was fehlte.
+    try:
+        window.trial_line.clicked.disconnect()
+    except (RuntimeError, TypeError) as nothing_there:  # pragma: no cover — die Zusage
+        raise AssertionError(
+            "die Lizenzzeile beschreibt weiter einen Weg, statt einer zu sein"
+        ) from nothing_there

@@ -214,7 +214,7 @@ from app.ui.labels import (
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import Worker, WorkerLeash, weak_slot
-from app.ui.loading import LoadingVeil, remaining_time
+from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
@@ -1016,7 +1016,7 @@ class MainWindow(QMainWindow):
         (0,2 ms). Bei jeder davon zuckte bisher der Fortschrittsbalken auf und
         sofort wieder weg. Was aufblitzt, sagt nichts; es macht nur unruhig."""
         self._patience.setSingleShot(True)
-        self._patience.setInterval(200)
+        self._patience.setInterval(DELAY_MS)
         self._patience.timeout.connect(self._show_wait_cursor)
         self._bar_delay = QTimer(self)
         """Wann Balken und Abbrechen kommen — die dritte Stufe von §2.8.
@@ -1027,7 +1027,7 @@ class MainWindow(QMainWindow):
         steht schon da. Der Balken kommt erst, wo das Warten lang genug ist,
         dass man wissen will, wie weit es ist."""
         self._bar_delay.setSingleShot(True)
-        self._bar_delay.setInterval(2000)
+        self._bar_delay.setInterval(BAR_AFTER_MS)
         self._bar_delay.timeout.connect(self._show_progress_bar)
         self._waits = False
         """Ob gerade etwas läuft, das die Stufen von §2.8 trägt.
@@ -1710,6 +1710,7 @@ class MainWindow(QMainWindow):
         # Warnungen". Material und Dauer gehören dazu: sie sind das Maß, das
         # beim Drucken zählt, und standen bisher allein hinter Strg+P.
         self.facts = PrintFacts(self)
+        self.facts.clicked.connect(self.action_print_settings)
 
         # Die Demo- und Testzeitraumzeile steht **dauerhaft** (Demo-Konzept
         # §2 F) und ist damit keine Meldung im Sinne von ``showMessage`` —
@@ -1731,8 +1732,17 @@ class MainWindow(QMainWindow):
         self.alert_button.setVisible(False)
         self.alert_button.clicked.connect(self._show_alerts)
 
-        self.trial_line = QLabel("", self)
+        # **Ein Knopf und kein Label, weil die Zeile einen Weg nennt.** Sie
+        # sagt „Hilfe → Solidon freischalten …", und eine Wegbeschreibung an
+        # der Stelle, an der man steht, ist ein Weg, den jemand zu Fuß gehen
+        # soll. Als Knopf ist sie derselbe Satz und ein Klick — flach
+        # gezeichnet, damit die Statusleiste eine Auskunftszeile bleibt und
+        # keine Knopfleiste wird.
+        self.trial_line = QToolButton(self)
+        self.trial_line.setAutoRaise(True)
         self.trial_line.setVisible(False)
+        self.trial_line.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.trial_line.clicked.connect(self.action_activate)
 
         bar = self.statusBar()
         bar.addWidget(self.measurements, 1)
@@ -3298,6 +3308,15 @@ class MainWindow(QMainWindow):
             message = licence_lock_line(state)
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
+        # Der Satz nennt den Menüweg weiterhin — er steht auch im Handbuch und
+        # in fünf Katalogen so. Was dazukommt, ist die Zusage, dass der Klick
+        # dorthin führt: an drei Stellen, weil drei verschiedene Leute sie
+        # brauchen (Regel 18).
+        if message:
+            self.trial_line.setToolTip(tr("Öffnet die Freischaltung."))
+            self.trial_line.setStatusTip(tr("Öffnet die Freischaltung."))
+            self.trial_line.setAccessibleName(tr("Solidon freischalten"))
+            self.trial_line.setAccessibleDescription(message)
         # Die Linie trennt zwei Auskünfte — steht links keine, trennt sie
         # nichts und wäre ein Strich ohne Anlass.
         self.trial_divider.setVisible(bool(message))

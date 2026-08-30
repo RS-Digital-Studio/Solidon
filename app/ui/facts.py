@@ -19,6 +19,8 @@ Herkunft steht im Hinweis, nicht im Kleingedruckten.
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.core.slice.estimate import Estimate
@@ -70,6 +72,15 @@ def change(before: Estimate | None, after: Estimate) -> str:
 class PrintFacts(QWidget):
     """Material, Dauer und die Änderung — eine Zeile in der Statusleiste."""
 
+    clicked = Signal()
+    """Der Kunde will wissen, wo diese Zahlen herkommen.
+
+    Eine Auskunft, die eine Frage aufwirft, sollte den Weg zu ihrer Antwort
+    kennen: „51 g · 3 h 30 min" ist geschätzt, und wer die Schätzung ändern
+    oder nachrechnen will, braucht die Druckeinstellungen. Der Weg dorthin
+    stand bisher nur im Menü, und im Menü sucht ihn niemand, der gerade auf
+    die Zahl sieht."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._previous: Estimate | None = None
@@ -85,12 +96,28 @@ class PrintFacts(QWidget):
         row.addWidget(self.summary)
         row.addWidget(self.delta)
 
-        self.setToolTip(
-            tr(
-                "Geschätzt aus Volumen und Oberfläche, ohne Stützen und ohne "
-                "Haftungshilfe. Gemessene Werte liefert die Gegenprobe aus dem G-Code."
-            )
+        # Der Zeiger ist die erste Auskunft darüber, dass hier etwas passiert —
+        # eine Zeile, die auf Klicks reagiert und wie Text aussieht, ist eine
+        # versteckte Funktion. Der Satz dahinter ist die zweite (Regel 18), und
+        # ``accessibleDescription`` die dritte, für den, der nichts sieht.
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        hint = tr(
+            "Geschätzt aus Volumen und Oberfläche, ohne Stützen und ohne "
+            "Haftungshilfe. Gemessene Werte liefert die Gegenprobe aus dem G-Code."
         )
+        way = tr("Klicken öffnet die Druckeinstellungen.")
+        self.setToolTip(f"{hint} {way}")
+        self.setStatusTip(way)
+        self.setAccessibleName(tr("Materialverbrauch und Druckdauer"))
+        self.setAccessibleDescription(f"{hint} {way}")
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
+        """Ein Klick auf die Zahlen führt dorthin, wo sie entstehen."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def show_estimate(self, current: Estimate | None, project: str = "") -> None:
         """Die neue Schätzung zeigen und die vorige als Vergleich behalten.

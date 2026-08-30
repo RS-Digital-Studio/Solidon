@@ -49,6 +49,14 @@ from app.ui.theme import THEMES, Theme
 #: gerechnet, und eine Anzeige, die dabei aufblitzt, ist Unruhe ohne Auskunft.
 DELAY_MS = 200
 
+#: Ab wann Fortschrittsbalken und Abbrechen erscheinen (Bauplan §2.8).
+#:
+#: Die Stufe darunter zeigt Zeiger und Statuszeile; erst darüber will man
+#: wissen, wie weit es ist. Die Zahl steht hier und nicht im Fenster, weil sie
+#: dieselbe Tabelle beantwortet wie ``DELAY_MS`` darüber — zwei Schwellen einer
+#: Zusage, an zwei Orten gepflegt, laufen auseinander.
+BAR_AFTER_MS = 2000
+
 #: Ab wann eine Wartezeit eine Schätzung bekommt (Bauplan §2.8).
 #:
 #: Vorher wäre sie geraten: Die ersten Sekunden eines Laufs sagen wenig über
