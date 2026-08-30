@@ -3358,18 +3358,33 @@ def _preview_pixels(widget: QWidget) -> int:
     Wer seine Schrift größer stellt, bekommt größere Zeilen; ein Bild in
     fester Größe säße dann in einer Zeile, die doppelt so hoch ist.
 
-    Der Faktor kommt aus dem Bild und nicht aus einer Überlegung: Bei
-    Zeilenhöhe mal 1,15 war ein Quader ein Punkt, an dem nichts zu erkennen
-    war — und ein Bild, das man nicht erkennt, ist teurer als kein Bild.
+    **Der Faktor war 1,2 und ist 2,5 — bei Standardschrift also 40 statt 19
+    Bildpunkte.** Hier stand vorher, größer gehe nicht: Die Karte sei 260
+    Punkte breit, und ab Zeilenhöhe mal 1,7 habe „Dose Deckel" als „Dose Dec…"
+    dagestanden. Die erste Zahl stimmt — die Karte ist bei jeder Fensterbreite
+    bis 1920 genau 258 Punkte breit. Die Folgerung stimmt nicht mehr:
+    Gemessen bleibt die Spalte „Objekt" bei **jeder** Vorschaugröße 165 Punkte
+    breit, und `elidedText` kürzt den Namen weder bei 32 noch bei 40 noch bei
+    48. Was der Satz beschrieb, war eine Spaltenaufteilung, die es so nicht
+    mehr gibt.
 
-    Größer geht trotzdem nicht: Die Karte ist 260 Pixel breit, ein volles
-    Kantenmaß nimmt davon gut die Hälfte, und ab Zeilenhöhe mal 1,7 stand
-    „Dose Deckel" als „Dose Dec…" da. Ein Name, den man lesen kann, ist mehr
-    wert als eine Silhouette, die man erkennt — das Bild bleibt deshalb die
-    Wiedererkennung nebenher und wird nie die Auskunft selbst. Eine
-    Maßspalte mit Deckel half nicht: Sie war schon am Anschlag.
+    Damit blieb der Grund weg, und der Befund nicht: Bei 19 Punkten war ein
+    Quader ein Fleck, in dem auch bei fünffacher Vergrößerung keine Form zu
+    sehen ist — ein Bild, das man nicht erkennt, kostet Spaltenbreite und
+    liefert nichts. Bei 40 ist die Platte als schräg liegender Körper
+    erkennbar, mit Kante und Schattierung; bei 32 erkennt man sie auch, nur
+    knapper. Gewählt ist 40, weil der Befund „halbe Größe ist keine Option"
+    ausdrücklich ausschließt.
+
+    Bezahlt wird das in Zeilenhöhe: 44 statt 23 Punkte. Das ist der ehrliche
+    Preis — eine Karte zeigt halb so viele Objekte ohne Rollen. Er ist es
+    wert, solange das Bild seine Aufgabe erfüllt; ein Fleck erfüllte sie nicht.
+
+    Die Obergrenze von 56 hält das Bild aus der Namensspalte heraus, wenn
+    jemand seine Schrift sehr groß stellt: Ein Drittel der 165 Punkte ist die
+    Grenze, ab der die gemessene Reserve knapp wird.
     """
-    return max(int(widget.fontMetrics().height() * 1.2), 18)
+    return min(max(int(widget.fontMetrics().height() * 2.5), 40), 56)
 
 
 def _svg_icon(svg: str, size: int) -> QIcon:

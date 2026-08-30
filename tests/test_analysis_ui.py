@@ -4154,3 +4154,51 @@ def test_the_history_shows_what_kind_of_step_each_line_is(qt_app: QApplication) 
             )
     finally:
         panel.deleteLater()
+
+
+def test_the_object_preview_is_large_enough_to_recognise(qt_app: QApplication) -> None:
+    """Das Vorschaubild war ein Fleck, in dem auch vergrößert nichts zu sehen war.
+
+    Bei Zeilenhöhe mal 1,2 — bei Standardschrift 19 Bildpunkte — zeigte der
+    Objektbaum von einer Platte einen dunklen Punkt (B5). Ein Bild, das man
+    nicht erkennt, kostet Spaltenbreite und liefert nichts; der Befund schließt
+    „halbe Größe" ausdrücklich als Ausweg aus.
+
+    **Der alte Grund gegen mehr ist nachgemessen und weggefallen.** Im
+    Docstring stand, ab Zeilenhöhe mal 1,7 werde der Name gekürzt. Gemessen
+    bleibt die Spalte „Objekt" bei 19, 32, 40 und 48 Punkten Vorschau konstant
+    165 Punkte breit, und ``elidedText`` kürzt in keinem der vier Fälle. Was
+    der Satz beschrieb, war eine Spaltenaufteilung von früher.
+
+    Geprüft wird hier die Rechnung, nicht das Bild: Die Untergrenze, die
+    Mitwachsen-Eigenschaft und der Deckel, der das Bild aus der Namensspalte
+    heraushält.
+    """
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.panels import _preview_pixels
+
+    probe = QLabel()
+    try:
+        assert _preview_pixels(probe) >= 40, (
+            "unter vierzig Punkten ist ein Quader eine Silhouette ohne Kanten — "
+            "gemessen an den Belegbildern der Durchsicht"
+        )
+
+        # **Es wächst mit der Schrift** — der ursprüngliche Zweck der Funktion,
+        # und er darf beim Vergrößern nicht verlorengehen.
+        gross = QFont(probe.font())
+        gross.setPointSize(max(probe.font().pointSize(), 1) * 3)
+        probe.setFont(gross)
+        assert _preview_pixels(probe) > 40, "bei dreifacher Schrift wächst das Bild mit"
+
+        # **Und es hört rechtzeitig auf.** Die Spalte „Objekt" ist 165 Punkte
+        # breit; ein Bild über einem Drittel davon nähme dem Namen den Platz,
+        # den die Messung ihm als Reserve gelassen hat.
+        riesig = QFont(probe.font())
+        riesig.setPointSize(max(probe.font().pointSize(), 1) * 4)
+        probe.setFont(riesig)
+        assert _preview_pixels(probe) <= 56, "über sechsundfünfzig frisst es die Namensspalte"
+    finally:
+        probe.deleteLater()
