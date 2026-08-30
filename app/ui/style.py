@@ -378,11 +378,16 @@ QPushButton:focus {{
    durchsichtige Kante, sichtbar wurde sie erst beim Überfahren — und in der
    Bewegen-Karte stehen drei Modusknöpfe nebeneinander, von denen nur der
    gewählte eine Fläche hat: Die anderen beiden las man als Beschriftungen.
-   Die Ruhekante nimmt deshalb die Zebrafarbe: leiser als die Trennlinie,
-   und doch eine Kante. Wer keine will, setzt sie wie die Kopfzeile unten
-   ausdrücklich auf ``none``. */
+   Die Ruhekante nimmt dieselbe Linienfarbe wie jeder andere Knopf und jedes
+   Feld — ein erster Anlauf griff zur leiseren Zebrafarbe, und die ist gegen
+   die Dialogfläche **1,13** im dunklen und **1,01** im hellen Thema: eine
+   Kante, die es gibt und die niemand sieht. Mit der Linienfarbe sind es 2,30
+   und 2,00, so viel wie der Rahmen eines Eingabefelds; was diese Farbe
+   leistet, ist eine Frage an das Thema, dass der Knopf sie nicht
+   unterschreitet, eine an das Stylesheet. Wer keine Kante will, setzt sie wie
+   die Kopfzeile unten ausdrücklich auf ``none``. */
 QToolButton {{
-    border: 1px solid {hover};
+    border: 1px solid {line};
     border-radius: {SPACE}px;
     padding: {TIGHT}px {NORMAL}px;
 }}

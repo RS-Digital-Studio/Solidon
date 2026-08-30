@@ -1014,6 +1014,24 @@ def test_a_locked_control_looks_locked_and_a_button_looks_like_one(theme: str) -
     assert "transparent" not in resting, (
         f"{theme}: der Werkzeugknopf ist im Ruhezustand rahmenlos: {resting}"
     )
+    # **Und die Kante ist zu sehen.** Der erste Anlauf nahm die leisere
+    # Zebrafarbe und kam damit auf 1,13 im dunklen und 1,01 im hellen Thema —
+    # eine Kante, die es gibt und die niemand sieht; gemessen hat es die
+    # Nachbarsitzung am gerenderten Knopf. Geprüft wird gegen die
+    # Linienfarbe des Themas, wie beim Feldrahmen: Was sie leistet, ist eine
+    # Frage an das Thema, dass der Knopf sie nicht unterschreitet, eine an
+    # das Stylesheet.
+    from app.ui.theme import contrast_ratio
+
+    colours = THEMES[theme]  # type: ignore[index]
+    found = re.search(r"border:\s*1px solid (#[0-9a-fA-F]{6})", resting)
+    assert found, f"{theme}: die Ruhekante nennt keine Farbe: {resting}"
+    drawn = contrast_ratio(found.group(1), colours["window"])
+    intended = contrast_ratio(colours["line"], colours["window"])
+    assert drawn >= intended, (
+        f"{theme}: die Knopfkante bringt {drawn:.2f} auf der Dialogfläche, die "
+        f"Linienfarbe des Themas {intended:.2f} — leiser ist sie keine Kante mehr"
+    )
 
     for control in ("QCheckBox", "QRadioButton"):
         assert f"{control}::indicator:disabled" in sheet, (
