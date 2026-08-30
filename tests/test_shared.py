@@ -446,3 +446,52 @@ def test_a_recipe_without_licence_or_author_passes() -> None:
     """
     assert "license" not in json.loads(recipe())
     assert inspect(recipe()) == []
+
+
+def test_the_cases_on_disk_still_say_what_the_check_says_today() -> None:
+    """Die Vergleichsdateien für die Server-Seite altern, wenn niemand sie neu
+    erzeugt.
+
+    Sie liegen im Repository, weil an diesem Projekt drei Maschinen arbeiten
+    und wer die PHP-Seite prüft, nicht an dem Rechner sitzt, der sie erzeugt
+    hat. Damit sind sie ein eingechecktes Erzeugnis — und das überlebt seinen
+    Erzeuger: Am 27.08.2026 hat genau diese Sorte einen Paketbau auf vier
+    Plattformen gekostet, weil zwischen zwei Läufen fünf Stunden lagen.
+
+    **Gelesen wird von der Platte, nicht aus dem Werkzeug.** Ein Vergleich von
+    ``cases()`` gegen ``verdicts()`` liefe im selben Prozess durch dieselbe
+    Funktion und wäre immer grün — der Sollwert käme aus dem Prüfling. Der
+    Test nimmt deshalb die Bytes, die eingecheckt sind, und fragt die heutige
+    Prüfung.
+    """
+    from pathlib import Path as _Path
+
+    from tools.make_shared_cases import TARGET
+
+    folder = _Path(TARGET)
+    if not folder.exists():
+        pytest.skip("Die Fälle sind noch nicht erzeugt — `python tools/make_shared_cases.py`")
+
+    expected = json.loads((folder / "erwartet.json").read_text(encoding="utf-8"))
+    assert expected, "das abgelegte Urteil ist leer — dann vergleicht die Server-Seite nichts"
+    assert any(findings for findings in expected.values()), "kein einziger Fall wird abgewiesen"
+    assert any(not findings for findings in expected.values()), (
+        "kein einziger Fall kommt durch — davon ist eine Server-Seite, die alles "
+        "abweist, nicht zu unterscheiden"
+    )
+
+    files = sorted(folder.glob("*.bin"))
+    assert {path.stem for path in files} == set(expected), (
+        "Dateien und Urteil gehen auseinander. Einmal "
+        "`python tools/make_shared_cases.py`, dann stimmt es wieder."
+    )
+
+    drifted = {
+        path.stem: (expected[path.stem], inspect(path.read_bytes()))
+        for path in files
+        if inspect(path.read_bytes()) != expected[path.stem]
+    }
+    assert not drifted, (
+        "Das abgelegte Urteil ist nicht mehr das, was die Prüfung sagt — die "
+        f"Server-Seite vergliche gegen einen alten Stand: {sorted(drifted)}"
+    )

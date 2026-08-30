@@ -1,0 +1,56 @@
+{
+  "gut-liste-von-zahlen": [],
+  "gut-lizenz-und-autor": [],
+  "gut-schlicht": [],
+  "gut-titel-genau-an-der-grenze": [],
+  "gut-umlaute-und-anfuehrung": [],
+  "schlecht-anhang-kein-base64": [
+    "Der Anhang „netz“ ist kein base64."
+  ],
+  "schlecht-auszeichnung-im-autor": [
+    "„author“ enthält eine Auszeichnung."
+  ],
+  "schlecht-auszeichnung-im-text": [
+    "„doc“ enthält einen Link oder Auszeichnung."
+  ],
+  "schlecht-formatversion-zu-neu": [
+    "Die Formatversion 99 kennt der Server nicht — bekannt sind [1]."
+  ],
+  "schlecht-fremde-lizenz": [
+    "„WTFPL“ ist keine der erlaubten Lizenzen."
+  ],
+  "schlecht-kein-json": [
+    "Die Datei ist kein gültiges JSON."
+  ],
+  "schlecht-leere-datei": [
+    "Die Datei ist kein gültiges JSON."
+  ],
+  "schlecht-link-im-text": [
+    "„doc“ enthält einen Link oder Auszeichnung."
+  ],
+  "schlecht-liste-statt-objekt": [
+    "Ein Rezept ist ein Objekt, keine Liste und keine Zahl."
+  ],
+  "schlecht-text-zu-lang": [
+    "„doc“ ist 2001 Zeichen lang, erlaubt sind 2000."
+  ],
+  "schlecht-titel-ein-zeichen-zu-lang": [
+    "„title“ ist 121 Zeichen lang, erlaubt sind 120."
+  ],
+  "schlecht-unbekannte-operation": [
+    "Schritt 1 nennt die unbekannte Operation 'run_shell_command'."
+  ],
+  "schlecht-unbekannter-schluessel": [
+    "Unbekannte Schlüssel: __class__."
+  ],
+  "schlecht-verschachtelter-parameter": [
+    "Schritt 1, Parameter „length“ hat einen Wert, der nicht erlaubt ist."
+  ],
+  "schlecht-www-ohne-schema": [
+    "„doc“ enthält einen Link oder Auszeichnung."
+  ],
+  "schlecht-zwei-gruende-auf-einmal": [
+    "„doc“ ist 2018 Zeichen lang, erlaubt sind 2000.",
+    "„doc“ enthält einen Link oder Auszeichnung."
+  ]
+}

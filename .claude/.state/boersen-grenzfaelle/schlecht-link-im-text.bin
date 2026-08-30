@@ -1,0 +1,23 @@
+{
+  "name": "halter",
+  "title": "Kabelhalter",
+  "group": "Befestigung",
+  "document": {
+    "format_version": 19,
+    "ops": [
+      {
+        "id": 1,
+        "op": "create_box",
+        "params": {
+          "length": 20.0,
+          "width": 10.0
+        }
+      }
+    ]
+  },
+  "payloads": {},
+  "exposed": [],
+  "features": {},
+  "doc": "Mehr davon auf https://beispiel.test",
+  "format_version": 1
+}

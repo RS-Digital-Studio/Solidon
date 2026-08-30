@@ -1,0 +1,26 @@
+{
+  "name": "halter",
+  "title": "Kabelhalter",
+  "group": "Befestigung",
+  "document": {
+    "format_version": 19,
+    "ops": [
+      {
+        "id": 1,
+        "op": "create_box",
+        "params": {
+          "sizes": [
+            1.0,
+            2.0,
+            3.0
+          ]
+        }
+      }
+    ]
+  },
+  "payloads": {},
+  "exposed": [],
+  "features": {},
+  "doc": "Hält ein Kabel an der Tischkante.",
+  "format_version": 1
+}
