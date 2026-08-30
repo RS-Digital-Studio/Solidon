@@ -130,7 +130,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
 | SpaceMouse-Anbindung — P15 führte sie unter „wird nicht gebaut" | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept mit P15-Revision und Roberts Bau-Entscheidung — sein „wäre schon spannend" (30.08.2026) ist ein Interesse, keine Ansage. Kandidat: `pyspacemouse` (MIT, über hidapi, ohne Herstellertreiber) |
 | Resin-Druck: der Export kann es, das Wissen fehlt | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | ein Konzept, wie weit die Druckbarkeitsprüfung Resin mitdenkt — Saugglocken, Abflussbohrungen beim Aushöhlen, Punktstützen; der Bauplan kennt Resin bisher an keiner Stelle |
-| Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Versand der Antwort, dann den Verkaufsstart — spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
+| Die Zusagen aus der Antwort an den Kunden | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | den Verkaufsstart — die Mail ist seit dem 30.08.2026 versendet, spätestens zum 01.11.2026 bekommt der Kunde die zugesagte Nachricht |
 | Die ComfyUI-Modelle haben noch keine Auswahl | Die ComfyUI-Modelle bekommen eine Auswahl (30.08.2026) | 5ds Paket — Roberts Auftrag „bei beiden auswahl"; die Kern-Vorarbeit liegt gesichert, Oberfläche, Tests und Kataloge fehlen |
 
 ---
@@ -12748,11 +12748,23 @@ Punkte als notiert — was hier steht, ist also auch zugesagt.
       Konzept, wie weit Solidon hier mitgeht. Naheliegender erster Schritt,
       der beiden Welten nützt: die Aushöhlen-Op um eine Abflussbohrung
       erweitern.
-- [ ] **Die Zusagen aus der Antwort.** Der Entwurf verspricht dem Kunden
-      eine kurze Nachricht zum Verkaufsstart und ein „Sie hören von mir",
-      falls die SpaceMouse kommt. Sobald die Mail versendet ist, sind das
-      Termine: spätestens zum 01.11.2026 fällig, unabhängig davon, was aus
-      den zwei Punkten darüber wird.
+- [ ] **Die Zusagen aus der Antwort — versendet, damit scharf.** Die Mail
+      ging am 30.08.2026 um 11:24 von support@solidon3d.de hinaus; fällig
+      sind jetzt die Nachricht zum Verkaufsstart (spätestens 01.11.2026)
+      und das „Sie hören von mir", falls die SpaceMouse kommt.
+
+Der Kunde hat noch am selben Vormittag geantwortet, und die Antwort
+verschiebt den Resin-Punkt: Sein Bedarf ist **nicht** eine
+Resin-Analyse, sondern die Vorbereitung nicht perfekter Dateien VOR dem
+Hersteller-Slicer — viele Resin-Drucker arbeiten nur mit dem eigenen,
+rudimentären Slicer, und die Lücke füllte bisher Meshmixer. Solidon als
+Vorstufe („Datei rein, repariert und angepasst raus") ist für ihn die
+Lösung; Resin-spezifische Prüfungen sind das Sahnehäubchen, nicht der
+Kern. Das Resin-Konzept aus dem zweiten Kästchen beginnt darum bei
+dieser Vorstufe, nicht bei Saugglocken. Dazu kündigt er eine
+PayPal-Spende an und will Solidon seinen Dentalkunden empfehlen — der
+Multiplikator ist real, und „Meshmixer-Nachfolge im Dentalbereich" ist
+ein Positionierungs-Datenpunkt fürs Marketing.
 
 ---
 
