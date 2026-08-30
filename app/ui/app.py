@@ -31,6 +31,7 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
+from app.ui import window_chrome
 from app.ui.icons import application_icon
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
@@ -192,6 +193,12 @@ def build_application(
 
     report(tr("Das Erscheinungsbild wird gesetzt …"), 0.6)
     apply_theme(application, settings.theme)  # type: ignore[arg-type]
+    # **Die Titelleiste bekommt die Farbe der Anwendung** (G15). Windows malt
+    # sie sonst in seinem eigenen Grau, und quer über die Fensteroberkante
+    # läuft ein Absatz, an dem das Fenster in zwei Teile zerfällt. Der Wächter
+    # hängt an der Anwendung und hört auf ``Show`` und Palettenwechsel — jeder
+    # Dialog kommt damit von selbst mit, ohne dass ihn jemand einträgt.
+    window_chrome.install(application)
 
     report(tr("Das Fenster wird aufgebaut …"), 0.72)
     session = Session()
@@ -337,6 +344,12 @@ def main(argv: list[str] | None = None) -> int:
     # danach noch einmal; das kostet nichts und bleibt die Stelle, an der ein
     # Themenwechsel im Betrieb ankommt.
     apply_theme(application, settings.theme)  # type: ignore[arg-type]
+    # **Die Titelleiste bekommt die Farbe der Anwendung** (G15). Windows malt
+    # sie sonst in seinem eigenen Grau, und quer über die Fensteroberkante
+    # läuft ein Absatz, an dem das Fenster in zwei Teile zerfällt. Der Wächter
+    # hängt an der Anwendung und hört auf ``Show`` und Palettenwechsel — jeder
+    # Dialog kommt damit von selbst mit, ohne dass ihn jemand einträgt.
+    window_chrome.install(application)
     state = activation.state()
     if state.over:
         # Auch dieser Import ist schwer (``app.core.scene`` über

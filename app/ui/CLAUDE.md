@@ -101,7 +101,10 @@ statt einer Zahl von 0 bis 7)
 **Erscheinung**
 
 `style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
-(hell und dunkel) · `palette.py` (**Farbe trägt nie allein Bedeutung**,
+(hell und dunkel) · `window_chrome.py` (die Titelleiste trägt die Farben der
+Anwendung — Windows malt sie weiter, es bekommt nur gesagt, in welcher Farbe;
+ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
+`palette.py` (**Farbe trägt nie allein Bedeutung**,
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
 zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 
