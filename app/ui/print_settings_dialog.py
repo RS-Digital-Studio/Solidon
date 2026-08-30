@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
@@ -76,7 +77,7 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
-from app.ui.dialogs import licence_lock_line, show_error
+from app.ui.dialogs import handlers_of, licence_lock_line, show_error
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
 from app.ui.labels import (
@@ -1819,6 +1820,48 @@ class PrintSettingsDialog(QDialog):
         # Erst jetzt: die Auswahl steht, und ``_slicer_path`` ist längst gesetzt.
         self._fill_slicer_choice()
         return self.slicer_box
+
+    def error_handlers(self) -> dict[str, Callable[[AppError], None]]:
+        """Die Handlungen des Fensters, ergänzt um die des Slicer-Wegs.
+
+        **Ergänzt und nicht ersetzt**, und das ist hier keine Feinheit:
+        :func:`handlers_of` geht die Elternkette hoch, nimmt das **erste**
+        Widget, das diese Methode trägt, und kehrt damit zurück. Ohne die
+        erste Zeile verlöre jeder Fehler, der mit diesem Dialog als Fenster
+        erscheint, das ganze Wörterbuch des Hauptfensters — reparieren,
+        verkleinern, teilen, nur exportieren. Die neuen Knöpfe wären da, die
+        alten still fort.
+
+        Drei Kennungen wurden bis hierhin angeboten und von niemandem
+        eingelöst (gezählt am 30.08.2026): Wenn der Slicer-Lauf scheitert,
+        schlug die Übergabe vor, seine Ausgabe anzusehen, das Maschinenprofil
+        zu prüfen und einen anderen Slicer zu wählen — alle drei ohne Draht,
+        also nur als Sätze zum Lesen. Auf einem Rechner mit drei Slicern war
+        das eine Sackgasse, während zwei arbeitende danebenlagen (§2.1).
+        ``choose_slicer`` hängt zusätzlich am Hauptfenster: Der Fehler tritt
+        auch ohne offenen Dialog auf.
+        """
+        known = dict(handlers_of(self.parentWidget()))
+        known["show_output"] = self._show_slicer_output
+        known["check_profile"] = lambda _error: self._open_slicer_section()
+        known["choose_slicer"] = lambda _error: self._open_slicer_section()
+        return known
+
+    def _show_slicer_output(self, error: AppError) -> None:
+        """Was der Slicer geschrieben hat — als Text, nicht als Wertzeile.
+
+        ``show_details`` setzt jeden Wert über ``value_line`` in **eine**
+        Zeile. Für achthundert Zeichen Slicer-Protokoll wäre das eine Zeile,
+        die niemand liest; hier steht es im aufklappbaren Teil, wo
+        mehrzeiliger Text hingehört.
+        """
+        written = str(error.values.get("output", "") or "")
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle(tr("Ausgabe des Slicers"))
+        box.setText(str(error.title))
+        box.setDetailedText(written or tr("Der Slicer hat nichts geschrieben."))
+        box.exec()
 
     def _open_slicer_section(self) -> None:
         """Den Abschnitt aufklappen, weil darin etwas zu entscheiden ist.

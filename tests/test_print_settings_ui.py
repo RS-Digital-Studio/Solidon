@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QSpinBox,
+    QWidget,
 )
 
 from app.core.export import handover
@@ -1904,3 +1905,51 @@ def test_a_failed_slicer_run_returns_the_plate_findings(
     )
 
     assert returned == [[finding]], "der Prüfbericht erfährt sonst nichts vom Abbruch"
+
+
+# --- Fehlerhandlungen des Slicer-Wegs -----------------------------------------------
+
+
+class _WindowWithHandlers(QWidget):
+    """Ein Fenster, das eigene Fehlerhandlungen trägt — wie das Hauptfenster."""
+
+    def error_handlers(self) -> dict[str, object]:
+        return {"repair_and_retry": lambda _error: None, "export_only": lambda _error: None}
+
+
+def test_the_dialog_wires_the_three_slicer_actions(qt_app: QApplication, session: Session) -> None:
+    """Drei Kennungen wurden angeboten und von niemandem eingelöst.
+
+    `show_output`, `check_profile` und `choose_slicer` standen in den
+    Slicer-Fehlschlägen und hatten nirgends einen Handler — angeboten wird
+    aber nur, wofür es einen gibt, also blieben sie Sätze zum Lesen. Auf einem
+    Rechner mit drei Slicern war das eine Sackgasse (§2.1).
+    """
+    parent = _WindowWithHandlers()
+    dialog = PrintSettingsDialog(session, UiSettings(), parent=parent)
+
+    known = dialog.error_handlers()
+
+    for name in ("show_output", "check_profile", "choose_slicer"):
+        assert name in known, f"{name} wurde angeboten und nicht eingelöst"
+        assert callable(known[name])
+
+
+def test_the_dialog_keeps_the_handlers_of_its_window(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Die eigene Liste **ergänzt** die des Fensters, sie ersetzt sie nicht.
+
+    `handlers_of` nimmt das erste Widget der Elternkette, das
+    `error_handlers` trägt, und kehrt zurück. Eine eigene Methode am Dialog
+    verdeckt damit das ganze Wörterbuch darüber: Die neuen Knöpfe wären da,
+    die alten — reparieren, verkleinern, teilen, nur exportieren — still fort,
+    und zwar für jeden Fehler, der mit diesem Dialog als Fenster erscheint.
+    """
+    parent = _WindowWithHandlers()
+    dialog = PrintSettingsDialog(session, UiSettings(), parent=parent)
+
+    known = dialog.error_handlers()
+
+    assert "repair_and_retry" in known, "die Handlungen des Fensters gingen verloren"
+    assert "export_only" in known
