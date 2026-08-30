@@ -150,3 +150,26 @@ Kausalitäts-Regel wie beim Schloss: die Antwort muss den Befehl noch ändern
 können), die Zeilen-Ansage steht **vorher notiert** da, und nach jedem
 Commit mit Dateistands-Anteil läuft die Probe auf dem Commit — nicht auf
 dem Baum.
+
+
+**Die Zähl-Gestalt, 30.08.2026 (3a, `b3cfd578`):** Der Guard prüfte die
+**Zahl der Dateien** — zwei, wie angesagt — und den Umfang gar nicht. In
+`main_window.py` standen 132 hinzugefügte Zeilen, die eigene Änderung maß
+etwa die Hälfte; der Rest war 50s ungestagter Abtragen-Block, der
+mitreiste. Bei den vier Commits davor war dieselbe Datei bewusst als Blob
+aus HEAD gebaut worden, genau dagegen — diesmal nicht, weil „meine
+Änderung ist dort die einzige" ungeprüft angenommen wurde.
+
+**Eine Dateizahl ist keine Sollprobe, sondern eine Anzeige.** Sie stimmt
+genau dann, wenn man die richtigen Pfade genannt hat — und das ist die
+Frage nicht. Die Frage ist, was **in** den Dateien steht. Die Ansage muss
+deshalb zwei Zahlen tragen: wie viele Dateien, und ungefähr wie viele
+Zeilen je Datei. Weicht der Umfang ab, ist es fremder Stand, auch wenn die
+Datei die richtige ist.
+
+Zugute halten lässt sich nur die Reaktion: Der Umfang fiel unmittelbar nach
+dem Commit auf, die Meldung ging sofort hinaus, und der Betroffene stand
+gerade davor, den Widerspruch zwischen `--numstat 132/10` und einem leeren
+`git diff` zu jagen. **Ein stiller Mitnahme-Commit ist der schlechteste
+Fall** — der Betroffene sucht sonst später, warum sein Diff kleiner ist als
+seine Arbeit.
