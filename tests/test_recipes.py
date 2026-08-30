@@ -9,6 +9,7 @@ der Weg vom Ordner bis ins Register.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -93,6 +94,118 @@ def test_a_recipe_survives_the_round_trip_and_keeps_its_hash(profile: Profile) -
     assert recipe.fingerprint(back) == recipe.fingerprint(made)
     assert back.exposed == made.exposed
     assert back.features == made.features
+
+
+def test_a_licence_does_not_change_the_version(profile: Profile) -> None:
+    """**Die Kernzusage:** Eine korrigierte Lizenz macht kein anderes Teil.
+
+    Der Hash ist die Version (§24.4), und die beantwortet „ist das dieselbe
+    Bauart" — nicht „ist das derselbe Text". Spränge er bei einer
+    Lizenzkorrektur, wäre das Rezept für jeden, der es eingebunden hat,
+    plötzlich ein anderes: Sein Projekt meldete beim Öffnen einen geänderten
+    Baustein, den niemand geometrisch geändert hat.
+
+    Abgestimmt mit der Börsen-Sitzung am 30.08.2026; ihre Prüfseite benutzt
+    den Fingerabdruck nicht als Identität, es spricht also auch von dort
+    nichts dagegen.
+    """
+    ohne = _recipe(profile)
+    mit = dataclasses.replace(ohne, license="CC0-1.0", author="Robert")
+
+    assert recipe.fingerprint(mit) == recipe.fingerprint(ohne), (
+        "die Lizenz ist in den Hash gewandert — ein eingebundenes Teil würde "
+        "beim nächsten Öffnen als geändert gemeldet"
+    )
+
+
+def test_licence_and_author_travel_in_the_file(profile: Profile) -> None:
+    """Aus dem Hash heraus heißt nicht: aus der Datei heraus.
+
+    Beide hängen **neben** den Daten wie der Bereichstest-Bericht — sie müssen
+    die Rundreise trotzdem überstehen, sonst wüsste die Börse nichts von
+    ihnen.
+    """
+    made = dataclasses.replace(_recipe(profile), license="CC-BY-4.0", author="RS Digital")
+
+    data = recipe.file_data(made)
+    assert data["license"] == "CC-BY-4.0"
+    assert data["author"] == "RS Digital"
+
+    back = recipe.from_data(data)
+    assert back.license == "CC-BY-4.0", "die Lizenz kam nicht zurück"
+    assert back.author == "RS Digital", "der Autor kam nicht zurück"
+
+
+def test_a_recipe_without_a_licence_is_not_an_error(profile: Profile) -> None:
+    """Leer heißt „nicht angegeben", nicht „ungültig".
+
+    Eine Pflichtangabe würde jedes bestehende Rezept ungültig machen — genau
+    die Migration, die zwei optionale Felder sich sparen. Und was nichts sagt,
+    schreibt auch nichts: Die Datei trägt die Schlüssel dann gar nicht erst.
+    """
+    made = _recipe(profile)
+    data = recipe.file_data(made)
+
+    assert "license" not in data, "ein leeres Feld steht als leerer Schlüssel in der Datei"
+    assert "author" not in data
+    assert recipe.from_data(data).license == ""
+
+
+def test_an_older_recipe_file_still_opens(profile: Profile) -> None:
+    """Kein Formatsprung: Eine Datei von vor den beiden Feldern liest sich weiter.
+
+    ``FORMAT_VERSION`` bleibt deshalb auf 1 — zwei optionale Felder mit
+    Vorgabewert machen keine alte Datei unlesbar, und die Checkliste in
+    ``AGENTS.md`` verlangt die Erhöhung für genau diesen Fall.
+    """
+    alt = recipe.file_data(_recipe(profile))
+    alt.pop("license", None)
+    alt.pop("author", None)
+
+    back = recipe.from_data(alt)
+
+    assert back.license == ""
+    assert back.author == ""
+    assert back.format_version == recipe.FORMAT_VERSION
+
+
+def test_capture_passes_the_licence_through(profile: Profile) -> None:
+    """**Die Kette endet am letzten Glied.**
+
+    ``capture`` ist der einzige Weg zu einem Rezept. Kennte es die zwei Felder
+    nicht, wären sie an der Dataclass vorhanden und immer leer — der Dialog
+    könnte sie setzen wollen und käme nicht an.
+
+    Das Argument heißt ``licence``, das Feld ``license``: ``license`` ist ein
+    Python-Builtin und darf kein Parametername sein.
+    """
+    made = recipe.capture(
+        _document(),
+        {},
+        name="mit_lizenz",
+        title="Mit Lizenz",
+        group="structure",
+        op_ids=(1,),
+        exposed=(),
+        features={"top": "face_top"},
+        licence="CC-BY-SA-4.0",
+        author="Robert",
+        profile=profile,
+    )
+
+    assert made.license == "CC-BY-SA-4.0", "capture hat die Lizenz nicht durchgereicht"
+    assert made.author == "Robert", "capture hat den Autor nicht durchgereicht"
+
+
+def test_the_licence_list_is_the_source_for_the_exchange() -> None:
+    """Die Wertemenge steht im Kern, und die Börse liest sie von hier.
+
+    Führte die Prüfseite sie, hinge der Kern an der Börse — die falsche
+    Richtung (abgestimmt am 30.08.2026). Alle drei erlauben Weitergabe und
+    kommerzielle Nutzung; wer herunterlädt, darf drucken und verkaufen.
+    """
+    assert recipe.RECIPE_LICENSES == ("CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
+    assert all(kennung.startswith("CC") for kennung in recipe.RECIPE_LICENSES)
 
 
 def test_a_changed_recipe_is_a_different_version(profile: Profile) -> None:

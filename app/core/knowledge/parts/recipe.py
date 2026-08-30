@@ -49,7 +49,7 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec
@@ -78,6 +78,20 @@ FORMAT_VERSION = 1
 #: Wo eigene Rezepte liegen: neben den ``.py``-Bausteinen, als eigener
 #: Unterordner — eine Datei je Rezept, der Dateiname ist der Name.
 RECIPES_DIRNAME = "recipes"
+
+#: Unter welchen Lizenzen ein Rezept weitergegeben werden darf.
+#:
+#: **Die Quelle steht hier und nicht in der Börse.** Eine feste Wertemenge an
+#: einem Rezeptfeld ist Rezept-Domäne; führte die Prüfseite sie, hinge der Kern
+#: an der Börse, und das ist die falsche Richtung (abgestimmt mit der
+#: Börsen-Sitzung, 30.08.2026). ``shared.rules()`` liest diese Konstante und
+#: gibt sie an die PHP-Seite weiter, damit beide Seiten dieselbe Liste prüfen.
+#:
+#: Alle drei erlauben die Weitergabe und die kommerzielle Nutzung — was ein
+#: Kunde herunterlädt, darf er drucken und verkaufen. Was sie unterscheiden,
+#: ist die Nennung des Autors und die Frage, ob eine Abwandlung wieder unter
+#: dieselbe Lizenz muss.
+RECIPE_LICENSES: Final = ("CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
 
 #: Kennzeichnung im Katalog (§24.5): ein Rezept ist weder ``shipped`` noch
 #: eine ``user``-``.py``. Der Unterschied trägt: ``travelling_parts`` warnt
@@ -141,13 +155,38 @@ class Recipe:
     (Konzept §18d): Der Dialog benennt, was nach außen sichtbar ist, sonst
     wäre die Provenienzkette an der Naht unterbrochen."""
     doc: str = ""
+    license: str = ""
+    """Unter welcher Lizenz das Rezept weitergegeben werden darf, oder leer.
+
+    **Leer ist kein Fehler, sondern „nicht angegeben".** Eine Pflichtangabe
+    würde jedes bestehende Rezept ungültig machen — genau die Migration, die
+    zwei optionale Felder sich sparen. Der Export fragt danach, der Import
+    weist fremde Herkunft aus (§32), und wo nichts steht, steht nichts.
+
+    Der Feldname trägt die **US-Schreibung**, obwohl der Bestand sonst
+    ``licence`` schreibt: ``shared.rules()`` leitet die erlaubten
+    Rezeptschlüssel aus ``dataclasses.fields(Recipe)`` ab, der Feldname **ist**
+    also der Schlüssel in der Regeldatei und in der Datei selbst. Eine zweite
+    Schreibung wäre damit keine Geschmacksfrage, sondern eine
+    Übersetzungsstelle zwischen Python und PHP. ``serialise.py`` schreibt das
+    Dokumentformat aus demselben Grund schon so."""
+    author: str = ""
+    """Wer das Rezept gebaut hat, oder leer. Freitext — ein Name, ein
+    Kürzel, eine Adresse; die Börse prüft die Länge, nicht die Gestalt."""
     format_version: int = FORMAT_VERSION
     range_report: Any = None
     """Der letzte Bereichstest (:mod:`range_check`), oder ``None``.
 
     Am Rezept, **nicht im Hash**: Der Hash ist die Version (§24.4), und das
     Prüfen darf aus dem Rezept kein anderes machen. ``to_data`` lässt den
-    Bericht deshalb aus, ``save`` schreibt ihn als eigenes Feld daneben."""
+    Bericht deshalb aus, ``save`` schreibt ihn als eigenes Feld daneben.
+
+    **``license`` und ``author`` liegen aus demselben Grund daneben**, und mit
+    derselben Folge: Wer eine Lizenz korrigiert, ändert eine Angabe *über* das
+    Teil und nicht das Teil — ein Rezept, dessen Hash dabei spränge, wäre für
+    jeden, der es eingebunden hat, plötzlich ein anderes. Die Kehrseite gehört
+    dazu und ist gewollt: Beide Felder liegen damit **außerhalb dessen, was die
+    Version deckt**, und lassen sich ändern, ohne dass die Version es zeigt."""
 
 
 def to_data(recipe: Recipe) -> dict[str, Any]:
@@ -187,6 +226,8 @@ def from_data(data: dict[str, Any]) -> Recipe:
         exposed=tuple(ExposedParam(**entry) for entry in data.get("exposed", ())),
         features=dict(data.get("features", {})),
         format_version=int(data.get("format_version", 1)),
+        license=str(data.get("license", "")),
+        author=str(data.get("author", "")),
         range_report=_report_from(data.get("range_report")),
     )
 
@@ -563,11 +604,18 @@ def file_data(recipe: Recipe) -> dict[str, Any]:
     """Die Daten samt Bereichstest-Bericht — was eine Rezeptdatei trägt.
 
     Dieselbe Gestalt für die Datei im Nutzerordner und für die Reise in einer
-    Projektdatei: Der Bericht hängt **neben** den Daten, nicht darin (siehe
-    ``Recipe.range_report``) — Prüfen macht aus dem Rezept kein anderes, aber
+    Projektdatei: Bericht, Lizenz und Autor hängen **neben** den Daten, nicht
+    darin (siehe ``Recipe.range_report``) — Prüfen macht aus dem Rezept kein anderes, aber
     der Empfänger soll die Warnung aus §24.5 sehen, ohne selbst zu prüfen.
     """
     data = to_data(recipe)
+    # Neben den Daten, nicht darin — wie der Bericht, und aus demselben Grund
+    # (siehe ``Recipe.range_report``): Sie gehören in die Datei, aber nicht in
+    # den Hash.
+    if recipe.license:
+        data["license"] = recipe.license
+    if recipe.author:
+        data["author"] = recipe.author
     if recipe.range_report is not None:
         data["range_report"] = {
             "checked": recipe.range_report.checked,
@@ -651,17 +699,26 @@ def capture(
     exposed: tuple[ExposedParam, ...],
     features: dict[str, str],
     doc: str = "",
+    licence: str = "",
+    author: str = "",
     profile: Profile,
 ) -> Recipe:
     """Aus einem echten Dokument den Ausschnitt herausschneiden.
 
     Die Naht zu Paket E4: Der Dialog sammelt Name, Titel, Gruppe, die
-    gewählten Schritte, die freigegebenen Parameter samt ihren Angaben und die
-    benannten Merkmale — hier entsteht daraus das Rezept, und die **Probe
-    läuft sofort**: einmal auswerten, genau ein Körper, jedes benannte
-    Merkmal vorhanden (Konzept §18a und §18d). Was hier durchgeht, steht
-    danach im Katalog; was nicht, sagt beim Speichern warum, nicht später
-    beim Benutzen.
+    gewählten Schritte, die freigegebenen Parameter samt ihren Angaben, die
+    benannten Merkmale und — für die Börse — Lizenz und Autor. Hier entsteht
+    daraus das Rezept, und die **Probe läuft sofort**: einmal auswerten, genau
+    ein Körper, jedes benannte Merkmal vorhanden (Konzept §18a und §18d). Was
+    hier durchgeht, steht danach im Katalog; was nicht, sagt beim Speichern
+    warum, nicht später beim Benutzen.
+
+    **Das Argument heißt ``licence``, das Feld ``license``**, und beides ist
+    Absicht: ``license`` ist ein Python-Builtin und darf kein Parametername
+    sein (ruff A002), während der *Feldname* der Dateischlüssel ist und dem
+    Dokumentformat folgen muss (siehe :attr:`Recipe.license`). Damit trägt der
+    Code die britische Schreibung wie der übrige Bestand und die Datei die
+    amerikanische wie ``serialise.py``.
 
     Mitgenommen werden alle Projektparameter des Dokuments — sie sind kleine
     Daten, und welche der Ausschnitt wirklich liest, entscheiden seine
@@ -719,6 +776,11 @@ def capture(
         exposed=exposed,
         features=dict(features),
         doc=doc,
+        # **Durchgereicht, nicht nur vorhanden.** Ein Feld an der Dataclass,
+        # das der einzige Weg zu einem Rezept nicht kennt, wäre da und immer
+        # leer — der Dialog könnte es setzen wollen und käme nicht an.
+        license=licence,
+        author=author,
     )
     build(recipe, profile=profile)  # die Probe — wirft mit Handlungsvorschlag
     return recipe
