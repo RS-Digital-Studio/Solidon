@@ -119,7 +119,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Nach einem Erzeugungslauf begraben 118 wortgleiche Hinweise den Prüfbericht | Wortgleiche Waisen-Hinweise fluten den Prüfbericht (30.08.2026) | eine Entscheidung über Zusammenfassen oder Deckel — in `evaluate.py` oder `panels.py`, nicht nebenbei |
 | Das Budget der Orientierungssuche ist zu knapp gesetzt | Das Budget der Orientierungssuche lässt keinen Puffer (30.08.2026) | Roberts Entscheidung: das 20-s-Budget aus §31 anheben oder die Suche beschleunigen — 18,7 s auf beiden gemessenen Ständen sind kein Regressionsfall, sondern 6 Prozent Luft |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
-| Solidons Slicer-Lauf scheitert an ElegooSlicer, die CLI selbst nicht | Solidons Elegoo-Lauf scheitert, die CLI selbst nicht (30.08.2026) | fb's vier Trennläufe zwischen `--arrange 0` und dem selbst geschriebenen Maschinenprofil |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
 | Die zweite Slicer-Übergabeart hat keinen Aufrufer | Die zweite Übergabeart ist gebaut und hängt an nichts (30.08.2026) | den Anschluss an den Druckdialog: Übergabeart wählbar, Wahl gemerkt — der Fensterweg bekommt denselben Platz wie der Konsolenlauf (55) |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -12526,9 +12525,20 @@ und das von `write_config` selbst geschriebene Maschinenprofil statt Elegoos
 Original. Ein `layer_gcode` mit `G92 E0` wird nicht eingebaut — Robert: „den
 gcode wollen wir nicht verändern, nur die vorgaben bei den slicern" (§22).
 
-- [ ] fb's vier Trennläufe zwischen den zwei Unterschieden, mit wörtlich
-      festgehaltenen Kommandozeilen — danach der Fix an Solidons Aufruf oder
-      die belegte Auskunft, dass es am Slicer liegt.
+- [x] Geschlossen am 30.08.2026, in zwei Messungen: fb's Trennläufe (auf der
+      Handzeile mit Elegoos Systemprofilen) wiesen den Schalterwert 0 als
+      alleinige Ursache aus — `--arrange 1` läuft, die abgelehnte
+      **Wertbelegung** ist gerade das „nicht anordnen". Der Fix ist die
+      Rückfallstufe in `153c942d`: einmal ohne den Schalter, die verworfene
+      Anordnung als Befund (`slicer.arranged_itself`), das Programm je
+      Sitzung gemerkt. Und der echte Ende-zu-Ende-Weg ist belegt (55):
+      Solidons voller Aufruf mit selbst geschriebenem Maschinenprofil gegen
+      ElegooSlicer 1.5.3.4 — Abbruch an `--arrange 0` in Sekundenbruchteilen,
+      der Rückfall liefert `plate_1.gcode` mit 100 Schichten und 1568,6 mm
+      Filament (stimmig zur Referenz), der Befund kommt in beiden Läufen,
+      die zweite Platte läuft gemerkt in einem Zug (3,2 s statt 3,9 s).
+      Damit ist auch das eigene Maschinenprofil am echten Weg bestätigt,
+      nicht nur auf der Handzeile entlastet.
 
 ---
 
