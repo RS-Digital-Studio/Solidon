@@ -2786,3 +2786,51 @@ def test_every_group_holds_one_subject(qt_app: QApplication, session: Session) -
 
     groesste = max(sum(1 for f in FIELDS if f.group == g and not f.front) for g in GROUPS)
     assert groesste <= 9, f"die größte Gruppe trägt {groesste} Felder"
+
+
+def test_the_spool_colour_is_big_enough_to_read(qt_app: QApplication) -> None:
+    """Die Farbe steht als Überschrift, nicht als Fußnote (Befund B28).
+
+    Der Dialog heißt „Druckeinstellungen — Gehäuse", und die Farbe daneben
+    sagt, **welche** Spule gemeint ist. Sie war ein 14-Punkte-Quadrat in einem
+    620 Punkte breiten Dialog — dieselbe Größe wie in einer Listenzeile, wo
+    sie neben zwanzig Geschwistern steht und nur unterscheiden muss.
+
+    **Geprüft wird die Rechnung, nicht das Bild.** Ob 14 Punkte zu klein sind,
+    hängt an der Schriftgröße, und offscreen gibt es keine Schrift: Dort meldet
+    auch die fette Überschrift 14 Punkte, und jede Pixelprüfung wäre in einer
+    Lage grün, die es beim Kunden nicht gibt (`tests.md`). Zugesichert ist
+    deshalb, was unabhängig davon gilt — das Feld ist so hoch wie seine Zeile
+    und nie kleiner als das Listenmaß.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.ui.filament_picker import SWATCH_PIXELS
+    from app.ui.print_settings_dialog import swatch_size
+
+    hoch = QLabel("Text")
+    hoch.setFixedHeight(40)
+    klein = QLabel("Text")
+    klein.setFixedHeight(6)
+
+    assert swatch_size(hoch) == 40, "so hoch wie die Zeile"
+    assert swatch_size(klein) == SWATCH_PIXELS, "aber nie unter dem Listenmaß"
+
+
+def test_the_filament_dialog_uses_that_calculation() -> None:
+    """Die Hälfte, die der Test darüber nicht prüfen kann.
+
+    Er prüft die Rechnung an einem Widget bekannter Höhe — und bliebe grün,
+    wenn der Dialog sie gar nicht ruft und wieder die Konstante setzt (die
+    Mutation „im Dialog nicht benutzt" hat genau das gezeigt). Am Quelltext
+    geprüft, weil die Pixelfrage offscreen nicht messbar ist; beide zusammen
+    sichern den Weg.
+    """
+    import inspect
+
+    from app.ui.print_settings_dialog import FilamentOverrideDialog
+
+    quelle = inspect.getsource(FilamentOverrideDialog.__init__)
+
+    assert "swatch_size(title)" in quelle, "die Überschrift gibt das Maß vor"
+    assert "SWATCH_PIXELS, SWATCH_PIXELS" not in quelle, "und nicht mehr die Listenkonstante"

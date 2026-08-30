@@ -1095,6 +1095,21 @@ class _ColourButton(QPushButton):
             self.changed.emit(self._value)
 
 
+def swatch_size(reference: QWidget) -> int:
+    """Wie groß ein Farbfeld neben diesem Text sein muss.
+
+    Die Farbe einer Spule steht in zwei Lagen: in einer Liste, wo sie neben
+    ihren Geschwistern nur unterscheiden muss, und als Überschrift, wo sie
+    allein sagt, welche Spule gemeint ist. Für die erste genügen die vierzehn
+    Punkte aus dem Filamentwähler; für die zweite ist das zu wenig (Befund
+    B28: „die wichtigste Eigenschaft als unauffälligstes Element").
+
+    Gerechnet aus der Zeile statt als Zahl daneben — die Schrift skaliert
+    (§19.3), und eine Konstante wäre bei der nächsten Größe wieder zu klein.
+    """
+    return max(SWATCH_PIXELS, reference.sizeHint().height())
+
+
 def _make_setting_editor(
     field: Field,
     parent: QWidget,
@@ -1216,15 +1231,21 @@ class FilamentOverrideDialog(QDialog):
         heading_layout = QHBoxLayout(heading)
         heading_layout.setContentsMargins(0, 0, 0, 0)
         heading_layout.setSpacing(TIGHT)
-        colour = QLabel(heading)
-        colour.setPixmap(
-            swatch(shown_colour(int(slot.index), slot.colour)).pixmap(SWATCH_PIXELS, SWATCH_PIXELS)
-        )
-        colour.setAccessibleName(tr("Filamentfarbe"))
         title = QLabel(name, heading)
         font = title.font()
         font.setBold(True)
         title.setFont(font)
+        colour = QLabel(heading)
+        # **So hoch wie die Zeile, in der sie steht** (Befund B28). Vierzehn
+        # Punkte sind das Maß einer Listenzeile, wo die Farbe neben zwanzig
+        # Geschwistern nur unterscheiden muss. Hier steht sie allein und sagt,
+        # welche Spule gemeint ist — ein dunkles Blau von einem dunklen Grau zu
+        # trennen verlangt Fläche. Gerechnet statt gesetzt, weil die Schrift
+        # skaliert (§19.3): eine feste Zahl wäre bei der nächsten Schriftgröße
+        # wieder zu klein.
+        edge = swatch_size(title)
+        colour.setPixmap(swatch(shown_colour(int(slot.index), slot.colour)).pixmap(edge, edge))
+        colour.setAccessibleName(tr("Filamentfarbe"))
         heading_layout.addWidget(colour)
         heading_layout.addWidget(title, 1)
         layout.addWidget(heading)
