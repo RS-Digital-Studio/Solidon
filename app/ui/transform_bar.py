@@ -21,6 +21,7 @@ from typing import Any
 from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QFormLayout,
     QHBoxLayout,
@@ -297,10 +298,30 @@ class TransformBar(QWidget):
         # sie geht durch tr(): Im Französischen gehört vor das Prozentzeichen
         # ein Leerzeichen, im Englischen nicht.
         self.angle_value.setSuffix(tr(" °"))
+        # **Vorgewählt, weil das Teil sonst in der Luft steht.** Eine Drehung um
+        # X oder Y kippt den Körper, und seine Unterseite liegt danach irgendwo
+        # — mal über der Platte, mal darunter. Wer dreht, will fast immer
+        # drucken, und ein Teil, das nicht aufliegt, druckt nicht.
+        #
+        # Der Haken bleibt trotzdem einer: Wer eine Baugruppe in ihrer Lage
+        # zueinander dreht, braucht genau das nicht, und für den ist ein
+        # ungefragtes Aufsetzen ein Fehler, den er erst im Slicer bemerkt.
+        self.to_bed = QCheckBox(tr("aufs Bett"), holder)
+        self.to_bed.setChecked(True)
+        self.to_bed.setToolTip(
+            tr(
+                "Setzt das Teil nach dem Drehen mit seiner Unterseite auf die "
+                "Platte. Beides zusammen ist ein Schritt im Verlauf und geht mit "
+                "einem Strg+Z zurück."
+            )
+        )
+        self.to_bed.setAccessibleDescription(self.to_bed.toolTip())
+
         row.addWidget(QLabel(tr("Achse"), holder))
         row.addWidget(self.axis)
         row.addWidget(QLabel(tr("Winkel"), holder))
         row.addWidget(self.angle_value)
+        row.addWidget(self.to_bed)
         return holder
 
     def _scale_fields(self) -> QWidget:
@@ -353,6 +374,16 @@ class TransformBar(QWidget):
     def role(self) -> str:
         """Welche Rolle gerade gewählt ist."""
         return ROLES[max(self.roles.checkedId(), 0)][0]
+
+    def drops_to_bed(self) -> bool:
+        """Ob nach der Drehung aufgesetzt werden soll.
+
+        Nur beim Drehen: Verschieben ist eine Ansage über den Ort — wer
+        ``dz = 10`` tippt, will das Teil oben haben, und ein Aufsetzen danach
+        nähme ihm genau das. Skalieren wäre ein Fall für sich; solange es
+        nicht beauftragt ist, bleibt es beim Drehen.
+        """
+        return self.role() == "rotate" and self.to_bed.isChecked()
 
     def draft(self) -> tuple[str, dict[str, Any]]:
         """Die Operation zur gewählten Rolle, mit den Werten der Felder.

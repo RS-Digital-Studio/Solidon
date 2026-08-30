@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from app.core.geom.mesh import as_mesh_data
 from app.ui.labels import set_display_unit
 from app.ui.main_window import MainWindow
 from app.ui.transform_bar import TransformBar
@@ -374,6 +375,97 @@ def test_one_body_typed_keeps_the_old_meaning(window: MainWindow) -> None:
     assert turns, "der Klick hat keinen Drehschritt erzeugt"
     assert "about" not in turns[-1].params, (
         f"bei einem Körper gilt sein eigener Mittelpunkt: {turns[-1].params}"
+    )
+
+
+def test_turning_puts_the_part_back_on_the_bed(window: MainWindow) -> None:
+    """Wer dreht, bekommt sein Teil aufgesetzt — und zwar wirklich.
+
+    **Eine Drehung um X oder Y kippt den Körper**, und seine Unterseite liegt
+    danach irgendwo: mal über der Platte, mal darunter. Wer dreht, will fast
+    immer drucken, und ein Teil, das nicht aufliegt, druckt nicht.
+
+    Gemessen wird an der Geometrie und nicht an der Zahl der Schritte: Ein
+    zweiter Eintrag im Verlauf beweist nur, dass etwas passiert ist — die
+    Zusage ist, dass die Unterseite danach auf null liegt.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+
+    window.transform_bar.role_buttons["rotate"].click()
+    window.transform_bar.to_bed.setChecked(True)
+    window.transform_bar.axis.setCurrentIndex(0)  # um X, damit es kippt
+    window.transform_bar.angle_value.setValue(45.0)
+    window.transform_bar.apply.click()
+    window.session.wait_for_idle()
+
+    scene = window.session.evaluate_now().scene
+    unterkante = min(as_mesh_data(entry.mesh).bounds.minimum[2] for entry in scene.objects.values())
+    assert unterkante == pytest.approx(0.0, abs=1e-6), (
+        f"nach dem Drehen liegt die Unterseite bei {unterkante:.3f} mm statt auf "
+        "der Platte — ein Teil, das nicht aufliegt, druckt nicht"
+    )
+
+
+def test_the_turn_and_the_drop_are_one_undo(window: MainWindow) -> None:
+    """Beides zusammen ist eine Handlung, also ein Strg+Z.
+
+    **Das ist die eigentliche Zusage von P6.** Zwei getrennte Aufrufe wären
+    zwei Schritte im Verlauf und zwei Undos für eine Handlung — der Kunde
+    drückt einmal zurück, sieht sein Teil in der Luft und weiß nicht, was er
+    da halb zurückgenommen hat.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+    vorher = len(window.session.project.document.ops)
+
+    window.transform_bar.role_buttons["rotate"].click()
+    window.transform_bar.to_bed.setChecked(True)
+    window.transform_bar.axis.setCurrentIndex(0)
+    window.transform_bar.angle_value.setValue(45.0)
+    window.transform_bar.apply.click()
+    window.session.wait_for_idle()
+
+    ops = [entry.op for entry in window.session.project.document.ops]
+    assert ops[-2:] == ["rotate_object", "place_on_bed"], f"Verlauf endet auf {ops[-3:]}"
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    danach = len(window.session.project.document.ops)
+    assert danach == vorher, (
+        f"ein Undo hat {vorher + 2 - danach} von zwei Schritten zurückgenommen — "
+        "Drehen und Aufsetzen sind eine Handlung und gehören in eine Transaktion"
+    )
+
+
+def test_moving_never_drops_to_the_bed(window: MainWindow) -> None:
+    """Verschieben ist eine Ansage über den Ort — und die gilt.
+
+    Die Gegenprobe zum Haken. Wer ``dz = 10`` tippt, will das Teil oben haben;
+    ein Aufsetzen danach nähme ihm genau das. Der Haken gehört deshalb zum
+    Drehen und nicht zur Leiste.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+
+    window.transform_bar.to_bed.setChecked(True)
+    window.transform_bar.role_buttons["move"].click()
+    window.transform_bar.dz.set_value_mm(10.0)
+    window.transform_bar.apply.click()
+    window.session.wait_for_idle()
+
+    ops = [entry.op for entry in window.session.project.document.ops]
+    assert "place_on_bed" not in ops, (
+        f"Verschieben hat aufgesetzt und damit die Ansage überschrieben: {ops}"
     )
 
 

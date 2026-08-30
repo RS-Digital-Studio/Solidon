@@ -9014,10 +9014,25 @@ class MainWindow(QMainWindow):
         # Punkt aus derselben Quelle wie der Zug am Griff — zwei Wege zum
         # selben Ergebnis sind sonst zwei Ergebnisse.
         params = {**params, **self.pivot_for_transform()}
-        self.session.apply(
-            REGISTRY.get(op).title,
-            [OperationDraft(op=op, inputs=(one,), params=params) for one in chosen],
-        )
+        drafts = [OperationDraft(op=op, inputs=(one,), params=params) for one in chosen]
+
+        # **Nach dem Drehen aufs Bett — in derselben Transaktion.** Eine
+        # Drehung um X oder Y kippt den Körper, und seine Unterseite liegt
+        # danach irgendwo: mal über der Platte, mal darunter. Wer dreht, will
+        # fast immer drucken, und ein Teil, das nicht aufliegt, druckt nicht.
+        #
+        # Entscheidend ist das **Wo**, nicht das Ob: Zwei getrennte
+        # ``session.apply`` wären zwei Schritte im Verlauf und zwei Undos für
+        # eine Handlung — der Kunde drückt einmal Strg+Z, sieht das Teil in der
+        # Luft und weiß nicht, was er da halb zurückgenommen hat. Als ein
+        # Aufruf ist es eine Handlung mit zwei Teilen, und genau so heißt sie
+        # auch im Verlauf.
+        title = REGISTRY.get(op).title
+        if self.transform_bar.drops_to_bed():
+            drafts += [OperationDraft(op="place_on_bed", inputs=(one,)) for one in chosen]
+            title = tr("Drehen und aufs Bett setzen")
+
+        self.session.apply(title, drafts)
 
     def _repair_after_error(self, error: AppError) -> None:
         """§17.1: die Reparaturkette auf den Körper, an dem es hing."""
