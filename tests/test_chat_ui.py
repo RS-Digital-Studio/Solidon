@@ -1528,6 +1528,7 @@ def test_the_error_dialog_really_shows_them(
     assert gelesen, "der Dialog wurde gebaut"
     assert "192.168.1.50" in gelesen[-1], "die Adresse steht daneben"
     assert "502 Bad Gateway" in gelesen[-1], "und der Anfang der Antwort"
+    assert "anthropic" in gelesen[-1], "und der Anbieter, den der Changelog zusagt"
 
     # Und der zweite Weg zu denselben Angaben liest aus derselben Quelle —
     # zwei Antworten auf dieselbe Frage driften.

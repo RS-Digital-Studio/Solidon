@@ -11,12 +11,13 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
-from app.core.backends.mesh import ScriptedMeshBackend
+from app.core.backends.mesh import GeneratedMesh, ScriptedMeshBackend
 from app.core.errors import OperationCancelled
 from app.core.scene import History
 from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.session import Session
+from tests.conftest import FakeMesh
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -306,6 +307,50 @@ def test_a_second_try_counts_the_seed_up_and_keeps_the_first(
     # Gewählt wird über die Liste; ohne Auswahl gilt der letzte.
     dialog.attempts.setCurrentRow(0)
     assert dialog.chosen() is dialog.tries[0]
+
+
+def test_a_tiny_body_shows_its_real_volume_beside_closed(qt_app: QApplication) -> None:
+    """Die Zeile, die der Kunde liest — nicht die Funktion, die sie formatiert.
+
+    ``format_volume`` hat einen eigenen Test, und der reicht bis zur eigenen
+    Klammer. Zugesagt ist aber die **Zeile** in der Versuchsliste: Volumen
+    neben „geschlossen". Zwischen beidem liegen zwei Glieder — ``labels.volume``
+    und ``_show_tries`` —, und ein halbes Kubikmillimeter stand dort als
+    „0 mm³", während die Formatierung längst richtig rechnete.
+
+    **Gemessen wird die Zahl, nicht ihre Schreibweise.** Ein ``assert`` auf
+    „0,12 mm³" wäre ein Nachbau der Formatierung: Er bräche bei jeder
+    Stellenänderung, ohne dass ein Kunde etwas verlöre, und er bliebe grün,
+    wenn die Kette wieder auf feste Kubikzentimeter zurückfiele — dort steht
+    dieselbe Zahl als „0,0". Geprüft wird deshalb, was die Zusage ausmacht:
+    dass **etwas Positives** dort steht.
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    try:
+        wait_for_readiness(dialog, qt_app)
+        # 0,5 mm Kante — 0,125 mm³, der Wert aus einem echten Wurf.
+        dialog.tries = [
+            GeneratedMesh(
+                mesh=FakeMesh(size=(0.5, 0.5, 0.5)),  # type: ignore[arg-type]
+                payload=b"",
+                suffix=".stl",
+                backend="test",
+            )
+        ]
+        dialog._show_tries()
+
+        eintrag = dialog.attempts.item(0)
+        assert eintrag is not None, "der Versuch steht in der Liste"
+        zeile = eintrag.text()
+        assert "geschlossen" in zeile, "die Zusage nennt beides in einer Zeile"
+
+        # Das mittlere der drei Stücke ist das Volumen; die Trennung gehört
+        # zur Zeile und nicht zur Formatierung, die hier geprüft wird.
+        gemessen = zeile.split("·")[1].strip()
+        zahl = float(gemessen.split()[0].replace(",", "."))
+        assert zahl > 0.0, f"ein Körper mit Volumen zeigt keine Null: {zeile!r}"
+    finally:
+        dialog.deleteLater()
 
 
 def test_a_failure_stays_in_the_dialog(qt_app: QApplication) -> None:
