@@ -2873,3 +2873,98 @@ def test_the_stretch_is_bounded_by_the_snap_that_precedes_it() -> None:
         assert sketch_view_near(kamera, (0.0, 0.0, 0.0)) == erwartet, (
             f"bei {grad}° erwartet: {erwartet} — die Streckgrenze ist auf diesen Rand gerechnet"
         )
+
+
+def test_each_navigation_scheme_does_what_its_name_promises() -> None:
+    """Vier Schemata, und zwei hielten ihren eigenen Namen nicht (V3).
+
+    „Wie im CAD — mittlere Taste dreht" stand im Einstellungsdialog, und die
+    mittlere Taste hatte **gar keinen Beobachter**: In `cad` drehte die linke,
+    in `blender` ebenso. Wer aus einem CAD oder aus Blender kam, drückte das
+    Rad, nichts geschah, und die linke Taste drehte das Modell weg, statt
+    etwas auszuwählen.
+
+    Geprüft wird an der Tabelle, aus der der Interaktionsstil seine Aufrufe
+    holt — die Kette im Stil ist eine VTK-Klasse und lief offscreen nie;
+    genau deshalb konnte der falsche Satz zwei Schemata lang dastehen.
+    """
+    from app.ui.viewport import navigation_action
+
+    # Cura und die Slicer-Familie bleiben, wie sie waren.
+    assert navigation_action("slicer", "left", False) == "select"
+    assert navigation_action("slicer", "left", True) == "pan"
+    assert navigation_action("slicer", "right", False) == "rotate"
+    assert navigation_action("orbit", "left", False) == "rotate"
+    assert navigation_action("orbit", "right", False) == "pan"
+
+    # Die mittlere Taste schiebt dort weiter — das tat sie über VTKs eigene
+    # Behandlung schon immer, und ein neuer Beobachter darf es nicht nehmen.
+    for scheme in ("slicer", "orbit"):
+        assert navigation_action(scheme, "middle", False) == "pan", scheme
+        assert navigation_action(scheme, "middle", True) == "pan", scheme
+
+    # Und die zwei, die ihren Namen jetzt halten.
+    assert navigation_action("cad", "middle", False) == "rotate"
+    assert navigation_action("cad", "middle", True) == "pan"
+    assert navigation_action("cad", "left", False) == "select"
+    assert navigation_action("cad", "right", False) == "zoom"
+
+    assert navigation_action("blender", "middle", False) == "rotate"
+    assert navigation_action("blender", "middle", True) == "pan"
+    assert navigation_action("blender", "left", False) == "select"
+
+
+def test_every_scheme_can_rotate_and_pan() -> None:
+    """Keine Belegung darf eine Kamerabewegung verlieren.
+
+    Wer ein Schema wählt, muss damit drehen **und** schieben können; ein
+    Schema ohne eines von beidem wäre eine Sackgasse, in der ein Teil der
+    Szene unerreichbar bleibt.
+
+    **Ausgewählt wird nicht über diese Tabelle**, und das ist der Grund,
+    warum hier ``select`` nicht mitgeprüft wird: Der erste Entwurf dieses
+    Tests verlangte es und meldete prompt „orbit kann nicht auswählen" — ein
+    Fehlbefund. Ein Klick ohne Zug geht in **jedem** Schema an ``on_pick``
+    (``_left_up``), gleich was die Taste beim Ziehen tut. Die Tabelle
+    beschreibt das Ziehen, nicht den Klick.
+    """
+    from app.ui.viewport import _NAVIGATION, navigation_action
+
+    for scheme in _NAVIGATION:
+        reachable = {
+            navigation_action(scheme, button, shift)  # type: ignore[arg-type]
+            for button in ("left", "middle", "right")
+            for shift in (False, True)
+        }
+        assert {"rotate", "pan"} <= reachable, (
+            f"{scheme} kann nicht beides: erreichbar ist {sorted(reachable)}"
+        )
+
+
+def test_the_navigation_texts_say_what_the_scheme_does() -> None:
+    """Die Beschreibung im Dialog und das Verhalten kommen aus einer Quelle.
+
+    Nicht wörtlich geprüft — ein Text soll sich lesen lassen —, aber an der
+    Aussage, die der Kunde daraus zieht: Wo „mittlere Taste dreht" steht,
+    muss die mittlere Taste drehen, und wo „links wählt" steht, darf links
+    die Kamera nicht bewegen. Genau diese Zusage war zweimal gebrochen.
+    """
+    from app.ui.settings_dialog import NAVIGATION
+    from app.ui.viewport import _NAVIGATION, navigation_action
+
+    assert set(NAVIGATION) == set(_NAVIGATION), "jedes Schema hat genau eine Beschreibung"
+
+    for scheme, label in NAVIGATION.items():
+        text = str(label).lower()
+        if "mittlere taste dreht" in text:
+            assert navigation_action(scheme, "middle", False) == "rotate", scheme  # type: ignore[arg-type]
+        if "links wählt" in text:
+            assert navigation_action(scheme, "left", False) == "select", scheme  # type: ignore[arg-type]
+        if "links dreht" in text:
+            assert navigation_action(scheme, "left", False) == "rotate", scheme  # type: ignore[arg-type]
+        if "rechts dreht" in text:
+            assert navigation_action(scheme, "right", False) == "rotate", scheme  # type: ignore[arg-type]
+        if "rechts zoomt" in text:
+            assert navigation_action(scheme, "right", False) == "zoom", scheme  # type: ignore[arg-type]
+        if "rechts schiebt" in text:
+            assert navigation_action(scheme, "right", False) == "pan", scheme  # type: ignore[arg-type]

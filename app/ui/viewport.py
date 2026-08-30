@@ -97,7 +97,69 @@ _log = get_logger(__name__)
 NavigationScheme = Literal["slicer", "cad", "blender", "orbit"]
 """``slicer`` folgt §2.9 und damit Cura: links wählt, rechts dreht.
 ``orbit`` ist die Aufteilung von Bambu Studio, OrcaSlicer und PrusaSlicer —
-links dreht, rechts schiebt. Ein viertes Schema, keine andere Vorgabe."""
+links dreht, rechts schiebt. ``cad`` und ``blender`` legen das Drehen auf die
+mittlere Taste, wie die Programme, nach denen sie heißen."""
+
+MouseButton = Literal["left", "middle", "right"]
+CameraAction = Literal["select", "rotate", "pan", "zoom"]
+
+#: Was eine Maustaste in einem Schema an der Kamera tut.
+#:
+#: **Eine reine Funktion und keine Kette im Interaktionsstil**, aus zwei
+#: Gründen. Der eine ist die Prüfbarkeit: Der Stil ist eine VTK-Klasse, seine
+#: Tastenkette lief offscreen nie, und deshalb konnte „mittlere Taste dreht"
+#: zwei Schemata lang im Einstellungsdialog stehen, **ohne dass die mittlere
+#: Taste überhaupt einen Beobachter hatte**. Der andere ist die eine Wahrheit:
+#: Der Text im Dialog und das Verhalten stammen jetzt aus derselben Tabelle.
+_NAVIGATION: Final[dict[NavigationScheme, dict[tuple[MouseButton, bool], CameraAction]]] = {
+    # Cura: links wählt, rechts dreht, Umschalt und Ziehen schiebt.
+    "slicer": {
+        ("left", False): "select",
+        ("left", True): "pan",
+        ("middle", False): "pan",
+        ("middle", True): "pan",
+        ("right", False): "rotate",
+        ("right", True): "rotate",
+    },
+    # Bambu Studio, OrcaSlicer, PrusaSlicer: links dreht, rechts schiebt.
+    "orbit": {
+        ("left", False): "rotate",
+        ("left", True): "rotate",
+        ("middle", False): "pan",
+        ("middle", True): "pan",
+        ("right", False): "pan",
+        ("right", True): "pan",
+    },
+    # CAD: die mittlere Taste dreht, mit Umschalt schiebt sie; links wählt,
+    # damit es überhaupt eine Auswahltaste gibt, und rechts zoomt.
+    "cad": {
+        ("left", False): "select",
+        ("left", True): "pan",
+        ("middle", False): "rotate",
+        ("middle", True): "pan",
+        ("right", False): "zoom",
+        ("right", True): "zoom",
+    },
+    # Blender: links wählt, die mittlere Taste dreht, Umschalt+Mitte schiebt.
+    "blender": {
+        ("left", False): "select",
+        ("left", True): "pan",
+        ("middle", False): "rotate",
+        ("middle", True): "pan",
+        ("right", False): "rotate",
+        ("right", True): "rotate",
+    },
+}
+
+
+def navigation_action(scheme: NavigationScheme, button: MouseButton, shift: bool) -> CameraAction:
+    """Was diese Taste in diesem Schema an der Kamera tut.
+
+    ``select`` heißt: Die Kamera rührt sich nicht — der Klick gehört der
+    Auswahl, dem Werkzeug oder dem Körper darunter.
+    """
+    return _NAVIGATION[scheme][(button, shift)]
+
 
 DisplayMode = Literal["solid", "solid_edges", "wireframe", "transparent"]
 """How a body is drawn (§18.1)."""
@@ -8766,6 +8828,12 @@ def _InteractorStyle(  # noqa: N802
             self.AddObserver("LeftButtonReleaseEvent", self._left_up)
             self.AddObserver("RightButtonPressEvent", self._right_down)
             self.AddObserver("RightButtonReleaseEvent", self._right_up)
+            # **Die mittlere Taste hatte gar keinen Beobachter**, und zwei
+            # Schemata versprechen sie im Namen: „Wie im CAD — mittlere Taste
+            # dreht" und „Wie in Blender". Wer aus einem CAD kam, drückte das
+            # Rad und es geschah nichts.
+            self.AddObserver("MiddleButtonPressEvent", self._middle_down)
+            self.AddObserver("MiddleButtonReleaseEvent", self._middle_up)
             self.AddObserver("MouseWheelForwardEvent", self._wheel_in)
             self.AddObserver("MouseWheelBackwardEvent", self._wheel_out)
             self.AddObserver("MouseMoveEvent", self._mouse_move)
@@ -8831,22 +8899,7 @@ def _InteractorStyle(  # noqa: N802
                 # Pixeln Wackeln, wie es beim Klicken normal ist).
                 self._ready_to_drag = True
                 return
-            if scheme == "slicer":
-                # Links wählt; geschoben wird mit Umschalt und Ziehen.
-                if self._shift():
-                    self.StartPan()
-                    self._tell("panning")
-                return
-            if scheme == "blender" and self._shift():
-                self.StartPan()
-                self._tell("panning")
-                return
-            if on_rotate_start is not None:
-                # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
-                # Tiefe der Körper, unsichtbar (§2.9, ``_aim_rotation``).
-                on_rotate_start()
-            self.StartRotate()
-            self._tell("rotate")
+            self._begin("left")
 
         def _mouse_move(self, *_: Any) -> None:
             if self._painting:
@@ -8878,9 +8931,7 @@ def _InteractorStyle(  # noqa: N802
 
         def _left_up(self, *_: Any) -> None:
             painted, self._painting = self._painting, False
-            self.EndPan()
-            self.EndRotate()
-            self._tell(None)
+            self._end()
             started, self._left_at = self._left_at, None
             dragged, self._dragging_body = self._dragging_body, False
             self._ready_to_drag = False
@@ -8937,17 +8988,22 @@ def _InteractorStyle(  # noqa: N802
             if on_camera is not None:
                 on_camera()
 
-        def _right_down(self, *_: Any) -> None:
-            self._right_at = self._position()
-            if scheme == "cad":
-                self.StartDolly()
-                self._tell("zoom")
+        def _begin(self, button: MouseButton) -> None:
+            """Die Kamerabewegung dieser Taste starten — laut Schema.
+
+            Eine Stelle für alle drei Tasten: Die Zuordnung steht in
+            :data:`_NAVIGATION`, hier steht nur, wie VTK sie ausführt.
+            """
+            action = navigation_action(scheme, button, self._shift())
+            if action == "select":
                 return
-            if scheme == "orbit":
-                # Links dreht, rechts schiebt — die Aufteilung von Bambu
-                # Studio, OrcaSlicer und PrusaSlicer.
+            if action == "pan":
                 self.StartPan()
                 self._tell("panning")
+                return
+            if action == "zoom":
+                self.StartDolly()
+                self._tell("zoom")
                 return
             if on_rotate_start is not None:
                 # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
@@ -8956,11 +9012,25 @@ def _InteractorStyle(  # noqa: N802
             self.StartRotate()
             self._tell("rotate")
 
-        def _right_up(self, *_: Any) -> None:
+        def _end(self) -> None:
+            """Jede Bewegung beenden — welche lief, weiß hier niemand mehr."""
             self.EndRotate()
             self.EndDolly()
             self.EndPan()
             self._tell(None)
+
+        def _middle_down(self, *_: Any) -> None:
+            self._begin("middle")
+
+        def _middle_up(self, *_: Any) -> None:
+            self._end()
+
+        def _right_down(self, *_: Any) -> None:
+            self._right_at = self._position()
+            self._begin("right")
+
+        def _right_up(self, *_: Any) -> None:
+            self._end()
             started, self._right_at = self._right_at, None
             if on_context is None:
                 return

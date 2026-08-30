@@ -2242,8 +2242,14 @@ class MainWindow(QMainWindow):
                 "orbit",
                 tr("Links dreht, rechts schiebt — die verbreitetste Aufteilung."),
             ),
-            ("cad", tr("Wie in einem CAD-Programm: Mittlere Taste dreht.")),
-            ("blender", tr("Wie in Blender.")),
+            (
+                "cad",
+                tr("Mittlere Taste dreht, mit Umschalt schiebt sie; rechts zoomt."),
+            ),
+            (
+                "blender",
+                tr("Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt."),
+            ),
         ):
             action = self._add_action(
                 navigation_menu,

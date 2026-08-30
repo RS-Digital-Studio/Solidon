@@ -57,8 +57,8 @@ from app.ui.shortcut_schemes import SCHEMES
 NAVIGATION = {
     "slicer": _("Wie in Cura — links wählt, rechts dreht"),
     "orbit": _("Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"),
-    "cad": _("Wie im CAD — mittlere Taste dreht"),
-    "blender": _("Wie in Blender"),
+    "cad": _("Wie im CAD — mittlere Taste dreht, rechts zoomt"),
+    "blender": _("Wie in Blender — links wählt, mittlere Taste dreht"),
 }
 
 #: Die Bezeichnungen der Themen.
