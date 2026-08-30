@@ -367,6 +367,60 @@ def test_the_dialog_is_there_before_the_answers_are(qt_app: QApplication) -> Non
     assert "nachgesehen" not in dialog.chat_state.text()
 
 
+def test_the_first_screen_answers_before_it_is_asked(qt_app: QApplication) -> None:
+    """Vier Stellen, an denen ein Neuling raten musste — aus einer Fahrt zu viert.
+
+    Der Erststart ist das Erste, was ein Kunde von Solidon sieht, und er richtet
+    sich ausdrücklich an jemanden **ohne** CAD-Erfahrung. Vier Befunde einer
+    Bedienfahrt, hier zusammen festgehalten, weil sie dieselbe Frage stellen:
+    Muss der Kunde raten?
+
+    * **Der Drucker, der nicht in der Liste steht.** Wer einen Artillery oder
+      Qidi hat, sah die Liste, fand sich nicht und wusste nicht, ob der
+      allgemeine Eintrag für ihn gilt. Er gilt — und das steht jetzt da.
+    * **Drei Platzhalter, die nicht sagten, worauf sie warten.** Dreimal „Wird
+      nachgesehen …" untereinander ist dreimal dieselbe Nicht-Auskunft. Der
+      Name steht sofort, nur der Zustand wandert nach.
+    * **Ein gesperrter Knopf ohne Grund daneben.** Er ist es knapp drei
+      Sekunden lang; die Zeile darüber sagt jetzt, warum.
+    * **Eine Zusammenfassung, die die Zeilen darüber wiederholte.**
+      „Optional nicht eingerichtet: ComfyUI" stand über einer Zeile „nicht
+      eingerichtet · ComfyUI — …". Zweimal dasselbe liest sich wie zwei
+      Auskünfte; die Zusammenfassung trägt nur noch den Ausnahmefall.
+
+    Geprüft wird am **gebauten** Dialog und vor der Erhebung — genau der
+    Augenblick, den ein Kunde als Erstes sieht.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    dialog = FirstRunDialog(UiSettings())
+    try:
+        texts = [label.text() for label in dialog.findChildren(QLabel) if label.isVisibleTo(dialog)]
+        joined = " ".join(texts)
+
+        assert any("nicht dabei" in text for text in texts), (
+            f"no way out for a printer that is not listed: {texts}"
+        )
+
+        waiting = [text for text in texts if "nachgesehen" in text]
+        assert waiting, "the placeholders should still say that something is being looked up"
+        assert all(text != "Wird nachgesehen …" for text in waiting), (
+            f"a placeholder must name what it waits for: {waiting}"
+        )
+        assert len(set(waiting)) == len(waiting), (
+            f"two placeholders reading the same say nothing apart: {waiting}"
+        )
+
+        assert not dialog.install_button.isEnabled(), "unchanged: no button on a guess"
+        assert any("Zusatzprogramme" in text and "nachgesehen" in text for text in texts), (
+            "the disabled button needs its reason next to it"
+        )
+
+        assert "Optional nicht eingerichtet" not in joined, "the summary repeated the rows above it"
+    finally:
+        dialog.deleteLater()
+
+
 def test_looking_does_not_happen_in_the_gui_thread(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -399,7 +453,7 @@ def test_a_printer_the_user_chose_is_not_overwritten(qt_app: QApplication) -> No
     dialog.printer.setCurrentIndex(dialog.printer.count() - 1)
     chosen = dialog.printer.currentData()
 
-    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="prusa_mk4"))
+    dialog._show(first_run.Findings(tools=(), chat="x", printer="prusa_mk4"))
 
     assert dialog.printer.currentData() == chosen, "die eigene Wahl bleibt stehen"
 
@@ -410,7 +464,7 @@ def test_a_suggestion_arrives_while_nobody_has_chosen(qt_app: QApplication) -> N
     offered = {dialog.printer.itemData(index) for index in range(dialog.printer.count())}
     other = next(entry for entry in sorted(offered) if entry != dialog.printer.currentData())
 
-    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer=other))
+    dialog._show(first_run.Findings(tools=(), chat="x", printer=other))
 
     assert dialog.printer.currentData() == other
 
@@ -430,9 +484,7 @@ def test_the_slicer_filament_lands_in_the_rack(
         slicer_profile="Elegoo PETG PRO @ECC2",
     )
 
-    dialog._show(
-        first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=(imported,))
-    )
+    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=(imported,)))
 
     stored = filaments.catalogue()[0]
     assert stored.name == imported.name
@@ -461,7 +513,7 @@ def test_different_loaded_filament_types_are_not_guessed(
         for material_type, colour in (("PLA", "#112233"), ("TPU", "#445566"))
     )
 
-    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=loaded))
+    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=loaded))
 
     assert settings.material == "abs", "bei mehreren Typen bleibt die vorhandene Vorgabe"
 
@@ -495,7 +547,7 @@ def test_an_unknown_loaded_filament_keeps_the_material_choice_ambiguous(
         ),
     )
 
-    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="", filaments=loaded))
+    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=loaded))
 
     assert settings.material == "abs", "ein unbekannter Typ verhindert eine automatische Wahl"
 

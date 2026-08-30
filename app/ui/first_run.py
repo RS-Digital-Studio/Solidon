@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME
-from app.core import activation, install, tools
+from app.core import activation, tools
 from app.core.activation import TRIAL_DAYS
 from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
@@ -79,7 +79,6 @@ class Findings:
     """
 
     tools: tuple[tools.ToolState, ...]
-    missing: str
     chat: str
     printer: str
     filaments: tuple[filaments.CatalogueFilament, ...] = ()
@@ -99,7 +98,6 @@ class _Survey(Worker):
         self.done.emit(
             Findings(
                 tools=tools.survey(),
-                missing=_missing_text(),
                 chat=_chat_text(),
                 printer=printer,
                 filaments=loaded_filaments,
@@ -255,6 +253,22 @@ class FirstRunDialog(QDialog):
         form.addRow(basics_hint)
         form.addRow(tr("Sprache"), self.language)
         form.addRow(tr("Drucker"), self.printer)
+        # **Der Ausweg für alle, die ihr Gerät nicht finden.** Die Liste nennt
+        # die verbreiteten Maschinen; wer einen Artillery oder Qidi hat, stand
+        # vorher vor der Frage, ob der allgemeine Eintrag für ihn gilt — und
+        # riet. Er gilt, und was ihn vom eigenen Gerät unterscheidet, sind zwei
+        # Werte, die sich ändern lassen (§2.4: eine gute Vorgabe schlägt eine
+        # Einstellmöglichkeit, aber nur, wenn man ihr trauen kann).
+        printer_hint = QLabel(
+            tr(
+                "Ihr Drucker ist nicht dabei? Der allgemeine Eintrag passt für den "
+                "Anfang — Bauraum und Düse lassen sich in den Einstellungen ändern."
+            ),
+            basics,
+        )
+        printer_hint.setWordWrap(True)
+        set_level(printer_hint, "caption")
+        form.addRow(printer_hint)
 
         optional = QGroupBox(tr("Optionale Erweiterungen"), self)
         optional_layout = QVBoxLayout(optional)
@@ -275,21 +289,38 @@ class FirstRunDialog(QDialog):
         self._tool_rows = QVBoxLayout(self.tools)
         self._tool_rows.setContentsMargins(0, 0, 0, 0)
         self._tool_rows.setSpacing(TIGHT)
-        # Bis die Erhebung antwortet, steht hier ein Satz und keine Behauptung
-        # über etwas, das niemand nachgesehen hat.
-        looking = QLabel(tr("Wird nachgesehen …"), self.tools)
+        # **Der Platzhalter nennt, worauf er wartet.** Bis die Erhebung
+        # antwortet, steht hier ein Satz und keine Behauptung über etwas, das
+        # niemand nachgesehen hat — aber dreimal „Wird nachgesehen …"
+        # untereinander sagte nicht, *was* nachgesehen wird. Der Name steht
+        # sofort, nur der Zustand wandert nach.
+        looking = QLabel(tr("Zusatzprogramme — wird nachgesehen …"), self.tools)
         set_level(looking, "caption")
         self._tool_rows.addWidget(looking)
 
-        self.extras_state = QLabel(tr("Wird nachgesehen …"), optional)
+        # **Diese Zeile trägt nur noch den Ausnahmefall.** Sie fasste zusammen,
+        # was die Programmzeilen darüber einzeln nennen („Optional nicht
+        # eingerichtet: ComfyUI" über einer Zeile „nicht eingerichtet ·
+        # ComfyUI — …"); zweimal dasselbe liest sich wie zwei Auskünfte. Bleibt
+        # sie leer, bleibt sie unsichtbar — sichtbar wird sie, wenn die
+        # Erhebung scheitert und die Zeilen deshalb nichts zeigen können.
+        self.extras_state = QLabel("", optional)
         self.extras_state.setWordWrap(True)
         set_level(self.extras_state, "caption")
+        self.extras_state.hide()
 
+        # **Gesperrt, bis die Erhebung antwortet — aber nicht mehr wortlos.**
+        # Ein gesperrter Knopf ohne Grund daneben ist eine Frage an den Kunden,
+        # die er nicht beantworten kann; er stand knapp drei Sekunden so da.
+        # Der Grund steht jetzt in der Zeile darüber („Zusatzprogramme — wird
+        # nachgesehen …"), und damit bleibt die Entscheidung von
+        # ``test_the_dialog_is_there_before_the_answers_are`` gültig: kein
+        # Knopf auf eine Vermutung.
         self.install_button = QPushButton(tr("Zusatzprogramme verwalten …"), optional)
         self.install_button.clicked.connect(self._install)
         self.install_button.setEnabled(False)
 
-        self.chat_state = QLabel(tr("Wird nachgesehen …"), optional)
+        self.chat_state = QLabel(tr("Chat — wird nachgesehen …"), optional)
         self.chat_state.setWordWrap(True)
         set_level(self.chat_state, "caption")
 
@@ -429,7 +460,6 @@ class FirstRunDialog(QDialog):
         assert isinstance(found, Findings)
         self.findings = found
         self._fill_tools(found.tools)
-        self.extras_state.setText(found.missing)
         self.install_button.setEnabled(True)
         self.chat_state.setText(found.chat)
         if found.filaments:
@@ -465,6 +495,7 @@ class FirstRunDialog(QDialog):
         _log.warning("first run survey crashed: %s", detail)
         self._fill_tools(())
         self.install_button.setEnabled(True)
+        self.extras_state.show()
         self.extras_state.setText(
             tr(
                 "Der Zustand der Zusatzprogramme konnte nicht geprüft werden. Sie "
@@ -656,18 +687,6 @@ def _chat_text() -> str:
         "Der Chat braucht einen Zugang zu einem Sprachmodell — ein eigener "
         "Schlüssel oder ein lokales Modell über Ollama. Alles andere "
         "funktioniert ohne."
-    )
-
-
-def _missing_text() -> str:
-    """Eine Zeile über das, was nicht da ist — gezeigt neben dem Knopf, der
-    es holt.
-    """
-    absent = install.missing()
-    if not absent:
-        return tr("Zusatzprogramme sind eingerichtet.")
-    return f"{tr('Optional nicht eingerichtet')}: " + ", ".join(
-        str(entry.title) for entry in absent
     )
 
 
