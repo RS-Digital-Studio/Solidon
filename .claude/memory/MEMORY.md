@@ -103,6 +103,7 @@
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc + Python-Patchskript faltet Escape-Folgen; Mehrzeiliges ohne Backslashes bauen, dreimal an einem Abend zugeschnappt.
 - [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sie sauber, und die Verallgemeinerung war die eigentliche Falle.
+- [Commit-Nachricht gehört in eine Datei](commit-nachricht-gehoert-in-eine-datei.md) — `python - << ENDE` liest stdin mit der System-Codepage; aus einem echten Encoding-Fehler wurde die falsche Verallgemeinerung, und ein Commit ging in ASCII hinaus.
 - [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) — eine Messung, die den Bestand verändert, gehört in einen eigenen Worktree; der Syntaxfehler war nicht das Problem, sondern der Ort.
 - [Wächter lesen Kommentare mit](waechter-lesen-kommentare-mit.md) — Quelltext-Wächter treffen auch Docstrings/Kommentare; verbotene Muster umschreiben, nie zitieren.
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
