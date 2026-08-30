@@ -135,6 +135,17 @@ class SectionBar(QWidget):
         self.thickness = LengthSpin(self)
         self.thickness.set_range_mm(0.1, 500.0)
         self.thickness.set_value_mm(10.0)
+        self.thickness.setMinimumWidth(90)
+        # **Wie das Positionsfeld daneben, und aus demselben Grund.** Ohne
+        # diese Zeile sendet das Feld bei jedem Tastendruck: Wer „10" zu „30"
+        # ändert, schneidet erst mit 3 mm und dann mit 30 — zwei Schnitte für
+        # eine Eingabe, und der erste mit einer Dicke, die niemand wollte. Wer
+        # die Zehn löscht, steht kurz unter dem Mindestwert und sieht das Feld
+        # auf 0,1 springen. Zwei gleichartige Felder nebeneinander, von denen
+        # eines die Tastatur abwartet und das andere nicht, ist zudem eine
+        # Inkonsistenz, die niemand erklären kann (Roberts Fehlerbericht,
+        # 30.08.2026).
+        self.thickness.setKeyboardTracking(False)
         self.thickness.valueChanged.connect(self._emit)
 
         self.warning = QLabel("", self)
