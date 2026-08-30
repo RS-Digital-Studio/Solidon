@@ -1,4 +1,4 @@
-"""Schreibt die Erlaubnisliste der Tauschbörse neben die PHP-Dateien.
+"""Schreibt die Erlaubnisliste der geteilten Bausteine neben die PHP-Dateien.
 
 **Zwei Seiten prüfen dasselbe, und sie sprechen verschiedene Sprachen.** Die
 Anwendung prüft vor dem Hochladen, der Server beim Empfangen — und PHP liest
@@ -14,9 +14,9 @@ Werkzeug anzufassen.
 
 Aufruf::
 
-    .venv\\Scripts\\python.exe tools/make_exchange_rules.py
+    .venv\\Scripts\\python.exe tools/make_shared_rules.py
 
-``tests/test_exchange.py`` prüft, dass die eingecheckte Datei aktuell ist —
+``tests/test_shared.py`` prüft, dass die eingecheckte Datei aktuell ist —
 eine erzeugte Datei, die niemand neu erzeugt, ist beim nächsten Zuwachs
 falsch, und genau das ist am 27.08.2026 einem Paketbau passiert.
 """
@@ -31,10 +31,10 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.core.bootstrap import load_operations  # noqa: E402
-from app.core.knowledge.parts.exchange import rules  # noqa: E402
+from app.core.knowledge.parts.shared import rules  # noqa: E402
 
 #: Wohin die Liste geschrieben wird — neben die PHP-Dateien, die sie lesen.
-TARGET = ROOT / "website" / "api" / "exchange-rules.json"
+TARGET = ROOT / "website" / "api" / "shared-rules.json"
 
 
 def written() -> str:

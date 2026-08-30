@@ -1,4 +1,4 @@
-"""Die Formatprüfung der Tauschbörse (Konzept §3.1, §3.2, §3.6).
+"""Die Formatprüfung der geteilten Bausteine (Konzept §3.1, §3.2, §3.6).
 
 **Sie prüft nicht auf Verbotenes, sondern auf Erlaubtes.** Eine Sperrliste
 („kein ``import``, kein ``eval``") muss vollständig sein, um zu wirken, und
@@ -12,7 +12,7 @@ der Veröffentlichung**.
 Zwei Seiten prüfen dasselbe — die Anwendung vor dem Hochladen, der Server beim
 Empfangen —, und sie sind in verschiedenen Sprachen geschrieben. Deshalb
 stehen die Regeln hier als **Daten** und nicht als Code: :func:`rules` gibt
-sie als gewöhnliches Wörterbuch, ``tools/make_exchange_rules.py`` schreibt sie
+sie als gewöhnliches Wörterbuch, ``tools/make_shared_rules.py`` schreibt sie
 neben die PHP-Dateien, und beide Seiten lesen dieselbe Liste. Zwei
 handgepflegte Listen wären die teurere Bauart — der Skizzenlöser und sein
 Serializer haben am 31.08.2026 vorgeführt, wie das endet: Die eine ließ durch,

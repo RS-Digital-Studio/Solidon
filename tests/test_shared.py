@@ -1,4 +1,4 @@
-"""Die Formatprüfung der Tauschbörse — Missbrauchs- und Grenzfälle.
+"""Die Formatprüfung der geteilten Bausteine — Missbrauchs- und Grenzfälle.
 
 Seit Kunden ohne Sichtung hochladen (Robert, 30.08.2026), ist diese Prüfung
 **die erste und einzige vor der Veröffentlichung**. Was hier durchkommt, steht
@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.knowledge.parts.exchange import (
+from app.core.knowledge.parts.shared import (
     MAX_DOC_CHARS,
     MAX_TITLE_CHARS,
     MAX_UPLOAD_BYTES,
@@ -233,14 +233,14 @@ def test_the_file_beside_the_php_matches_what_the_application_knows() -> None:
     import sys
     from pathlib import Path
 
-    from tools.make_exchange_rules import TARGET, written
+    from tools.make_shared_rules import TARGET, written
 
     assert TARGET.exists(), (
-        f"{TARGET.name} fehlt — einmal `python tools/make_exchange_rules.py` genügt"
+        f"{TARGET.name} fehlt — einmal `python tools/make_shared_rules.py` genügt"
     )
     assert TARGET.read_text(encoding="utf-8") == written(), (
         f"{TARGET.name} ist nicht mehr das, was die Anwendung sagt. "
-        "Einmal `python tools/make_exchange_rules.py`, dann stimmt es wieder."
+        "Einmal `python tools/make_shared_rules.py`, dann stimmt es wieder."
     )
 
     # Und zweimal erzeugen ergibt zweimal dasselbe: Ohne diese Zusage meldete
@@ -252,7 +252,7 @@ def test_the_file_beside_the_php_matches_what_the_application_knows() -> None:
     # Erlaubnisliste schon einmal leer geblieben.
     root = Path(__file__).parent.parent
     result = subprocess.run(
-        [sys.executable, str(root / "tools" / "make_exchange_rules.py")],
+        [sys.executable, str(root / "tools" / "make_shared_rules.py")],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -277,7 +277,7 @@ def test_the_rules_file_carries_what_both_sides_need() -> None:
     import json as _json
     from pathlib import Path
 
-    from tools.make_exchange_rules import TARGET
+    from tools.make_shared_rules import TARGET
 
     known = _json.loads(Path(TARGET).read_text(encoding="utf-8"))
     for key in (
