@@ -13166,17 +13166,17 @@ bereits als eigener Auftrag bei 50.
 
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
-| G1 | **Kritisch**: Jede Menü-Überschrift ist unsichtbar — `QMenu::separator` im Stylesheet frisst die `addSection`-Titel; 114 Einträge stehen in unbenannten Blöcken (B1) | S | offen — zuerst |
-| G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | offen |
-| G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | offen |
+| G1 | **Kritisch**: Jede Menü-Überschrift ist unsichtbar — `QMenu::separator` im Stylesheet frisst die `addSection`-Titel; 114 Einträge stehen in unbenannten Blöcken (B1) | S | **72, Serie G1/G2/G3/G7** — zuerst |
+| G2 | **Kritisch**: Die Prozentzahl im Fortschrittsbalken ist ab der Hälfte unlesbar — Kontrast 1,69 auf dem Bernstein-Chunk im dunklen Thema (B2) | S | **72, Serie** |
+| G3 | **Kritisch**: Der waagerechte Rollbalkengriff wird zur 2-Pixel-Linie — `min-width` fehlt (B3) | S | **72, Serie** |
 | G4 | **Kritisch**: Der Bausteinkatalog — zehn Sekunden Textwüste ohne Wartesignal, dann Kacheln ohne Ruheform, nicht normierte Renderings, springende Titelzeilen (B4+B25) | M | offen |
-| G5 | **Kritisch**: Das Objektbaum-Vorschaubild ist ein 4-Pixel-Fleck — vergrößern oder ausbauen, halbe Größe ist keine Option (B5) | S | offen |
+| G5 | **Kritisch**: Das Objektbaum-Vorschaubild ist ein 4-Pixel-Fleck — vergrößern oder ausbauen, halbe Größe ist keine Option (B5) | S | **50, nach G11** |
 | G6 | **Kritisch, Systemebene**: Der Akzentfarben-Haushalt — Bernstein bedeutet gleichzeitig sechs Dinge; dazu färbt der Prüfbericht ganze Sätze in Rollenfarbe und der Hauptknopf bedeutet nicht überall dasselbe (B6+B16+B22). Konzeptnotiz vor dem Bau: Wo darf der Akzent stehen, was bekommt eine leisere Form | L | offen — Notiz zuerst |
-| G7 | Widget-Grundformen in `style.py`: Slider ungestylt, Spinbox-Pfeile 10×11 mit verdecktem Trennstrich, Splitter-Fuge Kontrast 1,0, gesperrte Zustände kaum unterscheidbar, Werkzeugknopf rahmenlos (B7/B15/B30/B32/B37) | M | offen |
+| G7 | Widget-Grundformen in `style.py`: Slider ungestylt, Spinbox-Pfeile 10×11 mit verdecktem Trennstrich, Splitter-Fuge Kontrast 1,0, gesperrte Zustände kaum unterscheidbar, Werkzeugknopf rahmenlos (B7/B15/B30/B32/B37) | M | **72, Serie** |
 | G8 | Formular-Raster der Dialoge: springende Feldkanten im Operationsdialog, zwei Raster im Einstellungsdialog, halbleere Gruppen der Druckeinstellungen, uneinheitliche Nachkommastellen, fehlender Rhythmus im Erststart (B8/B10/B11/B36/B38/B39) | M | offen |
 | G9 | Einheiten und Zeichen-Knöpfe: „[mm]" aus den Beschriftungen in die Werte (die eigene Regel in `oberflaeche.md` verlangt es), „fx" und „…" als erkennbare Knöpfe mit Bezug zur Zeile (B12/B13/B14) | M | offen |
 | G10 | Leere- und Wartezustände: Chat-Begrüßung statt schwarzem Kasten (und der Modellname weg von der prominentesten Stelle), Generierungsdialog, Freischaltung, vier nackte Warte-Textzeilen gegen `wartezeit.md` (B17/B18/B26/B29) | M | offen |
-| G11 | Skizzenkarte neu setzen (zerfallener Textblock, doppelter Hinweis, schwebende Kapsel) und die kursiven Kartenhinweise aufrecht (B19/B20) | S | offen — dockt an 50s Fertig-Fix an |
+| G11 | Skizzenkarte neu setzen (zerfallener Textblock, doppelter Hinweis, schwebende Kapsel) und die kursiven Kartenhinweise aufrecht (B19/B20) | S | **50** — dockt an den Fertig-Fix an |
 | G12 | Druckeinstellungen: eine Abschnittsform statt QGroupBox-2010 über rahmenlosen Aufklappern (B9) | S | offen — dockt an D11 an |
 | G13 | Kleinserie: Filamentkarten-Höhe, Befehlspaletten-Spalten, Statuszeilen-Verschmelzung, Startbildschirm-Resthöhe, Filamentdialog (Farbfeld winzig, „OK"), Verlauf ohne Symbole, Menü-Icon-Lücken, Handbuch-Ränder, helle Kanten, sprachabhängiger Symbol-Schwellwert (B21/B23/B24/B27/B28/B31/B33/B34/B35/B40) | M | offen — nach den großen |
 
