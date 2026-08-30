@@ -135,6 +135,21 @@ wenn beide identisch sind, ist die Reparatur verlustfrei. Und `.git/index`
 kopieren, bevor man ihn anfasst — er gehört allen Sitzungen, und die Kopie
 beantwortet hinterher die Frage, wie es dazu kam.
 
+**Vorbeugen ist derselbe Befehl wie Reparieren**, und er wirkt punktuell:
+`git reset -- <die eigenen neuen Pfade>` **ohne** `GIT_INDEX_FILE`,
+unmittelbar nach dem privaten Commit. Das setzt genau diese Einträge auf HEAD
+und lässt jeden anderen in Ruhe.
+
+**Die naheliegende größere Lösung — `git read-tree HEAD` auf den Haupt-Index —
+beruht auf einer Annahme, die nicht hält:** „Wer mit privatem Index arbeitet,
+hat im Haupt-Index ohnehin nichts stehen." Am 30.08.2026 gemessen, zweimal
+dieselbe Frage: Am Abend lagen dort **vier** Einträge, die es nur dort gab
+(`command_band.py`, `test_command_band.py`, zwei Präsentations-Artefakte); am
+Morgen danach **keiner**. Die vier waren harmlos — Reste vor bewussten
+Lösch-Commits —, aber das wusste man erst nach `git log --diff-filter=D`, und
+ein pauschales `read-tree` fragt nicht. Nicht jede Hand am Baum benutzt einen
+privaten Index: ein fremder Worktree, ein Codex-Lauf, Robert selbst.
+
 **Wie anwenden:** Bevor man ein `MM` für fremde Arbeit hält, die eine Zeile
 fahren, die es entscheidet:
 
