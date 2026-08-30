@@ -6074,3 +6074,83 @@ def test_a_fresh_sketch_operation_offers_no_way_back_into_space(qt_app: QApplica
         assert field.space_button.isHidden(), "ohne einen Schritt gibt es nichts zu ändern"
     finally:
         field.deleteLater()
+
+
+def test_reopening_a_sketch_step_still_finds_its_field(qt_app: QApplication) -> None:
+    """Der Sprung ins genannte Feld überlebt die Skizzen-Verdrahtung (Z9).
+
+    ``edit_operation`` trägt einen Parameter ``field`` — den Feldnamen, in den
+    *Eingabe korrigieren* den Cursor setzt, wenn ein Befund einen Wert nennt.
+    Die Schleife, die den „Im Raum zeichnen"-Knopf verdrahtet, hieß einen
+    Commit lang genauso, und danach stand in ``field`` ein **Widget**:
+    ``dialog.focus_field(field)`` zwei Zeilen weiter bekam es statt einer
+    Zeichenkette.
+
+    **Getroffen hätte es genau die fünf Skizzen-Operationen**, denn nur bei
+    ihnen ist die Schleife nicht leer — bei jeder anderen bleibt der Parameter
+    unberührt, und der Fehler wäre in keinem Bohrungs- oder Aushöhlen-Dialog
+    aufgefallen.
+
+    Die Ironie gehört dazu, weil sie wiederkommen kann: Die Schleife hieß
+    zuerst ``feld`` und war damit kollisionsfrei. Erst die Umbenennung auf
+    Englisch — nötig wegen der Sprachregel — hat die Kollision erzeugt. Ein
+    Wächter, der die Sprache prüft, prüft nicht die Eindeutigkeit.
+    """
+    from app.core.scene import OperationDraft
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.session.start_new()
+        window.session.apply(
+            "Grundform", [OperationDraft(op="create_box", inputs=[], params={"width": 40.0})]
+        )
+        window.session.wait_for_idle()
+        body = next(iter(window.session.evaluate_now().scene.objects))
+        window.object_tree.select_object(body)
+        window.session.apply(
+            "Tasche",
+            [
+                OperationDraft(
+                    op="sketch_pocket",
+                    inputs=[body],
+                    params={"depth": 4.0, "sketch": sketch_to_text(shapes.rectangle(12.0, 8.0))},
+                )
+            ],
+        )
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+
+        step = window.session.history.operations[-1].id
+
+        # **Auf der Klasse patchen, nicht auf einem Dialog.** Der erste Anlauf
+        # ersetzte ``focus_field`` an einem bereits gebauten Dialog und maß
+        # damit nichts: ``edit_operation`` baut jedes Mal einen neuen, und der
+        # Patch saß auf dem alten. Die Gegenprobe blieb grün, als die Kollision
+        # zurückkam — ein Test, der nicht greift, ist schlechter als keiner.
+        from app.ui.op_dialog import OperationDialog
+
+        gesucht: list[object] = []
+        echt = OperationDialog.focus_field
+        OperationDialog.focus_field = (  # type: ignore[method-assign]
+            lambda self, name: bool(gesucht.append(name)) or True
+        )
+        try:
+            window.edit_operation(step, field="depth")
+            QApplication.processEvents()
+        finally:
+            OperationDialog.focus_field = echt  # type: ignore[method-assign]
+
+        assert gesucht, "der Sprung ins genannte Feld wurde überhaupt versucht"
+        assert all(isinstance(name, str) for name in gesucht), (
+            f"focus_field bekam etwas anderes als einen Feldnamen: "
+            f"{[type(n).__name__ for n in gesucht]}"
+        )
+        assert gesucht == ["depth"], f"und zwar den genannten: {gesucht}"
+    finally:
+        window.wait_for_workers()
+        window.deleteLater()

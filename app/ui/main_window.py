@@ -8076,8 +8076,15 @@ class MainWindow(QMainWindow):
         # dieselbe Operation, eine andere Umgebung, je nachdem ob man sie
         # anlegt oder ändert. Das Feld kennt seinen Schritt nicht; diese
         # Stelle kennt ihn, also verdrahtet sie ihn.
-        for field in dialog.findChildren(SketchField):
-            field.offer_space(partial(self._draw_sketch_in_space, op_id, entry.op, dialog))
+        # **Nicht ``field`` als Schleifenname** — so hieß er einen Commit lang,
+        # und dieser Rumpf trägt bereits einen Parameter dieses Namens: den
+        # Feldnamen, in den *Eingabe korrigieren* den Cursor setzt. Nach der
+        # Schleife stand dort ein Widget, und ``dialog.focus_field(field)``
+        # zwei Zeilen weiter bekam es statt einer Zeichenkette. Getroffen
+        # hätte es genau die fünf Skizzen-Operationen, denn nur bei ihnen ist
+        # die Schleife nicht leer.
+        for sketch_field in dialog.findChildren(SketchField):
+            sketch_field.offer_space(partial(self._draw_sketch_in_space, op_id, entry.op, dialog))
         if exact is not None:
             exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
             exact.toggled.connect(dialog.valuesChanged)
