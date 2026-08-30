@@ -117,7 +117,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Eine Kunden-3MF läuft beim Einlesen in einen Vier-Minuten-Timeout | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | eine Diagnose des Hashing-Pfads unter gleichzeitigem Autosave und eine Korpusdatei, die den Fall festhält |
 | Nach einem erzeugten Objekt ist der Chat-Kontext zu drei Vierteln voll | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | eine Messreihe über mehrere Objekte mit `prompt_eval_count` — bis dahin ist die 76-Prozent-Zahl eine einzelne Beobachtung |
-| Der Bericht rät zu einem Schritt, den dieselbe Kette schon getan hat | Ein Rat bleibt stehen, den dieselbe Kette schon befolgt hat (30.08.2026) | eine Bedienentscheidung mit Konzept-Ansage — das `perceive.mended`-Muster liegt nahe, die Grenze ist „derselbe Lauf" |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -12660,17 +12659,14 @@ Kunde liest einen Handlungsvorschlag für etwas, das die Anwendung im
 selben Zug getan hat — muss er raten, ob er noch klicken soll, ist es
 falsch.
 
-- [ ] Konzept-Ansage vor dem Bau — die Richtung ist keine Meinungsfrage
-      mehr: `scene/evaluate.py:1198` entscheidet denselben Fall schon im
-      Bestand (`perceive.mended` — „Eine offene Stelle ist geschlossen und
-      damit fort": ausgewiesen, nicht weggelassen; 5ds Fund auf fb's
-      Vermutung). Die Frage an den Bauenden ist nur noch, warum
-      `ingest.very_large` anders sein sollte — und der echte Aufwand:
-      `mended` entsteht, wo die Behebung passiert und beide Zustände
-      sichtbar sind; `very_large` entsteht beim Laden und wird vier
-      Schritte später gegenstandslos, das Umschreiben braucht eine Stelle,
-      die den Endzustand kennt. „Derselbe Lauf" ist die Grenze, nicht
-      „irgendwann später".
+- [x] **Erledigt** (15/53, `198e0009`, 30.08.2026): `ingest.very_large`
+      steht in `SETTLED_BY` und wird vom `mesh.deviation`-Befund
+      derselben Kette gestrichen — der Weg-3-Kunde liest keinen Rat mehr
+      für etwas, das Schritt vier längst getan hat. Bleibt die
+      Dezimierung über der Erkennungsgrenze, trägt der frische
+      `perceive.too_large` die Auskunft weiter; der Dauer-Rat für die
+      Kartenzone entfällt bewusst (Karten melden beim Klick selbst).
+      Rot-Probe dokumentiert: beide Tests vor dem Eintrag rot.
 
 ---
 
