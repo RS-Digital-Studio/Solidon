@@ -9348,11 +9348,7 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       vier Millionen Filteraufrufen, die sechs anderen Stellen null Mal.
       Sie bleiben als **Vorsorge** für „ein Kind geht einzeln"; die
       Zählung `installEventFilter` gegen `removeEventFilter` war nie
-      eine Aussage. Der zweite Fund (`overlay.py:294`) fällt aus einem
-      anderen Grund — ein fremder Wrapper unter recyceltem Zeiger, gegen
-      den `isValid` nichts sagt — und trägt jetzt eine Typprüfung, deren
-      Wirkung der nächste Torlauf unter Last zeigt (eigene
-      Registerzeile). Der ursprüngliche Wortlaut des Punkts bleibt
+      eine Aussage. Der ursprüngliche Wortlaut des Punkts bleibt
       darunter als Geschichte stehen:
 
       **Elf von dreizehn Eventfiltern werden nie abbestellt, und was das
@@ -9404,6 +9400,14 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       dieselbe Familie: ein Filter, der während des Abbaus Nachbarn befragt,
       die keine mehr sind. Wer die elf angeht, nimmt diesen Fall als
       Reproduktionsversuch mit.
+
+- [ ] **Wirkt die Typprüfung an `overlay.py:294`?** Der zweite Fund der
+      Serie fällt aus einem anderen Grund als das Abbestellen — ein
+      fremder Wrapper unter recyceltem Zeiger, gegen den `isValid`
+      nichts sagt (`bce88ff8`, Gegenprobe reproduziert die
+      Torlauf-Meldung wortgleich). Ob die Prüfung den echten Riss unter
+      Last verhindert, zeigt erst der nächste volle Torlauf — bis dahin
+      ist sie plausibel, nicht belegt.
 
       **Dritter Fundort, Release-Kontrolle vom 30.08.2026:** Im vollen
       Torlauf auf `4807f3f2` fiel `test_split_tool.py::
