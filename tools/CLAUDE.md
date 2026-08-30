@@ -31,6 +31,7 @@ auf sein Datum wartet.
 | `session_board.py` | Wer arbeitet gerade woran (`list` / `claim` / `release`) |
 | `gate_lock.py` | Ein Schloss fürs Tor: nur ein Testlauf gleichzeitig auf dieser Maschine |
 | `link_memory.py` | Die Erinnerungen ins Repository hängen — einmal je Maschine |
+| `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |
 | `to_main.py` | Der Weg nach `main`: prüfen, was wirklich committet wird |
 
 **Messen und Prüfen** (keines davon ist ein Testlauf)

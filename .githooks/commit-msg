@@ -1,0 +1,18 @@
+#!/bin/sh
+# Prüft die Commit-Meldung auf Ersatzschreibung statt Umlaut.
+#
+# Der Anlass: Am 30./31.08.2026 entstanden an einem Abend fünf Meldungen und
+# Texte mit „ae"/„ss" statt echter Umlaute — jedes Mal, weil deutscher Text
+# durch ein Bash-Heredoc oder printf ging und dort aus Vorsicht ASCII getippt
+# wurde. Die Erinnerung dazu existierte und wurde zweimal geschärft; was fehlte,
+# war eine Prüfung zum Zeitpunkt der Arbeit.
+#
+# SOLIDON_KEIN_TOR=1 schaltet ihn ab, wie beim pre-commit.
+
+[ -n "$SOLIDON_KEIN_TOR" ] && exit 0
+
+PY=".venv/Scripts/python.exe"
+[ -x "$PY" ] || PY="python"
+
+"$PY" tools/check_message.py "$1" || exit 1
+exit 0
