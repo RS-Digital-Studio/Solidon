@@ -145,7 +145,18 @@ ALT=$(git rev-parse HEAD) \
 
 Der zweite Vergleich fängt das Restfenster: Wandert HEAD zwischen `read-tree`
 und Commit **innerhalb** des Aufrufs, stimmen Zahlen gegen einen Boden, der
-sich bewegt hat. Und die Phantome, die ein privater Commit im **Haupt**-Index
+sich bewegt hat.
+
+**Und die ganze Kette läuft in EINEM Aufruf, mit vorher geschriebener
+Commit-Meldung.** Drei HEAD-Rennen in einer Nacht (31.08.2026) lagen alle
+daran, dass zwischen `read-tree` und `commit` noch etwas geschah — einmal das
+Schreiben der Meldung, zweimal eine Sollprobe. Ein zweimal frisch gebauter
+Index mit gefangenem erstem Wettlauf hat nicht gereicht. Die Meldung entsteht
+als Datei **vor** der Kette; Bau, Guard und Commit folgen ohne Unterbrechung.
+Bei einer **geteilten** Datei (Kataloge, `MEMORY.md`, `ROADMAP.md`,
+`3d-agent-bauplan.md`) zusätzlich vor dem Commit den **eigenen Block grepen**
+— die Dateizahl-Kontrolle fängt eine Datei zu viel, aber keine fremde Zeile
+in einer richtigen Datei (dreimal passiert in derselben Nacht). Und die Phantome, die ein privater Commit im **Haupt**-Index
 hinterlässt (frisch committete Dateien stehen dort als gelöscht), heilt man
 **je Pfad** mit `git restore --staged <pfad>` — nie mit einem `read-tree HEAD`
 ohne `GIT_INDEX_FILE`, denn der würfe weg, was andere Sitzungen dort gerade
