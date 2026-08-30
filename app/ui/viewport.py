@@ -361,31 +361,71 @@ SKETCH_VIEW_DIRECTIONS: dict[str, tuple[Vec3, Vec3]] = {
 }
 
 
-def sketch_view_near(
+#: Die sechs Achsenansichten, auf die eine freie Kamera einrastet.
+#:
+#: **Ohne ``iso``**, und das ist der Unterschied zur Werkzeugleiste: Die
+#: schräge Ansicht liegt mitten im Drehraum, und wer ein Modell dreht, käme
+#: dort ständig vorbei. Eine Achsenansicht dagegen ist ein Ziel — man will
+#: genau dorthin, und die letzten Grad von Hand zu treffen ist Zielen ohne
+#: Gewinn.
+AXIS_VIEW_DIRECTIONS: dict[str, tuple[Vec3, Vec3]] = {
+    name: VIEW_DIRECTIONS[name] for name in ("front", "back", "left", "right", "top", "bottom")
+}
+
+
+def _nearest_view(
+    directions: dict[str, tuple[Vec3, Vec3]],
     position: Sequence[float],
     focus: Sequence[float],
-    threshold_degrees: float = 10.0,
+    threshold_degrees: float,
 ) -> str | None:
-    """Nahe Hauptansicht der Kamera, sonst ``None`` für eine freie Ansicht.
+    """Der Name der nächsten Ansicht aus ``directions``, sonst ``None``.
 
-    Verglichen wird die Blickrichtung, nicht der Ort der Kamera. Dadurch
-    bleibt Schieben ohne Einfluss und nur das Kippen entscheidet. Die
-    Rückseiten rasten absichtlich nicht auf eine andersherum benannte
-    Vorder-, Seiten- oder Draufsicht ein.
+    Verglichen wird die **Blickrichtung**, nicht der Ort der Kamera. Dadurch
+    bleibt Schieben ohne Einfluss, und nur das Kippen entscheidet.
     """
     direction = tuple(float(position[axis]) - float(focus[axis]) for axis in range(3))
     length = math.sqrt(sum(value * value for value in direction))
     if length <= EPS_GEOM:
         return None
     unit = tuple(value / length for value in direction)
-    best_plane = None
+    best_name = None
     best_dot = -1.0
-    for plane, (wanted, _up) in SKETCH_VIEW_DIRECTIONS.items():
+    for name, (wanted, _up) in directions.items():
         score = sum(unit[axis] * wanted[axis] for axis in range(3))
         if score > best_dot:
-            best_plane, best_dot = plane, score
+            best_name, best_dot = name, score
     limit = math.cos(math.radians(max(0.0, threshold_degrees)))
-    return best_plane if best_dot >= limit else None
+    return best_name if best_dot >= limit else None
+
+
+def sketch_view_near(
+    position: Sequence[float],
+    focus: Sequence[float],
+    threshold_degrees: float = 10.0,
+) -> str | None:
+    """Nahe Zeichenebene der Kamera, sonst ``None`` für eine freie Ansicht.
+
+    Nur die drei Ebenen, auf denen gezeichnet wird: Die Rückseiten rasten
+    absichtlich nicht auf eine andersherum benannte Vorder-, Seiten- oder
+    Draufsicht ein — die Skizze läge dann gespiegelt zu ihrem Namen.
+    """
+    return _nearest_view(SKETCH_VIEW_DIRECTIONS, position, focus, threshold_degrees)
+
+
+def axis_view_near(
+    position: Sequence[float],
+    focus: Sequence[float],
+    threshold_degrees: float = 10.0,
+) -> str | None:
+    """Nahe Achsenansicht der Kamera, sonst ``None`` für eine freie Ansicht.
+
+    **Das Gegenstück zu :func:`sketch_view_near` für das Modell.** Dort geht
+    es um die drei Ebenen, auf denen gezeichnet wird, und eine Rückseite wäre
+    eine falsch benannte Ebene. Hier geht es um den Blick, und von hinten
+    zuzusehen ist so gut wie von vorn — deshalb alle sechs.
+    """
+    return _nearest_view(AXIS_VIEW_DIRECTIONS, position, focus, threshold_degrees)
 
 
 #: Wie weit ein mitfliegendes Zahlenfeld vom Zeiger wegsteht, in Bildpunkten.
@@ -2869,28 +2909,47 @@ class Viewport(QWidget):
     def _settle_sketch_view(self) -> str | None:
         """Eine nahe Hauptansicht einrasten und ihren Namen melden.
 
-        Nur im Skizzenmodus: Außerhalb soll eine frei gedrehte Modellansicht
-        frei bleiben. Abstand, Fokus und Parallelmaßstab ändern sich nicht;
-        das Einrasten korrigiert ausschließlich die letzten wenigen Grad.
+        **Im Skizzenmodus und außerhalb**, und der Unterschied liegt nur in
+        der Tabelle: Beim Zeichnen sind es die drei Ebenen, auf denen
+        gezeichnet wird (eine Rückseite wäre eine falsch benannte Ebene), am
+        Modell alle sechs Achsenansichten.
+
+        Abstand, Fokus und Parallelmaßstab ändern sich nicht; das Einrasten
+        korrigiert ausschließlich die letzten Grad. **Warum es das tut:** Die
+        letzten fünf Grad von Hand zu treffen ist Zielen ohne Gewinn — der
+        Kunde will *in* die Vorderansicht, nicht neben sie. Und im
+        Skizzenmodus hängt mehr daran als die Anmutung: Solange die Kamera
+        frei steht, bewirbt die Leiste den Ziehgriff (``_sketch_pull_offer``
+        vergleicht Blick gegen Zeichenebene), und der ist nahe der Draufsicht
+        unbrauchbar empfindlich — bei einem Grad Kippung bedeuten zehn Pixel
+        Mausbewegung rund siebzig Millimeter Höhe. Das Einrasten nimmt genau
+        den Bereich heraus, in dem die Geste angeboten wird und nicht taugt.
+
+        Gemeldet wird der Name nur für die Skizze: ``sketchViewChanged``
+        füllt das Ebenenfeld, und außerhalb gibt es keines.
         """
-        if self._sketch_frame is None or self.plotter is None:
+        if self.plotter is None:
             return None
         camera = getattr(self.plotter, "camera", None)
         position = getattr(camera, "position", None)
         focus = getattr(camera, "focal_point", None)
         if position is None or focus is None:
             return None
-        plane = sketch_view_near(position, focus)
-        if plane is not None:
-            direction, up = SKETCH_VIEW_DIRECTIONS[plane]
+        sketching = self._sketch_frame is not None
+        table = SKETCH_VIEW_DIRECTIONS if sketching else AXIS_VIEW_DIRECTIONS
+        found = sketch_view_near(position, focus) if sketching else axis_view_near(position, focus)
+        if found is not None:
+            direction, up = table[found]
             distance = max(math.dist(tuple(position), tuple(focus)), EPS_GEOM)
             snapped = tuple(float(focus[axis]) + direction[axis] * distance for axis in range(3))
             self.plotter.camera_position = [snapped, tuple(focus), up]
             with suppress(Exception):  # pragma: no cover - hängt an der VTK-Version
                 self.plotter.renderer.ResetCameraClippingRange()
             self.plotter.render()
-        self.sketchViewChanged.emit(plane or "")
-        return plane
+        if not sketching:
+            return found
+        self.sketchViewChanged.emit(found or "")
+        return found
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -7595,7 +7654,11 @@ class Viewport(QWidget):
         assert point is not None
         self._body_drag_from = point
         self._body_drag_offset = (0.0, 0.0)
-        self.set_drag_cursor("moving")
+        # "move", nicht "moving": Eine Rolle, die es nicht gibt, fällt still
+        # auf den Systempfeil zurück — die häufigste Zuggeste zeigte den
+        # falschen Zeiger, und kein Test sah es, bis der Wächter in
+        # tests/test_cursors.py die Literale gegen cursors.known() hält.
+        self.set_drag_cursor("move")
         return True
 
     def continue_body_drag(self, x: int, y: int) -> None:

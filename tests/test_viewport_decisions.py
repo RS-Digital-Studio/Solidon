@@ -2596,6 +2596,89 @@ def test_camera_near_a_sketch_main_view_snaps_by_direction() -> None:
     assert sketch_view_near((0.0, 0.0, -10.0), (0.0, 0.0, 0.0)) is None
 
 
+def test_the_model_view_snaps_to_all_six_axis_views() -> None:
+    """Am Modell rasten auch die Rückseiten ein — beim Zeichnen nicht.
+
+    **Der Unterschied ist keine Nachlässigkeit, sondern die Sache.** Eine
+    Skizze auf ``plane:xz`` von hinten betrachtet läge gespiegelt zu ihrem
+    eigenen Namen; deshalb kennt ``sketch_view_near`` nur die drei Ebenen, auf
+    denen gezeichnet wird. Wer ein Modell ansieht, will einfach dorthin
+    schauen — von hinten ist so gut wie von vorn.
+
+    Robert am 30.08.2026: „die seitenansicht, vorderansicht und draufsicht
+    sollten in der nähe einrasten."
+    """
+    from app.ui.viewport import axis_view_near, sketch_view_near
+
+    von_hinten = ((0.0, 10.0, 0.0), (0.0, 0.0, 0.0))
+    von_unten = ((0.0, 0.0, -10.0), (0.0, 0.0, 0.0))
+    von_links = ((-10.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+
+    assert axis_view_near(*von_hinten) == "back"
+    assert axis_view_near(*von_unten) == "bottom"
+    assert axis_view_near(*von_links) == "left"
+
+    assert sketch_view_near(*von_hinten) is None, (
+        "eine Skizze darf nicht auf ihre Rückseite einrasten — sie läge gespiegelt zu ihrem Namen"
+    )
+    assert sketch_view_near(*von_unten) is None
+    assert sketch_view_near(*von_links) is None
+
+
+def test_the_oblique_view_never_catches_a_turning_camera() -> None:
+    """``iso`` rastet nicht ein, obwohl die Werkzeugleiste sie anbietet.
+
+    Sie liegt mitten im Drehraum: Wer ein Modell dreht, käme dort ständig
+    vorbei, und ein Einrasten wäre kein Ziel, sondern ein Hindernis. Eine
+    Achsenansicht dagegen will man genau treffen.
+    """
+    from app.ui.viewport import VIEW_DIRECTIONS, axis_view_near
+
+    richtung, _up = VIEW_DIRECTIONS["iso"]
+    laenge = sum(wert * wert for wert in richtung) ** 0.5
+    genau_darauf = tuple(wert / laenge * 10.0 for wert in richtung)
+
+    assert axis_view_near(genau_darauf, (0.0, 0.0, 0.0)) is None, (
+        "die schräge Ansicht darf keine Kamera fangen — sonst rastet jeder "
+        "Zug durch den Drehraum darauf ein"
+    )
+
+
+def test_the_snap_reaches_far_enough_to_cover_an_unusable_drag() -> None:
+    """Der Fangbereich muss die Lagen abdecken, in denen der Ziehgriff nichts taugt.
+
+    **Die Verbindung zwischen zwei Zahlen, die sonst nichts voneinander
+    wüssten.** Am Ziehgriff wird eine Höhe aus der Mausbewegung abgelesen, und
+    die Empfindlichkeit wächst mit ``1/sin`` des Kippwinkels: Bei einem Grad
+    bedeuten zehn Pixel rund siebzig Millimeter, bei fünf Grad noch vierzehn.
+    Die einzige Grenze in ``axis_hit`` ist ``_PARALLEL_ENOUGH = 1e-3``, also
+    **0,057°** — eine numerische Schranke gegen Division durch fast Null, keine
+    bedienbare.
+
+    Bedienbar wird es, wenn ein Pixel höchstens einen Rasterschritt bedeutet:
+    bei 1 mm Raster und 0,125 mm je Pixel in der Seitenansicht ist das
+    ``sin >= 0,125``, also rund **7°**. Der Fangbereich liegt darüber, und
+    deshalb braucht es keine zweite Schwelle daneben — wer im Skizzenmodus
+    dreht und loslässt, landet nie in der unbrauchbaren Zone.
+
+    Dieser Test hält genau das fest: Wird der Fangbereich unter 7° gesenkt,
+    reißt er, und wer ihn senkt, weiß warum.
+    """
+    import math
+
+    from app.ui.viewport import sketch_view_near
+
+    unbrauchbar_bis_grad = 7.0
+    knapp_darunter = math.radians(unbrauchbar_bis_grad - 0.5)
+    aus_der_draufsicht = (0.0, math.sin(knapp_darunter) * 10.0, math.cos(knapp_darunter) * 10.0)
+
+    assert sketch_view_near(aus_der_draufsicht, (0.0, 0.0, 0.0)) == "plane:xy", (
+        f"bei {unbrauchbar_bis_grad - 0.5}° muss die Kamera noch einrasten — sonst "
+        "bleibt der Ziehgriff in einer Lage stehen, in der zehn Pixel über "
+        "zehn Millimeter bedeuten"
+    )
+
+
 def test_sketch_drag_callback_edits_before_it_moves_the_camera(
     qt_app: QApplication,
 ) -> None:

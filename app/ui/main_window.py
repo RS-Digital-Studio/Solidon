@@ -5193,11 +5193,26 @@ class MainWindow(QMainWindow):
         in der draufsicht zeichne und dann in die Seitenansicht oder
         vorderansicht gehe sie nach oben ziehen kann." Genau dieser Zustand ist
         die Bedingung — **die Querschau**, also Blick und Zeichenebene
-        auseinander (``view_plane`` gegen ``sketch.plane``). Dort sieht man die
-        Ebene von der Kante, dort kann man ohnehin nicht sinnvoll zeichnen, und
-        dort ist die Geste damit frei. In der Draufsicht bliebe sie dem
-        Zeichnen im Weg: Ein Druck auf eine Umrisskante wäre dort mal ein
-        Punkt, mal ein Zug.
+        auseinander (``view_plane`` gegen ``sketch.plane``). In der Draufsicht
+        bliebe die Geste dem Zeichnen im Weg: Ein Druck auf eine Umrisskante
+        wäre dort mal ein Punkt, mal ein Zug.
+
+        **Hier stand „dort sieht man die Ebene von der Kante", und das galt
+        nur für die eingerasteten Ansichten.** Ein Ungleichheitsvergleich
+        trennt „von der Kante gesehen" nicht von „ein wenig gekippt": Sobald
+        die Kamera frei steht, meldet ``reflect_camera_view`` ``FREE_VIEW``,
+        und die Bedingung war erfüllt, während weiter von schräg oben
+        gezeichnet wurde. Der Ziehgriff ist dort zugleich am unbrauchbarsten —
+        seine Empfindlichkeit wächst mit ``1/sin`` des Kippwinkels, bei einem
+        Grad bedeuten zehn Pixel Mausbewegung rund siebzig Millimeter Höhe
+        (gemessen am 30.08.2026 über :func:`app.core.sketch.planes.axis_hit`).
+
+        **Geschlossen ist das nicht hier, sondern am Einrasten**
+        (:meth:`Viewport._settle_sketch_view`): Eine Kamera innerhalb von zehn
+        Grad um eine Hauptansicht rastet auf sie ein, und damit gibt es die
+        unbrauchbare Lage nach einem Mausdrehen nicht mehr. Zehn Grad decken
+        die rund sieben ab, unter denen ein Pixel mehr als einen Rasterschritt
+        bedeutet — deshalb steht hier **keine** zweite Schwelle daneben.
 
         Drei Antworten, wie :meth:`Viewport.set_sketch_pull` sie erwartet.
         Ein **Grund** statt einer leeren Zeichenkette kommt nur, wo die Geste
