@@ -758,3 +758,60 @@ def test_the_word_a_customer_types_lands_on_top() -> None:
             daneben.append(f"{wort} -> {erste.name} statt {gemeint}")
 
     assert not daneben, "diese Wörter zeigen zuerst auf das Falsche: " + "; ".join(daneben)
+
+
+# --- Der Körper steht auf der Platte, nicht in ihr (B35) ---------------------
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_the_body_stands_out_from_the_bed(theme: str) -> None:
+    """Ein Körper muss sich von der Druckplatte abheben — in beiden Themen.
+
+    **B35 der Design-Durchsicht, und der Befund lag woanders als vermutet.**
+    Notiert war „die Kanten sind im hellen Thema zu schwach"; gemessen standen
+    die Kanten mit **4,45 gegen 4,47** in beiden Themen gleich gut da. Der
+    Körper hob sich aber von der Plattenfläche nur mit **2,05** ab, im
+    dunklen Thema mit 7,50 — er stand in der Platte statt auf ihr.
+
+    Drei Zusagen, alle am dunklen Thema abgelesen, wo der Befund nie auftrat.
+    Die Schwelle liegt bei 3,0 und nicht bei den 7,50 des dunklen Themas:
+    Dort ist der Körper hell und die Platte sehr dunkel, im hellen Thema liegt
+    er zwischen heller Platte und dunkler Kante. Durchgerechnet über alle vier
+    Farben gemeinsam bleibt bei „>= 4,0" **keine** Kombination übrig.
+    """
+    colours = viewport_colours(theme)
+
+    fläche = contrast_ratio(colours["object"], colours["bed_surface"])
+    raster = contrast_ratio(colours["object"], colours["bed"])
+    kante = contrast_ratio(colours["object"], colours["edge"])
+
+    assert fläche >= 3.0, (
+        f"{theme}: der Körper hebt sich mit {fläche:.2f} von der Plattenfläche ab "
+        "— unter 3,0 wird er zur flachen Silhouette"
+    )
+    # Zwei statt drei: Das Raster ist eine Hilfslinie, keine Fläche — es muss
+    # vom Körper unterscheidbar sein, nicht von ihm abstechen. Im dunklen Thema
+    # sind es 3,39, im hellen ist bei 2,35 die Grenze dessen, was neben den
+    # vier bestehenden Zusagen bleibt.
+    assert raster >= 2.0, f"{theme}: der Körper hebt sich mit {raster:.2f} vom Plattenraster ab"
+    assert kante >= 3.0, (
+        f"{theme}: die Kante zeichnet den Körper mit {kante:.2f} — unter 3,0 verliert er seine Form"
+    )
+
+
+def test_the_bed_stays_behind_the_body() -> None:
+    """Die Platte ist Kulisse und darf nicht lauter sein als der Körper.
+
+    Sie war im hellen Thema das auffälligste Element im Bild: hell gerastert
+    vor einem hellen Grund, während der Körper daneben verschwamm. Der Test
+    hält die Rangfolge fest — wer die Platte wieder nach vorn holt, bekommt
+    einen roten Lauf.
+    """
+    for theme in ("light", "dark"):
+        colours = viewport_colours(theme)
+        koerper = contrast_ratio(colours["object"], colours["bed_surface"])
+        platte = contrast_ratio(colours["bed_surface"], colours["bottom"])
+        assert koerper > platte, (
+            f"{theme}: der Körper hebt sich mit {koerper:.2f} ab, die Platte mit "
+            f"{platte:.2f} vom Grund — damit ist die Kulisse lauter als die Sache"
+        )

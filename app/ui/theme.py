@@ -144,12 +144,45 @@ THEMES: dict[Theme, dict[str, str]] = {
         "tooltip": "#ffffff",
         "viewport_bottom": "#d5dae1",
         "viewport_top": "#f4f6f8",
-        "object": "#7d8894",
-        "bed": "#9aa3ae",
+        # **Der Körper stand in der Platte, nicht auf ihr** (B35). Gemessen am
+        # 30.08.2026, Kontrast im hellen gegen das dunkle Thema:
+        #
+        # | | hell (vorher) | jetzt | dunkel |
+        # |---|---|---|---|
+        # | Körper / Plattenfläche | 2,05 | 3,36 | 7,50 |
+        # | Körper / Plattenraster | 1,41 | 2,35 | 3,39 |
+        # | Körper / Kante | 4,45 | 4,11 | 4,47 |
+        #
+        # **Die Kante war nicht die Ursache, und sie bleibt unangetastet.** Der
+        # Befund nannte sie („im hellen Thema zu schwach"), gemessen stand sie
+        # mit 4,45 gegen 4,47 in beiden Themen gleich gut da. Wer sie dunkler
+        # gemacht hätte, hätte eine Zahl verbessert, die in Ordnung war,
+        # während der Körper weiter in der Platte verschwindet.
+        #
+        # **Geändert hat sich vor allem die Platte**, nicht der Körper: Sie
+        # rückt vom Körper weg und an den Bildgrund heran und hört damit
+        # zugleich auf, das auffälligste Element im Bild zu sein. Der Körper
+        # wird nur eine Spur dunkler.
+        #
+        # **Das dunkle Thema ist nicht erreichbar, und das ist kein Versäumnis.**
+        # Dort ist der Körper hell und die Platte sehr dunkel — 7,50 Abstand.
+        # Im hellen Thema liegt der Körper zwischen heller Platte und dunkler
+        # Kante; beide Abstände lassen sich nicht zugleich groß machen.
+        # Durchgerechnet über Körper, Fläche, Raster und Kante gemeinsam bleibt
+        # bei „Fläche >= 4,0" keine Kombination übrig, die zugleich die vier
+        # Zusagen aus ``test_the_viewport_follows_the_theme`` hält.
+        #
+        # **Ein erster Entwurf hellte Raster und Fläche gemeinsam auf** und
+        # verlor dabei ihren gegenseitigen Abstand (1,02 statt der verlangten
+        # 1,4) — ein Raster, das man auf seinem eigenen Grund nicht sieht.
+        # Gefangen hat es derselbe Test, der die Zusage seit je hält.
+        "object": "#78828e",
+        "bed": "#bfcad8",
         # Zieht mit dem Hintergrund mit: Der abgedunkelte Verlauf war der
         # bisherigen Plattenfarbe auf 1,07 nahegekommen, und eine Druckplatte,
-        # die man vom Nichts dahinter nicht unterscheidet, ist keine.
-        "bed_surface": "#bcc4ce",
+        # die man vom Nichts dahinter nicht unterscheidet, ist keine. Mit 1,21
+        # bleibt sie darüber und tritt zugleich hinter den Körper zurück.
+        "bed_surface": "#e5effb",
         "edge": "#1c2228",
     },
 }
