@@ -57,7 +57,7 @@
 
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — 270 war exakt der französische Wert, und niemand setzte Französisch; die Messung stimmte, die Kette dahinter war erfunden.
-- [Sondenbau](sondenbau.md) — wenn ein Test nur in großen Läufen kippt, misst eine Sonde den Unterschied; fünf Bauarten, an denen sie sich selbst maß statt der Sache.
+- [Sondenbau](sondenbau.md) — wenn ein Test nur in großen Läufen kippt, misst eine Sonde den Unterschied; sechs Bauarten, an denen sie sich selbst maß statt der Sache.
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — drei gefallene Befunde an einem Tag; beim dritten war die Messung echt und galt nur woanders.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — eine Auflage nannte „die Agenten-Werkzeugbeschreibungs-Tests“, ich fuhr test_agent.py; der gemeinte hieß test_agent_suite.py und war schon auf HEAD rot.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy lief vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
@@ -67,6 +67,7 @@
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML als Artifact; jede neue beginnt mit dem Übertrag, und jeder „offene" Punkt der Vorversion wird am Code nachgemessen, nicht abgeschrieben.
 
 ## Haltung
+- [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — wer eine Funktion um eine Variante erweitert, grept den alten Namen durch conftest, Fixtures und Wächter; ein ins Leere gehender Patch ist schlimmer als keiner.
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab für alles: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument.
