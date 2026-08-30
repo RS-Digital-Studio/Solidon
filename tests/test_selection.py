@@ -1032,3 +1032,151 @@ def test_the_status_line_says_what_a_drag_will_do(window: MainWindow) -> None:
         f"„Auswahl“ sagt nicht, wie viele es sind — das war der alte Text: {text!r}"
     )
     assert len(text) > 20, f"die Zeile trägt keine Auskunft über den Zug: {text!r}"
+
+
+# --- Was der Griff sagt, bevor gezogen wird -----------------------------------
+
+
+def test_the_handle_on_a_face_says_which_face_it_is() -> None:
+    """Sitzt der Griff auf einer Fläche, nennt er sie — statt X, Y und Z.
+
+    **Weil drei Achsenbuchstaben dort die falsche Auskunft sind.** Der Griff
+    springt bei gewählter Fläche dorthin und kennt nur vor und zurück
+    (§18.11); beschriftet war er weiter mit X, Y und Z, und was wirklich
+    passiert, erfuhr der Kunde erst während des Zugs. Wer nicht aus dem CAD
+    kommt, liest drei Achsen als „hier geht es in drei Richtungen" und zieht in
+    eine, die verfällt.
+
+    Geprüft wird die reine Funktion und nicht der Plotter: Offscreen gibt es
+    keinen, und ein Test, der sich dort überspringt, ist grün über einer leeren
+    Menge (siehe den Kopf dieser Datei).
+    """
+    from app.ui.viewport import FACE_ARROW, gizmo_labels
+
+    achsen = gizmo_labels((0.0, 0.0, 0.0), 10.0)
+    assert [text for _punkt, text in achsen] == ["X", "Y", "Z"], (
+        "ohne Fläche bleibt es bei den drei Achsen"
+    )
+
+    flaeche = gizmo_labels((0.0, 0.0, 0.0), 10.0, ("Oberseite", (0.0, 0.0, 1.0)))
+    beschriftung = [text for _punkt, text in flaeche]
+    assert beschriftung == [FACE_ARROW], (
+        f"der Griff muss die eine Richtung zeigen, er sagt {beschriftung}"
+    )
+    assert "X" not in beschriftung and "Y" not in beschriftung, (
+        "die Achsenbuchstaben dürfen daneben nicht stehen bleiben — sie "
+        "versprechen Richtungen, die es an einer Fläche nicht gibt"
+    )
+
+
+def test_the_face_label_sits_along_the_normal() -> None:
+    """Die Beschriftung liegt in Zugrichtung, nicht auf einer Achse.
+
+    Sonst stünde sie bei einer schräg liegenden Fläche irgendwo im Raum, und
+    der Doppelpfeil zeigte in eine Richtung, in die nichts geht.
+    """
+    from app.ui.viewport import GIZMO_LABEL_GAP, gizmo_labels
+
+    reach = 10.0 * GIZMO_LABEL_GAP
+    ((punkt, _text),) = gizmo_labels((1.0, 2.0, 3.0), 10.0, ("Vorderseite", (0.0, -1.0, 0.0)))
+
+    assert punkt == pytest.approx((1.0, 2.0 - reach, 3.0)), (
+        f"die Beschriftung muss auf der Normalen liegen, sie liegt bei {punkt}"
+    )
+
+
+def test_a_customer_never_reads_the_internal_name(window: MainWindow) -> None:
+    """Am Griff steht „Oberseite" und nirgends ``face_2``.
+
+    Die Kennung ist die Sprache des Op-Stacks. Für jemanden ohne
+    CAD-Erfahrung ist sie eine Nummer ohne Aussage — sie gehört in den Tooltip
+    und in Parameterfelder, nicht in die Ansicht (§18.5).
+
+    Über die Flächen des Korpus und nicht über ein selbstgebautes Merkmal: Was
+    hier geprüft wird, muss das sein, was die Anwendung erzeugt.
+    """
+    from app.ui.labels import feature_name
+
+    entry = window.session.last_result.scene.objects["obj_1"]
+    faces = [(fid, f) for fid, f in entry.features.items() if f.kind == "face"]
+    assert len(faces) >= 3, f"nur {len(faces)} Flächen — dann prüft das nichts"
+
+    for feature_id, feature in faces:
+        name = feature_name(feature_id, feature)
+        assert feature_id not in name, (
+            f"die Kennung {feature_id!r} darf nicht in die Ansicht durchschlagen: {name!r}"
+        )
+        assert name.strip(), f"{feature_id}: ohne Namen stünde der Doppelpfeil allein am Griff"
+
+
+def test_choosing_a_face_reaches_the_handle_label(window: MainWindow) -> None:
+    """Von der gewählten Fläche bis zur Beschriftung — das Stück dazwischen.
+
+    **Die beiden Enden sind geprüft, das Stück dazwischen war es nicht.**
+    ``gizmo_labels`` beschriftet richtig, wenn man ihm eine Fläche gibt, und
+    ``feature_name`` benennt sie kundengerecht — aber ob die Auswahl je dort
+    ankommt, sagt keines von beiden. Durchgereicht ist nicht gerufen.
+
+    Offscreen prüfbar, weil ``gizmo_face_label`` keine Plotter-Wache trägt:
+    ``_label_gizmo`` steigt bei fehlendem Plotter sofort aus und wäre hier
+    grün über einer leeren Menge.
+    """
+    entry = window.session.last_result.scene.objects["obj_1"]
+    faces = [fid for fid, f in entry.features.items() if f.kind == "face"]
+    assert faces, "die Platte hat keine Flächen — dann prüft das nichts"
+
+    window.object_tree.select_object("obj_1")
+    assert window.viewport.gizmo_face_label() is None, (
+        "ohne gewählte Fläche darf am Griff keine stehen — dort gelten X, Y und Z"
+    )
+
+    window.viewport.select_feature(faces[0])
+    beschriftung = window.viewport.gizmo_face_label()
+
+    assert beschriftung is not None, (
+        f"eine gewählte Fläche ({faces[0]}) muss am Griff ankommen — sonst sagt "
+        "er weiter X, Y und Z und verspricht Richtungen, die es nicht gibt"
+    )
+    name, normal = beschriftung
+    assert name.strip() and faces[0] not in name, (
+        f"am Griff steht die Kennung statt des Namens: {name!r}"
+    )
+    assert len(normal) == 3 and any(abs(wert) > 0.0 for wert in normal), (
+        f"die Richtung fehlt oder ist null: {normal}"
+    )
+
+
+def test_nothing_on_the_gizmo_leaves_ascii() -> None:
+    """VTK nimmt in dieser Beschriftung kein Zeichen außerhalb von ASCII.
+
+    **Kein Stilwunsch, sondern eine harte Grenze.** Die Griffbeschriftung ist
+    ein ``vtkStringArray``; pyvista lehnt alles andere ab, und zwar nicht mit
+    einer Warnung, sondern mit ``ValueError: String array contains non-ASCII
+    characters``. Der ganze Griffaufbau stürzt damit ab.
+
+    **Der Fall ist einmal passiert und wäre in der deutschen Fassung nie
+    aufgefallen:** Am Griff standen kurz ein Doppelpfeil „↕" und der Name der
+    Fläche aus ``feature_name``. Auf Französisch heißen vier der sechs Flächen
+    ``Face supérieure``, ``Arrière``, ``Côté gauche`` und ``Côté droit`` — die
+    Anwendung wäre dort beim Klick auf eine Fläche abgestürzt, hier nicht.
+
+    Deshalb prüft dieser Test **jede** Beschriftung, die die Funktion erzeugen
+    kann, und nicht nur die deutsche Lage. Der Name steht in der Statusleiste,
+    wo Qt zeichnet und jede Sprache darf.
+    """
+    from app.ui.viewport import gizmo_labels
+
+    laeufe = [
+        gizmo_labels((0.0, 0.0, 0.0), 10.0),
+        gizmo_labels((0.0, 0.0, 0.0), 10.0, ("Face supérieure", (0.0, 0.0, 1.0))),
+        gizmo_labels((0.0, 0.0, 0.0), 10.0, ("Côté gauche", (-1.0, 0.0, 0.0))),
+        gizmo_labels((0.0, 0.0, 0.0), 10.0, ("Arrière", (0.0, 1.0, 0.0))),
+    ]
+    assert len(laeufe) == 4, "die Grundmenge ist leer — dann prüft dieser Test nichts"
+
+    for marken in laeufe:
+        for _punkt, text in marken:
+            assert text.isascii(), (
+                f"VTK kann {text!r} nicht zeichnen und wirft beim Aufbau des Griffs "
+                "einen ValueError — übersetzte Texte gehören in die Statusleiste"
+            )

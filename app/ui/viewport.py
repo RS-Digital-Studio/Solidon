@@ -77,7 +77,7 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
-from app.ui.labels import display_unit, feature_label, length, localised
+from app.ui.labels import display_unit, feature_label, feature_name, length, localised
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -1637,16 +1637,69 @@ GIZMO_LINE_RADIUS = 0.035
 GIZMO_LABEL_GAP = 1.2
 
 
+#: Was am Griff steht, wenn er auf einer Fläche sitzt: vor und zurück.
+#:
+#: **Reines ASCII, und das ist keine Vorliebe, sondern eine Grenze von VTK.**
+#: Diese Beschriftung ist ein ``vtkStringArray``, und pyvista lehnt jedes
+#: Zeichen darin ab, das nicht ASCII ist — nicht mit einer Warnung, sondern
+#: mit ``ValueError: String array contains non-ASCII characters``. Der ganze
+#: Griffaufbau stürzt damit ab.
+#:
+#: Hier stand deshalb kurz ein Doppelpfeil „↕" und dahinter der Name der
+#: Fläche aus ``feature_name``. Beides ging nicht, und der Name war der
+#: schwerere Fehler: Auf Französisch heißen vier der sechs Flächen
+#: ``Face supérieure``, ``Arrière``, ``Côté gauche`` und ``Côté droit`` — die
+#: Anwendung wäre dort beim Klick auf eine Fläche abgestürzt, in der deutschen
+#: Fassung dagegen nie.
+#:
+#: **Der Name steht deshalb, wo Qt zeichnet:** In der Statusleiste, die bei
+#: gewähltem Merkmal ohnehin „Platte · Oberseite" zeigt. Am Griff bleibt die
+#: Richtung, und die braucht keine Übersetzung.
+FACE_ARROW = "<->"
+
+
 def gizmo_labels(
-    origin: tuple[float, float, float], length: float
+    origin: tuple[float, float, float],
+    length: float,
+    face: tuple[str, tuple[float, float, float]] | None = None,
 ) -> list[tuple[tuple[float, float, float], str]]:
-    """Wo X, Y und Z am Gizmo stehen (Regel 18).
+    """Was am Gizmo steht (Regel 18) — drei Achsen oder eine Fläche.
 
     Die drei Achsen unterschied allein Rot, Grün und Blau — für jeden, der die
     nicht trennt, waren es drei gleiche Pfeile. Ein Buchstabe an der Spitze
     trägt dieselbe Aussage ohne Farbe.
+
+    **Sitzt der Griff auf einer Fläche, sind X, Y und Z die falsche Auskunft.**
+    Er springt dann dorthin und kennt nur vor und zurück (§18.11), aber
+    beschriftet war er weiter mit drei Achsen — und was wirklich passiert,
+    erfuhr der Kunde erst, während er zog. Wer nicht aus dem CAD kommt, liest
+    drei Achsenbuchstaben als „hier geht es in drei Richtungen" und zieht in
+    eine, die verfällt.
+
+    ``face`` ist Name und Normale der Fläche. **Gezeichnet wird nur die
+    Richtung** (:data:`FACE_ARROW`) — der Name gehört nicht hierher, weil VTK
+    in dieser Beschriftung kein Zeichen außerhalb von ASCII annimmt und die
+    Flächennamen übersetzt werden. Er steht in der Statusleiste, wo Qt
+    zeichnet. Der Parameter trägt ihn trotzdem: Wer die Beschriftung einmal
+    über Qt legt, hat ihn dann zur Hand, und die Auskunft „welche Fläche" wird
+    an *einer* Stelle bestimmt statt an zweien.
     """
     reach = length * GIZMO_LABEL_GAP
+    if face is not None:
+        _name, normal = face
+        # Auf der Normalen und im selben Abstand wie die Achsenbuchstaben —
+        # ein Griffsatz, eine Schreibweise. Nicht auf der Spitze: dort liegt
+        # die Beschriftung, wo man greifen will.
+        return [
+            (
+                (
+                    origin[0] + float(normal[0]) * reach,
+                    origin[1] + float(normal[1]) * reach,
+                    origin[2] + float(normal[2]) * reach,
+                ),
+                FACE_ARROW,
+            )
+        ]
     return [
         ((origin[0] + reach, origin[1], origin[2]), "X"),
         ((origin[0], origin[1] + reach, origin[2]), "Y"),
@@ -6025,6 +6078,27 @@ class Viewport(QWidget):
             vtkMapper.SetResolveCoincidentTopology(self._coincident_before)
             self._coincident_before = None
 
+    def gizmo_face_label(self) -> tuple[str, tuple[float, float, float]] | None:
+        """Name und Richtung der Fläche am Griff — oder ``None`` fürs Objekt.
+
+        **Als eigene Auskunft und nicht als Zeilen in ``_label_gizmo``**, aus
+        demselben Grund wie bei :meth:`gizmo_target`: Jene Methode steigt bei
+        ``self.plotter is None`` sofort aus, und offscreen gibt es keinen
+        Plotter. Ein Test, der sie dort ruft, ist grün, ohne etwas geprüft zu
+        haben — und die Verkabelung zwischen Auswahl und Beschriftung wäre
+        genau das ungeprüfte Stück zwischen zwei geprüften Enden.
+        """
+        chosen = self.gizmo_target()
+        if chosen is None:
+            return None
+        normal = chosen.params.get("normal")
+        if not isinstance(normal, tuple | list) or len(normal) != 3:
+            return None
+        return (
+            feature_name(self._selected_feature or "", chosen),
+            (float(normal[0]), float(normal[1]), float(normal[2])),
+        )
+
     def _label_gizmo(self, actor: Any) -> None:
         """Schreibt X, Y und Z an die Achsen (Regel 18).
 
@@ -6039,7 +6113,7 @@ class Viewport(QWidget):
 
         length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
         centre = (float(actor.center[0]), float(actor.center[1]), float(actor.center[2]))
-        marks = gizmo_labels(centre, length)
+        marks = gizmo_labels(centre, length, self.gizmo_face_label())
         if self._scale_handle is not None:
             # Das S hinter dem Würfel, im selben Abstand wie X, Y und Z
             # hinter ihren Spitzen — ein Griffsatz, eine Schreibweise.

@@ -448,6 +448,45 @@ schneiden. **Und sie gehört der Platte des Körpers**, nicht der ersten
 eines Körpers auf Platte 2 eine Bettbreite weiter, und am Umriss von Platte 1
 geschnitten wäre sein Schatten restlos weg.
 
+## Was VTK beschriftet, ist ASCII — und sonst nichts
+
+Die Griffbeschriftung ist ein `vtkStringArray`. pyvista lehnt darin jedes
+Zeichen außerhalb von ASCII ab, und zwar nicht mit einer Warnung:
+
+```
+ValueError: String array contains non-ASCII characters that are not supported by VTK
+```
+
+Der ganze Griffaufbau stürzt damit ab. **Das ist der eine Ort in der
+Oberfläche, an den ein übersetzter Text nicht darf** — überall sonst zeichnet
+Qt, und Qt kann jede Sprache.
+
+**Der Fall ist am 30.08.2026 passiert und wäre auf Deutsch nie aufgefallen.**
+Am Griff standen kurz ein Doppelpfeil und der Name der Fläche aus
+`feature_name`. Deutsch ist „Oberseite", „Unterseite", „Vorderseite" — alles
+ASCII. Französisch nicht:
+
+| | |
+|---|---|
+| `Oberseite` | `Face supérieure` |
+| `Rückseite` | `Arrière` |
+| `Linke Seite` | `Côté gauche` |
+| `Rechte Seite` | `Côté droit` |
+
+Vier von sechs. Ein Kunde auf Französisch hätte beim Klick auf eine Fläche
+einen Absturz bekommen, und ein Torlauf in deutscher Umgebung hätte
+geschwiegen — die Sorte Fehler, die es bis zum Kunden schafft.
+
+**Wohin der Text stattdessen gehört:** in die Statusleiste. Sie zeigt bei
+gewähltem Merkmal ohnehin „Platte · Oberseite", dort zeichnet Qt, und dort
+darf jede Sprache stehen. Am Griff bleibt, was keine Übersetzung braucht —
+`X`, `Y`, `Z`, `S` und `<->` für eine Fläche, die nur vor und zurück kennt.
+
+Gesichert durch `tests/test_selection.py::test_nothing_on_the_gizmo_leaves_ascii`,
+und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
+hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
+wieder tut.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

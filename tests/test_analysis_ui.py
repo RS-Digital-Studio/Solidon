@@ -1871,7 +1871,14 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
         viewport.gizmo_target = lambda: face  # type: ignore[method-assign]
         viewport.set_gizmo(True)
         assert viewport._scale_handle is None, "eine Fläche hat keine Größe zu ändern"
-        assert viewport._gizmo_label_data.n_points == 3
+        # **Eine Marke und nicht drei**, seit die Beschriftung sagt, was der
+        # Griff an einer Fläche kann: vor und zurück. Drei Achsenbuchstaben
+        # versprachen dort drei Richtungen, von denen zwei verfallen — wer
+        # nicht aus dem CAD kommt, zieht in eine davon und sieht nichts
+        # passieren. Der Name der Fläche steht in der Statusleiste, wo Qt
+        # zeichnet: VTK nimmt in dieser Beschriftung kein Zeichen außerhalb
+        # von ASCII, und die Flächennamen werden übersetzt.
+        assert viewport._gizmo_label_data.n_points == 1, "an der Fläche eine Richtung"
     finally:
         viewport.deleteLater()
 
