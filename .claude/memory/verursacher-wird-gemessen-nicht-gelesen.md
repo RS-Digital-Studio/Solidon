@@ -42,3 +42,16 @@ in seinem Inhalt, nicht in seiner Position im Verlauf.
 Verwandt: [[commit-o-nimmt-den-dateistand]] (dort geht es um die Zurechnung
 *eigener* Commits), [[messwerkzeug-misst-sich-selbst]] und
 [[bekannte-familie-erklaert-nicht-den-ausloeser]].
+
+**Nachtrag vom 30.08.2026 — dieselbe Lehre für Reproduktion statt Attribution.**
+Ein Befund lautete „ElegooSlicers Kommandozeile nimmt keinen Auftrag an — auch
+mit ihren eigenen Systemprofilen". Eine Parallelsitzung slicte damit zweimal
+sauber. Widerlegt war der Befund in Sekunden; **nicht mehr feststellbar war,
+was ich damals eigentlich gefahren hatte** — die Zeile stand nur im
+Terminal-Puffer, und der war fort.
+
+Attribution braucht `git log -S` auf den Zeileninhalt, Reproduktion braucht die
+**wörtliche Kommandozeile**. Beide sind Rohdaten, beide sterben mit dem Puffer,
+wenn niemand sie festhält. Wer einen Befund meldet, schreibt den Aufruf mit
+hinein, solange er noch dasteht — hinterher ist eine erinnerte Zeile kein Beleg,
+sondern eine zweite Vermutung über der ersten.
