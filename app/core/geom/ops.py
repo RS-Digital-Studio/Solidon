@@ -36,12 +36,49 @@ from app.core.types import (
     OpContext,
     OpResult,
     Transform,
+    Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 _AXES = tuple(AXIS_VECTORS)
+#: Die Drehpunkte, die eine Transformation kennt.
+#:
+#: ``point`` ist der einzige, der nicht aus dem Netz kommt, sondern aus den
+#: Parametern (``pivot_x``/``pivot_y``/``pivot_z``). Er ist dafür da, dass
+#: **mehrere** Körper um denselben Punkt gedreht werden können: Die anderen
+#: drei liest ``anchor_point`` aus dem eigenen Netz, jeder Körper drehte also
+#: um sich selbst, und eine Gruppe fiele auseinander.
 _ANCHORS = ("centre", "origin", "bed")
+
+#: Dieselben drei, dazu der genannte Punkt.
+#:
+#: **Getrennt und nicht für alle**, weil ``fit_to_size`` und ``mirror_object``
+#: ihn nicht auswerten. Stünde er auch in ihrer Auswahlliste, wäre er dort
+#: eine Sackgasse (§2.1): ein Eintrag, den man wählen kann und der nichts tut.
+#: Wer eine der beiden später erweitert, tauscht die Liste bewusst.
+_ANCHORS_WITH_POINT = (*_ANCHORS, "point")
+
+
+def named_pivot(params: Any) -> Vec3 | None:
+    """Der genannte Drehpunkt aus den Parametern — oder ``None``.
+
+    **Der Unterschied zu „nicht gesetzt" ist der Anker und nicht die Null.**
+    Ein Nullpunkt ist ein gültiger Drehpunkt; wer ihn an der Zahl erkennen
+    wollte, könnte „um den Ursprung" nicht von „nichts angegeben"
+    unterscheiden. Deshalb entscheidet ``about``, und die drei Zahlen gelten
+    nur, wenn es ``point`` sagt.
+
+    Alte Projektdateien tragen ``about`` als ``centre``, ``origin`` oder
+    ``bed`` und kommen hier nie durch — ihr Verhalten ändert sich nicht.
+    """
+    if getattr(params, "about", None) != "point":
+        return None
+    return (
+        float(getattr(params, "pivot_x", 0.0)),
+        float(getattr(params, "pivot_y", 0.0)),
+        float(getattr(params, "pivot_z", 0.0)),
+    )
 
 
 def as_transform(matrix: Any) -> Transform:
@@ -142,9 +179,33 @@ class RotateParams(BaseParams):
     about: str = param(
         title=_("Drehpunkt"),
         default="centre",
-        choices=_ANCHORS,
+        choices=_ANCHORS_WITH_POINT,
         placement="advanced",
-        doc=_("Schwerpunkt des Objekts, Weltnullpunkt oder Aufstandsfläche."),
+        doc=_(
+            "Schwerpunkt des Objekts, Weltnullpunkt, Aufstandsfläche — oder "
+            "ein genannter Punkt, um den mehrere Körper gemeinsam drehen."
+        ),
+    )
+    pivot_x: float = param(
+        title=_("Drehpunkt X"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Drehpunkt „Genannter Punkt“ ist."),
+    )
+    pivot_y: float = param(
+        title=_("Drehpunkt Y"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Drehpunkt „Genannter Punkt“ ist."),
+    )
+    pivot_z: float = param(
+        title=_("Drehpunkt Z"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Drehpunkt „Genannter Punkt“ ist."),
     )
 
 
@@ -164,7 +225,11 @@ class RotateParams(BaseParams):
 def rotate_object(ctx: OpContext) -> OpResult:
     params = cast(RotateParams, ctx.params)
     source = ctx.inputs[0]
-    pivot = anchor_point(as_mesh_data(source.mesh), cast(Anchor, params.about))
+    # Ein genannter Punkt schlägt den Anker aus dem eigenen Netz — nur so
+    # drehen mehrere Körper um dieselbe Stelle statt jeder um sich selbst.
+    pivot = named_pivot(params) or anchor_point(
+        as_mesh_data(source.mesh), cast(Anchor, params.about)
+    )
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
     turned = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(
@@ -219,9 +284,33 @@ class ScaleParams(BaseParams):
     about: str = param(
         title=_("Bezugspunkt"),
         default="centre",
-        choices=_ANCHORS,
+        choices=_ANCHORS_WITH_POINT,
         placement="advanced",
-        doc=_("Der Punkt, der stehen bleibt: Schwerpunkt, Nullpunkt oder Aufstandsfläche."),
+        doc=_(
+            "Der Punkt, der stehen bleibt: Schwerpunkt, Nullpunkt, Aufstandsfläche "
+            "— oder ein genannter Punkt, damit mehrere Körper zusammen wachsen."
+        ),
+    )
+    pivot_x: float = param(
+        title=_("Bezugspunkt X"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist."),
+    )
+    pivot_y: float = param(
+        title=_("Bezugspunkt Y"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist."),
+    )
+    pivot_z: float = param(
+        title=_("Bezugspunkt Z"),
+        default=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Gilt nur, wenn der Bezugspunkt „Genannter Punkt“ ist."),
     )
 
 
@@ -243,7 +332,9 @@ def scale_object(ctx: OpContext) -> OpResult:
         params.fy or params.factor,
         params.fz or params.factor,
     )
-    pivot = anchor_point(as_mesh_data(source.mesh), cast(Anchor, params.about))
+    pivot = named_pivot(params) or anchor_point(
+        as_mesh_data(source.mesh), cast(Anchor, params.about)
+    )
     matrix = scaling(factors, pivot)
     scaled = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(

@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 17
+FORMAT_VERSION: Final = 18
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,6 +310,27 @@ def _allow_removed_operations(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _allow_a_named_pivot(data: dict[str, Any]) -> dict[str, Any]:
+    """17 → 18: Drehen und Skalieren dürfen einen genannten Punkt tragen.
+
+    ``about`` kannte ``centre``, ``origin`` und ``bed`` — alle drei liest die
+    Operation aus dem *eigenen* Netz. Ab v18 gibt es ``point``, und dann gelten
+    ``pivot_x``/``pivot_y``/``pivot_z``: So drehen mehrere gewählte Körper um
+    **dieselbe** Stelle, statt jeder um sich selbst.
+
+    Alte Dateien tragen keinen solchen Punkt und brauchen keine inhaltliche
+    Umrechnung. **Die Versionsgrenze ist trotzdem nötig, und der Grund ist
+    gemessen:** Eine v0.2.2-Anwendung nimmt ``about="point"`` an, statt es
+    abzulehnen — ``anchor_point`` kennt den Wert nicht und fällt still auf
+    ``bounds.centre`` durch. Sie rechnete also eine Gruppendrehung als lauter
+    Einzeldrehungen und zeigte ein falsches Ergebnis ohne einen Hinweis
+    darauf. Mit dem Sprung sagt sie stattdessen, dass die Datei zu neu ist.
+
+    Dasselbe Muster wie bei 16 → 17: keine Umrechnung, nur ein Schutz.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -328,6 +349,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=14, to_version=15, apply=_protect_filament_metadata),
     Step(from_version=15, to_version=16, apply=_keep_reports_without_suggestions_valid),
     Step(from_version=16, to_version=17, apply=_allow_removed_operations),
+    Step(from_version=17, to_version=18, apply=_allow_a_named_pivot),
 )
 
 

@@ -872,15 +872,6 @@ def _face_side(normal: Any) -> str:
     return tr("hinten") if y >= 0.0 else tr("vorn")
 
 
-#: Transformationen, die auf die **ganze** Auswahl wirken dürfen.
-#:
-#: Nur das Verschieben: Sein Vektor ist für jeden Körper derselbe, die
-#: Anordnung der Auswahl bleibt erhalten. Drehen und Skalieren nehmen ihren
-#: Bezugspunkt aus dem eigenen Netz und rissen eine Gruppe auseinander — die
-#: Begründung steht bei :meth:`MainWindow.inputs_for_transform`.
-MOVES_THE_WHOLE_SELECTION = frozenset({"translate_object"})
-
-
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -6210,31 +6201,60 @@ class MainWindow(QMainWindow):
         Teilen. Das ist nicht ungenau, sondern kaputt: Die Auswahl sagt zwei,
         das Bild zeigt eines, und niemand erfährt, warum.
 
-        **Verschieben gilt für alle, Drehen und Skalieren nicht**, und der
-        Unterschied liegt nicht in der Bequemlichkeit, sondern in der
-        Geometrie: Ein Verschiebevektor ist für jeden Körper derselbe, die
-        Anordnung der Auswahl bleibt also erhalten. ``rotate_object`` und
-        ``scale_object`` nehmen ihren Bezugspunkt dagegen aus dem **eigenen**
-        Netz (``anchor_point`` kennt nur ``origin``, ``bed`` und ``centre``) —
-        jeder Körper drehte um sich selbst statt die Gruppe um ihre Mitte, und
-        was der Kunde gerade zusammengestellt hat, flöge auseinander. Ein
-        gemeinsamer Punkt ist über die vorhandenen Anker nicht erreichbar;
-        ``origin`` wirft die Teile quer durch den Bauraum.
+        **Alle drei Züge gelten inzwischen der ganzen Auswahl.** Verschieben
+        konnte das immer — sein Vektor ist für jeden Körper derselbe. Drehen
+        und Skalieren gingen zunächst nicht: Sie nahmen ihren Bezugspunkt aus
+        dem *eigenen* Netz, jeder Körper drehte also um sich selbst statt die
+        Gruppe um ihre Mitte. Seit die Operationen einen genannten Punkt
+        annehmen (``about="point"``), gibt es diesen Unterschied nicht mehr;
+        den Punkt liefert :meth:`pivot_for_transform`.
 
-        Deshalb hier eine Regel und kein ``if`` in zwei Handlern: Der Zug am
-        Griff und die Eingabe in der Transformationsleiste sind für den Kunden
-        **dieselbe** Handlung — sie erzeugen dieselbe Operation. Liefe eines
-        auf zwei Teile und das andere auf eines, wäre das nicht inkonsistent,
-        sondern unerklärlich.
+        Die Reihenfolge ist die Anklickreihenfolge (``selected_objects``).
+        """
+        return self.object_tree.selected_objects()
 
-        Die Reihenfolge ist die Anklickreihenfolge (``selected_objects``): Wo
-        nur einer gilt, ist es der zuerst gewählte und kein zufälliger aus
-        einer Menge.
+    def pivot_for_transform(self) -> dict[str, float | str]:
+        """Der gemeinsame Bezugspunkt für einen Zug an mehreren Körpern.
+
+        Leer bei einem einzelnen Körper: Dann gilt sein eigener Schwerpunkt,
+        genau wie bisher und wie in jeder bestehenden Projektdatei. Erst ab
+        zwei markierten Körpern steht ein Punkt in den Parametern.
+
+        **Die Mitte der gemeinsamen Hülle und nicht der Schwerpunkt der
+        Massen.** Was der Kunde sieht, ist der Kasten um seine Auswahl; dessen
+        Mitte ist die Stelle, an der er den Griff erwartet. Ein Schwerpunkt
+        wanderte mit dem Volumen und läge bei einem großen und einem kleinen
+        Teil fast im großen — die Drehung sähe dann aus, als griffe sie nur
+        eines an.
+
+        **Eine Abfrage und keine Geometrieänderung** (Regel 2): Hier entsteht
+        kein Ergebnis, das in ein Dokument wandert, sondern ein *Parameter*,
+        den die Operation dann selbst verrechnet. Der Unterschied ist der, an
+        dem der Weg über eine Zerlegung in der Oberfläche gescheitert wäre —
+        dort stünde am Ende eine Zahl in der Projektdatei, deren Herkunft
+        niemand mehr nachvollzieht, und ein nachträglich geänderter Winkel im
+        Verlauf rechnete sie nicht mit.
         """
         chosen = self.object_tree.selected_objects()
-        if op in MOVES_THE_WHOLE_SELECTION or len(chosen) < 2:
-            return chosen
-        return chosen[:1]
+        if len(chosen) < 2:
+            return {}
+        result = self.session.last_result
+        if result is None:
+            return {}
+        meshes = [
+            as_mesh_data(entry.mesh)
+            for entry in (result.scene.objects.get(one) for one in chosen)
+            if entry is not None
+        ]
+        if not meshes:
+            return {}
+        centre = bounding_box_of(meshes).centre
+        return {
+            "about": "point",
+            "pivot_x": float(centre[0]),
+            "pivot_y": float(centre[1]),
+            "pivot_z": float(centre[2]),
+        }
 
     def _on_transform_dragged(self, steps: Any) -> None:
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
@@ -6253,18 +6273,22 @@ class MainWindow(QMainWindow):
                 for object_id in self.inputs_for_transform("translate_object")
             )
         if steps.turns:
+            pivot = self.pivot_for_transform()
             drafts.extend(
                 OperationDraft(
                     op="rotate_object",
                     inputs=(object_id,),
-                    params={"axis": steps.axis, "angle": steps.angle},
+                    params={"axis": steps.axis, "angle": steps.angle, **pivot},
                 )
                 for object_id in self.inputs_for_transform("rotate_object")
             )
         if steps.resizes:
+            pivot = self.pivot_for_transform()
             drafts.extend(
                 OperationDraft(
-                    op="scale_object", inputs=(object_id,), params={"factor": steps.scale}
+                    op="scale_object",
+                    inputs=(object_id,),
+                    params={"factor": steps.scale, **pivot},
                 )
                 for object_id in self.inputs_for_transform("scale_object")
             )
@@ -6282,13 +6306,18 @@ class MainWindow(QMainWindow):
         chosen = self.inputs_for_transform("scale_object")
         if not chosen:
             return
-        selected = chosen[0]
+        # Der Würfel greift alle markierten Körper — um ihre gemeinsame Mitte,
+        # damit die Anordnung erhalten bleibt statt jeden für sich zu blähen.
+        pivot = self.pivot_for_transform()
         self.session.apply(
             REGISTRY.get("scale_object").title,
             [
                 OperationDraft(
-                    op="scale_object", inputs=(selected,), params={"factor": float(factor)}
+                    op="scale_object",
+                    inputs=(object_id,),
+                    params={"factor": float(factor), **pivot},
                 )
+                for object_id in chosen
             ],
         )
 
@@ -8528,21 +8557,19 @@ class MainWindow(QMainWindow):
         if described is None or not meshes:
             self.measurements.clear_selection()
             return
-        # **Bei mehreren Teilen sagt die Zeile, was ein Zug tut.** „Auswahl"
-        # allein nannte nicht einmal ihre Zahl, und die Griffe wirken nicht
-        # auf alle gleich: Verschieben gilt für jeden markierten Körper,
-        # Drehen und Größe für den zuerst gewählten (siehe
-        # ``inputs_for_transform``). Wer das erst am Ergebnis merkt, hat einen
-        # Zug zurückzunehmen, den er nicht gemeint hat — deshalb steht es
-        # vorher da, in der Zeile, die ohnehin im Blick ist.
+        # **Die Zahl statt „Auswahl".** Sie allein nannte nicht einmal, wie
+        # viele Teile gewählt sind.
+        #
+        # Hier stand kurz auch, was ein Zug tut — „Ziehen verschiebt alle ·
+        # Drehen und Größe gelten dem ersten". Der Satz ist mit dem genannten
+        # Drehpunkt gegenstandslos geworden: Alle drei Züge gelten jetzt der
+        # ganzen Auswahl, und ein Hinweis auf eine Einschränkung, die es nicht
+        # mehr gibt, ist schlechter als keiner. Er ist auch aus den fünf
+        # Katalogen entfernt — ein Schlüssel, den niemand mehr benutzt, meldet
+        # sich sonst in ``test_translations`` als „nicht mehr gebraucht".
         name = described[0] if len(meshes) == 1 else tr("{zahl} Teile").format(zahl=len(meshes))
-        note = (
-            ""
-            if len(meshes) == 1
-            else tr("Ziehen verschiebt alle · Drehen und Größe gelten dem ersten")
-        )
         bounds = bounding_box_of(meshes)
-        self.measurements.show_object(name, bounds.size, volume_of(meshes), note)
+        self.measurements.show_object(name, bounds.size, volume_of(meshes))
 
     def action_add_parameter(self) -> None:
         """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""

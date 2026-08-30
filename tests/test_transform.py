@@ -310,3 +310,113 @@ def test_fit_to_size_refuses_a_body_without_extent() -> None:
     with pytest.raises(GeometryError) as problem:
         fit_to_size(context)
     assert problem.value.suggestions, "und nennt, was jetzt zu tun ist"
+
+
+# --- Der genannte Drehpunkt: mehrere Körper um dieselbe Stelle ------------------
+
+
+def test_a_named_pivot_turns_around_a_point_outside_the_body(
+    document: Document, profile: Profile
+) -> None:
+    """Ein Körper dreht um eine Stelle, die nicht seine eigene ist.
+
+    **Der Fall, für den es den Punkt gibt.** Ohne ihn liest ``anchor_point``
+    den Bezug aus dem *eigenen* Netz: Bei zwei markierten Körpern drehte jeder
+    um sich selbst, und die Anordnung, die der Kunde gerade hergestellt hat,
+    fiele auseinander.
+
+    Gemessen am Mittelpunkt: Der Würfel steht mittig um den Ursprung, eine
+    Drehung um 180° um einen Punkt bei x = 10 muss ihn nach x = 20 tragen.
+    """
+    history = prepared(document)
+    before = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    history.apply(
+        _("Drehen"),
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                params={
+                    "axis": "z",
+                    "angle": 180.0,
+                    "about": "point",
+                    "pivot_x": 10.0,
+                    "pivot_y": 0.0,
+                    "pivot_z": 0.0,
+                },
+            )
+        ],
+    )
+    after = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    assert after[0] == pytest.approx(2 * 10.0 - before[0], abs=1e-6), (
+        f"eine 180°-Drehung um x=10 spiegelt den Mittelpunkt an dieser Stelle: "
+        f"aus {before[0]} muss {2 * 10.0 - before[0]} werden, wurde {after[0]}"
+    )
+    assert after[1] == pytest.approx(-before[1], abs=1e-6)
+
+
+def test_without_the_named_pivot_nothing_changes(document: Document, profile: Profile) -> None:
+    """Die Vorgabe ist neutral — eine Datei ohne Punkt rechnet wie vorher.
+
+    **Die Gegenprobe zur Migration, und sie gehört hierher und nicht in die
+    Zusicherung.** Die drei Zahlen sind neu; wenn ihre Vorgabe das Verhalten
+    verschöbe, änderte sich jedes bestehende Projekt still mit. Geprüft wird
+    deshalb gegen den Anker, den alte Dateien tragen: ``centre`` lässt den
+    Mittelpunkt stehen, egal was in ``pivot_x`` steht.
+    """
+    history = prepared(document)
+    before = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    history.apply(
+        _("Drehen"),
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                # about fehlt: die Vorgabe centre gilt, wie in jeder alten Datei
+                params={"axis": "z", "angle": 90.0},
+            )
+        ],
+    )
+    after = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    assert after == pytest.approx(before, abs=1e-6), (
+        f"ohne genannten Punkt bleibt der Mittelpunkt stehen — aus {before} wurde {after}"
+    )
+
+
+def test_a_named_pivot_of_zero_is_a_point_and_not_a_missing_value(
+    document: Document, profile: Profile
+) -> None:
+    """Der Nullpunkt ist ein Drehpunkt und kein „nichts angegeben".
+
+    **Deshalb entscheidet der Anker und nicht die Zahl.** Wer „nicht gesetzt"
+    an ``pivot == (0, 0, 0)`` erkennen wollte, könnte „um den Ursprung" nicht
+    davon unterscheiden — und eine Drehung um den Ursprung ist genau das, was
+    ein Körper braucht, der neben ihm steht.
+    """
+    history = prepared(document)
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 30.0})],
+    )
+    versetzt = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    history.apply(
+        _("Drehen"),
+        [
+            OperationDraft(
+                op="rotate_object",
+                inputs=("obj_1",),
+                params={"axis": "z", "angle": 180.0, "about": "point"},
+            )
+        ],
+    )
+    gedreht = evaluate_with(document, profile).scene.objects["obj_1"].mesh.bounds.centre
+
+    assert gedreht[0] == pytest.approx(-versetzt[0], abs=1e-6), (
+        f"um den Ursprung gedreht muss aus x={versetzt[0]} x={-versetzt[0]} werden, "
+        f"wurde {gedreht[0]} — der Nullpunkt wurde als „nicht gesetzt“ gelesen"
+    )

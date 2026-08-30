@@ -931,6 +931,19 @@ def two_bodies(window: MainWindow) -> tuple[str, str]:
         ],
     )
     window.session.wait_for_idle()
+    # **Der zweite Körper steht daneben, und das ist der Punkt.**
+    # ``create_box`` legt ihn um den Ursprung an, genau wie die Platte — beide
+    # Mittelpunkte lägen dann auf der Z-Achse, und eine Drehung um Z um ihre
+    # gemeinsame Mitte ließe beide stehen. Der Test wäre grün, ohne etwas
+    # geprüft zu haben; genau diese Lage hat er in seiner ersten Fassung
+    # gemessen. Fünfzig Millimeter Versatz machen den Unterschied sichtbar.
+    box = window.session.last_result.scene.objects
+    letzter = [one for one in box if one != "obj_1"][-1]
+    window.session.apply(
+        "Danebenstellen",
+        [OperationDraft(op="translate_object", inputs=(letzter,), params={"dx": 50.0})],
+    )
+    window.session.wait_for_idle()
 
     tree = window.object_tree.tree
     assert tree.topLevelItemCount() >= 2, "der zweite Körper fehlt — dann prüft das nichts"
@@ -992,37 +1005,82 @@ def test_a_drag_moves_every_selected_body(window: MainWindow) -> None:
     )
 
 
-def test_turning_several_bodies_keeps_them_where_they_are(window: MainWindow) -> None:
-    """Drehen gilt dem ersten — und lässt die anderen in Ruhe.
+def test_turning_several_bodies_turns_them_as_a_group(window: MainWindow) -> None:
+    """Zwei Teile gewählt, einmal gedreht — die Gruppe dreht, nicht jeder für sich.
 
-    **Nicht aus Bequemlichkeit, sondern aus Geometrie:** ``rotate_object``
-    nimmt seinen Bezugspunkt aus dem *eigenen* Netz. Auf alle angewandt drehte
-    sich jeder Körper um sich selbst, statt die Gruppe um ihre Mitte — die
-    Anordnung, die der Kunde gerade hergestellt hat, wäre hin. Solange die Op
-    keinen gemeinsamen Punkt kennt, ist „einer" die ehrliche Antwort, und die
-    Statuszeile sagt sie vorher.
+    **Hier stand einmal das Gegenteil**, und die Begründung war richtig, solange
+    sie galt: ``rotate_object`` nahm seinen Bezugspunkt aus dem *eigenen* Netz,
+    jeder Körper drehte also um sich selbst, und die Anordnung, die der Kunde
+    gerade hergestellt hat, wäre auseinandergefallen. Deshalb galt Drehen dem
+    zuerst gewählten Teil, und die Statuszeile sagte es.
+
+    Für einen Kunden war das aber keine Lösung, sondern eine Grenze: Wer zwei
+    Teile markiert und dreht, erwartet, dass sie sich zusammen drehen. Seit die
+    Operation einen genannten Punkt annimmt, gibt es die Grenze nicht mehr.
+
+    Gemessen an der **Anordnung**: Der Abstand zwischen den Mittelpunkten muss
+    die Drehung überstehen. Dreht jeder um sich selbst, bleiben beide stehen,
+    wo sie sind — dann ist der Abstand ebenfalls gleich, und der Test sähe
+    nichts. Deshalb wird zusätzlich geprüft, dass die Körper sich überhaupt
+    bewegt haben.
     """
+    import math
+
     from app.ui.viewport import TransformSteps
 
-    _first, second = two_bodies(window)
-    before = size_of(window, second)
+    first, second = two_bodies(window)
+    vorher = (centre_of(window, first), centre_of(window, second))
+    abstand_vorher = math.dist(vorher[0], vorher[1])
 
     window._on_transform_dragged(TransformSteps(axis="z", angle=90.0))
     window.session.wait_for_idle()
 
-    assert size_of(window, second) == before, (
-        f"der zweite Körper darf sich beim Drehen nicht mitdrehen — aus {before} "
-        f"wurde {size_of(window, second)}; eine Drehung um den je eigenen "
-        "Mittelpunkt reißt die Anordnung der Auswahl auseinander"
+    nachher = (centre_of(window, first), centre_of(window, second))
+    abstand_nachher = math.dist(nachher[0], nachher[1])
+
+    assert abstand_nachher == pytest.approx(abstand_vorher, abs=1e-6), (
+        f"die Anordnung muss die Drehung überstehen: aus {abstand_vorher:.3f} mm "
+        f"Abstand wurde {abstand_nachher:.3f} mm"
+    )
+    gewandert = [math.dist(vorher[i], nachher[i]) for i in (0, 1)]
+    assert all(weg > 1e-6 for weg in gewandert), (
+        f"beide Körper müssen um die gemeinsame Mitte gewandert sein, gewandert "
+        f"sind sie um {gewandert} mm — dreht jeder um sich selbst, steht jeder still"
     )
 
 
-def test_the_status_line_says_what_a_drag_will_do(window: MainWindow) -> None:
-    """Die Auskunft steht **vor** dem Zug, nicht als Meldung danach.
+def test_one_body_still_turns_around_itself(window: MainWindow) -> None:
+    """Ein einzelner Körper dreht um seinen eigenen Schwerpunkt — wie immer.
 
-    Ein Hinweis, der erst nach der Handlung kommt, kostet den Kunden einen
-    Zug, den er nicht gemeint hat. Die Statuszeile steht ohnehin im Blick,
-    verdeckt nichts und verlangt kein Wegklicken (§2.5).
+    **Die Gegenprobe zur Gruppendrehung.** Der gemeinsame Punkt darf nur ab
+    zwei markierten Körpern in die Parameter kommen; stünde er auch bei einem,
+    änderte sich das Verhalten jedes bestehenden Projekts still mit.
+    """
+    from app.ui.viewport import TransformSteps
+
+    window.object_tree.select_object("obj_1")
+    assert window.pivot_for_transform() == {}, (
+        "bei einem einzelnen Körper darf kein Punkt in die Parameter wandern"
+    )
+
+    vorher = centre_of(window, "obj_1")
+    window._on_transform_dragged(TransformSteps(axis="z", angle=90.0))
+    window.session.wait_for_idle()
+
+    assert centre_of(window, "obj_1") == pytest.approx(vorher, abs=1e-6), (
+        "ein einzelner Körper dreht um sich selbst, sein Mittelpunkt bleibt stehen"
+    )
+
+
+def test_the_status_line_counts_the_selected_parts(window: MainWindow) -> None:
+    """Die Zeile nennt die Zahl der gewählten Teile, nicht bloß „Auswahl".
+
+    **Und sie sagt nichts mehr über Einschränkungen.** Hier stand kurz
+    „Ziehen verschiebt alle · Drehen und Größe gelten dem ersten" — ein
+    ehrlicher Satz, solange die Grenze bestand. Seit alle drei Züge der ganzen
+    Auswahl gelten, wäre er ein Versprechen über eine Einschränkung, die es
+    nicht gibt, und das ist schlechter als kein Satz. Der Schlüssel ist aus
+    allen fünf Katalogen entfernt.
     """
     two_bodies(window)
     text = window.measurements.text()
@@ -1031,7 +1089,6 @@ def test_the_status_line_says_what_a_drag_will_do(window: MainWindow) -> None:
     assert "Auswahl" not in text, (
         f"„Auswahl“ sagt nicht, wie viele es sind — das war der alte Text: {text!r}"
     )
-    assert len(text) > 20, f"die Zeile trägt keine Auskunft über den Zug: {text!r}"
 
 
 # --- Was der Griff sagt, bevor gezogen wird -----------------------------------
