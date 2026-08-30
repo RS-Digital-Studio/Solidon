@@ -102,6 +102,20 @@ def test_parameter_rows_fit_the_left_card_and_offer_visible_details(
     from app.core.types import Document, Parameter
     from app.ui.overlay import LEFT_WIDTH
     from app.ui.panels import ParameterPanel
+    from app.ui.theme import apply_theme
+
+    # **Gemessen wird die Betriebslage, nicht der Nullzustand.** ``app.py``
+    # legt das Stylesheet beim Start über die *Anwendung*; der Kunde sieht die
+    # Karte deshalb nie ohne. Für die Breite ist das kein Detail: Ein
+    # Zahlenfeld kostet mit Stylesheet 2 px Rahmen je Seite, Innenabstand und
+    # einen Pfeilknopf — die Karte misst **270** statt 258.
+    #
+    # Ohne diese Zeile war der Test eine Reihenfolgeabhängigkeit: allein
+    # gefahren grün (258), hinter einem Test, der ein Thema setzte, rot (270).
+    # Und die rote Fassung hatte recht — die Zone war zu schmal, auf jedem
+    # Fenster unter rund 2080 Pixeln. Wer ihn über eine Rücksetz-Fixture
+    # „stabil grün" gemacht hätte, hätte den Kundenfehler zugedeckt.
+    apply_theme(qt_app, "light")  # type: ignore[arg-type]
 
     document = Document(format_version=1, app_version="0.0.1")
     document.parameters["breite"] = Parameter(name="breite", value=40.0, unit="mm")
@@ -1226,12 +1240,32 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
     „den ganzen Zeichensatz" seit je als das, was fehlte.
     """
     from app.i18n import tr
-    from app.ui.shortcuts_window import entries
+    from app.ui.shortcuts_window import _native, entries
     from app.ui.sketch_editor import ACTION_KEYS, PLANE_KEYS, TOOL_KEYS, VIEW_KEYS
+
+    # **Verglichen werden Anzeigenamen, nicht Deklarationstexte.** ``entries``
+    # schreibt jede Taste so, wie sie auf der Tastatur steht — und Qt
+    # übersetzt das aus seinem eigenen Katalog: „Home" heißt auf einer
+    # deutschen Oberfläche **Pos1**. Der Vergleich gegen die rohen Werte aus
+    # ``VIEW_KEYS`` traf damit an genau einer Taste daneben.
+    #
+    # Sichtbar war das nur in großen Läufen: Qts Katalog kommt von
+    # ``install_qt_translations`` — im Betrieb beim Start (``app.py``), in der
+    # Suite von irgendeinem früheren Test. Ohne ihn gibt ``_native("Home")``
+    # eben „Home" zurück, der Vergleich ging auf, und der Test war grün in
+    # einer Lage, die es beim Kunden nicht gibt.
+    #
+    # **Hergestellt wird die Betriebslage hier trotzdem nicht**, und das ist
+    # gemessen: Ein Aufruf von ``install_qt_translations`` davor macht die
+    # Gegenprobe nicht rot. ``_native`` neutralisiert die Lage auf **beiden**
+    # Seiten des Vergleichs — mit Katalog stehen „Pos1" und „Pos1", ohne ihn
+    # „Home" und „Home". Eine Zeile, deren Entfernen nichts rot macht, ist
+    # Zierat; beim Kartenmaß oben ist es umgekehrt, dort hängt die Zahl selbst
+    # an der Lage.
 
     named = {key for _group, _title, key in entries(window.menuBar(), window)}
     drawing = {**TOOL_KEYS, **ACTION_KEYS, **VIEW_KEYS, **PLANE_KEYS}
-    missing = sorted(key for key in drawing.values() if key not in named)
+    missing = sorted(key for key in drawing.values() if _native(key) not in named)
 
     assert not missing, f"die Übersicht kennt diese Zeichentasten nicht: {missing}"
 

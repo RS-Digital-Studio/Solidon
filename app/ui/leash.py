@@ -256,8 +256,24 @@ class WorkerLeash:
         jemand vor ihm aufgeräumt hat. Ohne diese Zeile landete None in der
         Liste, und der Zeitgeber danach fragte es nach ``isRunning`` — ein
         AttributeError im Teardown, weit weg von seiner Ursache.
+
+        **Und alles andere, was kein ``isRunning`` hat, ebenso.** Die
+        ``None``-Zeile darüber beschrieb den Fall richtig und deckte nur einen
+        seiner Werte ab: Ein blankes ``object()`` legt sich genauso in die
+        Liste, und der Zeitgeber stirbt daran genauso — nur eben mit
+        ``'object' object has no attribute 'isRunning'`` statt mit ``None``.
+        Gefunden am 30.08.2026 über eine Sonde am Eingang: ``_on_split_done``
+        reicht auch einen **fremden** Arbeiter hierher (richtig so, ein
+        veralteter Thread läuft ja noch), und `test_a_stale_split_worker_cannot_deliver`
+        schickt dafür eine Attrappe durch die ganze Kette.
+
+        Der Fehler war dabei jahrelang latent: Ohne den Suite-Pin fiel die
+        letzte Referenz, bevor der Zeitgeber feuerte — der Rückruf lief nie.
+        Seit der Pin auch Viewports hält, lebt alles lange genug, und die
+        Ausnahme stand zweimal je Lauf im Protokoll. **Ein Fehler, den nur
+        eine Aufräumung verdeckt, ist keiner weniger.**
         """
-        if worker is None:
+        if not hasattr(worker, "isRunning"):
             return
         if worker not in self._held:
             self._held.append(worker)
@@ -273,8 +289,16 @@ class WorkerLeash:
         Sein Ergebnis will niemand mehr — aber sein Thread läuft noch, und
         ohne Referenz zerstört der Speicherbereiniger das QThread-Objekt
         unter ihm.
+
+        Dieselbe Eingangsprüfung wie in :meth:`hold_until_done`, und aus
+        demselben Grund: Hier stand ``worker is None``, und ein Wert ohne
+        ``isRunning`` wäre eine Zeile später an genau dieser Abfrage
+        gestorben. **Die beiden Eingänge sind die einzigen Stellen, an denen
+        etwas in ``_alive`` gelangt** — wer danach daraus liest
+        (``wait_for_all``, ``_release``), darf sich deshalb auf einen
+        Arbeiter verlassen.
         """
-        if worker is None or not worker.isRunning():
+        if not hasattr(worker, "isRunning") or not worker.isRunning():
             return
         if worker in self._held:
             # Zweimal zurückgestellt heißt nicht zweimal gehalten: sonst stünde

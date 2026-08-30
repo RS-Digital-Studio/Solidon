@@ -325,6 +325,50 @@ def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _the_language_starts_at_the_source() -> Iterator[None]:
+    """Die Anzeigesprache ist derselbe Fall wie die Einheit darunter.
+
+    ``set_language`` schreibt eine Modulvariable, nicht ein Widget — ein Test,
+    der auf Französisch stellt, nähme jeden folgenden mit, und der fiele an
+    einem Text um, der nichts mit ihm zu tun hat. Für die Einheit gab es diese
+    Klammer seit je, für die Sprache nicht.
+
+    **Und sie fängt heute nichts**, das gehört dazu: Eine Sonde über einen
+    ganzen Lauf (407 Tests) hat **null** Sprachwechsel gemeldet. Sie steht hier
+    nicht wegen eines Falles, sondern weil die Asymmetrie sonst der nächste
+    Fund wäre — dieselbe Sorte Zustand, einmal geklammert und einmal nicht.
+
+    **Zurückgesetzt wird auf die Quellsprache, also den Auslieferungszustand.**
+    Das ist bei der Sprache dasselbe wie der Kundenzustand; bei anderen
+    Zuständen ist es das nicht, und dann wäre eine solche Fixture falsch —
+    siehe den Hinweis zum Stylesheet unten.
+    """
+    yield
+    try:
+        from app.i18n import SOURCE_LANGUAGE, set_language
+    except ImportError:  # pragma: no cover - ohne die Kataloge gibt es nichts zu räumen
+        return
+    set_language(SOURCE_LANGUAGE)
+
+
+#: **Was hier absichtlich NICHT zurückgesetzt wird: das Stylesheet.**
+#:
+#: ``apply_theme`` legt es über die *Anwendung*, und ``app.py`` tut das beim
+#: Start — der Kunde sieht die Oberfläche also nie ohne. Eine Fixture, die es
+#: nach jedem Test abräumt, stellte einen Zustand her, den es im Betrieb nicht
+#: gibt, und genau das hätte am 30.08.2026 einen echten Fehler zugedeckt: Die
+#: Parameterkarte maß ohne Stylesheet 258 und mit 270, die linke Zone war 260
+#: breit. Der Test dazu war allein grün und hinter einem Fenster rot — und die
+#: **rote** Fassung hatte recht.
+#:
+#: Wer eine Rücksetzung baut, prüft deshalb zuerst: Setzt sie auf das zurück,
+#: was der Kunde hat, oder auf ein nacktes Nichts? Ein Thema, ein Stylesheet,
+#: ein geladenes Register gehören zur Betriebslage. Wer eine Breite oder ein
+#: Layout misst, stellt sie **her** (``apply_theme`` im Test), statt sie
+#: wegzuräumen.
+
+
+@pytest.fixture(autouse=True)
 def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
     """Die Anzeigeeinheit ist ein Prozesszustand, also gehört sie zurückgesetzt.
 

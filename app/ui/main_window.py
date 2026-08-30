@@ -8037,6 +8037,35 @@ class MainWindow(QMainWindow):
             # einen größeren Drucker hat, ist damit einen Klick entfernt statt
             # gezwungen, sein Teil zu verkleinern.
             "choose_printer": lambda _error: self.action_print_settings(),
+            # **Derselbe Weg, dieselbe Lücke, eine Zeile weiter.** Scheitert
+            # der Slicer-Lauf, schlägt die Absage vor, einen anderen zu
+            # wählen — und auch dieser Rat hatte keinen Draht. Auf einem
+            # Rechner mit drei installierten Slicern ist das eine Sackgasse
+            # nach §2.1, während zwei arbeitende danebenliegen.
+            #
+            # **Am Fenster und nicht am Dialog**, weil der Fehler auch ohne
+            # offenen Druckdialog auftritt (``handover.py``, der
+            # ``detect``-Fall). Am Dialog hinge der Knopf genau dort nicht, wo
+            # man ihn am nötigsten braucht. Gemessen von 3d-druck-55 an den
+            # echten Handlern.
+            "choose_slicer": lambda _error: self.action_print_settings(),
+            # **Und die zwei, die der Druckdialog besser kann — hier trotzdem.**
+            # Beide hängen auch am Dialog (``print_settings_dialog.py``), wo
+            # ``show_output`` die Slicer-Ausgabe in ein aufklappbares Textfeld
+            # legt statt in eine Zeile: Achthundert Zeichen Protokoll als
+            # ``value_line`` liest niemand. Der Wächter sieht den Dialog aber
+            # nicht — er liest ``error_handlers`` des Fensters —, und wichtiger
+            # als das ist: Der Fehler tritt auch **ohne** offenen Dialog auf.
+            #
+            # ``show_details`` ist dafür kein Notbehelf, sondern der zweitbeste
+            # Ort: Es zeigt ``error.values`` vollständig, und die Ausgabe des
+            # Slicers liegt genau dort (``values["output"]``, an allen vier
+            # Stellen gesetzt). Derselbe Inhalt, nur weniger gut gesetzt.
+            # ``check_profile`` ist wörtlich dieselbe Handlung wie
+            # ``choose_printer``: Das Profil wechselt man in den
+            # Druckeinstellungen. Befunde und Fassungen von 3d-druck-fb.
+            "show_output": lambda error: show_details(error, self),
+            "check_profile": lambda _error: self.action_print_settings(),
             # **Sechsmal angeboten, nie ausgeführt.** Wenn der Slicer fehlt,
             # abbricht oder seine Kommandozeile unbekannt ist, schlägt die
             # Übergabe vor, nur zu exportieren und selbst zu slicen — an sechs

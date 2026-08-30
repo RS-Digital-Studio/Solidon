@@ -87,7 +87,25 @@ MOVE_MS = 160
 
 #: Breite der linken Zone. Breit genug für „Schraubenloch mit Senkung" in der
 #: Verlaufsliste, schmal genug, dass daneben noch ein Modell steht.
-LEFT_WIDTH = 260
+#:
+#: **Die Zahl ist gemessen, nicht gewählt.** Hier stand 260, und die
+#: Parameterkarte braucht in der Betriebslage **270**: Sobald das Stylesheet
+#: liegt — also immer, ``app.py`` legt es beim Start —, kostet ein Zahlenfeld
+#: 2 px Rahmen je Seite, Innenabstand und einen Pfeilknopf von ``ROOMY``
+#: Breite. Ohne Stylesheet sind es 258, und genau so hat der Wächter in
+#: ``tests/test_interface_limits.py`` jahrelang gemessen: allein gefahren
+#: grün, hinter einem Test mit Thema rot.
+#:
+#: Getroffen hat das **jedes Fenster unter rund 2080 Pixeln** — die Zone
+#: wächst erst darüber über 270 hinaus (``card_width``, 13 %). Full HD und
+#: jeder Laptop lagen also darunter; die Karte konnte nicht auf ihre Zone
+#: schrumpfen und ragte darüber hinaus.
+#:
+#: Der Preis steht in der zweiten Hälfte der Begründung oben, und er ist
+#: gemessen: Im Vorgabefenster (1280 auf 820, ``MainWindow.resize``) bleiben dem
+#: Modell **660 statt 672** Pixel, wenn beide Spalten offen stehen — 1,8 %
+#: weniger. „Daneben steht noch ein Modell" gilt damit unverändert.
+LEFT_WIDTH = 272
 
 #: Breite der rechten Zone. Ein Befund ist ein Satz, kein Absatz — schmaler
 #: als links, weil hier nichts eingerückt ist.

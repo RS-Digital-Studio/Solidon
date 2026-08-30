@@ -45,6 +45,72 @@ eine Zeile Code geändert hat.
 `filterwarnings = ["error"]` ist gesetzt: eine Warnung bricht den Lauf. Das ist
 Absicht — sie wird behoben, nicht unterdrückt.
 
+### Isolation heißt Betriebslage, nicht Nullzustand
+
+Eine Rücksetz-Fixture stellt her, was der **Kunde** hat — nicht ein nacktes
+Nichts. Der Unterschied ist keine Feinheit: Am 30.08.2026 hat er einen echten
+Fehler drei Monate lang zugedeckt und wäre um ein Haar festgeschrieben worden.
+
+`apply_theme` legt das Stylesheet über die **Anwendung**, und `app.py` tut das
+beim Start; die Oberfläche existiert im Betrieb also nie ohne. Die
+Parameterkarte misst deshalb:
+
+| | Breite |
+|---|---|
+| ohne Stylesheet | 258 |
+| mit Stylesheet (jeder Kunde) | **270** |
+| linke Zone (`LEFT_WIDTH`, damals) | 260 |
+
+`test_parameter_rows_fit_the_left_card` baut sein Panel frei stehend. Allein
+gefahren war er grün, hinter einem Test mit Thema rot — und **die rote Fassung
+hatte recht**: Die Karte passte auf jedem Fenster unter rund 2080 Pixeln nicht
+in ihre Zone (`card_width` wächst erst darüber). Full HD und jeder Laptop lagen
+darunter.
+
+Die naheliegende Reparatur wäre eine Fixture gewesen, die das Stylesheet nach
+jedem Test abräumt. Sie hätte den Test **verlässlich grün** gemacht und den
+Kundenfehler dauerhaft unsichtbar. Zwei Sitzungen hielten sie für richtig,
+bevor die Messung kam.
+
+Daraus zwei Sätze:
+
+* **Wer eine Rücksetzung baut, prüft ihren Zielzustand.** Sprache auf die
+  Quellsprache, Anzeigeeinheit auf Millimeter — das *ist* der
+  Auslieferungszustand. Ein Thema, ein Stylesheet, ein geladenes Register
+  gehören dagegen zur Betriebslage; sie wegzuräumen erzeugt eine Lage, die es
+  beim Kunden nicht gibt.
+* **Wer eine Breite, ein Layout oder eine Metrik misst, stellt die Betriebslage
+  her** (`apply_theme` im Test), statt sie wegzuräumen. Sonst misst der Test
+  etwas, das niemand je sieht.
+
+Und die allgemeine Form, weil sie über Fixtures hinausgeht: **Ein Test, der nur
+in einer Lage grün ist, die es im Betrieb nicht gibt, ist keine Zusicherung,
+sondern eine Tarnung.** Die Frage davor ist dieselbe wie überall in dieser
+Datei — was habe ich gerade gemessen, und ist das, was der Kunde hat?
+
+**Und die Gegenrichtung, damit daraus kein Kult wird: Die Betriebslage
+herzustellen trägt nur, wo die Messgröße selbst an ihr hängt.** Beide
+Richtungen sind am selben Tag gemessen worden, in derselben Datei:
+
+| Fall | Messgröße | Betriebslage herstellen? |
+|---|---|---|
+| Kartenbreite | 258 ohne, **270** mit Stylesheet | **ja** — die Zahl hängt daran |
+| Kürzelübersicht | „Home" ohne, „Pos1" mit Qt-Katalog | **nein** — siehe unten |
+
+Bei der Kürzelübersicht verglich der Test rohe Deklarationstexte (`VIEW_KEYS`)
+gegen Anzeigenamen aus `entries()`, und Qt übersetzt „Home" auf einer
+deutschen Oberfläche zu „Pos1". Der Fix ist, **über dieselbe Funktion zu
+vergleichen, die auch anzeigt** (`_native`) — und damit neutralisiert sich die
+Lage auf beiden Seiten: mit Katalog „Pos1" gegen „Pos1", ohne ihn „Home" gegen
+„Home".
+
+Ein zusätzliches `install_qt_translations` im Test war deshalb Zierat, und die
+Gegenprobe hat es entlarvt: Entfernt man es, wird nichts rot. **Eine Zeile,
+deren Entfernen nichts rot macht, prüft nichts** — und in vier Wochen
+unterscheidet sie niemand mehr von den tragenden. Die Frage lautet also nicht
+„habe ich die Betriebslage hergestellt", sondern: **Hängt das, was ich messe,
+an ihr?**
+
 Für eine Warnung aus **Fremdcode**, die sich nicht beheben lässt, stehen
 darunter Ausnahmen — eng, und nur unter drei Bedingungen: sie nennen den
 Meldungstext *und* das auslösende Modul, nicht bloß die Kategorie; der eigene

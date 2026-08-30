@@ -424,3 +424,41 @@ def test_the_sweep_over_the_surface_finds_files_to_read() -> None:
     # Weit unter dem Stand (52) — das soll einen Zusammenbruch fangen, nicht
     # jede neue oder gelöschte Datei melden.
     assert len(files) >= 20, f"nur {len(files)} Dateien unter app/ui — falscher Pfad?"
+
+
+def test_the_leash_turns_away_what_is_not_a_worker(qt_app: QApplication) -> None:
+    """Was kein ``isRunning`` hat, kommt nicht in die Menge der Gehaltenen.
+
+    Der Zeitgeber, der später nachsieht, ob ein Arbeiter ausgelaufen ist,
+    fragt jeden Eintrag nach ``isRunning``. Ein Fremdkörper darin ist deshalb
+    kein Schönheitsfehler, sondern eine Ausnahme in einem Qt-Rückruf — weit
+    weg von ihrer Ursache, ohne einen Test rot zu machen, und sie beendet die
+    Aufräumkette für **alle** übrigen Arbeiter dieses Durchgangs.
+
+    Der Docstring von ``hold_until_done`` beschrieb genau diesen Fall und
+    deckte nur einen seiner Werte ab: ``None``. Am 30.08.2026 stand
+    ``'object' object has no attribute 'isRunning'`` zweimal je Lauf im
+    Protokoll — ``_on_split_done`` reicht auch einen fremden Arbeiter hierher
+    (richtig so, ein veralteter Thread läuft ja noch), und
+    ``test_a_stale_split_worker_cannot_deliver`` schickt dafür eine Attrappe
+    durch die ganze Kette.
+
+    **Latent war er jahrelang:** Ohne den Suite-Pin fiel die letzte Referenz,
+    bevor der Zeitgeber feuerte, und der Rückruf lief nie. Seit der Pin auch
+    Viewports hält, lebt alles lange genug. Ein Fehler, den nur eine
+    Aufräumung verdeckt, ist keiner weniger.
+
+    Geprüft werden beide Eingänge — sie sind die einzigen Stellen, an denen
+    etwas in ``leash._alive`` gelangt, und deshalb dürfen sich die Leser
+    danach auf einen Arbeiter verlassen.
+    """
+    from app.ui import leash
+
+    fremd = object()
+    vorher = set(leash._alive)
+    leine = leash.WorkerLeash(QObject())
+    leine.hold_until_done(fremd)
+    leine.retire(fremd)
+
+    assert set(leash._alive) == vorher, "ein Fremdkörper ist in die Menge gelangt"
+    assert fremd not in leash._alive
