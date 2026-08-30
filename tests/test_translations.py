@@ -624,3 +624,94 @@ def test_no_placeholder_name_speaks_german() -> None:
         f"Deutsche Platzhalternamen: {offenders}. Ein Platzhalter ist ein Schlüssel "
         f"und bleibt englisch. Alle {len(names)} vorhandenen Namen: {sorted(names)}"
     )
+
+
+#: Ersatzschreibungen, die in einem deutschen Oberflächentext nichts zu suchen
+#: haben — gesucht als **ganzes Wort**, damit kein englisches Wort mit `ss`
+#: oder `ue` darin fällt.
+#:
+#: Die Liste ist kuratiert wie ``GERMAN_STEMS``, und aus demselben Grund: Eine
+#: Regel „jedes `ae` ist verdächtig" träfe `Fläche` nicht und `value` schon.
+#: Wer eine neue Ersatzschreibung findet, trägt sie hier ein.
+ASCII_STATT_UMLAUT = {
+    "liess": "ließ",
+    "liessen": "ließen",
+    "waehlen": "wählen",
+    "waehle": "wähle",
+    "groesse": "Größe",
+    "groessen": "Größen",
+    "fuer": "für",
+    "koennen": "können",
+    "koennte": "könnte",
+    "muessen": "müssen",
+    "muss": None,  # richtig geschrieben, steht hier als Merkposten
+    "oeffnen": "öffnen",
+    "schliessen": "schließen",
+    "loeschen": "löschen",
+    "aendern": "ändern",
+    "hoehe": "Höhe",
+    "laenge": "Länge",
+    "staerke": "Stärke",
+    "groesser": "größer",
+    "spaeter": "später",
+    "zurueck": "zurück",
+    "ueber": "über",
+    "haelt": "hält",
+    "faellt": "fällt",
+    "waere": "wäre",
+    # Die Beugungen gehören dazu: Eine Liste, die „gross" kennt und „grosses"
+    # nicht, lässt genau den Fall durch, der im Fließtext häufiger ist.
+    "gross": "groß",
+    "grosse": "große",
+    "grosses": "großes",
+    "grossen": "großen",
+    "grosser": "großer",
+    "grossem": "großem",
+    "heisst": "heißt",
+    "weiss": "weiß",
+    "strasse": "Straße",
+    "massnahme": "Maßnahme",
+}
+
+
+def test_no_source_text_writes_ae_for_a_umlaut() -> None:
+    """Ein deutscher Quelltext ist hier nicht nur Text, sondern die **Kennung**.
+
+    Deshalb ist ein `ss` statt `ß` hier teurer als anderswo. Er wird zur
+    Message-ID, sobald jemand ihn übersetzt — und die Berichtigung danach
+    kostet fünf Kataloge, weil der berichtigte Satz ein **anderer Schlüssel**
+    ist und alle Übersetzungen daran hängen bleiben.
+
+    Bei einem Bezeichner schlägt ``test_language_rules`` an; bei einem
+    Oberflächentext prüfte bisher nichts. Am 31.08.2026 sind an einem Abend
+    vier Fälle aufgelaufen — drei Commit-Meldungen und zwei Texte
+    („Die Datei liess sich dort nicht anlegen. Waehlen Sie einen anderen
+    Ordner."), alle über ein Bash-Heredoc geschrieben und alle vorsorglich in
+    ASCII. Der Weg überträgt Umlaute gemessen sauber; die Vorsicht war
+    unbegründet und teuer.
+
+    Gesucht wird als **ganzes Wort** und gegen eine kuratierte Liste, nicht
+    nach dem Muster „irgendwo steht `ae`". Sonst fiele jedes englische Wort mit
+    `ss` und jede Zeichenkette mit `ue` darin.
+    """
+    import re as _re
+
+    ids = message_ids()
+    assert ids, "keine Oberflächentexte gefunden — dann prüft dieser Test nichts"
+
+    muster = _re.compile(
+        r"(?<![\wäöüßÄÖÜ])(" + "|".join(sorted(ASCII_STATT_UMLAUT)) + r")(?![\wäöüßÄÖÜ])",
+        _re.IGNORECASE,
+    )
+    treffer: dict[str, list[str]] = {}
+    for text in ids:
+        gefunden = {wort.lower() for wort in muster.findall(text)}
+        gefunden -= {wort for wort in gefunden if ASCII_STATT_UMLAUT[wort] is None}
+        if gefunden:
+            treffer[text[:70]] = sorted(gefunden)
+
+    assert not treffer, (
+        "Ersatzschreibung statt Umlaut in einem Oberflächentext. Das ist die "
+        "Message-ID: Wer sie später berichtigt, macht alle fünf Übersetzungen "
+        f"tot. {treffer}"
+    )
