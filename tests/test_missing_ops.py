@@ -582,6 +582,72 @@ def test_engraved_text_takes_away_the_same_volume(profile: Profile) -> None:
     assert result.outputs[0].mesh.bounds.size[2] == pytest.approx(4.0, abs=0.01), "nothing proud"
 
 
+def _plate() -> SceneObject:
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    return SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate))
+
+
+def test_a_label_beside_the_body_falls_off_as_loose_letters(profile: Profile) -> None:
+    """**Die zweite Hälfte derselben Auskunft** (gemessen 31.08.2026).
+
+    ``without_effect`` fragt nach dem **Volumen** und schweigt deshalb genau
+    dann, wenn die Schrift danebenfällt statt zu fehlen: Die Buchstaben kommen
+    ja hinzu, nur eben neben dem Teil. An einer Platte 40 auf 20 mit einer
+    Beschriftung 200 mm daneben kamen **drei Komponenten** zurück, wo eine war
+    — wasserdicht, plausibles Volumen, kein Befund.
+
+    Der Kommentar an der Aufrufstelle beschreibt genau das, seit es ihn gibt:
+    „die Buchstaben stehen dann als eigene Komponente neben dem Teil und reisen
+    bis in den Export mit." Geprüft hat es niemand. Dieselbe Bauart und
+    derselbe Satzbau wie ``texture.fell_apart``.
+    """
+    result = run("label_text", _plate(), profile, text="AB", size=6.0, depth=0.6, x=200.0, z=4.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "label.fell_apart" in codes, f"kein Befund, gemeldet wurde: {codes}"
+
+    apart = next(f for f in result.findings if f.code == "label.fell_apart")
+    assert int(apart.values["before"]) == 1, "die Platte war vorher schon zerteilt"
+    assert int(apart.values["after"]) > 1, "nichts ist abgefallen — der Test misst nichts"
+    assert apart.severity == "error", "lose Lettern im Export sind kein Schönheitsfehler"
+
+
+def test_a_label_on_the_body_stays_silent(profile: Profile) -> None:
+    """Die Gegenprobe: Was haftet, wird nicht angemeckert.
+
+    Ohne sie bliebe der Test oben grün, auch wenn die Prüfung jede Beschriftung
+    meldete — und der Kunde lernte, sie zu überlesen.
+    """
+    result = run("label_text", _plate(), profile, text="AB", size=6.0, depth=0.6, z=4.0)
+
+    codes = [finding.code for finding in result.findings]
+    assert "label.fell_apart" not in codes, f"Fehlalarm bei haftender Schrift: {codes}"
+
+
+def test_an_engraved_label_may_divide_the_body() -> None:
+    """Vertieft schneidet, und Schneiden darf teilen.
+
+    Dieselbe Ausnahme wie bei Textur und Bausteinen. Geprüft wird die Funktion
+    direkt, weil eine gravierte Schrift den Körper über die Operation gar nicht
+    zerteilt — ein Test darüber wäre auch ohne die Bedingung grün und hielte
+    damit nichts.
+    """
+    from types import SimpleNamespace
+
+    from app.core.geom.label_ops import _fell_apart
+
+    vorher = SimpleNamespace(component_count=1)
+    nachher = SimpleNamespace(component_count=3)
+
+    assert _fell_apart(vorher, nachher, "engraved") is None, (
+        "ein Schnitt, der teilt, wurde als Zerfall gemeldet"
+    )
+    assert _fell_apart(vorher, nachher, "raised") is not None, (
+        "die Gegenprobe: bei erhabener Schrift muss dieselbe Lage gemeldet werden"
+    )
+
+
 def test_a_label_that_misses_the_body_says_so(profile: Profile) -> None:
     """Denselben Satz bekommt seit je, wer eine Magnettasche daneben setzt —
     die Beschriftung bekam ihn nicht.

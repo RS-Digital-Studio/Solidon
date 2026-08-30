@@ -33,6 +33,7 @@ from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import (
     MAX_SLOTS,
     BaseParams,
+    Finding,
     MaterialSlot,
     OpContext,
     OpResult,
@@ -208,6 +209,49 @@ class LabelParams(BaseParams):
     )
 
 
+def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
+    """Ist die Schrift neben dem Körper liegengeblieben? (Regel 17)
+
+    **Der Fall, den der Kommentar an der Aufrufstelle seit jeher beschreibt**
+    und den niemand prüfte: „Erhaben ist es schlimmer als graviert: die
+    Buchstaben stehen dann als eigene Komponente neben dem Teil und reisen bis
+    in den Export mit." Gemessen am 31.08.2026 an einer Platte 40 auf 30 mit
+    einer Beschriftung 200 mm daneben: **drei Komponenten**, wo eine war —
+    Platte und zwei Lettern, wasserdicht, mit plausiblem Volumen, und kein
+    Befund dazu.
+
+    :func:`without_effect` fängt das **nicht**, und das ist kein Versehen,
+    sondern seine Bauart: Es misst, ob sich das Volumen geändert hat. Bei
+    erhabener Schrift ändert es sich — die Buchstaben kommen ja hinzu, nur eben
+    daneben. Die Volumenfrage ist damit beantwortet und die falsche gestellt.
+
+    **Die Teilezahl lügt nicht.** Dieselbe Bauart wie
+    ``texture_ops._fell_apart`` und ``parts._hanging_loose``, samt derselben
+    Ausnahme: Ein graviertes Muster schneidet, und Schneiden darf teilen.
+    """
+    if mode != "raised" or after.component_count <= before.component_count:
+        return None
+    loose = after.component_count - before.component_count
+    return Finding(
+        code="label.fell_apart",
+        severity="error",
+        # Der Vorschlag steht im Satz, und der Satz ist parallel zu dem der
+        # Textur gebaut: Der Kunde erkennt die Familie am Wortlaut, nicht am
+        # Befundcode — den sieht er nie.
+        message=_(
+            "Die Schrift hängt nicht am Körper: Sie liegt in {loose} losen Stücken "
+            "daneben und würde einzeln gedruckt. Meist steht sie neben der Fläche, "
+            "auf die sie soll — klicken Sie die Fläche an, dann trägt sie Ort und "
+            "Richtung selbst ein."
+        ),
+        values={
+            "loose": str(loose),
+            "before": str(before.component_count),
+            "after": str(after.component_count),
+        },
+    )
+
+
 @register_op(
     name="label_text",
     title=_("Text aufbringen"),
@@ -290,12 +334,20 @@ def label_text(ctx: OpContext) -> OpResult:
     # graviert: die Buchstaben stehen dann als eigene Komponente neben dem
     # Teil und reisen bis in den Export mit.
     nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
+    # **Und die zweite Hälfte derselben Auskunft.** ``without_effect`` fragt
+    # nach dem Volumen und schweigt deshalb genau dann, wenn die Schrift
+    # danebenfällt statt zu fehlen — dort ist Volumen dazugekommen.
+    apart = _fell_apart(body_mesh, outcome.mesh, mode)
 
     _log.info("labelled with %r, %s", params.text, mode)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={}, material_slots=slots)],
         solver=outcome.solver,
-        findings=[*outcome.findings, *([nothing] if nothing is not None else [])],
+        findings=[
+            *outcome.findings,
+            *([nothing] if nothing is not None else []),
+            *([apart] if apart is not None else []),
+        ],
     )
 
 
