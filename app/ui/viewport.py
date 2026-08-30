@@ -1090,7 +1090,35 @@ SHADOW_LIFT = 0.05
 #: wäre ein Schatten **je Zusammenhangskomponente** statt je Körper; das steht
 #: im Register und ist eine eigene Entscheidung.
 SHADOW_COLOUR = "#11151a"
-SHADOW_OPACITY = 0.18
+#: Wie deckend der Kontaktschatten je Thema liegt.
+#:
+#: **Dieselbe Deckkraft ist auf hellem Grund viel lauter.** Der Schatten legt
+#: :data:`SHADOW_COLOUR` über die Plattenfläche; wie stark das wirkt, hängt
+#: davon ab, wie weit nach unten es von dort überhaupt noch geht. Gemessen am
+#: 30.08.2026 bei 0,18 in beiden Themen:
+#:
+#: | | Schatten | Grund | Kontrast |
+#: |---|---|---|---|
+#: | hell | 0,4094 | 0,6106 | **1,44** |
+#: | dunkel | 0,0183 | 0,0219 | **1,05** |
+#:
+#: Der Unterschied im hellen Thema war damit das Vierundfünfzigfache des
+#: dunklen (0,2012 gegen 0,0037 Luminanz). Verschärft hat es die
+#: B35-Aufhellung der Plattenfläche: Je heller der Grund, desto weiter der Weg
+#: nach unten.
+#:
+#: **„Der Schatten wie im dunklen Thema reicht"** (Robert, 30.08.2026). Der
+#: Zielwert ist also der Kontrast des dunklen Themas, und gemessen trifft ihn
+#: 0,03:
+#:
+#: | Deckkraft | 0,18 | 0,08 | 0,05 | 0,04 | 0,03 |
+#: |---|---|---|---|---|---|
+#: | Kontrast | 1,44 | 1,17 | 1,10 | 1,08 | **1,06** |
+#:
+#: Die 0,18 des dunklen Themas bleiben unangetastet — dort ist der Wert seit
+#: Roberts Entscheid vom 25.08.2026 bewusst leise, und gemessen ist er genau
+#: so laut, wie er sein soll.
+SHADOW_OPACITY = {"light": 0.03, "dark": 0.18}
 
 #: Wie weit der Schatten je Millimeter Höhe vom Betrachter weg läuft, und wie
 #: weit dabei zur Seite.
@@ -2606,6 +2634,8 @@ class Viewport(QWidget):
         self._scheme: NavigationScheme = "slicer"
         self._mode: DisplayMode = "solid"
         self._shading: Shading = "flat"
+        self._shadow_opacity = SHADOW_OPACITY["dark"]
+        """Deckkraft des Kontaktschattens, von ``set_theme`` gesetzt."""
         self._projection: Projection = "perspective"
         self._section: SectionPlane | None = None
         self._slice_thickness: float | None = None
@@ -3864,7 +3894,7 @@ class Viewport(QWidget):
                         self.plotter.add_mesh(
                             outline,
                             color=SHADOW_COLOUR,
-                            opacity=SHADOW_OPACITY,
+                            opacity=self._shadow_opacity,
                             lighting=False,
                             # Der Name trägt jetzt auch das Stück: Zwei Schatten
                             # desselben Körpers auf derselben Fläche hätten sonst
@@ -4295,6 +4325,7 @@ class Viewport(QWidget):
         self._object_colour = colours["object"]
         self._bed_colour = colours["bed"]
         self._bed_surface = colours["bed_surface"]
+        self._shadow_opacity = SHADOW_OPACITY["light" if theme == "light" else "dark"]
         self._edge_colour = colours["edge"]
         # **Direkt aus THEMES und nicht über ``viewport_colours``**, wie es
         # ``ViewBar.set_theme`` daneben auch tut. Der Grund ist eine Zusage:

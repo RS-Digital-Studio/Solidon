@@ -47,7 +47,7 @@ import gc
 import math
 import weakref
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -2968,3 +2968,187 @@ def test_the_navigation_texts_say_what_the_scheme_does() -> None:
             assert navigation_action(scheme, "right", False) == "zoom", scheme  # type: ignore[arg-type]
         if "rechts schiebt" in text:
             assert navigation_action(scheme, "right", False) == "pan", scheme  # type: ignore[arg-type]
+
+
+def test_the_body_gets_more_light_where_its_colour_is_darker() -> None:
+    """Das Frontlicht hängt am Thema, und die Richtung ist begründet.
+
+    Der Körper ist im hellen Thema ``#78828e`` und im dunklen ``#b9c4d0`` —
+    0,217 gegen 0,532 Luminanz, also 2,45-mal dunkler. Schattierung
+    multipliziert; damit sind auf ihm auch alle Helligkeitsunterschiede
+    2,45-mal kleiner, und der Körper wird zur flachen Silhouette. Gemessen am
+    30.08.2026 zwischen den zwei sichtbaren Außenwänden der Beispieldose:
+    0,0155 im hellen gegen 0,0380 im dunklen Thema.
+
+    Die Zusage ist deshalb keine Zahl, sondern eine **Richtung**: Wo die
+    Grundfarbe dunkler ist, braucht der Körper mehr Frontlicht. Wer die Werte
+    stimmt, darf sie ändern; wer sie vertauscht, macht den Befund wieder auf.
+    """
+    from app.ui.theme import viewport_colours
+    from app.ui.viewport import HEADLIGHT
+
+    assert set(HEADLIGHT) == {"light", "dark"}, "beide Themen brauchen einen Wert"
+    assert all(0.0 <= wert <= 1.0 for wert in HEADLIGHT.values()), HEADLIGHT
+
+    def luminanz(farbe: str) -> float:
+        roh = [int(farbe[stelle : stelle + 2], 16) / 255.0 for stelle in (1, 3, 5)]
+        linear = [k / 12.92 if k <= 0.03928 else ((k + 0.055) / 1.055) ** 2.4 for k in roh]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    hell = luminanz(viewport_colours("light")["object"])
+    dunkel = luminanz(viewport_colours("dark")["object"])
+    # Die Gegenprobe zur Begründung: Ist der Körper im hellen Thema *nicht*
+    # dunkler, trägt die ganze Argumentation nicht und der Test prüft eine
+    # Richtung, die es nicht gibt.
+    assert hell < dunkel, (
+        f"der Körper ist im hellen Thema {hell:.3f} und im dunklen {dunkel:.3f} — "
+        "die Begründung des Frontlichts setzt das Gegenteil voraus"
+    )
+    assert HEADLIGHT["light"] > HEADLIGHT["dark"], (
+        f"heller Körper {hell:.3f} bekommt {HEADLIGHT['light']}, "
+        f"dunkler {dunkel:.3f} bekommt {HEADLIGHT['dark']} — falsch herum"
+    )
+
+
+def test_the_theme_really_reaches_the_headlight() -> None:
+    """``set_theme`` stellt das Frontlicht ein — und findet es über seine Art.
+
+    Offscreen gibt es keinen Plotter, also eine Attrappe mit genau dem, was
+    benutzt wird (wie in ``test_cursors.py``). Geprüft wird beides: dass der
+    Wert des Themas ankommt, und dass **nur** das Headlight ihn bekommt — die
+    vier Kameralichter des Light Kits stehen über und hinter dem Teil und
+    haben mit dieser Entscheidung nichts zu tun.
+
+    Gesucht wird über ``light_type`` und nicht über die Stelle in der Liste:
+    Welche Lichter pyvista aufstellt und in welcher Reihenfolge, ist seine
+    Sache und kann sich mit einer neuen Fassung ändern.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import HEADLIGHT, Viewport
+
+    def lampe(art: str) -> SimpleNamespace:
+        return SimpleNamespace(light_type=art, intensity=0.25)
+
+    for thema in ("light", "dark"):
+        lichter = [
+            lampe("Headlight"),
+            lampe("Camera Light"),
+            lampe("Camera Light"),
+            lampe("Camera Light"),
+            lampe("Camera Light"),
+        ]
+        attrappe = SimpleNamespace(renderer=SimpleNamespace(lights=lichter))
+        blind = cast(Any, Viewport.__new__(Viewport))
+        blind.plotter = attrappe
+        Viewport._light_the_body(blind, thema)
+
+        assert lichter[0].intensity == HEADLIGHT[thema], (
+            f"{thema}: Frontlicht steht auf {lichter[0].intensity}, erwartet {HEADLIGHT[thema]}"
+        )
+        assert all(licht.intensity == 0.25 for licht in lichter[1:]), (
+            "die Kameralichter des Light Kits gehören nicht dazu"
+        )
+
+    # Und ohne Headlight passiert nichts, statt dass es kracht: Was pyvista
+    # aufstellt, ist seine Sache, und ein Körper ohne Frontlicht ist dunkler,
+    # aber sichtbar.
+    ohne = [lampe("Camera Light"), lampe("Scene Light")]
+    blind = cast(Any, Viewport.__new__(Viewport))
+    blind.plotter = SimpleNamespace(renderer=SimpleNamespace(lights=ohne))
+    Viewport._light_the_body(blind, "light")
+    assert all(licht.intensity == 0.25 for licht in ohne), "ohne Headlight bleibt alles stehen"
+
+
+def test_switching_the_theme_actually_touches_the_headlight() -> None:
+    """Und ``set_theme`` ruft es — die Zusage, die der Test darüber nicht hält.
+
+    Gemessen bei der Mutationsprobe am 30.08.2026: Nimmt man den Ruf aus
+    ``set_theme`` heraus, bleibt der Test darüber **grün**. Er prüft, was die
+    Methode tut, wenn man sie ruft, und nicht, dass sie gerufen wird —
+    durchgereicht ist nicht gerufen, und eine Kette endet am letzten Glied.
+
+    Eine Attrappe hilft hier nicht: ``set_theme`` fasst ein Dutzend Kinder an,
+    bevor es zum Plotter kommt, und was man dafür alles nachbauen müsste, wäre
+    selbst die Fehlerquelle. Gelesen wird deshalb der Quelltext der Methode —
+    dieselbe Bauart wie die Setzstellen-Prüfung in ``test_cursors.py``.
+    """
+    import inspect
+
+    from app.ui.viewport import Viewport
+
+    quelle = inspect.getsource(Viewport.set_theme)
+    assert "_light_the_body" in quelle, (
+        "set_theme stellt das Frontlicht nicht ein — der Themenwechsel lässt "
+        "den Körper in der Beleuchtung des vorigen Themas stehen"
+    )
+    # Die Gegenprobe zur Suchmethode: Der Name muss dort auch wirklich zu
+    # finden sein können, sonst prüft die Zeile darüber eine leere Menge.
+    assert "set_background" in quelle, "die gelesene Quelle ist nicht set_theme"
+
+
+def test_the_contact_shadow_is_as_quiet_on_light_ground_as_on_dark() -> None:
+    """Dieselbe Deckkraft ist auf hellem Grund viel lauter — also zwei Werte.
+
+    Der Schatten legt ``SHADOW_COLOUR`` über die Plattenfläche, und wie stark
+    das wirkt, hängt daran, wie weit von dort überhaupt noch Weg nach unten
+    ist. Bei 0,18 in beiden Themen gemessen (30.08.2026, Beispieldose):
+    Kontrast 1,44 im hellen gegen 1,05 im dunklen, ein Luminanzunterschied von
+    0,2012 gegen 0,0037 — das Vierundfünfzigfache. Die B35-Aufhellung der
+    Plattenfläche hatte das verschärft.
+
+    „Der Schatten wie im dunklen Thema reicht" (Robert, 30.08.2026): Mit 0,03
+    im hellen Thema steht er bei 1,06 und damit auf dem Wert des dunklen, das
+    bei seinen 0,18 unangetastet bleibt.
+
+    Geprüft wird wieder die **Richtung** und nicht die Zahl — wer die Werte
+    stimmt, darf sie ändern; wer sie vertauscht, macht den Befund wieder auf.
+    """
+    from app.ui.theme import viewport_colours
+    from app.ui.viewport import SHADOW_OPACITY
+
+    assert set(SHADOW_OPACITY) == {"light", "dark"}, "beide Themen brauchen einen Wert"
+    assert all(0.0 <= wert <= 1.0 for wert in SHADOW_OPACITY.values()), SHADOW_OPACITY
+
+    def luminanz(farbe: str) -> float:
+        roh = [int(farbe[stelle : stelle + 2], 16) / 255.0 for stelle in (1, 3, 5)]
+        linear = [k / 12.92 if k <= 0.03928 else ((k + 0.055) / 1.055) ** 2.4 for k in roh]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    hell = luminanz(viewport_colours("light")["bed_surface"])
+    dunkel = luminanz(viewport_colours("dark")["bed_surface"])
+    # Die Gegenprobe zur Begründung: Liegt die helle Plattenfläche nicht höher,
+    # gibt es den Effekt nicht, und dieser Test prüfte eine erfundene Ursache.
+    assert hell > dunkel, (
+        f"Plattenfläche hell {hell:.3f}, dunkel {dunkel:.3f} — die Begründung "
+        "der zwei Deckkräfte setzt das Gegenteil voraus"
+    )
+    assert SHADOW_OPACITY["light"] < SHADOW_OPACITY["dark"], (
+        f"heller Grund {hell:.3f} bekommt {SHADOW_OPACITY['light']}, dunkler "
+        f"{dunkel:.3f} bekommt {SHADOW_OPACITY['dark']} — falsch herum"
+    )
+
+
+def test_the_theme_reaches_the_shadow_and_the_drawing_reads_it() -> None:
+    """Und beide Enden der Kette: ``set_theme`` setzt, das Zeichnen liest.
+
+    Zwei Zusagen, und die zweite ist die, an der es zuerst reißt: Eine
+    themenabhängige Konstante nützt nichts, solange die Zeichenstelle weiter
+    die **Konstante** liest statt den gemerkten Wert. Dieselbe Lücke hat die
+    Mutationsprobe am Frontlicht gezeigt — durchgereicht ist nicht gerufen.
+    """
+    import inspect
+
+    from app.ui.viewport import Viewport
+
+    quelle = inspect.getsource(Viewport.set_theme)
+    assert "_shadow_opacity" in quelle, (
+        "set_theme merkt sich die Deckkraft nicht — ein Themenwechsel ließe "
+        "den Schatten in der Stärke des vorigen Themas stehen"
+    )
+    assert "set_background" in quelle, "die gelesene Quelle ist nicht set_theme"
+
+    gezeichnet = inspect.getsource(Viewport._place_shadows)
+    assert "self._shadow_opacity" in gezeichnet, (
+        "das Zeichnen liest die Konstante statt des gemerkten Werts"
+    )

@@ -481,6 +481,43 @@ hängt am **Interactor** (`EndInteractionEvent`) und nicht am Interaktionsstil:
 den tauscht jeder Schemawechsel aus, und der Orientierungswürfel dreht an ihm
 vorbei.
 
+### Zwei Werte hängen am Thema, und beide aus demselben Grund
+
+Die Farben des Themas sind nicht die einzige Größe, die zwischen hell und
+dunkel wechselt. **Beleuchtung und Deckkraft wirken auf verschieden hellem
+Grund verschieden stark**, und wer sie als eine Zahl führt, hat sie für genau
+ein Thema richtig eingestellt.
+
+**Das Frontlicht** (`HEADLIGHT`): VTK stellt fünf Lichter auf, und nur eines —
+das Headlight aus der Kamerarichtung — trifft die zum Betrachter zeigenden
+Seitenwände; die vier Kameralichter stehen über und hinter dem Teil. Der Körper
+ist im hellen Thema 2,45-mal dunkler als im dunklen (`#78828e` gegen
+`#b9c4d0`), Schattierung multipliziert, also sind auf ihm auch alle
+Helligkeitsunterschiede 2,45-mal kleiner — 0,0155 gegen 0,0380 zwischen zwei
+Außenwänden. Das ist kein Beleuchtungsfehler, sondern Multiplikation, und
+deshalb hilft dort nur mehr Licht: 0,45 statt 0,25.
+
+**Die Schattendeckkraft** (`SHADOW_OPACITY`): Derselbe Wert 0,18 ergab 1,44
+Kontrast auf der hellen Plattenfläche und 1,05 auf der dunklen — das
+Vierundfünfzigfache an Luminanzunterschied. Ein Schatten hat auf hellem Grund
+viel weiter nach unten Platz. Im hellen Thema sind es deshalb 0,03; das ergibt
+1,06 und damit genau die Lautstärke des dunklen Themas („der Schatten wie im
+dunklen Thema reicht", Robert, 30.08.2026).
+
+**Zwei Wege, die vorher gemessen und verworfen wurden**, damit sie niemand
+erneut geht: Ein ambienter Anteil am Körper hebt alle Flächen gleich und macht
+ihn dabei *flacher* (Wandunterschied 1,19 → 1,12, Abhebung von der Platte
+8,41 → 5,75). Ein Glanzanteil ändert an den Wänden fast nichts und am Deckel
+gar nichts.
+
+**Und die Falle beim Bauen solcher Paare**: Eine themenabhängige Konstante
+nützt nichts, solange die Zeichenstelle weiter die Konstante liest statt den
+gemerkten Wert — und ein Test, der nur die Methode prüft, bleibt dabei grün.
+Gemessen: Nimmt man den Ruf aus `set_theme` heraus, fällt kein Test.
+`tests/test_viewport_decisions.py` hält deshalb je Paar **drei** Zusagen: die
+Richtung der Werte, dass `set_theme` sie setzt, und dass das Zeichnen sie
+liest.
+
 **Die Anwendung setzt ihre Startkamera selbst.** Ohne `view_from("iso")` beim
 Aufbau erbt sie pyvistas Stellung über (1, 1, 1), und die eigene Vorgabe aus
 `VIEW_DIRECTIONS` sieht nur, wer „Isometrisch" im Menü wählt — ein Sprung aus
