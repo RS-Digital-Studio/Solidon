@@ -374,6 +374,14 @@
        zieht die Zeitachse das Bild beim nächsten Bildlauf zurück, und die
        Geste wäre folgenlos. */
     stage.style.animation = "none";
+    /* **Und das Sprite wiederherstellen, falls der Regler ein Einzelbild
+       gesetzt hat.** Sonst verschiebt die nächste Zeile die Ansicht eines
+       Bildes, das nur eine Kachel hoch ist — bei 88 % ist davon nichts mehr
+       im Rahmen, und die Bühne steht leer da. Gefunden am gerenderten
+       Aufmacher: erst am Regler gezogen, dann gedreht, und das Teil war weg.
+       Ein leerer Inline-Wert lässt die Regel aus dem Stylesheet wieder
+       gelten; der Dateiname steht deshalb hier nicht noch einmal. */
+    stage.style.background = "";
     stage.style.backgroundPositionY = (frame / (count - 1)) * 100 + "%";
   };
 
