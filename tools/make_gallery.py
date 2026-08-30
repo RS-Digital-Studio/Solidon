@@ -57,6 +57,19 @@ TARGET = Path(__file__).resolve().parent.parent / "website" / "bilder"
 #: weil der Zuschnitt für alle gilt.
 ZOOM = 1.4
 
+#: Wo die Vorgabe zu nah ist — je Teil, mit Grund.
+#:
+#: ``reset_camera`` rahmt nach einem Schwenk enger als aus der Vorgabe heraus:
+#: Ein Teil, das von hinten flach gesehen wird, füllt mehr Breite als dasselbe
+#: Teil von schräg oben. 1,4 schnitt den Lochwandhalter an.
+ZOOMS: dict[str, float] = {
+    "lochwandhalter": 1.0,
+    "klappbox": 1.15,
+    # Zwei Körper nebeneinander, und ``reset_camera`` rahmt beide mit Luft:
+    # Bei 0,95 stand das halbe Druckbett samt Maßzahlen im Bild.
+    "schraubdose": 1.35,
+}
+
 #: Abstand des Zuschnitts zu den Karten, in Bildpunkten.
 MARGIN = 24
 
@@ -68,6 +81,31 @@ MARGIN = 24
 #: Auflösung einer 450 Punkte breiten Kachel, und WebP macht daraus ein
 #: Zehntel.
 WIDTH = 900
+
+#: Von wo aus ein Teil gezeigt wird, wenn die Vorgabe sein Merkmal verdeckt.
+#:
+#: **Roberts Einwand vom 30.08.2026: „so bringen die haken aber nichts".** Der
+#: Lochwandhalter stand in der Standardansicht von vorn, und seine SKADIS-Haken
+#: sitzen hinten — ein Bild, das genau das nicht zeigt, wofür das Teil da ist.
+#:
+#: Die Vorgabe ``iso`` blickt von (1, -1, 0.8), also von vorn-rechts-oben. Was
+#: hier steht, ist die Ausnahme davon, und jede Zeile nennt ihren Grund: Ein
+#: Blickwinkel ohne Begründung ist beim nächsten Teil geraten.
+VIEWS: dict[str, tuple[float, float, float]] = {
+    # Von hinten, und **flach**: Die Einhänger sitzen auf der Rückwand und sind
+    # der ganze Zweck des Teils — Robert am 30.08.2026: „so bringen die haken
+    # aber nichts". Der erste Versuch stand bei 0,7 in der Höhe und sah dabei
+    # in den offenen Kasten; dessen Innenwände zeigt die Anwendung rot
+    # (``BACKFACE_COLOUR``, damit man beim Arbeiten merkt, dass man von innen
+    # sieht), und ein halbrotes Bild erklärt in einer Galerie niemandem etwas.
+    "lochwandhalter": (-0.9, -1.0, 0.3),
+    # Flacher als die Vorgabe: Das Gewinde am Hals liest sich von der Seite,
+    # von oben verschwindet es hinter dem Rand.
+    "schraubdose": (1.0, -1.0, 0.35),
+    # Ebenfalls flach, aus demselben Grund: Das Filmscharnier ist eine dünne
+    # Stelle in der Wand und von oben ein Strich.
+    "klappbox": (1.0, -0.8, 0.4),
+}
 
 #: Wie stark WebP verdichtet (0 bis 100).
 #:
@@ -111,13 +149,31 @@ def crop_box(window: Any, view: Any) -> tuple[int, int, int]:
 
 
 def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
-    """Ein geladenes Teil aufnehmen und unter ``galerie-<stem>.png`` ablegen."""
+    """Ein geladenes Teil aufnehmen und unter ``galerie-<stem>.webp`` ablegen."""
     from make_figures import settle
 
     view = window.viewport
+    # **Das Achsenkreuz gehört nicht ins Galeriebild.** In der Anwendung sagt
+    # es, wo oben ist, und dafür ist es da. Auf einem Bild, das ein Teil zeigen
+    # soll, steht es davor — bei der Schraubdose mitten im Gewinde.
+    from app.ui.viewport import axes_widget_of
+
+    marker = axes_widget_of(view.plotter) if view.plotter is not None else None
+    if marker is not None:
+        marker.SetEnabled(0)
+
     view.reset_camera()
     settle(app, 20)
-    view.zoom(ZOOM)
+    # **Erst die Richtung, dann einpassen.** Andersherum stünde das Teil nach
+    # dem Schwenk wieder halb außerhalb: ``reset_camera`` rahmt für die Lage,
+    # in der es gerufen wird.
+    direction = VIEWS.get(stem)
+    if direction is not None and view.plotter is not None:
+        view.plotter.camera_position = [direction, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+        settle(app, 10)
+        view.reset_camera()
+        settle(app, 20)
+    view.zoom(ZOOMS.get(stem, ZOOM))
     settle(app, 30)
 
     screen = view.screen() or QApplication.primaryScreen()
