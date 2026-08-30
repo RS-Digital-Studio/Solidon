@@ -185,6 +185,48 @@ def _repolish(widget: QWidget) -> None:
         style.polish(widget)
 
 
+#: Wie weit die Fläche des aktiven Werkzeugs zum Fenster hin gemischt wird.
+#:
+#: Der Wert entscheidet nicht über Lesbarkeit — dafür steht die Kante ein —,
+#: sondern über die Lautstärke. Gemessen im dunklen Thema gegen die
+#: Fensterfarbe: 0,25 gibt 1,59, 0,35 gibt 1,90, 0,50 gibt 2,52. Die
+#: Zebrafläche, mit der die Fläche nicht zu verwechseln sein darf, liegt bei
+#: 1,13, und die Linienfarbe des Fensters bei 2,30. 0,35 hält den Abstand nach
+#: unten (2,15 gegen das Zebra) und bleibt unter der Linienfarbe — das aktive
+#: Werkzeug ist damit leiser als jeder Rahmen im Fenster.
+_ACTIVE_MIX: Final = 0.35
+
+
+def _mixed(front: str, back: str, share: float) -> str:
+    """Mischt zwei Hexfarben, ``share`` ist der Anteil der vorderen."""
+    first = [int(front[i : i + 2], 16) for i in (1, 3, 5)]
+    second = [int(back[i : i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(
+        f"{round(a * share + b * (1 - share)):02x}" for a, b in zip(first, second, strict=True)
+    )
+
+
+def active_fill(theme: Theme) -> str:
+    """Die Fläche, die ein aktives Werkzeug trägt.
+
+    **Der Akzent gehört dem Flüchtigen und genau einem Dauerhaften.** Vier
+    Flächen im Fenster leuchteten dauerhaft in Bernstein — der Hauptknopf, das
+    aktive Werkzeug, die Kartenkante, das ablaufende Datum —, und vier
+    Dauerleuchten machen aus einem Signal eine Tapete. Das aktive Werkzeug
+    sagt „du bist hier" und nicht „tu das"; es bekommt deshalb eine gedämpfte
+    Fläche, während die volle Farbe dem Hauptknopf bleibt.
+
+    Was die Aussage danach trägt, ist die **Kante**, und das ist der Teil, der
+    im hellen Thema mehr gewinnt als die Fläche verliert: Der Rahmen nahm
+    bisher ``highlight`` und kam damit auf 1,70 gegen das Fenster, die Fläche
+    auf dieselben 1,70 — der aktive Knopf riss dort die 3,0 aus WCAG 1.4.11
+    an keiner einzigen Stelle. Mit ``accent_line`` sind es 3,01, und im
+    dunklen Thema bleiben es dieselben 5,54 wie vorher.
+    """
+    colours = THEMES[theme]
+    return _mixed(colours["highlight"], colours["window"], _ACTIVE_MIX)
+
+
 #: Die zwei Pfeile am Zahlenfeld, als Zeichnung ohne Datei im Paket.
 #:
 #: Ein Dreieck, zweimal — nach oben und nach unten. ``{colour}`` füllt die
@@ -350,6 +392,13 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     # Rahmen dämpft, nimmt dem Feld seine einzige Kante.
     field_line = line
 
+    # Die Fläche des aktiven Werkzeugs und dieselbe Fläche unter dem Zeiger.
+    # Der überfahrene Ton ist nicht die Zebrafarbe, sondern derselbe Akzent
+    # eine Stufe lauter: Ein aktiver Knopf, der beim Überfahren ins Graue
+    # wechselt, sieht aus, als hätte er sich abgeschaltet.
+    active = active_fill(theme)
+    active_hover = _mixed(highlight, window, _ACTIVE_MIX + 0.15)
+
     return f"""
 /* --- Typografie: vier Stufen, Größe und Gewicht und Farbe --------------- */
 *[level="title"] {{ font-size: {sizes["title"][0]}pt; font-weight: {sizes["title"][1]}; }}
@@ -419,7 +468,18 @@ QToolButton {{
     padding: {TIGHT}px {NORMAL}px;
 }}
 QToolButton:hover {{ background: {hover}; border-color: {line}; }}
-QToolButton:checked {{ background: {highlight}; color: {on_highlight}; border-color: {highlight}; }}
+/* **Das aktive Werkzeug sagt „du bist hier", nicht „tu das"** — die Begründung
+   und die Messwerte stehen bei ``active_fill``. Die Schrift wird hier nicht
+   gesetzt: Sie bleibt die des Themas, und damit wechselt beim Einschalten
+   eines Werkzeugs allein die Fläche. Das ist auch die Bedingung dafür, dass
+   ein **Symbol** neben der Beschriftung stehen bleiben darf — auf voller
+   Akzentfläche brauchte es eine eigene dunkle Fassung, sonst standen Zeichen
+   und Wort derselben Aussage in entgegengesetzten Farben.
+   Und der überfahrene aktive Knopf antwortet: Ohne eigene Regel gewinnt
+   ``:checked`` gegen ``:hover``, und dann ist der eine Knopf im Fenster, den
+   man am ehesten wieder anklickt, der einzige ohne Rückmeldung. */
+QToolButton:checked {{ background: {active}; border-color: {accent_line}; }}
+QToolButton:checked:hover {{ background: {active_hover}; border-color: {accent_line}; }}
 QToolButton:focus {{
     border: 2px solid {focus};
     padding: {TIGHT - 1}px {NORMAL - 1}px;

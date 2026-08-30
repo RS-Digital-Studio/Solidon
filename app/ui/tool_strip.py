@@ -32,7 +32,6 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, Signal
-from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -46,7 +45,6 @@ from PySide6.QtWidgets import (
 
 from app.i18n import TranslatableText, tr
 from app.ui.icons import icon
-from app.ui.palette import ROLES, readable_on
 from app.ui.style import NORMAL, TIGHT, set_level
 
 
@@ -247,6 +245,16 @@ class ToolStrip(QWidget):
         # ist die zweite Kodierung.
         button.setText(str(title))
         if symbol:
+            # **Eine Farbe, gedrückt wie ungedrückt.** Solange der aktive Knopf
+            # die volle Akzentfläche trug, setzte das Stylesheet darauf die
+            # dunkle Schrift der Auswahl, und das Symbol daneben kam weiter
+            # hell aus dem Thema: 1,58 Kontrast, zwei Zeichen derselben Aussage
+            # in entgegengesetzten Farben. Eine eigene Umfärbung hielt das
+            # zusammen (``QIcon.Mode.Selected`` gilt der markierten Zeile einer
+            # Liste, Qt fragt für einen gedrückten Knopf keinen Modus ab).
+            # Seit die Fläche gedämpft ist (``style.active_fill``), behält der
+            # Knopf die Schrift des Themas — und dieselbe Farbe trägt dann auch
+            # das Symbol, mit 4,93 im dunklen Thema statt 2,72.
             button.setIcon(icon(symbol, button))
             button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.setCheckable(True)
@@ -259,36 +267,6 @@ class ToolStrip(QWidget):
 
         bar.setVisible(False)
         self._layout.addWidget(bar)
-
-    def _recolour(self, key: str, *, active: bool) -> None:
-        """Das Symbol des Umschalters folgt seiner Fläche.
-
-        Der gedrückte Knopf trägt Bernstein, und das Stylesheet setzt dort die
-        dunkle Schrift der Auswahl. Das **Symbol** kam weiter aus dem Thema, also
-        hell: 1,58 Kontrast auf dem Bernstein, gemessen — und daneben stand die
-        Beschriftung dunkel. Zwei Zeichen derselben Aussage in
-        entgegengesetzten Farben.
-
-        Qt fragt für einen gedrückten Knopf keinen eigenen Symbolmodus ab
-        (``QIcon.Mode.Selected`` gilt der markierten Zeile einer Liste), also
-        wird hier umgefärbt.
-
-        **Gerechnet, nicht erfragt.** Der erste Anlauf nahm
-        ``self.palette().highlightedText()`` — die idiomatische Rolle, und
-        trotzdem falsch: Solange kein Thema angewandt ist, liefert die Palette
-        die Systemfarben, und auf einem Windows-Standard ist das Weiß. Weiß auf
-        Bernstein bringt 2,06. Der Untergrund kommt aus dem Stylesheet, also aus
-        ``ROLES["select"]``; die Schrift darauf rechnet ``readable_on`` aus
-        genau dieser Farbe. Zwei Konstanten, kein Zustand dazwischen.
-        """
-        tool = self._tools.get(key)
-        button = self._buttons.get(key)
-        if tool is None or button is None or not tool.symbol:
-            return
-        if active:
-            button.setIcon(icon(tool.symbol, button, colour=QColor(readable_on(ROLES["select"]))))
-        else:
-            button.setIcon(icon(tool.symbol, button))
 
     def set_shortcut(self, key: str, sequence: str) -> None:
         """Merkt sich die Tastenfolge und schreibt sie in den Tooltip.
@@ -325,14 +303,12 @@ class ToolStrip(QWidget):
             tool = self._tools[previous]
             tool.bar.setVisible(False)
             self._buttons[previous].setChecked(False)
-            self._recolour(previous, active=False)
             if tool.reset is not None:
                 tool.reset()
         if key is not None:
             tool = self._tools[key]
             tool.bar.setVisible(True)
             self._buttons[key].setChecked(True)
-            self._recolour(key, active=True)
             self._hint.setText(str(tool.hint))
             self._hint.setVisible(bool(str(tool.hint)))
             # Nach dem Sichtbarmachen, nicht davor: was hier geschaltet wird,

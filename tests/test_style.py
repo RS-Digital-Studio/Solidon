@@ -1072,3 +1072,115 @@ def test_two_answers_do_not_read_as_one_sentence(qt_app: QApplication) -> None:
     finally:
         window.close()
         window.release()
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_the_active_tool_says_it_at_its_edge_and_no_longer_shouts(
+    theme: str, qt_app: QApplication
+) -> None:
+    """Das aktive Werkzeug sagt „du bist hier", und die Kante trägt die Aussage.
+
+    Vier Flächen im Fenster leuchteten dauerhaft in Bernstein — Hauptknopf,
+    aktives Werkzeug, Kartenkante, ablaufendes Datum —, und vier Dauerleuchten
+    machen aus einem Signal eine Tapete. Die volle Farbe bleibt dem Hauptknopf,
+    der eine Handlung *verlangt*; das Werkzeug bekommt eine gedämpfte Fläche.
+
+    **Der Tausch kostet im hellen Thema nichts und bringt dort das meiste.**
+    Kante und Fläche nahmen beide ``highlight``, und das sind gegen die
+    Fensterfarbe 1,70 — der aktive Knopf riss die 3,0 aus WCAG 1.4.11 an keiner
+    Stelle. Die Kante nimmt jetzt ``accent_line``, die Farbe, die genau dafür im
+    Thema steht: 3,01 im hellen, unveränderte 5,54 im dunklen.
+
+    Gemessen am **gebauten** Streifen mit angewandtem Stylesheet: Eine Farbe,
+    die eine Regel nennt, ist noch keine Farbe, die ein Widget trägt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QColor
+    from PySide6.QtWidgets import QToolButton, QWidget
+
+    from app.ui.style import apply_style
+    from app.ui.theme import apply_theme, contrast_ratio
+    from app.ui.tool_strip import ToolStrip
+
+    def hexed(image: object, x: int, y: int) -> str:
+        colour = image.pixelColor(x, y)  # type: ignore[attr-defined]
+        return f"#{colour.red():02x}{colour.green():02x}{colour.blue():02x}"
+
+    def boldest(image: object, button: QToolButton, against: str) -> str:
+        """Der Punkt im Knopf, der am weitesten von seiner Fläche abliegt.
+
+        Das ist die Schrift oder das Symbol — beide sind das Einzige, was auf
+        einer einfarbigen Fläche noch gezeichnet wird. Gesucht über den
+        Kontrast und nicht über eine erwartete Farbe: Welche das sein soll,
+        ist ja gerade die Frage.
+        """
+        found, best = against, 1.0
+        for x in range(button.x() + 3, button.x() + button.width() - 3):
+            for y in range(button.y() + 3, button.y() + button.height() - 3):
+                here = hexed(image, x, y)
+                gap = contrast_ratio(here, against)
+                if gap > best:
+                    found, best = here, gap
+        return found
+
+    apply_theme(qt_app, theme)  # type: ignore[arg-type]
+    apply_style(qt_app, theme)  # type: ignore[arg-type]
+    strip = ToolStrip()
+    try:
+        strip.add("section", "Schnitt", QWidget())
+        strip.add("measure", "Messen", QWidget())
+        strip.resize(600, 60)
+        strip.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+        strip.show()
+        qt_app.processEvents()
+
+        buttons = strip.findChildren(QToolButton)
+        assert len(buttons) >= 2, "der Streifen hat keine zwei Knöpfe zu vergleichen"
+        active, resting = buttons[0], buttons[1]
+        active.setChecked(True)
+        qt_app.processEvents()
+
+        image = strip.grab().toImage()
+        # Die linke Kante auf halber Höhe: dort ist der Rahmen gerade, an den
+        # Ecken rundet ihn ``border-radius`` in den Grund hinein.
+        edge = hexed(image, active.x(), active.y() + active.height() // 2)
+        fill = hexed(image, active.x() + active.width() // 2, active.y() + 5)
+        calm = hexed(image, resting.x() + resting.width() // 2, resting.y() + 5)
+        ground = hexed(image, 1, 1)
+        ink = boldest(image, active, fill)
+        calm_ink = boldest(image, resting, calm)
+    finally:
+        strip.close()
+        apply_theme(qt_app, "dark")  # type: ignore[arg-type]
+        apply_style(qt_app, "dark")  # type: ignore[arg-type]
+
+    assert contrast_ratio(edge, ground) >= 3.0, (
+        f"{theme}: die Kante des aktiven Werkzeugs bringt nur "
+        f"{contrast_ratio(edge, ground):.2f} gegen den Grund — WCAG 1.4.11 verlangt 3,0"
+    )
+    assert fill != THEMES[theme]["highlight"], (
+        f"{theme}: das aktive Werkzeug trägt weiter die volle Akzentfläche ({fill})"
+    )
+    # Und die Dämpfung hat einen Boden: Was den Zustand zeigt, ist der
+    # **Bernsteinton** auf grauem Grund, nicht der Helligkeitsunterschied — im
+    # hellen Thema sind das 1,21, und daran gemessen wäre jede Fläche zu leise.
+    hue, saturation, _value, _alpha = QColor(fill).getHsv()
+    _calm_hue, calm_saturation, _cv, _ca = QColor(calm).getHsv()
+    assert 20 <= hue <= 50 and saturation >= 30, (
+        f"{theme}: die Fläche des aktiven Werkzeugs ist nicht mehr als solche zu "
+        f"erkennen (Farbton {hue}, Sättigung {saturation})"
+    )
+    assert saturation > calm_saturation + 20, (
+        f"{theme}: aktiv ({saturation}) und ruhend ({calm_saturation}) sind sich zu ähnlich"
+    )
+    # **Und die Schrift wechselt beim Einschalten nicht mit.** Solange der
+    # Knopf die volle Akzentfläche trug, setzte das Stylesheet darauf die dunkle
+    # Auswahlschrift — und das Symbol daneben kam weiter hell aus dem Thema, mit
+    # 1,58 Kontrast: zwei Zeichen derselben Aussage in entgegengesetzten Farben.
+    # Eine eigene Umfärbung hielt das zusammen und ist mit der gedämpften Fläche
+    # weggefallen. Was sie ersetzt, ist diese Zeile: Beide Knöpfe schreiben in
+    # derselben Farbe, also kann kein Zeichen mehr aus der Reihe fallen.
+    assert ink == calm_ink, (
+        f"{theme}: der aktive Knopf schreibt in {ink}, der ruhende in {calm_ink} — "
+        "wer die Schriftfarbe umschaltet, muss auch das Symbol umfärben"
+    )
