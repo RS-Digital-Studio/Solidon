@@ -2084,6 +2084,14 @@ def test_a_running_export_keeps_the_bar_when_the_evaluation_ends(window: MainWin
     """
     window._exporting = True
     try:
+        # **Wie der Export es tut, nicht wie der Test es könnte.** ``_export``
+        # schaltet den Balken selbst an, bevor es die Flagge setzt; wer nur die
+        # Flagge setzt, stellt eine Lage her, die im Betrieb nicht vorkommt.
+        # Die Zusage lautet „bleibt", nicht „erscheint" — und seit die Anzeige
+        # gestuft ist (§2.8), sind das zwei verschiedene Sätze: Ein Balken, den
+        # noch niemand angeschaltet hat, kann nicht bleiben.
+        window.progress.setRange(0, 0)
+        window.progress.setVisible(True)
         window._on_busy(False)
         assert window.progress.isVisibleTo(window), "der Export trägt den Balken weiter"
         assert not window.cancel_button.isVisibleTo(window), (
@@ -10046,11 +10054,11 @@ def test_a_short_calculation_shows_nothing_at_all(window: MainWindow) -> None:
     # grün gegen eine Lüge — genau die Tarnung, vor der ``wartezeit.md`` warnt.
     assert not window.progress.isVisibleTo(window), "der Balken kam sofort"
     assert not window.cancel_button.isVisibleTo(window), "der Abbrechen-Knopf kam sofort"
-    assert QApplication.overrideCursor() is None, "der Wartezeiger kam sofort"
+    assert window.cursor().shape() != Qt.CursorShape.BusyCursor, "der Wartezeiger kam sofort"
 
     window.session.busyChanged.emit(False)
     assert not window.progress.isVisibleTo(window)
-    assert QApplication.overrideCursor() is None, "ein Zeiger blieb stehen"
+    assert window.cursor().shape() != Qt.CursorShape.BusyCursor, "ein Zeiger blieb stehen"
 
 
 def test_the_waiting_grows_in_the_three_steps_the_plan_names(window: MainWindow) -> None:
@@ -10071,8 +10079,11 @@ def test_the_waiting_grows_in_the_three_steps_the_plan_names(window: MainWindow)
         assert window._bar_delay.isActive(), "die Uhr für den Balken läuft nicht"
 
         window._patience.timeout.emit()
-        cursor = QApplication.overrideCursor()
-        assert cursor is not None, "nach zwei Zehnteln fehlt der Zeiger"
+        # Am **Fenster** gefragt und nicht an der Anwendung: Der Zeiger ist eine
+        # Eigenschaft dieses Fensters, damit er den Override der synchronen
+        # Rechnung nicht vom Stapel nimmt (der Grund steht bei
+        # ``_show_wait_cursor``).
+        cursor = window.cursor()
         assert cursor.shape() == Qt.CursorShape.BusyCursor, (
             "der reine Wartezeiger behauptet eine gesperrte Oberfläche — sie ist bedienbar"
         )
@@ -10085,7 +10096,7 @@ def test_the_waiting_grows_in_the_three_steps_the_plan_names(window: MainWindow)
         window.session.busyChanged.emit(False)
 
     assert not window.progress.isVisibleTo(window)
-    assert QApplication.overrideCursor() is None, (
+    assert window.cursor().shape() != Qt.CursorShape.BusyCursor, (
         "der Zeiger blieb stehen — das sieht aus wie ein hängendes Programm"
     )
 
@@ -10103,7 +10114,9 @@ def test_no_wait_cursor_survives_a_second_run(window: MainWindow) -> None:
         window._patience.timeout.emit()
         window._patience.timeout.emit()  # ein zweiter Anlauf derselben Stufe
         window.session.busyChanged.emit(False)
-    assert QApplication.overrideCursor() is None, "nach drei Läufen steht ein Zeiger im Weg"
+    assert window.cursor().shape() != Qt.CursorShape.BusyCursor, (
+        "nach drei Läufen steht ein Zeiger im Weg"
+    )
 
 
 def test_the_status_bar_leads_where_its_numbers_come_from(window: MainWindow) -> None:

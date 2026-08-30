@@ -8602,8 +8602,23 @@ class MainWindow(QMainWindow):
         genau das verlangt §2.8 —, und ein reiner Wartezeiger behauptete das
         Gegenteil.
         """
-        if not self._waiting:
-            QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+        # **Am Fenster und nicht an der Anwendung**, und das ist keine Feinheit.
+        # ``setOverrideCursor`` führt einen **Stapel**, und
+        # ``restoreOverrideCursor`` nimmt blind das oberste Element — nicht das
+        # eigene. Beim Einlesen einer Datei laufen zwei Zeiger nebeneinander:
+        # ``waiting()`` setzt den reinen Wartezeiger für die synchrone Rechnung
+        # (dort ist er richtig, der Hauptthread rechnet), und dieser hier gilt
+        # dem asynchronen Lauf. Wer beide über den Override legt, räumt beim
+        # Aufräumen den fremden weg und lässt den eigenen darunter stehen — der
+        # Kunde sah dann die falsche von zwei Aussagen, und acht Tests, die mit
+        # Wartezeit nichts zu tun haben, wurden rot.
+        #
+        # Als Widget-Eigenschaft gibt es keinen Stapel: Ein Override liegt
+        # darüber, solange er gilt, und darunter kommt dieser wieder hervor.
+        # Das ist auch die ehrlichere Aussage — der Zeiger gilt diesem Fenster,
+        # und die Oberfläche bleibt bedienbar.
+        if self._waits and not self._waiting:
+            self.setCursor(Qt.CursorShape.BusyCursor)
             self._waiting = True
 
     def _show_progress_bar(self) -> None:
@@ -8622,14 +8637,16 @@ class MainWindow(QMainWindow):
     def _stop_waiting(self) -> None:
         """Alle Stufen zurück — Zeitgeber, Zeiger, Balken, Knopf.
 
-        Der Zeiger wird genau so oft zurückgenommen, wie er gesetzt wurde:
-        ``restoreOverrideCursor`` ohne vorangegangenes ``setOverrideCursor``
-        nimmt den Zeiger eines anderen mit.
+        Der Zeiger ist eine Eigenschaft dieses Fensters und kein Override der
+        Anwendung — der Grund steht bei :meth:`_show_wait_cursor`. Die Flagge
+        bleibt trotzdem: ``unsetCursor`` auf einem Fenster, das nie einen
+        gesetzt hat, ist zwar folgenlos, aber die Flagge sagt auch, ob die
+        Stufe überhaupt erreicht wurde.
         """
         self._patience.stop()
         self._bar_delay.stop()
         if self._waiting:
-            QApplication.restoreOverrideCursor()
+            self.unsetCursor()
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
@@ -10032,6 +10049,15 @@ class MainWindow(QMainWindow):
         kappt, braucht das Fenster nicht zu zerstören.
         """
         self.wait_for_workers(timeout_ms)
+        # **Der Wartezeiger geht mit.** Er ist ein Override der *Anwendung*,
+        # nicht des Fensters: Ein Zeitgeber, der nach dem Loslassen feuert,
+        # setzt ihn für alles, was danach kommt, und niemand nimmt ihn
+        # zurück. In der Suite hat das acht Bestandstests umgebracht, die mit
+        # der Wartezeit nichts zu tun haben — sie liefen hinter einem Test,
+        # der einen Lauf begann und ihn nicht endete. Im Betrieb ist es
+        # dasselbe eine Stufe größer: Wer das Fenster schließt, während
+        # gerechnet wird, behält die Sanduhr über dem Schreibtisch.
+        self._stop_waiting()
         # Die Sitzung überlebt dieses Fenster — in der Suite gehört sie einem
         # eigenen Fixture, im Betrieb kann ein zweites Fenster folgen. Solange
         # ihre Signale hierher zeigen, ruft das nächste Ergebnis in ein
