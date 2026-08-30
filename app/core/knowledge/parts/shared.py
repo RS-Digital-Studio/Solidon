@@ -251,7 +251,8 @@ def _operation_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[s
 
 
 def _payload_findings(data: dict[str, Any]) -> list[str]:
-    """Payloads sind base64 und werden nicht ausgeführt — nur gemessen (§3.6)."""
+    """Payloads sind base64 und werden nicht ausgeführt — nur gemessen
+    (Konzept §3.6)."""
     payloads = data.get("payloads")
     if payloads is None:
         return []
