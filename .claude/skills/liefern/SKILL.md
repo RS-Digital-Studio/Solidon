@@ -179,7 +179,17 @@ den Haupt-Index — sie sieht auch die Minen der anderen. Und zwar **im selben
 Aufruf wie der Commit**, nicht erst vor dem nächsten: Die Phantome wachsen
 sofort nach (50, 30.08.2026 — d3 entschärfte auf null, ein einziger Commit
 mit zwei neuen Dateien erzeugte Minuten später zwei neue), und in der Lücke
-bis zur nächsten Prüfung genügt ein pfadloser Commit irgendeiner Sitzung. Wer dort eine Datei
+bis zur nächsten Prüfung genügt ein pfadloser Commit irgendeiner Sitzung.
+
+**Aber die Kontrolle läuft außerhalb der Index-Umgebung** — erst
+`unset GIT_INDEX_FILE` (oder `env -u GIT_INDEX_FILE git status --short`),
+dann prüfen. Wer sie unter noch gesetzter Variable ans Kettenende hängt,
+nachdem er seinen privaten Index gelöscht hat, bekommt **jede verfolgte
+Datei als gelöscht** gemeldet — ein fehlender Index ist ein leerer, dieselbe
+Familie wie `privater-index-fester-name`, nur beim Kontrollieren statt beim
+Schreiben (d3, 30.08.2026: Schreckzahl 1345 über einem sauberen Baum). Die
+Kontrolle ist die gefährlichere Hälfte, weil ihre Zahl geglaubt wird — wer
+auf 1345 hin „rettet", richtet die erste Katastrophe an. Wer dort eine Datei
 findet, die im Arbeitsbaum **und** in HEAD liegt, entschärft sie mit
 `git reset -- <pfad>`; eine Löschung, die jemand wollte, hätte die Datei
 nicht mehr im Baum.
