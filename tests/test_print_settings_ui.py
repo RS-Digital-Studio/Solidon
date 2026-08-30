@@ -2005,3 +2005,112 @@ def test_switching_the_slicer_drops_the_result_of_the_old_one(
     assert dialog._gcode == [], "die Druckdatei des alten Slicers wurde weiter angeboten"
     assert not dialog.save_button.isEnabled()
     assert not dialog.state.text(), "die Kennzahlen des alten Laufs standen noch da"
+
+
+def test_the_reason_for_the_grey_button_is_on_screen(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Der Grund stand nur im Tooltip, und der erscheint erst beim Zielen.
+
+    Wer den grauen *Slicen*-Knopf sah, las nirgends, was ihm fehlt — die
+    Auswahl dazu liegt zudem in einer zugeklappten Box (Handlauf,
+    30.08.2026). Ein grauer Knopf allein ist außerdem Bedeutung über Farbe
+    (Regel 18).
+    """
+    dialog._slicer_path = tmp_path / "elegoo-slicer.exe"
+    dialog._needs_profiles = True
+    dialog._profiles_pending = False
+    dialog.machine_choice.clear()
+
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled(), "ohne Profil bleibt der Knopf zu"
+    grund = dialog.slice_button.toolTip()
+    assert grund, "der Grund steht am Knopf"
+    assert dialog.state.text() == grund, "und er steht auch sichtbar auf dem Bildschirm"
+
+
+def test_a_finished_run_keeps_its_numbers_on_screen(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Ohne Grund bleibt stehen, was der Lauf ergeben hat.
+
+    Die Gegenrichtung zum Test darüber: Die Zeile trägt beides, und ein
+    fehlender Grund darf das Ergebnis nicht wegwischen.
+    """
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        default_process="0.20mm Standard",
+    )
+    dialog._profiles_found([machine, _profile("0.20mm Standard", "process")])
+    dialog._slicer_path = tmp_path / "elegoo-slicer.exe"
+    dialog.state.setText("Druckzeit: 18 min · Material: 4,7 g")
+
+    dialog._show_slicer_state()
+
+    assert dialog.state.text() == "Druckzeit: 18 min · Material: 4,7 g"
+
+
+def test_the_plate_carries_the_height_of_its_tallest_part(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Ohne die Höhe kann niemand merken, dass die Druckdatei zu kurz ist.
+
+    Cura druckte bei zentriert importiertem Modell still die halbe Höhe — was
+    unter dem Druckbett lag, fiel weg (Handlauf, 30.08.2026). Der Vergleich
+    dagegen braucht ein Maß, und das kennt nur die Oberfläche.
+    """
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    flach = trimesh.creation.box(extents=(20.0, 20.0, 5.0))
+    hoch = trimesh.creation.box(extents=(20.0, 20.0, 30.0))
+    objekte = [
+        SceneObject(id="A", name="A", mesh=MeshData.of(flach)),
+        SceneObject(id="B", name="B", mesh=MeshData.of(hoch)),
+    ]
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    run = dialog._plate_run(objekte, 0, tmp_path, "satz", setup)
+
+    assert run.model_height == pytest.approx(30.0), "die höchste der Platte zählt"
+
+
+def test_the_worker_hands_the_height_to_the_slicer(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Durchgereicht ist nicht gerufen.
+
+    Das Feld an `PlateRun` nützt nichts, solange der Arbeiter es nicht
+    weitergibt — und das ist genau die Stelle, an der eine Kette still endet.
+    """
+    from app.core.errors import OperationCancelled
+    from app.core.export import handover
+    from app.ui import print_settings_dialog as modul
+
+    gesehen: list[object] = []
+
+    def merken(*_args: object, **kwargs: object) -> object:
+        gesehen.append(kwargs.get("model_height"))
+        raise OperationCancelled()
+
+    monkeypatch.setattr(modul.handover, "slice_model", merken)
+    modell = tmp_path / "platte.3mf"
+    modell.write_bytes(b"")
+    lauf = modul.PlateRun(plate=0, model=modell, model_height=42.5)
+    worker = modul._SliceWorker(
+        [lauf],
+        print_settings.resolve(profiles.make_profile()),
+        profiles.make_profile(),
+        handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca"),
+    )
+
+    worker.run()
+
+    assert gesehen == [42.5], "die Höhe kam beim Slicer nicht an"

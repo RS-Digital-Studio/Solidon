@@ -1312,6 +1312,14 @@ class PlateRun:
     model: Path
     slots: tuple[MaterialSlot, ...] = ()
     keep_arrangement: bool = False
+    model_height: float | None = None
+    """Wie hoch die Teile dieser Platte sind, in mm.
+
+    Für den Vergleich mit der Höhe, die im G-Code tatsächlich gefahren wird:
+    Cura druckte bei zentriert importiertem Modell still die halbe Höhe — was
+    unter dem Druckbett lag, fiel weg, und niemand sah es (Handlauf,
+    30.08.2026). Ohne die Angabe entfällt der Vergleich; geraten wird nichts.
+    """
     findings: tuple[Finding, ...] = ()
     """Was beim Schreiben der Baugruppe auffiel — Haftungsränder,
     Filamentwechsel. Sie reisen mit ihrer Platte, damit im Prüfbericht steht,
@@ -1373,6 +1381,7 @@ class _SliceWorker(Worker):
                     self._setup,
                     keep_arrangement=entry.keep_arrangement,
                     slots=entry.slots,
+                    model_height=entry.model_height,
                     cancelled=self.cancelled,
                 )
             except OperationCancelled:
@@ -2628,6 +2637,19 @@ class PrintSettingsDialog(QDialog):
             self.state.setText(
                 tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
             )
+        elif reason:
+            # **Der Grund gehört auf den Bildschirm, nicht in einen Tooltip.**
+            # Er stand bis hierhin nur an ``slice_button`` — und ein Tooltip
+            # erscheint erst, wenn jemand mit der Maus darauf wartet. Wer den
+            # grauen Knopf sieht und nicht auf die Idee kommt, ihn anzuzielen,
+            # las nirgends, was ihm fehlt; die Auswahl dazu liegt zudem in
+            # einer zugeklappten Box (Handlauf, 30.08.2026). Ein grauer Knopf
+            # allein ist außerdem Bedeutung über Farbe (Regel 18).
+            #
+            # Nur wenn es einen Grund gibt: Ohne einen trägt die Zeile das
+            # Ergebnis des letzten Laufs, und das wäre hier nicht zu
+            # überschreiben, sondern stehen zu lassen.
+            self.state.setText(str(reason))
 
     def _pick_slicer(self) -> Path | None:
         """Welcher Slicer gilt — der gemerkte, sonst der erste gefundene.
@@ -3147,6 +3169,12 @@ class PrintSettingsDialog(QDialog):
             # ohne Deckung (§20).
             slots=handover.with_slot_profiles(slots, chosen),
             keep_arrangement=keep,
+            # Die höchste der Platte: Der Vergleich fragt, ob der G-Code so
+            # hoch wird wie das Modell, und ein niedrigeres Teil daneben
+            # ändert daran nichts.
+            model_height=max(
+                (as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
+            ),
             findings=tuple(findings),
         )
 
