@@ -172,7 +172,13 @@ class _Row(QWidget):
         title.setWordWrap(True)
 
         #: Wo es liegt, oder der Satz, der sagt, was als Nächstes hilft.
-        self.where = QLabel(tr("Wird gesucht …"), self)
+        # **Leer, solange die Erhebung läuft.** Hier stand „Wird gesucht …",
+        # je Zeile einmal — im offenen Dialog gemessen siebenmal derselbe
+        # Satz, dazu sechs Fragezeichen als Zustandszeichen. Dass gesucht
+        # wird, sagen der laufende Balken und die Zeile darunter **einmal**
+        # für alle; hier gehört hin, was diese eine Zeile herausgefunden hat,
+        # und bis dahin nichts.
+        self.where = QLabel("", self)
         self.where.setWordWrap(True)
         self.where.setEnabled(False)
         self.where.setTextFormat(Qt.TextFormat.PlainText)

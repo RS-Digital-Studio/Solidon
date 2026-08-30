@@ -16,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from app.core import install, tools
 from app.i18n import SOURCE_LANGUAGE
@@ -1340,3 +1340,31 @@ def test_the_failure_text_quotes_the_button_by_its_real_name(language: str) -> N
     assert knopf in satz, (
         f"{language}: der Satz nennt den Knopf nicht beim Namen — Knopf {knopf!r}, Satz {satz!r}"
     )
+
+
+def test_the_dialog_says_once_that_it_is_searching(qt_app: QApplication) -> None:
+    """Sieben Zeilen sagten dasselbe, während eine Erhebung lief.
+
+    Jede Anforderungszeile startete mit „Wird gesucht …" in ihrem Fundort-Feld
+    — im offenen Dialog gemessen siebenmal derselbe Satz, dazu sechs
+    Fragezeichen als Zustandszeichen. Dass gesucht wird, sagen der laufende
+    Balken und die Zeile darunter einmal für alle; ins Feld der Zeile gehört,
+    was **diese** Zeile herausgefunden hat.
+    """
+    from app.ui.install_dialog import InstallDialog
+
+    dialog = InstallDialog()
+    try:
+        dialog.show()
+        qt_app.processEvents()
+        texts = [label.text() for label in dialog.findChildren(QLabel) if label.text().strip()]
+        searching = [text for text in texts if "gesucht" in text]
+        assert len(searching) <= 1, (
+            f"{len(searching)} Zeilen sagen zugleich, dass gesucht wird: {searching[:3]}"
+        )
+        assert dialog.progress.isVisibleTo(dialog), "und der Balken sagt es ohne Worte"
+    finally:
+        dialog.hide()
+        dialog.release()
+        for _ in range(3):
+            qt_app.processEvents()
