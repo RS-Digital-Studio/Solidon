@@ -1973,3 +1973,86 @@ def test_the_roll_holder_stays_in_one_piece_across_its_range() -> None:
                 f"{breite:.0f} mm: {objekt.name} zerfällt in {stuecke} Stücke — "
                 "eine feste Zahl wandert beim Parameterzug nicht mit"
             )
+
+
+#: Die Galerieteile und der Parameter, an dem ein Kunde zuerst dreht.
+#:
+#: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus der
+#: Börse landet in einem fremden Projekt, und dort setzt jemand den Wert von
+#: Hand. Was nur im gezeigten Punkt hält, hält nicht.
+GALERIETEILE = (
+    # **110 und nicht 80, und das ist eine Messung, keine Bequemlichkeit.**
+    # Das Gehäuse zerfällt unterhalb von 110 mm: seine vier Gewindebuchsen
+    # sitzen auf festen Positionen und fallen aus der schmaler werdenden
+    # Wand — 5 Stücke bei 90, 3 bei 100, ab 110 einer. Nach oben hält es.
+    # Die untere Grenze ist an 3a gemeldet; sie gehört zum Schaustück und
+    # nicht zu diesem Test, und ein Test, der sie überdeckte, verspräche
+    # eine Parametrik, die das Teil nicht hat.
+    ("gehaeuse", "breite", (110.0, 120.0, 200.0)),
+    ("schraubdose", "durchmesser", (50.0, 75.0, 120.0)),
+    ("lochwandhalter", "breite", (80.0, 120.0, 200.0)),
+)
+
+
+@pytest.mark.parametrize(
+    ("stem", "parameter", "werte"), GALERIETEILE, ids=[teil[0] for teil in GALERIETEILE]
+)
+def test_a_gallery_part_stays_in_one_piece_across_its_range(
+    stem: str, parameter: str, werte: tuple[float, ...]
+) -> None:
+    """Jeder gezeigte Körper bleibt **ein** Stück, über die ganze Spanne.
+
+    **Der Anlass ist der eigene Fehler.** In `schraubdose.p3d` stand
+    ``wrap_diameter`` als feste Zahl, einmal bei ⌀60 aus der Geometrie
+    abgelesen. Beim Zug auf ⌀75 wickelte die Rändelung weiter um den Zylinder
+    von gestern, traf den Deckel nicht mehr und lag als **553 lose Stücke**
+    daneben — wasserdicht, plausibles Volumen, kein einziger Befund.
+
+    Auf dem Galeriebild stand ein glatter Deckel, und niemand hat es gesehen:
+    Ein zerbrochener Deckel wäre aufgefallen, ein unvollständiger nicht. Genau
+    das macht die Teilezahl zum billigsten Wächter — sie verrät einen
+    zerfallenen Körper dort, wo Volumen und Wasserdichtheit schweigen.
+
+    Geprüft wird auch die **Zahl** der Körper: Verschluckt eine Boolesche
+    Operation einen, sinkt sie, und ein fehlendes Teil fällt auf einem Bild
+    ebenso wenig auf wie ein unvollständiges.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+    from app.core.scene.project import load
+
+    load_operations()
+    ziel = Path(__file__).resolve().parent.parent / "website" / "teile" / f"{stem}.p3d"
+    assert ziel.is_file(), f"das Galerieteil fehlt: {ziel}"
+
+    project = load(ziel)
+    document = project.document
+    profile = profiles.make_profile()
+    assert parameter in document.parameters, (
+        f"{stem}: der Parameter „{parameter}“ steht nicht mehr im Rezept — "
+        "dann prüft dieser Test eine Spanne, die es nicht gibt"
+    )
+
+    erwartet: int | None = None
+    for wert in werte:
+        document.parameters[parameter] = dataclasses.replace(
+            document.parameters[parameter], value=wert
+        )
+        result = evaluate(document, profile)
+        koerper = list(result.scene.objects.values())
+        if erwartet is None:
+            erwartet = len(koerper)
+            assert erwartet > 0, f"{stem}: die Auswertung liefert gar keinen Körper"
+        assert len(koerper) == erwartet, (
+            f"{stem} bei {parameter}={wert:.0f}: {len(koerper)} Körper statt {erwartet} — "
+            "eine Boolesche Operation hat einen verschluckt"
+        )
+        for objekt in koerper:
+            stuecke = int(getattr(objekt.mesh, "component_count", 1) or 1)
+            assert stuecke == 1, (
+                f"{stem} bei {parameter}={wert:.0f}: {objekt.name} zerfällt in "
+                f"{stuecke} Stücke — eine feste Zahl wandert beim Parameterzug nicht mit"
+            )
