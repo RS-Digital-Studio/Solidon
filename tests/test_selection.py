@@ -906,3 +906,129 @@ def test_a_second_feature_takes_over_from_the_first(window: MainWindow) -> None:
     assert viewport.selected_feature == holes[1].id, (
         f"von {holes[0].id} kommend bleibt die Auswahl stehen statt auf {holes[1].id} zu wechseln"
     )
+
+
+# --- Was ein Zug bei mehreren gewählten Körpern trifft -------------------------
+
+
+def two_bodies(window: MainWindow) -> tuple[str, str]:
+    """Ein zweiter Körper neben der Platte, beide im Baum markiert.
+
+    Über ``session.apply`` und nicht durch Zusammensetzen einer Szene von Hand:
+    Was der Test bewegt, muss dasselbe sein, was ein Kunde bewegt — sonst misst
+    er eine Lage, die kein Klick herstellt.
+    """
+    from app.core.scene.history import OperationDraft
+
+    window.session.apply(
+        "Kasten",
+        [
+            OperationDraft(
+                op="create_box",
+                inputs=(),
+                params={"width": 10.0, "depth": 20.0, "height": 5.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    tree = window.object_tree.tree
+    assert tree.topLevelItemCount() >= 2, "der zweite Körper fehlt — dann prüft das nichts"
+    for index in range(tree.topLevelItemCount()):
+        item = tree.topLevelItem(index)
+        assert item is not None
+        item.setSelected(True)
+
+    chosen = window.object_tree.selected_objects()
+    assert len(chosen) == 2, f"zwei Körper sollten markiert sein, markiert sind {len(chosen)}"
+    return chosen[0], chosen[1]
+
+
+def centre_of(window: MainWindow, object_id: str) -> tuple[float, float, float]:
+    from app.core.geom.mesh import as_mesh_data
+
+    entry = window.session.last_result.scene.objects[object_id]
+    centre = as_mesh_data(entry.mesh).bounds.centre
+    return (float(centre[0]), float(centre[1]), float(centre[2]))
+
+
+def size_of(window: MainWindow, object_id: str) -> tuple[float, float, float]:
+    """Die Kantenmaße — und **nicht** der Mittelpunkt, wenn es ums Drehen geht.
+
+    Die erste Fassung dieses Tests maß den Mittelpunkt und blieb grün, als die
+    Gegenprobe das Drehen versuchsweise auf alle Körper ausdehnte: Eine Drehung
+    um den *eigenen* Mittelpunkt lässt genau diesen unverändert. Ein Würfel
+    hätte auch die Kantenmaße behalten, deshalb ist der zweite Körper 10 x 20 x
+    5 — um Z gedreht wird daraus 20 x 10 x 5, und das ist zu sehen.
+    """
+    from app.core.geom.mesh import as_mesh_data
+
+    entry = window.session.last_result.scene.objects[object_id]
+    size = as_mesh_data(entry.mesh).bounds.size
+    return (round(float(size[0]), 3), round(float(size[1]), 3), round(float(size[2]), 3))
+
+
+def test_a_drag_moves_every_selected_body(window: MainWindow) -> None:
+    """Zwei Teile gewählt, einmal gezogen — beide müssen sich bewegen.
+
+    **Weil ein Kunde, der zwei Teile markiert hat, zwei Teile meint.** Vorher
+    nahm der Zug still ``selected()``, also ``items[0]``: Die Auswahl sagte
+    zwei, das Bild bewegte eines, und niemand erfuhr, warum. Das ist nicht
+    ungenau, sondern kaputt — und es ist genau der Fall, den jemand ohne
+    CAD-Erfahrung als Fehler der Anwendung liest, nicht als Bedienfehler.
+    """
+    from app.ui.viewport import TransformSteps
+
+    first, second = two_bodies(window)
+    before = (centre_of(window, first), centre_of(window, second))
+
+    window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+
+    after = (centre_of(window, first), centre_of(window, second))
+    moved = [round(after[i][0] - before[i][0], 3) for i in (0, 1)]
+    assert moved == [5.0, 5.0], (
+        f"beide gewählten Körper müssen um 5 mm wandern, gewandert sind sie um {moved} mm"
+    )
+
+
+def test_turning_several_bodies_keeps_them_where_they_are(window: MainWindow) -> None:
+    """Drehen gilt dem ersten — und lässt die anderen in Ruhe.
+
+    **Nicht aus Bequemlichkeit, sondern aus Geometrie:** ``rotate_object``
+    nimmt seinen Bezugspunkt aus dem *eigenen* Netz. Auf alle angewandt drehte
+    sich jeder Körper um sich selbst, statt die Gruppe um ihre Mitte — die
+    Anordnung, die der Kunde gerade hergestellt hat, wäre hin. Solange die Op
+    keinen gemeinsamen Punkt kennt, ist „einer" die ehrliche Antwort, und die
+    Statuszeile sagt sie vorher.
+    """
+    from app.ui.viewport import TransformSteps
+
+    _first, second = two_bodies(window)
+    before = size_of(window, second)
+
+    window._on_transform_dragged(TransformSteps(axis="z", angle=90.0))
+    window.session.wait_for_idle()
+
+    assert size_of(window, second) == before, (
+        f"der zweite Körper darf sich beim Drehen nicht mitdrehen — aus {before} "
+        f"wurde {size_of(window, second)}; eine Drehung um den je eigenen "
+        "Mittelpunkt reißt die Anordnung der Auswahl auseinander"
+    )
+
+
+def test_the_status_line_says_what_a_drag_will_do(window: MainWindow) -> None:
+    """Die Auskunft steht **vor** dem Zug, nicht als Meldung danach.
+
+    Ein Hinweis, der erst nach der Handlung kommt, kostet den Kunden einen
+    Zug, den er nicht gemeint hat. Die Statuszeile steht ohnehin im Blick,
+    verdeckt nichts und verlangt kein Wegklicken (§2.5).
+    """
+    two_bodies(window)
+    text = window.measurements.text()
+
+    assert "2" in text, f"die Zeile muss die Zahl der gewählten Teile nennen: {text!r}"
+    assert "Auswahl" not in text, (
+        f"„Auswahl“ sagt nicht, wie viele es sind — das war der alte Text: {text!r}"
+    )
+    assert len(text) > 20, f"die Zeile trägt keine Auskunft über den Zug: {text!r}"

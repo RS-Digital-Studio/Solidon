@@ -2971,14 +2971,29 @@ class MeasurementLabel(QLabel):
     def clear_selection(self) -> None:
         self.setText(tr("Keine Auswahl"))
 
-    def show_object(self, name: str, size: tuple[float, float, float], content: float) -> None:
-        self.setText(
+    def show_object(
+        self,
+        name: str,
+        size: tuple[float, float, float],
+        content: float,
+        note: str = "",
+    ) -> None:
+        """Die Maße der Auswahl, und bei mehreren Teilen, was für sie gilt.
+
+        ``note`` steht am Ende und ist bei einem einzelnen Körper leer. Er
+        trägt bei mehreren die Auskunft, welche Griffe für alle wirken und
+        welche nicht — **bevor** gezogen wird und nicht als Meldung danach.
+        Die Statusleiste ist dafür der richtige Ort: Sie steht ohnehin im
+        Blick, sie verdeckt nichts, und sie verlangt kein Wegklicken.
+        """
+        text = (
             f"{name}   "
             f"{length(size[0], self._unit, with_unit=False)} × "
             f"{length(size[1], self._unit, with_unit=False)} × "
             f"{length(size[2], self._unit)}   "
             f"{volume(content, self._unit)}"
         )
+        self.setText(f"{text}   {note}" if note else text)
 
 
 #: Höchstanteil der Maßspalte im Objektbaum.

@@ -871,6 +871,15 @@ def _face_side(normal: Any) -> str:
     return tr("hinten") if y >= 0.0 else tr("vorn")
 
 
+#: Transformationen, die auf die **ganze** Auswahl wirken dürfen.
+#:
+#: Nur das Verschieben: Sein Vektor ist für jeden Körper derselbe, die
+#: Anordnung der Auswahl bleibt erhalten. Drehen und Skalieren nehmen ihren
+#: Bezugspunkt aus dem eigenen Netz und rissen eine Gruppe auseinander — die
+#: Begründung steht bei :meth:`MainWindow.inputs_for_transform`.
+MOVES_THE_WHOLE_SELECTION = frozenset({"translate_object"})
+
+
 class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
@@ -6170,35 +6179,72 @@ class MainWindow(QMainWindow):
             ],
         )
 
+    def inputs_for_transform(self, op: str) -> tuple[ObjectId, ...]:
+        """Welche Körper eine Transformation trifft — leer heißt: keine Auswahl.
+
+        **Weil ein Kunde, der zwei Teile markiert hat, zwei Teile meint.**
+        ``object_tree.selected()`` gibt ``items[0]``, den ersten von mehreren,
+        und ein Zug am Griff bewegte damit still eines von zwei markierten
+        Teilen. Das ist nicht ungenau, sondern kaputt: Die Auswahl sagt zwei,
+        das Bild zeigt eines, und niemand erfährt, warum.
+
+        **Verschieben gilt für alle, Drehen und Skalieren nicht**, und der
+        Unterschied liegt nicht in der Bequemlichkeit, sondern in der
+        Geometrie: Ein Verschiebevektor ist für jeden Körper derselbe, die
+        Anordnung der Auswahl bleibt also erhalten. ``rotate_object`` und
+        ``scale_object`` nehmen ihren Bezugspunkt dagegen aus dem **eigenen**
+        Netz (``anchor_point`` kennt nur ``origin``, ``bed`` und ``centre``) —
+        jeder Körper drehte um sich selbst statt die Gruppe um ihre Mitte, und
+        was der Kunde gerade zusammengestellt hat, flöge auseinander. Ein
+        gemeinsamer Punkt ist über die vorhandenen Anker nicht erreichbar;
+        ``origin`` wirft die Teile quer durch den Bauraum.
+
+        Deshalb hier eine Regel und kein ``if`` in zwei Handlern: Der Zug am
+        Griff und die Eingabe in der Transformationsleiste sind für den Kunden
+        **dieselbe** Handlung — sie erzeugen dieselbe Operation. Liefe eines
+        auf zwei Teile und das andere auf eines, wäre das nicht inkonsistent,
+        sondern unerklärlich.
+
+        Die Reihenfolge ist die Anklickreihenfolge (``selected_objects``): Wo
+        nur einer gilt, ist es der zuerst gewählte und kein zufälliger aus
+        einer Menge.
+        """
+        chosen = self.object_tree.selected_objects()
+        if op in MOVES_THE_WHOLE_SELECTION or len(chosen) < 2:
+            return chosen
+        return chosen[:1]
+
     def _on_transform_dragged(self, steps: Any) -> None:
         """Ein Ziehen, eine Transaktion — in einem Schritt zurückgenommen
         (§18.11, §15.5).
         """
-        selected = self.object_tree.selected()
-        if selected is None:
-            return
         drafts: list[OperationDraft] = []
         if steps.moves:
-            drafts.append(
+            # Ein Draft je Körper, alle in einem ``apply`` — weiter genau eine
+            # Transaktion, und ein Strg+Z nimmt den ganzen Zug zurück.
+            drafts.extend(
                 OperationDraft(
                     op="translate_object",
-                    inputs=(selected,),
+                    inputs=(object_id,),
                     params={"dx": steps.offset[0], "dy": steps.offset[1], "dz": steps.offset[2]},
                 )
+                for object_id in self.inputs_for_transform("translate_object")
             )
         if steps.turns:
-            drafts.append(
+            drafts.extend(
                 OperationDraft(
                     op="rotate_object",
-                    inputs=(selected,),
+                    inputs=(object_id,),
                     params={"axis": steps.axis, "angle": steps.angle},
                 )
+                for object_id in self.inputs_for_transform("rotate_object")
             )
         if steps.resizes:
-            drafts.append(
+            drafts.extend(
                 OperationDraft(
-                    op="scale_object", inputs=(selected,), params={"factor": steps.scale}
+                    op="scale_object", inputs=(object_id,), params={"factor": steps.scale}
                 )
+                for object_id in self.inputs_for_transform("scale_object")
             )
         if drafts:
             self.session.apply(_("Direkt bewegt"), drafts)
@@ -6211,9 +6257,10 @@ class MainWindow(QMainWindow):
         Punkt skalieren will, nimmt den Dialog; der Zug ist für das
         Gleichmäßige da.
         """
-        selected = self.object_tree.selected()
-        if selected is None:
+        chosen = self.inputs_for_transform("scale_object")
+        if not chosen:
             return
+        selected = chosen[0]
         self.session.apply(
             REGISTRY.get("scale_object").title,
             [
@@ -8459,9 +8506,21 @@ class MainWindow(QMainWindow):
         if described is None or not meshes:
             self.measurements.clear_selection()
             return
-        name = described[0] if len(meshes) == 1 else tr("Auswahl")
+        # **Bei mehreren Teilen sagt die Zeile, was ein Zug tut.** „Auswahl"
+        # allein nannte nicht einmal ihre Zahl, und die Griffe wirken nicht
+        # auf alle gleich: Verschieben gilt für jeden markierten Körper,
+        # Drehen und Größe für den zuerst gewählten (siehe
+        # ``inputs_for_transform``). Wer das erst am Ergebnis merkt, hat einen
+        # Zug zurückzunehmen, den er nicht gemeint hat — deshalb steht es
+        # vorher da, in der Zeile, die ohnehin im Blick ist.
+        name = described[0] if len(meshes) == 1 else tr("{zahl} Teile").format(zahl=len(meshes))
+        note = (
+            ""
+            if len(meshes) == 1
+            else tr("Ziehen verschiebt alle · Drehen und Größe gelten dem ersten")
+        )
         bounds = bounding_box_of(meshes)
-        self.measurements.show_object(name, bounds.size, volume_of(meshes))
+        self.measurements.show_object(name, bounds.size, volume_of(meshes), note)
 
     def action_add_parameter(self) -> None:
         """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""
