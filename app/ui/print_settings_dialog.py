@@ -92,7 +92,7 @@ from app.ui.labels import (
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.palette import ROLES
-from app.ui.panels import collapsible
+from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.style import ROOMY, TIGHT, make_primary, set_level
@@ -1588,6 +1588,10 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self._start_profile_search()
+        # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
+        # ganzen Dialog. Zehn Formulare rechneten sie bis hierhin einzeln, und
+        # die Felder begannen an zehn Stellen (B8/B11).
+        align_forms(self)
 
     def take_slice_result(self, result: SliceResult | None) -> None:
         """Die nachgereichte Schichtanalyse übernehmen (§2.8, §29).

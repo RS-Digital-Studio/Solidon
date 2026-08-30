@@ -2701,3 +2701,53 @@ def test_the_most_important_section_can_be_folded_away(
     qt_app.processEvents()
 
     assert not editor.isVisibleTo(dialog), "zugeklappt ist zu"
+
+
+def test_every_form_row_of_a_dialog_starts_at_one_line(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Ein Dialog, eine Beschriftungsspalte (Befund B8/B11).
+
+    Ein `QFormLayout` rechnet seine Spalte für sich. Wo zwei davon in einem
+    Dialog stehen — und das tun sie hier: Vorderseite, acht Gruppen der Tiefe,
+    Profilzuordnung —, beginnen die Felder an verschiedenen Stellen. Gemessen
+    am gebauten Dialog waren es **zehn** verschiedene linke Kanten von 11 bis
+    226 Punkten; im Einstellungsdialog 148 oben gegen 70 unten.
+
+    Der Blick sucht dann in jeder Zeile neu, wo der Wert anfängt. Angeglichen
+    wird nach links, nicht nach rechts: Die Feldbreiten sind eine getroffene
+    Entscheidung (`_editor` — „keines breiter, als sein Wert ist"), die
+    Startlinie ist keine.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.tabs_toggle.setChecked(True)
+    dialog.show()
+    qt_app.processEvents()
+
+    breiten: set[int] = set()
+    kanten_je_block: list[set[int]] = []
+    for form in dialog.findChildren(QFormLayout):
+        block: set[int] = set()
+        for row in range(form.rowCount()):
+            marke = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            feld = form.itemAt(row, QFormLayout.ItemRole.FieldRole)
+            if marke is None or feld is None:
+                continue
+            label, widget = marke.widget(), feld.widget()
+            if widget is None or label is None or not widget.isVisibleTo(dialog):
+                continue
+            breiten.add(label.width())
+            block.add(widget.mapTo(dialog, widget.rect().topLeft()).x())
+        if block:
+            kanten_je_block.append(block)
+
+    assert kanten_je_block, "keine Formularzeile gefunden — dann prüft nichts darunter"
+    # **Eine Beschriftungsspalte, geprüft an ihrer Breite.** Die absolute
+    # Startlinie darf sich zwischen Abschnitten um deren Einrückung
+    # unterscheiden — ein Reiterinhalt ist ein eigener Kasten, und elf Punkte
+    # Innenabstand sind Gliederung, kein Sprung. Was nicht sein darf, ist eine
+    # zweite Spaltenbreite: Sie entsteht, sobald ein Formular seine Beschriftung
+    # allein ausrechnet, und genau daran begannen die Felder an zehn Stellen.
+    assert len(breiten) == 1, f"{len(breiten)} Beschriftungsbreiten: {sorted(breiten)}"
+    for block in kanten_je_block:
+        assert len(block) == 1, f"in einem Block springen die Kanten: {sorted(block)}"

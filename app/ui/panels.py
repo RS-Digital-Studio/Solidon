@@ -3206,6 +3206,43 @@ def open_section(content: QWidget) -> None:
             return
 
 
+def align_forms(dialog: QWidget) -> None:
+    """Alle Formularzeilen eines Dialogs auf eine Beschriftungsspalte legen.
+
+    Ein ``QFormLayout`` rechnet seine linke Spalte für sich, und ein Dialog
+    trägt selten nur eines: Die Druckeinstellungen haben zehn (Vorderseite,
+    acht Gruppen, Profilzuordnung), der Einstellungsdialog zwei. Gemessen am
+    gebauten Fenster begannen die Felder dadurch an **zehn** verschiedenen
+    Stellen zwischen 11 und 226 Punkten; im Einstellungsdialog bei 148 oben
+    und 70 unten (Befunde B8 und B11 der Design-Durchsicht). Der Blick sucht
+    dann in jeder Zeile neu, wo der Wert anfängt.
+
+    Angeglichen wird **nach links, nicht nach rechts**. Die Feldbreiten sind
+    eine getroffene Entscheidung — keines breiter, als sein Wert ist, siehe
+    ``print_settings_dialog._editor`` —, und ein Feld für „z" so breit wie
+    eines für ein Muster wäre die Rückkehr des handbreiten Kastens für
+    „0,200". Die Startlinie dagegen hat niemand gewählt; sie ist ein Rest der
+    Spaltenrechnung.
+
+    Gerufen wird das am Ende des Aufbaus, wenn alle Zeilen stehen. Ein
+    Abschnitt, der später aufgeht, ändert daran nichts: Die Breite ist dann
+    schon gesetzt, und Qt vergrößert eine Beschriftung nur, es verkleinert
+    sie nicht.
+    """
+    labels: list[QWidget] = []
+    for form in dialog.findChildren(QFormLayout):
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                labels.append(widget)
+    if not labels:
+        return
+    breiteste = max(widget.sizeHint().width() for widget in labels)
+    for widget in labels:
+        widget.setMinimumWidth(breiteste)
+
+
 def describe_selection(result: EvaluationResult | None, object_id: ObjectId | None) -> Any:
     """Name, Größe und Volumen des gewählten Objekts, oder None."""
     if result is None or object_id is None:

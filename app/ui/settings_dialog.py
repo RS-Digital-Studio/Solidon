@@ -37,6 +37,7 @@ from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.labels import by_title
 from app.ui.palette import DIFF_PALETTES
+from app.ui.panels import align_forms
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
 
@@ -204,6 +205,10 @@ class SettingsDialog(QDialog):
         layout.addWidget(self._application_group())
         layout.addWidget(self._project_group())
         layout.addWidget(buttons)
+        # Zwei Gruppen, zwei Formulare — und jedes rechnete seine
+        # Beschriftungsspalte für sich: Die Felder begannen oben bei 148 und
+        # unten bei 70 Punkten, gemessen am gebauten Dialog (Befund B11).
+        align_forms(self)
 
     def _application_group(self) -> QWidget:
         box = QGroupBox(tr("Anwendung"), self)

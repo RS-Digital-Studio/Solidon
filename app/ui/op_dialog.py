@@ -50,6 +50,7 @@ from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.labels import NumberSpin, choice_label, display_unit, explain_choices
 from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.panels import align_forms
 from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
@@ -1159,6 +1160,11 @@ class OperationDialog(QDialog):
         layout.addWidget(buttons)
 
         self._couple_dependent_fields()
+        # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
+        # jedes rechnete seine Beschriftungsspalte für sich: Im Bohrdialog
+        # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
+        # selben Blickfeld (Befund B8).
+        align_forms(self)
 
     def _couple_dependent_fields(self) -> None:
         """Ein Feld ohne Wirkung steht nicht bedienbar da (§2.6).
