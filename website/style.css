@@ -990,6 +990,94 @@ nav.lang a.cta:hover {
   box-shadow: var(--shadow);
 }
 
+/* --- Das Kopfmenü: Leiste am Rechner, Aufklapper am Handy -----------------
+
+   Robert am 31.08.2026: „mach doch ein aufklappmenü für mobil." Vorher
+   blendeten zwei Klassen vier der sechs Einträge aus, sobald es eng wurde —
+   auf dem Handy kannte die Hälfte der Besucher vier Wege schlicht nicht.
+
+   **Ein Markup, zwei Auftritte, kein Skript.** Das Browser-Stylesheet blendet
+   die Kinder eines geschlossenen `details` über `display` aus, und eine eigene
+   `display`-Regel gewinnt dagegen. Am Rechner steht der Inhalt deshalb offen
+   und das Symbol verschwindet; unterhalb der Umbruchbreite dreht sich beides
+   um. Dieselbe Bauart trägt der Sprachwechsel daneben seit jeher.
+
+   `display: contents` löst Aufklapper und Panel auf, sodass die sechs
+   Verweise direkte Kinder der Leiste werden — ohne das stünden sie
+   untereinander in einem Kasten. */
+nav.lang .menu,
+nav.lang .menu-panel {
+  display: contents;
+}
+
+nav.lang .menu > summary {
+  display: none;
+}
+
+@media (max-width: 56rem) {
+  nav.lang .menu {
+    display: block;
+    position: relative;
+  }
+
+  nav.lang .menu > summary {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem;
+    border-radius: var(--r-sm);
+    color: var(--muted);
+    cursor: pointer;
+    /* Das Dreieck des Aufklappers gehört hier nicht hin — das Symbol ist die
+       Anzeige. Zwei Schreibweisen, weil die eine in Firefox greift und die
+       andere in den Chromium-Browsern. */
+    list-style: none;
+  }
+
+  nav.lang .menu > summary::-webkit-details-marker { display: none; }
+
+  nav.lang .menu > summary:hover { color: var(--accent); }
+
+  nav.lang .menu > summary svg {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+
+  /* **Ein Feld über dem Inhalt, keines davor.** Läge das Panel im Fluss,
+     schöbe jedes Öffnen die halbe Seite nach unten — und beim Schließen
+     wieder zurück. */
+  nav.lang .menu-panel {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    right: 0;
+    z-index: 40;
+    min-width: 12.5rem;
+    padding: 0.4rem;
+    border-radius: var(--r-lg);
+    background: var(--card);
+    box-shadow: var(--shadow-lift);
+  }
+
+  nav.lang .menu-panel > a {
+    padding: 0.62rem 0.8rem;
+    border-radius: var(--r-sm);
+    color: var(--fg);
+  }
+
+  nav.lang .menu-panel > a:hover {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+  }
+
+  /* Die Seite, auf der man steht, ist keine Reise wert — sie wird gezeigt,
+     nicht angeboten. */
+  nav.lang .menu-panel > a[aria-current="page"] {
+    color: var(--accent);
+    font-weight: 600;
+  }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -1217,8 +1305,25 @@ nav.lang a.cta:hover {
 /* ── Abschnitte ────────────────────────────────────────────────────────── */
 
 section {
-  padding: 3.5rem 0;
+  padding: 3rem 0;
   border-top: 1px solid var(--line);
+}
+
+/* **Die Seite hat vier Kapitel, und der Abstand wusste nichts davon.**
+   Alle vierzehn Abschnitte trugen dasselbe Polster — ein Block mit 1553 px
+   Inhalt wie einer mit 401. Dreizehn gleiche Fugen hintereinander lesen sich
+   als Kette ohne Gliederung.
+
+   Die Gliederung lag längst da und wurde nur nicht benutzt: Die getönten
+   Abschnitte schließen je ein Kapitel ab, und was auf sie folgt, fängt ein
+   neues an — sichtbar daran, dass genau diese drei keinen oberen Rahmen
+   tragen, weil der Farbwechsel ihn ersetzt. Sie bekommen jetzt auch den
+   Abstand eines Anfangs.
+
+   Ein Band ist ausgenommen: Es steht zwischen zwei Abschnitten und beginnt
+   nichts. */
+main > section.tint + section:not(.band) {
+  padding-top: 5.5rem;
 }
 
 /* **Ein Abschnitt trägt seinen Abstand, ein Band nicht.**
