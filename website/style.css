@@ -2031,7 +2031,29 @@ ol.steps-list b {
   margin-bottom: 0.85rem;
 }
 
-.showcase p { margin: 0 0 0.8rem; color: var(--muted); }
+/* **Die Spalte war breit genug, der Text zu breit.** Dreizehn von vierzehn
+   Absätzen der Schaustücke liefen über 75 Zeichen je Zeile, der längste auf
+   113. Die Karte selbst bleibt, wie sie ist — begrenzt wird der Absatz darin,
+   dieselbe Trennung wie bei den Antworten der häufigen Fragen.
+
+   Die Zahl ist an einer Reihe gewählt und nicht geschätzt, denn ein ``ch``
+   ist die Breite der Ziffer Null — echte Buchstaben sind schmaler, und es
+   passen mehr Zeichen hinein, als die Zahl verspricht:
+
+       70 ch   Mittel 77, längste 89, zehn von vierzehn über der Marke
+       64 ch   Mittel 75, längste 80, sechs darüber
+       60 ch   Mittel 71, längste 77, drei darüber
+       56 ch   Mittel 63, längste 73, keine — aber schon nah an der
+               unteren Grenze von fünfundvierzig
+
+   Gewählt sind 60 ch. Die drei, die knapp darüber bleiben, sind die längsten
+   Absätze der Seite; sie enger zu setzen hieße, die anderen elf zu schmal zu
+   machen. */
+.showcase p {
+  margin: 0 0 0.8rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
 
 .showcase .note {
   font-size: var(--t-md);
@@ -3342,11 +3364,25 @@ table.compare tr:hover td { background: var(--card); }
 table.compare .yes { color: var(--accent); font-weight: 600; white-space: nowrap; }
 table.compare .no { color: var(--muted); white-space: nowrap; }
 
-/* Auf einer Seite mit der Vergleichstabelle steht die Fußnote unter einem
-   46-rem-Block und lief bei 44 um zwei rem gegen dessen Kante. Beide Werte
-   nebeneinander sah man auf sechs Seiten. */
+/* **Die Kante war der falsche Gewinn.** Die Fußnote stand auf 44 rem unter
+   einem 46-rem-Block und lief um zwei rem gegen dessen Kante; angeglichen auf
+   46 standen beide bündig — und die Zeile lief auf 101 Zeichen, weit über die
+   45 bis 75, die lesbar sind. Die Kante hatte gewonnen, der Text verloren.
+
+   Die Kante ist damit wieder ungleich, und das ist richtig so: Eine Fußnote,
+   die schmaler ist als ihr Bezugstext, liest sich als Fußnote. Zeichen statt
+   rem, weil die Zusage in Zeichen gemacht ist — ändert jemand die
+   Schriftgröße, bleibt die Zeile gleich lang.
+
+   **60 ch und nicht 70, und der Unterschied kam aus dem Italienischen.** Ein
+   ``ch`` ist die Breite der Ziffer Null; echte Buchstaben sind im Schnitt
+   schmaler, also passen mehr als 70 Zeichen in 70 ch — wie viel mehr, hängt
+   an der Sprache. Gemessen bei 70 ch: Deutsch 72 Zeichen, Französisch 78,
+   Italienisch 83. Bei 60 ch sind es 63, 67 und 71, und keine Sprache steht
+   mehr über der Marke. Wer nur die deutsche Fassung misst, lässt die Regel
+   zu weit. */
 p.footnote {
-  max-width: 46rem;
+  max-width: 60ch;
   color: var(--muted);
   font-size: var(--t-md);
   border-left: 2px solid var(--line);
