@@ -5,11 +5,22 @@ Stand: 28. August 2026
 
 ## Diese Website
 
-Diese Website besteht aus statischen Seiten; die einzige Ausnahme ist die [Tauschbörse](#tauschboerse), die weiter unten eigens beschrieben wird. Außerhalb davon setzt sie keine Cookies, bindet keine Inhalte fremder Server ein und verwendet keine Analyse- oder Tracking-Dienste Dritter. Es gibt keine Nutzerkonten. Ein einziges Cookie gibt es doch, und es erreicht keinen Besucher: Die nicht öffentliche Auswertungsseite unter `/api/` merkt sich damit die Anmeldung des Betreibers.
+Diese Website besteht aus statischen Seiten. Zwei Ausnahmen nehmen etwas entgegen: die [Tauschbörse](#tauschboerse), die weiter unten eigens beschrieben wird, und der [Rückmeldungsbogen](#rueckmeldung) auf der Startseite. Außerhalb davon setzt sie keine Cookies, bindet keine Inhalte fremder Server ein und verwendet keine Analyse- oder Tracking-Dienste Dritter. Es gibt keine Nutzerkonten. Ein einziges Cookie gibt es doch, und es erreicht keinen Besucher: Die nicht öffentliche Auswertungsseite unter `/api/` merkt sich damit die Anmeldung des Betreibers.
 
 Gezählt wird trotzdem, aber auf dem eigenen Server und ohne Cookie: Beim Öffnen einer Seite meldet der Browser den aufgerufenen Pfad an `/api/count.php`, und ein Download läuft über dieselbe Stelle. Gespeichert werden Zeitpunkt, Pfad beziehungsweise Dateiname, die Domain der verweisenden Seite — nicht deren vollständige Adresse — und ein Kennzeichen, das die Aufrufe eines Tages zusammenfasst. Dieses Kennzeichen ist ein Hash aus IP-Adresse, Browserkennung und einem Zufallswert, der jede Nacht neu gebildet und nicht aufbewahrt wird; nach Ablauf des Tages lässt es sich niemandem mehr zuordnen, auch uns nicht. IP-Adresse und Browserkennung selbst werden nicht gespeichert, die Daten verlassen den Server nicht, und über einen Tag hinaus entsteht kein Profil. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — das berechtigte Interesse, zu wissen, ob und worüber diese Seiten gefunden werden. Auf dem Endgerät wird dabei nichts gespeichert und nichts ausgelesen, sodass es keiner Einwilligung nach § 25 TDDDG bedarf. Wer im Browser *Do Not Track* oder *Global Privacy Control* eingeschaltet hat, wird nicht gezählt.
 
 Beim Abruf der Seiten verarbeitet der Hosting-Anbieter — die netcup GmbH, Emmy-Noether-Straße 10, 76131 Karlsruhe, Deutschland — die technisch notwendigen Verbindungsdaten (IP-Adresse, Zeitpunkt, abgerufene Datei) in seinen Server-Protokollen. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO — das berechtigte Interesse am technischen Betrieb und an der Abwehr von Angriffen. Mit dem Anbieter besteht ein Vertrag über Auftragsverarbeitung nach Art. 28 DSGVO.
+
+
+### Der Rückmeldungsbogen auf der Startseite {#rueckmeldung}
+
+Auf der Startseite steht ein kurzer Bogen: eine Stufe von eins bis fünf und zwei Textfelder. Gesendet wird nur, was Sie hineinschreiben, und erst wenn Sie auf *Absenden* klicken. Kein Feld ist Pflicht — auch die angeklickte Stufe allein lässt sich abschicken.
+
+Übertragen werden die gewählte Stufe, die beiden Texte und, wenn Sie eine angeben, Ihre E-Mail-Adresse. Sie ist freiwillig; ohne sie kommt keine Antwort, und wir haben dann keine Möglichkeit, zurückzuschreiben. Weiteres wird nicht mitgeschickt: keine Programmversion, kein Bildschirmfoto, kein Protokoll — das sind Angaben, die der Bogen *in der Anwendung* auf Wunsch anhängt, dieser hier nicht.
+
+Die Sendung geht an dieselbe Stelle wie eine Rückmeldung aus der Anwendung und landet im Support-Postfach. Zweck ist, die Anwendung vor dem Erscheinen zu verbessern und Ihnen zu antworten, falls Sie das möchten. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO, bei einer angegebenen Rückadresse zusätzlich Art. 6 Abs. 1 lit. b DSGVO. Gespeichert wird die Sendung, bis der Vorgang erledigt ist, längstens 24 Monate.
+
+Damit niemand das Formular als Schleuder benutzt, merkt sich der Server für eine Stunde, wie viele Sendungen von einer Adresse kamen — als Hash der IP-Adresse, nicht als Adresse selbst, und nach einer Stunde fällt der Eintrag heraus. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO, das berechtigte Interesse an der Abwehr von Missbrauch.
 
 
 ## Freiwillige Spende über PayPal
