@@ -23,6 +23,7 @@ from typing import Any
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, Signal
 from PySide6.QtGui import (
+    QColor,
     QDragEnterEvent,
     QDragLeaveEvent,
     QDropEvent,
@@ -34,6 +35,7 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
+    QGraphicsDropShadowEffect,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -75,6 +77,11 @@ RECENT_ROWS = 4
 #: Kacheln je Zeile. Zwei bei 900 Pixel heißt gut 430 pro Kachel: das
 #: Vorschaubild links, daneben Titel und Satz.
 TILE_COLUMNS = 2
+
+#: Unter zwei lesbaren Kachelbreiten wird aus dem Raster eine Liste. Senkrecht
+#: rollen ist auf einem schmalen Fenster erwartbar; waagerecht suchen ist es
+#: nicht.
+NARROW_COLUMNS = 1
 
 #: Wie schmal eine Kachel werden darf, bevor Titel und Satz aneinander kleben.
 #:
@@ -219,7 +226,7 @@ def current_theme() -> str:
 
 #: Wie hoch ein Vorschaubild in der Kachel steht. Groß genug, um die Form zu
 #: erkennen, klein genug, dass Titel und Satz ihre Zeilen behalten.
-PREVIEW_HEIGHT = 88
+PREVIEW_HEIGHT = 112
 
 
 def _preview_pixmap(entry: Example) -> QPixmap | None:
@@ -274,6 +281,14 @@ class ExampleTile(QFrame):
         # Waagerecht dehnbar, senkrecht mitwachsend: sonst steht neben einer
         # Kachel mit drei Zeilen eine mit zwei, und die Zeile sieht schief aus.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        # **Tiefe als Rückmeldung, ohne Bewegung.** Überfahren hebt die Kachel
+        # leicht an, Tastaturfokus bleibt zusätzlich der klare Rahmen aus dem
+        # gemeinsamen Stylesheet. Es läuft keine Animation: Wer reduzierte
+        # Bewegung gewählt hat, bekommt dieselbe unmittelbare Antwort.
+        self._hovered = False
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self.setGraphicsEffect(self._shadow)
+        self._paint_depth()
 
         title = QLabel(str(entry.title), self)
         title.setWordWrap(True)
@@ -328,6 +343,31 @@ class ExampleTile(QFrame):
         layout.setSpacing(ROOMY)
         layout.addWidget(self.preview)
         layout.addWidget(words, stretch=1)
+
+    def _paint_depth(self) -> None:
+        """Eine ruhige Karte und eine klar angehobene unter dem Zeiger."""
+        active = self._hovered or self.hasFocus()
+        self._shadow.setBlurRadius(18.0 if active else 8.0)
+        self._shadow.setOffset(0.0, 3.0 if active else 1.0)
+        self._shadow.setColor(QColor(0, 0, 0, 82 if active else 40))
+
+    def enterEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._hovered = True
+        self._paint_depth()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._hovered = False
+        self._paint_depth()
+        super().leaveEvent(event)
+
+    def focusInEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().focusInEvent(event)
+        self._paint_depth()
+
+    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().focusOutEvent(event)
+        self._paint_depth()
 
     def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         if event.button() == Qt.MouseButton.LeftButton:
@@ -450,8 +490,10 @@ class StartScreen(QWidget):
         # ist, wenn man nichts Bestimmtes vorhat.
         self.new_button = QPushButton(tr("Neues Projekt"), self)
         make_primary(self.new_button)
+        self.new_button.setMinimumHeight(44)
         self.new_button.clicked.connect(self.newRequested)
         self.open_button = QPushButton(tr("Projekt öffnen …"), self)
+        self.open_button.setMinimumHeight(44)
         self.open_button.clicked.connect(self.browseRequested)
 
         drop = DropArea(self)
@@ -471,6 +513,7 @@ class StartScreen(QWidget):
         self.manual_button.setToolTip(tr("Die ersten fünfzehn Minuten, von vorn erklärt."))
         self.manual_button.setStatusTip(self.manual_button.toolTip())
         self.manual_button.setFlat(True)
+        self.manual_button.setMinimumHeight(44)
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_button.clicked.connect(self.manualRequested)
 
@@ -491,6 +534,12 @@ class StartScreen(QWidget):
         inner.addWidget(title)
         inner.addWidget(drop)
         inner.addLayout(buttons)
+        # Wer schon gearbeitet hat, sucht zuerst den Rückweg in sein Projekt.
+        # Deshalb steht „Zuletzt geöffnet" vor den Touren; Neu, Öffnen und
+        # Weiterarbeiten bilden gemeinsam den Einstieg, Vertiefung folgt.
+        inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
+        inner.addWidget(self.recent_empty)
+        inner.addWidget(self.recent_list)
         # **Einmal über der Gruppe, nicht viermal darin** (Befund B27).
         # Unter jedem der vier Kacheltitel stand „Geführte Tour · Schritt für
         # Schritt" — dieselbe Aussage über dieselbe Sache, viermal im selben
@@ -515,9 +564,6 @@ class StartScreen(QWidget):
         # Fläche, die man trifft (Regel 18 über den gedrückten Zustand).
         self.more_section = collapsible(tr("Was kann das noch?"), self.more_area, open_now=False)
         inner.addWidget(self.more_section)
-        inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
-        inner.addWidget(self.recent_empty)
-        inner.addWidget(self.recent_list)
         # **Ausbalanciert, nicht oben angedockt** (Befund B27). Der ganze
         # Überschuss sammelte sich unten: Auf einem hohen Fenster endete der
         # Inhalt bei genau der halben Höhe, und darunter war nichts — das las
@@ -533,7 +579,11 @@ class StartScreen(QWidget):
         inner.addStretch(3)
 
         centred = QWidget(self)
+        centred_policy = centred.sizePolicy()
+        centred_policy.setHorizontalPolicy(QSizePolicy.Policy.Ignored)
+        centred.setSizePolicy(centred_policy)
         middle = QHBoxLayout(centred)
+        self._middle = middle
         # Zwei statt drei Weiten Rand: Die drei waren Luft, die oben und unten
         # zusammen zweiunddreißig Pixel kostete — bei einem Inhalt, der auf
         # 1920 mal 1080 um 198 Pixel über das Sichtfeld hinausragte.
@@ -557,6 +607,10 @@ class StartScreen(QWidget):
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        # Die schmale Fassung wird eine Kachelspalte und wächst nach unten.
+        # Ein zweiter Rollweg wäre kein Ausweichen, sondern abgeschnittener
+        # Inhalt, den man erst durch Probieren findet.
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(centred)
 
         outer = QVBoxLayout(self)
@@ -585,8 +639,14 @@ class StartScreen(QWidget):
         """
         available = self.width() - 2 * WIDE * 2
         wide_enough = available >= 3 * TILE_MIN_WIDTH
+        narrow = available < 2 * TILE_MIN_WIDTH
+        # Der Rollbereich darf bei 640 Punkten nicht an seiner Wunschbreite
+        # festhalten. Im einspaltigen Rückweg reichen kompakte Außenränder;
+        # die Kacheln selbst behalten ihren großzügigen Innenraum.
+        margin = NORMAL if narrow else WIDE * 2
+        self._middle.setContentsMargins(margin, margin, margin, margin)
         self.column.setMaximumWidth(WIDE_COLUMN_WIDTH if wide_enough else COLUMN_WIDTH)
-        columns = 3 if wide_enough else TILE_COLUMNS
+        columns = 3 if wide_enough else NARROW_COLUMNS if narrow else TILE_COLUMNS
         if columns == self._columns:
             return
         self._columns = columns
@@ -666,7 +726,7 @@ class StartScreen(QWidget):
             # Kachel sah auf großen Bildschirmen wie ein fehlender Weg aus;
             # die Funktionsbeispiele darunter nutzen die dritte Spalte
             # weiterhin, wenn sie passt.
-            columns = TILE_COLUMNS if starts else self._columns
+            columns = min(self._columns, TILE_COLUMNS) if starts else self._columns
             tile = ExampleTile(entry, path, parent)
             tile.chosen.connect(self.openRequested)
             index = placed[starts]
@@ -717,5 +777,10 @@ class StartScreen(QWidget):
 def _caption(text: str, parent: QWidget) -> QLabel:
     """Eine Abschnittsüberschrift über einer Gruppe."""
     label = QLabel(text, parent)
+    # Die längste Überschrift ist selbst eine Erklärung. Ohne Umbruch machte
+    # ihre Wunschbreite auf 640 Punkten den ganzen Rollbereich 146 Punkte
+    # breiter als das Fenster — obwohl jede Kachel darunter längst sauber in
+    # einer Spalte stand.
+    label.setWordWrap(True)
     set_level(label, "section")
     return label

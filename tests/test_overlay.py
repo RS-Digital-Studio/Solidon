@@ -25,11 +25,14 @@ from app.ui import overlay
 from app.ui.main_window import MainWindow
 from app.ui.overlay import (
     CARD_PADDING,
+    LEFT_MAX,
     LEFT_WIDTH,
     MARGIN,
+    RIGHT_MAX,
     RIGHT_WIDTH,
     OverlayHost,
     card_stylesheet,
+    card_width,
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -273,6 +276,47 @@ def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
         assert zone.geometry().left() >= 0
         assert zone.geometry().right() <= width
         assert zone.geometry().bottom() <= height
+
+
+def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
+    """Maße und Befunde bekommen Raum, ohne auf 4K zu Wänden zu werden."""
+    widths = (640, 800, 1200, 1920, 2560, 3072, 3840)
+    left = [card_width(LEFT_WIDTH, LEFT_MAX, width) for width in widths]
+    right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width) for width in widths]
+
+    assert 295 <= left[3] <= 310, f"Full HD links: {left[3]} statt etwa 300"
+    assert 315 <= right[3] <= 330, f"Full HD rechts: {right[3]} statt etwa 320"
+    assert left == sorted(left) and right == sorted(right), "breiter darf keine Karte schrumpfen"
+    assert left[-1] <= LEFT_MAX and right[-1] <= RIGHT_MAX
+
+    for width, left_width, right_width in zip(widths, left, right, strict=True):
+        assert left_width + right_width + 3 * MARGIN <= width, (
+            f"{width}: linke und rechte Karte überlappen oder nehmen den letzten Sichtspalt"
+        )
+
+
+@pytest.mark.parametrize("width", (640, 800, 1200, 1920, 2560, 3072))
+def test_the_overlay_matrix_keeps_every_zone_inside_and_the_viewport_whole(
+    qt_app: QApplication, width: int
+) -> None:
+    """Die Layoutmatrix prüft die Wirkung, nicht nur die Breitenformel."""
+    host = OverlayHost(QLabel("Ansicht"))
+    left, right, bottom = QWidget(), QWidget(), QLabel("Werkzeuge")
+    host.set_zones(left, right, bottom)
+    host.resize(width, 900)
+    host.show()
+    qt_app.processEvents()
+
+    assert host.view.geometry() == host.rect()
+    assert left.geometry().left() == MARGIN
+    assert right.geometry().right() == width - MARGIN - 1
+    assert left.geometry().right() + MARGIN < right.geometry().left(), (
+        f"{width}: zwischen den Arbeitskarten bleibt kein sichtbarer Viewport"
+    )
+    for zone in (left, right, bottom):
+        assert host.rect().contains(zone.geometry()), f"{width}: {zone.geometry()} liegt außerhalb"
+
+    host.deleteLater()
 
 
 def test_a_hidden_zone_gives_its_room_back(window: MainWindow) -> None:

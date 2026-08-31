@@ -87,8 +87,9 @@ class RoomTaker(Protocol):
 #: hier aus demselben Grund wie ``card_stylesheet``.
 MOVE_MS = 160
 
-#: Breite der linken Zone. Breit genug für „Schraubenloch mit Senkung" in der
-#: Verlaufsliste, schmal genug, dass daneben noch ein Modell steht.
+#: Breite der linken Zone auf Full HD. Breit genug für Maße, Parameter und
+#: „Schraubenloch mit Senkung" in der Verlaufsliste, schmal genug, dass
+#: daneben noch ein Modell steht.
 #:
 #: **Hier stand einen halben Tag lang 272, und die Messung dahinter war ein
 #: Phantom.** Ein Wächter maß die Parameterkarte auf 270 und damit über der
@@ -105,11 +106,12 @@ MOVE_MS = 160
 #: Wer diese Zahl ändern will, misst deshalb unter **echter** Plattform.
 #: Offscreen sagt über Schriftmetrik nichts — auch dann nicht, wenn man die
 #: Familie ausdrücklich setzt.
-LEFT_WIDTH = 260
+LEFT_WIDTH = 300
 
 #: Breite der rechten Zone. Ein Befund ist ein Satz, kein Absatz — schmaler
-#: als links, weil hier nichts eingerückt ist.
-RIGHT_WIDTH = 300
+#: als eine klassische Seitenleiste, aber etwas breiter als links, weil hier
+#: vollständige Handlungssätze und der Chat stehen.
+RIGHT_WIDTH = 320
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -123,6 +125,12 @@ RIGHT_WIDTH = 300
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
 RIGHT_MAX = 460
+
+#: In einem schmalen Fenster dürfen die beiden Karten einander nicht
+#: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als
+#: sichtbare Mitte und als Griff auf die Ansicht. Bei 640 Punkten sind das 268
+#: je Karte statt einer Überlappung. Auf Full HD greift die Grenze nicht.
+NARROW_CARD_SHARE = 0.42
 
 #: Abstand der Karten zum Fensterrand und zueinander.
 MARGIN = ROOMY
@@ -177,10 +185,14 @@ def living[T: QWidget](zone: QWidget, wanted: type[T]) -> list[T]:
 def card_width(base: int, cap: int, window: int) -> int:
     """Wie breit eine Karte in einem Fenster dieser Breite sein soll.
 
-    Unter etwa 2000 Pixeln kommt der Grundwert heraus — dort ändert sich
-    nichts. Darüber wächst die Karte anteilig, bis sie den Deckel erreicht.
+    Auf Full HD kommt der Grundwert heraus. Darüber wächst die Karte anteilig,
+    bis sie den Deckel erreicht. Darunter darf sie nicht so breit bleiben,
+    dass beide Seiten einander überdecken: Die schmale Grenze erhält zwischen
+    ihnen einen sichtbaren Griff auf den Viewport.
     """
-    return int(min(max(base, window * GROWTH_SHARE), cap))
+    grown = min(max(base, window * GROWTH_SHARE), cap)
+    narrow = max(window * NARROW_CARD_SHARE, 0)
+    return int(min(grown, narrow))
 
 
 def card_stylesheet(theme: Theme) -> str:

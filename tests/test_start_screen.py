@@ -8,6 +8,8 @@ Gestaltung lässt sich nicht festnageln, ihre Entscheidungen schon.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -17,6 +19,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QWidget
 from app.core import examples
 from app.ui.start_screen import (
     COLUMN_WIDTH,
+    PREVIEW_HEIGHT,
     TILE_MIN_WIDTH,
     WIDE_COLUMN_WIDTH,
     DropArea,
@@ -196,11 +199,33 @@ def test_a_tile_opens_its_project(screen: StartScreen) -> None:
     assert tiles[0].focusPolicy() != Qt.FocusPolicy.NoFocus, "und erreichbar mit Tab"
 
 
+def test_a_tile_answers_pointer_and_keyboard_focus_without_motion(screen: StartScreen) -> None:
+    """Tiefe bestätigt die ganze Zielfläche unmittelbar, ohne Animation."""
+    from PySide6.QtCore import QEvent, Qt
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    screen.resize(1200, 900)
+    screen.show()
+    QApplication.processEvents()
+    tile = screen.tiles[0]
+    effect = tile.graphicsEffect()
+    assert isinstance(effect, QGraphicsDropShadowEffect)
+
+    QApplication.sendEvent(tile, QEvent(QEvent.Type.Leave))
+    rest = effect.blurRadius()
+    QApplication.sendEvent(tile, QEvent(QEvent.Type.Enter))
+    assert effect.blurRadius() > rest
+
+    tile.setFocus(Qt.FocusReason.OtherFocusReason)
+    QApplication.sendEvent(tile, QEvent(QEvent.Type.Leave))
+    assert effect.blurRadius() > rest, "Tastaturfokus braucht dieselbe zweite Rückmeldung"
+    tile.clearFocus()
+    assert effect.blurRadius() == rest
+
+
 def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
     """Ein leerer Zustand darf klein sein; er muss nur seinen Platz wieder
     hergeben, wenn er gefüllt wird."""
-    from pathlib import Path
-
     screen.show_recent([])
     assert not screen.recent_empty.isHidden()
     assert screen.recent_list.isHidden()
@@ -209,6 +234,16 @@ def test_an_empty_recent_list_is_a_line_not_a_box(screen: StartScreen) -> None:
     assert screen.recent_empty.isHidden()
     assert not screen.recent_list.isHidden()
     assert screen.recent_list.count() == 2
+
+
+def test_recent_projects_come_before_the_guided_tours(screen: StartScreen) -> None:
+    """Weiterarbeiten steht vor Entdecken, sobald es etwas fortzusetzen gibt."""
+    screen.show_recent([Path("mein-projekt.p3d")])
+    screen.resize(1920, 1080)
+    screen.show()
+    QApplication.processEvents()
+
+    assert screen.recent_list.geometry().bottom() < screen.examples_area.geometry().top()
 
 
 # --- Vorschaubilder (Konzept Teil 2.1, Punkt 3) ---------------------------------
@@ -336,9 +371,9 @@ def test_the_tiles_use_the_width_they_have(screen: StartScreen) -> None:
     ]
     assert (0, 2) in more_positions, "die Vertiefungen nutzen die dritte Spalte weiter"
 
-    screen.resize(2 * TILE_MIN_WIDTH + 40, 900)
+    screen.resize(1200, 900)
     QApplication.processEvents()
-    assert screen._columns == TILE_COLUMNS, "drei Spalten in einem schmalen Fenster"
+    assert screen._columns == TILE_COLUMNS, "zwei Spalten bei mittlerer Breite"
 
     # Und die Kacheln sind alle noch da, in der richtigen Gruppe.
     assert len(screen.tiles) == screen.examples_grid.count() + screen.more_grid.count()
@@ -397,6 +432,82 @@ def test_the_column_uses_the_width_it_is_allowed(screen: StartScreen) -> None:
     )
 
     screen.hide()
+
+
+@pytest.mark.parametrize(
+    ("width", "columns"),
+    ((640, 1), (800, 1), (1200, 2), (1920, 3), (2560, 3), (3072, 3)),
+)
+def test_the_start_layout_degrades_without_horizontal_overflow(
+    screen: StartScreen, width: int, columns: int
+) -> None:
+    """Von 640 bis 3072 Punkten bleibt jede Kachel lesbar und erreichbar.
+
+    Zwei Kacheln auf 640 Punkten ließen nach Bild, Innenrand und Abstand nur
+    eine Wortkolonne. Der Rückweg ist eine Spalte und senkrechtes Rollen — nie
+    eine zweite Achse, die den wichtigsten Inhalt außerhalb des Fensters legt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QScrollArea
+
+    screen.resize(width, 900)
+    screen.show()
+    QApplication.processEvents()
+
+    scroll = screen.findChild(QScrollArea)
+    assert scroll is not None
+    assert screen._columns == columns
+    assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    assert scroll.horizontalScrollBar().maximum() == 0, (
+        f"{width}: der erste Eindruck verlangt waagerechtes Rollen"
+    )
+    assert screen.column.width() <= scroll.viewport().width(), (
+        f"{width}: die Inhaltsspalte ist breiter als ihr Sichtfeld"
+    )
+
+    starts = [tile for tile in screen.tiles if tile.entry.way]
+    wanted_start_columns = 1 if columns == 1 else 2
+    positions = [screen.examples_grid.getItemPosition(index)[:2] for index in range(len(starts))]
+    assert max(column for _row, column in positions) + 1 == wanted_start_columns
+    screen.hide()
+
+
+def test_primary_start_actions_are_large_and_examples_are_readable(screen: StartScreen) -> None:
+    """Die drei Einstiege sind klare Ziele, die Beispiele mehr als Briefmarken."""
+    assert PREVIEW_HEIGHT >= 112, "auf Full HD bleibt vom Beispiel sonst nur ein Symbol"
+    for button in (screen.new_button, screen.open_button, screen.manual_button):
+        assert button.minimumHeight() >= 44, (
+            f"{button.text()!r} ist mit {button.minimumHeight()} Punkten kein sicheres Ziel"
+        )
+
+
+@pytest.mark.parametrize("font_size", (10, 13, 15, 20))
+def test_the_start_screen_has_no_second_scroll_axis_at_100_to_200_percent(
+    qt_app: QApplication, font_size: int
+) -> None:
+    """Größere Systemschrift macht die Seite länger, aber nie breiter."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.ui.style import stylesheet
+
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", font_size))
+    screen = StartScreen()
+    try:
+        screen.resize(1920, 1080)
+        screen.show()
+        qt_app.processEvents()
+
+        scroll = screen.findChild(QScrollArea)
+        assert scroll is not None
+        assert scroll.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        assert scroll.horizontalScrollBar().maximum() == 0
+        assert all(tile.accessibleName() for tile in screen.tiles)
+        assert all(tile.accessibleDescription() for tile in screen.tiles)
+    finally:
+        screen.deleteLater()
+        qt_app.setStyleSheet(before)
 
 
 def test_the_tour_note_stands_once_above_the_tiles(qt_app: QApplication) -> None:
