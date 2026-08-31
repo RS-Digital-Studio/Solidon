@@ -14,11 +14,14 @@ import dataclasses
 from collections.abc import Callable
 
 from app.core import examples
-from app.core.scene import OperationDraft
+from app.core.knowledge import profiles
+from app.core.scene import OperationDraft, evaluate
 from app.core.scene.history import History, change_for
-from app.core.scene.project import Project, load
+from app.core.scene.project import Project, ProjectSources, load
 from app.core.tour import TOURS, Tour, tour_for
 from app.core.types import Document
+from app.i18n import SOURCE_LANGUAGE, set_language
+from app.i18n.catalog import install_language
 
 
 def test_every_example_has_a_tour() -> None:
@@ -571,3 +574,97 @@ def test_every_tour_counts_the_steps_its_example_really_has() -> None:
                     f"{tour.example_id}: die Tour sagt {wort} ({zahl}), der Verlauf hat {schritte}"
                 )
     assert geprueft, "keine Tour nennt eine Zahl — dann prüft dieser Test nichts"
+
+
+def test_the_fit_tour_needs_exactly_one_undo() -> None:
+    """Das elfte Beispiel: ein Strg+Z, und die Warnung ist weg.
+
+    **Der Test gibt es, weil genau das einmal nicht stimmte.** Die Tour sagte
+    „nimm den letzten Schritt zurück", und hinter dem gemeinten stand noch das
+    Anordnen: Es brauchte zwei Undo, und die Erkennung quittierte schon nach
+    dem ersten — der Nutzer tat, was dastand, sah die Warnung weiterhin und
+    wurde darin bestätigt. Gefunden von Hand in der Abnahme (31.08.2026),
+    behoben in ``25bb2581``; hier steht die Zusicherung dazu.
+    """
+    project, history = _opened("passung-nach-materialwechsel")
+
+    _walk(
+        tour_for("passung-nach-materialwechsel"),  # type: ignore[arg-type]
+        project.document,
+        history,
+        {3: lambda d, h: h.undo()},
+    )
+
+
+def test_the_fit_tour_leads_out_of_the_warning() -> None:
+    """Und der Prüfbericht bestätigt es — nicht nur die Erkennung der Tour.
+
+    **Die beiden sind nicht dasselbe, und der alte Fehler saß genau dazwischen.**
+    ``_walk`` fragt die ``done``-Funktion; die kann quittieren, während die
+    Warnung noch steht. Hier wird gemessen, was der Kunde sieht: eine Warnung
+    beim Öffnen, keine nach einem Undo.
+
+    Geprüft wird der Befundcode und nicht die Zahl allein — „genau eine
+    Warnung" wäre auch erfüllt, wenn es eine andere wäre.
+    """
+    project, history = _opened("passung-nach-materialwechsel")
+    profile = profiles.make_profile(
+        project.document.printer or "centauri-carbon-2",
+        project.document.material or "pla",
+    )
+
+    def warnungen() -> list[str]:
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        return [
+            finding.code
+            for finding in result.scene.report.findings
+            if finding.severity in ("warning", "error")
+        ]
+
+    assert warnungen() == ["fit.violated"], "beim Öffnen steht genau diese eine Warnung"
+
+    history.undo()
+
+    assert warnungen() == [], "nach einem Undo ist der Bericht grün"
+
+
+def test_the_fit_tour_names_the_numbers_the_report_shows() -> None:
+    """Die Zahlen im Tourtext sind die des Prüfberichts, in jeder Sprache.
+
+    **Ein Text, der andere Zahlen nennt als die Anzeige daneben, ist eine
+    Fährte** — der Kunde sucht dann nach etwas, das so nicht dasteht. Die Tour
+    nennt 0,20 und 0,35 Millimeter; beides muss aus dem Befund kommen und
+    nicht aus dem Gedächtnis dessen, der den Text geschrieben hat.
+
+    Verglichen werden nur die Ziffern, nicht die Schreibweise: Der Bericht
+    setzt einen Punkt (``format_length`` tut das in allen Sprachen), die
+    deutsche Tour ein Komma. Dass das auseinandergeht, ist ein eigener Befund
+    an ``format_length`` und keiner an diesem Text — die Zahl erkennt jeder
+    wieder, die Schreibweise gehört an eine Stelle, die über alle Anzeigen
+    entscheidet.
+    """
+    project, _ = _opened("passung-nach-materialwechsel")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    befund = next(
+        finding for finding in result.scene.report.findings if finding.code == "fit.violated"
+    )
+    werte = dict(befund.values)
+    ziffern = {
+        str(werte["actual"]).split()[0].replace(",", "."),
+        str(werte["expected"]).split()[0].replace(",", "."),
+    }
+
+    tour = tour_for("passung-nach-materialwechsel")
+    assert tour is not None
+
+    for sprache in ("de", "en"):
+        if sprache != SOURCE_LANGUAGE:
+            install_language(sprache)
+        set_language(sprache)
+        texte = " ".join(str(step.text) for step in tour.steps)
+        gerade = texte.replace(",", ".")
+        fehlend = sorted(zahl for zahl in ziffern if zahl not in gerade)
+        assert not fehlend, f"{sprache}: die Tour nennt {fehlend} nicht, der Bericht schon"
+
+    set_language(SOURCE_LANGUAGE)
