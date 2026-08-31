@@ -23,7 +23,7 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -218,6 +218,7 @@ def split_to_fit(
     max_parts: int = MAX_PARTS,
     samples: int = SAMPLES,
     pins: int | None = None,
+    protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
@@ -235,6 +236,12 @@ def split_to_fit(
     (:func:`oversize`) rechnet sie mit. Wo eine Hälfte damit übersteht, wird
     feiner geteilt. ``pins`` ist die gewünschte Stiftzahl; ohne Stifte
     (``pins=0``) gibt es keine Zugabe und die alte Rechnung bleibt.
+
+    ``protect`` reicht die geschützten Flächen an **jeden** Schnitt weiter,
+    nicht nur an den ersten. Sie sind Punktwolken und keine Dreiecksnummern,
+    und das ist der Grund: Jedes Teilstück ist ein neues Netz mit neuer
+    Nummerierung — ein Verweis über Indizes zeigte nach dem ersten Schnitt
+    ins Leere, und mehrfach geteilt wird gerade das, was besonders groß ist.
 
     ``cancelled`` wird **zwischen** den Schnitten und innerhalb der Abtastung
     abgefragt (§15.6). Ein halb geschnittener Körper entsteht dabei nicht: Der
@@ -272,7 +279,13 @@ def split_to_fit(
         # Stift lässt) und in die Reserve der Kinder.
         allowance = _pin_allowance(part, axis, profile, pins)
         candidate = find_plane(
-            part, profile, axis=axis, allowance=allowance, samples=samples, cancelled=cancelled
+            part,
+            profile,
+            axis=axis,
+            allowance=allowance,
+            samples=samples,
+            protect=protect,
+            cancelled=cancelled,
         )
         if candidate is None:
             outcome.findings.append(
@@ -364,6 +377,34 @@ def _pin_allowance(mesh: MeshData, axis: Axis, profile: Profile, pins: int) -> f
     return plan_pins(mesh, plane, count=pins).length / 2.0
 
 
+def cuts_through(plane: SectionPlane, protect: Sequence[Any]) -> bool:
+    """Ob diese Ebene eine geschützte Fläche zerteilt (§22.3, Sichtflächen).
+
+    Gerechnet wird über die **Abstände** der geschützten Punkte zur Ebene und
+    nicht über eine Achskoordinate: Eine Naht muss auch dann sauber beurteilt
+    werden, wenn sie schräg liegt, und `split_line` legt sie schräg. Liegen
+    alle Punkte einer Fläche auf derselben Seite, geht die Ebene an ihr
+    vorbei — nur wenn beide Seiten belegt sind, schneidet sie hindurch.
+
+    Ein Punkt **auf** der Ebene zerteilt nichts, deshalb die Toleranz. Sie ist
+    `EPS_GEOM` und keine eigene Zahl: Dieselbe Grenze entscheidet in dieser
+    Datei schon, ob eine Schnittfläche überhaupt Fläche hat.
+
+    Mehrere Flächen werden einzeln geprüft. Eine Ebene, die **zwischen** zwei
+    geschützten Flächen hindurchgeht, ist erlaubt — verboten ist nur, durch
+    eine hindurchzugehen.
+    """
+    normal = np.asarray(plane.normal, dtype=float)
+    for patch in protect:
+        points = np.asarray(patch, dtype=float)
+        if not len(points):
+            continue
+        away = points @ normal - plane.position
+        if away.min() < -EPS_GEOM and away.max() > EPS_GEOM:
+            return True
+    return False
+
+
 def find_plane(
     mesh: MeshData,
     profile: Profile,
@@ -371,6 +412,7 @@ def find_plane(
     axis: Axis | None = None,
     allowance: float = 0.0,
     samples: int = SAMPLES,
+    protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
@@ -383,6 +425,13 @@ def find_plane(
     Stücks gewählt, und ``allowance`` engt das Fenster so ein, dass die Hälften
     mitsamt Stift aufs Bett passen. Ohne beides — ein Aufruf von außen —
     entscheidet die Achse die nackte Ausdehnung und das Fenster bleibt weit.
+
+    ``protect`` sind Punktwolken geschützter Flächen (§22.3). Ebenen, die
+    durch eine davon gehen, fallen aus der Auswahl — **auf beiden Wegen**,
+    dem abgetasteten und dem aus der konvexen Zerlegung. Bleibt danach
+    nichts, gibt es keine Naht: ``None``, wie bei einem Körper, den
+    Schneiden nicht rettet. Was der Nutzer daraus zu wählen bekommt,
+    entscheidet die Ebene darüber.
     """
     if axis is None:
         axis = _axis_to_cut(mesh, profile)
@@ -394,7 +443,7 @@ def find_plane(
     candidates = [
         entry
         for entry in _judge(mesh, axis, positions, cancelled=cancelled)
-        if entry.area > EPS_GEOM
+        if entry.area > EPS_GEOM and not cuts_through(entry.plane, protect)
     ]
     best = min(candidates, key=lambda entry: entry.score) if candidates else None
     if best is not None and best.score <= HINT_THRESHOLD:
@@ -407,6 +456,12 @@ def find_plane(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     hinted = _from_decomposition(mesh, axis, window)
+    if hinted is not None and cuts_through(hinted.plane, protect):
+        # Auch die zweite Meinung hält sich an die Sperre. Ohne diese Zeile
+        # wäre sie der Weg, auf dem eine verbotene Naht doch gewinnt — und
+        # zwar genau dann, wenn die abgetasteten Ebenen alle mittelmäßig
+        # sind, also im schwierigen Fall.
+        hinted = None
     if hinted is not None and (best is None or hinted.score < best.score):
         return hinted
     return best

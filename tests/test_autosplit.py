@@ -180,6 +180,121 @@ def test_a_prismatic_waist_is_still_the_right_seam(profile: Profile) -> None:
     assert candidate.area == pytest.approx(40.0 * 30.0), "weiterhin der Querschnitt der Mitte"
 
 
+def shield(low: float, high: float, y: float = 30.0, z: float = 20.0) -> np.ndarray:
+    """Die Eckpunkte einer geschützten Fläche auf der Oberseite eines Balkens.
+
+    Sie steht für das, was in der Anwendung aus ``Feature.face_indices`` kommt:
+    die Punkte der angeklickten Fläche. Koordinaten und keine Indizes, denn ein
+    Teilstück ist ein neues Netz mit neuer Nummerierung — eine Sperre über
+    Indizes wäre nach dem ersten Schnitt verloren, und genau die Fälle mit
+    mehreren Schnitten sind die, für die es sie gibt.
+    """
+    return np.array(
+        [[x, side, z] for x in (low, high) for side in (-y, y)],
+        dtype=float,
+    )
+
+
+def test_a_protected_face_pushes_the_seam_aside(profile: Profile) -> None:
+    """T8, §22.3: „Diese Fläche soll schön bleiben."
+
+    Die Naht darf durch eine gesperrte Fläche nicht hindurch. Gemessen wird
+    gegen den ungesperrten Lauf desselben Körpers und nicht gegen eine
+    abgelesene Zahl: Wo die Naht ohne Sperre liegt, entscheidet die Bewertung,
+    und die ändert sich mit jedem neuen Term.
+    """
+    whole = bar()
+    free = autosplit.find_plane(whole, profile)
+    assert free is not None and free.axis == "x"
+
+    guard = shield(free.position - 6.0, free.position + 6.0)
+    guarded = autosplit.find_plane(whole, profile, protect=[guard])
+
+    assert guarded is not None, "neben der Sperre bleibt Platz, also gibt es eine Naht"
+    assert not (guard[:, 0].min() < guarded.position < guard[:, 0].max()), (
+        f"die Naht liegt bei {guarded.position:.1f} und damit in der geschützten Fläche "
+        f"({guard[:, 0].min():.1f} bis {guard[:, 0].max():.1f})"
+    )
+
+
+def test_a_face_across_the_whole_window_leaves_no_seam(profile: Profile) -> None:
+    """Deckt die Sperre jede mögliche Naht, gibt es keine — und das wird gesagt.
+
+    ``find_plane`` antwortet mit ``None``, wie bei einem Körper, den Schneiden
+    nicht rettet. Was die Oberfläche daraus macht, ist die Wahl mit ihrem Preis
+    (Sperre aufheben, trotzdem trennen, von Hand trennen) — hier steht nur, dass
+    der Kern nicht heimlich doch hindurchschneidet.
+    """
+    whole = bar()
+
+    assert autosplit.find_plane(whole, profile, protect=[shield(-200.0, 200.0)]) is None
+
+
+def test_the_second_opinion_obeys_the_guard(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch die konvexe Zerlegung darf nicht durch eine gesperrte Fläche.
+
+    ``find_plane`` hat zwei Wege zu einer Naht: die abgetasteten Ebenen und,
+    wenn die alle mittelmäßig sind, die konvexe Zerlegung als zweite Meinung.
+    Eine Sperre, die nur den ersten Weg kennt, hätte im **schwierigen** Fall
+    keine Wirkung — also genau dort, wo es darauf ankommt.
+
+    **Warum die Schwelle hier gesetzt wird.** Gemessen an den Körpern dieses
+    Korpus wird die zweite Meinung nie gefragt: Die beste abgetastete Ebene
+    kommt auf 0,000 bis 0,070 und bleibt damit weit unter ``HINT_THRESHOLD``
+    von 0,3. Ohne die gesetzte Schwelle prüft dieser Test also nichts — die
+    Mutation „Sperre im Zerlegungsweg entfernen" blieb grün, und das ist der
+    Grund, aus dem er überhaupt geschrieben wurde.
+
+    Gemessen an dieser Gabel schlägt die Zerlegung x = −13,0 vor. Die Sperre
+    reicht von −14 bis +14, also liegt der Vorschlag mitten darin, und seine
+    Punktzahl ist besser als die der erlaubten Ebenen — ohne die Prüfung
+    gewänne er.
+    """
+    monkeypatch.setattr(autosplit, "HINT_THRESHOLD", 0.0)
+    left = trimesh.creation.box(extents=(300.0, 20.0, 20.0))
+    left.apply_translation((0.0, -40.0, 10.0))
+    right = trimesh.creation.box(extents=(300.0, 20.0, 20.0))
+    right.apply_translation((0.0, 40.0, 10.0))
+    joint = trimesh.creation.box(extents=(40.0, 100.0, 20.0))
+    joint.apply_translation((0.0, 0.0, 10.0))
+    fork = MeshData.of(trimesh.boolean.union([left, right, joint]))
+    guard = np.array([[x, s, 20.0] for x in (-14.0, 14.0) for s in (-50.0, 50.0)], dtype=float)
+
+    candidate = autosplit.find_plane(fork, profile, protect=[guard])
+
+    assert candidate is not None
+    assert not (-14.0 < candidate.position < 14.0), (
+        f"die Naht liegt bei {candidate.position:.1f} und damit in der Sperre — "
+        "die zweite Meinung hat sie umgangen"
+    )
+
+
+def test_the_guard_survives_the_second_cut(profile: Profile) -> None:
+    """Ein Körper, der zweimal geteilt wird, hält die Sperre auch beim zweiten Mal.
+
+    **Das ist der Test, an dem eine Sperre über Dreiecksindizes gescheitert
+    wäre**: Nach dem ersten Schnitt sind die Stücke neue Netze, ihre Dreiecke
+    tragen neue Nummern, und der Verweis zeigte ins Leere. Über Koordinaten
+    trägt sie durch jeden Schnitt — deshalb steht die Entscheidung hier als
+    Test und nicht nur als Satz in einer Karte.
+    """
+    whole = bar(600.0)
+    free = autosplit.split_to_fit(whole, profile)
+    assert len(free.cuts) >= 2, "sechshundert Millimeter brauchen zwei Schnitte"
+
+    second = free.cuts[1].plane.position
+    guard = shield(second - 6.0, second + 6.0)
+    guarded = autosplit.split_to_fit(whole, profile, protect=[guard])
+
+    assert guarded.divided, "geteilt wird trotzdem"
+    for step in guarded.cuts:
+        assert not (guard[:, 0].min() < step.plane.position < guard[:, 0].max()), (
+            f"ein Schnitt liegt bei {step.plane.position:.1f} und damit in der Sperre"
+        )
+
+
 def test_a_body_twice_too_long_takes_two_cuts(profile: Profile) -> None:
     outcome = autosplit.split_to_fit(bar(600.0), profile)
 
