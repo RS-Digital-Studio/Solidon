@@ -13481,7 +13481,26 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       die Abnahme-Auflage: Der Fix muss gegen einen Cache **aus der Zeit
       davor** gemessen werden, sonst beweist er nur, dass ein leerer Cache
       keine alten Namen hat. c3s Prüfstand nimmt den Cache-Ordner als
-      Argument — die Lage ist jederzeit herstellbar.
+      Argument — die Lage ist jederzeit herstellbar. **GEHEILT (`36884af2`,
+      0d, gegen den warmen Cache gemessen): de öffnen → auf en umschalten →
+      „Can · Lid", stabil über zwei Läufe.** Der Grund ist die richtige
+      Ebene: **Der Cache speichert jetzt den übersetzbaren Text statt seiner
+      aufgelösten Fassung — der Op-Hash ist sprachneutral, weil das Ergebnis
+      es ist**; der Schlüssel braucht keine Sprache. Zwillingsantwort
+      beruhigend: **Befundmeldungen sind bereits `TranslatableText` und
+      wandern korrekt — der Objektname war die Ausnahme, nicht die Regel.**
+      Drei der sechs Stellen sind zu (Deckel, Drehdeckel, Prüfstück); die
+      drei mit **laufender Nummer** (Körper, Slot, Filament) sind ein
+      eigener Fall: `TranslatableText` kennt kein `format`, und es
+      nachzurüsten berührt `__eq__`/`__hash__` — zwei „Slot {n}" mit
+      verschiedenen Zahlen wären gleich, und 49 Vergleiche hängen daran.
+      **Die Trennlinie ist inhaltlich: „Name mit Quellbezug" ist
+      vollständig repariert, „Name mit Zähler" ist ein anderer Fall mit
+      anderer Lösung** — freigegeben als eigener Zug (format als eigenes
+      Feld, außerhalb von Gleichheit und Hash), aber **erst nach c3s
+      Gegenprobe gegen einen Cache aus der Zeit vor dem Fix**. Und 0ds
+      Dank an c3 ist der beste Beleg des Verfahrens: **„Ohne ihre Messung
+      hätte ich grün gemeldet, und der Kundenfall wäre offen geblieben."**
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
