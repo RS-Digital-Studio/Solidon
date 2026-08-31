@@ -84,7 +84,7 @@ MAX_STEPS = 8
 #: geflossenen.
 #:
 #: Ungewichtet war der Deckel nach vier von acht Schritten erreicht: Die
-#: markierte Werkzeugliste wiegt rund 25 000 Token, jeder Schritt meldet sie
+#: markierte Werkzeugliste wiegt rund 20 000 Token, jeder Schritt meldet sie
 #: erneut als Cache-Lesung, und die kostet ein Zehntel. Die acht Schritte aus
 #: §26.5 waren damit nicht fahrbar — der Vorschlag hielt mit ``tokens`` an und
 #: zeigte einen halben Zug.
@@ -308,9 +308,10 @@ class AgentSession:
         # Ein lokales Modell bekommt dieselben Werkzeuge, nur knapper
         # beschrieben. Gemessen: qwen3:14b traf drei von fünf und brauchte für
         # einen einzigen Aufruf bis zu zwei Minuten — damals bei 88 Werkzeugen
-        # mit 104 KB Schema. Inzwischen sind es 96 mit 110 KB, kompakt 87: die
-        # Enge ist gewachsen, nicht geschrumpft. Was fehlt, ist nicht Können,
-        # sondern Platz.
+        # mit 104 KB Schema. Am 31.08.2026 sind es **106 Werkzeuge**, voll
+        # 151 KB und kompakt 95 KB; die Grundlast des kompakten Satzes wiegt
+        # gemessene 19 641 Token gegen 24 161 vorher. Was fehlt, ist nicht
+        # Können, sondern Platz — aber die Enge wächst nicht mehr von selbst.
         tools = list(tool_schemas(self.registry, compact=compact))
 
         # Was der Zug vom Budget verbraucht hat — **gewichtet** (§26.5,

@@ -180,10 +180,12 @@ def operation_tools(
         # nennen traf für 72 von 77 Ops den falschen Ort.
         description = str(schema["description"])
         if compact:
-            # Auch die Parametertexte: sie sind mit 40 KB der größte einzelne
-            # Posten im Schema. Gekürzt auf den ersten Satz bleibt stehen, was
-            # der Wert bedeutet; weg fällt, warum er so heißt und was bei
-            # Randfällen passiert.
+            # Auch die Parametertexte: sie sind mit gemessenen 45 KB der
+            # größte einzelne Posten im Schema — 40 Prozent des kompakten
+            # Satzes. Gekürzt auf den ersten Satz bleibt stehen, was der Wert
+            # bedeutet; weg fällt, warum er so heißt und was bei Randfällen
+            # passiert. Was danach noch doppelt steht, holen die beiden Blöcke
+            # oben in den Systemprompt.
             for name, field in properties.items():
                 text = str(field.get("description", ""))
                 if ". " in text:

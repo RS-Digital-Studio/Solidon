@@ -840,11 +840,21 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
 #: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Am 28.08.2026 sind es mit 106 Werkzeugen
-#: 23 891 Token für den kompakten Satz, den dieser Weg fährt
-#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``). Er kommt im
-#: Fenster noch ganz an; der Test gegen :data:`PROMPT_TOOL_COUNT` macht jede
-#: weitere Operation zum Anlass für eine neue Messung.
+#: Die Reihe fuhr 84 Schemata. Am 31.08.2026 sind es mit 106 Werkzeugen
+#: **19 641 Token** für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 59,9 % des
+#: Fensters. Vorher waren es am selben Tag und mit demselben Skript gemessen
+#: 24 161; die Differenz sind die zwei Schritte, die wortgleiche Wiederholung
+#: aus dem Schema in den Systemprompt geholt haben (``objects`` und die sechs
+#: Platzierungsangaben eines Bausteins). Der Test gegen
+#: :data:`PROMPT_TOOL_COUNT` macht jede weitere Operation zum Anlass für eine
+#: neue Messung.
+#:
+#: **Die Zeit daneben misst etwas anderes als die Zahl.** Beide Läufe brauchten
+#: über zehn Minuten, weil ``api/ps`` während der Messung ``0.0 GB im VRAM``
+#: meldete — das Modell rechnete vollständig auf der CPU. ``prompt_eval_count``
+#: zählt trotzdem die Nutzlast: Die Dauer gehört der Maschine, die Token
+#: gehören dem Schema.
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
