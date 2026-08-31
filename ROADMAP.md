@@ -13467,7 +13467,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       herstellen kann. **Dritter Fall derselben Bauart an einem Tag, und
       diesmal richtig herum gelöst: Zwei Läufe antworten verschieden, die
       Differenz ist die Auskunft, und die Frage ist nicht „wer hat recht",
-      sondern „welche Lage stellt der Kunde her".**
+      sondern „welche Lage stellt der Kunde her".** **Und die Beobachtung,
+      die den Befund von „ärgerlich" auf „nur der Kunde erlebt ihn" hebt
+      (c3): Der Cache-Pfad trägt einen Code-Hash** (`cache/results/0.2.2+8a5c21`
+      → nach dem nächsten Commit `+296450`) — **jede Codeänderung verwirft
+      den ganzen Ergebniscache.** Wir bauen mehrmals täglich, der Kunde
+      erst beim nächsten Update: **für uns nahezu unsichtbar, für ihn
+      wochenlang dauerhaft.** Das erklärt die ganze Verwirrung rückwirkend
+      (0d maß nach einer Codeänderung, c3 nach sechs Läufen mit demselben
+      Stand — und nur ihr Weg ist der des Kunden). **Prüf-Regel für alles
+      Zwischengespeicherte: „Wer nach jeder Codeänderung misst, sieht nie,
+      was der Kunde sieht — er fährt denselben Stand monatelang."** Daraus
+      die Abnahme-Auflage: Der Fix muss gegen einen Cache **aus der Zeit
+      davor** gemessen werden, sonst beweist er nur, dass ein leerer Cache
+      keine alten Namen hat. c3s Prüfstand nimmt den Cache-Ordner als
+      Argument — die Lage ist jederzeit herstellbar.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
