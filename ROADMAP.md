@@ -13427,7 +13427,27 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       aufgelöste. Die Kundenfrage ist präzise gestellt: **Was sieht jemand,
       der die Sprache auf Englisch stellt und dann das mitgelieferte
       Beispiel ÖFFNET?** Beide Wege werden nebeneinander gemessen; wenn der
-      geöffnete Fall „Dose Deckel" zeigt, steht der Befund.
+      geöffnete Fall „Dose Deckel" zeigt, steht der Befund. **GEKLÄRT, und
+      beide Messungen stimmen (0d, 31.08.):** Sprache **zuerst** setzen,
+      dann öffnen → „Can · Can Lid" ✓; auf Deutsch öffnen und **danach
+      umschalten** → **„Can · Dose Deckel" ✗**. Die Ursache ist nicht
+      gespeichert-gegen-erzeugt, sondern **übersetzbar gegen eingefroren**:
+      Die Dose steht als Parameter mit `translatable=("name",)` und wandert
+      mit, der Deckelname entsteht bei der Auswertung — aber `lid.py` ruft
+      `.translate()` und hinterlässt einen festen String. **Wörtlich
+      dieselbe Familie wie die Merkmalslage: beim Erzeugen festgeschrieben,
+      von einem späteren Vorgang überholt — dort `arrange_bed`, hier der
+      Sprachwechsel.** Fix: Der Deckel heißt künftig nur `_("Deckel")` ohne
+      Quellnamen — das löst c3s zweiten Punkt mit (der Name trug den Stand
+      der Dose beim Erzeugen und brach bei jeder Umbenennung), Begründung:
+      **Ein Name, der eine Beziehung behauptet und sie nicht hält, ist
+      schlechter als keiner.** **Sechs Geschwister in einem Zug**
+      (threemf „Körper", colour_ops „Slot", lid „Deckel"/„Drehdeckel",
+      paint „Filament", prepare_ops „Prüfstück"). **Testlücke dahinter: ein
+      Test, der UMSCHALTET statt nur zu öffnen** — das Umschalten war der
+      Fall, der verdeckt blieb. Und 0ds Selbstkorrektur: **„Auf meinem
+      Messweg trifft er nicht" statt „der Befund trifft nicht"** — dass die
+      eigene Messung sauber war, sagt über den anderen Weg nichts.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
