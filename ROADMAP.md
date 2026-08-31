@@ -121,7 +121,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Die Trennen-Serie T1–T9 | Sinnvolles Trennen — die Serie (31.08.2026) | die Abarbeitung nach Roberts Vollausbau-Entscheid — Nahtlage nach Kanten, Stützbedarf je Teil, schiefe Ebenen (§22.3), automatische Verbinderwahl, Festigkeit, Symmetrie, globale Suche, die eine Kundengeste, das Schaustück; Start nach der Website-Welle, Reihenfolge gegen Resin bei Robert |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
-| Ein Projekt zu öffnen kostet ein Vielfaches des Bauens | Befunde aus dem Weg-Dreh (31.08.2026) | die Diagnose (15): Profil über `load()`+`evaluate()` am Griff-Projekt — 908,8 CPU-s für EINEN Durchlauf, der beim Bauen neunmal in 2 min lief; Verdachtsrichtung perceive-Merkmalsvergleich, §2.8/P1 |
+| Ein generiertes Modell zu öffnen kostet eine Minute | Befunde aus dem Weg-Dreh (31.08.2026) | die Behebung an der richtigen Ursache: `orient_for_print` auf dem ungefilterten generierten Netz (Eule 61,77 s; Rollenhalter 0,96 s — die 574/909 CPU-s waren vermutlich der ganze Video-Lauf, Klärung bei 3a) plus Fortschritt/Ansage beim Öffnen (§2.8); der await_result-Docstring verliert seine falsche Begründung |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -13379,8 +13379,22 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Fix rücknehmbar vorgeführt. Randnotiz: Ob der Prüfbericht seinen
       Geltungsbereich nennen sollte („0 Warnungen" ≠ „druckbar"), ist ein
       eigener späterer Punkt.
-- [ ] **Ein Projekt zu öffnen kostet ein Vielfaches des Bauens — seit der
-      CPU-Zeit-Messung ein BEFUND, kein Verdacht mehr** (3a, 31.08.): Am
+- [ ] **Ein generiertes Modell zu öffnen kostet eine Minute — der Punkt ist
+      echt, die Ursache war falsch zugeordnet** (15s Profil, 31.08., alle
+      Schaustücke nacheinander): `rollenhalter.p3d` öffnet in **0,96 s**
+      (der await_result-Docstring behauptet 574 CPU-s — Faktor
+      sechshundert), und die Schrittzahl erklärt nichts (20 Schritte → 1 s,
+      5 Schritte → 62 s). Der echte Fresser ist `weg3-eule-generiert.p3d`
+      mit **61,77 s**: eine 4-MB-Quelldatei, auf der `orient_for_print`
+      ungefiltert rechnet — nicht die Schritte kosten, sondern das Netz,
+      auf dem sie rechnen. 3as 574/909 CPU-s sind ungeklärt (Vermutung:
+      CPU-Zeit des ganzen Video-Laufs samt 36 Aufnahmen dem Öffnen
+      zugeschrieben — offen, bei 3a). Entscheid: Die 15-Minuten-Marke in
+      await_result bleibt, ihre **Begründung** kommt heraus — sie schreibt
+      eine falsche Ursache fest, und der Nächste sucht an der falschen
+      Stelle (3a zieht den eigenen Docstring nach der Klärung nach).
+      Kundenweg-Punkt bleibt: Wer ein generiertes Modell öffnet, wartet
+      eine Minute, ohne zu wissen worauf (§2.8). Ursprünglich (3a, 31.08.): Am
       Weg-4-Griff (neun Schritte, 108 762 Dreiecke), ohne Qt und ohne
       Session — nur `load()` und `evaluate()` — **908,8 CPU-Sekunden** und
       nicht fertig, während der Bau desselben Projekts ~2 Minuten kostete
