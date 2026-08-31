@@ -61,10 +61,13 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+import numpy as np  # noqa: E402
+
 from app.core.bootstrap import load_operations  # noqa: E402
 
 load_operations()
 
+from app.core.geom.sculpt import Stroke, strokes_to_text  # noqa: E402
 from app.core.knowledge import profiles  # noqa: E402
 from app.core.scene import History, OperationDraft, evaluate  # noqa: E402
 from app.core.scene.project import (  # noqa: E402
@@ -706,6 +709,294 @@ def build_adapted() -> tuple[Project, int, int]:
     return project, built, len(plan)
 
 
+#: Die Maße des Handschmeichlers, in Millimetern.
+#:
+#: Der Rohling ist eine Kugel; ``LANG``, ``BREIT`` und ``HOCH`` ziehen sie zur
+#: Grundform.
+STONE_BLANK = 70.0
+STONE_LONG, STONE_WIDE, STONE_HIGH = 1.35, 1.0, 0.52
+
+
+def _surface_at(mesh: object, x: float, y: float, reach: float = 2.5) -> float:
+    """Wo die Oberseite des Körpers über ``(x, y)`` liegt — am Netz gemessen.
+
+    **Hier stand zweimal eine gerechnete Zahl, und beide Male war sie falsch.**
+    Zuerst ``STONE_BLANK * STONE_HIGH`` — das ist die *Gesamthöhe* der Form,
+    36,4 mm, und die Züge saßen 18 mm über dem Teil in der Luft: Der
+    20er-Pinsel kratzte mit seinem Rand 0,41 mm ab, die drei 9er trafen keinen
+    einzigen Eckpunkt. Dann die halbe Höhe, +18,2, in der Annahme, der Körper
+    sei um den Ursprung gebaut. Gemessen liegt er von 16,8 bis 53,2:
+    ``create_sphere`` stellt die Kugel auf das Bett, ``scale_object`` skaliert
+    um den Objektmittelpunkt, und ``place_on_bed`` setzt erst am Ende auf. Die
+    zweite Zahl legte die Züge also 35 mm zu **tief** und drückte die
+    Unterseite ein — der Körper wurde 40,6 mm hoch statt 36,4.
+
+    Eine Zahl hat einen Ursprung, und dieser hier hängt an drei fremden
+    Operationen. Deshalb wird er nicht mehr hergeleitet: Der höchste Eckpunkt
+    in einem kleinen Umkreis *ist* die Fläche. Bei 1,7 mm Kantenlänge und
+    einem Pinsel von 9 bis 20 mm ist das um Größenordnungen genau genug.
+    """
+    points = np.asarray(mesh.raw.vertices, dtype=float)  # type: ignore[attr-defined]
+    near = points[(points[:, 0] - x) ** 2 + (points[:, 1] - y) ** 2 < reach**2]
+    if not len(near):
+        raise SystemExit(f"Kein Eckpunkt bei ({x}, {y}) — der Pinsel hätte nichts zu greifen.")
+    return float(near[:, 2].max())
+
+
+def _dimple(mesh: object, x: float, y: float, radius: float, depth: float) -> Stroke:
+    """Ein Pinselzug von oben in die Fläche.
+
+    Der Punkt liegt **auf** der Oberseite, die Richtung ist ihre Normale. Ein
+    Zug, der innen ansetzt, greift ins Leere: Der Pinsel wirkt dort, wo er
+    aufsetzt.
+    """
+    return Stroke(
+        point=(x, y, _surface_at(mesh, x, y)),
+        normal=(0.0, 0.0, 1.0),
+        radius=radius,
+        strength=depth,
+        tool="carve",
+    )
+
+
+def build_stone() -> tuple[Project, int, int]:
+    """Das Schaustück für Weg 4: ein Handschmeichler mit Daumenmulde.
+
+    **Warum dieses Motiv.** Weg 4 beginnt auf der Seite mit einem
+    Zugeständnis — „Manche Formen lassen sich nicht bemaßen." Eine Daumenmulde
+    ist der kürzeste Beweis: Sie hat kein Maß, sie hat einen Daumen. Der
+    Körper liegt flach und druckt ohne Stützen, und er ist ein Teil, das Leute
+    tatsächlich drucken.
+
+    **Der erste Anlauf war ein Griff mit Kugelknauf** und lief technisch
+    durch: neun von neun Schritten, Kuppe verschmolzen, vier Mulden sichtbar.
+    Verworfen wurde er nach dem Bild — die Silhouette liest auf einer
+    Werbeseite zweideutig. Zwei Dinge hat er gelehrt, und beide stecken hier
+    drin: Eine Kugel bei ``dz`` gleich der Zylinderhöhe **berührt** den
+    Zylinder nur, statt ihn zu überlappen, und ``blend_union`` hat dann nichts
+    zu verschmelzen. Und ``hollow_object`` rastert mit einem Drittel der
+    Wandstärke — seine Dreieckszahl hängt am Raster, nicht am Eingangsnetz,
+    und aus 47 000 wurden 108 000 samt 618 Befunden „Ein Merkmal hat keinen
+    Nachfolger mehr". Dieses Schaustück höhlt deshalb nicht aus und hat
+    vierundzwanzig.
+
+    **Die Züge kommen als Daten und nicht aus der Maus**, und das ist keine
+    Abkürzung, sondern die Bauart der Operation (Regel 2): Der Editor sammelt
+    Gesten in einen Parameterwert, das Ergebnis entsteht bei der Auswertung.
+    Was hier steht, ist genau das, was der Editor geschrieben hätte.
+    """
+    project = new_project()
+    history = History(project.document)
+    profile = profiles.make_profile()
+
+    # **Die Züge brauchen das Netz, auf das sie treffen.** Deshalb baut dieses
+    # Schaustück in zwei Etappen: Erst entsteht der Rohling, dann wird seine
+    # Oberseite gemessen, dann setzt der Pinsel auf. Ein Plan am Stück müsste
+    # den Aufsetzpunkt vorher wissen — und genau daran ist er zweimal
+    # gescheitert (siehe ``_surface_at``).
+    blank: list[tuple[str, list[OperationDraft]]] = [
+        (
+            "Rohling",
+            [
+                OperationDraft(
+                    op="create_sphere", params={"diameter": STONE_BLANK, "name": "Handschmeichler"}
+                )
+            ],
+        ),
+        (
+            "Grundform ziehen",
+            [
+                OperationDraft(
+                    op="scale_object",
+                    inputs=("obj_1",),
+                    params={"fx": STONE_LONG, "fy": STONE_WIDE, "fz": STONE_HIGH},
+                )
+            ],
+        ),
+        (
+            "Gleichmäßig vernetzen",
+            [OperationDraft(op="remesh_uniform", inputs=("obj_1",), params={"edge": 1.8})],
+        ),
+    ]
+
+    built = 0
+    print(f"{'Schritt':26} {'Ergebnis':10} {'Dreiecke':>9}")
+
+    def run(steps: list[tuple[str, list[OperationDraft]]]) -> int:
+        done = 0
+        for title, drafts in steps:
+            try:
+                history.apply(title, drafts)
+            except Exception as problem:
+                print(f"{title:26} {'ABGELEHNT':10} {'—':>9}  {problem}")
+                continue
+            result = evaluate(project.document, profile)
+            if not result.complete:
+                for entry in result.scene.report.findings:
+                    if entry.code.startswith("op."):
+                        print(f"{'':26} {entry.code}: {entry.message}")
+                print(f"{title:26} {'HÄLT AN':10}")
+                history.undo()
+                continue
+            done += 1
+            body = next(iter(result.scene.objects.values()))
+            print(f"{title:26} {'gebaut':10} {body.mesh.triangle_count:9}")
+            # Auch ein gelungener Schritt kann etwas zu sagen haben. Befunde
+            # nur beim Anhalten zu zeigen ist der Grund, aus dem vier
+            # wirkungslose Züge unbemerkt blieben — siehe ``_surface_at``.
+            for entry in result.scene.report.findings:
+                if entry.severity in ("warning", "error"):
+                    print(f"{'':26} {entry.severity}: {entry.message}")
+        return done
+
+    built += run(blank)
+    stone = next(iter(evaluate(project.document, profile).scene.objects.values())).mesh
+    shaping: list[tuple[str, list[OperationDraft]]] = [
+        (
+            "Daumenmulde",
+            [
+                OperationDraft(
+                    op="sculpt_strokes",
+                    inputs=("obj_1",),
+                    params={"strokes": strokes_to_text([_dimple(stone, 12.0, 0.0, 20.0, 5.0)])},
+                )
+            ],
+        ),
+        (
+            "Fingerrillen",
+            [
+                OperationDraft(
+                    op="sculpt_strokes",
+                    inputs=("obj_1",),
+                    params={
+                        "strokes": strokes_to_text(
+                            [_dimple(stone, -16.0, y, 9.0, 3.2) for y in (-13.0, 0.0, 13.0)]
+                        )
+                    },
+                )
+            ],
+        ),
+        ("Auf das Bett", [OperationDraft(op="place_on_bed", inputs=("obj_1",))]),
+    ]
+    built += run(shaping)
+    return project, built, len(blank) + len(shaping)
+
+
+#: Wo eine generierte Datei erfahrungsgemäß liegt.
+#:
+#: **Sie reist nicht im Repository mit**, und das ist Absicht: Sie ist
+#: Nutzerausgabe, vier Megabyte groß, und das fertige Schaustück trägt sie
+#: ohnehin eingebettet. Wer die Bauart ohne diese Datei fährt, bekommt einen
+#: Satz, der sagt was fehlt — nicht einen Pfad, den kein Mensch liest.
+GENERATED_GUESS = Path("D:/AI/ComfyUI_windows_portable/ComfyUI/output/solidon/text_00009_.glb")
+
+#: Wie stark das generierte Modell vergrößert wird.
+#:
+#: **Ein generiertes Modell kommt ohne Maßstab.** Die Eule maß 1,9 Einheiten;
+#: mal hundert sind daraus 190 Millimeter, und das ist ein Teil, das aufs Bett
+#: passt und in der Hand etwas hermacht. Das erste, was Solidon mit einer
+#: solchen Datei tut, ist ihr eine Größe zu geben — deshalb steht dieser
+#: Schritt gleich hinter dem Einlesen.
+GENERATED_SCALE = 100.0
+
+#: Auf wie viele Dreiecke reduziert wird.
+#:
+#: Gemessen an derselben Datei: Bei 150 000 und 100 000 bleibt das Netz
+#: sauber; bei 60 000 entstehen zwei Kanten mit drei Nachbarn, bei 30 000
+#: vier, und der Prüfbericht meldet zu Recht „Der Körper war geschlossen und
+#: ist es jetzt nicht mehr". Bei hunderttausend verschwindet außerdem der
+#: Hinweis „sehr fein vernetzt" — der Schritt hat damit eine sichtbare
+#: Wirkung und keinen Preis.
+GENERATED_TRIANGLES = 100000
+
+
+def build_generated(source: Path) -> tuple[Project, int, int]:
+    """Das Schaustück für Weg 3: ein generiertes Modell wird druckbar.
+
+    **Das Motiv ist echte Produktausgabe**, keine Nachbildung — eine
+    TripoSG-Datei aus dem ComfyUI-Ausgabeordner, wie Weg 3 sie erzeugt. Was
+    Solidon daraus macht, ist die ganze Sektion: Sie kommt ohne Maßstab an, zu
+    fein vernetzt und beliebig gedreht, und jeder der fünf Schritte antwortet
+    auf genau eine dieser drei Eigenschaften.
+
+    **``repair`` fehlt bewusst.** Seit dem Wächter in ``ingest/loader.py``
+    kommt die Datei mit null offenen Kanten an; ein Schritt, der „an diesem
+    Netz war nichts zu reparieren" meldet, ist im Verlauf eine leere Zeile.
+    """
+    from app.core.scene.project import ProjectSources
+
+    if not source.is_file():
+        raise SystemExit(
+            "Für Weg 3 fehlt die generierte Datei. Sie entsteht in der Anwendung über "
+            f"„Erzeugen“ und liegt danach im ComfyUI-Ausgabeordner; erwartet wurde "
+            f"{source}. Ein anderer Pfad geht als zweites Argument mit."
+        )
+
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/generiert.glb", sha256=""
+    )
+    project.sources["src_1"] = source.read_bytes()
+    history = History(project.document)
+    profile = profiles.make_profile()
+    reader = ProjectSources(project)
+
+    plan: list[tuple[str, list[OperationDraft]]] = [
+        (
+            "Modell einlesen",
+            [OperationDraft(op="load", params={"source": "src_1", "unit": "mm", "name": "Eule"})],
+        ),
+        (
+            "Auf Größe bringen",
+            [
+                OperationDraft(
+                    op="scale_object", inputs=("obj_1",), params={"factor": GENERATED_SCALE}
+                )
+            ],
+        ),
+        (
+            "Auflösung reduzieren",
+            [
+                OperationDraft(
+                    op="decimate_mesh", inputs=("obj_1",), params={"triangles": GENERATED_TRIANGLES}
+                )
+            ],
+        ),
+        (
+            "Für den Druck ausrichten",
+            [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={})],
+        ),
+        ("Auf das Bett", [OperationDraft(op="place_on_bed", inputs=("obj_1",))]),
+    ]
+
+    built = 0
+    print(f"{'Schritt':26} {'Ergebnis':10} {'Dreiecke':>9}")
+    for title, drafts in plan:
+        try:
+            history.apply(title, drafts)
+        except Exception as problem:
+            print(f"{title:26} {'ABGELEHNT':10} {'—':>9}  {problem}")
+            continue
+        result = evaluate(project.document, profile, sources=reader)
+        if not result.complete:
+            for entry in result.scene.report.findings:
+                if entry.code.startswith("op."):
+                    print(f"{'':26} {entry.code}: {entry.message}")
+            print(f"{title:26} {'HÄLT AN':10}")
+            history.undo()
+            continue
+        built += 1
+        body = next(iter(result.scene.objects.values()))
+        print(f"{title:26} {'gebaut':10} {body.mesh.triangle_count:9}")
+        # Auch ein gelungener Schritt kann etwas zu sagen haben. Befunde nur
+        # beim Anhalten zu zeigen ist der Grund, aus dem vier wirkungslose
+        # Züge unbemerkt blieben — siehe ``_stone_top``.
+        for entry in result.scene.report.findings:
+            if entry.severity in ("warning", "error"):
+                print(f"{'':26} {entry.severity}: {entry.message}")
+    return project, built, len(plan)
+
+
 def main() -> int:
     # ``rollenhalter`` als Argument wählt das zweite Schaustück. Kein eigenes
     # Werkzeug daneben: Beide sind Teile für dieselbe Website, und zwei
@@ -714,7 +1005,17 @@ def main() -> int:
     # ``anpassen`` baut auf ``rollenhalter`` auf und schreibt ein anderes
     # Projekt — deshalb ein eigener Zweig und keine dritte Bedingung in der
     # Zeile darunter.
-    if "anpassen" in sys.argv:
+    if "generiert" in sys.argv:
+        # Ein Argument, das nicht auf ``.p3d`` endet und ein Pfad ist, ist die
+        # Quelle. Kein eigener Schalter: Sie ist das einzige, was diese Bauart
+        # von außen braucht.
+        given = [
+            entry for entry in sys.argv[1:] if not entry.endswith(".p3d") and entry != "generiert"
+        ]
+        project, built, total = build_generated(Path(given[0]) if given else GENERATED_GUESS)
+    elif "stein" in sys.argv:
+        project, built, total = build_stone()
+    elif "anpassen" in sys.argv:
         project, built, total = build_adapted()
     else:
         project, built = build_holder() if holder else build()
@@ -732,7 +1033,11 @@ def main() -> int:
         print("\nNicht vollständig — das Schaustück wird nicht geschrieben.")
         return 1
     chosen = [entry for entry in sys.argv[1:] if entry.endswith(".p3d")]
-    if "anpassen" in sys.argv:
+    if "generiert" in sys.argv:
+        default = ROOT / "website" / "teile" / "weg3-eule-generiert.p3d"
+    elif "stein" in sys.argv:
+        default = ROOT / "website" / "teile" / "weg4-stein-formen.p3d"
+    elif "anpassen" in sys.argv:
         default = ROOT / "website" / "teile" / "weg1-halter-anpassen.p3d"
     elif holder:
         default = ROOT / "website" / "teile" / "rollenhalter.p3d"
