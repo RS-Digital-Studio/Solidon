@@ -53,6 +53,7 @@ eine Kiste.
 from __future__ import annotations
 
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -66,8 +67,13 @@ load_operations()
 
 from app.core.knowledge import profiles  # noqa: E402
 from app.core.scene import History, OperationDraft, evaluate  # noqa: E402
-from app.core.scene.project import Project, new_project, save  # noqa: E402
-from app.core.types import Parameter  # noqa: E402
+from app.core.scene.project import (  # noqa: E402
+    Project,
+    ProjectSources,
+    new_project,
+    save,
+)
+from app.core.types import Parameter, Source  # noqa: E402
 
 #: Die Maße des Gehäuses, als benannte Projektparameter.
 #:
@@ -598,14 +604,127 @@ def build_holder() -> tuple[Project, int]:
     return project, built
 
 
+#: Wo die Anpassung sitzt und wie groß sie ist.
+#:
+#: Vorn in der Grundplatte, dort wo man das Teil anschrauben würde. Fünf
+#: Millimeter ist die Schraube, die jeder hat, und ``z`` liegt auf der
+#: Plattenstärke, weil ``drill_hole`` von oben zählt.
+ADAPTED_HOLE = {"diameter": 5.0, "x": 0.0, "y": -38.0, "z": PLATE_THICKNESS, "axis": "z"}
+
+
+def build_adapted() -> tuple[Project, int, int]:
+    """Das Schaustück für Weg 1: ein eingelesenes Modell, das angepasst wird.
+
+    **Warum nicht das Beispielprojekt.** ``weg1-halterung-anpassen.p3d`` hat
+    genau diese Struktur und zeigt dabei eine flache Platte mit fünf
+    Bohrungen. Als Lehrstück richtig — es zeigt eine Sache ohne Ablenkung —,
+    auf einer Website falsch: Wer dort eine flache Platte sieht, denkt „das
+    kann jeder" und liest nicht weiter.
+
+    **Warum der Rollenhalter.** Er steht im Aufmacher, und wenn das Video ihn
+    wieder zeigt, erzählen Bühne und Sektion dieselbe Geschichte. Er wird hier
+    frisch gebaut und nicht aus ``rollenhalter.p3d`` gelesen: Beide entstehen
+    dann im selben Lauf aus derselben Quelle, und ein geänderter Halter kann
+    nicht an einem alten Abzug vorbeilaufen.
+
+    **Der Weg ist echt, auch wenn das Modell von uns stammt.** Es wird als STL
+    geschrieben, als STL eingelesen, repariert und angepasst — genau das, was
+    der Kunde mit einer heruntergeladenen Datei täte. Der Unterschied ist
+    keiner, den man im Bild sieht; wir haben nur keine fremde, die wir zeigen
+    dürfen.
+
+    **Die Anpassung muss sichtbar sein**, sonst zeigt das Video ein Standbild
+    mit einem Ladevorgang. Gewählt ist eine Bohrung durch die Grundplatte —
+    der Fall aus §18.5, „indem man auf die Stelle zeigt, die stört".
+    """
+    source, _ = build_holder()
+    profile = profiles.make_profile()
+    scene = evaluate(source.document, profile).scene
+    # Nur der Halter selbst — die beiden Achsen sind eigene Objekte und kämen
+    # als lose Stücke in einer Datei an.
+    body = next(entry for entry in scene.objects.values() if entry.name.startswith("Rollenhalter"))
+    with tempfile.TemporaryDirectory() as folder:
+        mesh = Path(folder) / "rollenhalter-import.stl"
+        body.mesh.raw.export(str(mesh))
+        data = mesh.read_bytes()
+    print(f"Ausgangsdatei: {len(data) / 1024:.0f} kB, {body.mesh.triangle_count} Dreiecke")
+
+    project = new_project()
+    # **Die Datei reist im Projekt mit** (§16.1): ein Eintrag im Dokument und
+    # die Bytes daneben. ``save`` schreibt beides in den Container und rechnet
+    # die Prüfsumme.
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/rollenhalter-import.stl", sha256=""
+    )
+    project.sources["src_1"] = data
+
+    plan: list[tuple[str, list[OperationDraft]]] = [
+        (
+            "Modell einlesen",
+            [
+                OperationDraft(
+                    op="load", params={"source": "src_1", "unit": "mm", "name": "Rollenhalter"}
+                )
+            ],
+        ),
+        ("Reparieren", [OperationDraft(op="repair", inputs=("obj_1",), params={})]),
+        ("Auf das Bett", [OperationDraft(op="place_on_bed", inputs=("obj_1",))]),
+        (
+            "Befestigungsloch setzen",
+            [
+                OperationDraft(
+                    op="drill_hole", inputs=("obj_1",), params={**ADAPTED_HOLE, "depth": 0.0}
+                )
+            ],
+        ),
+    ]
+
+    history = History(project.document)
+    built = 0
+    print(f"{'Schritt':26} {'Ergebnis':10} {'Körper':>6}")
+    for title, drafts in plan:
+        try:
+            history.apply(title, drafts)
+        except Exception as problem:
+            print(f"{title:26} {'ABGELEHNT':10} {'—':>6}  {problem}")
+            continue
+        # **Ohne Lesezugriff findet ``load`` seine Datei nicht.** ``evaluate``
+        # bekommt nur das Dokument; die Bytes liegen im Projekt daneben, und
+        # ``ProjectSources`` ist die Brücke. Ohne sie endet der erste Schritt
+        # in ``op.load.InternalError`` — eine Meldung, die nach Programmfehler
+        # klingt und einen fehlenden Zugang meint.
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        if not result.complete:
+            for entry in result.scene.report.findings:
+                if entry.code.startswith("op."):
+                    print(f"{'':26} {entry.code}: {entry.message}")
+            print(f"{title:26} {'HÄLT AN':10} {len(result.scene.objects):6}")
+            history.undo()
+            continue
+        built += 1
+        print(f"{title:26} {'gebaut':10} {len(result.scene.objects):6}")
+    return project, built, len(plan)
+
+
 def main() -> int:
     # ``rollenhalter`` als Argument wählt das zweite Schaustück. Kein eigenes
     # Werkzeug daneben: Beide sind Teile für dieselbe Website, und zwei
     # Programme, die dasselbe tun, laufen unweigerlich auseinander.
     holder = "rollenhalter" in sys.argv
-    project, built = build_holder() if holder else build()
-    total = len(holder_steps()) if holder else len(steps())
-    result = evaluate(project.document, profiles.make_profile())
+    # ``anpassen`` baut auf ``rollenhalter`` auf und schreibt ein anderes
+    # Projekt — deshalb ein eigener Zweig und keine dritte Bedingung in der
+    # Zeile darunter.
+    if "anpassen" in sys.argv:
+        project, built, total = build_adapted()
+    else:
+        project, built = build_holder() if holder else build()
+        total = len(holder_steps()) if holder else len(steps())
+    # **Mit Quellenzugang**, sonst zählt die Schlusszeile eine leere Szene.
+    # Gemessen beim ersten Lauf der Anpassung: „4 von 4 Schritten, 0 Körper" —
+    # jeder Schritt gebaut, und darunter nichts. ``load`` findet seine Datei
+    # nur über ``ProjectSources``; für die beiden anderen Bauarten ist der
+    # Leser leer und ändert nichts.
+    result = evaluate(project.document, profiles.make_profile(), sources=ProjectSources(project))
     print(f"\n{built} von {total} Schritten, {len(result.scene.objects)} Körper")
     for entry in result.scene.objects.values():
         print(f"   {entry.name:26} {entry.mesh.triangle_count:7} Dreiecke")
@@ -613,11 +732,12 @@ def main() -> int:
         print("\nNicht vollständig — das Schaustück wird nicht geschrieben.")
         return 1
     chosen = [entry for entry in sys.argv[1:] if entry.endswith(".p3d")]
-    default = (
-        ROOT / "website" / "teile" / "rollenhalter.p3d"
-        if holder
-        else ROOT / "website" / "schaustueck.p3d"
-    )
+    if "anpassen" in sys.argv:
+        default = ROOT / "website" / "teile" / "weg1-halter-anpassen.p3d"
+    elif holder:
+        default = ROOT / "website" / "teile" / "rollenhalter.p3d"
+    else:
+        default = ROOT / "website" / "schaustueck.p3d"
     target = Path(chosen[0]) if chosen else default
     target.parent.mkdir(parents=True, exist_ok=True)
     save(project, target)
