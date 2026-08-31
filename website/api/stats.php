@@ -344,6 +344,8 @@ function entries(string $dir, string $month): array
         }
         $rows[] = [
             'day' => $when->format('Y-m-d'),
+            'hour' => (int) $when->format('G'),
+            'weekday' => (int) $when->format('N'),
             'kind' => (string) ($row['k'] ?? ''),
             'value' => (string) ($row['v'] ?? ''),
             'from' => (string) ($row['r'] ?? ''),
@@ -390,6 +392,89 @@ function visitors_per_day(array $rows): array
     return $counts;
 }
 
+/**
+ * Zu welcher Sprachfassung ein Pfad gehört.
+ *
+ * Die Fassungen liegen als Unterordner (`/en/…`), die deutsche Quelle im
+ * Wurzelverzeichnis — dieselbe Ordnung, die `available_languages()` in der
+ * Anwendung liest. Hier reicht die feste Liste: Ein neuer Ordner auf dem
+ * Server entsteht nicht ohne eine neue Sprachdatei im Repository.
+ */
+function language_of(string $path): string
+{
+    foreach (['en', 'es', 'fr', 'it', 'pt'] as $code) {
+        if (strpos($path, '/' . $code . '/') === 0 || $path === '/' . $code) {
+            return $code;
+        }
+    }
+    return 'de';
+}
+
+/**
+ * Zu welchem Zielsystem ein Paketname gehört.
+ *
+ * Die Muster folgen den vier ausgelieferten Paketarten aus
+ * `tools/make_download.py`; was keines trifft, bleibt unter seinem Namen
+ * stehen, statt in einem „Sonstige"-Topf zu verschwinden.
+ */
+function platform_of(string $file): string
+{
+    if (stripos($file, 'Setup') !== false || stripos($file, '.exe') !== false) {
+        return 'Windows';
+    }
+    if (stripos($file, '.flatpak') !== false || stripos($file, '.AppImage') !== false) {
+        return 'Linux';
+    }
+    if (stripos($file, 'arm64') !== false) {
+        return 'macOS (Apple Silicon)';
+    }
+    if (stripos($file, 'macos') !== false) {
+        return 'macOS (Intel)';
+    }
+    return $file;
+}
+
+/**
+ * Die Besuche eines Monats: je Tag und Kennzeichen die Seitenaufrufe, in der
+ * Reihenfolge der Datei.
+ *
+ * Grundlage für Einstiegsseiten und Besuchstiefe. Beides bleibt innerhalb
+ * eines Tages — dieselbe Grenze wie bei den Besucherzahlen, aus demselben
+ * Grund: Um Mitternacht endet, was sich zusammenfassen lässt.
+ */
+function visits(array $rows): array
+{
+    $found = [];
+    foreach ($rows as $row) {
+        if ($row['kind'] !== 'p' || $row['mark'] === '') {
+            continue;
+        }
+        $found[$row['day'] . '|' . $row['mark']][] = $row['value'];
+    }
+    return $found;
+}
+
+/** Die Kopfzeile eines Monats: Aufrufe, Besuche, Downloads — für den Vergleich
+ *  über die Monate, ohne die ganze Seite je Monat aufzubauen. */
+function month_totals(string $dir, string $month): array
+{
+    $rows = entries($dir, $month);
+    $pages = 0;
+    $downloads = 0;
+    foreach ($rows as $row) {
+        if ($row['kind'] === 'p') {
+            $pages++;
+        } elseif ($row['kind'] === 'd') {
+            $downloads++;
+        }
+    }
+    return [
+        'pages' => $pages,
+        'visitors' => array_sum(visitors_per_day($rows)),
+        'downloads' => $downloads,
+    ];
+}
+
 $dir = store_dir();
 $available = months($dir);
 $zone = new DateTimeZone(DISPLAY_ZONE);
@@ -414,6 +499,77 @@ $peak = max(1, max(array_map(static fn (array $d): int => ($d['p'] ?? 0) + ($d['
 $today = (new DateTimeImmutable('now', $zone))->format('Y-m-d');
 $today_pages = $per_day[$today]['p'] ?? 0;
 $today_downloads = $per_day[$today]['d'] ?? 0;
+
+// Seiten je Besuch — die eine Zahl, die „viele Aufrufe" von „viele Leute"
+// unterscheidet. Ohne Besuche bleibt sie leer statt durch null zu teilen.
+$visit_sum = array_sum($visitors);
+$pages_per_visit = $visit_sum > 0
+    ? number_format(count($pages) / $visit_sum, 1, ',', '.')
+    : '—';
+
+// Nach Stunde und Wochentag, nur Seitenaufrufe: wann gelesen wird.
+$by_hour = array_fill(0, 24, 0);
+$by_weekday = array_fill(1, 7, 0);
+foreach ($pages as $row) {
+    $by_hour[$row['hour']]++;
+    $by_weekday[$row['weekday']]++;
+}
+$hour_peak = max(1, max($by_hour));
+$weekday_peak = max(1, max($by_weekday));
+$weekday_names = [1 => 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag',
+    'Freitag', 'Samstag', 'Sonntag'];
+
+// Sprachfassungen der Aufrufe.
+$by_language = [];
+foreach ($pages as $row) {
+    $code = language_of($row['value']);
+    $by_language[$code] = ($by_language[$code] ?? 0) + 1;
+}
+arsort($by_language);
+$language_names = ['de' => 'Deutsch', 'en' => 'Englisch', 'es' => 'Spanisch',
+    'fr' => 'Französisch', 'it' => 'Italienisch', 'pt' => 'Portugiesisch'];
+
+// Zielsysteme der Downloads.
+$by_platform = [];
+foreach ($downloads as $row) {
+    $name = platform_of($row['value']);
+    $by_platform[$name] = ($by_platform[$name] ?? 0) + 1;
+}
+arsort($by_platform);
+
+// Einstiegsseiten und Besuchstiefe — beides je Besuch, beides je Tag.
+$visit_paths = visits($rows);
+$entry_pages = [];
+$depth_bands = ['1 Seite' => 0, '2 bis 3' => 0, '4 bis 9' => 0, '10 und mehr' => 0];
+foreach ($visit_paths as $paths) {
+    $entry_pages[$paths[0]] = ($entry_pages[$paths[0]] ?? 0) + 1;
+    $n = count($paths);
+    if ($n === 1) {
+        $depth_bands['1 Seite']++;
+    } elseif ($n <= 3) {
+        $depth_bands['2 bis 3']++;
+    } elseif ($n <= 9) {
+        $depth_bands['4 bis 9']++;
+    } else {
+        $depth_bands['10 und mehr']++;
+    }
+}
+arsort($entry_pages);
+
+// Wie viele Aufrufe ohne verweisende Seite kamen — die Zeile, die in der
+// „Woher"-Tabelle sonst unsichtbar fehlt.
+$without_referrer = count(array_filter($rows, static fn (array $row): bool => $row['from'] === ''));
+
+// Alle Monate nebeneinander — erst ab dem zweiten lohnt die Tabelle.
+$month_rows = [];
+if (count($available) > 1) {
+    foreach ($available as $option) {
+        $month_rows[$option] = $option === $month
+            ? ['pages' => count($pages), 'visitors' => $visit_sum, 'downloads' => count($downloads)]
+            : month_totals($dir, $option);
+    }
+    ksort($month_rows);
+}
 
 /**
  * Was im Download-Ordner liegt, mit Größe — Dateiname als Schlüssel.
@@ -468,6 +624,7 @@ function e(string $text): string
   h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
   h1 .abmelden { font-size: .8rem; font-weight: normal; margin-left: .75rem; vertical-align: middle; }
   h2 { font-size: 1.1rem; margin: 2.5rem 0 .75rem; }
+  h3 { font-size: .95rem; margin: 1.75rem 0 .5rem; }
   .sub { color: var(--dim); margin: 0 0 2rem; }
   .zahlen { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0 0 1rem; }
   .zahl { border: 1px solid var(--line); border-radius: .5rem; padding: .75rem 1.25rem; min-width: 8rem; }
@@ -510,7 +667,8 @@ und geht keinen Besucher etwas an.)</p>
 
 <div class="zahlen">
   <div class="zahl"><b><?= number_format((float) count($pages), 0, ',', '.') ?></b><span>Seitenaufrufe im Monat</span></div>
-  <div class="zahl"><b><?= number_format((float) array_sum($visitors), 0, ',', '.') ?></b><span>Besuche (Summe der Tage)</span></div>
+  <div class="zahl"><b><?= number_format((float) $visit_sum, 0, ',', '.') ?></b><span>Besuche (Summe der Tage)</span></div>
+  <div class="zahl"><b><?= e($pages_per_visit) ?></b><span>Seiten je Besuch</span></div>
   <div class="zahl"><b><?= number_format((float) count($downloads), 0, ',', '.') ?></b><span>Downloads im Monat</span></div>
   <div class="zahl"><b><?= $today_pages ?> · <?= $today_downloads ?></b><span>heute: Aufrufe · Downloads</span></div>
 </div>
@@ -526,6 +684,49 @@ und geht keinen Besucher etwas an.)</p>
       <td class="n"><?= (int) ($visitors[$day] ?? 0) ?></td>
       <td class="n"><?= (int) ($counts['d'] ?? 0) ?></td>
       <td><span class="balken" style="width: <?= max(1, (int) round($sum / $peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+
+<?php if ($month_rows): ?>
+<h2>Monate im Vergleich</h2>
+<?php $month_peak = max(1, max(array_map(static fn (array $t): int => $t['pages'], $month_rows))); ?>
+<table>
+  <tr><th>Monat</th><th class="n">Aufrufe</th><th class="n">Besuche</th><th class="n">Downloads</th><th style="width:40%"></th></tr>
+  <?php foreach ($month_rows as $option => $totals): ?>
+    <tr>
+      <td><?php if ($option === $month): ?><b><?= e($option) ?></b><?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?></td>
+      <td class="n"><?= number_format((float) $totals['pages'], 0, ',', '.') ?></td>
+      <td class="n"><?= number_format((float) $totals['visitors'], 0, ',', '.') ?></td>
+      <td class="n"><?= number_format((float) $totals['downloads'], 0, ',', '.') ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($totals['pages'] / $month_peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
+
+<h2>Nach Uhrzeit</h2>
+<p class="sub">Seitenaufrufe je Stunde, über den ganzen Monat aufsummiert.</p>
+<table>
+  <tr><th>Stunde</th><th class="n">Aufrufe</th><th style="width:55%"></th></tr>
+  <?php foreach ($by_hour as $hour => $count): ?>
+    <?php if ($count === 0) { continue; } ?>
+    <tr>
+      <td><?= $hour ?>–<?= $hour + 1 ?> Uhr</td>
+      <td class="n"><?= $count ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($count / $hour_peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+
+<h2>Nach Wochentag</h2>
+<table>
+  <tr><th>Tag</th><th class="n">Aufrufe</th><th style="width:55%"></th></tr>
+  <?php foreach ($by_weekday as $weekday => $count): ?>
+    <tr>
+      <td><?= e($weekday_names[$weekday]) ?></td>
+      <td class="n"><?= $count ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($count / $weekday_peak * 100)) ?>%"></span></td>
     </tr>
   <?php endforeach; ?>
 </table>
@@ -560,6 +761,21 @@ $listed = $files + array_map(static fn (int $size): int => 0, $present);
     </tr>
   <?php endforeach; ?>
 </table>
+
+<?php if ($by_platform): ?>
+<h3>Nach Zielsystem</h3>
+<?php $platform_peak = max(1, max($by_platform)); ?>
+<table>
+  <tr><th>Zielsystem</th><th class="n">Downloads</th><th style="width:55%"></th></tr>
+  <?php foreach ($by_platform as $name => $count): ?>
+    <tr>
+      <td><?= e($name) ?></td>
+      <td class="n"><?= (int) $count ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($count / $platform_peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
 <?php endif; ?>
 
 <h2>Seiten</h2>
@@ -573,6 +789,49 @@ $listed = $files + array_map(static fn (int $size): int => 0, $present);
     <tr><td><?= e($path) ?></td><td class="n"><?= (int) $count ?></td></tr>
   <?php endforeach; ?>
 </table>
+
+<?php if ($by_language): ?>
+<h3>Nach Sprachfassung</h3>
+<?php $language_peak = max(1, max($by_language)); ?>
+<table>
+  <tr><th>Fassung</th><th class="n">Aufrufe</th><th style="width:55%"></th></tr>
+  <?php foreach ($by_language as $code => $count): ?>
+    <tr>
+      <td><?= e($language_names[$code] ?? $code) ?></td>
+      <td class="n"><?= (int) $count ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($count / $language_peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
+
+<?php if ($entry_pages): ?>
+<h3>Einstiegsseiten</h3>
+<p class="sub">Die erste Seite jedes Besuchs — wo Leser ankommen, nicht wohin
+sie weiterklicken. Je Tag gezählt, wie die Besuche selbst.</p>
+<table>
+  <tr><th>Pfad</th><th class="n">Besuche</th></tr>
+  <?php foreach (array_slice($entry_pages, 0, TOP, true) as $path => $count): ?>
+    <tr><td><?= e($path) ?></td><td class="n"><?= (int) $count ?></td></tr>
+  <?php endforeach; ?>
+</table>
+
+<h3>Besuchstiefe</h3>
+<p class="sub">Wie viele Seiten ein Besuch umfasst. Viele Ein-Seiten-Besuche
+heißen: Leser kommen an und bleiben nicht — oder die eine Seite beantwortet
+schon alles.</p>
+<?php $depth_peak = max(1, max($depth_bands)); ?>
+<table>
+  <tr><th>Seiten je Besuch</th><th class="n">Besuche</th><th style="width:55%"></th></tr>
+  <?php foreach ($depth_bands as $band => $count): ?>
+    <tr>
+      <td><?= e($band) ?></td>
+      <td class="n"><?= (int) $count ?></td>
+      <td><span class="balken" style="width: <?= max(1, (int) round($count / $depth_peak * 100)) ?>%"></span></td>
+    </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
 <?php endif; ?>
 
 <h2>Woher</h2>
@@ -583,6 +842,7 @@ $listed = $files + array_map(static fn (int $size): int => 0, $present);
 <?php else: ?>
 <table>
   <tr><th>Verweisende Seite</th><th class="n">Aufrufe</th></tr>
+  <tr><td class="leer">direkt oder ohne mitgeschickte Herkunft</td><td class="n"><?= (int) $without_referrer ?></td></tr>
   <?php foreach (array_slice($sources, 0, TOP, true) as $host => $count): ?>
     <tr><td><?= e($host) ?></td><td class="n"><?= (int) $count ?></td></tr>
   <?php endforeach; ?>
