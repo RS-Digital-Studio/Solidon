@@ -132,6 +132,27 @@ def _op_present(name: str) -> StepCheck:
     return check
 
 
+def _op_gone(name: str) -> StepCheck:
+    """Getan, sobald keine Operation dieses Namens mehr im Stapel steht.
+
+    **Die Gegenprüfung zu ``_op_present``, und sie ist präziser als
+    ``_undo_happened``.** Jenes fragt nur, ob *irgendetwas* zurückgenommen
+    wurde (``history.can_redo``) — bei einem Beispiel, in dem hinter dem
+    gemeinten Schritt noch einer steht, quittiert es schon nach dem ersten
+    Strg+Z, während der Zustand, den die Tour beschreibt, noch gar nicht
+    erreicht ist. Der Nutzer tut, was dasteht, sieht das Gegenteil, und die
+    Führung bestätigt ihn (gefunden von 72 am elften Beispiel, 31.08.2026).
+
+    Hier wird gefragt, ob der genannte Schritt weg ist — also der Zustand
+    selbst und nicht eine Bewegung dorthin.
+    """
+
+    def check(document: Document, history: History) -> bool:
+        return _first_op(document, name) is None
+
+    return check
+
+
 def _op_restored(name: str) -> StepCheck:
     """Getan, sobald die Operation wieder da und nichts mehr zurückgenommen
     ist — die Erkennung für ein Redo nach einem Undo."""
@@ -735,7 +756,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                     "Weg — der andere ist, die Öffnung um 0,15 mm zu weiten und "
                     "das weiche Material zu behalten."
                 ),
-                done=_undo_happened,
+                done=_op_gone("set_material"),
             ),
         ),
         closing=_(

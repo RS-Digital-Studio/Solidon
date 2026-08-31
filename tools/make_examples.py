@@ -821,13 +821,20 @@ def fit_after_material_change() -> Project:
     # Strg+Z nimmt den Materialwechsel zurück, und der Bericht wird grün. Das
     # ist der Weg, den das Beispiel vorführt.
     history.apply(
-        _("Deckel aus TPU"),
-        [OperationDraft(op="set_material", inputs=(lid,), params={"material": "tpu-95a"})],
-    )
-
-    history.apply(
         _("Anordnen"),
         [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
+    )
+
+    # **Zuletzt, und das ist keine Geschmacksfrage.** Die Tour sagt „nimm den
+    # letzten Schritt zurück, der Bericht wird grün" — stünde danach noch das
+    # Anordnen, bräuchte es zwei Strg+Z, und nach dem ersten stünde die Warnung
+    # noch da. Ein Nutzer tut dann, was dasteht, sieht das Gegenteil, und die
+    # Führung quittiert ihm trotzdem Erfolg (gefunden von 72 in der Abnahme,
+    # 31.08.2026). Ein Beispiel, dessen Anleitung einen Schritt danebenliegt,
+    # ist schlimmer als keins.
+    history.apply(
+        _("Deckel aus TPU"),
+        [OperationDraft(op="set_material", inputs=(lid,), params={"material": "tpu-95a"})],
     )
     return project
 
