@@ -13435,7 +13435,22 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       zwischen mitwandernder Merkmalslage (sauber, berührt jedes Merkmal)
       und Nachrechnen in `maps.location_of` (klein, kuriert eine Stelle).
       Lehre daneben, an 1bs Beinahe-Warnung: **Eine richtige Umrechnung
-      eines veralteten Werts bleibt veraltet.**
+      eines veralteten Werts bleibt veraltet.** **URSACHE ZURÜCKGEZOGEN
+      (c3, mit Ansage, wenige Minuten später): Dieselbe Abfrage antwortet
+      in zwei Messwegen verschieden** — über ein `MainWindow` (0,33 | 0 |
+      30, außerhalb) gegen ein nacktes `Session()` (−66,67 | 77 | 30,
+      **innerhalb**, exakt um die Körpermitte verschoben — also genau die
+      Verschiebung, deren Fehlen der Befund war). Beispieldatei
+      unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
+      **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
+      am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
+      arrange_bed überholt es"** — wenn `location_of` im Fensterfall anders
+      antwortet, liegt der Fehler eine Ebene tiefer. 0d ist am Orts-Teil
+      gestoppt, der Auswahl-Teil läuft weiter. Maßgabe für die Klärung:
+      **Wenn zwei Läufe verschieden antworten, ist die Frage nicht „welcher
+      stimmt", sondern „welcher entspricht dem Kundenweg" — der Kunde hat
+      immer ein Fenster;** beide Zahlen werden mit ihrem Weg gemeldet, nie
+      eine allein.
 - [ ] **Ein `return` macht aus drei gleichzeitigen Stufen ein
       Entweder-oder — die zweite Hälfte des Klick-Wegs** (c3 nachgemessen,
       Sonde geeicht: `object_tree.selected()` unterscheidet obj_1/obj_2/None,
