@@ -19,7 +19,7 @@ from itertools import pairwise
 from typing import Any, Final, Literal, NamedTuple, cast
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -1357,10 +1357,16 @@ def _available() -> bool:
     VTK braucht einen echten OpenGL-Kontext; auf der Offscreen-Qt-Plattform
     scheiterte es nicht höflich, sondern nähme den Prozess mit. Also passiert
     die Prüfung davor und nicht in einem except-Zweig.
+
+    Die Plattform wird beim Aufbau der ``QGuiApplication`` festgelegt. Ein
+    späterer Werkzeugaufruf kann die Umgebungsvariable entfernen, ändert Qt
+    damit aber nicht mehr. Die wirksame Plattform gewinnt deshalb; nur vor dem
+    Anwendungsaufbau bleibt die Variable der Rückfall.
     """
     if os.environ.get(HEADLESS_VARIABLE):
         return False
-    if os.environ.get("QT_QPA_PLATFORM") in ("offscreen", "minimal", "vnc"):
+    platform = QGuiApplication.platformName() or os.environ.get("QT_QPA_PLATFORM", "")
+    if platform.casefold() in ("offscreen", "minimal", "vnc"):
         return False
     try:
         import pyvista  # noqa: F401

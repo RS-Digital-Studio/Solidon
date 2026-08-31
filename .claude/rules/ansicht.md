@@ -97,6 +97,16 @@ einmal gefehlt:
   zwei Zustände in einem Bild, und beide echt. Wer dem geglaubt hätte, hätte
   einen Fehler gesucht, den es nicht gibt.
 
+**Ob VTK überhaupt starten darf, entscheidet die wirksame Qt-Plattform.** Sie
+steht beim Aufbau der `QGuiApplication` fest. Ein später gestartetes Werkzeug
+kann `QT_QPA_PLATFORM` aus der Umgebung entfernen, macht aus einer laufenden
+Offscreen-Anwendung aber keine Windows- oder XCB-Anwendung. Wer danach nur die
+Variable liest, baut einen nativen VTK-Interactor ohne passenden Qt-Kontext;
+der Prozess stirbt beim nächsten Fensteraufbau in
+`render_window_interactor.initialize`. Deshalb fragt `viewport._available()`
+zuerst `QGuiApplication.platformName()` und nimmt die Umgebungsvariable nur
+vor dem Anwendungsaufbau als Rückfall.
+
 Für eine Zeile, die nicht umbrechen kann — eine Skala, eine Knopfleiste —
 lohnt daneben die Zahl: `sizeHint().width()` gegen `width()`, **in jeder
 Sprache**. Was gequetscht wird, meldet Qt nicht.

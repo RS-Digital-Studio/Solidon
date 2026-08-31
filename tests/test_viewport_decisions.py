@@ -64,6 +64,25 @@ from app.ui.theme import THEMES, viewport_colours
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
 
 
+def test_the_effective_qt_platform_keeps_vtk_out_after_the_environment_changes(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Plattform steht beim ``QApplication``-Aufbau fest, nicht danach.
+
+    ``tools.make_manual.main`` entfernt ``QT_QPA_PLATFORM``, wenn es als
+    Werkzeug läuft. Ein Test ruft diesen Einstieg im selben Prozess auf. Qt
+    bleibt dabei offscreen; nur die Umgebungsvariable ist fort. Wer allein sie
+    fragt, baut danach einen echten VTK-Interactor ohne passenden Qt-Kontext
+    und der nächste Fensteraufbau stirbt nativ statt mit einem Testfehler.
+    """
+    from app.ui import viewport
+
+    assert qt_app.platformName() == "offscreen"
+    monkeypatch.delenv("QT_QPA_PLATFORM", raising=False)
+
+    assert not viewport._available()
+
+
 def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) -> None:
     """Eine Farbe aus OBJ/PLY/GLB wird gezeichnet, nicht nur gespeichert (§20)."""
     from app.ui.viewport import Viewport
