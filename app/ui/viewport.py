@@ -649,6 +649,84 @@ def sketch_cursor(
     ]
 
 
+def hatch_lines(
+    corners: Any, normal: Vec3, spacing: float, limit: int = 40
+) -> list[tuple[Vec3, Vec3]]:
+    """Parallele Striche über einer Dreiecksfläche — zweite Kodierung nach Regel 18.
+
+    Eine geschützte Sichtfläche trägt eine Tönung. Tönung allein ist Farbe, und
+    Farbe allein trägt keine Bedeutung: Wer sie nicht unterscheiden kann, sieht
+    eine Fläche wie jede andere. Die Striche sind das zweite Merkmal, und sie
+    sind Geometrie wie das Kreuz in :func:`cross_marks` und der Pfeil in
+    :func:`pull_handle` — keine Textur, die beim Drehen mitwandert.
+
+    ``corners`` sind die Eckpunkte je Dreieck (drei Zeilen je Dreieck), wie der
+    Merkmals-Patch sie ohnehin baut. Geschnitten wird mit einer Schar von
+    Ebenen quer zur Fläche; zurück kommen die Segmente, die dabei in den
+    Dreiecken liegen.
+
+    **Die Schnittrichtung kommt aus der Normalen und nicht aus einer Achse.**
+    Eine Fläche, die in der xy-Ebene liegt, hat mit z-Schnitten keinen
+    Schnittpunkt — sie läge in der Ebene. Gewählt wird deshalb die Achse, zu
+    der die Normale am wenigsten zeigt; das Kreuzprodukt daraus liegt sicher
+    in der Fläche.
+
+    ``limit`` deckelt die Zahl der Striche. Eine große Fläche mit engem Abstand
+    ergäbe sonst tausende Segmente, und die kosten beim Drehen mehr, als sie
+    dem Auge sagen.
+    """
+    import numpy as np
+
+    points = np.asarray(corners, dtype=float)
+    if len(points) < 3 or spacing <= 0.0:
+        return []
+    up = np.asarray(normal, dtype=float)
+    length = float(np.linalg.norm(up))
+    if length <= EPS_GEOM:
+        return []
+    up = up / length
+    # Die Achse, zu der die Normale am wenigsten zeigt: ihr Kreuzprodukt mit
+    # der Normalen ist am längsten und damit am stabilsten.
+    axis = np.zeros(3)
+    axis[int(np.argmin(np.abs(up)))] = 1.0
+    across = np.cross(up, axis)
+    across /= np.linalg.norm(across)
+
+    reach = points @ across
+    low, high = float(reach.min()), float(reach.max())
+    if high - low <= spacing:
+        return []
+    steps = np.arange(low + spacing, high, spacing)
+    if len(steps) > limit:
+        steps = np.linspace(low + spacing, high - spacing / 2.0, limit)
+
+    triangles = points.reshape(-1, 3, 3)
+    away = reach.reshape(-1, 3)
+    segments: list[tuple[Vec3, Vec3]] = []
+    for level in steps:
+        side = away - level
+        # Ein Dreieck trägt ein Segment, wenn seine Ecken nicht alle auf
+        # derselben Seite liegen.
+        touched = (side.min(axis=1) < 0.0) & (side.max(axis=1) > 0.0)
+        for triangle, offsets in zip(triangles[touched], side[touched], strict=True):
+            crossing = []
+            for first, second in ((0, 1), (1, 2), (2, 0)):
+                one, other = offsets[first], offsets[second]
+                if (one < 0.0) == (other < 0.0):
+                    continue
+                share = one / (one - other)
+                crossing.append(triangle[first] + share * (triangle[second] - triangle[first]))
+            if len(crossing) == 2:
+                start, end = crossing
+                segments.append(
+                    (
+                        (float(start[0]), float(start[1]), float(start[2])),
+                        (float(end[0]), float(end[1]), float(end[2])),
+                    )
+                )
+    return segments
+
+
 def pull_handle(
     frame: PlaneFrame,
     curves: Sequence[SketchCurve],

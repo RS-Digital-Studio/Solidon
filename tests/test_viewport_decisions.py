@@ -3325,3 +3325,101 @@ def test_clicking_a_finding_is_never_without_an_answer() -> None:
     zeigen = inspect.getsource(MainWindow._show_finding_at)
     assert "view_point_of" in zeigen, "aus der Szene in die Ansicht (§25)"
     assert "mark_finding" in zeigen, "und am Ziel steht eine Marke"
+
+
+# --- die Schraffur einer geschützten Sichtfläche (T8, Regel 18) -------------------
+
+
+def quadrat(normale: str) -> Any:
+    """Ein 10-mm-Quadrat aus zwei Dreiecken, in der Ebene quer zur Normalen.
+
+    Als Eckpunktliste je Dreieck, genau wie der Merkmals-Patch sie baut: drei
+    Zeilen je Dreieck, geteilte Ecken doppelt.
+    """
+    import numpy as np
+
+    flach = np.array(
+        [
+            [0.0, 0.0],
+            [10.0, 0.0],
+            [10.0, 10.0],
+            [0.0, 0.0],
+            [10.0, 10.0],
+            [0.0, 10.0],
+        ]
+    )
+    leer = np.zeros((6, 1))
+    if normale == "z":
+        return np.hstack([flach, leer])
+    if normale == "x":
+        return np.hstack([leer, flach])
+    return np.hstack([flach[:, :1], leer, flach[:, 1:]])
+
+
+def test_the_hatch_covers_the_face_at_the_asked_spacing() -> None:
+    """Die Striche liegen in der Fläche, im verlangten Abstand.
+
+    Der Nullpunkt: Zehn Millimeter Fläche, zwei Millimeter Abstand, also vier
+    Striche dazwischen. Sie liegen in der Ebene der Fläche und innerhalb ihrer
+    Grenzen — eine Schraffur, die über den Rand ragt, wäre keine.
+    """
+    import numpy as np
+
+    from app.ui.viewport import hatch_lines
+
+    segmente = hatch_lines(quadrat("z"), (0.0, 0.0, 1.0), 2.0)
+
+    assert segmente, "eine 10-mm-Fläche trägt bei 2 mm Abstand Striche"
+    punkte = np.array([ort for strich in segmente for ort in strich])
+    assert np.allclose(punkte[:, 2], 0.0), "die Striche liegen in der Fläche"
+    assert punkte[:, 0].min() >= -1e-9 and punkte[:, 0].max() <= 10.0 + 1e-9
+    assert punkte[:, 1].min() >= -1e-9 and punkte[:, 1].max() <= 10.0 + 1e-9
+    hoehen = sorted({round(float(wert), 6) for wert in punkte[:, 1]})
+    assert hoehen == [2.0, 4.0, 6.0, 8.0], f"vier Striche im Abstand zwei, gefunden {hoehen}"
+
+
+def test_the_hatch_works_on_any_orientation() -> None:
+    """**Der Fall, an dem eine feste Achse scheitert.**
+
+    Wer quer zu ``z`` schneidet, bekommt auf einer Fläche, die selbst in der
+    xy-Ebene liegt, keinen einzigen Schnittpunkt: Die Ebenen lägen parallel
+    zur Fläche. Die Schnittrichtung kommt deshalb aus der Normalen, und dieser
+    Test fährt alle drei Lagen.
+    """
+    from app.ui.viewport import hatch_lines
+
+    for richtung, normale in (
+        ("z", (0.0, 0.0, 1.0)),
+        ("x", (1.0, 0.0, 0.0)),
+        ("y", (0.0, 1.0, 0.0)),
+    ):
+        segmente = hatch_lines(quadrat(richtung), normale, 2.0)
+        assert len(segmente) >= 4, f"Fläche mit Normale {richtung}: {len(segmente)} Striche"
+
+
+def test_a_face_smaller_than_the_spacing_stays_bare() -> None:
+    """Kein Strich ist besser als einer, der die Fläche halbiert.
+
+    Bei einer Fläche, die schmaler ist als der Abstand, trägt die Schraffur
+    nichts zur Lesbarkeit bei — sie sähe wie eine Kante aus.
+    """
+    from app.ui.viewport import hatch_lines
+
+    assert hatch_lines(quadrat("z"), (0.0, 0.0, 1.0), 20.0) == []
+    assert hatch_lines(quadrat("z"), (0.0, 0.0, 1.0), 0.0) == []
+    assert hatch_lines(quadrat("z"), (0.0, 0.0, 0.0), 2.0) == [], "ohne Normale keine Richtung"
+
+
+def test_the_hatch_stays_within_its_limit() -> None:
+    """Eine große Fläche mit engem Abstand kostet sonst beim Drehen.
+
+    Ohne Deckel ergäben zehn Millimeter bei 0,01 Abstand tausend Striche, und
+    keiner davon sagt mehr als der vorige.
+    """
+    from app.ui.viewport import hatch_lines
+
+    segmente = hatch_lines(quadrat("z"), (0.0, 0.0, 1.0), 0.01, limit=12)
+
+    hoehen = {round(strich[0][1], 6) for strich in segmente}
+    assert len(hoehen) <= 12, f"höchstens zwölf Striche, gefunden {len(hoehen)}"
+    assert len(hoehen) >= 10, "und nicht plötzlich gar keine mehr"
