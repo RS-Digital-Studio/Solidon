@@ -607,3 +607,53 @@
     console.warn("site.js: Block ab Zeile 507 ausgefallen —", problem);
   }
 })();
+
+/* Die Aufnahmen in der Wege-Sektion.
+ *
+ * **Im Markup steht `controls` und kein `autoplay`.** Wer kein JavaScript hat,
+ * sieht das Standbild und einen Abspielknopf — er kann es ansehen, wenn er
+ * will. Hier wird die Leiste weggenommen und der Loop gestartet, sobald er im
+ * Bild ist; damit gibt es keinen Zustand, in dem etwas läuft, das jemand nicht
+ * wollte, und keinen, in dem etwas stillsteht, das niemand starten kann.
+ *
+ * **Bei reduzierter Bewegung passiert hier gar nichts**, und das ist der
+ * Unterschied zwischen „abgeschaltet" und „weggenommen": Die Bedienleiste
+ * bleibt stehen, das Standbild auch. Automatische Bewegung gehört abgeschaltet,
+ * Bedienung nicht.
+ *
+ * Angehalten wird beim Verlassen des Bildes. Ein Loop, der unten weiterläuft,
+ * kostet Rechenzeit für nichts — auf einem Telefon ist das Akku.
+ */
+(() => {
+  try {
+    const films = document.querySelectorAll("video.weg-film");
+    if (!films.length) return;
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    if (!("IntersectionObserver" in window)) return;
+
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) {
+            entry.target.pause();
+            continue;
+          }
+          /* **Erst wenn es wirklich läuft, verschwindet die Leiste.** Ein
+             Browser darf das Abspielen verweigern, und dann stünde der
+             Besucher sonst vor einem Standbild ohne Knopf. */
+          entry.target
+            .play()
+            .then(() => entry.target.removeAttribute("controls"))
+            .catch(() => {});
+        }
+      },
+      { rootMargin: "120px" }
+    );
+
+    for (const film of films) watcher.observe(film);
+  } catch (problem) {
+    console.warn("site.js: die Wege-Aufnahmen laufen nicht —", problem);
+  }
+})();

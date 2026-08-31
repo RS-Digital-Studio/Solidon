@@ -1121,6 +1121,21 @@ nav.lang .menu > summary {
   }
 }
 
+/* Die Aufnahmen der Wege. Sie stehen an der Stelle, an der vorher eine
+   Zeichnung stand, und übernehmen deren Maße — dieselbe Breite, dieselbe
+   Rundung, derselbe dunkle Grund darunter. Der Grund ist nicht Zierde: Ein
+   Video lädt sein Standbild erst, und bis dahin wäre die Fläche durchsichtig
+   und die Seite spränge, sobald es da ist. */
+.weg-film {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--r-lg);
+  background: var(--stage);
+  object-fit: cover;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
