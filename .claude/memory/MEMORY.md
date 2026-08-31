@@ -37,7 +37,6 @@
 - [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht; dazu Reihenfolge und `--nachpruefen` am Ende.
 - [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s; ein halbes Paket sieht ganz aus.
 - [Gesetzt heißt nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips; der Wert sagt nichts über die Sichtbarkeit.
-- [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Web-Geschwister von „Qt lügt vor dem Anzeigen".
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — isVisible und hasFocus antworten falsch, solange nichts angezeigt ist.
 - [Die Suite fährt ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — ein Farbtest misst Windows; falsche Werte mit stimmendem Verhältnis tarnen sich.
 - [Signal passt an den falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet, was von der Stelligkeit passt; nur das Bildschirmfoto sah es.
@@ -48,6 +47,7 @@
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — der Suchbegriff ist die Verneinung, nicht der Name der neuen Sache.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — ein leerer Verweis liest sich so glatt wie ein gültiger.
 - [Wächter sieht nur das Getane](waechter-sieht-nur-das-getane.md) — blind für das, was ein Framework von selbst tut; neun ungesetzte Akzente.
+- [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — dreimal an einem Morgen: richtige Regel, ungeprüfter Rand. Wo gilt das noch, wo ich es nicht gemeint habe?
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — fragte, ob das Wörterbuch voll ist, statt was darin steht; verglich null.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler, sechs Finder, keiner davon pytest; ansehen, mutieren, durchfahren.
 - [Testprojekt trifft den Fall nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was der Test hineinlegt; acht von neun Beispielen fielen.
@@ -64,7 +64,6 @@
 - [Zwei Zeilen sind nicht die Funktion](zwei-zeilen-sind-nicht-die-funktion.md) — „Fehlalarm" verlangt, dass man liest, was mit dem Rückgabewert geschieht; drei Sitzungen stimmten derselben Verkürzung zu.
 
 - [Suche prüft ihre eigene Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — ein Filter, der nichts trifft, sieht aus wie einer, der nichts findet.
-- [Bestätigung verstärkt die Fehlannahme](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei Messungen derselben falschen Frage lesen sich wie Beleg; die Übereinstimmung prüft die Frage nicht mit.
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
@@ -80,6 +79,7 @@
 - [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
 - [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
 - [Abgelesene Zahl altert still](abgelesene-zahl-altert-still.md) — sie stimmt nur in der Lage, in der sie entstand; was fehlt, sieht aus wie Absicht.
+- [Eine Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — beim Vereinheitlichen auf eine Skala verlieren bewegliche Werte genau das, wofür sie da sind.
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
 
