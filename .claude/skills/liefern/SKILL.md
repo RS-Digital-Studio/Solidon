@@ -63,6 +63,13 @@ getan. Findet sich ein zurückgebliebener Autostash, gehört sein Inhalt
 verglichen und zurückgespielt, bevor irgendwer weiterarbeitet — im geteilten
 Baum trifft er fremde Arbeit.
 
+**Und jeder Wächter, der Dateien zählt, fragt `git diff HEAD` — nie `git diff`
+ohne Ziel.** Ohne HEAD läuft der Vergleich gegen den Haupt-Index, und der ist
+in diesem Baum alt (siehe unten): Er kennt die privat committeten Stände nicht
+und meldet die eigene, längst gelandete Arbeit als offene fremde. Gemessen am
+31.08.2026 — 36 Fehlalarme beim ersten Lauf eines neuen Guards; gegen HEAD
+gefragt waren es null.
+
 ## Wer mit privatem Index committet, zieht den Haupt-Index nach
 
 Im geteilten Arbeitsbaum committet jede Sitzung über `GIT_INDEX_FILE` und
