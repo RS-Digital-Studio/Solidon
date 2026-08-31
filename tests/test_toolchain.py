@@ -241,6 +241,76 @@ def test_the_version_file_fits_the_clients_that_are_already_out_there() -> None:
     )
 
 
+def test_the_delivered_file_carries_both_views_and_they_agree() -> None:
+    """Was hinausgeht, trägt beide Sichten — und sie sagen dasselbe.
+
+    **Der Anschluss zu ``test_both_views_of_the_changelog_carry_the_same_points``
+    darüber.** Der prüft die *Erzeuger* (``changes_for``, ``grouped_for``) an
+    den Changelog-Quellen; dieser prüft das *Ergebnis*. Zwischen beiden liegt
+    ``write_version`` mit der Kappung, und dort geht die Zusage verloren, wenn
+    sie verloren geht: Eine Kappung, die nur die flache Liste stutzt, macht
+    genau diese Datei in sich falsch, und beide Nachbartests blieben grün.
+
+    Gemessen an ``website/version.json``, weil das die Datei ist, die der
+    Kunde abruft — nicht an einer gebauten Nachbildung.
+    """
+    import json
+
+    version_file = _ROOT / "website" / "version.json"
+    data = json.loads(version_file.read_text(encoding="utf-8"))
+
+    flat = data.get("changes")
+    assert isinstance(flat, dict) and flat, (
+        "website/version.json trägt keine Punkte unter `changes` — genau die "
+        "flache Sicht ist das Einzige, was eine ausgelieferte 0.2.1 liest"
+    )
+    grouped = data.get("groups")
+    assert isinstance(grouped, dict) and grouped, (
+        "website/version.json trägt keine `groups` — das Update-Fenster zeigte "
+        "die Punkte dann wieder als flache Liste, wie vor dem 30.08.2026"
+    )
+
+    for language, points in flat.items():
+        blocks = grouped.get(language)
+        assert blocks, f"{language}: flach vorhanden, gegliedert nicht"
+        from_groups = [point for block in blocks for point in block["points"]]
+        assert from_groups == points, (
+            f"{language}: die ausgelieferte Datei nennt {len(points)} Punkte flach "
+            f"und {len(from_groups)} gegliedert — dieselbe Datei sagt zwei Stände"
+        )
+
+
+def test_the_delivered_file_stays_readable_for_an_old_client() -> None:
+    """Die ausgelieferte Datei bleibt lesbar für die Fassungen, die draußen sind.
+
+    Gemessen am 31.08.2026 gegen den ausgecheckten Code von v0.2.1 und v0.2.2:
+    Beide kennen ``groups`` nicht, beide lesen die Datei vollständig, die echte
+    Unterschrift trägt in beiden. Der Grund steht in ``signed_payload``, und er
+    ist das, was dieser Test festhält: Unterschrieben wird **alles außer der
+    Unterschrift**, also auch ein Feld, das der alte Code nicht kennt. Würde
+    dort je eine Feldliste stehen, bräche jede ausgelieferte Fassung — und der
+    Bruch fiele erst beim Kunden auf, denn der neue Code prüfte gegen sich
+    selbst.
+
+    Die Größe prüft der Test darüber. Hier geht es um den Inhalt: Jede Sprache,
+    die die Datei nennt, trägt auch Punkte. Eine Sprache mit leerer Liste wäre
+    für den alten Leser ein Update ohne einen Satz Text.
+    """
+    import json
+
+    from app.core.updates import signature_ok
+
+    data = json.loads((_ROOT / "website" / "version.json").read_text(encoding="utf-8"))
+    assert signature_ok(data), (
+        "die eingecheckte version.json trägt keine gültige Unterschrift — jede "
+        "ausgelieferte Fassung verwirft sie ungelesen"
+    )
+
+    flat = data.get("changes") or {}
+    leer = sorted(language for language, points in flat.items() if not points)
+    assert not leer, f"ohne Punkte in {leer} — dort sähe der Kunde ein Update ohne Text"
+
+
 # --- der festgeschriebene Versionssatz -------------------------------------------
 #
 # `constraints.txt` hält fest, *in welcher* Version ein Paket installiert wird.
