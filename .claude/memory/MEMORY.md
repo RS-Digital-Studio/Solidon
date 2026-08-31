@@ -77,7 +77,6 @@
 - [Rezept ist der Fund, die Op ist die Ursache](rezept-ist-der-fund-op-ist-die-ursache.md) — zwei „Bausteinfehler“ lagen im Rezept, und beide Male fehlte in Wahrheit eine Prüfung in der Operation; dazu: der Boden verrät, was die Hüllgröße verschweigt.
 - [Fehlalarm, den mehrere für einen halten](fehlalarm-den-mehrere-fuer-einen-halten.md) — „das ist doch nur eine Messung“ gilt nicht, sobald sie verrechnet wird; und die Wirkung war null, während mein Kommentar mehr behauptete.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
-- [Schwelle misst die falsche Achse](schwelle-misst-die-falsche-achse.md) — dieselbe Klasse wie ein Messfehler, aber im ausgelieferten Code; je schlimmer der Fall, desto stiller.
 
 - [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
 - [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
@@ -87,6 +86,8 @@
 - [Erzeugte Datei führt ins fremde Werkzeug](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — der Befund kommt aus dem eigenen Gebiet, die Antwort liegt in einem fremden.
 - [Eigener Messfehler widerlegt den Befund nicht](eigener-messfehler-widerlegt-den-befund-nicht.md) — eine falsche Entwarnung kostet den Fund; zwei getrennte Fragen.
 - [Am Eingang drehen](am-eingang-drehen.md) — antwortet die Messung auf jede Änderung gleich, misst sie nichts; billiger als der bekannte Ausgang.
+- [Eingestellter Wert ist nicht das Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — `ch` ist nicht Zeichen, Kaskadenwert nicht Bild, String nicht Darstellung.
+- [Schwelle misst die falsche Achse](schwelle-misst-die-falsche-achse.md) — dieselbe Fehlerklasse im ausgelieferten Code; je schlimmer der Fall, desto stiller.
 - [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — eine richtige Regel mit ungeprüftem Geltungsbereich; wo gilt sie noch, wo ich sie nicht gemeint habe?
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
