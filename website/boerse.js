@@ -103,14 +103,26 @@
     liste.setAttribute("aria-busy", "true");
     let antwort;
     try {
-      const daten = await fetch("/api/shared.php?" + werte.toString());
+      /* **Mit Frist.** Ohne sie wartet `fetch` unbegrenzt, und die Seite steht
+         auf „wird geladen", bis jemand sie neu lädt. Der Zustand, den Robert
+         am 31.08.2026 gesehen hat, sah aus wie ein langsamer Server und war
+         einer, der gar nicht antwortet. */
+      const abbruch = new AbortController();
+      const frist = setTimeout(() => abbruch.abort(), 8000);
+      const daten = await fetch("/api/shared.php?" + werte.toString(), {
+        signal: abbruch.signal,
+      });
+      clearTimeout(frist);
+      /* Ein Server ohne PHP liefert die Datei als Quelltext — mit Status 200.
+         `fetch` ist damit zufrieden, und erst `json()` merkt es. Deshalb wird
+         beides hier gefangen und nicht nur der Netzfehler. */
       antwort = await daten.json();
     } catch (fehler) {
       liste.setAttribute("aria-busy", "false");
-      if (hinweis) {
-        hinweis.textContent =
-          "Die Liste ließ sich nicht laden. Prüfe deine Verbindung und lade die Seite neu.";
-      }
+      /* **Nicht „prüfe deine Verbindung".** Solange die Börse noch nicht
+         eingerichtet ist, liegt es nicht am Kunden, und ein Rat, der ihn
+         suchen schickt, ist schlechter als keiner. Der Leerzustand aus dem
+         Markup bleibt einfach stehen — er sagt schon das Richtige. */
       return;
     }
     liste.setAttribute("aria-busy", "false");

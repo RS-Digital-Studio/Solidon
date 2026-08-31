@@ -558,9 +558,13 @@ nav.lang a.cta:hover {
   .turntable {
     animation: none;
     background-position-y: 0%;
-    cursor: default;
+    /* **Der Greifzeiger bleibt.** Er stand hier auf `default`, weil das Skript
+       an dieser Stelle vollständig ausstieg; seit die Bedienung auch bei
+       reduzierter Bewegung arbeitet, wäre ein Pfeil die Ansage, dass nichts
+       zu greifen ist — und das stimmt nicht mehr. */
   }
-  .turn-hint { display: none; }
+  /* Der Hinweis bleibt stehen und wird vom Skript umgeschrieben: Ausgeblendet
+     erfuhr niemand, dass Ziehen möglich ist. */
 }
 
 /* Das Produktbild steht allein in seiner Spalte. Der Platz ist so gebaut,
@@ -2997,11 +3001,18 @@ p.footnote {
 .boerse-hochladen button,
 .boerse-suche button { margin-top: 0; }
 
-/* Solange die Liste lädt, steht hier ein Satz; danach die Kacheln. Ohne eine
-   Mindesthöhe springt die Seite in dem Moment, in dem die Antwort ankommt. */
+/* Solange die Liste lädt, steht hier ein Satz; danach die Kacheln.
+   **Die Mindesthöhe gilt nur während des Ladens** (`aria-busy`), und das ist
+   der Unterschied zwischen einer Seite, die nicht springt, und einer, die ein
+   Loch hat: Bei leerer Börse stand unter dem einen Satz eine Fläche von acht
+   Zeilen Nichts — Robert am 31.08.2026 als „zu leer" gemeldet, im selben Bild
+   wie der Ladezustand, den er beanstandet hatte. */
 #ergebnis {
-  min-height: 8rem;
   margin-top: 1.75rem;
+}
+
+#ergebnis[aria-busy="true"] {
+  min-height: 8rem;
 }
 
 .boerse-liste {
