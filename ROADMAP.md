@@ -13728,7 +13728,27 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       nichts und formal „getroffen"). **Kamera und Licht sind als Ursache
       des Kiesel-Standbilds damit erledigt — es gab nichts zu sehen.**
       Lehre (1b): **Eine Zahl ist nie nur eine Zahl, sie hat einen
-      Ursprung.** **Behoben — nach einem zweiten Fehlversuch derselben
+      Ursprung.** **Sprite neu und eingesetzt (`c9a78622`): 1000 × 15768,
+      36 Aufnahmen à 1000×438 = exakt 16/7** wie das Stylesheet es seit dem
+      Morgen verlangt (310 statt 214 kB für 25 % mehr Breite). **Dabei ein
+      zweiter Befund aus dem Morgen-Einstieg:** `shoot_turntable` verlangt
+      im Docstring seit jeher, dass ein anderes Motiv seinen eigenen
+      Abstand mitbringt — `TURNTABLE_ZOOM` ist am Gehäuse gemessen, der
+      Rollenhalter ist 128 mm breit —, **und der neue Einstieg hatte dafür
+      keinen Schalter**: Im ausgelieferten Sprite war die Oberkante der
+      Seitenwand abgeschnitten, und wer es hätte ändern wollen, hätte eine
+      Konstante verstellen müssen, die einem anderen Schaustück gehört.
+      **Dritte Instanz derselben Familie an einem Tag: Eine Datei, die eine
+      Falle richtig benennt, ist gegen sie nicht immun** — der Docstring
+      beschrieb das Problem präzise, und der Aufrufer zehn Zeilen weiter
+      konnte ihm nicht folgen. `--zoom` gibt es jetzt (0,80), **an allen 36
+      Drehlagen nachgeprüft statt an einer** (ein breites Teil wandert beim
+      Drehen; ein Einzelbild sagt über die anderen 35 nichts). Und die
+      Ursache für den fehlenden vierten Schalter: **drei Schalter mit
+      demselben zwölfzeiligen Leseblock davor** — `option()` liest sie
+      jetzt alle. Die sechs `index.html` liegen gestempelt, aber
+      **uncommittet** (sie tragen die zurückgestellte Weg-4-Karte), damit
+      niemandem ein fremdes Rot begegnet. **Behoben — nach einem zweiten Fehlversuch derselben
       Art:** Die erste Reparatur setzte die Züge von 18 mm zu hoch auf
       35 mm zu **tief** (Annahme „Körper um den Ursprung gebaut"; gemessen
       liegt er 16,80–53,20, weil `create_sphere` aufs Bett stellt und
@@ -13917,7 +13937,7 @@ statt eingefrorener Oberfläche (§2.8), keine GPL (Regel 15), jede Bewertung
 | T5 | Zerbrechlichkeit und Festigkeit als Heuristik: dünne Splitterteile bestrafen, Naht meidet die Lastzone; FEM bewusst zurückgestellt (Regel 22) | S–M | **zu als Negativbefund** (15, gemessen an neun Formen, kein Commit): Bauraumfenster und Mittenlage erzwingen ausgewogene Teile — am 17-Nahtlagen-Fall laufen Score und Festigkeit parallel, die Suche wählt die splitterfreieste Lage von selbst; Splitter entstehen nur, wo der Körper selbst schlank ist, und dann vermeidet sie keine Naht; Lastzonen-Meidung ist ohne Nutzungswissen nicht bestimmbar, das Querschnitts-Minimum meidet die Naht seit T1. Ehrliche Grenze: neun Formen sind keine Vollständigkeit — das Messgerüst steht, eine neue Form kostet eine halbe Stunde |
 | T6 | Symmetrie erhalten: Schnitt auf oder symmetrisch zur erkannten Symmetrieebene | S–M | offen |
 | T7 | Globale Suche statt greedy: Beam Search über Schnittfolgen (Vorbild Chopper, Breite ~4), abbrechbar in `JUDGE_BLOCK`-Häppchen | M–L | offen |
-| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | **in Arbeit (15): Vorschlag mit Bild vor dem Bau** — zwei Varianten (Markiergeste, Sperr-Anzeige, Rücknahme, und was die Suche sagt, wenn unter der Sperre keine gute Naht bleibt: anhalten und fragen, Regel 21), gemessen gegen die Oberflächengrenzen, Bild an Robert und Review |
+| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | **in Arbeit (1b, Test zuerst). Bauart entschieden: Sperre über KOORDINATEN, nicht über Dreiecksindizes** — `split_to_fit` schneidet mehrfach, jedes Teilstück ist ein neues Netz mit neuer Nummerierung, eine Index-Sperre wäre nach dem ersten Schnitt verloren; `Feature.face_indices` bleibt der Weg von der angeklickten Fläche zu den Punkten, aber **einmal beim Markieren statt bei jedem Schnitt**. Drei Auflagen: **Abstände zur Ebene statt Achsposition** (gilt für jede Normale und bleibt bei T3s schiefen Ebenen richtig), Toleranz in der Größenordnung der übrigen Suche (ein Punkt auf der Ebene ist kein Schnitt), und **der Test bildet den Mehrfachschnitt ab** — genau dort wäre die Index-Fassung durchgefallen. Ursprünglich: **Vorschlag mit Bild vor dem Bau** — zwei Varianten (Markiergeste, Sperr-Anzeige, Rücknahme, und was die Suche sagt, wenn unter der Sperre keine gute Naht bleibt: anhalten und fragen, Regel 21), gemessen gegen die Oberflächengrenzen, Bild an Robert und Review |
 | T9 | Das Schaustück: zusammengebaut sehen, dann die Bett-Lage der Einzelteile — Explosions-Szene im Loop-Drehbuch, Motiv aus den mehrteiligen Galerieteilen (Roberts Idee, Hälfte b) | S | offen |
 
 - [ ] Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 →
