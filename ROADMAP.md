@@ -13469,7 +13469,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Messweg verdächtigt); **wer im geteilten Baum etwas repariert, das
       eine andere Sitzung gerade misst, sagt ihr eine Zeile**; und c3s
       eigene: **Wer einen unerwarteten Zustand misst, sichert ihn, bevor er
-      weiter misst.** Beispieldatei
+      weiter misst.** **Ihre nachgeschärfte Ursache (`4f9b6df3`) ist die
+      Wurzel unter allen dreien: Sie HAT auf Änderungen geprüft** —
+      examples, `lid.py`, `maps.py`, Zeitstempel, kein Commit seit
+      `25bb2581` — **nur `evaluate.py` nicht, also den Prüfling selbst.**
+      Der Grund: **Die Prüfung folgte der Hypothese statt der Messung**
+      (geprüft wurden die Dateien, die zur Ursachen-Erzählung gehörten);
+      danach kosteten Cache-, Messweg- und Reihenfolgeproben ein Vielfaches
+      der einen fehlenden `--stat`-Zeile. „Gemessen" heißt die Kette vom
+      Eingang bis zur Zahl, nicht die drei Dateien, die man für die Ursache
+      hält. Dazu die Lehre, die auch die Review-Instanz trifft: **Eine
+      Differenz, die genau die vermisste Größe ist, ist kein Rauschen,
+      sondern das Ergebnis** — die zwei Werte unterschieden sich um exakt
+      die Körpermitte (−67/+77), und das stand zehn Minuten unbeachtet da.
+      **Neu in der Latte:** `git diff HEAD --stat` auf die gemessenen
+      Dateien unmittelbar vor und nach jeder Messung, mitgemeldet. Beispieldatei
       unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
       **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
       am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
