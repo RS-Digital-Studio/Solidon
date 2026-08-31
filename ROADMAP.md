@@ -13455,7 +13455,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       danach; die fehlende Verschiebung ist in beiden sichtbar.** Lehre:
       **Eine Sonderbehandlung, die nur die halbe Menge kennt, ist ein
       Fehler mit gutem Gewissen.** Erkannte Merkmale sind eine andere
-      Klasse (weg4 zeigt 21) und bleiben offen. Beispieldatei
+      Klasse (weg4 zeigt 21) und bleiben offen. **Die Zeitachse des
+      scheinbaren Widerspruchs ist vollständig aufgelöst: 0ds Fix lag ab
+      ~12:20 UNCOMMITTET im Arbeitsbaum, c3 hat ihn ab 12:26 mitgemessen**
+      (nachgemessen: `git diff HEAD` zeigt die 41 Zeilen) — 12:15/12:16 vor
+      dem Fix falsch über *beide* Messwege, ab 12:26 richtig über *beide*.
+      Kein Cache, kein Fenster, keine Reihenfolge: **Eine Nachbarsitzung
+      hat den Prüfling unter der laufenden Messung repariert**, und beide
+      Befunde stehen damit — Symptom am Bild (vor dem Fix), Ursache am
+      Quelltext. Drei Lehren: **Vor jeder Wiederholungsmessung
+      `git diff HEAD --stat` auf die gemessenen Dateien** (drei Sekunden,
+      beantwortet „hat sich der Prüfling geändert?", bevor man den eigenen
+      Messweg verdächtigt); **wer im geteilten Baum etwas repariert, das
+      eine andere Sitzung gerade misst, sagt ihr eine Zeile**; und c3s
+      eigene: **Wer einen unerwarteten Zustand misst, sichert ihn, bevor er
+      weiter misst.** Beispieldatei
       unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
       **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
       am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
