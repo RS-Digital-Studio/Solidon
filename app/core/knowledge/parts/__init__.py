@@ -8,30 +8,43 @@ nichts hier darf für sie eine Lizenzfrage aufwerfen.
 Bausteine sind gegen ``manifold3d`` gebaut, nicht gegen OpenSCAD —
 ``insert_part`` hängt so an keiner externen Installation und bleibt testbar.
 
-Der Import dieses Pakets registriert die mitgelieferten Bausteine. Eigene
-Bausteine aus dem Nutzerverzeichnis werden getrennt und mit Absicht geladen
-(§24.5) — sie sind nicht Teil der Anwendung, nur der Bibliothek auf einem
-Rechner.
+Ein bloßer Paketimport registriert nichts. Der Anwendungstakt lädt die fünf
+mitgelieferten Gruppen ausdrücklich über :mod:`app.core.bootstrap`. Der
+öffentliche ``PARTS``-Import behält seine bisherige Zusage und lädt die
+Bibliothek beim ersten Zugriff; eigene Bausteine bleiben davon getrennt
+(§24.5).
 """
 
-from app.core.knowledge.parts import (  # noqa: F401
-    fasteners,
-    mechanics,
-    mounting,
-    structure,
-    testbodies,
-)
-from app.core.knowledge.parts.registry import (
-    GROUPS,
-    LIBRARY_VERSION,
-    PARTS,
-    PartChange,
-    PartRegistry,
-    PartSpec,
-    changed_since,
-    missing_parts,
-    register_part,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Final
+
+from app.core.lazy import install
+
+if TYPE_CHECKING:
+    from app.core.knowledge.parts.registry import (
+        GROUPS,
+        LIBRARY_VERSION,
+        PARTS,
+        PartChange,
+        PartRegistry,
+        PartSpec,
+        changed_since,
+        missing_parts,
+        register_part,
+    )
+
+_EXPORTS: Final = {
+    "GROUPS": ("registry", "GROUPS"),
+    "LIBRARY_VERSION": ("registry", "LIBRARY_VERSION"),
+    "PARTS": ("builtin", "PARTS"),
+    "PartChange": ("registry", "PartChange"),
+    "PartRegistry": ("registry", "PartRegistry"),
+    "PartSpec": ("registry", "PartSpec"),
+    "changed_since": ("builtin", "changed_since"),
+    "missing_parts": ("builtin", "missing_parts"),
+    "register_part": ("registry", "register_part"),
+}
 
 __all__ = [
     "GROUPS",
@@ -44,3 +57,5 @@ __all__ = [
     "missing_parts",
     "register_part",
 ]
+
+install(__name__, _EXPORTS)

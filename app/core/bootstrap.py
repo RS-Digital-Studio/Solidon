@@ -9,6 +9,7 @@ unvollständiges Menü, ohne dass irgendwo ein Fehler stünde.
 from __future__ import annotations
 
 import importlib
+from threading import Lock
 from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
@@ -41,24 +42,26 @@ _OPERATION_MODULES: Final[tuple[str, ...]] = (
 )
 
 #: Die Bausteinbibliothek deklariert selbst keine Operationen — je Baustein
-#: wird eine erzeugt (§24.1). Der Paketimport füllt das Bausteinregister, der
+#: wird eine erzeugt (§24.1). ``builtin.load`` füllt das Bausteinregister, der
 #: Aufruf danach macht aus jedem Eintrag eine Operation.
 _PART_MODULE: Final = "app.core.knowledge.parts"
 
 _loaded = False
+_load_lock = Lock()
 
 
 def load_operations() -> None:
     """Importiert jedes Modul, das Operationen deklariert. Mehrfacher Aufruf
     ist unschädlich."""
     global _loaded
-    if _loaded:
-        return
-    for name in _OPERATION_MODULES:
-        importlib.import_module(name)
-    importlib.import_module(_PART_MODULE)
-    importlib.import_module(f"{_PART_MODULE}.ops").register_all()
-    _loaded = True
+    with _load_lock:
+        if _loaded:
+            return
+        for name in _OPERATION_MODULES:
+            importlib.import_module(name)
+        importlib.import_module(f"{_PART_MODULE}.builtin").load()
+        importlib.import_module(f"{_PART_MODULE}.ops").register_all()
+        _loaded = True
 
 
 _user_loaded = False

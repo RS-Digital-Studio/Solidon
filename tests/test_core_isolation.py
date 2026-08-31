@@ -200,7 +200,7 @@ def test_two_threads_may_import_the_same_package() -> None:
     ist der Unterschied. Ein Test nur auf ``scene`` hätte genau den einen Fall
     festgehalten, den jemand schon behoben hat.
 
-    Sechs davon lösen ihre Namen jetzt erst beim Zugriff auf
+    Sieben davon lösen ihre Namen jetzt erst beim Zugriff auf
     (:mod:`app.core.lazy`). Im Subprozess, weil die Module beim Start des Tests
     längst geladen wären und der Fall dann nicht mehr auftritt.
     """
@@ -209,25 +209,14 @@ def test_two_threads_may_import_the_same_package() -> None:
         import importlib, pkgutil, sys, threading
         import app.core
 
-        # Ein bekannter offener Fall. Er steht in ROADMAP.md; wer ihn behebt,
-        # streicht seinen Namen hier -- dann prüft dieser Test ihn mit.
-        #
-        # ``knowledge.parts``: dort ist der Import die **Registrierung**. Die
-        # fünf Modulimporte im ``__init__`` füllen das Bausteinregister, und
-        # ``bootstrap.load_operations`` verlässt sich darauf. Verzögert wären
-        # sie wirkungslos -- das ist kein Strukturfix mehr, sondern eine
-        # Verhaltensänderung mit eigenem Punkt.
-        KNOWN_OPEN = {"app.core.knowledge.parts"}
-
         # **Alles Nachschlagen passiert hier, vor dem ersten Thread.** Der
         # erste Anlauf ließ den zweiten Thread das Paket selbst importieren,
         # um an seine Untermodule zu kommen -- damit war das Paket geladen,
         # bevor der Wettlauf begann, und der Test war grün an einem Paket, das
-        # nachweislich deadlockt. Gegenprobe gemacht: ohne KNOWN_OPEN muss er
-        # rot werden.
+        # nachweislich deadlockt.
         packages = []
         for info in pkgutil.walk_packages(app.core.__path__, "app.core."):
-            if not info.ispkg or info.name in KNOWN_OPEN:
+            if not info.ispkg:
                 continue
             module = importlib.import_module(info.name)
             # Nur Pakete, deren __init__ überhaupt etwas lädt -- ein Docstring
@@ -281,6 +270,360 @@ def test_two_threads_may_import_the_same_package() -> None:
     assert not finished.stdout.strip(), (
         "two threads deadlocked while importing the same package:\n" + finished.stdout
     )
+
+
+def test_parts_package_defers_registration_and_survives_parallel_imports() -> None:
+    """§24-Registrierung gehört in den Bootstrap, nicht in den Paketimport.
+
+    Der öffentliche ``PARTS``-Import bleibt der bequeme Bibliotheksvertrag und
+    lädt die mitgelieferten Bausteine bei seinem ersten Zugriff. Ein bloßes
+    ``import app.core.knowledge.parts`` bleibt dagegen frei von registrierenden
+    Untermodulen. Der 50-fache Wettlauf hält genau die beiden früher
+    verklemmten Wege gegeneinander.
+    """
+    script = textwrap.dedent(
+        """
+        import importlib, sys, threading
+
+        shipped = (
+            "fasteners",
+            "mechanics",
+            "mounting",
+            "structure",
+            "testbodies",
+        )
+        prefix = "app.core.knowledge.parts."
+
+        import app.core.knowledge.parts as parts
+        eager = sorted(name for name in sys.modules if name.startswith(prefix))
+        assert not eager, eager
+
+        broken = []
+        for attempt in range(50):
+            for stale in [name for name in sys.modules if name.startswith("app.")]:
+                del sys.modules[stale]
+
+            def through_package():
+                try:
+                    package = importlib.import_module("app.core.knowledge.parts")
+                    assert package.PARTS.all()
+                except BaseException as error:
+                    broken.append(
+                        f"{attempt} (package): {type(error).__name__}: {error}"
+                    )
+
+            def through_submodules():
+                try:
+                    for name in shipped:
+                        importlib.import_module(f"app.core.knowledge.parts.{name}")
+                except BaseException as error:
+                    broken.append(
+                        f"{attempt} (modules): {type(error).__name__}: {error}"
+                    )
+
+            first = threading.Thread(target=through_package)
+            second = threading.Thread(target=through_submodules)
+            first.start()
+            second.start()
+            first.join(timeout=10)
+            second.join(timeout=10)
+            if first.is_alive() or second.is_alive():
+                broken.append(f"{attempt}: nach 10 s noch nicht beendet")
+                break
+
+        print("\\n".join(broken))
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+        timeout=90,
+    )
+
+    assert finished.returncode == 0, finished.stderr or finished.stdout
+    assert not finished.stdout.strip(), finished.stdout
+
+
+def test_public_part_version_helpers_load_only_the_default_registry() -> None:
+    """§24.4-Helfer sehen den Bestand, ohne Test-Register zu beladen.
+
+    Beide Prozesse greifen absichtlich nie auf ``PARTS`` zu. Damit beweist der
+    erste, dass der öffentliche Helfer selbst die mitgelieferten Gruppen lädt;
+    der zweite hält die Gegenrichtung: Ein ausdrücklich übergebenes Register
+    bleibt vollständig isoliert und importiert keine Gruppe als Nebenwirkung.
+    """
+    default_script = textwrap.dedent(
+        """
+        import sys
+        import app.core.knowledge.parts as parts
+
+        prefix = "app.core.knowledge.parts."
+        shipped = parts.changed_since({"screw_hole": "0"})
+        missing = parts.missing_parts(
+            {"screw_hole": "0", "not_installed": "1"}
+        )
+
+        assert shipped == ("screw_hole",), shipped
+        assert missing == ("not_installed",), missing
+        assert all(
+            f"{prefix}{name}" in sys.modules
+            for name in ("fasteners", "mechanics", "mounting", "structure", "testbodies")
+        )
+        """
+    )
+    explicit_script = textwrap.dedent(
+        """
+        import sys
+        import app.core.knowledge.parts as parts
+
+        registry = parts.PartRegistry()
+        assert parts.changed_since({"screw_hole": "0"}, registry) == ()
+        assert parts.missing_parts({"own_part": "1"}, registry) == ("own_part",)
+        assert not any(
+            f"app.core.knowledge.parts.{name}" in sys.modules
+            for name in ("fasteners", "mechanics", "mounting", "structure", "testbodies")
+        )
+        """
+    )
+
+    for script in (default_script, explicit_script):
+        finished = subprocess.run(
+            [sys.executable, "-c", script],
+            capture_output=True,
+            text=True,
+            cwd=Path(app.core.__file__).parents[2],
+            check=False,
+        )
+        assert finished.returncode == 0, finished.stderr or finished.stdout
+
+
+def test_bootstrap_loads_shipped_parts_exactly_once() -> None:
+    """Der Anwendungstakt lädt die fünf Bausteingruppen genau einmal."""
+    script = textwrap.dedent(
+        """
+        import importlib, sys, typing
+
+        loader = importlib.import_module("app.core.knowledge.parts.builtin")
+        operations = importlib.import_module("app.core.knowledge.parts.ops")
+        registry = importlib.import_module("app.core.knowledge.parts.registry")
+        assert typing.get_type_hints(loader.load)["return"] is registry.PartRegistry
+        original_load = loader.load
+        original_register = operations.register_all
+        calls = []
+
+        def counted_load():
+            calls.append("parts")
+            return original_load()
+
+        def counted_register():
+            calls.append("ops")
+            return original_register()
+
+        loader.load = counted_load
+        operations.register_all = counted_register
+        from app.core.bootstrap import load_operations
+        load_operations()
+        load_operations()
+
+        assert calls == ["parts", "ops"], calls
+        assert loader.SHIPPED_MODULES == (
+            "fasteners",
+            "mechanics",
+            "mounting",
+            "structure",
+            "testbodies",
+        )
+        assert all(
+            f"app.core.knowledge.parts.{name}" in sys.modules
+            for name in loader.SHIPPED_MODULES
+        )
+        from app.core.knowledge.parts import PARTS
+        assert PARTS.all()
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+    )
+
+    assert finished.returncode == 0, finished.stderr or finished.stdout
+
+
+def test_parts_loader_recovers_from_a_partial_module_import() -> None:
+    """Ein abgebrochener Dekoratorlauf darf das Register nicht vergiften.
+
+    Python entfernt ein Modul nach einem Importfehler aus ``sys.modules``,
+    nimmt dessen bereits ausgeführte Dekoratoren aber nicht zurück. Ohne eine
+    Transaktion trifft der nächste Versuch deshalb auf den ersten gebliebenen
+    Baustein und meldet ihn als doppelt registriert.
+    """
+    script = textwrap.dedent(
+        """
+        import importlib, sys
+
+        loader = importlib.import_module("app.core.knowledge.parts.builtin")
+        registry = importlib.import_module("app.core.knowledge.parts.registry")
+        original = registry.PARTS.register
+        calls = 0
+
+        def fail_after_one(spec):
+            global calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("erzwungener Abbruch im Gruppenimport")
+            return original(spec)
+
+        registry.PARTS.register = fail_after_one
+        try:
+            loader.load()
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("der erzwungene Teilimport ist nicht abgebrochen")
+        finally:
+            registry.PARTS.register = original
+
+        assert not registry.PARTS.all(), [spec.name for spec in registry.PARTS.all()]
+        assert loader._loaded is False
+
+        complete = loader.load()
+        assert complete.all()
+        assert loader._loaded is True
+        assert all(
+            f"app.core.knowledge.parts.{name}" in sys.modules
+            for name in loader.SHIPPED_MODULES
+        )
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+    )
+
+    assert finished.returncode == 0, finished.stderr or finished.stdout
+
+
+def test_parts_loader_keeps_a_parallel_completed_group_when_the_next_group_fails() -> None:
+    """Rollback betrifft das Fehler-Modul, nicht eine parallel beendete Gruppe.
+
+    ``fasteners`` steckt beim Snapshot schon in ``sys.modules``, hat aber noch
+    keinen Dekorator abgeschlossen. Danach registriert es vollständig;
+    ``mechanics`` bricht beim zweiten Baustein ab. Der Retry muss beide Gruppen
+    vollständig sehen — die erste aus dem Cache, die zweite aus dem Neuimport.
+    """
+    script = textwrap.dedent(
+        """
+        import importlib, sys, threading
+
+        loader = importlib.import_module("app.core.knowledge.parts.builtin")
+        registry = importlib.import_module("app.core.knowledge.parts.registry")
+        original_import = importlib.import_module
+        original_register = registry.PARTS.register
+        fasteners = "app.core.knowledge.parts.fasteners"
+        mechanics = "app.core.knowledge.parts.mechanics"
+        expected_fasteners = {
+            "heatset_m4",
+            "nut_trap",
+            "printed_nut",
+            "printed_screw",
+            "printed_thread",
+            "screw_hole",
+        }
+        entered_fasteners = threading.Event()
+        release_fasteners = threading.Event()
+        loader_waiting = threading.Event()
+        failed = []
+        parallel_failed = []
+        mechanics_calls = 0
+
+        def controlled_register(spec):
+            global mechanics_calls
+            if spec.fn.__module__ == fasteners and not entered_fasteners.is_set():
+                entered_fasteners.set()
+                assert release_fasteners.wait(10), "fasteners wurde nicht freigegeben"
+            if spec.fn.__module__ == mechanics:
+                mechanics_calls += 1
+                if mechanics_calls == 2:
+                    raise RuntimeError("erzwungener Abbruch in mechanics")
+            return original_register(spec)
+
+        def tracked_import(name):
+            if name == fasteners and threading.current_thread().name == "loader":
+                loader_waiting.set()
+            return original_import(name)
+
+        registry.PARTS.register = controlled_register
+        loader.importlib.import_module = tracked_import
+
+        def load_fasteners():
+            try:
+                original_import(fasteners)
+            except BaseException as error:
+                parallel_failed.append(error)
+
+        first = threading.Thread(target=load_fasteners, name="fasteners")
+
+        def load_with_failure():
+            try:
+                loader.load()
+            except BaseException as error:
+                failed.append(error)
+
+        second = threading.Thread(target=load_with_failure, name="loader")
+        first.start()
+        assert entered_fasteners.wait(10), "fasteners erreichte keinen Dekorator"
+        second.start()
+        assert loader_waiting.wait(10), "loader wartete nicht auf fasteners"
+        release_fasteners.set()
+        first.join(10)
+        second.join(10)
+        assert not first.is_alive() and not second.is_alive(), "Import-Deadlock"
+        assert not parallel_failed, parallel_failed
+        assert len(failed) == 1 and isinstance(failed[0], RuntimeError), failed
+        assert loader._loaded is False
+        after_failure = registry.PARTS.all()
+        assert {
+            spec.name for spec in after_failure if spec.fn.__module__ == fasteners
+        } == expected_fasteners
+        assert not any(spec.fn.__module__ == mechanics for spec in after_failure)
+
+        registry.PARTS.register = original_register
+        loader.importlib.import_module = original_import
+        complete = loader.load()
+        modules = {spec.fn.__module__ for spec in complete.all()}
+
+        assert len(complete.all()) == 27
+        assert {
+            spec.name for spec in complete.all() if spec.fn.__module__ == fasteners
+        } == expected_fasteners
+        assert fasteners in modules, sorted(modules)
+        assert mechanics in modules, sorted(modules)
+        assert all(
+            f"app.core.knowledge.parts.{name}" in modules
+            for name in loader.SHIPPED_MODULES
+        ), sorted(modules)
+        assert loader._loaded is True
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+        timeout=90,
+    )
+
+    assert finished.returncode == 0, finished.stderr or finished.stdout
 
 
 def test_activation_keeps_its_public_names_without_eager_submodules() -> None:

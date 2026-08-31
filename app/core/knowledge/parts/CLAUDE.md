@@ -38,6 +38,7 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | Datei | Rolle |
 |---|---|
 | `registry.py` | `register_part`, `PARTS`, `LIBRARY_VERSION`, `changed_since()` |
+| `builtin.py` | Lädt die fünf mitgelieferten Gruppen einmalig; `bootstrap.load_operations()` ruft `builtin.load()` vor der Op-Erzeugung, der Paketimport selbst registriert nichts |
 | `ops.py` | **Jeder Baustein wird zusätzlich eine Operation** (§24.1, §10) |
 | `build.py` | Gemeinsamer Boden für jeden Baustein |
 | `shapes.py` | Kleine Formen, aus denen die Bausteine gebaut werden |
