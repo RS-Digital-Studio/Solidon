@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -33,6 +34,7 @@ from app.core.backends.llm import (
     OllamaBackend,
 )
 from app.core.bootstrap import load_operations
+from tools.measure_local_model import model_state, unload
 
 SYSTEM = (
     "Du steuerst ein CAD-Programm über Werkzeuge. Benutze für jede Anfrage ein "
@@ -57,6 +59,7 @@ def check(model: str) -> bool:
     schemas = tool_schemas()
     structured = 0
     hits = 0
+    times: list[float] = []
     lines: list[str] = []
 
     for question, wanted in CASES:
@@ -71,6 +74,7 @@ def check(model: str) -> bool:
             lines.append(f"    {wanted:18} Fehler  {type(problem).__name__}: {problem}")
             continue
         seconds = time.perf_counter() - started
+        times.append(seconds)
 
         if not reply.wants_tools:
             lines.append(f"    {wanted:18} Prosa  {seconds:5.1f}s  {reply.text[:58]!r}")
@@ -84,8 +88,26 @@ def check(model: str) -> bool:
             lines.append(f"    {wanted:18} falsch {seconds:5.1f}s  {names}")
 
     total = len(CASES)
+    # **Quote und Zeit aus demselben Lauf.** Zwei Tabellen über zwei Zustände
+    # der Maschine wären nicht vergleichbar: Ein Modell mit guter Quote in
+    # 700 Sekunden ist für den Kunden schlechter als eines mit knapper Quote
+    # in zehn, und diese Abwägung darf nicht aus getrennten Läufen entstehen.
+    on_gpu, share = model_state()
+    where = (
+        "ungemessen"
+        if on_gpu is None
+        else f"{'Karte' if on_gpu else 'Prozessor'} ({share} % im VRAM)"
+    )
+    # **Erst messen, dann entladen.** Die erste Fassung räumte vor der
+    # Abfrage auf und meldete deshalb bei jedem Modell „ungemessen" — das
+    # Aufräumen ist richtig, es stand nur an der falschen Stelle.
+    unload(model)
+    middle = statistics.median(times) if times else 0.0
     print(f"  {model}")
-    print(f"    strukturiert {structured}/{total} · richtig {hits}/{total}")
+    print(
+        f"    strukturiert {structured}/{total} · richtig {hits}/{total}"
+        f" · Median {middle:.1f} s je Anfrage · {where}"
+    )
     for line in lines:
         print(line)
     print()

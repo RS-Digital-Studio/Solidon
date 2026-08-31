@@ -84,7 +84,7 @@ class Turn:
         return self.prompt_tokens / self.seconds if self.seconds else 0.0
 
 
-def _ps() -> tuple[bool | None, int | None]:
+def model_state() -> tuple[bool | None, int | None]:
     """Wo das Modell gerade liegt — ``(ganz im VRAM?, Anteil in Prozent)``.
 
     ``(None, None)``, wenn ``api/ps`` nicht antwortet oder nichts geladen ist.
@@ -143,7 +143,7 @@ def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
         print(f"    Abbruch nach {time.monotonic() - started:.0f} s — {type(error).__name__}")
         return None
     seconds = time.monotonic() - started
-    on_gpu, share = _ps()
+    on_gpu, share = model_state()
     return Turn(
         seconds=seconds,
         prompt_tokens=int(data.get("prompt_eval_count", 0)),
@@ -152,7 +152,7 @@ def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
     )
 
 
-def _unload(model: str) -> None:
+def unload(model: str) -> None:
     """Den Speicher zurückgeben — auch wenn der Lauf gescheitert ist."""
     request = urllib.request.Request(
         ollama_endpoint(None),
@@ -238,7 +238,7 @@ def main() -> int:
     try:
         # **Kalt zuerst, und kalt heißt wirklich kalt.** Ein Kaltstart nach
         # einem warmen Lauf misst nichts — deshalb wird vorher entladen.
-        _unload(arguments.model)
+        unload(arguments.model)
         print("  Kaltstart …")
         cold = _ask(arguments.model, schemas)
         warm = []
@@ -248,7 +248,7 @@ def main() -> int:
             if turn is not None:
                 warm.append(turn)
     finally:
-        _unload(arguments.model)
+        unload(arguments.model)
 
     print()
     _report("kalt", [cold] if cold else [])
