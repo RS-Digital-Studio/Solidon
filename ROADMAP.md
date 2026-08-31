@@ -117,7 +117,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten | Befunde aus dem Weg-Dreh (31.08.2026) | 3as Reproduktion an ihrer Datei — an vier Korpusmodellen nicht reproduzierbar, generated_figure war Vererbung; die Meldelücke des Pakets ist behoben (`0d1edb8b`: SIMPLIFY_MISSED misst jetzt gegen das Ziel statt gegen den Eingang) |
 | 61 % der mehrzeiligen Startseiten-Texte laufen über 75 Zeichen | Die Zeilen laufen zu lang (31.08.2026) | den Grundregel-Entwurf (15, nach T1; mit 50 abgestimmt, von 72 nachgemessen) — die Punktfixes haben ihre Stellen zu, dies ist die Grundsatzfrage dahinter; längste gemessene Zeile 153 Zeichen |
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
-| Die Tour des elften Beispiels verspricht ein falsches Undo | Befunde aus dem Weg-Dreh (31.08.2026) | 50s Fix mit drei Auflagen (Schrittfolge drehen, Satz auf den Registertitel, done = „Warnung weg") — danach 72s Sprach-Stichprobe und der Kameraflug am echten Fenster |
+| Der Deckelname friert die Sprache seiner Erzeugung ein | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix in `lid.py:451` (0d): Ein englischer Kunde liest im Objektbaum „Can" und darunter **„Dose Deckel"** — der Name wird beim Erzeugen aufgelöst und als fester String gespeichert, trägt also den ALTEN Namen des Quellkörpers und zerschneidet den Zusammenhang; trifft jedes mitgelieferte Beispiel in fünf Sprachen (c3 gemessen), Zwillingssuche gehört dazu |
+| `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Die Ollama-Serie O1–O5 | Ollama bis zum Anschlag (31.08.2026) | die Abarbeitung nach Roberts Order („wird oft benutzt, bis zum Anschlag optimieren, perfekte Qualität/Performance") — O1 zuerst: Modell warmhalten und klären, warum es mit 0 % VRAM auf der CPU rechnet (701 s je Anfrage); dann Messstrecke, Grundlast-Endausbau mit Quote-Messung je Schritt, Modell-Empfehlung; bei d3 |
@@ -13404,7 +13405,40 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Material des Erzeugungszeitpunkts ein — vertretbar, aber jeder so
       erzeugte Deckel bleibt auf damals festgenagelt. Tor grün (1218).
       Ursprünglich: (50, im Bau).
-- [ ] **Die Tour des elften Beispiels verspricht ein falsches Undo** (72s
+- [ ] **Kundenfehler aus der Abnahme des elften Beispiels (31.08., an
+      0d): Der Deckelname friert die Sprache seiner Erzeugung ein**
+      (`lid.py:451` — `name=params.name or f"{source.name} {_('Deckel')…}"`
+      wird beim Erzeugen aufgelöst und als fester String gespeichert):
+      Gemessen sieht ein englischer Kunde „Can" und darunter „Dose Deckel"
+      — zwei deutsche Wörter, und der Deckel trägt den **alten** Namen
+      seines Quellkörpers, womit der Zusammenhang zerschnitten ist, den der
+      Name herstellen soll; es trifft **jedes mitgelieferte Beispiel** in
+      fünf Sprachen, also das, was ein Kunde als Erstes öffnet, und es ist
+      eine Zeile — Zwillingssuche nach anderen beim Erzeugen eingefrorenen
+      Namen gehört dazu.
+- [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
+      Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
+      „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle
+      Anzeigen entscheidet, nicht in einen Tourtext. Danach prüft der
+      Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst
+      Zahlen formatiert (Prüfbericht, Parameterleiste, Maßfeld,
+      Export-Dialoge) wird mitgemessen.
+- [x] **Die Tour des elften Beispiels versprach ein falsches Undo —
+      erledigt und dreifach abgesichert** (Fix `25bb2581`, Test `919a2501`,
+      Gegenprobe c3): Die Schrittfolge ist gedreht (ein Undo genügt), die
+      Abschlussprüfung fragt jetzt den **Zustand** (`_op_gone`) statt der
+      **Bewegung** (`can_redo`), und der Durchlauf-Test belegt Schritt für
+      Schritt, dass jede Prüfung vor ihrer Handlung NICHT quittiert — er
+      misst dabei den **Prüfbericht** samt Befundcode, nicht die Erkennung,
+      denn genau dazwischen saß der Fehler. c3s unabhängige Gegenprobe der
+      gedrehten Reihenfolge: **identisch bis auf jeden Wert**, nur die
+      Undo-Zahl 2→1 — die beabsichtigte Änderung und sonst nichts. Die
+      dritte Auflage („Satz auf den Registertitel") ist **zurückgenommen**:
+      Der Verlauf zeigt den Transaktionstitel, Tour und Verlauf sagen
+      dasselbe; und die Anschlussfrage ist gemessen ohne Befund — **keine
+      Anzeige zeigt einen Schritt unter dem Registertitel**, die Trennung
+      ist sauber („das Menü benennt, was man tun kann, der Verlauf, was man
+      getan hat"). Ursprünglich: (72s
       Abnahme am gebauten Fenster, 31.08. — der schwerste Satz des Tages:
       „Er hat getan, was dastand, sieht das Gegenteil, und die Führung
       bestätigt ihm, es sei richtig gewesen"): Der Tour-Satz nennt einen
