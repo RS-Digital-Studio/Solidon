@@ -63,6 +63,18 @@ getan. Findet sich ein zurückgebliebener Autostash, gehört sein Inhalt
 verglichen und zurückgespielt, bevor irgendwer weiterarbeitet — im geteilten
 Baum trifft er fremde Arbeit.
 
+**Und die Urheber-Frage („wessen Änderung ist das?") beantwortet nie der
+Status, sondern `git log -S '<symbol>' -- <pfad>`** — das nennt Commit,
+Uhrzeit und Meldung, die Zuordnung wird ein Beleg statt einer Vermutung.
+Caveat: `-S` zählt Vorkommens-Änderungen — eine Zeichenkette, die in alter
+und neuer Fassung vorkommt, führt zum **Einführungs**-Commit statt zur
+Umbenennung; dann den neuen Namen mit Wortgrenze oder `-G` nehmen. Am
+31.08.2026 verneinten zwei Sitzungen eine Urheberschaft „mit Beleg" aus ihrem
+eigenen Diff — richtig gemessen, falsche Quelle: Der Diff gegen den alten
+Haupt-Index zeigt jedem etwas anderes, je nachdem, wie alt sein Index ist,
+und eine seit acht Stunden auf origin liegende Arbeit wäre fast als verwaist
+verbucht worden.
+
 **Und jeder Wächter, der Dateien zählt, fragt `git diff HEAD` — nie `git diff`
 ohne Ziel.** Ohne HEAD läuft der Vergleich gegen den Haupt-Index, und der ist
 in diesem Baum alt (siehe unten): Er kennt die privat committeten Stände nicht
