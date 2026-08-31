@@ -41,3 +41,45 @@ derselbe Fehler, andere Richtung.
 Die Schwester dazu ist [[testprojekt-trifft-den-fall-nicht]]: Dort fehlen die
 Daten, die die Anwendung erzeugt; hier fehlen die Schritte, die sie geht.
 Siehe auch [[messwerkzeug-misst-sich-selbst]].
+
+---
+
+**Nachtrag 31.08.2026 — die dritte Richtung: Wer ein Werkzeug nachbaut, erbt
+seine Fallen nicht.** Ich habe einen Prüfstand gebaut, der das Hauptfenster
+mit `QWidget.grab()` fotografiert, und das Bild als stärksten Beleg für einen
+Befund angeführt: „Der Viewport ist danach vollständig leer."
+
+Er war nie leer. `grab()` malt das Widget über den Qt-Painter nach, und der
+weiß nichts von dem, was OpenGL in die 3D-Ansicht gezeichnet hat — der
+Bereich bleibt im Bild schwarz, gleich was darin steht. Gemessen: `_actors=2`,
+zehn Aktoren im Renderer, `plotter.screenshot()` liefert 766 verschiedene
+Farben, und derselbe Moment über `grab()` zeigt eine leere Fläche.
+
+**Die Falle stand die ganze Zeit im Repository, an zwei Stellen, wörtlich:**
+`support_dialog.window_shot` („die 3D-Ansicht ist ein natives Fenster und
+bliebe sonst leer" — es holt sie mit `_paint_viewports` nach), und
+`tools/make_figures.py` („der Qt-Painter weiß nichts von dem, was OpenGL in
+den Viewport gezeichnet hat — die Bildmitte bliebe schwarz" — es hat dafür
+einen `from_screen`-Schalter auf `screen.grabWindow`). Auch
+`make_web_images.py` nimmt das Fenster so auf und `grab()` nur den
+Startbildschirm, der keinen Viewport hat.
+
+**Why:** Ich habe die Fallen nicht übersehen — ich bin ihnen nie begegnet,
+weil ich mein eigenes Aufnahmewerkzeug im Scratchpad gebaut habe, statt das
+vorhandene zu benutzen. Das ist der Unterschied zu
+[[benannte-falle-schuetzt-nicht]]: Dort schützt der Kommentar den nicht, der
+die Datei *liest*; hier schützt er den nicht, der sie *nie öffnet*.
+
+**How to apply:** Bevor ein Prüfstand etwas aufnimmt, misst, öffnet oder
+speichert — **suchen, ob die Anwendung dafür schon einen Weg hat**
+(`grep -rn "def.*shot\|screenshot\|grab" app/ tools/`). Sie hat ihn meistens,
+und wo sie ihn hat, steht daneben, warum der naive Weg nicht reicht. Ein
+selbst gebautes Werkzeug beginnt bei null Erfahrung, auch wenn das Projekt
+zehn Jahre alt ist.
+
+Und die Regel für den Viewport im Besonderen: **Ein Bildschirmfoto belegt die
+Ansicht nur über `plotter.screenshot()` oder `screen.grabWindow()`.**
+`QWidget.grab()` taugt für Panels, Menüs und Leisten. Wer die Ansicht belegen
+will, prüft vorher an einer Lage mit **bekanntem** Inhalt, ob das Werkzeug ihn
+zeigt — sonst ist das Foto, das die Instanz sein soll, nur ein weiterer
+blinder Zeuge.
