@@ -1573,10 +1573,13 @@ Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
   eigenen Baustein
 - **Rezept-Export und -Import bleiben lokal, verlustfrei und offline
   nutzbar.** Die optionale öffentliche Community-Tauschstelle auf der Website
-  ist eine kostenlose Ablage für sichere Rezepte und **kein Marktplatz**. Ihr
-  Startumfang ist: Rezepte suchen, ansehen, hochladen und herunterladen. Es
-  gibt dort keine Konten, Profile, Zahlungen, Provisionen oder
-  Direktnachrichten; Likes und Kommentare gehören nicht zum Startumfang
+  dient dem unentgeltlichen Austausch bestehender Bausteinrezepte zwischen
+  Nutzern und ist **kein Marktplatz**. Die kostenpflichtige Kauflizenz ab
+  Solidon3D 1.x bleibt davon unberührt; 0.x-Fassungen sind weiterhin Demo-
+  Fassungen. Der Startumfang der Tauschstelle ist: Rezepte suchen, ansehen,
+  hochladen und herunterladen. Es gibt dort keine Konten, Profile, Zahlungen,
+  Provisionen oder Direktnachrichten; Likes und Kommentare gehören nicht zum
+  Startumfang
 - Öffentlich getauschte Rezepte führen **keine eingebetteten Modelldaten oder
   sonstigen Mesh-Payloads** mit. Lokal dürfen solche Daten in Projektdateien
   weiterhin mitreisen. Für jeden öffentlichen Beitrag bleiben ausgewiesene
