@@ -88,6 +88,7 @@
 - [Am Eingang drehen](am-eingang-drehen.md) — antwortet die Messung auf jede Änderung gleich, misst sie nichts; billiger als der bekannte Ausgang.
 - [Eingestellter Wert ist nicht das Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — `ch` ist nicht Zeichen, Kaskadenwert nicht Bild, String nicht Darstellung.
 - [Schwelle misst die falsche Achse](schwelle-misst-die-falsche-achse.md) — dieselbe Fehlerklasse im ausgelieferten Code; je schlimmer der Fall, desto stiller.
+- [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — 381 CPU-Sekunden sind kein Lebenszeichen; nur die Differenz zweier Messungen ist eine.
 - [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — eine richtige Regel mit ungeprüftem Geltungsbereich; wo gilt sie noch, wo ich sie nicht gemeint habe?
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
