@@ -58,6 +58,48 @@ Dassault Systèmes, EOS, Trumpf oder Stratasys bezeichnen nur denkbare Klassen
 strategischer Käufer; von keiner dieser Firmen liegt ein bekundetes Interesse
 vor.
 
+## Wirtschaftliche Leitlinie des Maker-Modells
+
+Der ergänzende Gesprächsentwurf stellt dem hohen theoretischen Firmenwert
+eines Enterprise- oder Medizinunternehmens ein kleineres, aber
+kapitaleffizienteres Maker-Geschäft gegenüber. Der tragfähige Kern davon ist:
+
+- Ein Einmalkauf ohne großen Vertrieb, Investoren und kundenspezifische
+  Projekte kann Robert mehr Kontrolle, einen früheren Markteintritt und einen
+  höheren Anteil am tatsächlich erwirtschafteten Gewinn lassen.
+- Der Verzicht auf eine medizinische Zweckbestimmung vermeidet die
+  **medizinproduktspezifische** Zulassungs- und Qualitätslast. Das ist ein
+  echter wirtschaftlicher Vorteil und entspricht der gewählten Zielgruppe.
+- Ein schlankes Produkt kann auch mit weniger Umsatz wirtschaftlich sinnvoll
+  sein. Persönlicher finanzieller Erfolg und theoretischer Unternehmenswert
+  sind deshalb nicht dieselbe Kennzahl.
+- Ein späterer Verkauf an einen strategischen Käufer ist denkbar, aber kein
+  Produktziel. Das Produkt wird für Nutzer gebaut, nicht für einen
+  angenommenen Exit.
+
+Folgende Aussagen aus dem Entwurf bleiben **unbelegte Annahmen** und werden
+nicht als Projektwissen verwendet:
+
+- Der Maker-Fokus setzt den Marktwert nicht automatisch auf 2 bis 5 Millionen
+  Euro. Ohne Umsatz-, Nutzungs- und Referenzdaten gibt es keinen belastbaren
+  Wert.
+- Entwicklung, Signierung, Zahlungsabwicklung, Mehrwertsteuer, Support,
+  Sicherheit, Aktualisierungen und allgemeine rechtliche Pflichten kosten
+  weiterhin Geld. „Nahezu null Vorabkosten“ und 80 bis 90 Prozent Nettomarge
+  sind nicht belegt.
+- Ein Haftungsausschluss macht das Haftungsrisiko nicht minimal. Der Verzicht
+  auf eine medizinische Zweckbestimmung beseitigt Medizinprodukterecht, nicht
+  Verbraucher-, Produkt-, Datenschutz-, Sicherheits- oder
+  Gewährleistungspflichten.
+- Es ist nicht belegt, dass ein genannter Hersteller Solidon kaufen möchte
+  oder dass 2 bis 5 Millionen Euro für ihn „Kleingeld“ wären.
+
+Für spätere wirtschaftliche Bewertungen werden daher getrennt gemessen:
+Umsatz und Deckungsbeitrag, verkaufte und tatsächlich genutzte Lizenzen,
+Supportaufwand, Weiterempfehlung, Firmenreferenzen sowie die Abhängigkeit des
+Produkts von Robert. Erst diese Zahlen beantworten, ob das Maker-Modell nicht
+nur frei und schlank, sondern auch finanziell erfolgreich ist.
+
 **Bei künftigen Entscheidungen gilt:** Firmeninteresse als Bestätigung und
 Lernquelle nutzen. Den Produktkurs nur ändern, wenn Robert ihn ausdrücklich
 ändert — nie aus einer theoretischen Bewertung oder aus dem Namen eines
