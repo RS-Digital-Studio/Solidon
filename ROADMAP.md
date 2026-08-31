@@ -119,7 +119,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
 | Der Deckelname friert die Sprache seiner Erzeugung ein | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix in `lid.py:451` (0d): Ein englischer Kunde liest im Objektbaum „Can" und darunter **„Dose Deckel"** — der Name wird beim Erzeugen aufgelöst und als fester String gespeichert, trägt also den ALTEN Namen des Quellkörpers und zerschneidet den Zusammenhang; trifft jedes mitgelieferte Beispiel in fünf Sprachen (c3 gemessen), Zwillingssuche gehört dazu |
 | Der Klick auf eine Warnung fliegt die Kamera ins Leere | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Familien-Fix: Das Merkmal friert seine Lage beim Erzeugen ein und überlebt `arrange_bed` unverändert — der Viewport ist nach dem Klick leer (c3 am Fenster gemessen, Foto als Instanz); erst die Familiensuche, dann die Wahl zwischen mitwandernder Lage und Nachrechnen |
-| Die Flughöhe nach einem Befund-Klick ist nirgends zugesagt | Befunde aus dem Weg-Dreh (31.08.2026) | einen Entscheid aus Kundensicht (Review) — die Kamera steht nach dem Flug so nah, dass der Ort gefunden und die Orientierung verloren ist; keine Zusage nennt eine Höhe, also eine offene Bedienfrage statt einer Abweichung |
+| Die Flughöhe nach einem Befund-Klick steht auf 0,26× | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Umsetzung des Entscheids (1,4 × Hüllquader-Diagonale) — heute ist 1 von 8 Ecken im Bild und die Beschriftung der Marke außerhalb; der Knick liegt gemessen bei 1,2×, 1,4× ist der Sicherheitsabstand |
 | Ein `return` macht aus drei gleichzeitigen Stufen ein Entweder-oder | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds zweiten Commit (eigener Test): Nach dem Flug kehrt `_on_finding_activated` zurück, die Auswahlzeile darunter wird nie erreicht — `oberflaeche.md` und der Docstring sagen beide „die Stufen schließen einander nicht aus"; Geschwistersuche gehört dazu |
 | `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
@@ -13520,14 +13520,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       dahinter (dritter Teil von `pruefstand-geht-den-weg-der-oberflaeche`):
       **Ein selbst gebautes Werkzeug beginnt bei null Erfahrung, auch wenn
       das Projekt zehn Jahre alt ist.**
-- [ ] **Die Flughöhe nach einem Befund-Klick ist nirgends zugesagt**
-      (c3s Beobachtung ohne Befundcharakter, 31.08.): Nach dem Flug steht
-      die Kamera sehr nah — man sieht die Innenecke und die Marke, aber
-      nicht mehr, **wo am Teil** man ist. Keine Zusage nennt eine Höhe,
-      also ist es keine Abweichung, sondern eine offene Bedienentscheidung:
-      Wer nach einem Klick den Ort gefunden und die Orientierung verloren
-      hat, ist nicht angekommen. Entscheid aus Kundensicht bei der
-      Review-Instanz. Beispieldatei
+- [ ] **Die Flughöhe nach einem Befund-Klick: entschieden auf 1,4 × die
+      Hüllquader-Diagonale, Umsetzung bei 0d** (c3 gemessen, 31.08.):
+      Ist-Zustand **0,26×** (24 mm, **1 von 8 Ecken im Bild**); die Kurve
+      zeigt einen klaren Knick bei **1,2×** (6/8 Ecken — dort wird aus
+      „irgendeiner Fläche" ein erkennbares Teil), bei 2,5× ist das Teil
+      ganz drin, aber die Marke wird klein. **Und das Bild zeigt, was keine
+      Zahl hergibt: Ab dem Knick steht auch die Beschriftung der Marke im
+      Bild** („Die Passung sitzt enger als vorgesehen") — bei 0,26× liegt
+      sie außerhalb, der Kunde verliert also nicht nur den Kontext, sondern
+      **die Auskunft, für die die Marke da ist** (§18.4). **1,4× statt 1,2×
+      ist bewusster Sicherheitsabstand** — ein Wert direkt am Knick kippt
+      bei anderen Teilen und Blickwinkeln. Die Regel gilt in **Vielfachen
+      der Diagonale**, nicht in Millimetern (größenunabhängig); Reichweite
+      gehört in den Kommentar: gemessen an genau einem Teil, weil über alle
+      elf Beispiele **ein** Befund einen Ort trägt und 61 keinen. Beispieldatei
       unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
       **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
       am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
