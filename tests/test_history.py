@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from app.core.errors import ValidationError
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
+from app.core.scene.project import Project, load, save
 from app.core.scene.serialise import document_from_data, document_to_data
 from app.core.types import (
     BaseParams,
@@ -22,6 +24,7 @@ from app.core.types import (
     OpResult,
     Origin,
     Parameter,
+    SolverInfo,
 )
 from app.i18n import _
 
@@ -94,6 +97,32 @@ def registry() -> Registry:
         _unused = ctx.seed
         return OpResult(outputs=list(ctx.inputs))
 
+    @register_op(
+        name="repair",
+        title=_("Reparieren"),
+        category="prepare",
+        params=SeedParams,
+        consumes=1,
+        produces=1,
+        doc=_("Testversion."),
+        registry=own,
+    )
+    def repair(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=list(ctx.inputs))
+
+    @register_op(
+        name="combine_objects",
+        title=_("Körper verbinden"),
+        category="prepare",
+        params=SeedParams,
+        consumes=2,
+        produces=1,
+        doc=_("Testversion."),
+        registry=own,
+    )
+    def combine(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=[])
+
     return own
 
 
@@ -149,6 +178,182 @@ def test_a_second_history_over_the_same_document_keeps_numbering(
 
     names = [entry.id for entry in document.transactions]
     assert len(set(names)) == len(names), f"doppelte Transaktionskennung: {names}"
+
+
+def test_repair_and_retry_replaces_the_complete_suffix_as_one_transaction(
+    history: History,
+) -> None:
+    """Der Reparaturknopf darf nie hinter dem gescheiterten Schritt landen.
+
+    Der bisherige Weg hängte ``repair`` ans Ende. Die Auswertung hielt aber
+    vorher am fehlerhaften Schritt an und erreichte die Reparatur nie. Der
+    neue Zug ersetzt deshalb den ganzen Suffix: Reparatur zuerst, danach neue
+    Fassungen des gescheiterten und aller jüngeren Schritte — auch eines
+    unabhängigen. Ein Undo stellt den alten Suffix vollständig wieder her.
+    """
+    object_id = create(history)
+    history.apply(
+        _("Gescheiterter Schritt"),
+        [OperationDraft(op="rename_object", inputs=(object_id,), params={"count": 4})],
+    )
+    failed_id = history.operations[-1].id
+    marked = dataclasses.replace(
+        history.operations[-1],
+        solver=SolverInfo(strategy="direct"),
+        seed=91,
+        translatable=("name",),
+        matches={"face": {"kind": "face", "centre": [1.0, 2.0, 3.0]}},
+    )
+    history.document.ops[-1] = marked
+    history.apply(
+        _("Abhängiger Schritt"),
+        [OperationDraft(op="rename_object", inputs=(object_id,), params={"count": 5})],
+    )
+    create(history)
+
+    prefix = tuple(entry for entry in history.operations if entry.id < failed_id)
+    old_suffix = tuple(entry for entry in history.operations if entry.id >= failed_id)
+    old_transaction_count = len(history.transactions)
+
+    transaction = history.repair_and_retry(failed_id)
+
+    assert len(history.transactions) == old_transaction_count + 1
+    assert history.transactions[-1] is transaction
+    assert transaction.changes is not None
+    assert transaction.changes.before.edited_ops == {entry.id: entry for entry in old_suffix}
+    assert transaction.changes.after.edited_ops == dict.fromkeys(entry.id for entry in old_suffix)
+
+    new_ops = tuple(entry for entry in history.operations if entry.id in transaction.ops)
+    assert [entry.op for entry in new_ops] == [
+        "repair",
+        "rename_object",
+        "rename_object",
+        "make_object",
+    ]
+    assert new_ops[0].inputs == (object_id,)
+    retried = new_ops[1]
+    assert retried.params == marked.params
+    assert retried.inputs == marked.inputs
+    assert retried.outputs == marked.outputs
+    assert retried.seed == marked.seed
+    assert retried.translatable == marked.translatable
+    assert retried.matches == marked.matches
+    assert retried.solver is None, "die neue Auswertung bestimmt die Rückfallstufe neu"
+    assert set(transaction.ops).isdisjoint({entry.id for entry in old_suffix})
+    assert tuple(entry for entry in history.operations if entry.id not in transaction.ops) == prefix
+
+    history.undo()
+    assert history.operations == prefix + old_suffix
+
+    history.redo()
+    assert tuple(entry for entry in history.operations if entry.id in transaction.ops) == new_ops
+    assert not {entry.id for entry in old_suffix}.intersection(
+        entry.id for entry in history.operations
+    )
+
+
+def test_repair_and_retry_repairs_each_live_input_once(history: History) -> None:
+    """Eine Operation mit zwei Eingängen bekommt zwei Reparaturen, nicht eine Wahl."""
+    first = create(history)
+    second = create(history)
+    history.apply(
+        _("Gescheiterte Verbindung"),
+        [OperationDraft(op="combine_objects", inputs=(first, second))],
+    )
+    failed_id = history.operations[-1].id
+    old_output = history.operations[-1].outputs
+
+    transaction = history.repair_and_retry(failed_id)
+
+    new_ops = tuple(entry for entry in history.operations if entry.id in transaction.ops)
+    assert [entry.op for entry in new_ops] == ["repair", "repair", "combine_objects"]
+    assert [entry.inputs for entry in new_ops[:2]] == [(first,), (second,)]
+    assert new_ops[-1].inputs == (first, second)
+    assert new_ops[-1].outputs == old_output
+
+
+def test_repair_and_retry_survives_saving_with_undo_and_redo(
+    history: History, registry: Registry, tmp_path: Path
+) -> None:
+    object_id = create(history)
+    history.apply(_("Gescheitert"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    failed_id = history.operations[-1].id
+    original = history.operations
+    transaction = history.repair_and_retry(failed_id)
+    repaired = history.operations
+
+    target = save(Project(document=history.document), tmp_path / "reparatur.p3d")
+    reopened = History(load(target).document, registry)
+
+    assert reopened.operations == repaired
+    assert reopened.transactions[-1].id == transaction.id
+    reopened.undo()
+    assert reopened.operations == original
+    reopened.redo()
+    assert reopened.operations == repaired
+
+
+def test_repair_and_retry_never_guesses_a_target(history: History) -> None:
+    """Ein Schritt ohne Eingang ist kein Anlass, die aktuelle Auswahl zu nehmen."""
+    create(history)
+    failed_id = history.operations[-1].id
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.repair_and_retry(failed_id)
+
+    assert caught.value.constraint == "no_repair_target"
+    assert document_to_data(history.document) == before
+
+
+def test_repair_and_retry_rejects_an_input_that_is_no_longer_alive(history: History) -> None:
+    """Auch eine gespeicherte, aber ungültige Eingangs-ID wird nicht ersetzt."""
+    object_id = create(history)
+    history.apply(_("Gescheitert"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    failed_id = history.operations[-1].id
+    history.document.ops[-1] = dataclasses.replace(
+        history.operations[-1], inputs=("obj_404",), outputs=("obj_404",)
+    )
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.repair_and_retry(failed_id)
+
+    assert caught.value.constraint == "no_repair_target"
+    assert caught.value.values["missing"] == ["obj_404"]
+    assert document_to_data(history.document) == before
+
+
+def test_repair_and_retry_never_turns_an_exact_shell_into_triangles() -> None:
+    """Aushöhlen braucht seinen exakten Körper auch beim erneuten Versuch.
+
+    Eine vorgeschaltete Netzreparatur würde die einzeln bearbeitbaren Flächen
+    in Dreiecke umwandeln. ``shell_exact`` könnte danach nur noch mit
+    ``NeedsSolidError`` halten; deshalb bleibt der Verlauf unverändert.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project()
+    exact_history = History(project.document)
+    exact_history.apply(
+        _("Exakter Quader"),
+        [OperationDraft(op="create_brep_box", params={"width": 40.0, "depth": 30.0})],
+    )
+    object_id = exact_history.operations[-1].outputs[0]
+    exact_history.apply(
+        _("Aushöhlen"),
+        [OperationDraft(op="shell_exact", inputs=(object_id,), params={"wall": 2.0})],
+    )
+    stopped_at = exact_history.operations[-1].id
+    before = document_to_data(project.document)
+
+    with pytest.raises(ValidationError) as caught:
+        exact_history.repair_and_retry(stopped_at)
+
+    assert caught.value.constraint == "repair_not_for_exact_body"
+    assert document_to_data(project.document) == before
 
 
 def test_same_count_in_and_out_keeps_the_object(history: History) -> None:

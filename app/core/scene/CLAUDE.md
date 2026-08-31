@@ -63,6 +63,15 @@ Variantengenerator, §28.3)
 
 - **`OpContext.scene` ist nur lesend** (Regel 3). Ops erzeugen Objekte, sie
   ändern keine.
+- **Reparieren und erneut versuchen ersetzt den angehaltenen Suffix atomar.**
+  Die Reparatur steht vor dem fehlerhaften Schritt; dieser und alle jüngeren
+  Schritte werden mit neuen Kennungen neu geplant. Alte Fassungen liegen in
+  `DocumentChange.before.edited_ops`, ihre Entfernung in `after.edited_ops`.
+  Reparatur und neue Fassungen gehören zu einer Transaktion, damit ein Undo
+  exakt den alten Suffix zurückholt. Die gemeinsame Zielprüfung in
+  `repair_targets()` verlangt lebende Eingänge und schließt Operationen des
+  exakten Kerns aus: Eine Netzreparatur würde ihre bearbeitbaren Flächen in
+  feste Dreiecke umwandeln und den erneuten Versuch unbrauchbar machen.
 - **Objektzahländerung hält die Auswertung an** statt sie zu verschlucken.
 - **Keine absoluten Pfade** in der Projektdatei (Regel 12), **kein
   ausführbarer Code** darin (Regel 13).

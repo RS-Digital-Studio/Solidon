@@ -123,7 +123,12 @@ def test_repair_says_when_it_could_not_close_the_body() -> None:
     half = body.replacing(body.raw.submesh([range(6)], append=True))
 
     result = repair(half, holes=False)
-    assert "repair.still_open" in {finding.code for finding in result.findings}
+    codes = {finding.code for finding in result.findings}
+    assert "repair.still_open" in codes
+    assert "repair.holes_filled" not in codes, "ohne Reparatur gibt es keine Erfolgsmeldung"
+    remaining = next(finding for finding in result.findings if finding.code == "repair.still_open")
+    assert remaining.values["open_edges"] == open_edge_count(result.mesh) > 0
+    assert "Kanten verfeinern" not in str(remaining.message)
 
 
 # --- Als Operation ---------------------------------------------------------------
@@ -375,8 +380,9 @@ def test_a_skipped_step_says_so_in_the_report() -> None:
     """**Was nicht getan wurde, gehört in den Bericht** (§2.7).
 
     Vorher stand nichts davon im Prüfbericht — wer ihn las, musste annehmen,
-    dass geprüft wurde, was übersprungen worden war. Und der Satz nennt, was
-    jetzt hilft: neu vernetzen, dann ein zweiter Lauf.
+    dass geprüft wurde, was übersprungen worden war. Danach behauptete der
+    Satz, Kanten verfeinern schließe den Körper zuverlässig, obwohl genau
+    diese Operation ein offenes Netz zurückweist und Reparieren empfiehlt.
 
     ``broken_open`` ist der Körper, den auch die ganze Kette nicht zu einem
     Volumen macht — gemessen an sechs Dateien des Korpus, und er ist die
@@ -384,15 +390,14 @@ def test_a_skipped_step_says_so_in_the_report() -> None:
     """
     result = repair(raw("broken_open.stl"), self_intersections=True)
 
-    codes = {finding.code for finding in result.findings}
-    assert "repair.self_intersections_skipped" in codes
-    gesagt = next(
-        str(finding.message)
-        for finding in result.findings
-        if finding.code == "repair.self_intersections_skipped"
-    )
-    assert "geschlossenen Körper" in gesagt
-    assert "zweiter Lauf" in gesagt, "Regel 17: der nächste Schritt gehört dazu"
+    by_code = {finding.code: finding for finding in result.findings}
+    assert "repair.self_intersections_skipped" in by_code
+    assert "repair.still_open" in by_code, "übersprungene Prüfung und Rest sind zwei Aussagen"
+    skipped = str(by_code["repair.self_intersections_skipped"].message)
+    remaining = str(by_code["repair.still_open"].message)
+    assert "nicht geprüft" in skipped
+    assert "Kanten verfeinern" not in skipped
+    assert skipped != remaining, "Prüfung übersprungen und Rest offen dürfen sich nicht doppeln"
 
 
 def test_the_step_runs_last_so_that_it_can_run_at_all() -> None:

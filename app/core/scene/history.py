@@ -19,7 +19,7 @@ import dataclasses
 import itertools
 import re
 import secrets
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -27,6 +27,7 @@ from app.core import activation, expressions
 from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
+    REPAIR_AND_RETRY,
     SHOW_STEP_VALUES,
     UserError,
     ValidationError,
@@ -57,6 +58,78 @@ _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 #: Vorgegebene Urheberschaft. Manuelle Operationen sind einzelne Transaktionen
 #: des Nutzers (§15.5).
 USER_ORIGIN: Final[Origin] = Origin(by="user")
+
+
+def _living_objects(operations: Sequence[Operation]) -> set[ObjectId]:
+    """Die Körper, die nach einer Folge aktiver Schritte noch vorhanden sind."""
+    living: set[ObjectId] = set()
+    for entry in operations:
+        living.difference_update(set(entry.inputs) - set(entry.outputs))
+        living.update(entry.outputs)
+    return living
+
+
+def repair_targets(
+    document: Document,
+    stopped_at: OpId,
+    registry: Registry = REGISTRY,
+) -> tuple[ObjectId, ...]:
+    """Reparierbare Eingänge eines angehaltenen Netzschritts.
+
+    Diese Prüfung ist die gemeinsame Schranke für Verlauf und Oberfläche:
+    angeboten wird nur, was :meth:`History.repair_and_retry` anschließend
+    wirklich als einen Zug planen kann. Ein Schritt des exakten Kerns bleibt
+    ausgeschlossen, weil ``repair`` seine einzeln bearbeitbaren Flächen in
+    feste Dreiecke umwandeln würde und der erneute Versuch dann sicher hält.
+    """
+    operations = tuple(sorted(document.ops, key=lambda entry: entry.id))
+    failed_index = next(
+        (index for index, entry in enumerate(operations) if entry.id == stopped_at),
+        None,
+    )
+    if failed_index is None:
+        return ()
+    failed = operations[failed_index]
+    if not registry.has(failed.op) or registry.get(failed.op).requires_kind == "brep":
+        return ()
+    living = _living_objects(operations[:failed_index])
+    targets = tuple(dict.fromkeys(failed.inputs))
+    if not targets or any(target not in living for target in targets):
+        return ()
+    return targets
+
+
+def repair_is_available(
+    document: Document | None,
+    *,
+    stopped_at: OpId | None,
+    op_id: OpId | None,
+    object_id: ObjectId | None,
+    live_objects: Collection[ObjectId] | None = None,
+    registry: Registry = REGISTRY,
+) -> bool:
+    """Ob ein Reparaturvorschlag aus diesem Dokument ausführbar ist.
+
+    Ein Operationsfehler darf seinen Suffix nur am aktuell angehaltenen
+    Schritt ersetzen. Ein ausdrücklich genannter, noch vorhandener Körper
+    kann dagegen als gewöhnlicher nächster Reparaturschritt behandelt werden.
+    Die Bauartprüfung gilt in beiden Fällen.
+    """
+    if document is None:
+        return False
+    operation = next((entry for entry in document.ops if entry.id == op_id), None)
+    if operation is not None and (
+        not registry.has(operation.op) or registry.get(operation.op).requires_kind == "brep"
+    ):
+        return False
+    if op_id is not None and stopped_at == op_id:
+        return bool(repair_targets(document, op_id, registry))
+    available = (
+        live_objects
+        if live_objects is not None
+        else _living_objects(tuple(sorted(document.ops, key=lambda entry: entry.id)))
+    )
+    return object_id is not None and object_id in available
 
 
 def restore(document: Document, state: DocumentState) -> None:
@@ -301,6 +374,103 @@ class History:
         self._record_numbering()
         if settled is not None:
             restore(self.document, settled.after)
+        return transaction
+
+    def repair_and_retry(self, stopped_at: OpId) -> Transaction:
+        """Repariert die Eingänge vor einem angehaltenen Schritt und plant neu.
+
+        Ein bloß angehängtes ``repair`` kann nie helfen: Die Auswertung hält
+        am fehlerhaften Schritt an und erreicht alles dahinter nicht. Deshalb
+        wird der vollständige Suffix ab ``stopped_at`` ersetzt. Vor seine neu
+        geplanten Fassungen kommt je lebendem Eingang genau eine Reparatur;
+        alte und neue Fassung reisen in **einer** Transaktion, damit ein Undo
+        den ganzen Zug und nur ihn zurücknimmt (§15.5, Regel 16).
+
+        Die Ziele stammen ausschließlich aus der Operation. Eine Auswahl aus
+        der Oberfläche gehört nicht zum Dokument und wäre nach dem Öffnen oder
+        über den Agenten ein anderes Ergebnis (Regel 21).
+        """
+        activation.require(activation.CHANGE)
+        operations = self.operations
+        failed = self.operation(stopped_at)
+        failed_index = next(
+            index for index, entry in enumerate(operations) if entry.id == failed.id
+        )
+        prefix = operations[:failed_index]
+        suffix = operations[failed_index:]
+
+        living = _living_objects(prefix)
+        targets = repair_targets(self.document, stopped_at, self._registry)
+        if self._registry.get(failed.op).requires_kind == "brep":
+            raise ValidationError(
+                field="in",
+                detail=_("Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten."),
+                constraint="repair_not_for_exact_body",
+                values={"op": stopped_at},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+        declared_targets = tuple(dict.fromkeys(failed.inputs))
+        missing = tuple(target for target in declared_targets if target not in living)
+        if not targets or missing:
+            raise ValidationError(
+                field="in",
+                detail=_(
+                    "Dieser Schritt verwendet kein vorhandenes Modell, das Solidon reparieren kann."
+                ),
+                constraint="no_repair_target",
+                values={"op": stopped_at, "missing": list(missing)},
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+                op_id=stopped_at,
+            )
+
+        # Erst vollständig planen, dann schreiben. Ein fehlerhafter jüngerer
+        # Schritt lässt so weder einen halben Suffix noch eine Reparatur zurück.
+        self._reseed()
+        planned: list[Operation] = []
+        for target in targets:
+            repaired = self._plan(OperationDraft(op="repair", inputs=(target,)), living)
+            planned.append(repaired)
+            living.difference_update(set(repaired.inputs) - set(repaired.outputs))
+            living.update(repaired.outputs)
+
+        for entry in suffix:
+            cloned = self._plan(
+                OperationDraft(
+                    op=entry.op,
+                    inputs=entry.inputs,
+                    params=entry.params,
+                    outputs=entry.outputs,
+                    seed=entry.seed,
+                ),
+                living,
+            )
+            cloned = dataclasses.replace(
+                cloned,
+                solver=None,
+                translatable=entry.translatable,
+                matches=entry.matches,
+            )
+            planned.append(cloned)
+            living.difference_update(set(cloned.inputs) - set(cloned.outputs))
+            living.update(cloned.outputs)
+
+        old_versions = {entry.id: entry for entry in suffix}
+        changes = DocumentChange(
+            before=DocumentState(edited_ops=old_versions),
+            after=DocumentState(edited_ops=dict.fromkeys(old_versions)),
+        )
+        self._forget_undone()
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=REPAIR_AND_RETRY.label,
+            ops=tuple(entry.id for entry in planned),
+            changes=changes,
+        )
+        self.document.ops.extend(planned)
+        self.document.transactions.append(transaction)
+        restore(self.document, changes.after)
+        self._record_numbering()
         return transaction
 
     def _bundle_into_last(self, drafts: Sequence[OperationDraft]) -> Transaction | None:

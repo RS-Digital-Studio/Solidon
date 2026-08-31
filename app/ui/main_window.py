@@ -16,6 +16,7 @@ import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
+from copy import copy
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
@@ -84,6 +85,7 @@ from app.core.agent.tools import (
 from app.core.backends import llm
 from app.core.errors import (
     CANCEL,
+    REPAIR_AND_RETRY,
     AppError,
     ExternalToolError,
     InternalError,
@@ -146,6 +148,7 @@ from app.core.scene import (
     values_for_object,
 )
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.history import repair_is_available
 from app.core.scene.project import clear_autosave, find_recovery
 from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
 from app.core.sketch.profile import SketchCurve, curves_of
@@ -8994,6 +8997,23 @@ class MainWindow(QMainWindow):
         if isinstance(error, InternalError):
             self.report_error(error)
             return
+        result = self.session.last_result
+        offers_repair = any(action.id == REPAIR_AND_RETRY.id for action in error.suggestions)
+        if offers_repair and not repair_is_available(
+            self.session.project.document,
+            stopped_at=result.stopped_at if result is not None else None,
+            op_id=error.op_id,
+            object_id=error.object_id,
+            live_objects=frozenset(result.scene.objects) if result is not None else None,
+        ):
+            # Der Dialog darf keinen Knopf zeigen, dessen Handler anschließend
+            # ohne Ziel zurückkehrt. Die ursprüngliche Ausnahme bleibt für
+            # Protokoll und Bericht unverändert; nur ihre Dialogfassung verliert
+            # den nicht ausführbaren Vorschlag.
+            error = copy(error)
+            error.suggestions = tuple(
+                action for action in error.suggestions if action.id != REPAIR_AND_RETRY.id
+            )
         show_error(error, self)
 
     def error_handlers(self) -> dict[str, Any]:
@@ -9233,8 +9253,19 @@ class MainWindow(QMainWindow):
         self.session.apply(title, drafts)
 
     def _repair_after_error(self, error: AppError) -> None:
-        """§17.1: die Reparaturkette auf den Körper, an dem es hing."""
-        object_id = self._object_of(error)
+        """§17.1: vor dem Fehler wiederholen, sonst am Befund anhängen.
+
+        Ein angehaltener Operationslauf braucht die Reparatur **vor** seinem
+        fehlerhaften Schritt. Ein gewöhnlicher Berichtsbefund — etwa direkt
+        nach dem Einlesen — hat dagegen keinen angehaltenen Suffix und bekommt
+        die Reparatur als nächsten Schritt. In beiden Fällen stammt das Ziel
+        aus dem Dokument oder dem Befund, nie aus der aktuellen Auswahl.
+        """
+        result = self.session.last_result
+        if error.op_id is not None and result is not None and result.stopped_at == error.op_id:
+            self.session.repair_and_retry(error.op_id)
+            return
+        object_id = error.object_id
         if object_id is None:
             return
         self.session.apply(

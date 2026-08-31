@@ -9,7 +9,7 @@ Regel 2).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
@@ -62,7 +62,8 @@ from app.core.registry import MENU_TWINS, REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
-from app.core.types import Document, Feature, Finding, ObjectId
+from app.core.scene.history import repair_is_available
+from app.core.types import Document, Feature, Finding, ObjectId, OpId
 from app.core.units import LengthUnit
 from app.i18n import sort_key, tr
 from app.ui.dialogs import handlers_of
@@ -333,6 +334,15 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im
     # Bericht stand nur, dass sich die Fläche kaum verschoben hat.
     "mesh.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # Reparieren hat getan, was ohne erfundene Fläche möglich war. Ein
+    # zweiter Reparaturlauf und Kanten verfeinern führen von hier nur zurück;
+    # die Defektkarte zeigt dagegen die Kanten, die wirklich übrig sind.
+    "repair.still_open": (SHOW_LOCATIONS,),
+    # Ein offener Körper hat kein belastbares Innen, also kann die Prüfung auf
+    # Selbstdurchdringungen nicht laufen. Derselbe Ort, aber eine andere
+    # Aussage: Dieser Befund erklärt den ausgelassenen Schritt, der Nachbar
+    # darüber den verbleibenden Defekt.
+    "repair.self_intersections_skipped": (SHOW_LOCATIONS,),
     # **Drei Befunde über die Auswahl, und keiner hatte ein Menü.** Sie
     # tragen alle ihre Schrittkennung, und was hilft, ist dasselbe: andere
     # Objekte wählen. *Eingabe korrigieren* wäre hier nicht nur
@@ -342,6 +352,13 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "evaluate.too_few_inputs": (CHANGE_SELECTION,),
     "evaluate.object_count": (CHANGE_SELECTION,),
 }
+
+#: Diese Handlungen dürfen nie auf die aktuelle Auswahl zurückfallen. Die
+#: Auswertung trägt die Objektkennung an Operationsbefunde nach; fehlt sie
+#: trotzdem, wäre „Stellen zeigen" wieder stilles Raten (Regel 21).
+_LOCATED_REPAIR_FINDINGS: Final = frozenset(
+    {"repair.still_open", "repair.self_intersections_skipped"}
+)
 
 #: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden
 #: sind (``evaluate._finding_from``): ``op.<operation>.<Ausnahmeklasse>``.
@@ -368,6 +385,8 @@ def actions_for(finding: Finding) -> tuple[Action, ...]:
     Operation und der Ausnahme enthält — das sind 86 mal n Zeilen, die alle
     dasselbe sagen würden.
     """
+    if finding.code in _LOCATED_REPAIR_FINDINGS and finding.object_id is None:
+        return ()
     if finding.suggestions:
         # Im Fehlerdialog schließt „Abbrechen" das Fenster. Im Prüfbericht
         # ist kein Vorgang offen, den dieser Knopf abbrechen könnte; die Zeile
@@ -382,7 +401,72 @@ def actions_for(finding: Finding) -> tuple[Action, ...]:
     return ()
 
 
-def as_error(finding: Finding) -> AppError:
+def _object_for_finding(finding: Finding, document: Document | None) -> ObjectId | None:
+    """Der belegte Körper des Befunds — niemals die aktuelle Auswahl."""
+    if finding.object_id is not None:
+        return finding.object_id
+    if document is None or finding.op_id is None:
+        return None
+    operation = next((entry for entry in document.ops if entry.id == finding.op_id), None)
+    if operation is None or len(operation.inputs) != 1:
+        return None
+    return operation.inputs[0]
+
+
+def _repair_was_attempted(finding: Finding, document: Document | None) -> bool:
+    """Ob derselbe aktive Zug alle Eingänge unmittelbar davor repariert hat.
+
+    Der Befundtext ist dafür absichtlich ohne Bedeutung: Eine Reparatur kann
+    Löcher schließen, nichts finden oder einen anderen Rest melden. In allen
+    Fällen wäre derselbe Knopf unmittelbar danach ein Ring. Belegt wird der
+    Versuch durch die aktiven Operationskennungen derselben Transaktion.
+    """
+    if document is None or finding.op_id is None:
+        return False
+    by_id = {entry.id: entry for entry in document.ops}
+    failed = by_id.get(finding.op_id)
+    if failed is None or not failed.inputs:
+        return False
+    transaction = next(
+        (entry for entry in document.transactions if finding.op_id in entry.ops), None
+    )
+    if transaction is None:
+        return False
+    position = transaction.ops.index(finding.op_id)
+    covered: set[ObjectId] = set()
+    for op_id in reversed(transaction.ops[:position]):
+        operation = by_id.get(op_id)
+        if operation is None or operation.op != "repair":
+            break
+        if len(operation.inputs) == 1:
+            covered.add(operation.inputs[0])
+    return set(failed.inputs) <= covered
+
+
+def actions_for_document(
+    finding: Finding,
+    document: Document | None,
+    *,
+    stopped_at: OpId | None = None,
+    live_objects: Collection[ObjectId] | None = None,
+) -> tuple[Action, ...]:
+    """Nur im aktuellen Dokument ausführbare Handlungen anbieten."""
+    offered = list(actions_for(finding))
+    if _repair_was_attempted(finding, document) or not repair_is_available(
+        document,
+        stopped_at=stopped_at,
+        op_id=finding.op_id,
+        object_id=finding.object_id,
+        live_objects=live_objects,
+    ):
+        offered = [action for action in offered if action.id != REPAIR_AND_RETRY.id]
+    target = _object_for_finding(finding, document)
+    if target is None or (live_objects is not None and target not in live_objects):
+        offered = [action for action in offered if action.id != SHOW_LOCATIONS.id]
+    return tuple(offered)
+
+
+def as_error(finding: Finding, document: Document | None = None) -> AppError:
     """Einen Befund so verpacken, dass die Fehlerhandlungen ihn annehmen.
 
     Die Handler des Fensters (``error_handlers``) arbeiten auf einem
@@ -394,7 +478,7 @@ def as_error(finding: Finding) -> AppError:
     return AppError(
         title=finding.message,
         suggestions=finding.suggestions,
-        object_id=finding.object_id,
+        object_id=_object_for_finding(finding, document),
         op_id=finding.op_id,
         values=dict(finding.values),
     )
@@ -523,31 +607,37 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
     ``names`` löst die Kennung zum Namen auf. Ohne die Zuordnung bleibt die
     Kennung stehen: „obj_2" ist weniger als „Klotz B", aber mehr als nichts.
     """
-    extra = [
-        # Über ``localised_value``: Ein Befund trägt neben Zahlen auch Pfade,
-        # Adressen und Endungen, und ``localised`` tauschte dort jeden Punkt
-        # gegen ein Komma — „sources/1_cube_clean,stl".
-        #
-        # Die Merkmalskennung bekommt ihr Wort davor: Neben dem aufgelösten
-        # Objektnamen läse sich ein nacktes „face_3" wie ein zweiter Name —
-        # und der eigene Maßstab des Fensters sagt, dass eine Kennung allein
-        # niemandem sagt, welche Fläche gemeint ist.
-        (
-            f"{tr('Merkmal')} {finding.values[key]}"
-            if key == "feature"
-            # **Dieselbe Quelle wie der Tooltip daneben**, und zwar seit der
-            # Messung vom 27.08.2026: Die Zeile trug ihre Einheit selbst und
-            # schrieb „1,2 mm · 3,456 cm³", während der Tooltip an demselben
-            # Eintrag „Wandstärke: 1,20 mm · Entfernt: 3,5 cm³" sagte — zwei
-            # Zahlen für denselben Wert, sichtbar in einem Blick. Und in Zoll
-            # blieb die Zeile bei Millimetern stehen, weil eine feste Einheit
-            # nicht umschalten kann. ``value_text`` beantwortet beides und
-            # lässt Pfade, Kennungen und Versionsnummern unangetastet.
-            else value_text(key, finding.values[key])
-        )
-        for key in _LINE_VALUES
-        if key in finding.values
-    ]
+    extra: list[str] = []
+    if finding.code in _LOCATED_REPAIR_FINDINGS and "open_edges" in finding.values:
+        extra.append(value_line("open_edges", finding.values["open_edges"]))
+
+    extra.extend(
+        [
+            # Über ``localised_value``: Ein Befund trägt neben Zahlen auch Pfade,
+            # Adressen und Endungen, und ``localised`` tauschte dort jeden Punkt
+            # gegen ein Komma — „sources/1_cube_clean,stl".
+            #
+            # Die Merkmalskennung bekommt ihr Wort davor: Neben dem aufgelösten
+            # Objektnamen läse sich ein nacktes „face_3" wie ein zweiter Name —
+            # und der eigene Maßstab des Fensters sagt, dass eine Kennung allein
+            # niemandem sagt, welche Fläche gemeint ist.
+            (
+                f"{tr('Merkmal')} {finding.values[key]}"
+                if key == "feature"
+                # **Dieselbe Quelle wie der Tooltip daneben**, und zwar seit der
+                # Messung vom 27.08.2026: Die Zeile trug ihre Einheit selbst und
+                # schrieb „1,2 mm · 3,456 cm³", während der Tooltip an demselben
+                # Eintrag „Wandstärke: 1,20 mm · Entfernt: 3,5 cm³" sagte — zwei
+                # Zahlen für denselben Wert, sichtbar in einem Blick. Und in Zoll
+                # blieb die Zeile bei Millimetern stehen, weil eine feste Einheit
+                # nicht umschalten kann. ``value_text`` beantwortet beides und
+                # lässt Pfade, Kennungen und Versionsnummern unangetastet.
+                else value_text(key, finding.values[key])
+            )
+            for key in _LINE_VALUES
+            if key in finding.values
+        ]
+    )
     if finding.object_id and "object" not in finding.values:
         identifier = str(finding.object_id)
         extra.insert(0, (names or {}).get(identifier, identifier))
@@ -2584,8 +2674,11 @@ class ReportPanel(QWidget):
         """Kennung zu Namen — aus der gezeigten Szene und aus allen Namen, die
         die Auswertung je vergeben hat. Siehe :meth:`show_result`."""
         self._document: Document | None = None
-        """Nur für die Herkunftszeile im Tooltip — welcher Schritt das gemeldet
-        hat. Der Bericht braucht das Dokument für nichts anderes."""
+        """Für Herkunft, Zielableitung und ausführbare Berichtshandlungen."""
+        self._stopped_at: OpId | None = None
+        """Der wirklich angehaltene Schritt der gerade gezeigten Auswertung."""
+        self._live_objects: frozenset[ObjectId] = frozenset()
+        """Die wirklich ausgewerteten Körper, nicht nur geplante Ausgänge."""
         self._findings: list[Finding] = []
         """Die rohen Befunde hinter den Zeilen. Die Liste im Fenster ist eine
         *Darstellung* davon (gebündelt, sortiert) — wer Zeilen aus Zeilen neu
@@ -2665,10 +2758,13 @@ class ReportPanel(QWidget):
         # die Zeile unsichtbar, wie die Filterzeile über der leeren Liste.
         self._offers = QWidget(self)
         self._offers.setVisible(False)
-        self._offer_row = QHBoxLayout(self._offers)
+        # Untereinander und über die ganze Breite: Zwei längere Handlungen
+        # passten im schmalen Prüfbericht nicht nebeneinander. Der primäre
+        # Knopf begann sichtbar außerhalb der Karte und verlor „Re“ von
+        # „Reparieren“. Übersetzungen dürfen die Handlung nicht abschneiden.
+        self._offer_row = QVBoxLayout(self._offers)
         self._offer_row.setContentsMargins(0, TIGHT, 0, 0)
         self._offer_row.setSpacing(TIGHT)
-        self._offer_row.addStretch(1)
         self.list.itemSelectionChanged.connect(self._show_offers)
 
         layout.addWidget(self.facts)
@@ -2690,8 +2786,8 @@ class ReportPanel(QWidget):
         nachziehen — drei Gelegenheiten für einen Knopf, der das Falsche tut.
         """
         row = self._offer_row
-        while row.count() > 1:
-            item = row.takeAt(row.count() - 1)
+        while row.count():
+            item = row.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.setParent(None)
@@ -2703,7 +2799,16 @@ class ReportPanel(QWidget):
         )
         handlers = handlers_of(self)
         offered = (
-            [action for action in actions_for(finding) if action.id in handlers]
+            [
+                action
+                for action in actions_for_document(
+                    finding,
+                    self._document,
+                    stopped_at=self._stopped_at,
+                    live_objects=self._live_objects,
+                )
+                if action.id in handlers
+            ]
             if finding is not None
             else []
         )
@@ -2735,7 +2840,14 @@ class ReportPanel(QWidget):
         finding: Finding | None = items[0].data(Qt.ItemDataRole.UserRole)
         handler = handlers_of(self).get(action_id)
         if finding is not None and handler is not None:
-            handler(as_error(finding))
+            if action_id == REPAIR_AND_RETRY.id:
+                # Noch vor dem synchronen Umbau des Verlaufs sperren. Das
+                # Ergebnis baut gleich eine frische Knopfzeile; der alte
+                # Knopf bleibt auch dann gesperrt, wenn ein zweiter Klick
+                # schon in der Ereignisschlange wartet.
+                for button in self._offers.findChildren(QPushButton):
+                    button.setEnabled(False)
+            handler(as_error(finding, self._document))
 
     def _show_controls(self) -> None:
         """Filterzeile und Liste nur, wenn es etwas zu filtern gibt.
@@ -2803,6 +2915,8 @@ class ReportPanel(QWidget):
         # ist geschlossen und damit fort." Beides stimmt, das eine kommt vom
         # Einlesen, das andere von der Reparatur — und das stand nirgends.
         self._document = document
+        self._stopped_at = result.stopped_at if result is not None else None
+        self._live_objects = frozenset(result.scene.objects) if result is not None else frozenset()
         # Die Namen der Körper, damit ein Befund sagen kann, welchen er meint.
         # Sie stehen im Ergebnis, das ohnehin hereinkommt — die Kennung „obj_2"
         # wäre die zweitbeste Antwort auf „welcher denn".
@@ -2957,7 +3071,15 @@ class ReportPanel(QWidget):
             if item.isHidden():
                 continue
             finding = item.data(Qt.ItemDataRole.UserRole)
-            if any(action.id in handlers for action in actions_for(finding)):
+            if any(
+                action.id in handlers
+                for action in actions_for_document(
+                    finding,
+                    self._document,
+                    stopped_at=self._stopped_at,
+                    live_objects=self._live_objects,
+                )
+            ):
                 self.list.setCurrentRow(row)
                 return
 
@@ -3155,7 +3277,12 @@ class ReportPanel(QWidget):
         if item is None:
             return
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
-        offers = actions_for(finding)
+        offers = actions_for_document(
+            finding,
+            self._document,
+            stopped_at=self._stopped_at,
+            live_objects=self._live_objects,
+        )
         handlers = handlers_of(self)
         offered = [action for action in offers if action.id in handlers]
         if not offered:
@@ -3173,7 +3300,7 @@ class ReportPanel(QWidget):
         # Die Handler des Fensters arbeiten auf einem ``AppError`` — sie
         # kommen aus dem Fehlerdialog. Ein Befund ist keiner, trägt aber
         # dieselben zwei Angaben, die sie brauchen: den Körper und die Zahlen.
-        handlers[chosen[picked].id](as_error(finding))
+        handlers[chosen[picked].id](as_error(finding, self._document))
 
 
 class MeasurementLabel(QLabel):

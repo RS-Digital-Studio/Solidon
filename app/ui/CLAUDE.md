@@ -118,6 +118,14 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 ## Grenzen
 
 - **Keine feste Zeichenkette** — alles über `tr()` (Regel 20).
+- **Berichtshandlungen lesen ihren Zielkörper aus Befund oder Dokument.** Eine
+  aktuelle Auswahl ist kein Ersatz. „Reparieren und erneut versuchen“ steht
+  nur am aktuell angehaltenen Netzschritt mit lebenden Eingängen oder an einem
+  ausdrücklich benannten, noch vorhandenen Körper. Der Knopf wird nicht erneut
+  angeboten, wenn unmittelbar davor bereits alle Eingänge in derselben aktiven
+  Transaktion repariert wurden, und sperrt sich beim ersten Klick bis zum neuen
+  Ergebnis. Berichtshandlungen stehen vollbreit untereinander, damit auch
+  längere Übersetzungen in der schmalen Karte vollständig bleiben.
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen** (Regel 19), mit
   der ausdrücklich gewünschten Ausnahme für das Löschen im Verlauf: Sie
   nennt mitbetroffene Schritte und den Rückweg über Strg+Z.

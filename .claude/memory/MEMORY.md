@@ -43,6 +43,7 @@
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — dazwischen liegt ein Bereich, in dem beide Antworten falsch sind.
 - [Eine Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen; ein guter Docstring deckt die Lücke.
 - [Knopf und Handlung fragen verschieden](knopf-und-handlung-fragen-verschieden.md) — freigegeben bei A, ausgeführt bei B; dazwischen ist der Klick folgenlos.
+- [Eine Reparatur hinter dem Fehler läuft nie](reparatur-muss-vor-den-fehler.md) — den angehaltenen Suffix atomar ersetzen; nur lebende Netz-Ziele anbieten und den ersten Klick sofort sperren.
 - [Roh gegen gerendert vergleichen](roh-gegen-gerendert-vergleichen.md) — wer Quelltext in fertigem HTML sucht, prüft die Maskierung mit.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — der Suchbegriff ist die Verneinung, nicht der Name der neuen Sache.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — ein leerer Verweis liest sich so glatt wie ein gültiger.

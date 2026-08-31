@@ -3435,6 +3435,347 @@ def test_a_geometry_failure_offers_repair_and_locations() -> None:
     ]
 
 
+def test_a_partial_repair_shows_closed_total_and_remaining_edges() -> None:
+    """Der Anteil steht in der Zeile — nicht als zwei rohe Zahlen im Tooltip."""
+    from app.core.types import Finding
+    from app.ui.panels import _line_for
+
+    filled = Finding(
+        code="repair.holes_filled",
+        severity="info",
+        message="3 von 19 offenen Kanten geschlossen; 16 bleiben offen.",
+        object_id="obj_1",
+        values={"before": 19, "after": 16},
+    )
+    remaining = Finding(
+        code="repair.still_open",
+        severity="warning",
+        message="Die Reparatur schließt kleine Löcher, kann fehlende Wände aber nicht ersetzen.",
+        object_id="obj_1",
+        values={"open_edges": 16},
+    )
+
+    filled_line = _line_for(filled, {"obj_1": "Halb offen"})
+    remaining_line = _line_for(remaining, {"obj_1": "Halb offen"})
+
+    assert "3 von 19 offenen Kanten geschlossen; 16 bleiben offen" in filled_line
+    assert "Halb offen" in filled_line
+    assert "Offene Kanten: 16" in remaining_line
+    assert "Halb offen" in remaining_line
+
+
+def test_repair_remainders_show_locations_only_for_a_known_body() -> None:
+    """Der Ausweg führt zur Defektkarte, aber nie über eine geratene Auswahl."""
+    from app.core.types import Finding
+    from app.ui.panels import actions_for
+
+    for code in ("repair.still_open", "repair.self_intersections_skipped"):
+        located = Finding(code=code, severity="warning", message="x", object_id="obj_1")
+        unlocated = Finding(code=code, severity="warning", message="x")
+        assert [action.id for action in actions_for(located)] == ["show_locations"]
+        assert actions_for(unlocated) == ()
+
+
+def test_an_attempted_repair_is_not_offered_twice_regardless_of_its_finding() -> None:
+    """Auch „nichts zu reparieren“ öffnet denselben Reparaturring nicht erneut.
+
+    Die Sperre liest bewusst keinen Befundtext: Ob die Reparatur teilweise
+    half oder ``repair.nothing_to_do`` meldete, steht im Bericht; belegt ist
+    der Versuch durch den aktiven Zug im Verlauf.
+    """
+    from app.core.types import Document, Finding, Operation, Transaction
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.extend(
+        [
+            Operation(id=4, op="repair", inputs=("obj_1",), outputs=("obj_1",)),
+            Operation(id=5, op="remesh_uniform", inputs=("obj_1",), outputs=("obj_1",)),
+        ]
+    )
+    document.transactions.append(Transaction(id="t3", title="Reparieren", ops=(4, 5)))
+    finding = Finding(
+        code="op.remesh_uniform.NotManifoldError",
+        severity="error",
+        message="offen",
+        op_id=5,
+        suggestions=(errors.REPAIR_AND_RETRY, errors.SHOW_LOCATIONS),
+    )
+
+    assert [action.id for action in actions_for_document(finding, document, stopped_at=5)] == [
+        "show_locations"
+    ]
+
+    # Eine fremde Reparatur in einer anderen Transaktion oder am anderen
+    # Körper ist kein Versuch für diesen Schritt und darf ihn nicht sperren.
+    document.transactions[:] = [
+        Transaction(id="t2", title="Fremde Reparatur", ops=(4,)),
+        Transaction(id="t3", title="Fehler", ops=(5,)),
+    ]
+    assert [action.id for action in actions_for_document(finding, document, stopped_at=5)] == [
+        "repair_and_retry",
+        "show_locations",
+    ]
+
+
+def test_two_inputs_are_only_considered_repaired_when_both_are_covered() -> None:
+    """Zwei Eingänge werden weder zusammengeworfen noch über die Auswahl ergänzt."""
+    from app.core.types import Document, Finding, Operation, Transaction
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.extend(
+        [
+            Operation(id=7, op="repair", inputs=("obj_1",), outputs=("obj_1",)),
+            Operation(id=8, op="repair", inputs=("obj_2",), outputs=("obj_2",)),
+            Operation(
+                id=9,
+                op="subtract_objects",
+                inputs=("obj_1", "obj_2"),
+                outputs=("obj_3",),
+            ),
+        ]
+    )
+    document.transactions.append(Transaction(id="t4", title="Reparieren", ops=(7, 8, 9)))
+    finding = Finding(
+        code="op.subtract_objects.BooleanFailedError",
+        severity="error",
+        message="geht nicht",
+        op_id=9,
+        suggestions=(errors.REPAIR_AND_RETRY, errors.SHOW_LOCATIONS),
+    )
+
+    assert actions_for_document(finding, document, stopped_at=9) == (), (
+        "beide Reparaturen wurden versucht; für zwei Körper gibt es keinen eindeutigen Kartenort"
+    )
+
+    document.transactions[-1] = Transaction(id="t4", title="Reparieren", ops=(7, 9))
+    assert [action.id for action in actions_for_document(finding, document, stopped_at=9)] == [
+        "repair_and_retry"
+    ]
+
+
+def test_repair_is_not_offered_for_a_stopped_step_without_an_input() -> None:
+    """Ein Knopf ohne ausführbares Modell erscheint gar nicht erst."""
+    from app.core.types import Document, Finding, Operation
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.append(Operation(id=3, op="create_box", inputs=(), outputs=("obj_1",)))
+    finding = Finding(
+        code="op.create_box.GeometryError",
+        severity="error",
+        message="geht nicht",
+        op_id=3,
+        suggestions=(errors.REPAIR_AND_RETRY, errors.SHOW_LOCATIONS),
+    )
+
+    offered = actions_for_document(finding, document, stopped_at=3)
+
+    assert offered == ()
+
+
+def test_a_planned_but_not_evaluated_object_is_not_an_executable_target() -> None:
+    """Der Stapel kann Ausgänge nennen, die hinter dem Stopp nie entstanden."""
+    from app.core.types import Document, Finding, Operation
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.append(Operation(id=3, op="create_box", outputs=("obj_1",)))
+    finding = Finding(
+        code="mesh.open",
+        severity="error",
+        message="geht nicht",
+        object_id="obj_1",
+        suggestions=(errors.REPAIR_AND_RETRY, errors.SHOW_LOCATIONS),
+    )
+
+    offered = actions_for_document(finding, document, live_objects=frozenset())
+
+    assert offered == ()
+
+
+def test_repair_is_not_offered_before_retrying_an_exact_shell() -> None:
+    """Die Oberfläche bewahrt Aushöhlen vor einer sicher schädlichen Reparatur."""
+    from app.core.types import Document, Finding, Operation
+    from app.ui.panels import actions_for_document
+
+    document = Document(format_version=18, app_version="test")
+    document.ops.extend(
+        [
+            Operation(id=4, op="create_brep_box", outputs=("obj_1",)),
+            Operation(id=5, op="shell_exact", inputs=("obj_1",), outputs=("obj_1",)),
+        ]
+    )
+    finding = Finding(
+        code="op.shell_exact.GeometryError",
+        severity="error",
+        message="geht nicht",
+        op_id=5,
+        suggestions=(errors.REPAIR_AND_RETRY, errors.SHOW_LOCATIONS),
+    )
+
+    offered = actions_for_document(finding, document, stopped_at=5)
+
+    assert [action.id for action in offered] == ["show_locations"]
+
+
+def test_an_objectless_direct_error_has_no_repair_button(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der modale Fehlerweg verspricht keine Reparatur ohne Ziel."""
+    from app.ui import main_window
+
+    shown: list[errors.AppError] = []
+    monkeypatch.setattr(main_window, "show_error", lambda error, _parent: shown.append(error))
+
+    window._on_error(errors.NotManifoldError(open_edges=3))
+
+    assert len(shown) == 1
+    assert "repair_and_retry" not in {action.id for action in shown[0].suggestions}
+
+
+def test_partial_repair_runs_from_the_report_and_undoes(window: MainWindow) -> None:
+    """Datei → Berichtsknopf → Restkarte → Oberflächen-Undo, ohne Kernabkürzung."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.geom.repair import open_edge_count
+
+    window.open_path(MESHES / "partially_open.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    assert open_edge_count(window.session.last_result.scene.objects[object_id].mesh) == 19
+
+    def choose(code: str) -> None:
+        for row in range(window.report.list.count()):
+            item = window.report.list.item(row)
+            finding = item.data(Qt.ItemDataRole.UserRole)
+            if finding.code == code:
+                window.report.list.setCurrentRow(row)
+                QApplication.processEvents()
+                return
+        raise AssertionError(f"kein Befund {code!r} im sichtbaren Bericht")
+
+    def button(label: object) -> QPushButton | None:
+        buttons = window.report._offers.findChildren(QPushButton)
+        return next((entry for entry in buttons if entry.text() == str(label)), None)
+
+    choose("ingest.not_watertight")
+    repair_button = button(errors.REPAIR_AND_RETRY.label)
+    assert repair_button is not None and not repair_button.isHidden()
+    repair_button.click()
+    window.session.wait_for_idle()
+
+    repaired = window.session.last_result.scene.objects[object_id].mesh
+    assert open_edge_count(repaired) == 16
+    lines = [window.report.list.item(row).text() for row in range(window.report.list.count())]
+    assert any("3 von 19 offenen Kanten geschlossen; 16 bleiben offen" in line for line in lines)
+    assert any("Offene Kanten: 16" in line for line in lines)
+
+    choose("repair.still_open")
+    location_button = button(errors.SHOW_LOCATIONS.label)
+    assert location_button is not None and not location_button.isHidden()
+    location_button.click()
+    QApplication.processEvents()
+    assert window.tools.active() == "analysis"
+    assert window.analysis_bar.chosen() == "defects"
+    assert window.object_tree.selected_objects() == (object_id,)
+
+    window.undo_action.trigger()
+    window.session.wait_for_idle()
+    restored = window.session.last_result.scene.objects[object_id].mesh
+    assert open_edge_count(restored) == 19
+
+
+def test_failed_operation_is_repaired_before_retry_without_a_loop(window: MainWindow) -> None:
+    """Echter Fehler → Reparatur davor → Retry → Stellen zeigen → ein Undo."""
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout
+
+    window.resize(1500, 950)
+    window.show()
+    QApplication.processEvents()
+    window.open_path(MESHES / "partially_open.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    window.session.apply(
+        REGISTRY.get("remesh_uniform").title,
+        [OperationDraft(op="remesh_uniform", inputs=(object_id,))],
+    )
+    window.session.wait_for_idle()
+
+    first_result = window.session.last_result
+    failed_id = first_result.stopped_at
+    assert failed_id is not None
+    original_ops = tuple(window.session.project.document.ops)
+    old_transaction = window.session.history.transaction_of(failed_id)
+    assert old_transaction is not None
+
+    def choose(code: str) -> None:
+        for row in range(window.report.list.count()):
+            item = window.report.list.item(row)
+            finding = item.data(Qt.ItemDataRole.UserRole)
+            if finding.code == code:
+                window.report.list.setCurrentRow(row)
+                QApplication.processEvents()
+                return
+        raise AssertionError(f"kein Befund {code!r} im sichtbaren Bericht")
+
+    def button(label: object) -> QPushButton | None:
+        return next(
+            (
+                entry
+                for entry in window.report._offers.findChildren(QPushButton)
+                if entry.text() == str(label)
+            ),
+            None,
+        )
+
+    failed_code = "op.remesh_uniform.NotManifoldError"
+    choose(failed_code)
+    first_repair = button(errors.REPAIR_AND_RETRY.label)
+    assert first_repair is not None and not first_repair.isHidden()
+    offered_buttons = [
+        entry for entry in window.report._offers.findChildren(QPushButton) if not entry.isHidden()
+    ]
+    assert isinstance(window.report._offer_row, QVBoxLayout)
+    assert all(window.report._offers.rect().contains(entry.geometry()) for entry in offered_buttons)
+    assert len({entry.x() for entry in offered_buttons}) == 1
+    assert len({entry.width() for entry in offered_buttons}) == 1
+    transaction_count = len(window.session.history.transactions)
+    first_repair.click()
+    first_repair.click()
+    window.session.wait_for_idle()
+
+    assert len(window.session.history.transactions) == transaction_count + 1
+    retry = window.session.history.transactions[-1]
+    retry_ops = [entry for entry in window.session.project.document.ops if entry.id in retry.ops]
+    assert [entry.op for entry in retry_ops] == ["repair", "remesh_uniform"]
+    assert retry.changes is not None
+    assert failed_id in (retry.changes.after.edited_ops or {})
+    assert window.session.last_result.stopped_at == retry_ops[-1].id
+
+    rows = [window.history_panel.list.item(row) for row in range(window.history_panel.list.count())]
+    old_row = next(item for item in rows if old_transaction.id in item.toolTip())
+    assert tr("gelöscht") in old_row.text() and old_row.font().strikeOut()
+    assert any(str(errors.REPAIR_AND_RETRY.label) in item.text() for item in rows)
+
+    choose(failed_code)
+    assert button(errors.REPAIR_AND_RETRY.label) is None, "derselbe Reparaturweg bildet keinen Ring"
+    location = button(errors.SHOW_LOCATIONS.label)
+    assert location is not None and not location.isHidden()
+
+    window.undo_action.trigger()
+    window.session.wait_for_idle()
+    assert tuple(window.session.project.document.ops) == original_ops
+    assert window.session.last_result.stopped_at == failed_id
+
+    choose(failed_code)
+    restored = button(errors.REPAIR_AND_RETRY.label)
+    assert restored is not None and not restored.isHidden(), (
+        "nach dem Undo ist der Reparaturversuch nicht mehr aktiv"
+    )
+
+
 def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow) -> None:
     """Der Befund spricht über **einen** Wert — der Dialog soll ihn zeigen.
 

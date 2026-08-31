@@ -592,6 +592,23 @@ class Session(QObject):
         self.evaluate_async()
         return True
 
+    def repair_and_retry(self, stopped_at: int) -> bool:
+        """Setzt Reparatur und erneuten Versuch als einen Zug vor den Fehler.
+
+        Die Reihenfolge und das Undo gehören dem Verlauf; die Sitzung meldet
+        nur eine Abweisung oder stößt nach dem atomaren Umbau die neue
+        Auswertung an.
+        """
+        try:
+            self.history.repair_and_retry(stopped_at)
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return True
+
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
         """Eine gedrehte Zahl der Parameterleiste (§13, §15.5).
 

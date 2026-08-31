@@ -370,6 +370,7 @@ def repair(
         # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
         # Fläche, die fehlte. Wer den Bericht liest, erkennt, ob sein Modell
         # eine Lücke hatte oder nur einen Buchhaltungsfehler.
+        open_before = open_edge_count(result.mesh)
         result.mesh, seams = stitch_t_junctions(result.mesh)
         if seams:
             result.changed = True
@@ -386,13 +387,21 @@ def repair(
         # zahlen war der gemessene Faktor 2,1 auf dem Normalfall „Reparieren
         # an einem heruntergeladenen Modell".
         result.mesh, closed = fill_holes(result.mesh, stitch=False)
+        open_after = open_edge_count(result.mesh)
         if closed:
             result.changed = True
             result.findings.append(
                 Finding(
                     code="repair.holes_filled",
                     severity="info",
-                    message=_("Offene Stellen wurden geschlossen."),
+                    message=_(
+                        "{closed} von {total} offenen Kanten geschlossen; "
+                        "{remaining} bleiben offen.",
+                        closed=open_before - open_after,
+                        total=open_before,
+                        remaining=open_after,
+                    ),
+                    values={"before": open_before, "after": open_after},
                 )
             )
 
@@ -435,10 +444,8 @@ def repair(
                     code="repair.self_intersections_skipped",
                     severity="info",
                     message=_(
-                        "Selbstdurchdringungen konnten nicht aufgelöst werden: Dieser "
-                        "Schritt braucht einen geschlossenen Körper, und das Netz ist "
-                        "auch nach der Reparatur keiner. Kanten verfeinern schließt es "
-                        "zuverlässig; danach lohnt ein zweiter Lauf."
+                        "Selbstdurchdringungen wurden nicht geprüft, weil der Körper offen ist. "
+                        "Die Defektkarte zeigt die Stellen, die zuerst geschlossen werden müssen."
                     ),
                 )
             )
@@ -448,15 +455,13 @@ def repair(
             Finding(
                 code="repair.still_open",
                 severity="warning",
-                # Was jetzt geht, gehört dazu (§2.7). Bei einem erzeugten Netz
-                # ist das der Normalfall und nicht die Ausnahme: ein
-                # Bildmodell liefert eine Hülle, keinen Körper, und Löcher
-                # füllen reicht dafür nicht. Neu vernetzen schließt es
-                # zuverlässig und kostet Feinheit — eine Abwägung, die dem
-                # Nutzer gehört, nicht der Reparatur.
+                # Der frühere Folgesatz schickte den Nutzer im Kreis:
+                # „Kanten verfeinern schließt es" — diese Operation weist ein
+                # offenes Netz zurück und empfiehlt wieder Reparieren. Die
+                # ehrliche Grenze erklärt, warum der Rest bleibt; die
+                # Oberfläche führt von dort zu den betroffenen Stellen (§2.7).
                 message=_(
-                    "Das Modell ist weiterhin nicht geschlossen. "
-                    "Kanten verfeinern schließt es, kostet aber Feinheit."
+                    "Die Reparatur schließt kleine Löcher, kann fehlende Wände aber nicht ersetzen."
                 ),
                 values={"open_edges": open_edge_count(result.mesh)},
             )

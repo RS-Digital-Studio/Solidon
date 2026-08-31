@@ -326,8 +326,16 @@ def test_filling_holes_reports_filling_and_not_watertightness() -> None:
 
 
 def test_repair_never_says_nothing_to_do_and_still_open(profile: Profile) -> None:
-    """Beides zugleich stand im Bericht, und beides stimmte auf seine Art."""
+    """Eine Teilreparatur nennt Erfolg und Rest, ohne den Nutzer zurückzuschicken.
+
+    Der Prüfling beginnt mit neunzehn offenen Kanten. Drei davon kann der
+    Füller schließen, sechzehn bleiben: Aus „Offene Stellen wurden
+    geschlossen" allein wurde deshalb eine falsche Vollzugsmeldung. Noch
+    schlimmer war der Folgesatz „Kanten verfeinern schließt es" — diese
+    Operation weist ein offenes Netz zurück und empfiehlt wieder Reparieren.
+    """
     entry = SceneObject(id="obj_1", name="Halb offen", mesh=half_open())
+    before = open_edge_count(entry.mesh)
 
     result = run(
         "repair", entry, profile, weld=False, degenerate=False, normals=False, fill_holes=True
@@ -337,6 +345,39 @@ def test_repair_never_says_nothing_to_do_and_still_open(profile: Profile) -> Non
     assert "repair.still_open" in codes
     assert "repair.nothing_to_do" not in codes, "ein Widerspruch in derselben Liste"
     assert "repair.holes_filled" in codes
+    filled = next(finding for finding in result.findings if finding.code == "repair.holes_filled")
+    remaining = next(finding for finding in result.findings if finding.code == "repair.still_open")
+    after = open_edge_count(result.outputs[0].mesh)
+    assert filled.values == {"before": before, "after": after}
+    assert (
+        str(filled.message)
+        == f"{before - after} von {before} offenen Kanten geschlossen; {after} bleiben offen."
+    )
+    assert before > after > 0, "der Prüfling braucht einen Teilerfolg mit ehrlichem Rest"
+    assert remaining.values["open_edges"] == after
+    assert str(remaining.message) == (
+        "Die Reparatur schließt kleine Löcher, kann fehlende Wände aber nicht ersetzen."
+    )
+    assert "Kanten verfeinern" not in str(remaining.message)
+
+
+def test_a_complete_hole_repair_counts_every_open_edge(profile: Profile) -> None:
+    """Ein vollständiger Erfolg ist derselbe Bericht mit einem Rest von null."""
+    body = cube().replacing(cube().raw.submesh([range(1, 12)], append=True))
+    entry = SceneObject(id="obj_1", name="Ein Loch", mesh=body)
+    before = open_edge_count(body)
+
+    result = run(
+        "repair", entry, profile, weld=False, degenerate=False, normals=False, fill_holes=True
+    )
+
+    filled = next(finding for finding in result.findings if finding.code == "repair.holes_filled")
+    assert filled.values == {"before": before, "after": 0}
+    assert (
+        str(filled.message) == f"{before} von {before} offenen Kanten geschlossen; 0 bleiben offen."
+    )
+    assert result.outputs[0].mesh.is_watertight
+    assert "repair.still_open" not in [finding.code for finding in result.findings]
 
 
 def test_a_healthy_mesh_still_says_nothing_to_do(profile: Profile) -> None:

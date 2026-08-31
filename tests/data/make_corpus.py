@@ -281,6 +281,24 @@ def broken_open() -> None:
     )
 
 
+def partially_open() -> None:
+    """Eine große fehlende Wand plus ein kleines schließbares Loch.
+
+    Der Reparaturbericht braucht einen echten Teilerfolg: Ein Bodendreieck
+    kann der Füller ersetzen, die vollständig fehlende Decke nicht. Der
+    unterteilte Würfel beginnt deshalb mit neunzehn offenen Kanten; nach dem
+    Füllen bleiben sechzehn. Genau dieser Unterschied muss im sichtbaren
+    Bericht stehen, statt als pauschaler Vollzug zu erscheinen.
+    """
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0)).subdivide().subdivide()
+    normals = np.asarray(box.face_normals)
+    keep = np.ones(len(box.faces), dtype=bool)
+    keep[normals[:, 2] > 0.9] = False
+    keep[int(np.flatnonzero(normals[:, 2] < -0.9)[0])] = False
+    box.update_faces(keep)
+    write(box, "partially_open.stl")
+
+
 def broken_selfint() -> None:
     """Zwei ineinandergeschobene Blöcke, verbunden ohne geschnitten zu
     sein (§34).
@@ -564,6 +582,7 @@ if __name__ == "__main__":
     plate_chamfer_and_taper()
     degenerate()
     broken_open()
+    partially_open()
     two_components()
     generated_figure()
     clean_figure()
