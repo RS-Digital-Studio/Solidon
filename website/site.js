@@ -356,13 +356,11 @@
  * und Pfeiltasten — eine Antwort auf eine Absicht statt auf eine
  * Nebenwirkung.
  *
- * **Die Bilder liegen weiterhin als ein Sprite übereinander.** Die
- * sechsunddreißig Aufnahmen liegen als **ein** Bild übereinander, und die
- * Bildlaufposition verschiebt den Ausschnitt (`animation-timeline: scroll()`).
- * Das rechnet der Compositor; ein Skript müsste bei jedem Bildlauf aufwachen.
- * Ein Sheet statt sechsunddreißig Dateien ist dabei kein Detail: Beim
- * Scrollen darf nichts nachgeladen werden, sonst ruckelt genau die Bewegung,
- * die flüssig sein soll.
+ * **Die Bilder liegen als ein Sprite übereinander**, und dieser Grund ist
+ * älter als die Scroll-Drehung und überlebt sie: Ein Sheet statt
+ * sechsunddreißig Dateien heißt eine Anfrage statt sechsunddreißig. Beim
+ * Ziehen darf nichts nachgeladen werden, sonst stockt genau die Bewegung,
+ * die der Geste folgen soll. Verschoben wird über `background-position-y`.
  *
  * **Warum keine 3D-Bibliothek.** Ein echtes Modell im Browser bräuchte
  * three.js oder model-viewer, also drei- bis sechshundert Kilobyte fremden
@@ -370,9 +368,10 @@
  * sieht für den Betrachter genauso aus — er dreht ein Teil und sieht es von
  * allen Seiten —, kostet 0,25 MB und braucht diese Zeilen hier.
  *
- * **Was dieses Skript hinzufügt, sind zwei Dinge, die CSS nicht kann:**
- * die Ziehgeste und den Regler. Ohne Skript dreht sich das Teil beim Scrollen
- * trotzdem — nur greifen kann man es nicht.
+ * **Ohne dieses Skript steht das Teil still.** Bis zum 31.08.2026 drehte es
+ * sich auch beim Scrollen, über eine Zeitachse im Stylesheet; wer das Skript
+ * blockte, sah immerhin das. Seit dem Ausbau ist die Geste der einzige Weg —
+ * das Standbild ist der Ruhezustand, und der Hinweis unter der Bühne sagt es.
  *
  * **Der Regler ändert ein Maß, keinen Winkel**, und das ist der Unterschied
  * zwischen einem Ansichtsspielzeug und der Aussage des Produkts: Die
