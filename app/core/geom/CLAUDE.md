@@ -69,7 +69,9 @@ das ganze Register.
 
 `prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Anordnen, Kollisionen,
 §18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt, §22.3) ·
-`pins.py` (Passstifte über eine Trennebene) · `orient.py`
+`pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
+Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
+`orient.py`
 
 **Messen und Schneiden**
 

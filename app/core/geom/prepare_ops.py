@@ -31,6 +31,7 @@ from app.core.geom.pins import (
     PIN_MAX,
     PinnedPair,
     add_pins,
+    connector_glue_finding,
     feature_side,
     next_connector_index,
     plan_pins,
@@ -1140,6 +1141,15 @@ class SplitPinnedParams(BaseParams):
         placement="advanced",
         doc=_CONNECTOR_DOC,
     )
+    glue_hint: bool = param(
+        title=_("Kleben empfohlen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Automatisch teilen schaltet dies ein, wenn weder Schwalbenschwanz noch "
+            "Schnapper zur Naht passen."
+        ),
+    )
     diameter: float = param(
         title=_("Stiftdurchmesser"),
         default=0.0,
@@ -1198,6 +1208,7 @@ def split_pinned(ctx: OpContext) -> OpResult:
         plane,
         pins=params.pins,
         shape=params.shape,
+        glue_hint=params.glue_hint,
         diameter=params.diameter,
         play=params.play,
     )
@@ -1209,6 +1220,7 @@ def _cut_and_pin(
     *,
     pins: int,
     shape: str,
+    glue_hint: bool,
     diameter: float,
     play: float,
 ) -> OpResult:
@@ -1253,6 +1265,8 @@ def _cut_and_pin(
         if plan is not None
         else PinnedPair(first=first, second=second)
     )
+    if glue_hint and plan is not None and plan.count and plan.shape == "round":
+        pair.findings.append(connector_glue_finding())
 
     first_features, second_features = _features_after_split(source.features, plane)
     first_name, second_name = half_names(source.name, pinned=bool(pair.pin_features))
@@ -1451,6 +1465,7 @@ def split_line(ctx: OpContext) -> OpResult:
         SectionPlane(normal=normal, position=params.position),
         pins=params.pins,
         shape=params.shape,
+        glue_hint=False,
         diameter=params.diameter,
         play=params.play,
     )

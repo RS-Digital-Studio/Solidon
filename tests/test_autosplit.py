@@ -7,6 +7,7 @@ geteilt, ohne dass jemand einen Parameter anfasst. Alle drei stehen hier.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +23,7 @@ from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cancel import NeverCancelled
-from app.core.scene.project import Project, ProjectSources, new_project
+from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import OpContext, Profile, Scene, SceneObject, Source
 
@@ -455,6 +456,132 @@ def test_convex_parts_are_reproducible(profile: Profile) -> None:
 # --- die Passstifte -------------------------------------------------------------
 
 
+def connector_body(depth: float, face: float) -> MeshData:
+    """Ein Nahtkörper mit getrennt messbarer Tiefe und Fügefläche.
+
+    Getrennt wird bei x = 0. ``depth`` liegt damit hinter der Naht, ``face``
+    spannt die quadratische Schnittfläche auf. So kann jede Grenze gegen
+    denselben Körper variiert werden, statt Form und Messwert zugleich zu
+    ändern.
+    """
+    return MeshData.of(trimesh.creation.box(extents=(depth, face, face)))
+
+
+CONNECTOR_PLANE = SectionPlane(normal=(1.0, 0.0, 0.0), position=0.0)
+
+
+def test_auto_connector_uses_a_dovetail_on_a_roomy_joining_face() -> None:
+    """Zwei getrennte Verbinderplätze machen die Fläche geeignet.
+
+    Die Wahl beruht nicht auf einem Modellnamen: Gemessen werden die
+    zusammenhängende Fügefläche und der Abstand der bereits geplanten Sitze
+    gegen deren Hülle aus Durchmesser plus verbleibender Wand.
+    """
+    plan = pins.plan_pins(connector_body(40.0, 40.0), CONNECTOR_PLANE, shape="auto")
+
+    assert plan.shape == "dovetail"
+    assert plan.choice is not None
+    assert plan.choice.face_area >= plan.choice.required_face_area
+    assert plan.choice.seat_spacing >= plan.choice.required_seat_spacing
+    assert plan.choice.requires_glue is False
+
+
+def test_auto_connector_uses_a_snap_when_only_the_depth_is_roomy() -> None:
+    """Eine schmale Fläche trägt keinen Schwalbenschwanz, aber einen Arm.
+
+    Die Gegenprobe trennt die zwei Richtungen: Quer zur Naht liegen die Sitze
+    zu dicht für zwei Schwalbenschwänze, hinter ihr stehen mehr als acht
+    Millimeter für den Federarm.
+    """
+    plan = pins.plan_pins(connector_body(40.0, 12.0), CONNECTOR_PLANE, shape="auto")
+
+    assert plan.shape == "snap"
+    assert plan.choice is not None
+    assert plan.choice.seat_spacing < plan.choice.required_seat_spacing
+    assert plan.choice.material_depth >= plan.choice.required_material_depth
+    assert plan.length / 2.0 >= pins.SNAP_MIN_REACH
+    assert plan.choice.requires_glue is False
+
+
+def test_auto_connector_uses_round_pins_and_says_glue_when_both_are_tight() -> None:
+    """Ohne breite Fläche und Federweg bleibt die gutmütige Klebenaht.
+
+    Rund ist hier kein stiller Standard: Der Plan weist die beiden
+    unterschrittenen Messgrößen aus und gibt den vorhandenen Kleberhinweis
+    als Befund zurück.
+    """
+    plan = pins.plan_pins(connector_body(12.0, 12.0), CONNECTOR_PLANE, shape="auto")
+
+    assert plan.shape == "round"
+    assert plan.choice is not None
+    assert plan.choice.seat_spacing < plan.choice.required_seat_spacing
+    assert plan.choice.material_depth < plan.choice.required_material_depth
+    assert plan.choice.requires_glue is True
+    assert [finding.code for finding in plan.findings] == ["split.connector_glue"]
+    assert "Kleber" in str(plan.findings[0].message)
+
+
+def test_an_explicit_round_choice_is_not_overwritten_by_the_automatic_rule() -> None:
+    """T4 gilt nur für Auto Split; eine ausdrückliche Form bleibt bestehen."""
+    plan = pins.plan_pins(connector_body(40.0, 40.0), CONNECTOR_PLANE, shape="round")
+
+    assert plan.shape == "round"
+    assert plan.choice is None
+    assert not plan.findings
+
+
+def test_the_connector_suggestion_is_deterministic() -> None:
+    """§11.3: gleiche Nahtmessung, gleiche Form und dieselben Messwerte."""
+    body = connector_body(40.0, 12.0)
+
+    first = pins.plan_pins(body, CONNECTOR_PLANE, shape="auto")
+    second = pins.plan_pins(body, CONNECTOR_PLANE, shape="auto")
+
+    assert first.shape == second.shape
+    assert first.choice == second.choice
+    assert first.findings == second.findings
+
+
+def test_a_perforated_corpus_plate_does_not_get_a_false_connector() -> None:
+    """Der reale Lochplattenkörper widerlegt die Entscheidung nach Fläche allein.
+
+    ``plate_holes.stl`` hat 796 Dreiecke, vier Durchgangsbohrungen und bei
+    z = 4 eine große, gelochte Fügefläche. Hinter ihr stehen aber nur vier
+    Millimeter Material je Hälfte. Das trägt nicht einmal den kleinsten
+    sinnvollen Stift samt Restwand; ein Schwalbenschwanz oder Federarm wäre
+    deshalb eine falsche Zusage. Derselbe zweite Lauf ist die
+    Determinismus-Gegenprobe am Korpuskörper.
+    """
+    perforated = body("plate_holes.stl")
+    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=float(perforated.bounds.centre[2]))
+
+    first = pins.plan_pins(perforated, plane, shape="auto")
+    second = pins.plan_pins(perforated, plane, shape="auto")
+
+    assert perforated.triangle_count == 796, "der Test benutzt den komplexen Korpuskörper"
+    assert first == second
+    assert first.shape == "round"
+    assert first.count == 0 and first.choice is None
+    assert [finding.code for finding in first.findings] == ["split.seam_too_thin"]
+    values = first.findings[0].values
+    assert values["depth_mm"] < values["needed_mm"], values
+
+
+def test_the_round_fallback_still_builds_two_watertight_halves(profile: Profile) -> None:
+    """Der Hinweis ersetzt die Geometrie nicht: Rundstift und Bohrung entstehen."""
+    whole = connector_body(12.0, 12.0)
+    first, second, findings = split_at_plane(whole, CONNECTOR_PLANE)
+    assert not findings
+    plan = pins.plan_pins(whole, CONNECTOR_PLANE, shape="auto")
+
+    pair = pins.add_pins(first, second, plan, profile)
+
+    assert plan.shape == "round"
+    assert pair.first.is_watertight and pair.second.is_watertight
+    assert len(pair.pin_features) == len(pair.bore_features) == plan.count
+    assert [finding.code for finding in pair.findings] == ["split.connector_glue"]
+
+
 def test_pins_sit_inside_the_cut_face(profile: Profile) -> None:
     whole = body()
     candidate = autosplit.find_plane(whole, profile)
@@ -683,6 +810,130 @@ def test_the_plan_is_one_operation_per_cut(loaded, profile: Profile) -> None:
     assert plan.drafts[0].params["axis"] == "x"
 
 
+def test_auto_split_stores_its_connector_suggestion_in_every_step(profile: Profile) -> None:
+    """Die Messung wird ein Parameter und nicht bloß eine flüchtige Meinung.
+
+    Nur so rechnet dieselbe Projektdatei beim nächsten Öffnen dieselbe Form.
+    Der breite Balken bietet je Naht zwei getrennte Sitze und bekommt deshalb
+    Schwalbenschwänze.
+    """
+    plan = plan_split(bar(600.0), "obj_1", profile)
+
+    assert plan.drafts
+    assert [draft.params["shape"] for draft in plan.drafts] == [
+        step.connector_shape for step in plan.outcome.cuts
+    ]
+    assert all(draft.params["shape"] == "dovetail" for draft in plan.drafts)
+
+
+def test_auto_split_stores_snap_for_a_deep_narrow_seam(profile: Profile) -> None:
+    """Die zweite Form erreicht ebenfalls den wirklichen Operationsstapel."""
+    narrow = MeshData.of(trimesh.creation.box(extents=(400.0, 12.0, 12.0)))
+
+    first = plan_split(narrow, "obj_1", profile)
+    second = plan_split(narrow, "obj_1", profile)
+
+    assert first.drafts
+    assert all(draft.params["shape"] == "snap" for draft in first.drafts)
+    assert [draft.params for draft in first.drafts] == [draft.params for draft in second.drafts]
+
+
+def test_auto_split_builds_the_suggested_snaps(profile: Profile) -> None:
+    """Der schmale Fall endet nicht beim Parameter, sondern in echter Geometrie."""
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 400.0, "depth": 12.0, "height": 12.0},
+            )
+        ],
+    )
+    narrow = MeshData.of(trimesh.creation.box(extents=(400.0, 12.0, 12.0)))
+
+    applied = apply_split(project.document, narrow, "obj_1", profile)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+    assert split_ops and all(entry.params["shape"] == "snap" for entry in split_ops)
+    assert result.complete
+    assert all(
+        result.scene.objects[object_id].mesh.is_watertight for object_id in applied.object_ids
+    )
+    assert applied.fits, "jeder erzeugte Schnapper bekommt sein Passungspaar"
+
+
+def test_the_automatic_round_fallback_keeps_its_glue_hint(profile: Profile, tmp_path: Path) -> None:
+    """Der notwendige Handgriff überlebt Projektdatei und Neuauswertung.
+
+    Die konkrete Form allein reicht dafür nicht: ``round`` kann auch eine
+    ausdrückliche Nutzerwahl sein. Auto Split hält deshalb zusätzlich fest,
+    dass diese runden Stifte der Rückfall aus zu kleiner Fügefläche und zu
+    kurzem Federweg waren. ``auto`` selbst reist nie in der Datei mit.
+    """
+    tight_profile = replace(
+        profile,
+        printer=replace(profile.printer, build_volume=(14.0, 256.0, 256.0)),
+    )
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 12.0, "depth": 12.0, "height": 12.0},
+            )
+        ],
+    )
+    tight = connector_body(12.0, 12.0)
+
+    applied = apply_split(project.document, tight, "obj_1", tight_profile)
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+
+    assert [entry.params["shape"] for entry in split_ops] == ["round"]
+    assert all(entry.params["shape"] != "auto" for entry in split_ops)
+    assert [entry.params["glue_hint"] for entry in split_ops] == [True]
+    assert [finding.code for finding in applied.findings] == ["split.connector_glue"]
+
+    path = tmp_path / "rund-mit-kleberhinweis.p3d"
+    save(project, path)
+    reopened = load(path)
+    result = evaluate(
+        reopened.document,
+        tight_profile,
+        sources=ProjectSources(reopened, base_dir=path.parent),
+    )
+
+    reopened_split = [entry for entry in reopened.document.ops if entry.op == "split_pinned"]
+    assert [entry.params["glue_hint"] for entry in reopened_split] == [True]
+    assert result.complete
+    assert [
+        finding.code
+        for finding in result.scene.report.findings
+        if finding.code == "split.connector_glue"
+    ] == ["split.connector_glue"]
+
+
+def test_an_explicit_round_operation_does_not_claim_an_automatic_fallback(
+    profile: Profile,
+) -> None:
+    """Die neue Herkunftsangabe ändert die manuelle Rundwahl nicht."""
+    entry = SceneObject(id="obj_1", name="Balken", mesh=body())
+
+    result = run(
+        "split_pinned",
+        entry,
+        profile,
+        axis="x",
+        position=0.0,
+        pins=2,
+        shape="round",
+    )
+
+    assert "split.connector_glue" not in {finding.code for finding in result.findings}
+
+
 def test_oversized_is_divided_without_anybody_touching_a_parameter(
     loaded, profile: Profile
 ) -> None:
@@ -693,6 +944,8 @@ def test_oversized_is_divided_without_anybody_touching_a_parameter(
     result = evaluate(project.document, profile, sources=ProjectSources(project))
 
     assert result.complete
+    split_ops = [entry for entry in project.document.ops if entry.op == "split_pinned"]
+    assert split_ops and all(entry.params["shape"] == "dovetail" for entry in split_ops)
     assert len(applied.object_ids) == 2
     for object_id in applied.object_ids:
         part = result.scene.objects[object_id]

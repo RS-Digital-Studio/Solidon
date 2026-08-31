@@ -106,14 +106,34 @@ def plan_split(
         OperationDraft(
             op="split_pinned",
             inputs=(object_id,),
-            params={"axis": step.plane.axis, "position": step.plane.position, "pins": pins},
+            params={
+                "axis": step.plane.axis,
+                "position": step.plane.position,
+                "pins": pins,
+                # Auto Split trifft diese Wahl aus den Messdaten der jeweiligen
+                # Naht. Gespeichert wird die konkrete Form, damit dieselbe
+                # Projektdatei nicht bei jeder Auswertung neu entscheidet.
+                "shape": step.connector_shape,
+                # Rund kann auch eine ausdrückliche Nutzerwahl sein. Dieser
+                # getrennte Wert bewahrt nur den Handlungshinweis des
+                # automatischen Rückfalls über Speichern und Neuauswertung.
+                "glue_hint": step.connector_glue,
+            },
         )
         for step in outcome.cuts
     ]
     return SplitPlan(
         drafts=tuple(drafts),
         outcome=outcome,
-        seated=tuple(fitting_pins(step.source, step.plane.plane, pins) for step in outcome.cuts),
+        seated=tuple(
+            fitting_pins(
+                step.source,
+                step.plane.plane,
+                pins,
+                shape=step.connector_shape,
+            )
+            for step in outcome.cuts
+        ),
         connector_start=next_connector_index(features or {}),
     )
 

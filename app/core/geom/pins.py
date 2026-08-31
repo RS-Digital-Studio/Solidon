@@ -78,6 +78,11 @@ PIN_DEPTH_FACTOR = 1.5
 #: abgebrochenen darin. Wo weniger Material steht, entsteht deshalb keiner.
 PIN_MIN_ENGAGEMENT = 0.75
 
+#: Nur der Auto-Split-Ablauf darf diese Form anfordern. Gespeichert wird nie
+#: ``auto``, sondern die aus der Naht gemessene konkrete Form.
+AUTO = "auto"
+ROUND = "round"
+
 #: Der Schnappverbinder unter den Querschnitten — er ist keiner, sondern ein
 #: eigener Baustein, und beide Stellen, die ihn erkennen müssen, lesen hier.
 SNAP = "snap"
@@ -172,6 +177,32 @@ BORE_RELIEF = shapes.SEAT_RELIEF
 
 
 @dataclass(frozen=True, slots=True)
+class ConnectorChoice:
+    """Der nachvollziehbare Messentscheid für eine Auto-Split-Naht.
+
+    Die Fügefläche wird in ihrer Ebene beurteilt: Reichen ihre Fläche und
+    der Abstand der bereits geplanten Sitze für deren Hüllen, ist ein
+    Schwalbenschwanz formschlüssig und lässt trotzdem Klebefläche stehen.
+    Sonst entscheidet die nutzbare Materialtiefe hinter der Naht, ob der
+    Federarm lang genug wird. Reicht auch sie nicht, bleiben runde Stifte zum
+    Ausrichten und der Plan weist auf Kleber hin.
+
+    Alle Grenzen folgen aus den Nahtdaten und den vorhandenen
+    Verbinderregeln: Durchmesser, verbleibende Wand und
+    :data:`SNAP_MIN_REACH`. Es kommt kein weiteres Toleranzmaß hinzu.
+    """
+
+    shape: Literal["dovetail", "snap", "round"]
+    face_area: float
+    required_face_area: float
+    seat_spacing: float
+    required_seat_spacing: float
+    material_depth: float
+    required_material_depth: float
+    requires_glue: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PinPlan:
     """Wo die Stifte hinkommen, und wie groß sie sind."""
 
@@ -191,9 +222,10 @@ class PinPlan:
     """Verbinder — ``round``, ``hex``, ``dovetail`` oder ``snap``.
 
     Rund braucht zwei Stück gegen Verdrehen, die kantigen halten schon
-    einzeln. Welcher es ist, entscheidet der Nutzer; die Planung sucht in
-    jedem Fall Platz für einen Kreis dieses Durchmessers, und was
-    hineingelegt wird, passt dann hinein.
+    einzeln. Außerhalb von Auto Split entscheidet der Nutzer; Auto Split
+    speichert die aus Fügefläche und Materialtiefe gemessene konkrete Form.
+    Die Planung sucht in jedem Fall Platz für einen Kreis dieses
+    Durchmessers, und was hineingelegt wird, passt dann hinein.
 
     ``snap`` ist der Ausreißer: kein Querschnitt, sondern ein federnder Arm
     aus der Bausteinbibliothek. Er steht hier trotzdem in derselben Liste,
@@ -201,6 +233,8 @@ class PinPlan:
     Naht von mindestens 5,4 mm, sonst wird rund daraus
     (``split.snap_too_small``)."""
     findings: tuple[Finding, ...] = ()
+    choice: ConnectorChoice | None = None
+    """Messwerte der automatischen Wahl; bei einer ausdrücklichen Form leer."""
 
     @property
     def count(self) -> int:
@@ -243,13 +277,20 @@ def plan_pins(
     normal = _unit(plane.normal)
     section = sections_across(mesh, normal, np.array([plane.position]))[0]
     if section is None or section.is_empty:
-        return PinPlan((), 0.0, 0.0, normal, shape, (_no_face(),))
+        return PinPlan((), 0.0, 0.0, normal, ROUND if shape == AUTO else shape, (_no_face(),))
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
     diameter = _diameter(largest)
     seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
     if seats is None:
-        return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
+        return PinPlan(
+            (),
+            0.0,
+            0.0,
+            normal,
+            ROUND if shape == AUTO else shape,
+            (_too_small(diameter, wall),),
+        )
 
     # Die Fläche nennt eine obere Schranke für den Durchmesser, die Tiefe eine
     # zweite. Wo die zweite kleiner ist, wird der Stift dünner statt zu
@@ -264,12 +305,24 @@ def plan_pins(
         if thinner < PIN_MIN:
             needed = PIN_MIN * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
             return PinPlan(
-                (), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),)
+                (),
+                0.0,
+                0.0,
+                normal,
+                ROUND if shape == AUTO else shape,
+                (_seam_too_thin(diameter, thickest, needed),),
             )
         diameter = thinner
         seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
         if seats is None:
-            return PinPlan((), 0.0, 0.0, normal, shape, (_too_small(diameter, wall),))
+            return PinPlan(
+                (),
+                0.0,
+                0.0,
+                normal,
+                ROUND if shape == AUTO else shape,
+                (_too_small(diameter, wall),),
+            )
 
     # Fließkomma: Nach dem Verdünnen ist die Einbindung genau die gemessene
     # Tiefe, und ein Vergleich auf Gleichheit entschiede dort ein letztes Bit.
@@ -280,7 +333,14 @@ def plan_pins(
         # Tiefe, die dort gemessen wurde, und nicht die vom ersten Anlauf.
         thickest = max((raw for _point, _usable, raw in seats), default=thickest)
         needed = diameter * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
-        return PinPlan((), 0.0, 0.0, normal, shape, (_seam_too_thin(diameter, thickest, needed),))
+        return PinPlan(
+            (),
+            0.0,
+            0.0,
+            normal,
+            ROUND if shape == AUTO else shape,
+            (_seam_too_thin(diameter, thickest, needed),),
+        )
 
     # Der Stift ist so lang, wie die dünnste seiner Stellen trägt — alle
     # teilen sich einen Körper, und der längste gemeinsame Nenner ist der
@@ -289,7 +349,14 @@ def plan_pins(
     room = min(usable for _point, usable in seated)
     reach = min(diameter * PIN_DEPTH_FACTOR, room)
     points = tuple(point for point, _usable in seated)
-    findings = []
+    findings: list[Finding] = []
+    choice = None
+
+    if shape == AUTO:
+        choice = _choose_connector(largest, points, diameter, room, wall)
+        shape = choice.shape
+        if choice.requires_glue:
+            findings.append(connector_glue_finding(choice))
 
     if shape == SNAP:
         # **Ein Federarm ist kein Passstift, und seine Länge folgt nicht dem
@@ -325,6 +392,49 @@ def plan_pins(
         normal=normal,
         shape=shape,
         findings=tuple(findings),
+        choice=choice,
+    )
+
+
+def _choose_connector(
+    section: Any,
+    points: tuple[Vec3, ...],
+    diameter: float,
+    material_depth: float,
+    wall: float,
+) -> ConnectorChoice:
+    """Wählt die konkrete Form ausschließlich aus den Nahtmessdaten."""
+    envelope = diameter + 2.0 * wall
+    required_area = len(points) * envelope**2
+    if len(points) < 2:
+        spacing = 0.0
+        required_spacing = 0.0
+    else:
+        spacing = min(
+            float(np.linalg.norm(np.asarray(first) - np.asarray(second)))
+            for index, first in enumerate(points)
+            for second in points[index + 1 :]
+        )
+        required_spacing = envelope
+
+    area = float(section.area)
+    roomy_face = area + EPS_GEOM >= required_area and spacing + EPS_GEOM >= required_spacing
+    if roomy_face:
+        selected: Literal["dovetail", "snap", "round"] = "dovetail"
+    elif material_depth + EPS_GEOM >= SNAP_MIN_REACH:
+        selected = "snap"
+    else:
+        selected = "round"
+
+    return ConnectorChoice(
+        shape=selected,
+        face_area=area,
+        required_face_area=required_area,
+        seat_spacing=spacing,
+        required_seat_spacing=required_spacing,
+        material_depth=material_depth,
+        required_material_depth=SNAP_MIN_REACH,
+        requires_glue=selected == ROUND,
     )
 
 
@@ -617,6 +727,37 @@ def _too_shallow_for_snap(depth: float) -> Finding:
             "zum Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
         ),
         values={"depth_mm": round(depth, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
+    )
+
+
+def connector_glue_finding(choice: ConnectorChoice | None = None) -> Finding:
+    """Die automatische Rückfallwahl nennt Grund und nächsten Handgriff.
+
+    Der Satz ist derselbe wie beim ausdrücklich gewählten, aber zu kurzen
+    Schnapper und damit bereits in allen Sprachkatalogen vorhanden. Beim
+    Planen machen die Werte beide verworfenen Wege nachprüfbar; die Operation
+    bewahrt denselben Hinweis ohne flüchtige Messwerte über die Projektdatei.
+    """
+    values = (
+        {
+            "face_area_mm2": round(choice.face_area, 2),
+            "needed_face_area_mm2": round(choice.required_face_area, 2),
+            "seat_spacing_mm": round(choice.seat_spacing, 2),
+            "needed_seat_spacing_mm": round(choice.required_seat_spacing, 2),
+            "depth_mm": round(choice.material_depth, 2),
+            "needed_depth_mm": round(choice.required_material_depth, 2),
+        }
+        if choice is not None
+        else {}
+    )
+    return Finding(
+        code="split.connector_glue",
+        severity="info",
+        message=_(
+            "Hinter der Naht steht zu wenig Material für einen Federarm — er wäre zu kurz "
+            "zum Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
+        ),
+        values=values,
     )
 
 

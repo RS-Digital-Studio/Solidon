@@ -149,6 +149,14 @@ class Step:
     Gerechnet wird es nicht hier: Die Stiftplanung lebt in ``pins.py``, und
     das Modul importiert dieses hier. Der Aufrufer in ``app/core/split.py``
     hat beide."""
+    connector_shape: str = "round"
+    """Die aus genau dieser Naht gemessene, konkrete Verbinderform.
+
+    ``auto`` steht hier nie: Der Stapel muss beim erneuten Auswerten dieselbe
+    Geometrie bekommen, ohne die damalige Suche noch einmal zu wiederholen.
+    """
+    connector_glue: bool = False
+    """Ob die automatische Wahl auf Rundstifte mit Kleber zurückfiel."""
 
 
 @dataclass(slots=True)
@@ -312,6 +320,32 @@ def split_to_fit(
             )
             return outcome
 
+        connector_shape = "round"
+        connector_glue = False
+        if pins > 0:
+            from app.core.geom.pins import AUTO, plan_pins
+
+            connector_plan = plan_pins(
+                part,
+                candidate.plane,
+                count=pins,
+                shape=AUTO,
+            )
+            connector_shape = connector_plan.shape
+            connector_glue = bool(
+                connector_plan.choice is not None and connector_plan.choice.requires_glue
+            )
+            # Das Suchfenster rechnet mit einer Schätzung an der Mitte. Für
+            # die Kinder gilt die wirkliche Einbindung an der gewählten Naht;
+            # insbesondere ein Schnapper braucht mindestens acht Millimeter
+            # und darf nicht wie ein kurzer Rundstift bilanziert werden.
+            allowance = connector_plan.length / 2.0
+            outcome.findings.extend(
+                finding
+                for finding in connector_plan.findings
+                if finding.code == "split.connector_glue"
+            )
+
         outcome.parts[index : index + 1] = [first, second]
         # Beide Hälften erben die Zugabe des Elternteils und bekommen die des
         # neuen Schnitts auf der Schnittachse dazu. Auf **beide**, weil erst der
@@ -319,7 +353,15 @@ def split_to_fit(
         # Fehler ist, einer zu viel Reserve zu geben, nicht einer zu wenig.
         child = _add_on_axis(reserve, axis, allowance)
         reserves[index : index + 1] = [child, child]
-        outcome.cuts.append(Step(part_index=index, plane=candidate, source=part))
+        outcome.cuts.append(
+            Step(
+                part_index=index,
+                plane=candidate,
+                source=part,
+                connector_shape=connector_shape,
+                connector_glue=connector_glue,
+            )
+        )
         _log.info("split along %s at %.2f mm", candidate.axis, candidate.position)
 
     if _worst(outcome.parts, profile, reserves) is not None:
@@ -370,11 +412,11 @@ def _pin_allowance(mesh: MeshData, axis: Axis, profile: Profile, pins: int) -> f
     """
     if pins <= 0:
         return 0.0
-    from app.core.geom.pins import plan_pins  # spät: pins importiert dieses Modul
+    from app.core.geom.pins import AUTO, plan_pins  # spät: pins importiert dieses Modul
 
     centre = float(mesh.bounds.centre["xyz".index(axis)])
     plane = SectionPlane(normal=AXIS_NORMALS[axis], position=centre)
-    return plan_pins(mesh, plane, count=pins).length / 2.0
+    return plan_pins(mesh, plane, count=pins, shape=AUTO).length / 2.0
 
 
 def cuts_through(plane: SectionPlane, protect: Sequence[Any]) -> bool:
