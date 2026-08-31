@@ -40,6 +40,47 @@ def bar(length: float = 400.0) -> MeshData:
     return MeshData.of(trimesh.creation.box(extents=(length, 60.0, 40.0)))
 
 
+def dumbbell(neck: float = 30.0, flank: float = 60.0) -> MeshData:
+    """Dicke Enden, ein Hals, der sich **stetig** auf ``neck`` verjüngt.
+
+    Der Radius fällt über ``flank`` Millimeter von 40 auf ``neck`` und steigt
+    wieder — eine **sanfte** Mulde, und das ist der Punkt.
+
+    Drei Entwürfe davor trafen den Fall nicht, und jeder verfehlte ihn anders:
+
+    * Zwei Kegel Spitze an Spitze berühren sich in einem Punkt mit Querschnitt
+      **null**. Dort lässt sich gar nicht schneiden.
+    * Ein Hals, der von −8 bis +8 gleich stark bleibt, ist im Suchfenster
+      überall gleich dick — bei einem 400 mm langen Körper auf einem 220er
+      Bett reicht das Fenster nur ±16 mm um die Mitte, weiter außen passt eine
+      Hälfte nicht mehr. Es gab keine Kerbe zu erkennen, nur eine flache
+      Strecke.
+    * Eine **steile** Verjüngung über ±30 mm fängt schon der vorhandene
+      ``PRISM_WEIGHT``-Term: Dort ändert sich der Querschnitt kräftig, und die
+      Naht wandert von selbst weg. Der Test war grün, ohne den neuen Term zu
+      brauchen.
+
+    Die Lücke liegt dazwischen: eine Verjüngung, die flach genug ist, dass
+    ``change`` sie über seine halbe Millimeter nicht sieht, und tief genug,
+    dass die Naht dort nicht hingehört. Gemessen wählt die Suche ohne den
+    Einschnürungsterm genau die Mitte, mit einer Punktzahl von 0,003.
+    """
+    profile_line = np.array(
+        [
+            [0.0, -200.0],
+            [40.0, -200.0],
+            [40.0, -flank],
+            [neck, 0.0],
+            [40.0, flank],
+            [40.0, 200.0],
+            [0.0, 200.0],
+        ]
+    )
+    body_mesh = trimesh.creation.revolve(profile_line, sections=64)
+    body_mesh.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2, [0, 1, 0]))
+    return MeshData.of(body_mesh)
+
+
 # --- die Suche ------------------------------------------------------------------
 
 
@@ -88,6 +129,55 @@ def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:
     assert candidate is not None
     assert candidate.contours == 1
     assert abs(candidate.position) <= 20.0, "through the joint, not through both arms"
+
+
+def test_the_seam_avoids_the_narrowest_place(profile: Profile) -> None:
+    """§22.3, Festigkeit: durch die dünnste Stelle wird nicht getrennt.
+
+    Eine Hantel — dicke Enden, eine Einschnürung in der Mitte. Bis hierher
+    gewann genau diese Stelle: Sie hat **eine** Kontur, der Querschnitt ist
+    dort am kleinsten, und sie liegt in der Mitte, also trugen alle drei
+    bisherigen Terme sie. Gedruckt bricht das Teil dann an der Naht, denn
+    quer zur Schicht ist die Verbindung ohnehin am schwächsten, und sie sitzt
+    am dünnsten Querschnitt.
+
+    Der Unterschied zu ``test_the_plane_lands_in_the_slim_middle`` ist die
+    **Form** der dünnen Stelle, nicht ihre Dicke: Dort ist die Taille
+    prismatisch, verläuft also über eine Strecke gleich — hier ist sie ein
+    Minimum an einem Punkt. Die prismatische Taille bleibt die richtige Naht;
+    verboten ist nur die Kerbe.
+    """
+    candidate = autosplit.find_plane(dumbbell(), profile)
+
+    assert candidate is not None
+    assert candidate.axis == "x", "quer zur langen Richtung"
+    # Gemessen liegt das Minimum bei x = 0 mit 201 mm², die Flanken steigen
+    # binnen fünfzehn Millimetern auf das Doppelte. Alles innerhalb von zehn
+    # Millimetern um die Mitte ist die Kerbe.
+    assert abs(candidate.position) > 10.0, (
+        f"die Naht liegt bei {candidate.position:.1f} und damit in der Einschnürung — "
+        "dort bricht das gedruckte Teil"
+    )
+    assert candidate.area > 400.0, (
+        f"der Querschnitt der Naht ist {candidate.area:.0f} mm² und damit nahe am Minimum von 201"
+    )
+
+
+def test_a_prismatic_waist_is_still_the_right_seam(profile: Profile) -> None:
+    """Die Gegenprobe zur Regel darüber, und sie ist die wichtigere Hälfte.
+
+    Eine Einschnürung zu meiden ist nur dann richtig, wenn eine **prismatische**
+    Taille weiterhin gewinnt — sonst hat die neue Regel die alte umgeworfen,
+    statt sie zu ergänzen. ``oversized.stl`` hat genau so eine Taille, und die
+    Naht gehört hinein.
+
+    Steht dieser Test rot, ist der Einschnürungsterm zu grob: Er bestraft dann
+    jede dünne Stelle statt nur die spitze.
+    """
+    candidate = autosplit.find_plane(body(), profile)
+
+    assert candidate is not None
+    assert candidate.area == pytest.approx(40.0 * 30.0), "weiterhin der Querschnitt der Mitte"
 
 
 def test_a_body_twice_too_long_takes_two_cuts(profile: Profile) -> None:

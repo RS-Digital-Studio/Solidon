@@ -23,6 +23,7 @@ Näherung wieder zusammenzukleben ergibt ein genähertes Teil (§11.1).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -58,11 +59,46 @@ MAX_PARTS = 12
 #: zu sehen, ob der Körper dort prismatisch ist.
 PRISM_STEP = 0.5
 
-#: Gewichte der drei Kriterien. Konturen dominieren mit Absicht: eine Naht,
+#: Gewichte der Kriterien. Konturen dominieren mit Absicht: eine Naht,
 #: die in mehrere Brücken zerfällt, ist schlimmer als jede Unwucht.
 CONTOUR_WEIGHT = 1.0
 PRISM_WEIGHT = 0.6
 BALANCE_WEIGHT = 0.25
+
+#: **Eine Naht gehört nicht an die dünnste Stelle** (§22.3, Festigkeit).
+#: Quer zur Schicht ist eine geklebte Fuge ohnehin die schwächste Stelle des
+#: Teils; sie zusätzlich in den kleinsten Querschnitt zu legen, addiert zwei
+#: Schwächen an einem Ort.
+#:
+#: Der Term ist nötig, weil die drei darüber eine Einschnürung **belohnen**:
+#: Sie hat eine Kontur, sie liegt oft mittig, und ``PRISM_WEIGHT`` misst die
+#: erste Ableitung des Querschnitts — die an einem Minimum genau null ist. Eine
+#: Kerbe sieht für diese Rechnung aus wie ein prismatischer Abschnitt.
+#: Gemessen an einer Hantel mit 201 mm² Halsquerschnitt: Punktzahl 1,2·10⁻⁸,
+#: also die beste überhaupt erreichbare.
+NOTCH_WEIGHT = 0.9
+
+#: Ab welcher relativen Vertiefung eine Stelle als Einschnürung gilt. Darunter
+#: ist es Messrauschen einer prismatischen Strecke — ``oversized.stl`` hat eine
+#: Taille, die über ihre Länge gleich bleibt, und die bleibt die richtige Naht.
+NOTCH_FLOOR = 0.02
+
+#: Wie viele Schnitte die grobe Profilkurve über die **ganze** Achse nimmt.
+#:
+#: Das Suchfenster ist eng — bei einem 400 mm langen Körper auf einem 220er
+#: Bett sind es ±16 mm um die Mitte, weil weiter außen eine Hälfte nicht mehr
+#: passt. Darin sind eine prismatische Taille und eine Mulde **nicht zu
+#: unterscheiden**: Beide sind auf dieser Länge flach. Über die volle Achse
+#: sind sie es sehr wohl, und darauf beruht der Term.
+#:
+#: Dreizehn Schnitte kosten gemessen drei Millisekunden — gegen die
+#: neunundneunzig der eigentlichen Suche fällt das nicht ins Gewicht (§31).
+PROFILE_SAMPLES = 13
+
+#: Wie nah am Minimum eine Stelle liegen muss, um als „auch dort dünn" zu
+#: zählen. Eine prismatische Taille hat mehrere solche Stellen, eine Mulde
+#: genau eine — daran werden sie unterschieden.
+PROFILE_PLATEAU = 0.08
 
 #: Über dieser Punktzahl sind die abgetasteten Ebenen alle mittelmäßig, und
 #: die konvexe Zerlegung wird um eine zweite Meinung gebeten.
@@ -453,6 +489,75 @@ def _sections_in_blocks(
     return [*below, *middle, *above]
 
 
+def _notch_depth(
+    mesh: MeshData,
+    axis: Axis,
+    *,
+    cancelled: CancelToken | None = None,
+) -> Callable[[float], float]:
+    """Baut die Auskunft „wie tief ist die Einschnürung hier".
+
+    Zurück kommt eine Funktion über die Position: null, wo der Körper nicht
+    eingeschnürt ist, sonst der relative Abstand des Querschnitts zum dicksten
+    Teil des Körpers.
+
+    **Warum eine eigene Kurve über die ganze Achse.** Das Suchfenster ist eng
+    — bei einem 400 mm langen Körper auf einem 220er Bett ±16 mm —, und darin
+    sehen die prismatische Taille und die Mulde gleich aus: beide flach. Erst
+    über die volle Länge trennen sie sich, und zwar an einer zählbaren
+    Eigenschaft:
+
+        ``oversized.stl``   3200 · **1200, fünfmal** · 3200   — eine Strecke
+        eine Mulde          5018 · 3978 · **2839** · 3940 · 5018   — ein Tal
+
+    Liegen mehrere Abtastpunkte gemeinsam am Minimum, ist die dünne Stelle
+    prismatisch und damit die **richtige** Naht (§22.3). Liegt genau einer
+    dort, ist es eine Kerbe, und dort gehört keine Fuge hin: Quer zur Schicht
+    ist sie ohnehin die schwächste Stelle des Teils.
+
+    Warum nicht die Nachbarn aus der Suche selbst: Sie liegen einen Millimeter
+    auseinander, und eine Kerbe ist ein Extremum — ihre erste Ableitung ist
+    null, auf dieser Länge also nichts zu sehen. Dieselbe Blindheit hat der
+    ``PRISM_WEIGHT``-Term, der über ``PRISM_STEP`` misst; genau deshalb bekam
+    eine Hantel mit 201 mm² Hals die bestmögliche Punktzahl.
+    """
+    index = "xyz".index(axis)
+    low = float(mesh.bounds.minimum[index]) + PRISM_STEP
+    high = float(mesh.bounds.maximum[index]) - PRISM_STEP
+    if high <= low:
+        return lambda _position: 0.0
+
+    stations = np.linspace(low, high, PROFILE_SAMPLES)
+    sections = _sections_in_blocks(mesh, axis, stations, cancelled)[:PROFILE_SAMPLES]
+    areas = [
+        float(entry.area) if entry is not None and not entry.is_empty else 0.0 for entry in sections
+    ]
+    usable = [value for value in areas if value > EPS_GEOM]
+    if len(usable) < 3:
+        return lambda _position: 0.0
+
+    thickest = max(usable)
+    thinnest = min(usable)
+    if thickest <= EPS_GEOM or thinnest >= thickest:
+        return lambda _position: 0.0
+
+    # Eine Strecke oder ein Tal? Gezählt wird, wie viele Stellen gemeinsam
+    # unten liegen. Zwei genügen: Sie spannen bereits eine Strecke auf.
+    plateau = sum(1 for value in usable if value <= thinnest * (1.0 + PROFILE_PLATEAU))
+    if plateau >= 2:
+        return lambda _position: 0.0
+
+    def depth_at(position: float) -> float:
+        """Wie weit dieser Ort unter dem dicksten Querschnitt liegt."""
+        here = float(np.interp(position, stations, areas))
+        if here <= EPS_GEOM:
+            return 0.0
+        shortfall = (thickest - here) / thickest
+        return shortfall if shortfall > NOTCH_FLOOR else 0.0
+
+    return depth_at
+
+
 def _judge(
     mesh: MeshData,
     axis: Axis,
@@ -476,6 +581,11 @@ def _judge(
     centre = float(mesh.bounds.centre[index])
     span = float(mesh.bounds.size[index]) or 1.0
 
+    # Die Einschnürung wird über die **ganze** Achse gemessen, nicht im
+    # Suchfenster: Darin sehen eine prismatische Taille und eine Mulde gleich
+    # aus. Dreizehn zusätzliche Schnitte, gemessen drei Millisekunden.
+    depth_at = _notch_depth(mesh, axis, cancelled=cancelled)
+
     judged: list[Candidate] = []
     for position, under, here, over in zip(positions, below, middle, above, strict=True):
         if here is None or here.is_empty:
@@ -495,6 +605,7 @@ def _judge(
                     CONTOUR_WEIGHT * (contours - 1)
                     + PRISM_WEIGHT * change
                     + BALANCE_WEIGHT * balance
+                    + NOTCH_WEIGHT * depth_at(float(position))
                 ),
             )
         )
