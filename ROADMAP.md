@@ -117,6 +117,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimate_mesh` erzeugt an 3as Eule nicht-mannigfaltige Kanten | Befunde aus dem Weg-Dreh (31.08.2026) | 3as Reproduktion an ihrer Datei — an vier Korpusmodellen nicht reproduzierbar, generated_figure war Vererbung; die Meldelücke des Pakets ist behoben (`0d1edb8b`: SIMPLIFY_MISSED misst jetzt gegen das Ziel statt gegen den Eingang) |
 | 61 % der mehrzeiligen Startseiten-Texte laufen über 75 Zeichen | Die Zeilen laufen zu lang (31.08.2026) | den Grundregel-Entwurf (15, nach T1; mit 50 abgestimmt, von 72 nachgemessen) — die Punktfixes haben ihre Stellen zu, dies ist die Grundsatzfrage dahinter; längste gemessene Zeile 153 Zeichen |
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
+| Die Tour des elften Beispiels verspricht ein falsches Undo | Befunde aus dem Weg-Dreh (31.08.2026) | 50s Fix mit drei Auflagen (Schrittfolge drehen, Satz auf den Registertitel, done = „Warnung weg") — danach 72s Sprach-Stichprobe und der Kameraflug am echten Fenster |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Die Ollama-Serie O1–O5 | Ollama bis zum Anschlag (31.08.2026) | die Abarbeitung nach Roberts Order („wird oft benutzt, bis zum Anschlag optimieren, perfekte Qualität/Performance") — O1 zuerst: Modell warmhalten und klären, warum es mit 0 % VRAM auf der CPU rechnet (701 s je Anfrage); dann Messstrecke, Grundlast-Endausbau mit Quote-Messung je Schritt, Modell-Empfehlung; bei d3 |
@@ -13402,7 +13403,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Nebenbefund als kleiner Punkt bei Bedarf: `apply_lid` friert das
       Material des Erzeugungszeitpunkts ein — vertretbar, aber jeder so
       erzeugte Deckel bleibt auf damals festgenagelt. Tor grün (1218).
-      Ursprünglich: (50, im Bau). Der Überhang-Zuschnitt fiel an der Messung, bevor eine Stunde
+      Ursprünglich: (50, im Bau).
+- [ ] **Die Tour des elften Beispiels verspricht ein falsches Undo** (72s
+      Abnahme am gebauten Fenster, 31.08. — der schwerste Satz des Tages:
+      „Er hat getan, was dastand, sieht das Gegenteil, und die Führung
+      bestätigt ihm, es sei richtig gewesen"): Der Tour-Satz nennt einen
+      Schritt „Deckel aus TPU", der im Verlauf „Material festlegen" heißt
+      und NICHT der letzte ist (arrange_bed folgt) — ein Strg+Z lässt die
+      Warnung stehen, und `done=_undo_happened` (can_redo) quittiert
+      trotzdem Erfolg. Punkte 1, 2 und 4 der Abnahme halten (eine Warnung
+      mit beiden Zahlen; der 812df37b-Klickweg bis zum Ort durchgerechnet;
+      vier Schritte, gesiezt). Fix bei 50 mit drei Auflagen: Schrittfolge
+      drehen (arrange_bed VOR set_material — 72 misst auf Wunsch, dass die
+      Reihenfolge das Ergebnis nicht ändert), Tour-Satz auf den
+      Registertitel, done = „die Warnung ist weg". Danach 72s
+      Zwei-Sprachen-Stichprobe und der Kameraflug am echten Fenster. Der Überhang-Zuschnitt fiel an der Messung, bevor eine Stunde
       hineinfloss: `evaluate()` prüft beim Öffnen Operationen, Passungen,
       Bauraum und Überlappung — **Überhänge nicht** (`advise()` läuft nur
       aus Druckdialog und Agent); ein Beispiel „mit Warnung als
@@ -13522,10 +13537,10 @@ statt eingefrorener Oberfläche (§2.8), keine GPL (Regel 15), jede Bewertung
 | T2 | Stützbedarf je Teilstück in die Bewertung: die besten Kandidaten je Ebene grob orientieren (`orient_for_print`) und das Stützvolumen der Schichtanalyse in den Score mischen — beide Bausteine existieren | M–L | offen |
 | T3 | Schiefe Ebenen in der automatischen Suche: Normalenfächer als Zweitstufe, wenn achsparallel über der Schwelle bleibt — löst das §22.3-Versprechen „Höhen und Richtungen" ein; die Maschinerie rechnet längst mit beliebigen Normalen | M–L | offen |
 | T4 | Verbinderform automatisch vorschlagen (Schwalbenschwanz bei Fläche, Schnapper ab Federweg, sonst rund+Kleber) statt Nutzerwahl — die Messdaten liegen je Naht schon vor | S–M | offen |
-| T5 | Zerbrechlichkeit und Festigkeit als Heuristik: dünne Splitterteile bestrafen, Naht meidet die Lastzone; FEM bewusst zurückgestellt (Regel 22) | S–M | offen |
+| T5 | Zerbrechlichkeit und Festigkeit als Heuristik: dünne Splitterteile bestrafen, Naht meidet die Lastzone; FEM bewusst zurückgestellt (Regel 22) | S–M | **zu als Negativbefund** (15, gemessen an neun Formen, kein Commit): Bauraumfenster und Mittenlage erzwingen ausgewogene Teile — am 17-Nahtlagen-Fall laufen Score und Festigkeit parallel, die Suche wählt die splitterfreieste Lage von selbst; Splitter entstehen nur, wo der Körper selbst schlank ist, und dann vermeidet sie keine Naht; Lastzonen-Meidung ist ohne Nutzungswissen nicht bestimmbar, das Querschnitts-Minimum meidet die Naht seit T1. Ehrliche Grenze: neun Formen sind keine Vollständigkeit — das Messgerüst steht, eine neue Form kostet eine halbe Stunde |
 | T6 | Symmetrie erhalten: Schnitt auf oder symmetrisch zur erkannten Symmetrieebene | S–M | offen |
 | T7 | Globale Suche statt greedy: Beam Search über Schnittfolgen (Vorbild Chopper, Breite ~4), abbrechbar in `JUDGE_BLOCK`-Häppchen | M–L | offen |
-| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | offen |
+| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | **in Arbeit (15): Vorschlag mit Bild vor dem Bau** — zwei Varianten (Markiergeste, Sperr-Anzeige, Rücknahme, und was die Suche sagt, wenn unter der Sperre keine gute Naht bleibt: anhalten und fragen, Regel 21), gemessen gegen die Oberflächengrenzen, Bild an Robert und Review |
 | T9 | Das Schaustück: zusammengebaut sehen, dann die Bett-Lage der Einzelteile — Explosions-Szene im Loop-Drehbuch, Motiv aus den mehrteiligen Galerieteilen (Roberts Idee, Hälfte b) | S | offen |
 
 - [ ] Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 →
@@ -13549,7 +13564,7 @@ damit von „liegt" zu „messen und entscheiden".
 | Paket | Kern | Größe | Stand |
 |---|---|---|---|
 | O1 | Betriebszustand: Das Modell wird warmgehalten statt je Aufruf neu von Platte geladen (keep_alive, Vorwärmen beim ersten Chat-Öffnen, num_ctx-Kontrolle) — heute kostet ein Kaltstart 3:51, und der hängende Dienst von heute gehört als Fehlerbild verstanden, nicht nur neu gestartet. **Erster Kernbefund (d3, gemessen): Das Modell rechnet vollständig auf der CPU — api/ps meldet 15,0 GB, davon 0,0 im VRAM (0 %)**, eine Anfrage mit voller Werkzeuglast kostet 701 s; warum die GPU leer bleibt (Modellgröße gegen VRAM, num_gpu, Ollama-Konfiguration), ist die erste Frage des Pakets | M | **zu** (`18fb2249`): **Solidon setzte kein keep_alive** — Ollamas 5-Minuten-Vorgabe entlud das Modell zwischen zwei Chat-Zügen (gemessen: 219 s kalt gegen 6 s warm an derselben Anfrage); jetzt 30 min als Abwägung gegen den Render-/Slice-Speicher, der Test prüft, DASS das Feld mitgeht, Mutationsprobe 2/2 rot. **Die GPU-Frage ist beantwortet und gehört nicht uns:** RTX 4080 vorhanden, Ollamas eigenes Protokoll zeigt dreimal „GPU discovery watchdog timed out" → CPU-Fallback mit 0 B VRAM — erklärt rückwirkend den 500er, den Nullpunkt-Abbruch und die Vier-Minuten-Ladezeiten |
-| O6 | Der Langsamkeits-Hinweis: Antwortet das lokale Backend auffällig langsam (Kaltstart-Klasse, CPU-Fallback wie der GPU-Discovery-Fall), sagt Solidon es dem Kunden mit Handlungsvorschlag statt ihn rätseln zu lassen — Schwelle und Wortlaut nach §2.7/§2.8, Entscheid der Review-Instanz aus Kundensicht (31.08.) | S–M | offen |
+| O6 | Der Langsamkeits-Hinweis: Antwortet das lokale Backend auffällig langsam (Kaltstart-Klasse, CPU-Fallback wie der GPU-Discovery-Fall), sagt Solidon es dem Kunden mit Handlungsvorschlag statt ihn rätseln zu lassen — Schwelle und Wortlaut nach §2.7/§2.8; **dazu die Lage-Kopplung des Warmhaltens** (Entscheid 31.08., seit d3s Messtag belegt statt hypothetisch): Läuft das Modell auf der CPU, sind 30 Minuten keep_alive 15 GB echter Arbeitsspeicher nach der letzten Frage — auf CPU-Fallback kürzer warmhalten und es dem Kunden sagen; beides ein Paket | S–M | offen |
 | O2 | Grundlast-Endausbau mit Quote-Messung je Schritt: Marken-Indirektion (−13 %) und default-Verzicht (−8 %) einzeln gegen die lokale Referenz messen — was die Quote kippt, fliegt raus, was hält, bleibt | M | offen |
 | O3 | Die §2.6-Tür als Bedienentwurf: `list_operations` statt aller 106 Schemata vorab — Entwurf mit Vorlage an Robert, denn er ändert, was das Modell „sieht" | M | offen |
 | O4 | Eine belastbare lokale Messstrecke: Referenzanfragen gegen Ollama auf ruhiger Maschine, Warm- gegen Kaltstart getrennt, Latenz je Zug und prompt_eval_count protokolliert — die 4/33-mit-17-Timeouts-Quote maß die Maschine, nicht den Prompt, und so etwas darf nie wieder als Abnahme herhalten | M | offen |
