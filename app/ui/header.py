@@ -19,7 +19,14 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QWidget
+from PySide6.QtWidgets import (
+    QGridLayout,
+    QLabel,
+    QSizePolicy,
+    QStyle,
+    QStyleOptionComboBox,
+    QWidget,
+)
 
 from app.branding import PROJECT_SUFFIX
 from app.core.scene import EvaluationResult
@@ -27,7 +34,7 @@ from app.core.types import Profile
 from app.core.units import LengthUnit
 from app.i18n import tr
 from app.ui.labels import length
-from app.ui.style import NORMAL, ROOMY, divider, set_level
+from app.ui.style import TIGHT, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
 
@@ -67,10 +74,10 @@ def bounds_text(result: EvaluationResult | None, unit: LengthUnit) -> str:
 #: ``explode_bar``, wo der Wähler herkommt — der Viewport kennt ihn.
 ALL_PLATES = -1
 
-#: Wie schmal ein kürzbares Feld der Kopfzeile werden darf, bevor es aufhört,
-#: etwas zu sagen. Vier Zeichen und die Auslassung — darunter steht dort „…",
-#: und das ist keine Auskunft mehr.
-LEAST_CHARACTERS = 5
+#: Ein eigenes Profil darf aus einem einzigen, beliebig langen Wort bestehen.
+#: Sein unterscheidendes Ende bleibt zugänglich, darf aber nicht erneut die
+#: ganze Werkzeugleiste auf sein Vollmaß zwingen.
+MAXIMUM_TAIL_CHARACTERS = 10
 
 
 class _EphemeralLabel(QLabel):
@@ -95,58 +102,100 @@ class _EphemeralLabel(QLabel):
     das Fenster breit zieht, bekommt ihn zurück.
     """
 
-    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
-        super().__init__(text, parent)
-        self._full = text
+    def __init__(
+        self,
+        text: str = "",
+        parent: QWidget | None = None,
+        *,
+        tail_words: int = 0,
+        protected_end: str = "",
+    ) -> None:
+        super().__init__("", parent)
+        self._full = ""
+        self._tail_words = tail_words
+        self._protected_end = protected_end
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        # **Auch der Text aus dem Konstruktor bekommt seinen Tooltip.** Er lief
-        # an :meth:`setText` vorbei, und damit hätte ein so gebautes Label
-        # gekürzt, ohne dass irgendwo noch stünde, was da eigentlich steht. In
-        # dieser Datei starten alle Labels leer, der Fall trat also nie ein —
-        # eine Zusage, die nur zufällig hält, hält nicht.
-        if text:
-            self.setToolTip(text)
+        # Konstruktor und späteres Setzen laufen bewusst durch denselben Weg:
+        # Volltext, Hilfe und sichtbare Kürzung dürfen nie auseinanderlaufen.
+        self.setText(text)
 
     def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
         """Merkt sich den ganzen Text und zeigt, was hineinpasst."""
         self._full = text
         self.setToolTip(text)
+        self.setAccessibleName(text)
+        raw_tail, visible_tail = self._bounded_tail()
+        if raw_tail:
+            metrics = self.fontMetrics()
+            full_width = metrics.horizontalAdvance(text)
+            body = text[: -len(raw_tail)]
+            tail_width = metrics.horizontalAdvance(f"{'…' if body else ''}{visible_tail}")
+            # Ein echtes Minimum, kein ``minimumSizeHint`` unter ``Ignored``:
+            # Stern, Einheit oder ein begrenztes Modellende passen damit
+            # nachweisbar hinein, ohne die Leiste selbst wieder zu verdrängen.
+            self.setMinimumWidth(min(full_width, tail_width))
+        else:
+            self.setMinimumWidth(0)
+        self.updateGeometry()
         self._fit()
 
     def full_text(self) -> str:
         """Was dastünde, wenn der Platz reichte — für Tests und Vorleser."""
         return self._full
 
-    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
-        """Fünf Zeichen statt der vollen Breite.
-
-        Das ist die eine Zeile, an der D6 hängt: Solange hier die volle
-        Textbreite steht, kann die Leiste nicht kürzen, sondern nur
-        wegnehmen.
-        """
-        height = super().minimumSizeHint().height()
-        return QSize(self.fontMetrics().averageCharWidth() * LEAST_CHARACTERS, height)
-
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
         self._fit()
 
-    def _fit(self) -> None:
-        """Kürzt auf die aktuelle Breite — aber nur, wenn es eine gibt.
+    def _tail(self) -> str:
+        """Das rohe Ende, dessen Bedeutung eine Kürzung nicht verschlucken darf."""
+        if self._protected_end and self._full.endswith(self._protected_end):
+            return self._protected_end
+        if not self._tail_words:
+            return ""
+        words = self._full.split()
+        return " ".join(words[-self._tail_words :])
 
-        **Vor dem ersten Layout ist ``width()`` winzig**, und wer dann kürzt,
-        kürzt auf nichts: Gemessen stand nach dem Öffnen eines Projekts ``''``
-        im Titel, obwohl der Name gesetzt war. Ein Label, das seinen Text beim
-        Setzen verliert, ist schlimmer als eines, das die Zeile sprengt —
-        gefunden hat es die Nachmessung, kein Test hätte danach gefragt.
-        """
+    def _bounded_tail(self, room: int | None = None) -> tuple[str, str]:
+        """Begrenzt ein unteilbares Ende, nicht den zugänglichen Volltext."""
+        raw_tail = self._tail()
+        if not raw_tail:
+            return "", ""
+        metrics = self.fontMetrics()
+        limit = max(
+            metrics.horizontalAdvance("…"),
+            metrics.averageCharWidth() * MAXIMUM_TAIL_CHARACTERS,
+        )
+        if room is not None:
+            limit = min(limit, max(0, room))
+        visible_tail = metrics.elidedText(raw_tail, Qt.TextElideMode.ElideMiddle, limit)
+        return raw_tail, visible_tail
+
+    def _fit(self) -> None:
+        """Kürzt sichtbar und hält das semantische Ende vollständig fest."""
         room = self.width()
-        if room <= self.fontMetrics().averageCharWidth() * LEAST_CHARACTERS:
+        metrics = self.fontMetrics()
+        if metrics.horizontalAdvance(self._full) <= room:
             super().setText(self._full)
             return
-        super().setText(
-            self.fontMetrics().elidedText(self._full, Qt.TextElideMode.ElideRight, room)
-        )
+        raw_tail, visible_tail = self._bounded_tail(room)
+        if not raw_tail:
+            super().setText(metrics.elidedText(self._full, Qt.TextElideMode.ElideMiddle, room))
+            return
+        body = self._full[: -len(raw_tail)]
+        if not body:
+            super().setText(metrics.elidedText(self._full, Qt.TextElideMode.ElideMiddle, room))
+            return
+        body_room = max(0, room - metrics.horizontalAdvance(visible_tail))
+        visible = metrics.elidedText(body, Qt.TextElideMode.ElideMiddle, body_room) + visible_tail
+        # Kerning an der neuen Naht kann den getrennt berechneten Text um
+        # einzelne Pixel verbreitern. Die sichtbare Zusage gewinnt auch dort.
+        while body_room and metrics.horizontalAdvance(visible) > room:
+            body_room -= 1
+            visible = (
+                metrics.elidedText(body, Qt.TextElideMode.ElideMiddle, body_room) + visible_tail
+            )
+        super().setText(visible)
 
 
 class HeaderBar(QWidget):
@@ -166,46 +215,128 @@ class HeaderBar(QWidget):
         super().__init__(parent)
         self.setObjectName("headerBar")
 
-        # **Die drei langen kürzen, die kurzen nicht** (Befund D6). Name, Maße
-        # und Drucker tragen zusammen 878 der 968 Pixel, die diese Zeile
-        # wünschte; „Druckplatte" und „PLA" sind kurz und fest. Wer alles
-        # kürzbar macht, bekommt eine Zeile, in der auch das Material zu „P…"
-        # wird, ohne dass es je nötig wäre.
-        self.title = _EphemeralLabel("", self)
+        # **Die drei langen kürzen mit Bedeutung** (Befund D6). Name, Maße und
+        # Drucker tragen zusammen 878 der 968 Pixel, die diese Zeile wünschte;
+        # ihre Enden bleiben deshalb fest: Ungespeichert-Stern, Einheit und
+        # Druckermodell. Plattenwahl und Material teilen den übrigen Raum
+        # responsiv, wobei der Zweck „Platte“ nie abgeschnitten werden darf.
+        self.title = _EphemeralLabel("", self, protected_end="*")
         set_level(self.title, "section")
-        self.bounds = _EphemeralLabel("", self)
+        self.bounds = _EphemeralLabel("", self, tail_words=1)
         set_level(self.bounds, "caption")
 
-        self.plate_label = QLabel(tr("Druckplatte"), self)
-        set_level(self.plate_label, "caption")
         self.plates = BarComboBox(self)
+        self.plates.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
         self.plates.setAccessibleName(tr("Druckplatte"))
         self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
         self.plates.currentIndexChanged.connect(self._on_plate)
 
-        self.printer = _EphemeralLabel("", self)
+        self.printer = _EphemeralLabel("", self, tail_words=2)
         set_level(self.printer, "caption")
-        self.material = QLabel("", self)
+        # Das Material steht zusätzlich im Filamentbereich. In der engsten
+        # Kopfzeile darf diese Wiederholung deshalb vor dem Plattenwähler
+        # kürzen; der vollständige Wert bleibt wie bei den übrigen Auskünften
+        # für Tooltip und Hilfstechnik erhalten.
+        self.material = _EphemeralLabel("", self, tail_words=1)
         set_level(self.material, "caption")
 
-        row = QHBoxLayout(self)
-        row.setContentsMargins(ROOMY, 0, ROOMY, 0)
-        row.setSpacing(NORMAL)
-        row.addWidget(self.title)
-        row.addWidget(self.bounds)
-        row.addStretch(1)
-        row.addWidget(self.plate_label)
-        row.addWidget(self.plates)
+        self._divider = divider(self)
+        self._layout = QGridLayout(self)
+        self._layout.setContentsMargins(TIGHT, 0, TIGHT, 0)
+        self._layout.setHorizontalSpacing(TIGHT)
+        self._layout.setVerticalSpacing(TIGHT)
+        self._compact = False
+        self._arrange(False)
         # Dieselbe Trennung wie in der Statuszeile: Plattenwahl links,
         # Drucker und Material rechts — „… 220 mm   PLA" stand sonst als ein
         # Satz da, obwohl das eine eine Auswahl ist und das andere ein
         # Bericht.
-        row.addWidget(divider(self))
-        row.addWidget(self.printer)
-        row.addWidget(self.material)
 
         self.show_plates(0)
-        self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().Policy.Fixed)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Bittet die Werkzeugleiste um das zweizeilige Kompaktmaß.
+
+        ``QToolBar`` gibt einem eingebetteten Widget sonst sein Wunschmaß oder
+        verschiebt es vollständig in den Überlauf. Das Kompaktmaß legt den
+        Plattenzustand unter die übrigen Angaben; durch ``Expanding`` wächst
+        der Header bei mehr Platz weiter und bleibt dann einzeilig.
+        """
+        preferred = super().sizeHint()
+        return QSize(self._compact_width(), preferred.height())
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Das kleinste responsive Maß statt der Summe einer einzigen Zeile."""
+        minimum = super().minimumSizeHint()
+        return QSize(self._compact_width(), minimum.height())
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._arrange(self._wide_width() > event.size().width())
+        super().resizeEvent(event)
+
+    def _compact_width(self) -> int:
+        """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
+        top = (self.title, self.bounds, self.printer, self.material)
+        top_width = sum(widget.minimumWidth() for widget in top) + TIGHT * (len(top) - 1)
+        plate_width = self.plates.minimumWidth() if not self.plates.isHidden() else 0
+        return max(top_width, plate_width) + TIGHT * 2
+
+    def _wide_width(self) -> int:
+        """Mindestbreite, ab der alle Angaben in eine Zeile passen."""
+        widgets: list[QWidget] = [self.title, self.bounds]
+        if not self.plates.isHidden():
+            widgets.extend((self.plates, self._divider))
+        widgets.extend((self.printer, self.material))
+        return (
+            sum(widget.minimumWidth() for widget in widgets)
+            + TIGHT * max(0, len(widgets) - 1)
+            + TIGHT * 2
+        )
+
+    def _arrange(self, compact: bool) -> None:
+        """Ordnet denselben Inhalt ohne Duplikat ein- oder zweizeilig an."""
+        if compact == self._compact and self._layout.count():
+            return
+        widgets = (
+            self.title,
+            self.bounds,
+            self.plates,
+            self._divider,
+            self.printer,
+            self.material,
+        )
+        for widget in widgets:
+            self._layout.removeWidget(widget)
+        for column in range(7):
+            self._layout.setColumnStretch(column, 0)
+        if compact:
+            self._layout.addWidget(self.title, 0, 0)
+            self._layout.addWidget(self.bounds, 0, 1)
+            self._layout.addWidget(self.printer, 0, 2)
+            self._layout.addWidget(self.material, 0, 3)
+            self._layout.addWidget(self.plates, 1, 0, 1, 4)
+            for column, stretch in enumerate((2, 3, 3, 1)):
+                self._layout.setColumnStretch(column, stretch)
+            self._divider.hide()
+        else:
+            self._layout.addWidget(self.title, 0, 0)
+            self._layout.addWidget(self.bounds, 0, 1)
+            self._layout.addWidget(self.plates, 0, 3)
+            self._layout.addWidget(self._divider, 0, 4)
+            self._layout.addWidget(self.printer, 0, 5)
+            self._layout.addWidget(self.material, 0, 6)
+            for column, stretch in ((0, 2), (1, 3), (2, 1), (3, 1), (5, 3), (6, 1)):
+                self._layout.setColumnStretch(column, stretch)
+            self._divider.show()
+        self._compact = compact
+        self._layout.invalidate()
+        self._layout.activate()
+        self.updateGeometry()
+
+    def _reflow(self) -> None:
+        """Zieht nach, wenn ein neuer Text sein semantisches Minimum ändert."""
+        self._arrange(self._wide_width() > self.width())
 
     @property
     def plate(self) -> int:
@@ -222,16 +353,34 @@ class HeaderBar(QWidget):
         previous = self.plate
         self.plates.blockSignals(True)
         self.plates.clear()
-        self.plates.addItem(tr("Alle"), ALL_PLATES)
+        self.plates.addItem(tr("Alle Platten"), ALL_PLATES)
         for index in range(plates):
-            self.plates.addItem(f"{tr('Platte')} {index + 1}", index)
+            self.plates.addItem(tr("Platte {number}", number=index + 1), index)
+        # Zweck **und Zustand** bleiben vollständig sichtbar. Nur „Platte“ zu
+        # zeigen verbarg nach der Wahl, ob alle oder eine einzelne Platte gilt.
+        # Der aktive Qt-Stil liefert Innenabstand, Rahmen und Pfeil. Qts
+        # ``sizeHint`` speichert dagegen den ersten, noch leeren Inhalt im
+        # Cache; nach dem Befüllen war er kleiner als der aktuelle Text.
+        metrics = self.plates.fontMetrics()
+        texts = [self.plates.itemText(index) for index in range(self.plates.count())]
+        widest = max(texts, key=metrics.horizontalAdvance)
+        option = QStyleOptionComboBox()
+        option.initFrom(self.plates)
+        option.currentText = widest
+        needed = self.plates.style().sizeFromContents(
+            QStyle.ContentsType.CT_ComboBox,
+            option,
+            QSize(metrics.horizontalAdvance(widest), metrics.height()),
+            self.plates,
+        )
+        self.plates.setMinimumWidth(needed.width())
         if previous != ALL_PLATES and previous < plates:
             self.plates.setCurrentIndex(previous + 1)
         self.plates.blockSignals(False)
 
         many = plates > 1
         self.plates.setVisible(many)
-        self.plate_label.setVisible(many)
+        self._reflow()
         if not many and previous != ALL_PLATES:
             self.plateChanged.emit(ALL_PLATES)
 
@@ -248,19 +397,21 @@ class HeaderBar(QWidget):
         """
         self.title.setText(project_name(name))
         self.bounds.setText(bounds_text(result, unit))
+        self._reflow()
 
     def show_profile(self, profile: Profile) -> None:
         """Worauf gedruckt wird. Beides, denn beides ändert das Ergebnis."""
         self.printer.setText(str(profile.printer.title))
         self.material.setText(str(profile.material.title))
+        self._reflow()
 
     def state(self) -> tuple[str, str, str, str]:
-        """Was gerade dasteht — die Tests lesen das, nicht die Widgets."""
+        """Die vollständige Auskunft — unabhängig von der sichtbaren Kürzung."""
         return (
-            self.title.text(),
-            self.bounds.text(),
-            self.printer.text(),
-            self.material.text(),
+            self.title.full_text(),
+            self.bounds.full_text(),
+            self.printer.full_text(),
+            self.material.full_text(),
         )
 
 

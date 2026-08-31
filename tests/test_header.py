@@ -12,6 +12,7 @@ Geprüft wird der Text, nicht das Aussehen: was dort steht, ist eine Aussage
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 
 import pytest
 
@@ -66,6 +67,114 @@ def test_the_header_names_printer_and_material(qt_app: QApplication) -> None:
     _title, _bounds, printer, material = header.state()
     assert printer == str(profile.printer.title)
     assert material == str(profile.material.title)
+
+
+def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
+    window: MainWindow,
+    qt_app: QApplication,
+) -> None:
+    """Eigene Profilnamen dürfen die ganze Kopfzeile nicht verdrängen."""
+    profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
+    printer_title = "Druckermodell" * 16
+    material_title = "Materialbezeichnung" * 12
+    profile = replace(
+        profile,
+        printer=replace(profile.printer, title=printer_title),
+        material=replace(profile.material, title=material_title),
+    )
+
+    window.header.show_profile(profile)
+    window.header.title.setText("Ein langes eigenes Projekt*")
+    window.header.bounds.setText("220,0 × 220,0 × 250,0 mm")
+    window.header.show_plates(3)
+    window.resize(640, 720)
+    window.header.updateGeometry()
+    window.toolbar.updateGeometry()
+    QApplication.processEvents()
+
+    assert window.header.isVisibleTo(window.toolbar), (
+        "die Kopfzeile liegt im Überlaufmenü: "
+        f"header min={window.header.minimumSizeHint().width()}, "
+        f"printer min={window.header.printer.minimumWidth()}, "
+        f"material min={window.header.material.minimumWidth()}, "
+        f"toolbar={window.toolbar.width()}"
+    )
+    assert window.header.plates.isVisibleTo(window.toolbar)
+    for label, full_text in (
+        (window.header.printer, printer_title),
+        (window.header.material, material_title),
+    ):
+        assert label.isVisibleTo(window.toolbar) and label.width() > 0
+        assert label.full_text() == full_text
+        assert label.toolTip() == full_text
+        assert label.accessibleName() == full_text
+        assert label.text() != full_text and "…" in label.text()
+
+
+def test_the_plate_filter_shows_its_complete_state_in_every_language(
+    qt_app: QApplication,
+) -> None:
+    """Auch bei 640 Pixeln ist nicht nur der Zweck, sondern die Wahl sichtbar.
+
+    Ein zusammengesetztes „Platte: Alle“ war in drei Sprachen grammatisch
+    falsch und schnitt bei schmalen Fenstern ausgerechnet den Zustand ab. Ein
+    eigener übersetzter Eintrag und seine echte Zeichenbreite verhindern
+    beides für „alle“ und für jede einzelne Platte.
+    """
+    from PySide6.QtWidgets import QStyle, QStyleOptionComboBox
+
+    from app.i18n import set_language, tr
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.style import apply_style
+
+    previous_style = qt_app.styleSheet()
+    apply_style(qt_app, "dark")
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            header = HeaderBar()
+            header.title.setText("Ein sehr langes Beispielprojekt*")
+            header.bounds.setText("6,5354 × 3,1496 × 2,0472 in")
+            header.printer.setText("Allgemeiner FDM-Drucker 220 mm")
+            header.material.setText("PLA")
+            header.show_plates(3)
+            header.show()
+            try:
+                assert header.plates.itemText(0) == str(tr("Alle Platten"))
+                for width in (289, 449, 689, 1125):
+                    # Ein freistehendes QWidget darf Qt nicht unter das
+                    # Mindestmaß seines *vorigen* Layouts verkleinern. In der
+                    # echten QToolBar entscheidet derselbe Vergleich vor der
+                    # Zuweisung; hier lösen wir ihn für die Zielbreite aus.
+                    header._arrange(header._wide_width() > width)
+                    header.resize(width, 80)
+                    QApplication.processEvents()
+                    assert header.width() == width
+                    assert header.title.width() > 0 and header.title.text().endswith("*")
+                    assert header.bounds.width() > 0 and header.bounds.text().endswith("in")
+                    assert header.printer.width() > 0 and header.printer.text().endswith("220 mm")
+                    assert header.material.width() > 0 and header.material.text() == "PLA"
+                    for index in range(header.plates.count()):
+                        header.plates.setCurrentIndex(index)
+                        QApplication.processEvents()
+                        option = QStyleOptionComboBox()
+                        option.initFrom(header.plates)
+                        option.currentText = header.plates.currentText()
+                        field = header.plates.style().subControlRect(
+                            QStyle.ComplexControl.CC_ComboBox,
+                            option,
+                            QStyle.SubControl.SC_ComboBoxEditField,
+                            header.plates,
+                        )
+                        assert field.width() >= header.plates.fontMetrics().horizontalAdvance(
+                            header.plates.currentText()
+                        ), f"{language}/{width}: {header.plates.currentText()!r} ist abgeschnitten"
+            finally:
+                header.deleteLater()
+    finally:
+        set_language("de")
+        qt_app.setStyleSheet(previous_style)
 
 
 @pytest.fixture
