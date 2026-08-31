@@ -80,6 +80,7 @@
 - [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
 - [Abgelesene Zahl altert still](abgelesene-zahl-altert-still.md) — sie stimmt nur in der Lage, in der sie entstand; was fehlt, sieht aus wie Absicht.
 - [Eine Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — beim Vereinheitlichen auf eine Skala verlieren bewegliche Werte genau das, wofür sie da sind.
+- [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — eine richtige Regel mit ungeprüftem Geltungsbereich; wo gilt sie noch, wo ich sie nicht gemeint habe?
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
 
