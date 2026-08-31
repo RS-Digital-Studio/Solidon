@@ -261,19 +261,7 @@
        * sucht, schickt einem Telefon ein AppImage; die mobilen Systeme werden
        * deshalb zuerst geprüft und nehmen sich heraus.
        */
-      const platform = () => {
-        const hint = navigator.userAgentData && navigator.userAgentData.platform;
-        const mark = String(hint || navigator.platform || navigator.userAgent || "")
-          .toLowerCase();
-        const agent = String(navigator.userAgent || "").toLowerCase();
-        if (/android|iphone|ipad|ipod/.test(agent)) return "";
-        if (mark.includes("win")) return "windows";
-        if (mark.includes("mac") || mark.includes("darwin")) return "macos";
-        if (mark.includes("linux") || mark.includes("x11")) return "linux";
-        return "";
-      };
-
-      const system = platform();
+      const system = document.documentElement.dataset.os || "";
 
       /* Erst die Verweise, dann die Texte: Ein Knopf, der schon „Demo laden"
          heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
@@ -655,5 +643,135 @@
     for (const film of films) watcher.observe(film);
   } catch (problem) {
     console.warn("site.js: die Wege-Aufnahmen laufen nicht —", problem);
+  }
+})();
+
+/* Welches System sitzt davor?
+ *
+ * Das Ergebnis steht als `data-os` am Wurzelelement, und zwar sofort — der
+ * Download-Kasten wartet auf einen Termin, das Register der
+ * Installationshinweise wartet auf nichts. Ein Attribut und keine gemeinsame
+ * Variable: Diese Datei besteht aus Blöcken, die einzeln fehlschlagen dürfen,
+ * und eine geteilte Variable wäre eine Naht zwischen ihnen.
+ *
+ * **Zurückhaltend geraten.** Nur ein sicher erkanntes Windows, macOS oder
+ * Linux wird eingetragen; alles andere lässt das Attribut leer, und dann
+ * wählt der Besucher selbst. **Android trägt „Linux" in seinem Kennzeichen** —
+ * wer nur danach sucht, schickt einem Telefon ein AppImage; die mobilen
+ * Systeme werden deshalb zuerst geprüft und nehmen sich heraus.
+ */
+(() => {
+  try {
+    const hint = navigator.userAgentData && navigator.userAgentData.platform;
+    const mark = String(hint || navigator.platform || navigator.userAgent || "").toLowerCase();
+    const agent = String(navigator.userAgent || "").toLowerCase();
+    let system = "";
+    if (!/android|iphone|ipad|ipod/.test(agent)) {
+      if (mark.includes("win")) system = "windows";
+      else if (mark.includes("mac") || mark.includes("darwin")) system = "macos";
+      else if (mark.includes("linux") || mark.includes("x11")) system = "linux";
+    }
+    if (system) document.documentElement.dataset.os = system;
+  } catch (problem) {
+    console.warn("site.js: das System bleibt unerkannt —", problem);
+  }
+})();
+
+/* Register — aus Abschnitten wird eine Leiste, aber nur wenn es geht.
+ *
+ * Das Markup trägt nur `data-tabs` am Behälter und `data-tab="Name"` an jedem
+ * Abschnitt. Ohne dieses Skript stehen die Abschnitte untereinander da, jeder
+ * mit seiner Überschrift — länger, aber vollständig und ohne tote Schalter.
+ * Stünde die Leiste im HTML, sähe ein Besucher ohne JavaScript eine Reihe von
+ * Knöpfen, die nichts tun.
+ *
+ * `data-tabs-preselect` nennt den Reiter, der zuerst offen sein soll. Der
+ * Download-Kasten setzt darüber das erkannte Betriebssystem — wer auf einem
+ * Mac liest, bekommt den macOS-Hinweis und muss ihn nicht suchen.
+ */
+(() => {
+  try {
+    for (const box of document.querySelectorAll("[data-tabs]")) {
+      const pages = [...box.querySelectorAll(":scope > [data-tab]")];
+      if (pages.length < 2) continue;
+
+      const strip = document.createElement("div");
+      strip.className = "tab-strip";
+      strip.setAttribute("role", "tablist");
+      const label = box.dataset.tabsLabel;
+      if (label) strip.setAttribute("aria-label", label);
+
+      const tabs = [];
+      pages.forEach((page, index) => {
+        const name = page.dataset.tab;
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.className = "tab";
+        tab.setAttribute("role", "tab");
+        tab.textContent = name;
+        /* Die Kennungen werden hier vergeben und nicht im Markup verlangt:
+           Zwei Registerleisten auf einer Seite dürften sonst dieselbe tragen,
+           und `aria-controls` zeigte auf die falsche Seite. */
+        tab.id = "tab-" + index + "-" + Math.random().toString(36).slice(2, 8);
+        page.id = tab.id + "-page";
+        tab.setAttribute("aria-controls", page.id);
+        page.setAttribute("role", "tabpanel");
+        page.setAttribute("aria-labelledby", tab.id);
+        strip.appendChild(tab);
+        tabs.push(tab);
+      });
+
+      const show = (index, focus) => {
+        pages.forEach((page, i) => {
+          page.hidden = i !== index;
+        });
+        tabs.forEach((tab, i) => {
+          const on = i === index;
+          tab.setAttribute("aria-selected", on ? "true" : "false");
+          /* **Nur der offene Reiter ist mit Tab erreichbar.** Eine Leiste, in
+             der die Tabulatortaste durch alle sieben Reiter läuft, hält
+             jemanden auf, der zum Inhalt will — das erwartete Verhalten ist:
+             hinein, mit den Pfeilen wählen, wieder hinaus. */
+          tab.tabIndex = on ? 0 : -1;
+        });
+        if (focus) tabs[index].focus();
+      };
+
+      strip.addEventListener("click", (event) => {
+        const index = tabs.indexOf(event.target);
+        if (index >= 0) show(index, false);
+      });
+
+      strip.addEventListener("keydown", (event) => {
+        const current = tabs.indexOf(document.activeElement);
+        if (current < 0) return;
+        const keys = {
+          ArrowRight: current + 1,
+          ArrowLeft: current - 1,
+          Home: 0,
+          End: tabs.length - 1,
+        };
+        if (!(event.key in keys)) return;
+        const next = (keys[event.key] + tabs.length) % tabs.length;
+        show(next, true);
+        event.preventDefault();
+      });
+
+      box.prepend(strip);
+
+      /* **Der Reiter des eigenen Systems ist der offene.** `data-tabs-preselect`
+         darf ihn im Markup nennen; ist dort nichts angegeben und trägt die
+         Seite ein erkanntes System, wird dessen Reiter genommen. Groß- und
+         Kleinschreibung bleiben außen vor, weil im Markup „macOS" steht und
+         in der Erkennung „macos". */
+      const os = document.documentElement.dataset.os || "";
+      const preselect = (box.dataset.tabsPreselect || os).toLowerCase();
+      const wanted = pages.findIndex(
+        (page) => (page.dataset.tab || "").toLowerCase() === preselect
+      );
+      show(wanted >= 0 ? wanted : 0, false);
+    }
+  } catch (problem) {
+    console.warn("site.js: die Register bleiben eine Liste —", problem);
   }
 })();

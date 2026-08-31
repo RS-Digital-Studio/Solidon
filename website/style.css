@@ -985,11 +985,22 @@ nav.lang a.cta:hover {
   font-variant-numeric: tabular-nums;
 }
 
-/* **Ein Boden für alle Karten, kein Deckel.** Die Regel steht hier oben,
-   damit jede spätere Einzelangabe sie überschreiben kann. Sie gibt der
-   Kartenfamilie das, was ihr fehlte: Tiefe. Im Hellen trägt der Schatten das
-   allein; im Dunkeln ist er fast unsichtbar und die aufgehellte Fläche
-   (`--card`) tut die Arbeit — deshalb steht hier beides und nicht eines. */
+/* **Ein Boden für alle Karten — der in Wahrheit ein Deckel war.**
+   Hier stand „die Regel steht oben, damit jede spätere Einzelangabe sie
+   überschreiben kann", und der Satz war falsch: Die Einzelregeln stehen
+   **davor** (`.download` bei Zeile 794, dieser Block bei 993). Bei gleicher
+   Spezifität gewinnt die spätere — dieser Block hat also alle sechzehn
+   Kartenkanten wieder mit dem alten Schatten zugedeckt. Ein Kommentar, der
+   eine Reihenfolge behauptet, ist keine Reihenfolge.
+
+   Gefunden hat es 15 an einer Messung, die sie nicht zu Ende erklären konnte
+   und deshalb roh weitergab: `--edge` am Element korrekt gesetzt, gerechneter
+   Schatten trotzdem der alte, ohne `inset`. Beides zugleich ist nur möglich,
+   wenn eine zweite Regel gewinnt.
+
+   Jetzt trägt der Boden dieselbe Kante wie die Einzelregeln. Damit ist die
+   Reihenfolge gleichgültig — und das ist besser als eine richtige
+   Reihenfolge, die beim nächsten Einfügen wieder kippt. */
 .download,
 .price-card,
 .way,
@@ -998,7 +1009,7 @@ nav.lang a.cta:hover {
 .release-card,
 .stats,
 .boerse-liste > li {
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 /* --- Das Kopfmenü: Leiste am Rechner, Aufklapper am Handy -----------------
@@ -1134,6 +1145,52 @@ nav.lang .menu > summary {
   border-radius: var(--r-lg);
   background: var(--stage);
   object-fit: cover;
+}
+
+/* Register. Die Leiste erzeugt `site.js`; ohne Skript gibt es sie nicht und
+   die Abschnitte stehen untereinander — deshalb steht hier nichts, was ein
+   Markup ohne Skript verunstalten könnte.
+
+   Der gewählte Reiter trägt **zwei** Unterscheidungen und nicht nur eine
+   Farbe: die kräftigere Schrift und den Strich darunter. Bedeutung allein
+   über Farbe gibt es hier nicht (Hausregel 18). */
+.tab-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0 0 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  padding: 0.5rem 0.85rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--t-sm);
+  cursor: pointer;
+  /* Der Strich sitzt auf der Linie der Leiste, nicht darüber. */
+  margin-bottom: -1px;
+  transition: color var(--step), border-color var(--step), background var(--step);
+}
+
+.tab:hover {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .btn {

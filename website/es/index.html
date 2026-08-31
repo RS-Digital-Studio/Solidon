@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=2c5aff5f">
+<link rel="stylesheet" href="../style.css?v=9e507fa5">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -302,9 +302,17 @@
             de proyecto no se ven afectados.</p>
             <p>¿Y después? La versión 1.0 llega el 1 de noviembre de 2026 — se compra una vez, no cada mes,
             <a href="#pricing">el precio ya está fijado</a>.</p>
-              <p class="pruefhinweis" data-release-show hidden>Windows muestra un aviso azul con una aplicación nueva y aún sin firmar: <i>Más información</i> → <i>Ejecutar de todas formas</i>. La firma llegará en cuanto esté el certificado.</p>
-            <p class="pruefhinweis" data-release-show hidden><b>macOS.</b> Apple aún no ha notarizado los paquetes actuales. Si macOS bloquea la instalación o el primer inicio, autorízalo una vez en <i>Ajustes del Sistema</i> → <i>Privacidad y seguridad</i> → <i>Abrir igualmente</i>.</p>
-            <p class="pruefhinweis" data-release-show hidden><b>Linux.</b> Un Flatpak no se instala con doble clic, sino desde el terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> en la carpeta donde lo descargaste. Después Solidon3D aparece en el menú de aplicaciones.</p>
+              <div class="tabs" data-tabs data-tabs-label="Sistema operativo">
+                <div data-tab="Windows" data-release-show hidden>
+                  <p class="pruefhinweis">Windows muestra un aviso azul con una aplicación nueva y aún sin firmar: <i>Más información</i> → <i>Ejecutar de todas formas</i>. La firma llegará en cuanto esté el certificado.</p>
+                </div>
+                <div data-tab="macOS" data-release-show hidden>
+                  <p class="pruefhinweis"><b>macOS.</b> Apple aún no ha notarizado los paquetes actuales. Si macOS bloquea la instalación o el primer inicio, autorízalo una vez en <i>Ajustes del Sistema</i> → <i>Privacidad y seguridad</i> → <i>Abrir igualmente</i>.</p>
+                </div>
+                <div data-tab="Linux" data-release-show hidden>
+                  <p class="pruefhinweis"><b>Linux.</b> Un Flatpak no se instala con doble clic, sino desde el terminal: <code>flatpak install ./Solidon3D-*.flatpak</code> en la carpeta donde lo descargaste. Después Solidon3D aparece en el menú de aplicaciones.</p>
+                </div>
+              </div>
             <p class="pruefhinweis" data-release-show hidden><b>Versiones nuevas.</b> Solidon comprueba al iniciarse si hay una versión más reciente y la ofrece para descargar — se descarga e instala solo con tu confirmación, y puede desactivarse en los ajustes.</p>
             </details>
             <p class="pruefhinweis">Después de instalar: <a href="/es/manual.html#start">Los primeros quince minutos</a> — de la ventana vacía a la primera pieza exportada.</p>
@@ -979,7 +987,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=1b72cc17" defer></script>
+<script src="/site.js?v=51734509" defer></script>
 
 </body>
 </html>
