@@ -28,7 +28,18 @@
        Spaltenbreite gestaucht zeigt Beschriftungen, die niemand mehr liest. */
     main { max-width: 74rem; margin: 0 auto; padding: 2rem 1.25rem 5rem;
            counter-reset: chapter; }
+    /* **Zwei Breiten, weil hier zweierlei steht.** 52rem galt bis zum
+       31.08.2026 für alles, und der Satz darüber stimmte nur der Absicht nach:
+       Gemessen an 344 mehrzeiligen Absätzen des deutschen Handbuchs standen
+       darauf 90 Zeichen je Zeile im Mittel und 119 im schlimmsten Fall — gut
+       lesbar sind 60 bis 75. Bei 38rem sind es gemessene 70.
+
+       Die 52rem bleiben trotzdem stehen, denn sie tragen auch die 97 Tabellen
+       der Referenz. Eine Tabelle auf Fließtextbreite bricht ihre Spalten um,
+       und dann liest sich gar nichts mehr. Beide bleiben mittig, die breiteren
+       Elemente ragen also symmetrisch heraus. */
     main > :not(figure) { max-width: 52rem; margin-left: auto; margin-right: auto; }
+    main > p, main > ul, main > ol, main > h3, main > h4 { max-width: 38rem; }
     /* Der Einstieg: derselbe Ton wie der Aufmacher der Startseite, eine
        Nummer kleiner — das Handbuch verkauft nicht, es empfängt. */
     main > h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.015em;
