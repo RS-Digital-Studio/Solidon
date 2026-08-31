@@ -210,3 +210,39 @@ das Messgerät selbst verstellt ist.
 **Den Haupt-Index dabei nicht heilen.** Ein `read-tree` darauf würde
 Vormerkungen anderer Sitzungen wegwerfen. Der eigene Index kostet eine Zeile
 und fasst nichts an.
+
+---
+
+**Am 31.08.2026 hat derselbe Index dreimal an einem Vormittag gelogen, und
+zweimal davon nicht beim Committen, sondern beim *Zuordnen*.**
+
+* Ein Guard, den ich gerade erst gebaut hatte, um fremde Arbeit vom Commit
+  fernzuhalten, meldete **36 fremde Dateien, die es nicht gab** — darunter
+  meine eigene `boerse.js` mit 27 Zeilen und `impressum.html` mit 16, beide
+  längst gelandet. Hätte ich ihm geglaubt, hätte ich 36 Dateien liegen lassen
+  und das Tor für alle rot.
+* Eine Nachbarsitzung suchte den Urheber einer angeblich halbfertigen Änderung
+  (`NAME_PATTERN` in `parts/registry.py`) und fragte **drei** Sitzungen. Alle
+  drei sahen in ihrem eigenen `git diff` nach, fanden nichts und verneinten —
+  richtig gemessen, falsche Quelle. Die Arbeit lag seit **acht Stunden** auf
+  `origin`, in zwei Commits zwei Minuten auseinander. Beinahe wäre daraus ein
+  „verwaister Punkt" im Protokoll geworden.
+* Und beim Lesen derselben Frage zeigte mir `git diff` ein Feld als frische
+  Zeile, das seit acht Stunden committet war.
+
+**Die Lehre ist enger als „nimm einen eigenen Index":** Bei jeder Frage nach
+*Herkunft* — wer hat das gemacht, ist das noch offen, gehört das mir? — ist
+`git status`/`git diff` das falsche Werkzeug, weil es einen **Zustand**
+beschreibt und keine **Geschichte**. Was die Frage wirklich beantwortet:
+
+    git diff HEAD -- <pfad>              # ist es offen?
+    git log -S '<das Symbol>' -- <pfad>  # wann kam es, in welchem Commit?
+
+Das zweite ist sogar die bessere Antwort, denn es nennt Hash, Uhrzeit und
+Commit-Meldung. Damit ist die Zuordnung ein **Beleg** statt einer Vermutung —
+und sie funktioniert auch dann, wenn der Fragende und der Urheber verschiedene
+Indexstände sehen.
+
+Verwandt: [[verursacher-wird-gemessen-nicht-gelesen]] (dieselbe Bewegung:
+nicht die naheliegende Anzeige lesen, sondern die Frage messen),
+[[messung-galt-fuer-den-stand-davor]].
