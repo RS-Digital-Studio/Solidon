@@ -120,7 +120,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Zusammengebaut sehen, in Einzelteilen drucken | Befunde aus dem Weg-Dreh (31.08.2026) | Roberts Idee als Schaustück-Loop: Explosion und Bett-Lage eines mehrteiligen Teils — 3a (neue Explosions-Szene im Drehbuch) mit d3 (Motiv); die Werkzeuge existieren |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
-| Ein Projekt zu öffnen kostet ein Vielfaches des Bauens | Befunde aus dem Weg-Dreh (31.08.2026) | eine Messung auf ruhiger Maschine — als Verdacht mit Zahl gemeldet (bauen 2 min, öffnen >30 min bei 574 CPU-s unter 17 Prozessen Fremdlast), §2.8-Wartezeit-Klasse |
+| Ein Projekt zu öffnen kostet ein Vielfaches des Bauens | Befunde aus dem Weg-Dreh (31.08.2026) | die Diagnose (15): Profil über `load()`+`evaluate()` am Griff-Projekt — 908,8 CPU-s für EINEN Durchlauf, der beim Bauen neunmal in 2 min lief; Verdachtsrichtung perceive-Merkmalsvergleich, §2.8/P1 |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d` |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -13347,21 +13347,36 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       **(a) Die Funktion** — Trennen soll nicht nur schneiden, sondern
       sinnvoll zerlegen: bauraumgerecht, Überhänge und Stützen minimierend,
       Naht an unauffälliger Stelle, Verbinder (Stifte, Schwalbenschwanz),
-      Festigkeit quer zur Schichtrichtung bedacht. Rechercheauftrag läuft
-      (Review-Instanz): Stand in Solidon (was Trennen/Auto Split heute
-      können, Bauplan-§§), Stand der Technik (PrusaSlicer-Cut mit
-      Verbindern, Chopper-Verfahren, Meshmixer, Luban), dann
-      Konzeptvorschlag mit Abnahmekriterien an Robert. **(b) Das
+      Festigkeit quer zur Schichtrichtung bedacht. **Die Recherche ist durch, die
+      Konzeptnotiz liegt:** `konzepte/konzept-sinnvolles-trennen-2026-08.md`
+      — Kernbild: Solidon hat als Einziges eine automatische Lagesuche samt
+      Verbindern mit Materialtiefen-Messung (PrusaSlicer/Bambu schneiden
+      nur, wo der Nutzer zeigt); was zum „sinnvoll" fehlt, sind Nahtlage
+      nach Kanten und Sichtflächen, Stützbedarf je Teil in der Bewertung
+      (beide Bausteine existieren, sind nicht eingekoppelt),
+      Festigkeits-Heuristik und die schiefen Ebenen, die §22.3 verspricht
+      (die Suche kennt drei Richtungen, Chopper 129). Zehn Kriterien mit
+      Aufwand S/M/L stehen in der Notiz — **wartet auf Roberts
+      Ausbaustufen-Wahl.** **(b) Das
       Schaustück** — zusammengebaut sehen, dann die Bett-Lage der
       Einzelteile: als Loop (3a: Explosions-Szene im Drehbuch, d3: Motiv
       aus den mehrteiligen Galerieteilen); es zeigt, was (a) verspricht.
-- [ ] **Ein Projekt zu öffnen kostet ein Vielfaches des Bauens — Verdacht
-      mit Zahl, kein Befund.** `rollenhalter.p3d` (zwanzig Schritte) baut in
-      ~2 Minuten und lief beim Öffnen über eine halbe Stunde ohne Bild (574
-      CPU-Sekunden, 304 MB) — gemessen unter 17 Python-Prozessen Fremdlast
-      (~35 % CPU), die Gegenprobe braucht eine ruhige Maschine.
-      §2.8-Wartezeit-Klasse: Ein Nutzer, der sein Projekt öffnet, wartet
-      keine halbe Stunde.
+- [ ] **Ein Projekt zu öffnen kostet ein Vielfaches des Bauens — seit der
+      CPU-Zeit-Messung ein BEFUND, kein Verdacht mehr** (3a, 31.08.): Am
+      Weg-4-Griff (neun Schritte, 108 762 Dreiecke), ohne Qt und ohne
+      Session — nur `load()` und `evaluate()` — **908,8 CPU-Sekunden** und
+      nicht fertig, während der Bau desselben Projekts ~2 Minuten kostete
+      und dabei `evaluate` NEUNMAL lief. Ein Durchlauf kann nicht ein
+      Vielfaches von neun Durchläufen kosten; CPU-Zeit statt Wanduhr nimmt
+      der Fremdlast das Alibi (bei 35 % Auslastung sind 909 CPU-Sekunden
+      auch auf leerer Maschine 909). Ursachen-Verdacht, ausdrücklich als
+      solcher: die Merkmalsvergleichs-Schleife in `perceive` — dieselbe
+      Stelle wie die 622er-Flutung; beim schrittweisen Bauen wächst der
+      Bestand mit, beim Laden trifft der teuerste Schritt sofort auf alles.
+      **Wer misst, beginnt bei perceive, nicht bei den Geometrie-Ops.**
+      Erstmessung des Rollenhalters (574 CPU-s unter Fremdlast) passt ins
+      Bild. §2.8, P1-Klasse — in Diagnose bei 15 (Profil zuerst, dann
+      Vorschlag, nicht blind bauen).
 
 ---
 
