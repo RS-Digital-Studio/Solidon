@@ -118,6 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 61 % der mehrzeiligen Startseiten-Texte laufen über 75 Zeichen | Die Zeilen laufen zu lang (31.08.2026) | den Grundregel-Entwurf (15, nach T1; mit 50 abgestimmt, von 72 nachgemessen) — die Punktfixes haben ihre Stellen zu, dies ist die Grundsatzfrage dahinter; längste gemessene Zeile 153 Zeichen |
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
 | Der Deckelname friert die Sprache seiner Erzeugung ein | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix in `lid.py:451` (0d): Ein englischer Kunde liest im Objektbaum „Can" und darunter **„Dose Deckel"** — der Name wird beim Erzeugen aufgelöst und als fester String gespeichert, trägt also den ALTEN Namen des Quellkörpers und zerschneidet den Zusammenhang; trifft jedes mitgelieferte Beispiel in fünf Sprachen (c3 gemessen), Zwillingssuche gehört dazu |
+| Der Klick auf eine Warnung fliegt die Kamera ins Leere | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Familien-Fix: Das Merkmal friert seine Lage beim Erzeugen ein und überlebt `arrange_bed` unverändert — der Viewport ist nach dem Klick leer (c3 am Fenster gemessen, Foto als Instanz); erst die Familiensuche, dann die Wahl zwischen mitwandernder Lage und Nachrechnen |
 | `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
@@ -13416,6 +13417,27 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       fünf Sprachen, also das, was ein Kunde als Erstes öffnet, und es ist
       eine Zeile — Zwillingssuche nach anderen beim Erzeugen eingefrorenen
       Namen gehört dazu.
+- [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
+      Fund derselben Familie, und der schwerste** (c3 am echten Fenster
+      gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
+      an, `arrange_bed` verschiebt danach den Körper — **das Merkmal behält
+      seine alte Lage.** Körper nach dem Anordnen (-102..-32, 52..102,
+      0..30), Merkmalszentrum (0,33 | 0 | 30), also außerhalb des
+      Hüllquaders; nach dem Klick ist der Viewport **vollständig leer**,
+      unten steht „Keine Auswahl". **Schlimmer als vor dem Klick-Fix:**
+      Vorher blieb der Klick folgenlos, jetzt verliert der Kunde sein Teil
+      aus dem Bild. **Die Familie ist die Beute — „beim Erzeugen
+      festgeschrieben, von einem späteren Schritt überholt": beim
+      Deckelnamen die Sprache, hier die Lage;** 0d sucht erst die Familie
+      (was schreiben `create_lid` und Geschwister sonst in `values` fest —
+      Normalen, Durchmesser, Flächenbezüge?), dann die Entscheidung
+      zwischen mitwandernder Merkmalslage (sauber, berührt jedes Merkmal)
+      und Nachrechnen in `maps.location_of` (klein, kuriert eine Stelle).
+      Zweiter Teil offen und schwächer belegt: ob die **Auswahl** gesetzt
+      wird — c3s erste Sonde las ein Attribut, das es nicht gibt, und sagt
+      es selbst dazu; sie misst nach. Lehre daneben, an 1bs
+      Beinahe-Warnung: **Eine richtige Umrechnung eines veralteten Werts
+      bleibt veraltet.**
 - [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
       Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
       „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle
