@@ -13393,9 +13393,18 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       5 Schritte → 62 s). Der echte Fresser ist `weg3-eule-generiert.p3d`
       mit **61,77 s**: eine 4-MB-Quelldatei, auf der `orient_for_print`
       ungefiltert rechnet — nicht die Schritte kosten, sondern das Netz,
-      auf dem sie rechnen. 3as 574/909 CPU-s sind ungeklärt (Vermutung:
-      CPU-Zeit des ganzen Video-Laufs samt 36 Aufnahmen dem Öffnen
-      zugeschrieben — offen, bei 3a). Entscheid: Die 15-Minuten-Marke in
+      auf dem sie rechnen. 3as 574/909 CPU-s sind **geklärt** (3a, mit Ansage): richtig gemessen,
+      falsch zugeordnet — es war die CPU-Zeit des **ganzen Prozesses** zu
+      einem Zeitpunkt, und die Zuordnung zum Öffnen entstand aus einer
+      **gepufferten Ausgabe**, die vor dem Fensteraufbau stehen blieb
+      („die CPU-Zeit beantwortet ‚arbeitet der Prozess?', nicht ‚woran?' —
+      die zweite Antwort war aus einer fehlenden Ausgabe erfunden und mit
+      einer echten Zahl belegt"); der await_result-Docstring ist sofort
+      berichtigt (nennt 15s Zahlen und die ehrliche Marken-Begründung).
+      **Ehrlich offen bleibt:** Warum der Sprite-Lauf in 37 Minuten kein
+      Bild schrieb — der Rollenhalter öffnet in einer Sekunde, es liegt
+      also woanders (Fensteraufbau, show_panels, Aufnahme); 3a fährt mit
+      `-u` neu und meldet, wohin die Zeit wirklich geht. Entscheid: Die 15-Minuten-Marke in
       await_result bleibt, ihre **Begründung** kommt heraus — sie schreibt
       eine falsche Ursache fest, und der Nächste sucht an der falschen
       Stelle (3a zieht den eigenen Docstring nach der Klärung nach).
