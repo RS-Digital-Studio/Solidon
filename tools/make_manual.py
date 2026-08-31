@@ -507,6 +507,7 @@ def _switcher(language: str) -> str:
 def _header(language: str) -> str:
     """Die Kopfzeile — am Bildschirm klebt sie oben, im Druck fehlt sie."""
     toc_label, cta_label, cta_target = HEADER_NAV.get(language, HEADER_NAV["de"])
+    toc_link = f'<a href="#toc">{toc_label}</a>'
     return (
         '<header class="site no-print"><div class="wrap">'
         f'<a class="brand" href="./">{BRAND_MARK}Solidon<span>3D</span></a>'
@@ -515,8 +516,10 @@ def _header(language: str) -> str:
         # Handbuch trägt dieselben sechs Wege wie jede andere Seite — sonst
         # ist es eine Sackgasse, aus der nur der Zurück-Knopf führt. Sein
         # eigenes Inhaltsverzeichnis kommt dazu, nicht an ihrer Stelle.
-        f"{nav_menu(language, current=ENTRIES[language][-1][0])}"
-        f'<a class="hide-small" href="#toc">{toc_label}</a>'
+        # Der Sprung ins Inhaltsverzeichnis gehört **in** das Menü, nicht
+        # daneben: außerhalb verschwände er auf einem Telefon ganz, während
+        # die sechs gemeinsamen Wege im Aufklapper erreichbar bleiben.
+        f"{nav_menu(language, current=ENTRIES[language][-1][0], extra=toc_link)}"
         f"{_switcher(language)}"
         f'<a class="cta" href="{cta_target}">{cta_label}</a>'
         "</nav></div></header>"

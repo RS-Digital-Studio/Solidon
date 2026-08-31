@@ -135,7 +135,7 @@ MENU_MARK: Final[str] = (
 )
 
 
-def nav_menu(language: str, *, current: str = "", on_home: bool = False) -> str:
+def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: str = "") -> str:
     """Die sechs Verweise in einem Aufklapper, der am Rechner keiner ist.
 
     **Warum ein ``details`` und kein Skript.** Auf einem Handy passten von
@@ -151,6 +151,12 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False) -> str:
     Inhalt offen und das Symbol verschwindet; erst unterhalb der Umbruchbreite
     dreht sich beides um.
 
+    ``extra`` nimmt einen Weg auf, den nur **diese** Seite hat — im Handbuch
+    den Sprung ins Inhaltsverzeichnis. Er gehört **in** das Panel und nicht
+    daneben: Außerhalb verschwände er auf einem Telefon ganz, während die
+    sechs gemeinsamen Wege im Aufklapper erreichbar bleiben — und ein
+    Handbuch ohne Sprung ins Inhaltsverzeichnis ist dort schwer zu benutzen.
+
     Dieselbe Bauart trägt der Sprachwechsel daneben seit jeher — und sie
     braucht keine Zeile JavaScript, funktioniert also auch, wenn nichts lädt.
     """
@@ -160,5 +166,6 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False) -> str:
         f"{MENU_MARK}</summary></details>"
         f'<div class="menu-panel">'
         f"{nav_links(language, current=current, on_home=on_home)}"
+        f"{extra}"
         f"</div>"
     )
