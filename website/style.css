@@ -20,6 +20,14 @@
   --card: #ffffff;
   --line: #e0ddd7;
   --shadow: 0 1px 2px rgb(28 27 26 / 6%), 0 8px 24px -12px rgb(28 27 26 / 18%);
+  /* **Vier Rundungsstufen, nicht neunzehn.** Was hier steht, sind die im
+     Bestand häufigsten Werte — so ändert die Vereinheitlichung möglichst
+     wenig Fläche. Wer eine fünfte braucht, braucht meistens eine der vier. */
+  --r-sm: 0.4rem;
+  --r-md: 0.5rem;
+  --r-lg: 0.75rem;
+  --r-xl: 1rem;
+  --r-pill: 999px;
   --shadow-lift: 0 2px 4px rgb(28 27 26 / 8%), 0 18px 40px -16px rgb(28 27 26 / 28%);
 
   /* Die Bühne trägt die Bildschirmfotos. Sie ist immer dunkel, in beiden
@@ -73,7 +81,7 @@ html {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
-  border-radius: 0.3rem;
+  border-radius: var(--r-sm);
 }
 
 body {
@@ -97,7 +105,7 @@ code {
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-size: 0.92em;
   background: var(--accent-soft);
-  border-radius: 0.3rem;
+  border-radius: var(--r-sm);
   padding: 0.1em 0.35em;
 }
 
@@ -117,7 +125,7 @@ code {
   top: -4rem;
   z-index: 20;
   padding: 0.6rem 1rem;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   background: var(--accent);
   color: var(--bg);
   font-weight: 600;
@@ -222,7 +230,7 @@ nav.lang details.langs summary {
   letter-spacing: 0.02em;
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -262,7 +270,7 @@ nav.lang details.langs ul {
   list-style: none;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.55rem;
+  border-radius: var(--r-md);
   box-shadow: var(--shadow-lift);
   min-width: 9.5rem;
   z-index: 20;
@@ -271,7 +279,7 @@ nav.lang details.langs ul {
 nav.lang details.langs li a {
   display: block;
   padding: 0.4rem 0.75rem;
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   font-size: 0.9rem;
 }
 
@@ -314,7 +322,7 @@ nav.lang a:hover::after { transform: scaleX(1); }
 nav.lang a.cta {
   color: var(--bg);
   background: var(--accent);
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   padding: 0.35rem 0.9rem;
   font-weight: 600;
   transition: transform var(--step), box-shadow var(--step);
@@ -488,7 +496,7 @@ nav.lang a.cta:hover {
 
 .turntable {
   aspect-ratio: 800 / 408;
-  border-radius: var(--radius, 14px);
+  border-radius: var(--r-xl);
   border: 1px solid var(--line);
   background-image: url("bilder/bock-sprite.webp");
   background-size: 100% 3600%;      /* sechsunddreißig Aufnahmen übereinander */
@@ -542,7 +550,7 @@ nav.lang a.cta:hover {
   margin-top: 0.9rem;
   padding: 0.7rem 1rem;
   border: 1px solid var(--line);
-  border-radius: var(--radius, 14px);
+  border-radius: var(--r-xl);
 }
 
 .dial label {
@@ -677,7 +685,7 @@ nav.lang a.cta:hover {
     justify-self: end;
     padding: clamp(0.8rem, 1.6vw, 1.3rem);
     border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-    border-radius: 1.1rem;
+    border-radius: var(--r-xl);
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card) 45%),
       var(--card);
@@ -695,7 +703,7 @@ nav.lang a.cta:hover {
 .download {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   padding: 1.5rem;
   max-width: min(58rem, 100%);
   box-shadow: var(--shadow);
@@ -776,7 +784,7 @@ nav.lang a.cta:hover {
   max-width: min(58rem, 100%);
   margin-top: 0.9rem;
   padding: 1.15rem 1.5rem;
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: color-mix(in srgb, var(--accent) 5%, var(--card));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, var(--line));
 }
@@ -819,7 +827,7 @@ nav.lang a.cta:hover {
   padding: 0.7rem 1.2rem;
   background: var(--fg);
   border: 0;
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   color: var(--bg);
   font-weight: 600;
   line-height: 1.3;
@@ -874,7 +882,7 @@ nav.lang a.cta:hover {
   gap: 0.5rem;
   margin-top: 1.1rem;
   padding: 0.7rem 1.35rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--accent);
   color: var(--bg);
   font-weight: 600;
@@ -966,7 +974,7 @@ nav.lang a.cta:hover {
   position: relative;
   background: var(--stage);
   border: 1px solid var(--stage-line);
-  border-radius: 0.9rem;
+  border-radius: var(--r-lg);
   padding: 0.55rem;
   margin-top: 2.5rem;
   box-shadow: var(--shadow-lift);
@@ -1016,7 +1024,7 @@ nav.lang a.cta:hover {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 0.45rem;
+  border-radius: var(--r-sm);
 }
 
 /* Ein Streiflicht, das einmal über die Bühne wandert, sobald sie ins Bild
@@ -1041,7 +1049,7 @@ nav.lang a.cta:hover {
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   overflow: hidden;
   margin: 0;
 }
@@ -1185,7 +1193,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   margin-top: 2rem;
   padding: 0.85rem 0.95rem 0.85rem 1.1rem;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--card);
   box-shadow: var(--shadow);
 }
@@ -1200,7 +1208,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   min-height: 2.65rem;
   padding: 0.45rem 2.4rem 0.45rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--bg);
   color: var(--fg);
   font: inherit;
@@ -1243,7 +1251,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   margin: 0 auto;
   padding: 1.25rem 1.4rem;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--card);
   color: var(--muted);
 }
@@ -1254,7 +1262,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   overflow: hidden;
   border: 1px solid var(--line);
   border-top: 3px solid var(--accent);
-  border-radius: 1rem;
+  border-radius: var(--r-xl);
   background: var(--card);
   box-shadow: var(--shadow);
 }
@@ -1297,7 +1305,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   flex: none;
   padding: 0.35rem 0.7rem;
   border: 1px solid var(--accent);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accent-soft);
   font-size: 0.82rem;
@@ -1314,7 +1322,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 .release-group {
   padding: 1.15rem 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--bg);
 }
 
@@ -1388,7 +1396,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 .pains li {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   padding: 1.25rem 1.35rem;
   transition: transform var(--step), box-shadow var(--step), border-color var(--step);
 }
@@ -1527,7 +1535,7 @@ ol.steps-list b {
   position: relative;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   padding: 1.5rem 1.35rem 1.35rem;
   overflow: hidden;
   transition: transform var(--step), box-shadow var(--step), border-color var(--step);
@@ -1576,7 +1584,7 @@ ol.steps-list b {
   width: 100%;
   height: auto;
   margin-bottom: 1rem;
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--stage);
   border: 1px solid var(--stage-line);
   box-shadow: none;
@@ -1619,7 +1627,7 @@ ol.steps-list b {
   letter-spacing: 0.08em;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.2rem 0.7rem;
   margin-bottom: 0.85rem;
 }
@@ -1670,7 +1678,7 @@ ol.steps-list b {
   height: auto;
   background: var(--stage);
   border: 1px solid var(--stage-line);
-  border-radius: 0.7rem;
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow);
 }
 
@@ -1781,7 +1789,7 @@ ul.features b { display: inline; }
   background: var(--card);
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   padding: 1.25rem 1.5rem;
   max-width: 58rem;
   box-shadow: var(--shadow);
@@ -1807,7 +1815,7 @@ ul.features b { display: inline; }
   background: var(--card);
   border: 1px solid var(--line);
   border-top: 3px solid var(--accent);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   padding: 1.75rem;
   box-shadow: var(--shadow);
 }
@@ -1837,7 +1845,7 @@ ul.features b { display: inline; }
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-soft);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.15rem 0.6rem;
 }
 
@@ -1899,7 +1907,7 @@ table.req td:first-child {
 .faq details {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.6rem;
+  border-radius: var(--r-md);
   padding: 0 1.15rem;
   transition: border-color var(--step), box-shadow var(--step);
 }
@@ -1957,7 +1965,7 @@ table.req td:first-child {
   padding: 4rem 1.5rem;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 1rem;
+  border-radius: var(--r-xl);
   box-shadow: var(--shadow);
 }
 
@@ -2005,7 +2013,7 @@ main.legal blockquote {
   padding: 0.8rem 1.2rem;
   background: var(--card);
   border-left: 3px solid var(--line);
-  border-radius: 0.35rem;
+  border-radius: var(--r-sm);
 }
 
 main.legal blockquote p { margin: 0; }
@@ -2037,7 +2045,7 @@ main.legal li { margin: 0.35rem 0; }
   min-height: 2.35rem;
   padding: 0.35rem 2rem 0.35rem 0.65rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--card);
   color: var(--fg);
   font: inherit;
@@ -2048,7 +2056,7 @@ main.legal li { margin: 0.35rem 0; }
   overflow: hidden;
   padding: clamp(2rem, 5vw, 3.5rem);
   border: 1px solid var(--line);
-  border-radius: 1.25rem;
+  border-radius: var(--r-xl);
   background:
     radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 22rem),
     var(--card);
@@ -2096,7 +2104,7 @@ main.legal li { margin: 0.35rem 0; }
   min-height: 8rem;
   padding: 1.15rem 1.15rem 1.15rem 3.6rem;
   border: 1px solid var(--line);
-  border-radius: 0.9rem;
+  border-radius: var(--r-lg);
   background: var(--bg-alt);
   counter-increment: activation-step;
 }
@@ -2135,7 +2143,7 @@ main.legal li { margin: 0.35rem 0; }
 .activation-card,
 .activation-note {
   border: 1px solid var(--line);
-  border-radius: 1rem;
+  border-radius: var(--r-xl);
   background: var(--card);
   box-shadow: var(--shadow);
 }
@@ -2159,7 +2167,7 @@ main.legal li { margin: 0.35rem 0; }
   width: 2.2rem;
   height: 2.2rem;
   place-items: center;
-  border-radius: 0.6rem;
+  border-radius: var(--r-md);
   background: var(--accent-soft);
   font-size: 1rem;
 }
@@ -2171,7 +2179,7 @@ main.legal li { margin: 0.35rem 0; }
   gap: 0.3rem;
   padding: 1rem;
   border: 1px dashed var(--accent);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--accent-soft);
   cursor: pointer;
 }
@@ -2190,7 +2198,7 @@ main.legal li { margin: 0.35rem 0; }
   align-items: center;
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--card);
   color: var(--fg);
   font-size: 1rem;
@@ -2215,7 +2223,7 @@ main.legal li { margin: 0.35rem 0; }
   margin-top: 0.2rem;
   padding: 0.8rem;
   border: 1px solid var(--line);
-  border-radius: 0.65rem;
+  border-radius: var(--r-md);
   background: var(--bg-alt);
 }
 
@@ -2235,7 +2243,7 @@ main.legal li { margin: 0.35rem 0; }
   resize: vertical;
   padding: 0.8rem;
   border: 1px solid var(--line);
-  border-radius: 0.65rem;
+  border-radius: var(--r-md);
   background: var(--bg);
   color: var(--fg);
   font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace;
@@ -2286,7 +2294,7 @@ main.legal li { margin: 0.35rem 0; }
   margin-top: 1.25rem;
   padding: 1.1rem;
   border: 1px solid var(--accent);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--accent-soft);
 }
 
@@ -2315,7 +2323,7 @@ main.legal p.blank {
 .draft {
   background: var(--card);
   border: 1px solid var(--accent);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   padding: 0.75rem 1rem;
   color: var(--accent);
   font-weight: 600;
@@ -2827,7 +2835,7 @@ a { color: var(--accent); }
 main.legal p.lang-note {
   background: var(--bg-alt);
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   padding: 0.8rem 1.1rem;
   font-size: 0.95rem;
   color: var(--muted);
@@ -3108,7 +3116,7 @@ p.footnote {
 .boerse-hochladen input {
   padding: 0.6rem 0.8rem;
   border: 1px solid var(--line);
-  border-radius: 0.5rem;
+  border-radius: var(--r-md);
   background: var(--card);
   color: var(--fg);
   font: inherit;
@@ -3131,7 +3139,7 @@ p.footnote {
   margin-right: 0.75rem;
   padding: 0.45rem 0.9rem;
   border: 1px solid var(--line);
-  border-radius: 0.4rem;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--accent);
   font: inherit;
@@ -3183,7 +3191,7 @@ p.footnote {
   flex-direction: column;
   padding: 1.15rem 1.25rem 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 0.75rem;
+  border-radius: var(--r-lg);
   background: var(--card);
 }
 
@@ -3307,7 +3315,7 @@ p.footnote {
   margin: 0;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 0.9rem;
+  border-radius: var(--r-lg);
   overflow: hidden;
 }
 
@@ -3350,7 +3358,7 @@ p.footnote {
    Kasten war nicht mehr zu lesen. */
 .auswahl {
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--r-xl);
   background: var(--card);
   color: var(--text);
   padding: 1.4rem 1.5rem 1.2rem;
