@@ -21,7 +21,7 @@
 <meta property="og:image" content="https://solidon3d.de/handbuch/fr/main-window.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="../icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=9e507fa5">
+<link rel="stylesheet" href="../style.css?v=37b5c115">
 <style>
     /* Der Text bleibt schmal, weil sich lange Zeilen schlecht lesen. Die
        Abbildungen dürfen darüber hinausragen: ein Bildschirmfoto auf halbe
@@ -33,7 +33,7 @@
        Nummer kleiner — das Handbuch verkauft nicht, es empfängt. */
     main > h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.015em;
                 margin: 1.6rem auto 0.4rem; }
-    p.lede { color: var(--muted); font-size: 1.12rem; margin-bottom: 2rem; }
+    p.lede { color: var(--muted); font-size: var(--t-base); margin-bottom: 2rem; }
     /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
        Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
        das, woran man beim Blättern die Gliederung erkennt. Die Nummer davor
@@ -45,7 +45,7 @@
        stehen als ``<h3>`` da — ein Stil, der auf ``h2`` festgenagelt wäre,
        griffe ins Leere, und genau das tat der alte (siehe ``anchored``). */
     main > h2[id], main > h3[id] {
-      margin-top: 3.2rem; color: var(--accent); font-size: 1.45rem;
+      margin-top: 3.2rem; color: var(--accent); font-size: var(--t-xl);
       border-bottom: 1px solid var(--line); padding-bottom: .4rem;
       counter-increment: chapter;
     }
@@ -57,7 +57,7 @@
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
-    figcaption { color: var(--muted); font-size: .9rem; margin-top: .5rem; }
+    figcaption { color: var(--muted); font-size: var(--t-sm); margin-top: .5rem; }
     /* Die Bildschirmfotos liegen auf derselben dunklen Bühne wie auf der
        Startseite — ``.stage`` samt Streiflicht kommt aus ``style.css``, hier
        steht nur, was im Handbuch anders ist: ``figure`` zentriert schon,
@@ -81,7 +81,7 @@
       }
     }
     .figure-text { color: var(--muted); font-style: italic; }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: var(--t-md); }
     /* Eine Tabelle mit sieben Spalten passt auf kein Telefon, und sie soll es
        auch nicht: die Materialtabelle ist eine Tabelle, kein Fließtext. Sie
        bekommt deshalb ihren eigenen Rollbereich, statt die Seite zu sprengen
@@ -105,7 +105,7 @@
     nav.toc { background: var(--card); border: 1px solid var(--line);
               border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem auto; }
     nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
-                         font-size: 1.1rem; letter-spacing: .02em; }
+                         font-size: var(--t-base); letter-spacing: .02em; }
     /* ``style.css`` nummeriert das Verzeichnis der Funktionsseite über
        einen Zähler und legt es als Raster an. Hier trägt jeder Eintrag
        seine Kapitelnummer schon im Markup, und die Spalten füllen sich
@@ -117,15 +117,15 @@
     nav.toc li { break-inside: avoid; margin: 0; }
     nav.toc a { display: flex; gap: .7rem; align-items: baseline;
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
-                text-decoration: none; color: var(--fg); font-size: .95rem; }
+                text-decoration: none; color: var(--fg); font-size: var(--t-md); }
     nav.toc li:last-child a { border-bottom: none; }
     /* Die Fuge zwischen den geschriebenen Kapiteln und der Referenz —
        gedämpft, weil sie ordnet und nicht ruft. */
     nav.toc .toc-divider { margin: 1.6rem 0 .8rem; border: none; padding: 0;
-                           font-size: .92rem; color: var(--muted);
+                           font-size: var(--t-md); color: var(--muted);
                            font-weight: 600; letter-spacing: .02em; }
     nav.toc a:hover { color: var(--accent); }
-    nav.toc .num { color: var(--accent); font-size: .82rem; font-weight: 600;
+    nav.toc .num { color: var(--accent); font-size: var(--t-xs); font-weight: 600;
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
     @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
 
@@ -233,7 +233,7 @@
 </head>
 <body>
 <a class="skip" href="#content">Aller au contenu</a>
-<header class="site no-print"><div class="wrap"><a class="brand" href="./"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/><path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/></svg>Solidon<span>3D</span></a><nav class="lang"><details class="menu"><summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg></summary></details><div class="menu-panel"><a class="hide-small" href="/fr/features.html">Fonctions</a><a class="hide-small" href="/fr/ai-models.html">Modèles IA</a><a href="/fr/exchange.html">Échange</a><a class="hide-tiny" href="/fr/#pricing">Prix</a><a class="hide-small" href="/fr/changelog.html">Nouveautés</a><a href="/fr/manual.html" aria-current="page">Manuel</a></div><a class="hide-small" href="#toc">Sommaire</a><details class="langs"><summary aria-label="Choisir la langue">FR</summary><ul><li><a href="../handbuch.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../en/manual.html" hreflang="en" lang="en">English</a></li><li><a href="../es/manual.html" hreflang="es" lang="es">Español</a></li><li><a href="../fr/manual.html" hreflang="fr" lang="fr" aria-current="page">Français</a></li><li><a href="../it/manual.html" hreflang="it" lang="it">Italiano</a></li><li><a href="../pt/manual.html" hreflang="pt" lang="pt">Português</a></li></ul></details><a class="cta" href="./#pricing">Essayer</a></nav></div></header>
+<header class="site no-print"><div class="wrap"><a class="brand" href="./"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 2.6 21 7.5v9L12 21.4 3 16.5v-9z" stroke-linejoin="round"/><path d="M3 7.5 12 12.4l9-4.9M12 12.4v9" stroke-linejoin="round"/></svg>Solidon<span>3D</span></a><nav class="lang"><details class="menu"><summary aria-label="Menu"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg></summary></details><div class="menu-panel"><a href="/fr/features.html">Fonctions</a><a href="/fr/ai-models.html">Modèles IA</a><a href="/fr/exchange.html">Échange</a><a href="/fr/#pricing">Prix</a><a href="/fr/changelog.html">Nouveautés</a><a href="/fr/manual.html" aria-current="page">Manuel</a></div><a class="hide-small" href="#toc">Sommaire</a><details class="langs"><summary aria-label="Choisir la langue">FR</summary><ul><li><a href="../handbuch.html" hreflang="de" lang="de">Deutsch</a></li><li><a href="../en/manual.html" hreflang="en" lang="en">English</a></li><li><a href="../es/manual.html" hreflang="es" lang="es">Español</a></li><li><a href="../fr/manual.html" hreflang="fr" lang="fr" aria-current="page">Français</a></li><li><a href="../it/manual.html" hreflang="it" lang="it">Italiano</a></li><li><a href="../pt/manual.html" hreflang="pt" lang="pt">Português</a></li></ul></details><a class="cta" href="./#pricing">Essayer</a></nav></div></header>
 <main id="content">
 <section class="cover"><h1>Solidon3D</h1><p class="subtitle">Manuel</p><hr><p class="claim">Concevoir, générer et préparer pour l'impression 3D</p><p class="imprint">Version 0.2.2<br>Copyright © 2026 RS Digital</p></section>
 <h1 class="no-print">Manuel</h1>
