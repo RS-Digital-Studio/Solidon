@@ -7314,7 +7314,21 @@ class MainWindow(QMainWindow):
         """
         self._finding_awaiting_map = None
         shown = self.viewport.view_point_of(target, entry.id)
-        self.viewport.fly_to(shown)
+        # **Der Abstand richtet sich nach dem Körper, nicht nach der Szene.**
+        # Vermessen an der Dose (Kamera zurückgezogen, Blickrichtung gleich):
+        # bei 0,26 Diagonalen war **eine** von acht Ecken im Bild, bei 1,2
+        # sechs — dort springt aus „irgendeiner Fläche" ein erkennbares Teil,
+        # und genau dort wird auch die Beschriftung der Marke sichtbar. Vorher
+        # steht der Satz, für den die Marke da ist, außerhalb des Bildes.
+        #
+        # 1,4 statt 1,2 ist Sicherheitsabstand: Ein Wert direkt am Knick kippt
+        # bei anderen Teilen und Blickwinkeln. Weiter hinaus (2,5) macht die
+        # Marke klein, und der Zweck des Flugs ist, dass man die Stelle sieht.
+        #
+        # In Vielfachen der Diagonale und nicht in Millimetern — das gilt für
+        # ein Teil jeder Größe. Gemessen werden konnte es nur an einem: Über
+        # alle elf Beispiele trägt genau ein Befund einen Ort.
+        self.viewport.fly_to(shown, reach=1.4 * float(entry.mesh.bounds.diagonal))
         self.viewport.mark_finding(target, str(finding.message), entry.id)
 
     # --- der Agent (§26) --------------------------------------------------------

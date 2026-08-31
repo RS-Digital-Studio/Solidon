@@ -4237,3 +4237,56 @@ def test_a_click_with_a_place_also_selects_the_body(window: MainWindow) -> None:
         "ein Klick mit Ort wählt den Körper trotzdem aus — die Stufen sind "
         "kumulativ, nicht alternativ"
     )
+
+
+def test_the_camera_keeps_the_body_in_view_after_a_finding_flight(window: MainWindow) -> None:
+    """Nach dem Flug steht der Körper im Bild, nicht eine Fläche davon (§18.4).
+
+    **Vermessen, nicht geschätzt.** Die Kamera hielt den Abstand aus der
+    Szenengröße geteilt durch drei — bei der Dose 24 mm, und davon war **eine**
+    von acht Ecken des Hüllquaders im Bild. Der Kunde klickte auf eine Warnung
+    und stand vor einer grauen Fläche.
+
+    Gemessen wurde in Vielfachen der Hüllquader-Diagonale: bei 1,2 sind sechs
+    von acht Ecken zu sehen — dort wird aus „irgendeiner Fläche" ein
+    erkennbares Teil, und dort wird auch die Beschriftung der Marke sichtbar,
+    also der Satz, für den die Marke überhaupt da ist. 1,4 ist der
+    Sicherheitsabstand dazu; weiter hinaus (2,5) wird die Marke klein.
+
+    Geprüft wird der Abstand und nicht die Zahl der Ecken: Die Ecken hängen am
+    Blickwinkel und am Seitenverhältnis des Fensters, der Abstand ist die
+    Größe, die der Code setzt.
+    """
+    select_plate(window)
+    entry = next(iter(window.session.last_result.scene.objects.values()))
+    finding = Finding(
+        code="etwas.anderes",
+        severity="warning",
+        message="x",
+        object_id=entry.id,
+        location=tuple(entry.mesh.bounds.centre),
+    )
+
+    # **Gemessen wird der verlangte Abstand, nicht die Kamerastellung.** Im
+    # Offscreen-Betrieb gibt es keinen Plotter und damit keine Kamera; was der
+    # Code entscheidet, ist die Reichweite, die er `fly_to` mitgibt. Das
+    # Umsetzen in eine Position ist Qt-Mechanik und gehört nicht hierher.
+    verlangt: list[float | None] = []
+    original = window.viewport.fly_to
+
+    def merken(point: Any, distance_factor: float = 3.0, reach: float | None = None) -> None:
+        verlangt.append(reach)
+        original(point, distance_factor, reach)
+
+    window.viewport.fly_to = merken  # type: ignore[method-assign]
+    try:
+        window._on_finding_activated(finding)
+    finally:
+        window.viewport.fly_to = original  # type: ignore[method-assign]
+
+    assert verlangt, "der Klick ist geflogen"
+    erwartet = 1.4 * float(entry.mesh.bounds.diagonal)
+    assert verlangt[0] is not None and abs(verlangt[0] - erwartet) < 0.01, (
+        f"der Flug verlangt {verlangt[0]} statt {erwartet:.1f} Abstand — bei zu"
+        " wenig sieht der Kunde eine Fläche statt eines Teils"
+    )

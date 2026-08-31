@@ -5274,13 +5274,18 @@ class Viewport(QWidget):
     def analysis_map(self) -> AnalysisMap | None:
         return self._map
 
-    def fly_to(self, point: Vec3, distance_factor: float = 3.0) -> None:
+    def fly_to(self, point: Vec3, distance_factor: float = 3.0, reach: float | None = None) -> None:
         """Bewegt die Kamera auf eine Stelle, ohne die Blickrichtung zu
         ändern (§18.4).
 
         Das Modell mitzudrehen kostete die Orientierung, die der Nutzer sich
         gerade aufgebaut hat; entlang der aktuellen Blickachse näher zu kommen
         behält sie.
+
+        ``reach`` gibt den Abstand vor, wo der Aufrufer ihn besser kennt als die
+        Szene: Ein Befund gehört zu **einem** Körper, und wie weit man von ihm
+        weg sein muss, hängt an dessen Größe und nicht an der des größten Teils
+        auf dem Bett.
         """
         if self.plotter is None:
             return
@@ -5294,7 +5299,7 @@ class Viewport(QWidget):
         if length <= 1e-9:
             direction = np.array([1.0, -1.0, 0.8])
             length = float(np.linalg.norm(direction))
-        reach = max(self._scene_size() / distance_factor, 1.0)
+        reach = max(reach or self._scene_size() / distance_factor, 1.0)
         target = np.asarray(point, dtype=float)
         camera.focal_point = tuple(target)
         camera.position = tuple(target + direction / length * reach)
