@@ -104,6 +104,7 @@
 - [Review immer vollständig](review-immer-vollstaendig.md) — jeden Diff ganz lesen, keine Stichproben-Ökonomie.
 - [Übersetzung neu statt geflickt](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz eigenständig ist; sonst neu.
 - [Baustein heißt je Sprache ein Wort](baustein-begriff-je-sprache.md) — es bloque, fr bloc, it blocco, pt bloco; pieza/peça bleiben für „Teil".
+- [Eine Warnungsmarke ist semantischer Zustand](warnungsmarke-ist-semantischer-zustand.md) — VTK-Aktoren überleben keinen Szenenaufbau; dieselbe Auswertung zeichnet ohne neue Frist nach, ein neues Ergebnis verwirft alles.
 - [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — bei einer neuen Variante den alten Namen durch conftest und Wächter grepen.
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Befunde waren welche.
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — fast keinen Fehler fand sein Urheber; der eigene Blick folgt der eigenen Absicht.

@@ -2753,6 +2753,14 @@ class Viewport(QWidget):
         """Deckkraft des Kontaktschattens, von ``set_theme`` gesetzt."""
         self._finding_actors: list[Any] = []
         """Ring und Beschriftung der zuletzt angeklickten Warnung."""
+        self._finding_mark: tuple[Vec3, str, str] | None = None
+        """Szenenort, Text und Körper der kurzlebigen Warnungsmarke.
+
+        Die VTK-Aktoren allein reichen nicht als Zustand: Ein Neuaufbau
+        derselben Auswertung kann sie aus dem Renderer nehmen, während ihre
+        Python-Referenzen weiterleben. Aus diesen drei Werten lässt sich die
+        Marke nach dem Aufbau ehrlich neu zeichnen.
+        """
         # **Ein Kind und kein ``QTimer.singleShot``.** Der statische Aufruf
         # hält bis zum Ablauf eine Referenz auf dieses Widget — genau das, was
         # ``leash.py`` an anderer Stelle als Ursache eines Absturzes beim
@@ -3384,10 +3392,36 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
 
+        self._finding_timer.stop()
+        self._finding_mark = (point, title, object_id)
+        self._draw_finding_mark()
+        self.plotter.render()
+        self._finding_timer.start(FINDING_MARK_MS)
+
+    def _draw_finding_mark(self) -> None:
+        """Die gemerkte Warnungsmarke in den aktuellen Renderer zeichnen.
+
+        Der Zeitgeber gehört zur Nutzerhandlung in :meth:`mark_finding` und
+        wird hier bewusst nicht neu gestartet. Eine Analysekarte darf die
+        Marke wiederherstellen, aber nicht länger sichtbar halten.
+        """
+        if self.plotter is None or self._finding_mark is None:
+            return
+
         import numpy as np
         import pyvista as pv
 
-        self._hide_finding_mark()
+        self._remove_finding_actors()
+        point, title, object_id = self._finding_mark
+        if object_id:
+            entry = self._result.scene.objects.get(object_id) if self._result is not None else None
+            if entry is None or not self._in_view(object_id, entry):
+                # Die Marke darf für ihre kurze Restfrist gemerkt bleiben:
+                # Wird der Körper wieder eingeblendet oder seine Platte
+                # gewählt, zeichnet der nächste Aufbau sie erneut. Solange
+                # der Körper nicht im Bild steht, darf aber auch sein Hinweis
+                # nicht körperlos im Raum schweben.
+                return
         camera = self.plotter.camera
         towards = np.asarray(camera.position, dtype=float) - np.asarray(
             camera.focal_point, dtype=float
@@ -3440,21 +3474,36 @@ class Viewport(QWidget):
                     pickable=False,
                 )
             )
-        self.plotter.render()
-        self._finding_timer.start(FINDING_MARK_MS)
 
-    def _hide_finding_mark(self) -> None:
-        """Die Marke wieder wegnehmen — nach der Zeit oder vor der nächsten."""
-        self._finding_timer.stop()
-        if self.plotter is None or not self._finding_actors:
-            return
+    def _remove_finding_actors(self) -> bool:
+        """Nur die nativen Aktoren entfernen, den semantischen Ort behalten."""
+        actors = list(self._finding_actors)
+        self._finding_actors.clear()
+        if self.plotter is None:
+            return bool(actors)
         import contextlib
 
-        for actor in self._finding_actors:
+        for actor in actors:
             with contextlib.suppress(Exception):  # hängt am Treiber
                 self.plotter.remove_actor(actor, render=False)
-        self._finding_actors.clear()
-        self.plotter.render()
+        return bool(actors)
+
+    def _hide_finding_mark(self, *, render: bool = True) -> None:
+        """Die Marke wieder wegnehmen — nach der Zeit oder vor der nächsten."""
+        self._finding_timer.stop()
+        self._finding_mark = None
+        removed = self._remove_finding_actors()
+        if render and removed and self.plotter is not None:
+            self.plotter.render()
+
+    def _prepare_finding_mark(self, result: EvaluationResult | None) -> bool:
+        """Ob dieselbe Auswertung ihre aktive Marke erneut zeichnen darf."""
+        if result is not None and result is self._result:
+            return self._finding_mark is not None
+        # Ein neuer Zustand kann denselben Punkt etwas anderes bedeuten
+        # lassen. Deshalb verschwinden Aktoren **und** semantischer Zustand.
+        self._hide_finding_mark(render=False)
+        return False
 
     def _light_the_body(self, theme: str) -> None:
         """Das Frontlicht auf den Wert dieses Themas setzen (:data:`HEADLIGHT`).
@@ -3777,6 +3826,7 @@ class Viewport(QWidget):
         # ein noch ausstehender Schnitt vom Schieber wäre danach derselbe
         # noch einmal.
         self._layer_rebuild.stop()
+        restore_finding = self._prepare_finding_mark(result)
         self._result = result
         # Ein Hoverziel gehört ebenso zur Auswertung wie seine vorbereiteten
         # Dreiecke. Nach einer Änderung kann dieselbe Kennung eine andere
@@ -3939,6 +3989,8 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
+        if restore_finding:
+            self._draw_finding_mark()
         self._render_now()
 
     def _aim_rotation(self) -> None:

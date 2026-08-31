@@ -135,6 +135,13 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
   zugänglicher Beschreibung. Körper und Schritt stehen sichtbar an der Zeile.
   Der Klick zeigt beide, aber keine Merkmalskarte einer Stelle, die nicht mehr
   existiert. Der Kerntext bleibt kanalneutral; nur das Panel nennt den Klick.
+- **Kurzlebige Warnungsmarken sind semantischer Ansichts-Zustand.** Ring und
+  Beschriftung im nativen Renderer sind nur die Darstellung. Baut eine
+  Analysekarte dieselbe Auswertung neu auf, werden beide aus Punkt, Text und
+  Körper erneut gezeichnet, ohne die ursprüngliche Frist zu verlängern. Ist
+  der Körper ausgeblendet oder liegt auf einer anderen gewählten Platte,
+  bleibt auch seine Marke unsichtbar. Ein neues Auswertungsergebnis verwirft
+  Zustand und Aktoren gemeinsam.
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen** (Regel 19), mit
   der ausdrücklich gewünschten Ausnahme für das Löschen im Verlauf: Sie
   nennt mitbetroffene Schritte und den Rückweg über Strg+Z.

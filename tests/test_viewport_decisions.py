@@ -309,6 +309,11 @@ class _RecordingPlotter:
         self.removed: list[object] = []
         self.renders = 0
         self.actors: list[_RecordingActor] = []
+        self.camera = SimpleNamespace(
+            position=(100.0, -100.0, 80.0),
+            focal_point=(0.0, 0.0, 0.0),
+            parallel_scale=50.0,
+        )
         """Die zurückgegebenen Actors, in der Reihenfolge von drawn.
 
         Damit ein Test nicht nur sehen kann, **was** gezeichnet wurde, sondern
@@ -3238,6 +3243,8 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     from app.ui.viewport import FINDING_MARK_MS, Viewport
 
     gelegt: list[str] = []
+    starts: list[int] = []
+    stops: list[None] = []
 
     class Attrappe:
         camera = SimpleNamespace(
@@ -3261,21 +3268,120 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     blind = cast(Any, Viewport.__new__(Viewport))
     blind.plotter = Attrappe()
     blind._finding_actors = []
-    blind._result = None
-    blind._finding_timer = SimpleNamespace(start=lambda ms: None, stop=lambda: None)
+    blind._finding_mark = None
+    current = SimpleNamespace(name="dieselbe Auswertung")
+    blind._result = current
+    blind._finding_timer = SimpleNamespace(
+        start=starts.append,
+        stop=lambda: stops.append(None),
+    )
 
     Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
     assert gelegt == ["finding_ring", "finding_label"], (
         f"Ring und Beschriftung gehören beide dazu: {gelegt}"
     )
+    assert blind._finding_mark == ((10.0, 5.0, 2.0), "Wandstärke 0,8 mm", "")
+    assert starts == [FINDING_MARK_MS], "die Nutzerhandlung startet genau eine Frist"
+    stopped_after_mark = len(stops)
+
+    # Ein Szenenneuaufbau kann die nativen Aktoren verlieren, während die
+    # Python-Referenzen noch stehen. Dieselbe Auswertung zeichnet aus dem
+    # semantischen Zustand neu, ohne den Zeitgeber noch einmal zu starten.
+    gelegt.clear()
+    assert Viewport._prepare_finding_mark(blind, current)
+    Viewport._draw_finding_mark(blind)
+    assert gelegt == ["finding_ring", "finding_label"]
+    assert starts == [FINDING_MARK_MS], "eine Kartenberechnung verlängert die Marke nicht"
+    assert len(stops) == stopped_after_mark, "dieselbe Auswertung beendet die Frist nicht"
+
+    # Ein neues Ergebnis darf denselben Punkt nicht mit neuer Geometrie
+    # verwechseln. Es verwirft Aktoren und semantischen Zustand gemeinsam.
+    changed = SimpleNamespace(name="neue Auswertung")
+    assert not Viewport._prepare_finding_mark(blind, changed)
+    assert blind._finding_mark is None
+    assert blind._finding_actors == []
+
+    # Noch einmal setzen, damit auch das reguläre Ablaufen der Frist geprüft
+    # wird und nicht nur der Wechsel auf ein neues Ergebnis.
+    Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
 
     Viewport._hide_finding_mark(blind)
     assert gelegt == [], f"nach der Frist steht nichts mehr: {gelegt}"
     assert blind._finding_actors == [], "und die Liste ist leer"
+    assert blind._finding_mark is None, "auch der semantische Zustand ist abgelaufen"
 
     # Die Frist ist kurz genug, dass niemand sie für einen Zustand hält, und
     # lang genug, um die Stelle nach dem Flug zu finden.
     assert 1000 <= FINDING_MARK_MS <= 5000, FINDING_MARK_MS
+
+
+def test_a_scene_rebuild_restores_only_a_visible_finding_mark(
+    qt_app: QApplication,
+) -> None:
+    """Die echte Szenenmethode hält die Marke an Ergebnis und Sichtbarkeit.
+
+    Der Fehler entstand nicht in den Zeichenhelfern allein: ``show_scene``
+    räumt die nativen Aktoren beim Kartenaufbau ab. Deshalb fährt dieser Test
+    den vollständigen Anschluss mit einer schreibenden Plotter-Attrappe. Er
+    prüft zugleich den Filterfall — ein ausgeblendeter Körper bekommt keinen
+    körperlosen Ring im Raum.
+    """
+    import dataclasses
+
+    from app.ui.viewport import FINDING_MARK_MS, Viewport
+
+    result = _scene_with_two_holes()
+    viewport = Viewport()
+    viewport.show_scene(result)
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+    starts: list[int] = []
+    stops: list[None] = []
+    viewport._finding_timer = cast(
+        Any,
+        SimpleNamespace(start=starts.append, stop=lambda: stops.append(None)),
+    )
+
+    viewport.mark_finding((0.0, 0.0, 5.0), "Passung zu eng", "obj_1")
+    first = tuple(viewport._finding_actors)
+    stopped_after_mark = len(stops)
+    assert len(first) == 2
+
+    plotter.drawn.clear()
+    viewport.show_scene(result)
+    assert len(viewport._finding_actors) == 2
+    assert tuple(viewport._finding_actors) != first, "der Neuaufbau zeichnet frische Aktoren"
+    assert plotter.names().count("finding_ring") == 1
+    assert plotter.names().count("finding_label") == 1
+    assert starts == [FINDING_MARK_MS], "der Kartenaufbau verlängert die Frist nicht"
+    assert len(stops) == stopped_after_mark, "der Kartenaufbau beendet die Frist nicht"
+
+    viewport.set_hidden(frozenset({"obj_1"}))
+    assert viewport._finding_mark is not None, "die kurze Restfrist darf weiterlaufen"
+    assert viewport._finding_actors == [], "ohne Körper schwebt keine Marke im Raum"
+
+    viewport.set_hidden(frozenset())
+    assert len(viewport._finding_actors) == 2, "wieder sichtbar wird dieselbe Marke nachgezeichnet"
+    assert starts == [FINDING_MARK_MS]
+
+    viewport.set_plate(1)
+    assert viewport._finding_mark is not None
+    assert viewport._finding_actors == [], "auf einer anderen Platte bleibt der Raum leer"
+
+    viewport.set_plate(-1)
+    assert len(viewport._finding_actors) == 2, "in der Gesamtansicht kehrt die Marke zurück"
+    assert starts == [FINDING_MARK_MS]
+
+    changed = dataclasses.replace(result)
+    viewport.show_scene(changed)
+    assert viewport._finding_mark is None
+    assert viewport._finding_actors == []
+    assert len(stops) == stopped_after_mark + 1
+
+    viewport.mark_finding((0.0, 0.0, 5.0), "Passung zu eng", "obj_1")
+    viewport.show_scene(None)
+    assert viewport._finding_mark is None
+    assert viewport._finding_actors == []
 
 
 def test_a_place_from_the_scene_is_shifted_into_the_view(qt_app: QApplication) -> None:
