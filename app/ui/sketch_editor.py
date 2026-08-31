@@ -15,6 +15,7 @@ sondern eine Zahl in der Statuszeile (§30.1).
 
 from __future__ import annotations
 
+import html
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -1242,7 +1243,17 @@ class SketchCanvas(QWidget):
         if drawing:
             return drawing
         if self.solved is None:
-            return tr("Leere Skizze — zeichnen oder eine Grundform einfügen.")
+            # **Der Satz nennt den Knopf, den es gibt.** Vorher stand hier
+            # „eine Grundform einfügen" — und einen Knopf dieses Namens gibt es
+            # nicht: Er heißt „Rechteck", und „Grundform" steht nur in den
+            # Tooltips *innerhalb* seines Menüs. Ein Anfänger las eine
+            # Wegbeschreibung zu einem Ziel, das unter diesem Namen nirgends
+            # steht — dieselbe Fährte ins Nichts, die `oberflaeche.md` für
+            # Auswahlwerte beschreibt, nur andersherum: Nicht der Wert hieß
+            # anders als sein Feld, sondern der Weg anders als sein Ziel.
+            return tr(
+                "Leere Skizze — zeichnen, oder eine fertige Form aus dem Rechteck-Menü einsetzen."
+            )
         # Zwei Fragen, eine Zeile, und die erste ist die dringendere: ohne
         # geschlossenen Umriss scheitert die Operation, mit ihm ist ein freier
         # Freiheitsgrad höchstens ungenau. Beide stehen nebeneinander, weil
@@ -3775,6 +3786,7 @@ class SketchPanel(QWidget):
         # zahlen. Dass es die Formen gibt, sagt seit Z6 die Statuszeile des
         # Zeichenmodus — dort sucht ein Anfänger, was als Nächstes geht
         # (Vorschlag 50, aus derselben Durchsicht).
+        self.shapes_button = shapes_button
         shapes_button.setText(tr("Rechteck"))
         shapes_button.setIcon(icons.icon("sketch_rectangle", shapes_button))
         shapes_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
@@ -4232,8 +4244,27 @@ class SketchPanel(QWidget):
         self.constraint_list.itemEntered.connect(self._point_at)
         self.constraint_list.currentItemChanged.connect(self._point_at)
 
-        self.status = QLabel(opening or self.canvas.status_text(), self)
+        self.status = QLabel(self)
         self.status.setWordWrap(True)
+        # **Eine Leerzustands-Einladung darf handeln, eine laufende
+        # Statusmeldung bleibt Auskunft.** Das ist die Grenze des Musters, und
+        # sie ist eng gezogen (Entscheid d5, 31.08.2026): Der Leerzustand ist
+        # kein Status, sondern eine Einladung — wer ihn liest, hat noch nichts
+        # getan und sucht den Anfang. Alles andere in dieser Zeile berichtet
+        # über etwas, das gerade geschieht, und bleibt unanklickbar; ein
+        # Bericht, den man drücken kann, wäre eine Handlung ohne Ankündigung.
+        #
+        # Erkennbar ist der Verweis an der Unterstreichung **und** am Wort
+        # selbst, nicht an der Farbe allein (Regel 18). Tastaturbedienbar über
+        # `LinksAccessibleByKeyboard`; ohne das Flag ist ein QLabel-Verweis nur
+        # mit der Maus erreichbar und für einen Bildschirmleser stumm.
+        self.status.setTextInteractionFlags(
+            Qt.TextInteractionFlag.LinksAccessibleByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+            | Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.status.linkActivated.connect(weak_slot(self, SketchPanel._open_shapes))
+        self._show_status(opening or self.canvas.status_text())
 
         # Wo der Zeiger steht, rechts in der Statuszeile — an der Stelle, an
         # der jedes CAD sie hat. Sie beantwortet die Frage, die man beim
@@ -4290,7 +4321,7 @@ class SketchPanel(QWidget):
         self.canvas.sketchChanged.connect(self._refresh_constraints)
         self.canvas.sketchChanged.connect(self._refresh_plane_role)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
-        self.canvas.statusChanged.connect(self.status.setText)
+        self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status))
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
 
@@ -5197,6 +5228,47 @@ class SketchPanel(QWidget):
         if not self.canvas.sketch.elements:
             return ""
         return sketch_to_text(self.canvas.sketch)
+
+    #: Ziel des Verweises in der Einladung — ein Name, kein Zustand.
+    INVITATION_TARGET = "sketch-shapes"
+
+    def _show_status(self, text: str) -> None:
+        """Zeigt die Statuszeile — und macht aus der Einladung einen Weg.
+
+        Nur der Leerzustandssatz bekommt seinen Verweis; jeder andere Satz geht
+        als reiner Text durch. Die Unterscheidung läuft über den **übersetzten**
+        Satz, damit sie in allen sechs Sprachen dieselbe ist: Was
+        ``status_text()`` für die leere Skizze liefert, ist die Einladung, alles
+        andere ist Bericht.
+        """
+        einladung = tr(
+            "Leere Skizze — zeichnen, oder eine fertige Form aus dem Rechteck-Menü einsetzen."
+        )
+        if text != einladung:
+            self.status.setTextFormat(Qt.TextFormat.PlainText)
+            self.status.setText(text)
+            return
+        wort = tr("Rechteck-Menü")
+        anfang, _, rest = text.partition(wort)
+        self.status.setTextFormat(Qt.TextFormat.RichText)
+        self.status.setText(
+            f"{html.escape(anfang)}"
+            f'<a href="{self.INVITATION_TARGET}">{html.escape(wort)}</a>'
+            f"{html.escape(rest)}"
+        )
+
+    def _open_shapes(self, _target: str = "") -> None:
+        """Klappt das Formen-Menü auf und lässt den Fokus darin.
+
+        Ohne den Fokus wäre der Weg für die Tastatur eine Sackgasse: Das Menü
+        stünde offen, und die Pfeiltasten liefen weiter ins Fenster. ``showMenu``
+        blockiert bis zum Schließen, deshalb steht der Fokus davor.
+        """
+        button = getattr(self, "shapes_button", None)
+        if button is None or button.menu() is None:
+            return
+        button.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        button.showMenu()
 
 
 class SketchEditorDialog(QDialog):

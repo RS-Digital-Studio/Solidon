@@ -6319,3 +6319,52 @@ def test_the_shape_button_says_what_a_click_does(qt_app: QApplication) -> None:
         "der Hinweis der leeren Skizze nennt die fertigen Formen nicht mehr — "
         "dann findet sie nur noch, wer den Pfeil trifft"
     )
+
+
+def test_the_empty_sketch_invites_and_the_invitation_leads_somewhere(qt_app: object) -> None:
+    """Die Leerzustands-Zeile nennt ihr Ziel und führt hin (Z6).
+
+    **Vorher war sie eine Fährte ins Nichts.** Sie sagte „eine Grundform
+    einfügen", und einen Knopf dieses Namens gibt es nicht: Er heißt
+    „Rechteck", und „Grundform" steht nur in den Tooltips *innerhalb* seines
+    Menüs. Ein Anfänger las eine Wegbeschreibung zu einem Ziel, das unter
+    diesem Namen nirgends steht — dieselbe Klasse wie ein Auswahlwert, der
+    anders heißt als sein Feld, nur andersherum.
+
+    Geprüft wird deshalb **beides**: dass der Satz den Knopf beim Namen nennt,
+    und dass das Wort ein Weg ist statt einer Beschreibung.
+    """
+    from PySide6.QtCore import Qt
+
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        text = panel.status.text()
+        assert '<a href="sketch-shapes">' in text, f"kein Verweis in der Einladung: {text}"
+        # **Und das Format dazu.** Der String allein sagt nichts: Ein `<a href>`
+        # in einem PlainText-Label steht als sichtbare spitze Klammer da, nicht
+        # als Verweis. Die Mutation „RichText → PlainText" ließ diesen Test
+        # grün, bis diese Zeile dazukam — die Regel des Tages, im eigenen Test:
+        # geprüft gehört, was gerendert wird, nicht was gesetzt wurde.
+        assert panel.status.textFormat() == Qt.TextFormat.RichText, (
+            "die Einladung trägt ihr Markup als Text statt als Verweis"
+        )
+        assert panel.shapes_button.text() in text, (
+            "die Einladung nennt einen anderen Namen als der Knopf trägt — "
+            f"Knopf {panel.shapes_button.text()!r}, Satz {text!r}"
+        )
+        flags = panel.status.textInteractionFlags()
+        assert flags & Qt.TextInteractionFlag.LinksAccessibleByKeyboard, (
+            "der Weg ist nur mit der Maus erreichbar"
+        )
+
+        # **Und eine laufende Meldung bleibt Auskunft.** Das ist die Grenze
+        # des Musters: Der Leerzustand lädt ein, der Bericht berichtet.
+        panel._show_status("Geschlossen — 3 Freiheitsgrade")
+        assert panel.status.textFormat() == Qt.TextFormat.PlainText
+        assert "<a href=" not in panel.status.text()
+    finally:
+        release = getattr(type(panel), "release", None)
+        if release is not None:
+            release(panel)
