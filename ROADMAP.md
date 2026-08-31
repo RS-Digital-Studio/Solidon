@@ -13502,7 +13502,24 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       prüft vorher an einer Lage mit bekanntem Inhalt, ob das Werkzeug ihn
       zeigt.** Und die Wurzel: **Ein Werkzeug, das die Instanz liefern
       soll, muss selbst geeicht sein — sonst ist es nur ein weiterer
-      blinder Zeuge.**
+      blinder Zeuge.** **Zwillingssuche durch (`4683227f`): keine — das
+      Projekt kennt die Falle überall, wo sie zählt** (`window_shot` holt
+      die Ansicht ausdrücklich per `_paint_viewports` nach, make_figures
+      und make_web_images nehmen `screen.grabWindow()`, die Stil-Tests
+      messen Panels ohne Viewport), **und an zwei Stellen steht sie wörtlich
+      im Quelltext** („die 3D-Ansicht ist ein natives Fenster und bliebe
+      sonst leer" / „der Qt-Painter weiß nichts von dem, was OpenGL in den
+      Viewport gezeichnet hat"). **Das macht den Fehler schärfer, nicht
+      milder — und die Abgrenzung ist die Lehre: „Benannte Falle schützt
+      nicht" trifft den, der die Datei liest; hier traf es den, der sie nie
+      öffnet**, weil er sein eigenes Werkzeug im Scratchpad baute. Daher
+      **die Latten-Regel in zwei Stufen, Suchen vor Eichen: `grep -rn
+      "def.*shot\|screenshot\|grab" app/ tools/` vor jedem Prüfstand — wo
+      die Anwendung den Weg schon hat, steht daneben, warum der naive nicht
+      reicht;** Eichen findet den Fehler, Suchen verhindert ihn. Wurzel
+      dahinter (dritter Teil von `pruefstand-geht-den-weg-der-oberflaeche`):
+      **Ein selbst gebautes Werkzeug beginnt bei null Erfahrung, auch wenn
+      das Projekt zehn Jahre alt ist.**
 - [ ] **Die Flughöhe nach einem Befund-Klick ist nirgends zugesagt**
       (c3s Beobachtung ohne Befundcharakter, 31.08.): Nach dem Flug steht
       die Kamera sehr nah — man sieht die Innenecke und die Marke, aber
