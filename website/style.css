@@ -2350,8 +2350,20 @@ footer.site a:hover { color: var(--accent); }
 
 /* Ohne das ``margin`` klebt eine Rechtstextseite am linken Rand — bei 76rem
    Seitenbreite steht der Text dann in einem Drittel und zwei Drittel bleiben
-   leer. Die Breite selbst bleibt schmal: das sind lange Sätze. */
-main.legal { padding: 3rem 0; max-width: 46rem; margin: 0 auto; }
+   leer.
+
+   **Die Breite soll schmal sein, und 46rem waren es nicht.** Der Satz stand
+   hier schon, die Zahl löste ihn nicht ein: Gemessen an zwanzig Absätzen des
+   Datenschutztexts liefen die Zeilen auf **90 Zeichen** — lesbar sind 45 bis
+   75, und darüber verliert das Auge beim Zeilenwechsel den Anschluss. Bei
+   einem Text, den ohnehin niemand freiwillig liest, ist das die falsche
+   Stelle zum Sparen.
+
+   Gemessene Reihe, gleicher Text, nur die Breite verändert: 46rem → 90
+   Zeichen, 40rem → 76, 38rem → 73, 36rem → 66. Gewählt sind 38rem, das obere
+   Ende des lesbaren Bereichs — 36 wäre typografisch schöner und ließe die
+   Seite bei 1440 Punkten Fensterbreite als schmalen Streifen wirken. */
+main.legal { padding: 3rem 0; max-width: 38rem; margin: 0 auto; }
 
 main.legal h1 { font-size: var(--t-2xl); }
 
