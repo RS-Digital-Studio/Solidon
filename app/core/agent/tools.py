@@ -110,10 +110,19 @@ def operation_tools(
             properties[OBJECTS_FIELD] = {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": str(
-                    _("Objekte, auf die die Operation angewendet wird, zum Beispiel obj_1.")
-                ),
             }
+            # **Der Satz dazu steht im kompakten Schema nicht mehr — er steht
+            # im Systemprompt.** Wörtlich derselbe Text in 79 Werkzeugen war
+            # der größte einzelne Posten der Grundlast, den kein Werkzeug
+            # braucht: ``objects`` ist keine Eigenschaft der Operation,
+            # sondern eine Konvention des Agenten, und Konventionen gehören
+            # dorthin, wo die anderen stehen. Gemessen 5 226 Zeichen, rund
+            # fünf Prozent des kompakten Schemas, ohne dass das Modell etwas
+            # verliert: Es liest den Systemprompt in jedem Zug.
+            if not compact:
+                properties[OBJECTS_FIELD]["description"] = str(
+                    _("Objekte, auf die die Operation angewendet wird, zum Beispiel obj_1.")
+                )
             required = [*parameters.get("required", []), OBJECTS_FIELD]
             parameters["required"] = required
 

@@ -291,6 +291,11 @@ class AgentSession:
         history = History(working, self.registry)
         scene = self._evaluate(working).scene
 
+        # **Eine Quelle für beide Seiten.** Der Systemprompt und die
+        # Werkzeugschemata müssen dieselbe Antwort auf „kompakt?" bekommen:
+        # Stand der Menü-Hinweis im Prompt, während die Schemata den Ort
+        # weggelassen hatten, folgte das Modell einer Zusage ins Leere.
+        compact = self.backend.id == "ollama"
         messages = build_messages(
             request,
             working,
@@ -298,6 +303,7 @@ class AgentSession:
             selection=self.selection,
             rule_set=active,
             views=self.views if self.backend.supports_images else (),
+            compact=compact,
         )
         # Ein lokales Modell bekommt dieselben Werkzeuge, nur knapper
         # beschrieben. Gemessen: qwen3:14b traf drei von fünf und brauchte für
@@ -305,7 +311,7 @@ class AgentSession:
         # mit 104 KB Schema. Inzwischen sind es 96 mit 110 KB, kompakt 87: die
         # Enge ist gewachsen, nicht geschrumpft. Was fehlt, ist nicht Können,
         # sondern Platz.
-        tools = list(tool_schemas(self.registry, compact=self.backend.id == "ollama"))
+        tools = list(tool_schemas(self.registry, compact=compact))
 
         # Was der Zug vom Budget verbraucht hat — **gewichtet** (§26.5,
         # :data:`MAX_TOKENS`). Eine eigene Zahl neben den beiden im Vorschlag:

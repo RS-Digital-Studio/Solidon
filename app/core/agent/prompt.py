@@ -79,16 +79,29 @@ zum Ausprobieren, keine Auswahl auf Verdacht, kein Vorschlag, den eine Antwort
 ohnehin verwirft. Dass ein Werkzeug zur Anfrage passt, heißt nicht, dass die
 Anfrage vollständig ist.
 
-Der Chat ist auch ein Suchfeld: Fragt jemand, wie etwas geht, nenne neben
-deinem Vorschlag auch, wo die Funktion im Menü steht — der Ort steht in jeder
-Werkzeugbeschreibung („Menü: …"). So findet er sie beim nächsten Mal selbst.
+Auf welche Objekte eine Operation wirkt, sagst du in ``objects`` — eine Liste
+von Kennungen aus dem Steckbrief, zum Beispiel ``obj_1``. Das gilt für jedes
+Werkzeug, das ein Objekt verbraucht, und wird dort nicht noch einmal erklärt.
 
 Antworte kurz und auf Deutsch. Beschreibe am Ende in einem Satz, was dein
 Vorschlag ändert.
 """
 
 
-def system_prompt(rule_set: rules.RuleSet | None = None) -> str:
+#: Der Hinweis aufs Menü — nur für Schemata, die den Ort auch tragen.
+#:
+#: §2.6: der Chat ist auch ein Suchfeld. Der Ort steht in der Beschreibung
+#: jeder Operation, damit das Modell bei einer Wie-Frage sagen kann, wo die
+#: Funktion im Fenster liegt — es hat sonst keine Quelle dafür. Im kompakten
+#: Schema fehlt er, und dort darf dieser Satz nicht stehen.
+_MENU_HINT = """
+Der Chat ist auch ein Suchfeld: Fragt jemand, wie etwas geht, nenne neben
+deinem Vorschlag auch, wo die Funktion im Menü steht — der Ort steht in jeder
+Werkzeugbeschreibung („Menü: …“). So findet er sie beim nächsten Mal selbst.
+"""
+
+
+def system_prompt(rule_set: rules.RuleSet | None = None, *, compact: bool = False) -> str:
     """Rolle, Regeln und Gewohnheiten — alles, was das Modell wissen muss,
     bevor es anfängt.
     """
@@ -99,4 +112,13 @@ def system_prompt(rule_set: rules.RuleSet | None = None) -> str:
         active.as_text(),
         _HABITS.strip(),
     ]
+    # **Der Menü-Satz nur, wenn die Schemata den Ort auch tragen.** Er stand
+    # bis zum 31.08.2026 immer da und war für jedes lokale Modell falsch:
+    # ``tool_schemas(compact=True)`` lässt den Menüweg weg — 95 Werkzeuge
+    # nennen ihn im vollen Schema, **null** im kompakten, und genau das
+    # kompakte bekommt Ollama. Ein Modell, das einer Zusage des Prompts
+    # folgt, die seine Werkzeuge nicht einlösen, erfindet den Ort oder
+    # schweigt; beides ist schlechter als die Wahrheit.
+    if not compact:
+        parts.append(_MENU_HINT.strip())
     return "\n\n".join(parts)

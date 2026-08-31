@@ -102,6 +102,7 @@ def build_messages(
     selection: tuple[ObjectId, str] | None = None,
     rule_set: rules.RuleSet | None = None,
     views: tuple[tuple[str, bytes], ...] = (),
+    compact: bool = False,
 ) -> list[Message]:
     """Der ganze Kontext, so wie das Backend ihn nimmt.
 
@@ -111,7 +112,10 @@ def build_messages(
     es weg, und beides ist richtig (Leitprinzip 8).
     """
     messages = [
-        Message(role="system", content=system_prompt(rule_set)),
+        # ``compact`` reist mit, weil der Systemprompt und die
+        # Werkzeugschemata dieselbe Antwort brauchen: Was der eine
+        # verspricht, müssen die anderen tragen.
+        Message(role="system", content=system_prompt(rule_set, compact=compact)),
         # Rahmen und Gerahmtes in **einer** Nachricht: Ein Hinweis, der in
         # einer eigenen steht, lässt sich von dem trennen, worüber er spricht —
         # beim mitgereisten Gespräch geht das nicht anders (es sind viele

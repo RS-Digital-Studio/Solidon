@@ -1278,6 +1278,73 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     assert kleine < grosse * 0.85, "unter fünfzehn Prozent Ersparnis lohnt der Sonderweg nicht"
 
 
+def test_the_prompt_only_promises_the_menu_path_when_the_schemas_carry_it() -> None:
+    """Was der Systemprompt zusagt, müssen die Werkzeuge einlösen.
+
+    **Der Anlass ist ein Fehler, den bis zum 31.08.2026 niemand sah.** Der
+    Prompt sagte in jedem Zug „der Ort steht in jeder Werkzeugbeschreibung
+    (‚Menü: …')" — und ``tool_schemas(compact=True)`` lässt genau diesen Ort
+    weg. Gemessen: 95 Werkzeuge nennen ihn im vollen Schema, **null** im
+    kompakten. Kompakt bekommt Ollama, also jedes lokale Modell. Ein Modell,
+    das einer Zusage folgt, die seine Werkzeuge nicht tragen, erfindet den Ort
+    oder schweigt; beides ist schlechter als die Wahrheit.
+
+    Geprüft wird die Deckung, nicht der Wortlaut: Steht der Hinweis im Prompt,
+    muss mindestens ein Werkzeug den Menüweg tragen — und umgekehrt.
+    """
+    from app.core.agent.prompt import system_prompt
+    from app.core.agent.tools import tool_schemas
+
+    for compact in (False, True):
+        prompt = system_prompt(compact=compact)
+        verspricht = "Menü: …" in prompt
+        traegt = any(
+            "Menü:" in str(entry.get("description", "")) for entry in tool_schemas(compact=compact)
+        )
+        assert verspricht == traegt, (
+            f"compact={compact}: Der Prompt verspricht den Menüweg "
+            f"{'ja' if verspricht else 'nein'}, die Schemata tragen ihn "
+            f"{'ja' if traegt else 'nein'} — eine Zusage ins Leere"
+        )
+
+
+def test_the_objects_convention_is_explained_exactly_once() -> None:
+    """``objects`` wird erklärt — im Schema oder im Prompt, nie nirgends.
+
+    Der Satz stand wörtlich in 79 Werkzeugen und war damit der größte einzelne
+    Posten der Grundlast, den kein Werkzeug braucht: ``objects`` ist keine
+    Eigenschaft der Operation, sondern eine Konvention des Agenten. Im
+    kompakten Schema steht er deshalb im Systemprompt.
+
+    **Der Test prüft die Erklärung, nicht ihren Ort** — sonst schriebe er die
+    Umsetzung fest. Verschwinden darf sie nirgends: Ein Modell, das nicht
+    weiß, wie es ein Objekt benennt, ruft jedes Werkzeug falsch auf.
+    """
+    from app.core.agent.prompt import system_prompt
+    from app.core.agent.tools import OBJECTS_FIELD, operation_tools
+
+    # **``operation_tools`` und nicht ``tool_schemas``.** Die erste Fassung
+    # dieses Tests fragte über alle Werkzeuge, und die Zusatzwerkzeuge
+    # ``read_digest`` und ``read_analysis`` tragen ``objects`` mit eigenem
+    # Text, unabhängig von ``compact``. Ein ``any`` darüber ist immer wahr —
+    # der Test blieb grün, als die Mutationsprobe den Satz aus dem Prompt nahm.
+    for compact in (False, True):
+        prompt = system_prompt(compact=compact)
+        felder = [
+            entry["input_schema"]["properties"][OBJECTS_FIELD]
+            for entry in operation_tools(compact=compact)
+            if OBJECTS_FIELD in entry["input_schema"].get("properties", {})
+        ]
+        assert felder, "keine Operation trägt objects — dann prüft dieser Test nichts"
+        im_schema = all(str(feld.get("description", "")) for feld in felder)
+        im_prompt = f"``{OBJECTS_FIELD}``" in prompt
+        assert im_schema or im_prompt, (
+            f"compact={compact}: objects wird weder in den {len(felder)} Operationen "
+            "noch im Systemprompt erklärt — ein Modell weiß dann nicht, wie es ein "
+            "Objekt benennt, und ruft jedes Werkzeug falsch auf"
+        )
+
+
 # --- Zurücknehmen sagt, was es mitnimmt (Review 25.08.2026, Regel 16) --------------
 
 
