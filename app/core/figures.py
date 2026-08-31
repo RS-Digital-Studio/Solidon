@@ -654,10 +654,36 @@ def _sketch_editor(theme: Theme) -> str:
 
     # Die Ebene gehört vor das Zeichnen: sie entscheidet, wohin extrudiert
     # wird — und wie die Schichten zur Zeichnung liegen.
-    canvas.box(10, 50, 168, 22, fill=colours.fill, radius=2.0)
+    #
+    # **Der Pfeil sagt, dass hier gewählt wird.** Vorher stand ein gefüllter
+    # Kasten mit fettem Text und sonst nichts; er sah aus wie eine Anzeige und
+    # nicht wie ein Feld. Der Editor hat dort eine ``QComboBox``, und damit
+    # beantwortet der Pfeil zugleich die Frage, die dieser Punkt seit dem
+    # 27.08.2026 offen trug: Ob die **Flächenebene** ins Bild gehört — der
+    # Editor kann auf einer angeklickten Fläche zeichnen, das Bild nannte nur
+    # „Draufsicht (XY)". Sie gehört nicht hinein. Ein zweiter Eintrag machte
+    # aus dem Schema eine Aufzählung, und die steht vollständig im
+    # Handbuchtext daneben („Ist ein Körper in der Szene, stehen dessen ebene
+    # Flächen mit in der Liste"). Ins Bild gehört, **dass** hier gewählt wird;
+    # **was** zur Wahl steht, sagt der Text.
+    #
+    # **Ein Label „Zeichenebene:" davor wäre richtig und passt nicht.** Der
+    # Editor setzt eins, und nicht aus Ordnungsliebe: Sein Docstring hält
+    # fest, dass ein unbenanntes Feld den Wechsel nicht erklären konnte. Im
+    # Schema kostet es die Zeile — gemessen mit ``QFontMetrics`` in Segoe UI
+    # bei zehn Pixeln über alle sechs Kataloge: Das Label braucht bis zu 82
+    # Bildpunkte (pt), und der Satz daneben bis zu 367 (pt). Beides zusammen
+    # mit Kasten und Pfeil überläuft die 620 des Bildes. Der Satz erklärt,
+    # **warum** die Ebene zählt, das Label nur, **was** das Feld ist — und den
+    # Namen trägt der Handbuchtext („Zuerst die Ebene, dann die Linie").
+    canvas.box(10, 50, 190, 22, fill=colours.fill, radius=2.0)
     canvas.label(20, 65, str(_("Draufsicht (XY) — liegend")), size=10, bold=True)
+    # Das Dreieck des Auswahlfelds, am rechten Rand des Kastens.
+    canvas.polygon(
+        [(178, 58), (188, 58), (183, 65)], fill=colours.muted, stroke=colours.muted, weight=0.6
+    )
     canvas.caption(
-        188, 65, str(_("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus."))
+        210, 65, str(_("Schichten liegen parallel zur Zeichnung — sie wächst nach oben heraus."))
     )
 
     # Die Zeichenfläche mit Raster.
