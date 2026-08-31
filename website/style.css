@@ -65,6 +65,18 @@
 
   --step: 0.22s cubic-bezier(0.33, 1, 0.68, 1);
   color-scheme: light dark;
+
+  /* Schriftskala: acht Stufen. Vorher standen hier dreiunddreißig
+     Werte, deren Nachbarn sich oft um ein Sechstel Pixel unterschieden —
+     unsichtbar beim Lesen, aber jeder einzeln zu pflegen. */
+  --t-xs: 0.78rem;
+  --t-sm: 0.88rem;
+  --t-md: 0.95rem;
+  --t-base: 1.05rem;
+  --t-lg: 1.2rem;
+  --t-xl: 1.4rem;
+  --t-2xl: 1.9rem;
+  --t-3xl: 3.0rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -116,7 +128,7 @@ body {
   color: var(--fg);
   font-family: "Source Sans 3", system-ui, "Segoe UI", Roboto, sans-serif;
   line-height: 1.6;
-  font-size: 1.05rem;
+  font-size: var(--t-base);
   -webkit-font-smoothing: antialiased;
 
   /* Der Schein hinter dem Aufmacher greift absichtlich über beide Ränder
@@ -233,7 +245,7 @@ header.site .wrap {
    „Solidon 3D" — mit Lücke, gegen Fenstertitel, Domain und branding.py. Der
    Abstand gehört an das Symbol, nicht zwischen die Silben. */
 .brand {
-  font-size: 1.35rem;
+  font-size: var(--t-xl);
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--fg);
@@ -257,7 +269,7 @@ nav.lang {
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  font-size: 0.95rem;
+  font-size: var(--t-md);
 }
 
 nav.lang a {
@@ -284,7 +296,7 @@ nav.lang details.langs summary {
   list-style: none;
   cursor: pointer;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--t-sm);
   letter-spacing: 0.02em;
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--line);
@@ -338,7 +350,7 @@ nav.lang details.langs li a {
   display: block;
   padding: 0.4rem 0.75rem;
   border-radius: var(--r-sm);
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
 }
 
 nav.lang details.langs li a::after { display: none; }
@@ -455,7 +467,7 @@ nav.lang a.cta:hover {
 .hero-kicker {
   margin: 0 0 0.65rem;
   color: var(--accent);
-  font-size: 0.82rem;
+  font-size: var(--t-xs);
   font-weight: 750;
   letter-spacing: 0.06em;
   line-height: 1.35;
@@ -471,7 +483,7 @@ nav.lang a.cta:hover {
 }
 
 .hero p.lead {
-  font-size: 1.2rem;
+  font-size: var(--t-lg);
   color: var(--muted);
   max-width: 40ch;
   margin: 0 0 1.75rem;
@@ -520,11 +532,11 @@ nav.lang a.cta:hover {
 .hero-kauf {
   margin: 0.6rem 0 0;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--t-md);
 }
 
 .hero-btn {
-  font-size: 1.05rem;
+  font-size: var(--t-base);
   padding: 0.85rem 1.6rem;
 }
 
@@ -587,7 +599,7 @@ nav.lang a.cta:hover {
    hinweist, ist einer zu viel. */
 .turn-hint {
   margin: 0.6rem 0 0;
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
   color: var(--ink-quiet, #9aa4b2);
   text-align: center;
   transition: opacity 0.2s ease;
@@ -612,7 +624,7 @@ nav.lang a.cta:hover {
 }
 
 .dial label {
-  font-size: 0.95rem;
+  font-size: var(--t-md);
   color: var(--ink-quiet, #9aa4b2);
   white-space: nowrap;
 }
@@ -728,7 +740,7 @@ nav.lang a.cta:hover {
 
   .hero p.lead {
     max-width: 48ch;
-    font-size: 1.25rem;
+    font-size: var(--t-lg);
   }
 
   .hero-text {
@@ -776,7 +788,7 @@ nav.lang a.cta:hover {
   box-shadow: var(--shadow);
 }
 
-.download strong { font-size: 1.1rem; }
+.download strong { font-size: var(--t-base); }
 
 .download p { margin: 0.5rem 0 0; color: var(--muted); }
 
@@ -811,14 +823,14 @@ nav.lang a.cta:hover {
   padding: 0.8rem 0 0.15rem;
   color: var(--accent);
   cursor: pointer;
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
   font-weight: 650;
 }
 
 .download-notes[open] summary { margin-bottom: 0.35rem; }
 
 .download-notes .pruefhinweis {
-  font-size: 0.88rem;
+  font-size: var(--t-sm);
 }
 
 /* Die Spende steht direkt unter dem Produktbild und verlängert nicht den
@@ -862,14 +874,14 @@ nav.lang a.cta:hover {
 .donate > div > strong {
   display: block;
   color: var(--fg);
-  font-size: 1.05rem;
+  font-size: var(--t-base);
   letter-spacing: -0.011em;
 }
 
 .donate p {
   margin: 0.3rem 0 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
 }
 
 /* **Das Rechtliche bleibt, es steht nur nicht mehr in der ersten Zeile.** Wer
@@ -883,7 +895,7 @@ nav.lang a.cta:hover {
 
 .donate-fine summary {
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--t-xs);
   cursor: pointer;
 }
 
@@ -894,7 +906,7 @@ nav.lang a.cta:hover {
 .donate p.donate-terms {
   margin-top: 0.55rem;
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: var(--t-xs);
   line-height: 1.45;
 }
 
@@ -1058,7 +1070,7 @@ nav.lang a.cta:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem 1.1rem;
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
   color: var(--muted);
 }
 
@@ -1187,7 +1199,7 @@ nav.lang a.cta:hover {
 
 .stats b {
   display: block;
-  font-size: 1.9rem;
+  font-size: var(--t-2xl);
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -1197,7 +1209,7 @@ nav.lang a.cta:hover {
 
 .stats span {
   display: block;
-  font-size: 0.92rem;
+  font-size: var(--t-md);
   color: var(--muted);
   margin-top: 0.2rem;
 }
@@ -1269,7 +1281,7 @@ section > .wrap > :is(h1, h2) + p.sub {
   margin: 0 0 2rem;
   color: var(--muted);
   max-width: 56ch;
-  font-size: 1.08rem;
+  font-size: var(--t-base);
 }
 
 section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
@@ -1322,7 +1334,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 }
 
 .release-picker label {
-  font-size: 0.92rem;
+  font-size: var(--t-md);
   font-weight: 650;
 }
 
@@ -1345,7 +1357,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   max-width: 58ch;
   margin: 1rem 0 0;
   color: var(--muted);
-  font-size: 0.94rem;
+  font-size: var(--t-md);
 }
 
 .changelog-content {
@@ -1404,7 +1416,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 .release-version-label {
   margin: 0 0 0.1rem;
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: var(--t-xs);
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -1419,7 +1431,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 .release-summary {
   margin: 0.3rem 0 0;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: var(--t-md);
 }
 
 /* Die laufende Fassung ist nicht nur orange: Text, Rahmen und Pillenform sind
@@ -1431,7 +1443,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accent-soft);
-  font-size: 0.82rem;
+  font-size: var(--t-xs);
   font-weight: 700;
 }
 
@@ -1470,14 +1482,14 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   border-radius: 50%;
   color: var(--accent);
   background: var(--accent-soft);
-  font-size: 0.72rem;
+  font-size: var(--t-xs);
   font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
 
 .release-group h3 {
   margin: 0;
-  font-size: 1.05rem;
+  font-size: var(--t-base);
   letter-spacing: -0.01em;
 }
 
@@ -1532,7 +1544,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .pains q {
   display: block;
-  font-size: 1.02rem;
+  font-size: var(--t-base);
   font-style: italic;
   color: var(--muted);
   margin-bottom: 0.7rem;
@@ -1598,7 +1610,7 @@ ol.steps-list li::before {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 700;
-  font-size: 1rem;
+  font-size: var(--t-md);
 }
 
 /* Die Linie verbindet die Nummern zu einem Weg. Sie endet an der letzten —
@@ -1616,7 +1628,7 @@ ol.steps-list li:not(:last-child)::after {
 ol.steps-list b {
   display: block;
   color: var(--fg);
-  font-size: 1.08rem;
+  font-size: var(--t-base);
   margin-bottom: 0.15rem;
 }
 
@@ -1685,11 +1697,11 @@ ol.steps-list b {
 
 .way:hover::before { transform: scaleY(1); }
 
-.way h3 { margin: 0 0 0.5rem; font-size: 1.15rem; }
+.way h3 { margin: 0 0 0.5rem; font-size: var(--t-lg); }
 
 .way .tag {
   display: block;
-  font-size: 0.85rem;
+  font-size: var(--t-sm);
   color: var(--accent);
   font-weight: 600;
   text-transform: uppercase;
@@ -1697,7 +1709,7 @@ ol.steps-list b {
   margin-bottom: 0.35rem;
 }
 
-.way p { margin: 0; color: var(--muted); font-size: 0.98rem; }
+.way p { margin: 0; color: var(--muted); font-size: var(--t-md); }
 
 /* Die Vignette über jedem Weg: eine kleine Zeichnung, die den Weg vorführt,
    bevor der Text ihn erklärt. Sie erbt Bühne und Farben von ``.figure`` —
@@ -1737,14 +1749,14 @@ ol.steps-list b {
 }
 
 .showcase h3 {
-  font-size: 1.4rem;
+  font-size: var(--t-xl);
   letter-spacing: -0.01em;
   margin: 0 0 0.6rem;
 }
 
 .showcase .kicker {
   display: inline-block;
-  font-size: 0.8rem;
+  font-size: var(--t-xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -1758,7 +1770,7 @@ ol.steps-list b {
 .showcase p { margin: 0 0 0.8rem; color: var(--muted); }
 
 .showcase .note {
-  font-size: 0.92rem;
+  font-size: var(--t-md);
   padding-left: 0.9rem;
   border-left: 2px solid var(--accent);
   color: var(--muted);
@@ -1778,7 +1790,7 @@ ol.steps-list b {
 
 .shot figcaption {
   margin-top: 0.7rem;
-  font-size: 0.88rem;
+  font-size: var(--t-sm);
   color: var(--muted);
 }
 
@@ -1808,7 +1820,7 @@ ol.steps-list b {
 .figure .body { fill: #cfd4db; stroke: #8b929b; stroke-width: 1.2; }
 .figure .body-soft { fill: #9aa2ad; stroke: none; }
 .figure .rule { stroke: #575e69; stroke-width: 1; }
-.figure .ink { fill: #e6e9ee; font-size: 12px; font-family: system-ui, "Segoe UI", sans-serif; }
+.figure .ink { fill: #e6e9ee; font-size: var(--t-xs); font-family: system-ui, "Segoe UI", sans-serif; }
 .figure .dim { fill: #98a0ab; font-size: 11px; font-family: system-ui, "Segoe UI", sans-serif; }
 .figure .hot { fill: #e08b4e; }
 .figure .hot-stroke { stroke: #e08b4e; fill: none; stroke-width: 1.6; }
@@ -1820,7 +1832,7 @@ ol.steps-list b {
 }
 .figure .value {
   fill: #e08b4e;
-  font-size: 13px;
+  font-size: var(--t-xs);
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
   font-weight: 600;
 }
@@ -1951,20 +1963,20 @@ ul.features b { display: inline; }
 }
 
 .price-card .amount b {
-  font-size: 3rem;
+  font-size: var(--t-3xl);
   line-height: 1;
   letter-spacing: -0.03em;
 }
 
 .price-card .amount s {
   color: var(--muted);
-  font-size: 1.2rem;
+  font-size: var(--t-lg);
   text-decoration-thickness: 2px;
 }
 
 .price-card .amount em {
   font-style: normal;
-  font-size: 0.85rem;
+  font-size: var(--t-sm);
   font-weight: 600;
   color: var(--accent);
   background: var(--accent-soft);
@@ -2109,7 +2121,7 @@ footer.site {
   border-top: 1px solid var(--line);
   padding: 2rem 0 3rem;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--t-md);
 }
 
 footer.site a { color: var(--muted); }
@@ -2123,11 +2135,11 @@ footer.site a:hover { color: var(--accent); }
    leer. Die Breite selbst bleibt schmal: das sind lange Sätze. */
 main.legal { padding: 3rem 0; max-width: 46rem; margin: 0 auto; }
 
-main.legal h1 { font-size: 1.8rem; }
+main.legal h1 { font-size: var(--t-2xl); }
 
-main.legal h2 { font-size: 1.3rem; margin-top: 2.5rem; }
+main.legal h2 { font-size: var(--t-xl); margin-top: 2.5rem; }
 
-main.legal h3 { font-size: 1.05rem; margin-top: 1.8rem; }
+main.legal h3 { font-size: var(--t-base); margin-top: 1.8rem; }
 
 main.legal hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
 
@@ -2161,7 +2173,7 @@ main.legal li { margin: 0.35rem 0; }
   align-items: center;
   gap: 0.55rem;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
 }
 
 .activation-language select {
@@ -2191,7 +2203,7 @@ main.legal li { margin: 0.35rem 0; }
 .activation-success {
   margin: 0 0 0.55rem;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: var(--t-xs);
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2249,7 +2261,7 @@ main.legal li { margin: 0.35rem 0; }
 
 .activation-steps b,
 .activation-steps span { display: block; }
-.activation-steps span { margin-top: 0.35rem; color: var(--muted); font-size: 0.93rem; }
+.activation-steps span { margin-top: 0.35rem; color: var(--muted); font-size: var(--t-md); }
 
 .activation-workspace {
   display: grid;
@@ -2282,7 +2294,7 @@ main.legal li { margin: 0.35rem 0; }
 
 .activation-card-head h2,
 .activation-note h2,
-.activation-result h2 { margin: 0; font-size: 1.2rem; }
+.activation-result h2 { margin: 0; font-size: var(--t-lg); }
 .activation-card-head p:not(.activation-stepmark) { margin: 0.35rem 0 0; color: var(--muted); }
 
 .activation-stepmark {
@@ -2292,7 +2304,7 @@ main.legal li { margin: 0.35rem 0; }
   place-items: center;
   border-radius: var(--r-md);
   background: var(--accent-soft);
-  font-size: 1rem;
+  font-size: var(--t-md);
 }
 
 #activation-form { display: grid; gap: 0.75rem; }
@@ -2307,7 +2319,7 @@ main.legal li { margin: 0.35rem 0; }
   cursor: pointer;
 }
 
-.activation-file span { color: var(--muted); font-size: 0.88rem; }
+.activation-file span { color: var(--muted); font-size: var(--t-sm); }
 .activation-file-row {
   display: flex;
   align-items: center;
@@ -2324,7 +2336,7 @@ main.legal li { margin: 0.35rem 0; }
   border-radius: var(--r-md);
   background: var(--card);
   color: var(--fg);
-  font-size: 1rem;
+  font-size: var(--t-md);
   font-weight: 650;
 }
 
@@ -2357,7 +2369,7 @@ main.legal li { margin: 0.35rem 0; }
 }
 
 .activation-paste[open] summary { margin-bottom: 0.7rem; }
-.activation-paste p { margin: 0 0 0.7rem; color: var(--muted); font-size: 0.9rem; }
+.activation-paste p { margin: 0 0 0.7rem; color: var(--muted); font-size: var(--t-sm); }
 .activation-paste label { display: block; margin-bottom: 0.35rem; font-weight: 650; }
 
 #request-text {
@@ -2426,7 +2438,7 @@ main.legal li { margin: 0.35rem 0; }
 
 .activation-aside { display: grid; gap: 1rem; }
 .activation-note { padding: 1.15rem; }
-.activation-note p { margin: 0.6rem 0; color: var(--muted); font-size: 0.93rem; }
+.activation-note p { margin: 0.6rem 0; color: var(--muted); font-size: var(--t-md); }
 .activation-note a { font-weight: 650; }
 
 @media (max-width: 760px) {
@@ -2960,7 +2972,7 @@ main.legal p.lang-note {
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 0.8rem 1.1rem;
-  font-size: 0.95rem;
+  font-size: var(--t-md);
   color: var(--muted);
   margin-bottom: 2rem;
 }
@@ -3000,7 +3012,7 @@ ol.chain li::before {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 650;
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
 }
 
 ol.chain li b { color: var(--fg); }
@@ -3014,14 +3026,14 @@ table.compare {
   width: 100%;
   max-width: 46rem;
   margin: 1.4rem 0 1.2rem;
-  font-size: 0.97rem;
+  font-size: var(--t-md);
 }
 
 table.compare th {
   text-align: left;
   padding: 0 1rem 0.6rem 0;
   border-bottom: 2px solid var(--line);
-  font-size: 0.86rem;
+  font-size: var(--t-sm);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
@@ -3044,14 +3056,14 @@ table.compare .no { color: var(--muted); white-space: nowrap; }
 p.footnote {
   max-width: 44rem;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--t-md);
   border-left: 2px solid var(--line);
   padding-left: 1.1rem;
 }
 
 #generiert h3 {
   margin-top: 2.6rem;
-  font-size: 1.25rem;
+  font-size: var(--t-lg);
 }
 
 /* --- Schaustücke: die Galerie erzeugter Körper und der Weg dorthin ---------
@@ -3093,7 +3105,7 @@ p.footnote {
 
 .schau figcaption {
   margin-top: 0.5rem;
-  font-size: 0.88rem;
+  font-size: var(--t-sm);
   line-height: 1.45;
   color: var(--muted);
   text-align: center;
@@ -3142,7 +3154,7 @@ p.footnote {
 
 .weg figcaption {
   margin-top: 0.6rem;
-  font-size: 0.9rem;
+  font-size: var(--t-sm);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3229,7 +3241,7 @@ p.footnote {
 
 .boerse-suche label,
 .boerse-hochladen label {
-  font-size: 0.88rem;
+  font-size: var(--t-sm);
   font-weight: 600;
   color: var(--muted);
 }
@@ -3278,7 +3290,7 @@ p.footnote {
   display: block;
   max-width: 34rem;
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--t-sm);
 }
 
 .boerse-hochladen button,
@@ -3320,13 +3332,13 @@ p.footnote {
 
 .boerse-liste h3 {
   margin: 0 0 0.5rem;
-  font-size: 1.05rem;
+  font-size: var(--t-base);
   line-height: 1.35;
 }
 
 .boerse-liste p {
   margin: 0 0 0.6rem;
-  font-size: 0.92rem;
+  font-size: var(--t-md);
   line-height: 1.55;
 }
 
@@ -3337,7 +3349,7 @@ p.footnote {
 .boerse-liste .sub {
   margin-top: auto;
   margin-bottom: 0.25rem;
-  font-size: 0.84rem;
+  font-size: var(--t-sm);
 }
 
 .boerse-liste .btn {
@@ -3419,7 +3431,7 @@ p.footnote {
 
 .schau.tight figcaption {
   margin-top: 0.35rem;
-  font-size: 0.82rem;
+  font-size: var(--t-xs);
   color: var(--muted);
 }
 
@@ -3451,7 +3463,7 @@ p.footnote {
 
 .beleg figcaption {
   padding: 0.85rem 1.1rem 1rem;
-  font-size: 0.92rem;
+  font-size: var(--t-md);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3503,13 +3515,13 @@ p.footnote {
    aus wie vorher (gemessen von 72 am 31.08.2026). */
 .auswahl-titel {
   margin: 0 0 0.35rem;
-  font-size: 1.15rem;
+  font-size: var(--t-lg);
   font-weight: 700;
 }
 
 .auswahl .hinweis {
   margin: 0 0 1rem;
-  font-size: 0.86rem;
+  font-size: var(--t-sm);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3533,7 +3545,7 @@ p.footnote {
 
 .pruefhinweis {
   margin: 0.4rem 0 0;
-  font-size: 0.84rem;
+  font-size: var(--t-sm);
   line-height: 1.5;
   color: var(--muted);
 }
@@ -3545,7 +3557,7 @@ p.footnote {
    sie nicht an den Knöpfen klebt. */
 .version {
   margin: 0.75rem 0 0;
-  font-size: 0.84rem;
+  font-size: var(--t-sm);
   color: var(--muted);
 }
 
@@ -3603,7 +3615,7 @@ p.footnote {
      1,2 rem sind 19,2 px — auf einem Gerät, das 320 px Text zeigt, sind das
      30 Zeichen je Zeile. Lesbar wird es ab 45; ganz erreicht der Aufmacher
      das auf einem Handy nie, aber 36 sind keine 30. */
-  .hero p.lead { font-size: 1.05rem; }
+  .hero p.lead { font-size: var(--t-base); }
 
   /* 20ch sind auf dem Handy schmaler als der Rahmen: Die Überschrift brach
      in vier Zeilen, wo drei gereicht hätten. Die Grenze ist für breite
