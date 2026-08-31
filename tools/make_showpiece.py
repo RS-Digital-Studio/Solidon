@@ -254,6 +254,15 @@ def steps() -> list[tuple[str, list[OperationDraft]]]:
                 )
             ],
         ),
+        (
+            "Auf dem Bett anordnen",
+            # **Die Objekte ausdrücklich.** ``arrange_bed`` arbeitet über
+            # ``ctx.inputs``; ohne sie lief der Schritt durch und ordnete
+            # nichts — der Deckel blieb, wo er lag, und der Prüfbericht
+            # behielt seinen Befund. Das Fenster macht es genauso
+            # (``inputs_for`` in ``main_window``), nur dort zur Laufzeit.
+            [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"), params={})],
+        ),
     ]
 
 
