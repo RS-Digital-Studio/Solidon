@@ -3270,9 +3270,16 @@ p.footnote {
   backdrop-filter: blur(2px);
 }
 
-.auswahl h3 {
+/* **Eine Kartenbeschriftung ist keine Gliederungsebene.** Hier stand ein
+   ``h3``, und die Seite sprang damit von der H1 direkt auf Ebene drei: Ein
+   Bildschirmleser las „Linux" als Unterpunkt von nichts. Der Dialog trägt
+   seinen Namen ohnehin im ``aria-label`` — die sichtbare Zeile wiederholte
+   ihn nur und kostete dafür die Gliederung. Sie ist jetzt ein ``p`` und sieht
+   aus wie vorher (gemessen von 72 am 31.08.2026). */
+.auswahl-titel {
   margin: 0 0 0.35rem;
   font-size: 1.15rem;
+  font-weight: 700;
 }
 
 .auswahl .hinweis {
