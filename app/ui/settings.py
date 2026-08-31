@@ -148,6 +148,14 @@ class UiSettings:
     Nachfrage übernommen — Regel 19 kennt keine Bestätigung vor rücknehmbaren
     Handlungen. Abschaltbar, denn es ändert das gefühlte Verhalten des Chats;
     die vier Bedingungen prüft ``agent_apply.auto_acceptable``."""
+    ai_disclosure_version: str = ""
+    ai_disclosure_backend: str = ""
+    ai_disclosure_target: str = ""
+    ai_disclosure_at_utc: str = ""
+    """P0-08: Textfassung, Backend-Typ, geheimnisbereinigtes tatsächliches
+    Datenziel und UTC-Zeitpunkt des zuletzt vollständig gezeigten KI-Hinweises.
+    Der Merker bleibt lokal in den Oberflächeneinstellungen und reist nie in
+    einer Projektdatei."""
 
     def remember(self, path: Path) -> None:
         text = str(path)

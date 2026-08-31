@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
@@ -52,6 +52,9 @@ from app.i18n import tr
 from app.ui.labels import UNEXPECTED_CRASH
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
+
+if TYPE_CHECKING:
+    from app.ui.settings import UiSettings
 
 _log = get_logger(__name__)
 
@@ -438,8 +441,13 @@ class _Row(QWidget):
 class InstallDialog(QDialog):
     """Die Liste dessen, was Solidon benutzen kann, und was davon da ist."""
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        settings: UiSettings | None = None,
+    ) -> None:
         super().__init__(parent)
+        self._settings = settings
         self.setWindowTitle(tr("Zusätzliche Programme"))
         self.setMinimumWidth(760)
         self._worker: _Worker | None = None
@@ -675,7 +683,7 @@ class InstallDialog(QDialog):
         elif requirement.follow_up == "chat":
             from app.ui.dialogs import KeyDialog
 
-            KeyDialog(parent=self).exec()
+            KeyDialog(parent=self, settings=self._settings).exec()
         else:
             return
         self.refresh()

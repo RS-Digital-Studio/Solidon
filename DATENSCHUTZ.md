@@ -1,6 +1,6 @@
 # Datenschutzerklärung
 
-Stand: 28. August 2026
+Stand: 31. August 2026
 
 
 ## Diese Website
@@ -51,12 +51,12 @@ Im Aktivierungsdienst speichern wir den Hash des Schlüssels, den öffentlichen 
 
 ## Die Anwendung Solidon3D
 
-Solidon3D läuft vollständig lokal und sendet von sich aus keine Daten. Fünf Ausnahmen, alle fünf unter Kontrolle des Nutzers:
+Solidon3D läuft vollständig lokal und sendet von sich aus keine Projektdaten. Klar begrenzte Netzwege gibt es nur nach einer sichtbaren Handlung oder für die ausdrücklich abschaltbare Updateprüfung:
 
 * **Gerät aktivieren oder deaktivieren.** Nur nach dem jeweiligen Klick sendet die Anwendung die oben beschriebenen, signierten Aktivierungsdaten. Der Offline-Weg speichert die Anfrage zunächst als Datei; erst die ausdrücklich aufgerufene Aktivierungsseite sendet sie. Danach prüft Solidon das Geräte-Zertifikat lokal und nimmt keinen Lizenzkontakt im Hintergrund auf.
 * **Update-Hinweis.** Beim Start fragt die Anwendung eine Versionsdatei auf dieser Website ab (`version.json`), um zu erfahren, ob es eine neuere Fassung gibt. Die Anfrage nennt dabei den Programmnamen und die installierte Versionsnummer — mehr nicht: keine Kennung, die Sie wiedererkennbar macht, und keine Angaben über Ihren Rechner. Gibt es eine neuere Fassung, erscheint ein Hinweis; **geladen und installiert wird sie erst, wenn Sie es ausdrücklich bestätigen**. Abschaltbar unter „Bearbeiten → Einstellungen“.
 * **Ein Modell aus dem Netz holen.** Wer einen Verweis auf eine Modelldatei in das Fenster zieht — etwa von MakerWorld, Printables oder Thingiverse —, lädt sie unmittelbar von dort. Der angefragte Server erfährt dabei Ihre IP-Adresse und den Programmnamen, so wie er es bei einem Aufruf über den Browser täte. Über uns läuft das nicht, und wir erfahren davon nichts.
-* **KI-Chat mit eigenem Schlüssel.** Wer den Chat mit einem API-Schlüssel eines KI-Anbieters nutzt, sendet seine Chat-Eingaben an diesen Anbieter — nach dessen Datenschutzbestimmungen. Mit einem lokalen Modell (Ollama) verlässt nichts den Rechner. Ohne beides läuft die Anwendung vollständig, nur ohne Chat.
+* **KI-Chat.** Wer Anthropic nutzt, sendet mit der aktuellen Nachricht auch bis zu zwölf frühere Chatbeiträge, den Prüfbericht und einen textlichen Steckbrief der gesamten aktuellen Szene mit Objekt- und Quellnamen, Maßen, Merkmalen, Parametern, Einstellungen und Auswahl sowie die für den Agenten nötigen Anweisungen, Regeln und Werkzeugschemata direkt an Anthropic — nach dessen Datenschutzbestimmungen. Unterstützt das gewählte Modell Bilder, kann Solidon außerdem automatisch gerenderte Ansichten der Szene mitsenden. Die Projektdatei und die Netzgeometrie selbst werden nicht übertragen. Ollama verarbeitet dieselben Arbeitsdaten: Bei einer Loopback-Adresse bleiben sie auf diesem Rechner; bei einer vom Nutzer eingetragenen entfernten Adresse werden sie an diesen anderen Rechner übertragen. Die Ollama-Werkzeugprobe sendet einen festen technischen Prüfauftrag ohne Projekt- oder Chatinhalt. Ausdrücklich gestartete Installations-, Download- oder Updatewege können gesondert das Netz verwenden. Ohne Anthropic oder Ollama läuft die Anwendung vollständig, nur ohne Chat.
 * **Rückmeldung an den Support.** Über *Hilfe → Rückmeldung senden* lässt sich ein Vorschlag, ein Fehler oder eine Frage direkt aus der Anwendung an [support@solidon3d.de](mailto:support@solidon3d.de) schicken. Denselben Weg nimmt der kurze Fragebogen, den Solidon3D während der Demo einmal anbietet — angeboten wird er von selbst, gesendet wird er nur, wenn Sie ihn ausfüllen und abschicken. Beides geschieht ausschließlich auf Knopfdruck und nie von selbst.
 **Was bei einer Rückmeldung übertragen wird.** Immer: der geschriebene Text, die Programmversion, Betriebssystem und die Versionen der verwendeten Bibliotheken. Zusätzlich nur das, was im Dialog angehakt ist — ein Bildschirmfoto des Solidon-Fensters, das lokale Protokoll der letzten Zeilen und die laufende Sitzung als Projektdatei; diese enthält das Modell samt Konstruktionsverlauf und den Chat-Verlauf, und der Dialog sagt das dort, wo man es anhakt. Vor dem Senden zeigt eine Vorschau den vollständigen Inhalt der Sendung. Die Angabe einer Rückadresse ist freiwillig; ohne sie kommt keine Antwort. Zweck der Verarbeitung ist die Bearbeitung der Anfrage, Rechtsgrundlage ist Art. 6 Abs. 1 lit. b bzw. lit. f DSGVO. Gespeichert wird die Sendung im Support-Postfach, bis der Vorgang erledigt ist, längstens 24 Monate.
 

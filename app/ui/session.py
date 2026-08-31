@@ -194,15 +194,16 @@ class _AgentWorker(Worker):
     finishedWith = Signal(object)
     failedWith = Signal(object)
 
-    def __init__(self, session: Session, request: str) -> None:
+    def __init__(self, session: Session, request: str, backend: LLMBackend) -> None:
         super().__init__()
         self._session = session
         self._request = request
+        self._backend = backend
 
     def work(self) -> None:
         session = self._session
         try:
-            preview = session.run_proposal(self._request)
+            preview = session.run_proposal(self._request, self._backend)
         except OperationCancelled:
             self.failedWith.emit(AppError(tr("Der Vorschlag wurde abgebrochen.")))
         except AppError as error:
@@ -1502,9 +1503,20 @@ class Session(QObject):
         """
         self._backend = backend
 
-    def propose_async(self, request: str, selection: tuple[str, str] | None = None) -> None:
-        """Fragt den Agenten. Die Antwort kommt als ``proposalReady`` an."""
-        backend = self.agent_backend
+    def propose_async(
+        self,
+        request: str,
+        selection: tuple[str, str] | None = None,
+        *,
+        backend: LLMBackend | None = None,
+    ) -> None:
+        """Fragt genau das an der Sendegrenze gebundene Modell.
+
+        ``backend`` ist der unveränderliche Zug-Schnappschuss aus dem Fenster.
+        Ohne ausdrückliche Übergabe bleibt der Aufruf für interne Werkzeuge und
+        Tests abwärtskompatibel, liest den Zugang aber nur hier ein einziges Mal.
+        """
+        backend = backend if backend is not None else self.agent_backend
         if backend is None:
             self.failed.emit(AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell.")))
             return
@@ -1527,7 +1539,7 @@ class Session(QObject):
                 _log.warning("scene views failed, proposing without images", exc_info=True)
         self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
-        worker = _AgentWorker(self, request)
+        worker = _AgentWorker(self, request, backend)
         worker.finishedWith.connect(self._on_proposal)
         worker.failedWith.connect(self._on_failed)
         worker.crashed.connect(lambda detail: self._on_failed(InternalError(detail=detail)))
@@ -1535,9 +1547,9 @@ class Session(QObject):
         self._agent = worker
         self._leash.start(worker)
 
-    def run_proposal(self, request: str) -> ProposalPreview:
+    def run_proposal(self, request: str, backend: LLMBackend | None = None) -> ProposalPreview:
         """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5)."""
-        backend = self.agent_backend
+        backend = backend if backend is not None else self.agent_backend
         if backend is None:  # pragma: no cover - vor dem Start des Arbeiters abgesichert
             raise AppError(tr("Für den Chat fehlt der Zugang zu einem Sprachmodell."))
 

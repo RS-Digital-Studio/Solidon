@@ -119,6 +119,13 @@ class ChatPanel(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setAcceptDrops(True)
+        self._restorable_request = ""
+        """Der unbearbeitete Eingabetext, bis die Sendegrenze ihn angenommen hat.
+
+        Der KI-Hinweis sitzt hinter dem Signal. Deshalb leert die Leiste für
+        unmittelbare Rückmeldung weiter das Feld, kann bei Zurück aber auch
+        Leerraum und Zeilenumbrüche genau wiederherstellen.
+        """
 
         self.turns = QListWidget(self)
         self.turns.setAccessibleName(tr("Gesprächsverlauf"))
@@ -566,11 +573,30 @@ class ChatPanel(QWidget):
         self.input.setTextCursor(cursor)
 
     def _send(self) -> None:
-        text = self.input.toPlainText().strip()
+        original = self.input.toPlainText()
+        text = original.strip()
         if not text:
             return
+        self._restorable_request = original
         self.input.clear()
         self.requestSent.emit(text)
+
+    def restore_request(self, request: str) -> None:
+        """Legt einen an der Sendegrenze angehaltenen Auftrag vollständig zurück."""
+
+        text = self._restorable_request
+        if not text or text.strip() != request:
+            text = request
+        self._restorable_request = ""
+        self.input.setPlainText(text)
+        self.input.selectAll()
+        self.input.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def forget_restorable_request(self, request: str) -> None:
+        """Die Sendegrenze hat diesen Auftrag angenommen; die Rücklage ist frei."""
+
+        if self._restorable_request.strip() == request:
+            self._restorable_request = ""
 
     # --- ein Bild als Eingabe (Konzept P15, E8) ---------------------------------
 

@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -35,6 +36,7 @@ from app.core.knowledge import profiles
 from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
+from app.ui.ai_disclosure import clear_disclosure
 from app.ui.labels import by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import align_forms
@@ -147,6 +149,25 @@ class SettingsDialog(QDialog):
             )
         )
 
+        self._reset_ai_disclosure = False
+        self.ai_disclosure_reset = QPushButton(tr("KI-Hinweis erneut anzeigen"), self)
+        self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
+        self.ai_disclosure_reset.setAccessibleDescription(
+            tr(
+                "Löscht nur den lokalen Anzeigenachweis. Vor der nächsten "
+                "Chatnachricht erscheint der KI-Hinweis erneut."
+            )
+        )
+        self.ai_disclosure_reset.setToolTip(self.ai_disclosure_reset.accessibleDescription())
+        has_disclosure = bool(
+            settings.ai_disclosure_version
+            or settings.ai_disclosure_backend
+            or settings.ai_disclosure_target
+            or settings.ai_disclosure_at_utc
+        )
+        self.ai_disclosure_reset.setEnabled(has_disclosure)
+        self.ai_disclosure_reset.clicked.connect(self._reset_disclosure)
+
         # Konzept P15 §7 Etappe 9: aus, bis jemand sie einschaltet. Der
         # Hinweis daneben nennt Adresse und Port, denn ohne die kann niemand
         # sie eintragen — und wer sie liest, sieht zugleich, dass sie diesen
@@ -230,6 +251,7 @@ class SettingsDialog(QDialog):
         form.addRow(tr("Tastenbelegung"), self.shortcuts)
         form.addRow("", self.updates)
         form.addRow("", self.auto_accept)
+        form.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
         form.addRow("", self.remote)
         form.addRow(tr("Port der Fernsteuerung"), self.remote_port)
         return box
@@ -270,11 +292,21 @@ class SettingsDialog(QDialog):
         settings.shortcut_scheme = str(self.shortcuts.currentData())
         settings.check_for_updates = self.updates.isChecked()
         settings.auto_accept_reversible = self.auto_accept.isChecked()
+        if self._reset_ai_disclosure:
+            clear_disclosure(settings)
         settings.remote_enabled = self.remote.isChecked()
         settings.remote_port = int(self.remote_port.value())
         settings.printer = str(self.printer.currentData())
         settings.material = str(self.material.currentData())
         return settings
+
+    def _reset_disclosure(self) -> None:
+        """Merkt die Wahl bis zum Speichern; Abbrechen verändert noch nichts."""
+
+        self._reset_ai_disclosure = True
+        self.ai_disclosure_reset.setEnabled(False)
+        self.ai_disclosure_reset.setText(tr("Wird vor der nächsten Nachricht angezeigt"))
+        self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
 
 
 def _choices(parent: QWidget, entries: Mapping[str, str | TranslatableText]) -> QComboBox:

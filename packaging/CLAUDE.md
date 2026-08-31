@@ -17,6 +17,7 @@ Gebaut wird nicht von hier, sondern über `tools/` und den Skill `/erzeugen`.
 | `install.sh` | Linux von Hand |
 | `solidon3d.ico`, `solidon3d.icns` | Symbole je Plattform — **erzeugt** von `tools/make_icon.py` |
 | `eula.txt` | Die Fassung, die der Installer zeigt — **erzeugt** von `tools/make_legal.py` aus `EULA.md` |
+| `DATENSCHUTZ.md` | Lokale, mitgelieferte Fassung für den KI-Hinweis; ohne Webabruf im Fenster gelesen |
 
 ## Die Symbolquelle liegt woanders
 

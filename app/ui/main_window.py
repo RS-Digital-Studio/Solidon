@@ -176,6 +176,11 @@ from app.core.types import (
 )
 from app.i18n import _, tr
 from app.ui import first_run
+from app.ui.ai_disclosure import (
+    DisclosureResult,
+    ensure_ai_disclosure,
+    target_for_backend,
+)
 from app.ui.analysis_bar import AnalysisBar, LayerBar
 from app.ui.catalog import PartCatalog
 from app.ui.chat import ChatPanel
@@ -3978,7 +3983,7 @@ class MainWindow(QMainWindow):
 
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
-        InstallDialog(self).exec()
+        InstallDialog(self, settings=self.settings).exec()
 
     def _offer_slicer_setup(self, dialog: PrintSettingsDialog) -> None:
         """Aus den Druckeinstellungen in die Liste der zusätzlichen Programme.
@@ -4870,7 +4875,7 @@ class MainWindow(QMainWindow):
         Fall; was der Dialog verändert hat, weiß er selbst nicht besser als
         eine neue Prüfung.
         """
-        KeyDialog(parent=self).exec()
+        KeyDialog(parent=self, settings=self.settings).exec()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
 
@@ -7340,10 +7345,41 @@ class MainWindow(QMainWindow):
         """Ein Zug. Die Auswahl reist mit, sonst heißt „dieses Loch"
         nichts (§26.1).
         """
+        backend = self.session.agent_backend
+        try:
+            target = target_for_backend(backend)
+        except (TypeError, ValueError):
+            result = DisclosureResult.FAILED
+        else:
+            result = (
+                DisclosureResult.CURRENT
+                if target is None
+                else ensure_ai_disclosure(self.settings, target, self)
+            )
+        if not result.allowed:
+            self._disclosure_stopped(
+                request,
+                rendering_problem=result is DisclosureResult.FAILED,
+            )
+            return
+        self.chat.forget_restorable_request(request)
         selected = self.object_tree.selected()
         feature = self.object_tree.selected_feature()
         selection = (selected, feature or "") if selected else None
-        self.session.propose_async(request, selection)
+        self.session.propose_async(request, selection, backend=backend)
+
+    def _disclosure_stopped(self, request: str, *, rendering_problem: bool) -> None:
+        """Stellt den Auftrag wieder her und führt zurück zur Backend-Auswahl."""
+
+        self.chat.restore_request(request)
+        self.action_llm_key()
+        if rendering_problem:
+            self.chat.set_notice(
+                tr(
+                    "Der KI-Hinweis konnte nicht vollständig angezeigt oder gespeichert werden. "
+                    "Wählen Sie den Chat-Zugang erneut und versuchen Sie es noch einmal."
+                )
+            )
 
     def _on_agent_busy(self, busy: bool) -> None:
         """Ein Zug dauert zehn bis sechzig Sekunden — §2.8 verlangt dafür

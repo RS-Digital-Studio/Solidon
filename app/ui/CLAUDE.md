@@ -93,6 +93,40 @@ Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py`
 `chat.py` (§26.3, §2.5) · `snapshots.py` (Ansichten für den Agenten) ·
 `remote_server.py` (MCP im Fenster)
 
+## P0-08 — KI-Hinweis an der Sendegrenze
+
+`ai_disclosure.py` hält den sichtbaren Informationstext, den lokalen
+Anzeigenachweis und die gemeinsame Sperre zusammen. `ensure_ai_disclosure`
+steht vor jedem echten LLM-Modellaufruf: im Hauptfenster unmittelbar vor
+`Session.propose_async`, im Chat-Einrichtungsdialog vor den beiden echten
+Aufrufen der Ollama-Werkzeugprobe. Erst ein vollständig aufgebauter,
+erreichbarer und zugänglicher Dialog öffnet den genau danach angeforderten Zug;
+Zurück, Escape,
+Schließen, ein unbekanntes Backend sowie Darstellungs- oder Speicherfehler
+senden nichts.
+
+Der Anbietertext folgt der tatsächlichen Nutzlast aus `agent/context.py` und
+`session.py`, nicht einer verkürzten Produktbeschreibung: Für Anthropic nennt
+er neben der aktuellen Nachricht den textlichen Szenensteckbrief,
+Prüfbericht, begrenzten Chatverlauf, Anweisungen/Regeln/Werkzeugschemata und
+die bei bildfähigen Modellen automatisch gerenderten Szenenansichten. Nicht
+übertragen werden die Projektdatei und die Netzgeometrie selbst.
+
+Ollama ist nicht gleichbedeutend mit „lokal“: Der eingetragene Dienst darf auf
+einem zweiten Rechner liegen. Der Hinweis zeigt deshalb die von Geheimnissen,
+Pfad, Abfrage und Fragment bereinigte Zieladresse und unterscheidet Loopback
+von einem entfernten Ziel. Der entfernte Text nennt denselben Arbeitskontext;
+die Werkzeugprobe nennt ihren festen technischen Auftrag ohne Projekt- oder
+Chatinhalt.
+
+Der Nachweis besteht ausschließlich aus Textfassung, Backend-Typ,
+Zielklasse/Zieladresse und UTC-Zeitpunkt in `UiSettings`. Er reist nicht im
+Projekt; Text-, Anbieter-, Local→Remote- und Hostwechsel schließen die Sperre
+wieder, und die Einstellungen können ihn zurücksetzen. Weil `ChatPanel` vor
+seinem Signal leert, hält es bis zur Entscheidung den unbearbeiteten
+Eingabetext: Bei einem Abbruch kommen auch Leerraum und Zeilenumbrüche
+vollständig und markiert ins Feld zurück.
+
 **Bibliothek**
 
 `catalog.py` (Bausteinkatalog, §24.3) · `filament_picker.py` (Farbe und Name

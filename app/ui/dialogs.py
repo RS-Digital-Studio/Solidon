@@ -62,6 +62,11 @@ from app.core.errors import (
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import format_decimal, get_language, tr
+from app.ui.ai_disclosure import (
+    DisclosureResult,
+    ensure_ai_disclosure,
+    target_for_backend,
+)
 from app.ui.labels import (
     UNEXPECTED_CRASH,
     NumberSpin,
@@ -70,6 +75,7 @@ from app.ui.labels import (
     value_line,
 )
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
+from app.ui.settings import UiSettings, load_settings
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, no_primary, set_level, set_role
 
 #: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
@@ -587,13 +593,14 @@ class _ToolProbeWorker(Worker):
 
     done = Signal(object, object)
 
-    def __init__(self, model: str) -> None:
+    def __init__(self, model: str, url: str) -> None:
         super().__init__()
         self._model = model
+        self._url = url
 
     def work(self) -> None:
-        usable = llm.ollama_tool_check(self._model)
-        self.done.emit(usable, llm.ollama_speed(self._model))
+        usable = llm.ollama_tool_check(self._model, url=self._url)
+        self.done.emit(usable, llm.ollama_speed(self._model, url=self._url))
 
 
 @dataclass(frozen=True, slots=True)
@@ -712,9 +719,15 @@ class KeyDialog(QDialog):
     darunter passiert, sagt der Erklärtext im Dialog.
     """
 
-    def __init__(self, account: str = "anthropic", parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        account: str = "anthropic",
+        parent: QWidget | None = None,
+        settings: UiSettings | None = None,
+    ) -> None:
         super().__init__(parent)
         self.account = account
+        self.settings = settings if settings is not None else load_settings()
         self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
         self._probe: _ToolProbeWorker | None = None
@@ -986,7 +999,7 @@ class KeyDialog(QDialog):
         if not tools.state_of(tool).installed:
             from app.ui.install_dialog import InstallDialog
 
-            InstallDialog(self).exec()
+            InstallDialog(self, settings=self.settings).exec()
             self.look()
             return
         self.service_button.setEnabled(False)
@@ -1141,10 +1154,42 @@ class KeyDialog(QDialog):
 
     def _probe_tools(self) -> None:
         model = self._chosen_model()
+        backend = llm.OllamaBackend(model=model)
+        try:
+            target = target_for_backend(backend)
+        except ValueError:
+            target = None
+        result = (
+            ensure_ai_disclosure(self.settings, target, self)
+            if target is not None
+            else DisclosureResult.FAILED
+        )
+        if not result.allowed:
+            if result is DisclosureResult.REJECTED:
+                set_role(
+                    self.probe_result,
+                    "info",
+                    tr(
+                        "Die Werkzeugprüfung wurde nicht gestartet. Wählen Sie „Werkzeuge "
+                        "prüfen“ erneut, wenn Sie den Datenweg vorher anzeigen möchten."
+                    ),
+                )
+            else:
+                set_role(
+                    self.probe_result,
+                    "warning",
+                    tr(
+                        "Der KI-Hinweis konnte nicht vollständig angezeigt oder gespeichert "
+                        "werden. Prüfen Sie den Chat-Zugang und versuchen Sie „Werkzeuge "
+                        "prüfen“ erneut."
+                    ),
+                )
+            self.probe_button.setEnabled(True)
+            return
         self.probe_button.setEnabled(False)
         set_role(self.probe_result, "info", tr("Das Modell wird geladen und gefragt — das dauert."))
 
-        worker = _ToolProbeWorker(model)
+        worker = _ToolProbeWorker(model, backend.url)
         worker.done.connect(self._probe_done)
         worker.crashed.connect(self._crashed)
         worker.finished.connect(self._probe_finished)
