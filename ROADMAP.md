@@ -13419,7 +13419,15 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Name herstellen soll; es trifft **jedes mitgelieferte Beispiel** in
       fünf Sprachen, also das, was ein Kunde als Erstes öffnet, und es ist
       eine Zeile — Zwillingssuche nach anderen beim Erzeugen eingefrorenen
-      Namen gehört dazu.
+      Namen gehört dazu. **Strittig, wird geklärt statt geschlossen (31.08.):
+      0d misst „Can Lid" und hält den Punkt für gegenstandslos, c3 maß „Can"
+      über „Dose Deckel"** — vermutlich **erzeugt gegen geöffnet**: Beim
+      frisch gebauten Deckel entsteht der Name in der Sprache des Kunden,
+      in der **gespeicherten** Projektdatei steht der beim Erzeugen
+      aufgelöste. Die Kundenfrage ist präzise gestellt: **Was sieht jemand,
+      der die Sprache auf Englisch stellt und dann das mitgelieferte
+      Beispiel ÖFFNET?** Beide Wege werden nebeneinander gemessen; wenn der
+      geöffnete Fall „Dose Deckel" zeigt, steht der Befund.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
@@ -13562,7 +13570,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Rückgabewerten, die kumulativ beschriebene Stufen exklusiv machen.
       Methodenlehre aus dem Weg dorthin: **Von drei aufgestellten Zeugen
       maßen zwei nichts — erst die Probe am Eingang trennte den
-      brauchbaren von den blinden.**
+      brauchbaren von den blinden.** **ZU (`8b24dc54`, 0d): Der Test misst
+      die Wirkung statt der Anwesenheit** (Auswahl leeren, klicken,
+      Auswahl steht — vorher `None`), 261 Tests grün. **Die Lehre daneben
+      wiegt schwerer als der Fix: `test_viewport_decisions.py` suchte den
+      Quelltext nach `select_object` ab — der Aufruf stand da, er lief nur
+      nicht; ein Test, der Anwesenheit prüft, ist gegen eine unerreichbare
+      Zeile blind.** Und sein Kommentar **kodierte die falsche Lesart**
+      („Stufe 2: ohne Ort wird der Körper ausgewählt"), womit die Ausnahme,
+      die den Fehler ausmacht, als geprüfte Entscheidung dastand — dieselbe
+      Familie wie `arranged_rigidly`: **Eine Sonderregel, die niemand
+      nachzählt, sieht aus wie Sorgfalt.** Geschwistersuche mit begründeter
+      Nullmeldung: Von neun Funktionen mit Stufen-Docstring führt eine ein
+      nacktes `return`, und das steht in einem `except`-Block (Fehlerpfad,
+      kein Stufenabbruch) — **der Fall war ein Einzelfall, das ist ein
+      Ergebnis und kein Versäumnis.**
 - [ ] **`sculpt_strokes` meldet Vollzug, wenn nichts getroffen wurde**
       (1b, 31.08., gemessen am Weg-4-Rezept): Die Züge sitzen **18 mm über
       dem Körper in der Luft** — der Körper ist bis Schritt 5 um den
