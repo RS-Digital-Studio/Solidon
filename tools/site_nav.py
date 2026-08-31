@@ -157,9 +157,8 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False) -> str:
     return (
         f'<details class="menu">'
         f'<summary aria-label="{MENU_LABELS.get(language, MENU_LABELS["de"])}">'
-        f"{MENU_MARK}</summary>"
+        f"{MENU_MARK}</summary></details>"
         f'<div class="menu-panel">'
         f"{nav_links(language, current=current, on_home=on_home)}"
         f"</div>"
-        f"</details>"
     )

@@ -54,6 +54,12 @@
   --r-lg: 0.75rem;
   --r-xl: 1rem;
   --r-pill: 999px;
+
+  /* **Die Kante einer Karte, als Licht statt als Linie.** Auf hellem Grund
+     ist das ein Schlagschatten: Er hebt die Fläche, ohne sie einzurahmen.
+     Der dunkle Gegenwert steht weiter unten und ist bewusst ein anderer —
+     ein Schatten auf Fast-Schwarz ist nichts. */
+  --edge: 0 1px 2px rgb(28 27 26 / 5%), 0 8px 22px -10px rgb(28 27 26 / 16%);
   --shadow-lift: 0 2px 4px rgb(28 27 26 / 8%), 0 18px 40px -16px rgb(28 27 26 / 28%);
 
   /* Die Bühne trägt die Bildschirmfotos. Sie ist immer dunkel, in beiden
@@ -90,6 +96,14 @@
     --card: #2a2723;
     --line: #35322d;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+
+    /* Im Dunkeln macht ein heller Innenrand an der Oberkante die Kante — als
+       fiele Licht von oben darauf. Der Schatten darunter bleibt, er trägt
+       aber nur noch die Trennung nach unten. */
+    --edge:
+      inset 0 1px 0 rgb(255 255 255 / 6%),
+      0 1px 2px rgb(0 0 0 / 35%),
+      0 10px 26px -14px rgb(0 0 0 / 70%);
     --shadow-lift: 0 2px 4px rgb(0 0 0 / 45%), 0 18px 40px -16px rgb(0 0 0 / 70%);
     --stage: #101215;
     --stage-line: #2a2e35;
@@ -779,11 +793,10 @@ nav.lang a.cta:hover {
    Monitor. Sie wächst jetzt mit, bis der Text zu breit würde. */
 .download {
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: 1.5rem;
   max-width: 58rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .download strong { font-size: var(--t-base); }
@@ -1000,12 +1013,22 @@ nav.lang a.cta:hover {
    und das Symbol verschwindet; unterhalb der Umbruchbreite dreht sich beides
    um. Dieselbe Bauart trägt der Sprachwechsel daneben seit jeher.
 
-   `display: contents` löst Aufklapper und Panel auf, sodass die sechs
-   Verweise direkte Kinder der Leiste werden — ohne das stünden sie
-   untereinander in einem Kasten. */
+   **Zwei Flex-Reihen und kein `display: contents`.** Der erste Entwurf löste
+   Aufklapper und Panel damit auf, und am Handy sah alles richtig aus — am
+   Rechner standen die sechs Verweise danach **untereinander** in einer
+   160 Punkt schmalen Spalte. Der Grund ist der Aufklapper selbst: Ein
+   `details` legt intern einen eigenen Kasten für seinen Inhalt an, und den
+   löst `display: contents` auf dem Element nicht mit auf. Die Verweise wurden
+   also nie Kinder der Leiste, sondern Blöcke in diesem Kasten.
+
+   Zwei ineinandergelegte Flex-Reihen tun dasselbe ohne den Sonderfall: Das
+   Panel ist eine Reihe in der Reihe, und der Abstand kommt aus derselben
+   Lücke wie überall. */
 nav.lang .menu,
 nav.lang .menu-panel {
-  display: contents;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
 }
 
 nav.lang .menu > summary {
@@ -1015,6 +1038,9 @@ nav.lang .menu > summary {
 @media (max-width: 56rem) {
   nav.lang .menu {
     display: block;
+  }
+
+  nav.lang {
     position: relative;
   }
 
@@ -1038,7 +1064,7 @@ nav.lang .menu > summary {
      Kasten, den der Browser verstecken könnte — gemessen sechs sichtbare
      Verweise bei zugeklapptem Menü. Was am Rechner die Leiste möglich macht,
      muss am Handy zurückgenommen werden. */
-  nav.lang .menu > .menu-panel { display: none; }
+  nav.lang .menu-panel { display: none; }
 
   nav.lang .menu > summary:hover { color: var(--accent); }
 
@@ -1057,7 +1083,7 @@ nav.lang .menu > summary {
      geschlossenen Zustand offen da — gemessen sechs sichtbare Verweise bei
      zugeklapptem Menü. Wer den Trick benutzt, um etwas sichtbar zu halten,
      muss ihn dort weglassen, wo etwas verschwinden soll. */
-  nav.lang .menu[open] > .menu-panel {
+  nav.lang .menu[open] + .menu-panel {
     display: flex;
     flex-direction: column;
     position: absolute;
@@ -1076,20 +1102,20 @@ nav.lang .menu > summary {
     box-shadow: var(--shadow-lift);
   }
 
-  nav.lang .menu[open] > .menu-panel > a {
+  nav.lang .menu[open] + .menu-panel > a {
     padding: 0.62rem 0.8rem;
     border-radius: var(--r-sm);
     color: var(--fg);
   }
 
-  nav.lang .menu[open] > .menu-panel > a:hover {
+  nav.lang .menu[open] + .menu-panel > a:hover {
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     color: var(--accent);
   }
 
   /* Die Seite, auf der man steht, ist keine Reise wert — sie wird gezeigt,
      nicht angeboten. */
-  nav.lang .menu[open] > .menu-panel > a[aria-current="page"] {
+  nav.lang .menu[open] + .menu-panel > a[aria-current="page"] {
     color: var(--accent);
     font-weight: 600;
   }
@@ -1288,10 +1314,10 @@ nav.lang .menu > summary {
   grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
   gap: 1px;
   background: var(--line);
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   overflow: hidden;
   margin: 0;
+  box-shadow: var(--edge);
 }
 
 .stats div {
@@ -1509,21 +1535,20 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   max-width: 72rem;
   margin: 0 auto;
   padding: 1.25rem 1.4rem;
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--card);
   color: var(--muted);
+  box-shadow: var(--edge);
 }
 
 .release-card {
   max-width: 72rem;
   margin: 0 auto;
   overflow: hidden;
-  border: 1px solid var(--line);
   border-top: 3px solid var(--accent);
   border-radius: var(--r-xl);
   background: var(--card);
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .release-card + .release-card { margin-top: 1.5rem; }
@@ -1580,9 +1605,9 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .release-group {
   padding: 1.15rem 1.25rem;
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--bg);
+  box-shadow: var(--edge);
 }
 
 .release-group:only-child { grid-column: 1 / -1; }
@@ -1602,13 +1627,13 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
   width: 1.85rem;
   height: 1.85rem;
   place-items: center;
-  border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--accent);
   background: var(--accent-soft);
   font-size: var(--t-xs);
   font-weight: 750;
   font-variant-numeric: tabular-nums;
+  box-shadow: var(--edge);
 }
 
 .release-group h3 {
@@ -1654,10 +1679,10 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .pains li {
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: 1.25rem 1.35rem;
   transition: transform var(--step), box-shadow var(--step), border-color var(--step);
+  box-shadow: var(--edge);
 }
 
 .pains li:hover {
@@ -1793,11 +1818,11 @@ ol.steps-list b {
 .way {
   position: relative;
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: 1.5rem 1.35rem 1.35rem;
   overflow: hidden;
   transition: transform var(--step), box-shadow var(--step), border-color var(--step);
+  box-shadow: var(--edge);
 }
 
 /* Ein Streifen in der Akzentfarbe, der beim Zeigen von links einläuft. Er
@@ -2046,12 +2071,11 @@ ul.features b { display: inline; }
    Zeilenanfang nicht wieder. */
 .honest {
   background: var(--card);
-  border: 1px solid var(--line);
   border-left: 4px solid var(--accent);
   border-radius: var(--r-md);
   padding: 1.25rem 1.5rem;
   max-width: 58rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .honest ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
@@ -2072,11 +2096,10 @@ ul.features b { display: inline; }
 
 .price-card {
   background: var(--card);
-  border: 1px solid var(--line);
   border-top: 3px solid var(--accent);
   border-radius: var(--r-lg);
   padding: 1.75rem;
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .price-card .amount {
@@ -2165,10 +2188,10 @@ table.req td:first-child {
 
 .faq details {
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-md);
   padding: 0 1.15rem;
   transition: border-color var(--step), box-shadow var(--step);
+  box-shadow: var(--edge);
 }
 
 .faq details[open] {
@@ -2223,9 +2246,8 @@ table.req td:first-child {
   text-align: center;
   padding: 4rem 1.5rem;
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-xl);
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .closing h2 { margin-bottom: 0.75rem; }
@@ -2314,12 +2336,11 @@ main.legal li { margin: 0.35rem 0; }
   position: relative;
   overflow: hidden;
   padding: clamp(2rem, 5vw, 3.5rem);
-  border: 1px solid var(--line);
   border-radius: var(--r-xl);
   background:
     radial-gradient(circle at 88% 10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 22rem),
     var(--card);
-  box-shadow: var(--shadow);
+  box-shadow: var(--edge);
 }
 
 .activation-kicker,
@@ -2362,10 +2383,10 @@ main.legal li { margin: 0.35rem 0; }
   position: relative;
   min-height: 8rem;
   padding: 1.15rem 1.15rem 1.15rem 3.6rem;
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--bg-alt);
   counter-increment: activation-step;
+  box-shadow: var(--edge);
 }
 
 .activation-steps li::before {
@@ -3452,9 +3473,9 @@ p.footnote {
   display: flex;
   flex-direction: column;
   padding: 1.15rem 1.25rem 1.25rem;
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   background: var(--card);
+  box-shadow: var(--edge);
 }
 
 .boerse-liste h3 {
@@ -3576,9 +3597,9 @@ p.footnote {
 .beleg figure {
   margin: 0;
   background: var(--card);
-  border: 1px solid var(--line);
   border-radius: var(--r-lg);
   overflow: hidden;
+  box-shadow: var(--edge);
 }
 
 .beleg img {
