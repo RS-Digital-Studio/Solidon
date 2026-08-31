@@ -855,6 +855,22 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: meldete — das Modell rechnete vollständig auf der CPU. ``prompt_eval_count``
 #: zählt trotzdem die Nutzlast: Die Dauer gehört der Maschine, die Token
 #: gehören dem Schema.
+#: Wie lange Ollama das Modell nach einer Antwort geladen hält.
+#:
+#: **Ohne diese Angabe gilt Ollamas Vorgabe von fünf Minuten**, und die ist
+#: für einen Chat neben einer Konstruktion zu kurz: Wer eine Frage stellt,
+#: sich das Ergebnis ansieht, eine Bohrung setzt und dann weiterfragt, ist
+#: leicht darüber — und zahlt dann den vollen Kaltstart. Gemessen am
+#: 31.08.2026 auf einer Maschine, deren Ollama auf der CPU rechnete:
+#: **219 Sekunden kalt gegen 6 Sekunden warm** für dieselbe Anfrage. Auf einer
+#: Karte ist der Abstand kleiner und bleibt spürbar.
+#:
+#: Dreißig Minuten, nicht mehr: Das Modell belegt bei ``qwen3:14b`` rund
+#: 15 GB, und dieselbe Maschine soll nebenher rendern und slicen. Wer den
+#: Chat eine halbe Stunde nicht anfasst, arbeitet gerade an etwas anderem —
+#: dann gehört der Speicher dorthin.
+OLLAMA_KEEP_ALIVE = "30m"
+
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
@@ -970,6 +986,10 @@ class OllamaBackend:
             # dafür, dass der Auftrag überhaupt ankommt — siehe
             # :data:`OLLAMA_CONTEXT_TOKENS`.
             "options": {"temperature": temperature, "num_ctx": OLLAMA_CONTEXT_TOKENS},
+            # Zwischen zwei Fragen geladen bleiben (:data:`OLLAMA_KEEP_ALIVE`).
+            # Ohne das Feld entlädt Ollama nach fünf Minuten, und die zweite
+            # Frage eines Gesprächs zahlt den Kaltstart noch einmal.
+            "keep_alive": OLLAMA_KEEP_ALIVE,
             "messages": [_as_ollama(entry) for entry in messages],
         }
         if tools:

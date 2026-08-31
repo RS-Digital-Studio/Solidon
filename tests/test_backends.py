@@ -343,6 +343,34 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     assert OLLAMA_CONTEXT_TOKENS >= 25361, "so viel brauchen die Werkzeuge allein"
 
 
+def test_the_local_model_stays_loaded_between_two_questions() -> None:
+    """Ohne ``keep_alive`` entlädt Ollama nach fünf Minuten.
+
+    Für einen Chat neben einer Konstruktion ist das zu kurz: Wer eine Frage
+    stellt, sich das Ergebnis ansieht, eine Bohrung setzt und dann weiterfragt,
+    ist leicht darüber — und zahlt den vollen Kaltstart ein zweites Mal.
+    Gemessen am 31.08.2026 an derselben Anfrage: **219 Sekunden kalt gegen
+    6 Sekunden warm** (auf einer Maschine, deren Ollama auf der CPU rechnete;
+    auf einer Karte ist der Abstand kleiner und bleibt spürbar).
+
+    Geprüft wird, **dass** das Feld mitgeht, nicht welche Zahl darin steht: Die
+    Dauer ist eine Abwägung gegen den Speicher, den dieselbe Maschine zum
+    Rendern und Slicen braucht, und sie darf sich ändern. Was sich nicht
+    ändern darf, ist das stillschweigende Zurückfallen auf Ollamas fünf
+    Minuten.
+    """
+    from app.core.backends.llm import OLLAMA_KEEP_ALIVE
+
+    transport = Recorder(ollama_answer())
+    OllamaBackend(transport=transport).complete([Message(role="user", content="Halter")])
+
+    _url, _headers, payload = transport.calls[0]
+    assert payload["keep_alive"] == OLLAMA_KEEP_ALIVE, (
+        "ohne keep_alive im Payload gilt Ollamas Vorgabe von fünf Minuten"
+    )
+    assert OLLAMA_KEEP_ALIVE, "eine leere Angabe ist dasselbe wie keine"
+
+
 def test_a_local_server_that_is_not_running_is_not_available() -> None:
     """Mit einem Socket gefragt, ein geschlossener Port kostet also
     Millisekunden, keine Sekunden.
