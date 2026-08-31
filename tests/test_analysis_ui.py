@@ -356,6 +356,117 @@ def test_clicking_a_warning_switches_the_map_and_moves_the_camera(window: MainWi
     assert analysis is not None and analysis.kind == "fits"
 
 
+def test_a_report_click_keeps_its_mark_across_the_async_map(
+    window: MainWindow,
+) -> None:
+    """Bericht, Kartenarbeiter, Renderer und Zeitgeber halten dieselbe Zusage.
+
+    Der kleine Viewport-Test kann nur sagen, was ``show_scene`` mit einer
+    Attrappe aufruft. Der Kundenfehler lag eine Ebene höher: Ein echter Klick
+    zeichnete Ring und Text, die fertige Analysekarte baute danach die Szene
+    neu und nahm beide wieder weg. Dieser Test fährt deshalb die ganze Kette
+    von der sichtbaren Berichtszeile bis zu ``set_analysis_map`` und lässt den
+    echten ``QTimer`` in der Qt-Ereignisschleife ablaufen.
+
+    Headless bekommt einen echten PyVista-Renderer statt einer Methodenattrappe;
+    auf einer Bildschirmplattform bleibt der wirkliche ``QtInteractor`` des
+    Fensters im Einsatz. Damit prüft auch der normale Lauf native VTK-Aktoren,
+    und der Windows-Beleg zusätzlich ihren Produktweg.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.viewport import FINDING_MARK_MS
+
+    viewport = window.viewport
+    owned_plotter: Any | None = None
+    if viewport.plotter is None:
+        pyvista = pytest.importorskip("pyvista")
+        owned_plotter = pyvista.Plotter(off_screen=True)
+        viewport.plotter = owned_plotter
+        viewport.show_scene(window.session.last_result)
+
+    before_rebuild: list[tuple[object | None, tuple[Any, ...]]] = []
+    after_rebuild: list[tuple[object | None, tuple[Any, ...], frozenset[str]]] = []
+    original_set_map = viewport.set_analysis_map
+
+    def actor_names() -> frozenset[str]:
+        plotter = viewport.plotter
+        assert plotter is not None
+        renderer = plotter.renderer
+        return frozenset(str(name) for name in renderer.actors)
+
+    def has_actor(names: frozenset[str], wanted: str) -> bool:
+        # ``add_point_labels`` hängt im nativen PyVista-Renderer die Rolle an
+        # den vergebenen Namen (``finding_label-labels``). Der Ring bleibt
+        # dagegen als ``finding_ring`` unverändert.
+        return any(name == wanted or name.startswith(f"{wanted}-") for name in names)
+
+    def observe_map(analysis: Any, object_id: Any) -> None:
+        before_rebuild.append((viewport._finding_mark, tuple(viewport._finding_actors)))
+        original_set_map(analysis, object_id)
+        after_rebuild.append(
+            (viewport._finding_mark, tuple(viewport._finding_actors), actor_names())
+        )
+
+    viewport.set_analysis_map = observe_map  # type: ignore[method-assign]
+    try:
+        select_plate(window)
+        finding = Finding(
+            code="fit.violated",
+            severity="warning",
+            message="Diese Passung ist zu eng.",
+            object_id="obj_1",
+            feature_ids=("hole_1",),
+        )
+        window.report.add_findings([finding])
+        window.resize(1040, 760)
+        window.show()
+        QApplication.processEvents()
+
+        item = next(
+            window.report.list.item(row)
+            for row in range(window.report.list.count())
+            if window.report.list.item(row).data(Qt.ItemDataRole.UserRole) is finding
+        )
+        window.report.list.scrollToItem(item)
+        QApplication.processEvents()
+        QTest.mouseClick(
+            window.report.list.viewport(),
+            Qt.MouseButton.LeftButton,
+            pos=window.report.list.visualItemRect(item).center(),
+        )
+        wait_for_map(window)
+
+        assert before_rebuild and before_rebuild[-1][0] is not None, (
+            "die Marke muss schon stehen, wenn die fertige Karte die Szene neu baut"
+        )
+        assert len(before_rebuild[-1][1]) == 2, "Ring und Text standen vor dem Kartenaufbau"
+        assert after_rebuild and after_rebuild[-1][0] == before_rebuild[-1][0]
+        assert len(after_rebuild[-1][1]) == 2, "der Kartenaufbau zeichnet beide Aktoren neu"
+        assert after_rebuild[-1][1] != before_rebuild[-1][1], (
+            "alte Python-Referenzen dürfen keinen erhaltenen Renderer vortäuschen"
+        )
+        assert has_actor(after_rebuild[-1][2], "finding_ring"), sorted(after_rebuild[-1][2])
+        assert has_actor(after_rebuild[-1][2], "finding_label"), sorted(after_rebuild[-1][2])
+        assert viewport.analysis_map is not None and viewport.analysis_map.kind == "fits"
+
+        QTest.qWait(FINDING_MARK_MS + 100)
+        QApplication.processEvents()
+        assert viewport._finding_mark is None, "der semantische Zustand läuft mit der Frist ab"
+        assert viewport._finding_actors == [], "nach der Frist bleibt kein nativer Aktor"
+        expired_names = actor_names()
+        assert not has_actor(expired_names, "finding_ring")
+        assert not has_actor(expired_names, "finding_label")
+    finally:
+        viewport.set_analysis_map = original_set_map  # type: ignore[method-assign]
+        viewport._finding_timer.stop()
+        viewport._hide_finding_mark(render=False)
+        if owned_plotter is not None:
+            owned_plotter.close()
+            viewport.plotter = None
+
+
 def test_a_warning_without_a_map_still_finds_its_place(window: MainWindow) -> None:
     select_plate(window)
     finding = Finding(
