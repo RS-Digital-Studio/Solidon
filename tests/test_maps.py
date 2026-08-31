@@ -412,6 +412,17 @@ def test_a_map_runs_through_while_nobody_cancels(profile: Profile) -> None:
 
 def test_a_finding_picks_its_map() -> None:
     assert maps.map_for(Finding(code="fit.violated", severity="warning", message="x")) == "fits"
+    assert maps.map_for(Finding(code="perceive.orphaned", severity="info", message="x")) is None, (
+        "ein verlorenes Merkmal hat im aktuellen Körper keine Fläche mehr, "
+        "die eine Karte zeigen kann"
+    )
+    assert maps.map_for(Finding(code="perceive.mended", severity="info", message="x")) is None, (
+        "eine geschlossene Fehlstelle ist ebenfalls keine Fläche des aktuellen Körpers mehr"
+    )
+    assert (
+        maps.map_for(Finding(code="perceive.generated_lost", severity="warning", message="x"))
+        is None
+    ), "auch ein verlorenes erzeugtes Merkmal hat im aktuellen Körper keine Fläche mehr"
     assert maps.map_for(Finding(code="repair.still_open", severity="warning", message="x")) == (
         "defects"
     )

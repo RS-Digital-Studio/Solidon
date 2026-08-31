@@ -34,6 +34,13 @@ Ein Merkmal, das nach jeder Operation einen neuen Namen bekäme, wäre wertlos
 was es trotzdem verliert, fängt `scene/orphans.py` auf und **fragt**, statt
 zu raten.
 
+Ein verlorenes erkanntes oder erzeugtes Merkmal und eine bereits geschlossene
+Fehlstelle haben im aktuellen Körper keine Fläche mehr, die eine
+Merkmalskarte ehrlich färben könnte. `perceive.orphaned`,
+`perceive.generated_lost` und `perceive.mended` führen deshalb nur zum
+betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
+`perceive.*`-Befunde behalten ihre Merkmalskarte.
+
 ## Grenzen
 
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.

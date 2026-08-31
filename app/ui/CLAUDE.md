@@ -126,6 +126,15 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
   Transaktion repariert wurden, und sperrt sich beim ersten Klick bis zum neuen
   Ergebnis. Berichtshandlungen stehen vollbreit untereinander, damit auch
   längere Übersetzungen in der schmalen Karte vollständig bleiben.
+- **Gebündelte Befunde behalten nur gemeinsame Klickziele.** Gleiche Kennung,
+  Schwere, Meldung, Herkunft, Körper, Schritt und Handlungen bilden eine
+  gezählte Zeile; andere Handlungen trennen das Bündel. Ort, Merkmalsziele und
+  Werte trennen allgemeine Befunde ebenfalls. Nur verlorene
+  Formdetails werden trotz verschiedener alter Kennungen ab zwei Einträgen
+  gebündelt; ihre internen Kennungen stehen ausschließlich in Tooltip und
+  zugänglicher Beschreibung. Körper und Schritt stehen sichtbar an der Zeile.
+  Der Klick zeigt beide, aber keine Merkmalskarte einer Stelle, die nicht mehr
+  existiert. Der Kerntext bleibt kanalneutral; nur das Panel nennt den Klick.
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen** (Regel 19), mit
   der ausdrücklich gewünschten Ausnahme für das Löschen im Verlauf: Sie
   nennt mitbetroffene Schritte und den Rückweg über Strg+Z.

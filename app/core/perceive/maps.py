@@ -906,6 +906,13 @@ def map_for(finding: Finding) -> MapKind | None:
     code = finding.code
     if code.startswith("fit."):
         return "fits"
+    # Das Formdetail oder die geschlossene Fehlstelle ist gerade **nicht mehr
+    # da**. Eine Merkmalskarte des aktuellen Körpers kann deshalb nur andere,
+    # weiterhin erkannte Stellen färben und würde so einen Ort vortäuschen,
+    # den der Befund nicht nennt. Körper und erzeugender Schritt bleiben
+    # ehrliche Ziele des Klicks.
+    if code in {"perceive.generated_lost", "perceive.mended", "perceive.orphaned"}:
+        return None
     if code.startswith("perceive."):
         return "features"
     if code.startswith(("repair.", "ingest.", "mesh.")):

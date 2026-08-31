@@ -106,6 +106,7 @@
 - [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — bei einer neuen Variante den alten Namen durch conftest und Wächter grepen.
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Befunde waren welche.
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — fast keinen Fehler fand sein Urheber; der eigene Blick folgt der eigenen Absicht.
+- [Ein Bündel erbt nicht das erste Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — gezählte Zeilen bleiben Bedienhandlungen; Ziele und Auswege müssen für jedes Mitglied stimmen.
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 

@@ -22,8 +22,8 @@ from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
-from app.core.types import Finding
-from app.i18n import format_decimal, tr
+from app.core.types import Action, Finding
+from app.i18n import TranslatableText, format_decimal, tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
 from app.ui.labels import feature_label, length
 from app.ui.main_window import MainWindow
@@ -1140,34 +1140,77 @@ def test_a_finding_without_values_stays_as_it_is() -> None:
     assert _line_for(finding) == "Doppelte Punkte verschweißt."
 
 
-def test_an_orphaned_feature_is_named_in_its_line() -> None:
-    """„Ein Merkmal hat keinen Nachfolger mehr" — welches?
+def test_an_orphaned_feature_keeps_its_internal_name_in_details_only(
+    qt_app: QApplication,
+) -> None:
+    """Einsteiger lesen Wirkung und Ausweg, die Diagnose behält die Kennung.
 
-    Nach dem Einsetzen eines Bausteins standen sechs wortgleiche Zeilen im
-    Bericht, jede mit demselben Objektnamen dahinter, und nichts daran war
-    unterscheidbar. Die Kennung stand längst in ``values`` — nur nie in der
-    Zeile. Gefunden am 25.08.2026 bei der Verifikation im echten Fenster.
+    „Merkmal face_3 hat keinen Nachfolger" beschreibt die interne Zuordnung
+    statt der Folge für den Nutzer. Die Kennung bleibt im Tooltip und in der
+    zugänglichen Beschreibung erreichbar; die sichtbare Zeile nennt Körper,
+    Wirkung, nächsten Klick und dass die Bearbeitung erhalten ist.
     """
-    from app.ui.panels import _line_for
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
 
-    def orphaned(feature: str) -> Finding:
-        return Finding(
-            code="perceive.orphaned",
-            severity="info",
-            message="Ein Merkmal hat keinen Nachfolger mehr.",
-            object_id="obj_1",
-            values={"feature": feature},
-        )
-
-    first = _line_for(orphaned("face_3"), {"obj_1": "Halter"})
-    second = _line_for(orphaned("face_7"), {"obj_1": "Halter"})
-
-    assert "face_3" in first and "face_7" in second, "jede Zeile nennt ihr Merkmal"
-    assert "Merkmal face_3" in first, (
-        "die Kennung trägt ihr Wort davor — nackt läse sie sich wie ein zweiter Name"
+    finding = Finding(
+        code="perceive.orphaned",
+        severity="info",
+        message="Ein Formdetail ist nach diesem Schritt nicht mehr automatisch wiederzuerkennen.",
+        object_id="obj_1",
+        values={"feature": "face_3"},
     )
-    assert first != second, "sechs Verwaisungen sind sechs Aussagen, keine sechs Kopien"
-    assert "Halter" in first, "und der Körper steht weiter dabei"
+    panel = ReportPanel()
+    try:
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(report=Report(findings=(finding,))),
+                object_names={"obj_1": "Halter"},
+            )
+        )
+        item = panel.list.item(0)
+        assert "Formdetail" in item.text() and "Halter" in item.text()
+        assert "Anklicken zeigt den Körper und den Schritt" in item.text()
+        assert "Bearbeitung bleibt erhalten" in item.text()
+        assert "Merkmal" not in item.text() and "Nachfolger" not in item.text()
+        assert "face_3" not in item.text(), "interne Kennungen sind keine Kundensprache"
+        assert "face_3" in item.toolTip()
+        assert "face_3" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+    finally:
+        panel.deleteLater()
+
+
+def test_a_mended_defect_keeps_its_internal_name_in_details_only(
+    qt_app: QApplication,
+) -> None:
+    """Eine geschlossene Fehlstelle ist Wirkung, nicht `edge_loop_7`."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    finding = Finding(
+        code="perceive.mended",
+        severity="info",
+        message="Eine offene Stelle ist geschlossen und damit fort.",
+        object_id="obj_1",
+        values={"feature": "edge_loop_7"},
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(report=Report(findings=(finding,))),
+                object_names={"obj_1": "Halter"},
+            )
+        )
+        item = panel.list.item(0)
+        assert "Halter" in item.text()
+        assert "Merkmal" not in item.text() and "edge_loop_7" not in item.text()
+        assert "edge_loop_7" in item.toolTip()
+        assert "edge_loop_7" in str(item.data(Qt.ItemDataRole.AccessibleDescriptionRole))
+    finally:
+        panel.deleteLater()
 
 
 def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
@@ -3079,16 +3122,20 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
     """118 wortgleiche Zeilen begraben die fünf, die etwas Eigenes sagen.
 
     Nach dem Löschen früher Verlaufsschritte meldete ``perceive.orphaned``
-    jedes verlorene Merkmal einzeln — 118 × „Ein Merkmal hat keinen
-    Nachfolger mehr", und die zwei Warnungen dazwischen fand niemand.
-    Gebündelt wird in der Anzeige, nicht im Kern: Agent, Kommandozeile und
-    Steckbrief lesen weiter jeden Befund einzeln.
+    jedes verlorene Formdetail einzeln — 118 wortgleiche Zeilen — und die zwei
+    Warnungen dazwischen fand niemand. Gebündelt wird in der Anzeige, nicht im
+    Kern: Agent, Kommandozeile und Steckbrief lesen weiter jeden Befund
+    einzeln.
     """
     from app.core.scene import EvaluationResult
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
 
-    orphan_text = "Ein Merkmal hat keinen Nachfolger mehr"
+    orphan_text = (
+        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+        "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+        "Bearbeitung bleibt erhalten."
+    )
     findings = (
         *(
             Finding(
@@ -3116,13 +3163,22 @@ def test_a_flood_of_identical_findings_becomes_one_line_that_counts_them(
     )
     panel = ReportPanel()
     try:
-        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(report=Report(findings=findings)),
+                object_names={"obj_1": "Griff"},
+            )
+        )
 
         texts = [panel.list.item(row).text() for row in range(panel.list.count())]
         assert len(texts) == 6, f"eine Sammelzeile statt 118, der Rest bleibt: {texts!r}"
 
-        bundle = [text for text in texts if orphan_text in text]
-        assert bundle == [f"118 × {orphan_text}"], "die Zahl steht im Text der Zeile (Regel 18)"
+        bundle = [text for text in texts if "118 Formdetails" in text]
+        assert bundle == [
+            "118 Formdetails sind nach diesem Schritt nicht mehr automatisch "
+            "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+            "Bearbeitung bleibt erhalten. — Griff"
+        ], "Zahl, nächster Klick und verständlicher Körpername stehen sichtbar an der Zeile"
 
         row = texts.index(bundle[0])
         tooltip = panel.list.item(row).toolTip()
@@ -3157,7 +3213,11 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
     from app.core.types import Report, Scene
     from app.ui.panels import ReportPanel
 
-    orphan_text = "Ein Merkmal hat keinen Nachfolger mehr"
+    orphan_text = (
+        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+        "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+        "Bearbeitung bleibt erhalten."
+    )
     orphans = tuple(
         Finding(
             code="perceive.orphaned",
@@ -3184,26 +3244,221 @@ def test_a_bundle_survives_findings_that_arrive_later(qt_app: QApplication) -> N
         )
         texts = [panel.list.item(row).text() for row in range(panel.list.count())]
         assert len(texts) == 2, f"die Sammelzeile übersteht den Nachschub: {texts!r}"
-        assert f"118 × {orphan_text}" in texts
+        assert any(text.startswith("118 Formdetails") for text in texts)
         assert f"119 × {tr('Hinweis')}" in panel.summary.text(), panel.summary.text()
 
-        # Und der Nachschub-Weg bündelt selbst: vier wortgleiche Warnungen
-        # aus einer Prüfung sind eine Zeile, keine vier.
+        # Der Nachschub-Weg dedupliziert identische Kernbefunde. Vier
+        # wortgleiche Warnungen ohne weitere Unterscheidungsmerkmale sind
+        # deshalb genau eine Zeile und zählen auch nur einmal.
         panel.add_findings(
             [
                 Finding(
                     code="check.collision",
                     severity="warning",
                     message="Zwei Objekte berühren sich",
-                    values={"feature": f"pair_{n}"},
                 )
-                for n in range(4)
+                for _ in range(4)
             ]
         )
         texts = [panel.list.item(row).text() for row in range(panel.list.count())]
-        assert "4 × Zwei Objekte berühren sich" in texts, texts
+        assert texts.count("Zwei Objekte berühren sich") == 1, texts
         assert len(texts) == 3, texts
-        assert f"4 × {tr('Warnung')}" in panel.summary.text(), panel.summary.text()
+        assert f"1 × {tr('Warnung')}" in panel.summary.text(), panel.summary.text()
+    finally:
+        panel.deleteLater()
+
+
+def test_a_bundle_never_crosses_the_body_or_step_its_click_will_show(
+    qt_app: QApplication,
+) -> None:
+    """Eine kurze Zeile darf nicht auf einen zufälligen Körper zeigen.
+
+    Die erste Bündelung gruppierte nur nach Kennung, Schwere und Wortlaut. Acht
+    Waisen aus zwei Körpern und zwei Schritten wurden eine Zeile; deren
+    künstlicher Befund verlor den Körper, behielt aber den ersten Schritt. Ein
+    Klick wählte deshalb den gerade markierten, womöglich falschen Körper und
+    sprang im Verlauf zum ersten zufälligen Schritt.
+
+    Der echte Einzelklick auf jede sichtbare Sammelzeile muss genau die
+    Navigationsdaten ausgeben, die für alle ihre Mitglieder gelten.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    findings = tuple(
+        Finding(
+            code="perceive.orphaned",
+            severity="info",
+            message=(
+                "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+                "Bearbeitung bleibt erhalten."
+            ),
+            object_id=object_id,
+            op_id=op_id,
+            feature_ids=(f"face_{index}",),
+            values={"feature": f"face_{index}"},
+            location=(float(index), 0.0, 0.0),
+        )
+        for object_id, op_id in (("obj_1", 7), ("obj_2", 11))
+        for index in range(4)
+    )
+    panel = ReportPanel()
+    activated: list[Finding] = []
+    panel.findingActivated.connect(activated.append)
+    try:
+        panel.resize(420, 520)
+        panel.show_result(
+            EvaluationResult(
+                scene=Scene(report=Report(findings=findings)),
+                object_names={"obj_1": "Griff", "obj_2": "Deckel"},
+            )
+        )
+        panel.show()
+        qt_app.processEvents()
+
+        assert panel.list.count() == 2, "je Körper und Schritt steht eine ehrliche Sammelzeile"
+        texts = [panel.list.item(row).text() for row in range(panel.list.count())]
+        assert texts[0] != texts[1], "gleich große Bündel müssen sichtbar unterscheidbar bleiben"
+        assert "Griff" in texts[0] and f"{tr('Schritt')} 7" in texts[0]
+        assert "Deckel" in texts[1] and f"{tr('Schritt')} 11" in texts[1]
+        for row, expected in enumerate((("obj_1", 7), ("obj_2", 11))):
+            item = panel.list.item(row)
+            bundled: Finding = item.data(Qt.ItemDataRole.UserRole)
+            assert (bundled.object_id, bundled.op_id) == expected
+            assert bundled.feature_ids == (), "verschiedene verlorene Details sind kein Einzelziel"
+            assert bundled.location is None, (
+                "der erste von vier Orten wäre ein erfundener Sammelort"
+            )
+            QTest.mouseClick(
+                panel.list.viewport(),
+                Qt.MouseButton.LeftButton,
+                pos=panel.list.visualItemRect(item).center(),
+            )
+            assert (activated[-1].object_id, activated[-1].op_id) == expected
+    finally:
+        panel.deleteLater()
+
+
+def test_a_bundle_never_discards_different_actions(qt_app: QApplication) -> None:
+    """Wortgleiche Fehler mit verschiedenen Auswegen bleiben getrennt.
+
+    Der erste Gruppenschlüssel kannte die Vorschläge nicht. Acht Fehler wurden
+    eine Zeile und der künstliche Befund bekam gar keine Handlung, sobald sich
+    nur ein Vorschlag unterschied. Damit verlor eine verdichtete Fehlerzeile
+    genau den Ausweg, den Regel 17 verlangt.
+    """
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    first = Action(id="first_way", label="Ersten Ausweg verwenden")
+    second = Action(id="second_way", label="Zweiten Ausweg verwenden")
+    findings = tuple(
+        Finding(
+            code="probe.actionable",
+            severity="error",
+            message="Dieser Wert braucht eine Korrektur.",
+            object_id="obj_1",
+            op_id=4,
+            suggestions=(action,),
+        )
+        for action in (first, second)
+        for _ in range(4)
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+
+        assert panel.list.count() == 2, "jeder andere Ausweg bildet ein eigenes Bündel"
+        kept = {
+            panel.list.item(row).data(Qt.ItemDataRole.UserRole).suggestions
+            for row in range(panel.list.count())
+        }
+        assert kept == {(first,), (second,)}, "keine Fehlerzeile verliert ihre Handlung"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_generic_bundle_never_discards_different_places(qt_app: QApplication) -> None:
+    """Ortsgebundene Warnungen bleiben je Ort und Merkmal anklickbar."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    findings = tuple(
+        Finding(
+            code="probe.located",
+            severity="warning",
+            message="Diese Stelle braucht Aufmerksamkeit.",
+            object_id="obj_1",
+            op_id=4,
+            feature_ids=(f"face_{index}",),
+            location=(float(index), 0.0, 0.0),
+        )
+        for index in range(4)
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+
+        assert panel.list.count() == 4, "vier echte Stellen dürfen nicht zu keinem Ort werden"
+        for row, expected in enumerate(findings):
+            shown: Finding = panel.list.item(row).data(Qt.ItemDataRole.UserRole)
+            assert shown.location == expected.location
+            assert shown.feature_ids == expected.feature_ids
+    finally:
+        panel.deleteLater()
+
+
+def test_a_generic_bundle_never_discards_different_values(qt_app: QApplication) -> None:
+    """Messwerte trennen Gruppen; ein gemeinsamer Wert bleibt im Detail."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Report, Scene
+    from app.ui.panels import ReportPanel
+
+    def shown(values: tuple[float | str | TranslatableText, ...]) -> list[Finding]:
+        findings = tuple(
+            Finding(
+                code="probe.measured",
+                severity="warning",
+                message="Diese Stelle ist zu dünn.",
+                object_id="obj_1",
+                op_id=4,
+                values={"wall_mm": value},
+            )
+            for value in values
+        )
+        panel.show_result(EvaluationResult(scene=Scene(report=Report(findings=findings))))
+        return [
+            panel.list.item(row).data(Qt.ItemDataRole.UserRole) for row in range(panel.list.count())
+        ]
+
+    panel = ReportPanel()
+    try:
+        separate = shown((0.4, 0.5, 0.6, 0.7))
+        assert len(separate) == 4, "vier verschiedene Messungen sind vier Aussagen"
+        assert [entry.values["wall_mm"] for entry in separate] == [0.4, 0.5, 0.6, 0.7]
+
+        typed = shown(
+            (
+                1.0,
+                "1.0",
+                TranslatableText("Gleicher sichtbarer Text", "erster Kontext"),
+                TranslatableText("Gleicher sichtbarer Text", "zweiter Kontext"),
+            )
+        )
+        assert len(typed) == 4, (
+            "Typ und Übersetzungskontext gehören zur Rohidentität; "
+            "die aktuelle Anzeige darf keine Werte verschlucken"
+        )
+
+        bundled = shown((0.6, 0.6, 0.6, 0.6))
+        assert len(bundled) == 1, "wirklich identische Messungen dürfen eine Zeile werden"
+        assert bundled[0].values["wall_mm"] == 0.6, "der gemeinsame Messwert bleibt im Detail"
     finally:
         panel.deleteLater()
 
@@ -3232,6 +3487,23 @@ def test_identical_findings_below_the_threshold_keep_their_own_lines(
             for _ in range(count)
         )
 
+    def orphans(count: int) -> tuple[Finding, ...]:
+        return tuple(
+            Finding(
+                code="perceive.orphaned",
+                severity="info",
+                message=(
+                    "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                    "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+                    "Bearbeitung bleibt erhalten."
+                ),
+                object_id="obj_1",
+                op_id=7,
+                values={"feature": f"face_{index}"},
+            )
+            for index in range(count)
+        )
+
     panel = ReportPanel()
     try:
         assert len(shown(echo(3))) == 3, "unter der Schwelle bleibt jede Zeile stehen"
@@ -3239,6 +3511,9 @@ def test_identical_findings_below_the_threshold_keep_their_own_lines(
         assert len(shown(echo(4) + echo(1, "warning"))) == 2, (
             "gleicher Wortlaut, anderer Schweregrad — zwei Zeilen"
         )
+        assert shown(orphans(1))[0].startswith("Ein Formdetail ist")
+        assert shown(orphans(2))[0].startswith("2 Formdetails sind")
+        assert shown(orphans(4))[0].startswith("4 Formdetails sind")
     finally:
         panel.deleteLater()
 

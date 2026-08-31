@@ -1250,7 +1250,10 @@ def _with_features(
                 message=(
                     _("Eine offene Stelle ist geschlossen und damit fort.")
                     if defect
-                    else _("Ein Merkmal hat keinen Nachfolger mehr.")
+                    else _(
+                        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                        "wiederzuerkennen."
+                    )
                 ),
                 object_id=entry.id,
                 op_id=operation.id,

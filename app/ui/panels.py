@@ -65,7 +65,7 @@ from app.core.scene import EvaluationResult
 from app.core.scene.history import repair_is_available
 from app.core.types import Document, Feature, Finding, ObjectId, OpId
 from app.core.units import LengthUnit
-from app.i18n import sort_key, tr
+from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
 from app.ui.icons import icon, icon_name_for
 from app.ui.labels import (
@@ -189,15 +189,41 @@ _BUNDLE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
     """Wortgleiche Befunde ab :data:`BUNDLE_FROM` zu einer Zeile je Wortlaut.
 
-    Gruppiert wird über Kennung, Grad und Wortlaut — nicht über die Werte,
-    denn genau die (das jeweilige Merkmal) machen die 118 Zeilen verschieden.
-    Die Reihenfolge der Erstvorkommen bleibt erhalten; kleine Gruppen kommen
-    als Einzelzeilen zurück (leere Mitgliederliste).
+    Gruppiert wird über Kennung, Grad, Wortlaut, Herkunft, Körper, Schritt und
+    angebotene Handlungen — nicht pauschal über die Werte, denn genau die (das
+    jeweilige Merkmal) machen die 118 Zeilen verschieden. Bei allen anderen
+    Befunden trennen zusätzlich Ort, Merkmalsziele und Werte die Gruppen; nur
+    verlorene Formdetails sind nachweislich ortlose Mengenbefunde. Körper, Schritt und
+    Auswege gehören zum Klickvertrag: Eine kurze Zeile darf nie auf das erste
+    zufällige Mitglied oder die aktuelle Auswahl zeigen und nie ihre Handlung
+    verlieren. Die Reihenfolge der Erstvorkommen bleibt erhalten; kleine
+    Gruppen kommen als Einzelzeilen zurück (leere Mitgliederliste).
     """
-    groups: dict[tuple[str, str, str], list[Finding]] = {}
-    order: list[tuple[str, str, str]] = []
+    groups: dict[tuple[Any, ...], list[Finding]] = {}
+    order: list[tuple[Any, ...]] = []
     for finding in findings:
-        key = (finding.code, finding.severity, str(finding.message))
+        key = (
+            finding.code,
+            finding.severity,
+            str(finding.message),
+            finding.source,
+            finding.object_id,
+            finding.op_id,
+            tuple((action.id, str(action.label), action.primary) for action in finding.suggestions),
+            # Nur verlorene Formdetails sind nachweislich ortlose
+            # Mengenbefunde. Jede andere Warnung behält Ort und Merkmale im
+            # Schlüssel; sonst würde aus vier anklickbaren Stellen eine Zeile
+            # ohne jedes räumliche Ziel.
+            None if finding.code == "perceive.orphaned" else finding.location,
+            () if finding.code == "perceive.orphaned" else finding.feature_ids,
+            (
+                ()
+                if finding.code == "perceive.orphaned"
+                else tuple(
+                    (name, type(value), value) for name, value in sorted(finding.values.items())
+                )
+            ),
+        )
         if key not in groups:
             groups[key] = []
             order.append(key)
@@ -205,7 +231,12 @@ def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
     result: list[tuple[Finding, list[Finding]]] = []
     for wording in order:
         members = groups[wording]
-        if len(members) >= BUNDLE_FROM:
+        # Zwei verlorene Formdetails sind schon zwei wortgleiche technische
+        # Zeilen ohne zusätzliche Kundenaussage. Andere Befunde bleiben bis
+        # drei einzeln: dort unterscheiden Körper oder Wert den Fall häufig
+        # noch sinnvoll.
+        threshold = 2 if members[0].code == "perceive.orphaned" else BUNDLE_FROM
+        if len(members) >= threshold:
             result.append((members[0], members))
         else:
             result.extend((one, []) for one in members)
@@ -618,9 +649,10 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
             # gegen ein Komma — „sources/1_cube_clean,stl".
             #
             # Die Merkmalskennung bekommt ihr Wort davor: Neben dem aufgelösten
-            # Objektnamen läse sich ein nacktes „face_3" wie ein zweiter Name —
-            # und der eigene Maßstab des Fensters sagt, dass eine Kennung allein
-            # niemandem sagt, welche Fläche gemeint ist.
+            # Objektnamen läse sich ein nacktes „face_3" wie ein zweiter Name.
+            # Bei einem verlorenen Formdetail bleibt sie ganz im Tooltip: Dort
+            # hilft sie der Diagnose, in der Kundenaussage wäre sie internes
+            # CAD-Vokabular ohne Handlung.
             (
                 f"{tr('Merkmal')} {finding.values[key]}"
                 if key == "feature"
@@ -636,6 +668,7 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
             )
             for key in _LINE_VALUES
             if key in finding.values
+            and not (finding.code in {"perceive.mended", "perceive.orphaned"} and key == "feature")
         ]
     )
     if finding.object_id and "object" not in finding.values:
@@ -3115,17 +3148,89 @@ class ReportPanel(QWidget):
             if len(members) > 15:
                 names += f" … (+{len(members) - 15})"
             # Die Zeile trägt Zahl und Satz — die Liste der Betroffenen wäre
-            # dort die nächste Flut und gehört in den Tooltip. ``feature``
-            # steht in ``_LINE_VALUES``, deshalb bekommt die Zeile den Satz
-            # direkt und nicht ``_line_for`` über die Bündel-Werte.
-            item = QListWidgetItem(f"{len(members)} × {finding.message}")
+            # dort die nächste Flut und gehört in den Tooltip. Waisen bekommen
+            # einen eigenen Satz ohne CAD-Begriffe: „Merkmal" und
+            # „Nachfolger" erklären einem Einsteiger weder den Zustand noch,
+            # dass seine Bearbeitung erhalten blieb.
+            message = (
+                tr(
+                    "{count} Formdetails sind nach diesem Schritt nicht mehr automatisch "
+                    "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; die "
+                    "Bearbeitung bleibt erhalten."
+                ).format(count=len(members))
+                if finding.code == "perceive.orphaned"
+                else f"{len(members)} × {finding.message}"
+            )
+            # Gleiche Zahl und gleicher Satz genügen nicht: Zwei Körper oder
+            # Schritte wären in der Liste optisch dieselbe Handlung, obwohl
+            # ihre Klicks an verschiedene Ziele führen. Der Name stammt aus
+            # derselben Auswertung wie der Objektbaum; „Schritt" ist die
+            # Sprache des sichtbaren Verlaufs und keine interne Op-Kennung.
+            context: list[str] = []
+            if finding.object_id is not None:
+                identifier = str(finding.object_id)
+                context.append(self._names.get(identifier, identifier))
+            if finding.op_id is not None:
+                step = f"{tr('Schritt')} {finding.op_id}"
+                if self._document is not None:
+                    transaction = next(
+                        (
+                            entry
+                            for entry in self._document.transactions
+                            if finding.op_id in entry.ops
+                        ),
+                        None,
+                    )
+                    if transaction is not None:
+                        step = f"{step} · {transaction.title}"
+                context.append(step)
+            if context:
+                message = f"{message} — {' · '.join(context)}"
+            item = QListWidgetItem(message)
             item.setData(_BUNDLE_ROLE, len(members))
+
+            # Nur Navigation mitnehmen, die für **jedes** Mitglied gilt.
+            # ``_bundled`` hält Körper, Schritt und Herkunft bereits im
+            # Gruppenschlüssel. Orte und Merkmale können sich gerade deshalb
+            # unterscheiden, weil hier viele Einzelbefunde zusammenkommen;
+            # der erste davon wäre keine Zusammenfassung, sondern eine
+            # zufällige Behauptung.
+            location = members[0].location
+            if any(one.location != location for one in members[1:]):
+                location = None
+            feature_ids = members[0].feature_ids
+            if any(one.feature_ids != feature_ids for one in members[1:]):
+                feature_ids = ()
+            values: Mapping[str, float | str | TranslatableText] = (
+                {"count": len(members), "feature": names}
+                if finding.code == "perceive.orphaned"
+                else members[0].values
+            )
             finding = dataclasses.replace(
                 finding,
-                object_id=None,
-                values={"count": len(members), "feature": names},
+                message=message,
+                feature_ids=feature_ids,
+                # Allgemeine Gruppen tragen nur identische Werte und behalten
+                # diese vollständig. Nur Waisen ersetzen ihre verschiedenen
+                # alten Kennungen durch die gezählte Diagnoseliste.
+                values=values,
+                location=location,
+                # Verschiedene Vorschläge trennen schon den Gruppenschlüssel:
+                # Eine verdichtete Fehlerzeile darf nie ihren Ausweg verlieren.
+                suggestions=members[0].suggestions,
             )
         else:
+            if finding.code == "perceive.orphaned":
+                # Der Kernbefund bleibt für Agent, CLI und Datei kanalneutral.
+                # Erst die sichtbare Zeile darf den konkreten UI-Klick nennen.
+                finding = dataclasses.replace(
+                    finding,
+                    message=tr(
+                        "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch "
+                        "wiederzuerkennen. Anklicken zeigt den Körper und den Schritt; "
+                        "die Bearbeitung bleibt erhalten."
+                    ),
+                )
             item = QListWidgetItem(_line_for(finding, self._names))
         # Die Farbe folgt der Fläche, auf der sie landet. Die Rollenfarben sind
         # für den dunklen Untergrund gewählt; auf der weißen Liste des hellen
@@ -3159,7 +3264,12 @@ class ReportPanel(QWidget):
         if step:
             details.append(step)
         details.extend(value_line(key, value) for key, value in finding.values.items())
-        item.setToolTip(" · ".join(details))
+        detail_text = " · ".join(details)
+        item.setToolTip(detail_text)
+        # Tastatur und Bildschirmleser bekommen dieselbe Diagnose wie die
+        # Maus. Bei verlorenen Formdetails liegt die interne Kennung bewusst
+        # nur hier und nicht in der sichtbaren Nicht-CAD-Zeile.
+        item.setData(Qt.ItemDataRole.AccessibleDescriptionRole, detail_text)
         self.list.addItem(item)
 
     def _count_up(self) -> None:

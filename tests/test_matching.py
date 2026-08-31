@@ -762,6 +762,9 @@ def test_a_generated_feature_that_is_really_gone_is_reported() -> None:
     assert reported, "a named feature that vanishes is a finding, not a silence"
     assert {entry.severity for entry in reported} == {"info"}
     assert not [entry for entry in reported if entry.code == "perceive.generated_lost"]
+    assert not any("Anklicken" in str(entry.message) for entry in reported), (
+        "Kern und Agent bekommen eine Feststellung, die UI ergänzt erst dort ihren Klickweg"
+    )
 
 
 def test_a_referenced_generated_feature_that_is_gone_is_a_warning() -> None:
@@ -771,9 +774,10 @@ def test_a_referenced_generated_feature_that_is_gone_is_a_warning() -> None:
     previous = {"op3.bore_1": _generated(bore, "op3.bore_1")}
     plugged = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
 
-    _features, findings = _carried(plugged, previous, referenced={"op3.bore_1"})
+    features, findings = _carried(plugged, previous, referenced={"op3.bore_1"})
 
     reported = [entry for entry in findings if entry.values.get("feature") == "op3.bore_1"]
+    assert "op3.bore_1" not in features, "die Karte dürfte sonst nur ein Phantom markieren"
     assert [entry.code for entry in reported] == ["perceive.generated_lost"]
     assert [entry.severity for entry in reported] == ["warning"]
 
