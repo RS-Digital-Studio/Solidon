@@ -422,6 +422,19 @@ nav.lang a.cta:hover {
   margin-top: 2rem;
 }
 
+/* **`min-width: 0` am Grid selbst genügt nicht — seine Kinder brauchen es
+   auch.** Ein Grid-Element steht auf `min-width: auto` und schrumpft damit
+   nicht unter die Breite seines Inhalts; die Spalte wächst mit, und das Grid
+   wird breiter als sein Container. Auf 375 Punkten stand die Spalte auf
+   368,6 px in einem 346 px breiten Elternteil, und alle vier Teile der
+   Drehbühne ragten acht Punkte über den Rand — sichtbar an der
+   Bildunterschrift, die rechts abgeschnitten endete. Gemessen von 72 am
+   31.08.2026; `body { overflow: clip }` verhindert dabei das Wegwischen, aber
+   es zeigt den Überlauf eben auch nicht als Rollbalken an. */
+.hero-side > * {
+  min-width: 0;
+}
+
 /* **Der Aufmacher trägt eine Handlung, nicht zwölf.** Vorher stand hier der
    ganze Download-Kasten mit Countdown, Laufzeit, Kaufmodell, fünf
    Plattform-Knöpfen, vier Installationshinweisen und den sechs Zusagen —
