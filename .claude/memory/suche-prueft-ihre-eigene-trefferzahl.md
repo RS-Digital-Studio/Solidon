@@ -1,8 +1,11 @@
 ---
 name: suche-prueft-ihre-eigene-trefferzahl
 description: "Ein Filter, der nichts trifft, und einer, der nichts findet, sehen gleich aus — und 265 Treffer sagen so wenig wie null. Die Trefferzahl ist die Kontrolle, nicht das Ergebnis."
-metadata:
+metadata: 
+  node_type: memory
   type: feedback
+  originSessionId: 5f85192a-8b20-4339-ba08-13913837d58c
+  modified: 2026-08-31T08:50:09.807Z
 ---
 
 Zwei Fälle vom 30.08.2026, dieselbe Wurzel:
@@ -38,3 +41,34 @@ ein zu weites Muster.
 Verwandt mit [[gemessene-frage-ist-nicht-die-gestellte]] (dort antwortet jede
 Suche auf ihre eigene Frage) und [[messwerkzeug-misst-sich-selbst]]. Der
 Unterschied: Dort täuscht das Werkzeug, hier täuscht seine **Ausbeute**.
+
+---
+
+**Nachtrag 31.08.2026 — die Technik, die es fängt: eine Gegenzahl im selben
+Aufruf.** Zu prüfen war, ob eine Landung („acht Schriftstufen stehen jetzt in
+`:root`") noch gilt. Mein Muster suchte `--text-*`, `--font-*`, `--fs-*` und
+fand **null**. Im selben Aufruf stand daneben, unabsichtlich:
+
+```
+Stufen in :root: 0
+font-size über var(): 79 Regeln
+```
+
+Null Stufen und neunundsiebzig Zugriffe darauf ist ein Widerspruch, den man
+nicht übersehen kann — die Stufen heißen `--t-xs` bis `--t-3xl`, und die
+Landung hält vollständig. Ohne die zweite Zahl hätte ich „die acht Stufen sind
+weg" gemeldet.
+
+Dreimal am selben Vormittag dieselbe Ursache: das Polster stand in `rem` statt
+`px` (mein Muster suchte `px`), die Kapitelanfänge waren **eine** CSS-Regel für
+**drei** Abschnitte (ich zählte Regeln, gefragt waren Abschnitte). Jedes Mal
+war das Ergebnis eine auffällige Null.
+
+**How to apply:** Eine Suche nach einer Sache, die dasein *muss*, bekommt eine
+zweite Zahl daneben, die vom selben Gegenstand abhängt aber anders gemessen
+wird. Widersprechen sie sich, ist das Muster schuld — nicht die Sache
+verschwunden. Das ist billiger als eine Gegenprobe und fängt dieselbe Klasse:
+Die Kontrolle steht dann **in** der Ausgabe, statt nachträglich erinnert werden
+zu müssen. Und wo die Zahlen aus verschiedenen Schichten kommen (CSS-Text
+gegen gerendertes DOM), fängt sie zusätzlich, dass man die falsche Schicht
+liest — [[messung-trägt-nur-am-ort-ihrer-messung]].
