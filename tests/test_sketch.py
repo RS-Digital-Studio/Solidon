@@ -1412,6 +1412,57 @@ def test_a_diameter_measures_the_whole_circle_and_a_radius_half_of_it() -> None:
     )
 
 
+def test_a_diameter_survives_the_way_into_the_project_file() -> None:
+    """Die Zusage lautete „bis in die Projektdatei" — hier wird sie gefahren.
+
+    Der Test darüber prüft die **Rechnung**: Ø 3,2 ergibt Radius 1,6. Das
+    beantwortet aber nur die halbe Frage. Eine Bemaßung, die im Löser stimmt
+    und beim Speichern zu einer ``distance`` zurückfällt, wäre beim nächsten
+    Öffnen wieder das Loch mit 6,4 mm — und **kein bestehender Test würde es
+    sehen**, weil keiner die Art durch ``sketch_to_text`` fährt.
+
+    Gemessen wird deshalb der ganze Weg: lösen, schreiben, lesen, wieder
+    lösen. Die zweite Zahl muss die erste sein, und die Art muss sie
+    überleben — eine Skizze, die richtig rechnet und falsch gespeichert wird,
+    ist schlimmer als eine, die gleich falsch rechnet.
+    """
+    import math
+
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("circle", ((0.0, 0.0), (5.0, 0.0))),),
+        constraints=(
+            SketchConstraint("fixed", (0,)),
+            SketchConstraint("diameter", (0, 1), value="3.2"),
+        ),
+    )
+
+    def diameter_of(what: Sketch) -> float:
+        centre, rim = solve_sketch(what, {}).elements[0].points
+        return 2 * math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+
+    before = diameter_of(sketch)
+    assert abs(before - 3.2) < 1e-6, "Ø 3,2 muss einen Kreis von 3,2 mm ergeben"
+
+    text = sketch_to_text(sketch)
+    assert '"diameter"' in text, "die Art steht wörtlich in der Datei, nicht als Zahl"
+
+    reloaded = sketch_from_text(text)
+    kinds = [c.kind for c in reloaded.constraints]
+    assert "diameter" in kinds, f"die Art ging beim Laden verloren: {kinds}"
+
+    assert abs(diameter_of(reloaded) - before) < 1e-9, (
+        "derselbe Kreis vor und nach dem Speichern — sonst wandert die Bemaßung"
+    )
+
+    # Und der Wert bleibt der Ausdruck, den der Kunde getippt hat. Wäre er
+    # beim Schreiben ausgerechnet worden, hinge er nicht mehr am Parameter.
+    values = [c.value for c in reloaded.constraints if c.kind == "diameter"]
+    assert values == ["3.2"], f"der Wert reist als Ausdruck, nicht als Zahl: {values}"
+
+
 def test_both_lists_of_constraint_kinds_stay_the_same() -> None:
     """Zwei Listen derselben Arten, und keine kennt die andere.
 
