@@ -710,6 +710,28 @@ TABLES: Final[dict[SlicerFlavour, tuple[Entry, ...]]] = {
     "cura": _entries(CURA),
 }
 
+
+def keys_for(path: str) -> tuple[str, ...]:
+    """Unter welchen Namen dieser Wert in den Slicern steht, ohne Doppelte.
+
+    Die Gegenrichtung der Tabellen oben, und sie hat einen Kunden: Wer aus
+    einem Slicer kommt, sucht seine Einstellung unter dem Namen, den er dort
+    gelernt hat. ``perimeters`` heißt bei uns *Wandbahnen*, und wer das eine
+    tippt, soll das andere finden.
+
+    Die Namen sind englische Schlüssel und keine Oberflächentexte — sie werden
+    nicht übersetzt, so wie ``skirt`` und ``brim`` im Dialog auch nicht
+    übersetzt werden: Der Kunde findet sie unter genau diesem Wort in seinem
+    Slicer wieder.
+    """
+    seen: list[str] = []
+    for entries in TABLES.values():
+        for entry in entries:
+            if entry.path == path and entry.key not in seen:
+                seen.append(entry.key)
+    return tuple(seen)
+
+
 #: Woran der Dateiname verrät, welche Familie da liegt. Die längeren Namen
 #: zuerst, damit ``bambu-studio`` nicht an ``studio`` hängen bleibt.
 FLAVOUR_BY_NAME: Final[tuple[tuple[str, SlicerFlavour], ...]] = (

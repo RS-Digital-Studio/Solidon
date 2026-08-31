@@ -2591,6 +2591,56 @@ def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: 
     assert dialog.search_hits("gibtesnicht") == []
 
 
+def test_the_search_also_knows_the_name_from_the_slicer(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Wer aus einem Slicer kommt, sucht unter dem Wort, das er dort gelernt hat.
+
+    Die Wandzahl heißt bei PrusaSlicer ``perimeters``, bei Orca ``wall_loops``
+    und bei Cura ``wall_line_count``. Keines der drei steht im Dialog — und
+    das ist **gemessen**, nicht angenommen: Die Zusicherung unten prüft für
+    jedes, dass es in Titel, Satz und Gruppenname nicht vorkommt. Ohne sie
+    prüfte dieser Test die Wortsuche noch einmal und nicht die Schlüssel.
+
+    Die Namen kommen aus derselben Tabelle, mit der die Übergabe schreibt.
+    Ein zweites Verzeichnis wäre eines, das altert, sobald ein Slicer einen
+    Schlüssel umbenennt — deshalb steht hier `keys_for` und keine Liste.
+    """
+    from app.core.export.slicer_keys import keys_for
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    for fremd in ("perimeters", "wall_loops", "wall_line_count"):
+        lesbar = " ".join(
+            " ".join((str(f.title), str(f.note), group_title(f.group))) for f in FIELDS
+        )
+        assert fremd.casefold() not in lesbar.casefold(), (
+            f"„{fremd}“ steht im lesbaren Text — dann prüft diese Zeile die Wortsuche"
+        )
+        assert "shell.wall_count" in dialog.search_hits(fremd), (
+            f"„{fremd}“ muss die Wandzahl finden"
+        )
+
+    # Und die Zuordnung stimmt in die andere Richtung: Was der Dialog findet,
+    # steht auch wirklich in der Übergabetabelle dieses Feldes.
+    assert set(keys_for("shell.wall_count")) == {"perimeters", "wall_loops", "wall_line_count"}
+
+    # Ein Schlüssel darf nicht das halbe Fenster treffen — dieselbe Grenze, an
+    # der die Einheit „mm" gescheitert ist (22 von 56). Gemessen ist der
+    # breiteste `support_material` mit sechs.
+    breiteste = max(
+        len(dialog.search_hits(schluessel)) for feld in FIELDS for schluessel in keys_for(feld.path)
+    )
+    assert breiteste <= 6, f"ein Schlüssel trifft {breiteste} von {len(FIELDS)} Zeilen"
+
+    # Und die Abdeckung: Ohne sie wäre der Test grün, wenn die Tabelle
+    # zusammenschrumpft — ein Filter über eine leere Menge findet nie etwas.
+    mit_namen = [f for f in FIELDS if keys_for(f.path)]
+    assert len(mit_namen) == len(FIELDS), (
+        f"nur {len(mit_namen)} von {len(FIELDS)} Feldern haben einen Slicer-Namen"
+    )
+
+
 def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(
     qt_app: QApplication, session: Session
 ) -> None:

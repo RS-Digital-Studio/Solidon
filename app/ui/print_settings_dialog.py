@@ -1937,7 +1937,16 @@ class PrintSettingsDialog(QDialog):
         zu „ae", damit „aushoehlen" und „Aushöhlen" dasselbe finden. Zwei
         Aufgaben, eine Tabelle — nicht zu verwechseln mit der Sortierfaltung,
         wo „ä" wie „a" zählt.
+
+        **Und der Name aus dem Slicer zählt mit.** Wer von PrusaSlicer kommt,
+        sucht seine Wandzahl unter ``perimeters``, wer von Orca kommt unter
+        ``wall_loops``, wer von Cura kommt unter ``wall_line_count`` — drei
+        Wörter für dieselbe Zeile, und keines davon steht im Dialog. Sie kommen
+        aus derselben Tabelle, mit der die Übergabe schreibt
+        (``slicer_keys.keys_for``): ein zweites Verzeichnis wäre eines, das
+        altert, sobald ein Schlüssel sich ändert.
         """
+        from app.core.export.slicer_keys import keys_for
         from app.ui.command_palette import fold
 
         wanted = fold(term).strip()
@@ -1945,7 +1954,16 @@ class PrintSettingsDialog(QDialog):
             return []
         hits = []
         for field in FIELDS:
-            haystack = fold(" ".join((str(field.title), str(field.note), group_title(field.group))))
+            haystack = fold(
+                " ".join(
+                    (
+                        str(field.title),
+                        str(field.note),
+                        group_title(field.group),
+                        *keys_for(field.path),
+                    )
+                )
+            )
             if wanted in haystack:
                 hits.append(field.path)
         return hits
