@@ -1137,6 +1137,14 @@ nav.lang .menu > summary {
    Rundung, derselbe dunkle Grund darunter. Der Grund ist nicht Zierde: Ein
    Video lädt sein Standbild erst, und bis dahin wäre die Fläche durchsichtig
    und die Seite spränge, sobald es da ist. */
+/* **Die Beschreibung eines Weges bleibt lesbar breit.** Bei zwei Spalten ist
+   die Karte ohnehin schmaler als 70 Zeichen; die Regel greift erst, wenn sie
+   auf einem schmalen Schirm über die volle Breite läuft — dort waren es 80 bis
+   85 (gemessen von 15). Lesbar sind 45 bis 75. */
+.way p {
+  max-width: 70ch;
+}
+
 .weg-film {
   display: block;
   width: 100%;
