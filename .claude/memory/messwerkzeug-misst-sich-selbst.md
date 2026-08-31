@@ -21,6 +21,8 @@ Mal sah die Zahl aus wie ein Ergebnis:
 | `ruff check app/ui/` | zu eng | `tests/` war nicht dabei, und dort lag die zu lange Zeile |
 | Korpuslauf über 14 Dateien | Lücke | enthielt keinen Torus; der fünfte Tabelleneintrag wurde geraten und war falsch |
 | vier `assert x not in text` | wirkungslos | prüften auf dem gestrippten Text, wo die verbotenen Tags längst weg waren |
+| `QFont(name, 10)` gegen `font-size="10"` | falsche Einheit | zehn **Punkt** statt zehn Pixel — bei 96 dpi ein Drittel breiter |
+| `QFontMetrics` unter `offscreen` | keine Schrift | Qt meldet dort **null** Familien; die Ersatzschrift misst glatte 10 px je Zeichen |
 
 **Drei Arten, und alle drei sehen aus wie ein Ergebnis: zu weit, zu eng, gar
 nicht.** Am 23.08.2026 an einem Abend alle drei — ein Regex, der jede Zeile traf
@@ -76,7 +78,22 @@ ihn danach zurückgezogen.
    nichts findet; ein Negativtest schweigt. Deshalb gehört die Gegenprobe in
    den Test selbst — Fehlerbild nachstellen, prüfen, dass das eigene Verbot
    daran anschlägt.
-8. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
+8. **Wer Textbreiten misst, prüft zuerst, welche Schrift antwortet.** Am
+   31.08.2026 zweimal hintereinander an derselben Frage — passt die
+   Ebenenzeile des Skizzen-Schemas in allen sechs Sprachen? Die erste Sonde
+   nahm `QFont("Segoe UI", 10)`: Das sind zehn **Punkt**, das `font-size="10"`
+   des SVG sind Pixel, bei 96 dpi ein Drittel Unterschied. Die zweite lief
+   unter `QT_QPA_PLATFORM=offscreen`, und dort meldet Qt **null**
+   Schriftfamilien — `QFontInfo(f).family()` gibt `''`, `exactMatch()` ist
+   `False`, und die Ersatzschrift misst glatte zehn Pixel je Zeichen. **Beide
+   Fassungen meldeten sechs Sprachen als überlaufend, auch Deutsch, wo das
+   bestehende Bild nachweislich passt** — und die glatten Zahlen (130 = 13
+   Zeichen, 250 = 25) waren das Erkennungszeichen, das ich zweimal übersah.
+   Zwei Zeilen genügen: `QFontDatabase.families()` abfragen und bei null
+   abbrechen, und `setPixelSize` statt der Punktgröße. Das gilt für jede
+   Messung an Schriftmetrik — mit ausdrücklich gesetzter Familie auch, denn
+   die Familie zu *setzen* heißt nicht, sie zu *bekommen*.
+9. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
    bot eine andere Sitzung eine Ursache an, die auf jede Beobachtung passte
    (`website/dl/` ist ignoriert, ein Arbeitsbaum bekommt es nicht) — und sie
    erklärte sogar, warum ausgerechnet *eine* Datei fehlt. Das war Zufall. Wer
