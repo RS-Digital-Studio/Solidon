@@ -382,9 +382,9 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
-| Tauschbörse | `shared` | geteilte Bausteine auf der Website (`shared_parts`, `SharedPart`) |
+| Tauschbörse | `shared` | öffentlich geteilte Rezepte auf der Website (`shared_parts`, `SharedPart`) |
 | Melden | `flag` | Beschwerde über einen fremden Beitrag der Tauschbörse |
-| Lizenz | `licence` | Nutzungsrechte an einem geteilten Baustein — **aber das Dataclass-Feld heißt `license`**: `shared-rules.json` leitet ihre Erlaubnisliste aus `dataclasses.fields(Recipe)` ab, der Feldname ist also zugleich Schlüssel in Regel- und Rezeptdatei, und `serialise.py` schreibt das Format schon so. Zwei Schreibungen wären dort eine Übersetzungsstelle zwischen Python und PHP. Technischer Schlüssel amerikanisch wie das Format, Oberflächentext britisch wie der Katalog (36 Substantive mit `licence` gegen 6 mit `license`, und die sechs sind Partizipien und ein Eigenname). Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
+| Lizenz | `licence` | Nutzungsrechte an einem öffentlich geteilten Rezept — **aber das Dataclass-Feld heißt `license`**: `shared-rules.json` leitet ihre Erlaubnisliste aus `dataclasses.fields(Recipe)` ab, der Feldname ist also zugleich Schlüssel in Regel- und Rezeptdatei, und `serialise.py` schreibt das Format schon so. Zwei Schreibungen wären dort eine Übersetzungsstelle zwischen Python und PHP. Technischer Schlüssel amerikanisch wie das Format, Oberflächentext britisch wie der Katalog (36 Substantive mit `licence` gegen 6 mit `license`, und die sechs sind Partizipien und ein Eigenname). Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.
@@ -1571,6 +1571,17 @@ Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
   dieselbe Sperre wie für jeden anderen Weg. Der Katalog weist die Herkunft
   aus, und ein mitgereistes Rezept überschreibt nie einen gleichnamigen
   eigenen Baustein
+- **Rezept-Export und -Import bleiben lokal, verlustfrei und offline
+  nutzbar.** Die optionale öffentliche Community-Tauschstelle auf der Website
+  ist eine kostenlose Ablage für sichere Rezepte und **kein Marktplatz**. Ihr
+  Startumfang ist: Rezepte suchen, ansehen, hochladen und herunterladen. Es
+  gibt dort keine Konten, Profile, Zahlungen, Provisionen oder
+  Direktnachrichten; Likes und Kommentare gehören nicht zum Startumfang
+- Öffentlich getauschte Rezepte führen **keine eingebetteten Modelldaten oder
+  sonstigen Mesh-Payloads** mit. Lokal dürfen solche Daten in Projektdateien
+  weiterhin mitreisen. Für jeden öffentlichen Beitrag bleiben ausgewiesene
+  Herkunft und Lizenz, die serverseitige Erlaubnisprüfung sowie ein Melde- und
+  Entfernungsweg verpflichtend
 - Öffnet jemand ein Projekt, das einen unbekannten eigenen Baustein benutzt,
   hält die Auswertung an und meldet, was fehlt (§15.2)
 - Sie erweitern nicht die Anwendung, sondern nur die Bibliothek — keine neuen
