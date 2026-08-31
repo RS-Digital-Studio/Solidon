@@ -13501,6 +13501,22 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Gegenprobe gegen einen Cache aus der Zeit vor dem Fix**. Und 0ds
       Dank an c3 ist der beste Beleg des Verfahrens: **„Ohne ihre Messung
       hätte ich grün gemeldet, und der Kundenfall wäre offen geblieben."**
+      **Gegenprobe bestanden (c3), und sie hat meine Auflage berichtigt:**
+      Einen Cache „aus der Zeit vor dem Fix" kann es nicht geben (Code-Hash
+      im Pfad) — gefahren wurde stattdessen der Kundenfall **innerhalb**
+      einer Version, mit dem Beweis, auf den es ankommt: **Cache 10 → 10
+      Einträge, nicht verworfen, Name trotzdem richtig.** Das trennt
+      „geheilt" von „geleert". **Ein scharfer Zwilling gefunden und an 0d
+      übergeben:** `prepare_ops.py:974` — `values={"object": str(source.name)…}`,
+      dasselbe eingefrorene `str()`; der Befund „Dieser Körper wird in
+      einem eigenen Material gerechnet. — Deckel" bleibt im englischen
+      Fenster deutsch, während der Körper daneben „Lid" heißt. Gegenzahl:
+      361 `values={`-Stellen im Kern, **eine** betroffen; die zwei Treffer
+      in `export/threemf.py` sind richtig (Name geht in eine Datei ohne
+      TranslatableText). **Und die genannte Reichweiten-Lücke ist mehr wert
+      als ein glatter Befund: Der grep deckt nur `str(…name)` — ein
+      `f"{obj.name}"` in einem `values` würde durchrutschen**; als
+      Suchauftrag in 0ds Zug gegeben.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
