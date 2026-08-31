@@ -118,6 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimate_mesh` erzeugt bei starker Reduktion nicht-mannigfaltige Kanten | Befunde aus dem Weg-Dreh (31.08.2026) | eine Ursachen-Untersuchung im Reduzierer — die Schwellen sind gemessen (100 000 sauber, 60 000 zwei, 30 000 vier defekte Kanten), der Prüfbericht meldet korrekt |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
+| Die Ollama-Serie O1–O5 | Ollama bis zum Anschlag (31.08.2026) | die Abarbeitung nach Roberts Order („wird oft benutzt, bis zum Anschlag optimieren, perfekte Qualität/Performance") — O1 zuerst: Modell warmhalten und klären, warum es mit 0 % VRAM auf der CPU rechnet (701 s je Anfrage); dann Messstrecke, Grundlast-Endausbau mit Quote-Messung je Schritt, Modell-Empfehlung; bei d3 |
 | Die Trennen-Serie T1–T9 | Sinnvolles Trennen — die Serie (31.08.2026) | die Abarbeitung nach Roberts Vollausbau-Entscheid — Nahtlage nach Kanten, Stützbedarf je Teil, schiefe Ebenen (§22.3), automatische Verbinderwahl, Festigkeit, Symmetrie, globale Suche, die eine Kundengeste, das Schaustück; Start nach der Website-Welle, Reihenfolge gegen Resin bei Robert |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
 | Ein generiertes Modell zu öffnen kostet zehn bis zwanzig Sekunden | Befunde aus dem Weg-Dreh (31.08.2026) | Roberts Produktantwort (ist das für ein Beispielprojekt in Ordnung?) und, falls nein, die Behebung an der gemessenen Ursache (`orient_for_print` auf dem ungefilterten Netz — einzeln 9,4–18,5 s, unter Last mehr); die Ansage beim Warten existiert und ist gut (§2.8 eingelöst), die 574/909 waren Prozess-CPU mit erfundener Zuordnung, der Docstring ist berichtigt |
@@ -13490,3 +13491,28 @@ statt eingefrorener Oberfläche (§2.8), keine GPL (Regel 15), jede Bewertung
       Determinismus-Test, Agenten-Suite-Stichprobe wo die Regelsammlung
       berührt ist, und Review vor dem Commit; Start nach der laufenden
       Website-Welle, Reihenfolge gegen Resin Stufe 1 liegt bei Robert.
+
+---
+
+## Ollama bis zum Anschlag (31.08.2026)
+
+Roberts Order: „Das Ollama wird aber oft benutzt und sollte bis zum Anschlag
+optimiert werden mit perfekter Qualität/Performance." Damit ist der lokale
+Pfad ein Hauptweg — der Kunde ohne Schlüssel, ohne Kosten, ohne Netz ist
+derselbe Kunde ohne CAD-Kenntnisse, und er verdient dieselbe Güte. Jede
+Optimierung wird doppelt gemessen (Antwortqualität UND Latenz), nichts wird
+blind getauscht; die zwei bisher zurückgestellten Grundlast-Hebel wechseln
+damit von „liegt" zu „messen und entscheiden".
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| O1 | Betriebszustand: Das Modell wird warmgehalten statt je Aufruf neu von Platte geladen (keep_alive, Vorwärmen beim ersten Chat-Öffnen, num_ctx-Kontrolle) — heute kostet ein Kaltstart 3:51, und der hängende Dienst von heute gehört als Fehlerbild verstanden, nicht nur neu gestartet. **Erster Kernbefund (d3, gemessen): Das Modell rechnet vollständig auf der CPU — api/ps meldet 15,0 GB, davon 0,0 im VRAM (0 %)**, eine Anfrage mit voller Werkzeuglast kostet 701 s; warum die GPU leer bleibt (Modellgröße gegen VRAM, num_gpu, Ollama-Konfiguration), ist die erste Frage des Pakets | M | offen |
+| O2 | Grundlast-Endausbau mit Quote-Messung je Schritt: Marken-Indirektion (−13 %) und default-Verzicht (−8 %) einzeln gegen die lokale Referenz messen — was die Quote kippt, fliegt raus, was hält, bleibt | M | offen |
+| O3 | Die §2.6-Tür als Bedienentwurf: `list_operations` statt aller 106 Schemata vorab — Entwurf mit Vorlage an Robert, denn er ändert, was das Modell „sieht" | M | offen |
+| O4 | Eine belastbare lokale Messstrecke: Referenzanfragen gegen Ollama auf ruhiger Maschine, Warm- gegen Kaltstart getrennt, Latenz je Zug und prompt_eval_count protokolliert — die 4/33-mit-17-Timeouts-Quote maß die Maschine, nicht den Prompt, und so etwas darf nie wieder als Abnahme herhalten | M | offen |
+| O5 | Antwortqualität lokal: Systemprompt-Feinschliff für kleine Modelle und eine geprüfte Modell-Empfehlung in Einstellungen und Handbuch — welcher Ollama-Stand liefert die beste Quote je Rechenklasse | M–L | offen |
+
+- [ ] Die Ollama-Serie abarbeiten — O1 zuerst (sofort machbar, kein
+      Schlüssel nötig, behebt den 3:51-Zustand), dann O4 als Messgrund,
+      dann O2/O5, O3 mit Vorlage an Robert; je Paket beide Zahlen
+      (Qualität und Latenz) vorher/nachher, Review vor dem Commit.
