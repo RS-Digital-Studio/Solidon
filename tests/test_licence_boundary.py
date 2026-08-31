@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from app.core import activation
-from app.core.activation import integrity, key, store
+from app.core.activation import certificate, integrity, key, store
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply
 from app.core.backends.scripted import ScriptedBackend
@@ -460,7 +460,7 @@ def test_a_valid_key_does_not_open_a_damaged_installation(
     )
     monkeypatch.setattr(key, "PUBLIC_KEY", public_key(TEST_SEED))
     store.write_key(make_key(TEST_SEED, licence))
-    monkeypatch.setattr(activation.certificates, "load_for", lambda _licence: _certificate())
+    monkeypatch.setattr(certificate, "load_for", lambda _licence: _certificate())
     target = fresh_state / "licence.manifest"
 
     # Richtung eins: unversehrt — Schlüssel und Gerätezertifikat wirken.

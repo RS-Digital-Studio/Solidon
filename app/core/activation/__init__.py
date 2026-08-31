@@ -40,13 +40,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Final
+from typing import TYPE_CHECKING, Any, Final
 
-from app.core.activation import certificate as certificates
-from app.core.activation import integrity, store
-from app.core.activation.certificate import ActivationCertificate
-from app.core.activation.key import Licence, LicenceKeyError, parse
-from app.core.activation.store import TRIAL_DAYS, TRIAL_FROM, read_key
 from app.core.errors import (
     ActiveLicenceCannotBeReplaced,
     DeviceActivationRequired,
@@ -54,10 +49,71 @@ from app.core.errors import (
     InstallationDamaged,
     LicenceRequired,
 )
+from app.core.lazy import install
 from app.core.log import get_logger
 from app.i18n import _
 
+
+class _LazyAnnotation:
+    """Löst einen Typ erst aus, wenn eine Laufzeit-Introspektion ihn auswertet.
+
+    Bei Unionen bleiben die rohen Annotationen die lesbaren öffentlichen
+    Namen. Beim Paketimport sind diese Namen nur Operanden; ``typing`` und
+    ``inspect`` werten ``Typ | None`` später aus und laden dabei genau das
+    nötige Untermodul. Der öffentliche Attributzugriff läuft unabhängig davon
+    über :func:`app.core.lazy.install` und liefert weiterhin direkt den echten
+    Typ.
+    """
+
+    __slots__ = ("_name",)
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def resolve(self) -> Any:
+        """Importiert den hinterlegten Typ für eine nackte Annotation."""
+        from importlib import import_module
+
+        submodule, attribute = _EXPORTS[self._name]
+        return getattr(import_module(f"{__name__}.{submodule}"), attribute)
+
+    def __or__(self, other: Any) -> Any:
+        return self.resolve() | other
+
+
+class _LazyTypeNamespace:
+    """Namensraum für Annotationen ohne Operator, der sie auflösen könnte."""
+
+    def __getattr__(self, name: str) -> Any:
+        return _LazyAnnotation(name).resolve()
+
+
+if TYPE_CHECKING:
+    from app.core.activation import certificate as _certificate_types
+    from app.core.activation.certificate import ActivationCertificate
+    from app.core.activation.key import Licence, LicenceKeyError
+    from app.core.activation.store import TRIAL_DAYS, TRIAL_FROM, read_key
+else:
+    _certificate_types = _LazyTypeNamespace()
+    ActivationCertificate = _LazyAnnotation("ActivationCertificate")
+    Licence = _LazyAnnotation("Licence")
+    LicenceKeyError = _LazyAnnotation("LicenceKeyError")
+
 _log = get_logger(__name__)
+
+#: Die öffentlich zugesagten Namen bleiben erreichbar, ohne beim Paketimport
+#: bereits ``certificate``, ``key`` oder ``store`` zu laden. Das ist hier
+#: sicherheitsrelevant: Die Funktionen darunter importieren ihre Prüfer erst
+#: unmittelbar vor dem Gebrauch und behalten dadurch dieselbe Reihenfolge an
+#: der Lizenzgrenze; nur die Reihenfolge der Python-Modul-Locks verschwindet.
+_EXPORTS: Final[dict[str, tuple[str, str]]] = {
+    "ActivationCertificate": ("certificate", "ActivationCertificate"),
+    "Licence": ("key", "Licence"),
+    "LicenceKeyError": ("key", "LicenceKeyError"),
+    "TRIAL_DAYS": ("store", "TRIAL_DAYS"),
+    "TRIAL_FROM": ("store", "TRIAL_FROM"),
+    "read_key": ("store", "read_key"),
+}
 
 __all__ = [
     "CHANGE",
@@ -191,7 +247,9 @@ class Activation:
         :data:`store.TRIAL_FROM`; der Demo-Stichtag bezeichnet ein anderes
         Produkt und schließt den Testzustand aus.
         """
-        return self.deadline is None and store.TRIAL_FROM is not None
+        from app.core.activation.store import TRIAL_FROM
+
+        return self.deadline is None and TRIAL_FROM is not None
 
     @property
     def in_trial(self) -> bool:
@@ -269,6 +327,10 @@ def forget_cache() -> None:
 
 
 def _determine() -> Activation:
+    from app.core.activation import certificate as certificates
+    from app.core.activation import integrity, store
+    from app.core.activation.key import LicenceKeyError, parse
+
     # **Der Schlüssel wird immer gelesen, auch bei gebrochenem Manifest.**
     # Vorher stand die Integritätsprüfung davor und kehrte sofort mit einem
     # leeren Zustand zurück: Ein zahlender Kunde, dessen Installation ein
@@ -277,7 +339,7 @@ def _determine() -> Activation:
     # heißt hier nicht freigeschaltet; ``Activation.unlocked`` sperrt bei
     # ``damaged`` unabhängig von der Lizenz (H4).
     licence: Licence | None = None
-    stored = read_key()
+    stored = store.read_key()
     deactivation_pending = store.read_pending_deactivation() is not None
     if stored is not None:
         try:
@@ -321,7 +383,10 @@ def stored_problem() -> LicenceKeyError | None:
     Damit der Freischaltdialog den Grund nennen kann, statt einen sichtbaren
     Schlüssel neben einer Testlaufmeldung unerklärt stehen zu lassen.
     """
-    stored = read_key()
+    from app.core.activation import store
+    from app.core.activation.key import LicenceKeyError, parse
+
+    stored = store.read_key()
     if stored is None:
         return None
     try:
@@ -342,9 +407,13 @@ def remember(text: str) -> Activation:
     rechnete dieselbe Signaturprüfung noch einmal. Es hält den Schlüssel auch
     dann für diese Sitzung gültig, wenn das Profil nicht beschreibbar war.
     """
+    from app.core.activation import certificate as certificates
+    from app.core.activation import integrity, store
+    from app.core.activation.key import LicenceKeyError, parse
+
     global _cached
     licence = parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
-    previous_text = read_key()
+    previous_text = store.read_key()
     deactivation_pending = store.read_pending_deactivation() is not None
     if deactivation_pending and previous_text is not None:
         try:
@@ -385,21 +454,29 @@ def remember(text: str) -> Activation:
 
 def create_activation_request(device_name: str) -> str:
     """Erzeugt die signierte Geräteanforderung für Online- und Dateiweg."""
+    from app.core.activation import certificate as certificates
+    from app.core.activation import store
+    from app.core.activation.key import LicenceKeyError
+
     if store.read_pending_deactivation() is not None:
         raise DeviceDeactivationPending()
-    stored = read_key()
+    stored = store.read_key()
     if stored is None:
         raise LicenceKeyError()
     return certificates.create_request(stored, device_name)
 
 
-def install_certificate(text: str) -> ActivationCertificate:
+def install_certificate(text: str) -> _certificate_types.ActivationCertificate:
     """Prüft und speichert eine Aktivierungsantwort für diesen Rechner."""
+    from app.core.activation import certificate as certificates
+    from app.core.activation import integrity, store
+    from app.core.activation.key import LicenceKeyError, parse
+
     global _cached
     if store.read_pending_deactivation() is not None:
         raise DeviceDeactivationPending()
     installed = certificates.install(text)
-    stored = read_key()
+    stored = store.read_key()
     if stored is None:  # durch ``install`` bereits erklärt; nur Typverengung
         raise LicenceKeyError()
     licence = parse(stored)
@@ -413,8 +490,11 @@ def install_certificate(text: str) -> ActivationCertificate:
 
 def create_deactivation_request() -> str:
     """Belegt gegenüber dem Server die Freigabe des aktuellen Geräteplatzes."""
+    from app.core.activation import certificate as certificates
+    from app.core.activation import store
+
     current = state()
-    stored = read_key()
+    stored = store.read_key()
     if stored is None or current.certificate is None:
         raise DeviceActivationRequired()
     return certificates.create_deactivation(stored, current.certificate)
@@ -422,11 +502,15 @@ def create_deactivation_request() -> str:
 
 def pending_deactivation_request() -> str | None:
     """Gibt den wiederholbaren Auftrag einer unbestätigten Abmeldung zurück."""
+    from app.core.activation import store
+
     return store.read_pending_deactivation()
 
 
 def prepare_deactivation() -> str:
     """Legt den Serverauftrag dauerhaft ab, bevor lokal gesperrt wird."""
+    from app.core.activation import store
+
     pending = store.read_pending_deactivation()
     if pending is not None:
         return pending
@@ -444,6 +528,8 @@ def prepare_deactivation() -> str:
 
 def clear_pending_deactivation() -> bool:
     """Vergisst den Auftrag ausschließlich nach bestätigter Serverfreigabe."""
+    from app.core.activation import store
+
     removed = store.forget_pending_deactivation()
     forget_cache()
     return removed
@@ -451,6 +537,8 @@ def clear_pending_deactivation() -> bool:
 
 def remove_certificate() -> bool:
     """Entfernt nur die lokale Gerätefreigabe und leert den Zustandscache."""
+    from app.core.activation import store
+
     removed = store.forget_certificate()
     forget_cache()
     return removed
@@ -463,6 +551,8 @@ def forget_key() -> bool:
     Neustart freigeschaltet, und ein Dialog zeigte weiter „Freigeschaltet für
     …" zu einem Schlüssel, den es nicht mehr gibt.
     """
+    from app.core.activation import store
+
     certificate_removed = store.forget_certificate()
     removed = store.forget_key()
     forget_cache()
@@ -498,3 +588,6 @@ def require(action: str) -> None:
                 ),
             )
         raise LicenceRequired(action=action)
+
+
+install(__name__, _EXPORTS)

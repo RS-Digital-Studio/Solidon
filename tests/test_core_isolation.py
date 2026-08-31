@@ -193,14 +193,14 @@ def test_two_threads_may_import_the_same_package() -> None:
 
     **Geprüft wird jedes Kernpaket, dessen ``__init__`` etwas lädt**, und
     dieser Zuschnitt ist der eigentliche Ertrag: Der Punkt stand in der Roadmap
-    als Einzelfall in ``scene``. Gemessen waren es **sechs** — ``scene``,
-    ``registry``, ``sketch``, ``agent``, ``brep`` und ``activation``. Die drei
-    Pakete mit einer Zeile Docstring als ``__init__`` (``geom``, ``perceive``,
-    ``knowledge``) waren sauber, und das ist der Unterschied. Ein Test nur auf
-    ``scene`` hätte genau den einen Fall festgehalten, den jemand schon behoben
-    hat.
+    als Einzelfall in ``scene``. Gemessen waren es **sieben** — ``scene``,
+    ``registry``, ``sketch``, ``agent``, ``brep``, ``activation`` und
+    ``knowledge.parts``. Die drei Pakete mit einer Zeile Docstring als
+    ``__init__`` (``geom``, ``perceive``, ``knowledge``) waren sauber, und das
+    ist der Unterschied. Ein Test nur auf ``scene`` hätte genau den einen Fall
+    festgehalten, den jemand schon behoben hat.
 
-    Fünf davon lösen ihre Namen jetzt erst beim Zugriff auf
+    Sechs davon lösen ihre Namen jetzt erst beim Zugriff auf
     (:mod:`app.core.lazy`). Im Subprozess, weil die Module beim Start des Tests
     längst geladen wären und der Fall dann nicht mehr auftritt.
     """
@@ -209,20 +209,15 @@ def test_two_threads_may_import_the_same_package() -> None:
         import importlib, pkgutil, sys, threading
         import app.core
 
-        # Zwei bekannte offene Fälle. Beide stehen in ROADMAP.md; wer einen
-        # behebt, streicht seinen Namen hier -- dann prüft dieser Test ihn mit.
-        #
-        # ``activation``: sein ``__init__`` ist keine Liste von Re-Exporten,
-        # sondern 223 Zeilen Code an der Lizenzgrenze. Dort die Ladereihenfolge
-        # zu ändern, ohne die Grenze mitzuprüfen, wäre der falsche Ort für eine
-        # Strukturänderung.
+        # Ein bekannter offener Fall. Er steht in ROADMAP.md; wer ihn behebt,
+        # streicht seinen Namen hier -- dann prüft dieser Test ihn mit.
         #
         # ``knowledge.parts``: dort ist der Import die **Registrierung**. Die
         # fünf Modulimporte im ``__init__`` füllen das Bausteinregister, und
         # ``bootstrap.load_operations`` verlässt sich darauf. Verzögert wären
         # sie wirkungslos -- das ist kein Strukturfix mehr, sondern eine
         # Verhaltensänderung mit eigenem Punkt.
-        KNOWN_OPEN = {"app.core.activation", "app.core.knowledge.parts"}
+        KNOWN_OPEN = {"app.core.knowledge.parts"}
 
         # **Alles Nachschlagen passiert hier, vor dem ersten Thread.** Der
         # erste Anlauf ließ den zweiten Thread das Paket selbst importieren,
@@ -286,3 +281,90 @@ def test_two_threads_may_import_the_same_package() -> None:
     assert not finished.stdout.strip(), (
         "two threads deadlocked while importing the same package:\n" + finished.stdout
     )
+
+
+def test_activation_keeps_its_public_names_without_eager_submodules() -> None:
+    """Die Deadlock-Reparatur darf weder die API noch die Lizenzgrenze laden.
+
+    Der Paketimport allein ist der sichere Zustand; erst der Zugriff auf einen
+    zugesagten Namen lädt genau dessen Untermodul. Im Subprozess ist der
+    Modulcache leer und kann die Aussage nicht versehentlich grün machen.
+    """
+    script = textwrap.dedent(
+        """
+        import importlib, inspect, sys, threading, typing
+        import app.core.activation as activation
+
+        prefix = "app.core.activation."
+        eager = sorted(name for name in sys.modules if name.startswith(prefix))
+        assert not eager, eager
+        assert "TRIAL_DAYS" in dir(activation)
+        assert activation.Activation.__annotations__["licence"] == "Licence | None"
+        assert (
+            activation.Activation.__annotations__["certificate"]
+            == "ActivationCertificate | None"
+        )
+        hints = typing.get_type_hints(activation.Activation)
+        annotations = inspect.get_annotations(activation.Activation, eval_str=True)
+        assert hints["licence"] == activation.Licence | None
+        assert hints["certificate"] == activation.ActivationCertificate | None
+        assert annotations["licence"] == activation.Licence | None
+        assert annotations["certificate"] == activation.ActivationCertificate | None
+        return_hints = typing.get_type_hints(activation.install_certificate)
+        return_annotations = inspect.get_annotations(
+            activation.install_certificate,
+            eval_str=True,
+        )
+        assert return_hints["return"] is activation.ActivationCertificate
+        assert return_annotations["return"] is activation.ActivationCertificate
+        assert isinstance(activation.TRIAL_DAYS, int)
+        loaded = sorted(name for name in sys.modules if name.startswith(prefix))
+        assert "app.core.activation.store" in loaded, loaded
+
+        broken = []
+        submodules = ("certificate", "device", "ed25519", "integrity", "key", "store")
+        for attempt in range(50):
+            for stale in [name for name in sys.modules if name.startswith("app.core.activation")]:
+                del sys.modules[stale]
+
+            def through_package():
+                try:
+                    package = importlib.import_module("app.core.activation")
+                    assert package.Activation.__name__ == "Activation"
+                    assert package.Licence.__name__ == "Licence"
+                except BaseException as error:
+                    broken.append(
+                        f"{attempt} (package): {type(error).__name__}: {error}"
+                    )
+
+            def through_submodules():
+                try:
+                    for name in submodules:
+                        importlib.import_module(f"app.core.activation.{name}")
+                except BaseException as error:
+                    broken.append(
+                        f"{attempt} (modules): {type(error).__name__}: {error}"
+                    )
+
+            first = threading.Thread(target=through_package)
+            second = threading.Thread(target=through_submodules)
+            first.start()
+            second.start()
+            first.join(timeout=10)
+            second.join(timeout=10)
+            if first.is_alive() or second.is_alive():
+                broken.append(f"{attempt}: nach 10 s noch nicht beendet")
+                break
+
+        assert not broken, "\\n".join(broken)
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+    )
+
+    assert finished.returncode == 0, finished.stderr or finished.stdout
