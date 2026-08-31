@@ -500,14 +500,6 @@
     dial.addEventListener("pointerdown", preload, { once: true });
     dial.addEventListener("focus", preload, { once: true });
 
-    /* Der Hinweis nennt bei abgeschalteter Scroll-Drehung nur noch, was wirklich
-       geht. Vorher war er ganz ausgeblendet, und damit erfuhr niemand, dass
-       Ziehen überhaupt möglich ist. */
-    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      const hint = document.querySelector(".turn-hint");
-      if (hint && hint.dataset.calm) hint.textContent = hint.dataset.calm;
-    }
-
     dial.addEventListener("input", () => {
       const index = Number(dial.value);
       stage.style.animation = "none";

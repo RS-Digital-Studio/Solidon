@@ -119,10 +119,33 @@
       antwort = await daten.json();
     } catch (fehler) {
       liste.setAttribute("aria-busy", "false");
-      /* **Nicht „prüfe deine Verbindung".** Solange die Börse noch nicht
-         eingerichtet ist, liegt es nicht am Kunden, und ein Rat, der ihn
-         suchen schickt, ist schlechter als keiner. Der Leerzustand aus dem
-         Markup bleibt einfach stehen — er sagt schon das Richtige. */
+      /* **Nicht „prüfe deine Verbindung".** Wenn der Server nicht antwortet,
+         liegt es nicht am Kunden, und ein Rat, der ihn seine Leitung suchen
+         schickt, ist schlechter als keiner.
+
+         **Und nicht den Satz aus dem Markup stehen lassen.** Der sagt heute
+         „die Börse öffnet mit Version 0.2.3" — richtig, solange sie noch nicht
+         offen ist, und falsch am Tag danach. Ein Zustand, der von einem Datum
+         abhängt, das im HTML steht, ist einer, den irgendwann niemand mehr
+         nachzieht.
+
+         Was hier steht, stimmt in beiden Zeiten und lässt etwas tun (Regel
+         17): Es sagt, was ist, und bietet den einen Griff an, der hilft. */
+      liste.textContent = "";
+      const gescheitert = document.createElement("p");
+      gescheitert.className = "sub";
+      gescheitert.appendChild(text("Die Liste lässt sich gerade nicht laden."));
+      liste.appendChild(gescheitert);
+
+      const nochmal = document.createElement("button");
+      nochmal.type = "button";
+      nochmal.className = "btn ghost";
+      nochmal.appendChild(text("Nochmal versuchen"));
+      nochmal.addEventListener("click", () => {
+        seite = 0;
+        zeigen(false);
+      });
+      liste.appendChild(nochmal);
       return;
     }
     liste.setAttribute("aria-busy", "false");
