@@ -1023,6 +1023,51 @@ def test_a_simplification_that_worked_stays_quiet() -> None:
     assert mesh_ops._simplification_findings(before, knapp, before.triangle_count - 2, "o") == []
 
 
+def test_a_simplification_that_missed_its_target_by_far_says_so() -> None:
+    """Und der Fall dazwischen, den beide Tests darüber durchließen.
+
+    Die Schwelle fragte, **wie viel reduziert** wurde, und gemeint war, **wie
+    weit am Ziel vorbei**. Das sind verschiedene Achsen, und bei einem Körper
+    mit Durchgangsloch fallen sie auseinander: Ein Rohr aus 131 072 Dreiecken
+    kommt bei jedem Ziel zwischen 20 000 und 600 mit **74 592** heraus — um 43
+    Prozent reduziert, also weit unter den fünf Prozent, ab denen gemeldet
+    wurde, und dabei das 124-Fache der verlangten Zahl.
+
+    Der Kunde stellte 600 ein, bekam 74 592 und erfuhr nichts. Wer 400
+    verlangte und 992 bekam, wurde gewarnt — je weiter das Ziel verfehlt war,
+    desto seltener meldete es sich.
+
+    **Die Topologie entscheidet, und es ist der Alltagsfall.** Gemessen:
+    Euler-Zahl 2 (Kugel, Quader) trifft jedes Ziel exakt; Euler-Zahl 0 — ein
+    Körper mit Durchgangsloch, also jede Hülse, jeder Ring, jedes Gehäuse mit
+    Durchbruch — bleibt stehen, ohne entartete Dreiecke und ohne offene Kante.
+    """
+    outer = trimesh.creation.cylinder(radius=15.0, height=30.0, sections=256)
+    inner = trimesh.creation.cylinder(radius=14.4, height=36.0, sections=256)
+    tube = trimesh.boolean.difference([outer, inner])
+    for _ in range(3):
+        tube = tube.subdivide()
+
+    before = MeshData.of(tube)
+    assert before.raw.euler_number == 0, "der Fall lebt vom Durchgangsloch"
+    after = mesh_ops.decimate(before, 600)
+
+    assert after.triangle_count > 600 * 10, (
+        f"ohne verfehltes Ziel prüft dieser Test nichts: {after.triangle_count}"
+    )
+    assert after.triangle_count < before.triangle_count * 0.95, (
+        "und ohne kräftige Reduktion griffe die alte Schwelle ohnehin"
+    )
+
+    findings = mesh_ops._simplification_findings(before, after, 600, "obj_1")
+
+    assert [f.code for f in findings] == ["mesh.not_simplified"], (
+        f"das um das 124-Fache verfehlte Ziel blieb stumm: {[f.code for f in findings]}"
+    )
+    assert findings[0].values["target"] == 600
+    assert findings[0].values["after"] == after.triangle_count
+
+
 def test_the_operation_actually_asks(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Verdrahtung, nicht die Rechnung — der teurere der beiden Fehler.
 

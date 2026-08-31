@@ -793,14 +793,27 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
-#: Ab welchem Anteil des Ziels eine Vereinfachung als wirkungslos gilt.
+#: Ab welchem **Vielfachen des Ziels** eine Vereinfachung eine Auskunft wert ist.
 #:
 #: Nicht „exakt verfehlt": Die Quadrik-Dezimierung landet regelmäßig ein paar
 #: Dreiecke neben der Vorgabe, und daraus einen Befund zu machen hieße, bei
-#: jedem zweiten Lauf etwas zu melden. Gemeint ist der Fall, in dem sie **gar
-#: nichts** getan hat — gemessen an ``weg1-halterung-anpassen``: 992 Dreiecke
-#: hinein, 992 heraus, und zwar bei jedem Ziel von 900 bis 400.
-SIMPLIFY_MISSED = 0.95
+#: jedem zweiten Lauf etwas zu melden.
+#:
+#: **Die Zahl stand bis zum 31.08.2026 auf 0,95 und maß den Anteil des
+#: Eingangs** — also, wie viel reduziert wurde, statt wie weit am Ziel vorbei.
+#: Zwei verschiedene Achsen, und bei einem Körper mit Durchgangsloch fallen sie
+#: auseinander: Ein Rohr aus 131 072 Dreiecken kommt bei jedem Ziel zwischen
+#: 20 000 und 600 mit 74 592 heraus — um 43 Prozent reduziert, also weit unter
+#: den fünf Prozent, ab denen gemeldet wurde, und dabei das 124-Fache der
+#: verlangten Zahl. Wer 400 verlangte und 992 bekam, wurde gewarnt; wer 600
+#: verlangte und 74 592 bekam, erfuhr nichts. Je weiter das Ziel verfehlt war,
+#: desto seltener meldete es sich.
+#:
+#: **Und es ist der Alltagsfall.** Gemessen: Euler-Zahl 2 (Kugel, Quader)
+#: trifft jedes Ziel exakt; Euler-Zahl 0 — ein Körper mit Durchgangsloch, also
+#: jede Hülse, jeder Ring, jedes Gehäuse mit Durchbruch — bleibt stehen, ohne
+#: entartete Dreiecke und ohne eine offene Kante.
+SIMPLIFY_MISSED = 1.5
 
 
 def _simplification_findings(
@@ -826,10 +839,15 @@ def _simplification_findings(
     schiefgegangen, es gab nur nichts zu tun. Die Handlung dazu ist keine
     Reparatur, sondern die Einordnung: Wer die Dreieckszahl senken will, muss
     die Form vergröbern (Glätten) oder mit dem leben, was die Form kostet.
+
+    **Gefragt wird, wie weit das Ergebnis am Ziel vorbeiliegt** — nicht, wie
+    viel es gegenüber dem Eingang eingespart hat. Die zweite Frage ließ genau
+    die Fälle durch, in denen kräftig reduziert und das Ziel trotzdem um
+    Größenordnungen verfehlt wurde; die Begründung steht an ``SIMPLIFY_MISSED``.
     """
     if after.triangle_count <= target or after.triangle_count > before.triangle_count:
         return []
-    if after.triangle_count < before.triangle_count * SIMPLIFY_MISSED:
+    if after.triangle_count < target * SIMPLIFY_MISSED:
         return []
     return [
         Finding(
