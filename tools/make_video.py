@@ -375,11 +375,55 @@ ANPASSEN: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Weg 3 — aus Text oder Bild ein druckbares Teil.
+#:
+#: Ohne Morph, aus demselben Grund wie bei :data:`ANPASSEN`: Ein generiertes
+#: Modell kommt ohne benannte Parameter herein. Es kommt auch ohne Maßstab —
+#: die Eule maß 1,9 Einheiten, und was Solidon zuerst mit ihr tut, ist ihr
+#: eine Größe zu geben.
+GENERIEREN: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "hook",
+            "Ein Satz Text, ein Modell. Was ein Generator liefert, ist noch "
+            "kein Druckteil: keine Größe, zu fein vernetzt, beliebig gedreht.",
+        ),
+        (
+            "turn",
+            "Solidon setzt den Maßstab, bringt die Auflösung auf ein Maß, mit "
+            "dem sich arbeiten lässt, und sucht die Lage mit den wenigsten "
+            "Stützen.",
+        ),
+        (
+            "closing",
+            "Vom Einfall zum Bauteil.",
+        ),
+    ),
+    "en": (
+        (
+            "hook",
+            "One line of text, one model. What a generator hands you is not "
+            "yet a printable part: no scale, too dense, arbitrarily rotated.",
+        ),
+        (
+            "turn",
+            "Solidon sets the scale, brings the mesh down to a size you can "
+            "work with, and finds the orientation that needs the fewest "
+            "supports.",
+        ),
+        (
+            "closing",
+            "From idea to part.",
+        ),
+    ),
+}
+
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
     "modular": MODULAR,
     "anpassen": ANPASSEN,
+    "generieren": GENERIEREN,
 }
 
 #: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
@@ -1071,11 +1115,26 @@ def record(
     return start + count
 
 
-def orbit_step(window: QWidget, app: QApplication, zoom: float, turns: float) -> StepFn:
+def orbit_step(
+    window: QWidget,
+    app: QApplication,
+    zoom: float,
+    turns: float,
+    start_degrees: float = 0.0,
+) -> StepFn:
     """Eine Kreisbahn um den Blickpunkt, als Schrittfunktion für :func:`record`.
 
     Dieselbe Rechnung wie in :func:`orbit`, nur portionsweise: die Kamera wird
     gesetzt statt gedreht, damit sich über hundert Bilder nichts aufsummiert.
+
+    **``start_degrees`` entscheidet, was im Standbild steht.** ``reset_camera``
+    liefert immer denselben Blick, und der ist für ein konstruiertes Teil
+    richtig — es steht so, wie es gezeichnet wurde. Ein generiertes oder für
+    den Druck gedrehtes Teil steht dagegen, wie die Schichtanalyse es hingelegt
+    hat, und das ist keine Ansicht, sondern ein Ergebnis. Beim ersten
+    Eulen-Loop war Bild 0 der schlechteste Winkel der ganzen Aufnahme — und
+    genau dieses Bild wird zum ``poster``, das bei ``preload="none"`` und bei
+    reduzierter Bewegung das einzige ist, was der Besucher je sieht.
     """
     viewport = window.viewport  # type: ignore[attr-defined]
     plotter = viewport.plotter
@@ -1087,7 +1146,7 @@ def orbit_step(window: QWidget, app: QApplication, zoom: float, turns: float) ->
     offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
     radius = math.hypot(offset_x, offset_y) * zoom
     height = focal[2] + (position[2] - focal[2]) * zoom
-    start_angle = math.atan2(offset_y, offset_x)
+    start_angle = math.atan2(offset_y, offset_x) + math.radians(start_degrees)
 
     def step(index: int, total: int) -> None:
         angle = start_angle + 2.0 * math.pi * turns * index / max(1, total)
@@ -1255,6 +1314,7 @@ def shoot_storyboard(
     language: str = "de",
     morph_name: str = MORPH_PARAMETER,
     morph_span: tuple[float, float] = MORPH,
+    start_degrees: float = 0.0,
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -1302,7 +1362,7 @@ def shoot_storyboard(
             # Aufmacher und Abspann drehen, aber nur ein Stück weit: eine volle
             # Umdrehung in vier Sekunden sieht aus wie ein Ausstellungsstück im
             # Schaufenster.
-            step = orbit_step(window, app, zoom, turns=0.35)
+            step = orbit_step(window, app, zoom, turns=0.35, start_degrees=start_degrees)
         total = record(window, app, frames, total, count, step)
         print(f"  {key:12s} {count:4d} Bilder")
     reset_morph(session)
@@ -1660,7 +1720,24 @@ def main() -> int:
         if len(parts) == 3:
             morph_span = (float(parts[1]), float(parts[2]))
         break
+    # ``--start <grad>`` — von welchem Winkel aus die Kreisbahn beginnt.
+    #
+    # In Grad und nicht in Umdrehungen: „52" liest sich, „0,146" nicht.
+    start_degrees = 0.0
+    for entry in arguments:
+        if not entry.startswith("--start"):
+            continue
+        value = entry.split("=", 1)[1] if "=" in entry else ""
+        if not value:
+            index = arguments.index(entry)
+            value = arguments[index + 1] if index + 1 < len(arguments) else ""
+        if value:
+            start_degrees = float(value)
+        break
+
     skip = {morph_name, f"{morph_name}:{morph_span[0]:g}:{morph_span[1]:g}"}
+    if start_degrees:
+        skip.add(f"{start_degrees:g}")
     wanted = [
         entry
         for entry in arguments
@@ -1697,6 +1774,7 @@ def main() -> int:
                 chosen=project,
                 morph_name=morph_name,
                 morph_span=morph_span,
+                start_degrees=start_degrees,
             )
             continue
         shoot_language(app, language, out, frames / f"{name}-{language}", script, project)
@@ -1908,6 +1986,7 @@ def shoot_loop(
     chosen: Path | None = None,
     morph_name: str = MORPH_PARAMETER,
     morph_span: tuple[float, float] = MORPH,
+    start_degrees: float = 0.0,
 ) -> tuple[Path, Path, Path]:
     """Ein Drehbuch als Website-Loop aufnehmen und ausgeben.
 
@@ -1965,6 +2044,7 @@ def shoot_loop(
         language=language,
         morph_name=morph_name,
         morph_span=morph_span,
+        start_degrees=start_degrees,
     )
     files = encode_loop(shot, out / stem)
     # Ein Fenster je Aufnahme, und der Viewport wird ausdrücklich
