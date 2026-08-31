@@ -1211,6 +1211,8 @@ def shoot_storyboard(
     zoom: float = 1.0,
     label: str = "",
     language: str = "de",
+    morph_name: str = MORPH_PARAMETER,
+    morph_span: tuple[float, float] = MORPH,
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -1247,7 +1249,7 @@ def shoot_storyboard(
             # bis hierher, damit der Index im Bandwurm der Wert des Bildes
             # bleibt und nicht der Wert des Bildes minus einer Szene.
             readout.extend([""] * (total - len(readout)))
-            step = morph_step(window, app, session, MORPH_PARAMETER, MORPH, readout, label)
+            step = morph_step(window, app, session, morph_name, morph_span, readout, label)
         elif key == "explode":
             step = explode_step(window, app, (0.0, EXPLOSION), zoom)
         elif key == "join":
@@ -1591,10 +1593,40 @@ def main() -> int:
     # zwei Programme, die dasselbe Fenster filmen, laufen unweigerlich
     # auseinander.
     as_loop = "loop" in arguments
+    # ``--morph <name>[:<von>:<bis>]`` — welcher Parameter im Loop läuft.
+    #
+    # **Das Werkzeug folgt dem Motiv, nicht umgekehrt.** ``MORPH_PARAMETER``
+    # heißt ``breite``; das Beispielprojekt und das Gehäuse-Schaustück haben
+    # ihn, der Rollenhalter nennt ihn ``rollenbreite`` und läuft von 55 bis 90.
+    # Ein Teil umzubenennen, damit ein Aufnahmewerkzeug es findet, hätte den
+    # Zweck verkehrt: Parameternamen gehören dem Nutzer.
+    #
+    # Name und Spanne stehen in **einem** Schalter, weil beides zusammengehört
+    # — ein anderer Parameter hat fast immer auch einen anderen Bereich, und
+    # zwei Schalter wären zwei Gelegenheiten, nur einen zu setzen.
+    morph_name, morph_span = MORPH_PARAMETER, MORPH
+    for entry in arguments:
+        if not entry.startswith("--morph"):
+            continue
+        value = entry.split("=", 1)[1] if "=" in entry else ""
+        if not value:
+            index = arguments.index(entry)
+            value = arguments[index + 1] if index + 1 < len(arguments) else ""
+        parts = value.split(":")
+        if parts and parts[0]:
+            morph_name = parts[0]
+        if len(parts) == 3:
+            morph_span = (float(parts[1]), float(parts[2]))
+        break
+    skip = {morph_name, f"{morph_name}:{morph_span[0]:g}:{morph_span[1]:g}"}
     wanted = [
         entry
         for entry in arguments
-        if entry not in SCRIPTS and entry != "loop" and not entry.endswith(".p3d")
+        if entry not in SCRIPTS
+        and entry != "loop"
+        and not entry.endswith(".p3d")
+        and not entry.startswith("--")
+        and entry not in skip
     ] or list(script)
     print(f"Drehbuch: {name}{' (Website-Loop)' if as_loop else ''}")
     if project is not None:
@@ -1621,6 +1653,8 @@ def main() -> int:
                 script[language],
                 f"{name}-{language}",
                 chosen=project,
+                morph_name=morph_name,
+                morph_span=morph_span,
             )
             continue
         shoot_language(app, language, out, frames / f"{name}-{language}", script, project)
@@ -1810,6 +1844,8 @@ def shoot_loop(
     stem: str,
     seconds: float = LOOP_SECONDS,
     chosen: Path | None = None,
+    morph_name: str = MORPH_PARAMETER,
+    morph_span: tuple[float, float] = MORPH,
 ) -> tuple[Path, Path, Path]:
     """Ein Drehbuch als Website-Loop aufnehmen und ausgeben.
 
@@ -1859,7 +1895,14 @@ def shoot_loop(
 
     print(f"Aufnahme Loop {stem} ({seconds:.0f} s):")
     shot = shoot_storyboard(
-        window, app, session, frames, loop_timing(scenes, seconds), language=language
+        window,
+        app,
+        session,
+        frames,
+        loop_timing(scenes, seconds),
+        language=language,
+        morph_name=morph_name,
+        morph_span=morph_span,
     )
     files = encode_loop(shot, out / stem)
     # Ein Fenster je Aufnahme, und der Viewport wird ausdrücklich
