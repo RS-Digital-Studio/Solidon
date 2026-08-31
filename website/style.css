@@ -49,7 +49,7 @@
     --muted: #a39e96;
     --accent: #e08b4e;
     --accent-soft: #33261a;
-    --card: #201e1b;
+    --card: #2a2723;
     --line: #35322d;
     --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
     --shadow-lift: 0 2px 4px rgb(0 0 0 / 45%), 0 18px 40px -16px rgb(0 0 0 / 70%);
@@ -876,6 +876,22 @@ nav.lang a.cta:hover {
   font-variant-numeric: tabular-nums;
 }
 
+/* **Ein Boden für alle Karten, kein Deckel.** Die Regel steht hier oben,
+   damit jede spätere Einzelangabe sie überschreiben kann. Sie gibt der
+   Kartenfamilie das, was ihr fehlte: Tiefe. Im Hellen trägt der Schatten das
+   allein; im Dunkeln ist er fast unsichtbar und die aufgehellte Fläche
+   (`--card`) tut die Arbeit — deshalb steht hier beides und nicht eines. */
+.download,
+.price-card,
+.way,
+.honest,
+.faq details,
+.release-card,
+.stats,
+.boerse-liste > li {
+  box-shadow: var(--shadow);
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -924,6 +940,27 @@ nav.lang a.cta:hover {
   color: var(--accent);
   border: 1px solid var(--line);
   margin-left: 0.5rem;
+}
+
+/* **Ein eigener Zustand, weil der geerbte auf ihm nicht ankommt.** Der
+   Geisterknopf übernahm bisher den Hover des gefüllten: `saturate(115%)` auf
+   einer transparenten Fläche tut sichtbar nichts, und `--shadow-lift` legt
+   einen Schatten unter einen Körper, den es nicht gibt. Er hob sich also an,
+   ohne sich zu verändern — genau die Sorte Zustand, die der Nutzer als „da
+   passiert nichts" liest.
+
+   Stattdessen füllt er sich leicht und zieht seine Kante in den Akzent: Er
+   wird zu dem, was er ist, statt so zu tun wie der Knopf daneben. */
+.btn.ghost:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: var(--accent);
+  box-shadow: none;
+  filter: none;
+}
+
+.btn.ghost:active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  transform: translateY(0);
 }
 
 /* Vier Zusagen in einer Zeile, direkt unter dem Preis. Sie beantworten die
