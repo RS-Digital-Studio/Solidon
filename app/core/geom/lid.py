@@ -448,7 +448,16 @@ def create_lid(ctx: OpContext) -> OpResult:
             dataclasses.replace(source, features=_with_cavity(source, cavities, z)),
             SceneObject(
                 id="",
-                name=params.name or f"{source.name} {_('Deckel').translate()}",
+                # **Kein Quellname und kein `.translate()`.** Beides war
+                # eine Momentaufnahme: Der Quellname brach, sobald jemand die
+                # Dose umbenannte („Dose Deckel" neben „Vorratsbehälter"), und
+                # `.translate()` machte aus dem Wort eine feste Zeichenkette —
+                # beim Sprachwechsel bei offenem Projekt blieb sie deutsch
+                # stehen, während der Körper daneben mitwanderte.
+                #
+                # Ein Name, der eine Beziehung behauptet und sie nicht hält,
+                # ist schlechter als keiner; der Zusammenhang steht im Verlauf.
+                name=params.name or _("Deckel"),
                 mesh=body,
                 material=source.material,
                 features=_collar_feature(cavities, z, params.collar, clearance),
@@ -715,7 +724,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
             ),
             SceneObject(
                 id="",
-                name=f"{source.name} {_('Drehdeckel').translate()}",
+                # Wie beim Deckel darüber: kein Quellbezug, kein
+                # eingefrorenes Wort.
+                name=_("Drehdeckel"),
                 mesh=lid,
                 material=source.material,
                 features={CAP_THREAD_FEATURE: cap_thread},

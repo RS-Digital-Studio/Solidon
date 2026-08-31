@@ -19,6 +19,8 @@ from app.core.registry import REGISTRY
 from app.core.scene import evaluate
 from app.core.scene.project import ProjectSources, load
 from app.core.types import Profile
+from app.i18n import SOURCE_LANGUAGE, set_language
+from app.i18n.catalog import install_language
 
 
 def test_there_is_one_example_per_way() -> None:
@@ -590,3 +592,43 @@ def test_no_feature_sits_outside_the_body_it_belongs_to(
                     break
 
     assert not daneben, "Merkmale liegen außerhalb ihres Körpers:\n" + "\n".join(daneben)
+
+
+def test_object_names_follow_a_language_change(profile: Profile) -> None:
+    """Ein Objektname wandert mit der Sprache mit, auch bei offenem Projekt.
+
+    **Der Fall, den ein Test ohne Umschalten nicht sieht.** Wer die Sprache
+    beim Start setzt und dann öffnet, bekommt „Can" und „Can Lid" — alles
+    richtig. Wer auf Deutsch öffnet und danach umschaltet, bekam „Can" und
+    **„Dose Deckel"**: Die Dose folgt, weil ihr Name ein übersetzbarer Text
+    ist; der Deckel bleibt, weil `create_lid` ihn beim Erzeugen mit
+    ``.translate()`` zu einer festen Zeichenkette gemacht hat.
+
+    Es ist dieselbe Familie wie ein Merkmal, das nach dem Anordnen liegen
+    bleibt: beim Erzeugen festgeschrieben, von einem späteren Vorgang überholt
+    — dort eine Verschiebung, hier ein Sprachwechsel.
+
+    Geprüft wird **ohne** erneute Auswertung, denn genau das tut die Oberfläche
+    beim Umschalten auch nicht: Sie zeichnet den Baum neu, sie rechnet die
+    Szene nicht nach.
+    """
+    set_language(SOURCE_LANGUAGE)
+    project = load(examples.directory() / "dose-mit-deckel.p3d")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    objekte = list(result.scene.objects.values())
+    assert objekte, "das Beispiel hat Körper"
+
+    install_language("en")
+    set_language("en")
+    try:
+        deutsch = [
+            str(entry.name)
+            for entry in objekte
+            if any(wort in str(entry.name) for wort in ("Dose", "Deckel", "Prüfstück", "Körper"))
+        ]
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert not deutsch, "diese Namen sind beim Sprachwechsel deutsch geblieben: " + ", ".join(
+        deutsch
+    )

@@ -1061,7 +1061,8 @@ def test_piece(ctx: OpContext) -> OpResult:
             dataclasses.replace(
                 source,
                 mesh=piece,
-                name=f"{source.name} {_('Prüfstück').translate()}",
+                # Wie beim Deckel: kein Quellbezug, kein eingefrorenes Wort.
+                name=_("Prüfstück"),
                 features={},
             )
         ],
