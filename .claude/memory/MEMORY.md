@@ -146,6 +146,7 @@
 - [Merkmalsmehrdeutigkeit: erledigt](merkmalsmehrdeutigkeit-entwurf.md) — §15.7 ist gebaut; die Notiz führte ihn zwei Tage zu lange als offen.
 
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc plus Python-Patchskript faltet Escape-Folgen; ohne Backslashes bauen.
+- [Patchskript verdoppelt Zeilenenden](patchskript-verdoppelt-zeilenenden.md) — newline="" nur beim Lesen verdoppelt jedes Zeilenende; ruff format zerlegt die Datei danach.
 - [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sauber.
 - [Commit-Nachricht gehört in eine Datei](commit-nachricht-gehoert-in-eine-datei.md) — `python - << ENDE` liest stdin mit der System-Codepage.
 - [Deutsches Schlusszeichen beendet den String](deutsches-schlusszeichen-beendet-den-string.md) — `„…"` ist kein Paar; `!r` in Assert-Meldungen ist der Ausweg.
