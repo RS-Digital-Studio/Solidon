@@ -2986,8 +2986,7 @@ p.footnote {
   padding-bottom: clamp(1.5rem, 4vw, 3rem);
 }
 
-.boerse-suche,
-.boerse-hochladen {
+.boerse-suche {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
@@ -2995,12 +2994,48 @@ p.footnote {
   margin-top: 1.75rem;
 }
 
-.boerse-suche p,
-.boerse-hochladen p {
+/* **Zwei geteilte Zeilen statt einer gemeinsamen Unterkante.** Mit
+   `align-items: flex-end` fluchteten die Unterkanten der Blöcke, und weil der
+   Mailblock einen Hinweissatz mehr trug, saß seine Beschriftung eine Zeile
+   höher als die daneben — Robert am 31.08.2026: „sind versetzt".
+
+   `subgrid` gibt allen Blöcken dieselben zwei Zeilen des Formulars: oben die
+   Beschriftungen, unten die Felder. Damit liegen beide Grundlinien fest, egal
+   wie lang eine Beschriftung umbricht. Der Hinweissatz steht als eigenes Kind
+   darunter und zieht keine Zeile mehr schief. */
+.boerse-hochladen {
+  display: grid;
+  grid-template-columns: minmax(13rem, 1fr) minmax(14rem, 1fr) auto;
+  align-items: end;
+  gap: 0.5rem 1.25rem;
+  margin-top: 1.75rem;
+}
+
+.boerse-suche p {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   margin: 0;
+}
+
+.boerse-hochladen > p {
+  display: grid;
+  grid-row: 1 / 3;
+  grid-template-rows: subgrid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+/* Der Knopf hat keine Beschriftung über sich und gehört in die Feldzeile —
+   sonst stünde er oben neben den Wörtern. */
+.boerse-hochladen > p:last-of-type:not(.sub) { grid-row: 2; }
+
+/* Ohne Spalten nebeneinander gibt es auch keine geteilten Zeilen: Untereinander
+   trägt jeder Block seine eigenen. */
+@media (max-width: 46rem) {
+  .boerse-hochladen { grid-template-columns: 1fr; }
+  .boerse-hochladen > p { grid-row: auto; grid-template-rows: auto auto; }
+  .boerse-hochladen > p:last-of-type:not(.sub) { grid-row: auto; }
 }
 
 /* Das Feld wächst, der Rest nicht: Ein Suchfeld, das so breit ist wie sein
@@ -3050,10 +3085,12 @@ p.footnote {
   cursor: pointer;
 }
 
-/* Der Hinweis unter dem Mailfeld gehört zum Feld und nicht in die Zeile
-   daneben: `span.sub` steht sonst hinter dem Eingabefeld statt darunter. */
-.boerse-hochladen .sub {
-  flex-basis: 100%;
+/* Der Hinweis steht unter dem ganzen Formular und über seine volle Breite —
+   er gehört zum Mailfeld, ist aber keine Zeile darin (siehe oben). */
+.boerse-hochladen > .sub {
+  grid-column: 1 / -1;
+  grid-row: auto;
+  display: block;
   max-width: 34rem;
   margin: 0;
   font-size: 0.85rem;
