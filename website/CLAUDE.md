@@ -57,6 +57,17 @@ Eine Änderung an einer erzeugten Datei ist beim nächsten Lauf weg. Wer sie
   Flatpak. Das Archiv bleibt ein Bauartefakt und wird nicht hochgeladen. Die
   aktuelle Seite bleibt bis zu diesem Release unverändert.
 
+## Eine Falle bei den sechs Sprachfassungen
+
+**Wer eine Klasse oder Struktur von Hand in eine Seite schreibt, schreibt
+sie in eine** — die anderen fünf sehen danach genauso aus wie vorher, und
+nichts meldet sich. Am 31.08.2026 trug die deutsche Startseite eine
+Band-Regel einen Tag lang allein; fünf Fassungen blieben 48 Punkte höher,
+und kein Test sah es. Strukturänderungen an `index.html` (Abschnitte,
+Klassen, Bänder, Kapitel) werden deshalb immer **über alle sechs Fassungen
+gezählt**, bevor sie als fertig gelten — die Zählung nebeneinander fand den
+Fall in Minuten.
+
 ## Eine Falle beim Suchen
 
 **Ein Tag kann einen Namen zerteilen.** Steht die Marke als
