@@ -348,8 +348,12 @@
  * vierundzwanzig Bilder sind einzeln **gerechnet**, nicht skaliert. Man sieht
  * es an den Laufachsen — eine gedehnte Aufnahme hätte hier Ellipsen.
  *
- * `prefers-reduced-motion` schaltet beides ab: Wer Bewegung abbestellt hat,
- * bekommt keine, auch nicht auf seine Geste hin.
+ * **`prefers-reduced-motion` schaltet die Scroll-Drehung ab, nicht die
+ * Bedienung.** Die Einstellung zielt auf das, was ohne Zutun läuft; ein
+ * Regler, den jemand zieht, ist die Funktion der Seite und kein Effekt. Bis
+ * zum 31.08.2026 stieg dieses Skript dort vollständig aus — gemessen mit
+ * `--force-prefers-reduced-motion` blieb die Zahl am Regler stehen und das
+ * Bild wechselte nicht.
  */
 (() => {
   "use strict";
@@ -359,9 +363,14 @@
   const count = Number(stage.dataset.frames || 0);
   if (count < 2) return;
 
-  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    return;
-  }
+  /* **Hier wird nicht mehr ausgestiegen.** Bis zum 31.08.2026 stand an dieser
+     Stelle ein `return` für `prefers-reduced-motion`, mit der Begründung „wer
+     Bewegung abbestellt hat, bekommt keine, auch nicht auf seine Geste hin".
+     Das klingt konsequent und ist falsch: Die Einstellung meint das, was
+     **ohne Zutun** läuft. Gemessen kostete sie den Regler vollständig — die
+     Zahl blieb stehen, das Bild wechselte nicht, der Knopf antwortete auf
+     keinen Klick. Die Scroll-Drehung bleibt abgeschaltet, aber sie wird im
+     Stylesheet abgeschaltet und nicht hier. */
 
   let frame = 0;
   let dragging = false;
@@ -454,6 +463,14 @@
   };
   dial.addEventListener("pointerdown", preload, { once: true });
   dial.addEventListener("focus", preload, { once: true });
+
+  /* Der Hinweis nennt bei abgeschalteter Scroll-Drehung nur noch, was wirklich
+     geht. Vorher war er ganz ausgeblendet, und damit erfuhr niemand, dass
+     Ziehen überhaupt möglich ist. */
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    const hint = document.querySelector(".turn-hint");
+    if (hint && hint.dataset.calm) hint.textContent = hint.dataset.calm;
+  }
 
   dial.addEventListener("input", () => {
     const index = Number(dial.value);
