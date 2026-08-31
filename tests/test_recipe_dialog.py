@@ -23,7 +23,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
-from app.core.knowledge.parts.registry import _NAME_PATTERN
+from app.core.knowledge.parts.registry import NAME_PATTERN
 from app.core.scene.project import new_project
 from app.core.types import Document, Feature, Operation, Parameter, Transaction
 from app.ui.catalog import PartCatalog
@@ -469,7 +469,7 @@ def test_every_title_becomes_a_name_the_registry_accepts() -> None:
         "ÜBERHANG",
     ):
         name = _identifier(titel)
-        assert _NAME_PATTERN.match(name), f"{titel!r} ergibt {name!r} — das Register lehnt es ab"
+        assert NAME_PATTERN.match(name), f"{titel!r} ergibt {name!r} — das Register lehnt es ab"
 
     # **Und der Buchstabe bleibt ein Buchstabe.** Gültig wäre auch
     # ``caf_halter`` — der Filter macht aus jedem fremden Zeichen einen
