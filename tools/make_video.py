@@ -1677,7 +1677,12 @@ TURNTABLE_STEPS = 36
 #: das **Teil** im Bild, und das steht auf der Seite in einer Spalte — 800
 #: reichen, und sie sind bei sechsunddreißig Bildern der Unterschied zwischen
 #: anderthalb und vier Megabyte.
-TURNTABLE_WIDTH = 800
+TURNTABLE_WIDTH = 1000
+#: Achthundert waren es bis zum 31.08.2026, aus einer Zeit, in der die Bühne
+#: schmaler stand. Nach der Straffung misst sie 745 Punkte — 800 Bildpunkte
+#: darauf sind Faktor 1,07, und die Latte für Schärfe liegt bei 1,2. Tausend
+#: ergeben 1,34 und liegen sicher darüber; zwölfhundert kosteten 144 kB mehr
+#: für einen Unterschied, den niemand sieht.
 
 #: Wie stark die Bilder gerechnet werden (WebP, 0 bis 100).
 #:
@@ -1725,6 +1730,7 @@ def shoot_turntable(
     steps: int = TURNTABLE_STEPS,
     chosen: Path | None = None,
     zoom: float = TURNTABLE_ZOOM,
+    ratio: float | None = None,
 ) -> list[Path]:
     """Eine Umdrehung des Teils als Bildreihe — zum Ziehen auf der Website.
 
@@ -1788,6 +1794,20 @@ def shoot_turntable(
     record(window, app, frames, 0, steps, orbit_step(window, app, zoom, 1.0))
 
     left, top, width, height = viewport_rect(window)
+    # **Der Zuschnitt folgt der Bühne, nicht dem Fenster.** Zeigt die Seite
+    # 16/7 und die Aufnahme 1000/510, bezahlt jedes Bild Pixel für einen Rand,
+    # den der Browser wegschneidet. Geschnitten wird um die Mitte, weil das
+    # Teil dort steht.
+    cut_x, cut_y, cut_w, cut_h = left, top, width, height
+    if ratio:
+        wanted = int(width / ratio)
+        if wanted < height:
+            cut_h = wanted - (wanted % 2)
+            cut_y = top + (height - cut_h) // 2
+        else:
+            cut_w = int(height * ratio)
+            cut_w -= cut_w % 2
+            cut_x = left + (width - cut_w) // 2
     written: list[Path] = []
     out.mkdir(parents=True, exist_ok=True)
     for index in range(steps):
@@ -1799,7 +1819,7 @@ def shoot_turntable(
                 # Erst den Viewport ausschneiden, dann auf die Zielbreite:
                 # Zuschneiden nach dem Skalieren träfe andere Bildpunkte.
                 "-vf",
-                f"crop={width}:{height}:{left}:{top},scale={TURNTABLE_WIDTH}:-2:flags=lanczos",
+                f"crop={cut_w}:{cut_h}:{cut_x}:{cut_y},scale={TURNTABLE_WIDTH}:-2:flags=lanczos",
                 "-quality",
                 str(TURNTABLE_QUALITY),
                 str(target),
