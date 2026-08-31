@@ -74,7 +74,13 @@ liegt, nie, **was** auf den Stapel kommt.
 
 ## Stand
 
-Entwurf — wartet auf Roberts Wahl der Ausbaustufe. Die naheliegende erste
-Stufe wäre die Kombination der drei S/M-Punkte, die der `caveat` der Op
-selbst benennt (Naht auf Kanten, Einschnürungs-Heuristik, Stützen für die
-besten Kandidaten) — aber das ist eine Beobachtung, keine Vorentscheidung.
+**Entschieden (Robert, 31.08.2026): Vollausbau.** Wörtlich: „Qualität ist
+das wichtigste — wie immer das sinnvollste und beste für den Kunden ohne
+CAD-Kenntnisse. Aufwand wie immer egal." Der Maßstab ist damit: Auto Split
+tut von selbst das Richtige — der Kunde wählt keine Kriterien, er bekommt
+eine Zerlegung, die er auch von einem erfahrenen Kollegen bekäme; höchstens
+eine einfache Geste („diese Fläche soll schön bleiben") kommt dazu. Die
+Serie steht als T1–T9 im ROADMAP-Register; FEM bleibt zurückgestellt, bis
+die Heuristiken gemessen nicht reichen (neue Abhängigkeit = Regel 22, eigene
+Entscheidung). Die Randbedingungen oben gelten unverändert — „Aufwand egal"
+kauft Rechenzeit mit Fortschritt und Abbruch, keine eingefrorene Oberfläche.

@@ -118,7 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimate_mesh` erzeugt bei starker Reduktion nicht-mannigfaltige Kanten | Befunde aus dem Weg-Dreh (31.08.2026) | eine Ursachen-Untersuchung im Reduzierer — die Schwellen sind gemessen (100 000 sauber, 60 000 zwei, 30 000 vier defekte Kanten), der Prüfbericht meldet korrekt |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
-| Zusammengebaut sehen, in Einzelteilen drucken | Befunde aus dem Weg-Dreh (31.08.2026) | Roberts Idee als Schaustück-Loop: Explosion und Bett-Lage eines mehrteiligen Teils — 3a (neue Explosions-Szene im Drehbuch) mit d3 (Motiv); die Werkzeuge existieren |
+| Die Trennen-Serie T1–T9 | Sinnvolles Trennen — die Serie (31.08.2026) | die Abarbeitung nach Roberts Vollausbau-Entscheid — Nahtlage nach Kanten, Stützbedarf je Teil, schiefe Ebenen (§22.3), automatische Verbinderwahl, Festigkeit, Symmetrie, globale Suche, die eine Kundengeste, das Schaustück; Start nach der Website-Welle, Reihenfolge gegen Resin bei Robert |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
 | Ein Projekt zu öffnen kostet ein Vielfaches des Bauens | Befunde aus dem Weg-Dreh (31.08.2026) | die Diagnose (15): Profil über `load()`+`evaluate()` am Griff-Projekt — 908,8 CPU-s für EINEN Durchlauf, der beim Bauen neunmal in 2 min lief; Verdachtsrichtung perceive-Merkmalsvergleich, §2.8/P1 |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -13342,7 +13342,11 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       unbrauchbar wie 622 Warnungen, nur weniger alarmierend; eine
       Zusammenfassungs-Zeile ist die Antwort (3a, gemessen, nicht gebaut —
       fremdes Gebiet).
-- [ ] **Roberts Idee (31.08.2026), von ihm präzisiert: „die Option zum
+- [x] **Erledigt als Recherche und Entscheid — die Arbeit lebt jetzt als
+      eigene Serie** („Sinnvolles Trennen — die Serie", unten im Register;
+      Roberts Vollausbau-Entscheid vom 31.08.: „Qualität ist das wichtigste,
+      Aufwand wie immer egal"). Ursprünglich: **Roberts Idee (31.08.2026),
+      von ihm präzisiert: „die Option zum
       SINNVOLLEN Trennen — recherchieren da auch mal."** Zwei Hälften:
       **(a) Die Funktion** — Trennen soll nicht nur schneiden, sondern
       sinnvoll zerlegen: bauraumgerecht, Überhänge und Stützen minimierend,
@@ -13404,3 +13408,33 @@ Rechtstexte stehen nach `665cfceb` auf 73. Die übrigen Textseiten:
       „maß" dieselben 81 Zeichen; 50s Notiz wirkte damit zweimal an einem
       Tag. Ursprünglich: Fließtext auf Lesebreite bringen, ohne
       Karten-Layouts zu brechen; Absatz-genau messen, dann die Grenze setzen.
+
+---
+
+## Sinnvolles Trennen — die Serie (31.08.2026)
+
+Roberts Entscheid zum Konzept (`konzepte/konzept-sinnvolles-trennen-2026-08.md`):
+**Vollausbau — „Qualität ist das wichtigste, das sinnvollste und beste für den
+Kunden ohne CAD-Kenntnisse, Aufwand wie immer egal."** Maßstab: Auto Split
+liefert von selbst die Zerlegung, die ein erfahrener Kollege wählen würde.
+Randbedingungen: deterministisch (§11.3), abbrechbar (§15.6), Fortschritt
+statt eingefrorener Oberfläche (§2.8), keine GPL (Regel 15), jede Bewertung
+ändert nur, wo die Ebene liegt — der Stapel bleibt `split_pinned`-Schritte.
+
+| Paket | Kern | Größe | Stand |
+|---|---|---|---|
+| T1 | Nahtlage nach Kanten und Krümmung: Krümmungsterm entlang der Schnittkontur in `_judge`, dazu die Einschnürungs-Heuristik („Naht nicht am Querschnittsminimum") — löst den `caveat` der Op ein | M | offen |
+| T2 | Stützbedarf je Teilstück in die Bewertung: die besten Kandidaten je Ebene grob orientieren (`orient_for_print`) und das Stützvolumen der Schichtanalyse in den Score mischen — beide Bausteine existieren | M–L | offen |
+| T3 | Schiefe Ebenen in der automatischen Suche: Normalenfächer als Zweitstufe, wenn achsparallel über der Schwelle bleibt — löst das §22.3-Versprechen „Höhen und Richtungen" ein; die Maschinerie rechnet längst mit beliebigen Normalen | M–L | offen |
+| T4 | Verbinderform automatisch vorschlagen (Schwalbenschwanz bei Fläche, Schnapper ab Federweg, sonst rund+Kleber) statt Nutzerwahl — die Messdaten liegen je Naht schon vor | S–M | offen |
+| T5 | Zerbrechlichkeit und Festigkeit als Heuristik: dünne Splitterteile bestrafen, Naht meidet die Lastzone; FEM bewusst zurückgestellt (Regel 22) | S–M | offen |
+| T6 | Symmetrie erhalten: Schnitt auf oder symmetrisch zur erkannten Symmetrieebene | S–M | offen |
+| T7 | Globale Suche statt greedy: Beam Search über Schnittfolgen (Vorbild Chopper, Breite ~4), abbrechbar in `JUDGE_BLOCK`-Häppchen | M–L | offen |
+| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | offen |
+| T9 | Das Schaustück: zusammengebaut sehen, dann die Bett-Lage der Einzelteile — Explosions-Szene im Loop-Drehbuch, Motiv aus den mehrteiligen Galerieteilen (Roberts Idee, Hälfte b) | S | offen |
+
+- [ ] Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 →
+      T7 → T6 → T8 → T9, je Paket Geometrietest gegen den Korpus,
+      Determinismus-Test, Agenten-Suite-Stichprobe wo die Regelsammlung
+      berührt ist, und Review vor dem Commit; Start nach der laufenden
+      Website-Welle, Reihenfolge gegen Resin Stufe 1 liegt bei Robert.
