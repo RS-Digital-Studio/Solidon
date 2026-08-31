@@ -142,6 +142,25 @@ Baustein und die Skizzentasche taten es; `label_text` nicht, und darum kam
 Dreieckszahl zurück, ohne eine Zeile im Prüfbericht. Eine neue Operation mit
 `boolean(...)` ist erst fertig, wenn diese Frage darin steht.
 
+**Und die Frage gilt nicht nur dem Booleschen.** Am 31.08.2026 hat sie
+`sculpt_strokes` gefehlt, und dort war der Ausgang schlimmer als Schweigen: Die
+Operation meldete „Die Züge dieser Sitzung wurden auf den Körper übertragen",
+während kein einziger Eckpunkt sich bewegt hatte. Der Vorbehalt im eigenen
+Registereintrag beschreibt genau diesen Fall — „Ein Strich sitzt an einer Stelle
+im Raum, und wer die Form darunter ändert, verschiebt die Fläche unter ihm
+weg" —, und geprüft wurde er nicht. Gemessen am Schaustück des vierten Wegs, das
+im Bild ein glatter Kiesel war: drei Fingerrillen 18 mm über dem Körper in der
+Luft, null Abtrag, zwei Schritte im Verlauf, kein Wort im Bericht.
+
+**Wo „getroffen" nicht „gewirkt" heißt, wird die Wirkung gemessen und nicht der
+Treffer.** Der vierte Zug desselben Schaustücks griff 321 von 5770 Eckpunkten
+und trug dabei 0,41 mm ab, bei eingestellter Stärke 5,0 — formal ein Treffer,
+im Druck nichts. `sculpt.no_effect` misst deshalb die größte Verschiebung
+gegen `Profile.printer.layer_height`: Was unter einer Schichthöhe bleibt,
+entsteht auch im Druck nicht. Daneben nennt `sculpt.strokes_missed` die Zahl
+der Züge, die gar nichts erreicht haben — die beiden Aussagen sind verschieden,
+und die zweite sagt dem Nutzer, wo er suchen muss.
+
 **Und gefragt wird mit dem Profil.** Die Grenze ist nicht `EPS_GEOM`, sondern
 `Profile.smallest_printable_volume` — ein Stück Extrusionsbahn von einer
 Bahnbreite Länge. Ein Werkzeug, das den Körper knapp verfehlt, schneidet keine

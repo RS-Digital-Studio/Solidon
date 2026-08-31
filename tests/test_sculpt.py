@@ -428,6 +428,75 @@ def test_an_empty_session_says_so(profile: Profile) -> None:
     assert {f.code for f in result.findings} == {"sculpt.empty"}
 
 
+def test_a_stroke_that_misses_the_body_is_reported(profile: Profile) -> None:
+    """Der Fall aus dem eigenen Vorbehalt der Operation — und er war stumm.
+
+    Ein Zug sitzt an einer Stelle im Raum. Wer die Form darunter später
+    verschiebt, lässt ihn in der Luft stehen: im Verlauf ein Schritt, am Teil
+    keine Änderung, und im Bericht stand bis hierher sogar, die Züge seien
+    übertragen worden. Gemessen am Weg-4-Schaustück, dessen drei Fingerrillen
+    18 mm über dem Körper lagen und exakt nichts abtrugen — die Operation
+    warnt davor im Register und prüfte es nicht.
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    strokes = [on_ball(1.0, 0.0, 0.0), on_ball(0.0, 0.0, 1.0, radius=60.0)]
+
+    result = run(entry, profile, strokes=strokes_to_text(strokes))
+
+    missed = next(f for f in result.findings if f.code == "sculpt.strokes_missed")
+    assert missed.severity == "warning"
+    assert missed.values["missed"] == 1
+    assert missed.values["strokes"] == 2
+
+
+def test_a_session_without_any_effect_does_not_claim_success(profile: Profile) -> None:
+    """Liegt jeder Zug daneben, ist „übertragen" die falsche Auskunft.
+
+    Das ist der Unterschied zwischen Schweigen und Falschaussage: Ein Bericht,
+    der nichts sagt, lässt den Nutzer suchen; einer, der den Erfolg meldet,
+    schickt ihn in die falsche Richtung.
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+
+    result = run(entry, profile, strokes=strokes_to_text([on_ball(0.0, 0.0, 1.0, radius=60.0)]))
+
+    codes = {f.code for f in result.findings}
+    assert "sculpt.no_effect" in codes
+    assert "sculpt.applied" not in codes, "was nicht geschah, wird nicht gemeldet"
+
+
+def test_a_stroke_shallower_than_a_layer_counts_as_no_effect(profile: Profile) -> None:
+    """Getroffen ist nicht gewirkt — die Schwelle ist eine Schichthöhe.
+
+    Der Daumenmulden-Zug des Schaustücks traf 321 von 5770 Eckpunkten und trug
+    dabei 0,41 mm ab, bei eingestellter Stärke 5,0: formal ein Treffer, im
+    Druck nichts. Gemessen wird deshalb die Verschiebung und nicht die
+    Trefferzahl, und die Grenze kommt aus dem Profil statt aus dem Code
+    (Regel 7).
+    """
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+    below = profile.printer.layer_height / 4.0
+    strokes = [on_ball(1.0, 0.0, 0.0, strength=below)]
+
+    result = run(entry, profile, strokes=strokes_to_text(strokes))
+
+    codes = {f.code for f in result.findings}
+    assert "sculpt.no_effect" in codes
+    assert "sculpt.strokes_missed" not in codes, "getroffen hat er, gewirkt nicht"
+
+
+def test_a_stroke_that_lands_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe — sonst warnt jede Sitzung, und keine Warnung zählt."""
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
+
+    result = run(entry, profile, strokes=strokes_to_text([on_ball(1.0, 0.0, 0.0)]))
+
+    codes = {f.code for f in result.findings}
+    assert "sculpt.no_effect" not in codes
+    assert "sculpt.strokes_missed" not in codes
+    assert "sculpt.applied" in codes
+
+
 # --- gegen den Korpus -----------------------------------------------------------
 
 

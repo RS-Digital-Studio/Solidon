@@ -40,6 +40,7 @@ from app.core.types import (
     Finding,
     OpContext,
     OpResult,
+    Profile,
     Stroke,
     Vec3,
 )
@@ -133,8 +134,15 @@ def _neighbours(mesh: trimesh.Trimesh, count: int) -> tuple[np.ndarray, np.ndarr
     return total, np.maximum(seen, 1.0)
 
 
-def _offsets(mesh: MeshData, strokes: Iterable[Stroke]) -> np.ndarray:
-    """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang."""
+def _offsets(
+    mesh: MeshData, strokes: Iterable[Stroke], missed: list[Stroke] | None = None
+) -> np.ndarray:
+    """Das Offsetfeld einer Etappe: alle Striche summiert, ein Durchgang.
+
+    ``missed`` sammelt die Striche, die keinen einzigen Eckpunkt greifen —
+    hier und nicht anderswo, weil die Kugelabfrage es ohnehin feststellt.
+    Was daraus wird, steht in ``_sculpting_findings``.
+    """
     body = mesh.raw
     points = np.asarray(body.vertices, dtype=float)
     normals = np.asarray(body.vertex_normals, dtype=float)
@@ -153,10 +161,12 @@ def _offsets(mesh: MeshData, strokes: Iterable[Stroke]) -> np.ndarray:
         curvature = np.einsum("ij,ij->i", middle - points, normals)
 
     for stroke in strokes:
+        touched = False
         for centre, direction in _mirrored(stroke):
             near, weight = _weights(tree, points, centre, stroke.radius)
             if not len(near):
                 continue
+            touched = True
             scale = (weight * stroke.strength)[:, None]
             if stroke.tool == "draw":
                 shift[near] += direction * scale
@@ -180,6 +190,8 @@ def _offsets(mesh: MeshData, strokes: Iterable[Stroke]) -> np.ndarray:
                 anchor = np.average(points[near], axis=0, weights=weight)
                 height = np.einsum("ij,j->i", points[near] - anchor, direction)
                 shift[near] -= direction * (height[:, None] * scale)
+        if missed is not None and not touched:
+            missed.append(stroke)
     return shift
 
 
@@ -229,7 +241,9 @@ def stroke_at(
     )
 
 
-def apply_strokes(mesh: MeshData, strokes: Sequence[Stroke]) -> MeshData:
+def apply_strokes(
+    mesh: MeshData, strokes: Sequence[Stroke], missed: list[Stroke] | None = None
+) -> MeshData:
     """Die ganze Strichliste auswerten — Etappe für Etappe, jede in einem Zug.
 
     ``warp`` ändert die Topologie nicht: Es kommen keine Dreiecke dazu, und
@@ -241,7 +255,9 @@ def apply_strokes(mesh: MeshData, strokes: Sequence[Stroke]) -> MeshData:
         return mesh
     body = mesh.raw
     for part in stages(strokes):
-        moved = np.asarray(body.vertices, dtype=float) + _offsets(mesh.replacing(body), part)
+        moved = np.asarray(body.vertices, dtype=float) + _offsets(
+            mesh.replacing(body), part, missed
+        )
         body = trimesh.Trimesh(vertices=moved, faces=body.faces, process=False)
     return mesh.replacing(body)
 
@@ -395,8 +411,9 @@ def sculpt_strokes(ctx: OpContext) -> OpResult:
     if extra:
         strokes = [replace(stroke, symmetry=stroke.symmetry | extra) for stroke in strokes]
 
-    after = apply_strokes(before, strokes)
-    findings = _sculpting_findings(before, after, strokes, source.id)
+    missed: list[Stroke] = []
+    after = apply_strokes(before, strokes, missed)
+    findings = _sculpting_findings(before, after, strokes, source.id, missed, ctx.profile)
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
 
 
@@ -438,14 +455,28 @@ def _from_baked(
 
 
 def _sculpting_findings(
-    before: MeshData, after: MeshData, strokes: Sequence[Stroke], object_id: str
+    before: MeshData,
+    after: MeshData,
+    strokes: Sequence[Stroke],
+    object_id: str,
+    missed: Sequence[Stroke],
+    profile: Profile,
 ) -> list[Finding]:
     """Was die Sitzung gekostet hat — und was ihr im Weg stand.
 
-    Drei Dinge, die der Nutzer nicht sehen kann und wissen muss: ob das Netz
-    für seinen Pinsel fein genug war (Entscheidung E), wie viele Durchgänge
-    seine Etappen kosten (Entscheidung C), und ob die Fläche sich dabei selbst
-    durchdrungen hat — ``warp`` prüft das nicht (Entscheidung L).
+    Vier Dinge, die der Nutzer nicht sehen kann und wissen muss: ob überhaupt
+    etwas geschehen ist, ob das Netz für seinen Pinsel fein genug war
+    (Entscheidung E), wie viele Durchgänge seine Etappen kosten
+    (Entscheidung C), und ob die Fläche sich dabei selbst durchdrungen hat —
+    ``warp`` prüft das nicht (Entscheidung L).
+
+    **Das erste ist am 31.08.2026 dazugekommen und war das teuerste.** Der
+    Vorbehalt im Register warnt seit jeher: Ein Zug sitzt an einer Stelle im
+    Raum, und wer die Form darunter verschiebt, zieht ihm die Fläche weg.
+    Geprüft wurde es nicht — die Sitzung meldete auch dann „übertragen", wenn
+    kein einziger Eckpunkt sich bewegt hatte. Gemessen am Schaustück des
+    vierten Wegs, dessen drei Fingerrillen 18 mm über dem Körper lagen: null
+    Abtrag, ein Schritt im Verlauf, und im Bericht die Erfolgsmeldung.
     """
     if not strokes:
         return [
@@ -458,6 +489,19 @@ def _sculpting_findings(
         ]
 
     parts = stages(strokes)
+
+    # Getroffen ist nicht gewirkt: Der Muldenzug des Schaustücks griff 321 von
+    # 5770 Eckpunkten und trug dabei 0,41 mm ab, bei eingestellter Stärke 5,0.
+    # Gemessen wird deshalb die Verschiebung, und die Grenze kommt aus dem
+    # Profil (Regel 7): Was unter einer Schichthöhe bleibt, entsteht im Druck
+    # nicht. ``warp`` lässt die Topologie stehen, die Punkte sind vergleichbar.
+    shifted = np.linalg.norm(
+        np.asarray(after.raw.vertices, dtype=float) - np.asarray(before.raw.vertices, dtype=float),
+        axis=1,
+    )
+    moved = float(shifted.max()) if len(shifted) else 0.0
+    layer = profile.printer.layer_height
+
     findings = [
         Finding(
             code="sculpt.applied",
@@ -466,7 +510,39 @@ def _sculpting_findings(
             object_id=object_id,
             values={"strokes": len(strokes), "stages": len(parts)},
         )
+        if moved >= layer
+        else Finding(
+            code="sculpt.no_effect",
+            severity="warning",
+            message=_(
+                "Diese Formsitzung hat den Körper nicht verändert — was sie bewegt hat, "
+                "bleibt unter einer Schichthöhe und entstünde auch im Druck nicht. Entweder "
+                "liegen die Züge neben der Fläche, oder ihre Stärke ist für dieses Teil zu "
+                "klein."
+            ),
+            object_id=object_id,
+            values={
+                "strokes": len(strokes),
+                "stages": len(parts),
+                "moved_mm": round(moved, 3),
+                "layer_mm": round(layer, 3),
+            },
+        )
     ]
+    if missed:
+        findings.append(
+            Finding(
+                code="sculpt.strokes_missed",
+                severity="warning",
+                message=_(
+                    "Ein Teil der Züge hat den Körper nicht erreicht und trägt nichts ab. Ein "
+                    "Zug bleibt an seiner Stelle im Raum — wer die Form darunter nachträglich "
+                    "verschiebt, lässt ihn in der Luft stehen. Erst konstruieren, dann formen."
+                ),
+                object_id=object_id,
+                values={"missed": len(missed), "strokes": len(strokes)},
+            )
+        )
 
     edge = float(np.median(np.asarray(before.raw.edges_unique_length, dtype=float)))
     finest = min(stroke.radius for stroke in strokes)
