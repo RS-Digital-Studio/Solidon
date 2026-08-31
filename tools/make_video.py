@@ -334,10 +334,52 @@ MODULAR: dict[str, tuple[tuple[str, str], ...]] = {
 }
 
 #: Die Drehbücher unter ihren Namen. Vorgabe ist das Einstiegsvideo.
+#: Weg 1 — ein fremdes Modell anpassen.
+#:
+#: **Ohne Morph-Szene**, und das ist keine Sparsamkeit: Ein eingelesenes
+#: Modell hat keine benannten Parameter, und `morph_step` steigt bei einem
+#: unbekannten Namen still aus. Das Video zeigte an dieser Stelle
+#: hundertzwanzig Bilder Stillstand. `record` fällt bei jedem Szenennamen,
+#: den es nicht kennt, auf eine Kreisbahn zurück — das ist die richtige
+#: Bewegung für ein Teil, dessen Änderung man von einer Seite sieht.
+ANPASSEN: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "hook",
+            "Eine heruntergeladene Datei. Sie passt fast — nur das eine Loch fehlt.",
+        ),
+        (
+            "turn",
+            "Solidon liest sie ein, repariert das Netz und setzt sie aufs "
+            "Bett. Dann klicken Sie auf die Stelle, die stört.",
+        ),
+        (
+            "closing",
+            "Aus fremd wird deins.",
+        ),
+    ),
+    "en": (
+        (
+            "hook",
+            "A downloaded file. It almost fits — one hole is missing.",
+        ),
+        (
+            "turn",
+            "Solidon reads it, repairs the mesh and places it on the bed. "
+            "Then you click the spot that bothers you.",
+        ),
+        (
+            "closing",
+            "Someone else's file becomes yours.",
+        ),
+    ),
+}
+
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
     "modular": MODULAR,
+    "anpassen": ANPASSEN,
 }
 
 #: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
