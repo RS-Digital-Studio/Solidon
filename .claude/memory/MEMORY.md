@@ -100,6 +100,7 @@
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — gilt für alles: sieben Merkmale, die einen Text verraten; Rückspiegeln ist eines davon.
 - [Ein Druckziel, vier Wege, ein Vertrauensmodell](solidon-ist-die-vorstufe-vor-dem-slicer.md) — Produktkern: vier Wege in einer Szene bis zur ehrlichen Slicer-Übergabe.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Konzeptlinie: Qualitätsvertrag, messbare KI, reproduzierbare Updates; keine Arbeitsliste.
+- [Firmennutzung ist ein Marktsignal](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs; Amsler & Frey validiert einen Einsatz, Millionenwerte bleiben unbelegte Szenarien.
 - [Review immer vollständig](review-immer-vollstaendig.md) — jeden Diff ganz lesen, keine Stichproben-Ökonomie.
 - [Übersetzung neu statt geflickt](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz eigenständig ist; sonst neu.
 - [Baustein heißt je Sprache ein Wort](baustein-begriff-je-sprache.md) — es bloque, fr bloc, it blocco, pt bloco; pieza/peça bleiben für „Teil".
