@@ -140,6 +140,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `website/dl/` sammelt jede je gebaute Fassung | Der Download-Ordner sammelt jede je gebaute Fassung (30.08.2026) | eine Produktentscheidung von Robert: alte Pakete behalten (Rollback-Archiv) oder auf die angebotene Fassung eindampfen — lokal 11 GB in 40 Dateien ab 0.1.1, und was davon auf dem Server liegt, ist noch nicht gezählt |
 | Panels und Dialoge sollen den Leitsatz einlösen | Alle Panels und Dialoge aus Kundensicht (30.08.2026) | **alle vierzehn sind zu — die Serie ist komplett abgearbeitet.** Zuletzt D6 (`2d7c46ea`, reviewt): Die Registerzahl 2330 war die Wunschbreite der Leiste, die Kippgrenze lag bei **1920** — auf dem verbreitetsten Bildschirm verschwand die ganze Kopfzeile hinter dem unbeschrifteten Pfeil, sobald ein Projekt offen war (leer will die Zeile 103 px, deshalb fiel es beim Ausprobieren nie auf; 15s erste Messung lief gegen das leere Fenster — „Testprojekt trifft den Fall nicht" in Reinform, selbst gefangen). Zwei Hälften: Die Labels kürzen ihren Text statt Breite zu verlangen (`_EphemeralLabel`, voller Wortlaut in Tooltip und `full_text()`, `minimumSizeHint` fünf Zeichen), die Werkzeugleiste gibt bei Platznot die Wörter auf und behält die Zeichen (Namen bleiben an QAction/Tooltip/statusTip); Hysterese mit **gemerkter** Wortform-Breite — eine Hysterese, die ihre eigene Wirkung misst, ist keine (viermal geschwungen über sieben Breiten, gemessen). Kopfzeile sichtbar von 1920 bis 1000 px. Freigabe-Stichprobe 9 Tests grün; D8 und D10 waren bereits fertig (`54d2db34`, `9b189966`) — damit sind es vierzehn von vierzehn (die Einzelheiten zu D3/D5: (zuletzt **D3 und D5, `8df08a3a`, reviewt**: der ComfyUI-Dialog hob „Ordner wählen …" statt „Einrichten" hervor — dieselbe Familie wie die neun aus `4d83b1ca`, er fehlte nur in der Liste des Wächters, und eine Liste ist so scharf wie ihre Lücken; im Fehlerdialog entschied `Action.primary` längst die Rolle, es fehlte `make_primary` am selben Ort, und bleibt nur „Abbrechen", trägt jetzt niemand den Akzent — „Schließen ist nie ein Hauptknopf" gilt auch für den einzigen; D5: „Weiter" ohne Auswahl im Skizzen-Dialog nahm den Klick an und schloss — jetzt gesperrt **mit Grund** an Tooltip, Statuszeile und Bildschirmleser, der Akzent bleibt, denn gesperrt sieht gesperrt aus. Freigabe-Stichprobe 10 gezielte Tests grün; 15s drei Prüfstand-Messfehler alle von der eigenen Gegenprobe gefangen, ihr `SOLIDON_KEIN_TOR=1` war angesagt und begründet — d3s Messlauf lief, die Prüfungen waren unmittelbar vorher selbst gefahren), dazu der Skeletteditor-Lader auf Roberts Wort). **Umverteilung nach D-Abschluss: Z5/Z6 wandern von 3a zu 15** — 3a behält WB10, und die einzige Doppellast des Abends ist aufgelöst |
 | Neun V-Pakete des Viewports | Der Zeichenmodus und der Viewport bekommen ihre Durchsicht (30.08.2026) | **alle neun sind zu** (zuletzt V6, `9da6d4fa`: 58 von 58 Befund-Klicks lösten nichts aus, jetzt bleibt keiner folgenlos) — offen nur der Warnprojekt-Nachweis für die Flug-Marke (50, nach WD3 — vorgemerkt auf eigenen Wunsch) |
+| Der Fragebogen auf der Startseite | Der Fragebogen kommt auf die Startseite (31.08.2026) | den Bau bei c3 — Inhalt wörtlich aus `feedback.py`, Ort ist der Unterstützen-Kasten (vor dem Download hätte er erfundene Antworten bekommen), keine Bestätigungsmail, Anrede folgt der Seite und nicht der Anwendung (Startseite duzt 48:5, Handbuch siezt 2:115); Datenschutz vor dem Livegang, Upload-Sperre gilt |
+| Roberts Ton-Direktive auf den Bestand | Der Fragebogen kommt auf die Startseite (31.08.2026) | das Durchgehen von Website, Handbuch und Oberflächentexten gegen die sieben Merkmale aus `.claude/memory/nicht-nach-ki-klingen.md` — der Maßstab ist vom 31.08.2026 und der Bestand nie daraufhin gelesen; an alle vier Sitzungen weitergegeben |
 | Dreizehn G-Pakete des Designs | Design und Anmutung bekommen ihre eigene Durchsicht (30.08.2026) | **die vollständige Abarbeitung — Roberts Order (30.08.2026): das ganze Dokument, alle 40 Befunde**, nicht nur die kritischen. Die style.py-Pakete G1/G2/G3/G7 als Serie in einer Hand (72), G11 bei 50, G12 dockt an D11 (15); je Paket Belegbild vorher/nachher und Review; **Folge der Beleuchtungs-Fixes: `app/images/` vor dem nächsten Paketbau neu erzeugen** |
 
 ---
@@ -13937,7 +13939,7 @@ statt eingefrorener Oberfläche (§2.8), keine GPL (Regel 15), jede Bewertung
 | T5 | Zerbrechlichkeit und Festigkeit als Heuristik: dünne Splitterteile bestrafen, Naht meidet die Lastzone; FEM bewusst zurückgestellt (Regel 22) | S–M | **zu als Negativbefund** (15, gemessen an neun Formen, kein Commit): Bauraumfenster und Mittenlage erzwingen ausgewogene Teile — am 17-Nahtlagen-Fall laufen Score und Festigkeit parallel, die Suche wählt die splitterfreieste Lage von selbst; Splitter entstehen nur, wo der Körper selbst schlank ist, und dann vermeidet sie keine Naht; Lastzonen-Meidung ist ohne Nutzungswissen nicht bestimmbar, das Querschnitts-Minimum meidet die Naht seit T1. Ehrliche Grenze: neun Formen sind keine Vollständigkeit — das Messgerüst steht, eine neue Form kostet eine halbe Stunde |
 | T6 | Symmetrie erhalten: Schnitt auf oder symmetrisch zur erkannten Symmetrieebene | S–M | offen |
 | T7 | Globale Suche statt greedy: Beam Search über Schnittfolgen (Vorbild Chopper, Breite ~4), abbrechbar in `JUDGE_BLOCK`-Häppchen | M–L | offen |
-| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | **in Arbeit (1b, Test zuerst). Bauart entschieden: Sperre über KOORDINATEN, nicht über Dreiecksindizes** — `split_to_fit` schneidet mehrfach, jedes Teilstück ist ein neues Netz mit neuer Nummerierung, eine Index-Sperre wäre nach dem ersten Schnitt verloren; `Feature.face_indices` bleibt der Weg von der angeklickten Fläche zu den Punkten, aber **einmal beim Markieren statt bei jedem Schnitt**. Drei Auflagen: **Abstände zur Ebene statt Achsposition** (gilt für jede Normale und bleibt bei T3s schiefen Ebenen richtig), Toleranz in der Größenordnung der übrigen Suche (ein Punkt auf der Ebene ist kein Schnitt), und **der Test bildet den Mehrfachschnitt ab** — genau dort wäre die Index-Fassung durchgefallen. Ursprünglich: **Vorschlag mit Bild vor dem Bau** — zwei Varianten (Markiergeste, Sperr-Anzeige, Rücknahme, und was die Suche sagt, wenn unter der Sperre keine gute Naht bleibt: anhalten und fragen, Regel 21), gemessen gegen die Oberflächengrenzen, Bild an Robert und Review |
+| T8 | Die eine Kundengeste: „Diese Fläche soll schön bleiben" — Sichtflächen-Markierung im Viewport als harte Sperre für die Nahtsuche (kein Kriterien-Dialog) | M | **Kern und Planungsbrücke sind auf main** (`1a89750e`, `72892f3c`, 1b, reviewt) — die Oberfläche ist in Arbeit. Bauart: Sperre über KOORDINATEN, nicht über Dreiecksindizes — `split_to_fit` schneidet mehrfach, jedes Teilstück ist ein neues Netz mit neuer Nummerierung, eine Index-Sperre wäre nach dem ersten Schnitt verloren; `Feature.face_indices` bleibt der Weg von der angeklickten Fläche zu den Punkten, aber **einmal beim Markieren statt bei jedem Schnitt**. Drei Auflagen: **Abstände zur Ebene statt Achsposition** (gilt für jede Normale und bleibt bei T3s schiefen Ebenen richtig), Toleranz in der Größenordnung der übrigen Suche (ein Punkt auf der Ebene ist kein Schnitt), und **der Test bildet den Mehrfachschnitt ab** — genau dort wäre die Index-Fassung durchgefallen. **Die dritte Auflage hat sofort getragen, anders als erwartet:** Der Mehrfachschnitt-Test war grün, aber eine Mutation deckte eine ungeprüfte Zeile auf — die Sperre im Weg der konvexen Zerlegung, vorsorglich gesetzt, und ihr Entfernen machte nichts rot. Grund gemessen: An keinem Körper des Korpus wird die zweite Meinung überhaupt gefragt (beste Ebene 0,000/0,070/0,000, alle unter `HINT_THRESHOLD` 0,3). Erreichbar ist der Pfad trotzdem — an einer Gabel mit Sperre −14…+14 schlägt die Zerlegung x = −13,0 vor, mitten in der Sperre und mit besserer Punktzahl als jede erlaubte Ebene; der vierte Test setzt die Schwelle deshalb selbst auf 0. **Familie: Ein zweiter Weg zum selben Ergebnis muss dieselben Regeln kennen wie der erste** — zweite Instanz an einem Tag neben dem Sculpt-Erzeuger, der Warnungen verschwieg, und beide Male ist der zweite Weg der, den man beim Bauen vergisst. **Persistenz-Entscheid (50, 31.08.2026): Die Sperre gehört ins DOKUMENT, nicht in die Ansicht.** 1bs Analyse war richtig (ein `protect` an der Operation wäre tot — zum Ausführungszeitpunkt ist die Suche vorbei), die Schlussfolgerung „also Ansichtszustand" nicht: „nicht an einer Operation" heißt nicht „nicht im Dokument", und `DocumentChange` trägt mit Parametern, Passungen, Drucker und Material vier Dinge, die an keinem Schritt hängen. Eine Sichtfläche ist eine Aussage über das **Teil**, nicht über die Sitzung — als Ansichtszustand ist sie nach dem Schließen weg, und der Kunde erfährt es an dem Schnitt, der durch die Fläche geht, die er schützen wollte. Eigener Zug nach der Oberfläche, mit `format_version`, Migration und eingecheckter Altdatei nach der Checkliste. Ursprünglich: **Vorschlag mit Bild vor dem Bau** — zwei Varianten (Markiergeste, Sperr-Anzeige, Rücknahme, und was die Suche sagt, wenn unter der Sperre keine gute Naht bleibt: anhalten und fragen, Regel 21), gemessen gegen die Oberflächengrenzen, Bild an Robert und Review |
 | T9 | Das Schaustück: zusammengebaut sehen, dann die Bett-Lage der Einzelteile — Explosions-Szene im Loop-Drehbuch, Motiv aus den mehrteiligen Galerieteilen (Roberts Idee, Hälfte b) | S | offen |
 
 - [ ] Die Trennen-Serie abarbeiten — Reihenfolge T1 → T5 → T4 → T2 → T3 →
@@ -13971,3 +13973,72 @@ damit von „liegt" zu „messen und entscheiden".
       Schlüssel nötig, behebt den 3:51-Zustand), dann O4 als Messgrund,
       dann O2/O5, O3 mit Vorlage an Robert; je Paket beide Zahlen
       (Qualität und Latenz) vorher/nachher, Review vor dem Commit.
+
+---
+
+## Der Fragebogen kommt auf die Startseite (31.08.2026)
+
+Roberts Auftrag: „den fragbogen mit feedback auch auf die startseite hübsch,
+modern, innovativ animiert machen und nicht nur ein button." Der Bogen
+existiert seit §37.2 in der Anwendung; was fehlt, ist der Weg für alle, die
+Solidon benutzen, aber gerade kein Fenster offen haben.
+
+**Der Inhalt ist entschieden und wird nicht neu erfunden:** `RATING_LABEL`,
+die fünf `RATINGS` und die zwei `QUESTIONS` aus `app/core/feedback.py`,
+wörtlich. Alle zehn Texte liegen in allen fünf Fremdsprachen vor (c3 hat jeden
+einzeln geprüft, null fehlend) — es wird geholt, nicht übersetzt.
+
+Drei Entscheidungen (50) und zwei Messkorrekturen (c3), die vor dem Bau fielen:
+
+- **Der Ort ist der Unterstützen-Kasten, nicht der Bereich vor dem Download.**
+  Der Bogen fragt, wie gut jemand zurechtkommt; das kann nur beantworten, wer
+  das Programm benutzt hat. Vor dem Download stünde er bei Leuten, die es
+  nicht kennen — deren Antworten wären erfunden und gingen in dieselbe
+  Auswertung wie echte. Nebeneffekt: Der Kasten trägt damit zwei Arten zu
+  helfen, und Robert hat den Satz dazu selbst geschrieben („der schönste
+  Beitrag bleibt ohnehin, dass Sie Solidon3D benutzen und mir schreiben, wo es
+  hakt", Kundenmail 30.08.).
+- **Keine Bestätigungsmail.** Bei der Tauschbörse ist sie der Preis dafür, dass
+  ein Beitrag öffentlich wird; hier gibt es diesen Gegenwert nicht, und eine
+  Mail an eine eingetippte Adresse ist selbst ein Missbrauchsweg — wer fremde
+  Adressen einträgt, lässt unseren Server die Post verschicken.
+- **Die Anrede folgt dem Ort, nicht der Herkunft.** Gemessen über alle
+  dreizehn deutschen Seiten: Startseite (48:5), Börse (12:1), Funktionen
+  (11:0) und KI-Modelle (7:0) duzen, Handbuch (2:115), EULA, Changelog,
+  Datenschutz, Widerruf, AGB und Offline-Aktivierung siezen — eine
+  durchgehaltene Linie nach Zweck, ohne eine Ausnahme in die falsche
+  Richtung, die nur nirgends geschrieben stand. Die fremdsprachigen
+  Startseiten folgen ihrer eigenen Sprache und nicht dem Deutschen: fr 0:61
+  (vous), es 28:16 (tú), it 34:4 (tu), pt 2:27 (você). Der Bogen übernimmt je
+  Fassung die Form ihrer Seite. Das sind keine zwei Erhebungen — dieselben
+  Fragen, dieselben fünf Stufen, dieselbe Reihenfolge; nur die Anrede wandert.
+- **Zwei meiner Sicherheitsauflagen waren überflüssig, c3 hat nachgemessen
+  statt nachgebaut:** `support.php` bremst bereits über die gehashte IP
+  (Zeile 130, `MAX_PER_HOUR = 12`) und nicht über die Adresse — eine zweite
+  Bremse über dieselbe Größe wäre nur eine zweite Zahl, die auseinanderläuft.
+  Und `kind` wird gegen kein Verzeichnis geprüft (Zeile 116), `kind=survey`
+  geht ohne Serveränderung durch.
+
+- [ ] **Den Bogen bauen** (c3): fünf Stufen mit Zahl **und** Wort zuerst
+      allein, der Klick klappt die zwei Textfelder auf und schiebt den
+      Senden-Knopf nach — wer nur klickt und geht, hat trotzdem geantwortet.
+      Kein Pflichtfeld, Adresse freiwillig mit dem Satz daneben, was ohne sie
+      fehlt. Honigtopf gegen Skripte, `prefers-reduced-motion`, beide Themen
+      × @1440/@375. **Der dreizehnte Fall braucht einen Text:** Regel 17 endet
+      nicht am Fensterrand — wer gegen die Stundengrenze läuft, muss lesen,
+      dass es nicht an ihm liegt, und die Adresse direkt bekommen. Sechs
+      Fassungen, `datenschutz` **vor** dem Livegang (der bestehende Absatz
+      nennt den Bogen *in der Anwendung* und deckt den Website-Eingang
+      nicht). Nicht hochladen — Roberts Upload-Sperre gilt.
+- [ ] **Roberts Ton-Direktive auf den Bestand anwenden.** „und auch alles mehr
+      so schreiben dass es nicht nach ki klingt", dazu „was er geschrieben hat
+      brauchen wir auch nicht wiederholen" (31.08.2026, an einer Kundenmail).
+      Die sieben Merkmale stehen in `.claude/memory/nicht-nach-ki-klingen.md`
+      — nummerierte Listen statt Fließtext, Rückspiegeln des Gesagten,
+      Dreierfiguren, jeder Absatz auf einer Pointe, Bewertungsvokabeln,
+      Gedankenstriche im Übermaß, der zusammenfassende Schlusssatz. An alle
+      vier Sitzungen weitergegeben. Offen ist der **Bestand**: Website,
+      Handbuch und die Oberflächentexte sind daraufhin nie gelesen worden,
+      und der Maßstab ist neu.
+
+---
