@@ -332,7 +332,7 @@ def two_colour_sign() -> Project:
         [
             OperationDraft(
                 op="create_box",
-                params={"width": 80.0, "depth": 30.0, "height": 3.0, "name": "Schild"},
+                params={"width": 80.0, "depth": 45.0, "height": 3.0, "name": "Schild"},
             )
         ],
     )
@@ -342,7 +342,16 @@ def two_colour_sign() -> Project:
             OperationDraft(
                 op="label_text",
                 inputs=("obj_1",),
-                params={"text": "Solidon3D", "size": 10.0, "depth": 0.8, "z": 3.0, "slot": 1},
+                params={
+                    "text": "Solidon3D",
+                    "size": 10.0,
+                    "depth": 0.8,
+                    # Nach oben gerückt: darunter stehen die Lettern.
+                    "x": 5.0,
+                    "y": 10.0,
+                    "z": 3.0,
+                    "slot": 1,
+                },
             )
         ],
     )
@@ -363,8 +372,25 @@ def two_colour_sign() -> Project:
             )
         ],
     )
-    # Der zweite Weg zur Zweifarbigkeit: Buchstaben als eigener Körper, für den
-    # Drucker mit einem Werkzeug und für Lettern zum Aufkleben.
+    # Der zweite Weg zur Zweifarbigkeit: Buchstaben als eigener Körper — beim
+    # Drucker ein Werkzeugwechsel, von Hand ein Satz Lettern zum Aufkleben.
+    #
+    # **Sie liegen auf dem Schild, nicht daneben** (Robert, 31.08.2026: „dass
+    # bei dem solidon3d 2026 bild was rausgeschnitten ist ist auch nicht gut").
+    # Vorher stand hier ``y = -40`` — vierzig Millimeter unter einem Schild,
+    # das dreißig tief ist, also weit außerhalb. Gemeint war „ein eigener
+    # Körper", zu sehen war ein Teil mit einem Loch und Abfall daneben. Auf
+    # dem Belegbild der Verkaufsseite las sich das als Fehler im Bild.
+    #
+    # Die Maße sind gemessen, nicht geschätzt: „Solidon3D" bei Größe 10 ist
+    # 49,6 mal 7,7 mm, „2026" bei Größe 8 nur 19,3 mal 6,1. Zwei Zeilen passen
+    # auf das Schild, sofern sie rechts vom Schlüsselloch bleiben — das sitzt
+    # bei x = -30 und reicht bis etwa -25.
+    #
+    # **Und das Schild ist dafür von 30 auf 45 mm gewachsen.** Bei 30 blieben
+    # zwischen den beiden Zeilen sechs Millimeter, und in der Schrägansicht des
+    # Belegbilds schoben sie sich perspektivisch übereinander — gemessen am
+    # Bild, nicht an den Zahlen: Die Lage stimmte, das Bild sah unruhig aus.
     history.apply(
         _("Lettern"),
         [
@@ -372,9 +398,11 @@ def two_colour_sign() -> Project:
                 op="create_label",
                 params={
                     "text": "2026",
-                    "size": 12.0,
+                    "size": 8.0,
                     "depth": 2.0,
-                    "y": -40.0,
+                    "x": 5.0,
+                    "y": -12.0,
+                    "z": 3.0,
                     "name": "Lettern",
                 },
             )
