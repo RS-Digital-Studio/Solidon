@@ -292,6 +292,7 @@ def render_page(language: str) -> str:
     icon_stamp = stamp_of(WEBSITE / "icon.svg")
     style_stamp = stamp_of(WEBSITE / "style.css")
     script_stamp = stamp_of(WEBSITE / "site.js")
+    exchange_target, exchange_label, _ = ENTRIES.get(language, ENTRIES[SOURCE_LANGUAGE])[2]
     return f"""<!doctype html>
 <html lang="{language}">
 <head>
@@ -338,7 +339,7 @@ def render_page(language: str) -> str:
   © 2026 RS Digital ·
   <a href="{home_for(language)}">{html.escape(copy.home)}</a> ·
   <a href="{manual_for(language)}">{html.escape(copy.manual)}</a> ·
-  <a href="{ENTRIES[language][2][0]}">{ENTRIES[language][2][1]}</a> ·
+  <a href="{exchange_target}">{exchange_label}</a> ·
   <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
   <a href="/impressum.html">{html.escape(copy.legal)}</a> ·
   <a href="/datenschutz.html">{html.escape(copy.privacy)}</a>

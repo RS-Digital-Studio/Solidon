@@ -68,8 +68,6 @@
 - [Bestätigung verstärkt die Fehlannahme](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei unabhängige Messungen derselben falschen Frage lesen sich wie Bestätigung.
 - [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Foto ist die Instanz.
 - [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — CPU-Zeit, Speicher, Handles sehen stehend aus wie arbeitend; nur eine Differenz trennt sie.
-- [Zeuge wird beim Messen überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — der Prüfling ändert sich unter der Messung; `git diff HEAD --stat` auf die gemessenen Dateien, nicht auf die vermuteten.
-- [Entwickler sieht den Cache-Fehler nie](entwickler-sieht-den-cache-fehler-nie.md) — der Cache-Pfad trägt einen Code-Hash; wer täglich baut, misst eine Lage, die es beim Kunden nie gibt.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
 - [Mutation, die den Fall nicht trifft](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht", nicht „der Test prüft nichts".
@@ -98,6 +96,7 @@
 ## Haltung
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument.
+- [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — gilt für alles: sieben Merkmale, die einen Text verraten; Rückspiegeln ist eines davon.
 - [Ein Druckziel, vier Wege, ein Vertrauensmodell](solidon-ist-die-vorstufe-vor-dem-slicer.md) — Produktkern: vier Wege in einer Szene bis zur ehrlichen Slicer-Übergabe.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Konzeptlinie: Qualitätsvertrag, messbare KI, reproduzierbare Updates; keine Arbeitsliste.
 - [Review immer vollständig](review-immer-vollstaendig.md) — jeden Diff ganz lesen, keine Stichproben-Ökonomie.

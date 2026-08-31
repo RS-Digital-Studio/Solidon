@@ -174,3 +174,51 @@ Die Startzeitmarke von 1233 ms wird auf dieser Maschine heute nicht mehr
 erreicht; sie ist der kleinste je gemessene Wert, und der Docstring des Tests
 nennt selbst eine Spanne von 2500 bis 13 764 ms. Zurückgesetzt wird sie
 trotzdem nicht — das verstecke die nächste echte Regression.
+
+---
+
+## Wanduhr sagt nicht, wem die Zeit gehört — CPU-Zeit sagt es
+
+Am 31.08.2026 lief eine Sprite-Aufnahme **siebenunddreißig Minuten**, ohne ein
+einziges Bild zu schreiben. Zwei Erklärungen lagen gleich nahe: „die Maschine
+ist voll" (siebzehn Python-Prozesse aus fünf Sitzungen) oder „hier hängt
+etwas". Beide hätten zu einer anderen Handlung geführt — warten oder abbrechen
+und suchen.
+
+Entschieden hat es eine Zahl, die in keiner der beiden Erzählungen vorkam:
+
+```
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Where-Object { $_.CommandLine -like '*<das eigene Programm>*' } |
+  ForEach-Object { $p = Get-Process -Id $_.ProcessId
+    "PID $($_.ProcessId)  CPU $([math]::Round([double]$p.CPU,1))s  $([math]::Round([double]$p.WorkingSet64/1MB,0)) MB" }
+```
+
+**574 CPU-Sekunden, 304 MB.** Damit sind beide Erzählungen falsch: Es hängt
+nicht (ein Hänger verbraucht keine CPU), und die Maschine ist nicht die
+Ursache (neuneinhalb Minuten sind echte Arbeit, die auch allein anfiele). Die
+Fremdlast streckte den Lauf um Faktor 3,8 — sie verursachte ihn nicht.
+
+Der Unterschied ist der zwischen einer Ausrede und einem Befund. „Zu langsam,
+weil die Maschine voll war" wäre nicht meldenswert gewesen; „ein Projekt zu
+öffnen kostet neuneinhalb CPU-Minuten, während es zu bauen zwei kostet" ist
+ein Wartezeit-Punkt (§2.8). Eine Nachbarsitzung hat genau daraus die schärfere
+Formulierung gezogen: *„Die Maschine war nicht das Problem, sondern die Arbeit
+selbst."*
+
+**Zwei Fallen im Befehl selbst**, beide an dem Tag zugeschnappt:
+
+* `[math]::Round($p.CPU, 1)` scheitert mit „Cannot find an overload", wenn der
+  Filter **mehrere** Prozesse trifft — `$p.CPU` ist dann ein Array. Der
+  Wrapper-Prozess der Shell zählt mit, und er hat 0 s CPU bei 4 MB. Genau
+  diese Zeile trennt ihn übrigens vom echten Lauf.
+* `ToDateTime($_.CreationDate)` wirft bei diesem Aufbau „out of range". Die
+  Startzeit braucht man nicht; die CPU-Zeit beantwortet die Frage allein.
+
+**Wie anwenden:** Bevor ein langsamer Lauf zur Fremdlast erklärt oder als
+Hänger abgebrochen wird, die CPU-Zeit lesen. Steht sie still, ist es ein
+Hänger. Steigt sie und ist klein gegen die Wanduhr, ist es die Maschine.
+Steigt sie und ist groß, ist es die Arbeit — und dann ist es ein Befund, kein
+Ärgernis. Verwandt: [[gemessene-frage-ist-nicht-die-gestellte]] — auch hier
+antwortet die naheliegende Anzeige (die Wanduhr) auf eine andere Frage als
+die gestellte.

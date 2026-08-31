@@ -3,9 +3,9 @@
   "configurations": [
     {
       "name": "website",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "website"],
-      "port": 8765
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "http.server", "8137", "--directory", "website"],
+      "port": 8137
     }
   ]
 }
