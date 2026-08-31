@@ -1126,6 +1126,21 @@ PICK_TOLERANCE = 0.005
 OBJECT_COLOUR = "#b9c4d0"
 SELECTED_COLOUR = ROLES["select"]
 BACKFACE_COLOUR = ROLES["backface"]
+PROTECTED_COLOUR = ROLES["protected"]
+
+#: Wie durchscheinend eine gesperrte Sichtfläche liegt. Deutlich genug, um
+#: sie zu sehen, blass genug, dass die Form darunter erkennbar bleibt — sie
+#: ist eine Notiz am Werkstück und nicht die Hauptsache.
+PROTECTED_OPACITY = 0.32
+
+#: Abstand der Schraffurstriche, als Anteil der Szenengröße. Bei einem
+#: 200-mm-Teil sind das fünf Millimeter: nah genug, dass eine kleine Fläche
+#: noch Striche trägt, weit genug, dass eine große nicht zugedeckt wird.
+PROTECTED_HATCH_SPACING = 0.025
+
+#: Die Striche sind heller als die Tönung, sonst verschwinden sie darin.
+PROTECTED_HATCH_COLOUR = "#d6f0ea"
+PROTECTED_HATCH_WIDTH = 2
 BED_COLOUR = "#5a6472"
 
 #: Der gefüllte Grund der Platte — dunkler als das Raster darauf und heller
@@ -2985,6 +3000,15 @@ class Viewport(QWidget):
         Auswertung, nicht dem Viewport.
         """
         self._feature_patch: Any | None = None
+        self._protected_patch: Any | None = None
+        self._protected_hatch: Any | None = None
+        # Welche Flächen als Sichtflächen gesperrt sind (§22.3), je Körper.
+        # **Sitzungsgebunden, und das ist ein Zwischenstand**: Eine
+        # Sichtfläche ist eine Eigenschaft des Werkstücks und gehört ins
+        # Dokument, mit ``format_version`` und Migration. Bis dahin merkt
+        # der Nutzer beim Schließen, dass die Markierung fort ist — was er
+        # nicht merken darf, ist, dass sie fehlt, während er sie glaubt.
+        self._protected: dict[ObjectId, set[FeatureId]] = {}
         """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
         Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
         aufleuchtet — die Auswahl zeigte das Objekt und nicht die Stelle."""
@@ -5447,6 +5471,57 @@ class Viewport(QWidget):
             return ()
         return self._face_indices(self._selected, self._selected_feature)
 
+    def protected_features(self, object_id: ObjectId | None = None) -> tuple[FeatureId, ...]:
+        """Welche Flächen dieses Körpers als Sichtflächen gesperrt sind.
+
+        Ohne ``object_id`` die des gewählten Körpers. Als eigene Auskunft und
+        nicht als Zustand des Plotters, aus demselben Grund wie bei
+        :meth:`highlighted_faces`: offscreen gibt es keinen Plotter, und ein
+        Test, der sich dort überspringt, prüft nie etwas.
+        """
+        target = object_id if object_id is not None else self._selected
+        if target is None:
+            return ()
+        return tuple(sorted(self._protected.get(target, ())))
+
+    def set_protected(self, object_id: ObjectId, feature_id: FeatureId, on: bool) -> None:
+        """Eine Fläche sperren oder freigeben und das Bild nachziehen."""
+        marked = self._protected.setdefault(object_id, set())
+        if on:
+            marked.add(feature_id)
+        else:
+            marked.discard(feature_id)
+        if not marked:
+            self._protected.pop(object_id, None)
+        self._redraw_features()
+        self._draw()
+
+    def protected_patches(self, object_id: ObjectId) -> list[Any]:
+        """Die Punktwolken der gesperrten Flächen — Eingabe für die Suche.
+
+        Punkte und keine Dreiecksnummern: ``split_to_fit`` teilt mehrfach,
+        und jedes Teilstück ist ein neues Netz mit neuer Nummerierung. Ein
+        Verweis über Indizes zeigte nach dem ersten Schnitt ins Leere.
+        Umgerechnet wird deshalb hier, einmal beim Suchen.
+        """
+        import numpy as np
+
+        if self._result is None:
+            return []
+        entry = self._result.scene.objects.get(object_id)
+        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+        if entry is None or raw is None:
+            return []
+        points = np.asarray(raw.vertices, dtype=float)
+        triangles = np.asarray(raw.faces, dtype=np.int64)
+        patches: list[Any] = []
+        for feature_id in self._protected.get(object_id, ()):
+            chosen = self._face_indices(object_id, feature_id)
+            if not chosen:
+                continue
+            patches.append(points[triangles[np.asarray(chosen, dtype=np.int64)].ravel()])
+        return patches
+
     def _selection_marking_hidden(self) -> bool:
         """Ob die Differenzfarben gerade Vorrang vor Auswahl und Hover haben.
 
@@ -5484,6 +5559,7 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         self._redraw_feature_patch()
+        self._redraw_protected_patch()
         self._redraw_hover_patch()
         for actor in self._feature_actors:
             self.plotter.remove_actor(actor, render=False)
@@ -5624,6 +5700,97 @@ class Viewport(QWidget):
             **side_kwargs,
             lighting=False,
             name="feature-patch",
+            render=False,
+            reset_camera=False,
+            pickable=False,
+        )
+
+    def _redraw_protected_patch(self) -> None:
+        """Die gesperrten Sichtflächen: Tönung und Schraffur (§22.3, Regel 18).
+
+        Zwei Aktoren statt einem. Die Tönung sagt „hier ist etwas", die
+        Striche sagen „und zwar dieses" — wer Türkis von Bernstein nicht
+        unterscheiden kann, liest die Schraffur. Beide liegen über dem Körper,
+        wie der Merkmals-Patch, und aus demselben Grund: Für die Anzeige wird
+        dezimiert (§18.9), das gröbere Netz darunter läge sonst stellenweise
+        davor.
+
+        Anders als der Merkmals-Patch hängt das hier nicht an der Auswahl. Eine
+        gesperrte Fläche bleibt sichtbar, auch wenn gerade nichts gewählt ist —
+        sonst erführe der Nutzer erst beim Anklicken, was er selbst markiert
+        hat.
+        """
+        if self.plotter is None:
+            return
+        for actor in (self._protected_patch, self._protected_hatch):
+            if actor is not None:
+                self.plotter.remove_actor(actor, render=False)
+        self._protected_patch = None
+        self._protected_hatch = None
+        if not self._protected or self._result is None:
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+        spacing = max(self._scene_size() * PROTECTED_HATCH_SPACING, EPS_GEOM)
+        corners: list[Any] = []
+        strokes: list[tuple[Vec3, Vec3]] = []
+        for object_id, features in self._protected.items():
+            entry = self._result.scene.objects.get(object_id)
+            raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+            if entry is None or raw is None or not self._in_view(object_id, entry):
+                continue
+            offset = self._view_offset(entry, self._result)
+            for feature_id in features:
+                chosen = self._face_indices(object_id, feature_id)
+                if not chosen:
+                    continue
+                index = np.asarray(chosen, dtype=np.int64)
+                triangles = np.asarray(raw.faces, dtype=np.int64)[index]
+                normals = np.asarray(raw.face_normals, dtype=float)[index]
+                patch = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
+                patch = patch + np.repeat(normals, 3, axis=0) * lift + offset
+                corners.append(patch)
+                # Die Striche liegen noch eine Spur höher als die Tönung,
+                # sonst streiten sie mit ihr um dieselbe Tiefe und flimmern.
+                middle = normals.mean(axis=0)
+                strokes.extend(hatch_lines(patch + middle * lift, tuple(middle), spacing))
+        if not corners:
+            return
+
+        points = np.vstack(corners)
+        count = len(points) // 3
+        faces = np.hstack(
+            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
+        ).ravel()
+        self._protected_patch = self.plotter.add_mesh(
+            pv.PolyData(points, faces),
+            color=PROTECTED_COLOUR,
+            opacity=PROTECTED_OPACITY,
+            backface_params={"color": PROTECTED_COLOUR, "opacity": PROTECTED_OPACITY},
+            lighting=False,
+            name="protected-patch",
+            render=False,
+            reset_camera=False,
+            pickable=False,
+        )
+        if not strokes:
+            return
+        ends = np.asarray([end for stroke in strokes for end in stroke], dtype=float)
+        lines = np.hstack(
+            [
+                np.full((len(strokes), 1), 2, dtype=np.int64),
+                np.arange(len(strokes) * 2).reshape(len(strokes), 2),
+            ]
+        ).ravel()
+        self._protected_hatch = self.plotter.add_mesh(
+            pv.PolyData(ends, lines=lines),
+            color=PROTECTED_HATCH_COLOUR,
+            line_width=PROTECTED_HATCH_WIDTH,
+            lighting=False,
+            name="protected-hatch",
             render=False,
             reset_camera=False,
             pickable=False,

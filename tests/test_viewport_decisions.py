@@ -3423,3 +3423,43 @@ def test_the_hatch_stays_within_its_limit() -> None:
     hoehen = {round(strich[0][1], 6) for strich in segmente}
     assert len(hoehen) <= 12, f"höchstens zwölf Striche, gefunden {len(hoehen)}"
     assert len(hoehen) >= 10, "und nicht plötzlich gar keine mehr"
+
+
+def test_a_protected_face_is_remembered_and_released(qt_app: QApplication) -> None:
+    """Sperren, freigeben, und die Auskunft dazu (T8, §22.3).
+
+    ``set_protected`` läuft vor der Plotter-Wache zu Ende: Die Markierung ist
+    eine Aussage über das Werkstück, das Zeichnen ist die Folge davon. Deshalb
+    ist sie offscreen prüfbar, und deshalb steht sie hier.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    assert viewport.protected_features("obj_1") == ()
+
+    viewport.set_protected("obj_1", "face_3", True)
+    viewport.set_protected("obj_1", "face_7", True)
+    assert viewport.protected_features("obj_1") == ("face_3", "face_7")
+    assert viewport.protected_features("obj_2") == (), "eine Sperre gehört ihrem Körper"
+
+    viewport.set_protected("obj_1", "face_3", False)
+    assert viewport.protected_features("obj_1") == ("face_7",)
+
+    viewport.set_protected("obj_1", "face_7", False)
+    assert viewport.protected_features("obj_1") == ()
+    assert not viewport._protected, "der leere Eintrag bleibt nicht als Karteileiche stehen"
+
+
+def test_without_a_scene_there_are_no_protected_patches(qt_app: QApplication) -> None:
+    """Ohne Auswertung gibt es keine Punkte — und keine Ausnahme.
+
+    ``protected_patches`` ist die Eingabe der Nahtsuche. Sie wird auch dann
+    gerufen, wenn gerade nichts gerechnet ist; eine leere Liste ist dann die
+    richtige Antwort und ein Absturz die falsche.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.set_protected("obj_1", "face_3", True)
+
+    assert viewport.protected_patches("obj_1") == []

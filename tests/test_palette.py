@@ -96,6 +96,7 @@ def test_a_role_has_one_colour_across_the_interface() -> None:
     assert ROLES["overhang"] == viewport.OVERHANG_COLOUR
     assert ROLES["feature"] == viewport.FEATURE_LABEL_COLOUR
     assert ROLES["backface"] == viewport.BACKFACE_COLOUR
+    assert ROLES["protected"] == viewport.PROTECTED_COLOUR
 
     for severity, encoding in SEVERITY_ENCODING.items():
         assert encoding.colour == ROLES[severity]  # type: ignore[literal-required]

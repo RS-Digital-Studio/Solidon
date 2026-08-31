@@ -32,6 +32,7 @@ Role = Literal[
     "overhang",
     "feature",
     "backface",
+    "protected",
     "axis_x",
     "axis_y",
 ]
@@ -61,6 +62,12 @@ ROLES: dict[Role, str] = {
     "overhang": "#d05a5a",
     "feature": "#cfe3f5",
     "backface": "#8b3a3a",
+    # Eine gesperrte Sichtfläche (§22.3). Türkis, weil es von allem
+    # anderen hier weit genug entfernt ist: Bernstein ist die Auswahl,
+    # Gelb die Insel, Rot der Überhang, und das Merkmalsblau liegt neben
+    # der Schichtfarbe. Die Fläche trägt zusätzlich eine Schraffur
+    # (``viewport.hatch_lines``) — die Farbe allein sagt nichts (Regel 18).
+    "protected": "#4fa89b",
     # Die Achsen einer Skizze. Rot für X, grün für Y — dieselbe Zuordnung wie
     # im Viewport-Würfel und in jedem CAD, das jemand vorher benutzt hat. Sie
     # tragen keine Bedeutung allein über die Farbe: an ihnen steht ihr
