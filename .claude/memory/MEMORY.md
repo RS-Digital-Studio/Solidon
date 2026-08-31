@@ -84,6 +84,7 @@
 - [Messung galt für den Stand davor](messung-galt-fuer-den-stand-davor.md) — nach einem Umbau ist die alte Messung richtig und über gestern; „sechs sichtbar" bestand zweimal, während nichts zu sehen war.
 - [Eine Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — beim Vereinheitlichen auf eine Skala verlieren bewegliche Werte genau das, wofür sie da sind.
 - [Erzeugte Datei führt ins fremde Werkzeug](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — der Befund kommt aus dem eigenen Gebiet, die Antwort liegt in einem fremden.
+- [Eigener Messfehler widerlegt den Befund nicht](eigener-messfehler-widerlegt-den-befund-nicht.md) — eine falsche Entwarnung kostet den Fund; zwei getrennte Fragen.
 - [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — eine richtige Regel mit ungeprüftem Geltungsbereich; wo gilt sie noch, wo ich sie nicht gemeint habe?
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
