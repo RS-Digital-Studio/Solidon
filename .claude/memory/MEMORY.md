@@ -37,6 +37,7 @@
 - [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht; dazu Reihenfolge und `--nachpruefen` am Ende.
 - [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s; ein halbes Paket sieht ganz aus.
 - [Gesetzt heißt nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips; der Wert sagt nichts über die Sichtbarkeit.
+- [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Web-Geschwister von „Qt lügt vor dem Anzeigen".
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — isVisible und hasFocus antworten falsch, solange nichts angezeigt ist.
 - [Die Suite fährt ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — ein Farbtest misst Windows; falsche Werte mit stimmendem Verhältnis tarnen sich.
 - [Signal passt an den falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet, was von der Stelligkeit passt; nur das Bildschirmfoto sah es.
