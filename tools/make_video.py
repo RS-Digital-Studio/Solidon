@@ -1834,26 +1834,24 @@ def main() -> int:
         # ``--ratio 16/7`` schneidet auf das Verhältnis der Bühne zu. Als
         # Bruch und nicht als Kommazahl, weil im Stylesheet auch ein Bruch
         # steht und man beide nebeneinanderlegen können soll.
+        given_ratio = option(arguments, "--ratio")
         ratio: float | None = None
-        stem = "sprite"
-        for entry in arguments:
-            if entry.startswith("--ratio"):
-                value = entry.split("=", 1)[1] if "=" in entry else ""
-                if not value:
-                    index = arguments.index(entry)
-                    value = arguments[index + 1] if index + 1 < len(arguments) else ""
-                if value:
-                    left, _, right = value.partition("/")
-                    ratio = float(left) / float(right) if right else float(left)
-            elif entry.startswith("--name"):
-                value = entry.split("=", 1)[1] if "=" in entry else ""
-                if not value:
-                    index = arguments.index(entry)
-                    value = arguments[index + 1] if index + 1 < len(arguments) else ""
-                if value:
-                    stem = value
-        print(f"Drehscheibe: {stem}, Verhältnis {ratio or 'wie das Fenster'}")
-        files = shoot_turntable(app, out, frames / "turntable", stem, chosen=project, ratio=ratio)
+        if given_ratio:
+            left, _, right = given_ratio.partition("/")
+            ratio = float(left) / float(right) if right else float(left)
+        stem = option(arguments, "--name") or "sprite"
+        # **Der Abstand gehört dem Motiv.** ``TURNTABLE_ZOOM`` ist am
+        # Elektronikgehäuse gemessen; der Rollenhalter ist 128 mm breit und
+        # ragte damit oben und rechts aus dem Bild — im eingesetzten Sprite
+        # war die Oberkante der Seitenwand abgeschnitten. Der Docstring von
+        # ``shoot_turntable`` verlangt seit jeher, den eigenen Wert
+        # mitzugeben; bis zum 31.08.2026 gab es dafür keinen Schalter.
+        given_zoom = option(arguments, "--zoom")
+        zoom = float(given_zoom) if given_zoom else TURNTABLE_ZOOM
+        print(f"Drehscheibe: {stem}, Verhältnis {ratio or 'wie das Fenster'}, Abstand {zoom}")
+        files = shoot_turntable(
+            app, out, frames / "turntable", stem, chosen=project, zoom=zoom, ratio=ratio
+        )
         stack_sprite(files, out / f"{stem}.webp")
         print()
         print(f"Fertig: {out}")
@@ -2058,6 +2056,22 @@ def shoot_turntable(
     print(f"  Reihe → {stem}-00…{steps - 1:02d}.webp  {total:.1f} MB zusammen")
     release_viewport(window)
     return written
+
+
+def option(arguments: list[str], name: str) -> str:
+    """Den Wert eines Schalters lesen, als ``--name wert`` wie als ``--name=wert``.
+
+    Drei Schalter mit demselben zwölfzeiligen Block davor waren der Grund, aus
+    dem der vierte fehlte: Wer ihn ergänzen will, schreibt den Block ein
+    viertes Mal ab. Eine leere Zeichenkette heißt: nicht angegeben.
+    """
+    for index, entry in enumerate(arguments):
+        if not entry.startswith(name):
+            continue
+        if "=" in entry:
+            return entry.split("=", 1)[1]
+        return arguments[index + 1] if index + 1 < len(arguments) else ""
+    return ""
 
 
 def stack_sprite(files: list[Path], target: Path) -> Path:
