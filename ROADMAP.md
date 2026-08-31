@@ -125,6 +125,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Die Ollama-Serie O1–O5 | Ollama bis zum Anschlag (31.08.2026) | die Abarbeitung nach Roberts Order („wird oft benutzt, bis zum Anschlag optimieren, perfekte Qualität/Performance") — O1 zuerst: Modell warmhalten und klären, warum es mit 0 % VRAM auf der CPU rechnet (701 s je Anfrage); dann Messstrecke, Grundlast-Endausbau mit Quote-Messung je Schritt, Modell-Empfehlung; bei d3 |
 | Die Trennen-Serie T1–T9 | Sinnvolles Trennen — die Serie (31.08.2026) | die Abarbeitung nach Roberts Vollausbau-Entscheid — Nahtlage nach Kanten, Stützbedarf je Teil, schiefe Ebenen (§22.3), automatische Verbinderwahl, Festigkeit, Symmetrie, globale Suche, die eine Kundengeste, das Schaustück; Start nach der Website-Welle, Reihenfolge gegen Resin bei Robert |
+| `sculpt_strokes` meldet Vollzug, wenn nichts getroffen wurde | Befunde aus dem Weg-Dreh (31.08.2026) | 1bs Fix mit Test zuerst: Am Weg-4-Rezept sitzen die Züge **18 mm über dem Körper in der Luft** (`place_on_bed` hebt erst als Schritt 6; der 20er-Pinsel kratzt 0,41 mm auf 321 von 5770 Punkten, der 9er trifft **null**) — und die Operation meldet „Die Züge wurden auf den Körper übertragen"; `operationen.md` verlangt wörtlich das Gegenteil, und der eigene `caveat` der Op beschreibt genau diesen Fall ungeprüft. Handlungsvorschlag muss die Richtung nennen, Schwelle statt Ja/Nein prüfen |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
 | Ein generiertes Modell zu öffnen kostet zehn bis zwanzig Sekunden | Befunde aus dem Weg-Dreh (31.08.2026) | Roberts Produktantwort (ist das für ein Beispielprojekt in Ordnung?) und, falls nein, die Behebung an der gemessenen Ursache (`orient_for_print` auf dem ungefilterten Netz — einzeln 9,4–18,5 s, unter Last mehr); die Ansage beim Warten existiert und ist gut (§2.8 eingelöst), die 574/909 waren Prozess-CPU mit erfundener Zuordnung, der Docstring ist berichtigt |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -13440,7 +13441,21 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       in zwei Messwegen verschieden** — über ein `MainWindow` (0,33 | 0 |
       30, außerhalb) gegen ein nacktes `Session()` (−66,67 | 77 | 30,
       **innerhalb**, exakt um die Körpermitte verschoben — also genau die
-      Verschiebung, deren Fehlen der Befund war). Beispieldatei
+      Verschiebung, deren Fehlen der Befund war). **AUFGELÖST, und der
+      Widerspruch war die Bestätigung (0d, am Quelltext statt an einer
+      Sonde):** `evaluate.py` wandert benannte Merkmale nur mit, wenn eine
+      **gemeinsame Matrix** vorliegt — und `arrange_bed` meldet keine (jeder
+      Körper trägt seinen eigenen Versatz); für **verwaiste** Merkmale
+      existiert die Sonderbehandlung `arranged_rigidly` längst, für
+      **benannte** nicht. Gemessen über alle elf Beispiele: **6 von 11
+      trugen Merkmale außerhalb ihres Körpers, danach 0** (vier enden auf
+      arrange_bed, eines auf place_on_bed), Mutationsprobe vier Tests rot.
+      **Und die zwei Messwege sind kein Widerspruch: Sie unterscheiden sich
+      um exakt die Körperverschiebung — einer zeigt den Wert davor, einer
+      danach; die fehlende Verschiebung ist in beiden sichtbar.** Lehre:
+      **Eine Sonderbehandlung, die nur die halbe Menge kennt, ist ein
+      Fehler mit gutem Gewissen.** Erkannte Merkmale sind eine andere
+      Klasse (weg4 zeigt 21) und bleiben offen. Beispieldatei
       unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
       **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
       am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
@@ -13469,6 +13484,24 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Methodenlehre aus dem Weg dorthin: **Von drei aufgestellten Zeugen
       maßen zwei nichts — erst die Probe am Eingang trennte den
       brauchbaren von den blinden.**
+- [ ] **`sculpt_strokes` meldet Vollzug, wenn nichts getroffen wurde**
+      (1b, 31.08., gemessen am Weg-4-Rezept): Die Züge sitzen **18 mm über
+      dem Körper in der Luft** — der Körper ist bis Schritt 5 um den
+      Ursprung zentriert (Scheitel z ≈ +18,2), `place_on_bed` hebt ihn erst
+      als Schritt 6; abgetragen wurden 0,41 mm (Daumenmulde, 321 von 5770
+      Punkten) und **0,00 mm** (Fingerrillen). **Und die Operation meldet
+      trotzdem `sculpt.applied`** — `operationen.md` verlangt wörtlich „Eine
+      Operation, die nichts bewirkt hat, sagt das", hier sagt sie das
+      Gegenteil; der eigene `caveat` beschreibt genau diesen Fall („wer die
+      Form darunter ändert, verschiebt die Fläche unter dem Strich weg")
+      und wird nicht geprüft. Für den Kunden ohne CAD-Kenntnisse die
+      schlimmste Sorte: Schritt im Verlauf, Teil unverändert, Bericht
+      schweigt. Fix mit Test zuerst, Handlungsvorschlag nennt die Richtung,
+      Schwelle statt Ja/Nein (0,41 mm auf 5 % der Punkte ist praktisch
+      nichts und formal „getroffen"). **Kamera und Licht sind als Ursache
+      des Kiesel-Standbilds damit erledigt — es gab nichts zu sehen.**
+      Lehre (1b): **Eine Zahl ist nie nur eine Zahl, sie hat einen
+      Ursprung.**
 - [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
       Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
       „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle

@@ -67,6 +67,7 @@
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend.
 - [Bestätigung verstärkt die Fehlannahme](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei unabhängige Messungen derselben falschen Frage lesen sich wie Bestätigung.
 - [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Foto ist die Instanz.
+- [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — CPU-Zeit, Speicher, Handles sehen stehend aus wie arbeitend; nur eine Differenz trennt sie.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
 - [Mutation, die den Fall nicht trifft](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht", nicht „der Test prüft nichts".
@@ -88,7 +89,6 @@
 - [Am Eingang drehen](am-eingang-drehen.md) — antwortet die Messung auf jede Änderung gleich, misst sie nichts; billiger als der bekannte Ausgang.
 - [Eingestellter Wert ist nicht das Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — `ch` ist nicht Zeichen, Kaskadenwert nicht Bild, String nicht Darstellung.
 - [Schwelle misst die falsche Achse](schwelle-misst-die-falsche-achse.md) — dieselbe Fehlerklasse im ausgelieferten Code; je schlimmer der Fall, desto stiller.
-- [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — 381 CPU-Sekunden sind kein Lebenszeichen; nur die Differenz zweier Messungen ist eine.
 - [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — eine richtige Regel mit ungeprüftem Geltungsbereich; wo gilt sie noch, wo ich sie nicht gemeint habe?
 
 - [Durchsicht je Version](durchsicht-je-version.md) — je Version ein Durchsicht-HTML; jeder „offene" Punkt wird am Code nachgemessen, nicht abgeschrieben.
