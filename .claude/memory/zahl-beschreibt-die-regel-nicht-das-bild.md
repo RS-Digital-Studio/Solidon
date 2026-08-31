@@ -30,11 +30,21 @@ Endzustand zeigt.
 ist aber der Wert der Kaskade und nicht der des Bildes; was dazwischenliegt,
 sind Animationen, Übergänge und der Compositor.
 
-**How to apply:** Für Sichtbarkeit `element.checkVisibility({opacityProperty:
-true, visibilityProperty: true})` nehmen — das rechnet den Renderzustand. Und
-die Regel, die diesen Fall gefangen hat: **Jeder Unsichtbar-Treffer wird im
-Bildschirmfoto nachgesehen, bevor er ein Befund wird.** Bei fünf Treffern
-kostet das eine Minute.
+**How to apply — und die Rangfolge ist der Kern:** Das **Bildschirmfoto ist
+die Instanz**, nicht die Absicherung. Ein Unsichtbar-Treffer ohne
+Foto-Bestätigung ist kein Befund, gleich welche API ihn geliefert hat.
+
+`element.checkVisibility({opacityProperty: true, visibilityProperty: true})`
+ist die bessere Abfrage als `getComputedStyle`, aber **nicht die Instanz**: Am
+selben Tag meldete es bei d5 nach einem Viewport-Wechsel H1 und Lead als
+unsichtbar, während der Screenshot aus demselben Aufruf beide zeigte. Bei mir
+antwortete es an derselben Stelle richtig (`true`, Opazität 1) — der
+Unterschied lag im Zeitpunkt gegenüber der laufenden Animation, nicht in der
+API.
+
+Genau das ist der Grund für die Rangfolge: Eine Abfrage, die **manchmal**
+lügt, ist als Instanz unbrauchbar, auch wenn sie meistens stimmt — man erkennt
+den Einzelfall nicht an ihr selbst.
 
 Das ist das Web-Geschwister von [[qt-luegt-vor-dem-anzeigen]] (`isVisible` und
 `hasFocus` antworten falsch, solange nichts angezeigt wurde) und
