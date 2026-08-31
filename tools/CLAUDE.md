@@ -55,6 +55,13 @@ einer anderen Maschine geprüft wird) ·
 `window_bench.py` (Beispiel im **echten** Fenster öffnen und die Wartezeit in
 Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 
+`window_bench.py` beendet seinen einzigen Lauf in Besitzreihenfolge: erst
+Arbeiter und Sitzungsverbindungen lösen, dann über
+`Viewport.release_plotter()` den VTK-Plotter bei noch lebendem
+Qt-Elternfenster schließen, zuletzt das Fenster. Derselbe terminale Weg liegt
+am akzeptierten `MainWindow.closeEvent`; `MainWindow.release()` bleibt für
+mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
+
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`

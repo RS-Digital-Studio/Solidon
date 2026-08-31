@@ -3183,6 +3183,33 @@ class Viewport(QWidget):
         # er die zu sehen glaubte, in der er stand.
         self.view_from("iso")
 
+    def release_plotter(self) -> None:
+        """Finalisiert den nativen Renderer vor seinem Qt-Elternfenster.
+
+        Dieser Weg gehört ausschließlich zum Ende der Anwendung. Beim
+        Sprachwechsel bleibt VTK bewusst bestehen: Dort wird zuerst ein neues
+        Fenster aufgebaut und das alte anschließend mit
+        :meth:`MainWindow.release <app.ui.main_window.MainWindow.release>`
+        von Sitzung und Arbeitern getrennt. Würde diese Methode dort laufen,
+        verlöre der folgende Interactor den prozessweiten VTK-Zustand.
+
+        ``None`` macht den Aufruf auch nach einem bereits abgebauten oder
+        offscreen erzeugten Viewport sicher und wiederholbar.
+        """
+        plotter = self.plotter
+        if plotter is None:
+            return
+        self.plotter = None
+        try:
+            plotter.close()
+        except Exception as problem:  # pragma: no cover - hängt am nativen Treiber
+            # Der Qt-Abbau muss weiterlaufen. Bliebe die Referenz gesetzt oder
+            # die Ausnahme liefe bis ins ``closeEvent``, hielte ein bereits
+            # angeschlagener Grafiktreiber zusätzlich die ganze Anwendung
+            # offen und der nächste Versuch räumte denselben C++-Besitz erneut
+            # ab.
+            _log.warning("the viewport renderer could not close: %s", problem)
+
     def _watch_camera(self) -> None:
         """Am Ende jeder Kamerabewegung die Schatten nachziehen (§18.6).
 

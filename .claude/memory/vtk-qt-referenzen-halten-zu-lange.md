@@ -65,3 +65,40 @@ Beide Stapelabzüge und die drei gescheiterten Anläufe (`gc.collect()`,
 `leash.undisturbed()`, zweimal `deleteLater`) stehen in `tests/conftest.py`,
 die Folge für die Oberfläche in `.claude/rules/oberflaeche.md`. Der Ring-Umbau
 bleibt richtig — er ist nur nicht unbeteiligt.
+
+**Fünfter Fall, 31.08.2026: Auch ein sauber endender Einzelprozess braucht
+eine Besitzreihenfolge.** `tools/window_bench.py` öffnete genau ein sichtbares
+Fenster und endete mit Exit 0. Weg 1 schrieb in drei von fünf frischen
+Prozessen, Weg 4 reproduzierbar, trotzdem
+`FRAMEBUFFER_INCOMPLETE_ATTACHMENT` auf stderr und einen FBO-Dump auf stdout.
+Der Fehler kam nach `GESAMT`, also nicht aus dem Bildaufbau: Das Hauptfenster
+wurde geschlossen, der noch lebende `QtInteractor` erst beim Prozessabbau
+finalisiert, als sein Qt-OpenGL-Kontext nicht mehr verlässlich aktuell war.
+
+Die A/B-Probe war kleiner als jede Treiberhypothese: `plotter.close()` **vor**
+`window.close()` machte denselben Weg 4 sofort still. Ein zweiter unabhängiger
+Lauf fand danach denselben Fehler beim echten Anwendungsende als
+`wglMakeCurrent failed`; zehn kontrollierte Abbrüche des echten
+`QApplication.exec()` bestätigten, dass der Prüfstand nur den realen Fehler
+sichtbarer machte.
+
+Die dauerhafte Reihenfolge liegt deshalb in genau einer Besitzstelle:
+`Viewport.release_plotter()` schließt VTK bei lebendem Elternfenster und räumt
+die Referenz. Der akzeptierte `MainWindow.closeEvent` ruft sie unmittelbar vor
+dem Qt-Abbau, der prozessabschließende Prüfstand ebenso. Das ist ausdrücklich
+keine allgemeine `MainWindow.release`-Regel: Der Sprachwechsel baut zuerst ein
+zweites Fenster mit derselben Sitzung und löst danach nur Arbeiter und Signale
+des alten. Das vorzeitige Finalisieren des prozessweiten VTK-Zustands ist als
+Gegenfehler bereits gemessen. Die Reichweite — Fensterwechsel oder Ende der
+ganzen Anwendung — entscheidet, welche Hälfte der Regel gilt.
+
+Der Vertrag selbst ist plattformneutral und verzweigt weder nach Windows noch
+nach einem Qt-Backend. Seine beiden Randfälle — kein Plotter und wiederholtes
+Freigeben — laufen offscreen in der Suite. Die native Abnahme vom 31.08.2026
+ist trotzdem exakt bezeichnet: Windows, je zehn frische Prozesse für echten
+App-Abschluss, Sprach-/Fensterwechsel sowie Fensterprüfstand Weg 1 und Weg 4;
+alle Exit 0, stderr leer, keine VTK-/Framebuffer-Marker, sichtbare Bilder nicht
+schwarz. Ein echter macOS- oder Linux-OpenGL-Treiber stand auf dieser Maschine
+nicht zur Verfügung. Diese beiden nativen Teardowns bleiben deshalb ein
+Paket-/Feldtest und dürfen nicht aus dem plattformneutralen Unit-Test als
+„live geprüft" abgeleitet werden.

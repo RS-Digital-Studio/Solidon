@@ -41,8 +41,10 @@ import os
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+EVENT_DRAIN_ROUNDS = 20
 
 
 def isolate(profile: Path) -> None:
@@ -57,6 +59,29 @@ def isolate(profile: Path) -> None:
         "XDG_CACHE_HOME",
     ):
         os.environ[variable] = str(profile)
+
+
+def shutdown_window(window: Any, application: Any) -> None:
+    """Beendet Arbeiter, VTK und Qt in ihrer sicheren Besitzreihenfolge.
+
+    Das Fenster besitzt den ``QtInteractor``. Wird nur das Elternfenster
+    geschlossen, räumt Python den noch lebenden VTK-Plotter erst beim
+    Prozessende auf; zu diesem Zeitpunkt ist sein Qt-OpenGL-Kontext nicht mehr
+    verlässlich aktuell. VTK meldet dann je nach Lauf unvollständige
+    Framebuffer. Deshalb werden zuerst die Arbeiter und Sitzungsverbindungen
+    gelöst, dann der Plotter bei noch lebendem Fenster geschlossen und zuletzt
+    das Qt-Fenster.
+
+    ``MainWindow.release`` schließt den Viewport absichtlich nicht: In der
+    Anwendung kann im selben Prozess ein weiteres Fenster folgen. Dieser
+    Prüfstand endet dagegen nach genau einem Fenster und ruft deshalb
+    denselben terminalen Viewport-Weg wie ``MainWindow.closeEvent``.
+    """
+    window.release()
+    window.viewport.release_plotter()
+    window.close()
+    for _ in range(EVENT_DRAIN_ROUNDS):
+        application.processEvents()
 
 
 def main() -> int:
@@ -177,12 +202,7 @@ def main() -> int:
     total = time.perf_counter() - wall
     print(f"GESAMT: {total:.2f} s (davon {arguments.settle:.0f} s Ruhe-Schwelle)", flush=True)
 
-    window.close()
-    release = getattr(type(window), "release", None)
-    if release is not None:
-        release(window)
-    for _ in range(20):
-        application.processEvents()
+    shutdown_window(window, application)
     return 0
 
 

@@ -83,6 +83,51 @@ def test_the_effective_qt_platform_keeps_vtk_out_after_the_environment_changes(
     assert not viewport._available()
 
 
+def test_plotter_release_is_idempotent(qt_app: QApplication) -> None:
+    """Der native Renderer wird genau einmal und über eine Besitzstelle gelöst."""
+    from app.ui.viewport import Viewport
+
+    class _Plotter:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    viewport = Viewport()
+    plotter = _Plotter()
+    viewport.plotter = plotter
+
+    viewport.release_plotter()
+    viewport.release_plotter()
+
+    assert plotter.close_calls == 1
+    assert viewport.plotter is None
+
+
+def test_failed_plotter_release_is_not_retried(qt_app: QApplication) -> None:
+    """Ein nativer Treiberfehler hält weder Qt offen noch den Besitzer fest."""
+    from app.ui.viewport import Viewport
+
+    class _FailingPlotter:
+        def __init__(self) -> None:
+            self.close_calls = 0
+
+        def close(self) -> None:
+            self.close_calls += 1
+            raise RuntimeError("native close failed")
+
+    viewport = Viewport()
+    plotter = _FailingPlotter()
+    viewport.plotter = plotter
+
+    viewport.release_plotter()
+    viewport.release_plotter()
+
+    assert plotter.close_calls == 1
+    assert viewport.plotter is None
+
+
 def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) -> None:
     """Eine Farbe aus OBJ/PLY/GLB wird gezeichnet, nicht nur gespeichert (§20)."""
     from app.ui.viewport import Viewport

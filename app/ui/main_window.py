@@ -10408,6 +10408,14 @@ class MainWindow(QMainWindow):
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         self._usage.stop()
+        # Erst hier steht fest, dass das echte Anwendungsfenster wirklich
+        # endet. Der VTK-Plotter braucht seinen noch lebenden Qt-OpenGL-Kontext
+        # zum Abbau; Qts später Prozessabriss kommt dafür zu spät und meldet
+        # je nach Treiber unvollständige Framebuffer oder ``wglMakeCurrent``.
+        # ``release()`` darf das ausdrücklich nicht tun: Es bedient auch den
+        # Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
+        # lebt.
+        self.viewport.release_plotter()
         event.accept()
 
 
