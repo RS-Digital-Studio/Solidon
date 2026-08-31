@@ -571,6 +571,9 @@ nav.lang a.cta:hover {
    dass ein ``<video>`` das ``<img>`` ersetzen kann, ohne dass sich das
    Layout bewegt: Die Bühne gibt das Seitenverhältnis vor, nicht der Inhalt
    (Vorarbeit für WD1). */
+.hero-side .stage,
+.hero .stage { max-width: none; }
+
 .hero-side .stage > video {
   display: block;
   width: 100%;
@@ -597,9 +600,12 @@ nav.lang a.cta:hover {
   padding: 1rem 0 3rem;
 }
 
+/* Dieselbe Rechnung wie bei der Downloadkarte, eine Nummer kleiner: 48rem
+   füllten bei 1440 px nur 54 %. Eine Bitte um Geld darf schmaler sein als
+   ein Angebot — aber nicht so schmal, dass sie in der Fläche verschwindet. */
 #unterstuetzen .donate {
   margin: 0 auto;
-  max-width: 48rem;
+  max-width: min(64rem, 100%);
 }
 
 /* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
@@ -663,12 +669,17 @@ nav.lang a.cta:hover {
   .hero .stage { margin-top: 0; }
 }
 
+/* **Eine feste Breite wird auf einem großen Schirm zur Leere.** Die Karte stand
+   auf 34rem: bei 1000 px Fensterbreite füllte sie 55 % ihres Containers, bei
+   1440 px nur noch 38 % — links und rechts je rund 440 px dunkle Fläche neben
+   dem einen Ding, das der Kunde anklicken soll. Die Leere wuchs also mit dem
+   Monitor. Sie wächst jetzt mit, bis der Text zu breit würde. */
 .download {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 0.75rem;
   padding: 1.5rem;
-  max-width: 34rem;
+  max-width: min(58rem, 100%);
   box-shadow: var(--shadow);
 }
 
@@ -886,7 +897,23 @@ nav.lang a.cta:hover {
 
 /* ── Bühne für Bildschirmfotos ─────────────────────────────────────────── */
 
+/* **Ein Beleg ist kein Plakat.** Die Bühne füllte die ganze Spalte — bei
+   1440 Punkten Fenster stand ein Bildschirmfoto 1385 breit da und erschlug
+   den Text daneben (Roberts „so große Bilder", 31.08.2026).
+
+   Die Grenze ist gemessen und nicht gewählt: Die Belege sind 1400 Punkte
+   breite Dateien. Über die ganze Spalte gezeigt ergibt das 1,01 Bildpunkte
+   je Anzeigepunkt — auf jedem Retina-Schirm sichtbar unscharf, und
+   `beleg-bausteine` (1220) wurde mit 0,88 sogar hochgerechnet. Bei 62rem
+   sind es 1,41 beziehungsweise 1,23. **Kleiner ist hier zugleich schärfer**,
+   und das ist der seltene Fall, in dem Zurückhaltung nichts kostet.
+
+   Der Aufmacher ist ausgenommen: Dort bestimmt die Spalte die Breite, und
+   die ist ohnehin die halbe Seite. */
 .stage {
+  max-width: 62rem;
+  margin-left: auto;
+  margin-right: auto;
   position: relative;
   background: var(--stage);
   border: 1px solid var(--stage-line);
@@ -1000,6 +1027,22 @@ nav.lang a.cta:hover {
 section {
   padding: 3.5rem 0;
   border-top: 1px solid var(--line);
+}
+
+/* **Ein Abschnitt trägt seinen Abstand, ein Band nicht.**
+   Das Polster galt konstant, während der Inhalt der vierzehn Sektionen
+   zwischen 155 und 5673 Zeichen schwankt — Faktor 37. Bei den dichten fällt
+   es nicht auf; bei den dünnen wird es zur Leere, die Robert am 31.08.2026
+   „zu leer" genannt hat. Gemessen stand das Statistikband bei 101 px Inhalt
+   in 112 px Polster: die Rahmung größer als das Gerahmte.
+
+   Die Grenze verläuft bei etwa 300 px Inhaltshöhe. Darunter ist eine Sektion
+   kein Abschnitt, sondern ein Band zwischen zweien — eine Leiste, eine Zahl,
+   eine Bitte. Sie bekommt die Hälfte. Wer eine neue Sektion anlegt, misst
+   ihre Inhaltshöhe einmal und entscheidet danach, nicht nach ihrer Stellung
+   auf der Seite. */
+section.band {
+  padding: 1.5rem 0;
 }
 
 section.tint {
@@ -2883,11 +2926,26 @@ p.footnote {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
   gap: 1.5rem;
-  align-items: end;
+  /* **`start` und nicht `end`.** Unten ausgerichtet stehen die Bilder auf
+     verschiedenen Höhen, sobald die Bildunterschriften verschieden lang sind
+     — bei vier Galerieteilen mit zwei- bis vierzeiligen Sätzen sitzt jedes
+     Bild woanders. Robert am 31.08.2026 am Bildschirmfoto: die Vorratsdose
+     sichtbar versetzt.
+
+     Für zwei Bilder nebeneinander war `end` einmal richtig (ein Paar mit
+     einem langen und einem kurzen Satz stand damit auf einer Linie); bei
+     dreien und mehr kippt dieselbe Regel ins Gegenteil. */
+  align-items: start;
   margin-top: 2rem;
 }
 
-.weg figure { margin: 0; }
+/* Die Zeile unter dem Bild wächst nach unten und schiebt nichts: So beginnt
+   jede Kachel oben auf derselben Linie, gleich wie lang ihr Satz ist. */
+.weg figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
 
 .weg img {
   display: block;
@@ -3068,6 +3126,63 @@ p.footnote {
   .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
 }
 
+/* --- Der Aufmacher auf schmalen Schirmen ---------------------------------
+   **Der Regler stand unter der Falz.** Bei 800 Punkten Breite maß 3a den
+   Aufmacher mit 999 Punkten Höhe und die Regler-Unterkante bei 1014 — auf
+   einem 900 hohen Fenster sieht niemand ohne Scrollen das Stück, das die
+   ganze Aussage trägt: zieh das Maß, das Teil rechnet neu. Vermutlich ein
+   Hauptanteil von Roberts „wirkt nicht modern" (31.08.2026).
+
+   Die Werte sind von 3a im Browser durchgemessen: Höhe 999 → 846,
+   Regler-Unterkante 1014 → 878. */
+@media (max-width: 68rem) {
+  /* Die Bühne wird flacher statt kleiner: Das Teil steht mittig im Bild,
+     also verträgt es einen Beschnitt oben und unten. Ein kleineres Bild
+     hätte dagegen nur Luft ringsum verschoben. */
+  .turntable {
+    aspect-ratio: 16 / 7;
+    /* **Muss mit.** Ohne die feste Angabe rechnet der Browser sie aus dem
+       neuen Seitenverhältnis neu, und das Sprite springt zwischen zwei
+       Kacheln. */
+    background-size: 100% 3600%;
+  }
+
+  /* Der Regler gehört an die Bühne. Achtundsiebzig Punkte Abstand machen aus
+     zwei zusammengehörenden Dingen zwei Dinge. */
+  .dial { margin-top: 0.5rem; }
+  .turn-hint { margin: 0.35rem 0 0; }
+  .hero-side { margin-top: 1rem; gap: 0.5rem; }
+  .hero { padding-top: 2rem; padding-bottom: 2rem; }
+  .hero p.lead { margin-bottom: 1.25rem; }
+  .hero-act { margin-top: 1rem; }
+}
+
+/* **Das Vorher/Nachher braucht keine 681 Punkte je Seite.** Die beiden
+   Zeichnungen sind 420 Punkte breit; über die halbe Spalte gezeigt stehen sie
+   mit 0,62 Bildpunkten je Anzeigepunkt da — hochgerechnet, und das bei einem
+   Bild, dessen ganze Aussage feine Löcher in einer Oberfläche sind.
+
+   Der Selektor greift den Block über sein Bild statt über eine eigene Klasse:
+   `index.html` gehört gerade jemand anderem, und eine Regel, die ohne
+   Markup-Änderung auskommt, muss auf niemanden warten. */
+.weg:has(img[src*="verwandlung"]) {
+  max-width: 54rem;
+  margin-inline: auto;
+}
+
+/* **Und eine Höchsthöhe, weil die Zeichnungen quadratisch sind.** Über die
+   Breite gedeckelt stehen sie immer noch 420 Punkte hoch; zwei davon
+   nebeneinander sind eine Bildschirmhöhe für einen Vergleich, den man in
+   einem Blick erfasst. Robert am 31.08.2026: „das Verwandlungspaar ist
+   riesig". `contain` hält dabei das Seitenverhältnis — beschnitten wäre der
+   Vergleich wertlos, denn die Löcher sitzen am Rand. */
+.weg:has(img[src*="verwandlung"]) img {
+  max-height: 20rem;
+  width: auto;
+  margin-inline: auto;
+  object-fit: contain;
+}
+
 /* Die gedrängte Version der Galerie: auf der Startseite steht sie als Beleg
    neben dem Text, nicht als eigenes Kapitel. Kleinere Kacheln, knappere
    Beschriftung, und vier davon passen auf eine Reihe. */
@@ -3121,9 +3236,13 @@ p.footnote {
 /* Die Dateiliste im Download-Kasten. Sie erscheint erst, wenn
    tools/make_download.py Pakete eingetragen hat — vorher steht dort die
    Warteliste. */
+/* **Vier Pakete untereinander machen eine schmale Karte hoch statt breit.**
+   Sie stehen jetzt nebeneinander, solange Platz ist, und brechen um, wenn
+   nicht — das füllt die Breite, die die Karte ohnehin bekommt, und macht
+   aus einer Liste eine Reihe zum Danebenhalten. */
 .dateien {
   display: flex;
-  flex-direction: column;
+  flex-flow: row wrap;
   gap: 0.5rem;
   margin: 0.8rem 0 0.7rem;
   align-items: flex-start;
