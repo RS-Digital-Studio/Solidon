@@ -488,31 +488,22 @@ nav.lang a.cta:hover {
      Teil — sonst wischt ein Telefon die Seite weg, statt zu drehen. */
   touch-action: pan-y;
 
-  animation: solidon-drehen linear both;
-  /* **An der Seitenposition, nicht an der Sichtbarkeit des Elements.**
-     `view()` misst, wie weit das Element durch das Fenster gewandert ist —
-     im Aufmacher steht es beim Laden schon mittig, und die Drehung wäre
-     dadurch zu zwei Dritteln vorbei, bevor jemand gescrollt hat. `scroll()`
-     hängt an der Seite: oben die erste Aufnahme, nach vierzehnhundert Punkten
-     die letzte. */
-  animation-timeline: scroll();
-  animation-range: 0 1400px;
-  /* **Sechsunddreißig Stufen, nicht fünfunddreißig.** `jump-none` verteilt
-     N Werte von 0 bis 100 %, die Schrittweite ist also 1/(N-1). Für
-     sechsunddreißig Aufnahmen braucht es Schritte von 1/35 — mit `steps(35)`
-     landete der Ausschnitt zwischen zwei Kacheln, und die Bühne zeigte zwei
-     halbe Teile übereinander. Sichtbar nur im Bild; die gemessene Position
-     (67,65 %) sah wie eine gültige Stufe aus. */
-  animation-timing-function: steps(36, jump-none);
+  /* **Keine Scroll-Kopplung mehr.** Bis zum 31.08.2026 drehte sich das Teil
+     an der Bildlaufposition (`animation-timeline: scroll()`), und Robert hat
+     das zweimal abgelehnt: „wenn ich scrolle, scrolle ich auch gleichzeitig
+     die Webseite". Beim ersten Mal habe ich die Strecke verlängert — eine
+     Antwort auf das Symptom. Ein zweites Mal abgelehnt heißt, das Feature ist
+     gestorben.
+
+     Die Bühne zeigt jetzt ihr Standbild und dreht nur auf Geste: Ziehen und
+     Pfeiltasten, aus `site.js`. Das ist der Code, der ohnehin der bessere war
+     — er antwortet auf eine Absicht statt auf eine Nebenwirkung. */
 }
 
 .turntable.is-turning {
   cursor: grabbing;
 }
 
-@keyframes solidon-drehen {
-  to { background-position-y: 100%; }
-}
 
 /* Der Hinweis liegt **unter** der Bühne und nicht darin: Im Bild verdeckte er
    die Grundplatte des Teils, und ein Hinweis, der das verdeckt, worauf er
@@ -569,7 +560,6 @@ nav.lang a.cta:hover {
    Die erste Aufnahme steht, und die Seite bleibt vollständig. */
 @media (prefers-reduced-motion: reduce) {
   .turntable {
-    animation: none;
     background-position-y: 0%;
     /* **Der Greifzeiger bleibt.** Er stand hier auf `default`, weil das Skript
        an dieser Stelle vollständig ausstieg; seit die Bedienung auch bei

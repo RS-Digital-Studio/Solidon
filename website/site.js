@@ -15,44 +15,49 @@
  */
 (() => {
   "use strict";
+  try {
 
-  const list = document.querySelector("nav.toc");
-  if (!list || !("IntersectionObserver" in window)) return;
+    const list = document.querySelector("nav.toc");
+    if (!list || !("IntersectionObserver" in window)) return;
 
-  /* Zu jedem Block sein Listeneintrag. Fehlt das Ziel, fällt der Eintrag
-     stillschweigend weg — eine Liste mit einem toten Link ist kein Grund,
-     die übrigen nicht zu markieren. */
-  const links = new Map();
-  for (const link of list.querySelectorAll('a[href^="#"]')) {
-    const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
-    if (target) links.set(target, link);
+    /* Zu jedem Block sein Listeneintrag. Fehlt das Ziel, fällt der Eintrag
+       stillschweigend weg — eine Liste mit einem toten Link ist kein Grund,
+       die übrigen nicht zu markieren. */
+    const links = new Map();
+    for (const link of list.querySelectorAll('a[href^="#"]')) {
+      const target = document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      if (target) links.set(target, link);
+    }
+    if (links.size === 0) return;
+
+    let marked = null;
+
+    const mark = (link) => {
+      if (link === marked) return;
+      if (marked) marked.removeAttribute("aria-current");
+      link.setAttribute("aria-current", "true");
+      marked = link;
+    };
+
+    const watcher = new IntersectionObserver(
+      (entries) => {
+        /* Mehrere Blöcke können gleichzeitig im Band liegen. Genommen wird der
+           oberste — sonst springt die Markierung beim Scrollen hin und her. */
+        const seen = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (seen.length > 0) mark(links.get(seen[0].target));
+      },
+      /* Ein Block gilt als gelesen, sobald er das obere Viertel erreicht. Er
+         füllt den Bildschirm nie ganz aus: die Blöcke sind höher als er. */
+      { rootMargin: "-20% 0px -70% 0px" }
+    );
+
+    for (const target of links.keys()) watcher.observe(target);
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 16 ausgefallen —", problem);
   }
-  if (links.size === 0) return;
-
-  let marked = null;
-
-  const mark = (link) => {
-    if (link === marked) return;
-    if (marked) marked.removeAttribute("aria-current");
-    link.setAttribute("aria-current", "true");
-    marked = link;
-  };
-
-  const watcher = new IntersectionObserver(
-    (entries) => {
-      /* Mehrere Blöcke können gleichzeitig im Band liegen. Genommen wird der
-         oberste — sonst springt die Markierung beim Scrollen hin und her. */
-      const seen = entries
-        .filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (seen.length > 0) mark(links.get(seen[0].target));
-    },
-    /* Ein Block gilt als gelesen, sobald er das obere Viertel erreicht. Er
-       füllt den Bildschirm nie ganz aus: die Blöcke sind höher als er. */
-    { rootMargin: "-20% 0px -70% 0px" }
-  );
-
-  for (const target of links.keys()) watcher.observe(target);
 })();
 
 /* Die Versionsauswahl des Changelogs.
@@ -64,33 +69,38 @@
  */
 (() => {
   "use strict";
+  try {
 
-  const picker = document.querySelector("[data-changelog-select]");
-  const entries = [...document.querySelectorAll("[data-changelog-entry]")];
-  const status = document.querySelector("[data-changelog-status]");
-  if (!picker || entries.length === 0) return;
+    const picker = document.querySelector("[data-changelog-select]");
+    const entries = [...document.querySelectorAll("[data-changelog-entry]")];
+    const status = document.querySelector("[data-changelog-status]");
+    if (!picker || entries.length === 0) return;
 
-  const show = (version, remember) => {
-    const selected = entries.find((entry) => entry.dataset.version === version);
-    if (!selected) return;
+    const show = (version, remember) => {
+      const selected = entries.find((entry) => entry.dataset.version === version);
+      if (!selected) return;
 
-    picker.value = version;
-    for (const entry of entries) entry.hidden = entry !== selected;
-    if (status) status.textContent = selected.dataset.announcement || version;
+      picker.value = version;
+      for (const entry of entries) entry.hidden = entry !== selected;
+      if (status) status.textContent = selected.dataset.announcement || version;
 
-    if (remember && window.history?.replaceState) {
-      history.replaceState(null, "", `#${selected.id}`);
-    }
-  };
+      if (remember && window.history?.replaceState) {
+        history.replaceState(null, "", `#${selected.id}`);
+      }
+    };
 
-  const fromHash = entries.find((entry) => entry.id === location.hash.slice(1));
-  show(fromHash?.dataset.version || picker.value, false);
+    const fromHash = entries.find((entry) => entry.id === location.hash.slice(1));
+    show(fromHash?.dataset.version || picker.value, false);
 
-  picker.addEventListener("change", () => show(picker.value, true));
-  window.addEventListener("hashchange", () => {
-    const selected = entries.find((entry) => entry.id === location.hash.slice(1));
-    if (selected) show(selected.dataset.version, false);
-  });
+    picker.addEventListener("change", () => show(picker.value, true));
+    window.addEventListener("hashchange", () => {
+      const selected = entries.find((entry) => entry.id === location.hash.slice(1));
+      if (selected) show(selected.dataset.version, false);
+    });
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 65 ausgefallen —", problem);
+  }
 })();
 
 /* Der Zähler bis zur Demo im Download-Kasten der Startseite.
@@ -114,75 +124,80 @@
  */
 (() => {
   "use strict";
-
-  const box = document.querySelector("[data-countdown]");
-  if (!box) return;
-
-  const target = Date.parse(document.body.dataset.release || "");
-  if (Number.isNaN(target) || !box.dataset.template) return;
-
-  const language = document.documentElement.lang || "de";
-  let unit;
-  let join;
   try {
-    unit = (value, name) =>
-      new Intl.NumberFormat(language, {
-        style: "unit",
-        unit: name,
-        unitDisplay: "long",
-      }).format(value);
-    join = new Intl.ListFormat(language, { style: "short", type: "unit" });
-    unit(1, "hour");
-  } catch {
-    return;
-  }
 
-  /* Wer ruhige Seiten eingestellt hat, bekommt keine Sekunden: eine Ziffer,
-     die im Blickfeld einmal je Sekunde springt, ist genau die Bewegung, die
-     diese Einstellung meint. Die Minute genügt — bis zum Termin sind es
-     Stunden. */
-  const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const box = document.querySelector("[data-countdown]");
+    if (!box) return;
 
-  /* Der Wecker steht vor `tick`, nicht dahinter: Wird die Seite **nach** dem
-     Termin geladen, räumt der erste Schlag ihn sofort wieder ab — und griffe
-     dabei auf eine Bindung zu, die erst zwei Zeilen später entsteht. Das ist
-     kein theoretischer Fall, sondern der Normalfall ab dem Zieltag. */
-  let timer = null;
+    const target = Date.parse(document.body.dataset.release || "");
+    if (Number.isNaN(target) || !box.dataset.template) return;
 
-  const tick = () => {
-    const raw = target - Date.now();
-    /* Ruhige Seiten zählen in Minuten, und zwar aufgerundet: abgerundet
-       stünde die letzte Minute lang „noch 0 Minuten" da, was zugleich falsch
-       aussieht und falsch ist — es ist ja noch etwas übrig. */
-    const rest = calm ? Math.ceil(raw / 60000) * 60 : Math.floor(raw / 1000);
-    if (raw <= 0) {
-      /* Vorbei heißt weg. Was dann gilt, sagt der Kasten selbst — ein
-         Zähler, der auf null stehen bleibt, behauptete etwas über einen
-         Download, den er nicht kennt. */
-      box.hidden = true;
-      clearInterval(timer);
+    const language = document.documentElement.lang || "de";
+    let unit;
+    let join;
+    try {
+      unit = (value, name) =>
+        new Intl.NumberFormat(language, {
+          style: "unit",
+          unit: name,
+          unitDisplay: "long",
+        }).format(value);
+      join = new Intl.ListFormat(language, { style: "short", type: "unit" });
+      unit(1, "hour");
+    } catch {
       return;
     }
-    const days = Math.floor(rest / 86400);
-    const hours = Math.floor(rest / 3600) % 24;
-    const minutes = Math.floor(rest / 60) % 60;
-    const seconds = rest % 60;
-    const parts = [];
-    if (days > 0) {
-      parts.push(unit(days, "day"));
-      if (hours > 0) parts.push(unit(hours, "hour"));
-    } else {
-      if (hours > 0) parts.push(unit(hours, "hour"));
-      /* Unter einer Minute bleiben die Sekunden allein stehen. */
-      if (hours > 0 || minutes > 0) parts.push(unit(minutes, "minute"));
-      if (!calm) parts.push(unit(seconds, "second"));
-    }
-    box.textContent = box.dataset.template.replace("{rest}", join.format(parts));
-    box.hidden = false;
-  };
 
-  tick();
-  if (!box.hidden) timer = setInterval(tick, calm ? 30000 : 1000);
+    /* Wer ruhige Seiten eingestellt hat, bekommt keine Sekunden: eine Ziffer,
+       die im Blickfeld einmal je Sekunde springt, ist genau die Bewegung, die
+       diese Einstellung meint. Die Minute genügt — bis zum Termin sind es
+       Stunden. */
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    /* Der Wecker steht vor `tick`, nicht dahinter: Wird die Seite **nach** dem
+       Termin geladen, räumt der erste Schlag ihn sofort wieder ab — und griffe
+       dabei auf eine Bindung zu, die erst zwei Zeilen später entsteht. Das ist
+       kein theoretischer Fall, sondern der Normalfall ab dem Zieltag. */
+    let timer = null;
+
+    const tick = () => {
+      const raw = target - Date.now();
+      /* Ruhige Seiten zählen in Minuten, und zwar aufgerundet: abgerundet
+         stünde die letzte Minute lang „noch 0 Minuten" da, was zugleich falsch
+         aussieht und falsch ist — es ist ja noch etwas übrig. */
+      const rest = calm ? Math.ceil(raw / 60000) * 60 : Math.floor(raw / 1000);
+      if (raw <= 0) {
+        /* Vorbei heißt weg. Was dann gilt, sagt der Kasten selbst — ein
+           Zähler, der auf null stehen bleibt, behauptete etwas über einen
+           Download, den er nicht kennt. */
+        box.hidden = true;
+        clearInterval(timer);
+        return;
+      }
+      const days = Math.floor(rest / 86400);
+      const hours = Math.floor(rest / 3600) % 24;
+      const minutes = Math.floor(rest / 60) % 60;
+      const seconds = rest % 60;
+      const parts = [];
+      if (days > 0) {
+        parts.push(unit(days, "day"));
+        if (hours > 0) parts.push(unit(hours, "hour"));
+      } else {
+        if (hours > 0) parts.push(unit(hours, "hour"));
+        /* Unter einer Minute bleiben die Sekunden allein stehen. */
+        if (hours > 0 || minutes > 0) parts.push(unit(minutes, "minute"));
+        if (!calm) parts.push(unit(seconds, "second"));
+      }
+      box.textContent = box.dataset.template.replace("{rest}", join.format(parts));
+      box.hidden = false;
+    };
+
+    tick();
+    if (!box.hidden) timer = setInterval(tick, calm ? 30000 : 1000);
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 115 ausgefallen —", problem);
+  }
 })();
 
 /* Der Wechsel vom Warten zum Laden.
@@ -204,67 +219,72 @@
  */
 (() => {
   "use strict";
+  try {
 
-  const page = document.body;
-  const moment = Date.parse(page.dataset.release || "");
-  if (Number.isNaN(moment)) return;
+    const page = document.body;
+    const moment = Date.parse(page.dataset.release || "");
+    if (Number.isNaN(moment)) return;
 
-  /* Ob es etwas zu laden gibt, steht nicht in einem Schalter, sondern im
-     Kasten selbst: Wenn dort ein Verweis auf eine Datei liegt, gibt es sie.
-     Ein Schalter wäre eine zweite Wahrheit neben der ersten, und die beiden
-     liefen irgendwann auseinander. Gefüllt wird der Kasten von
-     tools/make_download.py. */
-  const shelf = document.querySelector("[data-files]");
-  const ready = Boolean(shelf && shelf.querySelector("a[href]"));
+    /* Ob es etwas zu laden gibt, steht nicht in einem Schalter, sondern im
+       Kasten selbst: Wenn dort ein Verweis auf eine Datei liegt, gibt es sie.
+       Ein Schalter wäre eine zweite Wahrheit neben der ersten, und die beiden
+       liefen irgendwann auseinander. Gefüllt wird der Kasten von
+       tools/make_download.py. */
+    const shelf = document.querySelector("[data-files]");
+    const ready = Boolean(shelf && shelf.querySelector("a[href]"));
 
-  const arrive = () => {
-    /* Zwei Bedingungen, und sie sind nicht dieselbe.
-     *
-     * Ein Satz wie „die Demo erscheint am 20. August" wird am 21. falsch,
-     * ganz gleich ob eine Datei liegt — der Termin vergeht von selbst. Ein
-     * Knopf, der „Demo laden" heißt, wird dagegen erst richtig, wenn es
-     * etwas zu laden gibt. Wer beides an dieselbe Bedingung hängt, bekommt
-     * entweder einen toten Knopf oder einen Satz, der auf die Datei wartet.
-     */
-    for (const node of document.querySelectorAll("[data-past-text]")) {
-      node.textContent = node.dataset.pastText;
-    }
-    page.dataset.past = "true";
-
-    if (!ready) return;
-
-    /* Erst die Verweise, dann die Texte: Ein Knopf, der schon „Demo laden"
-       heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
-       Sekunde eine Lüge. Wohin er zeigt, sagt die erste Datei im Kasten —
-       auf einer Seite mit mehreren Paketen ist das die für Windows. */
-    const first = shelf.querySelector("a[href]");
-    for (const link of document.querySelectorAll("[data-release-href]")) {
-      link.href = first.getAttribute("href");
-      /* Den Dateinamen mitnehmen, nicht nur das leere Attribut: Der Verweis
-         zeigt auf den Zählpunkt und wird von dort weitergeleitet, und ein
-         `download` ohne Namen überließe es dem Browser, sich einen aus der
-         Adresse zu bauen — die dann `count.php` heißt. */
-      if (link.hasAttribute("data-release-download")) {
-        link.setAttribute("download", first.getAttribute("download") || "");
+    const arrive = () => {
+      /* Zwei Bedingungen, und sie sind nicht dieselbe.
+       *
+       * Ein Satz wie „die Demo erscheint am 20. August" wird am 21. falsch,
+       * ganz gleich ob eine Datei liegt — der Termin vergeht von selbst. Ein
+       * Knopf, der „Demo laden" heißt, wird dagegen erst richtig, wenn es
+       * etwas zu laden gibt. Wer beides an dieselbe Bedingung hängt, bekommt
+       * entweder einen toten Knopf oder einen Satz, der auf die Datei wartet.
+       */
+      for (const node of document.querySelectorAll("[data-past-text]")) {
+        node.textContent = node.dataset.pastText;
       }
-    }
-    for (const node of document.querySelectorAll("[data-release-text]")) {
-      node.textContent = node.dataset.releaseText;
-    }
-    for (const node of document.querySelectorAll("[data-release-hide]")) node.hidden = true;
-    for (const node of document.querySelectorAll("[data-release-show]")) node.hidden = false;
-    page.dataset.released = "true";
-  };
+      page.dataset.past = "true";
 
-  const rest = moment - Date.now();
-  if (rest <= 0) {
-    arrive();
-    return;
+      if (!ready) return;
+
+      /* Erst die Verweise, dann die Texte: Ein Knopf, der schon „Demo laden"
+         heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
+         Sekunde eine Lüge. Wohin er zeigt, sagt die erste Datei im Kasten —
+         auf einer Seite mit mehreren Paketen ist das die für Windows. */
+      const first = shelf.querySelector("a[href]");
+      for (const link of document.querySelectorAll("[data-release-href]")) {
+        link.href = first.getAttribute("href");
+        /* Den Dateinamen mitnehmen, nicht nur das leere Attribut: Der Verweis
+           zeigt auf den Zählpunkt und wird von dort weitergeleitet, und ein
+           `download` ohne Namen überließe es dem Browser, sich einen aus der
+           Adresse zu bauen — die dann `count.php` heißt. */
+        if (link.hasAttribute("data-release-download")) {
+          link.setAttribute("download", first.getAttribute("download") || "");
+        }
+      }
+      for (const node of document.querySelectorAll("[data-release-text]")) {
+        node.textContent = node.dataset.releaseText;
+      }
+      for (const node of document.querySelectorAll("[data-release-hide]")) node.hidden = true;
+      for (const node of document.querySelectorAll("[data-release-show]")) node.hidden = false;
+      page.dataset.released = "true";
+    };
+
+    const rest = moment - Date.now();
+    if (rest <= 0) {
+      arrive();
+      return;
+    }
+    /* Wer die Seite vorher offen hat, soll sie nicht neu laden müssen. Über
+       dem Bereich, den ein Zeitgeber sicher trägt (gut 24 Tage), wird nicht
+       gewartet — dann ist der Termin ohnehin keine Sitzung entfernt. */
+    if (rest < 2 ** 31 - 1) setTimeout(arrive, rest);
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 205 ausgefallen —", problem);
   }
-  /* Wer die Seite vorher offen hat, soll sie nicht neu laden müssen. Über
-     dem Bereich, den ein Zeitgeber sicher trägt (gut 24 Tage), wird nicht
-     gewartet — dann ist der Termin ohnehin keine Sitzung entfernt. */
-  if (rest < 2 ** 31 - 1) setTimeout(arrive, rest);
 })();
 
 /* Der Zählruf.
@@ -291,25 +311,30 @@
  */
 (() => {
   "use strict";
+  try {
 
-  if (navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.globalPrivacyControl) return;
+    if (navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.globalPrivacyControl) return;
 
-  /* **Der Verweis muss mitgeschickt werden, er steht nicht im Header.**
-     `sendBeacon` sendet als `Referer` die Seite, von der aus es ruft — also
-     immer solidon3d.de selbst. `count.php` erkennt die eigene Adresse und
-     verwirft sie, korrekterweise: Ein Sprung von Seite zu Seite ist kein
-     Verweis von außen. Damit kam nie ein Verweis an, und die Liste „Woher"
-     blieb leer, ohne dass etwas kaputt war. Woher der Besucher wirklich kommt,
-     weiß nur `document.referrer`. */
-  const body = new URLSearchParams({ p: location.pathname || "/" });
-  if (document.referrer) body.append("r", document.referrer);
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon("/api/count.php", body);
-  } else if (window.fetch) {
-    /* Der Rückfall für alles, was `sendBeacon` nicht kennt. `keepalive`
-       versucht dasselbe zu erreichen; klappt es nicht, fehlt ein Aufruf in
-       der Statistik und sonst nichts. */
-    fetch("/api/count.php", { method: "POST", body, keepalive: true }).catch(() => {});
+    /* **Der Verweis muss mitgeschickt werden, er steht nicht im Header.**
+       `sendBeacon` sendet als `Referer` die Seite, von der aus es ruft — also
+       immer solidon3d.de selbst. `count.php` erkennt die eigene Adresse und
+       verwirft sie, korrekterweise: Ein Sprung von Seite zu Seite ist kein
+       Verweis von außen. Damit kam nie ein Verweis an, und die Liste „Woher"
+       blieb leer, ohne dass etwas kaputt war. Woher der Besucher wirklich kommt,
+       weiß nur `document.referrer`. */
+    const body = new URLSearchParams({ p: location.pathname || "/" });
+    if (document.referrer) body.append("r", document.referrer);
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon("/api/count.php", body);
+    } else if (window.fetch) {
+      /* Der Rückfall für alles, was `sendBeacon` nicht kennt. `keepalive`
+         versucht dasselbe zu erreichen; klappt es nicht, fehlt ein Aufruf in
+         der Statistik und sonst nichts. */
+      fetch("/api/count.php", { method: "POST", body, keepalive: true }).catch(() => {});
+    }
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 292 ausgefallen —", problem);
   }
 })();
 
@@ -325,7 +350,13 @@
  */
 /* Das Teil zum Drehen — und der Regler, der sein Maß ändert.
  *
- * **Die Drehung selbst steht im Stylesheet, nicht hier.** Die
+ * **Die Drehung geschieht nur auf Geste.** Bis zum 31.08.2026 drehte sich das
+ * Teil zusätzlich an der Bildlaufposition; Robert hat das zweimal abgelehnt,
+ * und beim zweiten Mal ist es gestorben. Was bleibt, ist dieser Block: Ziehen
+ * und Pfeiltasten — eine Antwort auf eine Absicht statt auf eine
+ * Nebenwirkung.
+ *
+ * **Die Bilder liegen weiterhin als ein Sprite übereinander.** Die
  * sechsunddreißig Aufnahmen liegen als **ein** Bild übereinander, und die
  * Bildlaufposition verschiebt den Ausschnitt (`animation-timeline: scroll()`).
  * Das rechnet der Compositor; ein Skript müsste bei jedem Bildlauf aufwachen.
@@ -357,168 +388,183 @@
  */
 (() => {
   "use strict";
+  try {
 
-  const stage = document.querySelector(".turntable");
-  if (!stage) return;
-  const count = Number(stage.dataset.frames || 0);
-  if (count < 2) return;
+    const stage = document.querySelector(".turntable");
+    if (!stage) return;
+    const count = Number(stage.dataset.frames || 0);
+    if (count < 2) return;
 
-  /* **Hier wird nicht mehr ausgestiegen.** Bis zum 31.08.2026 stand an dieser
-     Stelle ein `return` für `prefers-reduced-motion`, mit der Begründung „wer
-     Bewegung abbestellt hat, bekommt keine, auch nicht auf seine Geste hin".
-     Das klingt konsequent und ist falsch: Die Einstellung meint das, was
-     **ohne Zutun** läuft. Gemessen kostete sie den Regler vollständig — die
-     Zahl blieb stehen, das Bild wechselte nicht, der Knopf antwortete auf
-     keinen Klick. Die Scroll-Drehung bleibt abgeschaltet, aber sie wird im
-     Stylesheet abgeschaltet und nicht hier. */
+    /* **Hier wird nicht mehr ausgestiegen.** Bis zum 31.08.2026 stand an dieser
+       Stelle ein `return` für `prefers-reduced-motion`, mit der Begründung „wer
+       Bewegung abbestellt hat, bekommt keine, auch nicht auf seine Geste hin".
+       Das klingt konsequent und ist falsch: Die Einstellung meint das, was
+       **ohne Zutun** läuft. Gemessen kostete sie den Regler vollständig — die
+       Zahl blieb stehen, das Bild wechselte nicht, der Knopf antwortete auf
+       keinen Klick. Die Scroll-Drehung bleibt abgeschaltet, aber sie wird im
+       Stylesheet abgeschaltet und nicht hier. */
 
-  let frame = 0;
-  let dragging = false;
-  let last = 0;
-  let carry = 0;
+    let frame = 0;
+    let dragging = false;
+    let last = 0;
+    let carry = 0;
 
-  const show = (index) => {
-    frame = ((index % count) + count) % count;
-    /* Die Scroll-Animation übersteuern, sobald jemand selbst dreht — sonst
-       zieht die Zeitachse das Bild beim nächsten Bildlauf zurück, und die
-       Geste wäre folgenlos. */
-    stage.style.animation = "none";
-    /* **Und das Sprite wiederherstellen, falls der Regler ein Einzelbild
-       gesetzt hat.** Sonst verschiebt die nächste Zeile die Ansicht eines
-       Bildes, das nur eine Kachel hoch ist — bei 88 % ist davon nichts mehr
-       im Rahmen, und die Bühne steht leer da. Gefunden am gerenderten
-       Aufmacher: erst am Regler gezogen, dann gedreht, und das Teil war weg.
-       Ein leerer Inline-Wert lässt die Regel aus dem Stylesheet wieder
-       gelten; der Dateiname steht deshalb hier nicht noch einmal. */
-    stage.style.background = "";
-    stage.style.backgroundPositionY = (frame / (count - 1)) * 100 + "%";
-  };
+    const show = (index) => {
+      frame = ((index % count) + count) % count;
+      /* Die Scroll-Animation übersteuern, sobald jemand selbst dreht — sonst
+         zieht die Zeitachse das Bild beim nächsten Bildlauf zurück, und die
+         Geste wäre folgenlos. */
+      /* `animation: none` stand hier, solange die Scroll-Zeitachse die Position
+         bei jedem Bildlauf zurückzog. Seit sie draußen ist, gibt es nichts mehr
+         zu übersteuern — die Zeile bleibt trotzdem, denn sie kostet nichts und
+         macht die Geste unabhängig davon, was ein Stylesheet später wieder
+         einführt. */
+      stage.style.animation = "none";
+      /* **Und das Sprite wiederherstellen, falls der Regler ein Einzelbild
+         gesetzt hat.** Sonst verschiebt die nächste Zeile die Ansicht eines
+         Bildes, das nur eine Kachel hoch ist — bei 88 % ist davon nichts mehr
+         im Rahmen, und die Bühne steht leer da. Gefunden am gerenderten
+         Aufmacher: erst am Regler gezogen, dann gedreht, und das Teil war weg.
+         Ein leerer Inline-Wert lässt die Regel aus dem Stylesheet wieder
+         gelten; der Dateiname steht deshalb hier nicht noch einmal. */
+      stage.style.background = "";
+      stage.style.backgroundPositionY = (frame / (count - 1)) * 100 + "%";
+    };
 
-  /* Wie weit man ziehen muss, damit sich das Teil um ein Bild dreht.
-     Zwölf Bildpunkte: eine ganze Umdrehung passt damit in eine Bewegung von
-     gut vierhundert Punkten, und das ist ungefähr die Breite, die eine Hand
-     auf einem Trackpad bequem zurücklegt. */
-  const STEP = 12;
+    /* Wie weit man ziehen muss, damit sich das Teil um ein Bild dreht.
+       Zwölf Bildpunkte: eine ganze Umdrehung passt damit in eine Bewegung von
+       gut vierhundert Punkten, und das ist ungefähr die Breite, die eine Hand
+       auf einem Trackpad bequem zurücklegt. */
+    const STEP = 12;
 
-  stage.addEventListener("pointerdown", (event) => {
-    dragging = true;
-    last = event.clientX;
-    carry = 0;
-    stage.classList.add("is-turning");
-    /* Der Zeiger gehört ab jetzt dieser Fläche: Ohne das endet die Drehung,
-       sobald die Maus den Rand überquert — und genau das tut sie beim
-       Ziehen. */
-    if (stage.setPointerCapture) stage.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  });
-  stage.addEventListener("pointermove", (event) => {
-    if (!dragging) return;
-    carry += event.clientX - last;
-    last = event.clientX;
-    const steps = Math.trunc(carry / STEP);
-    if (steps === 0) return;
-    carry -= steps * STEP;
-    show(frame - steps);
-  });
-  const end = () => {
-    dragging = false;
-    stage.classList.remove("is-turning");
-  };
-  stage.addEventListener("pointerup", end);
-  stage.addEventListener("pointercancel", end);
+    stage.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      last = event.clientX;
+      carry = 0;
+      stage.classList.add("is-turning");
+      /* Der Zeiger gehört ab jetzt dieser Fläche: Ohne das endet die Drehung,
+         sobald die Maus den Rand überquert — und genau das tut sie beim
+         Ziehen. */
+      if (stage.setPointerCapture) stage.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+    stage.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      carry += event.clientX - last;
+      last = event.clientX;
+      const steps = Math.trunc(carry / STEP);
+      if (steps === 0) return;
+      carry -= steps * STEP;
+      show(frame - steps);
+    });
+    const end = () => {
+      dragging = false;
+      stage.classList.remove("is-turning");
+    };
+    stage.addEventListener("pointerup", end);
+    stage.addEventListener("pointercancel", end);
 
-  /* Und für die Tastatur, weil eine Geste, die nur die Maus kennt, die
-     Hälfte der Besucher ausschließt. Die Fläche ist im Markup fokussierbar
-     (`tabindex="0"`), hier kommt nur die Bewegung dazu. */
-  stage.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    show(frame + (event.key === "ArrowRight" ? 1 : -1));
-    event.preventDefault();
-  });
+    /* Und für die Tastatur, weil eine Geste, die nur die Maus kennt, die
+       Hälfte der Besucher ausschließt. Die Fläche ist im Markup fokussierbar
+       (`tabindex="0"`), hier kommt nur die Bewegung dazu. */
+    stage.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      show(frame + (event.key === "ArrowRight" ? 1 : -1));
+      event.preventDefault();
+    });
 
-  /* Der Regler. Seine Spanne steht im Markup und nicht hier — sie gehört zum
-     Teil, das gerade gezeigt wird, und ein zweites Teil wäre sonst eine
-     Änderung an zwei Dateien. */
-  const dial = document.querySelector("[data-dial]");
-  const readout = document.querySelector("[data-dial-value]");
-  if (!dial || !readout) return;
+    /* Der Regler. Seine Spanne steht im Markup und nicht hier — sie gehört zum
+       Teil, das gerade gezeigt wird, und ein zweites Teil wäre sonst eine
+       Änderung an zwei Dateien. */
+    const dial = document.querySelector("[data-dial]");
+    const readout = document.querySelector("[data-dial-value]");
+    if (!dial || !readout) return;
 
-  const from = Number(dial.dataset.from || 0);
-  const to = Number(dial.dataset.to || 0);
-  const stops = Number(dial.dataset.stops || 0);
-  const pattern = dial.dataset.dial || "";
-  if (!pattern || stops < 2 || to <= from) return;
+    const from = Number(dial.dataset.from || 0);
+    const to = Number(dial.dataset.to || 0);
+    const stops = Number(dial.dataset.stops || 0);
+    const pattern = dial.dataset.dial || "";
+    if (!pattern || stops < 2 || to <= from) return;
 
-  const picture = (index) => pattern.replace("{n}", String(index).padStart(2, "0"));
+    const picture = (index) => pattern.replace("{n}", String(index).padStart(2, "0"));
 
-  /* Vorgeladen wird beim ersten Anfassen, nicht beim Laden der Seite: Wer die
-     Seite nur überfliegt, soll die vierundzwanzig Bilder nicht bezahlen. */
-  let ready = false;
-  const preload = () => {
-    if (ready) return;
-    ready = true;
-    for (let index = 0; index < stops; index += 1) {
-      new Image().src = picture(index);
+    /* Vorgeladen wird beim ersten Anfassen, nicht beim Laden der Seite: Wer die
+       Seite nur überfliegt, soll die vierundzwanzig Bilder nicht bezahlen. */
+    let ready = false;
+    const preload = () => {
+      if (ready) return;
+      ready = true;
+      for (let index = 0; index < stops; index += 1) {
+        new Image().src = picture(index);
+      }
+    };
+    dial.addEventListener("pointerdown", preload, { once: true });
+    dial.addEventListener("focus", preload, { once: true });
+
+    /* Der Hinweis nennt bei abgeschalteter Scroll-Drehung nur noch, was wirklich
+       geht. Vorher war er ganz ausgeblendet, und damit erfuhr niemand, dass
+       Ziehen überhaupt möglich ist. */
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const hint = document.querySelector(".turn-hint");
+      if (hint && hint.dataset.calm) hint.textContent = hint.dataset.calm;
     }
-  };
-  dial.addEventListener("pointerdown", preload, { once: true });
-  dial.addEventListener("focus", preload, { once: true });
 
-  /* Der Hinweis nennt bei abgeschalteter Scroll-Drehung nur noch, was wirklich
-     geht. Vorher war er ganz ausgeblendet, und damit erfuhr niemand, dass
-     Ziehen überhaupt möglich ist. */
-  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-    const hint = document.querySelector(".turn-hint");
-    if (hint && hint.dataset.calm) hint.textContent = hint.dataset.calm;
+    dial.addEventListener("input", () => {
+      const index = Number(dial.value);
+      stage.style.animation = "none";
+      stage.style.background =
+        'url("' + picture(index) + '") center / cover no-repeat';
+      const value = from + (to - from) * (index / (stops - 1));
+      /* **Das Trennzeichen kommt aus der Sprache der Seite, nicht aus einem
+         festen Tausch.** `replace(".", ",")` schrieb in jeder Fassung ein
+         Komma — im englischen Aufmacher stand damit „55.0 mm" als Startwert
+         und „90,0 mm", sobald jemand den Regler anfasste. Zwei Schreibweisen
+         in einem Feld, und die zweite war die falsche. Dieselbe Regel wie in
+         der Anwendung: eine Zahl, eine Schreibweise, und sie folgt der
+         Sprache. */
+      readout.textContent =
+        value.toLocaleString(document.documentElement.lang || "de", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        }) + " mm";
+    });
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 364 ausgefallen —", problem);
   }
-
-  dial.addEventListener("input", () => {
-    const index = Number(dial.value);
-    stage.style.animation = "none";
-    stage.style.background =
-      'url("' + picture(index) + '") center / cover no-repeat';
-    const value = from + (to - from) * (index / (stops - 1));
-    /* **Das Trennzeichen kommt aus der Sprache der Seite, nicht aus einem
-       festen Tausch.** `replace(".", ",")` schrieb in jeder Fassung ein
-       Komma — im englischen Aufmacher stand damit „55.0 mm" als Startwert
-       und „90,0 mm", sobald jemand den Regler anfasste. Zwei Schreibweisen
-       in einem Feld, und die zweite war die falsche. Dieselbe Regel wie in
-       der Anwendung: eine Zahl, eine Schreibweise, und sie folgt der
-       Sprache. */
-    readout.textContent =
-      value.toLocaleString(document.documentElement.lang || "de", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      }) + " mm";
-  });
 })();
 
 (() => {
   "use strict";
+  try {
 
-  for (const button of document.querySelectorAll("[data-choice]")) {
-    button.addEventListener("click", () => {
-      const box = document.getElementById("wahl-" + button.dataset.choice);
-      if (!box) return;
-      /* `showModal` und nicht `show`: Der Dialog soll den Rest der Seite
-         sperren, damit Esc ihn schließt und der Fokus nicht dahinter
-         entwischt. */
-      if (typeof box.showModal === "function") box.showModal();
-      else box.setAttribute("open", "");
-    });
-  }
-
-  /* Ein Klick neben den Dialog schließt ihn. Das Ereignis trägt dann den
-     Dialog selbst als Ziel — sein Inhalt liegt in Kindknoten, und die
-     melden sich selbst. */
-  for (const box of document.querySelectorAll("dialog.auswahl")) {
-    box.addEventListener("click", (event) => {
-      if (event.target === box) box.close();
-    });
-    /* Nach dem Klick auf ein Paket bleibt sonst ein Dialog über einer Seite
-       stehen, auf der gerade ein Download läuft. */
-    for (const link of box.querySelectorAll("a[href]")) {
-      link.addEventListener("click", () => box.close());
+    for (const button of document.querySelectorAll("[data-choice]")) {
+      button.addEventListener("click", () => {
+        const box = document.getElementById("wahl-" + button.dataset.choice);
+        if (!box) return;
+        /* `showModal` und nicht `show`: Der Dialog soll den Rest der Seite
+           sperren, damit Esc ihn schließt und der Fokus nicht dahinter
+           entwischt. */
+        if (typeof box.showModal === "function") box.showModal();
+        else box.setAttribute("open", "");
+      });
     }
+
+    /* Ein Klick neben den Dialog schließt ihn. Das Ereignis trägt dann den
+       Dialog selbst als Ziel — sein Inhalt liegt in Kindknoten, und die
+       melden sich selbst. */
+    for (const box of document.querySelectorAll("dialog.auswahl")) {
+      box.addEventListener("click", (event) => {
+        if (event.target === box) box.close();
+      });
+      /* Nach dem Klick auf ein Paket bleibt sonst ein Dialog über einer Seite
+         stehen, auf der gerade ein Download läuft. */
+      for (const link of box.querySelectorAll("a[href]")) {
+        link.addEventListener("click", () => box.close());
+      }
+    }
+  } catch (problem) {
+    /* Ein Fehler hier darf die folgenden Bloecke nicht mitnehmen. */
+    console.warn("site.js: Block ab Zeile 507 ausgefallen —", problem);
   }
 })();
