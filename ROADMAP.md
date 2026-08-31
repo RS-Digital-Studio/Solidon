@@ -119,6 +119,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
 | Der Deckelname friert die Sprache seiner Erzeugung ein | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix in `lid.py:451` (0d): Ein englischer Kunde liest im Objektbaum „Can" und darunter **„Dose Deckel"** — der Name wird beim Erzeugen aufgelöst und als fester String gespeichert, trägt also den ALTEN Namen des Quellkörpers und zerschneidet den Zusammenhang; trifft jedes mitgelieferte Beispiel in fünf Sprachen (c3 gemessen), Zwillingssuche gehört dazu |
 | Der Klick auf eine Warnung fliegt die Kamera ins Leere | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Familien-Fix: Das Merkmal friert seine Lage beim Erzeugen ein und überlebt `arrange_bed` unverändert — der Viewport ist nach dem Klick leer (c3 am Fenster gemessen, Foto als Instanz); erst die Familiensuche, dann die Wahl zwischen mitwandernder Lage und Nachrechnen |
+| Die Flughöhe nach einem Befund-Klick ist nirgends zugesagt | Befunde aus dem Weg-Dreh (31.08.2026) | einen Entscheid aus Kundensicht (Review) — die Kamera steht nach dem Flug so nah, dass der Ort gefunden und die Orientierung verloren ist; keine Zusage nennt eine Höhe, also eine offene Bedienfrage statt einer Abweichung |
 | Ein `return` macht aus drei gleichzeitigen Stufen ein Entweder-oder | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds zweiten Commit (eigener Test): Nach dem Flug kehrt `_on_finding_activated` zurück, die Auswahlzeile darunter wird nie erreicht — `oberflaeche.md` und der Docstring sagen beide „die Stufen schließen einander nicht aus"; Geschwistersuche gehört dazu |
 | `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
@@ -13483,7 +13484,33 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       sondern das Ergebnis** — die zwei Werte unterschieden sich um exakt
       die Körpermitte (−67/+77), und das stand zehn Minuten unbeachtet da.
       **Neu in der Latte:** `git diff HEAD --stat` auf die gemessenen
-      Dateien unmittelbar vor und nach jeder Messung, mitgemeldet. Beispieldatei
+      Dateien unmittelbar vor und nach jeder Messung, mitgemeldet.
+      **ABGENOMMEN auf `8d15960f` (c3, Prüfling vor und nach der Messung
+      still — die neue Auflage trug beim ersten Einsatz):** Brennpunkt
+      wandert von (−28|77|15) auf (−66,67|77|30), **im Körper**, die Marke
+      kommt als zehnter Aktor dazu; **die Auswahl bleibt aus** (geeichte
+      Sonde, nach dem Klick `None`) — das `return` steht unrepariert bei
+      0d. **Und c3 zieht ihren stärksten Beleg zurück:** Das „leere
+      Viewport"-Bild war ein **Werkzeug-Artefakt** — `QWidget.grab()`
+      bekommt den VTK-Kontext nicht und zeigt die Ansicht immer leer
+      (gemessen: `plotter.screenshot()` liefert 766 verschiedene Farben in
+      derselben Lage, `_actors=2`, Renderer-Aktoren 9). Der Befund stand
+      auf den **Zahlen** und steht weiter; nur der als stärkster angeführte
+      Beleg war der schwächste. **Latten-Regel daraus: Ein Bildschirmfoto
+      belegt den Viewport nur über `plotter.screenshot()`; `QWidget.grab()`
+      taugt für Panels, Menüs und Leisten — wer die Ansicht belegen will,
+      prüft vorher an einer Lage mit bekanntem Inhalt, ob das Werkzeug ihn
+      zeigt.** Und die Wurzel: **Ein Werkzeug, das die Instanz liefern
+      soll, muss selbst geeicht sein — sonst ist es nur ein weiterer
+      blinder Zeuge.**
+- [ ] **Die Flughöhe nach einem Befund-Klick ist nirgends zugesagt**
+      (c3s Beobachtung ohne Befundcharakter, 31.08.): Nach dem Flug steht
+      die Kamera sehr nah — man sieht die Innenecke und die Marke, aber
+      nicht mehr, **wo am Teil** man ist. Keine Zusage nennt eine Höhe,
+      also ist es keine Abweichung, sondern eine offene Bedienentscheidung:
+      Wer nach einem Klick den Ort gefunden und die Orientierung verloren
+      hat, ist nicht angekommen. Entscheid aus Kundensicht bei der
+      Review-Instanz. Beispieldatei
       unverändert, kein Commit dazwischen, kein fremder Zwischenstand.
       **Was trägt: das Symptom** (leerer Viewport, Brennpunkt außerhalb —
       am Bild belegt). **Was nicht trägt: „create_lid schreibt fest,
