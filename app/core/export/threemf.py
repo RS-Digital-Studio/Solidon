@@ -783,7 +783,7 @@ def _parts_of(
         entry.get("name")
         or titles.get(identifier)
         or inherited
-        or f"{_('Körper').translate()} {identifier}"
+        or str(_("Körper {number}", number=identifier))
     )
     mesh_node = entry.find(f"{{{CORE_NAMESPACE}}}mesh")
     if mesh_node is not None:
@@ -1058,7 +1058,7 @@ def _material_at(
     # Übersetzt, denn der Name landet in der Pinselleiste (Regel 20). Die
     # zwei Schreibstellen weiter unten bleiben roh: Dateiinhalt für fremde
     # Slicer ist keine Oberfläche.
-    return (str(_("Slot {number}")).format(number=position), DEFAULT_COLOUR)
+    return (str(_("Slot {number}", number=position)), DEFAULT_COLOUR)
 
 
 def _matrix(text: str | None) -> np.ndarray:
@@ -1112,9 +1112,7 @@ def _slots_for(mesh: MeshData, slots: list[MaterialSlot] | None) -> list[Materia
 
     known = {entry.index: entry for entry in (slots or [])}
     return [
-        known.get(
-            index, MaterialSlot(index=index, name=str(_("Slot {number}")).format(number=index))
-        )
+        known.get(index, MaterialSlot(index=index, name=_("Slot {number}", number=index)))
         for index in used_slots(mesh)
     ]
 
@@ -1187,7 +1185,10 @@ def _assembly_xml(
             # ``cannot serialize`` (gemessen am Beispiel „Schild zweifarbig",
             # 26.08.2026). In die Datei gehört ohnehin die Übersetzung: Sie
             # wird von einem Slicer gelesen, nicht von Solidon.
-            {"name": str(entry.name) or f"Slot {entry.index}", "displaycolor": _colour(entry)},
+            {
+                "name": str(entry.name) or str(_("Slot {number}", number=entry.index)),
+                "displaycolor": _colour(entry),
+            },
         )
 
     # Wohin ein objekteigener Slot in der gemeinsamen Liste zeigt. Ohne diese
@@ -1283,7 +1284,10 @@ def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
             "base",
             # ``str`` aus demselben Grund wie in :func:`write_assembly` — ein
             # übersetzbarer Slotname brachte ``ElementTree`` zu Fall.
-            {"name": str(entry.name) or f"Slot {entry.index}", "displaycolor": _colour(entry)},
+            {
+                "name": str(entry.name) or str(_("Slot {number}", number=entry.index)),
+                "displaycolor": _colour(entry),
+            },
         )
 
     body = ET.SubElement(

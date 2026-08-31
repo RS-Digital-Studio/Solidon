@@ -10,6 +10,7 @@ Der Kern erzeugt übersetzbare Texte; auflösen tut sie nur die Oberfläche.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Final
 
@@ -73,10 +74,15 @@ class TranslatableText:
 
     msgid: str
     context: str | None = None
+    values: Mapping[str, object] | None = None
 
     def __eq__(self, other: object) -> bool:
         if isinstance(other, TranslatableText):
-            return (self.msgid, self.context) == (other.msgid, other.context)
+            return (self.msgid, self.context, dict(self.values or {})) == (
+                other.msgid,
+                other.context,
+                dict(other.values or {}),
+            )
         if isinstance(other, str):
             return self.msgid == other
         return NotImplemented
@@ -92,7 +98,8 @@ class TranslatableText:
     def translate(self, language: str | None = None) -> str:
         """Löst gegen den aktiven Katalog auf; Rückfall ist die Message-ID."""
         catalog = _catalogs.get(language or _language, {})
-        return catalog.get(self._key(), self.msgid)
+        text = catalog.get(self._key(), self.msgid)
+        return text.format(**self.values) if self.values else text
 
     def _key(self) -> str:
         return f"{self.context}\x04{self.msgid}" if self.context else self.msgid
@@ -101,16 +108,20 @@ class TranslatableText:
         return self.translate()
 
 
-def _(msgid: str, context: str | None = None) -> TranslatableText:
+def _(msgid: str, context: str | None = None, /, **values: object) -> TranslatableText:
     """Markiert einen Text zur Übersetzung. Der kanonische Name in
-    Deklarationen."""
-    return TranslatableText(msgid, context)
+    Deklarationen.
+
+    Werte kommen als Schlüsselwörter: ``_("Slot {number}", number=3)``. Sie
+    stehen dem Einsammler nicht im Weg, der das erste Argument liest.
+    """
+    return TranslatableText(msgid, context, values or None)
 
 
-def tr(msgid: str, context: str | None = None) -> str:
+def tr(msgid: str, context: str | None = None, /, **values: object) -> str:
     """Übersetzt sofort. Für Oberflächen, die jetzt eine nackte Zeichenkette
     brauchen."""
-    return TranslatableText(msgid, context).translate()
+    return TranslatableText(msgid, context, values or None).translate()
 
 
 def set_language(language: str) -> None:

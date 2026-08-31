@@ -302,9 +302,16 @@ def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
     Felder; hier genügt eines, weil der Name allein steht.
 
     Was ein Nutzer selbst benannt hat, ist ein ``str`` und bleibt einer.
+
+    **Die Werte gehören dazu.** „Slot 2" ist die Message-ID ``Slot {number}``
+    und die Zahl zwei — ohne sie käme aus dem Cache ein Name mit sichtbarem
+    Platzhalter zurück. Sie sind der sprachneutrale Teil und altern nicht.
     """
     if isinstance(name, TranslatableText):
-        return {"msgid": name.msgid, "context": name.context}
+        data: dict[str, Any] = {"msgid": name.msgid, "context": name.context}
+        if name.values:
+            data["values"] = dict(name.values)
+        return data
     return str(name)
 
 
@@ -316,7 +323,7 @@ def _name_from_data(data: str | dict[str, Any]) -> TranslatableText | str:
     kannte. Beide sind wörtlich gemeint und bleiben es.
     """
     if isinstance(data, dict):
-        return TranslatableText(data["msgid"], data.get("context"))
+        return TranslatableText(data["msgid"], data.get("context"), data.get("values"))
     return data
 
 

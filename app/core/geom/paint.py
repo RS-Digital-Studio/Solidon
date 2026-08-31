@@ -220,7 +220,9 @@ def paint_slot(ctx: OpContext) -> OpResult:
                 # Namen nicht löschen.
                 name=params.name
                 or (existing.name if existing is not None else "")
-                or f"{_('Filament').translate()} {params.slot}",
+                # Sprachneutral abgelegt, erst beim Anzeigen aufgelöst —
+                # wie bei *Filament zuweisen* (``colour_ops.assign_slot``).
+                or _("Filament {number}", number=params.slot),
                 colour=chosen
                 if chosen is not None
                 else (existing.colour if existing is not None else None),

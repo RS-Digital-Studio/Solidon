@@ -336,3 +336,56 @@ def test_a_chosen_colour_wins_over_an_existing_slot() -> None:
     )
     weiss = next(s for s in mit_zweitem if s.index == 2)
     assert weiss.colour == (1.0, 1.0, 1.0), "fremde Filamente bleiben, wie sie waren"
+
+
+def test_a_default_slot_name_follows_the_language(profile: Profile) -> None:
+    """Der Vorgabename eines Filaments wandert mit der Sprache — auch aus dem Cache.
+
+    **Er tat es nicht.** Beide Operationen bauten ihn als
+    ``f"{_('Slot').translate()} {slot}"``: Die Übersetzung entstand beim
+    Rechnen und wurde damit zu einer festen Zeichenkette in der Sprache, die
+    gerade eingestellt war. Der Ergebnis-Cache kennt die Sprache nicht — wer
+    ein Projekt auf Deutsch rechnete und danach auf Englisch umstellte, behielt
+    „Slot 2"; umgekehrt stand „Emplacement 2" im deutschen Fenster. Ein Fehler,
+    den nur ein **warmer** Cache zeigt.
+
+    Geprüft wird die ganze Kette und nicht nur der Text: erst die beiden
+    Operationen, dann die Runde durch die Ablage. Der mittlere Schritt ist der,
+    an dem es hing — ``_name_to_data`` legte Message-ID und Kontext ab, und die
+    Zahl fiel dabei heraus. Aus dem Cache kam dann ein Name mit sichtbarem
+    ``{number}`` zurück.
+    """
+    from app.core.scene.cache import _name_from_data, _name_to_data
+    from app.i18n import SOURCE_LANGUAGE, get_language, set_language
+    from app.i18n.catalog import install_language
+
+    plain = SceneObject(id="obj_1", name="Platte", mesh=plate())
+    assigned = run("assign_slot", plain, profile, slot=2).outputs[0]
+    slot = next(entry for entry in assigned.material_slots if entry.index == 2)
+
+    faced = _with_top_face(SceneObject(id="obj_2", name="Platte", mesh=plate()), (0, 1))
+    painted = run("paint_slot", faced, profile, slot=3, at_feature="face_1").outputs[0]
+    filament = next(entry for entry in painted.material_slots if entry.index == 3)
+
+    vorher = get_language()
+    try:
+        set_language(SOURCE_LANGUAGE)
+        assert str(slot.name) == "Slot 2", "in der Quellsprache steht die Zahl im Text"
+        assert str(filament.name) == "Filament 3"
+
+        install_language("fr")
+        set_language("fr")
+        assert str(slot.name) == "Emplacement 2", "und wandert mit der Sprache"
+        assert str(filament.name) == "Filament 3", "französisch gleichlautend, aber übersetzt"
+
+        # Und dieselbe Runde durch die Ablage, in der der Name als Message-ID
+        # und Werte liegt — nicht als fertiger Satz.
+        abgelegt = _name_to_data(slot.name)
+        assert abgelegt == {"msgid": "Slot {number}", "context": None, "values": {"number": 2}}
+        zurueck = _name_from_data(abgelegt)
+        assert str(zurueck) == "Emplacement 2", "aus dem Cache in der jetzigen Sprache"
+
+        set_language(SOURCE_LANGUAGE)
+        assert str(zurueck) == "Slot 2", "und nach dem Umschalten in der neuen"
+    finally:
+        set_language(vorher)

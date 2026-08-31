@@ -79,7 +79,12 @@ def assign_slot(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     slot = MaterialSlot(
         index=params.slot,
-        name=params.name or f"{_('Slot').translate()} {params.slot}",
+        # **Kein ``.translate()``.** Das machte aus dem Wort eine feste
+        # Zeichenkette in der Sprache, die beim Rechnen eingestellt war — und
+        # der Ergebnis-Cache kennt die Sprache nicht, also blieb sie stehen.
+        # Der Text trägt seine Zahl jetzt selbst und wird erst beim Anzeigen
+        # aufgelöst.
+        name=params.name or _("Slot {number}", number=params.slot),
         colour=colour_from(params.colour),
         material=profile_name(params.slicer_profile) or None,
         material_type=params.material_type or None,
