@@ -82,7 +82,7 @@ STYLE = """
        Nummer kleiner — das Handbuch verkauft nicht, es empfängt. */
     main > h1 { font-size: clamp(2rem, 4vw, 2.6rem); letter-spacing: -0.015em;
                 margin: 1.6rem auto 0.4rem; }
-    p.lede { color: var(--muted); font-size: 1.12rem; margin-bottom: 2rem; }
+    p.lede { color: var(--muted); font-size: var(--t-base); margin-bottom: 2rem; }
     /* Die Kapitelüberschrift trägt die Akzentfarbe — dieselbe, die in der
        Anwendung den Hauptknopf und die aktive Karte kennzeichnet. Sie ist
        das, woran man beim Blättern die Gliederung erkennt. Die Nummer davor
@@ -94,7 +94,7 @@ STYLE = """
        stehen als ``<h3>`` da — ein Stil, der auf ``h2`` festgenagelt wäre,
        griffe ins Leere, und genau das tat der alte (siehe ``anchored``). */
     main > h2[id], main > h3[id] {
-      margin-top: 3.2rem; color: var(--accent); font-size: 1.45rem;
+      margin-top: 3.2rem; color: var(--accent); font-size: var(--t-xl);
       border-bottom: 1px solid var(--line); padding-bottom: .4rem;
       counter-increment: chapter;
     }
@@ -106,7 +106,7 @@ STYLE = """
     h3 { margin-top: 2rem; }
     figure { margin: 2rem auto; text-align: center; max-width: 72rem; }
     figure img { max-width: 100%; height: auto; border-radius: 6px; }
-    figcaption { color: var(--muted); font-size: .9rem; margin-top: .5rem; }
+    figcaption { color: var(--muted); font-size: var(--t-sm); margin-top: .5rem; }
     /* Die Bildschirmfotos liegen auf derselben dunklen Bühne wie auf der
        Startseite — ``.stage`` samt Streiflicht kommt aus ``style.css``, hier
        steht nur, was im Handbuch anders ist: ``figure`` zentriert schon,
@@ -130,7 +130,7 @@ STYLE = """
       }
     }
     .figure-text { color: var(--muted); font-style: italic; }
-    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92rem; }
+    table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: var(--t-md); }
     /* Eine Tabelle mit sieben Spalten passt auf kein Telefon, und sie soll es
        auch nicht: die Materialtabelle ist eine Tabelle, kein Fließtext. Sie
        bekommt deshalb ihren eigenen Rollbereich, statt die Seite zu sprengen
@@ -154,7 +154,7 @@ STYLE = """
     nav.toc { background: var(--card); border: 1px solid var(--line);
               border-radius: 10px; padding: 1.4rem 1.8rem 1.6rem; margin: 2.5rem auto; }
     nav.toc .toc-title { margin: 0 0 1rem; border: none; padding: 0;
-                         font-size: 1.1rem; letter-spacing: .02em; }
+                         font-size: var(--t-base); letter-spacing: .02em; }
     /* ``style.css`` nummeriert das Verzeichnis der Funktionsseite über
        einen Zähler und legt es als Raster an. Hier trägt jeder Eintrag
        seine Kapitelnummer schon im Markup, und die Spalten füllen sich
@@ -166,15 +166,15 @@ STYLE = """
     nav.toc li { break-inside: avoid; margin: 0; }
     nav.toc a { display: flex; gap: .7rem; align-items: baseline;
                 padding: .28rem 0; border-bottom: 1px solid var(--line);
-                text-decoration: none; color: var(--fg); font-size: .95rem; }
+                text-decoration: none; color: var(--fg); font-size: var(--t-md); }
     nav.toc li:last-child a { border-bottom: none; }
     /* Die Fuge zwischen den geschriebenen Kapiteln und der Referenz —
        gedämpft, weil sie ordnet und nicht ruft. */
     nav.toc .toc-divider { margin: 1.6rem 0 .8rem; border: none; padding: 0;
-                           font-size: .92rem; color: var(--muted);
+                           font-size: var(--t-md); color: var(--muted);
                            font-weight: 600; letter-spacing: .02em; }
     nav.toc a:hover { color: var(--accent); }
-    nav.toc .num { color: var(--accent); font-size: .82rem; font-weight: 600;
+    nav.toc .num { color: var(--accent); font-size: var(--t-xs); font-weight: 600;
                    min-width: 1.6rem; font-variant-numeric: tabular-nums; }
     @media (max-width: 40rem) { nav.toc ol { columns: 1; } }
 
