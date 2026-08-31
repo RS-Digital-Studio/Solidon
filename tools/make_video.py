@@ -1751,6 +1751,43 @@ def main() -> int:
     if project is not None:
         print(f"Projekt:  {project}")
 
+    # ``turntable`` nimmt die Bildreihe zum Ziehen auf und stapelt sie zum
+    # Sprite. **Vor** der Sprachschleife, weil an einem Teil, das sich dreht,
+    # kein Wort steht — eine Aufnahme dient allen sechs Fassungen.
+    #
+    # Bis zum 31.08.2026 gab es diesen Einstieg nicht: ``shoot_turntable``
+    # stand da und wurde von niemandem gerufen. Wer den Sprite neu brauchte,
+    # schrieb sich ein Skript daneben — und das Seitenverhältnis der Bühne
+    # war damit nicht nachzuvollziehen.
+    if "turntable" in arguments:
+        # ``--ratio 16/7`` schneidet auf das Verhältnis der Bühne zu. Als
+        # Bruch und nicht als Kommazahl, weil im Stylesheet auch ein Bruch
+        # steht und man beide nebeneinanderlegen können soll.
+        ratio: float | None = None
+        stem = "sprite"
+        for entry in arguments:
+            if entry.startswith("--ratio"):
+                value = entry.split("=", 1)[1] if "=" in entry else ""
+                if not value:
+                    index = arguments.index(entry)
+                    value = arguments[index + 1] if index + 1 < len(arguments) else ""
+                if value:
+                    left, _, right = value.partition("/")
+                    ratio = float(left) / float(right) if right else float(left)
+            elif entry.startswith("--name"):
+                value = entry.split("=", 1)[1] if "=" in entry else ""
+                if not value:
+                    index = arguments.index(entry)
+                    value = arguments[index + 1] if index + 1 < len(arguments) else ""
+                if value:
+                    stem = value
+        print(f"Drehscheibe: {stem}, Verhältnis {ratio or 'wie das Fenster'}")
+        files = shoot_turntable(app, out, frames / "turntable", stem, chosen=project, ratio=ratio)
+        stack_sprite(files, out / f"{stem}.webp")
+        print()
+        print(f"Fertig: {out}")
+        return 0
+
     qt_translator = None
     for language in wanted:
         if language not in script:
@@ -1950,6 +1987,42 @@ def shoot_turntable(
     print(f"  Reihe → {stem}-00…{steps - 1:02d}.webp  {total:.1f} MB zusammen")
     release_viewport(window)
     return written
+
+
+def stack_sprite(files: list[Path], target: Path) -> Path:
+    """Die Einzelbilder einer Umdrehung zu **einem** Bild stapeln.
+
+    **Warum überhaupt ein Sprite.** Sechsunddreißig Dateien sind
+    sechsunddreißig Anfragen, und beim Ziehen darf nichts nachgeladen werden
+    — sonst stockt genau die Bewegung, die der Geste folgen soll. Das
+    Stylesheet verschiebt stattdessen ``background-position-y`` in einem Bild
+    mit ``background-size: 100% 3600%``.
+
+    **Warum das hier steht und nicht in einem Skript daneben.** Bis zum
+    31.08.2026 gab es diesen Schritt nur als Handarbeit: ``shoot_turntable``
+    schrieb die Reihe, und irgendjemand setzte sie zusammen. Das Ergebnis lag
+    als ``bock-sprite.webp`` auf der Website, und der Weg dorthin war
+    verloren — wer das Seitenverhältnis ändern wollte, musste ihn neu
+    erfinden.
+
+    Gestapelt wird mit ffmpeg und nicht mit Pillow: ``run_ffmpeg`` steht
+    ohnehin bereit, und ``tools/`` kommt bisher ohne Bildbibliothek aus.
+    """
+    pattern = str(files[0].parent / f"{files[0].stem[:-3]}-%02d.webp")
+    run_ffmpeg(
+        [
+            "-i",
+            pattern,
+            "-filter_complex",
+            f"tile=1x{len(files)}",
+            "-quality",
+            str(TURNTABLE_QUALITY),
+            str(target),
+        ]
+    )
+    size = target.stat().st_size / 1024
+    print(f"  Sprite → {target.name}  {size:.0f} kB, {len(files)} Aufnahmen übereinander")
+    return target
 
 
 def loop_timing(
