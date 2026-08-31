@@ -3027,15 +3027,17 @@ p.footnote {
 }
 
 /* Der Knopf hat keine Beschriftung über sich und gehört in die Feldzeile —
-   sonst stünde er oben neben den Wörtern. */
-.boerse-hochladen > p:last-of-type:not(.sub) { grid-row: 2; }
+   sonst stünde er oben neben den Wörtern. **Nach dem Inhalt gefragt und nicht
+   nach der Reihenfolge:** `:last-of-type` traf den Hinweissatz, seit der als
+   eigenes Kind darunter steht, und der Knopf sprang 47 Punkt nach oben. */
+.boerse-hochladen > p:has(button) { grid-row: 2; }
 
 /* Ohne Spalten nebeneinander gibt es auch keine geteilten Zeilen: Untereinander
    trägt jeder Block seine eigenen. */
 @media (max-width: 46rem) {
   .boerse-hochladen { grid-template-columns: 1fr; }
   .boerse-hochladen > p { grid-row: auto; grid-template-rows: auto auto; }
-  .boerse-hochladen > p:last-of-type:not(.sub) { grid-row: auto; }
+  .boerse-hochladen > p:has(button) { grid-row: auto; }
 }
 
 /* Das Feld wächst, der Rest nicht: Ein Suchfeld, das so breit ist wie sein
