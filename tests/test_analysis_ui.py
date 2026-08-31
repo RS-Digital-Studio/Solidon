@@ -380,13 +380,7 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
 
     viewport = window.viewport
     owned_plotter: Any | None = None
-    if viewport.plotter is None:
-        pyvista = pytest.importorskip("pyvista")
-        owned_plotter = pyvista.Plotter(off_screen=True)
-        viewport.plotter = owned_plotter
-        viewport.show_scene(window.session.last_result)
-
-    before_rebuild: list[tuple[object | None, tuple[Any, ...]]] = []
+    before_rebuild: list[tuple[object | None, tuple[Any, ...], frozenset[str]]] = []
     after_rebuild: list[tuple[object | None, tuple[Any, ...], frozenset[str]]] = []
     original_set_map = viewport.set_analysis_map
 
@@ -403,14 +397,22 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         return any(name == wanted or name.startswith(f"{wanted}-") for name in names)
 
     def observe_map(analysis: Any, object_id: Any) -> None:
-        before_rebuild.append((viewport._finding_mark, tuple(viewport._finding_actors)))
+        before_rebuild.append(
+            (viewport._finding_mark, tuple(viewport._finding_actors), actor_names())
+        )
         original_set_map(analysis, object_id)
         after_rebuild.append(
             (viewport._finding_mark, tuple(viewport._finding_actors), actor_names())
         )
 
-    viewport.set_analysis_map = observe_map  # type: ignore[method-assign]
     try:
+        if viewport.plotter is None:
+            pyvista = pytest.importorskip("pyvista")
+            owned_plotter = pyvista.Plotter(off_screen=True)
+            viewport.plotter = owned_plotter
+            viewport.show_scene(window.session.last_result)
+        viewport.set_analysis_map = observe_map  # type: ignore[method-assign]
+
         select_plate(window)
         finding = Finding(
             code="fit.violated",
@@ -442,6 +444,8 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
             "die Marke muss schon stehen, wenn die fertige Karte die Szene neu baut"
         )
         assert len(before_rebuild[-1][1]) == 2, "Ring und Text standen vor dem Kartenaufbau"
+        assert has_actor(before_rebuild[-1][2], "finding_ring"), sorted(before_rebuild[-1][2])
+        assert has_actor(before_rebuild[-1][2], "finding_label"), sorted(before_rebuild[-1][2])
         assert after_rebuild and after_rebuild[-1][0] == before_rebuild[-1][0]
         assert len(after_rebuild[-1][1]) == 2, "der Kartenaufbau zeichnet beide Aktoren neu"
         assert after_rebuild[-1][1] != before_rebuild[-1][1], (
@@ -450,6 +454,12 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         assert has_actor(after_rebuild[-1][2], "finding_ring"), sorted(after_rebuild[-1][2])
         assert has_actor(after_rebuild[-1][2], "finding_label"), sorted(after_rebuild[-1][2])
         assert viewport.analysis_map is not None and viewport.analysis_map.kind == "fits"
+        assert viewport._finding_mark == before_rebuild[-1][0]
+        assert viewport._finding_timer.isActive(), "die sichtbare Frist läuft nach dem Kartenaufbau"
+        assert tuple(viewport._finding_actors) == after_rebuild[-1][1]
+        current_names = actor_names()
+        assert has_actor(current_names, "finding_ring"), sorted(current_names)
+        assert has_actor(current_names, "finding_label"), sorted(current_names)
 
         QTest.qWait(FINDING_MARK_MS + 100)
         QApplication.processEvents()
@@ -459,12 +469,19 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         assert not has_actor(expired_names, "finding_ring")
         assert not has_actor(expired_names, "finding_label")
     finally:
+        window.hide()
         viewport.set_analysis_map = original_set_map  # type: ignore[method-assign]
         viewport._finding_timer.stop()
         viewport._hide_finding_mark(render=False)
         if owned_plotter is not None:
             owned_plotter.close()
             viewport.plotter = None
+        elif viewport.plotter is not None:
+            # Der native Interactor gehört dem Prozess und darf zwischen zwei
+            # Fenstern nicht geschlossen werden (``MainWindow.release``).
+            # Seine Szene räumen wir trotzdem explizit, damit der sichtbare
+            # Beleg keine VTK-Aktoren bis zum Prozessende festhält.
+            viewport.plotter.clear()
 
 
 def test_a_warning_without_a_map_still_finds_its_place(window: MainWindow) -> None:
