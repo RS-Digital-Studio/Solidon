@@ -119,6 +119,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Reduzierer erreicht bei Euler-0-Körpern sein Ziel nicht | Befunde aus dem Weg-Dreh (31.08.2026) | eine Entscheidung (anderer Reduzierer oder Nachbearbeitung — trimesh gibt bei Hülsen/Ringen/Durchbrüchen bei 74 592 auf; der Kunde erfährt es seit `0d1edb8b`, Lizenzfrage bei jedem Kandidaten mitprüfen) |
 | Der Deckelname friert die Sprache seiner Erzeugung ein | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix in `lid.py:451` (0d): Ein englischer Kunde liest im Objektbaum „Can" und darunter **„Dose Deckel"** — der Name wird beim Erzeugen aufgelöst und als fester String gespeichert, trägt also den ALTEN Namen des Quellkörpers und zerschneidet den Zusammenhang; trifft jedes mitgelieferte Beispiel in fünf Sprachen (c3 gemessen), Zwillingssuche gehört dazu |
 | Der Klick auf eine Warnung fliegt die Kamera ins Leere | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Familien-Fix: Das Merkmal friert seine Lage beim Erzeugen ein und überlebt `arrange_bed` unverändert — der Viewport ist nach dem Klick leer (c3 am Fenster gemessen, Foto als Instanz); erst die Familiensuche, dann die Wahl zwischen mitwandernder Lage und Nachrechnen |
+| Ein `return` macht aus drei gleichzeitigen Stufen ein Entweder-oder | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds zweiten Commit (eigener Test): Nach dem Flug kehrt `_on_finding_activated` zurück, die Auswahlzeile darunter wird nie erreicht — `oberflaeche.md` und der Docstring sagen beide „die Stufen schließen einander nicht aus"; Geschwistersuche gehört dazu |
 | `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
@@ -13433,11 +13434,26 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Normalen, Durchmesser, Flächenbezüge?), dann die Entscheidung
       zwischen mitwandernder Merkmalslage (sauber, berührt jedes Merkmal)
       und Nachrechnen in `maps.location_of` (klein, kuriert eine Stelle).
-      Zweiter Teil offen und schwächer belegt: ob die **Auswahl** gesetzt
-      wird — c3s erste Sonde las ein Attribut, das es nicht gibt, und sagt
-      es selbst dazu; sie misst nach. Lehre daneben, an 1bs
-      Beinahe-Warnung: **Eine richtige Umrechnung eines veralteten Werts
-      bleibt veraltet.**
+      Lehre daneben, an 1bs Beinahe-Warnung: **Eine richtige Umrechnung
+      eines veralteten Werts bleibt veraltet.**
+- [ ] **Ein `return` macht aus drei gleichzeitigen Stufen ein
+      Entweder-oder — die zweite Hälfte des Klick-Wegs** (c3 nachgemessen,
+      Sonde geeicht: `object_tree.selected()` unterscheidet obj_1/obj_2/None,
+      nach dem echten Klick steht dort `None`). In
+      `main_window.py::_on_finding_activated` kehrt die Funktion nach dem
+      Flug zurück, und `select_object(entry.id)` steht darunter.
+      **`oberflaeche.md` sagt zu genau dieser Stelle: „Die Stufen schließen
+      einander nicht aus"** — der Docstring der Funktion ebenso; der Code
+      liest sie als Reihenfolge. **Andere Fehlerklasse als der eingefrorene
+      Wert** (dort „beim Erzeugen festgeschrieben, später überholt", hier
+      „Regel beschreibt gleichzeitig, Code führt exklusiv"), aber
+      derselbe Kundenweg: Wer nur den Ort repariert, bekommt einen Flug an
+      die richtige Stelle und weiterhin keine Auswahl. Bei 0d, in zwei
+      Commits mit je eigenem Test; Geschwistersuche nach frühen
+      Rückgabewerten, die kumulativ beschriebene Stufen exklusiv machen.
+      Methodenlehre aus dem Weg dorthin: **Von drei aufgestellten Zeugen
+      maßen zwei nichts — erst die Probe am Eingang trennte den
+      brauchbaren von den blinden.**
 - [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
       Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
       „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle
