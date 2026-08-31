@@ -117,6 +117,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimate_mesh` erzeugt bei starker Reduktion nicht-mannigfaltige Kanten | Befunde aus dem Weg-Dreh (31.08.2026) | eine Ursachen-Untersuchung im Reduzierer — die Schwellen sind gemessen (100 000 sauber, 60 000 zwei, 30 000 vier defekte Kanten), der Prüfbericht meldet korrekt |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
+| Zusammengebaut sehen, in Einzelteilen drucken | Befunde aus dem Weg-Dreh (31.08.2026) | Roberts Idee als Schaustück-Loop: Explosion und Bett-Lage eines mehrteiligen Teils — 3a (neue Explosions-Szene im Drehbuch) mit d3 (Motiv); die Werkzeuge existieren |
 | Der Prüfbericht wird von einem Befundtyp geflutet | Befunde aus dem Weg-Dreh (31.08.2026) | eine Zusammenfassungs-Zeile im Bericht („412 Merkmale haben keinen Nachfolger mehr") statt 622 gleichlautender — die info-Schwere ist richtig begründet (evaluate.py:1170), die Menge ist unbedacht |
 | Ein Projekt zu öffnen kostet ein Vielfaches des Bauens | Befunde aus dem Weg-Dreh (31.08.2026) | eine Messung auf ruhiger Maschine — als Verdacht mit Zahl gemeldet (bauen 2 min, öffnen >30 min bei 574 CPU-s unter 17 Prozessen Fremdlast), §2.8-Wartezeit-Klasse |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
@@ -13337,6 +13338,19 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       unbrauchbar wie 622 Warnungen, nur weniger alarmierend; eine
       Zusammenfassungs-Zeile ist die Antwort (3a, gemessen, nicht gebaut —
       fremdes Gebiet).
+- [ ] **Roberts Idee (31.08.2026), von ihm präzisiert: „die Option zum
+      SINNVOLLEN Trennen — recherchieren da auch mal."** Zwei Hälften:
+      **(a) Die Funktion** — Trennen soll nicht nur schneiden, sondern
+      sinnvoll zerlegen: bauraumgerecht, Überhänge und Stützen minimierend,
+      Naht an unauffälliger Stelle, Verbinder (Stifte, Schwalbenschwanz),
+      Festigkeit quer zur Schichtrichtung bedacht. Rechercheauftrag läuft
+      (Review-Instanz): Stand in Solidon (was Trennen/Auto Split heute
+      können, Bauplan-§§), Stand der Technik (PrusaSlicer-Cut mit
+      Verbindern, Chopper-Verfahren, Meshmixer, Luban), dann
+      Konzeptvorschlag mit Abnahmekriterien an Robert. **(b) Das
+      Schaustück** — zusammengebaut sehen, dann die Bett-Lage der
+      Einzelteile: als Loop (3a: Explosions-Szene im Drehbuch, d3: Motiv
+      aus den mehrteiligen Galerieteilen); es zeigt, was (a) verspricht.
 - [ ] **Ein Projekt zu öffnen kostet ein Vielfaches des Bauens — Verdacht
       mit Zahl, kein Befund.** `rollenhalter.p3d` (zwanzig Schritte) baut in
       ~2 Minuten und lief beim Öffnen über eine halbe Stunde ohne Bild (574
