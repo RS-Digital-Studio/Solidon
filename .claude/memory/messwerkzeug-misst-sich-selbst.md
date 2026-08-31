@@ -93,7 +93,23 @@ ihn danach zurückgezogen.
    abbrechen, und `setPixelSize` statt der Punktgröße. Das gilt für jede
    Messung an Schriftmetrik — mit ausdrücklich gesetzter Familie auch, denn
    die Familie zu *setzen* heißt nicht, sie zu *bekommen*.
-9. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
+9. **Fällt eine Messung aus, miss den Nullpunkt, bevor du eine Grenze
+   glaubst.** Am 31.08.2026 brach eine Ollama-Anfrage mit allen 106
+   Werkzeugen (117 KB) nach 882 Sekunden mit HTTP 500 ab, und die Erklärung
+   lag bereit: Die Werkzeugliste ist seit dem 30.08. um zehn gewachsen, sie
+   muss über eine Grenze gestoßen sein. Sie war plausibel, sie hatte ein
+   Datum, und sie war falsch. Der Beweis kostete einen Lauf: **null
+   Werkzeuge, zwei Zeichen Schema — Abbruch nach 312 Sekunden.** Wo die
+   kleinste denkbare Anfrage scheitert, kann die Größe nicht die Ursache
+   sein; der Dienst hing, und ein Neustart behob es.
+
+   Dasselbe Muster gilt für jede Messung an einer Gegenstelle: Der Nullpunkt
+   sagt, ob man die eigene Nutzlast misst oder den Zustand des anderen. Er
+   ist billiger als jede Bisektion und beantwortet die Frage, die vor ihr
+   steht. Zwei Zeichen, die neben `api/ps` gelesen werden — kein geladenes
+   Modell, während angeblich eine Anfrage läuft —, sind mehr wert als fünf
+   Messpunkte über eine Achse, die gar nicht die richtige ist.
+10. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
    bot eine andere Sitzung eine Ursache an, die auf jede Beobachtung passte
    (`website/dl/` ist ignoriert, ein Arbeitsbaum bekommt es nicht) — und sie
    erklärte sogar, warum ausgerechnet *eine* Datei fehlt. Das war Zufall. Wer
