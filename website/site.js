@@ -249,19 +249,67 @@
 
       if (!ready) return;
 
+      /* **Welches System sitzt davor?**
+       *
+       * Zurückhaltend geraten: Nur ein sicher erkanntes Windows, macOS oder
+       * Linux bekommt eine Vorauswahl. Alles andere — ein Telefon, ein
+       * unbekanntes System, ein Browser der nichts verrät — landet im Kasten
+       * und wählt selbst. Das ist eine Sekunde mehr und nie eine falsche
+       * Datei.
+       *
+       * **Android trägt „Linux" in seinem Kennzeichen.** Wer nur danach
+       * sucht, schickt einem Telefon ein AppImage; die mobilen Systeme werden
+       * deshalb zuerst geprüft und nehmen sich heraus.
+       */
+      const platform = () => {
+        const hint = navigator.userAgentData && navigator.userAgentData.platform;
+        const mark = String(hint || navigator.platform || navigator.userAgent || "")
+          .toLowerCase();
+        const agent = String(navigator.userAgent || "").toLowerCase();
+        if (/android|iphone|ipad|ipod/.test(agent)) return "";
+        if (mark.includes("win")) return "windows";
+        if (mark.includes("mac") || mark.includes("darwin")) return "macos";
+        if (mark.includes("linux") || mark.includes("x11")) return "linux";
+        return "";
+      };
+
+      const system = platform();
+
       /* Erst die Verweise, dann die Texte: Ein Knopf, der schon „Demo laden"
          heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
-         Sekunde eine Lüge. Wohin er zeigt, sagt die erste Datei im Kasten —
-         auf einer Seite mit mehreren Paketen ist das die für Windows. */
-      const first = shelf.querySelector("a[href]");
+         Sekunde eine Lüge.
+         **Umgebogen wird nur für Windows**, weil dort genau eine Datei passt.
+         macOS und Linux haben je zwei, und welche davon stimmt, kann der
+         Browser nicht wissen — Apple Silicon oder Intel, AppImage oder
+         Flatpak. Für sie bleibt der Knopf, was er im Markup ist: ein Weg zum
+         Kasten, wo die Wahl steht. */
+      const direct = system === "windows" ? shelf.querySelector("a[href]") : null;
       for (const link of document.querySelectorAll("[data-release-href]")) {
-        link.href = first.getAttribute("href");
+        if (!direct) continue;
+        link.href = direct.getAttribute("href");
         /* Den Dateinamen mitnehmen, nicht nur das leere Attribut: Der Verweis
            zeigt auf den Zählpunkt und wird von dort weitergeleitet, und ein
            `download` ohne Namen überließe es dem Browser, sich einen aus der
            Adresse zu bauen — die dann `count.php` heißt. */
         if (link.hasAttribute("data-release-download")) {
-          link.setAttribute("download", first.getAttribute("download") || "");
+          link.setAttribute("download", direct.getAttribute("download") || "");
+        }
+      }
+
+      /* **Im Kasten steht das eigene System vorn.** Nicht allein, nur zuerst
+         und als gefüllter Knopf — wer ein Paket für ein anderes System sucht
+         (etwa um es weiterzugeben), findet es weiterhin daneben. */
+      if (system) {
+        const own =
+          system === "windows"
+            ? shelf.querySelector("a[href]")
+            : shelf.querySelector('[data-choice="' + system + '"]');
+        if (own) {
+          own.style.order = "-1";
+          own.classList.remove("ghost");
+          for (const other of shelf.querySelectorAll(".btn")) {
+            if (other !== own && !other.closest("dialog")) other.classList.add("ghost");
+          }
         }
       }
       for (const node of document.querySelectorAll("[data-release-text]")) {
