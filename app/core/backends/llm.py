@@ -871,6 +871,22 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: dann gehört der Speicher dorthin.
 OLLAMA_KEEP_ALIVE = "30m"
 
+#: Wie lange warmgehalten wird, wenn das Modell auf dem Prozessor rechnet.
+#:
+#: **Dort kostet Warmhalten mehr, als es bringt.** Gemessen am 31.08.2026 auf
+#: derselben Maschine, einmal vor und einmal nach einem Neustart, der Ollamas
+#: GPU-Erkennung reparierte: auf der Karte 19 641 Token in **9,7 Sekunden**,
+#: auf dem Prozessor dieselben 19 641 in **701**. Wer elf Minuten auf eine
+#: Antwort wartet, fragt nicht gleich noch einmal — die dreißig Minuten
+#: blockieren dann 15 GB Arbeitsspeicher für einen zweiten Zug, der so bald
+#: nicht kommt, und derselbe Rechner soll nebenher rendern und slicen.
+#:
+#: Fünf Minuten sind Ollamas eigene Vorgabe. Auf dem Prozessor ist das der
+#: Zustand, den der Kunde ohnehin kannte, bevor es diese Einstellung gab: Die
+#: Kopplung nimmt dort eine Verbesserung zurück, wo sie schadet, statt eine
+#: Verschlechterung einzuführen.
+OLLAMA_KEEP_ALIVE_ON_CPU = "5m"
+
 OLLAMA_CONTEXT_TOKENS = 32768
 
 
@@ -921,6 +937,16 @@ class OllamaBackend:
     # einem zweiten Rechner läuft (§38).
     url: str = field(default_factory=lambda: _configured_ollama_url())
     transport: Transport = post_json_local
+
+    #: Ob der letzte Zug auf einer Grafikkarte lief — ``None``, solange keiner
+    #: gelaufen ist.
+    #:
+    #: **Gemessen wird aus der Antwort, nicht durch eine eigene Anfrage.**
+    #: Jede Ollama-Antwort bringt ``prompt_eval_count`` und
+    #: ``prompt_eval_duration`` mit; daraus fällt die Rate ohne einen einzigen
+    #: zusätzlichen Aufruf ab. Ein ``api/ps`` je Zug wäre eine Messlast im
+    #: Kundenzug, und die trägt kein Chat.
+    on_gpu: bool | None = None
 
     @property
     def id(self) -> str:
@@ -989,7 +1015,13 @@ class OllamaBackend:
             # Zwischen zwei Fragen geladen bleiben (:data:`OLLAMA_KEEP_ALIVE`).
             # Ohne das Feld entlädt Ollama nach fünf Minuten, und die zweite
             # Frage eines Gesprächs zahlt den Kaltstart noch einmal.
-            "keep_alive": OLLAMA_KEEP_ALIVE,
+            #
+            # **Auf dem Prozessor kürzer** (:data:`OLLAMA_KEEP_ALIVE_ON_CPU`):
+            # Dort dauert eine Antwort Minuten, ein zweiter Zug kommt so bald
+            # nicht, und dreißig Minuten blockierten 15 GB. Die Lage steht in
+            # :attr:`on_gpu` und kommt aus der vorigen Antwort — der erste Zug
+            # einer Sitzung hält lang warm, weil er es noch nicht weiß.
+            "keep_alive": (OLLAMA_KEEP_ALIVE_ON_CPU if self.on_gpu is False else OLLAMA_KEEP_ALIVE),
             "messages": [_as_ollama(entry) for entry in messages],
         }
         if tools:
@@ -1014,7 +1046,31 @@ class OllamaBackend:
             error.provider = error.provider or self.id
             error.values.setdefault("provider", self.id)
             raise
+        self.on_gpu = _ran_on_gpu(answer)
         return _from_ollama(answer, self.model)
+
+
+def _ran_on_gpu(answer: dict[str, Any]) -> bool | None:
+    """Ob dieser Zug auf einer Grafikkarte lief — ``None``, wenn ungemessen.
+
+    **Aus der Antwort, ohne eine zweite Frage.** Ollama legt
+    ``prompt_eval_count`` und ``prompt_eval_duration`` jeder Antwort bei; ihr
+    Verhältnis ist die Einleserate, und die trennt Karte von Prozessor um
+    Größenordnungen. Gemessen am 31.08.2026 auf derselben Maschine mit
+    denselben 19 641 Token: **2 025 Token je Sekunde** auf einer RTX 4080,
+    **28** auf dem Prozessor, als Ollamas GPU-Erkennung in einen Watchdog
+    lief. Die Marke von :data:`GPU_PROMPT_TOKENS_PER_SECOND` liegt mit 100
+    dazwischen und muss nicht genau treffen — zwischen 28 und 2 025 ist viel
+    Platz.
+
+    ``None`` heißt „nicht zu sagen" und nicht „Prozessor": Eine Antwort ohne
+    Zähler oder mit Dauer null darf die Einstellung nicht umstellen.
+    """
+    count = answer.get("prompt_eval_count")
+    duration = answer.get("prompt_eval_duration")
+    if not isinstance(count, int) or not isinstance(duration, int | float) or duration <= 0:
+        return None
+    return count / (float(duration) / 1e9) >= GPU_PROMPT_TOKENS_PER_SECOND
 
 
 def _as_ollama(message: Message) -> dict[str, Any]:

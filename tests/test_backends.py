@@ -371,6 +371,63 @@ def test_the_local_model_stays_loaded_between_two_questions() -> None:
     assert OLLAMA_KEEP_ALIVE, "eine leere Angabe ist dasselbe wie keine"
 
 
+def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:
+    """Die Lage kommt aus der Antwort, nicht aus einer zweiten Frage.
+
+    Jede Ollama-Antwort bringt ``prompt_eval_count`` und
+    ``prompt_eval_duration`` mit; ihr Verhältnis trennt Karte von Prozessor um
+    Größenordnungen. Gemessen am 31.08.2026 mit denselben 19 641 Token: **2 025
+    Token je Sekunde** auf einer RTX 4080, **28** auf dem Prozessor. Ein
+    ``api/ps`` je Zug wäre eine Messlast im Kundenzug, und die trägt kein Chat.
+    """
+    from app.core.backends.llm import GPU_PROMPT_TOKENS_PER_SECOND
+
+    schnell = {**ollama_answer(), "prompt_eval_count": 19641, "prompt_eval_duration": 9_700_000_000}
+    langsam = {
+        **ollama_answer(),
+        "prompt_eval_count": 19641,
+        "prompt_eval_duration": 701_000_000_000,
+    }
+
+    auf_karte = OllamaBackend(transport=Recorder(schnell))
+    auf_karte.complete([Message(role="user", content="Halter")])
+    assert auf_karte.on_gpu is True, (
+        f"{19641 / 9.7:.0f} Token/s ist über {GPU_PROMPT_TOKENS_PER_SECOND}"
+    )
+
+    auf_prozessor = OllamaBackend(transport=Recorder(langsam))
+    auf_prozessor.complete([Message(role="user", content="Halter")])
+    assert auf_prozessor.on_gpu is False, f"{19641 / 701:.0f} Token/s ist unter der Marke"
+
+
+def test_a_model_on_the_processor_is_not_kept_warm_for_half_an_hour() -> None:
+    """Warmhalten kostet auf dem Prozessor mehr, als es bringt.
+
+    Dort dauert dieselbe Anfrage 701 statt 9,7 Sekunden. Wer elf Minuten auf
+    eine Antwort wartet, fragt nicht gleich noch einmal — die dreißig Minuten
+    blockierten dann 15 GB Arbeitsspeicher für einen zweiten Zug, der so bald
+    nicht kommt, und derselbe Rechner soll nebenher rendern und slicen.
+
+    **Der erste Zug einer Sitzung hält lang warm**, weil die Lage dann noch
+    nicht gemessen ist: ``None`` heißt „nicht zu sagen" und nicht „Prozessor".
+    """
+    from app.core.backends.llm import OLLAMA_KEEP_ALIVE, OLLAMA_KEEP_ALIVE_ON_CPU
+
+    assert OLLAMA_KEEP_ALIVE_ON_CPU != OLLAMA_KEEP_ALIVE, "sonst ist die Kopplung wirkungslos"
+
+    for lage, erwartet, warum in (
+        (None, OLLAMA_KEEP_ALIVE, "ungemessen hält lang warm"),
+        (True, OLLAMA_KEEP_ALIVE, "auf der Karte lohnt es"),
+        (False, OLLAMA_KEEP_ALIVE_ON_CPU, "auf dem Prozessor nicht"),
+    ):
+        transport = Recorder(ollama_answer())
+        backend = OllamaBackend(transport=transport)
+        backend.on_gpu = lage
+        backend.complete([Message(role="user", content="Halter")])
+        _url, _headers, payload = transport.calls[0]
+        assert payload["keep_alive"] == erwartet, f"on_gpu={lage}: {warum}"
+
+
 def test_a_local_server_that_is_not_running_is_not_available() -> None:
     """Mit einem Socket gefragt, ein geschlossener Port kostet also
     Millisekunden, keine Sekunden.
