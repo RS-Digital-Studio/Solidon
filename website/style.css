@@ -1504,6 +1504,19 @@ section > .wrap > :is(h1, h2) + p.sub {
   font-size: var(--t-base);
 }
 
+/* **Die Absicht stand da, die Bedingung war zu eng.** Die Regel darüber
+   begrenzt einen Untertitel auf 56 Zeichen — aber nur, wenn er unmittelbar
+   auf eine h1 oder h2 folgt. Drei stehen hinter einem h3 oder einer Liste und
+   liefen deshalb über die volle Seitenbreite: 1385 Punkte, 138 Zeichen je
+   Zeile, fast das Doppelte des Lesbaren.
+
+   Hier steht nur die Breite und nicht der ganze Satz Eigenschaften: Abstand,
+   Farbe und Schriftgröße gehören zu der Stellung nach einer Überschrift und
+   sollen sich nicht auf jeden Untertitel ausdehnen. */
+p.sub {
+  max-width: 56ch;
+}
+
 section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 /* ── Changelog ────────────────────────────────────────────────────────── */
@@ -2302,6 +2315,23 @@ table.req td:first-child {
 .faq details > *:not(summary) {
   margin: 0 0 1rem;
   color: var(--muted);
+}
+
+/* **Die Klappe darf breit bleiben, begrenzt wird der Absatz darin.** Die
+   Antworten liefen über 891 Punkte auf 96 Zeichen je Zeile — lesbar sind 45
+   bis 75. Das ist die Stelle, an der jemand konzentriert liest: Er hat die
+   Frage angeklickt, weil sie ihn betrifft.
+
+   ``ch`` statt ``rem``, weil die Zusage in Zeichen gemacht ist und nicht in
+   Millimetern: Ändert sich die Schriftgröße der Antwort, bleibt die Zeile
+   gleich lang. Gemessen ergeben 70 ch hier 72 Zeichen — ein ``ch`` ist die
+   Breite der Null, und echte Zeichen sind im Schnitt schmaler.
+
+   Gemessen wird das nur an einer **geöffneten** Klappe. Zugeklappt nimmt der
+   Browser den Inhalt über ``content-visibility`` aus dem Layout, und jede
+   Breitenmessung gibt denselben Wert zurück, gleich was man einstellt. */
+.faq details p {
+  max-width: 70ch;
 }
 
 /* Die Antwort steigt beim Aufklappen ein Stück auf, statt zu erscheinen.
