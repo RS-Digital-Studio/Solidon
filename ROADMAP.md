@@ -13379,6 +13379,7 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Fix rücknehmbar vorgeführt. Randnotiz: Ob der Prüfbericht seinen
       Geltungsbereich nennen sollte („0 Warnungen" ≠ „druckbar"), ist ein
       eigener späterer Punkt.
+- [ ] **Ein Projekt zu öffnen kostet ein Vielfaches des Bauens — seit der
       CPU-Zeit-Messung ein BEFUND, kein Verdacht mehr** (3a, 31.08.): Am
       Weg-4-Griff (neun Schritte, 108 762 Dreiecke), ohne Qt und ohne
       Session — nur `load()` und `evaluate()` — **908,8 CPU-Sekunden** und
