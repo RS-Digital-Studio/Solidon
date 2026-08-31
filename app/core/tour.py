@@ -468,6 +468,15 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
+                shows="history",
+                text=_(
+                    "Auf der Rückseite sitzt eine Schlüsselloch-Aufhängung. "
+                    "Verschieben Sie sie: Doppelklick auf „Aufhängung“, dann die "
+                    "x-Position ändern."
+                ),
+                done=_op_number_changed("insert_keyhole", "x", -30.0),
+            ),
+            TourStep(
                 text=_(
                     "Beim Export trägt 3MF die Slots als Farbgruppen mit — der "
                     "Slicer macht daraus den Farbwechsel. STL kennt keine Farbe und "

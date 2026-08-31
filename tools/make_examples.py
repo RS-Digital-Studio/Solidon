@@ -355,6 +355,62 @@ def two_colour_sign() -> Project:
             )
         ],
     )
+    history.apply(
+        _("Aufhängung"),
+        [
+            OperationDraft(
+                op="insert_keyhole",
+                inputs=("obj_1",),
+                # **Von hinten, mit dem kleinsten möglichen Durchbruch** (Robert,
+                # 31.08.2026: „aufhängung nach hinten, von vorne nicht sichtbar").
+                #
+                # Ganz unsichtbar geht nicht, und das ist die Bauart und kein
+                # Mangel: Der Schaftschlitz muss durch die Platte, sonst greift
+                # die Schraube nicht — der Baustein sagt es selbst („der Schlitz,
+                # in den der Schaft gleitet, ganz hindurch"). Was sich vermeiden
+                # lässt, ist die **Kopftasche** auf der Sichtseite.
+                #
+                # Gemessen an der Platte 80 auf 45: Von der Oberseite fehlen mit
+                # ``head_room = 1,5`` noch 23,1 mm² statt 26,5 — der Rest ist der
+                # Schlitz selbst. Die Dicke ändert daran nichts, geprüft von 3
+                # bis 6 mm.
+                #
+                # ``axis="y"`` und nicht ``"z"``: Mit Z fehlt der Oberseite gar
+                # nichts, aber dann liegt das Schlüsselloch in der Plattenebene
+                # und die Schraube kann nicht greifen — die Operation meldet das
+                # seit dem 30.08.2026 als ``parts.up_points_nowhere``. Ein Schild,
+                # das nicht hängt, ist unsichtbar kaputt statt sichtbar heil.
+                params={
+                    "size": "M4",
+                    # **An die Rückseite geklickt, nicht auf Koordinaten
+                    # gesetzt.** Die Operation sagt diesen Weg selbst an, wenn
+                    # man es anders versucht: „Klicken Sie die Fläche an, an die
+                    # er kommt: Sie gibt ihm die Richtung, und er richtet sich
+                    # selbst auf." Frei platziert stand die Warnung
+                    # ``parts.up_points_nowhere`` im Prüfbericht des Beispiels
+                    # — auf dem Belegbild der Verkaufsseite die einzige Warnung
+                    # weit und breit.
+                    #
+                    # ``face_1`` ist die Unterseite: von den sechs Flächen der
+                    # Platte die mit der Normalen (0, 0, -1). Damit sitzt die
+                    # Aufhängung hinten, und die Sichtseite bleibt zu — Roberts
+                    # Vorgabe vom 31.08.2026, „aufhängung nach hinten, von vorne
+                    # nicht sichtbar".
+                    "at_feature": "face_1",
+                    "x": -30.0,
+                    "y": 0.0,
+                    # **Beides kleiner als die Platte dick ist.** Die Vorgabe
+                    # von ``depth`` ist 4,0 und damit größer als die 3,0 hier —
+                    # der Schlitz kam auf der Sichtseite wieder heraus, obwohl
+                    # der Baustein an der Rückfläche sitzt. Gemessen bleibt bei
+                    # 2,0 ein Boden von 1,0 mm stehen: bei 0,2 mm Schichthöhe
+                    # fünf Lagen, genug zum Tragen und dicht von vorne.
+                    "depth": 2.0,
+                    "head_room": 1.5,
+                },
+            )
+        ],
+    )
     # Der zweite Weg zur Zweifarbigkeit: Buchstaben als eigener Körper — beim
     # Drucker ein Werkzeugwechsel, von Hand ein Satz Lettern zum Aufkleben.
     #
