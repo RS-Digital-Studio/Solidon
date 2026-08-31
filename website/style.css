@@ -701,7 +701,7 @@ nav.lang a.cta:hover {
    liegen, lesen sich nicht als Gestaltung, sondern als Versehen. */
 #unterstuetzen .donate {
   margin: 0 auto;
-  max-width: min(58rem, 100%);
+  max-width: 58rem;
 }
 
 /* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
@@ -752,8 +752,6 @@ nav.lang a.cta:hover {
     margin-top: 0;
   }
 
-  .hero .download { max-width: 39rem; }
-
   /* Der Downloadkasten wächst am Erscheinungstag mit Hinweisen für drei
      Systeme. Das Bildschirmfoto darf deshalb nicht an seiner Mitte kleben:
      Es ist der visuelle Beweis neben der Überschrift und gehört oben in den
@@ -784,7 +782,7 @@ nav.lang a.cta:hover {
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
   padding: 1.5rem;
-  max-width: min(58rem, 100%);
+  max-width: 58rem;
   box-shadow: var(--shadow);
 }
 
@@ -860,7 +858,7 @@ nav.lang a.cta:hover {
   align-items: center;
   justify-content: space-between;
   gap: 1.5rem;
-  max-width: min(58rem, 100%);
+  max-width: 58rem;
   margin-top: 0.9rem;
   padding: 1.15rem 1.5rem;
   border-radius: var(--r-lg);
@@ -1425,7 +1423,9 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
     var(--bg);
 }
 
-.changelog-intro { max-width: 74rem; }
+/* Der Kopf stand zwei rem breiter als die Karten darunter — auf sechs
+   Changelog-Seiten sichtbar als Versatz an der linken Kante. */
+.changelog-intro { max-width: 72rem; }
 
 .changelog-intro h1 {
   max-width: 18ch;
@@ -3177,8 +3177,11 @@ table.compare tr:hover td { background: var(--card); }
 table.compare .yes { color: var(--accent); font-weight: 600; white-space: nowrap; }
 table.compare .no { color: var(--muted); white-space: nowrap; }
 
+/* Auf einer Seite mit der Vergleichstabelle steht die Fußnote unter einem
+   46-rem-Block und lief bei 44 um zwei rem gegen dessen Kante. Beide Werte
+   nebeneinander sah man auf sechs Seiten. */
 p.footnote {
-  max-width: 44rem;
+  max-width: 46rem;
   color: var(--muted);
   font-size: var(--t-md);
   border-left: 2px solid var(--line);
