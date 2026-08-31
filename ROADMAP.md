@@ -13580,7 +13580,26 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       nichts und formal „getroffen"). **Kamera und Licht sind als Ursache
       des Kiesel-Standbilds damit erledigt — es gab nichts zu sehen.**
       Lehre (1b): **Eine Zahl ist nie nur eine Zahl, sie hat einen
-      Ursprung.**
+      Ursprung.** **Behoben — nach einem zweiten Fehlversuch derselben
+      Art:** Die erste Reparatur setzte die Züge von 18 mm zu hoch auf
+      35 mm zu **tief** (Annahme „Körper um den Ursprung gebaut"; gemessen
+      liegt er 16,80–53,20, weil `create_sphere` aufs Bett stellt und
+      `scale_object` um den Objektmittelpunkt skaliert) — sie drückten die
+      Unterseite ein, der Körper wurde 40,56 statt 36,4 mm hoch.
+      **Gefangen hat es die Form der Zahlen, nicht das Auge: Maximum gleich
+      Mittelwert über alle 2178 Rasterpunkte ist keine Formung, sondern
+      eine Translation** („sieht besser aus" hätte es durchgewinkt).
+      Konsequenz und eigentliche Reparatur: **Der Aufsetzpunkt wird am Netz
+      gemessen statt hergeleitet** (höchster Eckpunkt im 2,5-mm-Umkreis,
+      Bau in zwei Etappen — ein Plan am Stück müsste wissen, was er erst
+      danach erfahren kann). Ergebnis: Daumenmulde 0,41 → **4,93 mm** (5,0
+      eingestellt), Fingerrillen 0,00 → **3,04 mm** (3,2), geformte
+      Oberseite 2,3 % → **26,9 %**; 1039 Tests grün. Verschärfte Lehre:
+      **„Eine Zahl hat einen Ursprung" reicht nicht — die Frage ist
+      WELCHEN, und die Antwort steht selten dort, wo die Zahl steht.**
+      Dazu aus demselben Zug: **Im geteilten Baum gehört ein Import in
+      denselben Schreibvorgang wie sein Verwender** — zwei Minuten Fenster
+      genügten, damit c3 ein `F821` fand, das binnen Minuten verschwand.
 - [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
       Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
       „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle
