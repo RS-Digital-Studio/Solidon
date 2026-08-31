@@ -63,6 +63,7 @@
 - [Zwei Zeilen sind nicht die Funktion](zwei-zeilen-sind-nicht-die-funktion.md) — „Fehlalarm" verlangt, dass man liest, was mit dem Rückgabewert geschieht; drei Sitzungen stimmten derselben Verkürzung zu.
 
 - [Suche prüft ihre eigene Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — ein Filter, der nichts trifft, sieht aus wie einer, der nichts findet.
+- [Bestätigung verstärkt die Fehlannahme](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei Messungen derselben falschen Frage lesen sich wie Beleg; die Übereinstimmung prüft die Frage nicht mit.
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
