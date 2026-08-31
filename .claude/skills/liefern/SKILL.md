@@ -51,6 +51,18 @@ Commits entstanden sind, was bewusst uncommittet blieb und warum — und ob
 `ROADMAP.md` fortzuschreiben ist, weil ein Punkt erledigt oder ein neuer Fund
 aufgetaucht ist.
 
+## Ein gescheiterter Merge ist ein Eingriff, kein Nichts
+
+**Wer einen Merge abbricht, prüft danach `git status` und `git stash list` —
+beides, immer.** Git legt vor einem Merge im schmutzigen Baum einen Autostash
+an, bewegt HEAD, schreibt Dateien — und spielt den Stash bei einem Abbruch
+nicht zuverlässig zurück („Index was not unstashed"). Ein „Merge failed" heißt
+also nicht „nichts passiert": Am 23.08.2026 trug der geteilte Baum danach eine
+ältere Fassung zweier Dateien, als committet war, und kein Commit hatte das
+getan. Findet sich ein zurückgebliebener Autostash, gehört sein Inhalt
+verglichen und zurückgespielt, bevor irgendwer weiterarbeitet — im geteilten
+Baum trifft er fremde Arbeit.
+
 ## Wer mit privatem Index committet, zieht den Haupt-Index nach
 
 Im geteilten Arbeitsbaum committet jede Sitzung über `GIT_INDEX_FILE` und
