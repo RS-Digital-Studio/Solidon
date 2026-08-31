@@ -57,7 +57,7 @@ from app.core.ingest.plan import MODEL_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.panels import collapsible
-from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
+from app.ui.style import NORMAL, TIGHT, WIDE, make_large_target, make_primary, set_level
 from app.ui.theme import THEMES
 
 #: Wie breit die Spalte höchstens wird. Darüber hinaus wächst nur der Rand:
@@ -89,6 +89,13 @@ NARROW_COLUMNS = 1
 #: Kacheln, gut 430 je Stück. Darunter wird der Satz zur Wortkolonne.
 TILE_MIN_WIDTH = 420
 
+#: Abstand zwischen zwei Beispielkacheln. Er gehört zur Umschaltgrenze: Zwei
+#: 420 Punkte breite Kacheln passen erst, wenn auch diese Fuge Platz hat.
+TILE_GRID_SPACING = NORMAL
+
+#: Tatsächlich verfügbare Breite, ab der das Raster zwei Spalten tragen kann.
+MEDIUM_LAYOUT_MIN_WIDTH = 2 * TILE_MIN_WIDTH + TILE_GRID_SPACING
+
 #: Wie breit die Spalte wird, wenn drei Kacheln nebeneinander passen.
 #:
 #: Auf 1920 mal 1080 blieben neben der 900 Pixel breiten Spalte gut 900 leer,
@@ -97,6 +104,17 @@ TILE_MIN_WIDTH = 420
 #: sobald die Breite genutzt wird. Der Satz über :data:`COLUMN_WIDTH` gilt
 #: weiter für Text; hier geht es um ein Raster aus Bildern.
 WIDE_COLUMN_WIDTH = 1360
+
+#: Ab dieser **verfügbaren** Breite trägt das zusätzliche Raster wirklich.
+#:
+#: Der frühere Sprung bei drei theoretischen Mindestbreiten (1260 Punkte)
+#: machte schon ein 1536-Punkte-Fenster 1360 Punkte breit, obwohl die vier
+#: sichtbaren Einstiege bewusst als zwei mal zwei stehen. Erst ab 1600 Punkten
+#: bleibt neben einer dritten Rasterspalte genug Ruhe für die Texte.
+WIDE_LAYOUT_MIN_WIDTH = 1600
+
+#: Die Ablagefläche ist eine große Trefferfläche, aber kein eigener Bildschirm.
+DROP_AREA_MIN_HEIGHT = 112
 
 
 class DropArea(QFrame):
@@ -116,7 +134,7 @@ class DropArea(QFrame):
         super().__init__(parent)
         self.setObjectName("dropArea")
         self.setAcceptDrops(True)
-        self.setMinimumHeight(140)
+        self.setMinimumHeight(DROP_AREA_MIN_HEIGHT)
         self._hover = False
 
         self.symbol = QLabel(self)
@@ -124,8 +142,11 @@ class DropArea(QFrame):
         size = self.fontMetrics().height() * 2
         self.symbol.setPixmap(icon("import", self).pixmap(size, size))
 
-        hint = QLabel(tr("Modell oder Projekt hier ablegen"), self)
+        hint_text = tr("Modell oder Projekt hier ablegen")
+        self.setAccessibleName(hint_text)
+        hint = QLabel(hint_text, self)
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setWordWrap(True)
         set_level(hint, "section")
 
         names = [suffix.lstrip(".").upper() for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX)]
@@ -135,6 +156,7 @@ class DropArea(QFrame):
             self,
         )
         kinds.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        kinds.setWordWrap(True)
         set_level(kinds, "caption")
 
         # Das Feld nimmt auch einen Verweis (:attr:`urlDropped`), und das ist
@@ -143,10 +165,11 @@ class DropArea(QFrame):
         # niemand kennt, ist keiner.
         link = QLabel(tr("Auch ein Verweis aus dem Browser"), self)
         link.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link.setWordWrap(True)
         set_level(link, "caption")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.setSpacing(TIGHT)
         layout.addStretch(1)
         layout.addWidget(self.symbol)
@@ -226,7 +249,7 @@ def current_theme() -> str:
 
 #: Wie hoch ein Vorschaubild in der Kachel steht. Groß genug, um die Form zu
 #: erkennen, klein genug, dass Titel und Satz ihre Zeilen behalten.
-PREVIEW_HEIGHT = 112
+PREVIEW_HEIGHT = 88
 
 
 def _preview_pixmap(entry: Example) -> QPixmap | None:
@@ -253,7 +276,7 @@ def _preview_pixmap(entry: Example) -> QPixmap | None:
     return QPixmap.fromImage(image)
 
 
-class ExampleTile(QFrame):
+class ExampleTile(QPushButton):
     """Ein Beispielprojekt als Kachel: Titel, ein Satz, und klickbar.
 
     Vorher eine Zeile Text unter sechs anderen. Eine Liste sagt nicht, dass
@@ -269,6 +292,7 @@ class ExampleTile(QFrame):
         self.setObjectName("exampleTile")
         self.entry = entry
         self.path = path
+        self.setAutoDefault(False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         guided = tr("Geführte Tour · Schritt für Schritt")
@@ -278,6 +302,7 @@ class ExampleTile(QFrame):
         # Namen neun Mal „Rahmen".
         self.setAccessibleName(str(entry.title))
         self.setAccessibleDescription(f"{entry.doc} {guided}")
+        self.clicked.connect(lambda _checked=False: self.chosen.emit(self.path))
         # Waagerecht dehnbar, senkrecht mitwachsend: sonst steht neben einer
         # Kachel mit drei Zeilen eine mit zwei, und die Zeile sieht schief aus.
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
@@ -339,8 +364,8 @@ class ExampleTile(QFrame):
         text.addStretch(1)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
-        layout.setSpacing(ROOMY)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        layout.setSpacing(NORMAL)
         layout.addWidget(self.preview)
         layout.addWidget(words, stretch=1)
 
@@ -369,15 +394,11 @@ class ExampleTile(QFrame):
         super().focusOutEvent(event)
         self._paint_depth()
 
-    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.chosen.emit(self.path)
-        super().mouseReleaseEvent(event)
-
     def keyPressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         """Was mit der Maus geht, geht mit der Tastatur (§19.2)."""
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
-            self.chosen.emit(self.path)
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.click()
+            event.accept()
             return
         super().keyPressEvent(event)
 
@@ -475,11 +496,11 @@ class StartScreen(QWidget):
         self.examples_area = QWidget(self)
         self.examples_grid = QGridLayout(self.examples_area)
         self.examples_grid.setContentsMargins(0, 0, 0, 0)
-        self.examples_grid.setSpacing(NORMAL)
+        self.examples_grid.setSpacing(TILE_GRID_SPACING)
         self.more_area = QWidget(self)
         self.more_grid = QGridLayout(self.more_area)
         self.more_grid.setContentsMargins(0, 0, 0, 0)
-        self.more_grid.setSpacing(NORMAL)
+        self.more_grid.setSpacing(TILE_GRID_SPACING)
         self.tiles: list[ExampleTile] = []
         self._columns = TILE_COLUMNS
         """Wie viele Kacheln gerade in eine Zeile gelegt werden."""
@@ -490,10 +511,10 @@ class StartScreen(QWidget):
         # ist, wenn man nichts Bestimmtes vorhat.
         self.new_button = QPushButton(tr("Neues Projekt"), self)
         make_primary(self.new_button)
-        self.new_button.setMinimumHeight(44)
+        make_large_target(self.new_button)
         self.new_button.clicked.connect(self.newRequested)
         self.open_button = QPushButton(tr("Projekt öffnen …"), self)
-        self.open_button.setMinimumHeight(44)
+        make_large_target(self.open_button)
         self.open_button.clicked.connect(self.browseRequested)
 
         drop = DropArea(self)
@@ -513,7 +534,7 @@ class StartScreen(QWidget):
         self.manual_button.setToolTip(tr("Die ersten fünfzehn Minuten, von vorn erklärt."))
         self.manual_button.setStatusTip(self.manual_button.toolTip())
         self.manual_button.setFlat(True)
-        self.manual_button.setMinimumHeight(44)
+        make_large_target(self.manual_button)
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_button.clicked.connect(self.manualRequested)
 
@@ -530,7 +551,7 @@ class StartScreen(QWidget):
         column.setMaximumWidth(COLUMN_WIDTH)
         inner = QVBoxLayout(column)
         inner.setContentsMargins(0, 0, 0, 0)
-        inner.setSpacing(WIDE)
+        inner.setSpacing(NORMAL)
         inner.addWidget(title)
         inner.addWidget(drop)
         inner.addLayout(buttons)
@@ -588,19 +609,21 @@ class StartScreen(QWidget):
         # zusammen zweiunddreißig Pixel kostete — bei einem Inhalt, der auf
         # 1920 mal 1080 um 198 Pixel über das Sichtfeld hinausragte.
         middle.setContentsMargins(WIDE * 2, WIDE * 2, WIDE * 2, WIDE * 2)
-        middle.addStretch(1)
+        middle.addStretch()
         # **Mit Dehnung, sonst bleibt die Spalte bei ihrer Wunschbreite.**
         # ``setMaximumWidth`` erlaubt nur; es zieht nicht. Zwischen zwei
         # Stretch-Feldern ohne eigenen Faktor bekam die Spalte ihre
         # ``sizeHint`` — gemessen 714 Pixel, und zwar bei **jeder**
         # Fenstergröße von 1280 bis 3413. Die Rechnung in
         # :meth:`_fit_the_columns` stellte derweil korrekt auf 1360 und drei
-        # Kachelspalten um; sie kam nur nie an. Der hohe Faktor lässt die
-        # Spalte den Überschuss holen, bis ihr Maximum sie stoppt — die beiden
-        # Stretch-Felder teilen sich, was dann noch übrig ist, und halten sie
-        # dabei in der Mitte.
-        middle.addWidget(column, 10)
-        middle.addStretch(1)
+        # Kachelspalten um; sie kam nur nie an. Nur die Spalte erhält deshalb
+        # einen Dehnungsfaktor: Bis zu ihrem Maximum nimmt sie jeden
+        # verfügbaren Punkt. Erst danach teilt Qt den Rest auf die beiden
+        # leeren Federn und hält sie damit in der Mitte. Ein Faktor auch an
+        # den Federn nahm ihr vorher schon unterhalb des Maximums ein Sechstel
+        # der Breite.
+        middle.addWidget(column, 1)
+        middle.addStretch()
 
         # In einem Rollbereich, weil die Spalte bei einem kleinen Fenster sonst
         # unten abgeschnitten wird — und was man nicht sieht, gibt es nicht.
@@ -638,8 +661,8 @@ class StartScreen(QWidget):
         Fensterrand.
         """
         available = self.width() - 2 * WIDE * 2
-        wide_enough = available >= 3 * TILE_MIN_WIDTH
-        narrow = available < 2 * TILE_MIN_WIDTH
+        wide_enough = available >= WIDE_LAYOUT_MIN_WIDTH
+        narrow = available < MEDIUM_LAYOUT_MIN_WIDTH
         # Der Rollbereich darf bei 640 Punkten nicht an seiner Wunschbreite
         # festhalten. Im einspaltigen Rückweg reichen kompakte Außenränder;
         # die Kacheln selbst behalten ihren großzügigen Innenraum.

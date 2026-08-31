@@ -19,9 +19,13 @@ from PySide6.QtWidgets import QApplication, QLabel, QWidget
 from app.core import examples
 from app.ui.start_screen import (
     COLUMN_WIDTH,
+    DROP_AREA_MIN_HEIGHT,
+    MEDIUM_LAYOUT_MIN_WIDTH,
     PREVIEW_HEIGHT,
+    TILE_GRID_SPACING,
     TILE_MIN_WIDTH,
     WIDE_COLUMN_WIDTH,
+    WIDE_LAYOUT_MIN_WIDTH,
     DropArea,
     ExampleTile,
     StartScreen,
@@ -69,13 +73,8 @@ def test_the_start_screen_fits_a_laptop_without_scrolling(qt_app: QApplication) 
 
         roll = screen.findChildren(QScrollArea)
         assert roll, "der Startbildschirm rollt gar nicht mehr — dann prüft das hier nichts"
-        innen = roll[0].widget()
-        assert innen is not None
-        noetig = innen.sizeHint().height()
-
-        assert noetig <= 900, (
-            f"der Startbildschirm verlangt {noetig} Bildpunkte und rollt damit auf einem "
-            "1600x900-Schirm — dem häufigsten Laptop"
+        assert roll[0].verticalScrollBar().maximum() == 0, (
+            "der Startbildschirm rollt auf einem 1600x900-Schirm — dem häufigsten Laptop"
         )
         assert len(screen.tiles) == len(examples.EXAMPLES), (
             "zugeklappt heißt nicht weg: alle Beispiele sind weiterhin da"
@@ -181,22 +180,111 @@ def test_the_four_starts_use_actions_instead_of_internal_way_numbers(
     } == shown
 
 
-def test_a_tile_opens_its_project(screen: StartScreen) -> None:
-    """Mit der Maus und mit der Tastatur — §19.2 kennt keine Ausnahme."""
+def test_a_tile_is_one_real_action_for_mouse_and_keyboard(screen: StartScreen) -> None:
+    """Maus, Eingabe und Leertaste lösen denselben echten Knopf je einmal aus."""
     from PySide6.QtCore import Qt
-    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtGui import QAccessible
+    from PySide6.QtTest import QTest
 
+    screen.show()
+    QApplication.processEvents()
     tiles = screen.findChildren(ExampleTile)
     assert tiles
+    tile = tiles[0]
+    interface = QAccessible.queryAccessibleInterface(tile)
+    assert interface is not None and interface.role() == QAccessible.Role.Button
+
     opened: list[str] = []
     screen.openRequested.connect(lambda path: opened.append(str(path)))
+    for trigger in (
+        lambda: QTest.mouseClick(tile, Qt.MouseButton.LeftButton),
+        lambda: QTest.keyClick(tile, Qt.Key.Key_Return),
+        lambda: QTest.keyClick(tile, Qt.Key.Key_Space),
+    ):
+        before = len(opened)
+        trigger()
+        assert opened[before:] == [str(tile.path)]
 
-    tiles[0].keyPressEvent(
-        QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_Return, Qt.KeyboardModifier.NoModifier)
-    )
-    assert opened == [str(tiles[0].path)]
 
-    assert tiles[0].focusPolicy() != Qt.FocusPolicy.NoFocus, "und erreichbar mit Tab"
+def test_the_tab_chain_reaches_the_first_tile_after_the_three_actions(
+    screen: StartScreen,
+) -> None:
+    """Die Schaltflächen stehen vor den Kacheln, wie sie im Bild gelesen werden."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    screen.show()
+    QApplication.processEvents()
+    screen.new_button.setFocus(Qt.FocusReason.OtherFocusReason)
+    for expected in (screen.open_button, screen.manual_button, screen.tiles[0]):
+        QTest.keyClick(screen, Qt.Key.Key_Tab)
+        assert QApplication.focusWidget() is expected
+
+
+@pytest.mark.parametrize("theme", ("dark", "light"))
+def test_a_held_tile_changes_its_surface_without_jumping(qt_app: QApplication, theme: str) -> None:
+    """Maus und Leertaste drücken die echte Fläche und lösen erst danach einmal aus."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.theme import apply_theme
+
+    def pixels(tile: ExampleTile) -> bytes:
+        return tile.grab().toImage().constBits().tobytes()
+
+    def changed(before: bytes, after: bytes) -> int:
+        return sum(
+            before[offset : offset + 4] != after[offset : offset + 4]
+            for offset in range(0, min(len(before), len(after)), 4)
+        )
+
+    previous = current_theme()
+    apply_theme(qt_app, theme)  # type: ignore[arg-type]
+    screen = StartScreen()
+    try:
+        screen.resize(1200, 900)
+        screen.show()
+        qt_app.processEvents()
+        tile = screen.tiles[0]
+        tile.setFocus(Qt.FocusReason.OtherFocusReason)
+        QTest.mouseMove(tile, tile.rect().center())
+        qt_app.processEvents()
+
+        opened: list[Path] = []
+        screen.openRequested.connect(opened.append)
+        geometry = tile.geometry()
+        label_geometry = [label.geometry() for label in tile.findChildren(QLabel)]
+
+        resting = pixels(tile)
+        QTest.mousePress(tile, Qt.MouseButton.LeftButton, pos=tile.rect().center())
+        qt_app.processEvents()
+        held_by_mouse = pixels(tile)
+        assert tile.isDown()
+        assert changed(resting, held_by_mouse) > tile.width() * tile.height() // 4
+        assert tile.geometry() == geometry
+        assert [label.geometry() for label in tile.findChildren(QLabel)] == label_geometry
+        assert opened == []
+        QTest.mouseRelease(tile, Qt.MouseButton.LeftButton, pos=tile.rect().center())
+        assert opened == [tile.path]
+
+        QTest.mouseMove(screen.new_button, screen.new_button.rect().center())
+        tile.setFocus(Qt.FocusReason.OtherFocusReason)
+        qt_app.processEvents()
+        resting = pixels(tile)
+        QTest.keyPress(tile, Qt.Key.Key_Space)
+        qt_app.processEvents()
+        held_by_keyboard = pixels(tile)
+        assert tile.isDown()
+        assert changed(resting, held_by_keyboard) > tile.width() * tile.height() // 4
+        assert tile.geometry() == geometry
+        assert [label.geometry() for label in tile.findChildren(QLabel)] == label_geometry
+        assert opened == [tile.path]
+        QTest.keyRelease(tile, Qt.Key.Key_Space)
+        assert opened == [tile.path, tile.path]
+    finally:
+        screen.close()
+        screen.deleteLater()
+        apply_theme(qt_app, previous)
 
 
 def test_a_tile_answers_pointer_and_keyboard_focus_without_motion(screen: StartScreen) -> None:
@@ -356,10 +444,11 @@ def test_the_tiles_use_the_width_they_have(screen: StartScreen) -> None:
     Bei einem schmalen Fenster bleibt es bei zwei: drei Kacheln unter
     ``TILE_MIN_WIDTH`` wären drei Wortkolonnen.
     """
-    from app.ui.start_screen import TILE_COLUMNS, TILE_MIN_WIDTH
+    from app.ui.start_screen import TILE_COLUMNS
+    from app.ui.style import WIDE
 
     screen.show()
-    screen.resize(3 * TILE_MIN_WIDTH + 200, 900)
+    screen.resize(WIDE_LAYOUT_MIN_WIDTH + 4 * WIDE, 900)
     QApplication.processEvents()
     assert screen._columns == 3, "die Breite ist da und wird nicht benutzt"
     way_positions = [screen.examples_grid.getItemPosition(index)[:2] for index in range(4)]
@@ -436,7 +525,17 @@ def test_the_column_uses_the_width_it_is_allowed(screen: StartScreen) -> None:
 
 @pytest.mark.parametrize(
     ("width", "columns"),
-    ((640, 1), (800, 1), (1200, 2), (1920, 3), (2560, 3), (3072, 3)),
+    (
+        (640, 1),
+        (800, 1),
+        (904, 1),
+        (1080, 2),
+        (1200, 2),
+        (1536, 2),
+        (1920, 3),
+        (2560, 3),
+        (3072, 3),
+    ),
 )
 def test_the_start_layout_degrades_without_horizontal_overflow(
     screen: StartScreen, width: int, columns: int
@@ -469,16 +568,103 @@ def test_the_start_layout_degrades_without_horizontal_overflow(
     wanted_start_columns = 1 if columns == 1 else 2
     positions = [screen.examples_grid.getItemPosition(index)[:2] for index in range(len(starts))]
     assert max(column for _row, column in positions) + 1 == wanted_start_columns
+    if columns > 1:
+        assert min(tile.width() for tile in starts) >= TILE_MIN_WIDTH
     screen.hide()
 
 
-def test_primary_start_actions_are_large_and_examples_are_readable(screen: StartScreen) -> None:
-    """Die drei Einstiege sind klare Ziele, die Beispiele mehr als Briefmarken."""
-    assert PREVIEW_HEIGHT >= 112, "auf Full HD bleibt vom Beispiel sonst nur ein Symbol"
-    for button in (screen.new_button, screen.open_button, screen.manual_button):
-        assert button.minimumHeight() >= 44, (
-            f"{button.text()!r} ist mit {button.minimumHeight()} Punkten kein sicheres Ziel"
+@pytest.mark.parametrize("themes", (("dark", "light"), ("light", "dark")))
+def test_primary_start_actions_are_large_and_examples_are_readable(
+    qt_app: QApplication, themes: tuple[str, str]
+) -> None:
+    """Die echte Themenkette darf den drei sicheren Trefferflächen nichts nehmen."""
+    from app.ui.style import TARGET_SIZE
+    from app.ui.theme import apply_theme
+
+    assert PREVIEW_HEIGHT == 88, "die Vorschau soll erkennbar und zugleich kompakt bleiben"
+    before = current_theme()
+    try:
+        for theme in themes:
+            apply_theme(qt_app, theme)  # type: ignore[arg-type]
+            screen = StartScreen()
+            screen.resize(1536, 740)
+            screen.show()
+            qt_app.processEvents()
+            area = screen.findChild(DropArea)
+            assert area is not None and area.minimumHeight() == DROP_AREA_MIN_HEIGHT
+            for button in (screen.new_button, screen.open_button, screen.manual_button):
+                measures = button.minimumHeight(), button.sizeHint().height(), button.height()
+                assert min(measures) >= TARGET_SIZE, (
+                    f"{theme}: {button.text()!r} misst min/sizeHint/aktuell {measures} "
+                    f"statt mindestens {TARGET_SIZE}"
+                )
+            screen.close()
+            screen.deleteLater()
+    finally:
+        apply_theme(qt_app, before)
+
+
+def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartScreen) -> None:
+    """Ein 1536er Fenster zeigt vier Wege als ruhiges 2×2 statt als breite Bühne."""
+    from app.ui.style import WIDE
+
+    outer = 4 * WIDE
+    screen.resize(WIDE_LAYOUT_MIN_WIDTH + outer - 1, 900)
+    screen.show()
+    QApplication.processEvents()
+    assert screen._columns == 2
+    assert screen.column.maximumWidth() == COLUMN_WIDTH
+
+    screen.resize(WIDE_LAYOUT_MIN_WIDTH + outer, 900)
+    QApplication.processEvents()
+    assert screen._columns == 3
+    assert screen.column.maximumWidth() == WIDE_COLUMN_WIDTH
+    screen.hide()
+
+
+def test_two_columns_start_only_when_both_tiles_and_the_gap_fit(screen: StartScreen) -> None:
+    """Die Rasterrechnung enthält die echte Fuge und gewährt der Spalte den Raum."""
+    from app.ui.style import WIDE
+
+    outer = 4 * WIDE
+    screen.show()
+    screen.resize(MEDIUM_LAYOUT_MIN_WIDTH + outer - 1, 900)
+    QApplication.processEvents()
+    assert screen._columns == 1
+
+    screen.resize(MEDIUM_LAYOUT_MIN_WIDTH + outer, 900)
+    QApplication.processEvents()
+    starts = [tile for tile in screen.tiles if tile.entry.way]
+    assert screen._columns == 2
+    assert screen.examples_grid.horizontalSpacing() == TILE_GRID_SPACING
+    assert min(tile.width() for tile in starts) >= TILE_MIN_WIDTH
+
+
+@pytest.mark.parametrize(("width", "height"), ((1536, 740), (1920, 970)))
+def test_the_empty_desktop_start_fits_without_scrolling(
+    qt_app: QApplication, width: int, height: int
+) -> None:
+    """Im echten Hauptfenster bleiben alle vier Einstiege im ersten Blick."""
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.ui.style import stylesheet
+
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("dark", 10))
+    screen = StartScreen()
+    try:
+        screen.resize(width, height)
+        screen.show()
+        qt_app.processEvents()
+        scroll = screen.findChild(QScrollArea)
+        assert scroll is not None
+        assert scroll.horizontalScrollBar().maximum() == 0
+        assert scroll.verticalScrollBar().maximum() == 0, (
+            f"{width}×{height}: die vier Einstiege liegen wieder unter der Kante"
         )
+    finally:
+        screen.deleteLater()
+        qt_app.setStyleSheet(before)
 
 
 @pytest.mark.parametrize("font_size", (10, 13, 15, 20))
@@ -505,6 +691,37 @@ def test_the_start_screen_has_no_second_scroll_axis_at_100_to_200_percent(
         assert scroll.horizontalScrollBar().maximum() == 0
         assert all(tile.accessibleName() for tile in screen.tiles)
         assert all(tile.accessibleDescription() for tile in screen.tiles)
+    finally:
+        screen.deleteLater()
+        qt_app.setStyleSheet(before)
+
+
+@pytest.mark.parametrize("width", (800, 1536))
+@pytest.mark.parametrize("font_size", (10, 13, 15, 20))
+def test_the_drop_area_wraps_every_line_at_large_system_text(
+    qt_app: QApplication, width: int, font_size: int
+) -> None:
+    """Kein Ablagetext ragt unsichtbar über seine echte Beschriftungsfläche."""
+    from app.ui.style import stylesheet
+
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", font_size))
+    screen = StartScreen()
+    try:
+        screen.resize(width, 1080)
+        screen.show()
+        qt_app.processEvents()
+        area = screen.findChild(DropArea)
+        assert area is not None and area.accessibleName()
+        labels = [label for label in area.findChildren(QLabel) if label.text()]
+        assert labels
+        for label in labels:
+            assert label.wordWrap(), f"{width}/{font_size}: {label.text()!r} bricht nicht um"
+            needed = label.heightForWidth(label.contentsRect().width())
+            assert needed <= label.contentsRect().height(), (
+                f"{width}/{font_size}: {label.text()!r} braucht {needed} Punkte Höhe, "
+                f"hat aber nur {label.contentsRect().height()}"
+            )
     finally:
         screen.deleteLater()
         qt_app.setStyleSheet(before)

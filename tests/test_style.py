@@ -196,6 +196,17 @@ def test_a_size_is_never_hardcoded_in_the_sheet() -> None:
         assert int(match.group(1)) in sizes, f"{match.group(0)} steht in keiner Stufe"
 
 
+def test_a_large_button_target_accounts_for_the_whole_box() -> None:
+    """44 Punkte meinen Inhalt, Polsterung und Rahmen zusammen."""
+    from app.ui.style import TARGET_SIZE
+
+    sheet = stylesheet("dark", 10)
+    match = re.search(r'QPushButton\[targetSize="large"\] \{\s*min-height: (\d+)px', sheet)
+    assert match is not None, "die opt-in-Trefferfläche fehlt im Stylesheet"
+    content = int(match.group(1))
+    assert content + 2 * TIGHT + 2 == TARGET_SIZE
+
+
 # --- der Themenwechsel kommt überall an (Konzept Teil 10, Punkt 10) --------------
 
 

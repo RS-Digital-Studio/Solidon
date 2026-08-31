@@ -55,6 +55,11 @@ ROOMY = SPACE * 3
 WIDE = SPACE * 4
 """Zwischen Abschnitten, die nichts miteinander zu tun haben."""
 
+#: Mindestmaß einer ausdrücklich großen Trefferfläche. Der gewöhnliche
+#: Desktopknopf bleibt kompakt; nur ein über :func:`make_large_target`
+#: markierter Einstieg nimmt dieses Maß ein.
+TARGET_SIZE = 44
+
 #: Die vier Stufen, in absteigender Lautstärke.
 LEVELS = ("title", "section", "body", "caption")
 
@@ -174,6 +179,19 @@ def make_primary(button: QPushButton) -> QPushButton:
     font = button.font()
     font.setWeight(QFont.Weight.DemiBold)
     button.setFont(font)
+    return button
+
+
+def make_large_target(button: QPushButton) -> QPushButton:
+    """Markiert einen Knopf als große, fehlertolerante Trefferfläche.
+
+    Ein bloßes ``setMinimumHeight(TARGET_SIZE)`` überlebt das globale
+    Stylesheet nicht: Qt setzt dessen ``min-height`` beim Polieren erneut und
+    machte aus 44 Punkten wieder 26. Der opt-in-Selektor im Stylesheet hält
+    den Vertrag in derselben Schicht, die ihn sonst überschreiben würde.
+    """
+    button.setProperty("targetSize", "large")
+    _repolish(button)
     return button
 
 
@@ -518,6 +536,13 @@ QPushButton {{
     padding: {TIGHT}px {ROOMY}px;
     min-height: {WIDE}px;
 }}
+/* Die Höhe im Selektor meint nur die Inhaltsbox. Je Seite kommen vier Punkte
+   Padding und ein Punkt Rahmen hinzu; im Fokus ersetzen drei Punkte Padding
+   plus zwei Punkte Rahmen dieselbe Summe. So ergeben sich exakt mindestens
+   TARGET_SIZE Punkte, ohne große Systemschrift auf dieses Maß zu deckeln. */
+QPushButton[targetSize="large"] {{
+    min-height: {TARGET_SIZE - 2 * TIGHT - 2}px;
+}}
 QPushButton:hover {{ background: {hover}; }}
 QPushButton:pressed {{ background: {line}; }}
 QPushButton:default {{
@@ -614,11 +639,15 @@ QToolButton#sectionHeading:hover {{ background: {hover}; }}
 QToolButton#sectionHeading:checked {{ background: transparent; color: {text}; }}
 QToolButton#sectionHeading:checked:hover {{ background: {hover}; }}
 
-/* Eine Beispielkachel ist ein großer Knopf mit zwei Zeilen darin. */
-QFrame#exampleTile {{
+/* Eine Beispielkachel ist semantisch und funktional ein großer Knopf mit zwei
+   Zeilen darin. Ihre eigene Innenkante kommt aus dem Layout; die gewöhnliche
+   Knopfpolsterung würde sie ein zweites Mal auftragen. */
+QPushButton#exampleTile {{
     background: {base};
     border: 1px solid {line};
     border-radius: {NORMAL}px;
+    min-height: 0;
+    padding: 0;
 }}
 /* Überfahren wechselt die **Fläche**, Fokus den **Rahmen**. Beides über den
    Rahmen zu sagen war im dunklen Thema — dem voreingestellten — keine Aussage:
@@ -626,8 +655,9 @@ QFrame#exampleTile {{
    Zustände unterschieden sich um einen Bildpunkt Rahmenbreite. Wer mit dem
    Tabulator durch die neun Kacheln geht, sah nicht, welche die Eingabetaste
    auslösen würde. */
-QFrame#exampleTile:hover {{ background: {hover}; }}
-QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
+QPushButton#exampleTile:hover {{ background: {hover}; }}
+QPushButton#exampleTile:focus {{ border: 2px solid {focus}; padding: 0; }}
+QPushButton#exampleTile:pressed {{ background: {line}; }}
 
 /* Die Tour ist eine Folge kleiner Karten statt einer grauen Textwand. Der
    aktuelle Auftrag trägt eine Akzentkante und einen Hintergrund; Pfeil,
