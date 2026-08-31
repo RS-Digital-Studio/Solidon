@@ -446,6 +446,17 @@ nav.lang a.cta:hover {
   margin: 1.75rem 0 0;
 }
 
+/* **Die stärkste Antwort auf die größte Kaufangst gehört ins erste
+   Blickfeld.** „Einmal kaufen statt abonnieren" stand in einem Fließtextabsatz
+   im Downloadkasten — auf einem Telefon zwölf Bildschirme unter dem Knopf, der
+   „kostenlos" sagt. Genau dort entsteht die Frage, also steht sie jetzt dort.
+   Leiser als der Knopf, denn sie beantwortet ihn und wirbt nicht selbst. */
+.hero-kauf {
+  margin: 0.6rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .hero-btn {
   font-size: 1.05rem;
   padding: 0.85rem 1.6rem;
@@ -603,12 +614,16 @@ nav.lang a.cta:hover {
   padding: 1rem 0 3rem;
 }
 
-/* Dieselbe Rechnung wie bei der Downloadkarte, eine Nummer kleiner: 48rem
-   füllten bei 1440 px nur 54 %. Eine Bitte um Geld darf schmaler sein als
-   ein Angebot — aber nicht so schmal, dass sie in der Fläche verschwindet. */
+/* **Genau die Breite der Downloadkarte, an der sie jetzt hängt.** Die 64rem
+   hier stammten aus der Zeit, als die Spende am Seitenende stand und gegen
+   die Fläche um Aufmerksamkeit kämpfte. Seit sie unmittelbar unter dem
+   Download-Kasten sitzt, ist die Rechnung eine andere: Gemessen ergaben die
+   64rem 1024 Punkt gegen 928 darüber — die untere Karte stand links und
+   rechts 48 Punkt über, und zwei Kanten, die um wenige Prozent auseinander
+   liegen, lesen sich nicht als Gestaltung, sondern als Versehen. */
 #unterstuetzen .donate {
   margin: 0 auto;
-  max-width: min(64rem, 100%);
+  max-width: min(58rem, 100%);
 }
 
 /* Ab hier ist Platz für zwei Spalten. Vorher stand das Bildschirmfoto unter
@@ -744,29 +759,42 @@ nav.lang a.cta:hover {
    und ein Verlauf, der oben links etwas kräftiger anfasst; die Fläche selbst
    bleibt ruhig. Der Knopf bleibt bewusst hinter dem gefüllten Download-Knopf
    zurück — er ist die zweite Handlung auf dieser Seite, nicht die erste. */
+/* **Dieselben Maße wie der Download-Kasten darüber, nur flacher.** Breite,
+   Radius und Kantenstärke sind identisch — zwei Elemente untereinander, die
+   sich um wenige Zehntel unterscheiden, wirken nicht verschieden, sondern
+   ungenau. Was sie trennt, ist die Höhe: Der Download trägt die Hauptsache
+   und darf Raum nehmen, die Spende ordnet sich unter.
+
+   Der Rahmen liegt innen als Schatten und nicht als `border`: Er kostet keine
+   Layoutbreite und trägt feiner auf, weil ein Punkt Rahmen auf heller Fläche
+   immer eine Spur zu hart steht. */
 .donate {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-top: 1.25rem;
-  padding: 1rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
-  border-radius: 0.6rem;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--accent) 17%, transparent), transparent 62%),
-    var(--accent-soft);
-  box-shadow: var(--shadow);
+  gap: 1.5rem;
+  max-width: min(58rem, 100%);
+  margin-top: 0.9rem;
+  padding: 1.15rem 1.5rem;
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--accent) 5%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 15%, var(--line));
 }
 
-/* Die Überschrift trägt den Akzent — ein Wort, keine Fläche. */
+/* **Der Akzent gehört dem Knopf, nicht der Überschrift.** Zwei Akzentträger in
+   einem Kasten von zehn Zentimetern teilen die Aufmerksamkeit, statt sie zu
+   lenken — und die Handlung ist der Knopf. */
 .donate > div > strong {
-  color: var(--accent);
+  display: block;
+  color: var(--fg);
+  font-size: 1.05rem;
+  letter-spacing: -0.011em;
 }
 
 .donate p {
-  margin: 0.25rem 0 0;
-  font-size: 0.92rem;
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .donate p.donate-terms {
@@ -778,32 +806,50 @@ nav.lang a.cta:hover {
 
 .donate-terms a { color: inherit; }
 
+/* **Neutral gefüllt und nicht umrandet.** Ein umrandeter Knopf liest sich als
+   zweite Wahl; einer in Akzentfarbe würde mit dem Download-Knopf
+   konkurrieren, der dieselbe Farbe trägt und die Hauptsache ist. Neutral
+   gefüllt ist beides nicht — und beim Zeigen springt er in den Akzent, statt
+   sich um zehn Prozent aufzuhellen. */
 .donate-button {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.62rem 0.9rem;
-  /* Eine leichte Füllung, damit er als Knopf gelesen wird und nicht als
-     Umrandung — aber weit hinter dem gefüllten Download-Knopf, der die
-     Hauptaktion trägt. */
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  border: 1px solid var(--accent);
+  gap: 0.45rem;
+  padding: 0.7rem 1.2rem;
+  background: var(--fg);
+  border: 0;
   border-radius: 0.5rem;
-  color: var(--accent);
-  font-weight: 650;
+  color: var(--bg);
+  font-weight: 600;
   line-height: 1.3;
   text-decoration: none;
-  transition: background var(--step), color var(--step), transform var(--step);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 12%);
+  transition: background var(--step), transform var(--step), box-shadow var(--step);
 }
 
 .donate-button:hover {
   background: var(--accent);
-  color: var(--bg);
   transform: translateY(-1px);
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-.donate-button:active { transform: translateY(0); }
+.donate-button:active { transform: translateY(0); box-shadow: 0 1px 2px rgb(0 0 0 / 12%); }
+
+/* Der Fokusring gehört zum Knopf und nicht zum Rahmen darum: Wer mit der
+   Tastatur hierher kommt, muss ihn sehen, ohne dass er im Ruhezustand da ist. */
+.donate-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Nebeneinander nur, solange beides nebeneinander Platz hat. Darunter steht
+   der Knopf über die volle Breite — ein Knopf, der auf dem Handy halb so
+   breit ist wie sein Kasten, sieht aus wie ein Rest. */
+@media (max-width: 42rem) {
+  .donate { flex-direction: column; align-items: stretch; gap: 1rem; }
+  .donate-button { justify-content: center; }
+}
 
 .donate-button svg { width: 1.05em; height: 1.05em; }
 
@@ -2340,7 +2386,13 @@ a { color: var(--accent); }
     .closing {
       animation: rise linear both;
       animation-timeline: view();
-      animation-range: entry 5% cover 22%;
+      /* **Voll da, sobald man es sieht.** `cover 22%` heißt: fertig, wenn
+         das Element zweiundzwanzig Prozent der **Sichthöhe** überdeckt — auf
+         einem schmalen Fenster ist es da längst im Bild und immer noch halb
+         durchsichtig. Gemessen bei 375 × 780 und schnellem Scrollen: an zwei
+         Stellen standen Elemente mit 0,25 und 0,34 im Bild. Am breiten
+         Fenster passiert das nirgends, deshalb fiel es nie auf. */
+      animation-range: entry 0% cover 12%;
     }
 
     /* Die Karten einer Reihe kommen nacheinander. Der Versatz steckt im
@@ -2350,21 +2402,21 @@ a { color: var(--accent); }
     .pains li:nth-child(2),
     ol.steps-list li:nth-child(2),
     .way:nth-child(2),
-    ul.features li:nth-child(2n) { animation-range: entry 5% cover 27%; }
+    ul.features li:nth-child(2n) { animation-range: entry 0% cover 15%; }
 
     .pains li:nth-child(3),
     ol.steps-list li:nth-child(3),
-    .way:nth-child(3) { animation-range: entry 5% cover 32%; }
+    .way:nth-child(3) { animation-range: entry 0% cover 18%; }
 
-    .pains li:nth-child(4) { animation-range: entry 5% cover 37%; }
+    .pains li:nth-child(4) { animation-range: entry 0% cover 21%; }
 
     /* Die Zahlenleiste zählt sich Zelle für Zelle auf — sechs Werte, die
        gleichzeitig erscheinen, liest niemand als sechs. */
-    .stats div:nth-child(2) { animation-range: entry 5% cover 25%; }
-    .stats div:nth-child(3) { animation-range: entry 5% cover 28%; }
-    .stats div:nth-child(4) { animation-range: entry 5% cover 31%; }
-    .stats div:nth-child(5) { animation-range: entry 5% cover 34%; }
-    .stats div:nth-child(6) { animation-range: entry 5% cover 37%; }
+    .stats div:nth-child(2) { animation-range: entry 0% cover 13%; }
+    .stats div:nth-child(3) { animation-range: entry 0% cover 16%; }
+    .stats div:nth-child(4) { animation-range: entry 0% cover 19%; }
+    .stats div:nth-child(5) { animation-range: entry 0% cover 22%; }
+    .stats div:nth-child(6) { animation-range: entry 0% cover 21%; }
 
     /* Das große Bildschirmfoto richtet sich beim Hereinkommen auf. Sieben
        Grad sind wenig genug, dass niemand sie benennen kann, und genug,
