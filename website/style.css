@@ -556,7 +556,25 @@ nav.lang a.cta:hover {
 
 /* Eine Zeile, keine Liste: Sechs kurze Zusagen unter einem Knopf sind ein
    Band und kein Aufzählungsblock. Umbrechen dürfen sie trotzdem — auf einem
-   Telefon steht sonst die Hälfte außerhalb. */
+   Telefon steht sonst die Hälfte außerhalb.
+
+   **Seit dem 31.08.2026 stehen sie in der linken Spalte des Aufmachers**, wo
+   vorher unter dem Knopf ein Loch war: Der Text endete 134 Punkte vor der
+   Bühne. In der Spalte schließt sich der Versatz auf sieben Punkte, und die
+   Downloadkarte rückt in den ersten Bildschirm. Inhaltlich gehören sie
+   ohnehin dorthin — „Läuft offline", „Kein Konto", „Deine Dateien bleiben
+   deine" sind Antworten auf die Frage, die man vor dem Herunterladen stellt,
+   und sie standen als Band weiter unten, wo sie niemand mehr sucht.
+
+   **Die Einblendung erbt sie jetzt von der Spalte, und das ist richtig so.**
+   ``.hero-text > *`` gibt jedem Kind dieselbe aufsteigende Bewegung; die
+   Zusagen sind das sechste davon und kommen mit dem Rest herauf, statt als
+   siebte Sache eigens zu erscheinen.
+
+   Ein Zwischenstand setzte hier ``animation: none; opacity: 1``, um sie
+   sofort zu zeigen. Das war doppelt falsch: Die Regel steht zweitausend
+   Zeilen vor ``.hero-text > *`` und verliert bei gleicher Spezifität ohnehin
+   — sie hätte nichts getan und eine Absicht behauptet, die niemand nachmisst. */
 .hero-assure {
   margin-top: 1.5rem;
   gap: 0.5rem 1.4rem;
@@ -579,7 +597,11 @@ nav.lang a.cta:hover {
 }
 
 .turntable {
-  aspect-ratio: 800 / 408;
+  /* **Dasselbe Verhältnis wie die Aufnahme**, seit dem 31.08.2026 in 16/7.
+     Vorher stand hier 800/408 und 16/7 nur in der gestrafften Fassung unter
+     68rem — die breite Fassung lud damit einen Rand, den sie selbst
+     wegrechnete. */
+  aspect-ratio: 16 / 7;
   border-radius: var(--r-xl);
   border: 1px solid var(--line);
   background-image: url("bilder/bock-sprite.webp");
@@ -3643,17 +3665,6 @@ p.footnote {
    Die Werte sind von 3a im Browser durchgemessen: Höhe 999 → 846,
    Regler-Unterkante 1014 → 878. */
 @media (max-width: 68rem) {
-  /* Die Bühne wird flacher statt kleiner: Das Teil steht mittig im Bild,
-     also verträgt es einen Beschnitt oben und unten. Ein kleineres Bild
-     hätte dagegen nur Luft ringsum verschoben. */
-  .turntable {
-    aspect-ratio: 16 / 7;
-    /* **Muss mit.** Ohne die feste Angabe rechnet der Browser sie aus dem
-       neuen Seitenverhältnis neu, und das Sprite springt zwischen zwei
-       Kacheln. */
-    background-size: 100% 3600%;
-  }
-
   /* Der Regler gehört an die Bühne. Achtundsiebzig Punkte Abstand machen aus
      zwei zusammengehörenden Dingen zwei Dinge. */
   .dial { margin-top: 0.5rem; }
