@@ -355,23 +355,6 @@ def two_colour_sign() -> Project:
             )
         ],
     )
-    history.apply(
-        _("Aufhängung"),
-        [
-            OperationDraft(
-                op="insert_keyhole",
-                inputs=("obj_1",),
-                # **Achse Y, nicht Z** — sonst schneidet das Schlüsselloch nichts.
-                # Ein Schlüsselloch hat ein Oben: Der Kopf geht unten durch, die
-                # Schraube sitzt oben. ``axis="z"`` dreht es in die Plattenebene,
-                # und dort kommt sein eigenes -Y nie nach oben (``keeps_up``,
-                # siehe ``parts.up_points_nowhere``). Gemessen am 31.08.2026:
-                # Mit Z trug der Schnitt **1 mm³** ab statt 101 — die Aufhängung
-                # war ein Kratzer, und wer das Schild druckte, hatte kein Loch.
-                params={"size": "M4", "x": -30.0, "y": 0.0, "z": 0.0, "axis": "y"},
-            )
-        ],
-    )
     # Der zweite Weg zur Zweifarbigkeit: Buchstaben als eigener Körper — beim
     # Drucker ein Werkzeugwechsel, von Hand ein Satz Lettern zum Aufkleben.
     #

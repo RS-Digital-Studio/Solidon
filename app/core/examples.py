@@ -118,11 +118,11 @@ EXAMPLES: Final[tuple[Example, ...]] = (
     ),
     Example(
         id="schild-zweifarbig",
-        title=_("Beschriftung — zweifarbig und aufhängbar"),
+        title=_("Beschriftung — zweifarbig"),
         way="",
         doc=_(
             "Ein Schild mit Schrift in einem eigenen Filament: der 3MF-Export "
-            "macht daraus den Farbwechsel. Dazu eine Schlüsselloch-Aufhängung."
+            "macht daraus den Farbwechsel — und die Lettern bleiben ein eigener Körper."
         ),
     ),
     Example(
