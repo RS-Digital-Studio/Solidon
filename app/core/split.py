@@ -84,6 +84,7 @@ def plan_split(
     *,
     features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
+    protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
 ) -> SplitPlan:
     """Sucht die Schnitte und macht Operationen daraus.
@@ -92,8 +93,15 @@ def plan_split(
     vergibt der Verlauf. Bekannt ist die *Reihenfolge*, und die genügt: die
     Eingabe des nächsten Schnitts ist eines der zwei Stücke, die der vorige
     gemacht hat.
+
+    ``protect`` sind die Punktwolken geschützter Flächen (§22.3). Sie wirken
+    **hier**, in der Suche, und nicht in der Operation: Was der Verlauf
+    festhält, ist die gefundene Ebene mit Achse und Position, und daraus
+    entsteht dasselbe Ergebnis, gleich wie sie gefunden wurde. Eine Sperre,
+    die in ``split_pinned`` stünde, wäre ein Parameter, den niemand
+    auswertet — die Suche hat da längst stattgefunden.
     """
-    outcome = split_to_fit(mesh, profile, pins=pins, cancelled=cancelled)
+    outcome = split_to_fit(mesh, profile, pins=pins, protect=protect, cancelled=cancelled)
     drafts = [
         OperationDraft(
             op="split_pinned",
@@ -147,9 +155,10 @@ def apply_split(
     *,
     features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
+    protect: Sequence[Any] = (),
 ) -> SplitApplied:
     """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
-    plan = plan_split(mesh, object_id, profile, features=features, pins=pins)
+    plan = plan_split(mesh, object_id, profile, features=features, pins=pins, protect=protect)
     return apply_planned(document, plan, object_id, profile, pins=pins)
 
 

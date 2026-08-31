@@ -230,6 +230,36 @@ def test_a_face_across_the_whole_window_leaves_no_seam(profile: Profile) -> None
     assert autosplit.find_plane(whole, profile, protect=[shield(-200.0, 200.0)]) is None
 
 
+def test_the_plan_carries_the_guard_into_its_drafts(profile: Profile) -> None:
+    """Die Sperre muss bis in die Operationen des Plans durchschlagen.
+
+    ``plan_split`` ist die Brücke zwischen der Suche und dem Verlauf: Es sucht
+    die Schnitte und macht ``split_pinned``-Schritte daraus. Ohne diesen Test
+    wäre das Durchreichen von ``protect`` ungeprüft — und eine Zeile, deren
+    Entfernen nichts rot macht, prüft nichts.
+
+    **Warum die Sperre nicht in der Operation steht:** Was der Verlauf
+    festhält, ist die gefundene Ebene mit Achse und Position, und daraus
+    entsteht dasselbe Ergebnis, gleich wie sie gefunden wurde. Ein
+    ``protect``-Parameter an ``split_pinned`` wäre einer, den niemand
+    auswertet — die Suche hat da längst stattgefunden.
+    """
+    whole = bar()
+    free = plan_split(whole, "obj_1", profile)
+    assert free.drafts, "ungesperrt wird geteilt"
+    seam = float(free.drafts[0].params["position"])
+
+    guard = shield(seam - 6.0, seam + 6.0)
+    guarded = plan_split(whole, "obj_1", profile, protect=[guard])
+
+    assert guarded.drafts, "neben der Sperre bleibt Platz"
+    for draft in guarded.drafts:
+        position = float(draft.params["position"])
+        assert not (guard[:, 0].min() < position < guard[:, 0].max()), (
+            f"ein Schritt des Plans schneidet bei {position:.1f} durch die Sperre"
+        )
+
+
 def test_the_second_opinion_obeys_the_guard(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
