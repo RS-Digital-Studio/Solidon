@@ -65,6 +65,8 @@
 
 - [Suche prüft ihre eigene Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — ein Filter, der nichts trifft, sieht aus wie einer, der nichts findet.
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend.
+- [Bestätigung verstärkt die Fehlannahme](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei unabhängige Messungen derselben falschen Frage lesen sich wie Bestätigung.
+- [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Foto ist die Instanz.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
 - [Mutation, die den Fall nicht trifft](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht", nicht „der Test prüft nichts".
