@@ -70,6 +70,9 @@
   --stage-line: #2c3038;
 
   --step: 0.22s cubic-bezier(0.33, 1, 0.68, 1);
+  /* Ein gemeinsames Mindestmaß für kompakte Bedienelemente. 2,75 rem sind
+     bei der Wurzelschrift 44 CSS-Pixel; der Inhalt darf größer werden. */
+  --target-min: 2.75rem;
   color-scheme: light dark;
 
   /* Schriftskala: acht Stufen. Vorher standen hier dreiunddreißig
@@ -3938,4 +3941,70 @@ p.footnote {
      in vier Zeilen, wo drei gereicht hätten. Die Grenze ist für breite
      Schirme gedacht, wo eine Überschrift sonst über die halbe Seite läuft. */
   .hero h1 { max-width: none; }
+}
+
+/* ── Zielräume für Tastatur und Berührung ────────────────────────────────
+   Die sichtbare Typografie bleibt kompakt; der bedienbare Kasten nicht.
+   Navigation, Reiter, Klappen und Formulargriffe unterschritten im echten
+   1440er Browserlauf 44 Pixel, obwohl sie optisch richtig gewichtet waren.
+   Ein gemeinsamer logischer Mindestwert hält alle Schreibrichtungen offen
+   und lässt mehrzeilige Beschriftungen weiterhin wachsen. */
+.brand,
+nav.lang a,
+nav.lang details.langs summary,
+nav.lang .menu > summary,
+.btn,
+.tab,
+.download-notes summary,
+.donate-fine summary,
+.donate-button,
+.toc a,
+footer.site a,
+.release-picker select,
+.activation-language select,
+.activation-file .activation-file-button,
+.activation-paste summary,
+.boerse-suche input,
+.boerse-suche select,
+.boerse-hochladen input {
+  min-block-size: var(--target-min);
+}
+
+/* Sehr kurze Beschriftungen wie „DE“, „AGB“ und der mobile Menügriff brauchen
+   denselben Raum auch waagerecht. Lange Formularfelder wachsen aus ihrem
+   Raster und gehören deshalb ausdrücklich nicht in diese Gruppe. */
+.brand,
+nav.lang a,
+nav.lang details.langs summary,
+nav.lang .menu > summary,
+.tab,
+footer.site a {
+  min-inline-size: var(--target-min);
+}
+
+nav.lang a,
+.tab,
+footer.site a {
+  display: inline-flex;
+  align-items: center;
+}
+
+nav.lang details.langs li a { width: 100%; }
+
+footer.site a {
+  justify-content: center;
+  padding-inline: 0.2rem;
+  vertical-align: middle;
+}
+
+/* Die Klappen bleiben native ``summary``-Elemente mitsamt ihrem Pfeil. Etwas
+   symmetrischer Innenraum zentriert ihre Zeile im größeren Zielkasten. */
+.download-notes summary { padding-block: 0.6rem; }
+.donate-fine summary { padding-block: 0.45rem; }
+.toc a { padding-block: 0.6rem; }
+
+/* Beim Schieberegler ist die Spur nicht das Ziel. Der Eingabekasten wird
+   44 Pixel hoch, während der Browser Spur und Daumen weiterhin zeichnet. */
+.dial input[type="range"] {
+  min-block-size: var(--target-min);
 }
