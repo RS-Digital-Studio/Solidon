@@ -1198,6 +1198,10 @@ class KeyDialog(QDialog):
             return ""
         return str(warning).format(
             rate=round(speed.tokens_per_second or 0.0, 1),
+            # Auf Tausender gerundet: „rund 20 000" ist die Aussage, die der
+            # Satz macht, und „19 641" wäre eine Genauigkeit, die er nicht
+            # hat — die Zahl gilt für ein Modell und einen Werkzeugsatz.
+            tokens=f"{round(llm.PROMPT_TOKENS, -3):n}",
             minutes=round(speed.prompt_minutes),
         )
 

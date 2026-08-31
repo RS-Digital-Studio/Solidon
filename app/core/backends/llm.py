@@ -1450,10 +1450,18 @@ def ollama_tool_check(
 GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 
 #: Wie groß der Systemprompt dieser Anwendung ist — einschließlich des
-#: kompakten Werkzeugsatzes, den der Ollama-Pfad fährt. Am 28.08.2026 mit
+#: kompakten Werkzeugsatzes, den der Ollama-Pfad fährt. Am 31.08.2026 mit
 #: ``qwen3:14b`` über den echten ``/api/chat``-Auftrag gemessen, nicht aus der
 #: JSON-Länge geschätzt (siehe :data:`OLLAMA_CONTEXT_TOKENS`).
-PROMPT_TOKENS: Final = 23891
+#:
+#: **Diese Zahl rechnet dem Kunden seine Wartezeit vor** — sie steht in
+#: :func:`speed_warning` als Platzhalter und wird dort mit
+#: :attr:`Speed.prompt_minutes` zu Minuten. Wer die Grundlast ändert, ändert
+#: sie mit: Vor dem 31.08.2026 stand hier 23 891 aus einer Messung vom 28.,
+#: und nach zwei Schritten an den Werkzeugschemata waren es 19 641 — der
+#: Kunde bekam eine um 22 Prozent zu hohe Schätzung, bei 7,8 Token je Sekunde
+#: einundfünfzig statt zweiundvierzig Minuten.
+PROMPT_TOKENS: Final = 19641
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
@@ -1542,9 +1550,12 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     einem Rechner ohne nutzbare Karte hilft kein kleineres Modell über die
     Runden, sondern ein Schlüssel.
 
-    Die zwei Platzhalter ``rate`` und ``minutes`` bleiben stehen; eingesetzt
-    werden sie von der Oberfläche aus :meth:`Speed.tokens_per_second` und
-    :meth:`Speed.prompt_minutes`. Dasselbe Muster wie bei ``AppError.values``
+    Die drei Platzhalter ``rate``, ``tokens`` und ``minutes`` bleiben stehen;
+    eingesetzt werden sie von der Oberfläche aus
+    :meth:`Speed.tokens_per_second`, :data:`PROMPT_TOKENS` und
+    :meth:`Speed.prompt_minutes`. **``tokens`` ist ein Platzhalter und keine
+    Zahl im Satz, weil er sonst altert:** Hier stand „rund 24 000", während
+    die Konstante daneben schon gepflegt wurde. Dasselbe Muster wie bei ``AppError.values``
     (§33.1): Der Kern kennt den Satz und die Zahlen, das Zusammensetzen gehört
     dorthin, wo auch die Sprache feststeht.
     """
@@ -1553,7 +1564,7 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     return _(
         "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
         "gemessene {rate} Token je Sekunde beim Einlesen. Der Auftrag dieser "
-        "Anwendung ist rund 24 000 Token lang, es dauert hier also etwa "
+        "Anwendung ist rund {tokens} Token lang, es dauert hier also etwa "
         "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Ein kleineres "
         "Modell ändert daran wenig; für zügige Antworten braucht es einen "
         "Schlüssel für ein gehostetes Modell — alles außer dem Chat bleibt "
