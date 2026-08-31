@@ -107,6 +107,17 @@ _HALF_MARK = " · "
 _PIN_NOTE = _("Stifte")
 _BORE_NOTE = _("Löcher")
 
+#: Dieselben zwei Zusätze als **ganzer** Name, mit dem Stamm als Wert. Der
+#: Stamm gehört dem Nutzer und bleibt eine Zeichenkette; der Zusatz gehört der
+#: Anwendung und wandert mit der Sprache. Vorher war der ganze Name eine feste
+#: Zeichenkette in der Sprache, die beim Trennen eingestellt war.
+#:
+#: Das Trennzeichen steht hier ausgeschrieben und nicht als ``_HALF_MARK``:
+#: Der Einsammler liest die Message-ID als **Literal** aus dem ``_()``-Aufruf,
+#: und ein zusammengesetzter Ausdruck ist für ihn keine. Zwei Sprachdateien mit
+#: einem Schlüssel, den niemand mehr füllt, wären der Preis dafür.
+_HALF_IDS = frozenset({"{name} · Stifte", "{name} · Löcher"})
+
 
 @lru_cache(maxsize=1)
 def _own_notes() -> frozenset[str]:
@@ -138,7 +149,9 @@ def _own_notes() -> frozenset[str]:
     return frozenset(notes)
 
 
-def half_names(base: TranslatableText | str, *, pinned: bool) -> tuple[str, str]:
+def half_names(
+    base: TranslatableText | str, *, pinned: bool
+) -> tuple[TranslatableText | str, TranslatableText | str]:
     """Wie die beiden Stücke heißen.
 
     „A" und „B" allein beantworten die Frage nicht, die man beim Zusammenbauen
@@ -150,20 +163,30 @@ def half_names(base: TranslatableText | str, *, pinned: bool) -> tuple[str, str]
     Buchstabenpfad bleibt dabei stehen — er zeigt, aus welchem Stück welches
     geworden ist. Ein fremder Namensteil hinter demselben Zeichen bleibt, wo
     er ist (:func:`_own_notes`).
+
+    Der Rückgabetyp ist geteilt: Ohne Stifte ist der Name reiner Nutzertext und
+    bleibt eine Zeichenkette; mit Stiften trägt er den Zusatz der Anwendung und
+    ist übersetzbar. Wer ihn anzeigt, nimmt ``str(...)``; wer ihn in einen
+    Dateinamen schreibt, ``source_text``.
     """
     # Ab hier wörtlich: Wie die Hälften heißen, entsteht beim Trennen, und was
     # dabei entsteht, gehört dem Nutzer — dieselbe Regel wie beim Namen einer
     # Kopie (:func:`app.core.scene.ops._copy_name`). Genommen wird die Fassung,
     # die er beim Trennen gesehen hat.
-    stem = str(base)
-    head, mark, tail = stem.rpartition(_HALF_MARK)
-    if mark and tail in _own_notes():
-        stem = head
+    if isinstance(base, TranslatableText) and base.msgid in _HALF_IDS:
+        # Eine Hälfte, die dieselbe Anwendung benannt hat: Der Stamm steht
+        # als Wert daneben und muss nicht aus dem Text zurückgelesen werden.
+        stem = str((base.values or {}).get("name", ""))
+    else:
+        stem = str(base)
+        head, mark, tail = stem.rpartition(_HALF_MARK)
+        if mark and tail in _own_notes():
+            stem = head
     if not pinned:
         return f"{stem} A", f"{stem} B"
     return (
-        f"{stem} A{_HALF_MARK}{_PIN_NOTE}",
-        f"{stem} B{_HALF_MARK}{_BORE_NOTE}",
+        _("{name} · Stifte", name=f"{stem} A"),
+        _("{name} · Löcher", name=f"{stem} B"),
     )
 
 

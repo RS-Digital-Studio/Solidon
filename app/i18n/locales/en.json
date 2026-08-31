@@ -3848,6 +3848,8 @@
   "{name} startet weiter im Hintergrund — Solidon beendet es nicht. Beim nächsten Öffnen von „Modell erzeugen“ wird nachgesehen, ob es inzwischen antwortet.": "{name} keeps starting in the background — Solidon does not stop it. The next time you open “Generate model” it checks whether it responds by then.",
   "{name} steht hier schon — ein Klick nimmt sie zurück.": "{name} is already set here — one click takes it back.",
   "{name} zurückgenommen.": "{name} taken back.",
+  "{name} · Löcher": "{name} · Holes",
+  "{name} · Stifte": "{name} · Pins",
   "{name} — {does}.": "{name} — {does}.",
   "{name} — {does}. Dazu {what} auswählen.": "{name} — {does}. Select {what} for this.",
   "{name}: {does}. Dazu erst {what} auswählen.": "{name}: {does}. Select {what} first.",

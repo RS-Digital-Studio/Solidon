@@ -628,7 +628,7 @@ def test_split_pinned_runs_as_an_operation(profile: Profile) -> None:
 
     result = run("split_pinned", entry, profile, axis="x", position=0.0, pins=2)
 
-    assert [output.name for output in result.outputs] == [
+    assert [str(output.name) for output in result.outputs] == [
         "Balken A · Stifte",
         "Balken B · Löcher",
     ], "beim Export ist der Name die einzige Auskunft darüber, welches Teil welches ist"

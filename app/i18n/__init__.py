@@ -168,8 +168,15 @@ def source_text(text: object) -> str:
 
     Das Gegenstück ist ``str(text)``, und es ist der Normalfall: Überall, wo
     ein Mensch den Namen **liest**, gehört die übersetzte Fassung hin.
+
+    **Werte werden eingesetzt, nicht mitgeliefert.** Die Message-ID von „Slot 2"
+    lautet ``Slot {number}``; roh zurückgegeben landete daraus ein Dateiname
+    ``Slot number.stl`` auf der Platte. Der stabile Teil ist die Quellsprache
+    **mit** der Zahl, nicht die Vorlage.
     """
-    return text.msgid if isinstance(text, TranslatableText) else str(text)
+    if isinstance(text, TranslatableText):
+        return text.msgid.format(**text.values) if text.values else text.msgid
+    return str(text)
 
 
 def sort_key(text: object) -> str:

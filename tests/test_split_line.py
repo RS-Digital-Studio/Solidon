@@ -251,12 +251,27 @@ def test_a_direction_of_zero_length_is_a_user_error(profile: Profile) -> None:
 # --- wie die Hälften heißen ---------------------------------------------------------
 
 
+def _shown(names: tuple[object, ...]) -> tuple[str, ...]:
+    """Wie die Namen im Fenster stehen.
+
+    ``half_names`` gibt seit dem Zähler-Zug einen übersetzbaren Text zurück,
+    wenn verstiftet wurde: Der Stamm gehört dem Nutzer, der Zusatz der
+    Anwendung. Ein Vergleich gegen eine Zeichenkette liefe sonst über die
+    Message-ID — und die lautet ``{name} · Stifte``, was hier niemand prüfen
+    will.
+    """
+    return tuple(str(name) for name in names)
+
+
 def test_the_halves_say_which_one_carries_the_pins() -> None:
     """Beim Export ist der Dateiname die einzige Auskunft darüber, welches
     Teil welches ist."""
     from app.core.geom.prepare_ops import half_names
 
-    assert half_names("Halter", pinned=True) == ("Halter A · Stifte", "Halter B · Löcher")
+    assert _shown(half_names("Halter", pinned=True)) == (
+        "Halter A · Stifte",
+        "Halter B · Löcher",
+    )
     assert half_names("Halter", pinned=False) == ("Halter A", "Halter B")
 
 
@@ -270,7 +285,7 @@ def test_splitting_a_half_again_replaces_the_note_instead_of_stacking_it() -> No
 
     first, _second = half_names("Halter", pinned=True)
 
-    assert half_names(first, pinned=True) == (
+    assert _shown(half_names(first, pinned=True)) == (
         "Halter A A · Stifte",
         "Halter A B · Löcher",
     )
@@ -286,7 +301,7 @@ def test_a_name_of_someone_elses_keeps_its_own_addition() -> None:
     """
     from app.core.geom.prepare_ops import half_names
 
-    assert half_names("Halter · Sonderanfertigung", pinned=True) == (
+    assert _shown(half_names("Halter · Sonderanfertigung", pinned=True)) == (
         "Halter · Sonderanfertigung A · Stifte",
         "Halter · Sonderanfertigung B · Löcher",
     )
@@ -300,10 +315,55 @@ def test_a_note_from_another_language_is_replaced_too() -> None:
     """
     from app.core.geom.prepare_ops import half_names
 
-    assert half_names("Halter A · Pins", pinned=True) == (
+    assert _shown(half_names("Halter A · Pins", pinned=True)) == (
         "Halter A A · Stifte",
         "Halter A B · Löcher",
     )
+
+
+def test_the_note_follows_the_language_and_the_stem_stays_put() -> None:
+    """Der Zusatz gehört der Anwendung, der Stamm dem Nutzer.
+
+    Beides stand vorher in einer festen Zeichenkette, in der Sprache, die beim
+    Trennen eingestellt war. Wer auf Deutsch teilte und danach auf Englisch
+    umstellte, hatte „Klotz A · Stifte" neben einer englischen Oberfläche —
+    und beim Export einen Dateinamen, der von der Einstellung abhing.
+
+    Der Stamm wandert **nicht** mit, und das ist Absicht: Ihn hat der Nutzer
+    vergeben, oder er ist die Fassung, die der Nutzer beim Trennen gesehen hat
+    (dieselbe Regel wie beim Namen einer Kopie).
+    """
+    from app.core.geom.prepare_ops import half_names
+    from app.i18n import SOURCE_LANGUAGE, get_language, set_language, source_text
+    from app.i18n.catalog import install_language
+
+    first, second = half_names("Klotz", pinned=True)
+
+    vorher = get_language()
+    try:
+        set_language(SOURCE_LANGUAGE)
+        assert str(first) == "Klotz A · Stifte"
+
+        install_language("en")
+        set_language("en")
+        assert str(first) == "Klotz A · Pins", "der Zusatz wandert"
+        assert str(second) == "Klotz B · Holes"
+
+        # Der Dateiname nimmt die Quellsprache — **mit** dem eingesetzten
+        # Stamm. Roh zurückgegeben stünde dort die Vorlage, und auf der Platte
+        # läge eine Datei „name · Stifte.stl".
+        assert source_text(first) == "Klotz A · Stifte"
+
+        # Und wer eine Hälfte über die Sprachgrenze hinweg weiterteilt,
+        # stapelt keine zwei Zusätze in zwei Sprachen. Für einen Text mit
+        # Werten braucht es dafür keinen Katalogvergleich mehr: Der Stamm
+        # steht daneben.
+        assert _shown(half_names(first, pinned=True)) == (
+            "Klotz A A · Pins",
+            "Klotz A B · Holes",
+        )
+    finally:
+        set_language(vorher)
 
 
 # --- zusammengelegte Zwillinge ------------------------------------------------------

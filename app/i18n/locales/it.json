@@ -3848,6 +3848,8 @@
   "{name} startet weiter im Hintergrund — Solidon beendet es nicht. Beim nächsten Öffnen von „Modell erzeugen“ wird nachgesehen, ob es inzwischen antwortet.": "{name} continua ad avviarsi in secondo piano: Solidon non lo ferma. Alla prossima apertura di «Genera modello» si controlla se nel frattempo risponde.",
   "{name} steht hier schon — ein Klick nimmt sie zurück.": "{name} c'è già — un clic lo ritira.",
   "{name} zurückgenommen.": "{name} ritirato.",
+  "{name} · Löcher": "{name} · Fori",
+  "{name} · Stifte": "{name} · Spine",
   "{name} — {does}.": "{name} — {does}.",
   "{name} — {does}. Dazu {what} auswählen.": "{name} — {does}. Per farlo, selezionare {what}.",
   "{name}: {does}. Dazu erst {what} auswählen.": "{name}: {does}. Selezionare prima {what}.",
