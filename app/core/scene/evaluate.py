@@ -897,8 +897,47 @@ def _with_features(
         for name, feature in entry.features.items()
         if feature.provenance == "generated"
     }
-    if declared and transform is not None:
-        declared = moved_features(declared, transform)
+    if declared:
+        # **Auch ohne gemeldete Matrix kann der Körper verschoben worden sein.**
+        # `arrange_bed` setzt jeden Körper einzeln aufs Bett und meldet deshalb
+        # keine gemeinsame Matrix; `place_on_bed` ebenso. Die benannten
+        # Merkmale blieben dabei liegen, wo sie erzeugt wurden — gemessen am
+        # elften Beispiel: Körper bei x -120 bis -50, `lid_cavity` bei x 0,3.
+        #
+        # Der Kunde merkt es an der schlimmsten Stelle: Ein Klick auf eine
+        # Warnung fliegt die Kamera an den alten Ort, also **vom Körper weg
+        # ins Leere**. Für verwaiste Merkmale gab es dazu längst eine
+        # Sonderbehandlung (weiter unten, `arranged_rigidly`); für die
+        # benannten fehlte sie. **Eine Sonderbehandlung, die nur die halbe
+        # Menge kennt, ist ein Fehler mit gutem Gewissen** — sie sieht aus wie
+        # eine geprüfte Entscheidung, und genau deshalb sieht dort niemand ein
+        # zweites Mal hin.
+        #
+        # Erkannt wird die Bewegung an ihrer Signatur statt am Namen der
+        # Operation: Gleiche Ausdehnung in allen drei Achsen, anderer
+        # Mittelpunkt — das ist eine Verschiebung und sonst nichts. So gilt es
+        # auch für die nächste Operation, die schiebt, ohne es zu melden.
+        # **Ein eigener Name, nachgezählt und nicht geraten.** `movement` und
+        # `carried` sind in dieser Funktion beide schon vergeben — zwei
+        # Bindungen desselben Namens sind für mypy ein Fehler und für einen
+        # Leser eine Falle, und ich habe hier zweimal danebengegriffen, bevor
+        # ich zählte.
+        rigid_shift: Transform | None = transform
+        if rigid_shift is None and previous_bounds is not None:
+            before, now = previous_bounds, mesh.bounds
+            gleich = all(
+                abs(now.size[axis] - before.size[axis]) <= EPS_DISPLAY for axis in range(3)
+            )
+            shift = tuple(now.centre[axis] - before.centre[axis] for axis in range(3))
+            if gleich and any(abs(value) > EPS_DISPLAY for value in shift):
+                rigid_shift = (
+                    (1.0, 0.0, 0.0, shift[0]),
+                    (0.0, 1.0, 0.0, shift[1]),
+                    (0.0, 0.0, 1.0, shift[2]),
+                    (0.0, 0.0, 0.0, 1.0),
+                )
+        if rigid_shift is not None:
+            declared = moved_features(declared, rigid_shift)
 
     watch.raise_if_cancelled()
     if say is not None:

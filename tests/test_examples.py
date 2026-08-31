@@ -529,3 +529,64 @@ def test_every_example_can_still_be_built() -> None:
             gescheitert.append(f"{name}: {type(problem).__name__}: {problem}")
 
     assert not gescheitert, "Beispiele lassen sich nicht mehr bauen:\n" + "\n".join(gescheitert)
+
+
+@pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
+def test_no_feature_sits_outside_the_body_it_belongs_to(
+    example: examples.Example, profile: Profile
+) -> None:
+    """Ein benanntes Merkmal wandert mit seinem Körper mit (§21.2).
+
+    **Was passiert, wenn nicht.** `create_lid` legt `lid_cavity` mit seinem
+    Mittelpunkt an, `arrange_bed` schiebt den Körper danach an seinen Platz auf
+    dem Bett — und das Merkmal bleibt, wo es war. Gemessen am elften Beispiel:
+    Körper bei x −120…−50, Merkmal bei x 0,3. Der Klick auf eine Warnung fliegt
+    die Kamera dann **vom Körper weg ins Leere**, und der Kunde sieht einen
+    leeren Viewport, aus dem er sich zurücknavigieren muss. Das ist schlimmer
+    als ein folgenloser Klick.
+
+    Der Mechanismus dafür ist gebaut (`moved_features`), greift aber nur, wo
+    die Operation **eine** Matrix meldet. `arrange_bed` verschiebt jeden Körper
+    einzeln und meldet deshalb keine; für verwaiste Merkmale gab es dazu schon
+    eine Sonderbehandlung, für die benannten nicht.
+
+    Geprüft wird gegen den Hüllquader mit einem Zuschlag: Ein Merkmal darf auf
+    der Oberfläche sitzen und dort einen halben Millimeter danebenliegen, ohne
+    dass etwas falsch wäre.
+    """
+    project = load(examples.directory() / example.filename)
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    daneben: list[str] = []
+    for object_id, entry in result.scene.objects.items():
+        bounds = entry.mesh.bounds
+        for name, feature in entry.features.items():
+            # **Nur die benannten Merkmale**, und die Einschränkung ist keine
+            # Bequemlichkeit: Ein *erkanntes* Merkmal wird am aktuellen Netz
+            # gemessen und kann gar nicht zurückbleiben; wo es trotzdem
+            # danebenliegt (weg4 zeigt einundzwanzig Kugeln), ist das ein
+            # anderer Fehler mit einer anderen Ursache und gehört in einen
+            # eigenen Test, nicht in eine erweiterte Erwartung hier.
+            if feature.provenance != "generated":
+                continue
+            # Und was der Kunde absichtlich weggeschnitten hat, ist nicht
+            # zurückgeblieben, sondern weg: `test_piece` schneidet 22 mm aus
+            # einem 70er Gehäuse, und die Merkmale des Originals liegen danach
+            # außerhalb. Der Kern sagt dazu an anderer Stelle denselben Satz
+            # („was außerhalb des neuen Körpers liegt, wurde weggeschnitten").
+            if any(entry.op == "test_piece" for entry in project.document.ops):
+                continue
+            centre = feature.params.get("centre")
+            if not isinstance(centre, list | tuple) or len(centre) != 3:
+                continue
+            for achse, wert in enumerate(centre):
+                unten = bounds.minimum[achse] - 0.5
+                oben = bounds.maximum[achse] + 0.5
+                if not unten <= float(wert) <= oben:
+                    daneben.append(
+                        f"{object_id}.{name}: Achse {achse} bei {float(wert):.1f}, "
+                        f"Körper von {bounds.minimum[achse]:.1f} bis {bounds.maximum[achse]:.1f}"
+                    )
+                    break
+
+    assert not daneben, "Merkmale liegen außerhalb ihres Körpers:\n" + "\n".join(daneben)
