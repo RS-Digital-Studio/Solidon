@@ -881,6 +881,19 @@ def location_of(entry: SceneObject, finding: Finding) -> Vec3 | None:
         index for feature in named for index in feature.face_indices if 0 <= index < len(centres)
     ]
     if not indices:
+        # **Ein benanntes Merkmal muss keine Flächen führen.** Die Merkmale
+        # einer Passung (`lid_cavity`, `lid_collar`) entstehen beim Erzeugen
+        # des Deckels und tragen ihre Geometrie als Werte — Mittelpunkt,
+        # Normale, Durchmesser —, nicht als Liste von Dreiecken. Ohne diese
+        # Zeile fand ein Klick auf eine Passungswarnung keinen Ort, obwohl er
+        # danebenstand, und der Kameraflug aus §18.4 fiel aus.
+        for feature in named:
+            middle = feature.params.get("centre")
+            if isinstance(middle, list | tuple) and len(middle) == 3:
+                try:
+                    return (float(middle[0]), float(middle[1]), float(middle[2]))
+                except (TypeError, ValueError):
+                    continue
         return None
     middle = centres[indices].mean(axis=0)
     return (float(middle[0]), float(middle[1]), float(middle[2]))

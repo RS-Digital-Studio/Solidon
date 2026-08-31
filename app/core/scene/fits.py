@@ -94,6 +94,10 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
                     "Passung ausführen."
                 ),
                 values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
+                # Ein Merkmal, das es nicht mehr gibt, lässt sich nicht
+                # ansteuern — der Körper aber schon. Das ist die zweite Stufe
+                # der Zusage aus §18.4, und ohne diese Zeile war es keine.
+                object_id=fit.a.object_id,
             )
         ]
 
@@ -110,6 +114,8 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
                 severity="warning",
                 message=_("Diese Passung lässt sich nicht messen — es fehlt ein Durchmesser."),
                 values={"fit": fit.name},
+                object_id=fit.a.object_id,
+                feature_ids=(fit.a.feature_id,),
             )
         ]
 
@@ -132,6 +138,12 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
                 "expected": format_length(wanted),
                 **({"materials": materials} if materials else {}),
             },
+            # **Wohin der Klick führt.** Genannt wird das Loch und nicht der
+            # Zapfen: Bei einer Schiebepassung ist die Öffnung die Stelle, an
+            # der man nachsieht. Aus dem Merkmal rechnet `maps.location_of`
+            # den Punkt, zu dem die Kamera fliegt.
+            object_id=hole_ref.object_id,
+            feature_ids=(hole_ref.feature_id,),
         )
     ]
 
@@ -193,6 +205,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 severity="warning",
                 message=_("Eine bündige Passung braucht zwei Flächen."),
                 values={"fit": fit.name, "a": first.kind, "b": second.kind},
+                object_id=fit.a.object_id,
+                feature_ids=(fit.a.feature_id,),
             )
         ]
 
@@ -207,6 +221,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 severity="warning",
                 message=_("Diese Passung lässt sich nicht messen — es fehlt eine Fläche."),
                 values={"fit": fit.name},
+                object_id=fit.a.object_id,
+                feature_ids=(fit.a.feature_id,),
             )
         ]
 
@@ -218,6 +234,8 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
                 severity="warning",
                 message=_("Die beiden Flächen stehen nicht parallel — bündig können sie nicht."),
                 values={"fit": fit.name, "alignment": round(alignment, 3)},
+                object_id=fit.a.object_id,
+                feature_ids=(fit.a.feature_id,),
             )
         ]
 
@@ -230,6 +248,10 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
             severity="warning",
             message=_("Die beiden Flächen sitzen nicht bündig."),
             values={"fit": fit.name, "actual": format_length(offset), "expected": "0 mm"},
+            # Die erste Fläche ist die Bezugsebene, gegen die gemessen
+            # wird — und damit die Stelle, an der man nachsieht.
+            object_id=fit.a.object_id,
+            feature_ids=(fit.a.feature_id,),
         )
     ]
 
