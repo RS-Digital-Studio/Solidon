@@ -971,7 +971,13 @@ def set_material(ctx: OpContext) -> OpResult:
                 code="prepare.material",
                 severity="info",
                 message=_("Dieser Körper wird in einem eigenen Material gerechnet."),
-                values={"object": str(source.name), "material": chosen or "-"},
+                # **Ohne `str()`.** Der Aufruf löste den Namen in der Sprache
+                # von jetzt auf und schrieb ihn fest: Im englischen Fenster
+                # stand hier weiter „Deckel", während der Körper daneben im
+                # Objektbaum „Lid" hieß — zwei Namen für dasselbe Teil in einem
+                # Blick. Ein übersetzbarer Text wandert mit; aufgelöst wird
+                # erst beim Anzeigen und beim Speichern.
+                values={"object": source.name, "material": chosen or "-"},
             )
         ]
         if chosen

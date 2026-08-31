@@ -839,7 +839,11 @@ class Finding:
     object_id: ObjectId | None = None
     op_id: OpId | None = None
     feature_ids: tuple[FeatureId, ...] = ()
-    values: Mapping[str, float | str] = field(default_factory=dict)
+    #: **Auch ein übersetzbarer Text.** Ein Wert, der einen Körper nennt,
+    #: muss mit der Sprache wandern können — sonst steht im englischen
+    #: Fenster ein deutscher Name neben demselben Körper im Objektbaum.
+    #: Aufgelöst wird beim Anzeigen und beim Speichern, nicht hier.
+    values: Mapping[str, float | str | TranslatableText] = field(default_factory=dict)
     location: Vec3 | None = None
     """Wohin die Kamera fliegt, wenn die Warnung angeklickt wird (§18.4)."""
     source: MetricSource = "internal"

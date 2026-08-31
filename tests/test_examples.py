@@ -632,3 +632,38 @@ def test_object_names_follow_a_language_change(profile: Profile) -> None:
     assert not deutsch, "diese Namen sind beim Sprachwechsel deutsch geblieben: " + ", ".join(
         deutsch
     )
+
+
+def test_a_finding_value_that_names_a_body_follows_the_language(profile: Profile) -> None:
+    """Ein Körpername in einem Befundwert wandert mit der Sprache mit.
+
+    **Dieselbe Klasse wie der Deckelname, eine Ebene tiefer.** `set_material`
+    meldet „Dieser Körper wird in einem eigenen Material gerechnet" und legt den
+    Namen als Wert daneben — mit `str()` aufgelöst. Im englischen Fenster stand
+    dort weiter „Deckel", während der Körper im Objektbaum daneben „Lid" hieß:
+    zwei Namen für dasselbe Teil in einem Blick.
+
+    Der Wert wird beim Speichern aufgelöst, und das ist richtig — `report.json`
+    ist die Momentaufnahme des letzten Berichts, und beim Öffnen wird ohnehin
+    neu gerechnet. Im Speicher aber bleibt er übersetzbar, und nur darauf sieht
+    der Kunde.
+    """
+    set_language(SOURCE_LANGUAGE)
+    project = load(examples.directory() / "passung-nach-materialwechsel.p3d")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    treffer = [
+        finding for finding in result.scene.report.findings if finding.code == "prepare.material"
+    ]
+    assert treffer, "das Beispiel setzt ein Material und meldet es"
+    wert = treffer[0].values["object"]
+
+    install_language("en")
+    set_language("en")
+    try:
+        gezeigt = str(wert)
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert "Deckel" not in gezeigt, (
+        f"der Befund nennt den Körper im englischen Fenster weiter deutsch: {gezeigt!r}"
+    )

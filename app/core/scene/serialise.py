@@ -467,7 +467,15 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
             "object_id": finding.object_id,
             "op_id": finding.op_id,
             "feature_ids": list(finding.feature_ids) or None,
-            "values": dict(finding.values) or None,
+            # **Hier aufgelöst und nicht im Befund.** `report.json` ist die
+            # Momentaufnahme des letzten Berichts; beim Öffnen wird ohnehin neu
+            # gerechnet. Im Speicher bleibt ein Wert übersetzbar und wandert mit
+            # der Sprache — nur JSON kennt keinen `TranslatableText`.
+            "values": {
+                key: str(value) if isinstance(value, TranslatableText) else value
+                for key, value in finding.values.items()
+            }
+            or None,
             "location": list(finding.location) if finding.location else None,
             "source": finding.source,
             "suggestions": [
