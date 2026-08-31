@@ -70,6 +70,106 @@ SHOWN_GROUPS = ("fasteners", "mechanics", "mounting")
 PADDING = 12
 
 
+#: Wo die Aussage eines Belegs in einem **Detail** steckt, zeigt er einen
+#: Ausschnitt statt des ganzen Fensters.
+#:
+#: **Die Regel ist eine über Dichte, nicht über Form** (50s Größen-Konzept,
+#: 31.08.2026): Dateibreite geteilt durch Anzeigebreite muss mindestens 1,3
+#: betragen, sonst ist das Bild auf einem Schirm mit doppelter Punktdichte
+#: sichtbar unscharf. Der Hero der KI-Seite steht auf 460 Punkten; ein
+#: Vollfenster von 1400 Punkten erfüllt die Zahl mühelos und zeigt trotzdem
+#: nichts — die Befundliste, um die es auf der ganzen Seite geht, ist dort eine
+#: graue Fläche, und auf dem Telefon bei 390 Punkten erkennt man gar nichts.
+#:
+#: **Vollfenster bleiben, wo die Aussage „so sieht das Programm aus" ist** —
+#: Startseite und Funktionsseite. Dort *ist* das ganze Fenster der Inhalt.
+#:
+#: Die Region steht als **Name** und nicht als vier Zahlen: „ab dem linken Rand
+#: des Viewports" bleibt richtig, wenn jemand die Spaltenbreite ändert; „ab 270"
+#: wäre am nächsten Tag eine Zahl ohne Herkunft.
+CROPS: dict[str, str] = {
+    "beleg-erzeugt": "viewport_und_bericht",
+}
+
+#: Auf diese Breite wird ein Ausschnitt herunterskaliert. 900 zu 460 Punkten
+#: Anzeige sind 1,96 — deutlich über der Grenze von 1,3 und ohne die Bytes, die
+#: der rohe Ausschnitt von 1130 kosten würde.
+CROP_WIDTH = 900
+
+
+def _crop_region(window: Any, kind: str) -> QRect:
+    """Die benannte Region als Rechteck im Fenster.
+
+    ``viewport_und_bericht`` beginnt hinter der linken Spalte und reicht bis zum
+    Fensterrand: Modell und Prüfbericht groß, Objekte, Parameter und Verlauf
+    bleiben draußen.
+
+    **Gemessen wird an den Panels, nicht am Viewport** — und das ist kein
+    Geschmack. Der Viewport füllt das ganze Fenster (gemessen: 0, 0, 1400, 757),
+    die Panels schweben **darüber**. Ein Ausschnitt „ab dem linken Rand des
+    Viewports" wäre deshalb das ganze Fenster gewesen; genau das hat er beim
+    ersten Anlauf geliefert, und dem Bild sah man es nicht an, weil es
+    trotzdem besser aussah als vorher (kleiner skaliert, also schärfer).
+
+    Eine Konstante steht hier auch nicht: Die Spalte ist heute 271 Punkte
+    breit, und wer das Layout ändert, soll den Ausschnitt nicht nachpflegen
+    müssen.
+    """
+    if kind != "viewport_und_bericht":
+        raise SystemExit(f"Unbekannter Ausschnitt: {kind}")
+    edges = []
+    for name in ("object_tree", "parameters", "history_panel", "filaments"):
+        panel = getattr(window, name, None)
+        if panel is not None:
+            edges.append(panel.mapTo(window, panel.rect().topRight()).x())
+    if not edges:
+        raise SystemExit("Kein Panel der linken Spalte gefunden — Ausschnitt unbestimmbar")
+    # Der linke Rand der Panels ist zugleich der Abstand, den sie zum
+    # Fensterrand halten; denselben lassen wir rechts von ihnen stehen.
+    margin = min(
+        panel.mapTo(window, QPoint(0, 0)).x()
+        for name in ("object_tree", "parameters", "history_panel")
+        if (panel := getattr(window, name, None)) is not None
+    )
+    left = max(edges) + margin
+    # **Oben genauso: nichts anschneiden.** Der erste Anlauf begann bei y = 0
+    # und zerteilte die Menüleiste — links stand ein halbes „chern" von
+    # „Speichern", und ein angeschnittenes Menü liest sich als Fehler im Bild
+    # (Roberts Einwand vom 31.08.2026, im Wortlaut zum Schild-Motiv: „dass da
+    # was rausgeschnitten ist ist auch nicht gut"). Der Schnitt liegt deshalb
+    # am oberen Rand der Panels: Was darüber steht, endet als Ganzes.
+    #
+    # Gemessen wird am **Container**, nicht am Inhalt: ``report`` ist die
+    # Befundliste, ihr Reiter („Prüfbericht · 1") gehört dem Elternteil. Der
+    # zweite Anlauf schnitt genau durch diesen Reiter — dieselbe Sorte Fehler
+    # eine Ebene feiner.
+    corners = []
+    for name in ("object_tree", "report"):
+        panel = getattr(window, name, None)
+        if panel is None:
+            continue
+        parent = panel.parentWidget() or panel
+        corners.append(parent.mapTo(window, QPoint(0, 0)).y())
+    top = max(0, min(corners) - margin) if corners else 0
+    return QRect(left, top, window.width() - left, window.height() - top)
+
+
+def _capture(window: Any, name: str, target: Path) -> None:
+    """Das Fenster ins Bild — ganz oder als benannter Ausschnitt.
+
+    Über den Bildschirm und nicht über den Qt-Painter: Der weiß nichts von dem,
+    was OpenGL in den Viewport gezeichnet hat, und die Bildmitte bliebe schwarz.
+    """
+    screen = window.screen() or QApplication.primaryScreen()
+    shot = screen.grabWindow(window.winId())
+    kind = CROPS.get(name)
+    if kind is not None:
+        shot = shot.copy(_crop_region(window, kind))
+        if shot.width() > CROP_WIDTH:
+            shot = shot.scaledToWidth(CROP_WIDTH, Qt.TransformationMode.SmoothTransformation)
+    shot.save(str(target)) or _explode(target)
+
+
 def _explode(target: Path) -> None:
     """Ein Speichern, dessen Rückgabe niemand liest, sieht immer nach Erfolg aus."""
     raise SystemExit(f"{target} ließ sich nicht schreiben — kein leises Fertig")
@@ -378,10 +478,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     window.activateWindow()
     figures.settle(app, 60)
     target = named("beleg-fenster", language)
-    # Über den Bildschirm, nicht über den Qt-Painter: der weiß nichts von dem,
-    # was OpenGL in den Viewport gezeichnet hat — die Bildmitte bliebe schwarz.
-    screen = window.screen() or QApplication.primaryScreen()
-    screen.grabWindow(window.winId()).save(str(target)) or _explode(target)
+    _capture(window, "beleg-fenster", target)
     written.append(target)
 
     # **Der Skizzenmodus im selben Fenster** — er ist seit P4 keine eigene Seite
@@ -389,7 +486,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     # Werkzeuge, ein Bild, und der Ausschnitt hängt an Maßen, die man messen muss.
     figures.frame_sketch(window, app)
     target = named("beleg-skizze", language)
-    screen.grabWindow(window.winId()).save(str(target)) or _explode(target)
+    _capture(window, "beleg-skizze", target)
     written.append(target)
     window.finish_sketch(keep=False)
     figures.settle(app, 20)
@@ -547,10 +644,7 @@ def take_generated(app: QApplication, language: str) -> Path:
     window.activateWindow()
     figures.settle(app, 60)
     target = named("beleg-erzeugt", language)
-    # Über den Bildschirm, nicht über den Qt-Painter — dieselbe Begründung wie
-    # bei den Fensterbildern darüber.
-    screen = window.screen() or QApplication.primaryScreen()
-    screen.grabWindow(window.winId()).save(str(target)) or _explode(target)
+    _capture(window, "beleg-erzeugt", target)
 
     # Nichts speichern wollen, sonst fragt ``closeEvent`` modal danach.
     session._dirty = False
