@@ -4202,3 +4202,38 @@ def test_the_object_preview_is_large_enough_to_recognise(qt_app: QApplication) -
         assert _preview_pixels(probe) <= 56, "über sechsundfünfzig frisst es die Namensspalte"
     finally:
         probe.deleteLater()
+
+
+def test_a_click_with_a_place_also_selects_the_body(window: MainWindow) -> None:
+    """Die drei Stufen eines Klicks schließen einander nicht aus (§18.4).
+
+    **Der Fehler, den das hier fängt.** Die Regel und der Docstring der Funktion
+    sagen beide dasselbe: Ort → die Kamera fliegt und eine Marke steht dort;
+    Körper → er wird ausgewählt; Schritt → der Verlauf zeigt ihn. Der Code
+    führte sie aber als Reihenfolge aus — nach dem Flug stand ein ``return``,
+    und die Zeile mit der Auswahl darunter wurde nie erreicht. Wer auf eine
+    Warnung mit Ort klickte, bekam den Flug **statt** der Auswahl.
+
+    **Und der Wächter daneben sah es nicht**, weil er den Quelltext nach
+    ``select_object`` absucht: Der Aufruf stand da, er lief nur nicht. Ein
+    Test, der Anwesenheit prüft, ist gegen eine unerreichbare Zeile blind —
+    deshalb misst dieser hier die Wirkung.
+    """
+    select_plate(window)
+    finding = Finding(
+        code="etwas.anderes",
+        severity="warning",
+        message="x",
+        object_id="obj_1",
+        location=(1.0, 2.0, 3.0),
+    )
+
+    window.object_tree.select_object("")
+    assert window.object_tree.selected() != "obj_1", "die Auswahl steht nicht schon vorher"
+
+    window._on_finding_activated(finding)
+
+    assert window.object_tree.selected() == "obj_1", (
+        "ein Klick mit Ort wählt den Körper trotzdem aus — die Stufen sind "
+        "kumulativ, nicht alternativ"
+    )

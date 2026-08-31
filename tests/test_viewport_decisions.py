@@ -3305,7 +3305,13 @@ def test_clicking_a_finding_is_never_without_an_answer() -> None:
 
     quelle = inspect.getsource(MainWindow._on_finding_activated)
     assert "point_at" in quelle, "Stufe 3: der Verlauf zeigt den gescheiterten Schritt"
-    assert "select_object" in quelle, "Stufe 2: ohne Ort wird der Körper ausgewählt"
+    # **„ohne Ort" stand hier und war die falsche Lesart.** Die Stufen
+    # schließen einander nicht aus: Auch mit Ort wird der Körper ausgewählt.
+    # Der Code führte sie exklusiv aus (ein `return` nach dem Flug), und dieser
+    # Wächter sah es nicht — er sucht den Aufruf im Quelltext, und der stand
+    # da; er lief nur nicht. Die Wirkung prüft jetzt
+    # `test_a_click_with_a_place_also_selects_the_body` in `test_analysis_ui`.
+    assert "select_object" in quelle, "Stufe 2: der Körper wird ausgewählt"
     assert "_finding_awaiting_map" in quelle, (
         "Stufe 1: der Klick merkt sich, dass er auf eine Karte wartet"
     )

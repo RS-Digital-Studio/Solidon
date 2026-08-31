@@ -7277,19 +7277,25 @@ class MainWindow(QMainWindow):
         else:
             target = maps.location_of(entry, finding)
 
+        # **Ein Klick auf einen Befund bleibt nie folgenlos** — und die drei
+        # Stufen schließen einander nicht aus (§18.4). Hier stand nach dem Flug
+        # ein ``return``, und die Auswahl darunter wurde nie erreicht: Wer auf
+        # eine Warnung mit Ort klickte, bekam den Flug **statt** der Auswahl.
+        # Regel und Docstring beschrieben sie gleichzeitig, der Code führte sie
+        # exklusiv aus.
+        #
+        # Der Wächter daneben sah es nicht, weil er den Quelltext nach
+        # ``select_object`` absucht: Der Aufruf stand da, er lief nur nicht.
         if target is not None:
             self._show_finding_at(finding, entry, target)
-            return
-
-        # **Ein Klick auf einen Befund bleibt nie folgenlos.** Ohne Ort gibt es
-        # keine Stelle zu zeigen — aber fast jeder Befund nennt einen Körper,
-        # und der lässt sich auswählen und ins Bild holen. Das ist die Auskunft,
-        # die möglich ist, und sie ist besser als gar keine Reaktion: Eine Zeile,
-        # auf die nichts folgt, sieht kaputt aus (§2.7).
-        if kind is not None:
+        elif kind is not None:
             # Die Karte rechnet noch. ``_map_ready`` holt den Flug nach, sobald
             # sie steht; bis dahin bleibt die Auswahl die Antwort.
             self._finding_awaiting_map = finding
+
+        # Und der Körper wird ausgewählt, ob geflogen wurde oder nicht: Wer die
+        # Stelle sieht, will auch wissen, zu welchem Teil sie gehört — bei zwei
+        # Körpern auf dem Bett ist das nicht selbstverständlich.
         self.object_tree.select_object(entry.id)
 
     def _show_finding_at(self, finding: Finding, entry: Any, target: Vec3) -> None:
