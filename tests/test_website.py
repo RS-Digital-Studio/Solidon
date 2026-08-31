@@ -764,8 +764,17 @@ def test_the_questions_are_marked_up_the_way_they_are_written(page: str) -> None
     Rich Result zeigt, ist dann nicht, was dort steht.
     """
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    # Die kompakten technischen Hinweise im Download-Kasten sind kein FAQ.
-    written = len(re.findall(r"<summary>", text)) - text.count('<details class="download-notes">')
+    # **Gezählt wird ein Aufklapper ohne Klasse, nicht jedes `<summary>` minus
+    # einer Ausnahmeliste.** Die Fragen im FAQ-Block sind schlichte
+    # `<details>`; jeder andere Aufklapper der Seite trägt eine Klasse, weil er
+    # gestaltet wird — die technischen Hinweise der Downloadkarte
+    # (`download-notes`) ebenso wie das Rechtliche am Spendenkasten
+    # (`donate-fine`, seit dem 31.08.2026). Vorher stand hier eine Subtraktion,
+    # und die musste bei jedem neuen Aufklapper wachsen: Der zweite ließ den
+    # Test fallen, ohne dass an den Fragen etwas falsch gewesen wäre. Eine
+    # Ausnahmeliste beantwortet die Frage „was ist kein FAQ" — gefragt ist
+    # aber „was ist eines".
+    written = len(re.findall(r"<details>", text))
     marked = len(re.findall(r'"@type": "Question"', text))
     assert written == marked, f"{page}: {written} Fragen geschrieben, {marked} ausgezeichnet"
 

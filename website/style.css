@@ -1,3 +1,29 @@
+/* --- Die beiden Schriften -------------------------------------------------
+   Selbst gehostet und nicht von einem fremden Dienst geladen: Die Zusage
+   „nichts von außen" gilt für Schriften wie für alles andere — ein
+   Schriftdienst sieht jeden Besucher.
+
+   Beide sind Variable Fonts, je eine Datei für den ganzen Gewichtsbereich.
+   `font-display: swap` heißt: Der Text steht sofort in der Ersatzschrift da
+   und wechselt, sobald die eigene geladen ist. Nichts bleibt unsichtbar,
+   während eine Datei unterwegs ist. */
+@font-face {
+  font-family: "Archivo";
+  src: url("fonts/Archivo-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("fonts/SourceSans3-Variable.woff2") format("woff2");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Solidon3D — statische Website. Keine externen Ressourcen. Das einzige
    Skript ist `site.js` von dieser Seite, und es markiert nur die Sprungliste.
    Bewegung entsteht ausschließlich aus CSS: Übergänge beim Zeigen und
@@ -88,7 +114,7 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font-family: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  font-family: "Source Sans 3", system-ui, "Segoe UI", Roboto, sans-serif;
   line-height: 1.6;
   font-size: 1.05rem;
   -webkit-font-smoothing: antialiased;
@@ -99,6 +125,38 @@ body {
      die stehende Kopfzeile lösen, weil es einen Rollbereich erzeugt.
      Die Zeile allein genügt nicht; sie steht auch am ``html`` darüber. */
   overflow-x: clip;
+}
+
+/* **Archivo trägt, was Aufmerksamkeit führt** — Überschriften, die Marke, die
+   Zahlen der Kennzahlenzeile. Breit laufend (`font-stretch: 110%`) und mit
+   engerem Zeilenschluss: Eine weit gestellte Grotesk braucht weniger Abstand
+   zwischen den Zeichen, sonst zerfällt das Wort. Keine `font-size` hier — die
+   Größenskala ist ein eigenes Gebiet und gehört nicht in die Schriftwahl. */
+h1,
+h2,
+h3,
+.brand,
+.stats b,
+.price strong {
+  font-family: "Archivo", system-ui, "Segoe UI", Roboto, sans-serif;
+  font-stretch: 110%;
+  letter-spacing: -0.018em;
+}
+
+/* Die kleineren Überschriften laufen normal breit: Bei 1.1rem wirkt eine weit
+   gestellte Schrift nicht monumental, sondern nur auseinandergezogen. */
+h3 {
+  font-stretch: 100%;
+  letter-spacing: -0.01em;
+}
+
+/* **Auf dunklem Grund wirkt jede Schrift dünner**, weil helle Formen auf
+   Dunkel optisch schrumpfen. Ein halber Gewichtsschritt gleicht das aus —
+   dieselbe Schrift, derselbe Eindruck, in beiden Themen. */
+@media (prefers-color-scheme: dark) {
+  body { font-weight: 380; }
+
+  h1, h2, h3, .brand, .stats b, .price strong { font-weight: 620; }
 }
 
 code {
@@ -647,7 +705,16 @@ nav.lang a.cta:hover {
     grid-template-columns: minmax(0, 0.86fr) minmax(34rem, 1.14fr);
     column-gap: clamp(2rem, 4vw, 4.25rem);
     align-items: start;
-    padding: clamp(3.5rem, 5vw, 5.5rem) 0 clamp(4rem, 6vw, 6.5rem);
+    /* **Der Innenabstand war größer als die Fugen daneben.** Gemessen bei
+       1440 × 950: unter der Reglerzeile standen 86 Punkte Polster, dann 20
+       Punkte Fuge, dann die Häkchenzeile — die Luft lag also **im** Aufmacher
+       und nicht zwischen den Blöcken. Wer an den Fugen dreht, findet dort
+       nichts zu holen (Robert am 31.08.2026, zweimal gemeldet als „der
+       Abstand ist oben relativ groß").
+       Der Aufmacher nahm damit 71 % des ersten Bildschirms ein. Jetzt sind es
+       beide Enden knapper; das Verhältnis von Rand zu Inhalt bleibt großzügig,
+       nur nicht mehr größer als der Inhalt selbst. */
+    padding: clamp(2.5rem, 3.6vw, 4rem) 0 clamp(2rem, 3vw, 3.5rem);
   }
 
   /* In der Spalte begrenzt die Spalte. Eine zusätzliche Zeichenbreite
@@ -804,6 +871,25 @@ nav.lang a.cta:hover {
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* **Das Rechtliche bleibt, es steht nur nicht mehr in der ersten Zeile.** Wer
+   gerade herunterlädt, liest „keine Bestellung, keine Gegenleistung" nicht —
+   wer spenden will, findet es in einem Griff. Im Dokument, im Text und für
+   jede Suche ist es unverändert da; das ist der Unterschied zwischen
+   Wegklappen und Weglassen. */
+.donate-fine {
+  margin-top: 0.35rem;
+}
+
+.donate-fine summary {
+  color: var(--muted);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.donate-fine summary:hover { color: var(--accent); }
+
+.donate-fine .donate-terms { margin-top: 0.45rem; }
 
 .donate p.donate-terms {
   margin-top: 0.55rem;
