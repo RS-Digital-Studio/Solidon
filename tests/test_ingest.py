@@ -172,6 +172,70 @@ def test_welding_that_would_tear_the_mesh_open_is_taken_back() -> None:
     assert "ingest.not_watertight" not in codes
 
 
+def test_removing_degenerate_faces_that_would_tear_the_mesh_open_is_taken_back() -> None:
+    """Der Zwilling zum Verschweißen: Auch das Entfernen ist eine Reparatur.
+
+    In einem geschlossenen Netz ist jedes Dreieck an zwei Kanten der einzige
+    Nachbar — wer eines herausnimmt, reißt genau dort ein Loch, auch wenn es
+    keine Fläche hat.
+
+    Gefunden an einer TripoSG-Ausgabe: 221 138 Dreiecke, geschlossen; zwölf
+    entartete entfernt, und danach standen zwanzig Kanten allein da. Der
+    Prüfbericht meldete „Das Modell ist nicht geschlossen" über eine Datei,
+    die es war; die Reparatur schloss vierzehn der zwanzig und meldete Erfolg;
+    ihr Vorschlag „Kanten verfeinern" endete in „Erst reparieren, dann noch
+    einmal". Vier Meldungen aus einer Ursache.
+
+    Hier derselbe Fall in klein: ein Quader, dessen vierte Bodenecke auf der
+    Diagonale zwischen ihren beiden Nachbarn liegt. Das eine Bodendreieck hat
+    damit keine Fläche mehr, und die Topologie bleibt unberührt.
+    """
+    import numpy as np
+    import trimesh
+
+    corners = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [10.0, 0.0, 0.0],
+            [10.0, 10.0, 0.0],
+            [5.0, 5.0, 0.0],
+            [0.0, 0.0, 10.0],
+            [10.0, 0.0, 10.0],
+            [10.0, 10.0, 10.0],
+            [0.0, 10.0, 10.0],
+        ]
+    )
+    faces = np.array(
+        [
+            [0, 1, 2],
+            [0, 2, 3],
+            [4, 6, 5],
+            [4, 7, 6],
+            [0, 4, 5],
+            [0, 5, 1],
+            [1, 5, 6],
+            [1, 6, 2],
+            [2, 6, 7],
+            [2, 7, 3],
+            [3, 7, 4],
+            [3, 4, 0],
+        ]
+    )
+    body = trimesh.Trimesh(vertices=corners, faces=faces, process=False)
+    assert body.is_watertight, "geschlossen, trotz des flachen Dreiecks"
+    assert int(body.nondegenerate_faces(height=1e-9).sum()) == 11, "eines hat keine Fläche"
+
+    result = normalise(MeshData.of(body), "mm")
+
+    assert result.mesh.is_watertight, "und bleibt es"
+    assert result.mesh.triangle_count == 12, "das flache Dreieck steht noch"
+    assert result.info.removed_triangles == 0
+    codes = {finding.code for finding in result.findings}
+    assert "ingest.degenerate_kept" in codes
+    assert "ingest.degenerate_removed" not in codes
+    assert "ingest.not_watertight" not in codes
+
+
 def test_welding_can_be_switched_off() -> None:
     result = normalise(mesh_of("cube_clean.stl"), "mm", weld=False)
     assert not result.info.welded

@@ -461,11 +461,44 @@ def normalise(
     if remove_degenerate and len(body.faces):
         progress(0.4, str(_("Entartete Dreiecke entfernen")))
         before = len(body.faces)
+        was_closed = bool(body.is_watertight)
+        intact = body.copy() if was_closed else None
         body.update_faces(body.nondegenerate_faces(height=EPS_GEOM))
         body.update_faces(body.unique_faces())
         body.remove_unreferenced_vertices()
         removed = before - len(body.faces)
-        if removed:
+        # **Dasselbe Zurücknehmen wie beim Verschweißen, aus demselben Grund.**
+        #
+        # In einem geschlossenen Netz ist jedes Dreieck an zwei Kanten der
+        # einzige Nachbar. Wer eines entfernt, reißt genau dort ein Loch — auch
+        # dann, wenn es keine Fläche hat. Gemessen an einer TripoSG-Ausgabe:
+        # 221 138 Dreiecke, geschlossen; zwölf entartete entfernt, und danach
+        # standen zwanzig Kanten allein da. Der Prüfbericht meldete „Das Modell
+        # ist nicht geschlossen" über eine Datei, die es war, die Reparatur
+        # schloss vierzehn der zwanzig und meldete Erfolg, und ihr Vorschlag
+        # „Kanten verfeinern" endete in „Erst reparieren, dann noch einmal".
+        # Vier Meldungen aus einer Ursache.
+        #
+        # Ein Duplikat ist der Fall, für den die Prüfung offen bleibt: Es
+        # kommt in einem geschlossenen Netz nicht vor — es gibt der Kante
+        # einen dritten Nachbarn —, und ``was_closed`` ist dann von vornherein
+        # falsch.
+        if removed and intact is not None and not body.is_watertight:
+            kept = removed
+            body = intact
+            removed = 0
+            findings.append(
+                Finding(
+                    code="ingest.degenerate_kept",
+                    severity="info",
+                    message=_(
+                        "Entartete Dreiecke blieben stehen — sie zu entfernen hätte das "
+                        "geschlossene Netz aufgerissen."
+                    ),
+                    values={"kept": kept},
+                )
+            )
+        elif removed:
             findings.append(
                 Finding(
                     code="ingest.degenerate_removed",

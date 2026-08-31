@@ -1615,6 +1615,7 @@
   "Ende": "End",
   "Ende des Knochens setzen …": "Set the end of the bone …",
   "Endung": "Suffix",
+  "Entartete Dreiecke blieben stehen — sie zu entfernen hätte das geschlossene Netz aufgerissen.": "Degenerate triangles were left in place — removing them would have torn the closed mesh open.",
   "Entartete Dreiecke entfernen": "Remove degenerate triangles",
   "Entartete Dreiecke wurden entfernt.": "Degenerate triangles were removed.",
   "Entf entfernt die gewählte.": "Del removes the selected one.",
