@@ -141,7 +141,7 @@ def test_an_unreviewed_contract_keeps_its_reservation() -> None:
     if not make_legal.REVIEW_PENDING:
         pytest.skip("die Texte sind geprüft, der Vorbehalt gehört weg")
 
-    for _source, target, _label in make_legal.DOCUMENTS:
+    for _source, target, _label, _contract in make_legal.DOCUMENTS:
         html = (WEBSITE / target).read_text(encoding="utf-8")
         assert 'class="draft"' in html, f"{target} trägt keinen Vorbehalt"
 
