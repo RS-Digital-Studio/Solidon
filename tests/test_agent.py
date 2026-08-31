@@ -1345,6 +1345,47 @@ def test_the_objects_convention_is_explained_exactly_once() -> None:
         )
 
 
+def test_where_a_part_sits_is_explained_where_the_model_reads_it() -> None:
+    """Die sechs Platzierungsangaben werden erklärt — im Schema oder im Prompt.
+
+    ``x``, ``y``, ``z``, ``axis``, ``angle`` und ``at_feature`` tragen in allen
+    27 Bausteinen wörtlich denselben Text: gemessen 8 086 Zeichen, die
+    sechsundzwanzigmal dasselbe sagen. Sie sind eine Konvention der
+    Bausteinschicht und keine Eigenschaft der einzelnen Operation — das
+    Handbuch erklärt sie aus demselben Grund einmal am Kopf der Kategorie
+    statt in jeder Bausteintabelle (``PART_PLACEMENT_PARAMS``).
+
+    **Geprüft wird die Erklärung, nicht ihr Ort.** Verschwinden darf sie
+    nirgends: Ein Modell, das nicht weiß, was ``at_feature`` bedeutet, setzt
+    den Baustein auf Koordinaten statt an die angeklickte Fläche.
+    """
+    from app.core.agent.prompt import system_prompt
+    from app.core.agent.tools import operation_tools
+    from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+
+    for compact in (False, True):
+        prompt = system_prompt(compact=compact)
+        bausteine = [
+            entry
+            for entry in operation_tools(compact=compact)
+            if all(
+                name in entry["input_schema"].get("properties", {})
+                for name in PART_PLACEMENT_PARAMS
+            )
+        ]
+        assert bausteine, "kein Werkzeug trägt alle sechs — dann prüft dieser Test nichts"
+        for name in PART_PLACEMENT_PARAMS:
+            im_schema = all(
+                str(entry["input_schema"]["properties"][name].get("description", ""))
+                for entry in bausteine
+            )
+            im_prompt = f"``{name}``" in prompt
+            assert im_schema or im_prompt, (
+                f"compact={compact}: {name} wird weder in den {len(bausteine)} "
+                "Bausteinen noch im Systemprompt erklärt"
+            )
+
+
 # --- Zurücknehmen sagt, was es mitnimmt (Review 25.08.2026, Regel 16) --------------
 
 

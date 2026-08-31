@@ -21,6 +21,7 @@ from typing import Any, Final
 from app.core.knowledge import standards
 from app.core.registry import REGISTRY, Registry, menu_path
 from app.core.registry import tool_schemas as op_schemas
+from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
 from app.i18n import _, tr
 
 #: Name der Zusatz-Eigenschaft, die jedes Operationswerkzeug trägt: auf welche
@@ -153,6 +154,23 @@ def operation_tools(
                 }
             )
             continue
+
+        # **Die Platzierung eines Bausteins steht im Systemprompt.** Die
+        # sechs Angaben aus ``PART_PLACEMENT_PARAMS`` tragen in allen 27
+        # Bausteinen wörtlich denselben Text — gemessen 8 086 Zeichen, die
+        # sechsundzwanzigmal dasselbe sagen. Sie sind eine Konvention der
+        # Bausteinschicht und keine Eigenschaft der einzelnen Operation;
+        # das Handbuch erklärt sie aus demselben Grund einmal am Kopf der
+        # Kategorie statt in jeder Bausteintabelle.
+        #
+        # Gestrichen wird nur, wo **alle sechs** beisammen sind: Ein
+        # Werkzeug, das ``x`` aus eigenem Recht führt (verschieben, drehen),
+        # meint damit etwas anderes und behält seinen Text.
+        if compact and all(name in properties for name in PART_PLACEMENT_PARAMS):
+            for name in PART_PLACEMENT_PARAMS:
+                properties[name] = {
+                    key: value for key, value in properties[name].items() if key != "description"
+                }
 
         parameters["properties"] = properties
         # §2.6: der Chat ist auch ein Suchfeld. Der Menüort steht in der
