@@ -159,6 +159,13 @@ Aufruf gemessen wie der Commit** — eine Prüfung aus einem früheren Aufruf
 behauptet einen Zustand, der beim Commit schon vergangen sein kann, und eine
 falsche Behauptung in der History ist schlimmer als mitgenommener Inhalt,
 weil sie niemanden mehr misstrauisch macht.
+Die vierte Stufe löst den Zielkonflikt der dritten (die Meldung entsteht
+vorher, die Messung danach): **Die Erwartung wird vorher angesagt, und die
+Prüfung bricht bei Abweichung ab, statt zu berichten** — dann steht in der
+Meldung nie Unerwartetes, weil Unerwartetes nie committet wird. Eine
+Prüfung, die nur berichtet, ist eine Notiz; eine, die abbricht, ist eine
+Zusicherung (15, 31.08.2026 — ihr Lauf gab „6 mit Inhalt" aus und committete
+trotzdem; so gebaut hätte er angehalten).
 Bei einer **geteilten** Datei (Kataloge, `MEMORY.md`, `ROADMAP.md`,
 `3d-agent-bauplan.md`) zusätzlich vor dem Commit den **eigenen Block grepen**
 — die Dateizahl-Kontrolle fängt eine Datei zu viel, aber keine fremde Zeile
