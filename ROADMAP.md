@@ -121,7 +121,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Klick auf eine Warnung fliegt die Kamera ins Leere | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Familien-Fix: Das Merkmal friert seine Lage beim Erzeugen ein und überlebt `arrange_bed` unverändert — der Viewport ist nach dem Klick leer (c3 am Fenster gemessen, Foto als Instanz); erst die Familiensuche, dann die Wahl zwischen mitwandernder Lage und Nachrechnen |
 | Die Flughöhe nach einem Befund-Klick steht auf 0,26× | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds Umsetzung des Entscheids (1,4 × Hüllquader-Diagonale) — heute ist 1 von 8 Ecken im Bild und die Beschriftung der Marke außerhalb; der Knick liegt gemessen bei 1,2×, 1,4× ist der Sicherheitsabstand |
 | Ein `return` macht aus drei gleichzeitigen Stufen ein Entweder-oder | Befunde aus dem Weg-Dreh (31.08.2026) | 0ds zweiten Commit (eigener Test): Nach dem Flug kehrt `_on_finding_activated` zurück, die Auswahlzeile darunter wird nie erreicht — `oberflaeche.md` und der Docstring sagen beide „die Stufen schließen einander nicht aus"; Geschwistersuche gehört dazu |
-| `format_length` schreibt in allen Sprachen einen Punkt | Befunde aus dem Weg-Dreh (31.08.2026) | den Fix an der EINEN Stelle, die über alle Anzeigen entscheidet (0d, eigener Nebenbefund) — der deutsche Kunde liest heute „0.20 mm"; danach prüft der Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst Zahlen formatiert (Bericht, Parameterleiste, Maßfeld, Export) wird mitgemessen |
 | Der Meldungs-Zirkel zwischen `repair` und `remesh_uniform` | Befunde aus dem Weg-Dreh (31.08.2026) | einen Handlungsvorschlag, der nicht zurückführt — zwei Meldungen zeigen aufeinander, der Nutzer läuft im Kreis |
 | `repair` meldet Vollzug ohne Zahl | Befunde aus dem Weg-Dreh (31.08.2026) | Anteil und Rest in der Meldung („vierzehn von zwanzig geschlossen"), statt Vollzug zu behaupten |
 | Die Ollama-Serie O1–O5 | Ollama bis zum Anschlag (31.08.2026) | die Abarbeitung nach Roberts Order („wird oft benutzt, bis zum Anschlag optimieren, perfekte Qualität/Performance") — O1 zuerst: Modell warmhalten und klären, warum es mit 0 % VRAM auf der CPU rechnet (701 s je Anfrage); dann Messstrecke, Grundlast-Endausbau mit Quote-Messung je Schritt, Modell-Empfehlung; bei d3 |
@@ -13537,7 +13536,24 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       einen Test statt in eine Annahme. Methodenlehre von c3 dazu: **Wer
       den Filter schärft, bis nichts mehr übrig ist, schärft irgendwann
       den Fund weg** — sieben Treffer von Hand lesen schlägt einen Filter,
-      der sauber aussieht.
+      der sauber aussieht. **Der Sprachvergleich wird ein Test — bei 0d im
+      Zug, c3 liefert Skript und Trefferliste:** Er fährt alle elf
+      Beispiele in zwei Sprachen und meldet jeden Auswertungstext, der
+      gleich bleibt; **er hat heute zwei Funde gebracht, die keine Suite
+      hatte.** Verortung mit Begründung: **Ein Wächter über dieselbe
+      Zusage gehört zu dem Fix, den er hält — zwei getrennte altern
+      auseinander**, und der zweite wird beim nächsten Umbau vergessen.
+      **Zwei Zusicherungen statt einer, weil die Erlaubnisliste die
+      Schwachstelle ist** (zu weit gefasst = grüner Test über leerer Menge,
+      dieselbe Familie wie „Mutation, die den Fall nicht trifft"):
+      **(1) Der Test meldet die Zahl der geprüften Texte mit (heute 58) und
+      wird rot, wenn sie unter eine Untergrenze fällt — ein Wächter, der
+      nichts mehr sieht, muss auffallen statt zu schweigen;
+      (2) Mutationsprobe gehört dazu** — ein absichtlich eingefrorener Name
+      muss ihn rot machen. Und c3s Einwand zum Dateinamen war kein Fehler,
+      sondern die Frage, die die Achse geschärft hat: Ohne sie stünde
+      „Zusatz übersetzbar" im Register ohne den Grund, warum das den Export
+      nicht bricht.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
@@ -13732,13 +13748,24 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Dazu aus demselben Zug: **Im geteilten Baum gehört ein Import in
       denselben Schreibvorgang wie sein Verwender** — zwei Minuten Fenster
       genügten, damit c3 ein `F821` fand, das binnen Minuten verschwand.
-- [ ] **`format_length` setzt in allen Sprachen einen Punkt** (0ds eigener
-      Nebenbefund beim Testbau, 31.08.) — der deutsche Kunde liest heute
-      „0.20 mm"; der Fix gehört an die **eine** Stelle, die über alle
-      Anzeigen entscheidet, nicht in einen Tourtext. Danach prüft der
-      Tour-Test die Schreibweise statt nur die Ziffern, und wer sonst
-      Zahlen formatiert (Prüfbericht, Parameterleiste, Maßfeld,
-      Export-Dialoge) wird mitgemessen.
+- [x] **`format_length`: kein Befund — von 0d selbst zurückgenommen
+      (31.08.).** Der Kern schreibt **bewusst** einen Punkt (Docstring zwei
+      Zeilen darunter: „lokalisiert wird in der Oberfläche, nicht im
+      Kern"), und die Oberfläche tut es: `value_text` → `localised_value` →
+      `QLocale().decimalPoint()` — **der deutsche Kunde liest „0,20 mm",
+      gemessen.** Auch die vermutete Zweitquelle (`localised` gegen
+      `format_decimal`) ist gelöst, und der Kommentar an `install_qt_translations`
+      beschreibt den Fall wörtlich („auf einem deutschen Windows mit
+      englischer Oberfläche stünden Komma im Feld und Punkt im Text
+      daneben"), an allen vier Aufrufstellen samt Erststart. Ursache der
+      Fehlmeldung: **„Ich habe den Kern gemessen und über die Anzeige
+      geurteilt"** — die Messung lief ohne Oberfläche, QLocale blieb auf
+      System-Deutsch. **Vierte Gestalt derselben Form an einem Tag**
+      (Changelog-Quelltext gegen gerenderte Seite; ein Messweg gegen den
+      anderen; Kern gegen Anzeige) — **Regel: Ein Kern-Wert, der falsch
+      aussieht, ist kein Befund, bevor man ihn in der Anzeige gesehen
+      hat.** Alle drei wurden von den Messenden selbst gefangen: kein
+      Muster von Nachlässigkeit, sondern eines von Disziplin.
 - [x] **Die Tour des elften Beispiels versprach ein falsches Undo —
       erledigt und dreifach abgesichert** (Fix `25bb2581`, Test `919a2501`,
       Gegenprobe c3): Die Schrittfolge ist gedreht (ein Undo genügt), die
