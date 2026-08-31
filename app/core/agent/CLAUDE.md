@@ -89,6 +89,14 @@ Werkzeuge hinzufügt, baut den Wächter dazu.
 Mehrdeutigkeit endet in einer `Question`, nicht in einem Versuch. Das ist
 Regel 21 und zugleich das, was die Agenten-Suite misst.
 
+## Viele Formdetails bleiben ein Zustand
+
+`checks.check()` behält jeden Rohbefund für Vorschlag und Prüfbericht.
+`checks.as_lines()` zählt nur `perceive.orphaned` je Körper und Schritt, bevor
+der Text zum Modell geht. So bleiben Diagnose und Klickziele vollständig,
+ohne dass hunderte wortgleiche Sätze den nächsten andersartigen Befund aus
+dem Agentenkontext verdrängen.
+
 ## Änderungen werden gemessen, nicht behauptet
 
 Am Verhalten geschraubt — Systemprompt, Regelsammlung, Werkzeugbeschreibung?

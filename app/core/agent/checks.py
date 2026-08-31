@@ -12,9 +12,11 @@ es weitermacht.
 
 from __future__ import annotations
 
+from collections import Counter
+
 from app.core.scene.evaluate import EvaluationResult
 from app.core.types import Finding, Mesh, ObjectId, Scene, SceneObject
-from app.i18n import _
+from app.i18n import _, tr
 
 #: Volumenverhältnis, außerhalb dessen eine Änderung erwähnenswert ist. Eine
 #: Boolesche Op darf einen Körper legitim halbieren; ein Faktor zehn in
@@ -131,7 +133,46 @@ def _compare(object_id: ObjectId, earlier: SceneObject, mesh: Mesh) -> list[Find
 
 
 def as_lines(findings: list[Finding]) -> str:
-    """Die Befunde als das Werkzeugergebnis, das das Modell liest."""
+    """Die Befunde als das Werkzeugergebnis, das das Modell liest.
+
+    Verlorene Formdetails bleiben als Rohbefunde im Vorschlag und damit für
+    Bericht, Diagnose und Barrierefreiheit vollständig erhalten. Im
+    Werkzeugergebnis werden sie je Körper und Schritt gezählt: Hunderte
+    wortgleiche Sätze verdrängen sonst gerade den nächsten andersartigen
+    Befund, auf den das Modell reagieren soll.
+    """
     if not findings:
         return str(_("Prüfung ohne Befund."))
-    return "\n".join(f"{finding.code}: {finding.message}" for finding in findings)
+
+    def key(finding: Finding) -> tuple[object, ...]:
+        return (
+            finding.code,
+            finding.severity,
+            str(finding.message),
+            finding.source,
+            finding.object_id,
+            finding.op_id,
+        )
+
+    counts = Counter(key(finding) for finding in findings if finding.code == "perceive.orphaned")
+    emitted: set[tuple[object, ...]] = set()
+    lines: list[str] = []
+    for finding in findings:
+        if finding.code != "perceive.orphaned":
+            lines.append(f"{finding.code}: {finding.message}")
+            continue
+
+        identity = key(finding)
+        if identity in emitted:
+            continue
+        emitted.add(identity)
+        amount = counts[identity]
+        context: list[str] = []
+        if finding.object_id is not None:
+            context.append(f"{tr('Körper')} {finding.object_id}")
+        if finding.op_id is not None:
+            context.append(f"{tr('Schritt')} {finding.op_id}")
+        suffix = f" — {' · '.join(context)}" if context else ""
+        count = f"{amount} \N{MULTIPLICATION SIGN} " if amount > 1 else ""
+        lines.append(f"{finding.code}: {count}{finding.message}{suffix}")
+    return "\n".join(lines)

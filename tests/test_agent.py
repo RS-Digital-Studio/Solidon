@@ -25,7 +25,16 @@ from app.core.errors import ValidationError
 from app.core.knowledge import rules
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
-from app.core.types import ChatEntry, Document, Profile, Scene, Source
+from app.core.types import (
+    ChatEntry,
+    Document,
+    Finding,
+    MetricSource,
+    Profile,
+    Scene,
+    Severity,
+    Source,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1084,6 +1093,96 @@ def test_a_clean_result_has_nothing_to_report(project: Project, profile: Profile
 
     assert "agent.not_watertight" not in {finding.code for finding in findings}
     assert checks.as_lines([]) == "Prüfung ohne Befund."
+
+
+def test_the_agent_reads_orphaned_form_details_once_per_body_and_step() -> None:
+    """622 Formdetails sind Zustandsdaten, nicht 622 neue Sätze im Kontext."""
+    message = "Ein Formdetail ist nach diesem Schritt nicht mehr automatisch wiederzuerkennen."
+    findings = [
+        Finding(
+            code="perceive.orphaned",
+            severity="info",
+            message=message,
+            object_id=object_id,
+            op_id=step,
+            values={"feature": f"face_{step}_{index}"},
+        )
+        for object_id, step, count in (("obj_1", 4, 400), ("obj_2", 5, 222))
+        for index in range(count)
+    ]
+    findings.append(
+        Finding(
+            code="fit.violated",
+            severity="warning",
+            message="Diese Passung ist zu eng.",
+            object_id="obj_1",
+            op_id=5,
+        )
+    )
+    raw = tuple(findings)
+
+    lines = checks.as_lines(findings).splitlines()
+
+    assert tuple(findings) == raw and len(raw) == 623, (
+        "die Verdichtung gilt nur dem Modelltext, nicht den Rohbefunden"
+    )
+    orphaned = [line for line in lines if line.startswith("perceive.orphaned:")]
+    assert len(orphaned) == 2, "Körper und Schritt bleiben getrennte Zustände"
+    assert any(
+        "400 \N{MULTIPLICATION SIGN}" in line and "Körper obj_1 · Schritt 4" in line
+        for line in orphaned
+    )
+    assert any(
+        "222 \N{MULTIPLICATION SIGN}" in line and "Körper obj_2 · Schritt 5" in line
+        for line in orphaned
+    )
+    assert not any("Anklicken" in line for line in orphaned), "Agententext bleibt kanalneutral"
+    assert lines[-1] == "fit.violated: Diese Passung ist zu eng.", (
+        "andere Befunde bleiben unverändert und in ihrer Reihenfolge"
+    )
+
+
+def test_agent_orphan_groups_keep_every_meaningful_dimension_and_order() -> None:
+    """Körper, Schritt, Schwere, Text und Herkunft trennen Agentenzeilen."""
+    message = "Ein Formdetail ist nicht mehr automatisch wiederzuerkennen."
+
+    def orphan(
+        *,
+        object_id: str = "obj_1",
+        op_id: int = 4,
+        severity: Severity = "info",
+        text: str = message,
+        source: MetricSource = "internal",
+    ) -> Finding:
+        return Finding(
+            code="perceive.orphaned",
+            severity=severity,
+            message=text,
+            object_id=object_id,
+            op_id=op_id,
+            source=source,
+        )
+
+    first_other = Finding(code="probe.first", severity="info", message="Erster anderer Befund.")
+    last_other = Finding(code="probe.last", severity="warning", message="Letzter anderer Befund.")
+    findings = [
+        orphan(),
+        first_other,
+        orphan(object_id="obj_2"),
+        orphan(op_id=5),
+        orphan(severity="warning"),
+        orphan(text="Ein anderes Formdetail ist nicht mehr wiederzuerkennen."),
+        orphan(source="gcode"),
+        last_other,
+    ]
+
+    lines = checks.as_lines(findings).splitlines()
+
+    orphaned = [line for line in lines if line.startswith("perceive.orphaned:")]
+    assert len(orphaned) == 6, "jede geänderte Bedeutung bleibt eine eigene Agentenzeile"
+    assert not any("\N{MULTIPLICATION SIGN}" in line for line in orphaned)
+    assert lines[1] == "probe.first: Erster anderer Befund."
+    assert lines[-1] == "probe.last: Letzter anderer Befund."
 
 
 # --- Annahme: zurücknehmen (§15.4, Regel 16) ---------------------------------------

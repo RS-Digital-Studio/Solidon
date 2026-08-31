@@ -31,6 +31,9 @@ Die Regel:
 - Ein Klicksatz gehört in die Oberfläche. Kern und Agent erhalten eine kurze,
   kanalneutrale Feststellung statt hunderter Anweisungen an eine nicht
   vorhandene Maus.
+- Die Agentenausgabe zählt diese Rohbefunde je Körper und Schritt. Vorschlag
+  und Prüfbericht behalten jedes Mitglied; nur der Text zum Modell wird kurz,
+  damit der nächste andersartige Befund nicht aus dem Kontext gedrängt wird.
 
 Die sichtbare Zeile nennt Zahl, Wirkung, nächsten Klick und Entwarnung. Eine
 kurze Liste mit falschem Ziel ist schlechter als die lange Liste, die sie
