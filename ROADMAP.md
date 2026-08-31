@@ -13448,6 +13448,26 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       Fall, der verdeckt blieb. Und 0ds Selbstkorrektur: **„Auf meinem
       Messweg trifft er nicht" statt „der Befund trifft nicht"** — dass die
       eigene Messung sauber war, sagt über den anderen Weg nichts.
+      **URSACHE EINE EBENE TIEFER (c3, dritte Fassung): Es ist kalter gegen
+      warmer Cache, nicht gespeichert gegen erzeugt.** Gemessen: eigener
+      **leerer** Cache + en → „Can Lid" (0ds Zahl); **geteilter warmer
+      Nutzercache** + en → „Dose Deckel" (c3s Zahl). **Der Ergebniscache
+      speichert den gebauten Namen mit, und der Op-Hash kennt die Sprache
+      nicht** — Punkt verschoben auf **„der Cache-Schlüssel kennt die
+      Sprache nicht, obwohl das Ergebnis sie trägt"**, dieselbe Klasse wie
+      die Sammelparameter-Regel in `operationen.md`, nur ist die gelesene
+      Größe die Sprache. `lid.py:451` ist damit **teilweise** entlastet —
+      der Quellbezug bricht unabhängig bei jeder Umbenennung, der Fix
+      bleibt; **neue Auflage: gegen den WARMEN Cache messen** (de öffnen →
+      auf en umschalten → steht „Lid"?). Steht er dann nicht, ist der
+      Cache-Schlüssel der eigentliche Fix und ein Kern-Eingriff mit
+      Leistungsfolgen — dann Vorlage vor dem Bau. Zwillingsfrage im Zug:
+      welche **anderen** sprachabhängigen Werte in den Cache wandern; c3
+      macht danach die Gegenprobe am Kundenweg, weil sie die Lage
+      herstellen kann. **Dritter Fall derselben Bauart an einem Tag, und
+      diesmal richtig herum gelöst: Zwei Läufe antworten verschieden, die
+      Differenz ist die Auskunft, und die Frage ist nicht „wer hat recht",
+      sondern „welche Lage stellt der Kunde her".**
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
