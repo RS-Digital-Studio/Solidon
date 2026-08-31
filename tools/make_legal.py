@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME, APP_VENDOR  # noqa: E402
+from tools.site_nav import ENTRIES  # noqa: E402
 
 WEBSITE = ROOT / "website"
 
@@ -351,7 +352,10 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<main id="content" class="legal">\n  <div class="wrap">\n{body}\n  </div>\n</main>\n\n'
         f'<footer class="site">\n  <div class="wrap">\n'
         f"    © 2026 {APP_VENDOR} ·\n"
-        f'    <a href="/">Startseite</a>{siblings}\n'
+        # Die Rechtstexte tragen kein Kopfmenü — hier ist die Fußzeile
+        # der einzige Weg zurück, und die Börse gehört auf jeden davon.
+        f'    <a href="/">Startseite</a> ·\n'
+        f'    <a href="{ENTRIES["de"][2][0]}">{ENTRIES["de"][2][1]}</a>{siblings}\n'
         # Auch die Rechtstexte: Wer wissen will, ob jemand das Widerrufs-
         # recht liest, braucht die Zeile. Was gezählt wird, steht in der
         # Datenschutzerklärung selbst — der Pfad und sonst nichts.

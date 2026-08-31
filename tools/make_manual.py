@@ -39,6 +39,7 @@ from app.core import figures, manual
 from app.core.bootstrap import load_operations
 from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import available_languages, read_catalog
+from tools.site_nav import ENTRIES, nav_links
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBSITE = ROOT / "website"
@@ -510,7 +511,12 @@ def _header(language: str) -> str:
         '<header class="site no-print"><div class="wrap">'
         f'<a class="brand" href="./">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
-        f'<a href="#toc">{toc_label}</a>'
+        # **Das gemeinsame Menü zuerst, der Inhaltsverweis danach.** Das
+        # Handbuch trägt dieselben sechs Wege wie jede andere Seite — sonst
+        # ist es eine Sackgasse, aus der nur der Zurück-Knopf führt. Sein
+        # eigenes Inhaltsverzeichnis kommt dazu, nicht an ihrer Stelle.
+        f"{nav_links(language, current=ENTRIES[language][-1][0])}"
+        f'<a class="hide-small" href="#toc">{toc_label}</a>'
         f"{_switcher(language)}"
         f'<a class="cta" href="{cta_target}">{cta_label}</a>'
         "</nav></div></header>"

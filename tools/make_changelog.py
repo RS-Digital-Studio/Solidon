@@ -28,6 +28,7 @@ from app.branding import APP_NAME, APP_VERSION  # noqa: E402
 from app.core import changes  # noqa: E402
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
 from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
+from tools.site_nav import ENTRIES, nav_links  # noqa: E402
 from tools.stamp_assets import stamp_of  # noqa: E402
 
 
@@ -190,9 +191,10 @@ def _header(language: str, copy: Copy) -> str:
         '<header class="site"><div class="wrap">'
         f'<a class="brand" href="{home_for(language)}">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
-        f'<a class="hide-small" href="{feature_for(language)}">{html.escape(copy.features)}</a>'
-        f'<a href="/{page_path(language)}" aria-current="page">{html.escape(copy.news)}</a>'
-        f'<a class="hide-tiny" href="{manual_for(language)}">{html.escape(copy.manual)}</a>'
+        # Dieselben sechs Wege wie überall — die Beschriftungen kommen aus
+        # `site_nav` und nicht mehr aus `Copy`, damit sie nicht an zwei Orten
+        # gepflegt werden müssen.
+        f"{nav_links(language, current='/' + page_path(language))}"
         f"{_switcher(language, copy)}"
         f'<a class="cta" href="{price_for(language)}">{html.escape(copy.demo)}</a>'
         "</nav></div></header>"
@@ -336,6 +338,7 @@ def render_page(language: str) -> str:
   © 2026 RS Digital ·
   <a href="{home_for(language)}">{html.escape(copy.home)}</a> ·
   <a href="{manual_for(language)}">{html.escape(copy.manual)}</a> ·
+  <a href="{ENTRIES[language][2][0]}">{ENTRIES[language][2][1]}</a> ·
   <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
   <a href="/impressum.html">{html.escape(copy.legal)}</a> ·
   <a href="/datenschutz.html">{html.escape(copy.privacy)}</a>

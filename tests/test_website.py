@@ -2018,3 +2018,54 @@ def test_a_gallery_part_stays_in_one_piece_across_its_range(
                 f"{stem} bei {parameter}={wert:.0f}: {objekt.name} zerfällt in "
                 f"{stuecke} Stücke — eine feste Zahl wandert beim Parameterzug nicht mit"
             )
+
+
+def test_no_delivered_page_is_an_island() -> None:
+    """Jede ausgelieferte Seite wird von mindestens einer anderen verlinkt.
+
+    **Der Anlass ist die Tauschbörse.** Sie war am 31.08.2026 fertig gebaut,
+    geprüft und in sechs Sprachen übersetzt — und **keine** Seite verwies auf
+    sie. Die sechs Börsenseiten verlinkten nur sich selbst; erreichbar war sie
+    allein über die Adresszeile. Robert hat es als Kunde gefunden, nicht als
+    Entwickler: „wo kommt man denn jetzt einfach und schnell zu der
+    katalog/bausteinbörse?"
+
+    Der Verweis-Test daneben (`..._every_file_the_page_refers_to_exists`) hat
+    das nie gesehen und konnte es nicht: Er prüft **ausgehende** Verweise auf
+    tote Ziele. Eine Insel hat keine toten Verweise — sie hat gar keine, die
+    zu ihr führen. Das ist die Gegenrichtung, und sie braucht eine eigene
+    Frage.
+    """
+    delivered = sorted(
+        page.relative_to(WEBSITE).as_posix()
+        for page in WEBSITE.rglob("*.html")
+        # Der Bestätigungsschnipsel der Suchmaschine ist keine Seite: Er wird
+        # nie verlinkt und soll es auch nicht werden.
+        if not page.name.startswith("google")
+        # Was unter `handbuch/` liegt, sind Abbildungsrahmen des Handbuchs.
+        and "handbuch" not in page.relative_to(WEBSITE).parts[:-1]
+        # **Die Offline-Aktivierung ist mit Absicht unverlinkt.** Sie ist kein
+        # Angebot, sondern ein Werkzeug für einen bestimmten Moment: Wer sie
+        # braucht, tippt die Adresse ab, die Solidon ihm nennt
+        # (`app/core/manual.py`, Abschnitt zur Freischaltung). Ein Verweis von
+        # der Verkaufsseite darauf würde einen Umstand bewerben, den die
+        # meisten nie haben.
+        and page.name != "offline-aktivierung.html"
+    )
+    assert len(delivered) >= 30, f"nur {len(delivered)} Seiten gefunden"
+
+    texts = {page: (WEBSITE / page).read_text(encoding="utf-8") for page in delivered}
+    islands = []
+    for page in delivered:
+        name = Path(page).name
+        # Eine Startseite wird als Ordner verlinkt (`/en/`), nicht als Datei.
+        needles = [f'href="/{page}"', f'href="{name}"', f'href="/{name}"']
+        if name == "index.html":
+            folder = Path(page).parent.as_posix()
+            needles += ['href="/"'] if folder == "." else [f'href="/{folder}/"']
+        if not any(
+            needle in text for other, text in texts.items() if other != page for needle in needles
+        ):
+            islands.append(page)
+
+    assert not islands, "keine Seite verlinkt hierher: " + ", ".join(islands)
