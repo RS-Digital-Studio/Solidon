@@ -1035,6 +1035,13 @@ nav.lang .menu > summary {
 
   nav.lang .menu > summary::-webkit-details-marker { display: none; }
 
+  /* **Zugeklappt heißt hier ausdrücklich `none`.** Ohne diese Zeile gilt die
+     `display: contents` von oben weiter, und ein aufgelöstes Panel hat keinen
+     Kasten, den der Browser verstecken könnte — gemessen sechs sichtbare
+     Verweise bei zugeklapptem Menü. Was am Rechner die Leiste möglich macht,
+     muss am Handy zurückgenommen werden. */
+  nav.lang .menu > .menu-panel { display: none; }
+
   nav.lang .menu > summary:hover { color: var(--accent); }
 
   nav.lang .menu > summary svg {
@@ -1044,13 +1051,25 @@ nav.lang .menu > summary {
 
   /* **Ein Feld über dem Inhalt, keines davor.** Läge das Panel im Fluss,
      schöbe jedes Öffnen die halbe Seite nach unten — und beim Schließen
-     wieder zurück. */
-  nav.lang .menu-panel {
+     wieder zurück.
+
+     **Nur bei `[open]` eine `display`-Regel**, und das ist derselbe
+     Mechanismus wie oben, nur andersherum: Weil eine eigene `display`-Angabe
+     das Verstecken des Browsers überschreibt, stand das Panel sonst auch im
+     geschlossenen Zustand offen da — gemessen sechs sichtbare Verweise bei
+     zugeklapptem Menü. Wer den Trick benutzt, um etwas sichtbar zu halten,
+     muss ihn dort weglassen, wo etwas verschwinden soll. */
+  nav.lang .menu[open] > .menu-panel {
     display: flex;
     flex-direction: column;
     position: absolute;
     top: calc(100% + 0.6rem);
-    right: 0;
+    /* **Nach rechts auf, weil das Symbol links steht.** Mit `right: 0` hing
+       das Feld an der rechten Kante des Symbols und lief damit nach links aus
+       dem Bild — gemessen bei 375 Punkt Breite. Ein Aufklapper öffnet zur
+       Seite, auf der Platz ist, und die richtet sich nach seinem Griff. */
+    left: 0;
+    max-width: calc(100vw - 2rem);
     z-index: 40;
     min-width: 12.5rem;
     padding: 0.4rem;
@@ -1059,20 +1078,20 @@ nav.lang .menu > summary {
     box-shadow: var(--shadow-lift);
   }
 
-  nav.lang .menu-panel > a {
+  nav.lang .menu[open] > .menu-panel > a {
     padding: 0.62rem 0.8rem;
     border-radius: var(--r-sm);
     color: var(--fg);
   }
 
-  nav.lang .menu-panel > a:hover {
+  nav.lang .menu[open] > .menu-panel > a:hover {
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     color: var(--accent);
   }
 
   /* Die Seite, auf der man steht, ist keine Reise wert — sie wird gezeigt,
      nicht angeboten. */
-  nav.lang .menu-panel > a[aria-current="page"] {
+  nav.lang .menu[open] > .menu-panel > a[aria-current="page"] {
     color: var(--accent);
     font-weight: 600;
   }

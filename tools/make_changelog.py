@@ -28,7 +28,7 @@ from app.branding import APP_NAME, APP_VERSION  # noqa: E402
 from app.core import changes  # noqa: E402
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
 from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
-from tools.site_nav import ENTRIES, nav_links  # noqa: E402
+from tools.site_nav import ENTRIES, nav_menu  # noqa: E402
 from tools.stamp_assets import stamp_of  # noqa: E402
 
 
@@ -194,7 +194,7 @@ def _header(language: str, copy: Copy) -> str:
         # Dieselben sechs Wege wie überall — die Beschriftungen kommen aus
         # `site_nav` und nicht mehr aus `Copy`, damit sie nicht an zwei Orten
         # gepflegt werden müssen.
-        f"{nav_links(language, current='/' + page_path(language))}"
+        f"{nav_menu(language, current='/' + page_path(language))}"
         f"{_switcher(language, copy)}"
         f'<a class="cta" href="{price_for(language)}">{html.escape(copy.demo)}</a>'
         "</nav></div></header>"

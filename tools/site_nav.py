@@ -113,3 +113,53 @@ def nav_links(language: str, *, current: str = "", on_home: bool = False) -> str
         attribute = f' class="{hide}"' if hide else ""
         parts.append(f'<a{attribute} href="{address}"{marker}>{label}</a>')
     return "".join(parts)
+
+
+#: Die Beschriftung des Aufklappmenüs je Sprache. Sie steht nur für
+#: Vorlesegeräte da — sichtbar ist das Symbol.
+MENU_LABELS: Final[dict[str, str]] = {
+    "de": "Menü",
+    "en": "Menu",
+    "es": "Menú",
+    "fr": "Menu",
+    "it": "Menu",
+    "pt": "Menu",
+}
+
+#: Drei Striche als Symbol. **Kein Zeichen aus einer Schrift und kein Emoji**
+#: (Hausregel): Ein Glyph hängt davon ab, was der Rechner installiert hat,
+#: eine Zeichnung nicht.
+MENU_MARK: Final[str] = (
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    'aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke-linecap="round"/></svg>'
+)
+
+
+def nav_menu(language: str, *, current: str = "", on_home: bool = False) -> str:
+    """Die sechs Verweise in einem Aufklapper, der am Rechner keiner ist.
+
+    **Warum ein ``details`` und kein Skript.** Auf einem Handy passten von
+    sechs Einträgen nur zwei in die Zeile; die übrigen vier wurden per CSS
+    ausgeblendet, und damit kannte die Hälfte der Besucher vier Wege nicht.
+    Robert am 31.08.2026: „mach doch ein aufklappmenü für mobil."
+
+    Am Rechner soll dieselbe Leiste aber eine Leiste bleiben — ein Aufklapper,
+    wo Platz ist, verlangt einen Klick für nichts. Beides aus **einem** Markup
+    geht, weil das Verstecken nicht geschieht: Das Browser-Stylesheet blendet
+    die Kinder eines geschlossenen ``details`` mit ``display`` aus, und eine
+    eigene ``display``-Regel gewinnt dagegen. Am Rechner steht deshalb der
+    Inhalt offen und das Symbol verschwindet; erst unterhalb der Umbruchbreite
+    dreht sich beides um.
+
+    Dieselbe Bauart trägt der Sprachwechsel daneben seit jeher — und sie
+    braucht keine Zeile JavaScript, funktioniert also auch, wenn nichts lädt.
+    """
+    return (
+        f'<details class="menu">'
+        f'<summary aria-label="{MENU_LABELS.get(language, MENU_LABELS["de"])}">'
+        f"{MENU_MARK}</summary>"
+        f'<div class="menu-panel">'
+        f"{nav_links(language, current=current, on_home=on_home)}"
+        f"</div>"
+        f"</details>"
+    )
