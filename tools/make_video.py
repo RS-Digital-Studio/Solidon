@@ -418,12 +418,53 @@ GENERIEREN: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Weg 4 — Formen, die kein Maß haben.
+#:
+#: Wieder ohne Morph, und hier ist es die Aussage selbst: Ein geformter Körper
+#: hat keine benannten Parameter, weil das der Punkt dieses Weges ist. Der
+#: Schlusssatz nennt, was kein Sculpting-Programm mitliefert — der ganze
+#: Vorgang bleibt ein Schritt im Verlauf und damit rücknehmbar.
+FORMEN: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "hook",
+            "Manche Formen haben kein Maß. Eine Fingermulde ist keine Zahl — sie ist eine Hand.",
+        ),
+        (
+            "turn",
+            "Grundkörper zusammensetzen, weich verschmelzen, gleichmäßig "
+            "vernetzen, dann mit dem Pinsel ausformen. Die Wandstärke läuft "
+            "dabei mit.",
+        ),
+        (
+            "closing",
+            "Von Hand geformt, und trotzdem rücknehmbar.",
+        ),
+    ),
+    "en": (
+        (
+            "hook",
+            "Some shapes have no dimension. A finger groove is not a number — it is a hand.",
+        ),
+        (
+            "turn",
+            "Combine primitives, blend them smoothly, remesh evenly, then "
+            "sculpt. Wall thickness updates as you go.",
+        ),
+        (
+            "closing",
+            "Shaped by hand, and still undoable.",
+        ),
+    ),
+}
+
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
     "modular": MODULAR,
     "anpassen": ANPASSEN,
     "generieren": GENERIEREN,
+    "formen": FORMEN,
 }
 
 #: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
@@ -602,18 +643,48 @@ def settle(app: QApplication, rounds: int = 12) -> None:
         app.processEvents()
 
 
-def await_result(app: QApplication, session: object, seconds: float = 60.0) -> bool:
+def await_result(app: QApplication, session: object, seconds: float = 900.0) -> bool:
     """Warten, bis die Auswertung durch ist.
 
     Sie läuft in einem Arbeitsfaden (§15.6), also genügt kein Stapel
     ``processEvents``: ohne das Warten filmt das Werkzeug den Startbildschirm.
+
+    **Fünfzehn Minuten und nicht eine**, seit dem 31.08.2026 — und die
+    Begründung ist enger, als sie zuerst hier stand.
+
+    Belegt ist: Ein **generiertes** Modell kostet beim Öffnen rund eine
+    Minute, weil ``orient_for_print`` auf einem ungefilterten Netz von
+    hunderttausend Dreiecken rechnet (gemessen an ``weg3-eule-generiert.p3d``:
+    61,8 s). Sechzig Sekunden sind dafür genau an der Grenze, und was dann
+    kommt, ist der Satz „Das Projekt rechnete nicht fertig" — er klingt nach
+    Fehler und meint Langsamkeit.
+
+    **Nicht belegt und deshalb hier nicht mehr behauptet:** Frühere Fassungen
+    dieses Docstrings nannten 574 und 909 CPU-Sekunden für zwei andere
+    Projekte. Diese Zahlen waren echt, aber falsch zugeordnet — es war die
+    CPU-Zeit **ganzer Läufe**, nicht die einer Phase, und zugeschrieben wurde
+    sie dem Öffnen, weil die Ausgabe an dieser Stelle stehenblieb. Sie blieb
+    stehen, weil Python puffert. Gemessen hat eine Nachbarsitzung dieselbe
+    Datei danach mit **0,96 s**.
+
+    Die lange Marke bleibt trotzdem: Sie kostet nichts, solange nichts hängt,
+    und ein Hänger ist an der stillstehenden CPU-Zeit des Prozesses zu
+    erkennen — nicht an dieser Marke.
     """
     deadline = time.monotonic() + seconds
+    started = time.monotonic()
+    reported = 0.0
     while time.monotonic() < deadline:
         app.processEvents()
         if getattr(session, "last_result", None) is not None:
             settle(app)
             return True
+        # Alle dreißig Sekunden eine Zeile: Ein Werkzeug, das eine
+        # Viertelstunde schweigt, sieht aus, als hinge es.
+        waited = time.monotonic() - started
+        if waited - reported >= 30.0:
+            reported = waited
+            print(f"  … rechnet seit {waited:.0f} s")
         time.sleep(0.05)
     return False
 
