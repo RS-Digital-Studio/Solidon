@@ -13516,7 +13516,28 @@ geschlossene Netze auf) ist mit `4b6a1d97` behoben; diese drei stehen noch:
       TranslatableText). **Und die genannte Reichweiten-Lücke ist mehr wert
       als ein glatter Befund: Der grep deckt nur `str(…name)` — ein
       `f"{obj.name}"` in einem `values` würde durchrutschen**; als
-      Suchauftrag in 0ds Zug gegeben.
+      Suchauftrag in 0ds Zug gegeben. **Lücke selbst geschlossen: der
+      Sprachvergleich über ALLE elf Beispiele** (58 Texte, 7 in beiden
+      Sprachen gleich, davon 4 zu Recht — Merkmalskennungen und ein
+      Passungsname vom Nutzer). **Zwei neue Fälle, als Abwägung gemeldet
+      statt als Fehler:** `half_names()` (`prepare_ops.py:140`) erzeugt
+      „Klotz A · Stifte" / „Klotz B · Löcher" als `tuple[str, str]`,
+      bewusst eingefroren. **Entscheid: Der Stamm bleibt dem Nutzer, der
+      Zusatz wird übersetzbar** — „Klotz" hat er vergeben, „· Stifte" nie
+      eingetippt, und ein englischer Kunde liest es sonst zwischen lauter
+      englischen Texten; das Docstring-Gegenargument („ein Name, der sich
+      beim Sprachwechsel ändert, ist beim Wiederfinden nicht besser")
+      **greift nur für Dateien** — die exportierte liegt geschrieben auf
+      der Platte, der Export löst in der Sprache auf, die der Kunde dabei
+      sieht. **Technisch ist es exakt der Zähler-Fall** (Nutzertext plus
+      erzeugter Teil), also derselbe Zug mit `format` als eigenem Feld.
+      Zwei Auflagen: Der Docstring begründet heute nur den Stamm —
+      **ein Kommentar, der die halbe Regel begründet, sieht aus wie eine
+      ganze**; und die Stabilität des geschriebenen Dateinamens gehört in
+      einen Test statt in eine Annahme. Methodenlehre von c3 dazu: **Wer
+      den Filter schärft, bis nichts mehr übrig ist, schärft irgendwann
+      den Fund weg** — sieben Treffer von Hand lesen schlägt einen Filter,
+      der sauber aussieht.
 - [ ] **Der Klick auf eine Warnung fliegt die Kamera ins Leere — dritter
       Fund derselben Familie, und der schwerste** (c3 am echten Fenster
       gemessen, 31.08.): `create_lid` legt das Merkmal mit seinem Zentrum
