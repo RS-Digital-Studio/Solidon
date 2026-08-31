@@ -736,6 +736,102 @@ def box_with_lid() -> Project:
     return project
 
 
+def fit_after_material_change() -> Project:
+    """Eine Passung, die nach einem Materialwechsel nicht mehr passt (§12, §14).
+
+    **Das einzige Beispiel, das mit einer Warnung öffnet — und zwar mit
+    Absicht.** Die anderen zehn zeigen, wie etwas geht. Dieses zeigt, was
+    passiert, wenn etwas *nicht mehr* geht, und das ist der Unterschied
+    zwischen einem Programm, das Formen baut, und einem, das mitdenkt: Die
+    Dose ist unverändert, der Deckel ist unverändert, und trotzdem stimmt
+    etwas nicht.
+
+    **Die Geschichte in einem Satz:** Der Deckel soll aus TPU kommen, damit er
+    beim Zudrücken nachgibt und dichtet. Weiches Material braucht mehr Spiel
+    als hartes — TPU 0,35 mm gegen PLA 0,20 —, und die Öffnung ist noch die
+    für PLA. Wer das nicht weiß, druckt zweimal.
+
+    Ein Kunde ohne CAD-Kenntnisse muss davon nichts wissen: Er sieht beim
+    Öffnen einen Satz, klickt darauf, und die Ansicht fliegt an die Stelle, um
+    die es geht. Der Fix ist eine Zahl — die Öffnung um 0,15 mm weiter.
+
+    Gebaut wird bewusst schlichter als „Dose mit Deckel": keine
+    Kabeldurchführung, keine Einpressbuchse, keine Beschriftung. Was hier zu
+    sehen sein soll, ist die Passung, und alles daneben wäre Ablenkung.
+    """
+    project = new_project()
+    document = project.document
+    document.parameters["breite"] = Parameter(
+        name="breite", value=70.0, unit="mm", title=_("Breite")
+    )
+    document.parameters["tiefe"] = Parameter(name="tiefe", value=50.0, unit="mm", title=_("Tiefe"))
+    document.parameters["hoehe"] = Parameter(name="hoehe", value=30.0, unit="mm", title=_("Höhe"))
+    document.parameters["wand"] = Parameter(
+        name="wand", value=2.0, unit="mm", title=_("Wandstärke")
+    )
+
+    history = History(document)
+    history.apply(
+        _("Körper"),
+        [
+            OperationDraft(
+                op="create_box",
+                params={
+                    "width": "=@breite",
+                    "depth": "=@tiefe",
+                    "height": "=@hoehe",
+                    "name": "Dose",
+                },
+            )
+        ],
+    )
+    history.apply(
+        _("Aushöhlen"),
+        [
+            OperationDraft(
+                op="hollow_object",
+                inputs=("obj_1",),
+                params={"wall": "=@wand", "open_top": True},
+            )
+        ],
+    )
+
+    # Der Deckel über seinen Ablauf, nicht über die nackte Operation: nur so
+    # entsteht das Passungspaar zwischen Öffnung und Kragen (§14). Ohne die
+    # Passung gäbe es hier nichts zu zeigen.
+    applied = apply_lid(
+        document,
+        "obj_1",
+        {"thickness": 2.5, "collar": 4.0},
+        profiles.make_profile(),
+    )
+    box, lid = applied.object_ids[0], applied.object_ids[1]
+
+    # **Die Passung folgt dem Material, statt eines festzuhalten.**
+    # `apply_lid` schreibt `auto:<das Material von jetzt>` — eine Momentaufnahme
+    # des Erzeugungszeitpunkts, und ein benannter Verweis bleibt, was er sagt
+    # (§12). Genau das wäre hier falsch: Die Geschichte ist ja, dass sich das
+    # Material *ändert*. Das nackte `auto:` heißt „worin das eben gedruckt
+    # wird", fragt beide Körper und nimmt den größeren Wert — es ist die
+    # Schreibweise für eine Passung, die mitdenken soll.
+    document.fits[-1] = dataclasses.replace(document.fits[-1], tolerance="auto:")
+
+    # **Der Schritt, um den es geht.** Er ist der letzte im Verlauf, damit ein
+    # Klick auf die Warnung genau hierher zeigt — und er ist rücknehmbar: Ein
+    # Strg+Z nimmt den Materialwechsel zurück, und der Bericht wird grün. Das
+    # ist der Weg, den das Beispiel vorführt.
+    history.apply(
+        _("Deckel aus TPU"),
+        [OperationDraft(op="set_material", inputs=(lid,), params={"material": "tpu-95a"})],
+    )
+
+    history.apply(
+        _("Anordnen"),
+        [OperationDraft(op="arrange_bed", inputs=(box, lid), params={"spacing": 8.0})],
+    )
+    return project
+
+
 #: Die Objektnamen, die in den mitgelieferten Beispielen gesetzt werden.
 #:
 #: **Warum eine Liste und nicht „jeder gesetzte Name".** Ein Beispiel ist eine
@@ -856,6 +952,7 @@ def main() -> int:
         "drucker-kalibrieren": calibration_plate,
         "aushoehlen-und-teilen": hollow_and_split,
         "dose-mit-deckel": box_with_lid,
+        "passung-nach-materialwechsel": fit_after_material_change,
     }
     for example in EXAMPLES:
         project = builders[example.id]()

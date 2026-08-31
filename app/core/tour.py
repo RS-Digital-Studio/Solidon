@@ -688,6 +688,62 @@ TOURS: Final[tuple[Tour, ...]] = (
             "Öffnung anklicken, dann *Bausteine → Deckel erzeugen*."
         ),
     ),
+    # **Die einzige Tour, die mit einer Warnung anfängt.** Die anderen zeigen,
+    # wie etwas geht; diese zeigt, was zu tun ist, wenn etwas nicht mehr geht —
+    # und beides gehört in eine Dokumentation, die den Kunden ernst nimmt.
+    Tour(
+        example_id="passung-nach-materialwechsel",
+        intro=_(
+            "Dieses Beispiel öffnet mit einer Warnung, und das ist Absicht. Der "
+            "Deckel soll aus weichem TPU kommen, damit er beim Zudrücken "
+            "nachgibt — und seitdem sitzt er zu stramm. Warum das so ist und wie "
+            "man es in einem Zug behebt, zeigen die nächsten Schritte."
+        ),
+        steps=(
+            TourStep(
+                shows="report",
+                text=_(
+                    "Rechts steht der Prüfbericht, und darin ein Satz: die Passung "
+                    "sitzt enger als vorgesehen. Daneben zwei Zahlen — vorhanden "
+                    "0,20 mm, nötig 0,35 mm. Solidon nennt sie, weil es beide "
+                    "Materialien kennt: die Dose ist hart, der Deckel weich."
+                ),
+            ),
+            TourStep(
+                shows="report",
+                text=_(
+                    "Klicken Sie auf die Meldung. Die Ansicht fliegt an die "
+                    "Öffnung, um die es geht, und eine Marke steht kurz dort. Eine "
+                    "Warnung, die nicht zeigt, wo sie sitzt, ist eine halbe "
+                    "Auskunft."
+                ),
+            ),
+            TourStep(
+                shows="viewport",
+                text=_(
+                    "Weiches Material braucht mehr Spiel als hartes: Es gibt beim "
+                    "Drucken nach und beim Fügen ebenso. Die Öffnung ist noch die "
+                    "für hartes Material — 0,15 mm zu eng für einen TPU-Deckel."
+                ),
+            ),
+            TourStep(
+                shows="history",
+                text=_(
+                    "Der letzte Schritt im Verlauf heißt „Deckel aus TPU“. Nehmen "
+                    "Sie ihn mit Strg+Z zurück: Der Bericht wird grün, weil beide "
+                    "Teile wieder aus demselben Material sind. Das ist der eine "
+                    "Weg — der andere ist, die Öffnung um 0,15 mm zu weiten und "
+                    "das weiche Material zu behalten."
+                ),
+                done=_undo_happened,
+            ),
+        ),
+        closing=_(
+            "Der Punkt ist nicht der Deckel, sondern dass niemand nachrechnen "
+            "musste. Wer ein Material wechselt, ändert damit jede Passung daran — "
+            "und erfährt es beim Öffnen und nicht nach dem Drucken."
+        ),
+    ),
 )
 
 

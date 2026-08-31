@@ -167,6 +167,21 @@ EXAMPLES: Final[tuple[Example, ...]] = (
             "statt nachgezeichnet, beschriftet und neben die Dose gelegt."
         ),
     ),
+    # **Das einzige Beispiel, das mit einer Warnung öffnet.** Die anderen zehn
+    # zeigen, wie etwas geht; dieses zeigt, was passiert, wenn etwas nicht mehr
+    # geht — und das ist der Unterschied zwischen einem Programm, das Formen
+    # baut, und einem, das mitdenkt. Die Ausnahme dafür steht in
+    # `tests/test_examples.py` als benannter Befundcode mit Begründung.
+    Example(
+        id="passung-nach-materialwechsel",
+        title=_("Wenn eine Passung nicht mehr passt"),
+        way="",
+        doc=_(
+            "Der Deckel soll aus weichem TPU kommen, damit er dichtet — und plötzlich "
+            "meldet der Prüfbericht, dass er zu stramm sitzt. Weiches Material braucht "
+            "mehr Spiel als hartes. Ein Klick auf die Meldung zeigt die Stelle."
+        ),
+    ),
 )
 
 

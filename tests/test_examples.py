@@ -338,6 +338,13 @@ def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
     Geprüft wird gegen die Befundcodes und nicht gegen die Zahl der Warnungen:
     Eine Warnung, die etwas Wahres sagt („Kleinstteile wurden gelöscht"),
     gehört dorthin.
+
+    **Die Ausnahmen sind dieselben wie beim Nachbarn darunter, nicht eigene.**
+    Zwei Listen für dieselbe Frage laufen auseinander, und dann erlaubt die
+    eine, was die andere verbietet — das merkt niemand, weil beide Tests grün
+    sind, solange kein Beispiel beides auslöst. Was hier verboten ist, steht
+    also in ``_ERLAUBTE_BEGRUESSUNG``, und wer eine Ausnahme einträgt,
+    begründet sie **einmal**.
     """
     verboten = {"ingest.not_watertight", "ingest.small_components", "fit.violated"}
     for entry in examples.EXAMPLES:
@@ -350,8 +357,11 @@ def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
             ),
             sources=ProjectSources(project),
         )
+        erlaubt = set(_ERLAUBTE_BEGRUESSUNG.get(entry.id, {}))
         found = {
-            finding.code for finding in result.scene.report.findings if finding.code in verboten
+            finding.code
+            for finding in result.scene.report.findings
+            if finding.code in verboten - erlaubt
         }
         assert not found, f"{entry.id}: {sorted(found)}"
 
@@ -370,6 +380,15 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # die etwas Wahres über den gezeigten Weg sagt, gehört in ein Beispiel
         # — sie ist Teil dessen, was es vorführt.
         "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
+    },
+    "passung-nach-materialwechsel": {
+        # **Hier ist die Warnung der Inhalt.** Das Beispiel führt vor, was
+        # geschieht, wenn ein Deckel aus weicherem Material kommen soll: Er
+        # braucht mehr Spiel, und die Öffnung ist noch die alte. Ohne die
+        # Warnung beim Öffnen hätte das Beispiel nichts zu zeigen — sie ist
+        # kein Makel, sondern die Ausgangslage, und der Weg daraus ist ein
+        # Klick auf die Meldung und eine Zahl.
+        "fit.violated": "ist der Inhalt des Beispiels, nicht sein Fehler",
     },
 }
 

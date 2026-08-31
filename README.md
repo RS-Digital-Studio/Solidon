@@ -63,7 +63,7 @@ Entwicklung bleiben daneben die Issues dieses Repositories.
 
 ## Die vier Wege
 
-Beim Start liegen zehn Beispielprojekte bereit — sie sind gleichzeitig
+Beim Start liegen elf Beispielprojekte bereit — sie sind gleichzeitig
 Dokumentation und Abnahmeprüfung (§37.2). Die ersten vier beantworten „wie
 fange ich an", die übrigen „was kann das eigentlich". Auf dem Startbildschirm
 stehen dafür die Handlungen statt der internen Wegnummern: vorhandenes Modell
@@ -82,6 +82,7 @@ frei formen.
 | `drucker-kalibrieren.p3d` | Toleranzleiter, Wandstärkenleiter, Überhangfächer |
 | `aushoehlen-und-teilen.p3d` | teilen, verstiften, aushöhlen, anordnen |
 | `dose-mit-deckel.p3d` | alles zusammen: benannte Maße, Bausteine, Deckel aus der Öffnung |
+| `passung-nach-materialwechsel.p3d` | der Deckel soll aus TPU kommen — und passt nicht mehr |
 
 ## Hilfe im Programm
 
