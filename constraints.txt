@@ -12,7 +12,7 @@
 # Windows-Eintrag (pywin32-ctypes) greift auf Linux deshalb einfach nicht.
 #
 # Erzeugt unter Windows mit Python 3.14; die Versionen selbst hängen nicht an
-# der Interpreterversion, die CI fährt sie unter 3.13.
+# der Interpreterversion, die CI fährt sie unter 3.13.14.
 #
 # Erneuern: Umgebung neu aufbauen, Suite grün fahren, dann
 #   .venv\Scripts\python.exe -m pip freeze --exclude-editable

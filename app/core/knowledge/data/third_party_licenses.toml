@@ -44,10 +44,10 @@ source = "https://www.apache.org/licenses/LICENSE-2.0.txt"
 sha256 = "a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd"
 
 [[text]]
-path = "third_party_licenses/libffi-3.4.8.txt"
+path = "third_party_licenses/libffi-3.4.4.txt"
 runtime = ["libffi"]
-source = "https://raw.githubusercontent.com/libffi/libffi/v3.4.8/LICENSE"
-sha256 = "67894089811f93fca47a76f85e017da6f8582d4ba0905963c6e0f1ad6df7a195"
+source = "https://raw.githubusercontent.com/libffi/libffi/v3.4.4/LICENSE"
+sha256 = "2c9c2acb9743e6b007b91350475308aee44691d96aa20eacef8e199988c8c388"
 
 [[text]]
 path = "third_party_licenses/AppImage-type2-runtime-dd6cebe.txt"
@@ -96,7 +96,7 @@ versions = ["3.0.21"]
 [[runtime]]
 id = "libffi"
 name = "libffi"
-source = "https://github.com/libffi/libffi/tree/v3.4.8"
+source = "https://github.com/libffi/libffi"
 
 [[runtime]]
 id = "openblas-numpy"

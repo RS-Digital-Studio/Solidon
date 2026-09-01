@@ -19,7 +19,9 @@ import argparse
 import json
 import platform
 import re
+import shutil
 import ssl
+import subprocess
 import sys
 import sysconfig
 from collections.abc import Callable, Iterable, Mapping
@@ -44,6 +46,7 @@ NON_SPDX_LICENCES: Final = {
     "PSF-based",
     "Microsoft Visual Studio Runtime license",
 }
+WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4"}
 
 DistributionLookup = Callable[[str], metadata.Distribution]
 
@@ -401,6 +404,39 @@ def _openblas_version(owner: str) -> str:
         return "unbekannt"
 
 
+def _libffi_version(
+    *,
+    target_platform: str | None = None,
+    python_version: str | None = None,
+) -> tuple[str, str]:
+    """Belegt die Quellversion hinter einer gebündelten libffi-Binärdatei."""
+    selected_platform = target_platform or sys.platform
+    selected_python = python_version or platform.python_version()
+    if selected_platform == "win32":
+        version = WINDOWS_LIBFFI_VERSIONS.get(selected_python, "unbekannt")
+        return version, f"CPython {selected_python} PCbuild/python.props"
+
+    compiler_config = shutil.which("pkg-config")
+    if compiler_config is None:
+        return "unbekannt", "pkg-config für libffi fehlt"
+    try:
+        completed = subprocess.run(
+            [compiler_config, "--modversion", "libffi"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5.0,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unbekannt", "pkg-config für libffi war nicht ausführbar"
+    version = completed.stdout.strip()
+    if completed.returncode != 0 or not re.fullmatch(
+        r"\d+(?:\.\d+){1,3}(?:[-+][0-9A-Za-z.-]+)?", version
+    ):
+        return "unbekannt", "pkg-config meldete keine exakte libffi-Version"
+    return version, "pkg-config --modversion libffi"
+
+
 def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
     """Logische Komponenten für die im Artefakt erkannten Laufzeitfamilien."""
     entries = tuple(files)
@@ -442,22 +478,15 @@ def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
             )
         )
     if "libffi" in owners:
-        abi = next(
-            (
-                match.group(1)
-                for path in paths
-                if (match := re.search(r"libffi[-.]([0-9]+)", Path(path).name))
-            ),
-            "unbekannt",
-        )
+        version, version_source = _libffi_version()
         components.append(
             _runtime_component(
                 "libffi",
                 "libffi",
-                f"ABI-{abi}",
+                version,
                 "MIT",
                 "https://github.com/libffi/libffi",
-                "ABI im Namen der gebündelten Bibliothek",
+                version_source,
             )
         )
     for owner in ("numpy", "scipy"):

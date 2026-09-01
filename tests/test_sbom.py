@@ -343,6 +343,18 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
     )
 
 
+def test_windows_libffi_is_bound_to_the_pinned_cpython_build() -> None:
+    """ABI 8 allein darf nicht als Quellversion in der Lizenzakte landen."""
+    assert make_sbom._libffi_version(target_platform="win32", python_version="3.13.14") == (
+        "3.4.4",
+        "CPython 3.13.14 PCbuild/python.props",
+    )
+    assert (
+        make_sbom._libffi_version(target_platform="win32", python_version="3.13.15")[0]
+        == "unbekannt"
+    )
+
+
 def test_the_artifact_locator_ignores_the_macos_collect_intermediate(
     tmp_path: Path,
 ) -> None:
