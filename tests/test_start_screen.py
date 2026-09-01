@@ -30,6 +30,7 @@ from app.ui.start_screen import (
     DropArea,
     ExampleTile,
     StartScreen,
+    accepted_path,
     current_theme,
 )
 
@@ -131,14 +132,33 @@ def test_the_drop_area_names_every_format_it_accepts(screen: StartScreen) -> Non
     """Eine beworbene Teilmenge lässt gültige Dateien wie Ausnahmen wirken."""
     from PySide6.QtWidgets import QLabel
 
-    from app.branding import PROJECT_SUFFIX
+    from app.branding import PART_FILE_SUFFIX, PROJECT_SUFFIX
     from app.core.ingest.plan import MODEL_SUFFIXES
 
     area = screen.findChild(DropArea)
     assert area is not None
     shown = "\n".join(label.text().lower() for label in area.findChildren(QLabel))
-    for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX):
+    for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
         assert suffix.lstrip(".").lower() in shown, suffix
+
+
+def test_the_drop_area_accepts_only_the_named_part_file_suffix(tmp_path: Path) -> None:
+    """Die Produktendung kommt hinein, ein beliebiges JSON-Dokument nicht."""
+    from PySide6.QtCore import QMimeData, QUrl
+
+    class Drop:
+        def __init__(self, path: Path) -> None:
+            self.data = QMimeData()
+            self.data.setUrls([QUrl.fromLocalFile(str(path))])
+
+        def mimeData(self) -> QMimeData:  # noqa: N802 — bildet die Qt-API nach
+            return self.data
+
+    part = tmp_path / "halter.solidon-part"
+    generic = tmp_path / "halter.json"
+
+    assert accepted_path(Drop(part)) == part  # type: ignore[arg-type]
+    assert accepted_path(Drop(generic)) is None  # type: ignore[arg-type]
 
 
 def test_every_example_is_a_tile_with_its_sentence(screen: StartScreen) -> None:

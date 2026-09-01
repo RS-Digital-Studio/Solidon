@@ -56,7 +56,7 @@ from PySide6.QtWidgets import (
 )
 from shiboken6 import isValid
 
-from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
+from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import activation, bootstrap, examples, manual, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
@@ -3689,6 +3689,9 @@ class MainWindow(QMainWindow):
         200 ms Verzögerung kommen obendrauf. Die Statuszeile wird ausdrücklich
         neu gezeichnet, bevor das Lesen den Hauptthread belegt (§2.8).
         """
+        if path.suffix.lower() == PART_FILE_SUFFIX:
+            self._open_part_file(path)
+            return
         project_file = path.suffix.lower() == PROJECT_SUFFIX
         if project_file and not self._may_discard():
             return
@@ -4835,23 +4838,34 @@ class MainWindow(QMainWindow):
         dieser Handler weder eine zu große Datei vollständig laden noch nach
         einer abgelehnten Aufnahme Erfolg melden.
         """
-        from app.core.knowledge.parts.shared import import_file
-
         source, _filter = QFileDialog.getOpenFileName(
             catalog,
             tr("Baustein aus Datei importieren"),
             "",
-            tr("Bausteindatei (*.json)"),
+            f"{tr('Baustein hinzufügen')} (*{PART_FILE_SUFFIX} *.json)",
         )
         if not source:
             return
+        self._open_part_file(Path(source), catalog)
+
+    def _open_part_file(self, path: Path, catalog: PartCatalog | None = None) -> None:
+        """Importiert eine lokale Bausteindatei aus Dialog, Drop oder Dateizuordnung.
+
+        Ein einziger Handler hält die drei Einstiege gleich. Insbesondere darf
+        die vom Betriebssystem zugeordnete Produktendung nicht in
+        :meth:`Session.import_model` fallen: Eine Bausteindatei ergänzt den
+        Katalog und ersetzt weder Projekt noch Szene.
+        """
         try:
-            findings = import_file(Path(source))
+            from app.core.knowledge.parts.shared import import_file
+
+            findings = import_file(path)
         except AppError as problem:
-            show_error(problem, catalog)
+            show_error(problem, catalog or self)
             return
 
-        catalog.refresh()
+        if catalog is not None:
+            catalog.refresh()
         # Die Befunde des Kerns sind die Auskunft über fremde Herkunft und
         # über alles, was an der Datei nicht stimmte. Sie stehen im
         # Prüfbericht, weil sie dort auch nach dem nächsten Klick noch stehen.
@@ -4920,13 +4934,16 @@ class MainWindow(QMainWindow):
         target, _filter = QFileDialog.getSaveFileName(
             catalog,
             tr("Baustein als Datei exportieren"),
-            f"{name}.json",
-            tr("Bausteindatei (*.json)"),
+            f"{name}{PART_FILE_SUFFIX}",
+            f"{tr('Baustein weitergeben')} (*{PART_FILE_SUFFIX})",
         )
         if not target:
             return
+        destination = Path(target)
+        if destination.suffix.lower() != PART_FILE_SUFFIX:
+            destination = destination.with_suffix(PART_FILE_SUFFIX)
         try:
-            Path(target).write_bytes(payload)
+            destination.write_bytes(payload)
         except OSError as problem:
             show_error(
                 ValidationError(
@@ -4934,7 +4951,7 @@ class MainWindow(QMainWindow):
                     detail=tr(
                         "Die Datei ließ sich dort nicht anlegen. Wählen Sie einen anderen Ordner."
                     ),
-                    values={"file": target, "reason": str(problem)[:200]},
+                    values={"file": str(destination), "reason": str(problem)[:200]},
                     constraint="write_failed",
                     suggestions=(CANCEL,),
                 ),

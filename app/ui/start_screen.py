@@ -60,7 +60,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, PROJECT_SUFFIX
+from app.branding import APP_NAME, PART_FILE_SUFFIX, PROJECT_SUFFIX
 from app.core import examples
 from app.core.examples import Example
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
@@ -131,7 +131,7 @@ DROP_AREA_MIN_HEIGHT = 112
 
 
 class DropArea(QFrame):
-    """Die große Ablagefläche. Nimmt Projekte und Modelle gleichermaßen.
+    """Die große Ablagefläche für Projekte, Modelle und Bausteindateien.
 
     Vorher stand hier ein Satz in der Bildmitte, ohne Rahmen, ohne Feld, ohne
     Symbol — man sah nicht, dass das eine Ablagefläche ist. Der gestrichelte
@@ -155,14 +155,17 @@ class DropArea(QFrame):
         size = self.fontMetrics().height() * 2
         self.symbol.setPixmap(icon("import", self).pixmap(size, size))
 
-        hint_text = tr("Modell oder Projekt hier ablegen")
+        hint_text = tr("Modell, Projekt oder Bausteindatei hier ablegen")
         self.setAccessibleName(hint_text)
         hint = QLabel(hint_text, self)
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
         set_level(hint, "section")
 
-        names = [suffix.lstrip(".").upper() for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX)]
+        names = [
+            suffix.lstrip(".").upper()
+            for suffix in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX)
+        ]
         middle = (len(names) + 1) // 2
         kinds = QLabel(
             "\n".join((" · ".join(names[:middle]), " · ".join(names[middle:]))),
@@ -447,7 +450,7 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
         if not url.isLocalFile():
             continue
         path = Path(url.toLocalFile())
-        if path.suffix.lower() in (*MODEL_SUFFIXES, PROJECT_SUFFIX):
+        if path.suffix.lower() in (*MODEL_SUFFIXES, PROJECT_SUFFIX, PART_FILE_SUFFIX):
             return path
     return None
 

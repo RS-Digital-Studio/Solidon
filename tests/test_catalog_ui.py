@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from pathlib import Path
 
 import pytest
 
@@ -640,6 +641,7 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
 
     from PySide6.QtWidgets import QFileDialog
 
+    from app.branding import PART_FILE_SUFFIX
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts.recipe import (
         IMPORTED_SOURCE,
@@ -679,8 +681,10 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
     register(recipe)
 
     window = MainWindow(Session(), UiSettings())
-    ziel = tmp_path / "probeklotz.json"
+    ziel = tmp_path / f"probeklotz{PART_FILE_SUFFIX}"
     catalogs: list[PartCatalog] = []
+    save_requests: list[tuple[object, ...]] = []
+    open_requests: list[tuple[object, ...]] = []
 
     def instead_of_exec(dialog: PartCatalog) -> int:
         catalogs.append(dialog)
@@ -700,12 +704,17 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
     original_save = QFileDialog.getSaveFileName
     original_open = QFileDialog.getOpenFileName
     PartCatalog.exec = instead_of_exec  # type: ignore[method-assign]
-    QFileDialog.getSaveFileName = staticmethod(  # type: ignore[method-assign]
-        lambda *args, **kwargs: (str(ziel), "")
-    )
-    QFileDialog.getOpenFileName = staticmethod(  # type: ignore[method-assign]
-        lambda *args, **kwargs: (str(ziel), "")
-    )
+
+    def save_file(*args, **_kwargs):
+        save_requests.append(args)
+        return str(ziel), ""
+
+    def open_file(*args, **_kwargs):
+        open_requests.append(args)
+        return str(ziel), ""
+
+    QFileDialog.getSaveFileName = staticmethod(save_file)  # type: ignore[method-assign]
+    QFileDialog.getOpenFileName = staticmethod(open_file)  # type: ignore[method-assign]
     try:
         window.action_catalog()
         assert catalogs, "action_catalog hat keinen Katalog gebaut"
@@ -725,6 +734,8 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
         catalog.export_part.click()
         assert not troubles, f"der Export meldete einen Fehler: {troubles}"
         assert ziel.is_file(), "der Klick hat keine Datei geschrieben"
+        assert save_requests and str(save_requests[0][2]).endswith(PART_FILE_SUFFIX)
+        assert f"*{PART_FILE_SUFFIX}" in str(save_requests[0][3])
         valid_payload = ziel.read_bytes()
         data = json.loads(valid_payload)
         assert data, "die geschriebene Datei ist leer"
@@ -755,6 +766,7 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
         ziel.write_bytes(valid_payload)
         catalog.import_part.click()
         assert not troubles, f"der gültige Import meldete einen Fehler: {troubles}"
+        assert open_requests and f"*{PART_FILE_SUFFIX}" in str(open_requests[0][3])
 
         spec = next((entry for entry in PARTS.all() if entry.name == "probeklotz"), None)
         assert spec is not None, "nach dem Einlesen steht der Baustein nicht im Katalog"
@@ -770,6 +782,43 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
         PartCatalog.exec = original_exec  # type: ignore[method-assign]
         QFileDialog.getSaveFileName = original_save  # type: ignore[method-assign]
         QFileDialog.getOpenFileName = original_open  # type: ignore[method-assign]
+        window.close()
+
+
+def test_open_path_routes_part_files_to_the_local_import(
+    qt_app: QApplication,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine Betriebssystem-Zuordnung darf nie in den Modellimport fallen."""
+    from app.branding import PART_FILE_SUFFIX
+    from app.core.knowledge.parts import shared
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    source = tmp_path / f"Prüfteil mit Leerzeichen{PART_FILE_SUFFIX}"
+    source.write_text("{}", encoding="utf-8")
+    imported: list[Path] = []
+
+    def import_part(path: str | Path, *_args, **_kwargs):
+        imported.append(Path(path))
+        return []
+
+    window = MainWindow(Session(), UiSettings())
+    monkeypatch.setattr(shared, "import_file", import_part)
+    monkeypatch.setattr(
+        window.session,
+        "import_model",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError(".solidon-part erreichte den Modellimport")
+        ),
+    )
+    try:
+        window.open_path(source)
+        assert imported == [source]
+        assert window.statusBar().currentMessage() == ("Importiert. Der Baustein steht im Katalog.")
+    finally:
         window.close()
 
 
