@@ -83,8 +83,8 @@ bleiben offen für das **1.0-Gate am 01.11.2026**. Die veröffentlichte
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| P9 — lokales Mesh-Backend | P9 — Säule B und Farbe | einen fest gepinnten, hashverifizierten Generator, dessen Code, Gewichte und gesamte Laufzeitkette die kommerzielle Nutzung in der EU erlauben. Ein uncommittierter, noch zentral zu reviewender und commitpflichtiger Rechtekandidat stuft den bisherigen TripoSG-Pfad nach Prüfung des vollständigen NOTICE als nicht freigabefähig ein und entfernt ihn fail-closed; auf HEAD `aa3d84f0` ist der Setupweg noch aktiv. Externe GLB/STL-Dateien bleiben vollständig nutzbar |
-| P9 — Weg 3 Ende zu Ende | P9 — Säule B und Farbe | dieselbe freigegebene Generatorenkette, den zentralen Review und Commit des uncommittierten Rechtekandidaten sowie einen nachgewiesenen Lauf Text/Bild → Mesh → Reparatur → Prüfbericht → Export auf Windows, macOS und Linux |
+| P9 — lokales Mesh-Backend | P9 — Säule B und Farbe | das reproduzierbare Pinning des tatsächlich verwendeten TripoSG-Git-Commits und der Gewichte-Revision, die vollständige LICENSE-/NOTICE-Kette und die gezielte Klärung der dort genannten HunyuanDiT-/FlashVDM-EU-Bedingungen. TripoSG selbst weist Quelltext und Modellkarte als MIT aus; ein Verstoß ist nicht festgestellt. Weg 3, TripoSG, ComfyUI und vorhandene Medien bleiben erhalten und werden weder entfernt noch deaktiviert oder vorsorglich ersetzt. Dieser offene Dokumentationspunkt ist kein automatischer Blocker für 0.3.0 |
+| P9 — Weg 3 Ende zu Ende | P9 — Säule B und Farbe | dieselbe vollständig dokumentierte und reproduzierbar gepinnte Generatorenkette sowie einen nachgewiesenen Lauf Text/Bild → Mesh → Reparatur → Prüfbericht → Export auf Windows, macOS und Linux. Der bestehende Weg bleibt während der Lizenzkettenklärung erhalten |
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und einen nachweisbar abgeschlossenen netcup-AVV. Das Repository belegt den Abschluss derzeit nicht, obwohl die öffentliche Datenschutzerklärung ihn behauptet. Vor der Freigabe im CCP prüfen und den Beleg sichern: Hosting, Mail, Support, Aktivierung, Protokolle/Statistik und Sicherungen; dazu Unterauftragsverarbeiter, TOM, Löschung und Wiederherstellung. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -810,18 +810,22 @@ bleiben offen für das **1.0-Gate am 01.11.2026**. Die veröffentlichte
       ersetzen sich nicht von innen.
 
 ## P9 — Säule B und Farbe
-- [ ] `MeshBackend`, ComfyUI lokal — die neutrale Backend-Grenze steht. Ein
-  uncommittierter, noch zentral zu reviewender und commitpflichtiger
-  Rechtekandidat soll die konkrete Einrichtung fail-closed sperren, bis Code,
-  Gewichte, Abhängigkeiten, feste Fassung und Weitergaberecht eines Ersatzes
-  vollständig belegt sind; auf HEAD `aa3d84f0` ist der TripoSG-Setupweg noch
-  aktiv
+- [ ] `MeshBackend`, ComfyUI lokal — die neutrale Backend-Grenze und der
+  TripoSG-Weg stehen. Offen sind das reproduzierbare Pinning des verwendeten
+  Git-Commits und der Gewichte-Revision, die vollständige LICENSE-/NOTICE-Kette
+  und die gezielte Klärung der dort genannten HunyuanDiT-/FlashVDM-
+  EU-Bedingungen. TripoSG selbst weist Quelltext und Modellkarte als MIT aus;
+  ein Verstoß ist nicht festgestellt. Weg 3, TripoSG, ComfyUI und vorhandene
+  Medien bleiben erhalten und werden weder entfernt noch deaktiviert oder
+  vorsorglich ersetzt. Dieser Dokumentationspunkt blockiert 0.3.0 nicht
+  automatisch
 - [x] Reparaturkette für generierte Meshes
 - [x] Materialslots, Attributerhalt über Boolesche Ops und Voxelstufe
 - [x] Textur → Slots mit Startwert, 3MF-Export mit Farbgruppen
 - [ ] **Weg 3 aus §2.2 als Ende-zu-Ende-Test** — Import und Reparatur einer
   extern erzeugten GLB/STL-Datei sind geprüft; Text/Bild → Mesh bleibt bis zur
-  freigegebenen Generatorenkette offen
+  vollständig dokumentierten und reproduzierbar gepinnten Generatorenkette
+  offen. Der bestehende Weg bleibt während dieser Klärung erhalten
 
 Anmerkungen zu P9:
 
@@ -839,16 +843,16 @@ Anmerkungen zu P9:
 * **Die eigene 3MF-Hälfte.** trimesh liest 3MF-Geometrie, gibt aber ein
   einheitliches Grau zurück — Schreiben *und* Lesen der Materialgruppen liegen
   darum in `app/core/export/threemf.py`.
-* **Der TripoSG-Rückbau liegt nur als uncommittierter, noch zentral zu
-  reviewender und commitpflichtiger Rechtekandidat vor.** Die Kurzfassung „MIT
-  für Quelltext und Gewichte" hielt der vollständigen NOTICE- und
-  Abhängigkeitsprüfung nicht stand. Der Kandidat verhindert deshalb das Laden
-  von Knoten und Gewichten sowie die Ausführung einer gefundenen lokalen
-  Installation und bietet stattdessen die konkrete Handlung „GLB- oder
-  STL-Datei importieren" an. Auf HEAD `aa3d84f0` ist der TripoSG-Setupweg noch
-  aktiv. Wieder geöffnet wird der Weg erst mit festem Commit und Hash,
-  vollständiger Lizenz- und Herkunftskette, kommerzieller EU-Freigabe und einem
-  Ende-zu-Ende-Lauf auf den drei Zielsystemen.
+* **TripoSG bleibt während der gezielten Lizenzkettenklärung der bestehende
+  Weg.** Quelltext und Modellkarte sind als MIT ausgewiesen; ein Verstoß ist
+  nicht festgestellt. Offen ist die Reproduzierbarkeit der konkreten Kette:
+  Solidon muss Git-Commit und Gewichte-Revision fest pinnen, LICENSE und NOTICE
+  vollständig dokumentieren und die im offiziellen NOTICE genannten
+  HunyuanDiT-/FlashVDM-EU-Bedingungen fachlich beziehungsweise bei VAST klären
+  und die kategorische Website-Aussage dazu sachlich neutral formulieren. Weg
+  3, TripoSG, ComfyUI und die vorhandenen Medien bleiben unabhängig davon
+  erhalten; sie werden weder entfernt noch deaktiviert oder vorsorglich
+  ersetzt. Der Dokumentationspunkt allein blockiert 0.3.0 nicht.
 
 ## P10 — Auto Split mit Verstiftung
 - [x] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung
