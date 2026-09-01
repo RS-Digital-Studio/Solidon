@@ -1,6 +1,6 @@
 # Widerrufsbelehrung
 
-Stand: 28. August 2026 · Fassung 1.1
+Stand: 31. August 2026 · Fassung 1.2
 
 Diese Belehrung gilt für **Verbraucher** — also für alle, die den Vertrag zu
 Zwecken schließen, die überwiegend weder ihrer gewerblichen noch ihrer
@@ -11,10 +11,10 @@ und wird nicht bestellt; ein entgeltlicher Vertrag, auf den sich ein Widerruf
 beziehen könnte, kommt dabei nicht zustande. Diese Belehrung gilt ab dem
 Verkaufsstart.
 
-Eine freiwillige Zahlung über den PayPal-Spendenknopf ändert daran nichts. Sie
-ist keine Bestellung der Demo oder einer Lizenz und begründet keine
-Gegenleistung. Wiederkehrende Spenden lassen sich in den Profileinstellungen
-bei PayPal ändern oder beenden.
+Eine freiwillige Zahlung über den PayPal-Unterstützungsweg ändert daran nichts.
+Sie ist keine Bestellung der Demo oder einer Lizenz und begründet keine
+Gegenleistung. Falls bei PayPal eine wiederkehrende Zahlung gewählt wurde,
+lässt sie sich dort in den Profileinstellungen ändern oder beenden.
 
 ---
 

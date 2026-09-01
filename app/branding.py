@@ -6,6 +6,7 @@ Ein-Zeilen-Änderung, samt Distributionsname und Umgebungsvariablen.
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Final
 
 #: Produktname. Entschieden am 27.07.2026 als „Formwerk", geändert am
@@ -41,6 +42,12 @@ ENVIRONMENT_PREFIX: Final = "SOLIDON3D"
 #: Firmendomain und trägt die Geschäftspost, aber nicht mehr den Produktkanal.
 SUPPORT_ADDRESS: Final = "support@solidon3d.de"
 
+#: Bis zu diesem Tag werden Solidon 1 und seine 1.x-Aktualisierungen
+#: mindestens mit Sicherheitskorrekturen unterstützt. Die eine semantische
+#: Quelle wird in Oberfläche, öffentlicher Sicherheitszusage und CRA-Prüfung
+#: gelesen; eine abgeschriebene Datumszeichenkette könnte unbemerkt abweichen.
+SECURITY_SUPPORT_UNTIL: Final = date(2031, 10, 31)
+
 #: Die Produktseite: Download, Handbuch, Kauf. Von hier lesen der Installer
 #: (``tools/make_installer.py``), der Update-Hinweis und der Knopf „Solidon
 #: kaufen" — sie stand vorher an zwei Stellen getrennt.
@@ -53,7 +60,9 @@ DONATION_URL: Final = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 
-#: Endung und MIME-Typ des portablen Bausteinrezepts.
+#: Endung und MIME-Typ einer austauschbaren Bausteindatei. Die Datei enthält
+#: ausschließlich das geprüfte JSON-Rezept; ``.json`` selbst wird auf keiner
+#: Plattform Solidon zugeordnet.
 PART_FILE_SUFFIX: Final = ".solidon-part"
 PART_FILE_MIME_TYPE: Final = "application/vnd.solidon.part+json"
 

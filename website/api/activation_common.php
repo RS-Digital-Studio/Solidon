@@ -8,11 +8,16 @@
  * benachbarten Verzeichnis appdata. SOLIDON_ACTIVATION_SEED_FILE und
  * SOLIDON_ACTIVATION_DB können diese sicheren Standardpfade überschreiben.
  *
- * Braucht PHP 7.4+, sodium und PDO_SQLITE. Es gibt kein Composer-Paket und
+ * Braucht PHP 8.1+, sodium und PDO_SQLITE. Es gibt kein Composer-Paket und
  * keine weitere Abhängigkeit.
  */
 
 declare(strict_types=1);
+
+if (PHP_VERSION_ID < 80100) {
+    http_response_code(503);
+    exit;
+}
 
 const ACTIVATION_DOCUMENT_FORMAT = 1;
 const ACTIVATION_REQUEST_KIND = 'activation-request';
@@ -20,6 +25,9 @@ const ACTIVATION_CERTIFICATE_KIND = 'activation-certificate';
 const DEACTIVATION_REQUEST_KIND = 'deactivation-request';
 const LICENCE_PUBLIC_KEY_HEX = 'c1a6c906ff05f935ae99e71ea3bea79919021077fbd763a9f31475b56e6d714d';
 const ACTIVATION_PUBLIC_KEY_HEX = '52e0682ff6d864d4c07809c2ec48728f435fd4b2e1f18dbd5a60561f524887c6';
+const ACTIVATION_MAX_BODY = 32768;
+/** Im IP-Missbrauchszähler bleiben bei jedem Zugriff höchstens 15 Minuten. */
+const ACTIVATION_RATE_RETENTION_SECONDS = 900;
 
 final class ActivationFailure extends RuntimeException
 {
@@ -37,6 +45,386 @@ final class ActivationFailure extends RuntimeException
         $this->errorCode = $errorCode;
         parent::__construct($reason);
     }
+}
+
+/** Einheitliche Schutzköpfe für alle Antworten des Aktivierungsdienstes. */
+function activation_security_headers(): void
+{
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    header('X-Frame-Options: DENY');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    header("Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+    header('Cache-Control: no-store');
+}
+
+/** Bindet einen Endpunkt an genau eine HTTP-Methode. */
+function activation_require_method(string $method): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== $method) {
+        header('Allow: ' . $method);
+        throw new ActivationFailure('Diese HTTP-Methode ist nicht erlaubt.', 405, 'method_not_allowed');
+    }
+}
+
+/** Browser dürfen nur von der eigenen öffentlichen Herkunft schreiben. */
+function activation_require_trusted_origin(): void
+{
+    $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+    if ($origin === '') {
+        return;  // Native Anwendung und Offline-Dateiweg senden keinen Origin-Kopf.
+    }
+    if (!in_array(strtolower($origin), ['https://solidon3d.de', 'https://www.solidon3d.de'], true)) {
+        throw new ActivationFailure('Die Herkunft der Anforderung wurde abgelehnt.', 403, 'origin_forbidden');
+    }
+}
+
+/** Prüft Medientyp und deklarierte Größe, bevor teure Arbeit beginnt. */
+function activation_require_json_headers(int $maximum = ACTIVATION_MAX_BODY): void
+{
+    $type = strtolower(trim(explode(';', (string) ($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+    if ($type !== 'application/json') {
+        throw new ActivationFailure(
+            'Die Anforderung muss als application/json gesendet werden.',
+            415,
+            'unsupported_media_type'
+        );
+    }
+    $declared = (string) ($_SERVER['CONTENT_LENGTH'] ?? '');
+    if ($declared !== '' && (!ctype_digit($declared) || (int) $declared > $maximum)) {
+        throw new ActivationFailure('Die Anforderung ist zu groß.', 413, 'invalid_request');
+    }
+}
+
+/** Liest einen JSON-Körper bytegenau und unabhängig vom Content-Length-Kopf. */
+function activation_read_json_body(int $maximum = ACTIVATION_MAX_BODY): string
+{
+    activation_require_json_headers($maximum);
+    $raw = file_get_contents('php://input', false, null, 0, $maximum + 1);
+    if ($raw === false || $raw === '') {
+        throw new ActivationFailure('Die Anforderung ist leer.', 400, 'invalid_request');
+    }
+    if (strlen($raw) > $maximum) {
+        throw new ActivationFailure('Die Anforderung ist zu groß.', 413, 'invalid_request');
+    }
+    return $raw;
+}
+
+/** Verhindert die versehentliche Veröffentlichung privater Zustandsdateien. */
+function activation_path_is_public(string $path): bool
+{
+    $root = realpath((string) ($_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__)))
+        ?: realpath(dirname(__DIR__));
+    if ($root === false) {
+        return false;
+    }
+    $root = rtrim(str_replace('\\', '/', strtolower($root)), '/');
+    $candidate = rtrim(str_replace('\\', '/', strtolower($path)), '/');
+    if (preg_match('#(^|/)\.\.(/|$)#', $candidate) === 1) {
+        return true;
+    }
+    $probe = $path;
+    while (true) {
+        if (is_link($probe)) {
+            return true;
+        }
+        if (file_exists($probe)) {
+            break;
+        }
+        $parent = dirname($probe);
+        if ($parent === $probe) {
+            return true;
+        }
+        $probe = $parent;
+    }
+    $resolved = realpath($probe);
+    if ($resolved === false) {
+        return true;
+    }
+    $candidate = rtrim(str_replace('\\', '/', strtolower($resolved)), '/');
+    return $candidate === $root || strpos($candidate, $root . '/') === 0;
+}
+
+/** Prüft Existenz, Lage und auf POSIX die Rechte einer Geheimnisdatei. */
+function activation_require_private_file(string $path): void
+{
+    if (!is_file($path) || !is_readable($path) || activation_path_is_public($path)) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    if (DIRECTORY_SEPARATOR === '/' && ((int) fileperms($path) & 0077) !== 0) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+}
+
+/** Private Zustandsordner schützen auch SQLite-WAL- und Sperrdateien. */
+function activation_require_private_directory(string $path): void
+{
+    if (!is_dir($path) && !@mkdir($path, 0700, true) && !is_dir($path)) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
+            503,
+            'service_unavailable'
+        );
+    }
+    if (DIRECTORY_SEPARATOR === '/' && ((int) fileperms($path) & 0077) !== 0) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    if (activation_path_is_public($path)) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+}
+
+/** Zwei nicht verknüpfbare Kennzeichen für das laufende und vorige Zeitfenster. */
+function activation_rate_client_keys(string $scope, int $window, int $now): array
+{
+    if ($window <= 0 || $window > ACTIVATION_RATE_RETENTION_SECONDS) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
+            503,
+            'service_unavailable'
+        );
+    }
+    $root = hash_hmac('sha256', 'solidon|activation-rate', activation_seed(), true);
+    $address = (string) ($_SERVER['REMOTE_ADDR'] ?? '-');
+    $bucket = intdiv($now, $window);
+    $keys = [];
+    foreach ([$bucket, $bucket - 1] as $number) {
+        $secret = hash_hmac('sha256', $scope . '|' . $number, $root, true);
+        $keys[] = $scope . ':ip:' . hash_hmac('sha256', $address, $secret);
+    }
+    return array_values(array_unique($keys));
+}
+
+/** Öffnet den IP-Zähler ohne Linkverfolgung und sperrt genau diese Datei. */
+function activation_open_rate_state(string $path)
+{
+    if (is_link($path)) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    $previousMask = umask(0077);
+    try {
+        $stream = @fopen($path, 'x+b');
+    } finally {
+        umask($previousMask);
+    }
+    $created = is_resource($stream);
+    if (!$created) {
+        if (is_link($path)) {
+            throw new ActivationFailure(
+                'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+                503,
+                'service_unavailable'
+            );
+        }
+        $stream = @fopen($path, 'r+b');
+    }
+    if (!is_resource($stream) || !flock($stream, LOCK_EX)) {
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
+            503,
+            'service_unavailable'
+        );
+    }
+    if ($created && DIRECTORY_SEPARATOR === '/' && !@chmod($path, 0600)) {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    clearstatcache(true, $path);
+    $opened = fstat($stream);
+    $named = @lstat($path);
+    if (!is_array($opened) || !is_array($named) || is_link($path) || !is_file($path)
+        || (int) ($opened['dev'] ?? -1) !== (int) ($named['dev'] ?? -2)
+        || (int) ($opened['ino'] ?? -1) !== (int) ($named['ino'] ?? -2)
+        || (int) ($opened['nlink'] ?? 0) !== 1 || (int) ($named['nlink'] ?? 0) !== 1
+        || (DIRECTORY_SEPARATOR === '/' && ((int) $opened['mode'] & 0077) !== 0)) {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    return $stream;
+}
+
+/** Schreibt jeden angeforderten Byte auf den bereits geöffneten Stream. */
+function activation_write_all($stream, string $data): bool
+{
+    $offset = 0;
+    while ($offset < strlen($data)) {
+        $written = fwrite($stream, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            return false;
+        }
+        $offset += $written;
+    }
+    return true;
+}
+
+/** Erzwingt die Persistenz; Solidon verlangt dafür PHP 8.1 oder neuer. */
+function activation_flush_and_sync($stream): bool
+{
+    return fflush($stream) && fsync($stream);
+}
+
+/** Stellt nach einem fehlgeschlagenen Ersatz den zuvor gelesenen Inhalt wieder her. */
+function activation_restore_stream($stream, string $original): bool
+{
+    $positioned = fseek($stream, 0, SEEK_SET) === 0;
+    $truncated = $positioned && ftruncate($stream, 0);
+    $written = $truncated && activation_write_all($stream, $original);
+    $synced = activation_flush_and_sync($stream);
+    return $positioned && $truncated && $written && $synced;
+}
+
+/** Ersetzt einen Stream transaktional und gibt bei jedem Persistenzfehler false zurück. */
+function activation_replace_stream($stream, string $data): bool
+{
+    if (fseek($stream, 0, SEEK_SET) !== 0) {
+        return false;
+    }
+    $original = stream_get_contents($stream);
+    if (!is_string($original) || fseek($stream, 0, SEEK_SET) !== 0
+        || !ftruncate($stream, 0)) {
+        return false;
+    }
+    if (activation_write_all($stream, $data) && activation_flush_and_sync($stream)) {
+        return true;
+    }
+    if (!activation_restore_stream($stream, $original)) {
+        error_log('Solidon: Wiederherstellung des Aktivierungszählers fehlgeschlagen.');
+    }
+    return false;
+}
+
+/** Schreibt den vollständigen Zähler auf denselben geprüften Handle. */
+function activation_write_rate_state(string $path, $stream, string $data): bool
+{
+    clearstatcache(true, $path);
+    $opened = fstat($stream);
+    $named = @lstat($path);
+    if (!is_array($opened) || !is_array($named) || is_link($path)
+        || (int) ($opened['dev'] ?? -1) !== (int) ($named['dev'] ?? -2)
+        || (int) ($opened['ino'] ?? -1) !== (int) ($named['ino'] ?? -2)
+        || (int) ($opened['nlink'] ?? 0) !== 1 || (int) ($named['nlink'] ?? 0) !== 1
+        || !activation_replace_stream($stream, $data)) {
+        return false;
+    }
+    clearstatcache(true, $path);
+    $named = @lstat($path);
+    return is_array($named) && !is_link($path)
+        && (int) ($opened['dev'] ?? -1) === (int) ($named['dev'] ?? -2)
+        && (int) ($opened['ino'] ?? -1) === (int) ($named['ino'] ?? -2)
+        && (int) ($named['nlink'] ?? 0) === 1;
+}
+
+/** Kurzes IP-Limit vor Signatur- und Datenbankarbeit; gespeichert wird nur ein HMAC. */
+function activation_consume_client_rate(string $scope, int $limit, int $window): void
+{
+    $configured = getenv('SOLIDON_ACTIVATION_RATE_FILE');
+    $path = $configured === false || $configured === ''
+        ? dirname(activation_data_path('SOLIDON_ACTIVATION_DB', 'activation.sqlite'))
+            . DIRECTORY_SEPARATOR . 'activation-rate.json'
+        : activation_data_path('SOLIDON_ACTIVATION_RATE_FILE', 'activation-rate.json');
+    $parent = dirname($path);
+    activation_require_private_directory($parent);
+    $stream = activation_open_rate_state($path);
+    try {
+        $raw = stream_get_contents($stream);
+        $state = $raw === '' ? [] : json_decode($raw === false ? '' : $raw, true);
+        if ($raw === false || !is_array($state)) {
+            throw new ActivationFailure(
+                'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
+                503,
+                'service_unavailable'
+            );
+        }
+        $now = time();
+        $clientKeys = activation_rate_client_keys($scope, $window, $now);
+        $key = $clientKeys[0];
+        $globalKey = $scope . ':global';
+        $kept = [];
+        foreach ($clientKeys as $clientKey) {
+            $kept = array_merge($kept, array_values(array_filter(
+                (array) ($state[$clientKey] ?? []),
+                static fn($stamp): bool => is_int($stamp)
+                    && $stamp > $now - $window && $stamp <= $now
+            )));
+            unset($state[$clientKey]);
+        }
+        $global = array_values(array_filter(
+            (array) ($state[$globalKey] ?? []),
+            static fn($stamp): bool => is_int($stamp)
+                && $stamp > $now - $window && $stamp <= $now
+        ));
+        if (count($kept) >= $limit || count($global) >= $limit * 100) {
+            throw new ActivationFailure('Zu viele Anforderungen in kurzer Zeit.', 429, 'rate_limit');
+        }
+        $kept[] = $now;
+        $global[] = $now;
+        $state[$key] = $kept;
+        $state[$globalKey] = $global;
+        foreach ($state as $name => $stamps) {
+            $recent = array_values(array_filter(
+                (array) $stamps,
+                static fn($stamp): bool => is_int($stamp)
+                    && $stamp > $now - ACTIVATION_RATE_RETENTION_SECONDS && $stamp <= $now
+            ));
+            if ($recent === []
+                || preg_match('/^[a-z]{1,16}:(?:global|ip:[0-9a-f]{64})$/D', (string) $name) !== 1) {
+                unset($state[$name]);
+            } else {
+                $state[$name] = $recent;
+            }
+        }
+        $encoded = json_encode($state, JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded) || !activation_write_rate_state($path, $stream, $encoded)) {
+            throw new ActivationFailure(
+                'Der Aktivierungsdienst ist vorübergehend nicht verfügbar.',
+                503,
+                'service_unavailable'
+            );
+        }
+    } finally {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+    }
+}
+
+// Eine Hilfsdatei ist kein öffentlicher Endpunkt.
+if (realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? '')) === realpath(__FILE__)) {
+    activation_security_headers();
+    http_response_code(404);
+    exit;
 }
 
 /** Eine JSON-Fehlermeldung mit stabiler Kennung für die Anwendung. */
@@ -155,6 +543,10 @@ function activation_document(string $raw, string $kind): array
         throw new ActivationFailure('Die Aktivierungsanforderung ist kein vollständiges JSON.') ;
     }
     if (!is_array($document)
+        || !activation_has_exact_keys(
+            $document,
+            ['format', 'kind', 'licence', 'payload', 'signature']
+        )
         || ($document['format'] ?? null) !== ACTIVATION_DOCUMENT_FORMAT
         || ($document['kind'] ?? null) !== $kind) {
         throw new ActivationFailure('Die Aktivierungsanforderung hat das falsche Format.');
@@ -164,6 +556,15 @@ function activation_document(string $raw, string $kind): array
         'payload' => activation_decode($document['payload'] ?? null),
         'signature' => activation_decode($document['signature'] ?? null),
     ];
+}
+
+/** Verhindert unbemerkte Zusatzfelder und PHP-Arrayformen in signierten Verträgen. */
+function activation_has_exact_keys(array $value, array $expected): bool
+{
+    $actual = array_keys($value);
+    sort($actual);
+    sort($expected);
+    return $actual === $expected;
 }
 
 /** Prüft Kaufcode, Gerätenachweis und alle Bindungen dazwischen. */
@@ -181,6 +582,10 @@ function activation_request(string $raw): array
         throw new ActivationFailure('Die signierten Gerätedaten sind unvollständig.');
     }
     if (!is_array($values)
+        || !activation_has_exact_keys(
+            $values,
+            ['device_name', 'device_public', 'format', 'kind', 'licence_digest', 'request_id']
+        )
         || ($values['format'] ?? null) !== ACTIVATION_DOCUMENT_FORMAT
         || ($values['kind'] ?? null) !== ACTIVATION_REQUEST_KIND) {
         throw new ActivationFailure('Die signierten Gerätedaten haben das falsche Format.');
@@ -244,6 +649,10 @@ function activation_deactivation_request(string $raw): array
         throw new ActivationFailure('Die signierten Abmeldedaten sind unvollständig.');
     }
     if (!is_array($values)
+        || !activation_has_exact_keys(
+            $values,
+            ['activation_id', 'device_public', 'format', 'kind', 'licence_digest']
+        )
         || ($values['format'] ?? null) !== ACTIVATION_DOCUMENT_FORMAT
         || ($values['kind'] ?? null) !== DEACTIVATION_REQUEST_KIND) {
         throw new ActivationFailure('Die signierten Abmeldedaten haben das falsche Format.');
@@ -273,7 +682,14 @@ function activation_data_path(string $setting, string $filename): string
         ? dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'appdata' . DIRECTORY_SEPARATOR . $filename
         : $configured;
     if (substr($path, 0, 1) !== DIRECTORY_SEPARATOR
-        && preg_match('/^[A-Za-z]:[\\\\\/]/', $path) !== 1) {
+        && preg_match('#^[A-Za-z]:[\\\\/]#', $path) !== 1) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
+    if (activation_path_is_public($path)) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',
             503,
@@ -324,6 +740,11 @@ function activation_database(bool $initialise = true): PDO
             'service_unavailable'
         );
     }
+    $parent = dirname($path);
+    activation_require_private_directory($parent);
+    if (!$initialise) {
+        activation_require_private_file($path);
+    }
     try {
         $database = new PDO('sqlite:' . $path, null, null, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -331,6 +752,9 @@ function activation_database(bool $initialise = true): PDO
         ]);
         $database->exec('PRAGMA busy_timeout = 5000');
         if ($initialise) {
+            if (DIRECTORY_SEPARATOR === '/') {
+                @chmod($path, 0600);
+            }
             $database->exec('PRAGMA journal_mode = WAL');
             activation_create_schema($database);
         } else {
@@ -367,7 +791,8 @@ function activation_rollback(PDO $database): void
 function activation_seed(): string
 {
     $path = activation_data_path('SOLIDON_ACTIVATION_SEED_FILE', 'activation.seed');
-    $text = is_readable($path) ? file_get_contents($path) : false;
+    activation_require_private_file($path);
+    $text = file_get_contents($path);
     if ($text === false) {
         throw new ActivationFailure(
             'Der Aktivierungsdienst ist noch nicht vollständig eingerichtet.',

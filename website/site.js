@@ -1,10 +1,11 @@
 /* Solidon3D — das Einzige, was diese Website ohne Skript nicht kann.
  *
- * Vier Dinge stehen hier, und alle sind Zugabe: die Sprungliste der
- * Funktionsseite markiert den Block, der gerade gelesen wird, der
- * Download-Kasten der Startseite zählt die Zeit bis zur Demo herunter, und
- * der Changelog zeigt die gewählte Version einzeln. Ganz unten meldet eine
- * Zeile dem eigenen Server, dass diese Seite geöffnet wurde. Alles
+ * Fünf Dinge stehen hier, und alle sind Zugabe: Das mobile Kopfmenü gibt die
+ * Seite nach einer Wahl wieder frei, die Sprungliste der Funktionsseite
+ * markiert den Block, der gerade gelesen wird, der Download-Kasten der
+ * Startseite zählt die Zeit bis zur Demo herunter, und der Changelog zeigt
+ * die gewählte Version einzeln. Ganz unten meldet eine Zeile dem eigenen
+ * Server, dass diese Seite geöffnet wurde. Alles
  * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
  * Zeitachsen (`animation-timeline: view()`), und die gehören dorthin — sie
  * laufen im Compositor, ein Skript müsste bei jedem Bildlauf rechnen.
@@ -660,6 +661,37 @@
  * wer nur danach sucht, schickt einem Telefon ein AppImage; die mobilen
  * Systeme werden deshalb zuerst geprüft und nehmen sich heraus.
  */
+/* Das mobile Kopfmenü schließt nach einer Wahl.
+ *
+ * Das Linkpanel ist das direkte Geschwister seines ``details.menu``. Auf dem
+ * Rechner bleibt dieses Details geschlossen und CSS zeigt das Panel als
+ * Leiste; dort ändert der Listener nichts. Auf dem Telefon öffnet der
+ * Hamburger das Details. Bliebe es nach einem Ankersprung offen, läge das
+ * Panel weiter über genau dem Ziel, zu dem der Besucher gerade gesprungen
+ * ist.
+ *
+ * ``click`` gilt für Maus, Berührung und die Aktivierung eines Links mit der
+ * Tastatur. Das Ereignis wird nicht angehalten: Der Link arbeitet zuerst wie
+ * jeder andere Link, nur der Aufklapper tritt aus dem Weg.
+ */
+(() => {
+  "use strict";
+  try {
+    for (const menu of document.querySelectorAll("details.menu")) {
+      const panel = menu.nextElementSibling;
+      if (!panel || !panel.matches(".menu-panel")) continue;
+
+      panel.addEventListener("click", (event) => {
+        if (!(event.target instanceof Element)) return;
+        if (!menu.open || !event.target.closest("a")) return;
+        menu.open = false;
+      });
+    }
+  } catch (problem) {
+    console.warn("site.js: das mobile Kopfmenü bleibt offen —", problem);
+  }
+})();
+
 (() => {
   try {
     const hint = navigator.userAgentData && navigator.userAgentData.platform;

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import ftplib
-import io
 import ipaddress
 import json
 import re
@@ -33,10 +32,29 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any
+from time import monotonic
+from typing import Any, Never
+from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+from app.core.http import (  # noqa: E402 - Repositorypfad gilt erst ab hier
+    RejectRedirects,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    deadline_after,
+    read_limited,
+    response_url,
+    same_origin,
+    validate_http_url,
+)
+from app.core.json_boundary import StrictJsonError  # noqa: E402 - Repositorypfad gilt erst ab hier
+from app.core.json_boundary import (  # noqa: E402 - Repositorypfad gilt erst ab hier
+    loads as load_json,
+)
+from app.core.log import redact_external  # noqa: E402 - Repositorypfad gilt erst ab hier
+from tools import asset_rights  # noqa: E402 - Repositorypfad gilt erst ab hier
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -48,24 +66,24 @@ ACCESS_FILE = ROOT / ".webserver.json"
 #: abgebildet: ``website/api/support.php`` → ``<root>/api/support.php``.
 LOCAL_ROOT = ROOT / "website"
 
-#: Entfernte gehostete Austauschwege bleiben auch dann vom Upload ausgeschlossen,
-#: wenn eine alte Arbeitskopie oder ein Erzeuger sie versehentlich zurückbringt.
-RETIRED_HOSTED_PATHS = frozenset(
+#: Frühere Dateien der gehosteten Tauschstelle. Sie werden weder neu
+#: ausgeliefert noch bei einem Bestandsabgleich als fehlend nachgeladen.
+RETIRED_SHARED_PATHS = frozenset(
     {
-        "api/shared-rules.json",
-        "api/shared-texts.json",
         "api/shared.php",
         "api/shared_common.php",
-        "api/shared_moderate.php",
         "api/shared_store.php",
+        "api/shared_moderate.php",
+        "api/shared-rules.json",
+        "api/shared-texts.json",
         "boerse.html",
         "boerse.js",
+        "tauschboerse-bedingungen.html",
         "en/exchange.html",
         "es/exchange.html",
         "fr/exchange.html",
         "it/exchange.html",
         "pt/exchange.html",
-        "tauschboerse-bedingungen.html",
     }
 )
 
@@ -76,6 +94,44 @@ TEMPLATE: dict[str, Any] = {
     "password": "hier eintragen",
     "root": "solidon3d.de/httpdocs",
 }
+
+PUBLIC_TIMEOUT_SECONDS = 30.0
+MAX_PUBLIC_TEXT_BYTES = 8 * 1024 * 1024
+MAX_REMOTE_VERSION_BYTES = 1024 * 1024
+MAX_REMOTE_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
+_VERSION_FIELDS = frozenset(
+    {
+        "version",
+        "url",
+        "notes",
+        "packages",
+        "changes",
+        "notes_by_language",
+        "groups",
+        "signature",
+    }
+)
+_PACKAGE_FIELDS = frozenset({"file", "url", "size", "sha256"})
+_PACKAGE_PLATFORMS = frozenset({"windows", "linux", "macos-arm64", "macos-x86_64"})
+_PUBLIC_OPENER = urllib.request.build_opener(RejectRedirects())
+
+
+def _open_public(request: urllib.request.Request, *, timeout: float) -> Any:
+    """Öffnet eine öffentliche Website-Datei ohne Weiterleitungen."""
+    return _PUBLIC_OPENER.open(request, timeout=timeout)
+
+
+_DEFAULT_OPEN_PUBLIC = _open_public
+
+
+def _public_address(url: str) -> str:
+    """Eine feste öffentliche HTTPS-Adresse ohne eingebettete Zugangswerte."""
+    return validate_http_url(
+        url,
+        allow_http=False,
+        allow_query=False,
+        allow_fragment=False,
+    )
 
 
 def read_access() -> dict[str, Any]:
@@ -148,7 +204,7 @@ def files_since(reference: str) -> list[Path]:
 def wanted(path: Path) -> bool:
     """Ob eine lokale Datei überhaupt auf den Server gehört.
 
-    Drei Ausnahmen, jede mit Grund:
+    Vier Ausnahmen, jede mit Grund:
 
     ``dl/`` trägt die Installationspakete. Sie stehen nicht im Repository
     (``.gitignore``) und wiegen je Version hundert Megabyte; hochgeladen
@@ -160,6 +216,14 @@ def wanted(path: Path) -> bool:
 
     ``.token`` ist ein Zugangswert. Der Betreiber-Token wird ausschließlich
     vom gehärteten Aktivierungs-Deployment in den privaten Serverordner gelegt.
+
+    ``teile/`` enthält lokale Projekt- und Geometriequellen für Bilder und
+    Videos. Der ganze Ordner bleibt privat, unabhängig von Dateiname oder
+    Endung.
+
+    Die frühere gehostete Tauschstelle wird nicht betrieben. Ihre Endpunkte,
+    Prüfdateien, Seiten und Skripte bleiben auch dann gesperrt, wenn eine alte
+    oder erzeugte Datei versehentlich wieder unter ``website/`` auftaucht.
     """
     relative = path.relative_to(LOCAL_ROOT)
     lower = path.name.lower()
@@ -175,8 +239,8 @@ def wanted(path: Path) -> bool:
         ".solidon-activation",
     )
     return (
-        relative.as_posix() not in RETIRED_HOSTED_PATHS
-        and relative.parts[0] != "dl"
+        relative.parts[0] not in {"dl", "teile"}
+        and relative.as_posix() not in RETIRED_SHARED_PATHS
         and path.suffix != ".md"
         and not lower.endswith(private_endings)
     )
@@ -216,16 +280,245 @@ def remote_index(session: ftplib.FTP_TLS, root: str) -> dict[str, int]:
     return found
 
 
+def retired_shared_files(session: ftplib.FTP_TLS, root: str) -> list[str]:
+    """Noch vorhandene Dateien der abgeschalteten gehosteten Tauschstelle."""
+
+    remote = remote_index(session, "/" + root)
+    return sorted(RETIRED_SHARED_PATHS.intersection(remote))
+
+
+def _validate_remote_version(value: object) -> dict[str, Any]:
+    """Prüft das veröffentlichte Manifest geschlossen vor jeder Entscheidung."""
+
+    def reject(detail: str) -> Never:
+        raise StrictJsonError(f"Ungültige version.json: {detail}")
+
+    def text(raw: object, field: str, *, maximum: int, empty: bool = True) -> str:
+        if not isinstance(raw, str) or len(raw) > maximum or (not empty and not raw):
+            reject(f"{field} hat keinen zulässigen Textwert")
+        return raw
+
+    if not isinstance(value, dict):
+        reject("Wurzel ist kein Objekt")
+    unknown = set(value) - _VERSION_FIELDS
+    missing = {"version", "packages", "signature"} - set(value)
+    if unknown or missing:
+        reject(f"unbekannte {sorted(unknown)} oder fehlende {sorted(missing)} Felder")
+
+    version = text(value.get("version"), "version", maximum=64, empty=False)
+    if re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", version) is None:
+        reject("version ist keine vollständige Versionsnummer")
+
+    packages = value.get("packages")
+    if not isinstance(packages, dict) or not packages or len(packages) > len(_PACKAGE_PLATFORMS):
+        reject("packages ist keine nichtleere, begrenzte Zuordnung")
+    if not set(packages) <= _PACKAGE_PLATFORMS:
+        reject("packages enthält eine unbekannte Plattform")
+    for platform_name, raw_entry in packages.items():
+        if not isinstance(raw_entry, dict) or set(raw_entry) != _PACKAGE_FIELDS:
+            reject(f"packages.{platform_name} hat fehlende oder unbekannte Felder")
+        filename = text(
+            raw_entry.get("file"),
+            f"packages.{platform_name}.file",
+            maximum=200,
+            empty=False,
+        )
+        if (
+            Path(filename).name != filename
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", filename) is None
+        ):
+            reject(f"packages.{platform_name}.file ist kein sicherer Dateiname")
+        address = text(
+            raw_entry.get("url"),
+            f"packages.{platform_name}.url",
+            maximum=2048,
+            empty=False,
+        )
+        try:
+            checked_address = validate_http_url(
+                address,
+                allow_http=False,
+                allow_query=True,
+                allow_fragment=False,
+            )
+        except ValueError:
+            reject(f"packages.{platform_name}.url ist keine sichere HTTPS-Adresse")
+        parts = urlsplit(checked_address)
+        try:
+            query = parse_qs(parts.query, strict_parsing=True)
+        except ValueError:
+            reject(f"packages.{platform_name}.url hat eine ungültige Abfrage")
+        if set(query) - {"f"} or any(len(values) != 1 for values in query.values()):
+            reject(f"packages.{platform_name}.url hat unbekannte oder mehrfache Abfragefelder")
+        query_name = query.get("f", [""])
+        addressed_name = unquote(query_name[-1]) if query_name[-1] else Path(parts.path).name
+        if addressed_name != filename:
+            reject(f"packages.{platform_name}.url und file nennen verschiedene Dateien")
+        size = raw_entry.get("size")
+        if (
+            not isinstance(size, int)
+            or isinstance(size, bool)
+            or not 0 < size <= MAX_REMOTE_PACKAGE_BYTES
+        ):
+            reject(f"packages.{platform_name}.size liegt außerhalb der Grenze")
+        digest = raw_entry.get("sha256")
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            reject(f"packages.{platform_name}.sha256 ist keine SHA-256-Prüfsumme")
+
+    if "url" in value:
+        address = text(value["url"], "url", maximum=2048, empty=False)
+        try:
+            validate_http_url(
+                address,
+                allow_http=False,
+                allow_query=False,
+                allow_fragment=False,
+            )
+        except ValueError:
+            reject("url ist keine sichere HTTPS-Adresse")
+    if "notes" in value:
+        text(value["notes"], "notes", maximum=800)
+    signature = value["signature"]
+    if not isinstance(signature, str) or re.fullmatch(r"[0-9a-f]{128}", signature) is None:
+        reject("signature ist keine Ed25519-Signatur")
+
+    notes_by_language = value.get("notes_by_language", {})
+    if not isinstance(notes_by_language, dict) or len(notes_by_language) > 16:
+        reject("notes_by_language ist keine begrenzte Zuordnung")
+    for language, note in notes_by_language.items():
+        if (
+            not isinstance(language, str)
+            or re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", language) is None
+        ):
+            reject("notes_by_language enthält einen ungültigen Sprachschlüssel")
+        text(note, f"notes_by_language.{language}", maximum=800)
+
+    changes = value.get("changes", {})
+    if not isinstance(changes, dict) or len(changes) > 16:
+        reject("changes ist keine begrenzte Zuordnung")
+    for language, points in changes.items():
+        if (
+            not isinstance(language, str)
+            or re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", language) is None
+            or not isinstance(points, list)
+            or len(points) > 100
+        ):
+            reject("changes enthält eine ungültige Sprachliste")
+        for index, point in enumerate(points):
+            text(point, f"changes.{language}.{index}", maximum=800, empty=False)
+
+    groups = value.get("groups", {})
+    if not isinstance(groups, dict) or len(groups) > 16:
+        reject("groups ist keine begrenzte Zuordnung")
+    for language, raw_groups in groups.items():
+        if (
+            not isinstance(language, str)
+            or re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", language) is None
+            or not isinstance(raw_groups, list)
+            or len(raw_groups) > 100
+        ):
+            reject("groups enthält eine ungültige Sprachliste")
+        total_points = 0
+        for index, group in enumerate(raw_groups):
+            if not isinstance(group, dict) or set(group) != {"title", "points"}:
+                reject(f"groups.{language}.{index} hat kein geschlossenes Gruppenschema")
+            text(group.get("title"), f"groups.{language}.{index}.title", maximum=200)
+            points = group.get("points")
+            if not isinstance(points, list):
+                reject(f"groups.{language}.{index}.points ist keine Liste")
+            total_points += len(points)
+            if total_points > 100:
+                reject(f"groups.{language} enthält zu viele Punkte")
+            for point_index, point in enumerate(points):
+                text(
+                    point,
+                    f"groups.{language}.{index}.points.{point_index}",
+                    maximum=800,
+                    empty=False,
+                )
+    return dict(value)
+
+
 def remote_version(session: ftplib.FTP_TLS, root: str) -> dict[str, Any]:
     """``version.json`` **vom Server**, nicht die lokale.
 
     Der Unterschied ist der ganze Zweck: Was published liegt, ist für jeden Kunden
     die gültige Fassung — unabhängig davon, was hier für aktuell gehalten wird.
     """
-    buffer = io.BytesIO()
-    session.retrbinary(f"RETR /{root}/version.json", buffer.write)
-    payload: dict[str, Any] = json.loads(buffer.getvalue().decode("utf-8"))
-    return payload
+    deadline = deadline_after(PUBLIC_TIMEOUT_SECONDS, timer=monotonic)
+    payload = bytearray()
+    data_socket: Any | None = None
+    control_socket = getattr(session, "sock", None)
+    previous_session_timeout = getattr(session, "timeout", None)
+    previous_control_timeout = (
+        control_socket.gettimeout()
+        if control_socket is not None and callable(getattr(control_socket, "gettimeout", None))
+        else None
+    )
+
+    def remaining() -> float:
+        left = deadline - monotonic()
+        if left <= 0:
+            raise ResponseDeadlineError("FTPS-Übertragung überschritt die Gesamtfrist")
+        return left
+
+    try:
+        left = remaining()
+        session.timeout = left
+        if control_socket is not None:
+            control_socket.settimeout(left)
+        data_socket = session.transfercmd(f"RETR /{root}/version.json")
+        while True:
+            data_socket.settimeout(remaining())
+            try:
+                chunk = data_socket.recv(64 * 1024)
+            except TimeoutError as problem:
+                raise ResponseDeadlineError(
+                    "FTPS-Übertragung überschritt die Gesamtfrist"
+                ) from problem
+            remaining()
+            if not chunk:
+                break
+            if len(payload) + len(chunk) > MAX_REMOTE_VERSION_BYTES:
+                raise ResponseTooLargeError(len(payload) + len(chunk), MAX_REMOTE_VERSION_BYTES)
+            payload.extend(chunk)
+        unwrap = getattr(data_socket, "unwrap", None)
+        if callable(unwrap):
+            data_socket.settimeout(remaining())
+            try:
+                unwrapped = unwrap()
+            except TimeoutError as problem:
+                raise ResponseDeadlineError(
+                    "FTPS-Übertragung überschritt die Gesamtfrist"
+                ) from problem
+            if unwrapped is not None:
+                data_socket = unwrapped
+        data_socket.close()
+        data_socket = None
+        left = remaining()
+        if control_socket is not None:
+            control_socket.settimeout(left)
+        try:
+            session.voidresp()
+        except TimeoutError as problem:
+            raise ResponseDeadlineError("FTPS-Übertragung überschritt die Gesamtfrist") from problem
+        remaining()
+    except TimeoutError as problem:
+        raise ResponseDeadlineError("FTPS-Übertragung überschritt die Gesamtfrist") from problem
+    finally:
+        if data_socket is not None:
+            data_socket.close()
+        session.timeout = previous_session_timeout
+        if control_socket is not None:
+            try:
+                control_socket.settimeout(previous_control_timeout)
+            except OSError:
+                print(
+                    "Warnung: Der FTPS-Steuersocket ließ sich nach dem Abruf nicht zurücksetzen.",
+                    file=sys.stderr,
+                )
+    value = load_json(payload, max_bytes=MAX_REMOTE_VERSION_BYTES)
+    return _validate_remote_version(value)
 
 
 def promised_files(payload: dict[str, Any]) -> set[str]:
@@ -270,7 +563,13 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
     """
     from app.branding import APP_VERSION
 
-    payload = remote_version(session, root)
+    try:
+        payload = remote_version(session, root)
+    except StrictJsonError:
+        return [], (
+            "version.json nennt kein einziges Paket oder hat ein ungültiges Schema. "
+            "Solange unklar ist, was noch gebraucht wird, wird nichts gelöscht."
+        )
     published = str(payload.get("version", ""))
     if published != APP_VERSION:
         return [], (
@@ -440,16 +739,28 @@ def verify_downloads() -> int:
         print("Weder version.json noch die Startseiten versprechen ein Paket.")
         return 0
 
-    base = str(read_access().get("public", "https://solidon3d.de/")).rstrip("/")
+    try:
+        base = _public_address(
+            str(read_access().get("public", "https://solidon3d.de/")).rstrip("/")
+        )
+    except ValueError as problem:
+        raise SystemExit(
+            "Die öffentliche Prüfadresse muss HTTPS ohne Zugangsdaten, "
+            "Abfrage oder Fragment verwenden."
+        ) from problem
     print(f"{len(promised)} versprochene Datei(en) gegen {base}")
 
     broken: list[str] = []
     for name in sorted(promised):
         local = LOCAL_ROOT / "dl" / name
         expected = local.stat().st_size if local.is_file() else 0
-        request = urllib.request.Request(f"{base}/dl/{name}", method="HEAD")
+        address = _public_address(f"{base}/dl/{name}")
+        request = urllib.request.Request(address, method="HEAD")
         try:
-            with urllib.request.urlopen(request, timeout=30) as answer:
+            with _open_public(request, timeout=PUBLIC_TIMEOUT_SECONDS) as answer:
+                final = _public_address(response_url(answer, address))
+                if not same_origin(address, final):
+                    raise OSError("unerwartete Weiterleitung")
                 length = int(answer.headers.get("Content-Length") or 0)
             if expected and length != expected:
                 print(f"  GRÖSSE  {name}: oben {length}, hier {expected}")
@@ -457,10 +768,11 @@ def verify_downloads() -> int:
             else:
                 print(f"  ok      {name}  {length / 1e6:.0f} MB")
         except urllib.error.HTTPError as problem:
+            problem.close()
             print(f"  HTTP {problem.code}  {name}")
             broken.append(name)
         except OSError as problem:
-            print(f"  nicht erreichbar  {name}: {problem}")
+            print(f"  nicht erreichbar  {name}: {redact_external(problem, limit=200)}")
             broken.append(name)
 
     if broken:
@@ -501,7 +813,7 @@ def public_url(root: str, target: str) -> str:
     der Pfad unter der Domain.
     """
     domain = root.strip("/").split("/")[0]
-    return f"https://{domain}/{target}"
+    return _public_address(f"https://{domain}/{target}")
 
 
 def differs(root: str, path: Path, remote_size: int | None) -> bool:
@@ -527,8 +839,9 @@ def differs(root: str, path: Path, remote_size: int | None) -> bool:
 
     Verglichen wird roh und nicht normalisiert: Liegt dort dieselbe Datei mit
     anderen Zeilenenden, ist sie eine andere Datei, und der nächste Upload
-    bringt beide Seiten in denselben Zustand. Was nicht öffentlich abrufbar ist
-    — ``.htaccess`` antwortet mit 403 —, entscheidet die Größe wie zuvor.
+    bringt beide Seiten in denselben Zustand. Was nicht öffentlich geprüft
+    werden kann, gilt sicherheitshalber als abweichend; eine Störung darf
+    keine gleich große juristische Seite als geprüft ausweisen.
     """
     if remote_size is None:
         return True
@@ -536,14 +849,35 @@ def differs(root: str, path: Path, remote_size: int | None) -> bool:
         return True
     if path.suffix.lower() not in _COMPARED_BY_CONTENT:
         return False
-    request = urllib.request.Request(public_url(root, remote_name(path)))
+    if remote_size > MAX_PUBLIC_TEXT_BYTES:
+        return True
+    address = public_url(root, remote_name(path))
+    request = urllib.request.Request(address)
+    deadline = deadline_after(PUBLIC_TIMEOUT_SECONDS)
     try:
-        with urllib.request.urlopen(request, timeout=30) as answer:
-            served = answer.read()
-    except (urllib.error.URLError, TimeoutError):
-        # Nicht öffentlich oder nicht erreichbar: Die Größe hat schon
-        # gestimmt, mehr lässt sich von hier aus nicht sagen.
-        return False
+        with _open_public(request, timeout=PUBLIC_TIMEOUT_SECONDS) as answer:
+            final = _public_address(response_url(answer, address))
+            if not same_origin(address, final):
+                return True
+            served = read_limited(
+                answer,
+                limit=remote_size,
+                deadline=deadline,
+                require_timeout=_open_public is _DEFAULT_OPEN_PUBLIC,
+            )
+    except urllib.error.HTTPError as problem:
+        problem.close()
+        return True
+    except (ResponseTooLargeError, ValueError):
+        return True
+    except (
+        urllib.error.URLError,
+        OSError,
+        ResponseDeadlineError,
+    ):
+        # Ohne Inhaltsbeleg ist „gleich" keine sichere Aussage — besonders
+        # nicht für AGB, EULA und Widerrufsbelehrung.
+        return True
     return bool(served != path.read_bytes())
 
 
@@ -615,17 +949,17 @@ def connect(access: dict[str, Any]) -> ftplib.FTP_TLS:
     ausgestellt hat, wird angenommen wie das echte. Über diese Leitung geht
     das Passwort zum Produktivserver.
 
-    Was gemeint war, ist ``CERT_REQUIRED`` ohne Namensprüfung — Kette und
-    Ablauf werden geprüft, nur der Name nicht. Nötig ist das allein, solange
-    der Zugang eine IP nennt; steht dort ein Name, bleibt auch die
-    Namensprüfung an, und dann ist die Verbindung vollständig abgesichert.
+    Eine IP im Zugang wird vor dem ersten Socket abgelehnt: Ohne den
+    Zertifikatsnamen lässt sich der Produktivserver nicht authentifizieren,
+    und über diese Leitung gehen Benutzername und Kennwort.
     """
     host = str(access["host"])
-    context = ssl.create_default_context()
     if is_address(host):
-        context.check_hostname = False
-        print("  Hinweis: Zugang nennt eine IP — Zertifikatsname ungeprüft.")
-        print("           Ein Hostname in .webserver.json schließt die Lücke.")
+        raise SystemExit(
+            "In .webserver.json muss ein Hostname statt einer IP stehen.\n"
+            "  Nur so prüft FTPS, dass das Serverzertifikat zum Produktivserver gehört."
+        )
+    context = ssl.create_default_context()
 
     session = ftplib.FTP_TLS(context=context)
     session.connect(host, int(access.get("port", 21)), timeout=30)
@@ -728,7 +1062,23 @@ def main() -> int:
         "--wirklich",
         dest="confirm",
         action="store_true",
-        help="zusammen mit --alte-pakete: die gezeigten Dateien wirklich löschen",
+        help="zusammen mit einer Löschprüfung: die gezeigten Dateien wirklich löschen",
+    )
+    parser.add_argument(
+        "--entfernte-tauschstelle",
+        dest="retired_shared",
+        action="store_true",
+        help="frühere Dateien der nicht betriebenen Tauschstelle zeigen; "
+        "löschen nur zusammen mit --wirklich",
+    )
+    parser.add_argument(
+        "--medium-entfernen",
+        dest="remove_media",
+        action="append",
+        default=[],
+        metavar="PFAD",
+        help="einen exakt benannten, nicht inventarisierten Server-Medienpfad "
+        "zunächst nur zeigen; löschen nur zusammen mit --wirklich",
     )
     parser.add_argument(
         "--nachpruefen",
@@ -745,6 +1095,18 @@ def main() -> int:
     )
     arguments = parser.parse_args()
 
+    if arguments.remove_media and (
+        arguments.files
+        or arguments.template
+        or arguments.verify
+        or arguments.since
+        or arguments.changed
+        or arguments.missing
+        or arguments.prune
+        or arguments.retired_shared
+    ):
+        raise SystemExit("--medium-entfernen muss als eigener, überprüfbarer Lauf erfolgen.")
+
     if arguments.template:
         return write_template()
 
@@ -760,18 +1122,38 @@ def main() -> int:
         files = []
     else:
         files = [path.resolve() for path in arguments.files]
-    if not files and not arguments.missing and not arguments.prune:
+    if (
+        not files
+        and not arguments.missing
+        and not arguments.prune
+        and not arguments.retired_shared
+        and not arguments.remove_media
+    ):
         print(
             "Nichts zu tun. Dateien nennen, --geaendert, --seit, --fehlend, "
-            "--alte-pakete oder --nachpruefen benutzen."
+            "--alte-pakete, --entfernte-tauschstelle, --medium-entfernen "
+            "oder --nachpruefen benutzen."
         )
         return 1
 
-    for path in files:
+    for index, path in enumerate(files):
+        path = path.resolve()
+        files[index] = path
         if not path.is_file():
             raise SystemExit(f"Gibt es nicht: {path}")
         if LOCAL_ROOT not in path.parents:
             raise SystemExit(f"Liegt nicht unter website/: {path}")
+        if not wanted(path):
+            raise SystemExit(
+                f"Darf nicht auf den Webserver: {path.relative_to(LOCAL_ROOT)}. "
+                "Nur ausdrücklich öffentliche Website-Dateien auswählen."
+            )
+
+    if files or arguments.missing or arguments.remove_media:
+        try:
+            asset_rights.require_website_assets_cleared()
+        except RuntimeError as problem:
+            raise SystemExit(str(problem)) from problem
 
     refuse_unsigned_version(files)
 
@@ -792,6 +1174,23 @@ def main() -> int:
             "Speicher des Systems, nicht in eine Ausnahme hier."
         ) from problem
     try:
+        if arguments.retired_shared:
+            stale = retired_shared_files(session, root)
+            if not stale:
+                print("Auf dem Server liegt keine Datei der früheren Tauschstelle.")
+                return 0
+            print(f"{len(stale)} Datei(en) der früheren Tauschstelle liegen noch oben:")
+            for name in stale:
+                print(f"  {name}")
+            if not arguments.confirm:
+                print()
+                print("Nichts gelöscht. Mit --wirklich noch einmal aufrufen.")
+                return 0
+            for name in stale:
+                session.delete(f"/{root}/{name}")
+                print(f"  gelöscht: {name}")
+            return 0
+
         if arguments.prune:
             stale, reason = stale_packages(session, root)
             if reason:
@@ -812,8 +1211,33 @@ def main() -> int:
                 print(f"  gelöscht: {name}")
             return 0
 
+        remote = remote_index(session, "/" + root)
+        if arguments.remove_media:
+            unexpected = set(asset_rights.unexpected_remote_website_assets(remote))
+            requested = sorted(set(arguments.remove_media))
+            refused = sorted(set(requested) - unexpected)
+            if refused:
+                raise SystemExit(
+                    "Nicht als uninventarisierter Medien-Altbestand belegt: " + ", ".join(refused)
+                )
+            print(f"{len(requested)} exakt benannte Altmedien sind zur Entfernung vorgesehen:")
+            for name in requested:
+                print(f"  {name}")
+            if not arguments.confirm:
+                print()
+                print("Nichts gelöscht. Mit --wirklich denselben Lauf bestätigen.")
+                return 0
+            for name in requested:
+                session.delete(f"/{root}/{name}")
+                print(f"  gelöscht: {name}")
+            return 0
+
+        try:
+            asset_rights.require_website_assets_cleared(remote_paths=remote)
+        except RuntimeError as problem:
+            raise SystemExit(str(problem)) from problem
+
         if arguments.missing:
-            remote = remote_index(session, "/" + root)
             files = [
                 path for path in local_files() if differs(root, path, remote.get(remote_name(path)))
             ]
@@ -822,7 +1246,6 @@ def main() -> int:
                 print("Der Server hat alles.")
                 return 0
         elif any(path.suffix.lower() == ".html" for path in files):
-            remote = remote_index(session, "/" + root)
             files = with_outdated_page_assets(files, root, remote)
         files = hold_back_version(session, root, files)
         print(f"{len(files)} Datei(en) → {access['host']}:{root}")

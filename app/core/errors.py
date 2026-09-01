@@ -27,6 +27,7 @@ CANCEL = Action("cancel", _("Abbrechen"))
 RETRY = Action("retry", _("Erneut versuchen"), primary=True)
 SHOW_DETAILS = Action("show_details", _("Details anzeigen"))
 CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
+USE_SUGGESTED_NAME = Action("use_suggested_name", _("Freien Namen verwenden"), primary=True)
 #: Für einen Schritt, den diese Fassung nicht rechnen kann (§16.2).
 #:
 #: **Regel 17 verlangt eine Handlung, und lange gab es hier keine ehrliche.**

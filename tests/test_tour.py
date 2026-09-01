@@ -152,6 +152,19 @@ def test_way_three_tour_recognises_its_actions() -> None:
     )
 
 
+def test_way_three_names_the_current_external_model_contract() -> None:
+    """Weg 3 verspricht nur den belegten Dateiimport, keinen Generator."""
+    tour = tour_for("weg3-generiert-aufbereiten")
+    assert tour is not None
+    closing = str(tour.closing)
+
+    assert "GLB" in closing
+    assert "STL" in closing
+    assert "extern" in closing
+    assert "deaktiviert" in closing
+    assert "ComfyUI" not in closing
+
+
 def test_way_four_tour_recognises_its_actions() -> None:
     """Weg 4: Übergang ändern, eine Formsitzung anlegen, zurücknehmen."""
     project, history = _opened("weg4-figur-formen")

@@ -21,10 +21,16 @@ Drei Regeln, die der Container erzwingt statt annimmt:
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
 import hashlib
 import json
+import math
+import os
+import sys
+import tempfile
 import zipfile
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 from typing import Any, Final
@@ -32,20 +38,25 @@ from typing import Any, Final
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
+from app.core.ingest.loader import MAX_FILE_BYTES
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_data_dir
-from app.core.scene.gathered import externalise, gathered_path, inline, references
+from app.core.scene.gathered import GATHERED_DIR, externalise, gathered_path, inline, references
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.serialise import (
     document_from_data,
     document_to_data,
+    has_lone_surrogate,
     report_from_data,
     report_to_data,
 )
 from app.core.types import Document, Finding, Report, Source, SourceId
-from app.i18n import _
+from app.i18n import TranslatableText, _
+
+if os.name == "nt":
+    import msvcrt
 
 _log = get_logger(__name__)
 
@@ -54,6 +65,48 @@ REPORT_ENTRY: Final = "report.json"
 THUMBNAIL_ENTRY: Final = "thumb.png"
 SOURCE_FOLDER: Final = "sources"
 AUTOSAVE_SUFFIX: Final = ".autosave"
+
+#: Grenzen für fremde Projektcontainer (§32). Die Nutzlast folgt derselben
+#: Obergrenze wie ein direkter Modellimport; die äußere Datei bekommt nur den
+#: notwendigen Spielraum für ZIP-Verzeichnis und Kompressionskopfzeilen.
+MAX_ARCHIVE_ENTRY_BYTES: Final = MAX_FILE_BYTES
+MAX_ARCHIVE_UNPACKED_BYTES: Final = MAX_FILE_BYTES
+MAX_PROJECT_FILE_BYTES: Final = MAX_FILE_BYTES + 16 * 1024 * 1024
+MAX_ARCHIVE_ENTRIES: Final = 4096
+
+#: Strukturierte Beilagen sind um Größenordnungen kleiner als ein Quellnetz.
+#: Eigene Grenzen halten manipulierte Dateien vor JSON-Decodierung,
+#: Rezeptaufnahme und Vorschauverarbeitung an.
+MAX_PROJECT_JSON_BYTES: Final = 16 * 1024 * 1024
+MAX_GATHERED_BYTES: Final = 16 * 1024 * 1024
+MAX_RECIPE_BYTES: Final = 4 * 1024 * 1024
+MAX_REPORT_BYTES: Final = 16 * 1024 * 1024
+MAX_THUMBNAIL_BYTES: Final = 32 * 1024 * 1024
+
+#: Auch syntaktisch kleines JSON darf nicht durch extreme Verschachtelung
+#: oder hunderttausende Kleinstobjekte unverhältnismäßig viel Arbeit und
+#: Speicher binden. Die Einzelgrenzen darunter beschreiben das aktuelle
+#: Projektschema; die generischen Grenzen gelten zusätzlich für unbekannte
+#: additive Felder künftiger Fassungen.
+MAX_JSON_DEPTH: Final = 64
+MAX_JSON_NODES: Final = 500_000
+MAX_JSON_COLLECTION_ITEMS: Final = 100_000
+MAX_JSON_STRING_CHARS: Final = MAX_GATHERED_BYTES
+MAX_PROJECT_OBJECTS: Final = 10_000
+MAX_PROJECT_OPERATIONS: Final = 100_000
+MAX_PROJECT_PARAMETERS: Final = 10_000
+MAX_PROJECT_SOURCES: Final = 10_000
+MAX_PROJECT_FITS: Final = 100_000
+MAX_PROJECT_TRANSACTIONS: Final = 100_000
+MAX_PROJECT_CHAT_ENTRIES: Final = 100_000
+MAX_REPORT_FINDINGS: Final = 100_000
+MAX_LINKED_SOURCE_BYTES: Final = MAX_FILE_BYTES
+
+#: Ein sehr kleines, gut komprimierbares JSON darf ein hohes Verhältnis
+#: haben. Ab einem MiB ist ein Verhältnis über 250 dagegen kein sinnvoller
+#: Projektinhalt mehr, sondern ein Dekompressionsangriff.
+MIN_RATIO_ENTRY_BYTES: Final = 1024 * 1024
+MAX_COMPRESSION_RATIO: Final = 250.0
 
 
 @dataclass(slots=True)
@@ -96,10 +149,14 @@ class ProjectSources:
         Antwort auf die einzige Frage, die diese Funktion hat.
         """
         source = self.describe(source_id)
+        if not source.embedded:
+            # Der gespeicherte Wert ist nur eine Behauptung über eine Datei,
+            # die außerhalb des Containers liegt. ``read`` prüft sie vor
+            # jedem Cache-Schlüssel erneut; sonst könnte eine ausgetauschte
+            # Datei unter dem alten Schlüssel ein altes Ergebnis erhalten.
+            return checksum(self.read(source_id))
         if source.sha256:
             return source.sha256
-        if not source.embedded:
-            return checksum(self.read(source_id))
         known = self._identities.get(source_id)
         if known is None:
             known = checksum(self.read(source_id))
@@ -138,15 +195,12 @@ class ProjectSources:
                 constraint="no_base_dir",
                 values={"source": source_id},
             )
-        linked = self.base_dir / source.path
-        if not linked.is_file():
-            raise ValidationError(
-                field="source",
-                detail=_("Die verknüpfte Datei wurde nicht gefunden."),
-                constraint="missing_link",
-                values={"source": source_id, "path": source.path},
-            )
-        return linked.read_bytes()
+        return _read_linked_source(
+            source,
+            self.base_dir,
+            field="source",
+            values={"source": source_id},
+        )
 
 
 def new_project(printer: str = "", material: str = "") -> Project:
@@ -163,6 +217,150 @@ def new_project(printer: str = "", material: str = "") -> Project:
 
 def checksum(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def _read_linked_source(
+    source: Source,
+    base_dir: Path,
+    *,
+    field: str,
+    values: dict[str, object],
+    require_checksum: bool = True,
+) -> bytes:
+    """Liest und prüft eine verknüpfte Quelle mit derselben Grenze wie den
+    direkten Import.
+
+    Die Größenabfrage liegt vor dem Lesen; der gedeckelte Lesezug schließt die
+    Lücke, falls die Datei zwischen beiden Schritten wächst.
+    """
+    if require_checksum and (
+        len(source.sha256) != 64
+        or any(character not in "0123456789abcdef" for character in source.sha256)
+    ):
+        raise ValidationError(
+            field=field,
+            detail=_("Eine Quelle stimmt nicht mit ihrer Prüfsumme überein."),
+            constraint="checksum",
+            values={**values, "path": source.path},
+        )
+
+    linked = base_dir / source.path
+    try:
+        resolved_base = base_dir.resolve(strict=True)
+        resolved_link = linked.resolve(strict=True)
+    except FileNotFoundError as problem:
+        raise ValidationError(
+            field=field,
+            detail=_("Die verknüpfte Datei wurde nicht gefunden."),
+            constraint="missing_link",
+            values={**values, "path": source.path},
+        ) from problem
+    try:
+        resolved_link.relative_to(resolved_base)
+    except ValueError as problem:
+        # Ein relativer Text ist noch keine sichere Verknüpfung: Symlinks und
+        # Windows-Junctions können ihn nach außerhalb des Projektordners
+        # auflösen. Geöffnet wird anschließend der geprüfte kanonische Pfad,
+        # damit ein Austausch der letzten Verknüpfung nicht um die Prüfung
+        # herumführt.
+        raise ValidationError(
+            field=field,
+            detail=_("In Projektdateien stehen keine absoluten Pfade."),
+            constraint="absolute_path",
+            values={**values, "path": source.path},
+        ) from problem
+    try:
+        with resolved_link.open("rb") as stream:
+            opened_path = _opened_file_path(stream)
+            try:
+                opened_path.relative_to(resolved_base)
+            except ValueError as problem:
+                raise ValidationError(
+                    field=field,
+                    detail=_("In Projektdateien stehen keine absoluten Pfade."),
+                    constraint="absolute_path",
+                    values={**values, "path": source.path},
+                ) from problem
+            size = os.fstat(stream.fileno()).st_size
+            if size > MAX_FILE_BYTES:
+                raise ValidationError(
+                    field=field,
+                    detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
+                    constraint="file_too_large",
+                    values={
+                        **values,
+                        "path": source.path,
+                        "size": size,
+                        "limit": MAX_FILE_BYTES,
+                    },
+                )
+            payload = stream.read(MAX_FILE_BYTES + 1)
+    except OSError as problem:
+        raise ValidationError(
+            field=field,
+            detail=_("Die Datei lässt sich nicht öffnen; sie ist beschädigt."),
+            constraint="unreadable",
+            values={**values, "path": source.path},
+        ) from problem
+    if len(payload) > MAX_FILE_BYTES:
+        raise ValidationError(
+            field=field,
+            detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            constraint="file_too_large",
+            values={
+                **values,
+                "path": source.path,
+                "size": len(payload),
+                "limit": MAX_FILE_BYTES,
+            },
+        )
+    actual = checksum(payload)
+    if source.sha256 and actual != source.sha256:
+        raise ValidationError(
+            field=field,
+            detail=_("Eine Quelle stimmt nicht mit ihrer Prüfsumme überein."),
+            constraint="checksum",
+            values={**values, "path": source.path},
+        )
+    return payload
+
+
+def _opened_file_path(stream: Any) -> Path:
+    """Ermittelt den kanonischen Pfad des bereits geöffneten Dateihandles."""
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetFinalPathNameByHandleW.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        )
+        kernel32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
+        handle = ctypes.c_void_p(msvcrt.get_osfhandle(stream.fileno()))
+        length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
+        if not length:
+            raise OSError(ctypes.get_last_error(), "Dateipfad konnte nicht geprüft werden")
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        written = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+        if not written or written >= len(buffer):
+            raise OSError(ctypes.get_last_error(), "Dateipfad konnte nicht geprüft werden")
+        name = buffer.value
+        if name.startswith("\\\\?\\UNC\\"):
+            name = "\\\\" + name[8:]
+        elif name.startswith("\\\\?\\"):
+            name = name[4:]
+        return Path(name).resolve(strict=True)
+
+    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
+        descriptor = descriptor_root / str(stream.fileno())
+        if descriptor.exists():
+            return descriptor.resolve(strict=True)
+    if sys.platform == "darwin":
+        import fcntl
+
+        raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 4096)
+        return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
+    raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
 
 
 def embedded_source_path(filename: str, source_id: str) -> str:
@@ -204,6 +402,319 @@ def _check_relative(path: str, where: str) -> None:
             constraint="absolute_path",
             values={"path": path},
         )
+
+
+def _entry_limit(name: str) -> int:
+    """Die Inhaltsgrenze für einen Eintrag des Projektcontainers."""
+    if name == PROJECT_ENTRY:
+        return MAX_PROJECT_JSON_BYTES
+    if name == REPORT_ENTRY:
+        return MAX_REPORT_BYTES
+    if name == THUMBNAIL_ENTRY:
+        return MAX_THUMBNAIL_BYTES
+    if name.startswith(f"{GATHERED_DIR}/"):
+        return MAX_GATHERED_BYTES
+    if name.startswith(part_recipes.CONTAINER_PREFIX):
+        return MAX_RECIPE_BYTES
+    return MAX_ARCHIVE_ENTRY_BYTES
+
+
+def _too_large(detail: TranslatableText, **values: object) -> ValidationError:
+    """Einheitliche, handlungsfähige Absage für Containergrenzen."""
+    return ValidationError(
+        field="container",
+        detail=detail,
+        constraint="file_too_large",
+        values=values,
+    )
+
+
+def _check_outer_size(path: Path) -> None:
+    """Prüft die gepackte Datei, bevor das ZIP-Verzeichnis geöffnet wird."""
+    size = path.stat().st_size
+    if size > MAX_PROJECT_FILE_BYTES:
+        raise _too_large(
+            _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            path=path.name,
+            size=size,
+            limit=MAX_PROJECT_FILE_BYTES,
+        )
+
+
+def _preflight_archive(container: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
+    """Prüft das ZIP-Verzeichnis vollständig vor dem ersten Inhaltslesezug."""
+    infos = container.infolist()
+    if len(infos) > MAX_ARCHIVE_ENTRIES:
+        raise _too_large(
+            _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            entries=len(infos),
+            limit=MAX_ARCHIVE_ENTRIES,
+        )
+
+    by_name: dict[str, zipfile.ZipInfo] = {}
+    unpacked = 0
+    compressed = 0
+    for info in infos:
+        _check_relative(info.filename, "container")
+        if info.filename in by_name:
+            raise ValidationError(
+                field="container",
+                detail=_("Der Projektinhalt ist beschädigt."),
+                constraint="exists",
+                values={"entry": info.filename},
+            )
+        by_name[info.filename] = info
+        compressed += info.compress_size
+
+        limit = _entry_limit(info.filename)
+        if info.file_size > limit:
+            raise _too_large(
+                _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+                entry=info.filename,
+                size=info.file_size,
+                limit=limit,
+            )
+        unpacked += info.file_size
+        if unpacked > MAX_ARCHIVE_UNPACKED_BYTES:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                unpacked=unpacked,
+                limit=MAX_ARCHIVE_UNPACKED_BYTES,
+            )
+
+        if info.file_size < MIN_RATIO_ENTRY_BYTES:
+            continue
+        ratio = info.file_size / max(info.compress_size, 1)
+        if ratio > MAX_COMPRESSION_RATIO:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                entry=info.filename,
+                ratio=round(ratio, 1),
+                limit=MAX_COMPRESSION_RATIO,
+            )
+    if unpacked >= MIN_RATIO_ENTRY_BYTES:
+        ratio = unpacked / max(compressed, 1)
+        if ratio > MAX_COMPRESSION_RATIO:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                ratio=round(ratio, 1),
+                limit=MAX_COMPRESSION_RATIO,
+            )
+    return by_name
+
+
+def _read_archive_entry(
+    container: zipfile.ZipFile,
+    info: zipfile.ZipInfo,
+) -> bytes:
+    """Liest höchstens die erlaubte Eintragsgröße plus ein Prüfbyte."""
+    limit = _entry_limit(info.filename)
+    try:
+        with container.open(info, "r") as stream:
+            payload = stream.read(limit + 1)
+    except (EOFError, NotImplementedError, RuntimeError) as problem:
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"entry": info.filename},
+        ) from problem
+    if len(payload) > limit:
+        raise _too_large(
+            _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            entry=info.filename,
+            size=len(payload),
+            limit=limit,
+        )
+    if len(payload) != info.file_size:
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"entry": info.filename},
+        )
+    return payload
+
+
+def _payload_size(payload: str | bytes) -> int:
+    return len(payload.encode("utf-8")) if isinstance(payload, str) else len(payload)
+
+
+def _check_output_entries(entries: list[tuple[str, str | bytes]]) -> None:
+    """Verhindert, dass Solidon selbst einen später unlesbaren Container baut."""
+    if len(entries) > MAX_ARCHIVE_ENTRIES:
+        raise _too_large(
+            _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            entries=len(entries),
+            limit=MAX_ARCHIVE_ENTRIES,
+        )
+    seen: set[str] = set()
+    unpacked = 0
+    for name, payload in entries:
+        _check_relative(name, "container")
+        if name in seen:
+            raise ValidationError(
+                field="container",
+                detail=_("Der Projektinhalt ist beschädigt."),
+                constraint="exists",
+                values={"entry": name},
+            )
+        seen.add(name)
+        size = _payload_size(payload)
+        limit = _entry_limit(name)
+        if size > limit:
+            raise _too_large(
+                _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+                entry=name,
+                size=size,
+                limit=limit,
+            )
+        unpacked += size
+        if unpacked > MAX_ARCHIVE_UNPACKED_BYTES:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                unpacked=unpacked,
+                limit=MAX_ARCHIVE_UNPACKED_BYTES,
+            )
+
+
+def _validate_json_tree(value: object) -> None:
+    """Begrenzt einen decodierten JSON-Baum iterativ und verlangt endliche Zahlen."""
+    stack: list[tuple[object, int]] = [(value, 0)]
+    nodes = 0
+    while stack:
+        current, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_JSON_NODES:
+            raise ValueError("json_nodes")
+        if depth > MAX_JSON_DEPTH:
+            raise ValueError("json_depth")
+        if isinstance(current, float) and not math.isfinite(current):
+            raise ValueError("non_finite_number")
+        if isinstance(current, str):
+            if len(current) > MAX_JSON_STRING_CHARS:
+                raise ValueError("json_string")
+            continue
+        if isinstance(current, dict):
+            if len(current) > MAX_JSON_COLLECTION_ITEMS:
+                raise ValueError("json_collection")
+            for key, child in current.items():
+                if not isinstance(key, str) or len(key) > MAX_JSON_STRING_CHARS:
+                    raise ValueError("json_key")
+                stack.append((child, depth + 1))
+            continue
+        if isinstance(current, list):
+            if len(current) > MAX_JSON_COLLECTION_ITEMS:
+                raise ValueError("json_collection")
+            stack.extend((child, depth + 1) for child in current)
+
+
+def _mapping(data: dict[str, Any], name: str) -> dict[str, Any]:
+    value = data.get(name, {})
+    if not isinstance(value, dict):
+        raise ValueError(f"schema:{name}")
+    return value
+
+
+def _records(data: dict[str, Any], name: str) -> list[dict[str, Any]]:
+    value = data.get(name, [])
+    if not isinstance(value, list) or any(not isinstance(entry, dict) for entry in value):
+        raise ValueError(f"schema:{name}")
+    return value
+
+
+def _check_schema_count(name: str, size: int, limit: int) -> None:
+    if size > limit:
+        raise _too_large(
+            _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+            field=name,
+            size=size,
+            limit=limit,
+        )
+
+
+def _validate_project_schema(data: object) -> dict[str, Any]:
+    """Prüft Form und Mengen des aktuellen Projekts vor der Deserialisierung."""
+    _validate_json_tree(data)
+    if not isinstance(data, dict):
+        raise ValueError("schema:project")
+    version = data.get("format_version")
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise ValueError("schema:format_version")
+
+    for name in ("scene", "libs", "parameters", "sources", "numbering"):
+        _mapping(data, name)
+    parameters = _mapping(data, "parameters")
+    sources = _mapping(data, "sources")
+    fits = _records(data, "fits")
+    transactions = _records(data, "transactions")
+    operations = _records(data, "ops")
+    chat = _records(data, "chat")
+    if any(not isinstance(entry, dict) for entry in parameters.values()):
+        raise ValueError("schema:parameters")
+    if any(not isinstance(entry, dict) for entry in sources.values()):
+        raise ValueError("schema:sources")
+
+    _check_schema_count("parameters", len(parameters), MAX_PROJECT_PARAMETERS)
+    _check_schema_count("sources", len(sources), MAX_PROJECT_SOURCES)
+    _check_schema_count("fits", len(fits), MAX_PROJECT_FITS)
+    _check_schema_count("transactions", len(transactions), MAX_PROJECT_TRANSACTIONS)
+    _check_schema_count("ops", len(operations), MAX_PROJECT_OPERATIONS)
+    _check_schema_count("chat", len(chat), MAX_PROJECT_CHAT_ENTRIES)
+
+    objects: set[str] = set()
+    for operation in operations:
+        if (
+            isinstance(operation.get("id"), bool)
+            or not isinstance(operation.get("id"), int)
+            or not isinstance(operation.get("op"), str)
+        ):
+            raise ValueError("schema:op")
+        for name in ("in", "out"):
+            references = operation.get(name, [])
+            if not isinstance(references, list) or any(
+                not isinstance(reference, str) for reference in references
+            ):
+                raise ValueError(f"schema:op.{name}")
+            if name == "out":
+                objects.update(references)
+        if not isinstance(operation.get("params", {}), dict):
+            raise ValueError("schema:op.params")
+        if operation.get("solver") is not None and not isinstance(operation["solver"], dict):
+            raise ValueError("schema:op.solver")
+        matches = operation.get("matches", {})
+        if not isinstance(matches, dict) or any(
+            not isinstance(entry, dict) for entry in matches.values()
+        ):
+            raise ValueError("schema:op.matches")
+        translatable = operation.get("translatable", [])
+        if not isinstance(translatable, list) or any(
+            not isinstance(entry, str) for entry in translatable
+        ):
+            raise ValueError("schema:op.translatable")
+    _check_schema_count("objects", len(objects), MAX_PROJECT_OBJECTS)
+    return data
+
+
+def _validate_report_schema(data: object) -> dict[str, Any]:
+    """Prüft den Bericht mit denselben Strukturgrenzen wie das Dokument."""
+    _validate_json_tree(data)
+    if not isinstance(data, dict):
+        raise ValueError("schema:report")
+    findings = data.get("findings", [])
+    if not isinstance(findings, list) or any(not isinstance(entry, dict) for entry in findings):
+        raise ValueError("schema:report.findings")
+    _check_schema_count("findings", len(findings), MAX_REPORT_FINDINGS)
+    for finding in findings:
+        suggestions = finding.get("suggestions", [])
+        if suggestions is not None and (
+            not isinstance(suggestions, list)
+            or any(not isinstance(entry, dict) for entry in suggestions)
+        ):
+            raise ValueError("schema:report.suggestions")
+        if not isinstance(finding.get("values", {}), dict):
+            raise ValueError("schema:report.values")
+    return data
 
 
 # --- Schreiben -------------------------------------------------------------------
@@ -295,9 +806,24 @@ def save(project: Project, path: Path) -> Path:
     for source_id, source in list(document.sources.items()):
         _check_relative(source.path, f"sources.{source_id}.path")
         if not source.embedded:
+            linked_payload = _read_linked_source(
+                source,
+                path.parent,
+                field=f"sources.{source_id}",
+                values={"source": source_id},
+                require_checksum=False,
+            )
+            # Ein neuer Link darf ohne Abdruck im Arbeitsspeicher entstehen;
+            # spätestens die erste Speicherung bindet ihn an genau die Datei,
+            # die dabei vorlag. Einen vorhandenen, falschen Abdruck hat der
+            # Leser davor bereits abgelehnt.
+            document.sources[source_id] = dataclasses.replace(
+                source,
+                sha256=checksum(linked_payload),
+            )
             continue
-        payload = project.sources.get(source_id)
-        if payload is None:
+        embedded_payload = project.sources.get(source_id)
+        if embedded_payload is None:
             raise ValidationError(
                 field=f"sources.{source_id}",
                 detail=_("Eine eingebettete Quelle hat keinen Inhalt."),
@@ -306,7 +832,10 @@ def save(project: Project, path: Path) -> Path:
             )
         # Die Prüfsumme ist Teil des Dokuments, also füllt das Speichern sie
         # ein (§16.1).
-        document.sources[source_id] = dataclasses.replace(source, sha256=checksum(payload))
+        document.sources[source_id] = dataclasses.replace(
+            source,
+            sha256=checksum(embedded_payload),
+        )
 
     # §9: Was ein Editor gesammelt hat, kann groß werden — eine
     # Sculpting-Sitzung mit viertausend Zügen ist ein halbes Megabyte Zahlen in
@@ -314,34 +843,85 @@ def save(project: Project, path: Path) -> Path:
     # Container, und im Dokument steht ein Verweis. Gearbeitet wird auf der
     # frisch serialisierten Kopie: Das Dokument im Speicher bleibt, was es ist.
     data = document_to_data(document)
+    _validate_project_schema(data)
+    if has_lone_surrogate(data):
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"reason": "unicode_scalar"},
+        )
     gathered_payloads = externalise(data, _next_gathered(data))
 
-    ensure_dir(path.parent)
-    temporary = path.with_name(path.name + ".part")
-    with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as container:
-        _write(container, PROJECT_ENTRY, json.dumps(data, indent=2, ensure_ascii=False))
-        for source_id, payload in gathered_payloads.items():
-            _write(container, gathered_path(source_id), payload)
-        for source_id, source in document.sources.items():
-            if source.embedded:
-                _write(container, source.path, project.sources[source_id])
-        _write(
-            container,
-            REPORT_ENTRY,
-            json.dumps(report_to_data(project.report), indent=2, ensure_ascii=False),
+    report_data = report_to_data(project.report)
+    _validate_report_schema(report_data)
+    if has_lone_surrogate(report_data):
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"reason": "unicode_scalar"},
         )
-        # Ein Rezept reist mit jedem Projekt, das es benutzt (Entscheidung
-        # Robert, 24.08.2026; Konzept Befestigungssysteme §17.1). Daten, kein
-        # Code — die Sicherheitslage ist die der ``project.json`` selbst.
-        # Zusätzliche Einträge, kein Formatschritt: Eine ältere Version liest
-        # den Container weiter und hält wie bisher bei ``parts.missing`` an.
-        for part_name, payload_text in part_recipes.for_container(document).items():
-            _write(container, part_recipes.container_entry(part_name), payload_text)
-        if project.thumbnail is not None:
-            _write(container, THUMBNAIL_ENTRY, project.thumbnail)
-    # Derselbe atomare Wechsel wie ``os.replace`` — ``Path.replace`` ruft ihn
-    # auf. Eine halb geschriebene Projektdatei darf es nie geben.
-    temporary.replace(path)
+
+    entries: list[tuple[str, str | bytes]] = [
+        (PROJECT_ENTRY, json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False))
+    ]
+    entries.extend(
+        (gathered_path(source_id), payload) for source_id, payload in gathered_payloads.items()
+    )
+    entries.extend(
+        (source.path, project.sources[source_id])
+        for source_id, source in document.sources.items()
+        if source.embedded
+    )
+    entries.append(
+        (
+            REPORT_ENTRY,
+            json.dumps(report_data, indent=2, ensure_ascii=False, allow_nan=False),
+        )
+    )
+    # Ein Rezept reist mit jedem Projekt, das es benutzt (Entscheidung
+    # Robert, 24.08.2026; Konzept Befestigungssysteme §17.1). Daten, kein
+    # Code — die Sicherheitslage ist die der ``project.json`` selbst.
+    # Zusätzliche Einträge, kein Formatschritt: Eine ältere Version liest
+    # den Container weiter und hält wie bisher bei ``parts.missing`` an.
+    entries.extend(
+        (part_recipes.container_entry(part_name), payload_text)
+        for part_name, payload_text in part_recipes.for_container(document).items()
+    )
+    if project.thumbnail is not None:
+        entries.append((THUMBNAIL_ENTRY, project.thumbnail))
+    _check_output_entries(entries)
+
+    ensure_dir(path.parent)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.",
+        suffix=".part",
+        dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w+b") as stream:
+            with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as container:
+                for name, entry_payload in entries:
+                    _write(container, name, entry_payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+            size = os.fstat(stream.fileno()).st_size
+        if size > MAX_PROJECT_FILE_BYTES:
+            raise _too_large(
+                _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+                path=path.name,
+                size=size,
+                limit=MAX_PROJECT_FILE_BYTES,
+            )
+        # Das zufällige, exklusiv angelegte Ziel liegt im selben Ordner; der
+        # Wechsel bleibt damit atomar, ohne ein vorhersagbares ``.part``-Ziel
+        # zu öffnen oder einer dort vorbereiteten Verknüpfung zu folgen.
+        temporary.replace(path)
+    finally:
+        with suppress(FileNotFoundError):
+            temporary.unlink()
     _log.info("saved project %s", path.name)
     return path
 
@@ -358,9 +938,11 @@ def load(path: Path) -> Project:
             constraint="missing_file",
             values={"path": path.name},
         )
+    _check_outer_size(path)
     try:
         with zipfile.ZipFile(path) as container:
-            names = set(container.namelist())
+            infos = _preflight_archive(container)
+            names = set(infos)
             if PROJECT_ENTRY not in names:
                 raise ValidationError(
                     field="container",
@@ -368,10 +950,11 @@ def load(path: Path) -> Project:
                     constraint="not_a_project",
                     values={"path": path.name},
                 )
-            for name in names:
-                _check_relative(name, "container")
-
-            data = migrate(json.loads(container.read(PROJECT_ENTRY)))
+            data = json.loads(_read_archive_entry(container, infos[PROJECT_ENTRY]))
+            if has_lone_surrogate(data):
+                raise ValueError("unicode_scalar")
+            data = _validate_project_schema(data)
+            data = migrate(data)
             # Die ausgelagerten Sammelwerte zurück ins Dokument, bevor daraus
             # eines wird: Ein Verweis, den niemand auflöst, wäre für jede
             # Operation dahinter ein Text ohne Inhalt und ein leeres Ergebnis
@@ -379,11 +962,12 @@ def load(path: Path) -> Project:
             inline(
                 data,
                 {
-                    source_id: container.read(gathered_path(source_id))
+                    source_id: _read_archive_entry(container, infos[gathered_path(source_id)])
                     for source_id in references(data)
                     if gathered_path(source_id) in names
                 },
             )
+            data = _validate_project_schema(data)
             document = document_from_data(data)
 
             # Mitgereiste Rezepte aufnehmen, bevor irgendetwas rechnet: Die
@@ -403,11 +987,30 @@ def load(path: Path) -> Project:
                 # ``try`` des Aufnehmens vorbei und ließ das ganze Projekt mit
                 # „Der Projektinhalt ist beschädigt" abbrechen — obwohl das
                 # Dokument heil war.
-                arrived.extend(part_recipes.adopt_payload(container.read(entry_name), entry_name))
+                arrived.extend(
+                    part_recipes.adopt_payload(
+                        _read_archive_entry(container, infos[entry_name]),
+                        entry_name,
+                    )
+                )
 
             payloads: dict[SourceId, bytes] = {}
+            linked_bytes = 0
             for source_id, source in document.sources.items():
                 if not source.embedded:
+                    linked_payload = _read_linked_source(
+                        source,
+                        path.parent,
+                        field=f"sources.{source_id}",
+                        values={"source": source_id},
+                    )
+                    linked_bytes += len(linked_payload)
+                    if linked_bytes > MAX_LINKED_SOURCE_BYTES:
+                        raise _too_large(
+                            _("Die Datei ist größer, als diese Anwendung verarbeitet."),
+                            sources=linked_bytes,
+                            limit=MAX_LINKED_SOURCE_BYTES,
+                        )
                     continue
                 if source.path not in names:
                     raise ValidationError(
@@ -416,8 +1019,8 @@ def load(path: Path) -> Project:
                         constraint="missing_payload",
                         values={"source": source_id, "path": source.path},
                     )
-                payload = container.read(source.path)
-                if source.sha256 and checksum(payload) != source.sha256:
+                payload = _read_archive_entry(container, infos[source.path])
+                if not source.sha256 or checksum(payload) != source.sha256:
                     raise ValidationError(
                         field=f"sources.{source_id}",
                         detail=_("Eine Quelle stimmt nicht mit ihrer Prüfsumme überein."),
@@ -426,18 +1029,25 @@ def load(path: Path) -> Project:
                     )
                 payloads[source_id] = payload
 
-            report = (
-                report_from_data(json.loads(container.read(REPORT_ENTRY)))
-                if REPORT_ENTRY in names
-                else Report()
-            )
+            if REPORT_ENTRY in names:
+                report_data = json.loads(_read_archive_entry(container, infos[REPORT_ENTRY]))
+                if has_lone_surrogate(report_data):
+                    raise ValueError("unicode_scalar")
+                report_data = _validate_report_schema(report_data)
+                report = report_from_data(report_data)
+            else:
+                report = Report()
             if arrived:
                 # Was beim Aufnehmen schiefging, steht im Bericht der Datei —
                 # sichtbar, bis die erste Auswertung ihn ersetzt, und die
                 # scheitert an einem fehlenden Baustein dann mit eigener
                 # Meldung (§15.2).
                 report = Report(findings=(*report.findings, *arrived))
-            thumbnail = container.read(THUMBNAIL_ENTRY) if THUMBNAIL_ENTRY in names else None
+            thumbnail = (
+                _read_archive_entry(container, infos[THUMBNAIL_ENTRY])
+                if THUMBNAIL_ENTRY in names
+                else None
+            )
     except zipfile.BadZipFile as problem:
         raise ValidationError(
             field="container",
@@ -452,7 +1062,15 @@ def load(path: Path) -> Project:
             constraint="damaged",
             values={"path": path.name},
         ) from problem
-    except (KeyError, ValueError, TypeError) as problem:
+    except (
+        AttributeError,
+        KeyError,
+        OverflowError,
+        RecursionError,
+        TypeError,
+        UnicodeError,
+        ValueError,
+    ) as problem:
         # Syntaktisch gültiges, strukturell kaputtes JSON: ein fehlender
         # Pflichtschlüssel, eine Zeichenkette, wo eine Zahl stehen muss.
         # Fünf solcher Wege verließen ``load()`` als rohe Ausnahme ohne
@@ -551,6 +1169,15 @@ def clear_autosave(path: Path | None) -> None:
 def project_data(path: Path) -> dict[str, Any]:
     """Das rohe ``project.json`` eines Containers — für Diagnose und
     Migrationstests."""
+    _check_outer_size(path)
     with zipfile.ZipFile(path) as container:
-        result: dict[str, Any] = json.loads(container.read(PROJECT_ENTRY))
+        infos = _preflight_archive(container)
+        if PROJECT_ENTRY not in infos:
+            raise ValidationError(
+                field="container",
+                detail=_("Der Datei fehlt der Projektinhalt."),
+                constraint="not_a_project",
+                values={"path": path.name},
+            )
+        result: dict[str, Any] = json.loads(_read_archive_entry(container, infos[PROJECT_ENTRY]))
         return result

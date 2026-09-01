@@ -44,7 +44,7 @@ from PySide6.QtGui import QImage, QPainter
 from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
-from app.i18n import SOURCE_LANGUAGE, _, install_catalog, set_language
+from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
 from app.i18n.catalog import read_catalog
 
 #: Wohin die Belege gehen.
@@ -87,9 +87,7 @@ PADDING = 12
 #: Die Region steht als **Name** und nicht als vier Zahlen: „ab dem linken Rand
 #: des Viewports" bleibt richtig, wenn jemand die Spaltenbreite ändert; „ab 270"
 #: wäre am nächsten Tag eine Zahl ohne Herkunft.
-CROPS: dict[str, str] = {
-    "beleg-erzeugt": "viewport_und_bericht",
-}
+CROPS: dict[str, str] = {}
 
 #: Auf diese Breite wird ein Ausschnitt herunterskaliert. 900 zu 460 Punkten
 #: Anzeige sind 1,96 — deutlich über der Grenze von 1,3 und ohne die Bytes, die
@@ -187,20 +185,6 @@ GAP = 8
 #: Befundsorten zeigt weiterhin das ``report.png`` der Fremddatei im
 #: Handbuch; hier steht ein Bericht, der sagt, dass nichts zu tun ist.
 WEB_EXAMPLE = "schild-zweifarbig.p3d"
-
-#: Das erzeugte Modell für den Aufmacher von ``ki-modelle.html``. Es liegt im
-#: Repository und wird **nicht** bei jedem Lauf neu erzeugt: Weg 3 braucht ein
-#: laufendes ComfyUI mit 7,5 GB Gewichten und einer Grafikkarte, und ein Motiv,
-#: das nur auf einer Maschine entstehen kann, ist keines. Entstanden ist es
-#: einmal über genau diesen Weg — TripoSG, Satz „a stylised owl figurine with
-#: folded wings, standing on a round base", Startwert 7, 31,6 Sekunden.
-GENERATED = Path(__file__).resolve().parent / "data" / "generated-owl.glb"
-
-#: Worauf die längste Kante gebracht wird. Nicht die Originalgröße: Was ein
-#: Generator liefert, misst hier 19 mm, und auf einem 220er Bett sieht das aus
-#: wie ein Fehler statt wie ein Teil. 120 mm füllen die Ansicht und bleiben
-#: eine Größe, die jemand wirklich druckt.
-GENERATED_MM = 120.0
 
 #: Zwei grüne Sätze je Sprache: wasserdicht, druckfertig. Gestellt wie
 #: ``figures.SAMPLE_FINDINGS`` und aus demselben Grund — nur passt hier die
@@ -581,78 +565,6 @@ def take_transformation() -> tuple[Path, Path]:
     return written[0], written[1]
 
 
-def take_generated(app: QApplication, language: str) -> Path:
-    """Ein erzeugtes Modell in der Anwendung — der Aufmacher von `ki-modelle`.
-
-    Die Seite behauptet: „Die Generatoren machen aus einem Satz eine Form. Was
-    sie nicht machen, ist ein Teil, das passt." Das Bild belegt beide Hälften
-    in einem Blick — links der Verlauf mit den drei Schritten, rechts der
-    Prüfbericht mit dem, was an einer frisch erzeugten Form auffällt, und in
-    der Statuszeile stehen Gewicht und Druckzeit.
-
-    **Das Modell liegt im Repository und wird nicht neu erzeugt** (`GENERATED`).
-    Erzeugt wurde es einmal über Weg 3 — TripoSG in einem lokalen ComfyUI, aus
-    dem Satz „a stylised owl figurine with folded wings, standing on a round
-    base", Startwert 7, 31,6 Sekunden. Es hier abzulegen kostet knapp vier
-    Megabyte und macht das Bild in jeder Sprache reproduzierbar, auch auf einem
-    Rechner ohne Grafikkarte und ohne ComfyUI. Ein Motiv, das nur auf einer
-    Maschine entstehen kann, ist keines.
-
-    **Die Einheit wird mitgegeben, und das ist kein Kniff.** Ein Generator
-    normiert seine Ausgabe; die Eule misst 2,5 Einheiten in der Diagonale, und
-    `detect_unit` erkennt daran nichts Sicheres. Der Kern fragt dann über
-    `ctx.ask` (Regel 21) — im Fenster ein modaler Dialog, in einem Bilderlauf
-    ein Stillstand bis zum Zeitlimit. Der Kunde beantwortet die Frage, hier
-    steht die Antwort im Aufruf.
-    """
-    from app.core.scene.history import OperationDraft
-    from app.ui.main_window import MainWindow
-    from app.ui.session import Session
-    from app.ui.settings import UiSettings
-
-    session = Session()
-    window = figures.prepared(
-        MainWindow(session, UiSettings()), WEB_WINDOW, hidden=False, maximize=False
-    )
-    session.import_model(GENERATED, unit="cm")
-    if not figures.await_result(app, session):
-        raise SystemExit("Die Auswertung wurde nicht fertig — kein Bild vom Modell")
-
-    body = next(iter(session.last_result.scene.objects.values()))
-    # Zwei Schritte, die jeder Kunde nach einer Generierung geht: auf Maß
-    # bringen (eine Zahl, kein Faktor) und aufs Bett setzen. Ohne den zweiten
-    # steckt die Eule 5,51 mm im Druckbett, und der Prüfbericht sagt es auch.
-    session.apply(
-        _("Auf Maß bringen"),
-        [
-            OperationDraft(
-                op="fit_to_size",
-                inputs=(body.id,),
-                outputs=(body.id,),
-                params={"largest": GENERATED_MM},
-            )
-        ],
-    )
-    session.apply(
-        _("Auf das Bett setzen"),
-        [OperationDraft(op="place_on_bed", inputs=(body.id,), outputs=(body.id,), params={})],
-    )
-    if not figures.await_result(app, session):
-        raise SystemExit("Die Auswertung nach dem Skalieren wurde nicht fertig")
-
-    window.raise_()
-    window.activateWindow()
-    figures.settle(app, 60)
-    target = named("beleg-erzeugt", language)
-    _capture(window, "beleg-erzeugt", target)
-
-    # Nichts speichern wollen, sonst fragt ``closeEvent`` modal danach.
-    session._dirty = False
-    window.close()
-    figures.release_viewport(window)
-    return target
-
-
 def main() -> int:
     os.environ.pop("QT_QPA_PLATFORM", None)
 
@@ -681,7 +593,6 @@ def main() -> int:
         motive = (
             take_parts(language),
             *take_windows(app, language),
-            take_generated(app, language),
         )
         if language == SOURCE_LANGUAGE:
             # Das Verwandlungspaar trägt keinen Text und entsteht deshalb

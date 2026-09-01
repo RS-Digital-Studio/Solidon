@@ -50,6 +50,7 @@ from PySide6.QtGui import QCursor, QGuiApplication, QImage, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
+from app.core.process import run_limited, trusted_cwd
 from app.ui.theme import THEMES
 
 #: Wie viel größer als die Zeilenhöhe ein Zeiger gezeichnet wird. Deutlich
@@ -279,20 +280,18 @@ def _from_macos_defaults() -> int:
     „Normalgröße".
     """
     try:
-        answer = subprocess.run(
+        answer = run_limited(
             ["defaults", "read", "com.apple.universalaccess", "mouseDriverCursorSize"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
+            cwd=trusted_cwd(),
             timeout=2.0,
-            check=False,
+            output_limit=4096,
         )
     except (OSError, subprocess.SubprocessError):
         return 0
     if answer.returncode != 0:
         return 0
     try:
-        factor = float(answer.stdout.strip())
+        factor = float(answer.stdout.decode("utf-8", errors="replace").strip())
     except ValueError:
         return 0
     return round(BASE_SIZE * factor) if factor > 0 else 0

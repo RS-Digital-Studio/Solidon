@@ -273,8 +273,8 @@ def test_the_press_drafts_count_the_same_changes() -> None:
     # **Nur bis zur beworbenen Fassung.** Ein Anschreiben für 0.2.2 nennt die
     # Zahl zum Stand 0.2.2; sobald der Abschnitt der nächsten Fassung
     # entsteht, wäre jede Zahl darin falsch, obwohl niemand sie angefasst hat.
-    # Gemessen am 31.08.2026: Die vierzehn Punkte von 0.2.3 machten 263 zu
-    # 277, und die Entwürfe hatten recht behalten, nicht der Test.
+    # Gemessen am 31.08.2026: Die Punkte des 0.3.0-Entwurfs erhöhten die
+    # Gesamtzahl, und die Entwürfe hatten recht behalten, nicht der Test.
     if APP_VERSION in versionen:
         versionen = versionen[versionen.index(APP_VERSION) :]
     dieser_stand = len(changelog_for(APP_VERSION, SOURCE_LANGUAGE))

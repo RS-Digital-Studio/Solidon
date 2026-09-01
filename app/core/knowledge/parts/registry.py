@@ -55,7 +55,7 @@ Parameterstellung keine Vorbereitung braucht.
 #: Wie ein Bausteinname aussehen darf.
 #:
 #: Öffentlich, weil zwei Module ihn brauchen: Diese Prüfung hier beim
-#: Einsetzen und die Dateiprüfung, bevor eine Datei überhaupt hinausgeht
+#: Einsetzen und die Dateiprüfung vor Import und Export
 #: (shared.rules). Als private Konstante hätte die zweite Seite ihn
 #: abschreiben müssen — und ein abgeschriebenes Muster ist eines, das beim
 #: nächsten Zuwachs auseinanderläuft.
@@ -109,6 +109,69 @@ class PartChange:
     reason: str
     effect: str = ""
     """Was sie an den Maßen ändert — das, worauf es für alte Projekte ankommt."""
+
+
+@dataclass(frozen=True, slots=True)
+class WallRequirement:
+    """Der fachliche Mindestwandvertrag eines Bausteins."""
+
+    parameter: str | None = None
+    reason: str | None = None
+    when: str | None = None
+    equals: Any = True
+
+    @classmethod
+    def from_parameter(cls, name: str) -> WallRequirement:
+        """Die Untergrenze kommt aus einem benannten Geometrieparameter."""
+        if not name.strip():
+            raise ValueError("der Wandparameter braucht einen Namen")
+        return cls(parameter=name)
+
+    @classmethod
+    def not_applicable(cls, reason: str) -> WallRequirement:
+        """Keine Wandprüfung, mit der fachlichen Begründung als Vertrag."""
+        if not reason.strip():
+            raise ValueError("eine ausgelassene Wandprüfung braucht eine Begründung")
+        return cls(reason=reason.strip())
+
+    @classmethod
+    def not_applicable_when(cls, name: str, equals: Any, reason: str) -> WallRequirement:
+        """Nur eine fachlich benannte Parameterstellung ist kein Druckkörper."""
+        if not name.strip():
+            raise ValueError("die Bedingung braucht einen Parameternamen")
+        if not reason.strip():
+            raise ValueError("eine ausgelassene Wandprüfung braucht eine Begründung")
+        return cls(reason=reason.strip(), when=name, equals=equals)
+
+    def minimum(self, values: dict[str, Any], profile: Profile) -> float | None:
+        """Die Untergrenze für genau diese Parameterkombination."""
+        if self.reason is not None and (self.when is None or values.get(self.when) == self.equals):
+            return None
+        if self.parameter is None:
+            return profile.minimum_wall_thickness
+        if self.parameter not in values:
+            raise ValueError(f"Wandparameter {self.parameter!r} fehlt")
+        minimum = float(values[self.parameter])
+        if minimum <= 0.0:
+            raise ValueError(f"Wandparameter {self.parameter!r} ist nicht positiv")
+        return min(minimum, profile.minimum_wall_thickness)
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureRequirement:
+    """Ein Merkmal und die Parameterstellung, in der es vorkommen muss."""
+
+    name: str
+    when: str | None = None
+    equals: Any = True
+    unless: str | None = None
+    unless_equals: Any = True
+
+    def applies(self, values: dict[str, Any]) -> bool:
+        """Ob das Merkmal in dieser Grenzkombination versprochen ist."""
+        required = self.when is None or values.get(self.when) == self.equals
+        excluded = self.unless is not None and values.get(self.unless) == self.unless_equals
+        return required and not excluded
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +364,10 @@ class PartSpec:
     """
     features: tuple[str, ...] = ()
     """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
+    wall: WallRequirement = WallRequirement()
+    """Ausführbarer Wandvertrag für den Bereichstest (§24.3)."""
+    feature_requirements: tuple[FeatureRequirement, ...] = ()
+    """Ausführbarer Merkmalsvertrag, einschließlich bedingter Merkmale."""
     doc: TranslatableText | str = ""
     caveat: TranslatableText | str = ""
     """Wo dieser Baustein die falsche Wahl ist (§24).
@@ -380,6 +447,17 @@ class PartRegistry:
         Fehler — zurücknehmen ist idempotent.
         """
         self._parts.pop(name, None)
+
+    def replace_state(self, prepared: PartRegistry) -> None:
+        """Aktiviert einen vollständig vorbereiteten Registerstand.
+
+        Rezeptdateien werden zuerst in einem isolierten Register geprüft und
+        erst nach ihrer atomaren Veröffentlichung sichtbar. Hier wird deshalb
+        bewusst nicht erneut validiert: Nach dem Platten-Commit darf kein
+        zweiter, fehlbarer Aufbau Datei und laufende Sitzung trennen.
+        """
+
+        self._parts = prepared._parts
 
     def _check(self, spec: PartSpec) -> None:
         if not NAME_PATTERN.match(spec.name):
@@ -496,6 +574,8 @@ def register_part(
     joined_by_host: bool = False,
     bodies: int = 1,
     features: Iterable[str] = (),
+    wall: WallRequirement | None = None,
+    feature_requirements: Iterable[FeatureRequirement] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
     changes: Sequence[PartChange] = (),
@@ -507,6 +587,10 @@ def register_part(
     """
 
     def decorate(fn: PartFn) -> PartFn:
+        declared_features = tuple(features)
+        declared_requirements = tuple(feature_requirements) or tuple(
+            FeatureRequirement(feature) for feature in declared_features
+        )
         (registry or PARTS).register(
             PartSpec(
                 name=name,
@@ -534,7 +618,9 @@ def register_part(
                 keeps_up=keeps_up,
                 lies_flat=lies_flat,
                 joined_by_host=joined_by_host,
-                features=tuple(features),
+                features=declared_features,
+                wall=wall or WallRequirement(),
+                feature_requirements=declared_requirements,
                 doc=doc,
                 caveat=caveat,
                 changes=tuple(changes),
@@ -568,10 +654,10 @@ def register_part(
 #: Lagersitz und optionale Sondermaße für Magnet und Kabel hinzu; Letztere
 #: ändern bestehende Projekte nicht und stehen deshalb nicht in deren
 #: Maßänderungsverlauf (28.08.2026).
-#: Version 13: Schnapphaken und Lochwand-Einhänger vereinigen ihre Teilkörper
-#: ohne innere Schnittflächen, die polygonale Scharnieraußenwand hält ihr
-#: Nennmaß, und Fuß sowie Fußtasche entstehen aus je einem Drehprofil
-#: (``mechanics.py``, ``mounting.py``, 31.08.2026).
+#: Version 13: Das Bolzenscharnier bemisst seine zugesagte Wandstärke außerhalb
+#: des radialen Druckspalts, der kleinste Schwalbenschwanzstift behält einen
+#: druckbaren Querschnitt, und der Standfuß trägt keine innere Ringschulter
+#: mehr (``mechanics.py``, ``mounting.py``, 31.08.2026).
 LIBRARY_VERSION: Final = "13"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie

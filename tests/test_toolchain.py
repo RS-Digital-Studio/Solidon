@@ -501,9 +501,129 @@ def test_developer_notes_stay_off_the_public_server() -> None:
     assert not upload.wanted(upload.LOCAL_ROOT / "operator.token")
     assert not upload.wanted(upload.LOCAL_ROOT / "api" / "activation.sqlite")
     assert not upload.wanted(upload.LOCAL_ROOT / "Anfrage.solidon-request")
+    private_projects = {
+        "gehaeuse.p3d",
+        "klappbox.p3d",
+        "lochwandhalter.p3d",
+        "rollenhalter.p3d",
+        "schraubdose.p3d",
+        "weg1-halter-anpassen.p3d",
+        "weg3-eule-generiert.p3d",
+        "weg4-stein-formen.p3d",
+    }
+    for name in private_projects:
+        assert not upload.wanted(upload.LOCAL_ROOT / "teile" / name)
+    assert not upload.wanted(upload.LOCAL_ROOT / "teile" / "erzeugungsnotiz.json")
     assert upload.wanted(upload.LOCAL_ROOT / "index.html")
-    assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "schau-skull.webp")
+    assert upload.wanted(upload.LOCAL_ROOT / "bilder" / "beleg.webp")
+    for retired in (
+        "api/shared.php",
+        "api/shared_common.php",
+        "api/shared_store.php",
+        "api/shared_moderate.php",
+        "api/shared-rules.json",
+        "api/shared-texts.json",
+        "boerse.html",
+        "boerse.js",
+        "tauschboerse-bedingungen.html",
+        "en/exchange.html",
+    ):
+        assert not upload.wanted(upload.LOCAL_ROOT / retired)
     assert all(path.suffix != ".md" for path in upload.local_files())
+    assert all(
+        path.relative_to(upload.LOCAL_ROOT).parts[0] != "teile" for path in upload.local_files()
+    )
+
+
+def test_retired_shared_inventory_only_contains_explicit_server_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Bereinigungslauf löscht ausschließlich die fest benannten Altdateien."""
+
+    import tools.upload_website as upload
+
+    monkeypatch.setattr(
+        upload,
+        "remote_index",
+        lambda _session, _root: {
+            "api/shared.php": 10,
+            "boerse.js": 20,
+            "index.html": 30,
+            "api/support.php": 40,
+        },
+    )
+
+    assert upload.retired_shared_files(object(), "httpdocs") == [
+        "api/shared.php",
+        "boerse.js",
+    ]
+
+
+def test_confirmed_retired_shared_cleanup_deletes_no_unrelated_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die bestätigte Bereinigung bleibt auf der unveränderlichen Positivliste."""
+
+    import tools.upload_website as upload
+
+    class Session:
+        def __init__(self) -> None:
+            self.deleted: list[str] = []
+
+        def delete(self, path: str) -> None:
+            self.deleted.append(path)
+
+        def quit(self) -> None:
+            pass
+
+    session = Session()
+    monkeypatch.setattr(upload, "read_access", lambda: dict(upload.TEMPLATE))
+    monkeypatch.setattr(upload, "connect", lambda _access: session)
+    monkeypatch.setattr(
+        upload,
+        "remote_index",
+        lambda _session, _root: {
+            "api/shared.php": 10,
+            "index.html": 20,
+            "api/support.php": 30,
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["upload_website.py", "--entfernte-tauschstelle", "--wirklich"],
+    )
+
+    assert upload.main() == 0
+    assert session.deleted == ["/solidon3d.de/httpdocs/api/shared.php"]
+
+
+def test_a_named_website_build_source_never_reaches_the_upload_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Auswahlsperre gilt auch für Dateiargumente, ``--geaendert`` und ``--seit``.
+
+    Alle drei Wege laufen nach ihrer Auswahl durch dieselbe Grenze in ``main``.
+    Nur ``local_files`` zu filtern schützt dagegen ausschließlich ``--fehlend``.
+    """
+    import tools.upload_website as upload
+
+    source = upload.LOCAL_ROOT / "teile" / "gehaeuse.p3d"
+    assert source.is_file(), "die geprüfte Website-Bauquelle fehlt"
+    connected = False
+
+    def connect(_access: dict[str, Any]) -> object:
+        nonlocal connected
+        connected = True
+        raise AssertionError("eine private Bauquelle erreichte die Netzgrenze")
+
+    monkeypatch.setattr(upload, "read_access", lambda: dict(upload.TEMPLATE))
+    monkeypatch.setattr(upload, "connect", connect)
+    monkeypatch.setattr(sys, "argv", ["upload_website.py", str(source)])
+
+    with pytest.raises(SystemExit, match="nicht auf den Webserver"):
+        upload.main()
+    assert not connected
 
 
 def test_uploading_a_page_includes_its_outdated_stamped_assets(
@@ -925,10 +1045,14 @@ class _AttrappeFTP:
         self.version_json = version_json
         self.dateien = dateien
         self.geloescht: list[str] = []
+        self.timeout = 30.0
 
-    def retrbinary(self, befehl: str, schreiben: Any) -> None:
+    def transfercmd(self, befehl: str) -> Any:
         assert befehl.startswith("RETR "), befehl
-        schreiben(json.dumps(self.version_json).encode("utf-8"))
+        return _AttrappeDatenkanal(json.dumps(self.version_json).encode("utf-8"))
+
+    def voidresp(self) -> str:
+        return "226 Transfer complete"
 
     def mlsd(self, path: str, facts: list[str] | None = None) -> list[tuple[str, dict[str, str]]]:
         if not path.endswith("/dl"):
@@ -939,9 +1063,25 @@ class _AttrappeFTP:
         self.geloescht.append(pfad)
 
 
+class _AttrappeDatenkanal:
+    def __init__(self, body: bytes) -> None:
+        self.body = body
+
+    def settimeout(self, _seconds: float) -> None:
+        return
+
+    def recv(self, size: int) -> bytes:
+        chunk, self.body = self.body[:size], self.body[size:]
+        return chunk
+
+    def close(self) -> None:
+        return
+
+
 def _version_json(version: str) -> dict[str, Any]:
     return {
         "version": version,
+        "signature": "0" * 128,
         "packages": {
             "windows": {
                 "url": f"https://solidon3d.de/api/count.php?f=Solidon3D-Setup-{version}.exe",

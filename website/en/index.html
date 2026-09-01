@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=be10c386">
+<link rel="stylesheet" href="../style.css?v=7e1cf380">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -177,8 +177,7 @@
         <div class="menu-panel">
           <a href="/en/features.html">Features</a>
           <a href="/en/ai-models.html">AI models</a>
-
-          <a href="#pricing">Price</a>
+          <a href="#demo">Demo</a>
           <a href="/en/changelog.html">What’s new</a>
           <a href="/en/manual.html">Manual</a>
         </div>
@@ -208,7 +207,6 @@
         <p class="lead">Drop in a model, change its dimensions, add a hole or
         choose a fit — then Solidon3D checks before slicing whether it is ready
         to print. No CAD experience, cloud or account required.</p>
-
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
@@ -320,13 +318,20 @@
   <div class="donate">
             <div>
               <strong>Support Solidon3D</strong>
-              <p>The demo stays free. A voluntary donation funds further development, testing and the next version.</p>
+              <p>The demo stays free. Voluntary support helps fund further development, testing and the next version.</p>
               <details class="donate-fine">
-                <summary>Legal note on donations</summary>
-                <p class="donate-terms">This is not an order, provides nothing in return and is not credited toward a later purchase. We do not issue donation receipts. PayPal processes the payment only after you click; <a href="/datenschutz.html">privacy details</a>.</p>
+                <summary>Legal note on voluntary support</summary>
+                <p class="donate-terms">This is not an order, provides nothing in return and is not credited toward a later purchase. We do not issue a tax certificate for the payment; do not treat it as tax-deductible. PayPal opens only after confirmation in the local notice; <a href="/datenschutz.html">privacy details</a>.</p>
               </details>
             </div>
-            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Donate with PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+            <button class="donate-button" type="button" data-choice="support">Support voluntarily <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
+            <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Voluntary support through PayPal">
+              <p class="auswahl-titel">Support voluntarily</p>
+              <p>The payment is not an order, provides nothing in return, unlocks nothing and is not credited toward a later purchase. We do not issue a tax certificate for it; do not treat it as tax-deductible.</p>
+              <p>Only the following button opens PayPal. You will leave solidon3d.de and the <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">PayPal privacy statement</a> applies.</p>
+              <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continue to PayPal</a>
+              <form method="dialog"><button class="btn ghost" value="zu">Back</button></form>
+            </dialog>
           </div>
     </div>
   </section>
@@ -353,7 +358,7 @@
       <div class="steps">
         <ol class="steps-list">
           <li><b>Get the demo, start it.</b> No account, no key, no setup —
-          install and go. Ten example projects are waiting on the start
+          install and go. Eleven example projects are waiting on the start
           screen.</li>
           <li><b>Drag a model in.</b> An STL from Printables or your own
           project: the report says right away what would go wrong when
@@ -447,20 +452,18 @@
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg3-generieren.png?v=e858ea35" muted loop playsinline controls
-                 preload="none" aria-label="A recording from the application: a generated owl model is imported, scaled, reduced in resolution and turned by the layer analysis into the orientation that needs the least support — which is why it ends up upside down. Beside it the report with no errors and no warnings.">
-                   <source src="../bilder/weg3-generieren.webm?v=f06d54b0" type="video/webm">
-                   <source src="../bilder/weg3-generieren.mp4?v=cb3c2c16" type="video/mp4">
+                 poster="../bilder/weg3-generiert-aufbereiten.png?v=75c521e9" muted loop playsinline controls
+                 preload="none" aria-label="A recording from the application: a self-generated reference mesh is opened, sized, repaired and placed on the print bed. Four history steps appear on the left; the inspection report on the right lists the repairs and remaining notices.">
+                   <source src="../bilder/weg3-generiert-aufbereiten.webm?v=895a6484" type="video/webm">
+                   <source src="../bilder/weg3-generiert-aufbereiten.mp4?v=1a961a47" type="video/mp4">
           </video>
-          <span class="tag">Way 3 — Generate</span>
-          <h3>From text or image</h3>
-          <p>A generated mesh runs through the repair chain automatically,
-          is brought to a resolution you can work with, gets an inspection
-          report and is split and pinned when needed — until it sits
-          printable on the plate. Needs a locally running ComfyUI and a
-          capable graphics card; the generator model is TripoSG under the
-          MIT licence, and one command sets it up. Without both, ways 1
-          and 2 remain fully usable.</p>
+          <span class="tag">Way 3 — Generated model</span>
+          <h3>Prepare a GLB or STL</h3>
+          <p>Drop in a file from any generator you choose: Solidon3D repairs
+          the mesh, sizes it, checks printability, and splits or pins it when
+          needed. Automatic setup of a particular 3D model will return only
+          when its complete licence and provenance chain is documented.
+          Ways 1, 2 and 4 remain fully usable independently.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -553,7 +556,7 @@
       <a href="/en/features.html">all features with pictures on the features page</a>.</p>
       <div class="beleg">
         <figure>
-          <img src="../handbuch/en/report.png?v=42970409" width="620" height="270" loading="lazy"
+          <img src="../handbuch/en/report.png?v=6d82ba4c" width="620" height="430" loading="lazy"
                alt="The report with four findings: the model is open in three places, 14 triangles face inwards, a wall is thinner than two extrusion widths, and the file did not state its unit">
           <figcaption><b>The report.</b> What goes wrong when printing stands there before the slicer spends the time — counted by error, warning and note.</figcaption>
         </figure>
@@ -601,37 +604,13 @@
 
   <section id="generated">
     <div class="wrap">
-      <h2>When the model comes from an AI</h2>
-      <p class="sub">A generator checks whether the mesh is closed. What it does
-      not check is whether the wall is thicker than your nozzle, whether an
-      overhang holds, whether an island starts in mid-air and whether the whole
-      thing fits your build plate. That is where Solidon3D starts — and
-      afterwards every number can still be changed.</p>
-      <ul class="schau tight">
-        <li><figure>
-          <img src="../bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="A gothic gargoyle on a plinth, with folded wings and claws">
-          <figcaption>Gargoyle</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="An octagonal lantern with pierced filigree panels">
-          <figcaption>Lantern</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="An industrial valve with a hand wheel and bolted flanges">
-          <figcaption>Industrial valve</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="A dragon skull with curved horns and rows of teeth">
-          <figcaption>Dragon skull</figcaption>
-        </figure></li>
-      </ul>
-      <p class="sub">Four of them from a single sentence each, generated and checked in Solidon3D — all closed and in one piece, around twenty seconds apiece. The generator runs on your own machine: no account, no upload, and the model behind it is MIT-licensed.</p>
-
-      <a class="btn ghost" href="/en/ai-models.html">From generator to print</a>
+      <h2>When the model comes from a generator</h2>
+      <p class="sub">Drop in a GLB or STL, repair it, size it, check it
+      against the printer and material, split it and add pins: this preparation
+      works with files from any generator you choose and requires no CAD
+      experience. Solidon3D deliberately downloads no particular 3D model
+      while its complete licence and provenance chain is not documented.</p>
+      <a class="btn ghost" href="/en/ai-models.html">From generator to printable part</a>
     </div>
   </section>
 
@@ -660,7 +639,8 @@
     </div>
   </section>
 
-  <section id="pricing">
+  <section id="demo">
+    <span id="pricing" aria-hidden="true"></span>
     <div class="wrap">
       <h2>Free 0.x demos until version 1.0</h2>
       <p class="sub">The current demo is free and complete. Version 1.0 is
@@ -674,8 +654,8 @@
             <b>Free</b>
             <em>demo until 30 Oct 2026</em>
           </div>
-          <p class="terms">The currently published demo is free and complete,
-          without a key or an account. Version 1.0 is planned for
+          <p class="terms">The published demo is version 0.2.2: free and
+          complete, without a key or an account. Version 1.0 is planned for
           1 November 2026, but is not yet an offer. Its price and contract
           terms will be published before it is offered.</p>
           <a class="btn" href="#download"
@@ -702,13 +682,21 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>AI remains optional.</b> The complete demo works
-              without chat. External models use the provider chosen by the
-              user; Ollama can run locally.</span>
+              without chat. Before the first model contact, Solidon shows
+              whether data goes to Anthropic, local Ollama or a remote Ollama
+              endpoint.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Your projects stay readable.</b> A ZIP file with JSON
               inside, export to STL, 3MF, OBJ, PLY and STEP.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Report vulnerabilities privately.</b> The
+              <a href="/en/security.html">security contact</a> also covers
+              the demo. Security updates for the paid version are guaranteed
+              until at least 31 October 2031.</span>
             </li>
           </ul>
         </div>
@@ -735,9 +723,8 @@
         the provider) or Ollama with a model of around 14 billion
         parameters and up — which needs a graphics card with
         16 GB of memory</td></tr>
-        <tr><td>Generate (optional)</td><td>a locally running ComfyUI and a
-        capable graphics card; a bundled tool sets up the
-        TripoSG model (MIT)</td></tr>
+        <tr><td>Generated model (optional)</td><td>an external GLB
+        or STL file; Solidon3D currently sets up no particular 3D model</td></tr>
         <tr><td>Other (optional)</td><td>a slicer — it is found or
         configured, and it is not required</td></tr>
       </table>
@@ -872,7 +859,7 @@
         <h2>The next part that fits</h2>
         <p data-past-text="The demo runs until 30 October — free and complete. Write a line and you'll get an answer: a human answers.">The demo runs until 30 October — free and complete. Write a line
         and you'll get an answer: a human answers.</p>
-        <a class="btn" href="/en/#pricing">
+        <a class="btn" href="/en/#demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
           </svg>
@@ -895,9 +882,9 @@
   <div class="wrap">
     © 2026 RS Digital ·
     <a href="/en/manual.html">Manual</a> ·
-     ·
     <a href="/en/changelog.html">What’s new</a> ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/en/security.html">Security</a> ·
     <a href="/impressum.html">Legal notice</a> ·
     <a href="/datenschutz.html">Privacy</a> ·
     <a href="/agb.html">Terms</a> ·
@@ -911,7 +898,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 
 </body>
 </html>

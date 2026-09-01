@@ -142,6 +142,31 @@ def test_the_palette_leaves_no_role_to_the_system() -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_links_are_readable_and_follow_the_theme(theme: str) -> None:
+    """Links bleiben auf Fenster und Feld lesbar, auch nach einem Besuch.
+
+    Qt nahm dafür die Systempalette. Unter Windows war deren helle Linkfarbe
+    im hellen Thema fast weiß auf hellgrau — gerade die Sicherheitsmeldung im
+    Über-Dialog verlor damit ihren einzigen sichtbaren Weg.
+    """
+    from PySide6.QtGui import QPalette
+
+    from app.ui.theme import build_palette
+
+    colours = THEMES[theme]  # type: ignore[index]
+    palette = build_palette(theme)  # type: ignore[arg-type]
+    for surface in ("window", "base"):
+        ratio = contrast_ratio(colours["link"], colours[surface])
+        assert ratio >= MINIMUM_CONTRAST, f"{theme}: Link auf {surface}: {ratio:.2f}"
+
+    for role in (QPalette.ColorRole.Link, QPalette.ColorRole.LinkVisited):
+        assert palette.color(role).name() == colours["link"]
+        assert palette.color(QPalette.ColorGroup.Disabled, role).name() == colours["disabled"], (
+            f"{theme}: ein gesperrter Link sieht für {role.name} weiter bedienbar aus"
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_a_border_is_actually_visible(theme: str) -> None:
     """Ein Knopf ohne sichtbaren Rahmen ist kein Knopf, sondern Text.
 

@@ -49,12 +49,3 @@ Zwei Prüfmuster, die den Rand sichtbar machen:
 * **Trennen, was verschiedene Gründe hat.** „Automatische Bewegung" und
   „Bedienung auf Geste" standen in einem Block, weil beide mit Bewegung zu tun
   haben. Sie haben verschiedene Gründe und gehören deshalb in zwei.
-
-Dasselbe gilt für Repository-Regeln. „Keine Toleranz als Zahl" schützt
-Fertigungsspiel, verbietet aber ohne benannten Geltungsbereich versehentlich
-`EPS_GEOM`; „jede Ausnahme braucht eine Handlung" schützt den Nutzer, fordert
-aber für eine interne Assertion sonst einen erfundenen Knopf. Eine harte Regel
-wird nicht weicher, wenn sie den richtigen Rand benennt. Sie wird prüfbarer:
-Fertigungswerte kommen aus Projekt oder Profil, Rechentoleranzen aus den drei
-benannten Konstanten; jeder nutzersichtbare `AppError` führt weiter, interne
-Programmierfehler werden diagnostiziert und an der Oberflächengrenze übersetzt.

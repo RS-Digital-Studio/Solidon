@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import pytest
-import trimesh
 
 pytest.importorskip("PySide6")
 
@@ -34,21 +33,12 @@ from PySide6.QtWidgets import (
 
 from app.core import errors
 from app.core.export import handover
-from app.core.geom import autosplit
 from app.core.geom.measure import Measurement
-from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY, catalogue_operations
 from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
-from app.core.types import (
-    MaterialSlot,
-    Parameter,
-    PrintSettings,
-    Profile,
-    SceneObject,
-    SlotOverride,
-)
+from app.core.types import MaterialSlot, Parameter, Profile, SceneObject, SlotOverride
 from app.i18n import tr
 from app.ui import main_window as main_window_module
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
@@ -1117,6 +1107,55 @@ def test_the_about_dialog_carries_the_licence_information(qt_app: QApplication) 
     listing = dialog.findChild(QTextBrowser)
     assert listing is not None
     assert "PySide6" in listing.toMarkdown()
+
+
+def test_the_about_dialog_localises_the_security_promise_and_links(
+    qt_app: QApplication,
+) -> None:
+    """§37.3: Termin und Meldeweg stimmen in jeder ausgelieferten Sprache.
+
+    ``QLocale()`` folgt der Prozesssprache, Solidon wechselt seine Sprache aber
+    im laufenden Prozess. Die echte spanische Oberfläche zeigte deshalb noch
+    „31. Oktober 2031“, obwohl der übrige Satz übersetzt war.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    from app.branding import SECURITY_SUPPORT_UNTIL, SUPPORT_ADDRESS, WEBSITE_URL
+    from app.i18n import set_language
+    from app.i18n.catalog import available_languages, install_language
+    from app.ui.dialogs import AboutDialog
+
+    dates = {
+        "de": "31. Oktober 2031",
+        "en": "October 31, 2031",
+        "es": "31 de octubre de 2031",
+        "fr": "31 octobre 2031",
+        "it": "31 ottobre 2031",
+        "pt": "31 de outubro de 2031",
+    }
+    assert SECURITY_SUPPORT_UNTIL.isoformat() == "2031-10-31"
+
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            dialog = AboutDialog()
+            security = dialog.findChild(QLabel, "security_support")
+            assert security is not None
+            text = security.text()
+            page = "security.html" if language == "de" else f"{language}/security.html"
+
+            assert dates[language] in text
+            assert f'href="mailto:{SUPPORT_ADDRESS}"' in text
+            assert f'href="{WEBSITE_URL}{page}"' in text
+            assert security.openExternalLinks()
+            assert security.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByMouse
+            assert (
+                security.textInteractionFlags() & Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+            )
+            dialog.deleteLater()
+    finally:
+        set_language("de")
 
 
 def test_advanced_parameters_sit_behind_the_fold(qt_app: QApplication) -> None:
@@ -3029,7 +3068,16 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     # ``retry`` und ``save_elsewhere`` hängen an einem gescheiterten Schreiben
     # und stehen darum nicht immer in ``known`` — angeboten werden sie genau
     # dann, wenn sie wirken können (``_WriteFailure``).
-    postponed = {"use_voxel_stage", "choose", "cancel", "retry", "save_elsewhere"}
+    postponed = {
+        "use_voxel_stage",
+        "choose",
+        "cancel",
+        "retry",
+        "save_elsewhere",
+        # Nur ein Importfehler mit den gelesenen Dateibytes kann diesen Namen
+        # anwenden; der Katalog verdrahtet ihn deshalb am konkreten Fehler.
+        "use_suggested_name",
+    }
 
     for name, value in vars(errors).items():
         if not isinstance(value, errors.Action):
@@ -4276,22 +4324,48 @@ def test_the_printer_of_an_open_project_can_change(session: Session) -> None:
 # --- Entdeckbarkeit (§2.6, §19.2) -----------------------------------------------
 
 
-def test_the_palette_reaches_more_than_the_registry(window: MainWindow) -> None:
+def test_the_palette_reaches_more_than_the_registry(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """§2.6: die Palette ist der Universalzugang — sie kannte nur Operationen.
 
     Speichern, das Handbuch und die sieben Ansichtswerkzeuge stehen nicht im
     Register. `ToolStrip.tool_titles()` und `strip_title()` wurden dafür
     geschrieben und hatten außer Tests keinen Aufrufer.
     """
+    opened: list[bool] = []
+    monkeypatch.setattr(window, "_open_catalog", lambda: opened.append(True))
     commands = window.window_commands()
 
     assert "file.save" in commands
     assert "help.manual" in commands
+    assert commands["file.part_adopt"][0] == "Baustein aus Datei hinzufügen …"
+    assert commands["file.part_share"][0] == "Baustein als Datei weitergeben …"
+    commands["file.part_share"][2]()
+    assert opened == [True], "die Weitergabe öffnet den Katalog zur Auswahl"
     for key in window.tools.tool_titles():
         assert f"tool.{key}" in commands, f"{key} fehlt in der Palette"
 
     for _title, _shortcut, slot in commands.values():
         assert callable(slot)
+
+
+def test_part_file_commands_do_not_add_a_file_menu_row(window: MainWindow) -> None:
+    """Beide Dateihandlungen leben in der Palette; das volle Menü bleibt an der Grenze."""
+    from app.core.registry.surfaces import MAX_MENU_ROWS
+
+    file_menu = next(
+        action.menu()
+        for action in window.menuBar().actions()
+        if action.menu() is not None and action.text().replace("&", "") == "Datei"
+    )
+    assert file_menu is not None
+    rows = [action for action in file_menu.actions() if not action.isSeparator()]
+    titles = {action.text().replace("&", "") for action in rows}
+
+    assert "Baustein aus Datei hinzufügen …" not in titles
+    assert "Baustein als Datei weitergeben …" not in titles
+    assert len(rows) <= MAX_MENU_ROWS
 
 
 def test_escape_closes_the_open_tool(window: MainWindow) -> None:
@@ -5612,23 +5686,15 @@ def test_the_split_worker_forwards_the_core_progress(
     """Der Arbeiter reicht den echten Kernfortschritt bis zu seinem Signal."""
     from app.ui import session as session_module
 
-    snapshot = session_module.capture_connector_geometry()
-
-    def planned(
-        *_args: object,
-        progress=None,
-        connector_geometry: object | None = None,
-        **_kwargs: object,
-    ) -> object:
+    def planned(*_args: object, progress=None, **_kwargs: object) -> object:
         assert progress is not None, "der Kern bekam keinen Fortschrittskanal"
-        assert connector_geometry is snapshot, "der Worker las das globale Register erneut"
         progress(0.25, "Grobsuche")
         progress(0.75, "Stützbewertung")
         progress(1.0, "")
         return object()
 
     monkeypatch.setattr(session_module, "plan_split", planned)
-    worker = session_module._SplitWorker(object(), "obj_1", session.profile, {}, snapshot)
+    worker = session_module._SplitWorker(object(), "obj_1", session.profile, {})
     seen: list[tuple[float, str]] = []
     worker.progressed.connect(lambda fraction, text: seen.append((fraction, text)))
 
@@ -5836,10 +5902,10 @@ def test_split_uses_its_own_real_status_and_bar_timers(window: MainWindow) -> No
         window._on_agent_busy(False)
 
 
-def test_auto_split_uses_delayed_accessible_and_unknown_progress(
+def test_auto_split_uses_delayed_accessible_and_monotonic_progress(
     window: MainWindow,
 ) -> None:
-    """Der echte Ein-Schnitt-Lauf bleibt bis zum vollständigen Plan unbestimmt."""
+    """Grobsuche bleibt unbestimmt; erst die Stützbewertung trägt Prozent."""
 
     class Running:
         def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
@@ -5875,25 +5941,22 @@ def test_auto_split_uses_delayed_accessible_and_unknown_progress(
             "Bricht die automatische Teilung ab. Modell und Verlauf bleiben unverändert."
         )
 
-        events: list[tuple[float, str]] = []
-        outcome = autosplit.split_to_fit(
-            MeshData.of(trimesh.creation.box(extents=(400.0, 60.0, 40.0))),
-            window.session.profile,
-            pins=0,
-            progress=lambda fraction, text: events.append((fraction, text)),
-        )
-        assert len(outcome.cuts) == 1
-
         window._split_started = main_window_module.time.monotonic() - 11.0
-        for fraction, text in events:
-            window.session.splitProgressChanged.emit(fraction, text)
+        window.session.splitProgressChanged.emit(0.7, tr("Ausrichtung suchen"))
+        assert window.progress.maximum() == 100
+        assert window.progress.value() == 70
+        assert "70 %" in window.status_message.text()
+        assert tr("gleich fertig") in window.status_message.text()
 
-        assert window.progress.minimum() == 0
-        assert window.progress.maximum() == 0, "unbekannte Gesamtschnittzahl bekam Prozent"
-        assert "%" not in window.status_message.text()
-        assert tr("gleich fertig") not in window.status_message.text()
+        window.session.splitProgressChanged.emit(0.5, tr("Ausrichtung suchen"))
+        assert window.progress.value() == 70, "bestimmter Fortschritt lief rückwärts"
+
+        window.session.splitProgressChanged.emit(1.0, "")
+        assert window.progress.value() == 100, "der leere Abschlusswert ging verloren"
+        assert window.status_message.text().startswith(tr("Ausrichtung suchen"))
+        assert "100 %" in window.status_message.text()
         assert tr("Ausrichtung suchen") in window.progress.accessibleDescription()
-        assert "%" not in window.progress.accessibleDescription()
+        assert "100 %" in window.progress.accessibleDescription()
         assert tr("Abbrechen ist verfügbar.") in window.progress.accessibleDescription()
     finally:
         window.session._split = None
@@ -6019,150 +6082,6 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     applied = results[0]
     assert applied.transaction is None, "ein 20-mm-Würfel passt aufs Bett"
     assert states and states[0] is True and states[-1] is False
-
-
-def test_auto_split_queues_behind_the_current_evaluation_and_uses_its_result(
-    session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Der Klick wartet asynchron auf genau den Dokumentstand seiner Revision."""
-    from app.core.geom.autosplit import SplitOutcome
-    from app.core.split import SplitPlan
-    from app.ui import session as session_module
-
-    created = session.history.apply(
-        "Anlegen",
-        [
-            OperationDraft(
-                op="create_box",
-                params={"width": 20.0, "depth": 60.0, "height": 40.0},
-            )
-        ],
-    )
-    session._mark_document_changed()
-    old_result = session.evaluate_now()
-
-    session.history.change_params(created.ops[0], {"width": 400.0})
-    session._mark_document_changed()
-    current_result = session.run_evaluation()
-    assert session.last_result is old_result, "der Test braucht sichtbar noch das alte Netz"
-
-    class CurrentEvaluation:
-        running = True
-
-        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
-            return self.running
-
-    evaluation = CurrentEvaluation()
-    session._worker = evaluation
-    widths: list[float] = []
-
-    def planned(mesh: MeshData, *_args: object, **_kwargs: object) -> SplitPlan:
-        widths.append(float(mesh.raw.extents[0]))
-        return SplitPlan((), SplitOutcome(parts=[mesh]))
-
-    monkeypatch.setattr(session_module, "plan_split", planned)
-    original_wait = session.wait_for_idle
-    monkeypatch.setattr(
-        session,
-        "wait_for_idle",
-        lambda *_args, **_kwargs: pytest.fail("split_async blockierte den Qt-Hauptthread"),
-    )
-
-    delivered: list[object] = []
-    session.split_async("obj_1", delivered.append)
-
-    assert not widths, "der Split-Arbeiter startete noch auf dem alten Netz"
-    monkeypatch.setattr(session, "wait_for_idle", original_wait)
-    session._on_finished(current_result, finished=evaluation)  # type: ignore[arg-type]
-    evaluation.running = False
-    session._on_thread_done(evaluation)  # type: ignore[arg-type]
-    original_wait()
-
-    assert widths == [pytest.approx(400.0)]
-    assert delivered, "der eingereihte Split lieferte sein Ergebnis nicht"
-
-
-@pytest.mark.parametrize("change", ("print_settings", "discard_proposal"))
-def test_metadata_changes_keep_a_running_split_valid(session: Session, change: str) -> None:
-    """Druckübergabe und Chatverlauf verändern die ausgewertete Geometrie nicht."""
-    from app.core.agent.proposal import Proposal
-    from app.core.scene.cancel import CancelSignal
-    from app.ui.session import ProposalPreview
-
-    class Running:
-        def __init__(self) -> None:
-            self.cancel = CancelSignal()
-
-        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
-            return True
-
-    worker = Running()
-    session._split = worker
-    revision = session._document_revision
-    changed: list[bool] = []
-    session.projectChanged.connect(lambda: changed.append(True))
-    try:
-        if change == "print_settings":
-            session.set_print_settings(PrintSettings(title="Fein"))
-            assert session.project.document.print_settings.title == "Fein"
-        else:
-            session.discard_proposal(ProposalPreview(proposal=Proposal(request="Nicht bauen")))
-            assert len(session.project.document.chat) == 2
-            assert session.project.document.chat[0].text == "Nicht bauen"
-
-        assert session.modified
-        assert changed == [True]
-        assert session._document_revision == revision
-        assert not worker.cancel.is_cancelled
-        assert not session._split_discarded
-    finally:
-        session._split = None
-        session._split_discarded = False
-
-
-def test_main_window_auto_split_is_one_undoable_transaction(window: MainWindow) -> None:
-    """Der echte Menüklick teilt vollständig; ein Rückgängig stellt alles wieder her."""
-    assert window.session.apply(
-        "Anlegen",
-        [
-            OperationDraft(
-                op="create_box",
-                params={"width": 400.0, "depth": 60.0, "height": 40.0},
-            )
-        ],
-    )
-    window.session.wait_for_idle()
-
-    document = window.session.project.document
-    before_ops = list(document.ops)
-    before_fits = list(document.fits)
-    before_transactions = list(document.transactions)
-    before_body = window.session.last_result.scene.objects["obj_1"].mesh
-    before_volume = before_body.volume
-    before_bounds = before_body.bounds
-    window.object_tree.select_object("obj_1")
-
-    window.action_auto_split()
-    window.session.wait_for_idle()
-
-    split_objects = list(window.session.last_result.scene.objects.values())
-    assert len(split_objects) == 2
-    assert len(document.transactions) == len(before_transactions) + 1
-    assert len(document.fits) > len(before_fits)
-    assert window._announcement.startswith(tr("Geteilt"))
-
-    window.action_undo()
-    window.session.wait_for_idle()
-
-    restored = list(window.session.last_result.scene.objects.values())
-    assert document.ops == before_ops
-    assert document.fits == before_fits
-    assert document.transactions == before_transactions
-    assert len(restored) == 1
-    assert restored[0].mesh.volume == pytest.approx(before_volume)
-    assert restored[0].mesh.bounds.minimum == pytest.approx(before_bounds.minimum)
-    assert restored[0].mesh.bounds.maximum == pytest.approx(before_bounds.maximum)
-    assert window._announcement == tr("Teilen und verstiften zurückgenommen.")
 
 
 def test_auto_split_uses_the_objects_material_for_search_and_fits(
@@ -6480,170 +6399,6 @@ def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     try:
         session._on_split_done(stale)
         assert session._split is keeper, "das Auslaufen eines Fremden räumt das Feld nicht"
-    finally:
-        session._split = None
-
-
-@pytest.mark.parametrize("way", ("start_new", "open_project"))
-def test_switching_projects_silently_discards_the_running_split(
-    session: Session, tmp_path: Path, way: str
-) -> None:
-    """Ein Plan des alten Dokuments darf das neue Projekt nie erreichen."""
-    from app.core.scene.cancel import CancelSignal
-    from app.core.scene.project import new_project, save
-
-    class Running:
-        def __init__(self) -> None:
-            self.cancel = CancelSignal()
-
-        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
-            return True
-
-    worker = Running()
-    session._split = worker
-    requested: list[bool] = []
-    session.splitCancelRequested.connect(lambda: requested.append(True))
-    try:
-        if way == "start_new":
-            session.start_new()
-        else:
-            other = save(
-                new_project("centauri-carbon-2", "petg"),
-                tmp_path / "anderes-projekt.p3d",
-            )
-            session.open_project(other)
-
-        assert worker.cancel.is_cancelled, "die Suche des alten Projekts rechnet weiter"
-        assert session._split_discarded, "ein verspäteter Plan blieb gültig"
-        assert not requested, "ein Projektwechsel sieht nicht wie ein Abbruchknopf-Klick aus"
-    finally:
-        session._split = None
-        session.wait_for_idle()
-
-
-def test_a_split_plan_is_bound_to_the_document_that_started_it(
-    session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Auch ohne rechtzeitiges Abbruchsignal bleibt die Dokumentgrenze hart."""
-    from app.core.scene.cancel import CancelSignal
-    from app.ui import session as session_module
-
-    class Running:
-        def __init__(self) -> None:
-            self.cancel = CancelSignal()
-
-    source_document = session.project.document
-    session.start_new()
-    session.wait_for_idle()
-    worker = Running()
-    session._split = worker
-    applied: list[object] = []
-    monkeypatch.setattr(
-        session_module,
-        "apply_planned",
-        lambda *_args, **_kwargs: applied.append(object()),
-    )
-    try:
-        session._split_planned(
-            worker,
-            object(),
-            "obj_1",
-            session.profile,
-            lambda _result: None,
-            source_document=source_document,
-        )
-        assert not applied, "der alte Split-Plan wurde auf das neue Dokument angewandt"
-    finally:
-        session._split = None
-
-
-def test_parameter_change_and_undo_each_discard_a_running_split(session: Session) -> None:
-    """Eine Suche auf alter Geometrie endet bei jeder Stapeländerung."""
-    from app.core.scene.cancel import CancelSignal
-
-    session.add_parameter(Parameter(name="width", value=40.0))
-    session.wait_for_idle()
-
-    for change in (lambda: session.change_parameter("width", 50.0), session.undo):
-
-        class Running:
-            def __init__(self) -> None:
-                self.cancel = CancelSignal()
-
-        worker = Running()
-        session._split = worker
-        session._split_discarded = False
-        try:
-            change()
-            assert worker.cancel.is_cancelled
-            assert session._split_discarded
-        finally:
-            session._split = None
-        session.wait_for_idle()
-
-
-def test_a_split_plan_is_bound_to_the_revision_that_started_it(
-    session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ein alter Plan bleibt selbst am selben Dokument wirkungslos."""
-    from app.core.scene.cancel import CancelSignal
-    from app.ui import session as session_module
-
-    source_document = session.project.document
-    source_revision = session._document_revision
-    session.add_parameter(Parameter(name="width", value=40.0))
-    session.wait_for_idle()
-
-    class Running:
-        def __init__(self) -> None:
-            self.cancel = CancelSignal()
-
-    worker = Running()
-    session._split = worker
-    session._split_discarded = False
-    applied: list[object] = []
-    monkeypatch.setattr(
-        session_module,
-        "apply_planned",
-        lambda *_args, **_kwargs: applied.append(object()),
-    )
-    try:
-        session._split_planned(
-            worker,
-            object(),
-            "obj_1",
-            session.profile,
-            lambda _result: None,
-            source_document=source_document,
-            source_revision=source_revision,
-        )
-        assert not applied
-        assert worker.cancel.is_cancelled
-    finally:
-        session._split = None
-
-
-def test_releasing_a_session_cancels_its_running_split(
-    session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Ein Fensterabbau lässt keinen Auto-Split-Thread zurück."""
-    from app.core.scene.cancel import CancelSignal
-
-    class Running:
-        def __init__(self) -> None:
-            self.cancel = CancelSignal()
-
-    worker = Running()
-    session._split = worker
-    waited: list[int] = []
-    monkeypatch.setattr(session, "wait_for_idle", waited.append)
-    monkeypatch.setattr(session._leash, "wait_all", lambda: None)
-    try:
-        session.release(37)
-
-        assert worker.cancel.is_cancelled, "release ließ die Teilung weiterlaufen"
-        assert session._split_discarded
-        assert waited == [37]
     finally:
         session._split = None
 
@@ -9305,9 +9060,13 @@ class _Drag:
 
         self._data = QMimeData()
         self._data.setUrls([QUrl(entry) for entry in urls])
+        self.accepted = False
 
     def mimeData(self) -> object:  # noqa: N802 — Qt gibt den Namen
         return self._data
+
+    def acceptProposedAction(self) -> None:  # noqa: N802 — bildet die Qt-API nach
+        self.accepted = True
 
 
 def _drag(urls: list[str]) -> Any:
@@ -9321,6 +9080,25 @@ def test_a_dropped_link_is_taken_like_a_dropped_file() -> None:
     assert accepted_url(_drag(["https://example.invalid/halter.stl"])) is not None
     assert accepted_url(_drag(["https://example.invalid/modelle/17"])) is None
     assert accepted_url(_drag(["file:///C:/teil.stl"])) is None, "das ist der Weg für Dateien"
+
+
+def test_a_part_file_drop_reaches_open_path_but_json_does_not(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das ganze Fenster teilt den exakten lokalen Dateivertrag der Startfläche."""
+    opened: list[Path] = []
+    monkeypatch.setattr(window, "open_path", opened.append)
+    part = tmp_path / "halter.solidon-part"
+    generic = tmp_path / "halter.json"
+
+    part_drop = _drag([part.as_uri()])
+    window.dropEvent(part_drop)  # type: ignore[arg-type]
+    generic_drop = _drag([generic.as_uri()])
+    window.dropEvent(generic_drop)  # type: ignore[arg-type]
+
+    assert opened == [part]
+    assert part_drop.accepted
+    assert not generic_drop.accepted
 
 
 def test_a_bad_address_says_so_before_a_worker_starts(

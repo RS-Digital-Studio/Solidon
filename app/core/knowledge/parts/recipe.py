@@ -45,19 +45,35 @@ from __future__ import annotations
 
 import base64
 import dataclasses
+import errno
 import hashlib
 import json
+import os
+import re
+import stat
+import tempfile
+import threading
+import time
+import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Final
 
-from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    USE_SUGGESTED_NAME,
+    GeometryError,
+    ValidationError,
+)
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_parts_dir
 from app.core.registry import Registry, op_params, param
 from app.core.scene.migrations import migrate
-from app.core.scene.serialise import document_from_data, document_to_data
+from app.core.scene.serialise import document_from_data, document_to_data, has_lone_surrogate
 from app.core.types import (
     BaseParams,
     Document,
@@ -71,6 +87,26 @@ from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
+_FILE_LOCK = threading.RLock()
+_TEMP_NAMESPACE: Final = ".solidon-recipe-"
+_TEMP_SUFFIX: Final = ".atomic-tmp"
+_TEMP_OWNER: Final = f"{os.getpid()}-{uuid.uuid4().hex}"
+_STALE_TEMP_SECONDS: Final = 24 * 60 * 60
+_TEMP_REMOVE_ATTEMPTS: Final = 3
+_REMOVE_NAMESPACE: Final = ".solidon-remove-"
+_REMOVE_PENDING_SUFFIX: Final = ".pending"
+_REMOVE_COMMITTED_SUFFIX: Final = ".committed"
+_UNSUPPORTED_DIRECTORY_SYNC: Final = frozenset(
+    code
+    for code in (
+        errno.EINVAL,
+        getattr(errno, "ENOTSUP", None),
+        getattr(errno, "EOPNOTSUPP", None),
+        getattr(errno, "ENOSYS", None),
+    )
+    if code is not None
+)
+
 #: Version der Rezept-Hülle. Der Dokument-Ausschnitt darin trägt seine eigene
 #: (``document.format_version``) und reist über deren Migrationen.
 FORMAT_VERSION = 1
@@ -81,9 +117,9 @@ RECIPES_DIRNAME = "recipes"
 
 #: Unter welchen Lizenzen ein Rezept weitergegeben werden darf.
 #:
-#: **Die Quelle steht hier und nicht in einem Dateidialog.** Eine feste
-#: Wertemenge an einem Rezeptfeld ist Rezept-Domäne. ``shared.rules()`` liest
-#: diese Konstante, damit Prüfung und Rezept dieselben Werte verwenden.
+#: **Die Quelle steht hier und nicht im Dateiprüfer.** Eine feste Wertemenge an
+#: einem Rezeptfeld ist Rezept-Domäne. ``shared.rules()`` liest diese Konstante,
+#: damit Import und Export dieselbe Liste prüfen.
 #:
 #: Alle drei erlauben die Weitergabe und die kommerzielle Nutzung — was ein
 #: Kunde herunterlädt, darf er drucken und verkaufen. Was sie unterscheiden,
@@ -105,6 +141,9 @@ LICENCE_LABELS: Final[dict[str, TranslatableText]] = {
 #: hinzufügt, ändert diese Liste, ohne sie anzufassen.
 RECIPE_LICENSES: Final = tuple(LICENCE_LABELS)
 
+_SHA256_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
+_UTC_TIMESTAMP_PATTERN: Final = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
 #: Kennzeichnung im Katalog (§24.5): ein Rezept ist weder ``shipped`` noch
 #: eine ``user``-``.py``. Der Unterschied trägt: ``travelling_parts`` warnt
 #: vor ``.py``-Bausteinen, die nie mitreisen — ein Rezept reist als Daten und
@@ -117,13 +156,9 @@ RECIPE_SOURCE = "recipe"
 #: gehört der Datei, mit der es kam, nicht dieser Maschine.
 TRAVELLED_SOURCE = "travelled"
 
-#: Herkunft eines Rezepts, das einzeln aus einer Datei eingelesen wurde.
-#:
-#: **Es kam nicht mit einer Projektdatei, und das ist der Unterschied.** Beide
-#: Wege nehmen dasselbe :func:`adopt`, aber die Katalogzeile sagt beim einen
-#: „kam mit einer Projektdatei und bleibt bei ihr" — für eine einzelne Datei wäre
-#: das eine falsche Herkunft, an genau der Stelle, an der §32 eine wahre
-#: verlangt.
+#: Herkunft eines Rezepts, das als Datei in den lokalen Katalog übernommen
+#: wurde. Diese Reise trägt nur den Abdruck der Eingangsbytes und den Zeitpunkt.
+#: Der lokale Pfad gehört ausdrücklich nie in die Rezeptdatei.
 IMPORTED_SOURCE = "imported"
 
 #: Wo Rezepte in einer Projektdatei liegen (Konzept §17.1).
@@ -158,6 +193,39 @@ class ExposedParam:
 
 
 @dataclass(frozen=True, slots=True)
+class ImportedOrigin:
+    """Unmittelbare Herkunft aus einer lokalen Austauschdatei.
+
+    Der Abdruck gilt den exakten Eingangsbytes. Der Zeitpunkt belegt die
+    Aufnahme in diesen Katalog. Mehr reist absichtlich nicht mit: kein Pfad,
+    kein Dateiname, keine Kontaktadresse und kein frei erweiterbares Feld.
+    """
+
+    source_sha256: str
+    imported_at: str
+
+    def __post_init__(self) -> None:
+        if type(self.source_sha256) is not str or not _SHA256_PATTERN.fullmatch(self.source_sha256):
+            raise ValueError("imported_origin.source_sha256")
+        _require_utc_timestamp(self.imported_at, "imported_origin.imported_at")
+
+
+def _require_utc_timestamp(value: object, field_name: str) -> None:
+    """Verlangt die eine gespeicherte UTC-Schreibweise ohne weiche Parserfälle."""
+
+    if type(value) is not str:
+        raise TypeError(field_name)
+    if not _UTC_TIMESTAMP_PATTERN.fullmatch(value):
+        raise ValueError(field_name)
+    try:
+        parsed = datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ")
+    except ValueError as problem:
+        raise ValueError(field_name) from problem
+    if parsed.strftime("%Y-%m-%dT%H:%M:%SZ") != value:
+        raise ValueError(field_name)
+
+
+@dataclass(frozen=True, slots=True)
 class Recipe:
     """Ein eigener Baustein als Daten (Konzept §16)."""
 
@@ -188,12 +256,19 @@ class Recipe:
     ``licence`` schreibt: ``shared.rules()`` leitet die erlaubten
     Rezeptschlüssel aus ``dataclasses.fields(Recipe)`` ab, der Feldname **ist**
     also der Schlüssel in der Regeldatei und in der Datei selbst. Eine zweite
-    Schreibung wäre damit keine Geschmacksfrage, sondern eine
-    Übersetzungsstelle zwischen Python und PHP. ``serialise.py`` schreibt das
+    Schreibung wäre damit keine Geschmacksfrage, sondern eine zweite
+    Übersetzungsstelle im Dateiformat. ``serialise.py`` schreibt das
     Dokumentformat aus demselben Grund schon so."""
     author: str = ""
     """Wer das Rezept gebaut hat, oder leer. Freitext — ein Name, ein
-    Kürzel, eine Adresse; die Dateiprüfung begrenzt die Länge, nicht die Gestalt."""
+    Kürzel oder eine Adresse; der Dateivertrag prüft Länge und Typ."""
+    imported_origin: ImportedOrigin | None = None
+    """Woher eine lokale Austauschdatei unmittelbar kam.
+
+    Beim Einlesen einer weiteren Datei wird diese Quittung am Import-Grenzpfad
+    durch den Abdruck der neuen Eingangsbytes ersetzt. Sie beschreibt die Reise,
+    nicht die Geometrie, und liegt deshalb außerhalb des Fingerabdrucks.
+    """
     format_version: int = FORMAT_VERSION
     range_report: Any = None
     """Der letzte Bereichstest (:mod:`range_check`), oder ``None``.
@@ -208,6 +283,12 @@ class Recipe:
     jeden, der es eingebunden hat, plötzlich ein anderes. Die Kehrseite gehört
     dazu und ist gewollt: Beide Felder liegen damit **außerhalb dessen, was die
     Version deckt**, und lassen sich ändern, ohne dass die Version es zeigt."""
+
+    def __post_init__(self) -> None:
+        if self.imported_origin is not None and not isinstance(
+            self.imported_origin, ImportedOrigin
+        ):
+            raise TypeError("imported_origin")
 
 
 def to_data(recipe: Recipe) -> dict[str, Any]:
@@ -232,6 +313,8 @@ def from_data(data: dict[str, Any]) -> Recipe:
     """Ein Rezept aus seinen Daten. Der Dokument-Teil läuft durch die
     Migrationen des Dokumentformats — ein altes Rezept öffnet wie eine alte
     Projektdatei."""
+    if has_lone_surrogate(data):
+        raise ValueError("unicode_scalar")
     return Recipe(
         name=str(data["name"]),
         title=str(data.get("title") or data["name"]),
@@ -249,7 +332,27 @@ def from_data(data: dict[str, Any]) -> Recipe:
         format_version=int(data.get("format_version", 1)),
         license=str(data.get("license", "")),
         author=str(data.get("author", "")),
+        imported_origin=_imported_origin_from(data.get("imported_origin")),
         range_report=_report_from(data.get("range_report")),
+    )
+
+
+def _imported_origin_from(data: Any) -> ImportedOrigin | None:
+    """Liest die optionale Dateiherkunft ohne lokale Pfade oder freie Felder."""
+
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise TypeError("imported_origin")
+    expected = {"source_sha256", "imported_at"}
+    if set(data) != expected:
+        raise ValueError("imported_origin")
+    for key in expected:
+        if type(data[key]) is not str:
+            raise TypeError(f"imported_origin.{key}")
+    return ImportedOrigin(
+        source_sha256=data["source_sha256"],
+        imported_at=data["imported_at"],
     )
 
 
@@ -589,6 +692,256 @@ def recipes_dir(base: Path | None = None) -> Path:
     return (base or user_parts_dir()) / RECIPES_DIRNAME
 
 
+def _encoded_file(recipe: Recipe) -> bytes:
+    """Die kanonischen Rezeptbytes für die dauerhafte Ablage."""
+
+    return (
+        json.dumps(file_data(recipe), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+
+def _write_all(descriptor: int, payload: bytes) -> None:
+    """Schreibt alle Bytes oder lässt den Dateinamen weiterhin unsichtbar."""
+
+    remaining = memoryview(payload)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        if written <= 0:
+            raise OSError("recipe_write_stopped")
+        remaining = remaining[written:]
+    os.fsync(descriptor)
+
+
+def _sync_directory(directory: Path) -> None:
+    """Sichert den Verzeichniseintrag, wo das Betriebssystem das unterstützt."""
+
+    if os.name == "nt":
+        return
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError as problem:
+        if problem.errno in _UNSUPPORTED_DIRECTORY_SYNC:
+            return
+        raise
+    try:
+        os.fsync(descriptor)
+    except OSError as problem:
+        if problem.errno not in _UNSUPPORTED_DIRECTORY_SYNC:
+            raise
+    finally:
+        os.close(descriptor)
+
+
+class _PublishedFileError(BaseException):
+    """Bewahrt den Commitstatus, wenn nach der Veröffentlichung etwas abbricht."""
+
+    def __init__(self, problem: BaseException) -> None:
+        super().__init__(str(problem))
+        self.problem = problem
+
+
+@dataclass(frozen=True, slots=True)
+class StoredFileMetadata:
+    """Die wiederherstellbaren Metadaten einer lokalen Rezeptdatei."""
+
+    mode: int
+    atime_ns: int
+    mtime_ns: int
+
+
+@dataclass(frozen=True, slots=True)
+class RemovedRecipeFile:
+    """Der pfadfreie, bytegenaue Stand eines entfernten lokalen Rezepts."""
+
+    name: str
+    source: str
+    payload: bytes
+    metadata: StoredFileMetadata
+    recipe: Recipe
+
+
+def _temporary_pattern(target_name: str | None = None) -> str:
+    """Der exklusive Namensraum für atomare Rezeptdateien dieses Ziels."""
+
+    if target_name is None:
+        return f"{_TEMP_NAMESPACE}*{_TEMP_SUFFIX}"
+    return f"{_TEMP_NAMESPACE}*.{target_name}.*{_TEMP_SUFFIX}"
+
+
+def _owned_by_current_user(info: os.stat_result) -> bool:
+    """Ob der portable Besitzervergleich das Aufräumen erlaubt."""
+
+    get_effective_user = getattr(os, "geteuid", None)
+    if get_effective_user is None:
+        return True
+    effective_user = int(get_effective_user())
+    return info.st_uid == effective_user
+
+
+def _remove_temporary(path: Path) -> OSError | None:
+    """Versucht eine eigene Tempdatei erneut und sichert ihre Entfernung."""
+
+    last_problem: OSError | None = None
+    for _attempt in range(_TEMP_REMOVE_ATTEMPTS):
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return None
+        except OSError as problem:
+            last_problem = problem
+            continue
+        _sync_directory(path.parent)
+        return None
+    return last_problem
+
+
+def _cleanup_stale_temporaries(
+    directory: Path,
+    *,
+    target_name: str | None = None,
+    now: float | None = None,
+) -> None:
+    """Räumt nur alte, reguläre Solidon-Tempdateien desselben Besitzers."""
+
+    cutoff = (time.time() if now is None else now) - _STALE_TEMP_SECONDS
+    for candidate in directory.glob(_temporary_pattern(target_name)):
+        try:
+            info = candidate.lstat()
+            belongs_to_process = candidate.name.startswith(f"{_TEMP_NAMESPACE}{_TEMP_OWNER}.")
+            if (
+                not stat.S_ISREG(info.st_mode)
+                or not _owned_by_current_user(info)
+                or (not belongs_to_process and info.st_mtime > cutoff)
+            ):
+                continue
+            problem = _remove_temporary(candidate)
+            if problem is not None:
+                _log.warning(
+                    "stale recipe temporary file %s could not be removed: %s",
+                    candidate.name,
+                    problem,
+                )
+        except FileNotFoundError:
+            continue
+        except OSError as problem:
+            _log.warning(
+                "stale recipe temporary file %s could not be inspected: %s",
+                candidate.name,
+                problem,
+            )
+
+
+def _publish_file(
+    target: Path,
+    payload: bytes,
+    *,
+    overwrite: bool,
+    on_published: Callable[[], None] | None = None,
+    prepare_file: Callable[[int, Path], None] | None = None,
+) -> None:
+    """Veröffentlicht vollständige Bytes atomar und meldet den Commitstatus."""
+
+    with _FILE_LOCK:
+        _cleanup_stale_temporaries(target.parent, target_name=target.name)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f"{_TEMP_NAMESPACE}{_TEMP_OWNER}.{target.name}.",
+            suffix=_TEMP_SUFFIX,
+            dir=target.parent,
+        )
+        temporary = Path(temporary_name)
+        closed = False
+        published = False
+        failure: BaseException | None = None
+        try:
+            _write_all(descriptor, payload)
+            if prepare_file is not None:
+                prepare_file(descriptor, temporary)
+                os.fsync(descriptor)
+            os.close(descriptor)
+            closed = True
+            if overwrite:
+                temporary.replace(target)
+            else:
+                # Der harte Link ist im selben Verzeichnis atomar und ersetzt nie
+                # eine vorhandene Kundendatei. Ein vorheriges ``exists()`` hätte
+                # zwischen Prüfung und Veröffentlichung ein Zeitfenster gelassen.
+                os.link(temporary, target)
+            published = True
+            if on_published is not None:
+                on_published()
+            _sync_directory(target.parent)
+        except BaseException as problem:
+            failure = problem
+
+        if not closed:
+            try:
+                os.close(descriptor)
+            except BaseException as problem:
+                if failure is None:
+                    failure = problem
+
+        try:
+            cleanup_problem = _remove_temporary(temporary)
+        except BaseException as problem:
+            if failure is None:
+                failure = problem
+        else:
+            if cleanup_problem is not None:
+                if published:
+                    _log.warning(
+                        "recipe temporary file %s remains after publication: %s",
+                        temporary.name,
+                        cleanup_problem,
+                    )
+                elif failure is None:
+                    failure = cleanup_problem
+                else:
+                    _log.warning(
+                        "recipe temporary file %s remains after failed publication: %s",
+                        temporary.name,
+                        cleanup_problem,
+                    )
+
+        if failure is not None:
+            if published:
+                raise _PublishedFileError(failure) from failure
+            raise failure
+
+
+def _save(
+    recipe: Recipe,
+    directory: Path | None = None,
+    *,
+    overwrite: bool = False,
+    on_published: Callable[[], None] | None = None,
+) -> Path:
+    """Interner Speicherweg, der einen bereits erfolgten Commit kennzeichnet."""
+
+    folder = ensure_dir(recipes_dir() if directory is None else directory)
+    target = folder / f"{recipe.name}.json"
+    payload = _encoded_file(recipe)
+    try:
+        _publish_file(target, payload, overwrite=overwrite, on_published=on_published)
+    except FileExistsError as problem:
+        raise _existing_recipe_error(recipe.name, target.name) from problem
+    return target
+
+
+def publish_payload(target: Path, payload: bytes) -> Path:
+    """Schreibt eine bereits geprüfte Bausteindatei atomar an ein Nutzerziel."""
+
+    ensure_dir(target.parent)
+    try:
+        _publish_file(target, payload, overwrite=True)
+    except _PublishedFileError as problem:
+        _log.warning(
+            "published recipe payload completed after %s",
+            type(problem.problem).__name__,
+        )
+    return target
+
+
 def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = False) -> Path:
     """Schreibt das Rezept als eine Datei; der Dateiname ist der Name.
 
@@ -600,25 +953,543 @@ def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = Fal
     ``save()`` die alte Datei bereits überschrieben hatte — die Meldung sprach
     von einem Fehlschlag, die Platte trug längst den Verlust.
     """
-    folder = ensure_dir(recipes_dir() if directory is None else directory)
-    target = folder / f"{recipe.name}.json"
-    if target.exists() and not overwrite:
-        raise ValidationError(
-            field="title",
-            detail=_(
-                "Unter diesem Namen liegt schon ein eigener Baustein. Wählen "
-                "Sie einen anderen Namen — oder ersetzen Sie den vorhandenen "
-                "ausdrücklich."
-            ),
-            values={"recipe": recipe.name, "file": target.name},
-            constraint="exists",
-            suggestions=(CORRECT_INPUT, CANCEL),
+    try:
+        return _save(recipe, directory, overwrite=overwrite)
+    except _PublishedFileError as problem:
+        _log.warning(
+            "published recipe save completed after %s",
+            type(problem.problem).__name__,
         )
-    target.write_text(
-        json.dumps(file_data(recipe), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
+        folder = recipes_dir() if directory is None else directory
+        return folder / f"{recipe.name}.json"
+
+
+def _existing_recipe_error(name: str, filename: str, *, suggested: str = "") -> ValidationError:
+    """Der gemeinsame, handlungsfähige Befund für eine Namenskollision."""
+
+    values = {"recipe": name, "file": filename}
+    if suggested:
+        values["suggested_name"] = suggested
+    suggestions = (USE_SUGGESTED_NAME, CANCEL) if suggested else (CORRECT_INPUT, CANCEL)
+    return ValidationError(
+        field="title",
+        detail=_(
+            "Unter diesem Namen liegt schon ein Baustein. Behalten Sie den vorhandenen "
+            "und übernehmen Sie die Datei unter dem vorgeschlagenen anderen Namen."
+        ),
+        values=values,
+        constraint="exists",
+        suggestions=suggestions,
     )
-    return target
+
+
+def available_name(
+    name: str,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    directory: Path | None = None,
+) -> str:
+    """Der erste freie Importname in Datei, Katalog und Operationsregister."""
+
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    source = parts or PARTS
+    operations = registry or REGISTRY
+    folder = recipes_dir() if directory is None else directory
+
+    def free(candidate: str) -> bool:
+        return (
+            not source.has(candidate)
+            and not operations.has(part_ops.op_name(candidate))
+            and not (folder / f"{candidate}.json").exists()
+        )
+
+    if free(name):
+        return name
+    stem = name[:110].rstrip("_") or "imported_part"
+    candidate = f"{stem}_imported"
+    number = 2
+    while not free(candidate):
+        suffix = f"_imported_{number}"
+        candidate = f"{stem[: 120 - len(suffix)].rstrip('_')}{suffix}"
+        number += 1
+    return candidate
+
+
+@dataclass(frozen=True)
+class _PreparedBinding:
+    """Der vollständig geprüfte Katalog- und Operationsstand nach dem Commit."""
+
+    parts: PartRegistry
+    operations: Registry
+
+
+def _prepare_binding(
+    recipe: Recipe,
+    parts: PartRegistry,
+    operations: Registry,
+    *,
+    replace_existing: bool,
+) -> _PreparedBinding:
+    """Baut den ganzen Folgezustand, ohne die laufende Sitzung zu verändern."""
+
+    from app.core.knowledge.parts import ops as part_ops
+
+    operation_name = part_ops.op_name(recipe.name)
+    prepared_parts = PartRegistry()
+    prepared_operations = Registry()
+    for part_spec in parts.all():
+        if replace_existing and part_spec.name == recipe.name:
+            continue
+        prepared_parts.register(part_spec)
+    for operation_spec in operations.all():
+        if replace_existing and operation_spec.name == operation_name:
+            continue
+        prepared_operations.register(operation_spec)
+    register(
+        recipe,
+        prepared_parts,
+        prepared_operations,
+        source=_catalog_source(recipe),
+    )
+    return _PreparedBinding(prepared_parts, prepared_operations)
+
+
+def _prepare_removal(
+    name: str,
+    parts: PartRegistry,
+    operations: Registry,
+) -> _PreparedBinding:
+    """Baut den vollständigen Registerstand ohne ein lokales Rezept."""
+
+    from app.core.knowledge.parts import ops as part_ops
+
+    operation_name = part_ops.op_name(name)
+    if not parts.has(name) or not operations.has(operation_name):
+        raise ValueError("recipe_binding_missing")
+    prepared_parts = PartRegistry()
+    prepared_operations = Registry()
+    for part_spec in parts.all():
+        if part_spec.name != name:
+            prepared_parts.register(part_spec)
+    for operation_spec in operations.all():
+        if operation_spec.name != operation_name:
+            prepared_operations.register(operation_spec)
+    return _PreparedBinding(prepared_parts, prepared_operations)
+
+
+def _activate_prepared(
+    parts: PartRegistry,
+    operations: Registry,
+    prepared: _PreparedBinding,
+) -> None:
+    """Aktiviert nach dem Platten-Commit beide vorgeprüften Registerstände."""
+
+    try:
+        parts.replace_state(prepared.parts)
+        operations.replace_state(prepared.operations)
+    except BaseException as problem:
+        # Eine asynchrone Unterbrechung zwischen den beiden Referenzwechseln
+        # darf keinen halben Zustand hinterlassen. Die Zuweisungen selbst
+        # validieren und allokieren nichts mehr und können wiederholt werden.
+        # Gelingt die Reparatur, ist die sichtbare Handlung erfolgreich und
+        # darf nicht mit einem unbrauchbaren Retry beantwortet werden.
+        try:
+            parts.replace_state(prepared.parts)
+            operations.replace_state(prepared.operations)
+        except BaseException as retry_problem:
+            raise retry_problem from problem
+        _log.warning(
+            "recipe registry activation recovered after %s",
+            type(problem).__name__,
+        )
+
+
+def _save_and_activate(
+    recipe: Recipe,
+    parts: PartRegistry,
+    operations: Registry,
+    prepared: _PreparedBinding,
+    directory: Path | None,
+    *,
+    overwrite: bool,
+) -> Path:
+    """Veröffentlicht die Datei und rollt danach ausschließlich vorwärts."""
+
+    def activate() -> None:
+        _activate_prepared(parts, operations, prepared)
+
+    try:
+        return _save(
+            recipe,
+            directory,
+            overwrite=overwrite,
+            on_published=activate,
+        )
+    except _PublishedFileError as problem:
+        # Rename/Link ist bereits geschehen. Selbst ein Fehler im ersten
+        # Aktivierungsversuch oder beim Verzeichnis-fsync wird deshalb durch
+        # denselben vorbereiteten Zustand aufgelöst, nie durch Plattenrollback.
+        _activate_prepared(parts, operations, prepared)
+        _log.warning(
+            "published recipe binding completed after %s",
+            type(problem.problem).__name__,
+        )
+        folder = recipes_dir() if directory is None else directory
+        return folder / f"{recipe.name}.json"
+
+
+def _read_stored_file(target: Path) -> tuple[bytes, StoredFileMetadata]:
+    """Liest Bytes und wiederherstellbare Dateimetadaten aus derselben Datei."""
+
+    before = target.lstat()
+    if not stat.S_ISREG(before.st_mode):
+        raise OSError(errno.EINVAL, "recipe_not_regular")
+    with target.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        if (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+            raise OSError(errno.EBUSY, "recipe_changed_during_read")
+        payload = stream.read()
+        after = os.fstat(stream.fileno())
+    if (
+        (after.st_dev, after.st_ino) != (opened.st_dev, opened.st_ino)
+        or after.st_size != opened.st_size
+        or after.st_mtime_ns != opened.st_mtime_ns
+    ):
+        raise OSError(errno.EBUSY, "recipe_changed_during_read")
+    return payload, StoredFileMetadata(
+        mode=stat.S_IMODE(before.st_mode),
+        atime_ns=before.st_atime_ns,
+        mtime_ns=before.st_mtime_ns,
+    )
+
+
+def _removal_paths(target: Path) -> tuple[Path, Path]:
+    """Zwei exklusive Namen für Vorbereitung und Commit einer Entfernung."""
+
+    identity = uuid.uuid4().hex
+    stem = f"{_REMOVE_NAMESPACE}{_TEMP_OWNER}.{target.name}.{identity}"
+    return (
+        target.parent / f"{stem}{_REMOVE_PENDING_SUFFIX}",
+        target.parent / f"{stem}{_REMOVE_COMMITTED_SUFFIX}",
+    )
+
+
+def _removal_target(candidate: Path, suffix: str) -> Path | None:
+    """Liest nur eigene, vollständig geformte Quarantänenamen."""
+
+    pattern = re.compile(
+        rf"^{re.escape(_REMOVE_NAMESPACE)}"
+        rf"(?P<owner>\d+-[0-9a-f]+)\."
+        rf"(?P<target>[a-z][a-z0-9_]*\.json)\."
+        rf"[0-9a-f]{{32}}{re.escape(suffix)}$"
+    )
+    match = pattern.fullmatch(candidate.name)
+    if match is None:
+        return None
+    return candidate.parent / match.group("target")
+
+
+def _restore_pending_removal(pending: Path, target: Path) -> None:
+    """Legt eine nicht festgeschriebene Entfernung ohne Überschreiben zurück."""
+
+    os.link(pending, target)
+    pending.unlink()
+    _sync_directory(target.parent)
+
+
+def _recover_interrupted_removals(directory: Path) -> None:
+    """Stellt Vorbereitungen zurück und räumt festgeschriebene Entfernungen auf."""
+
+    for pending in directory.glob(f"{_REMOVE_NAMESPACE}*{_REMOVE_PENDING_SUFFIX}"):
+        try:
+            if not stat.S_ISREG(pending.lstat().st_mode):
+                continue
+            target = _removal_target(pending, _REMOVE_PENDING_SUFFIX)
+            if target is None:
+                continue
+            if target.exists():
+                _log.warning(
+                    "pending recipe removal %s conflicts with an existing target",
+                    pending.name,
+                )
+                continue
+            _restore_pending_removal(pending, target)
+        except (FileExistsError, FileNotFoundError):
+            continue
+        except OSError as problem:
+            _log.warning(
+                "pending recipe removal %s could not be restored: %s",
+                pending.name,
+                problem,
+            )
+    for committed in directory.glob(f"{_REMOVE_NAMESPACE}*{_REMOVE_COMMITTED_SUFFIX}"):
+        try:
+            if not stat.S_ISREG(committed.lstat().st_mode):
+                continue
+            target = _removal_target(committed, _REMOVE_COMMITTED_SUFFIX)
+            if target is None:
+                continue
+            committed.unlink()
+            _sync_directory(directory)
+        except FileNotFoundError:
+            continue
+        except OSError as problem:
+            _log.warning(
+                "committed recipe removal %s could not be cleaned: %s",
+                committed.name,
+                problem,
+            )
+
+
+def _commit_removal_and_activate(
+    pending: Path,
+    committed: Path,
+    parts: PartRegistry,
+    operations: Registry,
+    prepared: _PreparedBinding,
+) -> None:
+    """Schreibt die Entfernung fest und rollt danach nur noch vorwärts."""
+
+    published = False
+    try:
+        pending.replace(committed)
+        published = True
+        _activate_prepared(parts, operations, prepared)
+        _sync_directory(committed.parent)
+    except BaseException as problem:
+        if published:
+            _activate_prepared(parts, operations, prepared)
+            raise _PublishedFileError(problem) from problem
+        raise
+    try:
+        committed.unlink()
+        _sync_directory(committed.parent)
+    except OSError as problem:
+        _log.warning(
+            "committed recipe removal %s could not be cleaned: %s",
+            committed.name,
+            problem,
+        )
+
+
+def _clean_committed_removal(committed: Path) -> None:
+    """Räumt eine festgeschriebene Quarantäne bestmöglich sofort auf."""
+
+    try:
+        committed.unlink()
+        _sync_directory(committed.parent)
+    except OSError as problem:
+        _log.warning(
+            "committed recipe removal %s could not be cleaned: %s",
+            committed.name,
+            problem,
+        )
+
+
+def remove_installed(
+    name: str,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    directory: Path | None = None,
+    *,
+    allowed_sources: frozenset[str] = frozenset((RECIPE_SOURCE, IMPORTED_SOURCE)),
+    expected_sha256: str | None = None,
+    validate_payload: Callable[[bytes], Recipe] | None = None,
+) -> RemovedRecipeFile:
+    """Entfernt ein dateibasiertes Rezept samt beiden Registerbindungen.
+
+    Der Rückgabewert enthält absichtlich keinen Pfad. Er hält die exakten
+    Bytes und die Dateimetadaten, die eine unmittelbare Wiederherstellung
+    braucht. Ein offenes Dokument oder dessen Verlauf gehört nicht zu dieser
+    lokalen Bibliotheksaktion.
+    """
+
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    source = parts or PARTS
+    operations = registry or REGISTRY
+    folder = recipes_dir() if directory is None else directory
+    target = folder / f"{name}.json"
+    with _FILE_LOCK:
+        _recover_interrupted_removals(folder)
+        if not source.has(name):
+            raise ValueError("recipe_binding_missing")
+        part_spec = source.get(name)
+        if part_spec.source not in allowed_sources:
+            raise ValueError("recipe_source_not_removable")
+        pending, committed = _removal_paths(target)
+        target.rename(pending)
+        try:
+            _sync_directory(folder)
+            payload, metadata = _read_stored_file(pending)
+            if (
+                expected_sha256 is not None
+                and hashlib.sha256(payload).hexdigest() != expected_sha256
+            ):
+                raise ValueError("recipe_file_changed")
+            try:
+                stored = (
+                    validate_payload(payload)
+                    if validate_payload is not None
+                    else from_data(json.loads(payload))
+                )
+            except (
+                AttributeError,
+                KeyError,
+                OverflowError,
+                TypeError,
+                UnicodeDecodeError,
+                ValueError,
+            ) as problem:
+                raise ValueError("recipe_file_invalid") from problem
+            if (
+                stored.name != name
+                or _catalog_source(stored) != part_spec.source
+                or part_spec.recipe_data != file_data(stored)
+            ):
+                raise ValueError("recipe_file_mismatch")
+            prepared = _prepare_removal(name, source, operations)
+        except BaseException:
+            _restore_pending_removal(pending, target)
+            raise
+        try:
+            _commit_removal_and_activate(
+                pending,
+                committed,
+                source,
+                operations,
+                prepared,
+            )
+        except _PublishedFileError as problem:
+            _activate_prepared(source, operations, prepared)
+            _log.warning(
+                "committed recipe removal completed after %s",
+                type(problem.problem).__name__,
+            )
+            _clean_committed_removal(committed)
+        return RemovedRecipeFile(
+            name=name,
+            source=part_spec.source,
+            payload=payload,
+            metadata=metadata,
+            recipe=stored,
+        )
+
+
+def _restore_file_metadata(
+    descriptor: int,
+    temporary: Path,
+    metadata: StoredFileMetadata,
+) -> None:
+    """Setzt den gesicherten Dateistand vor seiner Veröffentlichung."""
+
+    chmod_descriptor = getattr(os, "fchmod", None)
+    if chmod_descriptor is None:
+        temporary.chmod(metadata.mode)
+    else:
+        chmod_descriptor(descriptor, metadata.mode)
+    os.utime(temporary, ns=(metadata.atime_ns, metadata.mtime_ns))
+
+
+def restore_installed(
+    removed: RemovedRecipeFile,
+    restored: Recipe,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    directory: Path | None = None,
+) -> Path:
+    """Stellt exakte Rezeptbytes und ihre beiden Bindungen atomar wieder her."""
+
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    source = parts or PARTS
+    operations = registry or REGISTRY
+    if restored.name != removed.name or _catalog_source(restored) != removed.source:
+        raise ValueError("recipe_restore_mismatch")
+    with _FILE_LOCK:
+        from app.core.knowledge.parts import ops as part_ops
+
+        if source.has(removed.name) or operations.has(part_ops.op_name(removed.name)):
+            raise _existing_recipe_error(removed.name, f"{removed.name}.json")
+        prepared = _prepare_binding(
+            restored,
+            source,
+            operations,
+            replace_existing=False,
+        )
+        folder = ensure_dir(recipes_dir() if directory is None else directory)
+        target = folder / f"{removed.name}.json"
+
+        def activate() -> None:
+            _activate_prepared(source, operations, prepared)
+
+        def prepare_file(descriptor: int, temporary: Path) -> None:
+            _restore_file_metadata(descriptor, temporary, removed.metadata)
+
+        try:
+            _publish_file(
+                target,
+                removed.payload,
+                overwrite=False,
+                on_published=activate,
+                prepare_file=prepare_file,
+            )
+        except _PublishedFileError as problem:
+            _activate_prepared(source, operations, prepared)
+            _log.warning(
+                "published recipe restore completed after %s",
+                type(problem.problem).__name__,
+            )
+        except FileExistsError as problem:
+            raise _existing_recipe_error(removed.name, target.name) from problem
+        return target
+
+
+def install(
+    recipe: Recipe,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    directory: Path | None = None,
+) -> Path:
+    """Legt einen importierten Baustein an, aber ersetzt niemals einen vorhandenen.
+
+    Datei, Katalogeintrag und Operation bilden wie bei :func:`replace` eine
+    Einheit. Der Unterschied ist die Konfliktregel: Import ist immer
+    fail-closed; ein anderer Name muss vom Aufrufer ausdrücklich kommen.
+    """
+
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    source = parts or PARTS
+    operations = registry or REGISTRY
+    with _FILE_LOCK:
+        suggested = available_name(recipe.name, source, operations, directory)
+        if suggested != recipe.name:
+            raise _existing_recipe_error(
+                recipe.name,
+                f"{recipe.name}.json",
+                suggested=suggested,
+            )
+        prepared = _prepare_binding(
+            recipe,
+            source,
+            operations,
+            replace_existing=False,
+        )
+        return _save_and_activate(
+            recipe,
+            source,
+            operations,
+            prepared,
+            directory,
+            overwrite=False,
+        )
 
 
 def file_data(recipe: Recipe) -> dict[str, Any]:
@@ -637,6 +1508,8 @@ def file_data(recipe: Recipe) -> dict[str, Any]:
         data["license"] = recipe.license
     if recipe.author:
         data["author"] = recipe.author
+    if recipe.imported_origin is not None:
+        data["imported_origin"] = dataclasses.asdict(recipe.imported_origin)
     if recipe.range_report is not None:
         data["range_report"] = {
             "checked": recipe.range_report.checked,
@@ -670,12 +1543,15 @@ def load_all(
     folder = recipes_dir() if directory is None else directory
     if not folder.is_dir():
         return LoadResult()
+    with _FILE_LOCK:
+        _recover_interrupted_removals(folder)
+        _cleanup_stale_temporaries(folder)
     loaded: list[str] = []
     findings: list[Any] = []
     for path in sorted(folder.glob("*.json")):
         try:
             recipe = from_data(json.loads(path.read_text(encoding="utf-8")))
-            register(recipe, parts, registry)
+            register(recipe, parts, registry, source=_catalog_source(recipe))
             loaded.append(recipe.name)
             # Regel 13 hält nur mit Regel 11 zusammen: Ein Rezept durfte
             # Quelltext tragen (``create_from_scad``), und dann musste der
@@ -706,6 +1582,14 @@ def load_all(
     return LoadResult(loaded=tuple(loaded), findings=findings)
 
 
+def _catalog_source(recipe: Recipe) -> str:
+    """Leitet die sichtbare Katalogherkunft aus der dauerhaften Quittung ab."""
+
+    if recipe.imported_origin is not None:
+        return IMPORTED_SOURCE
+    return RECIPE_SOURCE
+
+
 # --- Der Ausschnitt (die Naht zu E4) ---------------------------------------------
 
 
@@ -728,7 +1612,7 @@ def capture(
 
     Die Naht zu Paket E4: Der Dialog sammelt Name, Titel, Gruppe, die
     gewählten Schritte, die freigegebenen Parameter samt ihren Angaben, die
-    benannten Merkmale und — für die Weitergabe — Lizenz und Autor. Hier entsteht
+    benannten Merkmale sowie Lizenz und Autor. Hier entsteht
     daraus das Rezept, und die **Probe läuft sofort**: einmal auswerten, genau
     ein Körper, jedes benannte Merkmal vorhanden (Konzept §18a und §18d). Was
     hier durchgeht, steht danach im Katalog; was nicht, sagt beim Speichern
@@ -855,11 +1739,10 @@ def adopt(
     """Nimmt ein mitgereistes Rezept auf — „lokal schlägt mitgereist, immer".
 
     **``catalog_source`` sagt, woher die Datei kam.** Die Vorgabe ist der
-    mitgereiste Weg, für den diese Funktion gebaut wurde; der einzelne
-    Dateiimport reicht :data:`IMPORTED_SOURCE` durch. Die Aufnahme ist in beiden
-    Fällen dieselbe — was sich unterscheidet, ist die Zeile, die der Katalog
-    darüber schreibt, und die soll nicht die falsche Herkunft behaupten. Das
-    Argument heißt nicht ``source``, weil das hier schon das Register ist.
+    mitgereiste Weg, für den diese Funktion gebaut wurde. Ein dauerhafter
+    Dateiimport nutzt stattdessen :func:`replace`, damit Datei, Katalog und
+    Operation atomar zusammen wechseln. Das Argument heißt nicht ``source``,
+    weil das hier schon das Register ist.
 
     Drei Lagen, unabhängig davon (Konzept §17.1):
 
@@ -899,8 +1782,7 @@ def adopt(
             local = source.get(name)
             if local.version == mark:
                 return announced
-            suffix = "imported" if catalog_source == IMPORTED_SOURCE else "travelled"
-            name = f"{arrived.name}_{suffix}"
+            name = f"{arrived.name}_travelled"
             # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
             # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
             # den unumbenannten Abdruck wäre nie gleich — jedes erneute
@@ -1000,40 +1882,28 @@ def replace(
     **Die Operation wird wirklich neu gebunden.** ``register_one`` hält den
     ``PartSpec`` als Vorgabewert seiner ``run``-Funktion fest — ein neuer
     Katalogeintrag allein ändert die Rechnung nicht (b0s Messung vom
-    26.08.2026). Deshalb erst abmelden, dann neu registrieren.
-
-    Scheitert ein Schritt, wird zurückgestellt, was schon getauscht war:
-    Halb ersetzt wäre die schlimmste aller Lagen — Katalog neu, Rechnung
-    alt, Platte irgendwo dazwischen.
+    26.08.2026). Deshalb entsteht der gesamte neue Registerstand zuerst
+    isoliert. Nach der Dateiveröffentlichung werden beide fertigen Abbildungen
+    nur noch aktiviert; es gibt keinen erneut fehlbaren Aufbau und keinen
+    Plattenrollback in einen womöglich widersprüchlichen Stand.
     """
-    from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts.registry import PARTS
     from app.core.registry import REGISTRY
 
     source = parts or PARTS
     operations = registry or REGISTRY
-    op = part_ops.op_name(recipe.name)
-    previous = source.get(recipe.name) if source.has(recipe.name) else None
-
-    if previous is not None:
-        source.remove(recipe.name)
-        operations.remove(op)
-    try:
-        register(recipe, source, operations)
-    except Exception:
-        if previous is not None:
-            source.register(previous)
-            part_ops.register_one(previous, operations)
-        raise
-    try:
-        return save(recipe, directory, overwrite=True)
-    except Exception:
-        # Die Platte hat den alten Stand behalten — dann behalten ihn auch
-        # Katalog und Register, sonst rechnete die Sitzung mit einem Stand,
-        # den der nächste Start nicht mehr kennt.
-        source.remove(recipe.name)
-        operations.remove(op)
-        if previous is not None:
-            source.register(previous)
-            part_ops.register_one(previous, operations)
-        raise
+    with _FILE_LOCK:
+        prepared = _prepare_binding(
+            recipe,
+            source,
+            operations,
+            replace_existing=True,
+        )
+        return _save_and_activate(
+            recipe,
+            source,
+            operations,
+            prepared,
+            directory,
+            overwrite=True,
+        )

@@ -24,7 +24,6 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
-_NOTICE_DATA_FILE: Final = Path(__file__).parent / "data" / "third_party_licenses.toml"
 
 #: Die Lizenzbeilage, wie sie neben der Anwendung liegt.
 #:
@@ -79,6 +78,7 @@ _EXTRA_MARKER = re.compile(r"extra\s*==\s*[\"']([^\"']+)[\"']")
 class Policy:
     allowed: tuple[str, ...]
     forbidden: tuple[str, ...]
+    allowed_with: tuple[str, ...]
     banned_packages: tuple[str, ...]
     known: dict[str, dict[str, str]]
 
@@ -102,23 +102,137 @@ def load_policy() -> Policy:
     return Policy(
         allowed=tuple(policy.get("allowed", ())),
         forbidden=tuple(policy.get("forbidden", ())),
+        allowed_with=tuple(policy.get("allowed_with", ())),
         banned_packages=tuple(policy.get("banned_packages", ())),
         known=data.get("known", {}),
     )
 
 
+@dataclass(frozen=True, slots=True)
+class LicenceExpression:
+    """Ein ausgewerteter Knoten eines SPDX-Lizenzausdrucks."""
+
+    operator: str
+    value: str = ""
+    left: LicenceExpression | None = None
+    right: LicenceExpression | None = None
+
+
+_SPDX_TOKEN = re.compile(r"\s*(\(|\)|AND\b|OR\b|WITH\b|[A-Za-z0-9][A-Za-z0-9.+-]*)")
+
+
+class _SpdxParser:
+    """Kleiner Parser für die in Paketmetadaten erlaubte SPDX-Grammatik."""
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.tokens = self._tokens(text)
+        self.index = 0
+
+    @staticmethod
+    def _tokens(text: str) -> tuple[str, ...]:
+        tokens: list[str] = []
+        position = 0
+        while position < len(text):
+            match = _SPDX_TOKEN.match(text, position)
+            if match is None:
+                raise ValueError(f"ungültiges Zeichen an Stelle {position + 1}")
+            tokens.append(match.group(1))
+            position = match.end()
+        return tuple(tokens)
+
+    def parse(self) -> LicenceExpression:
+        if not self.tokens:
+            raise ValueError("leerer Ausdruck")
+        expression = self._or_expression()
+        if self.index != len(self.tokens):
+            raise ValueError(f"unerwartetes Token {self.tokens[self.index]!r}")
+        return expression
+
+    def _or_expression(self) -> LicenceExpression:
+        expression = self._and_expression()
+        while self._take("OR"):
+            expression = LicenceExpression("OR", left=expression, right=self._and_expression())
+        return expression
+
+    def _and_expression(self) -> LicenceExpression:
+        expression = self._with_expression()
+        while self._take("AND"):
+            expression = LicenceExpression("AND", left=expression, right=self._with_expression())
+        return expression
+
+    def _with_expression(self) -> LicenceExpression:
+        expression = self._primary()
+        if not self._take("WITH"):
+            return expression
+        if expression.operator != "ID":
+            raise ValueError("WITH braucht links eine Lizenzkennung")
+        exception = self._next()
+        if exception in {"(", ")", "AND", "OR", "WITH"}:
+            raise ValueError("WITH braucht rechts eine Ausnahmekennung")
+        return LicenceExpression("WITH", value=f"{expression.value} WITH {exception}")
+
+    def _primary(self) -> LicenceExpression:
+        token = self._next()
+        if token == "(":
+            expression = self._or_expression()
+            if not self._take(")"):
+                raise ValueError("schließende Klammer fehlt")
+            return expression
+        if token in {")", "AND", "OR", "WITH"}:
+            raise ValueError(f"Lizenzkennung erwartet, {token!r} gefunden")
+        return LicenceExpression("ID", value=token)
+
+    def _next(self) -> str:
+        if self.index >= len(self.tokens):
+            raise ValueError("Ausdruck endet zu früh")
+        token = self.tokens[self.index]
+        self.index += 1
+        return token
+
+    def _take(self, wanted: str) -> bool:
+        if self.index >= len(self.tokens) or self.tokens[self.index] != wanted:
+            return False
+        self.index += 1
+        return True
+
+
+def parse_spdx(text: str) -> LicenceExpression:
+    """Parst einen SPDX-Ausdruck oder wirft mit einer prüfbaren Begründung."""
+    return _SpdxParser(text.strip()).parse()
+
+
+def _expression_allowed(expression: LicenceExpression, policy: Policy) -> bool:
+    """Ob mindestens eine OR-Wahl vollständig der Richtlinie entspricht."""
+    if expression.operator == "ID":
+        identifier = expression.value.casefold()
+        allowed = {value.casefold() for value in policy.allowed}
+        forbidden = {value.casefold() for value in policy.forbidden}
+        return identifier in allowed and identifier not in forbidden
+    if expression.operator == "WITH":
+        allowed_with = {value.casefold() for value in policy.allowed_with}
+        return expression.value.casefold() in allowed_with
+    if expression.left is None or expression.right is None:  # pragma: no cover - nur interne Abwehr
+        return False
+    if expression.operator == "AND":
+        return _expression_allowed(expression.left, policy) and _expression_allowed(
+            expression.right, policy
+        )
+    if expression.operator == "OR":
+        return _expression_allowed(expression.left, policy) or _expression_allowed(
+            expression.right, policy
+        )
+    return False
+
+
+def licence_allowed(text: str, policy: Policy | None = None) -> bool:
+    """Prüft einen vollständigen SPDX-Ausdruck semantisch und exakt."""
+    active = policy or load_policy()
+    return _expression_allowed(parse_spdx(text), active)
+
+
 def normalise(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
-
-
-def notice_packages() -> dict[str, tuple[str, str]]:
-    """Liest Version und gewählte Lizenz aller mitgelieferten Laufzeitpakete."""
-    with _NOTICE_DATA_FILE.open("rb") as stream:
-        data: dict[str, Any] = tomllib.load(stream)
-    return {
-        str(entry["name"]): (str(entry["version"]), str(entry["licence"]))
-        for entry in data.get("package", ())
-    }
 
 
 def declared_licence(distribution: metadata.Distribution) -> str:
@@ -187,7 +301,9 @@ def _direct_requirements(extras: Iterable[str]) -> set[str]:
     return names
 
 
-def runtime_packages(extras: Iterable[str] = RUNTIME_EXTRAS) -> dict[str, str]:
+def runtime_packages(
+    extras: Iterable[str] = RUNTIME_EXTRAS, *, strict: bool = False
+) -> dict[str, str]:
     """Jedes installierte Paket, das in der Anwendung landet, mit seiner
     Lizenz.
     """
@@ -202,6 +318,11 @@ def runtime_packages(extras: Iterable[str] = RUNTIME_EXTRAS) -> dict[str, str]:
         try:
             distribution = metadata.distribution(name)
         except metadata.PackageNotFoundError:
+            if strict:
+                raise RuntimeError(
+                    f"Die deklarierte Laufzeitabhängigkeit {name} ist nicht installiert. "
+                    "Die Lizenzbeilage darf nur in einer vollständigen Zielumgebung entstehen."
+                ) from None
             _log.warning("dependency %s is declared but not installed", name)
             continue
         found[distribution.metadata["Name"]] = declared_licence(distribution)
@@ -214,6 +335,7 @@ def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
     policy = load_policy()
     banned = {normalise(entry) for entry in policy.banned_packages}
     known = {normalise(key): value for key, value in policy.known.items()}
+    direct = _direct_requirements(extras)
     violations: list[Violation] = []
 
     for package, licence in sorted(runtime_packages(extras).items()):
@@ -221,20 +343,58 @@ def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
         if key in banned:
             violations.append(Violation(package, licence, "steht auf der Sperrliste (§36)"))
             continue
-        text = licence or known.get(key, {}).get("licence", "")
+        if key in direct and key not in known:
+            violations.append(
+                Violation(
+                    package,
+                    licence or "unbekannt",
+                    "direkte Abhängigkeit ohne Eintrag in der Freigabeliste",
+                )
+            )
+            continue
+        # Der paketbezogene, von Hand geprüfte SPDX-Ausdruck gewinnt gegen
+        # freie Anzeigenamen wie „BSD License“. Die ursprünglichen Wheel-Texte
+        # bleiben davon unberührt und gehen vollständig in die Beilage ein.
+        text = known.get(key, {}).get("licence", "") or licence
         if not text:
             violations.append(
                 Violation(package, "unbekannt", "keine Lizenzangabe und kein Eintrag in der Liste")
             )
             continue
-        lowered = text.lower()
-        # „LGPL-3.0 OR GPL-2.0" ist eine Wahl, und wir wählen LGPL — darum räumt
-        # die Anwesenheit von LGPL eine Lizenzangabe ab, die auch GPL nennt (§36).
-        if any(entry.lower() in lowered for entry in policy.forbidden) and "lgpl" not in lowered:
-            violations.append(Violation(package, text, "GPL-Lizenz ist ausgeschlossen (§36)"))
+        try:
+            allowed = licence_allowed(text, policy)
+        except ValueError as problem:
+            violations.append(Violation(package, text, f"kein gültiger SPDX-Ausdruck: {problem}"))
             continue
-        if not any(entry.lower() in lowered for entry in policy.allowed):
-            violations.append(Violation(package, text, "Lizenz steht nicht auf der Freigabeliste"))
+        if not allowed:
+            violations.append(
+                Violation(package, text, "kein vollständig erlaubter SPDX-Lizenzzweig")
+            )
+
+    # Plattformabhängige direkte Komponenten müssen bereits vor einem Bau auf
+    # einer anderen Maschine freigegeben sein. Deren Wheel-Texte prüft erst der
+    # jeweilige Ziel-Baulauf, der Eintrag selbst ist jedoch plattformneutral.
+    for package in PLATFORM_PACKAGES:
+        key = normalise(package)
+        record = known.get(key)
+        if record is None:
+            violations.append(
+                Violation(
+                    package,
+                    "unbekannt",
+                    "Plattformabhängigkeit ohne Eintrag in der Freigabeliste",
+                )
+            )
+            continue
+        expression = record.get("licence", "")
+        try:
+            allowed = bool(expression) and licence_allowed(expression, policy)
+        except ValueError:
+            allowed = False
+        if not allowed:
+            violations.append(
+                Violation(package, expression or "unbekannt", "Plattformfreigabe ist unzulässig")
+            )
     return violations
 
 
@@ -266,18 +426,28 @@ def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
     """Die Liste für den Über-Dialog und die Drittanbieter-Hinweise (§36,
     §37.2).
     """
-    del extras  # Die Beilage deckt immer den vollständigen Plattform-Satz.
+    lines = ["| Paket | Lizenz |", "|---|---|"]
+    policy = load_policy()
+    known = {normalise(key): value for key, value in policy.known.items()}
+    # Was hier installiert ist, **und** was auf einer anderen Plattform
+    # dazukommt: Die Datei reist mit jedem Paket, und ein Hinweis, der nur die
+    # Pakete des Baurechners nennt, fehlt auf allen anderen.
     try:
-        packages = notice_packages()
-    except OSError:
-        # Ein beschädigtes Paket kann die danebenliegende Beilage noch lesen.
+        found = dict(runtime_packages(extras))
+    except metadata.PackageNotFoundError:
+        # Im gebauten Paket ist die Anwendung keine installierte Distribution.
+        # Dann steht die Liste in der Beilage, die neben ihr liegt — sonst
+        # sieht der Kunde an dieser Stelle einen Ersatzsatz statt der
+        # Lizenzhinweise, die BSD, MIT und LGPL verlangen.
         from_file = _notices_from_file()
         if from_file is None:
             raise
         return from_file
-    lines = ["| Paket | Lizenz |", "|---|---|"]
-    for package, (_version, licence) in packages.items():
-        lines.append(f"| {package} | {licence} |")
+    for package, licence in PLATFORM_PACKAGES.items():
+        found.setdefault(package, licence)
+    for package, licence in sorted(found.items()):
+        text = known.get(normalise(package), {}).get("licence", "") or licence or "—"
+        lines.append(f"| {package} | {text} |")
     return "\n".join(lines) + "\n"
 
 

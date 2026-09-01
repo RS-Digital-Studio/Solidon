@@ -1,7 +1,7 @@
 """Aus den Rechtstexten die Seiten der Website machen — und die Version für den
 Installer.
 
-Quelle sind ``EULA.md``, ``AGB.md`` und ``WIDERRUF.md`` im Wurzelverzeichnis.
+Quelle sind die Rechtstexte im Wurzelverzeichnis.
 Sie stehen dort, weil sie zum Repository gehören wie die Lizenz: lesbar, ohne
 Werkzeug, in der Version, die gilt. Was hier entsteht, wird nie von Hand
 geändert — eine zweite Version eines Rechtstexts ist schlimmer als keine.
@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME, APP_VENDOR  # noqa: E402
+from tools.site_nav import ENTRIES  # noqa: E402
 
 WEBSITE = ROOT / "website"
 
@@ -59,7 +60,7 @@ _AUTOLINK = re.compile(r"&lt;(https?://[^&\s]+|mailto:[^&\s]+|[^&\s@]+@[^&\s]+)&
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
-#: Eine Sprungmarke am Ende einer Überschrift: ``## Rückgabe {#rueckgabe}``.
+#: Eine Sprungmarke am Ende einer Überschrift: ``## Rückmeldung {#rueckmeldung}``.
 #: Kleinbuchstaben, Ziffern und Bindestrich — mehr braucht ein Anker nicht, und
 #: mehr zuzulassen hieße, jede Eingabe für ein ``id``-Attribut zu maskieren.
 _ANCHOR = re.compile(r"^(.*?)\s*\{#([a-z][a-z0-9-]*)\}$")
@@ -68,8 +69,9 @@ _ANCHOR = re.compile(r"^(.*?)\s*\{#([a-z][a-z0-9-]*)\}$")
 def _split_anchor(title: str) -> tuple[str, str]:
     """Trennt eine Überschrift von ihrer Sprungmarke.
 
-    **Ohne sie kann ein Rechtstext nicht auf sich selbst verweisen.** Ein
-    Verweis ohne Ziel ist schlechter als keiner —
+    **Ohne sie kann ein Rechtstext nicht auf sich selbst verweisen.** Die
+    Datenschutzerklärung braucht genau das: Ein Absatz verweist auf einen
+    weiter unten erklärten Eingabeweg. Ein Verweis ohne Ziel ist schlechter als keiner —
     ``tests/test_website.py`` prüft jede Sprungmarke gegen ihr Ziel.
 
     Steht keine Marke da, bleibt die Überschrift, wie sie war; die drei
@@ -256,17 +258,8 @@ def _plain(text: str) -> str:
 PLACEHOLDER = re.compile(r"\[[A-ZÄÖÜ][A-ZÄÖÜ .\-,]{3,}\]")
 
 DRAFT_NOTE = (
-    '<p class="draft">Entwurf — dieser Text nennt noch Platzhalter statt '
-    "Angaben und ist vor der Veröffentlichung fachlich zu prüfen.</p>"
-)
-
-#: Ob die Texte fachlich geprüft sind. Auf ``False`` stellen, sobald sie es
-#: sind — dann fällt der Vorbehalt, und nur dann.
-REVIEW_PENDING = True
-
-REVIEW_NOTE = (
-    '<p class="draft">Sorgfältiger Entwurf, aber keine Rechtsberatung — vor '
-    "der Veröffentlichung fachlich zu prüfen.</p>"
+    '<p class="draft">Entwurf — Pflichtangaben fehlen noch; die Veröffentlichung '
+    "bleibt bis zu ihrer Ergänzung gesperrt.</p>"
 )
 
 #: Die englische Startseite verlinkt hierher, und wer von dort kommt, steht
@@ -285,24 +278,13 @@ LANGUAGE_NOTE = (
 
 
 def draft_banner(markdown: str) -> str:
-    """Der Entwurfshinweis — aus zwei Gründen, die nicht zusammenfallen.
+    """Ein sichtbarer Hinweis nur dann, wenn echte Platzhalter übrig sind.
 
-    Der erste ist der Platzhalter. Er wird nicht von Hand gesetzt und nicht von
-    Hand entfernt: sobald die Anschrift eingetragen ist, verschwindet er beim
-    nächsten Lauf von selbst. Ein Hinweis, den jemand wegnehmen muss, bleibt
-    sonst stehen, wenn er nicht mehr stimmt — oder er steht noch da, wenn er
-    längst falsch ist.
-
-    Der zweite ist die fachliche Prüfung, und sie hängt an keinem Platzhalter.
-    Beides an einen Satz zu hängen war zu wenig: mit dem Namen des
-    Zahlungsdienstleisters fiel der letzte Platzhalter, und ein ungeprüfter
-    Vertrag hätte ohne jeden Vorbehalt dagestanden. Diese Zeile fällt erst,
-    wenn jemand :data:`REVIEW_PENDING` umstellt — also wenn die Prüfung
-    wirklich stattgefunden hat.
+    Eine allgemeine Bewertung der Texte gehört in die interne Auditakte und
+    nicht auf jede öffentliche Rechtsseite. Der Erzeuger verhindert weiterhin,
+    dass eine Seite einen Platzhalter wie eine fertige Angabe zeigt.
     """
-    if PLACEHOLDER.search(markdown):
-        return DRAFT_NOTE
-    return REVIEW_NOTE if REVIEW_PENDING else ""
+    return DRAFT_NOTE if PLACEHOLDER.search(markdown) else ""
 
 
 def body_html(markdown: str, contract: bool = True) -> str:
@@ -339,6 +321,10 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{escape(title)} — {APP_NAME}</title>\n"
         f'<meta name="robots" content="noindex">\n'
+        f'<meta property="og:image" '
+        f'content="https://solidon3d.de/handbuch/de/main-window.png">\n'
+        f'<meta property="og:image:alt" '
+        f'content="Das Hauptfenster von Solidon3D mit Modell, Verlauf und Prüfbericht">\n'
         f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="style.css">\n'
         f"</head>\n<body>\n\n"
@@ -350,9 +336,9 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<footer class="site">\n  <div class="wrap">\n'
         f"    © 2026 {APP_VENDOR} ·\n"
         # Die Rechtstexte tragen kein Kopfmenü — hier ist die Fußzeile
-        # der gemeinsame Weg zurück.
+        # der einzige Weg zurück zu den Produktfunktionen.
         f'    <a href="/">Startseite</a> ·\n'
-        f"{siblings}\n"
+        f'    <a href="{ENTRIES["de"][0][0]}">{ENTRIES["de"][0][1]}</a>{siblings}\n'
         # Auch die Rechtstexte: Wer wissen will, ob jemand das Widerrufs-
         # recht liest, braucht die Zeile. Was gezählt wird, steht in der
         # Datenschutzerklärung selbst — der Pfad und sonst nichts.
@@ -373,8 +359,8 @@ def main() -> int:
         source = ROOT / source_name
         markdown = source.read_text(encoding="utf-8")
 
-        others = " ·\n".join(
-            f'    <a href="/{name}">{label}</a>'
+        others = "".join(
+            f' ·\n    <a href="/{name}">{label}</a>'
             for name, label in links.items()
             if name != target_name
         )

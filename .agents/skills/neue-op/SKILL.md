@@ -3,8 +3,8 @@ name: neue-op
 description: >
   Führt durch das vollständige Anlegen einer neuen Operation in Solidon:
   Registereintrag, Parameterschema, Umsetzung gegen manifold3d/trimesh,
-  Rückfallkette, Verhaltenstest, bei Geometrie ein Korpustest und
-  Übersetzungen in allen ausgelieferten Sprachen.
+  Rückfallkette, Geometrietest gegen den Korpus und Übersetzungen in beiden
+  Sprachen.
 argument-hint: "[was die Operation tun soll]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -30,20 +30,19 @@ Zwei bestehende Ops im selben Gebiet lesen, bevor die erste Zeile entsteht.
    `consumes`/`produces`, `applies_to`, `deterministic`, `doc`, optional
    `shortcut`. Kürzel gegen das Register prüfen.
 2. **Parameterschema** — Grenzen, Einheiten, Vorgaben, Zuordnung zu Vorderseite
-   oder „Weitere Einstellungen". Vorn zwei bis drei Werte. Fertigungsspiel als
-   Projekt- oder Profilwert (`auto:<material>`), Rechentoleranzen über §11.2.
-   Jeder `doc`-Satz sagt, was der Wert bewirkt.
-3. **Test zuerst** — jede Op mit Verhaltenstest; bei Geometrie zusätzlich
-   erwartete Kennzahlen gegen eine Datei aus `tests/data/`. Das ist keine
-   Formsache, sondern die Reihenfolge.
+   oder „Weitere Einstellungen". Vorn zwei bis drei Werte. Toleranzen als
+   `auto:<material>`, nie als Zahl. Jeder `doc`-Satz sagt, was der Wert
+   bewirkt.
+3. **Test zuerst** — erwartete Kennzahlen gegen eine Datei aus `tests/data/`.
+   Bei Geometrie ist das keine Formsache, sondern die Reihenfolge.
 4. **Umsetzung** als `OpFn` gegen `manifold3d`/`trimesh`. Boolesches über die
    Rückfallkette, erreichte Stufe in `solver`.
 5. **Zufall** — Startwert aus `ctx.seed`, `deterministic=False`.
 6. **Beide Qualitätsstufen** über `ctx.quality`; in Entwurf endet die Kette
    nach Stufe 2.
 7. **Befunde** als `findings` zurückgeben, nicht selbst protokollieren. Jeder
-   nutzersichtbare `AppError` trägt eine passende Handlung.
-8. **Texte** über `tr()` in jedem Katalog aus `app/i18n/locales/`.
+   Fehlerpfad trägt einen Handlungsvorschlag.
+8. **Texte** über `tr()` in beiden Sprachdateien.
 
 ## Abschluss
 

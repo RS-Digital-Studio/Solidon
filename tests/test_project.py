@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 import zipfile
 from pathlib import Path
 
 import pytest
 
+import app.core.scene.project as project_module
 from app.branding import PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
@@ -17,6 +19,7 @@ from app.core.scene.migrations import FORMAT_VERSION, Step, migrate
 from app.core.scene.project import (
     CONTAINER_TIMESTAMP,
     PROJECT_ENTRY,
+    REPORT_ENTRY,
     Project,
     ProjectSources,
     autosave_path,
@@ -260,18 +263,676 @@ def test_the_licence_of_a_source_survives(filled: Project, tmp_path: Path) -> No
     assert reopened.document.sources["src_1"].ingest.removed_triangles == 4
 
 
-def test_checksums_are_written_and_verified(filled: Project, tmp_path: Path) -> None:
+@pytest.mark.parametrize("declared", ["", "0" * 64])
+def test_checksums_are_written_and_verified(
+    filled: Project,
+    tmp_path: Path,
+    declared: str,
+) -> None:
     path = save(filled, tmp_path / "projekt.p3d")
     assert filled.document.sources["src_1"].sha256
 
     data = project_data(path)
-    data["sources"]["src_1"]["sha256"] = "0" * 64
+    data["sources"]["src_1"]["sha256"] = declared
     _rewrite_project_entry(path, data)
 
     with pytest.raises(ValidationError) as caught:
         load(path)
     assert caught.value.constraint == "checksum"
     assert caught.value.suggestions
+
+
+def test_a_linked_source_gets_a_checksum_when_saved(tmp_path: Path) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256="",
+        embedded=False,
+    )
+
+    path = save(project, tmp_path / "projekt.p3d")
+
+    expected = project_module.checksum(MESH_PAYLOAD)
+    assert project.document.sources["src_1"].sha256 == expected
+    assert load(path).document.sources["src_1"].sha256 == expected
+
+
+@pytest.mark.parametrize("method", ["read", "identity"])
+def test_a_changed_linked_source_is_refused(
+    tmp_path: Path,
+    method: str,
+) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256="",
+        embedded=False,
+    )
+    reopened = load(save(project, tmp_path / "projekt.p3d"))
+    linked.write_bytes(b"ausgetauschter Inhalt")
+
+    access = ProjectSources(reopened, base_dir=tmp_path)
+    with pytest.raises(ValidationError) as caught:
+        getattr(access, method)("src_1")
+
+    assert caught.value.constraint == "checksum"
+    assert caught.value.suggestions
+
+
+def test_a_linked_source_is_bounded_before_reading(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(b"123")
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256=project_module.checksum(b"123"),
+        embedded=False,
+    )
+    monkeypatch.setattr(project_module, "MAX_FILE_BYTES", 2)
+
+    with pytest.raises(ValidationError) as caught:
+        ProjectSources(project, base_dir=tmp_path).read("src_1")
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_a_linked_source_without_a_stored_checksum_is_refused(tmp_path: Path) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256="",
+        embedded=False,
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        ProjectSources(project, base_dir=tmp_path).read("src_1")
+
+    assert caught.value.constraint == "checksum"
+    assert caught.value.suggestions
+
+
+def test_loading_eagerly_verifies_a_linked_source_checksum(tmp_path: Path) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256="",
+        embedded=False,
+    )
+    path = save(project, tmp_path / "projekt.p3d")
+    linked.write_bytes(b"ausgetauscht")
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "checksum"
+    assert caught.value.suggestions
+
+
+def test_loading_bounds_all_linked_sources_together(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    project = new_project()
+    for index in range(2):
+        linked = tmp_path / f"linked-{index}.stl"
+        linked.write_bytes(b"123")
+        project.document.sources[f"src_{index}"] = Source(
+            id=f"src_{index}",
+            kind="import",
+            path=linked.name,
+            sha256="",
+            embedded=False,
+        )
+    path = save(project, tmp_path / "projekt.p3d")
+    monkeypatch.setattr(project_module, "MAX_LINKED_SOURCE_BYTES", 5)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_a_linked_source_must_not_escape_through_a_symbolic_link(tmp_path: Path) -> None:
+    project_dir = tmp_path / "projekt"
+    project_dir.mkdir()
+    outside = tmp_path / "ausserhalb.stl"
+    outside.write_bytes(MESH_PAYLOAD)
+    link = project_dir / "verknuepft.stl"
+    try:
+        link.symlink_to(outside)
+    except OSError as problem:
+        pytest.skip(f"Symbolische Verknüpfungen sind nicht verfügbar: {problem}")
+
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=link.name,
+        sha256=project_module.checksum(MESH_PAYLOAD),
+        embedded=False,
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        ProjectSources(project, base_dir=project_dir).read("src_1")
+
+    assert caught.value.constraint == "absolute_path"
+    assert caught.value.suggestions
+
+
+def test_a_linked_source_must_not_escape_through_a_linked_directory(tmp_path: Path) -> None:
+    project_dir = tmp_path / "projekt"
+    project_dir.mkdir()
+    outside = tmp_path / "ausserhalb"
+    outside.mkdir()
+    (outside / "modell.stl").write_bytes(MESH_PAYLOAD)
+    link = project_dir / "verknuepft"
+    try:
+        link.symlink_to(outside, target_is_directory=True)
+    except OSError as problem:
+        pytest.skip(f"Verzeichnisverknüpfungen sind nicht verfügbar: {problem}")
+
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path="verknuepft/modell.stl",
+        sha256=project_module.checksum(MESH_PAYLOAD),
+        embedded=False,
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        ProjectSources(project, base_dir=project_dir).read("src_1")
+
+    assert caught.value.constraint == "absolute_path"
+    assert caught.value.suggestions
+
+
+def test_a_stale_linked_checksum_stops_saving(tmp_path: Path) -> None:
+    linked = tmp_path / "linked.stl"
+    linked.write_bytes(MESH_PAYLOAD)
+    project = new_project()
+    project.document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=linked.name,
+        sha256="0" * 64,
+        embedded=False,
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        save(project, tmp_path / "projekt.p3d")
+
+    assert caught.value.constraint == "checksum"
+    assert caught.value.suggestions
+
+
+def test_the_outer_project_size_is_checked_before_zip_parsing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "zu-gross.p3d"
+    path.write_bytes(b"kein ZIP")
+    monkeypatch.setattr(project_module, "MAX_PROJECT_FILE_BYTES", path.stat().st_size - 1)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_too_many_archive_entries_are_refused_before_reading(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    with zipfile.ZipFile(path) as container:
+        count = len(container.infolist())
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRIES", count - 1)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_duplicate_archive_entries_are_refused(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    with zipfile.ZipFile(path) as container:
+        project_payload = container.read(PROJECT_ENTRY)
+    with (
+        pytest.warns(UserWarning, match="Duplicate name"),
+        zipfile.ZipFile(path, "a", compression=zipfile.ZIP_DEFLATED) as container,
+    ):
+        container.writestr(PROJECT_ENTRY, project_payload)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "exists"
+    assert caught.value.values["entry"] == PROJECT_ENTRY
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    ("entry", "limit_name", "payload"),
+    [
+        (PROJECT_ENTRY, "MAX_PROJECT_JSON_BYTES", None),
+        ("sources/halterung.stl", "MAX_ARCHIVE_ENTRY_BYTES", None),
+        ("sources/gathered/attack.json", "MAX_GATHERED_BYTES", b"{}"),
+        ("recipes/attack.json", "MAX_RECIPE_BYTES", b"{}"),
+        ("report.json", "MAX_REPORT_BYTES", None),
+        ("thumb.png", "MAX_THUMBNAIL_BYTES", None),
+    ],
+)
+def test_every_project_payload_has_its_own_limit(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    entry: str,
+    limit_name: str,
+    payload: bytes | None,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    if payload is not None:
+        _append_archive_entry(path, entry, payload)
+    with zipfile.ZipFile(path) as container:
+        size = container.getinfo(entry).file_size
+    monkeypatch.setattr(project_module, limit_name, size - 1)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.values["entry"] == entry
+    assert caught.value.suggestions
+
+
+def test_the_total_unpacked_project_size_is_bounded(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    with zipfile.ZipFile(path) as container:
+        unpacked = sum(info.file_size for info in container.infolist())
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_UNPACKED_BYTES", unpacked - 1)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.values["limit"] == unpacked - 1
+    assert caught.value.suggestions
+
+
+def test_an_extreme_compression_ratio_is_refused(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    payload = b"0" * 100_000
+    _append_archive_entry(path, "bomb.bin", payload)
+    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", 10_000)
+    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", 2.0)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.values["entry"] == "bomb.bin"
+    assert caught.value.suggestions
+
+
+def test_the_total_compression_ratio_cannot_be_evaded_with_small_entries(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    for index in range(3):
+        _append_archive_entry(path, f"small-{index}.bin", b"0" * 5_000)
+    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", 10_000)
+    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", 2.0)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert "entry" not in caught.value.values
+    assert caught.value.suggestions
+
+
+def test_an_entry_at_the_compression_ratio_limit_is_accepted(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    payload = b"0" * 100_000
+    _append_archive_entry(path, "dense.bin", payload)
+    with zipfile.ZipFile(path) as container:
+        info = container.getinfo("dense.bin")
+        ratio = info.file_size / info.compress_size
+    monkeypatch.setattr(project_module, "MIN_RATIO_ENTRY_BYTES", info.file_size)
+    monkeypatch.setattr(project_module, "MAX_COMPRESSION_RATIO", ratio)
+
+    assert load(path).document == filled.document
+
+
+def test_the_bounded_reader_does_not_trust_the_declared_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class LyingContainer:
+        def open(self, info: zipfile.ZipInfo, mode: str) -> io.BytesIO:
+            assert mode == "r"
+            return io.BytesIO(b"123")
+
+    info = zipfile.ZipInfo("payload.bin")
+    info.file_size = 1
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", 2)
+
+    with pytest.raises(ValidationError) as caught:
+        project_module._read_archive_entry(LyingContainer(), info)  # type: ignore[arg-type]
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_a_lone_surrogate_in_a_project_value_is_refused(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "surrogat-wert.p3d")
+    data = project_data(path)
+    data["app_version"] = "ungültig-\ud800"
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert "unicode_scalar" in str(caught.value.values.get("reason", ""))
+    assert caught.value.suggestions
+
+
+def test_a_lone_surrogate_in_a_report_key_is_refused(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "surrogat-schlüssel.p3d")
+    with zipfile.ZipFile(path) as container:
+        entries = {name: container.read(name) for name in container.namelist()}
+    report_data = json.loads(entries[REPORT_ENTRY])
+    report_data["\udfff"] = "ungültig"
+    entries[REPORT_ENTRY] = json.dumps(report_data).encode("utf-8")
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        for name, payload in entries.items():
+            container.writestr(name, payload)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert "unicode_scalar" in str(caught.value.values.get("reason", ""))
+    assert caught.value.suggestions
+
+
+def test_a_valid_non_bmp_character_in_a_project_is_accepted(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "nicht-bmp.p3d")
+    data = project_data(path)
+    data["app_version"] = "Version-\U00020000"
+    _rewrite_project_entry(path, data)
+
+    reopened = load(path)
+
+    assert reopened.document.app_version == "Version-\U00020000"
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_project_numbers_are_refused(
+    filled: Project,
+    tmp_path: Path,
+    value: float,
+) -> None:
+    path = save(filled, tmp_path / "nicht-endlich.p3d")
+    data = project_data(path)
+    data["parameters"]["width"]["value"] = value
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_excessive_json_depth_is_refused(filled: Project, tmp_path: Path) -> None:
+    path = save(filled, tmp_path / "zu-tief.p3d")
+    data = project_data(path)
+    nested: list[object] = []
+    data["unknown"] = nested
+    for _index in range(project_module.MAX_JSON_DEPTH + 1):
+        child: list[object] = []
+        nested.append(child)
+        nested = child
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_project_object_limit_accepts_the_boundary_and_refuses_one_more(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "objekte.p3d")
+    data = project_data(path)
+    monkeypatch.setattr(project_module, "MAX_PROJECT_OBJECTS", 2)
+    data["ops"] = [
+        {"id": index, "op": "rename_object", "in": [], "out": [f"obj_{index}"], "params": {}}
+        for index in range(1, 3)
+    ]
+    data["transactions"] = []
+    _rewrite_project_entry(path, data)
+
+    assert len(load(path).document.ops) == 2
+
+    data["ops"].append({"id": 3, "op": "rename_object", "in": [], "out": ["obj_3"], "params": {}})
+    _rewrite_project_entry(path, data)
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("scene", []),
+        ("parameters", []),
+        ("sources", []),
+        ("fits", {}),
+        ("transactions", {}),
+        ("ops", {}),
+        ("chat", {}),
+        ("numbering", []),
+    ],
+)
+def test_project_schema_collection_types_are_enforced(
+    filled: Project,
+    tmp_path: Path,
+    field: str,
+    invalid: object,
+) -> None:
+    path = save(filled, tmp_path / f"schema-{field}.p3d")
+    data = project_data(path)
+    data[field] = invalid
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_operation_schema_rejects_a_non_string_object_id(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "schema-op.p3d")
+    data = project_data(path)
+    data["ops"][0]["out"] = [7]
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_report_schema_requires_a_finding_list(filled: Project, tmp_path: Path) -> None:
+    path = save(filled, tmp_path / "schema-report.p3d")
+    with zipfile.ZipFile(path) as container:
+        entries = {name: container.read(name) for name in container.namelist()}
+    entries[REPORT_ENTRY] = b'{"findings": {}}'
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        for name, payload in entries.items():
+            container.writestr(name, payload)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_exact_archive_limits_still_open(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = save(filled, tmp_path / "projekt.p3d")
+    with zipfile.ZipFile(path) as container:
+        infos = container.infolist()
+        by_name = {info.filename: info for info in infos}
+        source_size = max(
+            by_name[source.path].file_size
+            for source in filled.document.sources.values()
+            if source.embedded
+        )
+    monkeypatch.setattr(project_module, "MAX_PROJECT_FILE_BYTES", path.stat().st_size)
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRIES", len(infos))
+    monkeypatch.setattr(
+        project_module,
+        "MAX_ARCHIVE_UNPACKED_BYTES",
+        sum(info.file_size for info in infos),
+    )
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", source_size)
+    monkeypatch.setattr(
+        project_module,
+        "MAX_PROJECT_JSON_BYTES",
+        by_name[PROJECT_ENTRY].file_size,
+    )
+    monkeypatch.setattr(project_module, "MAX_REPORT_BYTES", by_name["report.json"].file_size)
+    monkeypatch.setattr(project_module, "MAX_THUMBNAIL_BYTES", by_name["thumb.png"].file_size)
+
+    assert load(path).document == filled.document
+
+
+def test_saving_refuses_an_oversized_embedded_source(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(project_module, "MAX_ARCHIVE_ENTRY_BYTES", len(MESH_PAYLOAD) - 1)
+
+    with pytest.raises(ValidationError) as caught:
+        save(filled, tmp_path / "projekt.p3d")
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+
+
+def test_saving_refuses_an_oversized_container_without_leaving_a_partial_file(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(project_module, "MAX_PROJECT_FILE_BYTES", 1)
+
+    with pytest.raises(ValidationError) as caught:
+        save(filled, tmp_path / "projekt.p3d")
+
+    assert caught.value.constraint == "file_too_large"
+    assert caught.value.suggestions
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_saving_never_uses_the_predictable_part_path(filled: Project, tmp_path: Path) -> None:
+    predictable = tmp_path / "projekt.p3d.part"
+    predictable.write_bytes(b"fremder Inhalt")
+
+    save(filled, tmp_path / "projekt.p3d")
+
+    assert predictable.read_bytes() == b"fremder Inhalt"
+
+
+def test_saving_does_not_follow_a_predictable_part_symlink(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    victim = tmp_path / "nicht-ueberschreiben"
+    victim.write_bytes(b"wichtig")
+    predictable = tmp_path / "projekt.p3d.part"
+    try:
+        predictable.symlink_to(victim)
+    except OSError as problem:
+        pytest.skip(f"Symbolische Verknüpfungen sind nicht verfügbar: {problem}")
+
+    save(filled, tmp_path / "projekt.p3d")
+
+    assert victim.read_bytes() == b"wichtig"
+    assert predictable.is_symlink()
 
 
 @pytest.mark.parametrize(
@@ -774,10 +1435,16 @@ def _rewrite_project_entry(path: Path, data: dict[str, object]) -> None:
     """Replace project.json inside an existing container."""
     with zipfile.ZipFile(path) as container:
         entries = {name: container.read(name) for name in container.namelist()}
-    entries[PROJECT_ENTRY] = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
+    entries[PROJECT_ENTRY] = json.dumps(data, indent=2).encode("utf-8")
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
         for name, payload in entries.items():
             container.writestr(name, payload)
+
+
+def _append_archive_entry(path: Path, name: str, payload: bytes) -> None:
+    """Fügt einem Testcontainer eine komprimierte Beilage hinzu."""
+    with zipfile.ZipFile(path, "a", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(name, payload)
 
 
 def test_an_example_never_gets_an_autosave_beside_it() -> None:

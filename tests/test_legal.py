@@ -30,6 +30,7 @@ DOCUMENTS = {
     "EULA.md": "eula.html",
     "AGB.md": "agb.html",
     "WIDERRUF.md": "widerruf.html",
+    "DATENSCHUTZ.md": "datenschutz.html",
 }
 
 #: Seiten, die ein Verbraucher vor dem Kauf erreichen können muss.
@@ -56,7 +57,8 @@ def test_the_generated_page_matches_its_source(source_name: str, page_name: str)
     page = WEBSITE / page_name
     assert page.is_file(), f"{page_name} fehlt — tools/make_legal.py läuft nicht?"
 
-    expected = body_html((ROOT / source_name).read_text(encoding="utf-8"))
+    contract = source_name != "DATENSCHUTZ.md"
+    expected = body_html((ROOT / source_name).read_text(encoding="utf-8"), contract)
     assert expected in page.read_text(encoding="utf-8"), (
         f"{page_name} passt nicht mehr zu {source_name}.\n"
         "Neu erzeugen: .venv\\Scripts\\python.exe tools/make_legal.py"
@@ -75,11 +77,11 @@ def test_the_installer_shows_the_agreement_and_not_the_copyright_notice() -> Non
     assert "**" not in content
 
 
-def test_a_demo_donation_does_not_turn_into_a_licence_order() -> None:
-    """Der PayPal-Knopf widerspricht weder AGB noch Widerrufsbelehrung.
+def test_a_demo_support_payment_does_not_turn_into_a_licence_order() -> None:
+    """Der PayPal-Weg widerspricht weder AGB noch Widerrufsbelehrung.
 
     Beide Texte sagten vorher pauschal, während der Demo gebe es keinen
-    Zahlungsdienstleister. Seit dem Spendenknopf ist das falsch, obwohl es
+    Zahlungsdienstleister. Seit dem Unterstützungsweg ist das falsch, obwohl es
     weiterhin keinen Kauf gibt. Die Grenze ist die Gegenleistung und muss in
     Quelle und erzeugter Seite dieselbe bleiben.
     """
@@ -89,9 +91,51 @@ def test_a_demo_donation_does_not_turn_into_a_licence_order() -> None:
 
     assert "unentgeltliche Zuwendung ohne Gegenleistung" in agb_words
     assert "keine Bestellung einer Lizenz" in agb_words
+    assert "keine steuerliche Zuwendungsbestätigung" in agb_words
     assert "Profileinstellungen" in withdrawal
-    assert "PayPal-Spendenknopf" in (WEBSITE / "agb.html").read_text(encoding="utf-8")
+    assert "PayPal-Unterstützungsweg" in (WEBSITE / "agb.html").read_text(encoding="utf-8")
     assert "Profileinstellungen" in (WEBSITE / "widerruf.html").read_text(encoding="utf-8")
+
+
+def test_paypal_support_is_local_first_and_never_suggests_tax_deductibility() -> None:
+    """Vor PayPal steht ein lokaler Hinweis; die Zahlung kauft nichts."""
+    privacy = (ROOT / "DATENSCHUTZ.md").read_text(encoding="utf-8")
+    privacy_words = " ".join(privacy.split())
+
+    for required in (
+        "Freiwillige Unterstützung über PayPal",
+        "öffnet die Aktion *Solidon unterstützen …* zunächst nur einen lokalen Dialog",
+        "*PayPal im Browser öffnen*",
+        "Unterstützungsbereich ebenfalls zuerst einen lokal verarbeiteten Hinweis",
+        "*Mit PayPal unterstützen* führt zu PayPal",
+        "keine Gegenleistung",
+        "keine steuerliche Bestätigung",
+    ):
+        assert required in privacy_words
+    assert "PayPal-Spendenknopf" not in privacy_words
+    assert "PayPal bietet einmalige, monatliche und jährliche Spenden an" not in privacy_words
+    assert "Zuwendung" not in privacy_words
+
+
+@pytest.mark.parametrize(
+    ("page_name", "forbidden"),
+    [
+        ("index.html", ("spende", "spenden")),
+        ("en/index.html", ("donation", "donations")),
+        ("es/index.html", ("donación", "donaciones", "donativo", "donativos")),
+        ("fr/index.html", ("don volontaire", "dons")),
+        ("it/index.html", ("donazione", "donazioni")),
+        ("pt/index.html", ("doação", "doações", "donativo", "donativos")),
+    ],
+)
+def test_public_support_uses_no_tax_privileged_donation_wording(
+    page_name: str, forbidden: tuple[str, ...]
+) -> None:
+    """Der PayPal-Weg wird in jeder Sprache als Unterstützung bezeichnet."""
+
+    html = (WEBSITE / page_name).read_text(encoding="utf-8").casefold()
+    for term in forbidden:
+        assert re.search(rf"\b{re.escape(term)}\b", html) is None, (page_name, term)
 
 
 @pytest.mark.parametrize("page_name", ["index.html", "en/index.html"])
@@ -127,23 +171,105 @@ def test_a_page_with_a_placeholder_says_that_it_is_a_draft() -> None:
     )
 
 
-def test_an_unreviewed_contract_keeps_its_reservation() -> None:
-    """Die fachliche Prüfung hängt an keinem Platzhalter.
+def test_public_legal_pages_do_not_carry_an_internal_review_disclaimer() -> None:
+    """Die interne Qualitätssicherung ist keine Kundeninformation.
 
-    Beides an einem Satz zu führen war zu wenig: mit dem Namen des
-    Zahlungsdienstleisters fiel der letzte Platzhalter aus den AGB, und ein
-    ungeprüfter Vertrag hätte ohne jeden Vorbehalt dagestanden. Der Hinweis
-    fällt erst, wenn jemand `REVIEW_PENDING` umstellt — also wenn die Prüfung
-    stattgefunden hat.
+    Der Satz stand pauschal über jeder fertigen Seite und blieb auch nach der
+    Prüfung sichtbar. Echte Platzhalter werden weiterhin gesondert markiert.
     """
-    import tools.make_legal as make_legal
+    sentence = "Sorgfältiger Entwurf, aber keine Rechtsberatung"
+    for page in sorted(WEBSITE.rglob("*.html")):
+        html = page.read_text(encoding="utf-8")
+        assert sentence not in html, (
+            f"{page.relative_to(WEBSITE)} trägt noch den internen Vorbehalt"
+        )
 
-    if not make_legal.REVIEW_PENDING:
-        pytest.skip("die Texte sind geprüft, der Vorbehalt gehört weg")
 
-    for _source, target, _label, _contract in make_legal.DOCUMENTS:
-        html = (WEBSITE / target).read_text(encoding="utf-8")
-        assert 'class="draft"' in html, f"{target} trägt keinen Vorbehalt"
+def test_current_digital_content_withdrawal_paragraph_is_named() -> None:
+    """Seit der Neufassung steht das Erlöschen für digitale Inhalte in Absatz 6."""
+    agb = (ROOT / "AGB.md").read_text(encoding="utf-8")
+
+    assert "§ 356 Abs. 6 BGB" in agb
+    assert "§ 356 Abs. 5 BGB" not in agb
+
+
+def test_third_party_rights_take_precedence_over_proprietary_terms() -> None:
+    """LGPL- und andere Fremdrechte dürfen nicht vom Mantelvertrag verschwinden."""
+    eula = (ROOT / "EULA.md").read_text(encoding="utf-8")
+    notice = (ROOT / "LICENSE").read_text(encoding="utf-8")
+
+    assert "gehen deren Lizenzbedingungen diesen Bestimmungen vor" in eula
+    assert "geht dessen Lizenz diesen Bestimmungen vor" in notice
+    assert "LGPL-Bibliotheken austauschen" in eula
+
+
+def test_eula_keeps_local_part_exchange_and_printability_limits_clear() -> None:
+    """Lokaler Austausch darf nicht wieder zum RS-Dienst werden; „druckbar“
+    ist keine unbemerkte Sicherheitsfreigabe."""
+    eula = (ROOT / "EULA.md").read_text(encoding="utf-8")
+    words = " ".join(eula.split())
+
+    assert "lokal übernommenen Bausteindatei" in words
+    assert "Herkunft, Autor und Lizenz" in words
+    assert "Tauschbörse" not in words
+    for required in (
+        "geometrischen und drucktechnischen Kriterien",
+        "Tragfähigkeit",
+        "Lebensmittelechtheit",
+        "persönliche Schutzausrüstung",
+        "sonstige Schutzvorrichtungen",
+        "Gas- oder Druckanwendungen",
+        "elektrische Sicherheit",
+        "tragende Konstruktionen",
+        "nicht automatisch zum Hersteller jedes späteren Ausdrucks",
+        "mitgelieferte digitale Konstruktionsunterlagen",
+        "Fehlt eine Lizenzangabe",
+        "keine Weitergabe- oder Nutzungsrechte",
+    ):
+        assert required in words
+
+
+def test_root_license_keeps_mandatory_liability_exceptions() -> None:
+    """Der Manteltext darf die differenzierte Haftungsregel nicht aushebeln."""
+    notice = (ROOT / "LICENSE").read_text(encoding="utf-8")
+    words = " ".join(notice.split())
+
+    for required in (
+        "Endnutzer-Lizenzvertrag, insbesondere dessen Nummer 11",
+        "Vorsatz oder grobe Fahrlässigkeit",
+        "Verletzung von Leben, Körper oder Gesundheit",
+        "zwingende Haftung nach dem Produkthaftungsgesetz",
+    ):
+        assert required in words
+    assert "RS Digital haftet nicht für Schäden, die aus der Nutzung entstehen" not in words
+    assert "OpenSCAD" not in words
+
+
+def test_eula_preserves_user_rights_without_releasing_bundled_templates() -> None:
+    """Eigene Inhalte und mitgelieferte Vorlagen brauchen getrennte Rechte."""
+    eula = " ".join((ROOT / "EULA.md").read_text(encoding="utf-8").split())
+
+    assert "erwirbt RS Digital keine zusätzlichen Rechte" in eula
+    assert "Rechte Dritter und die nachfolgenden Regeln" in eula
+    assert "in Nummer 3 ausdrücklich erlaubte Nutzung separat lizenzierter" in eula
+    assert "Was Sie mit Solidon3D erzeugen, gehört Ihnen" not in eula
+    assert "RS Digital beansprucht keine Rechte an dem, was Sie mit Solidon3D erzeugen" not in eula
+
+
+def test_contracts_do_not_promise_a_fixed_first_sale_or_local_remote_ollama() -> None:
+    """Weitere 0.x-Demos bleiben möglich; entferntes Ollama bleibt entfernt."""
+
+    eula = (ROOT / "EULA.md").read_text(encoding="utf-8")
+    agb = (ROOT / "AGB.md").read_text(encoding="utf-8")
+    eula_words = " ".join(eula.split())
+    agb_words = " ".join(agb.split())
+
+    assert "am 1. November 2026 startende Vollversion" not in eula_words
+    assert "Zum Verkaufsstart am 1. November 2026" not in agb_words
+    assert "Eine spätere 0.x-Demo kann einen eigenen Stichtag nennen" in eula_words
+    assert "weitere kostenlose 0.x-Demo" in agb_words
+    assert "entfernten Ollama-Adresse" in eula_words
+    assert "Mit einem lokalen Modell verlässt nichts den Rechner" not in eula_words
 
 
 def test_the_sweep_over_the_pages_finds_something_to_read() -> None:

@@ -78,6 +78,20 @@ LINK = re.compile(
     + r'))(\?v=[0-9a-f]{8})?(")'
 )
 
+#: ``<picture>`` legt die dunkle Variante in ``srcset`` ab. Dieses Attribut
+#: kann mehrere Kandidaten samt Größenangabe tragen und passt deshalb nicht in
+#: :data:`LINK`, das genau eine Adresse zwischen zwei Anführungszeichen
+#: erwartet. Ohne den zweiten Weg blieben alle dunklen Handbuchbilder unter
+#: ihrer alten Cache-Adresse stehen.
+SRCSET = re.compile(r'(srcset=")([^"]+)(")')
+SRCSET_CANDIDATE = re.compile(
+    r"(?P<prefix>(?:^|,\s*))"
+    r'(?P<reference>(?!https?:|mailto:|data:|#|/api/)[^,\s"?]+\.(?:'
+    + "|".join(SUFFIXES)
+    + r"))(?P<existing>\?v=[0-9a-f]{8})?"
+    r"(?P<descriptor>\s+(?:\d+w|\d+(?:\.\d+)?x))?(?=,|$)"
+)
+
 #: Wie viele Zeichen des Hashes mitreisen. Acht sind 4,3 Milliarden
 #: Möglichkeiten — für die Frage „ist das dieselbe Datei wie vorhin?" mehr als
 #: genug, und kurz genug, dass ein Verweis lesbar bleibt.
@@ -128,6 +142,17 @@ def target_of(page: Path, reference: str) -> Path:
     return page.parent / reference
 
 
+def references_in(text: str) -> list[tuple[str, str | None]]:
+    """Alle eigenen Dateiverweise, auch die Kandidaten eines ``srcset``."""
+    found = [(reference, existing) for _, reference, existing, _ in LINK.findall(text)]
+    for attribute in SRCSET.finditer(text):
+        found.extend(
+            (match.group("reference"), match.group("existing"))
+            for match in SRCSET_CANDIDATE.finditer(attribute.group(2))
+        )
+    return found
+
+
 def stamp_page(page: Path, *, write: bool) -> tuple[int, int, list[str]]:
     """Stempelt eine Seite. Gibt zurück: gestempelt, unverändert, Fehlstellen."""
     text = page.read_text(encoding="utf-8")
@@ -149,7 +174,31 @@ def stamp_page(page: Path, *, write: bool) -> tuple[int, int, list[str]]:
             fresh += 1
         return f"{prefix}{reference}{wanted}{suffix}"
 
+    def replace_srcset(match: re.Match[str]) -> str:
+        prefix, candidates, suffix = match.groups()
+
+        def replace_candidate(candidate: re.Match[str]) -> str:
+            nonlocal fresh, same
+            reference = candidate.group("reference")
+            existing = candidate.group("existing")
+            target = target_of(page, reference)
+            if not target.is_file():
+                missing.append(reference)
+                return candidate.group(0)
+            wanted = f"?v={stamp_of(target)}"
+            if existing == wanted:
+                same += 1
+            else:
+                fresh += 1
+            return (
+                f"{candidate.group('prefix')}{reference}{wanted}"
+                f"{candidate.group('descriptor') or ''}"
+            )
+
+        return f"{prefix}{SRCSET_CANDIDATE.sub(replace_candidate, candidates)}{suffix}"
+
     stamped = LINK.sub(replace, text)
+    stamped = SRCSET.sub(replace_srcset, stamped)
     if write and stamped != text:
         page.write_text(stamped, encoding="utf-8")
     return fresh, same, missing

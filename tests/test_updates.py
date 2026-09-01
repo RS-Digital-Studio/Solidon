@@ -8,11 +8,14 @@ nie ein Fehlerdialog, nie ein Start, der daran hängt.
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
+import subprocess
+import sys
 import urllib.error
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from unittest import mock
 
@@ -20,7 +23,7 @@ import pytest
 
 from app.core import updates
 from app.core.changes import Group
-from app.core.errors import ExternalToolError, OperationCancelled
+from app.core.errors import ExternalToolError, FileWriteError, OperationCancelled
 from tests.release_signing import REAL_PUBLIC_KEY, accept_test_signatures, signed
 
 __all__ = ["accept_test_signatures"]  # die Fixture wirkt durch den Import, nicht durch Aufruf
@@ -634,13 +637,49 @@ def test_a_flatpak_is_installed_from_the_bundle_and_started_again(
     monkeypatch.setattr(updates, "_flatpak_is_user", lambda: True)
     monkeypatch.setenv("FLATPAK_ID", "de.rsdigital.solidon3d")
 
-    command = updates._install_command(Path("/home/wer/.cache/Solidon3D/updates/neu.flatpak"))
+    descriptor = 41
+    command = updates._install_command(
+        PurePosixPath(f"/proc/self/fd/{descriptor}"),  # type: ignore[arg-type]
+        forwarded_descriptor=descriptor,
+    )
 
-    assert command[:2] == ["flatpak-spawn", "--host"], "sonst landet es im Sandkasten"
+    assert command[:3] == [
+        "flatpak-spawn",
+        "--host",
+        f"--forward-fd={descriptor}",
+    ], "sonst erreicht der geprüfte Deskriptor den Host nicht"
     line = command[-1]
     assert "flatpak install --user --assumeyes" in line
-    assert "neu.flatpak" in line
+    assert f"/proc/self/fd/{descriptor}" in line
     assert "&& flatpak run" in line, "ohne das bleibt das Fenster weg"
+
+
+def test_macos_package_stays_on_the_download_path_because_launchservices_loses_the_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """LaunchServices reicht keinen geerbten ``/dev/fd`` an Installer weiter."""
+    package = package_for(b"macOS-Paket")
+    release = updates.Release(
+        version="99.0.0",
+        packages={updates.PLATFORM_MACOS_ARM: package},
+    )
+    started = False
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_MACOS_PACKAGE)
+
+    def note(*_args: object, **_kwargs: object) -> None:
+        nonlocal started
+        started = True
+
+    monkeypatch.setattr(updates.subprocess, "Popen", note)
+
+    assert release.package(updates.PLATFORM_MACOS_ARM) is package
+    assert release.startable(updates.PLATFORM_MACOS_ARM) is None
+    with pytest.raises(ExternalToolError) as raised:
+        updates._install_command(Path("/dev/fd/41"), forwarded_descriptor=41)
+
+    assert raised.value.suggestions
+    assert not started
 
 
 def test_a_system_wide_flatpak_is_not_replaced_by_a_second_one() -> None:
@@ -699,7 +738,12 @@ def package_for(payload: bytes, **changes: Any) -> updates.Package:
         "sha256": hashlib.sha256(payload).hexdigest(),
     }
     values.update(changes)
-    return updates.Package(**values)
+    release = signed({"version": "99.0.0", "packages": {updates.PLATFORM_WINDOWS: values}})
+    return updates._packages(
+        release["packages"],
+        origin=updates.VERSION_URL,
+        release=release,
+    )[updates.PLATFORM_WINDOWS]
 
 
 def test_a_downloaded_package_is_kept_when_the_checksum_matches() -> None:
@@ -813,6 +857,44 @@ def test_the_cache_holds_one_package_at_a_time() -> None:
     assert [p.name for p in updates.target_dir().glob("*")] == ["neu.exe"]
 
 
+def test_a_predictable_package_symlink_cannot_overwrite_another_file(tmp_path: Path) -> None:
+    payload = b"neues Paket"
+    victim = tmp_path / "wichtig"
+    victim.write_bytes(b"behalten")
+    target = updates.target_dir() / "paket.exe"
+    try:
+        target.symlink_to(victim)
+    except OSError as problem:
+        pytest.skip(f"Symbolische Verknüpfungen sind nicht verfügbar: {problem}")
+
+    file = updates.download(package_for(payload, file="paket.exe"), opener=serving(payload))
+
+    assert file.read_bytes() == payload
+    assert victim.read_bytes() == b"behalten"
+
+
+def test_a_cache_directory_link_is_refused_before_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    outside = tmp_path / "ausserhalb"
+    outside.mkdir()
+    victim = outside / "behalten"
+    victim.write_bytes(b"wichtig")
+    try:
+        (cache / "updates").symlink_to(outside, target_is_directory=True)
+    except OSError as problem:
+        pytest.skip(f"Verzeichnisverknüpfungen sind nicht verfügbar: {problem}")
+    monkeypatch.setattr(updates, "user_cache_dir", lambda: cache)
+
+    with pytest.raises(FileWriteError):
+        updates.download(package_for(b"Paket"), opener=serving(b"Paket"))
+
+    assert victim.read_bytes() == b"wichtig"
+
+
 def test_a_server_that_says_no_is_an_error_with_a_way_out() -> None:
     def refusing(_request: object, **_options: object) -> FakeAnswer:
         raise urllib.error.HTTPError("https://solidon3d.de/dl/x", 404, "weg", {}, None)  # type: ignore[arg-type]
@@ -836,16 +918,146 @@ def test_starting_hands_the_package_to_the_system(monkeypatch: pytest.MonkeyPatc
     """Gestartet und nicht abgewartet: Der Installer überlebt Solidon."""
     payload = b"ein Paket"
     file = updates.download(package_for(payload), opener=serving(payload))
-    gestartet: list[list[str]] = []
+    gestartet: list[tuple[list[str], dict[str, object]]] = []
 
-    def note(command: list[str], **_options: object) -> None:
-        gestartet.append(command)
+    def note(command: list[str], **options: object) -> None:
+        gestartet.append((command, options))
 
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_WINDOWS_SETUP)
     monkeypatch.setattr(updates.subprocess, "Popen", note)
 
     updates.start_installer(file)
 
-    assert gestartet and str(file) in gestartet[0]
+    command, options = gestartet[0]
+    assert str(file) in command
+    assert options["cwd"] == Path(updates.sys.executable).resolve().parent
+    assert options["stdout"] == updates.subprocess.DEVNULL
+    assert options["close_fds"] is True
+
+
+def test_starting_rechecks_the_downloaded_hash_and_release_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b"ein Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    file.write_bytes(b"nachtraeglich ausgetauscht")
+    started = False
+
+    def note(*_args: object, **_kwargs: object) -> None:
+        nonlocal started
+        started = True
+
+    monkeypatch.setattr(updates.subprocess, "Popen", note)
+
+    with pytest.raises(ExternalToolError):
+        updates.start_installer(file)
+
+    assert not started
+
+
+def test_starting_refuses_a_package_when_the_stored_release_signature_changed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = b"ein Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    package = updates._VERIFIED_PACKAGES[file.resolve()]
+    updates._VERIFIED_PACKAGES[file.resolve()] = dataclasses.replace(
+        package,
+        release_signature=b"\x00" * 64,
+    )
+    started = False
+
+    def note(*_args: object, **_kwargs: object) -> None:
+        nonlocal started
+        started = True
+
+    monkeypatch.setattr(updates.subprocess, "Popen", note)
+
+    with pytest.raises(ExternalToolError):
+        updates.start_installer(file)
+
+    assert not started
+
+
+@pytest.mark.skipif(updates.os.name != "nt", reason="Windows-Dateifreigabemodus")
+def test_the_verified_package_cannot_be_replaced_between_hash_and_process_start(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    payload = b"echtes signiertes Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    replacement = tmp_path / "Angreifer.exe"
+    replacement.write_bytes(b"anderer Inhalt")
+    boundary_was_held = False
+
+    def attack(_command: list[str], **_options: object) -> None:
+        nonlocal boundary_was_held
+        with pytest.raises(OSError):
+            replacement.replace(file)
+        with pytest.raises(OSError):
+            file.write_bytes(b"anderer Inhalt")
+        boundary_was_held = True
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_WINDOWS_SETUP)
+    monkeypatch.setattr(updates.subprocess, "Popen", attack)
+
+    updates.start_installer(file)
+
+    assert boundary_was_held
+    assert file.read_bytes() == payload
+    file.write_bytes(b"nach dem Start wieder freigegeben")
+
+
+@pytest.mark.skipif(updates.os.name == "nt", reason="POSIX-Deskriptorübergabe")
+def test_posix_starts_the_verified_descriptor_even_after_the_path_is_replaced(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    payload = b"echtes signiertes POSIX-Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    replacement = tmp_path / "Angreifer.flatpak"
+    replacement.write_bytes(b"anderer Inhalt")
+    real_popen = subprocess.Popen
+    inherited_payload = b""
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_FLATPAK)
+    monkeypatch.setattr(updates.discover, "in_flatpak", lambda: True)
+
+    def attack(command: list[str], **options: object) -> None:
+        nonlocal inherited_payload
+        descriptor = options["pass_fds"]
+        assert isinstance(descriptor, tuple) and len(descriptor) == 1
+        descriptor_number = descriptor[0]
+        descriptor_path = updates._inherited_descriptor_path(descriptor_number)
+        replacement.replace(file)
+        assert file.read_bytes() != payload, "der Angriff muss den Namen wirklich austauschen"
+        assert str(descriptor_path) in " ".join(command)
+        assert f"--forward-fd={descriptor_number}" in command
+
+        probe = real_popen(
+            [
+                sys.executable,
+                "-c",
+                "import pathlib,sys;"
+                "sys.stdout.buffer.write(pathlib.Path(sys.argv[1]).read_bytes())",
+                str(descriptor_path),
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=options["env"],
+            close_fds=True,
+            pass_fds=(descriptor_number,),
+        )
+        inherited_payload, error = probe.communicate(timeout=10)
+        assert probe.returncode == 0, error.decode("utf-8", errors="replace")
+
+    monkeypatch.setattr(updates.subprocess, "Popen", attack)
+
+    updates.start_installer(file)
+
+    assert inherited_payload == payload
+    assert file.stat().st_size != len(payload)
 
 
 # --- die Unterschrift der Versionsdatei (§37.2) ---------------------------------------
@@ -942,7 +1154,10 @@ class _AnswerFromDisk:
         self._raw = raw
 
     def read(self, count: int | None = None) -> bytes:
-        return self._raw if count is None else self._raw[:count]
+        if count is None:
+            count = len(self._raw)
+        chunk, self._raw = self._raw[:count], self._raw[count:]
+        return chunk
 
     def __enter__(self) -> _AnswerFromDisk:
         return self
@@ -982,7 +1197,7 @@ def test_the_published_version_file_gets_through_the_read_that_bounds_it() -> No
 
     raw = PUBLISHED_VERSION_FILE.read_bytes()
 
-    with mock.patch("urllib.request.urlopen", return_value=_AnswerFromDisk(raw)):
+    with mock.patch.object(updates, "_open_update", return_value=_AnswerFromDisk(raw)):
         try:
             payload = updates._get(updates.VERSION_URL, {}, {})
         except Exception as problem:

@@ -1,16 +1,18 @@
 # Allgemeine Geschäftsbedingungen
 
-Stand: 28. August 2026 · Fassung 1.3
+Stand: 31. August 2026 · Fassung 1.6
 
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
 
 **Solange nur die Demo-Version angeboten wird, greifen sie nicht.** Die Demo
 ist unentgeltlich; es gibt keine Bestellung und keinen Kaufpreis. Eine
-freiwillige Zahlung über den PayPal-Spendenknopf ist eine unentgeltliche
+freiwillige Zahlung über den PayPal-Unterstützungsweg ist eine unentgeltliche
 Zuwendung ohne Gegenleistung: Sie schaltet nichts frei, wird nicht auf einen
-späteren Kauf angerechnet und ist keine Bestellung einer Lizenz. Deshalb fällt
-sie nicht unter diese Bedingungen. Was für die Demo gilt, steht im
+späteren Kauf angerechnet und ist keine Bestellung einer Lizenz. RS Digital
+stellt dafür keine steuerliche Zuwendungsbestätigung aus; behandeln Sie die
+Zahlung nicht als steuerbegünstigte Zuwendung. Deshalb fällt die Zahlung
+nicht unter diese Bedingungen. Was für die Demo gilt, steht im
 Endnutzer-Lizenzvertrag unter <https://solidon3d.de/eula.html>, Abschnitt 4a.
 Diese Bedingungen stehen hier, weil sie ab dem Verkaufsstart gelten werden.
 
@@ -46,9 +48,10 @@ regelmäßige Lizenzabfrage offline weiter. Vor einem Rechnerwechsel wird der
 bisherige Platz in Solidon deaktiviert; bei Verlust oder Defekt hilft der
 Support nach Prüfung der Bestellnummer.
 
-Zum Verkaufsstart am 1. November 2026 wird **keine zusätzliche Testphase**
-angeboten. Eine spätere Fassung kann eine Testphase ausdrücklich anbieten;
-für die hier beschriebene Fassung gilt sie nicht.
+Beim späteren Verkaufsstart wird **keine zusätzliche Testphase** angeboten,
+sofern der Bestellvorgang nicht ausdrücklich etwas anderes ausweist. Eine
+weitere kostenlose 0.x-Demo oder eine spätere Testphase kann ausdrücklich
+angeboten werden; für die hier beschriebene Verkaufslizenz gilt sie nicht.
 
 ## § 3 Vertragsschluss
 
@@ -105,7 +108,7 @@ Bedingungen und die Folgen stehen in der Widerrufsbelehrung unter
 
 **Wichtig:** Bei digitalen Inhalten erlischt das Widerrufsrecht vorzeitig,
 wenn Sie der sofortigen Ausführung ausdrücklich zustimmen und bestätigen,
-dass Sie dadurch Ihr Widerrufsrecht verlieren (§ 356 Abs. 5 BGB). Wir fragen
+dass Sie dadurch Ihr Widerrufsrecht verlieren (§ 356 Abs. 6 BGB). Wir fragen
 beides im Bestellvorgang ausdrücklich ab. Wer die Lizenz sofort einlösen
 will, stimmt zu; wer sich die Frist offenhalten will, stimmt nicht zu und
 bekommt den Schlüssel nach Ablauf der Widerrufsfrist.
@@ -118,7 +121,11 @@ gelten davon unabhängig.
 
 Es gelten die gesetzlichen Mängelrechte. Für digitale Produkte gelten
 insbesondere die §§ 327 ff. BGB einschließlich unserer
-Aktualisierungspflicht.
+Aktualisierungspflicht. Sicherheits- und Funktionserhaltungsaktualisierungen,
+die das Gesetz für den maßgeblichen Bereitstellungszeitraum verlangt, werden
+mindestens bis zum 31. Oktober 2031 bereitgestellt und angekündigt. Eine
+weitergehende Zusage für neue Funktionen oder eine neue Hauptversion ist das
+nicht.
 
 Ist der Kunde Unternehmer, beträgt die Verjährungsfrist für Mängelansprüche
 ein Jahr ab Lieferung; für Verbraucher bleibt es bei den gesetzlichen

@@ -1,0 +1,422 @@
+schema_version = 1
+
+[delivery]
+description = "Rechtenachweis für alle getrackten Bilder, Symbole, Schriften, Videos, Audiodateien und Beispielprojekte, die mit der Anwendung oder der Website ausgeliefert werden."
+scope = "copyright_and_redistribution"
+not_a_safety_approval = true
+application_platforms = ["windows", "macos", "linux"]
+application_media_identical = true
+platform_exceptions = [
+  "packaging/solidon3d.ico wird nur unter Windows ausgeliefert.",
+  "packaging/solidon3d.icns wird nur unter macOS ausgeliefert.",
+]
+excluded = [
+  "Feedback/ — interne Fehlerbelege, keine Auslieferung",
+  "marketing/ — interne Arbeitsdateien, keine Auslieferung",
+  "tools/voice-reference.wav — reproduzierbare interne Synthesereferenz, keine Auslieferung",
+  "website/teile/ — Erzeugungsquellen der Website, vom Web-Uploader ausgeschlossen",
+  "tests/, tmp/, build/, dist/ und Caches — Prüf- oder Arbeitsergebnisse, keine Auslieferung",
+]
+
+# Ein Eintrag darf genau die Medien treffen, für die dieselbe Rechtekette gilt.
+# Der Test verlangt vollständige, überschneidungsfreie Abdeckung.
+
+[[asset]]
+pattern = "app/images/icon/solidon3d*.svg"
+art = "icon"
+creator = "Robert Schneider"
+rights_holder = "RS Digital"
+source = "Originalentwurf für Solidon3D"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "none"
+inputs = ["von Robert Schneider entworfene Vektorgeometrie"]
+derivative_status = "original"
+evidence = ["LICENSE", "app/images/CLAUDE.md"]
+redistribution_right = "confirmed_in_product"
+platforms = ["windows", "macos", "linux"]
+status = "cleared"
+
+[[asset]]
+pattern = "app/images/manual/*/*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahmen der eigenen Anwendung"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_figures.py"
+inputs = ["app/core/figures.py", "app/ui", "app/i18n/locales"]
+derivative_status = "generated_from_own_sources"
+evidence = ["app/images/CLAUDE.md", "tools/make_figures.py"]
+redistribution_right = "confirmed_in_product"
+platforms = ["windows", "macos", "linux"]
+status = "cleared"
+
+[[asset]]
+paths = [
+  "app/examples/aushoehlen-und-teilen.p3d",
+  "app/examples/dose-mit-deckel.p3d",
+  "app/examples/drucker-kalibrieren.p3d",
+  "app/examples/gehaeuse-mit-bausteinen.p3d",
+  "app/examples/passung-nach-materialwechsel.p3d",
+  "app/examples/schild-zweifarbig.p3d",
+  "app/examples/skizze-mit-massen.p3d",
+  "app/examples/weg1-halterung-anpassen.p3d",
+  "app/examples/weg2-halter-konstruieren.p3d",
+  "app/examples/weg3-generiert-aufbereiten.p3d",
+  "app/examples/weg4-figur-formen.p3d",
+]
+art = "project"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Mitgelieferte, vollständig aus registrierten Solidon-Operationen und eigenen Korpusquellen gebaute Beispielprojekte"
+license = "LicenseRef-Solidon-Examples"
+generator = "tools/make_examples.py"
+inputs = [
+  "tests/data/meshes/plate_holes.stl",
+  "tests/data/meshes/generated_figure.stl",
+  "registrierte Solidon-Operationen und -Bausteine",
+]
+derivative_status = "generated_from_own_sources"
+evidence = [
+  "app/examples/CLAUDE.md",
+  "app/examples/LICENSE",
+  "tools/make_examples.py",
+  "tests/data/LICENSE",
+]
+redistribution_right = "confirmed_with_notice"
+platforms = ["windows", "macos", "linux"]
+status = "cleared"
+
+[[asset]]
+paths = [
+  "app/examples/aushoehlen-und-teilen.svg",
+  "app/examples/dose-mit-deckel.svg",
+  "app/examples/drucker-kalibrieren.svg",
+  "app/examples/gehaeuse-mit-bausteinen.svg",
+  "app/examples/passung-nach-materialwechsel.svg",
+  "app/examples/schild-zweifarbig.svg",
+  "app/examples/skizze-mit-massen.svg",
+  "app/examples/weg1-halterung-anpassen.svg",
+  "app/examples/weg2-halter-konstruieren.svg",
+  "app/examples/weg3-generiert-aufbereiten.svg",
+  "app/examples/weg4-figur-formen.svg",
+]
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Vorschaubilder der mitgelieferten Beispielprojekte"
+license = "LicenseRef-Solidon-Examples"
+generator = "tools/make_examples.py"
+inputs = [
+  "app/examples/aushoehlen-und-teilen.p3d",
+  "app/examples/dose-mit-deckel.p3d",
+  "app/examples/drucker-kalibrieren.p3d",
+  "app/examples/gehaeuse-mit-bausteinen.p3d",
+  "app/examples/passung-nach-materialwechsel.p3d",
+  "app/examples/schild-zweifarbig.p3d",
+  "app/examples/skizze-mit-massen.p3d",
+  "app/examples/weg1-halterung-anpassen.p3d",
+  "app/examples/weg2-halter-konstruieren.p3d",
+  "app/examples/weg3-generiert-aufbereiten.p3d",
+  "app/examples/weg4-figur-formen.p3d",
+  "registrierte Solidon-Operationen und -Bausteine",
+]
+derivative_status = "generated_from_own_sources"
+evidence = ["app/examples/CLAUDE.md", "app/examples/LICENSE", "tools/make_examples.py"]
+redistribution_right = "confirmed_with_notice"
+platforms = ["windows", "macos", "linux"]
+status = "cleared"
+
+[[asset]]
+pattern = "packaging/solidon3d.ico"
+art = "icon"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Windows-Ableitung des Solidon3D-Symbols"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_icon.py"
+inputs = ["app/images/icon/solidon3d.svg"]
+derivative_status = "derived_from_icon"
+evidence = ["packaging/CLAUDE.md", "tools/make_icon.py"]
+redistribution_right = "confirmed_in_product"
+platforms = ["windows"]
+status = "cleared"
+
+[[asset]]
+pattern = "packaging/solidon3d.icns"
+art = "icon"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "macOS-Ableitung des Solidon3D-Symbols"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_icon.py"
+inputs = ["app/images/icon/solidon3d.svg"]
+derivative_status = "derived_from_icon"
+evidence = ["packaging/CLAUDE.md", "tools/make_icon.py"]
+redistribution_right = "confirmed_in_product"
+platforms = ["macos"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/icon.svg"
+art = "icon"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Website-Ableitung des Solidon3D-Symbols"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_icon.py"
+inputs = ["app/images/icon/solidon3d.svg"]
+derivative_status = "derived_from_icon"
+evidence = ["website/CLAUDE.md", "tools/make_icon.py"]
+redistribution_right = "confirmed_in_product"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/fonts/Archivo-Variable.woff2"
+art = "font"
+creator = "The Archivo Project Authors"
+rights_holder = "The Archivo Project Authors"
+source = "Archivo Variable Font"
+license = "OFL-1.1"
+generator = "none"
+inputs = ["unveränderte Schriftdatei des Archivo-Projekts"]
+derivative_status = "third_party_unmodified"
+evidence = ["website/fonts/OFL-Archivo.txt"]
+upstream_url = "https://github.com/Omnibus-Type/Archivo"
+upstream_version = "2.000 (retrieved 2026-08-31)"
+content_sha256 = {"website/fonts/Archivo-Variable.woff2" = "68476ed8cba00e8020e1feaa7d3ac225b947b07c0c7b25c84bfa2ee7721e7db4"}
+evidence_sha256 = {"website/fonts/OFL-Archivo.txt" = "108b4e57c9c796d3d38d0428ca7ee39de47ad93187302718d9b2d8864b9b716b"}
+redistribution_right = "confirmed_with_notice"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/fonts/SourceSans3-Variable.woff2"
+art = "font"
+creator = "Adobe"
+rights_holder = "Adobe"
+source = "Source Sans 3 Variable Font"
+license = "OFL-1.1"
+generator = "none"
+inputs = ["unveränderte Schriftdatei Source Sans 3"]
+derivative_status = "third_party_unmodified"
+evidence = ["website/fonts/OFL-SourceSans3.txt"]
+upstream_url = "https://github.com/adobe-fonts/source-sans/releases/tag/3.052R"
+upstream_version = "3.052R (retrieved 2026-08-31)"
+content_sha256 = {"website/fonts/SourceSans3-Variable.woff2" = "5f16566f7a40d39b339ad26be151fa5a1ab1f0c2574c7a2e619765584a1acbd8"}
+evidence_sha256 = {"website/fonts/OFL-SourceSans3.txt" = "56af9b9c6715597e458284a474dc118a50a4150e9d547c70f7b4a33c3e6a9328"}
+redistribution_right = "confirmed_with_notice"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/handbuch/*/*"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Lokalisierte Bildschirmaufnahmen und Zeichnungen des Solidon-Handbuchs"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_manual.py"
+inputs = ["app/images/manual", "app/core/figures.py", "app/core/drawing.py", "app/i18n/locales"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_manual.py", "tools/make_figures.py"]
+redistribution_right = "confirmed_in_product"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/beleg-bausteine*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahme des eigenen Bausteinkatalogs"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["registrierte Solidon-Bausteine", "app/ui"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_web_images.py"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/beleg-fenster*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahme der eigenen Anwendung"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["app/ui", "app/examples"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_web_images.py"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/beleg-skizze*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahme des eigenen Skizzenwerkzeugs"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["app/ui", "app/examples/skizze-mit-massen.p3d"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_web_images.py"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/beleg-start*.png"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildschirmaufnahme des eigenen Startbildschirms"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["app/ui", "app/examples"]
+derivative_status = "generated_from_own_sources"
+evidence = ["website/CLAUDE.md", "tools/make_web_images.py"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/galerie-*.webp"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Renderings eigener, parametrischer Solidon-Projekte"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_gallery.py"
+inputs = [
+  "website/teile/gehaeuse.p3d",
+  "website/teile/klappbox.p3d",
+  "website/teile/lochwandhalter.p3d",
+  "website/teile/schraubdose.p3d",
+  "Solidon-Viewport",
+]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_gallery.py", "tools/make_showpiece.py", "website/CLAUDE.md"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/bock-sprite.webp"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Drehreihe eines eigenen Solidon-Schaustücks"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = ["website/teile/rollenhalter.p3d", "Solidon-Viewport"]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/regler-*.webp"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Bildreihe eines eigenen parametrischen Solidon-Projekts"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = [
+  "website/teile/rollenhalter.p3d",
+  "Projektparameter rollenbreite von 55 bis 90 Millimeter",
+  "Solidon-Viewport",
+]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/verwandlung-*.svg"
+art = "image"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Vorher-/Nachher-Zeichnungen aus dem deterministisch selbst erzeugten Referenzmodell generated_figure.stl"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_web_images.py"
+inputs = ["app/examples/weg3-generiert-aufbereiten.p3d", "tests/data/meshes/generated_figure.stl"]
+derivative_status = "generated_from_mit_source"
+evidence = ["tools/make_web_images.py", "tests/data/make_corpus.py", "tests/data/LICENSE"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/weg1-anpassen.*"
+art = "video"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Stummer Produktloop mit eigenen Solidon-Inhalten"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = ["eigenes Solidon-Drehbuch", "website/teile/weg1-halter-anpassen.p3d"]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
+content_sha256 = {"website/bilder/weg1-anpassen.mp4" = "a62b574dd074b07fd8d7e80c0516d58b9f239dc534e1154e74df6a2a03a0a2e8", "website/bilder/weg1-anpassen.png" = "34b9707c3aaa6f94038affe1a53115faf4e2c2189056a72ce158861e22fe99f6", "website/bilder/weg1-anpassen.webm" = "8ea9e87d816fe64ec9dea2a22ce3b36ca974aa3b01712fbc0d7cecf7fdabe5ea"}
+input_sha256 = {"website/teile/weg1-halter-anpassen.p3d" = "0e2b2827aa6327265a622c1146b9b079b8d890deb010701efa1326726570f88e"}
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/weg2-konstruieren.*"
+art = "video"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Stummer Produktloop mit eigenen Solidon-Inhalten"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = ["eigenes Solidon-Drehbuch", "app/examples/gehaeuse-mit-bausteinen.p3d"]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_video.py", "website/CLAUDE.md"]
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/weg3-generiert-aufbereiten.*"
+art = "video"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Stummer Produktloop aus dem mitgelieferten Solidon-Beispiel und dem eigenen MIT-Referenzkorpus"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = ["app/examples/weg3-generiert-aufbereiten.p3d", "tests/data/meshes/generated_figure.stl"]
+derivative_status = "generated_from_mit_source"
+evidence = ["tools/make_video.py", "tools/make_examples.py", "tests/data/make_corpus.py", "tests/data/LICENSE", "website/CLAUDE.md"]
+content_sha256 = {"website/bilder/weg3-generiert-aufbereiten.mp4" = "1a961a4713614eccdc13765c981ea3701924a22b23d7e2f2a3b7f6c6acf3f2ea", "website/bilder/weg3-generiert-aufbereiten.png" = "75c521e9452cdb3a1236731c711dd335f2c1a018ea7468198f181a8ff0be161d", "website/bilder/weg3-generiert-aufbereiten.webm" = "895a6484d4788aafc6687d7f252866025150f3b84c3768a9c77bca0620903467"}
+input_sha256 = {"app/examples/weg3-generiert-aufbereiten.p3d" = "3176d54e6730e48a4df015a0674ffbbd193eb74fb8c0720bd4735c8c862e8afe", "tests/data/meshes/generated_figure.stl" = "f5aa84dd37fd6719bf68b661876a64ecaac629968810f1bb228e33888a1fcf1b"}
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"
+
+[[asset]]
+pattern = "website/bilder/weg4-formen.*"
+art = "video"
+creator = "Robert Schneider; erzeugt durch die Solidon-Werkzeugkette"
+rights_holder = "RS Digital"
+source = "Stummer Produktloop mit eigenen Solidon-Inhalten"
+license = "LicenseRef-Solidon-Proprietary"
+generator = "tools/make_video.py"
+inputs = ["eigenes Solidon-Drehbuch", "website/teile/weg4-stein-formen.p3d"]
+derivative_status = "generated_from_own_sources"
+evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
+content_sha256 = {"website/bilder/weg4-formen.mp4" = "5794b9b955ffa04a1f2e8b64c1b5a83fe850e8e30b6ad21cf638f82b2fdbdd8a", "website/bilder/weg4-formen.png" = "bf38b5b322be6bf7ad7cdbe4b9883156d56d99cee4ad389b0ffd75943484c10c", "website/bilder/weg4-formen.webm" = "235da3da9cd0fae0f676e02a3b7218f4c90e947c061fa4533188a27e0238ee2a"}
+input_sha256 = {"website/teile/weg4-stein-formen.p3d" = "71576d189505ec896a955db5875121efe9ee197637f883d6f2bd36ef10ac917d"}
+redistribution_right = "confirmed_on_website"
+platforms = ["web"]
+status = "cleared"

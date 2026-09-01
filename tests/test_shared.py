@@ -1,13 +1,9 @@
-"""Die lokale Bausteindatei — Format-, Import- und Exportgrenzen."""
+"""Die Formatprüfung lokaler Bausteindateien — Missbrauchs- und Grenzfälle."""
 
 from __future__ import annotations
 
 import base64
-import io
 import json
-import socket
-import urllib.request
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -15,12 +11,20 @@ import pytest
 from app.core.bootstrap import load_operations
 from app.core.knowledge.parts.shared import (
     MAX_DOC_CHARS,
+    MAX_EXPOSED,
     MAX_FILE_BYTES,
+    MAX_OPERATIONS,
+    MAX_PARAMETER_LIST_ITEMS,
+    MAX_PARAMS_PER_OPERATION,
+    MAX_PART_FILE_JSON_DEPTH,
+    MAX_PAYLOADS,
+    MAX_PROJECT_PARAMETERS,
+    MAX_SOURCES,
     MAX_TITLE_CHARS,
-    export_bytes,
-    import_file,
+    MAX_TOTAL_OPERATION_PARAMS,
+    MAX_VALUE_CHARS,
+    for_export,
     inspect,
-    read_recipe_file,
     rules,
 )
 
@@ -44,7 +48,7 @@ def recipe(**changes: Any) -> bytes:
         "group": "mounting",
         "document": {
             "format_version": 19,
-            "ops": [{"id": 1, "op": "create_box", "params": {"length": 20.0, "width": 10.0}}],
+            "ops": [{"id": 1, "op": "create_box", "params": {"width": 20.0, "depth": 10.0}}],
         },
         "payloads": {},
         "exposed": [],
@@ -71,9 +75,9 @@ def codes(findings: list) -> set[str]:
 
 
 def test_the_list_of_allowed_operations_comes_from_the_registry() -> None:
-    """Von Hand geführt wäre sie beim nächsten Zuwachs falsch (Konzept §3.1).
+    """Von Hand geführt wäre sie beim nächsten Zuwachs falsch.
 
-    Die Dateiprüfung wiese dann Rezepte ab, die die Anwendung selbst erzeugt hat — und
+    Der lokale Import wiese dann Rezepte ab, die die Anwendung selbst erzeugt hat — und
     der Kunde sähe nur, dass sein Baustein verschwindet. Deshalb ist die Liste
     abgeleitet und nicht aufgezählt.
     """
@@ -153,7 +157,7 @@ def test_a_parameter_that_is_not_a_plain_value_is_refused() -> None:
     """
     nested = {
         "format_version": 19,
-        "ops": [{"id": 1, "op": "create_box", "params": {"length": {"$ref": "irgendwas"}}}],
+        "ops": [{"id": 1, "op": "create_box", "params": {"width": {"$ref": "irgendwas"}}}],
     }
     assert "check_value_not_allowed" in codes(inspect(recipe(document=nested))), (
         "ein verschachtelter Parameterwert kam durch"
@@ -161,18 +165,13 @@ def test_a_parameter_that_is_not_a_plain_value_is_refused() -> None:
 
     plain = {
         "format_version": 19,
-        "ops": [{"id": 1, "op": "create_box", "params": {"sizes": [1.0, 2.0, 3.0]}}],
+        "ops": [{"id": 1, "op": "sculpt_strokes", "params": {"strokes": [1.0, 2.0, 3.0]}}],
     }
     assert inspect(recipe(document=plain)) == [], "eine Liste von Zahlen ist ein gültiger Parameter"
 
 
-def test_an_overlong_text_and_a_link_are_both_refused() -> None:
-    """Werbung braucht Platz und einen Link (Konzept §3.2).
-
-    Beides ist begrenzt, und beides wird einzeln gemeldet: Wer einen zu langen
-    Text **mit** Link weitergibt, soll nicht zweimal nachbessern müssen, um beide
-    Gründe zu erfahren.
-    """
+def test_text_is_bounded_but_plain_content_is_preserved() -> None:
+    """Dateien begrenzen Textmengen, verändern ihren Inhalt aber nicht."""
     long_title = inspect(recipe(title="x" * (MAX_TITLE_CHARS + 1)))
     assert "check_field_too_long" in codes(long_title), long_title
     # Die Zahlen gehören zur Zusage: Der Vergleich beider Prüfseiten hängt an
@@ -183,14 +182,8 @@ def test_an_overlong_text_and_a_link_are_both_refused() -> None:
         "limit": MAX_TITLE_CHARS,
     }, long_title[0].values
 
-    linked = inspect(recipe(doc="Mehr davon auf https://beispiel.test"))
-    assert "check_field_has_link" in codes(linked), linked
-
-    marked_up = inspect(recipe(doc="<script>irgendwas</script>"))
-    assert "check_field_has_link" in codes(marked_up), marked_up
-
-    both = inspect(recipe(doc="www.beispiel.test " + "y" * MAX_DOC_CHARS))
-    assert len(both) >= 2, f"nur ein Grund genannt, dabei sind es zwei: {both}"
+    assert inspect(recipe(doc="Mehr davon auf https://beispiel.test")) == []
+    assert inspect(recipe(doc="<script>bleibt gewöhnlicher Text</script>")) == []
 
 
 def test_a_file_over_the_size_limit_is_refused_before_anything_else() -> None:
@@ -203,42 +196,14 @@ def test_a_file_over_the_size_limit_is_refused_before_anything_else() -> None:
     """
     huge = b'{"name": "x", "title": "' + b"z" * (MAX_FILE_BYTES + 10) + b'"}'
     findings = inspect(huge)
-    assert codes(findings) == {"file_too_large"}, findings
-
-
-def test_reading_stops_one_byte_after_the_file_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Eine fremde Datei bekommt keine unbegrenzte Speicherzusage."""
-    from app.core.errors import ValidationError
-    from app.core.knowledge.parts import shared
-
-    monkeypatch.setattr(shared, "MAX_FILE_BYTES", 64)
-    requested: list[int] = []
-
-    class RecordingStream(io.BytesIO):
-        def read(self, size: int = -1) -> bytes:
-            requested.append(size)
-            return super().read(size)
-
-    stream = RecordingStream(b"x" * 1000)
-
-    def opened(_path: Path, mode: str) -> io.BytesIO:
-        assert mode == "rb"
-        return stream
-
-    monkeypatch.setattr(Path, "open", opened)
-
-    with pytest.raises(ValidationError) as refused:
-        read_recipe_file("beliebig.json")
-
-    assert requested == [65]
-    assert refused.value.constraint == "part_file_invalid"
+    assert "file_too_large" in codes(findings), findings
 
 
 def test_a_payload_that_is_not_base64_is_refused() -> None:
     """Anhänge werden gemessen, nicht ausgeführt — aber sie müssen lesbar sein.
 
     Ein Anhang, der kein base64 ist, kommt nie bei einem Empfänger an; ihn
-    anzunehmen hieße, eine Datei weiterzugeben, die beim ersten Öffnen
+    anzunehmen hieße, eine Kachel zu veröffentlichen, die beim ersten Öffnen
     scheitert.
     """
     good = base64.b64encode(b"solid netz\n").decode("ascii")
@@ -246,6 +211,166 @@ def test_a_payload_that_is_not_base64_is_refused() -> None:
 
     findings = inspect(recipe(payloads={"src_1": "das ist kein base64!!"}))
     assert "check_payload_not_base64" in codes(findings), findings
+
+
+@pytest.mark.parametrize(
+    ("changes", "field"),
+    (
+        (
+            {
+                "document": {
+                    "ops": [],
+                    "parameters": {f"p{i}": {} for i in range(MAX_PROJECT_PARAMETERS + 1)},
+                }
+            },
+            "parameters",
+        ),
+        (
+            {"document": {"ops": [], "sources": {f"s{i}": {} for i in range(MAX_SOURCES + 1)}}},
+            "sources",
+        ),
+        ({"payloads": {f"p{i}": "" for i in range(MAX_PAYLOADS + 1)}}, "payloads"),
+        ({"exposed": [{} for _ in range(MAX_EXPOSED + 1)]}, "exposed"),
+    ),
+)
+def test_resource_collections_have_hard_limits(changes: dict[str, Any], field: str) -> None:
+    """Kleine Einträge dürfen die Prüfung nicht grenzenlos vervielfachen."""
+
+    findings = inspect(recipe(**changes))
+
+    assert any(
+        finding.code == "check_too_many_entries" and finding.values.get("field") == field
+        for finding in findings
+    ), findings
+
+
+def test_operations_and_their_parameters_have_individual_and_total_limits() -> None:
+    """Die Dateigröße allein begrenzt die Bauarbeit eines Rezepts nicht."""
+
+    too_many_steps = {
+        "ops": [{"op": "create_box", "params": {}} for _ in range(MAX_OPERATIONS + 1)]
+    }
+    assert "check_too_many_entries" in codes(inspect(recipe(document=too_many_steps)))
+
+    too_many_in_one = {
+        "ops": [
+            {
+                "op": "create_box",
+                "params": {f"p{i}": i for i in range(MAX_PARAMS_PER_OPERATION + 1)},
+            }
+        ]
+    }
+    assert "check_too_many_params" in codes(inspect(recipe(document=too_many_in_one)))
+
+    params_per_step = MAX_PARAMS_PER_OPERATION
+    step_count = MAX_TOTAL_OPERATION_PARAMS // params_per_step + 1
+    too_many_total = {
+        "ops": [
+            {
+                "op": "create_box",
+                "params": {f"p{i}": i for i in range(params_per_step)},
+            }
+            for _ in range(step_count)
+        ]
+    }
+    assert "check_too_many_total_params" in codes(inspect(recipe(document=too_many_total)))
+
+
+def test_parameter_strings_and_lists_have_hard_limits() -> None:
+    """Ein einzelner Parameter darf keine zweite große Nutzlast verstecken."""
+
+    document = {
+        "ops": [
+            {
+                "op": "create_box",
+                "params": {
+                    "text": "x" * (MAX_VALUE_CHARS + 1),
+                    "items": list(range(MAX_PARAMETER_LIST_ITEMS + 1)),
+                },
+            }
+        ]
+    }
+    findings = inspect(recipe(document=document))
+
+    assert sum(finding.code == "check_value_not_allowed" for finding in findings) == 2
+
+
+def test_operation_edges_and_range_failures_have_hard_limits() -> None:
+    """Auch Metadaten neben den Parametern dürfen die Datei nicht unbeschränkt aufblasen."""
+
+    step = {
+        "op": "create_box",
+        "params": {},
+        "in": [f"i{i}" for i in range(rules()["max_operation_inputs"] + 1)],
+        "out": [f"o{i}" for i in range(rules()["max_operation_outputs"] + 1)],
+        "matches": {f"m{i}": {} for i in range(rules()["max_matches_per_operation"] + 1)},
+        "translatable": [f"t{i}" for i in range(rules()["max_translatable_per_operation"] + 1)],
+    }
+    failures = [{} for _ in range(rules()["max_range_failures"] + 1)]
+    findings = inspect(recipe(document={"ops": [step]}, range_report={"failures": failures}))
+
+    limited_fields = {
+        finding.values.get("field")
+        for finding in findings
+        if finding.code == "check_too_many_entries"
+    }
+    assert {
+        "ops.1.in",
+        "ops.1.out",
+        "ops.1.matches",
+        "ops.1.translatable",
+        "range_report.failures",
+    } <= limited_fields
+
+
+def test_unknown_operation_parameters_and_nonfinite_numbers_are_rejected() -> None:
+    """Parameter müssen zum registrierten Schema gehören; NaN ist kein JSON-Wert."""
+
+    unknown = {"ops": [{"op": "create_box", "params": {"geheim": 1}}]}
+    assert "check_unknown_params" in codes(inspect(recipe(document=unknown)))
+    assert "check_not_json" in codes(inspect(b'{"format_version": 1, "value": NaN}'))
+
+
+def test_lone_utf16_surrogates_are_invalid_but_non_bmp_text_is_valid() -> None:
+    """Import und Export müssen dieselbe UTF-8-Grenze ziehen."""
+
+    encoded = recipe().decode("utf-8")
+    invalid_value = encoded.replace('"title": "Kabelhalter"', '"title": "\\ud800"')
+    invalid_key = encoded.replace('"title": "Kabelhalter"', '"\\udfff": "Kabelhalter"')
+    assert "check_not_json" in codes(inspect(invalid_value.encode()))
+    assert "check_not_json" in codes(inspect(invalid_key.encode()))
+
+    valid = recipe(title="Prüfrezept mit \U00020000")
+    assert inspect(valid) == []
+
+
+def test_json_nesting_has_a_hard_limit_before_schema_processing() -> None:
+    """Viele kleine Container dürfen keinen tiefen Parserpfad erzwingen."""
+
+    depth = MAX_PART_FILE_JSON_DEPTH + 8
+    nested = b"[" * depth + b"0" + b"]" * depth
+    payload = recipe()[:-1] + b', "too_deep": ' + nested + b"}"
+
+    assert codes(inspect(payload)) == {"check_not_json"}
+
+
+def test_imported_origin_is_closed() -> None:
+    """Eine Dateiherkunft ist lesbar, aber nicht frei erweiterbar."""
+
+    valid = {
+        "source_sha256": "b" * 64,
+        "imported_at": "2026-08-31T15:16:17Z",
+    }
+    assert inspect(recipe(imported_origin=valid)) == []
+
+    cases = (
+        ("kein Objekt", "check_imported_origin_not_object"),
+        ({**valid, "path": "C:/privat/teil.json"}, "check_imported_origin_keys"),
+        ({**valid, "source_sha256": "B" * 64}, "check_imported_origin_sha256"),
+        ({**valid, "imported_at": "gestern"}, "check_imported_origin_imported_at"),
+    )
+    for value, expected in cases:
+        assert expected in codes(inspect(recipe(imported_origin=value)))
 
 
 def test_every_finding_is_reported_at_once() -> None:
@@ -257,7 +382,7 @@ def test_every_finding_is_reported_at_once() -> None:
     findings = inspect(
         recipe(
             title="x" * (MAX_TITLE_CHARS + 1),
-            doc="siehe https://beispiel.test",
+            doc="y" * (MAX_DOC_CHARS + 1),
             format_version=99,
             document={"format_version": 19, "ops": [{"id": 1, "op": "gibt_es_nicht"}]},
         )
@@ -273,7 +398,7 @@ def a_recipe(**changes: Any) -> Any:
 
     Der Baukasten oben (:func:`recipe`) baut die **Datei**; dieser baut das
     **Objekt**, aus dem sie entsteht. Beide werden gebraucht, und zwar an den
-    zwei Enden derselben Kette: Was die Dateiprüfung sieht, sind Bytes; was der
+    zwei Enden derselben Kette: Was der Dateileser sieht, sind Bytes; was der
     Kunde in der Hand hat, ist ein ``Recipe``.
     """
     from app.core.knowledge.parts.recipe import Recipe
@@ -307,7 +432,7 @@ def a_recipe(**changes: Any) -> Any:
     return Recipe(**fields)
 
 
-def test_the_share_file_comes_out_of_one_door_and_that_door_checks() -> None:
+def test_the_part_file_comes_out_of_one_door_and_that_door_checks() -> None:
     """Der gute Fall — und ohne ihn wäre der Test darunter wertlos.
 
     Ein Wächter „nichts Verbotenes kommt heraus" ist über einer Tür, die
@@ -315,7 +440,7 @@ def test_the_share_file_comes_out_of_one_door_and_that_door_checks() -> None:
     steht hier zuerst die Zusicherung, dass überhaupt etwas herauskommt: echte
     Bytes, gültiges JSON, und von der Prüfung selbst nicht beanstandet.
     """
-    payload = export_bytes(a_recipe())
+    payload = for_export(a_recipe())
 
     assert payload, "aus einem gültigen Rezept muss eine Datei entstehen"
     assert json.loads(payload)["name"] == "halter"
@@ -323,102 +448,8 @@ def test_the_share_file_comes_out_of_one_door_and_that_door_checks() -> None:
 
 
 @pytest.mark.parametrize(
-    "filename",
-    [
-        pytest.param("Baustein mit Leerzeichen.json", id="Windows-Leerzeichen"),
-        pytest.param("größe_µ.json", id="Linux-Unicode"),
-        pytest.param("Größe.json", id="macOS-Normalform"),
-    ],
-)
-def test_local_export_import_round_trip_is_portable_and_never_uses_the_network(
-    filename: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Bytes hinaus, lokale Datei hinein — ohne Konto, URL oder Netzaufruf."""
-    from app.core.knowledge.parts.recipe import IMPORTED_SOURCE
-    from app.core.knowledge.parts.registry import PartRegistry
-    from app.core.registry import Registry
-
-    def network_forbidden(*_args: Any, **_kwargs: Any) -> None:
-        pytest.fail("Der lokale Bausteindatei-Weg hat das Netzwerk aufgerufen.")
-
-    monkeypatch.setattr(socket, "create_connection", network_forbidden)
-    monkeypatch.setattr(urllib.request, "urlopen", network_forbidden)
-
-    target = tmp_path / filename
-    target.write_bytes(export_bytes(a_recipe()))
-    parts, registry = PartRegistry(), Registry()
-
-    assert import_file(target, parts, registry) == []
-    assert parts.get("halter").source == IMPORTED_SOURCE
-
-
-@pytest.mark.parametrize(
-    ("payload", "named"),
-    [
-        pytest.param(
-            lambda: json.dumps({**json.loads(recipe()), "__class__": "os.system"}).encode(),
-            "__class__",
-            id="unbekannter Schlüssel",
-        ),
-        pytest.param(
-            lambda: recipe(
-                document={
-                    "format_version": 19,
-                    "ops": [{"id": 1, "op": "run_shell_command", "params": {}}],
-                }
-            ),
-            "run_shell_command",
-            id="unbekannte Operation",
-        ),
-    ],
-)
-def test_import_rejects_unknown_content_before_registration(
-    payload: Any,
-    named: str,
-    tmp_path: Path,
-) -> None:
-    """Eine abgelehnte Datei erzeugt weder Katalogeintrag noch Erfolgslage."""
-    from app.core.errors import ValidationError
-    from app.core.knowledge.parts.registry import PartRegistry
-    from app.core.registry import Registry
-
-    target = tmp_path / "fremd.json"
-    target.write_bytes(payload())
-    parts, registry = PartRegistry(), Registry()
-
-    with pytest.raises(ValidationError) as refused:
-        import_file(target, parts, registry)
-
-    assert named in refused.value.values["findings"]
-    assert not parts.has("halter")
-
-
-def test_import_keeps_the_local_recipe_and_marks_the_arriving_copy(tmp_path: Path) -> None:
-    """„Lokal gewinnt" bleibt wahr; die fremde Fassung steht erkennbar daneben."""
-    from app.core.knowledge.parts.recipe import IMPORTED_SOURCE, fingerprint, register
-    from app.core.knowledge.parts.registry import PartRegistry
-    from app.core.registry import Registry
-
-    parts, registry = PartRegistry(), Registry()
-    local = a_recipe(doc="lokaler Stand")
-    register(local, parts, registry)
-    local_mark = fingerprint(local)
-
-    target = tmp_path / "anderer Stand.json"
-    target.write_bytes(export_bytes(a_recipe(doc="importierter Stand")))
-    assert import_file(target, parts, registry) == []
-
-    assert parts.get("halter").version == local_mark
-    assert parts.get("halter_imported").source == IMPORTED_SOURCE
-
-
-@pytest.mark.parametrize(
     "changes",
     [
-        pytest.param({"doc": "Mehr dazu auf http://beispiel.invalid/halter"}, id="Link im Text"),
-        pytest.param({"title": "Kabelhalter <b>neu</b>"}, id="Auszeichnung im Titel"),
         pytest.param({"title": "H" * (MAX_TITLE_CHARS + 1)}, id="Titel zu lang"),
         pytest.param({"doc": "H" * (MAX_DOC_CHARS + 1)}, id="Text zu lang"),
         pytest.param({"op": "erfinde_mir_was"}, id="unbekannte Operation"),
@@ -445,7 +476,7 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
     faulty = a_recipe(**changes)
 
     with pytest.raises(ValidationError) as refused:
-        export_bytes(faulty)
+        for_export(faulty)
 
     assert refused.value.values["findings"], "die Absage nennt den Grund nicht"
     assert refused.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“ (Regel 17)"
@@ -455,10 +486,10 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
 
 
 def test_the_licences_come_from_the_recipe_core_not_from_a_second_list() -> None:
-    """Die Wertemenge gehört dem Kern; die Dateiprüfung leitet sie daraus ab.
+    """Die Wertemenge gehört dem Kern; der Dateiweg liest sie von dort.
 
-    Andersherum — der Dateiprüfer führt die Liste, der Kern liest sie — wäre der
-    Kern vom Austauschformat abhängig. Der Test hält die
+    Andersherum — das Austauschformat führt die Liste, der Kern liest sie —
+    wäre der Kern von seinem Transport abhängig, und das ist die falsche Richtung. Der Test hält die
     Richtung fest, nicht die Werte: Wer eine vierte Lizenz zulässt, ändert eine
     Zeile in ``recipe.py`` und diese Liste zieht nach.
     """
@@ -475,7 +506,7 @@ def test_the_licences_come_from_the_recipe_core_not_from_a_second_list() -> None
         pytest.param({"license": "WTFPL"}, False, id="fremde Lizenz"),
         pytest.param({"license": 7}, False, id="Lizenz ist keine Zeichenkette"),
         pytest.param({"author": "R. Schneider, rs-digital.de"}, True, id="Autor mit Adresse"),
-        pytest.param({"author": "R. <b>Schneider</b>"}, False, id="Autor mit Auszeichnung"),
+        pytest.param({"author": "R. <b>Schneider</b>"}, True, id="Autor mit spitzen Klammern"),
         pytest.param({"author": "R" * (MAX_TITLE_CHARS + 1)}, False, id="Autor zu lang"),
     ],
 )
@@ -486,14 +517,9 @@ def test_the_check_asks_whether_a_value_is_allowed_never_whether_it_is_there(
 
     Zwei Zusagen in einem Test, weil sie dieselbe Naht betreffen. **Abwesend
     ist kein Fehler:** Ein Rezept ohne Lizenz schreibt den Schlüssel gar nicht
-    erst; eine Prüfung auf Anwesenheit wiese damit jedes zweite Rezept ab. Und
-    **eine Adresse ist keine Werbung:** ``Recipe.author`` ist ausdrücklich „ein
-    Name, ein Kürzel, eine Adresse", also gilt dort das Link-Verbot aus
-    ``FORBIDDEN_TEXT`` nicht — das ``<`` verbietet ein eigenes Muster weiter,
-    denn fremde Dateien können das Feld in der Oberfläche anzeigen.
-
-    Ein gemeinsames Muster für Titel und Autor hätte eines von beiden falsch
-    entschieden, und zwar still.
+    erst; eine Prüfung auf Anwesenheit wiese damit jedes zweite Rezept ab.
+    Autor und Beschreibung bleiben gewöhnlicher Text und werden nicht als
+    Auszeichnung interpretiert.
     """
     findings = inspect(recipe(**changes))
 
@@ -509,3 +535,12 @@ def test_a_recipe_without_licence_or_author_passes() -> None:
     """
     assert "license" not in json.loads(recipe())
     assert inspect(recipe()) == []
+
+
+def test_export_marks_missing_distribution_rights_explicitly() -> None:
+    """Eine Austauschdatei macht aus fehlenden Angaben keine Erlaubnis."""
+
+    exported = json.loads(for_export(a_recipe()))
+
+    assert exported["author"] == ""
+    assert exported["license"] == ""

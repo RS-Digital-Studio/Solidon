@@ -3,24 +3,20 @@
 
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
-header('X-Content-Type-Options: nosniff');
-header('Cache-Control: no-store');
-
 require_once __DIR__ . '/activation_common.php';
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
-    activation_answer_error(new ActivationFailure('Nur GET.', 405, 'method_not_allowed'));
-}
-if (!function_exists('sodium_crypto_sign_verify_detached')
-    || !extension_loaded('pdo_sqlite')) {
-    activation_answer_error(new ActivationFailure(
-        'Der Aktivierungsdienst ist auf diesem Server noch nicht vollständig eingerichtet.',
-        503,
-        'service_unavailable'
-    ));
-}
+header('Content-Type: application/json; charset=utf-8');
+activation_security_headers();
 try {
+    activation_require_method('GET');
+    if (!function_exists('sodium_crypto_sign_verify_detached')
+        || !extension_loaded('pdo_sqlite')) {
+        throw new ActivationFailure(
+            'Der Aktivierungsdienst ist auf diesem Server noch nicht vollständig eingerichtet.',
+            503,
+            'service_unavailable'
+        );
+    }
     activation_seed();
     $database = activation_database(false);
     $required = ['licences', 'activations', 'activation_attempts'];

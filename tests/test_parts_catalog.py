@@ -211,22 +211,21 @@ def test_a_project_from_an_older_library_is_told_what_moved() -> None:
     assert "screw_hole" in str(findings[0].values["parts"])
 
 
-def test_a_library_12_project_is_told_about_the_four_geometry_fixes() -> None:
-    """Die maßändernden Korrekturen aus Stand 13 erreichen die Projektmeldung."""
+def test_a_library_12_project_is_told_about_all_three_geometry_fixes() -> None:
+    """Die drei Maßkorrekturen aus Stand 13 erreichen die Projektmeldung."""
     from app.core.types import Operation
 
     document = Document(format_version=2, app_version="0.0.1", parts_version="12")
     document.ops = [
-        Operation(id=2, op="insert_foot", inputs=("obj_1",), outputs=("obj_1",)),
-        Operation(id=3, op="insert_hinge_eye", inputs=("obj_1",), outputs=("obj_1",)),
-        Operation(id=4, op="insert_pegboard_hook", inputs=("obj_1",), outputs=("obj_1",)),
-        Operation(id=5, op="insert_snap_fit", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=2, op="insert_barrel_hinge", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=3, op="insert_dowel", inputs=("obj_1",), outputs=("obj_1",)),
+        Operation(id=4, op="insert_foot", inputs=("obj_1",), outputs=("obj_1",)),
     ]
 
     findings = part_check.check(document)
 
     assert [finding.code for finding in findings] == ["parts.changed"]
-    assert findings[0].values["parts"] == "foot, hinge_eye, pegboard_hook, snap_fit"
+    assert findings[0].values["parts"] == "barrel_hinge, dowel, foot"
 
 
 def test_a_project_of_the_current_library_says_nothing() -> None:

@@ -38,18 +38,21 @@ warum. Kein stilles Scheitern.
 
 from __future__ import annotations
 
-import queue
 import shutil
 import subprocess
 import sys
-import threading
-import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import IO, Final, Literal
+from typing import Final, Literal
 
 from app.core import discover, tools
 from app.core.log import get_logger
+from app.core.process import (
+    ProcessOutputLimitExceeded,
+    run_stream_limited,
+    trusted_cwd,
+)
 from app.i18n import TranslatableText, _, tr
 
 _log = get_logger(__name__)
@@ -60,6 +63,10 @@ Kind = Literal["package", "program"]
 #: Paketverwaltungen laden herunter; eine Minute reicht nicht, und eine
 #: Stunde hilft niemandem.
 TIMEOUT_SECONDS = 900.0
+
+#: Paketverwaltungen dürfen ausführlich sein, aber keinen unbegrenzten
+#: Speicherstrom in die Anwendung schreiben.
+INSTALL_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
 
 ProgressFn = Callable[[str], None]
 
@@ -560,6 +567,17 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
                 f"{what_now}"
             ),
         )
+    except ProcessOutputLimitExceeded as problem:
+        return InstallResult(
+            requirement=requirement,
+            installed=False,
+            output=str(problem),
+            reason=_(
+                "Die Paketverwaltung hat abgebrochen. Was sie gemeldet hat, steht "
+                "unter „Details anzeigen“; die Seite des Herstellers führt die Datei "
+                "zum Selbstinstallieren."
+            ),
+        )
     except (OSError, subprocess.SubprocessError) as problem:
         return InstallResult(
             requirement=requirement,
@@ -625,71 +643,43 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
 def _stream(command: list[str], progress: ProgressFn) -> tuple[int, str]:
     """Den Installer laufen lassen und **währenddessen** melden, was er sagt.
 
-        **Vorher kam die Rückmeldung erst am Ende.** ``subprocess.run`` sammelt die
-        Ausgabe und gibt sie zurück, wenn der Prozess fertig ist — die
-        Fortschrittszeilen wurden also erst dann durchgereicht, wenn niemand sie
-        mehr brauchte. Bei OrcaSlicer sind das mehrere Minuten, in denen ein
-        unbestimmter Balken lief und sonst nichts geschah.
+    **Vorher kam die Rückmeldung erst am Ende.** ``subprocess.run`` sammelt die
+    Ausgabe und gibt sie zurück, wenn der Prozess fertig ist — die
+    Fortschrittszeilen wurden also erst dann durchgereicht, wenn niemand sie
+    mehr brauchte. Bei OrcaSlicer sind das mehrere Minuten, in denen ein
+    unbestimmter Balken lief und sonst nichts geschah.
 
-        Gelesen wird zeilenweise im Textmodus, und das ist hier der Trick: winget
-        zeichnet seinen Fortschrittsbalken mit Wagenrücklauf und ohne
-        Zeilenumbruch. Der Textmodus übersetzt ``
-    `` in ein Zeilenende, also
-        kommt jede Aktualisierung als eigene Zeile an — sonst käme bis zum Schluss
-        keine.
+    Gelesen wird in festen Byte-Stücken, damit auch eine einzige endlose
+    Zeile den Speicher nicht füllen kann. Wagenrücklauf und Zeilenumbruch
+    gelten beide als Zeilenende; damit kommen auch die Fortschrittsbalken
+    von winget rechtzeitig an.
 
-        ``stderr`` läuft in denselben Strom: Zwei getrennt zu lesen hieße, auf
-        einem zu blocken, während der andere vollläuft.
+    ``stderr`` läuft in denselben Strom: Zwei getrennt zu lesen hieße, auf
+    einem zu blocken, während der andere vollläuft.
 
-        **Und gewartet wird auf die Uhr, nicht auf die nächste Zeile.** Die
-        Frist stand hier im Schleifenkörper — geprüft also erst, wenn eine
-        Zeile ankam. Ein stiller Installer hing damit unbegrenzt, und der
-        Arbeiter-Thread überlebte sein Fenster (Gesamtreview L-2). Ein
-        Leser-Thread reicht die Zeilen durch eine Warteschlange; das Warten
-        darauf trägt die Frist.
+    **Und gewartet wird auf die Uhr, nicht auf die nächste Zeile.** Die
+    Frist stand hier im Schleifenkörper — geprüft also erst, wenn eine
+    Zeile ankam. Ein stiller Installer hing damit unbegrenzt, und der
+    Arbeiter-Thread überlebte sein Fenster (Gesamtreview L-2). Ein
+    Leser-Thread reicht begrenzte Stücke durch eine begrenzte
+    Warteschlange; das Warten darauf trägt die Frist.
     """
-    lines: list[str] = []
-    deadline = time.monotonic() + TIMEOUT_SECONDS
-    with subprocess.Popen(
+    lines: deque[str] = deque(maxlen=40)
+
+    def report(line: str) -> None:
+        lines.append(line)
+        progress(line)
+
+    answer = run_stream_limited(
         command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-    ) as process:
-        assert process.stdout is not None
-        feed: queue.Queue[str | None] = queue.Queue()
-
-        def drain(stdout: IO[str] = process.stdout) -> None:
-            # Läuft als Daemon: Nach einem Abbruch endet er, sobald das Rohr
-            # schließt, und hält sonst nichts am Leben.
-            for raw in stdout:
-                feed.put(raw)
-            feed.put(None)
-
-        threading.Thread(target=drain, daemon=True, name="install-stream").start()
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                process.kill()
-                raise subprocess.TimeoutExpired(command, TIMEOUT_SECONDS)
-            try:
-                raw = feed.get(timeout=min(remaining, 1.0))
-            except queue.Empty:
-                continue
-            if raw is None:
-                break
-            line = raw.strip()
-            if line:
-                lines.append(line)
-                progress(line)
-        code = process.wait()
+        cwd=trusted_cwd(),
+        timeout=TIMEOUT_SECONDS,
+        output_limit=INSTALL_OUTPUT_LIMIT,
+        on_line=report,
+    )
     # Nur das Ende: Eine Paketverwaltung schreibt hunderte Fortschrittszeilen,
     # und was jemand weitergeben will, sind die letzten.
-    return code, chr(10).join(lines[-40:])
+    return answer.returncode, chr(10).join(lines)
 
 
 def _command(requirement: Requirement) -> list[str]:

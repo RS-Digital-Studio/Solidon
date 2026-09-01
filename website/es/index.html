@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=be10c386">
+<link rel="stylesheet" href="../style.css?v=7e1cf380">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -174,8 +174,7 @@
         <div class="menu-panel">
           <a href="/es/features.html">Funciones</a>
           <a href="/es/ai-models.html">Modelos de IA</a>
-
-          <a href="#pricing">Precio</a>
+          <a href="#demo">Demo</a>
           <a href="/es/changelog.html">Novedades</a>
           <a href="/es/manual.html">Manual</a>
         </div>
@@ -205,7 +204,6 @@
         <p class="lead">Importa un modelo, cambia sus medidas, añade un
         agujero o elige un ajuste — Solidon3D comprueba antes de laminar si la
         pieza está lista para imprimir. Sin experiencia CAD, nube ni cuenta.</p>
-
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
@@ -294,8 +292,8 @@
             30 de octubre de 2026</b> y después ya no arranca — tus archivos
             de proyecto no se ven afectados.</p>
             <p>La versión 1.0 está prevista para el 1 de noviembre de 2026.
-            Todavía no es una oferta; su precio y sus condiciones
-            contractuales se publicarán antes de ofrecerla.</p>
+            Todavía no es una oferta; su precio y sus condiciones contractuales
+            se publicarán antes de ofrecerla.</p>
               <div class="tabs" data-tabs data-tabs-label="Sistema operativo">
                 <div data-tab="Windows" data-release-show hidden>
                   <p class="pruefhinweis">Windows muestra un aviso azul con una aplicación nueva y aún sin firmar: <i>Más información</i> → <i>Ejecutar de todas formas</i>. La firma llegará en cuanto esté el certificado.</p>
@@ -318,13 +316,20 @@
   <div class="donate">
             <div>
               <strong>Apoya Solidon3D</strong>
-              <p>La demo sigue siendo gratuita. Una donación voluntaria financia el desarrollo, las pruebas y la próxima versión.</p>
+              <p>La demo sigue siendo gratuita. El apoyo voluntario ayuda a financiar el desarrollo, las pruebas y la próxima versión.</p>
               <details class="donate-fine">
-                <summary>Nota legal sobre donativos</summary>
-                <p class="donate-terms">No es un pedido, no ofrece ninguna contraprestación ni se descuenta de una compra posterior. No emitimos certificados de donación. PayPal procesa el pago solo después de hacer clic; <a href="/datenschutz.html">detalles de privacidad</a>.</p>
+                <summary>Nota legal sobre el apoyo voluntario</summary>
+                <p class="donate-terms">No es un pedido, no ofrece ninguna contraprestación ni se descuenta de una compra posterior. No emitimos certificados fiscales por el pago; no lo trate como deducible fiscalmente. PayPal solo se abre después de confirmar el aviso local; <a href="/datenschutz.html">detalles de privacidad</a>.</p>
               </details>
             </div>
-            <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Donar con PayPal <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+            <button class="donate-button" type="button" data-choice="support">Apoyar voluntariamente <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
+            <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Apoyo voluntario mediante PayPal">
+              <p class="auswahl-titel">Apoyar voluntariamente</p>
+              <p>El pago no es un pedido, no ofrece contraprestación, no desbloquea nada ni se descuenta de una compra posterior. No emitimos certificados fiscales por el pago; no lo trate como deducible fiscalmente.</p>
+              <p>Solo el siguiente botón abre PayPal. Saldrá de solidon3d.de y se aplicará la <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">declaración de privacidad de PayPal</a>.</p>
+              <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Continuar a PayPal</a>
+              <form method="dialog"><button class="btn ghost" value="zu">Volver</button></form>
+            </dialog>
           </div>
     </div>
   </section>
@@ -351,7 +356,7 @@
       <div class="steps">
         <ol class="steps-list">
           <li><b>Descarga la demo y ábrela.</b> Sin cuenta, sin clave, sin
-          configuración — instalar y empezar. Diez proyectos de ejemplo
+          configuración — instalar y empezar. Once proyectos de ejemplo
           esperan en la pantalla de inicio.</li>
           <li><b>Arrastra un modelo.</b> Un STL de Printables o tu propio
           proyecto: el informe de comprobación dice al momento qué saldría
@@ -450,21 +455,19 @@
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
-                 poster="../bilder/weg3-generieren.png?v=e858ea35" muted loop playsinline controls
-                 preload="none" aria-label="Una grabación de la aplicación: un modelo de búho generado se importa, se ajusta de tamaño, se reduce en resolución y la lámina lo gira a la orientación que menos soportes necesita — por eso acaba boca abajo. Al lado, el informe sin errores ni avisos.">
-                   <source src="../bilder/weg3-generieren.webm?v=f06d54b0" type="video/webm">
-                   <source src="../bilder/weg3-generieren.mp4?v=cb3c2c16" type="video/mp4">
+                 poster="../bilder/weg3-generiert-aufbereiten.png?v=75c521e9" muted loop playsinline controls
+                 preload="none" aria-label="Una grabación de la aplicación: se abre una malla de referencia generada por nosotros, se ajusta su tamaño, se repara y se coloca en la base de impresión. A la izquierda aparecen cuatro pasos del historial; a la derecha, el informe enumera las reparaciones y los avisos restantes.">
+                   <source src="../bilder/weg3-generiert-aufbereiten.webm?v=895a6484" type="video/webm">
+                   <source src="../bilder/weg3-generiert-aufbereiten.mp4?v=1a961a47" type="video/mp4">
           </video>
-          <span class="tag">Camino 3 — Generar</span>
-          <h3>A partir de texto o imagen</h3>
-          <p>Una malla generada pasa automáticamente por la cadena de
-          reparación, se lleva a una resolución con la que se puede trabajar,
-          recibe un informe de comprobación y, si hace falta, se divide y
-          recibe pasadores — hasta que queda imprimible sobre la placa.
-          Necesita un ComfyUI en local y una tarjeta gráfica potente; el
-          modelo generador es TripoSG, bajo licencia MIT, y un comando lo
-          instala. Sin ambos, los caminos 1 y 2 siguen siendo plenamente
-          utilizables.</p>
+          <span class="tag">Camino 3 — Modelo generado</span>
+          <h3>Preparar un GLB o STL</h3>
+          <p>Arrastra un archivo de cualquier generador que elijas:
+          Solidon3D repara la malla, la ajusta de tamaño, comprueba su
+          imprimibilidad y la divide o añade pasadores cuando hace falta. La
+          instalación automática de un modelo 3D concreto solo volverá cuando
+          esté documentada toda su cadena de licencias y procedencia. Los
+          caminos 1, 2 y 4 siguen siendo plenamente utilizables.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -558,7 +561,7 @@
       <a href="/es/features.html">todas las funciones con imágenes en la página de funciones</a>.</p>
       <div class="beleg">
         <figure>
-          <img src="../handbuch/es/report.png?v=6d0857ee" width="620" height="270" loading="lazy"
+          <img src="../handbuch/es/report.png?v=04129a88" width="620" height="430" loading="lazy"
                alt="El informe con cuatro hallazgos: el modelo está abierto en tres puntos, 14 triángulos apuntan hacia dentro, una pared es más fina que dos anchos de extrusión y el archivo no indicaba su unidad">
           <figcaption><b>El informe.</b> Lo que sale mal al imprimir figura ahí antes de que el laminador gaste el tiempo — contado por error, aviso y nota.</figcaption>
         </figure>
@@ -610,37 +613,14 @@
 
   <section id="generated">
     <div class="wrap">
-      <h2>Cuando el modelo viene de una IA</h2>
-      <p class="sub">Un generador comprueba si la malla está cerrada. Lo que
-      no comprueba es si la pared es más gruesa que tu boquilla, si un
-      voladizo aguanta, si una isla empieza en el aire ni si el conjunto cabe
-      en tu placa de impresión. Justo ahí empieza Solidon3D — y después cada
-      número aún se puede cambiar.</p>
-      <ul class="schau tight">
-        <li><figure>
-          <img src="../bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="Una gárgola gótica sobre un pedestal, con alas plegadas y garras">
-          <figcaption>Gárgola</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="Un farol octogonal con paneles de filigrana calada">
-          <figcaption>Farol</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="Una válvula industrial con volante y bridas atornilladas">
-          <figcaption>Válvula industrial</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="Un cráneo de dragón con cuernos curvos y filas de dientes">
-          <figcaption>Cráneo de dragón</figcaption>
-        </figure></li>
-      </ul>
-      <p class="sub">Cuatro de ellos a partir de una sola frase cada uno, generados y comprobados en Solidon3D — todos cerrados y de una sola pieza, unos veinte segundos cada uno. El generador se ejecuta en tu propio equipo: sin cuenta, sin subida, y el modelo que hay detrás tiene licencia MIT.</p>
-
-      <a class="btn ghost" href="/es/ai-models.html">Del generador a la impresión</a>
+      <h2>Cuando el modelo viene de un generador</h2>
+      <p class="sub">Arrastra un GLB o STL, repáralo, ajústalo de tamaño,
+      compruébalo contra la impresora y el material, divídelo y añade
+      pasadores: esta preparación funciona con archivos de cualquier
+      generador que elijas y sin experiencia con CAD. Solidon3D no descarga
+      deliberadamente ningún modelo 3D concreto mientras no esté documentada
+      toda su cadena de licencias y procedencia.</p>
+      <a class="btn ghost" href="/es/ai-models.html">Del generador a la pieza imprimible</a>
     </div>
   </section>
 
@@ -671,7 +651,8 @@
     </div>
   </section>
 
-  <section id="pricing">
+  <section id="demo">
+    <span id="pricing" aria-hidden="true"></span>
     <div class="wrap">
       <h2>Demos 0.x gratuitas hasta la versión 1.0</h2>
       <p class="sub">La demo actual es gratuita y completa. La versión 1.0
@@ -682,13 +663,13 @@
       <div class="price">
         <div class="price-card">
           <div class="amount">
-            <b>Gratuita</b>
+            <b>Gratis</b>
             <em>demo hasta el 30/10/2026</em>
           </div>
-          <p class="terms">La demo publicada actualmente es gratuita,
-          completa, sin clave y sin cuenta. La versión 1.0 está prevista para
-          el 1 de noviembre de 2026, pero todavía no es una oferta. Su precio
-          y sus condiciones contractuales se publicarán antes de ofrecerla.</p>
+          <p class="terms">La demo pública es la versión 0.2.2: gratuita y
+          completa, sin clave ni cuenta. La versión 1.0 está prevista para el
+          1 de noviembre de 2026, pero todavía no es una oferta. Su precio y
+          sus condiciones contractuales se publicarán antes de ofrecerla.</p>
           <a class="btn" href="#download"
              data-release-href data-release-download>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
@@ -713,14 +694,22 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>La IA sigue siendo opcional.</b> La demo completa
-              funciona sin chat. Los modelos externos usan el proveedor
-              elegido por el usuario; Ollama puede funcionar localmente.</span>
+              funciona sin chat. Antes del primer contacto con un modelo,
+              Solidon indica si los datos van a Anthropic, a Ollama local o a
+              un destino Ollama remoto.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Tus proyectos siguen siendo legibles.</b> Un archivo
               ZIP con JSON dentro; exportación a STL, 3MF, OBJ, PLY y
               STEP.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Comunica las vulnerabilidades de forma confidencial.</b>
+              El <a href="/es/security.html">contacto de seguridad</a>
+              también cubre la demo. Las actualizaciones de seguridad para la
+              versión de pago están garantizadas al menos hasta el 31/10/2031.</span>
             </li>
           </ul>
         </div>
@@ -748,9 +737,9 @@
         con el proveedor) u Ollama con un modelo a partir de unos
         14 000 millones de parámetros — eso requiere una tarjeta gráfica
         con 16 GB de memoria</td></tr>
-        <tr><td>Generar (opcional)</td><td>un ComfyUI en local y una tarjeta
-        gráfica potente; una herramienta incluida instala el
-        modelo TripoSG (MIT)</td></tr>
+        <tr><td>Modelo generado (opcional)</td><td>un archivo GLB o
+        STL externo; Solidon3D no instala actualmente ningún modelo 3D
+        concreto</td></tr>
         <tr><td>Otros (opcional)</td><td>un slicer — se encuentra solo o
         se indica, y no es obligatorio</td></tr>
       </table>
@@ -893,7 +882,7 @@
         <p data-past-text="La demo funciona hasta el 30 de octubre — gratuita y completa. Quien escriba una línea recibirá respuesta: responde una persona.">La demo funciona hasta el 30 de octubre — gratuita y completa.
         Quien escriba una línea recibirá respuesta: responde una
         persona.</p>
-        <a class="btn" href="/es/#pricing">
+        <a class="btn" href="/es/#demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
           </svg>
@@ -916,9 +905,9 @@
   <div class="wrap">
     © 2026 RS Digital ·
     <a href="/es/manual.html">Manual</a> ·
-     ·
     <a href="/es/changelog.html">Novedades</a> ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/es/security.html">Seguridad</a> ·
     <a href="/impressum.html">Aviso legal</a> ·
     <a href="/datenschutz.html">Privacidad</a> ·
     <a href="/agb.html">Condiciones</a> ·
@@ -933,7 +922,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 
 </body>
 </html>

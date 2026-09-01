@@ -10,6 +10,7 @@ der Weg vom Ordner bis ins Register.
 from __future__ import annotations
 
 import dataclasses
+import errno
 import json
 from pathlib import Path
 
@@ -105,8 +106,8 @@ def test_a_licence_does_not_change_the_version(profile: Profile) -> None:
     plötzlich ein anderes: Sein Projekt meldete beim Öffnen einen geänderten
     Baustein, den niemand geometrisch geändert hat.
 
-    Die lokale Dateiprüfung benutzt den Fingerabdruck nicht als Identität;
-    Metadaten und Geometrie bleiben damit sauber getrennt.
+    Der lokale Dateiprüfer benutzt den Fingerabdruck nicht als Identität; auch
+    der Transport braucht deshalb keine geometrisch falsche neue Version.
     """
     ohne = _recipe(profile)
     mit = dataclasses.replace(ohne, license="CC0-1.0", author="Robert")
@@ -121,7 +122,8 @@ def test_licence_and_author_travel_in_the_file(profile: Profile) -> None:
     """Aus dem Hash heraus heißt nicht: aus der Datei heraus.
 
     Beide hängen **neben** den Daten wie der Bereichstest-Bericht — sie müssen
-    die Rundreise trotzdem überstehen, sonst verlöre der Empfänger sie.
+    die Rundreise trotzdem überstehen, sonst verlöre der Empfänger die
+    Rechteangaben.
     """
     made = dataclasses.replace(_recipe(profile), license="CC-BY-4.0", author="RS Digital")
 
@@ -149,8 +151,53 @@ def test_a_recipe_without_a_licence_is_not_an_error(profile: Profile) -> None:
     assert recipe.from_data(data).license == ""
 
 
+def test_imported_origin_travels_without_changing_the_recipe_version(profile: Profile) -> None:
+    """Ein Dateiimport bleibt fremd, ohne die Bauart des Rezepts zu ändern."""
+
+    made = _recipe(profile)
+    origin = recipe.ImportedOrigin(
+        source_sha256="b" * 64,
+        imported_at="2026-08-31T13:45:12Z",
+    )
+    imported = dataclasses.replace(made, imported_origin=origin)
+
+    assert recipe.fingerprint(imported) == recipe.fingerprint(made)
+    assert "imported_origin" not in recipe.to_data(imported)
+
+    data = recipe.file_data(imported)
+    assert data["imported_origin"] == dataclasses.asdict(origin)
+    assert recipe.from_data(data).imported_origin == origin
+    assert not any(
+        "path" in key.casefold() or "file" in key.casefold() for key in data["imported_origin"]
+    )
+
+
+def test_imported_origin_is_closed_and_strict(profile: Profile) -> None:
+    """Die Dateiquittung trägt ausschließlich Digest und UTC-Zeit."""
+
+    made = _recipe(profile)
+    origin = recipe.ImportedOrigin(
+        source_sha256="b" * 64,
+        imported_at="2026-08-31T13:45:12Z",
+    )
+    data = recipe.file_data(dataclasses.replace(made, imported_origin=origin))
+
+    for broken_origin in (
+        {"source_sha256": "B" * 64, "imported_at": origin.imported_at},
+        {"source_sha256": origin.source_sha256, "imported_at": "2026-8-31T1:2:3Z"},
+        {**data["imported_origin"], "path": "C:/privat/teil.json"},
+    ):
+        broken = dict(data)
+        broken["imported_origin"] = broken_origin
+        with pytest.raises((TypeError, ValueError)):
+            recipe.from_data(broken)
+
+    with pytest.raises(TypeError, match="imported_origin"):
+        dataclasses.replace(made, imported_origin={})  # type: ignore[arg-type]
+
+
 def test_an_older_recipe_file_still_opens(profile: Profile) -> None:
-    """Kein Formatsprung: Eine Datei von vor den beiden Feldern liest sich weiter.
+    """Kein Formatsprung: Eine Datei von vor den Zusatzfeldern liest sich weiter.
 
     ``FORMAT_VERSION`` bleibt deshalb auf 1 — zwei optionale Felder mit
     Vorgabewert machen keine alte Datei unlesbar, und die Checkliste in
@@ -159,11 +206,13 @@ def test_an_older_recipe_file_still_opens(profile: Profile) -> None:
     alt = recipe.file_data(_recipe(profile))
     alt.pop("license", None)
     alt.pop("author", None)
+    alt.pop("imported_origin", None)
 
     back = recipe.from_data(alt)
 
     assert back.license == ""
     assert back.author == ""
+    assert back.imported_origin is None
     assert back.format_version == recipe.FORMAT_VERSION
 
 
@@ -195,11 +244,12 @@ def test_capture_passes_the_licence_through(profile: Profile) -> None:
     assert made.author == "Robert", "capture hat den Autor nicht durchgereicht"
 
 
-def test_the_licence_list_is_the_source_for_the_file_check() -> None:
-    """Die Wertemenge steht im Kern, und die Dateiprüfung liest sie von hier.
+def test_the_licence_list_is_the_source_for_part_files() -> None:
+    """Die Wertemenge steht im Kern, und der lokale Dateiweg liest sie hier.
 
-    Führte die Prüfseite sie, hinge der Kern am Austauschformat — die falsche
-    Richtung. Alle drei erlauben Weitergabe und kommerzielle Nutzung.
+    Führte das Transportformat sie, hinge der Kern an seiner Außengrenze — die
+    falsche Richtung. Alle drei erlauben Weitergabe und kommerzielle Nutzung;
+    wer eine entsprechend lizenzierte Datei erhält, darf drucken und verkaufen.
     """
     assert recipe.RECIPE_LICENSES == ("CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
     assert all(kennung.startswith("CC") for kennung in recipe.RECIPE_LICENSES)
@@ -245,6 +295,218 @@ def test_saving_over_a_foreign_recipe_stops_instead_of_replacing(
     assert caught.value.values["recipe"] == made.name
     assert caught.value.suggestions, "Regel 17: auch diese Absage trägt einen Vorschlag"
     assert target.read_bytes() == before, "die vorhandene Datei bleibt unangetastet"
+
+
+def test_a_file_appearing_at_publication_time_is_never_replaced(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch im letzten Zeitfenster gewinnt die bereits vorhandene Kundendatei."""
+
+    made = _recipe(profile)
+    target = tmp_path / f"{made.name}.json"
+    original_link = recipe.os.link
+
+    def competing_publication(source: str | Path, destination: str | Path) -> None:
+        Path(destination).write_bytes(b"fremder vollstaendiger Stand")
+        original_link(source, destination)
+
+    monkeypatch.setattr(recipe.os, "link", competing_publication)
+
+    with pytest.raises(ValidationError):
+        recipe.save(made, tmp_path)
+
+    assert target.read_bytes() == b"fremder vollstaendiger Stand"
+    assert not tuple(tmp_path.glob(".*.tmp"))
+
+
+def test_a_partial_write_never_replaces_the_previous_recipe(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Abbruch mitten im Schreiben lässt nur die vollständige alte Datei sichtbar."""
+
+    made = _recipe(profile)
+    target = recipe.save(made, tmp_path)
+    before = target.read_bytes()
+    changed = dataclasses.replace(made, doc="neuer Stand")
+    original_write = recipe.os.write
+    calls = 0
+
+    def break_after_first_piece(descriptor: int, payload: bytes | memoryview) -> int:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            piece = bytes(payload[: max(1, len(payload) // 4)])
+            return original_write(descriptor, piece)
+        raise OSError("erzwungener Teilwrite")
+
+    monkeypatch.setattr(recipe.os, "write", break_after_first_piece)
+
+    with pytest.raises(OSError, match="Teilwrite"):
+        recipe.save(changed, tmp_path, overwrite=True)
+
+    assert target.read_bytes() == before
+    assert not tuple(tmp_path.glob(".*.tmp"))
+
+
+def test_saving_flushes_the_complete_recipe_before_publication(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Vor dem atomaren Veröffentlichen werden die vollständigen Bytes synchronisiert."""
+
+    original_fsync = recipe.os.fsync
+    synchronized: list[int] = []
+
+    def record(descriptor: int) -> None:
+        synchronized.append(descriptor)
+        original_fsync(descriptor)
+
+    monkeypatch.setattr(recipe.os, "fsync", record)
+
+    target = recipe.save(_recipe(profile), tmp_path)
+
+    assert target.exists()
+    assert synchronized
+
+
+def test_restart_removes_only_stale_owned_recipe_temporaries(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Start räumt nur alte reguläre Dateien im eigenen Namensraum."""
+
+    made = _recipe(profile)
+    recipe.save(made, tmp_path)
+    now = 2_000_000_000.0
+    old = now - recipe._STALE_TEMP_SECONDS - 1.0
+    stale = tmp_path / f"{recipe._TEMP_NAMESPACE}old-process.stale{recipe._TEMP_SUFFIX}"
+    fresh = tmp_path / f"{recipe._TEMP_NAMESPACE}other-process.fresh{recipe._TEMP_SUFFIX}"
+    foreign = tmp_path / f"{recipe._TEMP_NAMESPACE}foreign-owner{recipe._TEMP_SUFFIX}"
+    similar = tmp_path / f"{recipe._TEMP_NAMESPACE}similar{recipe._TEMP_SUFFIX}.backup"
+    stale.write_bytes(b"s")
+    fresh.write_bytes(b"fresh")
+    foreign.write_bytes(b"foreign-owner-unique")
+    similar.write_bytes(b"similar")
+    for path in (stale, foreign, similar):
+        recipe.os.utime(path, (old, old))
+    recipe.os.utime(fresh, (now, now))
+
+    symlink = tmp_path / f"{recipe._TEMP_NAMESPACE}linked{recipe._TEMP_SUFFIX}"
+    try:
+        symlink.symlink_to(stale)
+    except OSError:
+        symlink = None
+
+    foreign_size = foreign.lstat().st_size
+    monkeypatch.setattr(recipe.time, "time", lambda: now)
+    monkeypatch.setattr(
+        recipe,
+        "_owned_by_current_user",
+        lambda info: info.st_size != foreign_size,
+    )
+
+    loaded = recipe.load_all(tmp_path, PartRegistry(), Registry())
+
+    assert loaded.loaded == (made.name,)
+    assert not stale.exists()
+    assert fresh.exists(), "eine frische Tempdatei kann zu einem laufenden Prozess gehören"
+    assert foreign.exists(), "eine fremde Besitzerkennung verbietet das Löschen"
+    assert similar.exists(), "ähnliche Namen gehören nicht zum exklusiven Namensraum"
+    if symlink is not None:
+        assert symlink.is_symlink(), "Links werden nie als reguläre Tempdateien gelöscht"
+
+
+def test_restart_retries_a_failed_temporary_unlink(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein flüchtig gesperrtes Überbleibsel verschwindet noch beim selben Start."""
+
+    made = _recipe(profile)
+    recipe.save(made, tmp_path)
+    now = 2_000_000_000.0
+    stale = tmp_path / f"{recipe._TEMP_NAMESPACE}abandoned{recipe._TEMP_SUFFIX}"
+    stale.write_bytes(b"incomplete")
+    old = now - recipe._STALE_TEMP_SECONDS - 1.0
+    recipe.os.utime(stale, (old, old))
+    original_unlink = Path.unlink
+    attempts = 0
+
+    def fail_once(path: Path, *args: object, **kwargs: object) -> None:
+        nonlocal attempts
+        if path == stale:
+            attempts += 1
+            if attempts == 1:
+                raise PermissionError(errno.EACCES, "noch gesperrt", str(path))
+        original_unlink(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(recipe.time, "time", lambda: now)
+    monkeypatch.setattr(recipe, "_owned_by_current_user", lambda _info: True)
+    monkeypatch.setattr(Path, "unlink", fail_once)
+
+    loaded = recipe.load_all(tmp_path, PartRegistry(), Registry())
+
+    assert loaded.loaded == (made.name,)
+    assert attempts == 2
+    assert not stale.exists()
+
+
+@pytest.mark.parametrize(
+    "error_number",
+    sorted({errno.EINVAL, getattr(errno, "ENOTSUP", errno.EINVAL)}),
+)
+def test_directory_sync_tolerates_only_unsupported_errors_and_closes_the_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error_number: int,
+) -> None:
+    """Nicht unterstütztes Verzeichnis-fsync ist portabel, aber kein offenes Handle."""
+
+    descriptor = 73
+    closed: list[int] = []
+
+    def unsupported(_descriptor: int) -> None:
+        raise OSError(error_number, "nicht unterstützt")
+
+    monkeypatch.setattr(recipe.os, "name", "posix")
+    monkeypatch.setattr(recipe.os, "open", lambda *_args: descriptor)
+    monkeypatch.setattr(recipe.os, "fsync", unsupported)
+    monkeypatch.setattr(recipe.os, "close", closed.append)
+
+    recipe._sync_directory(tmp_path)
+
+    assert closed == [descriptor]
+
+
+def test_directory_sync_propagates_io_errors_and_closes_the_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein echter E/A-Fehler bleibt sichtbar und gibt das Handle trotzdem frei."""
+
+    descriptor = 79
+    closed: list[int] = []
+
+    def broken(_descriptor: int) -> None:
+        raise OSError(errno.EIO, "Plattenfehler")
+
+    monkeypatch.setattr(recipe.os, "name", "posix")
+    monkeypatch.setattr(recipe.os, "open", lambda *_args: descriptor)
+    monkeypatch.setattr(recipe.os, "fsync", broken)
+    monkeypatch.setattr(recipe.os, "close", closed.append)
+
+    with pytest.raises(OSError) as caught:
+        recipe._sync_directory(tmp_path)
+
+    assert caught.value.errno == errno.EIO
+    assert closed == [descriptor]
 
 
 # --- Die Auswertung (E5) ----------------------------------------------------------
@@ -415,6 +677,64 @@ def test_a_saved_recipe_loads_into_catalog_and_register(profile: Profile, tmp_pa
     assert spec.build_with_profile is not None, "das Profil des Kunden erreicht die Auswertung"
 
 
+def test_a_foreign_recipe_stays_foreign_after_restart(
+    profile: Profile,
+    tmp_path: Path,
+) -> None:
+    """Speichern und Neustart dürfen aus einer fremden Arbeitskopie keine eigene machen."""
+
+    origin = recipe.ImportedOrigin(
+        source_sha256="b" * 64,
+        imported_at="2026-08-31T13:45:12Z",
+    )
+    made = dataclasses.replace(_recipe(profile), imported_origin=origin)
+    recipe.save(made, tmp_path)
+    parts, registry = PartRegistry(), Registry()
+
+    loaded = recipe.load_all(tmp_path, parts, registry)
+
+    assert loaded.loaded == ("probe_halter",)
+    spec = parts.get("probe_halter")
+    assert spec.source == recipe.IMPORTED_SOURCE
+    assert not spec.own
+    assert spec.recipe_data is not None
+    assert spec.recipe_data["imported_origin"] == dataclasses.asdict(origin)
+
+
+def test_replacing_with_an_imported_recipe_marks_the_live_catalog_entry_foreign(
+    profile: Profile,
+    tmp_path: Path,
+) -> None:
+    """Direktes Einlesen wirkt sofort und nach dem Neustart gleich.
+
+    ``replace`` ist die atomare Grenze für Datei, Katalog und Operation. Wenn
+    sie eine Dateiherkunft nur auf die Platte schriebe, sähe dieselbe Sitzung
+    den Baustein fälschlich als eigenen.
+    """
+
+    made = dataclasses.replace(
+        _recipe(profile),
+        imported_origin=recipe.ImportedOrigin(
+            source_sha256="c" * 64,
+            imported_at="2026-08-31T14:15:16Z",
+        ),
+    )
+    parts, registry = PartRegistry(), Registry()
+
+    recipe.replace(made, parts, registry, tmp_path)
+
+    assert parts.get("probe_halter").source == recipe.IMPORTED_SOURCE
+    assert not parts.get("probe_halter").own
+
+
+def test_capture_always_creates_an_own_recipe(profile: Profile) -> None:
+    """Bewusstes Neuerfassen ist der Weg zurück zu einem eigenen Baustein."""
+
+    made = _recipe(profile)
+
+    assert made.imported_origin is None
+
+
 def test_a_broken_file_becomes_a_finding_not_a_crash(profile: Profile, tmp_path: Path) -> None:
     """Regel 17, dieselbe Haltung wie bei den ``.py``-Bausteinen: Eine kaputte
     Datei ist ein Befund mit Namen und Grund, der Rest des Katalogs lädt."""
@@ -428,6 +748,31 @@ def test_a_broken_file_becomes_a_finding_not_a_crash(profile: Profile, tmp_path:
     assert len(result.findings) == 1
     assert result.findings[0].code == "parts.recipe_failed"
     assert result.findings[0].values["file"] == "kaputt.json"
+
+
+def test_lone_utf16_surrogates_stop_every_recipe_entry_path(
+    profile: Profile,
+    tmp_path: Path,
+) -> None:
+    """Direktes Lesen, Reise und Nutzerordner teilen dieselbe UTF-8-Grenze."""
+
+    data = recipe.file_data(_recipe(profile))
+    data["document"]["scene"]["\ud800"] = "ungültig"
+    raw = json.dumps(data).encode("utf-8")
+
+    with pytest.raises(ValueError, match="unicode_scalar"):
+        recipe.from_data(data)
+    assert recipe.adopt(data, PartRegistry(), Registry())
+    assert recipe.adopt_payload(raw, "recipes/surrogat.json", PartRegistry(), Registry())
+
+    (tmp_path / "surrogat.json").write_bytes(raw)
+    loaded = recipe.load_all(tmp_path, PartRegistry(), Registry())
+    assert not loaded.loaded
+    assert len(loaded.findings) == 1
+
+    valid = recipe.file_data(_recipe(profile))
+    valid["title"] = "Baustein \U00020000"
+    assert recipe.from_data(valid).title == "Baustein \U00020000"
 
 
 def test_recipes_do_not_trigger_the_travel_warning(profile: Profile, tmp_path: Path) -> None:
@@ -483,7 +828,7 @@ def test_the_range_check_passes_a_healthy_recipe_and_keeps_the_hash(
     checked = recipe.range_check(made, profile, progress=lambda f, _t: seen.append(f))
 
     assert checked.range_report is not None and checked.range_report.passed
-    assert checked.range_report.checked == 3, "Minimum, Maximum und Vorgabe je Zahl"
+    assert checked.range_report.checked == 2, "Minimum und Maximum je Zahl"
     assert recipe.fingerprint(checked) == before
     assert seen and seen[-1] == 1.0, "der Fortschritt meldet sich bis zum Ende (§2.8)"
 
@@ -516,7 +861,7 @@ def test_a_breaking_corner_is_named_not_hidden(profile: Profile) -> None:
 
     report = checked.range_report
     assert report is not None and not report.passed
-    assert report.checked == 3
+    assert report.checked == 2
     assert any(entry.values.get("w") == 0.0 for entry in report.failures), (
         "die brechende Ecke muss ihre Werte nennen"
     )
@@ -1190,15 +1535,126 @@ def test_replace_rolls_back_when_the_disk_refuses(profile: Profile, tmp_path: Pa
     )
 
 
-def test_an_adopted_recipe_says_which_door_it_came_through(profile: Profile) -> None:
-    """Mitgereist und importiert sind zwei Herkünfte, nicht eine.
+def test_replace_preparation_failure_leaves_disk_and_registries_untouched(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Fehler im isolierten Aufbau erreicht weder Platte noch laufende Register."""
 
-    Beide Wege nehmen dasselbe :func:`adopt`, aber der Katalog schreibt eine
-    Zeile dazu: „kam mit einer Projektdatei und bleibt bei ihr". Für eine
-    einzeln importierte Datei wäre das eine **falsche** Herkunft — an genau der
-    Stelle, an der §32 eine wahre verlangt. Die Vorgabe bleibt der mitgereiste
-    Weg, damit sich für den bestehenden Aufrufer nichts ändert.
-    """
+    parts, registry = PartRegistry(), Registry()
+    made = _recipe(profile)
+    target = recipe.replace(made, parts, registry, tmp_path)
+    before = target.read_bytes()
+    previous_part = parts.get(made.name)
+    previous_operation = registry.get(part_ops.op_name(made.name))
+    changed = dataclasses.replace(made, doc="neuer Stand")
+    original_register = recipe.register
+
+    def register_then_fail(*args: object, **kwargs: object) -> None:
+        original_register(*args, **kwargs)  # type: ignore[arg-type]
+        raise RuntimeError("erzwungener Bindefehler")
+
+    def unexpected_publication(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("vor einer vollständigen Vorbereitung darf nichts veröffentlicht werden")
+
+    monkeypatch.setattr(recipe, "register", register_then_fail)
+    monkeypatch.setattr(recipe, "_publish_file", unexpected_publication)
+
+    with pytest.raises(RuntimeError, match="Bindefehler"):
+        recipe.replace(changed, parts, registry, tmp_path)
+
+    assert target.read_bytes() == before
+    assert parts.get(made.name) is previous_part
+    assert registry.get(part_ops.op_name(made.name)) is previous_operation
+    assert not tuple(tmp_path.glob(recipe._temporary_pattern()))
+
+
+def test_replace_rolls_forward_after_the_first_live_state_was_changed(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach dem Plattencommit führt auch eine Unterbrechung nur zum neuen Stand."""
+
+    parts, registry = PartRegistry(), Registry()
+    made = _recipe(profile)
+    target = recipe.replace(made, parts, registry, tmp_path)
+    previous_operation = registry.get(part_ops.op_name(made.name))
+    changed = dataclasses.replace(
+        made,
+        doc="neuer Stand",
+        exposed=(dataclasses.replace(made.exposed[0], default=40.0),),
+    )
+    original_replace_state = parts.replace_state
+    original_publish = recipe._publish_file
+    original_unlink = Path.unlink
+    state_changes = 0
+    publications = 0
+    unlinked: list[Path] = []
+
+    def replace_then_interrupt(prepared: PartRegistry) -> None:
+        nonlocal state_changes
+        state_changes += 1
+        original_replace_state(prepared)
+        if state_changes == 1:
+            raise RuntimeError("erzwungene Unterbrechung nach dem ersten Registertausch")
+
+    def count_publication(*args: object, **kwargs: object) -> None:
+        nonlocal publications
+        publications += 1
+        original_publish(*args, **kwargs)  # type: ignore[arg-type]
+
+    def record_unlink(path: Path, *args: object, **kwargs: object) -> None:
+        unlinked.append(path)
+        original_unlink(path, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(parts, "replace_state", replace_then_interrupt)
+    monkeypatch.setattr(recipe, "_publish_file", count_publication)
+    monkeypatch.setattr(Path, "unlink", record_unlink)
+
+    returned = recipe.replace(changed, parts, registry, tmp_path)
+
+    on_disk = json.loads(target.read_text(encoding="utf-8"))
+    current_part = parts.get(made.name)
+    current_operation = registry.get(part_ops.op_name(made.name))
+    assert on_disk["doc"] == changed.doc
+    assert on_disk["exposed"][0]["default"] == 40.0
+    assert current_part.version == recipe.fingerprint(changed)
+    assert current_operation is not previous_operation
+    assert current_operation.params().w == 40.0
+    assert as_mesh_data(current_part.fn(current_part.params()).mesh).volume == pytest.approx(
+        40.0 * 20.0 * 8.0
+    )
+    assert state_changes >= 2, "der vorbereitete Stand wird nach der Unterbrechung vollendet"
+    assert publications == 1, "der alte Stand wird nicht ein zweites Mal veröffentlicht"
+    assert target not in unlinked, "eine veröffentlichte Rezeptdatei wird nie zurückgelöscht"
+    assert returned == target
+
+
+def test_published_binding_does_not_hide_an_unrepairable_registry_error(
+    profile: Profile,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nur ein hergestellter Gesamtstand wird nach dem Plattencommit als Erfolg gemeldet."""
+
+    parts, registry = PartRegistry(), Registry()
+    made = _recipe(profile)
+
+    def always_fail(_prepared: Registry) -> None:
+        raise RuntimeError("Register bleibt unbrauchbar")
+
+    monkeypatch.setattr(registry, "replace_state", always_fail)
+
+    with pytest.raises(RuntimeError, match="Register bleibt unbrauchbar"):
+        recipe.replace(made, parts, registry, tmp_path)
+
+    assert (tmp_path / f"{made.name}.json").exists()
+
+
+def test_an_adopted_recipe_is_marked_as_travelled(profile: Profile) -> None:
+    """Ein Projektanhang bleibt von einem dauerhaften Dateiimport unterscheidbar."""
     from app.core.knowledge.parts.registry import PARTS
 
     try:
@@ -1207,12 +1663,6 @@ def test_an_adopted_recipe_says_which_door_it_came_through(profile: Profile) -> 
         assert recipe.adopt(recipe.file_data(made)) == []
         assert PARTS.get("probe_halter").source == recipe.TRAVELLED_SOURCE, (
             "ohne Angabe gilt der mitgereiste Weg"
-        )
-        _clean_globals("probe_halter")
-
-        assert recipe.adopt(recipe.file_data(made), catalog_source=recipe.IMPORTED_SOURCE) == []
-        assert PARTS.get("probe_halter").source == recipe.IMPORTED_SOURCE, (
-            "einzeln importiert ist nicht mitgereist"
         )
     finally:
         _clean_globals("probe_halter")

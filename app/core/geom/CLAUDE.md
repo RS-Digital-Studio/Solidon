@@ -72,10 +72,7 @@ das ganze Register.
 billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
 verstifteten Hälften, §22.3) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
-Materialtiefe und hält den Kleberhinweis als Operationsparameter fest; die
-beiden Verbinder-Bausteine werden vor einer Hintergrundsuche als
-unveränderlicher `ConnectorGeometrySnapshot` erfasst, nie während der
-Nahtbewertung aus dem globalen Register gelesen) ·
+Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py`
 
 **Messen und Schneiden**

@@ -42,7 +42,19 @@ from app.core.errors import (
     ExternalToolError,
     OperationCancelled,
 )
-from app.core.log import get_logger
+from app.core.http import (
+    HttpBoundaryError,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    deadline_after,
+    iter_limited,
+    read_limited,
+    response_url,
+    same_origin,
+    validate_http_url,
+)
+from app.core.json_boundary import loads as load_json
+from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import CancelToken
 from app.i18n import TranslatableText, _
 
@@ -65,11 +77,21 @@ TIMEOUT_SECONDS = 120.0
 #: schreibt im Chat, ein Werkzeugaufruf könne zwei Minuten kosten. Das Limit
 #: lag also genau auf dem Wert, vor dem die eigene Oberfläche warnt.
 #:
-#: Zehn Minuten, und die Begründung ist dieselbe wie bei ComfyUI: **Ein
-#: Zeitlimit gilt dem Hängen, nicht der Langsamkeit.** Auf Intel- und
-#: AMD-Grafik sind 7,8 Token je Sekunde gemessen worden; wer dort rechnet,
-#: soll ein Ergebnis bekommen und keine Absage.
+#: Zehn Minuten bleiben die technische Grenze des noch synchronen Transports.
+#: Die gemessenen 7,8 Token je Sekunde waren kein Grafiklauf, sondern Ollamas
+#: Rückfall auf den Prozessor. Für den vollständigen Solidon-Auftrag begann die
+#: Antwort dort erst nach rund 42 Minuten; dieser Weg ist damit nicht nur
+#: langsam, sondern im aktuellen Transport unbrauchbar. Die Probe sagt deshalb
+#: ausdrücklich, auf eine geeignete Grafikkarte oder einen gehosteten Zugang zu
+#: wechseln. Eine Stunde blockierbares Warten wäre kein ehrlicher Ersatz für
+#: einen wirklich abbrechbaren Transport.
 LOCAL_TIMEOUT_SECONDS = 600.0
+
+#: Selbst die größte erlaubte Modellausgabe ist wesentlich kleiner. Der
+#: Spielraum trägt Anbieter-Metadaten, ohne einem Fehlerproxy den Arbeitsspeicher
+#: zu überlassen.
+MAX_RESPONSE_BYTES: Final = 8 * 1024 * 1024
+MAX_ERROR_BYTES: Final = 64 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,19 +282,36 @@ def post_json(
     timeout: float = TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Der Vorgabe-Transport: ein POST, JSON hinein, JSON heraus."""
+    try:
+        address = validate_http_url(url, allow_http=True)
+    except ValueError as error:
+        raise BackendUnavailable() from error
+    if urllib.parse.urlsplit(address).scheme == "http" and headers:
+        raise BackendUnavailable()
+    deadline = deadline_after(timeout)
     body = json.dumps(payload).encode("utf-8")
     # Die Adresse kommt aus dem Backend, nie aus etwas, das das Modell gesagt hat.
     request = urllib.request.Request(
-        url, data=body, headers={"Content-Type": "application/json", **headers}
+        address, data=body, headers={"Content-Type": "application/json", **headers}
     )
     try:
-        with opener_for(url).open(request, timeout=timeout) as answer:
-            return _as_object(answer.read(), url)
+        with opener_for(address).open(request, timeout=timeout) as answer:
+            final = validate_http_url(response_url(answer, address), allow_http=True)
+            if not same_origin(address, final):
+                raise BackendUnavailable()
+            raw = read_limited(answer, limit=MAX_RESPONSE_BYTES, deadline=deadline)
+            return _as_object(raw, address)
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:500]
+        try:
+            raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
+            detail = redact_external(raw.decode("utf-8", errors="replace"))
+        except (ResponseDeadlineError, ResponseTooLargeError, ValueError):
+            detail = ""
+        finally:
+            error.close()
         raise BackendUnavailable(status=error.code, detail=detail) from error
     except urllib.error.URLError as error:
-        raise BackendUnavailable(detail=str(error.reason)) from error
+        raise BackendUnavailable(detail=redact_external(error.reason)) from error
     except TimeoutError as error:
         # **Und zwar getrennt von ``URLError``, denn urllib wickelt nur die
         # Hälfte ein.** Beim Verbindungsaufbau wird ein Zeitlimit zu einem
@@ -301,7 +340,11 @@ def post_json(
         # ``ConnectionError`` und nicht die eine Klasse: Abbruch,
         # verweigerte Annahme und geschlossene Gegenstelle sind für den
         # Kunden dieselbe Lage und verdienen denselben Satz.
-        raise BackendUnavailable(detail=str(error)) from error
+        raise BackendUnavailable(detail=redact_external(error)) from error
+    except ResponseTooLargeError as error:
+        raise BackendUnavailable() from error
+    except HttpBoundaryError as error:
+        raise BackendUnavailable() from error
 
 
 def _as_object(raw: bytes, url: str) -> dict[str, Any]:
@@ -322,7 +365,7 @@ def _as_object(raw: bytes, url: str) -> dict[str, Any]:
     """
     text = raw.decode("utf-8", errors="replace")
     try:
-        loaded = json.loads(text)
+        loaded = load_json(text, max_bytes=MAX_RESPONSE_BYTES)
     except ValueError as error:
         raise BackendAnswerUnreadable(url=url, excerpt=text) from error
     if not isinstance(loaded, dict):
@@ -482,9 +525,9 @@ class BackendAnswerUnreadable(ExternalToolError):
         self.provider = provider
         values: dict[str, Any] = {}
         if url:
-            values["url"] = url
+            values["url"] = redact_url(url)
         if excerpt:
-            values["answer"] = " ".join(excerpt.split())[: self.EXCERPT_CHARS]
+            values["answer"] = redact_external(excerpt, limit=self.EXCERPT_CHARS)
         if provider:
             values["provider"] = provider
         super().__init__(
@@ -872,7 +915,7 @@ def _arguments(value: Any) -> dict[str, Any]:
     """
     if isinstance(value, str):
         try:
-            value = json.loads(value)
+            value = load_json(value, max_bytes=MAX_RESPONSE_BYTES)
         except ValueError:
             _log.warning("tool arguments were neither object nor JSON text")
             return UNREADABLE_ARGUMENTS
@@ -892,8 +935,8 @@ def _arguments(value: Any) -> dict[str, Any]:
 #: Das lokale Vorgabemodell. Gewählt nach dem einzigen Kriterium, das hier
 #: zählt: Kommt ein strukturierter Werkzeugaufruf zurück oder Prosa?
 #:
-#: Gemessen wird das mit **allen** Werkzeugen, die der Agent anbietet — das
-#: sind die sechsundneunzig aus dem geladenen Register, rund 110 KB Schema,
+#: Gemessen wird das mit **allen** Werkzeugen, die der Agent anbietet — in der
+#: aktuellen Messung 106 aus dem geladenen Register, rund 156 KB Schema,
 #: und nicht die elf Zusatzwerkzeuge allein. Der Unterschied entscheidet die
 #: Wahl und hat sie einmal falsch entschieden: mit den damals sieben
 #: Zusatzschemata traf ``llama3.1:8b`` fünf von fünf, mit dem vollen Register
@@ -901,7 +944,7 @@ def _arguments(value: Any) -> dict[str, Any]:
 #: richtige Antwort auch dann — es schreibt sie als Fließtext hin, statt sie
 #: aufzurufen, und Ollama kann sie nicht auslesen.
 #:
-#: Mit dem vollen Register: ``qwen3:14b`` vier von fünf, ``llama3.1:8b`` zwei,
+#: Mit dem vollen Register: ``qwen3:14b`` fünf von fünf, ``llama3.1:8b`` zwei,
 #: ``qwen2.5-coder:14b`` keine. :func:`ollama_tool_check` und
 #: ``tools/check_local_model.py`` fahren die Messung nach.
 DEFAULT_OLLAMA_MODEL = "qwen3:14b"
@@ -930,9 +973,10 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: ====== ============= =========== =========
 #:
 #: Das volle Fenster ist dabei nicht nur richtiger, sondern **schneller** — ein
-#: Modell, das den Auftrag kennt, rät nicht herum. Es kostet Speicher: mit
-#: 32768 belegt ``qwen3:14b`` 14 GB und bleibt damit vollständig auf einer
-#: 16-GB-Karte. Wer ein größeres Modell fährt, zahlt hier zuerst.
+#: Modell, das den Auftrag kennt, rät nicht herum. Es kostet mehr Speicher als
+#: ein kleineres Fenster; im aktuellen RTX-4080-Lauf blieb ``qwen3:14b``
+#: vollständig auf der Grafikkarte. Wer ein größeres Modell fährt, zahlt hier
+#: zuerst.
 #:
 #: Die Reihe fuhr 84 Schemata. Am 31.08.2026 sind es mit 106 Werkzeugen
 #: **19 641 Token** für den kompakten Satz, den dieser Weg fährt
@@ -1215,10 +1259,10 @@ def _ran_on_gpu(answer: dict[str, Any]) -> bool | None:
     ``prompt_eval_count`` und ``prompt_eval_duration`` jeder Antwort bei; ihr
     Verhältnis ist die Einleserate, und die trennt Karte von Prozessor um
     Größenordnungen. Gemessen am 31.08.2026 auf derselben Maschine mit
-    denselben 19 641 Token: **2 025 Token je Sekunde** auf einer RTX 4080,
+    denselben 19 641 Token: kalt **1 504 Token je Sekunde** auf einer RTX 4080,
     **28** auf dem Prozessor, als Ollamas GPU-Erkennung in einen Watchdog
     lief. Die Marke von :data:`GPU_PROMPT_TOKENS_PER_SECOND` liegt mit 100
-    dazwischen und muss nicht genau treffen — zwischen 28 und 2 025 ist viel
+    dazwischen und muss nicht genau treffen — zwischen 28 und 1 504 ist viel
     Platz.
 
     ``None`` heißt „nicht zu sagen" und nicht „Prozessor": Eine Antwort ohne
@@ -1302,6 +1346,7 @@ OLLAMA_MIN_PARAMETERS: Final = 7.0
 #: in einem Arbeiter, nie im Oberflächen-Thread — das Limit begrenzt nur, wie
 #: lange der Arbeiter lebt.
 TAGS_TIMEOUT_SECONDS = 3.0
+MAX_TAGS_RESPONSE_BYTES: Final = 1024 * 1024
 
 Fetch = Callable[[str], dict[str, Any]]
 """``url -> answer``. Austauschbar, damit die Prüfung ohne Netz testbar ist."""
@@ -1310,9 +1355,15 @@ Fetch = Callable[[str], dict[str, Any]]
 def _get_json(url: str) -> dict[str, Any]:
     """Ein GET, JSON heraus — das Gegenstück zu :func:`post_json` für die
     Modell-Liste von Ollama."""
-    request = urllib.request.Request(url)
-    with opener_for(url).open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
-        return dict(json.loads(answer.read().decode("utf-8")))
+    address = validate_http_url(url, allow_http=True)
+    deadline = deadline_after(TAGS_TIMEOUT_SECONDS)
+    request = urllib.request.Request(address)
+    with opener_for(address).open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
+        final = validate_http_url(response_url(answer, address), allow_http=True)
+        if not same_origin(address, final):
+            raise ValueError("redirected model list")
+        raw = read_limited(answer, limit=MAX_TAGS_RESPONSE_BYTES, deadline=deadline)
+    return dict(load_json(raw, max_bytes=MAX_TAGS_RESPONSE_BYTES))
 
 
 def parse_parameter_count(text: str) -> float | None:
@@ -1345,8 +1396,8 @@ OLLAMA_SUGGESTIONS: Final = (
         "qwen3:14b",
         9.3,
         _(
-            "Bewährt: vier von fünf Werkzeugaufrufen, rund 15 Sekunden je Schritt. "
-            "Belegt 14 GB Grafikspeicher."
+            "Zweimal geprüft: jeweils fünf von fünf vollständigen Anweisungen "
+            "richtig; 11 bis 26 Sekunden je Anweisung (Median rund 17)."
         ),
     ),
     (
@@ -1391,27 +1442,42 @@ OLLAMA_SUGGESTIONS: Final = (
 #: im Chat aus, als arbeite es — genau deshalb gibt es
 #: ``tools/check_local_model.py``, und genau deshalb gehört sein Ergebnis in
 #: die Auswahl und nicht nur in einen Docstring.
-def known_model_note(name: str) -> TranslatableText | None:
-    """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes.
+def normalised_model_name(name: str) -> str:
+    """Der Vergleichsname einer Ollama-Modellfamilie.
+
+    ``:latest`` ist Ollamas Kennzeichnung für denselben unmarkierten Namen,
+    kein zweites installiertes Modell. Andere Kennzeichnungen bleiben
+    erhalten: ``qwen3:8b`` und ``qwen3:14b`` sind tatsächlich verschieden.
+    """
+    return name.strip().removesuffix(":latest")
+
+
+def known_model_suggestion(name: str) -> tuple[float, TranslatableText] | None:
+    """Größe und Satz zu einem Modellnamen, sonst ``None``.
 
     Verglichen wird ohne Kennzeichnung: Ollama führt dasselbe Modell als
     ``mistral-nemo`` und als ``mistral-nemo:latest``, und der Kunde hat es
     einmal installiert, nicht zweimal.
     """
 
-    def bare(entry: str) -> str:
-        return entry.removesuffix(":latest")
-
-    wanted = bare(name)
-    for entry, _gigabytes, note in OLLAMA_SUGGESTIONS:
-        if bare(entry) == wanted:
-            return note
+    wanted = normalised_model_name(name)
+    for entry, gigabytes, note in OLLAMA_SUGGESTIONS:
+        if normalised_model_name(entry) == wanted:
+            return gigabytes, note
     return None
+
+
+def known_model_note(name: str) -> TranslatableText | None:
+    """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes."""
+    suggestion = known_model_suggestion(name)
+    return suggestion[1] if suggestion is not None else None
 
 
 #: Ein Download von mehreren Gigabyte. Die Grenze ist großzügig, weil eine
 #: langsame Leitung sonst mitten im Modell aufgibt.
 PULL_TIMEOUT_SECONDS = 7200.0
+MAX_PULL_RESPONSE_BYTES: Final = 16 * 1024 * 1024
+MAX_PULL_LINE_BYTES: Final = 64 * 1024
 
 PullProgress = Callable[[str, float], None]
 """``schritt, anteil -> None``. Der Anteil ist 0…1, oder -1 für „unbekannt"."""
@@ -1500,16 +1566,21 @@ def pull_model(
     address = ollama_endpoint(url or _configured_ollama_url(), "/api/pull")
     body = json.dumps({"model": model, "stream": True}).encode("utf-8")
     _log.info("pulling ollama model %s", model)
+    deadline = deadline_after(PULL_TIMEOUT_SECONDS)
     try:
         # **Der Bau der Anfrage steht mit im ``try``.** ``Request()`` selbst
         # wirft einen ``ValueError``, sobald die Adresse kein Schema trägt, das
         # es kennt — gemessen an ``://kaputt``. Davor lag er eine Zeile
         # oberhalb, und dort fing ihn nichts.
+        address = validate_http_url(address, allow_http=True)
         request = urllib.request.Request(
             address, data=body, headers={"Content-Type": "application/json"}
         )
         with opener_for(address).open(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
-            for raw in answer:
+            final = validate_http_url(response_url(answer, address), allow_http=True)
+            if not same_origin(address, final):
+                raise ValueError("redirected model pull")
+            for raw in _pull_lines(answer, deadline):
                 if cancelled is not None and cancelled():
                     # Ollama räumt einen abgebrochenen Zug selbst auf und
                     # behält, was schon geladen ist — ein zweiter Versuch
@@ -1520,7 +1591,7 @@ def pull_model(
                 if not line:
                     continue
                 try:
-                    entry = dict(json.loads(line))
+                    entry = dict(load_json(line, max_bytes=MAX_PULL_LINE_BYTES))
                 except ValueError:
                     continue
                 if entry.get("error"):
@@ -1528,12 +1599,38 @@ def pull_model(
                 if progress is not None:
                     progress(str(entry.get("status", "")), _share(entry))
     except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")[:200]
+        try:
+            raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
+            detail = redact_external(raw.decode("utf-8", errors="replace"), limit=200)
+        except (ResponseDeadlineError, ResponseTooLargeError, ValueError):
+            detail = ""
+        finally:
+            error.close()
         _log.warning("pull of %s refused: %s", model, detail)
         return _("Ollama hat den Namen nicht angenommen.")
     except UNUSABLE_ADDRESS:
         return _("Ollama hat nicht geantwortet — läuft es noch?")
     return None
+
+
+def _pull_lines(answer: Any, deadline: float) -> Iterator[bytes]:
+    """Zerlegt Ollamas begrenzten Antwortstrom in ebenfalls begrenzte Zeilen."""
+    pending = b""
+    for chunk in iter_limited(
+        answer,
+        limit=MAX_PULL_RESPONSE_BYTES,
+        deadline=deadline,
+    ):
+        pending += chunk
+        while b"\n" in pending:
+            line, pending = pending.split(b"\n", 1)
+            if len(line) > MAX_PULL_LINE_BYTES:
+                raise ResponseTooLargeError(len(line), MAX_PULL_LINE_BYTES)
+            yield line
+        if len(pending) > MAX_PULL_LINE_BYTES:
+            raise ResponseTooLargeError(len(pending), MAX_PULL_LINE_BYTES)
+    if pending:
+        yield pending
 
 
 def _share(entry: dict[str, Any]) -> float:
@@ -1586,7 +1683,9 @@ def ollama_size_warning(
     return _(
         "Das lokale Modell hat weniger als 7 Milliarden Parameter — "
         "Werkzeugaufrufe scheitern damit erfahrungsgemäß. Bewährt hat sich "
-        "qwen3:14b; das braucht eine Grafikkarte mit 16 GB Speicher."
+        "qwen3:14b; in der Messung auf einer RTX 4080 lief es vollständig auf "
+        "der Grafikkarte. Ohne passende Grafikkarte fällt Ollama auf den "
+        "Prozessor zurück und wird erheblich langsamer."
     )
 
 
@@ -1594,18 +1693,23 @@ def local_model_expectation() -> TranslatableText:
     """Was ein lokales Modell hier wirklich leistet — gemessen, nicht geschätzt.
 
     Der Satz gehört an die Stelle, an der jemand Ollama einträgt. Ohne ihn
-    erlebt er das Ergebnis als Fehler der Anwendung: ein Zug, der zwei Minuten
-    braucht und dann das falsche Werkzeug ruft, sieht nach einem Fehler aus und
-    ist eine Eigenschaft des Modells.
+    erlebt er das Ergebnis als Fehler der Anwendung: Ein Rückfall auf den
+    Prozessor beginnt erst nach vielen Minuten zu antworten, während derselbe
+    Werkzeugweg auf einer geeigneten Grafikkarte in Sekunden fertig ist.
 
-    Die Zahlen stammen aus ``tools/check_local_model.py`` gegen die 88
+    Die Zahlen stammen aus ``tools/check_local_model.py`` gegen die 106
     Werkzeuge dieser Anwendung, nicht aus einer Bestenliste.
     """
     return _(
-        "Lokale Modelle sind langsamer und ungenauer als ein gehostetes: "
-        "qwen3:14b hat in der Messung drei von fünf Werkzeugaufrufen richtig "
-        "getroffen und für einen davon zwei Minuten gebraucht. Für kurze "
-        "Anweisungen reicht das; für lange Züge lohnt ein Schlüssel."
+        "qwen3:14b hat in zwei Messläufen jeweils fünf von fünf vollständigen "
+        "Anweisungen richtig ausgeführt: auf einer RTX 4080 in 11 bis 26 "
+        "Sekunden je Anweisung (Median rund 17), vollständig auf der "
+        "Grafikkarte. Der gemessene Rückfall auf den Prozessor erreichte nur "
+        "7,8 Token je Sekunde und brauchte rund 42 Minuten bis zum Beginn der "
+        "Antwort. Das überschreitet Solidons Zehn-Minuten-Grenze; ein "
+        "vollständiger Auftrag kann so nicht abgeschlossen werden. Solidon "
+        "zeigt den verwendeten Rechenweg an. Verwende eine geeignete "
+        "Grafikkarte oder einen Schlüssel für ein gehostetes Modell."
     )
 
 
@@ -1716,7 +1820,7 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
     ist es keine andere Geschwindigkeit, sondern eine andere Größenordnung:
     Gemessen auf einer Maschine mit Intel-Arc-Grafik, die Ollama nicht
     anspricht, 7,8 Token je Sekunde beim Einlesen — für den Systemprompt dieser
-    Anwendung einundfünfzig Minuten, **bevor** das erste Wort der Antwort
+    Anwendung zweiundvierzig Minuten, **bevor** das erste Wort der Antwort
     beginnt. Der Kunde sieht ein Fenster, das nichts tut, und hält es für einen
     Fehler; es ist eine Eigenschaft seiner Maschine, und die kann ihm niemand
     sagen außer uns.
@@ -1725,7 +1829,7 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
     einen kurzen Zug und keine Zeitnahme von außen. Gerechnet wird mit dem
     Einlesetempo und nicht mit dem Schreibtempo: Der Prompt ist das, was hier
     groß ist — die Antwort sind ein paar Dutzend Token, der Prompt sind knapp
-    vierundzwanzigtausend.
+    zwanzigtausend.
     """
     backend = OllamaBackend(model=model, transport=transport)
     if url is not None:
@@ -1759,7 +1863,7 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
     """Der Satz zur Messung — oder keiner, wenn es nichts zu sagen gibt.
 
     Gesagt wird nur, was der Kunde nicht selbst sehen kann, und mit der Zahl
-    dabei: „langsam" ist keine Auskunft, „einundfünfzig Minuten, bis die
+    dabei: „langsam" ist keine Auskunft, „zweiundvierzig Minuten, bis die
     Antwort beginnt" ist eine. Und der Vorschlag gehört dazu (Regel 17) — auf
     einem Rechner ohne nutzbare Karte hilft kein kleineres Modell über die
     Runden, sondern ein Schlüssel.
@@ -1779,10 +1883,11 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
         "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
         "gemessene {rate} Token je Sekunde beim Einlesen. Der Auftrag dieser "
         "Anwendung ist rund {tokens} Token lang, es dauert hier also etwa "
-        "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Ein kleineres "
-        "Modell ändert daran wenig; für zügige Antworten braucht es einen "
-        "Schlüssel für ein gehostetes Modell — alles außer dem Chat bleibt "
-        "ohne beides benutzbar."
+        "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Das "
+        "überschreitet Solidons Zehn-Minuten-Grenze; dieser vollständige "
+        "Auftrag kann so nicht abgeschlossen werden. Verwende eine geeignete "
+        "Grafikkarte oder einen Schlüssel für ein gehostetes Modell — alles "
+        "außer dem Chat bleibt ohne beides benutzbar."
     )
 
 

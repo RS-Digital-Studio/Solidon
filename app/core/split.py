@@ -21,13 +21,7 @@ from typing import Any
 
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import (
-    PIN_COUNT,
-    ConnectorGeometrySnapshot,
-    feature_side,
-    next_connector_index,
-    plan_pins,
-)
+from app.core.geom.pins import PIN_COUNT, feature_side, next_connector_index, plan_pins
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
@@ -94,7 +88,6 @@ def plan_split(
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> SplitPlan:
     """Sucht die Schnitte und macht Operationen daraus.
 
@@ -117,7 +110,6 @@ def plan_split(
         protect=protect,
         cancelled=cancelled,
         progress=progress,
-        connector_geometry=connector_geometry,
     )
     if cancelled is not None:
         cancelled.raise_if_cancelled()

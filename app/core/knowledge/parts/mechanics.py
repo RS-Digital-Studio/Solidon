@@ -20,7 +20,13 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
-from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
+from app.core.knowledge.parts.registry import (
+    FACE_GIVES_DIRECTION,
+    FeatureRequirement,
+    PartChange,
+    WallRequirement,
+    register_part,
+)
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
@@ -40,6 +46,20 @@ BEARING_SEAT_ADDED = PartChange(
     effect=(
         "Der Katalog kann jetzt eine passgenaue Lageraufnahme schneiden. Alte "
         "Projekte ändern sich nicht, weil sie den neuen Baustein nicht enthalten."
+    ),
+)
+
+DOWEL_DOVETAIL_PROFILE_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Der trapezförmige Schwalbenschwanz verlor bei der Umrechnung auf den "
+        "Nenn-Umkreis fast ein Drittel seiner druckbaren Querschnittstiefe."
+    ),
+    effect=(
+        "Der Schwalbenschwanz folgt jetzt dem Nenn-Umkreis mit einer gerundeten "
+        "Außenseite und einer formschlüssigen Sehne. Sein Umkreis bleibt gleich, "
+        "der kleinste Stift hält aber wieder zwei Extrusionsbahnen."
     ),
 )
 
@@ -128,6 +148,7 @@ class BearingSeatParams(BaseParams):
     subtractive=True,
     at_hole=True,
     features=["seat"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     doc=_(
         "Schneidet eine passende Tasche für ein Kugellager. Außenmaß und Breite "
         "kommen aus der Tabelle, die Passung aus dem eingestellten Material."
@@ -206,6 +227,10 @@ class SnapFitParams(BaseParams):
     group="mechanics",
     params=SnapFitParams,
     features=["arm", "hook"],
+    wall=WallRequirement.not_applicable(
+        "Federarm und auslaufender Anlaufkeil dürfen laut Parameterschema bewusst "
+        "unter der Profilgrenze liegen und werden an ihren benannten Maßen geprüft."
+    ),
     doc=_(
         "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
         "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
@@ -323,6 +348,10 @@ class LatchParams(BaseParams):
     group="mechanics",
     params=LatchParams,
     features=["ramp"],
+    wall=WallRequirement.not_applicable(
+        "Die Rastnase läuft funktionsbedingt spitz aus; als Aussparung ist sie zudem "
+        "ein abtragender Werkzeugkörper."
+    ),
     doc=_(
         "Nase zum Einrasten, mit Anlaufschräge nach oben und gerader "
         "Haltefläche nach unten — "
@@ -402,6 +431,10 @@ class HingeParams(BaseParams):
     group="mechanics",
     params=HingeParams,
     features=["hinge"],
+    wall=WallRequirement.not_applicable(
+        "Folie und Flügel dürfen laut Parameterschema bewusst unter der Profilgrenze "
+        "liegen und werden an ihren benannten Maßen geprüft."
+    ),
     lies_flat=True,
     doc=_(
         "Zwei Flügel, verbunden durch eine dünne Stelle. Die Schichten laufen quer "
@@ -493,8 +526,16 @@ class DowelParams(BaseParams):
     title=_("Passstift und Passbohrung"),
     group="mechanics",
     params=DowelParams,
-    version="2",
     features=["pin", "bore"],
+    wall=WallRequirement(
+        when="kind",
+        equals="bore",
+        reason="Die Bohrungsstellung ist ein abtragender Werkzeugkörper.",
+    ),
+    feature_requirements=(
+        FeatureRequirement("pin", when="kind", equals="pin"),
+        FeatureRequirement("bore", when="kind", equals="bore"),
+    ),
     doc=_(
         "Stift oder Bohrung als Paar, zum Zusammenstecken zweier Teile. Das Spiel "
         "kommt aus dem Materialprofil, damit "
@@ -514,6 +555,7 @@ class DowelParams(BaseParams):
             ),
         ),
         FACE_GIVES_DIRECTION,
+        DOWEL_DOVETAIL_PROFILE_FIXED,
     ],
 )
 def dowel(raw: BaseParams) -> PartResult:
@@ -585,16 +627,47 @@ def _profile(shape: str, diameter: float, length: float) -> MeshData:
         # √3/2-fache.
         return shapes.hexagon(diameter * math.sqrt(3.0) / 2.0, length)
     if shape == "dovetail":
-        # Die weiteste Ecke des Trapezes liegt auf (b/2, t/2) — der Umkreis
-        # ist also das √2-fache der breiten Seite.
-        return shapes.dovetail(diameter / math.sqrt(2.0), length)
+        return _rounded_dovetail(diameter, length)
     return shapes.cylinder(diameter, length)
+
+
+def _rounded_dovetail(diameter: float, length: float) -> MeshData:
+    """Ein gerundeter Schwalbenschwanz innerhalb seines Nenn-Umkreises.
+
+    Ein Trapez mit gleicher Breite und Tiefe kann in seinem Umkreis höchstens
+    ``diameter / √2`` stark sein. Bei der kleinsten Vorgabe waren das 0,707 mm
+    und damit weniger als zwei Extrusionsbahnen. Hier bleibt die große
+    Kreisbogen-Seite stehen; nur der rückwärtige 60-Grad-Bogen wird durch
+    seine Sehne ersetzt. Diese Sehne bildet den schmalen Einstieg, der Bogen
+    dahinter den Formschluss. Alle Punkte bleiben auf oder innerhalb des
+    unveränderten Nenn-Umkreises.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.deferred import trimesh
+
+    radius = diameter / 2.0
+    retained_arc = 5.0 * math.pi / 3.0
+    arc_steps = round(shapes.SEGMENTS * retained_arc / (2.0 * math.pi))
+    angles = [-math.pi / 3.0 + retained_arc * step / arc_steps for step in range(arc_steps + 1)]
+    outline = [(radius * math.cos(angle), radius * math.sin(angle)) for angle in angles]
+    return MeshData.of(trimesh.creation.extrude_polygon(Polygon(outline), height=length))
 
 
 #: Was eine 0,4er Düse als tragende Wand ablegen kann: zwei Außenwände. Ein
 #: Federarm darunter ist keiner — er ist eine Fahne, die beim ersten Einrasten
 #: abreißt.
 SNAP_MIN_ARM: Final = 0.8
+
+SNAP_CONNECTOR_FEATURES_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason="Der Haken war im Ergebnis benannt, aber nicht im Register deklariert.",
+    effect=(
+        "Arm und Haken sind jetzt ausschließlich für den Stift, die Rastkante "
+        "ausschließlich für die Tasche als Merkmale deklariert. Die Geometrie bleibt gleich."
+    ),
+)
 
 
 @op_params
@@ -648,8 +721,16 @@ class SnapConnectorParams(BaseParams):
     title=_("Schnappverbinder für eine Naht"),
     group="mechanics",
     params=SnapConnectorParams,
-    version="4",
-    features=["arm", "catch"],
+    features=["arm", "hook", "catch"],
+    wall=WallRequirement.not_applicable(
+        "Der Federarm ist ausdrücklich bis zu zwei Extrusionsbahnen dünn; die "
+        "Buchsenstellung ist ein abtragender Werkzeugkörper."
+    ),
+    feature_requirements=(
+        FeatureRequirement("arm", when="kind", equals="pin"),
+        FeatureRequirement("hook", when="kind", equals="pin"),
+        FeatureRequirement("catch", when="kind", equals="bore"),
+    ),
     doc=_(
         "Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu "
         "werden. Die Armstärke ist ein Zehntel der Länge; kürzer als 8 mm gibt es "
@@ -701,6 +782,7 @@ class SnapConnectorParams(BaseParams):
             reason=FACE_GIVES_DIRECTION.reason,
             effect=FACE_GIVES_DIRECTION.effect,
         ),
+        SNAP_CONNECTOR_FEATURES_FIXED,
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:
@@ -890,6 +972,7 @@ class HingeEyeParams(BaseParams):
     group="mechanics",
     params=HingeEyeParams,
     features=["eye"],
+    wall=WallRequirement.from_parameter("wall"),
     doc=_(
         "Eine Lasche mit Bohrung, die sich um einen Bolzen dreht. Zwei davon an "
         "zwei Teilen und ein Passstift dazwischen ergeben ein Scharnier, das "
@@ -972,6 +1055,16 @@ BARREL_HINGE_ADDED = PartChange(
     reason="Bolzenscharnier — das erste erklärt mehrteilige Teil (§24.3).",
 )
 
+BARREL_HINGE_CLEARANCE_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason="Die Augenwand wurde fälschlich vor dem Druckspalt bemessen.",
+    effect=(
+        "Der Außendurchmesser wächst jetzt zusätzlich um zweimal das gewählte Spiel. "
+        "Damit bleibt die angegebene Wandstärke auch um die bewegliche Bohrung erhalten."
+    ),
+)
+
 
 @op_params
 class BarrelHingeParams(BaseParams):
@@ -1029,6 +1122,7 @@ class BarrelHingeParams(BaseParams):
     # besteht aus zwei Teilen, und der Bereichstest verlangte einen.
     bodies=2,
     features=["hinge"],
+    wall=WallRequirement.from_parameter("wall"),
     doc=_(
         "Ein Scharnier, das aus dem Drucker schon beweglich kommt: zwei Laschen "
         "um einen mitgedruckten Bolzen, dazwischen der Druckspalt. Nichts "
@@ -1039,7 +1133,7 @@ class BarrelHingeParams(BaseParams):
         "schlackert. Er kommt aus dem kalibrierten Material — wer das Material "
         "wechselt, druckt ein Prüfstück, bevor er zwanzig Scharniere druckt."
     ),
-    changes=[BARREL_HINGE_ADDED],
+    changes=[BARREL_HINGE_ADDED, BARREL_HINGE_CLEARANCE_FIXED],
 )
 def barrel_hinge(raw: BaseParams) -> PartResult:
     """Zwei Laschen um einen mitgedruckten Bolzen, Achse parallel zur Fläche.
@@ -1067,8 +1161,11 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
     """
     params = cast(BarrelHingeParams, raw)
 
-    outer = params.pin + 2.0 * params.wall
     gap = max(params.play, BOOLEAN_OVERLAP)
+    # Die rechte Bohrung ist radial um ``gap`` weiter als der Bolzen. Der
+    # Außendurchmesser muss deshalb erst **danach** die zugesagte Wand tragen;
+    # andernfalls wird aus ``wall`` bei großem Spiel null oder ein Restkörper.
+    outer = params.pin + 2.0 * (gap + params.wall)
     # Die Lücke liegt in der Mitte: Jede Lasche bekommt die Hälfte der Breite
     # abzüglich des halben Spalts.
     half = (params.width - gap) / 2.0

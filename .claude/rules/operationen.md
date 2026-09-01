@@ -20,11 +20,8 @@ einzuhalten ist, steht unten unter „Sammelparameter" und wird von
 
 ## Vollständig oder gar nicht
 
-Keine gespeicherte Op ohne vollständigen Registervertrag: genau ein
-Registereintrag, ein Parameterschema — auch wenn es leer ist —, erzeugte
-Oberflächen, übersetzte Texte und ein Wirkungstest. Eine geometrieändernde Op
-braucht zusätzlich einen Geometrietest gegen einen analytischen Körper oder
-den Korpus. Die acht Schritte stehen als Checkliste in `AGENTS.md`; `/neue-op`
+Keine Op ohne Registereintrag, Parameterschema, Geometrietest und übersetzte
+Texte. Die acht Schritte stehen als Checkliste in `AGENTS.md`; `/neue-op`
 führt sie durch. Der Registereintrag braucht `name`, `title`, `category`,
 `params`, `reversible`, `consumes`/`produces`, `applies_to`, `deterministic`,
 `doc`, optional `shortcut`.
@@ -46,11 +43,8 @@ sagt, was er bewirkt — nicht, wie er heißt. Vorderseite des Dialogs: die zwei
 bis drei Werte, die man tatsächlich ändert. Alles Weitere hinter „Weitere
 Einstellungen" (§2.4).
 
-Geometrievergleiche verwenden ausschließlich die Rechentoleranzen aus §11.2.
-Fertigungsspiel, Passung und druckerabhängige Abstände verweisen ins
-Materialprofil (`auto:<material>`), nie auf eine lokale Zahl. Hauptmaße und
-wiederverwendete Nutzerwerte werden Projektparameter; einmalige Details,
-Schemavorgaben, Normtabellenwerte und algorithmische Konstanten nicht.
+Toleranzen verweisen ins Materialprofil (`auto:<material>`), nie als Zahl.
+Wo ein Projektparameter passt, steht keine Streuzahl.
 
 ### Sammelparameter (`kind` in `sketch`, `strokes`, `armature`)
 

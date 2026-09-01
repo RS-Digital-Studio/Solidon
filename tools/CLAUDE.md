@@ -61,7 +61,6 @@ mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
-`make_licence_notices.py` (setzt die vollständige Drittanbieter-Beilage aus eingecheckten Originaltexten zusammen) ·
 `make_video.py` · `make_showpiece.py` (das Schaustück der Website — ein
 Teil, das in einem Bild beantwortet, warum man das Programm haben will;
 gebaut über die Operations-API wie von einem Nutzer) ·
@@ -70,18 +69,42 @@ Viewport mit Licht und Schatten, Karten weggeschnitten — **nicht** über die
 flache Projektion, die für Katalogvorschauen reicht und für Qualität nicht) ·
 `stamp_assets.py` (**läuft als Letztes**, siehe unten)
 
+`site_nav.py` erzeugt die Wege aus einem sprachneutralen Pfadschema und liest
+ihre sichtbaren Texte aus dem Sprachkatalog. `make_manual.py` tut das auch für
+den ganzen Seiten- und PDF-Rahmen. Eine neue Sprache darf dort keine neue
+Tabellenzeile verlangen; ihr Katalog und das Pfadschema müssen genügen.
+
 **Bauen und Ausliefern**
 
 `bump_version.py` (die zwei Stellen, die die Version tragen, plus drei
-abgeleitete) · `make_installer.py` · `make_linux_packages.py` ·
+abgeleitete) · `make_installer.py` (baut lokal oder schreibt mit
+`--signing-handoff` den vollständigen Windows-App-Baum und alle festen
+Installer-Eingänge als sortierte relative Pfadliste samt SHA-256) ·
+`make_linux_packages.py` (verlangt für AppImage den
+bereits geprüften Laufzeitkern in `APPIMAGETOOL_RUNTIME_FILE`) ·
 `make_macos_package.py` · `make_download.py` · `sign_version.py` ·
 `build_licence_module.py` · `make_licence_keys.py` ·
+`asset_rights.py` (prüft `ASSET-RIGHTS.toml` vor Kundenbau und Website-Upload
+fail-closed: vollständiges Schema, nur beigefügte Dateinachweise, genau eine
+Rechtekette je ausgeliefertem Medium und kein `distribution_blocked`; schreibt
+nach PyInstaller einen Bytebeleg ins echte Kundenartefakt, den Windows-,
+Linux- und macOS-Paketierer erneut gegen Manifest, Spec, Prüflogik, Quellen
+und kopierte Medien prüfen) ·
+`make_sbom.py` (CycloneDX-Stückliste aus PyInstallers tatsächlicher Analyse,
+dem fertigen Zielpaket einschließlich jeder nativen Datei und der geprüften
+Lizenzfreigabeliste, nicht aus `pip freeze`) · `make_licence_notices.py`
+(menschenlesbare Beilage aus genau dieser Endartefakt-SBOM, Schema-2-Akte und
+fail-closed Releaseprüfung gegen Schema-1-Evidenz) ·
 `setup_activation_server.py` (privaten Startwert, Betreiberzugang und
 Datenbank vorbereiten) · `deploy_activation_server.py` (diese privaten Werte
 und die Endpunkte mit Sicherung ausliefern) · `licence_archive.py` (gemeinsame
 Dateisperre für Generator und Support-Oberfläche)
 
-**Website** `upload_website.py` · `make_stats_access.py`
+**Website** `upload_website.py` (schließt `website/teile/` als lokalen
+Projektquellordner vollständig aus; Bausteindateien werden ausschließlich
+lokal ausgetauscht und nie über die Website verteilt) · `make_stats_access.py` (schreibt den
+privaten Passwort-Hash ausschließlich nach `appdata/stats-access.php`, nie in
+den öffentlichen Website-Baum)
 
 **Übersetzen** `build_slice_core.py` (Ebenenschnitt und Konturverkettung der
 Schichtanalyse)

@@ -17,57 +17,121 @@ it into `website/version.json`.
 
 ## 0.3.0
 
+### Getting started and orientation
 
-### Getting started and the interface
+- Four guided introductions explain the main routes from a first design to a printable result.
+- The start screen now makes full use of smaller and narrower windows, with no clipped cards or hidden content.
+- Recent projects appear before the introductory tours, making them quicker to reach.
+- The start screen no longer moves the selection unexpectedly and is fully usable with mouse and keyboard.
+- The *New*, *Open* and *Examples* entries are more clearly organised and explain where they lead before opening.
+- Feedback and voluntary support are available directly from the start screen and work with the keyboard and assistive technologies.
+- Chat and report remain usable at the same time, even with a low window height.
+- The top toolbar remains visible with open projects and narrow windows instead of slipping out of the workspace.
+- A new drawing example leads directly into the sketch workflow and complements the existing example projects.
 
-- Four guided tours cover the main paths: adapt a model, construct one, generate one from text or an image, or sculpt freely. More examples remain available for going further.
-- The interface has been reorganised across windows, dialogs and toolbars. Clear spacing, consistent buttons and compact groups keep long settings and narrow windows usable.
-- Feedback and voluntary support appear as two clear cards on the start screen. They work with mouse and keyboard, respect reduced motion and explain what happens before opening an external page.
-- The print bed is translucent. Parts accidentally sitting just below it remain visible, while the grid and edge stay clear.
-- Print settings can be searched. The header shows the selected printer and the material actually in use instead of offering a second, conflicting selection there.
+### Interface and controls
 
-### Drawing and dimensions
+- Menus have clearly visible headings and consistently aligned icon columns.
+- The command overview aligns shortcuts and explanations cleanly, making long entries easier to scan.
+- Extensive dialogs use consistent columns and take advantage of wide windows with clear two-column views.
+- The former combined page for adhesion, retraction and filament is split into smaller, logically named settings areas.
+- All 56 print settings can be searched by their visible English labels.
+- Search also recognises 146 common slicer terms, including *perimeters* and *wall loops*.
+- Number fields respond reliably to arrow keys, step sizes and rounding without changing values unexpectedly.
+- Sliders behave consistently and remain precise even across fine value ranges.
+- Only the active tool keeps the accent colour; inactive controls recede visually.
+- Very short calculations run without a flickering indicator, medium ones show a wait cursor, and long ones add progress and cancellation.
+- Tool hints stay on one line where space allows and wrap in a controlled way in narrow windows.
+- Thumbnails in the object tree are large enough to recognise the actual shapes.
+- The filament list scrolls independently; *Add filament* and *Print values* remain reachable even with many spools.
+- Warnings and errors remain readable without conveying their meaning through text colour alone.
+- Disabled selection fields are clearly distinguishable from active selected fields.
 
-- A circle asks for its diameter rather than its radius. The value you enter is the one you can measure on the finished part.
-- Dimensions can be changed directly with a double click; number fields in the toolbars accept exact values without a trip through a large dialog.
-- Escape steps back through drawing in order: first the unfinished stroke, then the tool and only then the sketch. Redo also works while drawing.
-- Guidance names both ways to begin a sketch: draw your own outline or insert a ready-made primitive. Measurements finish with visible feedback.
+### Drawing and precise input
 
-### History and editing
+- Circles are entered by diameter, so an M3 hole can be created directly as 3.2 mm.
+- A diameter constraint remains an editable expression after solving, saving and reopening.
+- Dimensions can be edited directly with a double click, avoiding the previous lengthy selection path.
+- X, Y and Z position, angle and scale can be entered directly in the movement toolbar.
+- Exact input creates the same undoable action as moving with the mouse.
+- Multiple selected bodies use a shared centre for exact rotation and scaling.
+- Escape steps back by exactly one drawing level: current line, current tool, then the entire sketch.
+- Redo now also works while a sketch is open.
+- An empty sketch shows a clickable hint that leads directly to the rectangle tool.
+- The basic-shapes button is named after what one click does. The remaining shapes are behind the arrow beside it.
+- The section tool opens inside the body instead of in an empty view outside the model.
+- Front, side, top and opposite views snap reliably to all six axes.
+- The pull handle remains visible with a flat or angled camera and shows a useful measurement.
+- The measurement tool ends a measurement with visible feedback instead of apparently losing the result.
 
-- Several selected parts can be moved and rotated together. Rotation preserves their spacing, and the result is placed back on the print bed.
-- Consecutive movements are combined into one understandable action in the history. Related steps can be collapsed and undone together.
-- Downloaded and imported models can once again be cut and edited reliably. Protected or detected faces remain visibly marked without hiding their shape.
-- Sculpting stores every stroke in a session as one undoable step. Surface patterns report when a stroke misses the body instead of silently leaving loose geometry behind.
+### View, history and shape editing
 
-### Parts as files
+- Multiple selected bodies can be moved together.
+- Multiple selected bodies rotate around a shared centre while preserving their spacing.
+- After rotation, bodies can be placed neatly back on the print bed within the same action.
+- Consecutive movements of the same body are combined into one understandable history step.
+- Related actions appear as an expandable entry instead of overloading the history with individual lines.
+- One continuous user action can be completely reverted with a single Undo.
+- History entries show their type and a unique step number.
+- Downloaded and imported models can be cut immediately.
+- Protected faces are shown in turquoise with hatching, making them clear even without colour recognition.
+- Automatic and manual splitting account for protected visible faces when choosing the seam.
+- Selecting a report finding reliably goes to the affected location, body or matching history step.
+- When jumping to a finding, the camera frames the target instead of ending in a grey close-up.
+- Named faces and findings move with their body during arrangement and placement.
+- Brush modelling reports when strokes miss the model or produce no printable change.
 
-- Parts you create can be exported as local `.solidon-part` files and imported back into the catalogue. Import, export and undo all work through the interface.
-- A part file contains the editable steps, values, preview and provenance of the part. It does not execute bundled source code or contact an exchange service.
-- Imported parts remain identifiable as coming from elsewhere. A part of your own with the same name is not silently overwritten.
-- Part files can be associated with Solidon and opened from the file manager on Windows, macOS and Linux.
-- Pegboard hooks, living hinges and surface patterns now report unsuitable orientations or missing contact before a plausible-looking but unsuitable result goes unnoticed.
+### Custom parts and exchange files
 
-### Splitting and printing
+- Custom parts can be saved as local .solidon-part files and added back to the catalogue.
+- Part files can be opened, dragged in and imported through the operating system file association.
+- The file name and extension make it immediately clear that a file belongs to Solidon.
+- Import, sharing and the local library use complete interface text in all six languages.
+- Before saving, a custom part can be built from multiple editable steps and values.
+- Sharing offers a choice of unrestricted use, attribution, or attribution with share-alike terms.
+- When a custom part has been named locally, that name takes precedence over an imported name.
+- Origin and sharing terms remain traceable when exchanging a part.
+- Snap fits, hinge eyes, pegboard hooks and feet have stronger transitions without enclosed inner surfaces.
+- Catalogue cards retain their position and selected face when their previews finish loading.
 
-- Auto Split searches for stronger seams instead of favouring the thinnest place. Depending on the seam, it chooses pins, a dovetail, or tongue and groove to suit the available area.
-- Automatically created joints remain reproducible, and long searches can be cancelled without leaving a half-finished document state.
-- Multicolour and assembled parts can be viewed together and handled separately for printing. Their material and object references remain intact.
-- Print settings take material values from the spool actually selected. Search, help text and visible reasons for disabled actions lead to the right setting more quickly.
+### Splitting, printing and filament
 
-### Chat and 3D generation
+- Auto Split prefers load-bearing seams and avoids choosing the thinnest possible weak point.
+- The appropriate connector is chosen separately for each seam and stored as a concrete shape.
+- Notes about glued joints remain attached to the selected seam.
+- Auto Split responds reproducibly to changed requirements and can be cancelled during calculation.
+- Orientation search checks only genuinely distinct positions and stays within its intended time budget even for demanding bodies.
+- Large 3MF files are recognised and processed faster without changing the resulting file.
+- Material, fit and tolerances follow the filament spool actually selected or the occupied printer slot.
+- The header shows the material actually in use and no longer offers a second, conflicting material choice.
+- When disabled, *Save print file* explains that the file is created only during slicing.
+- Repairs already completed in the same workflow no longer reappear as open recommendations.
 
-- The path from text or image now runs through a dedicated Generate dialog into the same editable scene. Local setup installs ComfyUI and TripoSG at fixed, verifiable revisions.
-- Before the first call to a cloud model, Solidon shows which inputs and model data leave the computer. Local language and generation models remain clearly separated from them.
-- The chat explains its purpose, the current work step and the tool being used more clearly. The agent can handle repeated shape details together instead of needing each one explained separately.
+### Report, stability, platforms and languages
 
-### Report, stability and platforms
+- Similar report findings are grouped without losing their connection to affected bodies and locations.
+- Numbers and measurements in the report have complete labels instead of unexplained individual values.
+- If a repair cannot be completed, the unchanged original body is restored in full.
+- A closed imported mesh is no longer torn open by prematurely removing a problematic triangle.
+- Action buttons from the report no longer keep an already closed window in memory unnoticed.
+- Bundled parts and activation load at startup without blocking each other.
+- The 3D view closes before the window, helping Windows, Linux and macOS windows shut down more reliably.
+- Window frames and title bars adapt safely to each platform.
+- Standard buttons such as Open, Save and Cancel change language immediately without a restart.
+- Automatically created body and part names switch language correctly even after cached content has already been used.
+- Translations and report values are equally up to date in German, English, Spanish, French, Italian and Portuguese.
 
-- The report groups duplicate findings, labels measurements fully and takes you to the affected place when you select a warning. Action buttons remain directly available.
-- Automatic repairs run as one coherent step. If a repair cannot be completed, the original state remains intact and the message offers a practical next step.
-- Examples, bundled parts and activation load without blocking one another. The application releases its 3D view more reliably when closing.
-- Solidon opens its windows reliably on Windows, macOS and Linux. It adapts the title bar only where the system supports it and otherwise keeps the platform’s normal appearance.
-- German, English, Spanish, French, Italian and Portuguese interface text remains complete after a language change; standard buttons switch immediately too.
+### Chat and model support
+
+- Chat opens with a clear description of its purpose instead of an empty area or technical model terms.
+- Technical token counters have been removed from the normal customer interface.
+- The assistant recognises and groups identical shape details instead of treating every occurrence in isolation.
+- The Generate dialog turns text or an image into a model through local ComfyUI and brings it into the same editable scene.
+- The bundled TripoSG workflow creates a GLB that is then repaired, scaled and checked for printability automatically.
+- Local Ollama and local ComfyUI run one after the other so that they do not occupy the graphics card at the same time.
+- After an agent proposal or 3D generation, Solidon unloads local models and releases graphics memory.
+- Cancelling removes only the ComfyUI job started by Solidon; other jobs running there remain untouched.
+- Before the first use of a cloud model, Solidon clearly shows which content leaves the computer.
 
 ## 0.2.2
 

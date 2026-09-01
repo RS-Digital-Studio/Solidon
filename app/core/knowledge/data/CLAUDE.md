@@ -1,7 +1,7 @@
 # `data/` — die Wissensbasis
 
-Sieben TOML-Dateien und die Originaltexte der Drittanbieter-Lizenzen. **Hier
-stehen die Zahlen**, die im Code nichts zu suchen haben.
+Sechs TOML-Dateien. **Hier stehen die Zahlen**, die im Code nichts zu suchen
+haben.
 
 | Datei | Inhalt | Wer liest |
 |---|---|---|
@@ -11,8 +11,6 @@ stehen die Zahlen**, die im Code nichts zu suchen haben.
 | `standards.toml` | Normteilmaße (§24.2) | `standards.py` |
 | `rules.toml` | Die Regelsammlung des Agenten (§39) | `rules.py` |
 | `licences.toml` | Die Freigabeliste der Abhängigkeiten (§36) | `licences.py` |
-| `third_party_licenses.toml` | Manifest der tatsächlich ausgelieferten Laufzeitpakete | `licences.py`, `tools/make_licence_notices.py` |
-| `third_party_licenses/` | Inhaltstreue Lizenz- und Hinweistexte aus den Paketdistributionen | `tools/make_licence_notices.py` |
 
 ## Warum das keine Konstanten sind
 
@@ -27,6 +25,3 @@ im Baustein ein Fehler ist (Regel 7).
 - **`licences.toml`** ist die Freigabeliste. Eine neue Abhängigkeit wird
   **hier** eingetragen, bevor sie eingebaut wird. GPL kommt nicht hinein
   (Regel 15), `tests/test_licences.py` hält dagegen.
-- **`third_party_licenses.toml` und `third_party_licenses/`** bilden die
-  reproduzierbare Quelle für `THIRD-PARTY-NOTICES.md`. Jede Änderung wird mit
-  `python tools/make_licence_notices.py` erzeugt und mit `--check` geprüft.

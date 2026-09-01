@@ -13,6 +13,7 @@ Aufruf::
 from __future__ import annotations
 
 import html
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,7 +25,7 @@ SITE = "https://solidon3d.de"
 
 sys.path.insert(0, str(ROOT))
 
-from app.branding import APP_NAME, APP_VERSION  # noqa: E402
+from app.branding import APP_NAME  # noqa: E402
 from app.core import changes  # noqa: E402
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, language_name  # noqa: E402
 from app.i18n.catalog import available_languages, read_catalog  # noqa: E402
@@ -128,6 +129,30 @@ def path_for(language: str) -> Path:
     return WEBSITE / page_path(language)
 
 
+def published_version() -> str:
+    """Die auf der Website tatsächlich angebotene Fassung.
+
+    Der Quellbaum kann bereits die nächste Entwicklungsfassung tragen. Das
+    Badge „diese Version" gehört trotzdem zur veröffentlichten Fassung aus
+    ``version.json`` — erst der Release-Lauf setzt diese Datei um.
+    """
+    version_file = WEBSITE / "version.json"
+    try:
+        data = json.loads(version_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as problem:
+        raise RuntimeError(
+            "website/version.json ist nicht lesbar. Zuerst "
+            "„python tools/make_download.py …“ für die veröffentlichte Fassung ausführen."
+        ) from problem
+    version = data.get("version") if isinstance(data, dict) else None
+    if not isinstance(version, str) or not version.strip():
+        raise RuntimeError(
+            "website/version.json nennt keine Version. Zuerst "
+            "„python tools/make_download.py …“ für die veröffentlichte Fassung ausführen."
+        )
+    return version
+
+
 def address_for(language: str) -> str:
     """Die öffentliche Adresse einer Sprache."""
     return f"{SITE}/{page_path(language)}"
@@ -201,12 +226,12 @@ def _header(language: str, copy: Copy) -> str:
     )
 
 
-def _picker(entries: tuple[changes.Entry, ...], selected: str, copy: Copy) -> str:
+def _picker(entries: tuple[changes.Entry, ...], selected: str, published: str, copy: Copy) -> str:
     """Die Auswahl aller Fassungen, neueste zuerst."""
     options = []
     for entry in entries:
         label = entry.version
-        if entry.version == APP_VERSION:
+        if entry.version == published:
             label += f" — {copy.current}"
         active = " selected" if entry.version == selected else ""
         options.append(
@@ -229,7 +254,7 @@ def _summary(entry: changes.Entry, copy: Copy) -> str:
     return f"{changes_count} {changes_word} · {topics_count} {topics_word}"
 
 
-def _entry(entry: changes.Entry, selected: str, copy: Copy) -> str:
+def _entry(entry: changes.Entry, selected: str, published: str, copy: Copy) -> str:
     """Eine Version mit ihren kundennahen Gruppen und Punkten."""
     groups = []
     for index, group in enumerate(entry.groups, start=1):
@@ -245,7 +270,7 @@ def _entry(entry: changes.Entry, selected: str, copy: Copy) -> str:
     summary = _summary(entry, copy)
     badge = (
         f'<span class="release-badge">{html.escape(copy.current)}</span>'
-        if entry.version == APP_VERSION
+        if entry.version == published
         else ""
     )
     hidden = "" if entry.version == selected else " hidden"
@@ -265,19 +290,20 @@ def render_page(language: str) -> str:
     """Eine vollständige Sprachfassung als statisches HTML."""
     copy = copy_for(language)
     entries = changes.history(language)
-    selected = (
-        APP_VERSION
-        if any(entry.version == APP_VERSION for entry in entries)
-        else entries[0].version
-        if entries
-        else ""
-    )
+    published = published_version()
+    if not any(entry.version == published for entry in entries):
+        raise RuntimeError(
+            f"Die veröffentlichte Version {published} fehlt im Änderungsverlauf. "
+            "Ergänzen Sie sie in app/core/changes.py und erzeugen Sie die "
+            "Changelog-Seiten danach erneut."
+        )
+    selected = published
     cards = (
-        "".join(_entry(entry, selected, copy) for entry in entries)
+        "".join(_entry(entry, selected, published, copy) for entry in entries)
         if entries
         else f'<p class="release-empty">{html.escape(copy.empty)}</p>'
     )
-    picker = _picker(entries, selected, copy) if entries else ""
+    picker = _picker(entries, selected, published, copy) if entries else ""
     no_script = (
         "<noscript>"
         f'<p class="release-noscript">{html.escape(copy.no_script)}</p>'

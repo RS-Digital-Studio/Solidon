@@ -14,7 +14,10 @@ man sie, verbauen nicht.
 
 from __future__ import annotations
 
+import math
 from typing import cast
+
+import numpy as np
 
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
@@ -24,11 +27,14 @@ from app.core.knowledge.parts.build import bore, face, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MOUTH_AT_ORIGIN,
+    FeatureRequirement,
     PartChange,
+    WallRequirement,
     register_part,
 )
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 FIRST_RELEASE = PartChange(
@@ -221,6 +227,7 @@ class RibParams(BaseParams):
     group="structure",
     params=RibParams,
     features=["rib"],
+    wall=WallRequirement.from_parameter("wall"),
     doc=_(
         "Rippe mit schrägem Auslauf: Sie verstärkt eine Wand, ohne sie dicker zu "
         "machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst "
@@ -314,6 +321,11 @@ class CableGlandParams(BaseParams):
     params=CableGlandParams,
     subtractive=True,
     features=["bore", "relief"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
+    feature_requirements=(
+        FeatureRequirement("bore"),
+        FeatureRequirement("relief", when="strain_relief"),
+    ),
     doc=_(
         "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die "
         "zieht jeder Ruck am Kabel direkt an der Lötstelle."
@@ -473,6 +485,16 @@ CABLE_CLIP_ADDED = PartChange(
     reason="Kabelclip — die dünnste Gruppe des Katalogs war die meistgefragte.",
 )
 
+CABLE_CLIP_FACET_WALL_FIXED = PartChange(
+    version="13",
+    date="2026-09-01",
+    reason="Die polygonale Kreisannäherung unterschritt die zugesagte Bügelwand.",
+    effect=(
+        "Der Außendurchmesser wächst um die analytische Facettenkorrektur. "
+        "Kabelsitz, Spiel und Öffnung bleiben unverändert; die kleinste Wand hält ihr Nennmaß."
+    ),
+)
+
 
 @op_params
 class CableClipParams(BaseParams):
@@ -538,6 +560,7 @@ class CableClipParams(BaseParams):
     group="routing",
     params=CableClipParams,
     features=["seat"],
+    wall=WallRequirement.from_parameter("wall"),
     doc=_(
         "Ein Bügel, der auf eine Fläche kommt und ein Kabel hält. Die Öffnung ist "
         "enger als das Kabel: Man drückt es hinein, und es bleibt."
@@ -546,7 +569,7 @@ class CableClipParams(BaseParams):
         "Nicht für Kabel, die unter Zug stehen — dafür ist die Kabeldurchführung "
         "mit Zugentlastung da. Ein Clip führt, er hält nicht fest."
     ),
-    changes=[CABLE_CLIP_ADDED],
+    changes=[CABLE_CLIP_ADDED, CABLE_CLIP_FACET_WALL_FIXED],
 )
 def cable_clip(raw: BaseParams) -> PartResult:
     """Ein liegender C-Bügel auf einem Sockel.
@@ -561,7 +584,15 @@ def cable_clip(raw: BaseParams) -> PartResult:
     entry = standards.tube(params.size)
 
     inner = (params.diameter or entry.outer) + params.play
-    outer = inner + 2.0 * params.wall
+    # Gleich ausgerichtete 48-Ecke messen zwischen ihren parallelen Facetten
+    # nur ``wall * cos(pi / SEGMENTS)``. Die analytische Gegenkorrektur plus
+    # zwei Geometrietoleranzen und zwei Float32-Einheiten am Außenradius hält
+    # auch die größte Boolesche Repräsentation innerhalb des Nennmaßes.
+    float32_reserve = 2.0 * float(np.spacing(np.float32(inner / 2.0 + params.wall)))
+    faceted_wall = (params.wall + 2.0 * EPS_GEOM + float32_reserve) / math.cos(
+        math.pi / shapes.SEGMENTS
+    )
+    outer = inner + 2.0 * faceted_wall
     base = params.wall
     centre = base + inner / 2.0
 
@@ -648,6 +679,7 @@ class GussetParams(BaseParams):
     group="structure",
     params=GussetParams,
     features=["gusset"],
+    wall=WallRequirement.from_parameter("wall"),
     doc=_(
         "Dreieck in einer Innenecke: Es hält zwei Wände im rechten Winkel, wo sie "
         "sonst aufklappen. Der Klassiker gegen eine Ecke, die beim Anfassen federt."

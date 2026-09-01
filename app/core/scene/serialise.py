@@ -51,6 +51,28 @@ from app.core.types import (
 from app.i18n import TranslatableText, _
 
 
+def has_lone_surrogate(value: object) -> bool:
+    """Findet UTF-16-Ersatzhälften iterativ in Werten und Schlüsseln.
+
+    Python nimmt einzelne ``\\ud800``-Escapes beim JSON-Lesen an, obwohl sie
+    kein Unicode-Skalar und nicht als UTF-8 speicherbar sind. Die iterative
+    Prüfung bleibt auch bei absichtlich tiefer Fremdstruktur ohne Rekursion.
+    """
+
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, str):
+            if any(0xD800 <= ord(character) <= 0xDFFF for character in current):
+                return True
+        elif isinstance(current, dict):
+            pending.extend(current.keys())
+            pending.extend(current.values())
+        elif isinstance(current, list | tuple):
+            pending.extend(current)
+    return False
+
+
 def _without_none(data: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in data.items() if value is not None}
 

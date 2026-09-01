@@ -26,6 +26,7 @@ entweder die Neugierigen oder die Dauernutzer.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -45,6 +46,7 @@ from app.branding import (
     PROJECT_SUFFIX,
     WEBSITE_URL,
 )
+from tools import asset_rights
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
@@ -72,6 +74,11 @@ MIME_FILE = PACKAGING / f"{APP_ID}.xml"
 #: Projektdatei ist ein ZIP (§16.1), und das erkennt shared-mime-info am
 #: Inhalt.
 MIME_TYPE = f"application/x-{DISTRIBUTION_NAME}-project"
+
+#: Der AppImage-Laufzeitkern wird Bestandteil der Kundendatei. Der Wrapper
+#: verlangt deshalb eine bereits geprüfte, feste Datei, statt appimagetool
+#: während des Baus den jeweils neuesten Stand aus dem Netz holen zu lassen.
+APPIMAGE_RUNTIME_ENV = "APPIMAGETOOL_RUNTIME_FILE"
 
 #: Wie der Dateimanager den Typ nennt. Der englische Text steht als
 #: ``<comment>`` ohne Sprache und ist zugleich der Rückfall für jede Sprache,
@@ -728,6 +735,15 @@ def build_appimage() -> int:
         print("appimagetool nicht gefunden — von appimage.github.io holen oder auf den PATH legen.")
         return 1
 
+    runtime_value = os.environ.get(APPIMAGE_RUNTIME_ENV, "").strip()
+    runtime = Path(runtime_value).expanduser() if runtime_value else None
+    if runtime is None or not runtime.is_file():
+        print(
+            f"{APPIMAGE_RUNTIME_ENV} zeigt auf keinen geprüften AppImage-Laufzeitkern — "
+            "feste Laufzeitdatei laden, SHA-256 prüfen und den absoluten Pfad setzen."
+        )
+        return 1
+
     appdir = OUTPUT_DIR / f"{APP_NAME}.AppDir"
     if appdir.exists():
         shutil.rmtree(appdir)
@@ -751,7 +767,10 @@ def build_appimage() -> int:
     run.chmod(0o755)
 
     target = OUTPUT_DIR / f"{APP_NAME}-{APP_VERSION}-x86_64.AppImage"
-    completed = subprocess.run([tool, str(appdir), str(target)], check=False)
+    completed = subprocess.run(
+        [tool, "--runtime-file", str(runtime.resolve()), str(appdir), str(target)],
+        check=False,
+    )
     if completed.returncode:
         print("appimagetool ist gescheitert — die Ausgabe darüber sagt, woran.")
         return completed.returncode
@@ -830,6 +849,11 @@ def main() -> int:
         print(
             f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/{DISTRIBUTION_NAME}.spec"
         )
+        return 1
+    try:
+        asset_rights.require_customer_artifact_cleared(SOURCE_DIR, "linux")
+    except RuntimeError as problem:
+        print(problem)
         return 1
 
     chosen = arguments.tarball or arguments.appimage or arguments.flatpak

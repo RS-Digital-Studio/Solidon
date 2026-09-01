@@ -167,6 +167,7 @@ def test_php_issues_one_idempotent_device_certificate(
 
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
     database = tmp_path / "activation.sqlite"
     port = _free_port()
     environment = os.environ.copy()
@@ -307,6 +308,7 @@ def test_health_check_never_creates_a_missing_database(tmp_path: Path) -> None:
     """Die öffentliche Bereitschaftsprobe verändert keinen Serverzustand."""
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
     database = tmp_path / "missing.sqlite"
     port = _free_port()
     environment = os.environ.copy()
@@ -365,10 +367,12 @@ def test_private_operator_path_manages_one_licence_and_records_every_change(
 
     seed_file = tmp_path / "activation.seed"
     seed_file.write_text(ACTIVATION_SEED.hex(), encoding="ascii")
+    seed_file.chmod(0o600)
     database = tmp_path / "activation.sqlite"
     token_file = tmp_path / "operator.token"
     token = "ab" * 32
     token_file.write_text(token + "\n", encoding="ascii")
+    token_file.chmod(0o600)
     port = _free_port()
     environment = os.environ.copy()
     environment.update(

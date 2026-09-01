@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
+from datetime import date
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, Qt, Signal
+from PySide6.QtCore import QDate, QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QWidget
 
@@ -32,7 +33,7 @@ from app.core.units import (
     from_mm,
     to_mm,
 )
-from app.i18n import TranslatableText, _, tr
+from app.i18n import TranslatableText, _, get_language, tr
 
 # Die Zuordnung Kategorie → Menü (MENU_GROUPS, group_title) lebt seit der
 # Agent-Vertiefung (4.3) im Register: neben Leiste und Kontextmenü braucht sie
@@ -772,6 +773,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "chain": _("Kette"),
     "changes": _("Änderungen"),
     "character": _("Zeichen"),
+    "check": _("Prüfung"),
     "choice": _("Wahl"),
     "choices": _("Auswahl"),
     "checked": _("Geprüft"),
@@ -795,6 +797,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "detail": _("Einzelheit"),
     "edge": _("Kante"),
     "edges": _("Kanten"),
+    "entry": _("Eintrag"),
     "entries": _("Einträge"),
     "estimated": _("Geschätzt"),
     "expected": _("Erwartet"),
@@ -913,6 +916,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "status": _("Zustand"),
     "strokes": _("Striche"),
     "suffix": _("Endung"),
+    "suggested_name": _("Freier Name"),
     "support": _("Stützen"),
     "supported": _("Unterstützt"),
     "target": _("Ziel"),
@@ -1415,6 +1419,22 @@ def feature_label(feature_id: FeatureId, feature: Feature) -> str:
     return f"{name} · {measure}" if measure else name
 
 
+def calendar_date(value: date | None) -> str:
+    """Ein Kalendertag mit ausgeschriebenem Jahr in der Anzeigesprache."""
+    if value is None:
+        return ""
+    # ``QLocale()`` folgt der Prozesssprache. Solidon kann seine Sprache aber
+    # im laufenden Prozess wechseln; dann bliebe ein ausgeschriebener Monat
+    # sonst deutsch in einem spanischen Dialog stehen.
+    locale = QLocale(get_language())
+    pattern = locale.dateFormat(QLocale.FormatType.LongFormat)
+    # Der Wochentag macht aus „bis mindestens 31. Oktober“ einen schwer
+    # lesbaren Satz. Reihenfolge, Monatsname und Bindewörter bleiben Sache der
+    # Sprache; nur ``dddd`` samt anschließender Trennung fällt weg.
+    without_weekday = pattern.replace("dddd", "").lstrip(" ,")
+    return locale.toString(QDate(value.year, value.month, value.day), without_weekday)
+
+
 def deadline_date(state: Activation) -> str:
     """Der Stichtag der Demo, wie ihn der Nutzer liest.
 
@@ -1423,7 +1443,7 @@ def deadline_date(state: Activation) -> str:
     abgelaufene Demo verabschiedet. Fünf Formulierungen desselben Datums
     lesen sich wie fünf verschiedene Fristen.
     """
-    return state.deadline.strftime("%d.%m.%Y") if state.deadline is not None else ""
+    return calendar_date(state.deadline)
 
 
 def demo_line(state: Activation) -> str:

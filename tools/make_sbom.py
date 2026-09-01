@@ -1,0 +1,877 @@
+r"""Erzeugt die CycloneDX-Stückliste des ausgelieferten Laufzeitbaums (§37.3).
+
+Die Entwicklungsumgebung ist absichtlich **nicht** die Quelle. Die
+PyInstaller-Spec übergibt nach ihrer Analyse die tatsächlich aufgenommenen
+Importpakete. Nur Distributionen, die zugleich zu Solidons Laufzeitbaum
+gehören und im Analyseergebnis vorkommen, erscheinen im Kundenartefakt.
+
+Aufruf::
+
+    .venv\Scripts\python.exe tools/make_sbom.py
+
+Ohne PyInstaller-Analyse erzeugt der Aufruf eine konservative Vorschau der
+deklarierten Laufzeitmenge. Sie ist ausdrücklich kein Kundenartefakt.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import platform
+import re
+import ssl
+import sys
+import sysconfig
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass
+from importlib import metadata
+from pathlib import Path
+from typing import Any, Final, cast
+from urllib.parse import quote
+
+from packaging.markers import default_environment
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+
+from app.branding import APP_NAME, APP_VERSION, DISTRIBUTION_NAME
+from app.core.knowledge import licences
+
+ROOT: Final = Path(__file__).resolve().parent.parent
+OUTPUT: Final = ROOT / "build" / "Solidon3D.cdx.json"
+RUNTIME_EXTRAS: Final = licences.RUNTIME_EXTRAS
+SPDX_ALIASES: Final = {"LGPL-3.0": "LGPL-3.0-only"}
+NON_SPDX_LICENCES: Final = {
+    "PSF-based",
+    "Microsoft Visual Studio Runtime license",
+}
+
+DistributionLookup = Callable[[str], metadata.Distribution]
+
+
+@dataclass(frozen=True, slots=True)
+class RuntimeGraph:
+    """Aufgelöste Laufzeitpakete und ihre direkten Abhängigkeiten."""
+
+    distributions: dict[str, metadata.Distribution]
+    edges: dict[str, set[str]]
+
+
+@dataclass(frozen=True, slots=True)
+class NativeComponent:
+    """Eine native Hauptbibliothek, die eine Python-Distribution mitbringt."""
+
+    owner: str
+    name: str
+    slug: str
+    licence: str
+    website: str
+
+
+@dataclass(frozen=True, slots=True)
+class ArtifactFile:
+    """Eine tatsächlich im fertigen Kundenartefakt liegende native Datei."""
+
+    path: str
+    owner: str
+    version: str
+
+
+NATIVE_COMPONENTS: Final = (
+    NativeComponent(
+        "pyside6-essentials",
+        "Qt",
+        "qt",
+        "LGPL-3.0-only",
+        "https://doc.qt.io/qt-6/licensing.html",
+    ),
+    NativeComponent(
+        "cadquery-ocp-novtk",
+        "Open CASCADE Technology",
+        "opencascade-technology",
+        "LGPL-2.1-only WITH OCCT-exception-1.0",
+        "https://dev.opencascade.org/doc/overview/html/occt_public_license.html",
+    ),
+    NativeComponent(
+        "shapely",
+        "GEOS",
+        "geos",
+        "LGPL-2.1-or-later",
+        "https://libgeos.org/",
+    ),
+    NativeComponent(
+        "vtk",
+        "VTK native libraries",
+        "vtk-native",
+        "BSD-3-Clause",
+        "https://docs.vtk.org/en/latest/about.html",
+    ),
+)
+
+NATIVE_MAGIC: Final = {
+    b"MZ\x90\x00",
+    b"\x7fELF",
+    b"\xfe\xed\xfa\xce",
+    b"\xce\xfa\xed\xfe",
+    b"\xfe\xed\xfa\xcf",
+    b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+    b"\xbe\xba\xfe\xca",
+    b"\xca\xfe\xba\xbf",
+    b"\xbf\xba\xfe\xca",
+}
+
+
+def _applies(
+    requirement: Requirement,
+    *,
+    environment: Mapping[str, str],
+    active_extras: Iterable[str],
+) -> bool:
+    """Ob eine Anforderung für Zielplattform und gewählte Extras gilt."""
+    if requirement.marker is None:
+        return True
+    candidates = {"", *active_extras}
+    return any(
+        requirement.marker.evaluate({**environment, "extra": extra}) for extra in sorted(candidates)
+    )
+
+
+def runtime_graph(
+    *,
+    distribution: DistributionLookup = metadata.distribution,
+    extras: Iterable[str] = RUNTIME_EXTRAS,
+    environment: Mapping[str, str] | None = None,
+) -> RuntimeGraph:
+    """Löst die transitive Laufzeitmenge für genau eine Build-Umgebung auf.
+
+    Fehlt ein Paket, wird nicht mit einer unvollständigen Stückliste
+    weitergebaut. Die Meldung nennt den Weg zurück zur vollständigen Umgebung.
+    """
+    target = dict(cast(Mapping[str, str], default_environment()))
+    if environment is not None:
+        target.update(environment)
+    root = canonicalize_name(DISTRIBUTION_NAME)
+    requested_extras: dict[str, set[str]] = {root: set(extras)}
+    requirements: dict[str, dict[str, Requirement]] = {root: {}}
+    processed: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
+    found: dict[str, metadata.Distribution] = {}
+    edges: dict[str, set[str]] = {}
+    pending = [root]
+
+    while pending:
+        name = pending.pop(0)
+        active = frozenset(requested_extras.get(name, set()))
+        declared = frozenset(requirements.get(name, {}))
+        state = (active, declared)
+        if processed.get(name) == state:
+            continue
+        try:
+            package = distribution(name)
+        except (metadata.PackageNotFoundError, KeyError) as problem:
+            raise RuntimeError(
+                f"Laufzeitpaket {name!r} fehlt. Installieren Sie "
+                '".[geom,ui,agent,brep]" gegen constraints.txt und erzeugen '
+                "Sie die Stückliste erneut."
+            ) from problem
+
+        for requirement in requirements.get(name, {}).values():
+            if requirement.specifier and not requirement.specifier.contains(
+                package.version, prereleases=True
+            ):
+                raise RuntimeError(
+                    f"Laufzeitpaket {name!r} ist als {package.version} installiert, "
+                    f"erwartet wird {requirement.specifier}. Stellen Sie die Umgebung "
+                    "mit constraints.txt wieder her und erzeugen Sie die Stückliste erneut."
+                )
+
+        processed[name] = state
+        edges.setdefault(name, set())
+        if name != root:
+            found[name] = package
+
+        for raw in package.requires or ():
+            requirement = Requirement(raw)
+            if not _applies(requirement, environment=target, active_extras=active):
+                continue
+            child = canonicalize_name(requirement.name)
+            edges[name].add(child)
+            before = frozenset(requested_extras.get(child, set()))
+            requested_extras.setdefault(child, set()).update(requirement.extras)
+            child_requirements = requirements.setdefault(child, {})
+            requirement_key = str(requirement)
+            new_requirement = requirement_key not in child_requirements
+            child_requirements[requirement_key] = requirement
+            after = frozenset(requested_extras[child])
+            if child not in processed or before != after or new_requirement:
+                pending.append(child)
+
+    return RuntimeGraph(found, edges)
+
+
+def distributions_for_analysis(
+    entries: Iterable[tuple[object, ...]],
+    *,
+    package_map: Mapping[str, Iterable[str]] | None = None,
+) -> set[str]:
+    """Ordnet PyInstallers tatsächlich aufgenommene Einträge Distributionen zu.
+
+    Der erste Teil eines PYMODULE-/BINARY-/DATA-Zielnamens ist der importierte
+    Paketstamm. ``packages_distributions()`` ist dafür die installierte
+    Rückwärtszuordnung; damit werden auch Fälle wie ``PIL`` → ``Pillow`` und
+    ``OCP`` → ``cadquery-ocp-novtk`` richtig erfasst.
+    """
+    owners = package_map or metadata.packages_distributions()
+    normalised = {name.casefold(): tuple(values) for name, values in owners.items()}
+    found: set[str] = set()
+    for entry in entries:
+        if not entry:
+            continue
+        target = str(entry[0]).replace("\\", "/")
+        root = target.split("/", 1)[0].split(".", 1)[0]
+        for package in normalised.get(root.casefold(), ()):
+            found.add(canonicalize_name(package))
+    return found
+
+
+def _artifact_relative(path: Path, root: Path) -> str:
+    """Stabiler Vorwärtsschrägstrich-Pfad innerhalb des Kundenartefakts."""
+    return path.relative_to(root).as_posix()
+
+
+def _is_native_binary(path: Path) -> bool:
+    """Erkennt PE, ELF und Mach-O am Inhalt statt an Plattform-Endungen."""
+    try:
+        with path.open("rb") as stream:
+            magic = stream.read(4)
+    except OSError:
+        return False
+    return magic[:2] == b"MZ" or magic in NATIVE_MAGIC
+
+
+def _package_root(relative: str) -> str:
+    """Importwurzel hinter PyInstallers plattformspezifischem Paketrahmen."""
+    parts = relative.split("/")
+    if parts and parts[0] == "_internal":
+        parts = parts[1:]
+    elif len(parts) >= 3 and tuple(parts[:2]) in {
+        ("Contents", "Frameworks"),
+        ("Contents", "MacOS"),
+    }:
+        parts = parts[2:]
+    if not parts:
+        return ""
+    root = parts[0]
+    if root.casefold().endswith(".libs"):
+        root = root[:-5]
+    return root.split(".", 1)[0]
+
+
+def _runtime_owner(relative: str) -> str:
+    """Besitzer für Laufzeitdateien außerhalb eines Importpakets."""
+    name = Path(relative).name.casefold()
+    if name.casefold() in {APP_NAME.casefold(), f"{APP_NAME.casefold()}.exe"}:
+        return "pyinstaller-bootloader"
+    if "python.framework/" in relative.casefold():
+        return "cpython"
+    if any(
+        part.casefold().startswith("qt") and part.casefold().endswith(".framework")
+        for part in relative.split("/")
+    ):
+        return "pyside6-essentials"
+    if name.startswith(("python3", "libpython3", "_asyncio", "_bz2", "_ctypes", "_decimal")):
+        return "cpython"
+    if name.startswith(
+        (
+            "_elementtree",
+            "_hashlib",
+            "_lzma",
+            "_multiprocessing",
+            "_overlapped",
+            "_queue",
+            "_socket",
+            "_ssl",
+            "_uuid",
+            "pyexpat",
+            "select.",
+            "unicodedata",
+        )
+    ):
+        return "cpython"
+    if name.startswith(("libssl", "libcrypto")):
+        return "openssl"
+    if name.startswith("libffi"):
+        return "libffi"
+    if "openblas" in name:
+        return "openblas"
+    if name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++")):
+        return "gcc-runtime"
+    if name.startswith(("msvcp", "vcruntime", "ucrtbase", "api-ms-win-crt")):
+        return "msvc-runtime"
+    return "unassigned-native"
+
+
+def artifact_files(
+    root: Path,
+    *,
+    package_map: Mapping[str, Iterable[str]] | None = None,
+) -> list[ArtifactFile]:
+    """Inventarisiert jede native Datei aus dem fertigen Paket.
+
+    Der Eigentümer ist eine Python-Distribution, wo die Rückwärtszuordnung
+    das belegt. Wurzeldateien gehören zu CPython, PyInstallers Bootloader oder
+    einer namentlich erkannten nativen Laufzeitfamilie. Unbekanntes bleibt
+    sichtbar und wird nicht unter einer geratenen Lizenz versteckt.
+    """
+    owners = package_map or metadata.packages_distributions()
+    normalised = {name.casefold(): tuple(values) for name, values in owners.items()}
+    found: list[ArtifactFile] = []
+    for path in sorted(entry for entry in root.rglob("*") if entry.is_file()):
+        if not _is_native_binary(path):
+            continue
+        relative = _artifact_relative(path, root)
+        package_root = _package_root(relative)
+        distributions = normalised.get(package_root.casefold(), ())
+        owner: str
+        if package_root.casefold() == "app":
+            owner = str(canonicalize_name(DISTRIBUTION_NAME))
+            version = APP_VERSION
+        elif distributions:
+            owner = str(canonicalize_name(min(distributions, key=str.casefold)))
+            try:
+                version = metadata.version(owner)
+            except metadata.PackageNotFoundError:
+                version = "unbekannt"
+        else:
+            owner = _runtime_owner(relative)
+            version = "unbekannt"
+        found.append(ArtifactFile(relative, owner, version))
+    return found
+
+
+def _generic_purl(slug: str, version: str) -> str:
+    return f"pkg:generic/{quote(slug, safe='.-_')}@{quote(version, safe='.-_+')}"
+
+
+def _runtime_component(
+    slug: str,
+    name: str,
+    version: str,
+    licence: str,
+    website: str,
+    version_source: str,
+) -> dict[str, Any]:
+    """Eine Laufzeitfamilie außerhalb des Python-Distributionsgraphen."""
+    reference = _generic_purl(slug, version)
+    licence_entry: dict[str, object]
+    if licence in NON_SPDX_LICENCES or "PyInstaller Bootloader Exception" in licence:
+        licence_entry = {"license": {"name": licence}}
+    else:
+        licence_entry = {"expression": licence}
+    return {
+        "type": "library",
+        "bom-ref": reference,
+        "name": name,
+        "version": version,
+        "purl": reference,
+        "licenses": [licence_entry],
+        "externalReferences": [{"type": "website", "url": website}],
+        "properties": [
+            {"name": "solidon:version-source", "value": version_source},
+            {
+                "name": "solidon:licence-source",
+                "value": "geprüfte Lizenzbeilage im Kundenartefakt",
+            },
+        ],
+    }
+
+
+def _openssl_version() -> str:
+    match = re.search(r"\d+\.\d+\.\d+[a-z]*", ssl.OPENSSL_VERSION)
+    return match.group(0) if match else ssl.OPENSSL_VERSION
+
+
+def _openblas_version(owner: str) -> str:
+    """Liest die im Wheel dokumentierte BLAS-Version, nicht den Dateinamen."""
+    try:
+        package = __import__(owner)
+        config = package.__config__.CONFIG
+        value = config["Build Dependencies"]["blas"]["version"]
+        return str(value)
+    except (AttributeError, KeyError, TypeError):
+        return "unbekannt"
+
+
+def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
+    """Logische Komponenten für die im Artefakt erkannten Laufzeitfamilien."""
+    entries = tuple(files)
+    owners = {entry.owner for entry in entries}
+    paths = {entry.path.casefold() for entry in entries}
+    components: list[dict[str, Any]] = []
+
+    if "cpython" in owners:
+        components.append(
+            _runtime_component(
+                "cpython",
+                "CPython runtime",
+                platform.python_version(),
+                "PSF-2.0",
+                "https://www.python.org/psf/license/",
+                "laufender Build-Interpreter",
+            )
+        )
+    if "pyinstaller-bootloader" in owners:
+        components.append(
+            _runtime_component(
+                "pyinstaller-bootloader",
+                "PyInstaller bootloader",
+                metadata.version("pyinstaller"),
+                "GPL-2.0-or-later WITH PyInstaller Bootloader Exception",
+                "https://pyinstaller.org/en/stable/license.html",
+                "installierte Build-Distribution",
+            )
+        )
+    if "openssl" in owners or any("/libssl" in f"/{path}" for path in paths):
+        components.append(
+            _runtime_component(
+                "openssl",
+                "OpenSSL",
+                _openssl_version(),
+                "Apache-2.0",
+                "https://www.openssl.org/source/license.html",
+                "ssl.OPENSSL_VERSION",
+            )
+        )
+    if "libffi" in owners:
+        abi = next(
+            (
+                match.group(1)
+                for path in paths
+                if (match := re.search(r"libffi[-.]([0-9]+)", Path(path).name))
+            ),
+            "unbekannt",
+        )
+        components.append(
+            _runtime_component(
+                "libffi",
+                "libffi",
+                f"ABI-{abi}",
+                "MIT",
+                "https://github.com/libffi/libffi",
+                "ABI im Namen der gebündelten Bibliothek",
+            )
+        )
+    for owner in ("numpy", "scipy"):
+        if any(entry.owner == owner and "openblas" in entry.path.casefold() for entry in entries):
+            components.append(
+                _runtime_component(
+                    f"openblas-{owner}",
+                    f"OpenBLAS ({owner})",
+                    _openblas_version(owner),
+                    "BSD-3-Clause",
+                    "https://www.openblas.net/",
+                    f"{owner}.__config__",
+                )
+            )
+    if "gcc-runtime" in owners or any(
+        Path(path).name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++"))
+        for path in paths
+    ):
+        components.append(
+            _runtime_component(
+                "gcc-runtime",
+                "GCC Runtime Libraries",
+                platform.python_compiler(),
+                "GPL-3.0-or-later WITH GCC-exception-3.1",
+                "https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html",
+                "Compilerangabe des Zielinterpreters",
+            )
+        )
+    if "msvc-runtime" in owners or any(
+        Path(path).name.startswith(("msvcp", "vcruntime", "ucrtbase")) for path in paths
+    ):
+        components.append(
+            _runtime_component(
+                "microsoft-visual-cpp-runtime",
+                "Microsoft Visual C++ Runtime",
+                platform.python_compiler(),
+                "Microsoft Visual Studio Runtime license",
+                "https://visualstudio.microsoft.com/license-terms/",
+                "Compilerangabe des Zielinterpreters",
+            )
+        )
+    return components
+
+
+def artifact_root(
+    dist: Path,
+    *,
+    platform: str = sys.platform,
+    app_name: str = APP_NAME,
+) -> Path:
+    """Das echte Kundenartefakt, ohne macOS-COLLECT-Zwischenordner."""
+    return dist / (f"{app_name}.app" if platform == "darwin" else app_name)
+
+
+def locate_artifact_sbom(
+    dist: Path,
+    *,
+    platform: str = sys.platform,
+    app_name: str = APP_NAME,
+) -> Path:
+    """Findet genau eine Stückliste im Zielartefakt der aktuellen Plattform."""
+    root = artifact_root(dist, platform=platform, app_name=app_name)
+    files = sorted(root.rglob("Solidon3D.cdx.json")) if root.is_dir() else []
+    if len(files) != 1:
+        raise RuntimeError(
+            f"Im Kundenartefakt {root} wurde {len(files)}-mal "
+            "Solidon3D.cdx.json gefunden; erwartet ist genau eine Datei. "
+            "Bauen Sie das Zielpaket neu und prüfen Sie die PyInstaller-Datenliste."
+        )
+    return files[0]
+
+
+def _visible_dependencies(
+    graph: RuntimeGraph,
+    source: str,
+    included: set[str],
+) -> set[str]:
+    """Überbrückt nicht paketierte Zwischenknoten im deklarierten Graphen."""
+    visible: set[str] = set()
+    pending = list(graph.edges.get(source, set()))
+    seen: set[str] = set()
+    while pending:
+        child = pending.pop()
+        if child in seen:
+            continue
+        seen.add(child)
+        if child in included:
+            visible.add(child)
+        else:
+            pending.extend(graph.edges.get(child, set()))
+    return visible
+
+
+def _native_version(component: NativeComponent, package: metadata.Distribution) -> str:
+    """Nutzt die native Version, soweit sie ohne Dateiraten feststellbar ist."""
+    if component.slug == "geos":
+        try:
+            import shapely
+
+            return str(shapely.geos_version_string)
+        except (AttributeError, ImportError):
+            return package.version
+    if component.slug == "opencascade-technology":
+        match = re.match(r"\d+\.\d+\.\d+", package.version)
+        if match:
+            return match.group(0)
+    return package.version
+
+
+def _purl(name: str, version: str) -> str:
+    package = quote(canonicalize_name(name), safe=".-_")
+    release = quote(version, safe=".-_+")
+    return f"pkg:pypi/{package}@{release}"
+
+
+def _licence(package: metadata.Distribution) -> list[dict[str, object]]:
+    """Die geprüfte Rechtsgrundlage, erst danach rohe Paketmetadaten."""
+    name = str(package.metadata.get("Name", ""))
+    known = {canonicalize_name(key): value for key, value in licences.load_policy().known.items()}
+    selected = known.get(canonicalize_name(name), {}).get("licence")
+    if selected:
+        text = str(selected)
+        if text in NON_SPDX_LICENCES:
+            return [{"license": {"name": text}}]
+        return [{"expression": SPDX_ALIASES.get(text, text)}]
+
+    expression = package.metadata.get("License-Expression")
+    if expression:
+        return [{"expression": str(expression)}]
+
+    text = licences.declared_licence(package)
+    if not text:
+        text = known.get(canonicalize_name(name), {}).get("licence", "NOASSERTION")
+    return [{"license": {"name": text}}]
+
+
+def _native_component(
+    definition: NativeComponent,
+    owner: metadata.Distribution,
+) -> dict[str, Any]:
+    """Maschinenlesbarer Eintrag für eine mitgebrachte native Hauptbibliothek."""
+    version = _native_version(definition, owner)
+    reference = f"pkg:generic/{quote(definition.slug, safe='.-_')}@{quote(version, safe='.-_+')}"
+    return {
+        "type": "library",
+        "bom-ref": reference,
+        "name": definition.name,
+        "version": version,
+        "purl": reference,
+        "licenses": [{"expression": definition.licence}],
+        "externalReferences": [{"type": "website", "url": definition.website}],
+        "properties": [
+            {
+                "name": "solidon:bundled-by",
+                "value": str(owner.metadata.get("Name", definition.owner)),
+            },
+            {
+                "name": "solidon:version-source",
+                "value": ("native runtime" if definition.slug == "geos" else "owning distribution"),
+            },
+            {
+                "name": "solidon:licence-source",
+                "value": "app/core/knowledge/data/licences.toml and upstream project",
+            },
+        ],
+    }
+
+
+def _artifact_file_component(entry: ArtifactFile) -> dict[str, Any]:
+    """Dateiebene für das lückenlose native Inventar des Zielpakets."""
+    reference = f"urn:solidon:native-file:{quote(entry.path, safe='.-_/')}"
+    return {
+        "type": "file",
+        "bom-ref": reference,
+        "name": entry.path,
+        "version": entry.version,
+        "properties": [
+            {"name": "solidon:artifact-path", "value": entry.path},
+            {"name": "solidon:bundled-by", "value": entry.owner},
+            {
+                "name": "solidon:licence-source",
+                "value": "Lizenzbeilage der Besitzerkomponente; unbekannt bleibt offen",
+            },
+        ],
+    }
+
+
+def build_bom(
+    *,
+    distribution: DistributionLookup = metadata.distribution,
+    extras: Iterable[str] = RUNTIME_EXTRAS,
+    environment: Mapping[str, str] | None = None,
+    version: str = APP_VERSION,
+    platform: str | None = None,
+    included_distributions: Iterable[str] | None = None,
+    customer_artifact: Path | None = None,
+) -> dict[str, Any]:
+    """Baut eine deterministische CycloneDX-1.6-Stückliste."""
+    selected_extras = tuple(extras)
+    graph = runtime_graph(
+        distribution=distribution,
+        extras=selected_extras,
+        environment=environment,
+    )
+    target = platform or sysconfig.get_platform()
+    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    product_ref = _purl(DISTRIBUTION_NAME, version)
+    included: set[str]
+    if included_distributions is None:
+        included = set(graph.distributions)
+    else:
+        included = {
+            str(canonicalize_name(name))
+            for name in included_distributions
+            if canonicalize_name(name) in graph.distributions
+        }
+    refs = {
+        name: _purl(str(package.metadata.get("Name", name)), package.version)
+        for name, package in graph.distributions.items()
+        if name in included
+    }
+
+    components = []
+    for name in sorted(included):
+        package = graph.distributions[name]
+        shown = str(package.metadata.get("Name", name))
+        reference = refs[name]
+        components.append(
+            {
+                "type": "library",
+                "bom-ref": reference,
+                "name": shown,
+                "version": package.version,
+                "purl": reference,
+                "licenses": _licence(package),
+            }
+        )
+
+    native_refs: dict[str, str] = {}
+    for definition in NATIVE_COMPONENTS:
+        if definition.owner not in included:
+            continue
+        native = _native_component(definition, graph.distributions[definition.owner])
+        components.append(native)
+        native_refs[definition.owner] = str(native["bom-ref"])
+
+    packaged_files = artifact_files(customer_artifact) if customer_artifact is not None else []
+    file_refs: dict[str, list[str]] = {}
+    for entry in packaged_files:
+        component = _artifact_file_component(entry)
+        components.append(component)
+        file_refs.setdefault(entry.owner, []).append(str(component["bom-ref"]))
+
+    packaged_runtime = runtime_components(packaged_files)
+    components.extend(packaged_runtime)
+    runtime_refs = {str(component["bom-ref"]) for component in packaged_runtime}
+    components.sort(key=lambda component: (str(component["name"]).casefold(), component["version"]))
+
+    root = canonicalize_name(DISTRIBUTION_NAME)
+    dependencies = [
+        {
+            "ref": product_ref,
+            "dependsOn": sorted(
+                [
+                    *(refs[name] for name in _visible_dependencies(graph, root, included)),
+                    *runtime_refs,
+                    *(
+                        reference
+                        for owner, references in file_refs.items()
+                        if owner not in refs
+                        for reference in references
+                    ),
+                ]
+            ),
+        }
+    ]
+    dependencies.extend(
+        {
+            "ref": refs[name],
+            "dependsOn": sorted(
+                [
+                    *(refs[child] for child in _visible_dependencies(graph, name, included)),
+                    *([native_refs[name]] if name in native_refs else []),
+                    *file_refs.get(name, []),
+                ]
+            ),
+        }
+        for name in sorted(included)
+    )
+    dependencies.extend(
+        {"ref": reference, "dependsOn": []} for reference in sorted(native_refs.values())
+    )
+    dependencies.extend({"ref": reference, "dependsOn": []} for reference in sorted(runtime_refs))
+    dependencies.extend(
+        {"ref": reference, "dependsOn": []}
+        for reference in sorted(
+            reference for references in file_refs.values() for reference in references
+        )
+    )
+
+    boundary = (
+        "Declared Python runtime dependency closure with bundled native components"
+        if included_distributions is None
+        else "PyInstaller-analyzed customer artifact with bundled native components and files"
+    )
+
+    return {
+        "$schema": "https://cyclonedx.org/schema/bom-1.6.schema.json",
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.6",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "bom-ref": product_ref,
+                "name": APP_NAME,
+                "version": version,
+                "supplier": {"name": "RS Digital"},
+                "purl": product_ref,
+            },
+            "properties": [
+                {"name": "solidon:target-platform", "value": target},
+                {
+                    "name": "solidon:python-version",
+                    "value": python_version,
+                },
+                {
+                    "name": "solidon:runtime-extras",
+                    "value": ",".join(sorted(selected_extras)),
+                },
+                {
+                    "name": "solidon:component-boundary",
+                    "value": boundary,
+                },
+            ],
+        },
+        "components": components,
+        "dependencies": dependencies,
+    }
+
+
+def render_bom(bom: Mapping[str, Any]) -> str:
+    """Stabile Bytes: keine Uhrzeit, keine Zufallskennung, feste Sortierung."""
+    return json.dumps(bom, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+
+
+def write_bom(
+    output: Path = OUTPUT,
+    *,
+    included_distributions: Iterable[str] | None = None,
+    customer_artifact: Path | None = None,
+) -> dict[str, Any]:
+    """Erzeugt und schreibt die Stückliste; Rückgabe dient dem Bauprotokoll."""
+    bom = build_bom(
+        included_distributions=included_distributions,
+        customer_artifact=customer_artifact,
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(render_bom(bom), encoding="utf-8")
+    return bom
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", type=Path, default=OUTPUT, help="Zieldatei")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="nur prüfen, ob die Zieldatei zur aktuellen Build-Umgebung passt",
+    )
+    parser.add_argument(
+        "--locate-artifact",
+        type=Path,
+        metavar="DIST",
+        help="genau eine Stückliste im echten Kundenartefakt finden",
+    )
+    arguments = parser.parse_args()
+
+    if arguments.locate_artifact is not None:
+        try:
+            print(locate_artifact_sbom(arguments.locate_artifact))
+        except RuntimeError as problem:
+            print(problem, file=sys.stderr)
+            return 2
+        return 0
+
+    try:
+        bom = build_bom()
+        rendered = render_bom(bom)
+    except RuntimeError as problem:
+        print(problem, file=sys.stderr)
+        return 2
+
+    if arguments.check:
+        try:
+            current = arguments.output.read_text(encoding="utf-8")
+        except OSError:
+            current = ""
+        if current != rendered:
+            print(
+                f"{arguments.output} passt nicht zur Laufzeitumgebung. "
+                "Erzeugen Sie die Datei ohne --check neu.",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"{arguments.output} passt zur Laufzeitumgebung.")
+        return 0
+
+    arguments.output.parent.mkdir(parents=True, exist_ok=True)
+    arguments.output.write_text(rendered, encoding="utf-8")
+    count = len(bom["components"])
+    print(f"{arguments.output} geschrieben: {count} Laufzeitpakete für {sysconfig.get_platform()}.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

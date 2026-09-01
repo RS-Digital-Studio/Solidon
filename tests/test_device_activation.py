@@ -382,6 +382,18 @@ def test_the_online_client_accepts_only_a_confirmed_deactivation() -> None:
     assert raised.value.suggestions
 
 
+@pytest.mark.parametrize(
+    "answer",
+    [
+        b'{"ok":true,"value":NaN}',
+        (b"[" * 65) + b"0" + (b"]" * 65),
+    ],
+)
+def test_the_online_client_refuses_unsafe_json(answer: bytes) -> None:
+    with pytest.raises(ActivationServiceError):
+        activate("{}", sender=lambda _payload: answer)
+
+
 def test_the_online_client_rejects_an_unbounded_server_answer() -> None:
     class _LargeAnswer:
         def read(self, _amount: int) -> bytes:

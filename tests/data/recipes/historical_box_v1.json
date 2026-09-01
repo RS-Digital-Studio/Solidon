@@ -1,0 +1,93 @@
+{
+  "doc": "Ein gespeicherter Quader aus der ersten Dokumentfassung.",
+  "document": {
+    "app_version": "0.1.0",
+    "fits": [],
+    "format_version": 1,
+    "libs": {},
+    "ops": [
+      {
+        "id": 1,
+        "in": [],
+        "op": "create_box",
+        "out": [
+          "obj_1"
+        ],
+        "params": {
+          "anchor": "corner",
+          "depth": "@depth",
+          "height": "@height",
+          "name": "",
+          "width": "@width"
+        }
+      }
+    ],
+    "parameters": {
+      "depth": {
+        "max": 100.0,
+        "min": 5.0,
+        "unit": "mm",
+        "value": 18.0
+      },
+      "height": {
+        "max": 50.0,
+        "min": 2.0,
+        "unit": "mm",
+        "value": 8.0
+      },
+      "width": {
+        "max": 100.0,
+        "min": 5.0,
+        "unit": "mm",
+        "value": 20.0
+      }
+    },
+    "parts_version": "0",
+    "scene": {
+      "material": "",
+      "printer": ""
+    },
+    "sources": {},
+    "transactions": []
+  },
+  "exposed": [
+    {
+      "default": 20.0,
+      "doc": "Breite des Quaders.",
+      "maximum": 100.0,
+      "minimum": 5.0,
+      "name": "width",
+      "placement": "front",
+      "title": "Breite",
+      "unit": "mm"
+    },
+    {
+      "default": 18.0,
+      "doc": "Tiefe des Quaders.",
+      "maximum": 100.0,
+      "minimum": 5.0,
+      "name": "depth",
+      "placement": "front",
+      "title": "Tiefe",
+      "unit": "mm"
+    },
+    {
+      "default": 8.0,
+      "doc": "Höhe des Quaders.",
+      "maximum": 50.0,
+      "minimum": 2.0,
+      "name": "height",
+      "placement": "front",
+      "title": "Höhe",
+      "unit": "mm"
+    }
+  ],
+  "features": {
+    "top": "face_top"
+  },
+  "format_version": 1,
+  "group": "structure",
+  "name": "historischer_quader",
+  "payloads": {},
+  "title": "Historischer Quader"
+}

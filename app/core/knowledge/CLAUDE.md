@@ -21,7 +21,7 @@ Rechenwegs, nicht Beiwerk.
 | `rules.py` | Die Regelsammlung für den Agenten (§39) |
 | `calibration.py` | Selbstkalibrierung (§28.3) |
 | `filaments.py` | Benannte Filamente mit Farbe, als Vorwahl (§20) |
-| `licences.py` | Lizenzprüfung der Abhängigkeiten und Laufzeittabelle der Drittanbieter-Beilage (§36) |
+| `licences.py` | Lizenzprüfung der Abhängigkeiten (§36) |
 | `parts/` | Die Bausteinbibliothek — eigene `CLAUDE.md`, **eigene Lizenz** |
 | `data/` | **Wo das Wissen wirklich steht**: sechs TOML-Dateien (siehe unten) |
 
@@ -37,7 +37,6 @@ Die Module hier **laden und lösen auf**; die Werte selbst liegen daneben:
 | `standards.toml` | Normteilmaße |
 | `rules.toml` | **Die Regelsammlung des Agenten** (§39) |
 | `licences.toml` | Die Freigabeliste der Abhängigkeiten (§36) |
-| `third_party_licenses.toml` | Paket, Version, gewählte Lizenz und Originaltexte der ausgelieferten Laufzeit |
 
 `AGENTS.md` nennt für die Regelsammlung einen Pfad `core/knowledge/rules/` —
 **den gibt es nicht.** Der Eintrag gehört in `data/rules.toml`.

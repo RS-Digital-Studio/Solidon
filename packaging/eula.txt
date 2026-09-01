@@ -1,7 +1,7 @@
 Endnutzer-Lizenzvertrag für Solidon3D
 -------------------------------------
 
-Stand: 28. August 2026 · Fassung 1.4
+Stand: 31. August 2026 · Fassung 1.6
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -40,8 +40,8 @@ Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
 gebraucht. Innerhalb eines Betriebs zählt also nicht die Zahl der Rechner,
 sondern die Zahl der Menschen, die damit konstruieren.
 
-Für ab dem 1. November 2026 ausgestellte Verkaufsschlüssel braucht die
-Freischaltung einmalig eine Geräteaktivierung, aber kein Nutzerkonto. Sie
+Für regulär verkaufte Lizenzschlüssel braucht die Freischaltung einmalig eine
+Geräteaktivierung, aber kein Nutzerkonto. Sie
 kann direkt aus Solidon über das Netz oder als Anfrage- und Antwortdatei über
 ein zweites Gerät erfolgen. Dabei wird genau ein aktiver Geräteplatz je Lizenz
 geführt. Anschließend prüft Solidon Schlüssel und Geräte-Zertifikat
@@ -59,16 +59,45 @@ defekt, setzt der Support den Platz nach Prüfung der Bestellnummer zurück.
 Die gewerbliche Nutzung ist ausdrücklich eingeschlossen und kostet nichts
 extra.
 
-Was Sie mit Solidon3D erzeugen, gehört Ihnen. An Ihren Modellen,
-Projektdateien und exportierten Dateien haben wir keinerlei Rechte — Sie
-dürfen sie verkaufen, verschenken, veröffentlichen und lizenzieren, wie Sie
-wollen.
+Allein durch die Nutzung von Solidon3D erwirbt RS Digital keine zusätzlichen
+Rechte an Inhalten, die Sie selbst geschaffen haben, oder an Rechten, die
+Ihnen bereits zustehen. Sie dürfen Modelle, Projektdateien und exportierte
+Dateien nur insoweit nutzen und weitergeben, wie Rechte Dritter und die
+nachfolgenden Regeln zu mitgelieferten Bausteinen und Beispielen nicht
+entgegenstehen. Dazu gehört insbesondere die Lizenz einer importierten
+Quelle, einer lokal übernommenen Bausteindatei oder eines verwendeten
+generativen Modells. Durch Bearbeiten, Speichern oder Exportieren verschwinden
+solche Rechte und Namensnennungspflichten nicht. Mit einer Bausteindatei reisen
+ihre Angaben zu Herkunft, Autor und Lizenz; sie sind vor einer Weitergabe oder
+gewerblichen Nutzung zu beachten. Solidon3D überträgt Ihnen keine Rechte, die
+weder Sie noch RS Digital besitzen.
 
-Das gilt auch dann, wenn mitgelieferte Bausteine darin stecken: eine
-Mutternfalle, ein Gewinde, ein Filmscharnier aus der Bibliothek. Diese
-Bibliothek steht ausdrücklich unter der MIT-Lizenz, damit an Ihrem Ergebnis
-keine Frage offenbleibt. Wir erheben daran keinen Anspruch und verlangen
-keine Nennung.
+Wer einen gedruckten Gegenstand im eigenen Namen verkauft oder anderweitig in
+Verkehr bringt, muss seine Rolle und die Produktsicherheit dieses Gegenstands
+nach den konkreten Umständen selbst bestimmen und erfüllen. Die bloße Nutzung
+von Solidon3D macht RS Digital nicht automatisch zum Hersteller jedes späteren
+Ausdrucks. Unberührt bleibt eine gesetzliche Verantwortlichkeit von RS Digital
+für die Software, mitgelieferte digitale Konstruktionsunterlagen und eigene
+Produkt- oder Sicherheitszusagen.
+
+Für die von RS Digital mitgelieferten Bausteine gilt: Wenn darin eine
+Mutternfalle, ein Gewinde oder ein Filmscharnier aus der Bibliothek steckt,
+bleibt daran keine zusätzliche Einschränkung von uns hängen. Die Bibliothek
+steht unter der MIT-Lizenz; wir erheben keinen Anspruch und verlangen für das
+gedruckte oder exportierte Ergebnis keine Nennung. Bei lokal importierten
+Bausteindateien gilt dagegen die darin ausgewiesene Lizenz. Fehlt eine
+Lizenzangabe, gewährt Solidon3D dadurch keine Weitergabe- oder Nutzungsrechte;
+diese Rechte sind vor einer Weitergabe gesondert zu klären.
+
+An den elf in app/examples/LICENSE einzeln benannten Beispielprojekt-/
+Vorschaupaaren behält RS Digital das Urheberrecht. Die dort beigefügte
+Nutzungsfreigabe erlaubt Ihnen, die Beispiele zu öffnen, lokal zu kopieren,
+zu bearbeiten, zu drucken und zu exportieren. Gedruckte Gegenstände sowie
+eigene, individuell bearbeitete digitale Ergebnisse dürfen Sie privat und
+gewerblich nutzen und weitergeben. Die unveränderten ursprünglichen P3D- und
+SVG-Dateien dürfen ohne gesonderte Erlaubnis nicht als Vorlagen oder Sammlung
+weitergegeben werden. Fremdimporte bleiben nach ihren eigenen Rechten zu
+beurteilen.
 
 4a. Demo-Version
 ----------------
@@ -76,8 +105,9 @@ keine Nennung.
 Eine als Demo bezeichnete Version (Versionsnummer 0.x) überlassen wir
 Ihnen unentgeltlich und befristet. Sie läuft vollständig — keine
 Wasserzeichen, keine Exportsperre, keine gesperrten Funktionen — bis zu dem
-Tag, den die Anwendung selbst nennt: in der Statuszeile, im Über-Dialog und
-auf der Website. Dieser Tag ist der 30. Oktober 2026.
+Tag, den die jeweilige Anwendung selbst nennt: in der Statuszeile, im
+Über-Dialog und auf der Website. Die derzeit veröffentlichte Demo nennt den
+30. Oktober 2026. Eine spätere 0.x-Demo kann einen eigenen Stichtag nennen.
 
 Danach lässt sich die Demo nicht mehr starten. Das ist kein Mangel,
 sondern ihr Zweck: Sie zeigt das Programm für eine begrenzte Zeit, sie ist
@@ -86,7 +116,9 @@ keine dauerhaft nutzbare Version.
 Was dabei bleibt, sind Ihre Dateien. Sie liegen dort, wo Sie sie
 gespeichert haben; wir löschen nichts und machen nichts unlesbar. Eine
 Projektdatei ist ein ZIP-Archiv mit JSON darin und lässt sich auch ohne dieses
-Programm öffnen. Jede spätere Version liest sie unverändert.
+Programm öffnen. Unterstützte spätere Fassungen halten den dokumentierten
+Migrationsweg offen; eine Zusage für jede denkbare künftige Fassung ist das
+nicht.
 
 Für die Demo gilt außerdem:
 
@@ -107,17 +139,18 @@ Für die Demo gilt außerdem:
 4. Freischaltung der Verkaufsversion
 ------------------------------------
 
-Die am 1. November 2026 startende Vollversion wird zunächst ohne Testphase
-angeboten. Eine Testphase kann in einer späteren Fassung ausdrücklich
-hinzukommen; aus diesem Vertrag entsteht darauf kein Anspruch.
+Wenn die Vollversion angeboten wird, startet sie zunächst ohne zusätzliche
+Testphase. Eine weitere 0.x-Demo oder eine spätere Testphase kann
+ausdrücklich angeboten werden; aus diesem Vertrag entsteht darauf kein
+Anspruch.
 
 Ohne vollständige Freischaltung bleibt alles Lesende offen: eigene Projekte
 öffnen, drehen, messen, Prüfbericht und Schichtanalyse ansehen. Für alles, was
 ein Projekt ändert oder ein Ergebnis herausgibt, ist die Freischaltung
 erforderlich: Operationen anwenden, exportieren, an den Slicer übergeben und
-den Chat benutzen. Bei Verkaufsschlüsseln ab dem 1. November 2026 gehören dazu
+den Chat benutzen. Bei neu ausgegebenen Verkaufsschlüsseln gehören dazu
 Kaufcode und passendes Geräte-Zertifikat; der Kaufcode allein öffnet diese
-Handlungen nicht. Für vorher ausgegebene Bestandsschlüssel genügt weiterhin
+Handlungen nicht. Für bereits ausgegebene Bestandsschlüssel genügt weiterhin
 der gültige Kaufcode.
 
 5. Updates
@@ -128,8 +161,13 @@ also jede Version 1.0, 1.1, 1.2 und so fort. Ob es eine Version 2 geben wird
 und was sie kostet, ist heute nicht entschieden; ein Anspruch darauf entsteht
 aus diesem Vertrag nicht.
 
-Updates sind ein Angebot, keine Pflicht. Sie dürfen bei der Version bleiben,
-die Sie haben.
+Sicherheits- und Funktionserhaltungsaktualisierungen, die nach §§ 327f und
+327r BGB für den maßgeblichen Bereitstellungszeitraum erforderlich sind,
+stellen wir mindestens bis zum 31. Oktober 2031 bereit und informieren Sie
+darüber. Diese Pflicht ist nicht auf eine Hauptversion beschränkt. Sie können
+eine Aktualisierung ablehnen; gesetzliche Folgen einer unterlassenen
+Installation bleiben unberührt. Neue Funktionen und eine neue Hauptversion
+sind davon nicht versprochen.
 
 6. Weitergabe
 -------------
@@ -146,13 +184,22 @@ Eine Vermietung, ein Verleih oder eine Unterlizenzierung sind nicht erlaubt.
 -----------------------
 
   - Die Software oder Teile davon weiterverkaufen, veröffentlichen oder
-  verbreiten — ausgenommen die Weitergabe nach Nummer 6.
+  verbreiten — ausgenommen die Weitergabe nach Nummer 6 und die in Nummer 3
+  ausdrücklich erlaubte Nutzung separat lizenzierter Bausteine, Beispiele und
+  eigener Ergebnisse.
   - Den Lizenzschlüssel weitergeben oder öffentlich zugänglich machen.
   - Die Software zurückentwickeln, dekompilieren oder disassemblieren,
   soweit das Gesetz es nicht ausdrücklich erlaubt. Zwingende Rechte —
   insbesondere § 69d und § 69e UrhG zur Fehlerbehebung und zur Herstellung
   von Interoperabilität — bleiben unberührt.
   - Die Lizenzprüfung umgehen, entfernen oder unwirksam machen.
+
+Diese Beschränkungen gelten nicht, soweit zwingendes Recht oder die Lizenz
+eines fremden Bestandteils die Handlung erlaubt. Insbesondere dürfen Sie
+dynamisch gebundene LGPL-Bibliotheken austauschen und die dafür notwendigen
+Untersuchungen, Änderungen und Rückentwicklungen vornehmen. Solidon3D darf
+eine ordnungsgemäß ersetzte LGPL-Bibliothek nicht allein wegen der Ersetzung
+blockieren.
 
 8. Fremde Bestandteile
 ----------------------
@@ -161,12 +208,18 @@ Solidon3D verwendet fremde Programmbibliotheken, die ihren eigenen Lizenzen
 unterliegen. Die Übersicht liegt der Installation als
 THIRD-PARTY-NOTICES.md bei und steht im Über-Dialog.
 
+Für diese fremden Bestandteile gehen deren Lizenzbedingungen diesen Bestimmungen vor.
+Keine Regel dieses Vertrags beschränkt Rechte, die eine
+solche Lizenz oder zwingendes Recht einräumt.
+
 Besonders zu nennen: PySide6 steht unter der LGPL-3.0 und wird dynamisch
 gebunden und unverändert weitergegeben. Die LGPL gibt Ihnen das Recht, diese
 Bibliothek durch eine eigene, veränderte Version zu ersetzen. Bei der
 Windows-Installation liegen die betreffenden Dateien dafür unverschlüsselt im
-Programmordner; auf Anfrage an support@solidon3d.de nennen wir Ihnen die
-genauen Versionen und den Bezugsort des Quelltexts.
+Programmordner. Die Installation nennt die genauen Versionen, vollständigen
+Lizenztexte, Bezugsorte des korrespondierenden Quelltexts und die für einen
+Austausch erforderlichen Hinweise. Dieselben Angaben erhalten Sie auf Anfrage
+an support@solidon3d.de.
 
 Slicer, Ollama und ComfyUI werden nicht mitgeliefert. Sie werden, wenn
 vorhanden, als eigenständig installierte Programme aufgerufen und unterliegen
@@ -176,21 +229,26 @@ ausschließlich ihren eigenen Lizenzen.
 --------------------------------
 
 Solidon3D läuft vollständig auf Ihrem Rechner. Es gibt kein Nutzerkonto, keine
-Projektablage im Netz und keine Telemetrie. Drei Verbindungen kann es geben,
-alle drei unter Ihrer Kontrolle:
+Projektablage im Netz und keine Telemetrie. Verbindungen entstehen nur auf
+den folgenden, sichtbaren Wegen:
 
   - der Update-Hinweis, der beim Start eine Versionsdatei auf unserer
   Website abfragt. Abschaltbar unter „Bearbeiten → Einstellungen“. Geladen und
   installiert wird nur, was Sie ausdrücklich bestätigen;
   - der KI-Chat, sofern Sie einen eigenen API-Schlüssel hinterlegen. Dann
   gehen Ihre Chat-Eingaben an den von Ihnen gewählten Anbieter, nach dessen
-  Bedingungen. Mit einem lokalen Modell verlässt nichts den Rechner;
+  Bedingungen. Mit einem Ollama-Ziel auf diesem Rechner bleiben diese Daten
+  lokal; bei einer selbst eingetragenen entfernten Ollama-Adresse gehen sie an
+  diesen anderen Rechner;
   - die Rückmeldung an den Support, die Sie selbst absenden — über „Hilfe →
   Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo einmal
   von sich aus anbietet. Beide Wege führen in denselben Dialog. Übertragen
   wird, was er vor dem Senden anzeigt — Ihr Text und die Programmversion, dazu
   nur die dort angehakten Anhänge (Bildschirmfoto, Protokoll, laufende
   Sitzung). Von allein sendet die Anwendung nichts.
+  - die Geräteaktivierung oder -deaktivierung, die Sie selbst auslösen. Der
+  Offline-Dateiweg sendet dieselben Aktivierungsdaten erst auf der von Ihnen
+  geöffneten Aktivierungsseite; eine regelmäßige Lizenzabfrage gibt es nicht;
 
 Näheres regelt die Datenschutzerklärung unter
 https://solidon3d.de/datenschutz.html.
@@ -209,17 +267,25 @@ Das gilt besonders für:
   an Ihrem eigenen Drucker kalibrieren. Ein gedrucktes Teil kann trotz
   korrekter Rechnung nicht passen.
   - Druckbarkeit. Die Schichtanalyse ist Solidon3Ds eigene Rechnung und
-  nicht die Ihres Slicers. Beide Zahlenwelten werden getrennt ausgewiesen;
-  die Druckdatei erzeugt weiterhin Ihr Slicer.
+  nicht die Ihres Slicers. „Druckbar“ bedeutet ausschließlich, dass ein Modell
+  nach den gewählten geometrischen und drucktechnischen Kriterien für die
+  weitere Verarbeitung geeignet erscheint. Der Begriff sagt insbesondere
+  nichts über Tragfähigkeit, Lebensmittelechtheit, elektrische Sicherheit,
+  Druckfestigkeit oder eine Prüfung für einen konkreten Einsatzzweck aus.
+  Schichtanalyse und Slicer-Zahlen werden getrennt ausgewiesen; die Druckdatei
+  erzeugt weiterhin Ihr Slicer.
   - Erzeugte Modelle. Was ein Bildmodell liefert, ist eine Oberfläche und
   keine Konstruktion. Maßhaltigkeit wird dabei ausdrücklich nicht zugesichert.
   - Vorschläge des KI-Chats. Er wählt Operationen und Werte; er ist keine
   fachliche Beratung und kann irren.
 
-Nicht geeignet ist Solidon3D für Bauteile, deren Versagen Menschen
-gefährden kann — tragende Teile, Medizinprodukte, Luft- und Raumfahrt,
-Fahrzeugtechnik und Ähnliches. Wer die Software dennoch dafür einsetzt, tut
-das auf eigene Verantwortung und hat die Ergebnisse eigenständig zu prüfen.
+Nicht Gegenstand der Zweckbestimmung sind die Auslegung, Prüfung oder
+Freigabe sicherheitskritischer Bauteile — insbesondere für Medizin und
+Dentaltechnik, Fahrzeuge, Luft- und Raumfahrt, persönliche Schutzausrüstung,
+sonstige Schutzvorrichtungen, Gas- oder Druckanwendungen, elektrische
+Sicherheit oder tragende Konstruktionen. Ob ein konkretes Teil für seinen realen Zweck sicher und
+rechtlich zulässig ist, muss dafür fachkundig geprüft und, soweit erforderlich,
+nach den einschlägigen Vorschriften bewertet werden.
 
 11. Haftung
 -----------

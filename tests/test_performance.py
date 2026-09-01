@@ -33,6 +33,7 @@ from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.section import SectionPlane, cut
 from app.core.ingest.loader import normalise
+from app.core.knowledge.parts.range_check import has_self_intersections
 from app.core.perceive.features import detect
 from app.core.perceive.maps import wall_thickness_map
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
@@ -345,6 +346,40 @@ def test_the_input_stage_on_a_million_triangles() -> None:
     mesh = dense_mesh()
     taken = measure("ingest_dense", lambda: normalise(mesh, "mm"))
     assert taken < 60.0, "welding and cleaning a million triangles"
+
+
+def test_self_intersection_on_two_hundred_thousand_faces() -> None:
+    """Der vollständige BVH-Vertrag bleibt auch am P5-Maximalfall interaktiv.
+
+    Der Körper entsteht **vor** der Uhr. Seine voneinander getrennten kleinen
+    Dreiecke zwingen den Checker trotzdem durch exakt 199.516 Faces und alle
+    same-node-Blätter; ein Treffer wäre ein False-Positive. ``measure`` trägt
+    denselben 25-%-Regressionsvertrag wie die übrigen §31-Messungen in die
+    lokale ``.performance.json`` ein.
+    """
+    import numpy as np
+
+    face_count = 199_516
+    x = np.arange(face_count, dtype=float) * 2.0
+    vertices = np.empty((face_count, 3, 3), dtype=float)
+    vertices[:, 0] = np.column_stack((x, np.zeros(face_count), 0.0 * x))
+    vertices[:, 1] = vertices[:, 0] + (0.1, 0.0, 0.0)
+    vertices[:, 2] = vertices[:, 0] + (0.0, 0.1, 0.0)
+    raw = deferred.trimesh.Trimesh(
+        vertices=vertices.reshape(-1, 3),
+        faces=np.arange(face_count * 3).reshape(-1, 3),
+        process=False,
+    )
+    mesh = MeshData.of(raw)
+    result: list[bool] = []
+
+    assert len(mesh.raw.faces) == face_count
+    taken = measure(
+        "parts_self_intersection_199516", lambda: result.append(has_self_intersections(mesh))
+    )
+
+    assert result == [False]
+    assert taken < 15.0
 
 
 def large_assembly() -> bytes:

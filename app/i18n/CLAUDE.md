@@ -14,6 +14,13 @@ Die Regeln stehen in `.claude/rules/uebersetzung.md`.
 | `extract.py` | Übersetzbare Texte aus den Quellen einsammeln (§37.2) |
 | `locales/` | Ein JSON je Sprache: `en` `es` `fr` `it` `pt` |
 
+Der Einsammler liest außerdem die vier Generatorquellen aus
+`extract.EXTRA_SOURCES`. Dazu gehören `make_manual.py` und `site_nav.py`:
+Titel, Navigation, Sprunglinks und PDF-Ränder sind Teil derselben Sprache wie
+der Handbuchinhalt. Eine Katalogdatei reicht deshalb auch für den vollständigen
+Webrahmen einer neuen Sprache; feste Sprachtabellen im Generator sind kein
+zulässiger zweiter Katalog.
+
 **Deutsch hat keine Datei.** Es ist die Quellsprache — der deutsche Text steht
 im Code, die Kataloge übersetzen ihn weg.
 

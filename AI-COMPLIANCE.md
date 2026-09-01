@@ -21,15 +21,46 @@ barrierefrei mindestens:
 Für Anthropic kommt vor dem Senden hinzu:
 
 > Wenn Sie Anthropic wählen, werden Ihre Chatnachricht und die zuvor angezeigte
-> Projektauswahl direkt an Anthropic übertragen. Verwenden Sie Ihren eigenen
-> API-Schlüssel. Ohne Ihre ausdrückliche Auswahl werden keine Projektdatei und
-> kein Vorschaubild übertragen.
+> Projektauswahl nicht allein übertragen. Direkt an Anthropic gehen die
+> aktuelle Nachricht, bis zu zwölf frühere Chatbeiträge, ein textlicher
+> Steckbrief der gesamten aktuellen Szene mit Objekt- und Quellnamen, Maßen,
+> Merkmalen, Parametern, Einstellungen und Auswahl, der Prüfbericht sowie die
+> für den Agenten nötigen Anweisungen, Regeln und Werkzeugschemata. Unterstützt
+> das gewählte Modell Bilder, kann Solidon außerdem automatisch gerenderte
+> Ansichten der Szene mitsenden. Die Projektdatei und die Netzgeometrie selbst
+> werden nicht übertragen. Sie verwenden Ihren eigenen API-Schlüssel.
 
-Für Ollama kommt hinzu:
+Für Ollama nennt die Anzeige die normalisierte, von Zugangsdaten, Pfad,
+Abfrage und Fragment bereinigte Zieladresse und unterscheidet zwei Fälle.
 
-> Wenn Sie Ollama wählen, verarbeitet das ausgewählte lokale Modell die
-> Nachricht auf diesem Rechner. Installations-, Download- oder Updatewege des
-> Modells können gesondert eine Netzverbindung verwenden.
+**Lokales Ollama-Ziel (Loopback):**
+
+> Das Ollama-Modell verarbeitet auf diesem Rechner dieselben Arbeitsdaten wie
+> der Chat: aktuelle Nachricht, bis zu zwölf frühere Chatbeiträge, textlichen
+> Steckbrief der gesamten Szene, Prüfbericht, Anweisungen, Regeln und
+> Werkzeugschemata sowie bei einem Bildmodell automatisch gerenderte Ansichten.
+> Projektdatei und Netzgeometrie selbst werden nicht übertragen. Die
+> Werkzeugprobe sendet nur einen festen technischen Prüfauftrag ohne Projekt-
+> oder Chatinhalt. Installation, Download oder Update des Modells können
+> gesondert eine Netzverbindung verwenden.
+
+**Entferntes Ollama-Ziel:**
+
+> Das Ollama-Ziel liegt auf einem anderen Rechner. An die angezeigte Adresse
+> werden aktuelle Nachricht, bis zu zwölf frühere Chatbeiträge, der textliche
+> Steckbrief der gesamten Szene, Prüfbericht, Anweisungen, Regeln und
+> Werkzeugschemata sowie bei einem Bildmodell automatisch gerenderte Ansichten
+> übertragen. Projektdatei und Netzgeometrie selbst werden nicht übertragen.
+> Die Werkzeugprobe sendet einen festen technischen Prüfauftrag. Verwenden Sie
+> nur ein Ziel, dessen Betreiber und Übertragungsweg Sie vertrauen.
+
+Der Cloud-Hinweis muss alle tatsächlich gesendeten Datenarten nennen; eine
+pauschale „Chatnachricht“- oder „Projektauswahl“-Beschreibung genügt nicht.
+Ändert sich `build_messages()`, die automatische Ansichtserzeugung, die
+Werkzeugprobe, die Ollama-Zielklasse oder deren normalisierte Adresse, ist das
+eine disclosure-relevante Änderung und sperrt den ersten Modellaufruf bis
+Textversion, Kataloge und Tests nachgezogen sind. Ein Wechsel von lokal zu
+entfernt oder zwischen entfernten Hosts übernimmt nie den alten Nachweis.
 
 Die Anzeige ist Information, keine versteckte Einwilligung und keine
 Haftungsfreizeichnung. Sie erscheint vor dem ersten Senden, nicht erst in

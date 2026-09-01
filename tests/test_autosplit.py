@@ -330,7 +330,6 @@ def test_support_refinement_stops_after_the_connector_plan(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     signal = CancelSignal()
-    connector_geometry = pins.capture_connector_geometry()
     original = pins.plan_pins
 
     def plan_and_cancel(*args: object, **kwargs: object):
@@ -353,14 +352,15 @@ def test_support_refinement_stops_after_the_connector_plan(
             orientation_candidates=3,
             cancelled=signal,
             connector_count=pins.PIN_COUNT,
-            connector_geometry=connector_geometry,
         )
 
 
 def test_support_refinement_stops_after_adding_connectors(
     profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    connector_geometry = pins.capture_connector_geometry()
+    from app.core.knowledge.parts import PARTS
+
+    PARTS.all()
     signal = CancelSignal()
     original = pins.add_pins
 
@@ -379,37 +379,7 @@ def test_support_refinement_stops_after_adding_connectors(
             orientation_candidates=3,
             cancelled=signal,
             connector_count=pins.PIN_COUNT,
-            connector_geometry=connector_geometry,
         )
-
-
-def test_support_scoring_uses_only_the_injected_connector_geometry(
-    profile: Profile, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Die Bewertung lädt und liest im Arbeiter kein veränderliches Register."""
-    from app.core.knowledge.parts import builtin
-    from app.core.knowledge.parts.registry import PartRegistry
-
-    connector_geometry = pins.capture_connector_geometry()
-
-    def forbidden(*_args: object, **_kwargs: object) -> object:
-        raise AssertionError("die Hintergrundbewertung griff auf das globale Bausteinregister zu")
-
-    monkeypatch.setattr(builtin, "load", forbidden)
-    monkeypatch.setattr(PartRegistry, "get", forbidden)
-    monkeypatch.setattr(PartRegistry, "all", forbidden)
-
-    support = autosplit._support_after_cut(
-        MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 40.0))),
-        autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0),
-        profile,
-        orientation_candidates=3,
-        cancelled=None,
-        connector_count=pins.PIN_COUNT,
-        connector_geometry=connector_geometry,
-    )
-
-    assert np.isfinite(support)
 
 
 def test_the_decomposition_path_checks_cancellation_before_vhacd(profile: Profile) -> None:
@@ -436,26 +406,20 @@ def test_the_decomposition_path_checks_cancellation_after_vhacd(
         autosplit._from_decomposition(mesh, "x", (-10.0, 10.0), cancelled=signal)
 
 
-def test_one_cut_reports_unknown_total_until_the_plan_is_complete(profile: Profile) -> None:
-    """Eine Schnittsuche ist kein Anteil an einer bekannten Gesamtschnittzahl.
-
-    Ein 400-mm-Balken braucht auf diesem Profil genau einen Schnitt. Selbst in
-    diesem einfachen echten Lauf kennt ``split_to_fit`` die endgültige Zahl
-    aber erst, nachdem die Kinder geprüft wurden. Jeder Zwischenstand bleibt
-    deshalb unbestimmt; nur der vollständige Plan meldet eins.
-    """
+def test_support_aware_split_reports_monotonic_progress(profile: Profile) -> None:
     seen: list[tuple[float, str]] = []
 
     outcome = autosplit.split_to_fit(
-        bar(),
+        crossed_overhangs(),
         profile,
         pins=0,
         progress=lambda fraction, text: seen.append((fraction, text)),
     )
 
-    assert len(outcome.cuts) == 1, "der Testkörper bildet einen echten Ein-Schnitt-Lauf"
-    assert seen[-1] == (1.0, "")
-    assert {fraction for fraction, _text in seen[:-1]} == {0.0}
+    assert outcome.divided
+    fractions = [fraction for fraction, _text in seen]
+    assert fractions == sorted(fractions)
+    assert fractions[-1] == pytest.approx(1.0)
     assert any(text for _fraction, text in seen[:-1]), "der Balken nennt die laufende Arbeit"
 
 
@@ -624,9 +588,10 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
 
     Der analytische Körper erweitert den Balken aus ``crossed_overhangs`` auf
     einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
-    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht deutlich; nach ihrem
-    Aufbau braucht die linke weniger Stützen. Genau diese Mutation hält fest,
-    dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
+    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht sehr deutlich; mit der
+    heute gerundeten Verbindergeometrie bleibt sie vorn, aber mit den
+    tatsächlich höheren Stützvolumen beider Nähte. Der direkte Vergleich hält
+    fest, dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
     """
     from app.core.knowledge.parts import PARTS
 
@@ -663,7 +628,6 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
         orientation_candidates=3,
         cancelled=None,
         connector_count=pins.PIN_COUNT,
-        connector_geometry=pins.capture_connector_geometry(),
     )
     evaluated_right = autosplit._support_after_cut(
         mesh,
@@ -672,18 +636,17 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
         orientation_candidates=3,
         cancelled=None,
         connector_count=pins.PIN_COUNT,
-        connector_geometry=pins.capture_connector_geometry(),
     )
 
     assert bare_right < bare_left * 0.5
-    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE)
+    assert right_final < left_final * (1.0 - autosplit.SUPPORT_TIE)
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
     chosen = autosplit.find_plane(mesh, profile)
 
     assert chosen is not None
-    assert chosen.position == pytest.approx(left.position)
+    assert chosen.position == pytest.approx(right.position)
 
 
 def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:

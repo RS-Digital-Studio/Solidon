@@ -301,7 +301,7 @@ def test_a_mesh_between_the_two_old_limits_keeps_its_features(
     ``agent.analysis.TRIANGLE_LIMIT``, was die Grenze des *Steckbriefs* ist und
     nicht die der *Erkennung*. Was dazwischen lag, behielt seine Auflösung und
     verlor die Merkmale: kein Klick auf eine Bohrung, keine Passung, nichts für
-    den Agenten. Bei TripoSG war das der Normalfall.
+    den Agenten. Bei externen Generatoren ist das der Normalfall.
 
     Aufgelöst werden konnte das erst, nachdem ``decimate`` ein unverschweißtes
     Netz nicht mehr zerriss — vorher tauschte jede Senkung dieser Grenze

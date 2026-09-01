@@ -802,6 +802,15 @@ QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {{
     background: {highlight};
     color: {on_highlight};
 }}
+/* Der Bericht wählt den ersten lösbaren Befund selbst vor. Diese dauerhafte
+   Vorauswahl ist Orientierung, kein zweiter Handlungsaufruf neben dem
+   akzentuierten Lösungsknopf: ruhige Fläche plus Akzentkante kodieren sie
+   weiterhin doppelt, ohne im Ruhezustand eine zweite Signalfläche zu bilden. */
+QListWidget#reportFindings::item:selected {{
+    background: {active};
+    color: {text};
+    border-left: 3px solid {accent_line};
+}}
 QHeaderView::section {{
     background: {window};
     color: {muted};

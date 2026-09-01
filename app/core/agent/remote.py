@@ -35,6 +35,8 @@ from urllib.parse import urlsplit
 from app.branding import APP_NAME, APP_VERSION
 from app.core.agent.tools import ASK_USER, runs_foreign_source, tool_schemas
 from app.core.errors import AppError
+from app.core.json_boundary import StrictJsonError
+from app.core.json_boundary import loads as load_json
 from app.core.registry import Registry
 from app.i18n import TranslatableText, _
 
@@ -47,6 +49,9 @@ HOST: Final = "127.0.0.1"
 
 #: Voreingestellter Port. Über 1024, damit kein erhöhtes Recht nötig ist.
 DEFAULT_PORT: Final = 8787
+
+#: Derselbe Deckel wie am HTTP-Rumpf; direkte Aufrufer umgehen den Server nicht.
+MAX_REQUEST_BYTES: Final = 1 << 20
 
 #: JSON-RPC-Fehlercodes, so wie die Spezifikation sie vergibt.
 PARSE_ERROR: Final = -32700
@@ -154,11 +159,12 @@ def looks_like_path(value: str) -> bool:
     ``path`` heißen, um einen Pfad zu tragen — der Name eines Objekts ist Text,
     und Text nimmt alles auf.
 
-    Absichtlich eng gefasst. „Deckel 2" ist ein Name, und eine Sperre, die zu
-    breit greift, macht die Schnittstelle unbrauchbar und sieht dabei sicher
-    aus. Erkannt wird, was ohne Zweifel ein Pfad ist: ein Laufwerksbuchstabe,
-    ein führender Trenner, ein Netzpfad, ein Schritt nach oben — oder ein
-    Pfad in URL-Form.
+    Absichtlich rein **lexikalisch**. Ein relativer Pfad wird nicht gegen das
+    aktuelle Arbeitsverzeichnis aufgelöst: Das würde aus fremdem Text erst
+    einen scheinbaren Workspace-Bezug herstellen, und nach einem anderen
+    Programmstart auf einen anderen Ort zeigen. Erkannt wird, was Pfadsyntax
+    trägt: Laufwerksbuchstabe, führender oder enthaltener Trenner,
+    Punktsegment, Dateiendung oder URL-Form.
 
     **``file:`` kam durch**, und zwar weil es keines der anderen vier Merkmale
     trifft: kein führender Trenner, der Doppelpunkt steht an fünfter Stelle
@@ -173,11 +179,37 @@ def looks_like_path(value: str) -> bool:
         return False
     if text.lower().startswith("file:"):
         return True
-    if text.startswith(("/", "\\", "~")):
+    if text.startswith(("/", "\\", "~", ".")):
         return True
     if len(text) > 1 and text[1] == ":" and text[0].isalpha():
         return True
-    return ".." in text.replace("\\", "/").split("/")
+    # Ein NTFS-Datenstrom hängt ``:name`` auch an endungslose Namen wie
+    # ``README``. Leerraum trennt dagegen natürliche Beschriftungen wie
+    # „Deckel: links“; reine Uhrzeiten bleiben ebenfalls gewöhnlicher Text.
+    stream_parts = text.split(":")
+    if (
+        len(stream_parts) >= 2
+        and all(not any(character.isspace() for character in part) for part in stream_parts)
+        and any(not part.isdecimal() for part in stream_parts)
+    ):
+        return True
+    normalised = text.replace("\\", "/")
+    if "/" in normalised:
+        return True
+    # Ein einzelner relativer Dateiname hat keinen Trenner. Eine knappe,
+    # alphanumerische Endung ist die verbleibende eindeutige Pfadspur. Ihre
+    # Länge und Leerraum im Stamm sagen nichts darüber aus, ob ein Dateisystem
+    # den Namen annimmt; nur rein numerische Endungen bleiben Versionsangaben.
+    stem, separator, suffix = normalised.rpartition(".")
+    forbidden = '<>:"/\\|?*'
+    return bool(
+        separator
+        and stem
+        and suffix
+        and any(character.isalpha() for character in suffix)
+        and not suffix.endswith((" ", "."))
+        and not any(ord(character) < 0x20 or character in forbidden for character in suffix)
+    )
 
 
 def _holds_path(value: Any) -> bool:
@@ -280,7 +312,16 @@ class RemoteRefusedError(Exception):
     Fehlerantwort — der Kern sieht ihn nie."""
 
 
-def handle(payload: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
+class ResponseTooLargeError(Exception):
+    """Die Antwort überschreitet das vom Transport vorgegebene Budget."""
+
+
+def handle(
+    payload: dict[str, Any],
+    bridge: Bridge,
+    *,
+    max_response_bytes: int | None = None,
+) -> dict[str, Any]:
     """Eine JSON-RPC-Anfrage beantworten.
 
     Rein rechnend: kein Netz, kein Zustand, keine Nebenwirkung außer der, die
@@ -305,11 +346,16 @@ def handle(payload: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
     if method == "tools/list":
         return _result(ident, {"tools": [dict(entry) for entry in remote_tools()]})
     if method == "tools/call":
-        return _result(ident, _called(params, bridge))
+        return _result(ident, _called(params, bridge, max_response_bytes=max_response_bytes))
     return _error(ident, METHOD_NOT_FOUND, _("Diese Methode gibt es nicht."))
 
 
-def _called(params: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
+def _called(
+    params: dict[str, Any],
+    bridge: Bridge,
+    *,
+    max_response_bytes: int | None = None,
+) -> dict[str, Any]:
     """Ein Werkzeugaufruf, mit allen Auflagen davor.
 
     Auch ein Fehler ist ein Ergebnis: MCP unterscheidet zwischen einem
@@ -325,11 +371,43 @@ def _called(params: dict[str, Any], bridge: Bridge) -> dict[str, Any]:
     try:
         check_call(name, arguments)
         answer = bridge.call(name, arguments)
+        if max_response_bytes is not None:
+            _require_bounded_text(answer, max_response_bytes)
     except RemoteRefusedError as refused:
         return _tool_error(str(refused))
     except AppError as problem:
         return _tool_error(_readable(problem))
     return {"content": [{"type": "text", "text": answer}], "isError": False}
+
+
+def _require_bounded_text(value: str, limit: int) -> None:
+    """Misst einen JSON-Text ohne vorher eine zweite große Kopie anzulegen.
+
+    ``json.dumps`` erzeugt für eine Zeichenkette zunächst den vollständig
+    maskierten Text. Die Grenze muss deshalb davor greifen. Gezählt wird exakt
+    so, wie der Encoder mit ``ensure_ascii=False`` Zeichenketten schreibt;
+    sobald das Budget verbraucht ist, endet der Lauf.
+    """
+    if not isinstance(value, str):
+        raise TypeError("bridge answer is not text")
+    size = 2  # öffnendes und schließendes Anführungszeichen
+    short_escapes = {"\b", "\t", "\n", "\f", "\r", '"', "\\"}
+    for character in value:
+        codepoint = ord(character)
+        if character in short_escapes:
+            size += 2
+        elif codepoint < 0x20:
+            size += 6
+        elif codepoint < 0x80:
+            size += 1
+        elif codepoint < 0x800:
+            size += 2
+        elif codepoint < 0x10000:
+            size += 3
+        else:
+            size += 4
+        if size > limit:
+            raise ResponseTooLargeError
 
 
 def _readable(problem: AppError) -> str:
@@ -359,24 +437,31 @@ def _error(ident: Any, code: int, message: Any) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": ident, "error": {"code": code, "message": str(message)}}
 
 
-def answer_bytes(raw: bytes, bridge: Bridge) -> bytes:
+def answer_bytes(raw: bytes, bridge: Bridge, *, max_bytes: int | None = None) -> bytes:
     """Von rohen Zeichen zur rohen Antwort — die Form, die ein Server braucht.
 
     Ein abgeschnittener Datenstrom ist der Normalfall und keine Ausnahme; er
     bekommt eine Antwort wie alles andere, statt den Server zu beenden.
     """
     try:
-        payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return _dumped(_error(None, PARSE_ERROR, _("Das war kein gültiges JSON.")))
+        payload = load_json(raw, max_bytes=MAX_REQUEST_BYTES)
+    except StrictJsonError:
+        return _dumped(_error(None, PARSE_ERROR, _("Das war kein gültiges JSON.")), max_bytes)
     if not isinstance(payload, dict):
-        return _dumped(_error(None, INVALID_REQUEST, _("Eine Anfrage ist ein Objekt.")))
+        return _dumped(_error(None, INVALID_REQUEST, _("Eine Anfrage ist ein Objekt.")), max_bytes)
     try:
-        return _dumped(handle(payload, bridge))
+        return _dumped(handle(payload, bridge, max_response_bytes=max_bytes), max_bytes)
+    except ResponseTooLargeError:
+        raise
     except Exception:
         # Ein Server, der bei einer kaputten Anfrage abbricht, ist keiner.
-        return _dumped(_error(payload.get("id"), INTERNAL_ERROR, _("Unerwarteter Fehler.")))
+        return _dumped(
+            _error(payload.get("id"), INTERNAL_ERROR, _("Unerwarteter Fehler.")), max_bytes
+        )
 
 
-def _dumped(payload: dict[str, Any]) -> bytes:
-    return json.dumps(payload, ensure_ascii=False).encode("utf-8")
+def _dumped(payload: dict[str, Any], limit: int | None = None) -> bytes:
+    encoded = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    if limit is not None and len(encoded) > limit:
+        raise ResponseTooLargeError
+    return encoded

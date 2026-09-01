@@ -919,13 +919,12 @@ def main() -> int:
     parser.add_argument("packages", nargs="*", type=Path, help="die fertigen Installationsdateien")
     args = parser.parse_args()
 
-    changelog_pages = write_changelog_pages()
-    print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
-
     if not args.packages:
         print("Kein Paket angegeben — der Kasten wird geleert.")
         write_pages([])
         write_version([])
+        changelog_pages = write_changelog_pages()
+        print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
         print("\nDie Seite bittet wieder um Nachricht.")
         return 0
 
@@ -935,6 +934,8 @@ def main() -> int:
     write_pages(packages)
     print("\nVersionsdatei:")
     write_version(packages)
+    changelog_pages = write_changelog_pages()
+    print(f"Changelog: {len(changelog_pages)} Sprachversionen aus derselben Quelle erzeugt.\n")
     print(
         f"\nFertig. {len(packages)} Paket(e) unter website/dl/, eingetragen in "
         f"{len(PAGES)} Sprachversionen.\nZum Termin schaltet die Seite von "

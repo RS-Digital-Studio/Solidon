@@ -52,10 +52,6 @@ def ask(question: str, log: str, tmp_path: Path) -> bool:
     environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
     environment["SUITE_NUR_FUNKTIONEN"] = "1"
-    # Der Prüfmodus lädt ausschließlich Shell-Funktionen. Ein absichtlich
-    # ungültiger Pfad hält fest, dass dafür weder die Windows- noch die
-    # Linux-Form einer virtuellen Umgebung vorausgesetzt wird.
-    environment["SUITE_PYTHON"] = str(tmp_path / "nicht-vorhanden")
     call = question.replace("$P", str(protocol).replace("\\", "/"))
     result = subprocess.run(
         [BASH or "bash", "-c", f'source "{str(SCRIPT).replace(chr(92), "/")}"; {call}'],

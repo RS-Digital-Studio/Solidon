@@ -959,15 +959,26 @@ def test_the_pull_shows_a_share_and_a_way_out(
     ist, ist genau die Hälfte dessen, was hier zu prüfen ist.
     """
     from app.core.backends import keys, llm
-    from app.ui.dialogs import KeyDialog
+    from app.ui import dialogs
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(dialogs, "_what_answers", lambda: "Der Chat wird geprüft.")
 
     class Tags:
         """Die Modell-Liste, die derselbe Dialog beim Aufbau abfragt."""
 
-        def read(self) -> bytes:
-            return b'{"models": []}'
+        def __init__(self, owner: Server) -> None:
+            self.owner = owner
+            self._body = b'{"models": []}'
+            self.headers = {"Content-Length": str(len(self._body))}
+
+        def set_read_timeout(self, seconds: float) -> None:
+            assert seconds > 0
+
+        def read(self, size: int = -1) -> bytes:
+            self.owner.tags_read = True
+            chunk, self._body = self._body[:size], self._body[size:]
+            return chunk
 
     class Server:
         """Ollama, so weit der Dialog es anspricht: Liste und Download.
@@ -984,9 +995,14 @@ def test_the_pull_shows_a_share_and_a_way_out(
 
         def __init__(self) -> None:
             self.asking_for_tags = False
+            self.tags_read = False
+            self.headers: dict[str, str] = {}
+            self._body = b""
 
         def __call__(self, request: object, timeout: float = 0.0) -> object:
             self.asking_for_tags = "/api/tags" in str(getattr(request, "full_url", ""))
+            if not self.asking_for_tags:
+                self._body = b"".join(self.lines)
             return self
 
         def open(self, request: object, timeout: float = 0.0) -> object:
@@ -994,14 +1010,24 @@ def test_the_pull_shows_a_share_and_a_way_out(
             return self(request, timeout)
 
         def __enter__(self) -> object:
-            return Tags() if self.asking_for_tags else iter(self.lines)
+            return Tags(self) if self.asking_for_tags else self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
+        def set_read_timeout(self, seconds: float) -> None:
+            assert seconds > 0
+
+        def read(self, size: int = -1) -> bytes:
+            chunk, self._body = self._body[:size], self._body[size:]
+            return chunk
+
     server = Server()
     monkeypatch.setattr(llm, "opener_for", lambda _address: server)
-    dialog = KeyDialog()
+    dialog = dialogs.KeyDialog()
+    assert dialog.wait_for_look(), "die Modellliste endet vor dem Download"
+    qt_app.processEvents()
+    assert server.tags_read, "auch die begrenzte Modellliste wurde erfolgreich gelesen"
     dialog.pull_button.setEnabled(True)
 
     dialog.pull_button.click()
@@ -1041,13 +1067,14 @@ def test_a_pull_step_without_numbers_claims_no_percentage(
     assert "42" in dialog.probe_result.text(), "die Zahl steht neben dem Balken, nicht darin"
 
 
-def test_a_suggested_entry_hands_over_the_name_and_not_its_line(
+def test_a_suggested_entry_separates_the_name_from_its_explanation(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Eintrag trägt Größe und Bewertung — als Modellname wäre das falsch.
+    """Der Name bleibt lesbar, die Entscheidungshilfe steht darunter.
 
-    „qwen3:14b — 9,3 GB, Bewährt: …" ist ein Name, den Ollama nicht kennt: der
-    Download endete mit „Ollama hat den Namen nicht angenommen".
+    Im editierbaren Aufklappfeld sprang die lange Zeile nach rechts, während
+    ausgerechnet der Modellname links verschwand. Ein Nicht-CAD-Nutzer soll
+    erst sehen, was gewählt ist, und direkt darunter, warum es empfohlen wird.
     """
     from app.core.backends import keys, llm
     from app.ui.dialogs import KeyDialog
@@ -1059,7 +1086,47 @@ def test_a_suggested_entry_hands_over_the_name_and_not_its_line(
     dialog.model_field.setCurrentIndex(index)
 
     assert dialog._chosen_model() == llm.DEFAULT_OLLAMA_MODEL
-    assert " — " in dialog.model_field.currentText(), "die Zeile erklärt, der Name nicht"
+    assert dialog.model_field.currentText() == llm.DEFAULT_OLLAMA_MODEL
+    assert "Download: 9,3 GB" in dialog.model_note.text()
+    assert "fünf von fünf" in dialog.model_note.text()
+    assert "Median rund 17" in dialog.model_note.text()
+    assert "14 GB" not in dialog.model_note.text()
+
+
+def test_an_installed_alias_keeps_its_known_explanation(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``:latest`` ist keine zweite Modellfamilie und verliert keine Messung."""
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    dialog.model_field.clear()
+    dialog.model_field.addItem("mistral-nemo", "mistral-nemo")
+    dialog.model_field.setCurrentIndex(0)
+
+    assert "keine Messung" not in dialog.model_note.text()
+    assert "keine Werkzeuge" in dialog.model_note.text()
+
+
+def test_installed_model_aliases_appear_exactly_once(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ollamas ``:latest`` darf keine zweite sichtbare Modellzeile erzeugen."""
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    dialog._fill_models(("mistral-nemo", "mistral-nemo:latest"))
+
+    offered = [
+        str(dialog.model_field.itemData(index)) for index in range(dialog.model_field.count())
+    ]
+    aliases = [name for name in offered if llm.normalised_model_name(name) == "mistral-nemo"]
+    assert aliases == ["mistral-nemo"]
 
 
 def test_a_fetched_model_counts_even_without_saving(
@@ -1272,11 +1339,11 @@ def test_a_broken_pull_frees_the_button(
 def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Auf der CPU gemessene 42 Minuten, bis die erste Antwort beginnt.**
+    """**Gemessene zweiundvierzig Minuten, bis die erste Antwort beginnt.**
 
     Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
-    und fällt auf den Prozessor zurück: 7,8 Token je Sekunde beim Einlesen, und
-    der gemessene Auftrag dieser Anwendung ist 19 641 Token lang. „Das Modell ruft
+    und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
+    Auftrag dieser Anwendung ist rund 20 000 Token lang. „Das Modell ruft
     Werkzeuge auf" ist dann wahr und nutzlos — der Kunde sieht ein Fenster, das
     nichts tut, und hält es für einen Fehler der Anwendung.
 
@@ -1294,17 +1361,23 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     assert "Prozessor" in gesagt
     assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
     assert "42" in gesagt, "und was sie für den Kunden bedeutet"
+    assert "Zehn-Minuten-Grenze" in gesagt, "der CPU-Weg endet vor dem Ergebnis"
+    assert "nicht abgeschlossen" in gesagt, "die Grenze wird nicht als langsamer Erfolg verkauft"
+    assert "Grafikkarte" in gesagt, "der erste nutzbare Wechselweg steht dabei"
     assert "{" not in gesagt, "die Platzhalter sind gefüllt"
-    assert "Schlüssel" in gesagt, "Regel 17: der Vorschlag gehört dazu"
+    assert "Schlüssel" in gesagt and "gehostetes Modell" in gesagt, (
+        "Regel 17: auch der gehostete Wechselweg gehört dazu"
+    )
 
 
 def test_a_model_on_a_graphics_card_gets_the_plain_answer(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Wo nichts zu warnen ist, wird nicht gewarnt.
+    """Wo die Karte rechnet, sagt die Probe das gemessene Ergebnis.
 
-    Gesagt wird nur, was der Kunde nicht selbst sehen kann. Ein Modell auf
-    einer Karte bekommt die Antwort auf die Frage, die er gestellt hat.
+    „Brauchbar" allein ließ offen, ob die Grafikkarte wirklich benutzt wird.
+    Gerade nach einem CPU-Rückfall ist diese sichtbare Gegenprobe die Auskunft,
+    die der Nutzer braucht.
     """
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
@@ -1315,6 +1388,65 @@ def test_a_model_on_a_graphics_card_gets_the_plain_answer(
 
     assert "brauchbar" in dialog.probe_result.text()
     assert "Prozessor" not in dialog.probe_result.text()
+    assert "Grafikkarte" in dialog.probe_result.text()
+    assert "Sekunden" not in dialog.probe_result.text(), (
+        "die Ein-Werkzeug-Probe darf keine Zeit für den vollständigen Auftrag hochrechnen"
+    )
+
+
+def test_the_chat_notice_separates_the_full_gpu_run_from_the_cpu_fallback(
+    window: MainWindow,
+) -> None:
+    """Die gemessene GPU-Leistung steht sichtbar am Ort des lokalen Chats."""
+    window._ollama_size_answered(None)
+
+    text = window.chat.notice.text()
+    assert window.chat.notice.isVisibleTo(window.chat)
+    assert "zwei Messläufen" in text
+    assert "jeweils fünf von fünf" in text
+    assert "11 bis 26 Sekunden" in text
+    assert "Median rund 17" in text
+    assert "vollständig auf der Grafikkarte" in text
+    assert "7,8 Token je Sekunde" in text
+    assert "Prozessor" in text
+    assert "42 Minuten" in text
+    assert "Zehn-Minuten-Grenze" in text
+    assert "kann so nicht abgeschlossen werden" in text
+    assert "geeignete Grafikkarte" in text
+    assert "gehostetes Modell" in text
+    assert "drei von fünf" not in text
+
+
+def test_the_probe_result_keeps_the_buttons_inside_the_visible_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein nachgereichter Satz darf die untere Knopfleiste nicht abschneiden.
+
+    Im sichtbaren dunklen Fenster wuchs die Ergebniszeile auf zwei Zeilen, der
+    schon gezeigte Dialog aber nicht mit. Von „Speichern" blieb nur die obere
+    Hälfte. Erst ein manuelles ``adjustSize`` im Prüfstand machte denselben
+    Dialog vollständig.
+    """
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    dialog.show()
+    qt_app.processEvents()
+    dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
+    qt_app.processEvents()
+
+    assert dialog.height() >= dialog.sizeHint().height(), (
+        "das Fenster muss nach dem dynamischen Ergebnis mindestens seine Wunschhöhe haben"
+    )
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert buttons is not None and buttons.isVisibleTo(dialog)
+    assert dialog.contentsRect().contains(buttons.geometry().bottomRight()), (
+        "die vollständige Knopfleiste liegt im sichtbaren Dialog-Rechteck"
+    )
 
 
 def test_a_speed_that_was_not_measured_claims_nothing(qt_app: QApplication) -> None:

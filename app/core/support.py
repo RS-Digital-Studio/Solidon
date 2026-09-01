@@ -21,14 +21,26 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Final
+from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, UserError
-from app.core.log import get_logger
+from app.core.http import (
+    RejectRedirects,
+    deadline_after,
+    is_private_destination,
+    read_limited,
+    response_url,
+    same_origin,
+    validate_http_url,
+)
+from app.core.json_boundary import loads as load_json
+from app.core.log import get_logger, redact_external
 from app.core.report import environment
 from app.i18n import _, tr
 
@@ -64,6 +76,7 @@ MAX_MESSAGE_LENGTH: Final = 20_000
 #: Namen, und am Namen sah man es nicht. Gemeldet vom Zwillingsscan einer
 #: Nachbarsitzung.
 MAX_REPLY_BYTES: Final = 64 * 1024
+_SUPPORT_OPENER = urllib.request.build_opener(RejectRedirects())
 
 #: Die Arten einer Sendung. Sie stehen im Betreff und sortieren den Posteingang
 #: — mehr tun sie nicht, und deshalb sind es fünf und nicht zwölf.
@@ -266,7 +279,7 @@ def _failure_for(problem: Exception) -> SendFailed:
     ein Verbindungsfehler nicht. So bleibt der Versandweg austauschbar: geprüft
     wird eine Eigenschaft der Ausnahme, nicht ihr Typ.
     """
-    reason = str(problem)[:200]
+    reason = redact_external(problem, limit=200)
     code = getattr(problem, "code", None)
     if code == 429:
         # Ratengrenze, oft die des gemeinsamen Anschlusses (NAT): warten, nicht
@@ -333,7 +346,7 @@ def send(ticket: Ticket, url: str = SUPPORT_URL, sender: Sender | None = None) -
         raise _failure_for(problem) from problem
 
     if not answer.get("ok"):
-        refusal = str(answer.get("error") or "").strip()[:200]
+        refusal = redact_external(answer.get("error") or "", limit=200).strip()
         raise SendFailed(
             detail=_("Die Gegenstelle hat die Sendung abgelehnt."),
             values={"reason": refusal} if refusal else {},
@@ -422,10 +435,12 @@ def _file_safe(name: str) -> str:
 
 def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
     """Der Vorgabeweg: ein POST, Formular hinein, JSON heraus."""
-    import urllib.request
-
+    address = validate_http_url(url, allow_http=True)
+    if urlsplit(address).scheme == "http" and not is_private_destination(address):
+        raise ValueError("remote support endpoint requires HTTPS")
+    deadline = deadline_after(TIMEOUT_SECONDS)
     request = urllib.request.Request(
-        url,
+        address,
         data=body,
         headers={
             "Content-Type": content_type,
@@ -434,11 +449,12 @@ def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
-        raw = answer.read(MAX_REPLY_BYTES + 1)
-    if len(raw) > MAX_REPLY_BYTES:
-        raise ValueError("answer is too large")
+    with _SUPPORT_OPENER.open(request, timeout=TIMEOUT_SECONDS) as answer:
+        final = validate_http_url(response_url(answer, address), allow_http=True)
+        if not same_origin(address, final):
+            raise ValueError("support endpoint redirected")
+        raw = read_limited(answer, limit=MAX_REPLY_BYTES, deadline=deadline)
     try:
-        return dict(json.loads(raw.decode("utf-8")))
+        return dict(load_json(raw, max_bytes=MAX_REPLY_BYTES))
     except ValueError as problem:
-        raise ValueError(f"answer was not JSON: {raw[:200]!r}") from problem
+        raise ValueError("answer was not JSON") from problem

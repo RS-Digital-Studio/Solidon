@@ -1,20 +1,22 @@
 # Automatische Bauläufe für alle Zielplattformen (Bauplan §37.2).
 #
-# Drei Jobs. Die ersten zwei tragen eine Reihenfolge: zuerst läuft die Suite,
-# auf jeder Plattform, und nur was grün ist, wird paketiert. Ein Installer aus
-# einer roten Suite ist schlimmer als gar keiner. Beide bauen gegen
+# Suite und Paketierung tragen eine Reihenfolge. Danach trennen eigene Jobs
+# App-Signatur, ungeschützten Installerbau, Installer-Signatur und abschließende
+# Releaseakte. Nur was grün ist, wird veröffentlicht. Ein Installer aus einer
+# roten Suite ist schlimmer als gar keiner. Die Baujobs arbeiten gegen
 # `constraints.txt`, damit ein Lauf heute dasselbe installiert wie einer in
 # drei Monaten.
 #
-# Der dritte steht daneben und läuft wöchentlich: er lässt die Versionen frei
+# Der Versionswächter steht daneben und läuft wöchentlich: er lässt die Versionen frei
 # auflösen und meldet, wenn eine neue etwas bricht. Ohne ihn erfährt man davon
 # erst beim nächsten frischen Klon — und dann mitten in einer anderen Arbeit.
 #
 # Die Signierung braucht externe Identitäten, die nicht in diesem Repository
 # liegen: Azure Artifact Signing oder ein vorhandenes PFX für Windows sowie
-# Developer-IDs und Notarisierungsdaten für Apple. Die Schritte stehen hier
-# und überspringen sich, wenn ihre Angaben fehlen — ein Fork baut dann
-# unsigniert, statt zu scheitern.
+# Developer-IDs und Notarisierungsdaten für Apple. Geheimnisse erreichen nur
+# den jeweiligen Signierschritt; Windows erhält OIDC ausschließlich im
+# geschützten Signierjob. Ein ausdrücklich als `unsigned` gesetzter Modus baut
+# die Demo mit sichtbarer Warnung.
 #
 # Der tägliche Push läuft nur auf Ubuntu; die volle Drei-Plattform-Matrix und
 # die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch), also
@@ -51,22 +53,13 @@ jobs:
       matrix:
         os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
           cache: pip
-
-      - name: Release-Tag mit Anwendungsversion abgleichen
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: >-
-          python -c "import os, sys; from app.branding import APP_VERSION;
-          actual = os.environ['RELEASE_TAG']; expected = f'v{APP_VERSION}';
-          sys.exit(0) if actual == expected else sys.exit(
-          f'Release-Tag {actual} passt nicht zur Anwendungsversion {APP_VERSION};
-          erwartet ist {expected}.')"
 
       - name: Qt-Systembibliotheken (Linux)
         # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
@@ -144,11 +137,6 @@ jobs:
         # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
         # sonst einen eigenen Prozess für nichts.
         #
-        # `PrintSettingsDialog(` gehört ebenfalls in die Suche: Die Datei baut
-        # kein VTK-Fenster, erzeugt aber so viele umfangreiche Qt-Dialoge, dass
-        # der bereits gefüllte Sammelprozess reproduzierbar in Qt abstürzt. Ein
-        # einzelner betroffener Test besteht in einem frischen Prozess.
-        #
         # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
         # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
         # `window`-Fixture von `test_analysis_ui.py` (`QThread.__init__`,
@@ -185,7 +173,7 @@ jobs:
           GALLIUM_DRIVER: llvmpipe
         run: |
           set -e
-          windowed=$(grep -lE "MainWindow|Viewport\(|PrintSettingsDialog\(" tests/test_*.py | tr '\n' ' ')
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           # Xvfb nur, wo es eines gibt.
@@ -234,7 +222,7 @@ jobs:
           }
           attempt -m "not performance" $ignores
 
-          # **Die UI-intensiven Dateien laufen hier nicht mehr**, und das ist eine
+          # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
           #
           # Kein Runner hat eine Grafikkarte. VTK sucht trotzdem einen echten
@@ -256,7 +244,7 @@ jobs:
           # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
           # Sie schließt sich, sobald VTK dort läuft oder die Runner GL
           # bekommen; bis dahin steht sie in ROADMAP.md.
-          echo "::warning::UI-intensive Dateien übersprungen (Qt/VTK ohne GL): $windowed"
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
 
   package:
     name: Paket (${{ matrix.os }})
@@ -265,7 +253,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
-      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -296,30 +283,25 @@ jobs:
         # Version anzubieten, die niemand mehr baut.
         os: [windows-latest, ubuntu-latest, macos-26-intel, macos-latest]
     env:
-      # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
-      # im eigenen `if` lesen, und sein eigenes `env` dort auch nicht. Dies ist
-      # die eine Stelle, die die Bedingung unten sieht.
-      SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
-      SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
-      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
-      ARTIFACT_SIGNING_ACCOUNT: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
-      ARTIFACT_SIGNING_PROFILE: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
-      APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
-      APPLE_NOTARY_ID: ${{ secrets.APPLE_NOTARY_ID }}
-      APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Keine Geheimnisse: Der Modus ist eine gewöhnliche Repository-Variable.
+      # Schutz kommt ausschließlich von der Produktionsumgebung an den
+      # signierenden Jobs; Geheimnisse erreichen nur deren feste Schritte.
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE || 'unsigned' }}
+      WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE || 'unsigned' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
           cache: pip
+
+      - name: Signiermodi fail-closed prüfen
+        shell: pwsh
+        run: |
+          if ($env:WINDOWS_SIGNING_MODE -notin @('azure', 'pfx', 'unsigned')) { throw "WINDOWS_SIGNING_MODE muss azure, pfx oder unsigned sein." }
+          if ($env:MACOS_SIGNING_MODE -notin @('signed', 'notarized', 'unsigned')) { throw "MACOS_SIGNING_MODE muss signed, notarized oder unsigned sein." }
 
       - name: Qt-Systembibliotheken (Linux)
         # Auch hier: die Beispielprojekte und die PyInstaller-Analyse
@@ -346,9 +328,6 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tools/make_examples.py
 
-      - name: Drittanbieter-Lizenzbeilage prüfen
-        run: python tools/make_licence_notices.py --check
-
       - name: Rechen- und Prüfmodule kompilieren, Manifest signieren
         # Die schnelle Konturverkettung aus §31 muss auf genau der Plattform
         # entstehen, für die PyInstaller gleich darunter das Kundenpaket baut.
@@ -363,128 +342,84 @@ jobs:
           python tools/build_licence_module.py
 
       - name: Bauen
+        # Analysis bestimmt die tatsächlich importierten Distributionen; die
+        # gemeinsame Spec schreibt die Laufzeit-Stückliste aber erst nach dem
+        # fertigen COLLECT beziehungsweise macOS-BUNDLE. Dadurch enthält sie
+        # auch CPython, Bootloader und jede wirklich mitgereiste native Datei.
         run: pyinstaller packaging/solidon3d.spec --noconfirm
 
-      - name: Ohne Signatur bauen (Windows)
-        # Kein stummer Übersprung: die Demo geht unsigniert hinaus, und das
-        # gehört ins Protokoll, damit niemand ein signiertes Paket vermutet.
-        #
-        # Der Weg darunter ist ohnehin einer von gestern: seit Juni 2023 geben
-        # die Zertifizierungsstellen keine exportierbaren Code-Signing-Schlüssel
-        # mehr heraus — ein PFX in einem Secret ist für ein neu gekauftes
-        # Zertifikat kein möglicher Weg. Wenn signiert wird, dann über Azure
-        # Trusted Signing, und dann wird dieser Schritt ersetzt, nicht gefüllt.
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE == ''
+      - name: Laufzeit-Stückliste gegen CycloneDX 1.6 prüfen
+        # Das JSON Schema ist die Referenzimplementierung von CycloneDX. Der
+        # Abruf ist auf den offiziellen Release-Commit 1.6 festgeschrieben;
+        # eine spätere Änderung an master kann den Bau deshalb nicht verändern.
         shell: pwsh
         run: |
-          Write-Host "::warning::Unsigniert gebaut - SmartScreen warnt beim ersten Start."
-
-      - name: Signieren (Windows)
-        # Erst die Anwendung, dann unten der Installer — was in die Setup-Datei
-        # wandert, muss vorher signiert sein.
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE != ''
-        shell: pwsh
-        run: |
-          $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
-          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
-          [IO.File]::WriteAllBytes($pfx, $bytes)
-          # Der Name kommt aus app/branding.py, nicht aus dieser Datei — hier
-          # stand er zweimal und war nach der Umbenennung zweimal falsch.
-          $name = python -c "from app.branding import APP_NAME; print(APP_NAME)"
-          & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
-            /tr http://timestamp.digicert.com /td SHA256 `
-            "dist/$name/$name.exe"
-          & signtool verify /pa /v "dist/$name/$name.exe"
-
-      - name: Bei Azure für Artifact Signing anmelden
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        uses: azure/login@v3
-        with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Anwendungspfad für Artifact Signing bestimmen
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        shell: pwsh
-        run: |
-          $name = python -c "from app.branding import APP_NAME; print(APP_NAME)"
-          $path = (Resolve-Path "dist/$name/$name.exe").Path
-          "ARTIFACT_APP=$path" >> $env:GITHUB_ENV
-
-      - name: Anwendung mit Azure Artifact Signing signieren
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        uses: azure/artifact-signing-action@v2
-        with:
-          endpoint: ${{ env.ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ env.ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ env.ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ env.ARTIFACT_APP }}
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: Solidon3D
-          description-url: https://solidon3d.de/
-
-      - name: Azure-Signatur der Anwendung prüfen
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        shell: pwsh
-        run: signtool verify /pa /v $env:ARTIFACT_APP
-
-      - name: Inno Setup sicherstellen (Windows)
-        # Auf den GitHub-Runnern vorinstalliert; die Prüfung hält den Lauf
-        # auch auf einem Runner am Leben, der es nicht mitbringt.
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          if (-not (Get-Command ISCC -ErrorAction SilentlyContinue) -and
-              -not (Test-Path 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe')) {
-            choco install innosetup --no-progress -y
+          $schemaUri = "https://raw.githubusercontent.com/CycloneDX/specification/55343ba19dee1785acf1ce9191540d5fd7b590db/schema/bom-1.6.schema.json"
+          $schema = (Invoke-WebRequest -UseBasicParsing $schemaUri).Content
+          $sbomPath = python tools/make_sbom.py --locate-artifact dist
+          if ($LASTEXITCODE -ne 0) {
+            throw "Die Stückliste liegt nicht genau einmal im Kundenartefakt. Paket neu bauen und PyInstaller-Datenliste prüfen."
+          }
+          # Auf macOS bleibt neben der .app ein COLLECT-Zwischenordner liegen.
+          # Der Locator prüft nur die .app; Windows/Linux prüfen den finalen
+          # COLLECT-Ordner. Eine zufällige zweite Kopie unter dist zählt nicht.
+          $document = Get-Content -Raw -LiteralPath $sbomPath
+          if (-not (Test-Json -Json $document -Schema $schema)) {
+            throw "Solidon3D.cdx.json entspricht nicht dem offiziellen CycloneDX-1.6-Schema. Stückliste mit tools/make_sbom.py neu erzeugen."
           }
 
-      - name: Installer bauen (Windows)
+      - name: Lizenzbeilage aus dem fertigen Kundenartefakt erzeugen
+        # Notice und SBOM gehören in den unveränderlich gebundenen App-Baum;
+        # das maschinenlesbare Schema-2-Manifest bleibt dagegen in der
+        # CRA-/Buildakte. Dieser Schritt läuft vor jeder Paketierung und vor
+        # jeder Signierübergabe.
+        shell: pwsh
+        run: |
+          $sbomPath = python tools/make_sbom.py --locate-artifact dist
+          if ($LASTEXITCODE -ne 0) { throw "Die Endartefakt-SBOM fehlt oder ist mehrdeutig." }
+          $artifactRoot = if ($IsMacOS) { Resolve-Path "dist/Solidon3D.app" } else { Resolve-Path "dist/Solidon3D" }
+          $noticePath = Join-Path $artifactRoot "THIRD-PARTY-NOTICES.md"
+          python tools/make_licence_notices.py `
+            --sbom $sbomPath `
+            --output $noticePath `
+            --manifest build/third-party-licenses.json
+          if ($LASTEXITCODE -ne 0) { throw "Die Lizenzbeilage konnte nicht aus der Endartefakt-SBOM erzeugt werden." }
+          $manifest = Get-Content -Raw build/third-party-licenses.json | ConvertFrom-Json
+          if ($manifest.schema -ne 2) { throw "Das CRA-Lizenzmanifest hat nicht Schema 2." }
+
+      - name: Prüfsummengebundene Signierübergabe erzeugen (Windows)
+        # Der Paketjob sieht weder Signiergeheimnisse noch ein OIDC-Token. Er
+        # übergibt nur den vollständig gebauten, geprüften Stand an den
+        # geschützten Signierjob darunter.
         if: runner.os == 'Windows'
-        run: python tools/make_installer.py
+        run: python tools/make_installer.py --signing-handoff
 
-      - name: Installer signieren (Windows)
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT == '' && env.SIGN_CERTIFICATE != ''
+      - name: Signiereingang packen (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $bytes = [Convert]::FromBase64String($env:SIGN_CERTIFICATE)
-          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
-          [IO.File]::WriteAllBytes($pfx, $bytes)
-          $setup = Get-ChildItem dist -Filter "*-Setup-*.exe" | Select-Object -First 1
-          & signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 `
-            /tr http://timestamp.digicert.com /td SHA256 `
-            $setup.FullName
-          & signtool verify /pa /v $setup.FullName
+          $handoff = Get-Content -Raw packaging/build/windows-signing.json | ConvertFrom-Json
+          $stage = Join-Path $env:RUNNER_TEMP "windows-signing-input"
+          $archive = Join-Path $PWD "dist/windows-signing-input.zip"
+          New-Item -ItemType Directory -Force "$stage/dist" | Out-Null
+          New-Item -ItemType Directory -Force "$stage/packaging/build" | Out-Null
+          Copy-Item -Recurse -LiteralPath $handoff.source_dir -Destination "$stage/dist"
+          Copy-Item -LiteralPath $handoff.script, $handoff.licence, $handoff.icon -Destination "$stage/packaging"
+          Copy-Item -LiteralPath packaging/build/licence.manifest, packaging/build/windows-signing.json -Destination "$stage/packaging/build"
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -CompressionLevel Optimal
+          $sum = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower()
+          "$sum  windows-signing-input.zip" | Set-Content -Encoding ascii "dist/windows-signing-input.zip.sha256"
 
-      - name: Installerpfad für Artifact Signing bestimmen
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        shell: pwsh
-        run: |
-          $setup = Get-ChildItem dist -Filter "*-Setup-*.exe" | Select-Object -First 1
-          if ($null -eq $setup) { throw "Die Setup-Datei fehlt." }
-          "ARTIFACT_SETUP=$($setup.FullName)" >> $env:GITHUB_ENV
-
-      - name: Installer mit Azure Artifact Signing signieren
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        uses: azure/artifact-signing-action@v2
+      - name: Signiereingang übergeben (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          endpoint: ${{ env.ARTIFACT_SIGNING_ENDPOINT }}
-          signing-account-name: ${{ env.ARTIFACT_SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ env.ARTIFACT_SIGNING_PROFILE }}
-          files: ${{ env.ARTIFACT_SETUP }}
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          description: Solidon3D Setup
-          description-url: https://solidon3d.de/
-
-      - name: Azure-Signatur des Installers prüfen
-        if: runner.os == 'Windows' && env.ARTIFACT_SIGNING_ENDPOINT != ''
-        shell: pwsh
-        run: signtool verify /pa /v $env:ARTIFACT_SETUP
+          name: solidon3d-windows-signing-input
+          path: |
+            dist/windows-signing-input.zip
+            dist/windows-signing-input.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Archiv packen (Linux)
         # Als tar.gz, nicht als roher Ordner: der Artefakt-Upload verliert die
@@ -500,14 +435,25 @@ jobs:
       - name: Paketierwerkzeuge holen (Linux)
         # appimagetool kommt als AppImage und wird selbst nicht installiert;
         # flatpak-builder liegt in jeder Distribution. Beide sind externe
-        # Programme — Solidon liefert keines mit (§36).
+        # Programme — Solidon liefert keines mit (§36). Werkzeug und der
+        # Laufzeitkern, der später Teil der Kundendatei wird, kommen von festen
+        # Veröffentlichungen und laufen erst nach erfolgreicher SHA-256-Prüfung.
         if: runner.os == 'Linux'
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
-          sudo curl -fsSL -o /usr/local/bin/appimagetool \
-            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          sudo chmod +x /usr/local/bin/appimagetool
+          tool="$RUNNER_TEMP/appimagetool-x86_64.AppImage"
+          runtime="$RUNNER_TEMP/runtime-x86_64"
+          curl -fsSL --retry 3 -o "$tool" \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $tool" | sha256sum --check --strict
+          curl -fsSL --retry 3 -o "$runtime" \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          echo "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  $runtime" | sha256sum --check --strict
+          sudo install -m 755 "$tool" /usr/local/bin/appimagetool
+          sudo install -m 644 "$runtime" /usr/local/lib/appimage-runtime-x86_64
+          echo "APPIMAGETOOL_RUNTIME_FILE=/usr/local/lib/appimage-runtime-x86_64" >> "$GITHUB_ENV"
           flatpak remote-add --if-not-exists --user flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub \
@@ -545,108 +491,19 @@ jobs:
           test -x "dist/${name}.app/Contents/MacOS/${name}" || { echo "::error::Im Bundle fehlt die ausführbare Datei."; exit 1; }
           plutil -lint "dist/${name}.app/Contents/Info.plist"
 
-      - name: Ohne Signatur bauen (macOS)
-        # Wie bei Windows kein stummer Übersprung. Auf dem Mac wiegt es
-        # schwerer: Gatekeeper lässt eine unsignierte Anwendung aus dem Netz
-        # gar nicht erst starten, der Nutzer muss sie über das Kontextmenü
-        # öffnen. Das gehört auf die Download-Seite, nicht in eine Fußnote.
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE == ''
-        run: |
-          echo "::warning::Unsigniert gebaut - Gatekeeper blockiert den ersten Start (Rechtsklick, Oeffnen)."
-
-      - name: Signieren (macOS)
-        # Ad-hoc genügt nicht: signiert wird mit einer Developer-ID, sonst
-        # nützt die Signatur außerhalb des eigenen Rechners nichts. Die
-        # Notarisierung ist ein eigener Schritt und braucht ein Apple-Konto —
-        # sie kommt dazu, sobald es eines gibt.
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != ''
-        run: |
-          name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
-          keychain="$RUNNER_TEMP/build.keychain"
-          security create-keychain -p "" "$keychain"
-          security set-keychain-settings -lut 21600 "$keychain"
-          security unlock-keychain -p "" "$keychain"
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
-          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$keychain" >/dev/null
-          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          codesign --force --deep --options runtime --timestamp \
-            --sign "$APPLE_SIGN_IDENTITY" "dist/${name}.app"
-          codesign --verify --deep --strict --verbose=2 "dist/${name}.app"
-
-      - name: Archiv packen (macOS)
+      - name: Unsignierten macOS-App-Eingang packen
         # `ditto`, nicht `zip`: ein Bundle trägt Symlinks und erweiterte
         # Attribute, und ein gewöhnliches zip macht daraus Kopien und verliert
-        # die Signatur. `ditto` ist der Weg, den Apple selbst dafür vorsieht.
+        # später die Signatur. Prüfsumme und feste Namen binden genau den
+        # signierbaren App-Baum, bevor ein Apple-Schlüssel importiert wird.
         if: runner.os == 'macOS'
         run: |
           name=$(python -c "from app.branding import APP_NAME; print(APP_NAME)")
           version=$(python -c "from app.branding import APP_VERSION; print(APP_VERSION)")
           ditto -c -k --sequesterRsrc --keepParent \
             "dist/${name}.app" "dist/${name}-${version}-macos-$(uname -m).zip"
-
-      - name: Installationspaket bauen (macOS)
-        # Das .zip daneben bleibt: es trägt die Signatur des Bundles unverändert
-        # und ist der kürzere Weg für alle, die ihn kennen. Die .pkg ist für die
-        # anderen — sie zeigt den Lizenzvertrag und lässt den Ort wählen, genau
-        # wie die Setup-Datei unter Windows.
-        #
-        # `APPLE_INSTALLER_IDENTITY` ist ein *anderes* Zertifikat als
-        # `APPLE_SIGN_IDENTITY`: „Developer ID Installer" signiert Pakete,
-        # „Developer ID Application" signiert Programme. Fehlt es, entsteht ein
-        # unsigniertes Paket — der Schlusstext des Installers erklärt dann den
-        # ersten Start.
-        if: runner.os == 'macOS'
-        run: |
-          args=()
-          if [ -n "$APPLE_INSTALLER_IDENTITY" ]; then
-            args+=(--sign "$APPLE_INSTALLER_IDENTITY")
-          fi
-          if [ -n "$APPLE_CERTIFICATE" ] && [ -n "$APPLE_INSTALLER_IDENTITY" ] && \
-             [ -n "$APPLE_NOTARY_ID" ] && [ -n "$APPLE_NOTARY_PASSWORD" ] && \
-             [ -n "$APPLE_TEAM_ID" ]; then
-            args+=(--notarized)
-          fi
-          python tools/make_macos_package.py "${args[@]}"
-
-      - name: Signatur des macOS-Pakets prüfen
-        if: runner.os == 'macOS' && env.APPLE_INSTALLER_IDENTITY != ''
-        run: |
-          package=$(find dist -maxdepth 1 -name '*-macos-*.pkg' -print -quit)
-          test -n "$package"
-          pkgutil --check-signature "$package"
-
-      - name: Fehlende Apple-Freigabe ausweisen
-        if: runner.os == 'macOS' && (env.APPLE_CERTIFICATE == '' || env.APPLE_INSTALLER_IDENTITY == '' || env.APPLE_NOTARY_ID == '' || env.APPLE_NOTARY_PASSWORD == '' || env.APPLE_TEAM_ID == '')
-        run: |
-          echo "::warning::Nicht notarisiert - Developer-ID, Apple-ID, Team-ID und anwendungsspezifisches Passwort muessen vollstaendig sein."
-
-      - name: macOS-Paket notarisieren und Ticket anheften
-        if: runner.os == 'macOS' && env.APPLE_CERTIFICATE != '' && env.APPLE_INSTALLER_IDENTITY != '' && env.APPLE_NOTARY_ID != '' && env.APPLE_NOTARY_PASSWORD != '' && env.APPLE_TEAM_ID != ''
-        run: |
-          package=$(find dist -maxdepth 1 -name '*-macos-*.pkg' -print -quit)
-          test -n "$package"
-          xcrun notarytool submit "$package" \
-            --apple-id "$APPLE_NOTARY_ID" \
-            --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_NOTARY_PASSWORD" \
-            --wait
-          xcrun stapler staple "$package"
-          xcrun stapler validate "$package"
-          spctl --assess --type install --verbose=2 "$package"
-
-      - name: Prüfsummen (Windows)
-        # Sie stehen auf der Download-Seite neben der Datei — bei einem
-        # unsignierten Paket ist das die einzige Möglichkeit, die Herkunft zu
-        # prüfen. Als Datei neben dem Artefakt und im Protokoll: das eine holt
-        # man mit, das andere liest man ohne Download.
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Get-ChildItem dist -Filter "*-Setup-*.exe" | ForEach-Object {
-            $sum = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
-            "$sum  $($_.Name)" | Tee-Object -FilePath "dist/$($_.Name).sha256"
-          }
+          cd dist
+          shasum -a 256 "${name}-${version}-macos-$(uname -m).zip" | tee "${name}-${version}-macos-$(uname -m).zip.sha256"
 
       - name: Prüfsummen (Linux)
         if: runner.os == 'Linux'
@@ -662,33 +519,11 @@ jobs:
             done
           done
 
-      - name: Prüfsummen (macOS)
-        # `shasum -a 256`, weil macOS kein `sha256sum` mitbringt.
-        if: runner.os == 'macOS'
-        run: |
-          cd dist
-          for archive in *-macos-*.zip *-macos-*.pkg; do
-            test -f "$archive" || continue
-            shasum -a 256 "$archive" | tee "$archive.sha256"
-          done
-
-      - name: Installer hochladen (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: solidon3d-setup-windows
-          path: |
-            dist/*-Setup-*.exe
-            dist/*-Setup-*.exe.sha256
-          # Der private Speicher fasst 500 MB, ein Paket rund 250 — was
-          # veröffentlicht wird, liegt danach auf der Website, nicht hier.
-          retention-days: 7
-
       - name: Archiv hochladen (Linux)
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: solidon3d-linux
+          name: solidon3d-linux-release-input
           path: |
             dist/*-linux-x86_64.tar.gz
             dist/*-linux-x86_64.tar.gz.sha256
@@ -696,25 +531,991 @@ jobs:
             dist/*.AppImage.sha256
             dist/*.flatpak
             dist/*.flatpak.sha256
-          # Der Bau darüber verlangt AppImage und Flatpak ausdrücklich. Fehlt
-          # danach jede Ausgabe, ist auch der Artefaktschritt rot; ein internes
-          # tar.gz macht einen unvollständigen öffentlichen Linux-Bau nicht grün.
+          # Der Bau darüber verlangt AppImage und Flatpak ausdrücklich. Dieses
+          # private Zwischenartefakt trägt zusätzlich den App-Baum; öffentlich
+          # werden erst die zwei Pakete nach dem Releasecheck darunter.
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: macOS-App-Eingang übergeben
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-app-input-${{ runner.arch }}
+          path: |
+            dist/*-macos-*.zip
+            dist/*-macos-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  linux-release-check:
+    name: Linux-Releaseakte prüfen
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Äußere Linux-Pakete und App-Baum laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-linux-release-input
+          path: release-download
+      - name: Releasebelege fail-closed prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(find release-download -maxdepth 1 -type f -name 'Solidon3D-*-linux-x86_64.tar.gz')
+          appimage=$(find release-download -maxdepth 1 -type f -name '*.AppImage')
+          flatpak=$(find release-download -maxdepth 1 -type f -name '*.flatpak')
+          [ -n "$archive" ] && [ -n "$appimage" ] && [ -n "$flatpak" ]
+          for package in "$archive" "$appimage" "$flatpak"; do
+            [ -f "$package.sha256" ]
+            expected=$(awk '{print $1}' "$package.sha256")
+            [ "$(sha256sum "$package" | awk '{print $1}')" = "$expected" ] || { echo "Geändertes Linux-Paket: $package"; exit 1; }
+          done
+          cp "$appimage" "$flatpak" build/
+          while IFS= read -r entry; do
+            case "/$entry/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            case "$entry" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+          done < <(tar -tzf "$archive")
+          mkdir release-app
+          tar -xzf "$archive" -C release-app
+          artifact=$(find release-app -mindepth 2 -maxdepth 2 -type d -name Solidon3D)
+          [ -n "$artifact" ] || { echo "Solidon3D-App-Baum fehlt im Linux-Archiv."; exit 1; }
+          sbom=$(find "$artifact" -type f -name Solidon3D.cdx.json)
+          [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die Linux-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
+          python tools/make_licence_notices.py --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json
+      - name: Geprüfte Linux-Pakete veröffentlichen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-linux
+          path: |
+            release-download/*.AppImage
+            release-download/*.AppImage.sha256
+            release-download/*.flatpak
+            release-download/*.flatpak.sha256
           if-no-files-found: error
           retention-days: 7
 
-      - name: Archiv hochladen (macOS)
-        # Der Name trägt die Architektur, sonst überschreibt der zweite Mac
-        # das Artefakt des ersten und übrig bliebe eines von beiden — ohne
-        # dass jemand sähe, welches.
-        if: runner.os == 'macOS'
-        uses: actions/upload-artifact@v4
+  windows-app-sign-azure:
+    name: Windows-Anwendung mit Azure signieren
+    needs: package
+    if: >-
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
+      vars.WINDOWS_SIGNING_MODE == 'azure'
+    runs-on: windows-latest
+    environment: production-signing
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Gebundenen App-Baum laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: solidon3d-macos-${{ runner.arch }}
+          name: solidon3d-windows-signing-input
+          path: signing-download
+
+      - name: Vollständigen App-Baum prüfen
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $downloadRoot = (Resolve-Path "signing-download").Path
+          $downloadFiles = @(Get-ChildItem -LiteralPath $downloadRoot -Recurse -File -Force)
+          $downloadNames = @($downloadFiles | ForEach-Object { $_.FullName.Substring($downloadRoot.Length + 1).Replace('\','/') } | Sort-Object)
+          if ($downloadNames.Count -ne 2 -or (Compare-Object $downloadNames @('windows-signing-input.zip', 'windows-signing-input.zip.sha256'))) { throw "Unbekannte Datei in der Windows-App-Übergabe." }
+          $archive = (Resolve-Path "signing-download/windows-signing-input.zip").Path
+          $line = (Get-Content -Raw "signing-download/windows-signing-input.zip.sha256").Trim()
+          if ($line -notmatch '^([0-9a-f]{64})  windows-signing-input\.zip$') { throw "Ungültige Archiv-Prüfsumme." }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geändertes Übergabearchiv." }
+          $root = [IO.Path]::GetFullPath((Join-Path $PWD "signing-input"))
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+          $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          try {
+            foreach ($entry in $zip.Entries) {
+              $name = $entry.FullName.TrimEnd('/')
+              $parts = $name.Split('/')
+              if (-not $name -or $entry.FullName.Contains('\') -or [IO.Path]::IsPathRooted($name) -or $parts -contains '' -or $parts -contains '.' -or $parts -contains '..' -or -not $entries.Add($name)) { throw "Unzulässiger oder doppelter Archivpfad: $($entry.FullName)" }
+              $destination = [IO.Path]::GetFullPath((Join-Path $root $name))
+              if (-not $destination.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Archivpfad verlässt das Ziel: $name" }
+            }
+          }
+          finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          $reparsePoints = @(Get-ChildItem -LiteralPath $root -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+          if ($reparsePoints) { throw "Die Windows-Übergabe enthält Verknüpfungen oder Reparse-Points." }
+          $handoffPath = Join-Path $root "packaging/build/windows-signing.json"
+          $handoff = Get-Content -Raw -LiteralPath $handoffPath | ConvertFrom-Json
+          $fixed = @{
+            application = "dist/Solidon3D/Solidon3D.exe"; source_dir = "dist/Solidon3D"; output_dir = "dist"
+            script = "packaging/solidon3d.iss"; licence = "packaging/eula.txt"; icon = "packaging/solidon3d.ico"
+            licence_manifest = "packaging/build/licence.manifest"
+          }
+          if ($handoff.schema_version -ne 1 -or $handoff.app_name -ne 'Solidon3D' -or $handoff.app_vendor -ne 'RS Digital' -or $handoff.app_id -ne 'de.rsdigital.solidon3d' -or $handoff.app_url -ne 'https://solidon3d.de/' -or $handoff.project_suffix -ne '.p3d' -or $handoff.part_file_suffix -ne '.solidon-part' -or $handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json' -or $handoff.app_version -notmatch '^\d+\.\d+\.\d+$' -or $handoff.setup_filename -ne "Solidon3D-Setup-$($handoff.app_version).exe") { throw "Unbekannte Produktangaben in der Übergabe." }
+          function Resolve-HandoffPath([string]$name) {
+            if ([IO.Path]::IsPathRooted($name) -or $name.Contains('\') -or $name.Split('/') -contains '..') { throw "Unzulässiger Übergabepfad: $name" }
+            $path = [IO.Path]::GetFullPath((Join-Path $root $name))
+            if (-not $path.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Pfadausbruch: $name" }
+            return $path
+          }
+          foreach ($name in $fixed.Keys) { if ($handoff.$name -ne $fixed[$name]) { throw "Unbekannter Produktpfad: $name" }; Resolve-HandoffPath $handoff.$name | Out-Null }
+          $declared = @($handoff.input_sha256.PSObject.Properties.Name | Sort-Object)
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\','/') } | Where-Object { $_ -ne 'packaging/build/windows-signing.json' } | Sort-Object)
+          if (Compare-Object $declared $actual) { throw "Dateiliste und Übergabemanifest weichen voneinander ab." }
+          foreach ($entry in $handoff.input_sha256.PSObject.Properties) {
+            if ($entry.Value -notmatch '^[0-9a-f]{64}$') { throw "Ungültige Datei-Prüfsumme: $($entry.Name)" }
+            $path = Resolve-HandoffPath $entry.Name
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower() -ne $entry.Value) { throw "Geänderter Signiereingang: $($entry.Name)" }
+          }
+          "SIGNING_ROOT=$root" >> $env:GITHUB_ENV
+          "SIGNING_HANDOFF=$handoffPath" >> $env:GITHUB_ENV
+          "ARTIFACT_APP=$(Resolve-HandoffPath 'dist/Solidon3D/Solidon3D.exe')" >> $env:GITHUB_ENV
+
+      - name: Bei Azure für Artifact Signing anmelden
+        uses: azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Anwendung mit Azure Artifact Signing signieren
+        uses: azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30 # v2
+        with:
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ env.ARTIFACT_APP }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Solidon3D
+          description-url: https://solidon3d.de/
+
+      - name: Azure-Signatur prüfen und Übergabe neu binden
+        shell: pwsh
+        run: |
+          signtool verify /pa /v $env:ARTIFACT_APP
+          if ($LASTEXITCODE -ne 0) { throw "Die Signatur der Anwendung ist ungültig." }
+          $handoff = Get-Content -Raw -LiteralPath $env:SIGNING_HANDOFF | ConvertFrom-Json
+          $handoff.input_sha256.'dist/Solidon3D/Solidon3D.exe' = (Get-FileHash -LiteralPath $env:ARTIFACT_APP -Algorithm SHA256).Hash.ToLower()
+          $handoff | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $env:SIGNING_HANDOFF
+          Compress-Archive -Path "$env:SIGNING_ROOT/*" -DestinationPath windows-signing-input.zip
+          $sum = (Get-FileHash windows-signing-input.zip -Algorithm SHA256).Hash.ToLower()
+          "$sum  windows-signing-input.zip" | Set-Content -Encoding ascii windows-signing-input.zip.sha256
+
+      - name: Signierten App-Baum übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-app-azure
           path: |
-            dist/*-macos-*.pkg
-            dist/*-macos-*.pkg.sha256
-            dist/*-macos-*.zip
-            dist/*-macos-*.zip.sha256
+            windows-signing-input.zip
+            windows-signing-input.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-app-sign-pfx:
+    name: Windows-Anwendung mit PFX signieren
+    needs: package
+    if: >-
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
+      vars.WINDOWS_SIGNING_MODE == 'pfx'
+    runs-on: windows-latest
+    environment: production-signing
+    permissions:
+      contents: read
+    steps:
+      - name: Gebundenen App-Baum laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-signing-input
+          path: signing-download
+
+      - name: Vollständigen App-Baum prüfen
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $downloadRoot = (Resolve-Path "signing-download").Path
+          $downloadFiles = @(Get-ChildItem -LiteralPath $downloadRoot -Recurse -File -Force)
+          $downloadNames = @($downloadFiles | ForEach-Object { $_.FullName.Substring($downloadRoot.Length + 1).Replace('\','/') } | Sort-Object)
+          if ($downloadNames.Count -ne 2 -or (Compare-Object $downloadNames @('windows-signing-input.zip', 'windows-signing-input.zip.sha256'))) { throw "Unbekannte Datei in der Windows-App-Übergabe." }
+          $archive = (Resolve-Path "signing-download/windows-signing-input.zip").Path
+          $line = (Get-Content -Raw "signing-download/windows-signing-input.zip.sha256").Trim()
+          if ($line -notmatch '^([0-9a-f]{64})  windows-signing-input\.zip$') { throw "Ungültige Archiv-Prüfsumme." }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geändertes Übergabearchiv." }
+          $root = [IO.Path]::GetFullPath((Join-Path $PWD "signing-input"))
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+          $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          try {
+            foreach ($entry in $zip.Entries) {
+              $name = $entry.FullName.TrimEnd('/')
+              $parts = $name.Split('/')
+              if (-not $name -or $entry.FullName.Contains('\') -or [IO.Path]::IsPathRooted($name) -or $parts -contains '' -or $parts -contains '.' -or $parts -contains '..' -or -not $entries.Add($name)) { throw "Unzulässiger oder doppelter Archivpfad: $($entry.FullName)" }
+              $destination = [IO.Path]::GetFullPath((Join-Path $root $name))
+              if (-not $destination.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Archivpfad verlässt das Ziel: $name" }
+            }
+          }
+          finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          $reparsePoints = @(Get-ChildItem -LiteralPath $root -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+          if ($reparsePoints) { throw "Die Windows-Übergabe enthält Verknüpfungen oder Reparse-Points." }
+          $handoffPath = Join-Path $root "packaging/build/windows-signing.json"
+          $handoff = Get-Content -Raw -LiteralPath $handoffPath | ConvertFrom-Json
+          $fixed = @{
+            application = "dist/Solidon3D/Solidon3D.exe"; source_dir = "dist/Solidon3D"; output_dir = "dist"
+            script = "packaging/solidon3d.iss"; licence = "packaging/eula.txt"; icon = "packaging/solidon3d.ico"
+            licence_manifest = "packaging/build/licence.manifest"
+          }
+          if ($handoff.schema_version -ne 1 -or $handoff.app_name -ne 'Solidon3D' -or $handoff.app_vendor -ne 'RS Digital' -or $handoff.app_id -ne 'de.rsdigital.solidon3d' -or $handoff.app_url -ne 'https://solidon3d.de/' -or $handoff.project_suffix -ne '.p3d' -or $handoff.part_file_suffix -ne '.solidon-part' -or $handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json' -or $handoff.app_version -notmatch '^\d+\.\d+\.\d+$' -or $handoff.setup_filename -ne "Solidon3D-Setup-$($handoff.app_version).exe") { throw "Unbekannte Produktangaben in der Übergabe." }
+          function Resolve-HandoffPath([string]$name) {
+            if ([IO.Path]::IsPathRooted($name) -or $name.Contains('\') -or $name.Split('/') -contains '..') { throw "Unzulässiger Übergabepfad: $name" }
+            $path = [IO.Path]::GetFullPath((Join-Path $root $name))
+            if (-not $path.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Pfadausbruch: $name" }
+            return $path
+          }
+          foreach ($name in $fixed.Keys) { if ($handoff.$name -ne $fixed[$name]) { throw "Unbekannter Produktpfad: $name" }; Resolve-HandoffPath $handoff.$name | Out-Null }
+          $declared = @($handoff.input_sha256.PSObject.Properties.Name | Sort-Object)
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\','/') } | Where-Object { $_ -ne 'packaging/build/windows-signing.json' } | Sort-Object)
+          if (Compare-Object $declared $actual) { throw "Dateiliste und Übergabemanifest weichen voneinander ab." }
+          foreach ($entry in $handoff.input_sha256.PSObject.Properties) {
+            if ($entry.Value -notmatch '^[0-9a-f]{64}$') { throw "Ungültige Datei-Prüfsumme: $($entry.Name)" }
+            $path = Resolve-HandoffPath $entry.Name
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower() -ne $entry.Value) { throw "Geänderter Signiereingang: $($entry.Name)" }
+          }
+          "SIGNING_ROOT=$root" >> $env:GITHUB_ENV
+          "SIGNING_HANDOFF=$handoffPath" >> $env:GITHUB_ENV
+          "ARTIFACT_APP=$(Resolve-HandoffPath 'dist/Solidon3D/Solidon3D.exe')" >> $env:GITHUB_ENV
+
+      - name: Anwendung mit vorhandenem PFX signieren und prüfen
+        shell: pwsh
+        env:
+          SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
+          SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_CERTIFICATE))
+            signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $env:ARTIFACT_APP
+            if ($LASTEXITCODE -ne 0) { throw "Die Anwendung konnte nicht signiert werden." }
+            signtool verify /pa /v $env:ARTIFACT_APP
+            if ($LASTEXITCODE -ne 0) { throw "Die Signatur der Anwendung ist ungültig." }
+          }
+          finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Signierten App-Baum neu binden
+        shell: pwsh
+        run: |
+          $handoff = Get-Content -Raw -LiteralPath $env:SIGNING_HANDOFF | ConvertFrom-Json
+          $handoff.input_sha256.'dist/Solidon3D/Solidon3D.exe' = (Get-FileHash -LiteralPath $env:ARTIFACT_APP -Algorithm SHA256).Hash.ToLower()
+          $handoff | ConvertTo-Json -Depth 8 | Set-Content -Encoding utf8 $env:SIGNING_HANDOFF
+          Compress-Archive -Path "$env:SIGNING_ROOT/*" -DestinationPath windows-signing-input.zip
+          $sum = (Get-FileHash windows-signing-input.zip -Algorithm SHA256).Hash.ToLower()
+          "$sum  windows-signing-input.zip" | Set-Content -Encoding ascii windows-signing-input.zip.sha256
+
+      - name: Signierten App-Baum übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-app-pfx
+          path: |
+            windows-signing-input.zip
+            windows-signing-input.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-installer:
+    name: Windows-Installer ohne Signierrechte bauen
+    needs: [package, windows-app-sign-azure, windows-app-sign-pfx]
+    if: >-
+      always() && needs.package.result == 'success' &&
+      ((vars.WINDOWS_SIGNING_MODE == 'azure' && needs.windows-app-sign-azure.result == 'success') ||
+       (vars.WINDOWS_SIGNING_MODE == 'pfx' && needs.windows-app-sign-pfx.result == 'success') ||
+       ((vars.WINDOWS_SIGNING_MODE == '' || vars.WINDOWS_SIGNING_MODE == 'unsigned') &&
+        needs.windows-app-sign-azure.result == 'skipped' && needs.windows-app-sign-pfx.result == 'skipped'))
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE || 'unsigned' }}
+    steps:
+      - name: Azure-App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'azure'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-app-azure
+          path: signing-download
+      - name: PFX-App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'pfx'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-app-pfx
+          path: signing-download
+      - name: Unsignierten App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-signing-input
+          path: signing-download
+
+      - name: Vollständigen App-Baum prüfen
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $downloadRoot = (Resolve-Path "signing-download").Path
+          $downloadFiles = @(Get-ChildItem -LiteralPath $downloadRoot -Recurse -File -Force)
+          $downloadNames = @($downloadFiles | ForEach-Object { $_.FullName.Substring($downloadRoot.Length + 1).Replace('\','/') } | Sort-Object)
+          if ($downloadNames.Count -ne 2 -or (Compare-Object $downloadNames @('windows-signing-input.zip', 'windows-signing-input.zip.sha256'))) { throw "Unbekannte Datei in der Windows-App-Übergabe." }
+          $archive = (Resolve-Path "signing-download/windows-signing-input.zip").Path
+          $line = (Get-Content -Raw "signing-download/windows-signing-input.zip.sha256").Trim()
+          if ($line -notmatch '^([0-9a-f]{64})  windows-signing-input\.zip$') { throw "Ungültige Archiv-Prüfsumme." }
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geändertes Übergabearchiv." }
+          $root = [IO.Path]::GetFullPath((Join-Path $PWD "signing-input"))
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($archive)
+          $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          try {
+            foreach ($entry in $zip.Entries) {
+              $name = $entry.FullName.TrimEnd('/')
+              $parts = $name.Split('/')
+              if (-not $name -or $entry.FullName.Contains('\') -or [IO.Path]::IsPathRooted($name) -or $parts -contains '' -or $parts -contains '.' -or $parts -contains '..' -or -not $entries.Add($name)) { throw "Unzulässiger oder doppelter Archivpfad: $($entry.FullName)" }
+              $destination = [IO.Path]::GetFullPath((Join-Path $root $name))
+              if (-not $destination.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Archivpfad verlässt das Ziel: $name" }
+            }
+          }
+          finally { $zip.Dispose() }
+          Expand-Archive -LiteralPath $archive -DestinationPath $root
+          $reparsePoints = @(Get-ChildItem -LiteralPath $root -Recurse -Force | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint })
+          if ($reparsePoints) { throw "Die Windows-Übergabe enthält Verknüpfungen oder Reparse-Points." }
+          $handoffPath = Join-Path $root "packaging/build/windows-signing.json"
+          $handoff = Get-Content -Raw -LiteralPath $handoffPath | ConvertFrom-Json
+          $fixed = @{
+            application = "dist/Solidon3D/Solidon3D.exe"; source_dir = "dist/Solidon3D"; output_dir = "dist"
+            script = "packaging/solidon3d.iss"; licence = "packaging/eula.txt"; icon = "packaging/solidon3d.ico"
+            licence_manifest = "packaging/build/licence.manifest"
+          }
+          if ($handoff.schema_version -ne 1 -or $handoff.app_name -ne 'Solidon3D' -or $handoff.app_vendor -ne 'RS Digital' -or $handoff.app_id -ne 'de.rsdigital.solidon3d' -or $handoff.app_url -ne 'https://solidon3d.de/' -or $handoff.project_suffix -ne '.p3d' -or $handoff.part_file_suffix -ne '.solidon-part' -or $handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json' -or $handoff.app_version -notmatch '^\d+\.\d+\.\d+$' -or $handoff.setup_filename -ne "Solidon3D-Setup-$($handoff.app_version).exe") { throw "Unbekannte Produktangaben in der Übergabe." }
+          function Resolve-HandoffPath([string]$name) {
+            if ([IO.Path]::IsPathRooted($name) -or $name.Contains('\') -or $name.Split('/') -contains '..') { throw "Unzulässiger Übergabepfad: $name" }
+            $path = [IO.Path]::GetFullPath((Join-Path $root $name))
+            if (-not $path.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { throw "Pfadausbruch: $name" }
+            return $path
+          }
+          foreach ($name in $fixed.Keys) { if ($handoff.$name -ne $fixed[$name]) { throw "Unbekannter Produktpfad: $name" }; Resolve-HandoffPath $handoff.$name | Out-Null }
+          $declared = @($handoff.input_sha256.PSObject.Properties.Name | Sort-Object)
+          $actual = @(Get-ChildItem -LiteralPath $root -Recurse -File -Force | ForEach-Object { $_.FullName.Substring($root.Length + 1).Replace('\','/') } | Where-Object { $_ -ne 'packaging/build/windows-signing.json' } | Sort-Object)
+          if (Compare-Object $declared $actual) { throw "Dateiliste und Übergabemanifest weichen voneinander ab." }
+          foreach ($entry in $handoff.input_sha256.PSObject.Properties) {
+            if ($entry.Value -notmatch '^[0-9a-f]{64}$') { throw "Ungültige Datei-Prüfsumme: $($entry.Name)" }
+            $path = Resolve-HandoffPath $entry.Name
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower() -ne $entry.Value) { throw "Geänderter Signiereingang: $($entry.Name)" }
+          }
+          "SIGNING_ROOT=$root" >> $env:GITHUB_ENV
+          "SIGNING_HANDOFF=$handoffPath" >> $env:GITHUB_ENV
+
+      - name: Installer aus der geprüften Übergabe bauen
+        shell: pwsh
+        run: |
+          $compiler = (Get-Command ISCC -ErrorAction SilentlyContinue).Source
+          if (-not $compiler) { $compiler = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' }
+          if (-not (Test-Path -LiteralPath $compiler)) { throw "Inno Setup 6 fehlt auf dem GitHub-Runner." }
+          $handoff = Get-Content -Raw -LiteralPath $env:SIGNING_HANDOFF | ConvertFrom-Json
+          & $compiler "/DAppName=Solidon3D" "/DAppVersion=$($handoff.app_version)" "/DAppVendor=RS Digital" "/DAppId=de.rsdigital.solidon3d" "/DAppUrl=https://solidon3d.de/" "/DProjectSuffix=.p3d" "/DPartFileSuffix=.solidon-part" "/DPartFileMimeType=application/vnd.solidon.part+json" "/DSourceDir=$(Join-Path $env:SIGNING_ROOT 'dist/Solidon3D')" "/DOutputDir=$(Join-Path $env:SIGNING_ROOT 'dist')" "/DLicenseFile=$(Join-Path $env:SIGNING_ROOT 'packaging/eula.txt')" "/DSetupIconFile=$(Join-Path $env:SIGNING_ROOT 'packaging/solidon3d.ico')" (Join-Path $env:SIGNING_ROOT "packaging/solidon3d.iss")
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup konnte den Installer nicht bauen." }
+          $setup = Join-Path $env:SIGNING_ROOT "dist/$($handoff.setup_filename)"
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf)) { throw "Die exakt benannte Setup-Datei fehlt." }
+          $sum = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLower()
+          "$sum  $($handoff.setup_filename)" | Set-Content -Encoding ascii "$setup.sha256"
+          "ARTIFACT_SETUP=$setup" >> $env:GITHUB_ENV
+
+      - name: Unsignierten Demobau ausweisen
+        if: env.WINDOWS_SIGNING_MODE == 'unsigned'
+        shell: pwsh
+        run: Write-Host "::warning::Unsignierter Demobau - SmartScreen warnt beim ersten Start."
+
+      - name: Unsignierten finalen Installer intern übergeben
+        if: env.WINDOWS_SIGNING_MODE == 'unsigned'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-final-private
+          path: |
+            ${{ env.ARTIFACT_SETUP }}
+            ${{ env.ARTIFACT_SETUP }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Installer zur Signierung übergeben
+        if: env.WINDOWS_SIGNING_MODE != 'unsigned'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-installer-input
+          path: |
+            ${{ env.ARTIFACT_SETUP }}
+            ${{ env.ARTIFACT_SETUP }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-installer-sign-azure:
+    name: Windows-Installer mit Azure signieren
+    needs: windows-installer
+    if: vars.WINDOWS_SIGNING_MODE == 'azure'
+    runs-on: windows-latest
+    environment: production-signing
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Gebundenen Installer laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-installer-input
+          path: installer-input
+      - name: Exakten Installer prüfen
+        shell: pwsh
+        run: |
+          $inputRoot = (Resolve-Path installer-input).Path
+          $files = @(Get-ChildItem -LiteralPath $inputRoot -File -Recurse -Force)
+          if ($files | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }) { throw "Installer-Übergabe enthält einen Reparse-Point." }
+          $setup = @($files | Where-Object Name -Match '^Solidon3D-Setup-\d+\.\d+\.\d+\.exe$')
+          if ($files.Count -ne 2 -or $setup.Count -ne 1 -or $setup[0].DirectoryName -ne $inputRoot -or -not (Test-Path -LiteralPath "$($setup[0].FullName).sha256")) { throw "Unbekannte Installer-Übergabe." }
+          $line = (Get-Content -Raw "$($setup[0].FullName).sha256").Trim()
+          if ($line -notmatch '^([0-9a-f]{64})  Solidon3D-Setup-\d+\.\d+\.\d+\.exe$' -or (Get-FileHash $setup[0].FullName -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter Installer-Eingang." }
+          "ARTIFACT_SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
+      - name: Bei Azure für Artifact Signing anmelden
+        uses: azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f # v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Installer mit Azure Artifact Signing signieren
+        uses: azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30 # v2
+        with:
+          endpoint: ${{ secrets.ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.ARTIFACT_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.ARTIFACT_SIGNING_PROFILE }}
+          files: ${{ env.ARTIFACT_SETUP }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: Solidon3D Setup
+          description-url: https://solidon3d.de/
+      - name: Azure-Signatur prüfen und Prüfsumme erneuern
+        shell: pwsh
+        run: |
+          signtool verify /pa /v $env:ARTIFACT_SETUP
+          if ($LASTEXITCODE -ne 0) { throw "Die Signatur des Installers ist ungültig." }
+          $sum = (Get-FileHash -LiteralPath $env:ARTIFACT_SETUP -Algorithm SHA256).Hash.ToLower()
+          "$sum  $([IO.Path]::GetFileName($env:ARTIFACT_SETUP))" | Set-Content -Encoding ascii "$env:ARTIFACT_SETUP.sha256"
+      - name: Finalen Installer intern übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-final-private
+          path: |
+            ${{ env.ARTIFACT_SETUP }}
+            ${{ env.ARTIFACT_SETUP }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-installer-sign-pfx:
+    name: Windows-Installer mit PFX signieren
+    needs: windows-installer
+    if: vars.WINDOWS_SIGNING_MODE == 'pfx'
+    runs-on: windows-latest
+    environment: production-signing
+    permissions:
+      contents: read
+    steps:
+      - name: Gebundenen Installer laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-installer-input
+          path: installer-input
+      - name: Exakten Installer prüfen
+        shell: pwsh
+        run: |
+          $inputRoot = (Resolve-Path installer-input).Path
+          $files = @(Get-ChildItem -LiteralPath $inputRoot -File -Recurse -Force)
+          if ($files | Where-Object { $_.Attributes -band [IO.FileAttributes]::ReparsePoint }) { throw "Installer-Übergabe enthält einen Reparse-Point." }
+          $setup = @($files | Where-Object Name -Match '^Solidon3D-Setup-\d+\.\d+\.\d+\.exe$')
+          if ($files.Count -ne 2 -or $setup.Count -ne 1 -or $setup[0].DirectoryName -ne $inputRoot -or -not (Test-Path -LiteralPath "$($setup[0].FullName).sha256")) { throw "Unbekannte Installer-Übergabe." }
+          $line = (Get-Content -Raw "$($setup[0].FullName).sha256").Trim()
+          if ($line -notmatch '^([0-9a-f]{64})  Solidon3D-Setup-\d+\.\d+\.\d+\.exe$' -or (Get-FileHash $setup[0].FullName -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter Installer-Eingang." }
+          "ARTIFACT_SETUP=$($setup[0].FullName)" >> $env:GITHUB_ENV
+      - name: Installer mit vorhandenem PFX signieren und prüfen
+        shell: pwsh
+        env:
+          SIGN_CERTIFICATE: ${{ secrets.SIGN_CERTIFICATE }}
+          SIGN_PASSWORD: ${{ secrets.SIGN_PASSWORD }}
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP "signing.pfx"
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SIGN_CERTIFICATE))
+            signtool sign /f $pfx /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 $env:ARTIFACT_SETUP
+            if ($LASTEXITCODE -ne 0) { throw "Der Installer konnte nicht signiert werden." }
+            signtool verify /pa /v $env:ARTIFACT_SETUP
+            if ($LASTEXITCODE -ne 0) { throw "Die Signatur des Installers ist ungültig." }
+          }
+          finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+          }
+          $sum = (Get-FileHash -LiteralPath $env:ARTIFACT_SETUP -Algorithm SHA256).Hash.ToLower()
+          "$sum  $([IO.Path]::GetFileName($env:ARTIFACT_SETUP))" | Set-Content -Encoding ascii "$env:ARTIFACT_SETUP.sha256"
+      - name: Finalen Installer intern übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-windows-final-private
+          path: |
+            ${{ env.ARTIFACT_SETUP }}
+            ${{ env.ARTIFACT_SETUP }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-release-check:
+    name: Windows-Releaseakte prüfen
+    needs: [windows-installer, windows-installer-sign-azure, windows-installer-sign-pfx]
+    if: >-
+      always() && needs.windows-installer.result == 'success' &&
+      ((vars.WINDOWS_SIGNING_MODE == 'azure' && needs.windows-installer-sign-azure.result == 'success') ||
+       (vars.WINDOWS_SIGNING_MODE == 'pfx' && needs.windows-installer-sign-pfx.result == 'success') ||
+       ((vars.WINDOWS_SIGNING_MODE == '' || vars.WINDOWS_SIGNING_MODE == 'unsigned') &&
+        needs.windows-installer-sign-azure.result == 'skipped' && needs.windows-installer-sign-pfx.result == 'skipped'))
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    env:
+      WINDOWS_SIGNING_MODE: ${{ vars.WINDOWS_SIGNING_MODE || 'unsigned' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Finalen Installer laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-final-private
+          path: release-download
+      - name: Azure-App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'azure'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-app-azure
+          path: app-download
+      - name: PFX-App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'pfx'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-app-pfx
+          path: app-download
+      - name: Unsignierten App-Baum laden
+        if: env.WINDOWS_SIGNING_MODE == 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-windows-signing-input
+          path: app-download
+      - name: Releasebelege fail-closed prüfen
+        shell: pwsh
+        run: |
+          $archive = Resolve-Path app-download/windows-signing-input.zip
+          $archiveLine = (Get-Content -Raw app-download/windows-signing-input.zip.sha256).Trim()
+          if ($archiveLine -notmatch '^([0-9a-f]{64})  windows-signing-input\.zip$' -or (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter Windows-App-Baum vor der Releaseprüfung." }
+          Expand-Archive -LiteralPath $archive -DestinationPath release-app
+          $artifactRoot = Resolve-Path release-app/dist/Solidon3D
+          $sbom = @(Get-ChildItem -LiteralPath $artifactRoot -Recurse -File -Filter "Solidon3D.cdx.json")
+          if ($sbom.Count -ne 1) { throw "Die Windows-Endartefakt-SBOM fehlt oder ist mehrdeutig." }
+          $sbomPath = $sbom[0].FullName
+          $setup = @(Get-ChildItem release-download -File -Filter 'Solidon3D-Setup-*.exe')
+          if ($setup.Count -ne 1 -or -not (Test-Path -LiteralPath "$($setup[0].FullName).sha256")) { throw "Finaler Windows-Installer fehlt oder ist mehrdeutig." }
+          $setupLine = (Get-Content -Raw "$($setup[0].FullName).sha256").Trim()
+          if ($setupLine -notmatch '^([0-9a-f]{64})  Solidon3D-Setup-\d+\.\d+\.\d+\.exe$' -or (Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter finaler Windows-Installer." }
+          Copy-Item -LiteralPath $setup[0].FullName -Destination build/$($setup[0].Name)
+          python tools/make_licence_notices.py --release-check --artifact-root $artifactRoot --sbom $sbomPath --release-evidence build/release-evidence.json
+          if ($LASTEXITCODE -ne 0) { throw "Die Windows-Releasebelege sind unvollständig." }
+      - name: Geprüften Installer veröffentlichen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-setup-windows
+          path: release-download/*
+          if-no-files-found: error
+          retention-days: 7
+
+  macos-app-sign:
+    name: macOS-Anwendung signieren (${{ matrix.machine_arch }})
+    needs: package
+    if: >-
+      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
+      (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized')
+    runs-on: ${{ matrix.os }}
+    environment: production-signing
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26-intel
+            runner_arch: X64
+            machine_arch: x86_64
+          - os: macos-latest
+            runner_arch: ARM64
+            machine_arch: arm64
+    env:
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE }}
+    steps:
+      - name: Gebundenen App-Baum laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-app-input-${{ matrix.runner_arch }}
+          path: app-input
+
+      - name: App-Baum vor Schlüsselimport unveränderlich prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find app-input -mindepth 1 -type f | wc -l | tr -d ' ')
+          directories=$(find app-input -mindepth 1 -type d | wc -l | tr -d ' ')
+          [ "$files" = 2 ] && [ "$directories" = 0 ] || { echo "Unbekannte Dateien in der macOS-App-Übergabe."; exit 1; }
+          archive=$(find app-input -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.zip")
+          [ -n "$archive" ] && [ -f "$archive.sha256" ] || { echo "Gebundener App-Baum fehlt."; exit 1; }
+          checksum=$(cat "$archive.sha256")
+          [[ "$checksum" =~ ^([0-9a-f]{64})[[:space:]][[:space:]]Solidon3D-[0-9]+\.[0-9]+\.[0-9]+-macos-${{ matrix.machine_arch }}\.zip$ ]] || { echo "Ungültige App-Prüfsumme."; exit 1; }
+          [ "$(shasum -a 256 "$archive" | awk '{print $1}')" = "${BASH_REMATCH[1]}" ] || { echo "Geänderter App-Baum."; exit 1; }
+          while IFS= read -r entry; do
+            trimmed=${entry%/}
+            case "/$trimmed/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            case "$trimmed" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+          done < <(zipinfo -1 "$archive")
+          mkdir app-stage
+          ditto -x -k "$archive" app-stage
+          [ -d app-stage/Solidon3D.app ] || { echo "Solidon3D.app fehlt."; exit 1; }
+          [ "$(find app-stage -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = 1 ] || { echo "Unbekanntes Produkt im App-Archiv."; exit 1; }
+          /usr/bin/perl -MFile::Find -MCwd=abs_path -e '$root=abs_path($ARGV[0]); find({no_chdir=>1,wanted=>sub{return unless -l $File::Find::name; $path=abs_path($File::Find::name); die "Symlink verlässt App-Baum\n" unless defined($path) && index($path, "$root/")==0}},$root)' app-stage/Solidon3D.app
+          plist=app-stage/Solidon3D.app/Contents/Info.plist
+          [ "$(plutil -extract CFBundleIdentifier raw "$plist")" = "de.rsdigital.solidon3d" ]
+          [ "$(plutil -extract CFBundleName raw "$plist")" = "Solidon3D" ]
+          version=$(plutil -extract CFBundleShortVersionString raw "$plist")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          lipo -archs app-stage/Solidon3D.app/Contents/MacOS/Solidon3D | tr ' ' '\n' | grep -qx '${{ matrix.machine_arch }}'
+          printf 'ARTIFACT_APP=%s\n' "$PWD/app-stage/Solidon3D.app" >> "$GITHUB_ENV"
+
+      - name: App mit Developer-ID signieren und Schlüssel wieder sperren
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGN_IDENTITY: ${{ secrets.APPLE_SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/solidon-app.keychain-db"
+          certificate="$RUNNER_TEMP/solidon-app.p12"
+          password=$(uuidgen)
+          cleanup() {
+            security delete-keychain "$keychain" 2>/dev/null || true
+            rm -f "$certificate"
+          }
+          trap cleanup EXIT
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 300 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          codesign --force --deep --options runtime --timestamp --keychain "$keychain" --sign "$APPLE_SIGN_IDENTITY" "$ARTIFACT_APP"
+          codesign --verify --deep --strict --verbose=2 "$ARTIFACT_APP"
+
+      - name: Signierte App bei Apple notarisieren
+        if: env.MACOS_SIGNING_MODE == 'notarized'
+        shell: bash
+        env:
+          APPLE_NOTARY_ID: ${{ secrets.APPLE_NOTARY_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          ditto -c -k --sequesterRsrc --keepParent "$ARTIFACT_APP" notarization.zip
+          xcrun notarytool submit notarization.zip --apple-id "$APPLE_NOTARY_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait
+          xcrun stapler staple "$ARTIFACT_APP"
+          xcrun stapler validate "$ARTIFACT_APP"
+          spctl --assess --type execute --verbose=2 "$ARTIFACT_APP"
+
+      - name: Freigegebenen App-Baum neu binden
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(plutil -extract CFBundleShortVersionString raw "$ARTIFACT_APP/Contents/Info.plist")
+          archive="Solidon3D-${version}-macos-${{ matrix.machine_arch }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$ARTIFACT_APP" "$archive"
+          shasum -a 256 "$archive" | tee "$archive.sha256"
+      - name: Freigegebenen App-Baum intern übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-app-signed-${{ matrix.runner_arch }}
+          path: |
+            Solidon3D-*-macos-*.zip
+            Solidon3D-*-macos-*.zip.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  macos-package:
+    name: macOS-Installer ohne Signierrechte bauen (${{ matrix.machine_arch }})
+    needs: [package, macos-app-sign]
+    if: >-
+      always() && needs.package.result == 'success' &&
+      (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-app-sign.result == 'skipped') ||
+       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-app-sign.result == 'success'))
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26-intel
+            runner_arch: X64
+            machine_arch: x86_64
+          - os: macos-latest
+            runner_arch: ARM64
+            machine_arch: arm64
+    env:
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE || 'unsigned' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Signierten App-Baum laden
+        if: env.MACOS_SIGNING_MODE != 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-app-signed-${{ matrix.runner_arch }}
+          path: app-input
+      - name: Unsignierten App-Baum laden
+        if: env.MACOS_SIGNING_MODE == 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-app-input-${{ matrix.runner_arch }}
+          path: app-input
+      - name: Gebundenen App-Baum auspacken
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=$(find app-input -mindepth 1 -type f | wc -l | tr -d ' ')
+          directories=$(find app-input -mindepth 1 -type d | wc -l | tr -d ' ')
+          [ "$files" = 2 ] && [ "$directories" = 0 ] || { echo "Unbekannte Dateien in der macOS-App-Übergabe."; exit 1; }
+          archive=$(find app-input -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.zip")
+          [ -n "$archive" ] && [ -f "$archive.sha256" ]
+          checksum=$(cat "$archive.sha256")
+          [[ "$checksum" =~ ^([0-9a-f]{64})[[:space:]][[:space:]]Solidon3D-[0-9]+\.[0-9]+\.[0-9]+-macos-${{ matrix.machine_arch }}\.zip$ ]]
+          [ "$(shasum -a 256 "$archive" | awk '{print $1}')" = "${BASH_REMATCH[1]}" ] || { echo "Geänderter App-Baum."; exit 1; }
+          while IFS= read -r entry; do
+            trimmed=${entry%/}
+            case "/$trimmed/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            case "$trimmed" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+          done < <(zipinfo -1 "$archive")
+          ditto -x -k "$archive" dist
+          [ -d dist/Solidon3D.app ]
+          /usr/bin/perl -MFile::Find -MCwd=abs_path -e '$root=abs_path($ARGV[0]); find({no_chdir=>1,wanted=>sub{return unless -l $File::Find::name; $path=abs_path($File::Find::name); die "Symlink verlässt App-Baum\n" unless defined($path) && index($path, "$root/")==0}},$root)' dist/Solidon3D.app
+          cp "$archive" "dist/$(basename "$archive")"
+          cp "$archive.sha256" "dist/$(basename "$archive.sha256")"
+      - name: Installationspaket bauen
+        shell: bash
+        run: |
+          set -euo pipefail
+          notarized=false
+          [ "$MACOS_SIGNING_MODE" = notarized ] && notarized=true
+          python -c 'import sys; from tools import make_macos_package as tool; tool.write_files(sys.argv[1], notarized=sys.argv[2] == "true"); raise SystemExit(tool.build(sys.argv[1]))' '${{ matrix.machine_arch }}' "$notarized"
+          package=$(find dist -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
+          [ -n "$package" ]
+          shasum -a 256 "$package" | tee "$package.sha256"
+      - name: Unsignierten finalen Mac-Bau intern übergeben
+        if: env.MACOS_SIGNING_MODE == 'unsigned'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-final-private-${{ matrix.runner_arch }}
+          path: |
+            dist/Solidon3D-*-macos-*.pkg
+            dist/Solidon3D-*-macos-*.pkg.sha256
+          if-no-files-found: error
+          retention-days: 1
+      - name: Mac-Installer zur Signierung übergeben
+        if: env.MACOS_SIGNING_MODE != 'unsigned'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-installer-input-${{ matrix.runner_arch }}
+          path: |
+            dist/Solidon3D-*-macos-*.pkg
+            dist/Solidon3D-*-macos-*.pkg.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  macos-installer-sign:
+    name: macOS-Installer signieren (${{ matrix.machine_arch }})
+    needs: macos-package
+    if: vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized'
+    runs-on: ${{ matrix.os }}
+    environment: production-signing
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26-intel
+            runner_arch: X64
+            machine_arch: x86_64
+          - os: macos-latest
+            runner_arch: ARM64
+            machine_arch: arm64
+    env:
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE }}
+    steps:
+      - name: Gebundenen Installer laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-installer-input-${{ matrix.runner_arch }}
+          path: installer-input
+      - name: Exakten Installer vor Schlüsselimport prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ "$(find installer-input -mindepth 1 -type f | wc -l | tr -d ' ')" = 2 ]
+          [ "$(find installer-input -mindepth 1 -type d | wc -l | tr -d ' ')" = 0 ]
+          package=$(find installer-input -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
+          [ -n "$package" ] && [ -f "$package.sha256" ]
+          expected=$(awk '{print $1}' "$package.sha256")
+          [ ${#expected} = 64 ] && [ "$(shasum -a 256 "$package" | awk '{print $1}')" = "$expected" ] || { echo "Geänderter Installer-Eingang."; exit 1; }
+          printf 'ARTIFACT_PACKAGE=%s\n' "$PWD/$package" >> "$GITHUB_ENV"
+      - name: Installer mit Developer-ID signieren und Schlüssel wieder sperren
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/solidon-installer.keychain-db"
+          certificate="$RUNNER_TEMP/solidon-installer.p12"
+          password=$(uuidgen)
+          signed="$RUNNER_TEMP/signed.pkg"
+          cleanup() {
+            security delete-keychain "$keychain" 2>/dev/null || true
+            rm -f "$certificate" "$signed"
+          }
+          trap cleanup EXIT
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 300 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          productsign --sign "$APPLE_INSTALLER_IDENTITY" --keychain "$keychain" "$ARTIFACT_PACKAGE" "$signed"
+          pkgutil --check-signature "$signed"
+          mv "$signed" "$ARTIFACT_PACKAGE"
+      - name: Installer bei Apple notarisieren
+        if: env.MACOS_SIGNING_MODE == 'notarized'
+        shell: bash
+        env:
+          APPLE_NOTARY_ID: ${{ secrets.APPLE_NOTARY_ID }}
+          APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcrun notarytool submit "$ARTIFACT_PACKAGE" --apple-id "$APPLE_NOTARY_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait
+          xcrun stapler staple "$ARTIFACT_PACKAGE"
+          xcrun stapler validate "$ARTIFACT_PACKAGE"
+          spctl --assess --type install --verbose=2 "$ARTIFACT_PACKAGE"
+      - name: Finalen Installer neu binden
+        shell: bash
+        run: shasum -a 256 "$ARTIFACT_PACKAGE" | tee "$ARTIFACT_PACKAGE.sha256"
+      - name: Finalen Mac-Bau intern übergeben
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-final-private-${{ matrix.runner_arch }}
+          path: |
+            ${{ env.ARTIFACT_PACKAGE }}
+            ${{ env.ARTIFACT_PACKAGE }}.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  macos-release-check:
+    name: macOS-Releaseakte prüfen (${{ matrix.machine_arch }})
+    needs: [macos-package, macos-installer-sign]
+    if: >-
+      always() && needs.macos-package.result == 'success' &&
+      (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-installer-sign.result == 'skipped') ||
+       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success'))
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26-intel
+            runner_arch: X64
+            machine_arch: x86_64
+          - os: macos-latest
+            runner_arch: ARM64
+            machine_arch: arm64
+    env:
+      MACOS_SIGNING_MODE: ${{ vars.MACOS_SIGNING_MODE || 'unsigned' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.13"
+      - name: Finalen Installer laden
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-final-private-${{ matrix.runner_arch }}
+          path: release-download
+      - name: Signierten App-Baum laden
+        if: env.MACOS_SIGNING_MODE != 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-app-signed-${{ matrix.runner_arch }}
+          path: app-download
+      - name: Unsignierten App-Baum laden
+        if: env.MACOS_SIGNING_MODE == 'unsigned'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: solidon3d-macos-app-input-${{ matrix.runner_arch }}
+          path: app-download
+      - name: Releasebelege fail-closed prüfen
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive=$(find app-download -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.zip")
+          [ -n "$archive" ] && [ -f "$archive.sha256" ]
+          [ "$(shasum -a 256 "$archive" | awk '{print $1}')" = "$(awk '{print $1}' "$archive.sha256")" ] || { echo "Geänderter finaler macOS-App-Baum."; exit 1; }
+          mkdir release-app
+          ditto -x -k "$archive" release-app
+          package=$(find release-download -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
+          [ -n "$package" ] && [ -f "$package.sha256" ]
+          [ "$(shasum -a 256 "$package" | awk '{print $1}')" = "$(awk '{print $1}' "$package.sha256")" ] || { echo "Geänderter finaler macOS-Installer."; exit 1; }
+          cp "$package" "build/$(basename "$package")"
+          sbom=$(find release-app/Solidon3D.app -type f -name Solidon3D.cdx.json)
+          [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die macOS-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
+          python tools/make_licence_notices.py --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json
+      - name: Geprüften Mac-Bau veröffentlichen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: solidon3d-macos-${{ matrix.runner_arch }}
+          path: |
+            release-download/*
+            app-download/*
           if-no-files-found: error
           retention-days: 7
 
@@ -730,8 +1531,10 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13"
           cache: pip
@@ -769,8 +1572,8 @@ jobs:
         # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
         # geht unter — er prüft deshalb, was er hier prüfen kann.
         run: |
-          windowed=$(grep -lE "MainWindow|Viewport\(|PrintSettingsDialog\(" tests/test_*.py | tr '\n' ' ')
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
-          echo "::warning::UI-intensive Dateien übersprungen (Qt/VTK ohne GL): $windowed"
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
           python -m pytest -q -m "not performance" $ignores

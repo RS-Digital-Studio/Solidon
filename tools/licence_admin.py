@@ -24,24 +24,56 @@ import contextlib
 import json
 import os
 import re
+import stat
 import tempfile
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import Request, build_opener
 
 from app.core.activation import certificate, key
+from app.core.http import (
+    HttpBoundaryError,
+    RejectRedirects,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    deadline_after,
+    read_limited,
+    response_url,
+    same_origin,
+    validate_http_url,
+)
+from app.core.json_boundary import loads as load_json
+from app.core.log import redact_external
 from app.i18n import tr
 from tools.licence_archive import ArchiveBusyError, archive_lock
+
+if os.name == "nt":
+    import ctypes
+    import msvcrt
 
 DEFAULT_ENDPOINT: Final = "https://solidon3d.de/api/operator.php"
 TOKEN_PATTERN: Final = re.compile(r"[0-9a-f]{64}")
 ARCHIVE_FORMAT: Final = 1
+OPERATOR_TIMEOUT_SECONDS: Final = 10.0
+MAX_OPERATOR_RESPONSE_BYTES: Final = 256 * 1024
+MAX_TOKEN_FILE_BYTES: Final = 256
+
+_OPERATOR_OPENER = build_opener(RejectRedirects())
+
+
+def _open_operator(request: Request, *, timeout: float) -> Any:
+    """Öffnet den Betreiber-Endpunkt ohne Weiterleitung des Zugriffstokens."""
+    return _OPERATOR_OPENER.open(request, timeout=timeout)
+
+
+_DEFAULT_OPEN_OPERATOR = _open_operator
 
 ACTION_LABELS: Final = {
     "block": "Neue Aktivierungen sperren",
@@ -57,6 +89,196 @@ REASON_LABELS: Final = {
     "Datenauskunft": "data_request",
     "Sonstiger Vorgang": "other",
 }
+
+
+def _owned_by_current_user(descriptor: int) -> bool:
+    """Ob Eigentümer und Leserechte der geöffneten Datei privat sind."""
+    if os.name != "nt":
+        getuid = cast(Callable[[], int], vars(os)["getuid"])
+        return os.fstat(descriptor).st_uid == getuid()
+
+    class TokenOwner(ctypes.Structure):
+        _fields_ = (("sid", ctypes.c_void_p),)
+
+    class SidAndAttributes(ctypes.Structure):
+        _fields_ = (("sid", ctypes.c_void_p), ("attributes", ctypes.c_uint32))
+
+    class AclSizeInformation(ctypes.Structure):
+        _fields_ = (
+            ("ace_count", ctypes.c_uint32),
+            ("bytes_in_use", ctypes.c_uint32),
+            ("bytes_free", ctypes.c_uint32),
+        )
+
+    class AceHeader(ctypes.Structure):
+        _fields_ = (
+            ("kind", ctypes.c_ubyte),
+            ("flags", ctypes.c_ubyte),
+            ("size", ctypes.c_uint16),
+        )
+
+    class AllowedAce(ctypes.Structure):
+        _fields_ = (
+            ("header", AceHeader),
+            ("mask", ctypes.c_uint32),
+            ("sid_start", ctypes.c_uint32),
+        )
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = ctypes.c_void_p
+    kernel32.LocalFree.argtypes = (ctypes.c_void_p,)
+    kernel32.LocalFree.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    advapi32.GetSecurityInfo.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_void_p),
+    )
+    advapi32.GetSecurityInfo.restype = ctypes.c_uint32
+    advapi32.OpenProcessToken.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_void_p),
+    )
+    advapi32.OpenProcessToken.restype = ctypes.c_int
+    advapi32.GetTokenInformation.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    )
+    advapi32.GetTokenInformation.restype = ctypes.c_int
+    advapi32.EqualSid.argtypes = (ctypes.c_void_p, ctypes.c_void_p)
+    advapi32.EqualSid.restype = ctypes.c_int
+    advapi32.GetAclInformation.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_int,
+    )
+    advapi32.GetAclInformation.restype = ctypes.c_int
+    advapi32.GetAce.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_void_p),
+    )
+    advapi32.GetAce.restype = ctypes.c_int
+    advapi32.CreateWellKnownSid.argtypes = (
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.POINTER(ctypes.c_uint32),
+    )
+    advapi32.CreateWellKnownSid.restype = ctypes.c_int
+    handle = ctypes.c_void_p(msvcrt.get_osfhandle(descriptor))
+    owner = ctypes.c_void_p()
+    dacl = ctypes.c_void_p()
+    security_descriptor = ctypes.c_void_p()
+    result = advapi32.GetSecurityInfo(
+        handle,
+        1,  # SE_FILE_OBJECT
+        1 | 4,  # OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION
+        ctypes.byref(owner),
+        None,
+        ctypes.byref(dacl),
+        None,
+        ctypes.byref(security_descriptor),
+    )
+    if result != 0:
+        return False
+    token = ctypes.c_void_p()
+    try:
+        if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), 0x0008, ctypes.byref(token)):
+            return False
+
+        def token_sid(kind: int, structure: type[ctypes.Structure]) -> tuple[Any, int] | None:
+            needed = ctypes.c_uint32()
+            advapi32.GetTokenInformation(token, kind, None, 0, ctypes.byref(needed))
+            if not needed.value:
+                return None
+            buffer = ctypes.create_string_buffer(needed.value)
+            if not advapi32.GetTokenInformation(
+                token,
+                kind,
+                buffer,
+                needed.value,
+                ctypes.byref(needed),
+            ):
+                return None
+            sid = int(ctypes.cast(buffer, ctypes.POINTER(structure)).contents.sid)
+            return buffer, sid
+
+        owner_data = token_sid(4, TokenOwner)
+        user_data = token_sid(1, SidAndAttributes)
+        if owner_data is None or user_data is None:
+            return False
+        _owner_buffer, token_owner = owner_data
+        _user_buffer, token_user = user_data
+        if not advapi32.EqualSid(owner, ctypes.c_void_p(token_owner)):
+            return False
+        if not dacl:
+            return False
+
+        def well_known_sid(kind: int) -> tuple[Any, int] | None:
+            size = ctypes.c_uint32(68)
+            buffer = ctypes.create_string_buffer(size.value)
+            if not advapi32.CreateWellKnownSid(
+                kind,
+                None,
+                buffer,
+                ctypes.byref(size),
+            ):
+                return None
+            return buffer, ctypes.addressof(buffer)
+
+        system_data = well_known_sid(22)  # WinLocalSystemSid
+        administrators_data = well_known_sid(26)  # WinBuiltinAdministratorsSid
+        if system_data is None or administrators_data is None:
+            return False
+        _system_buffer, system_sid = system_data
+        _administrators_buffer, administrators_sid = administrators_data
+        trusted_sids = (token_user, token_owner, system_sid, administrators_sid)
+
+        acl = AclSizeInformation()
+        if not advapi32.GetAclInformation(
+            dacl,
+            ctypes.byref(acl),
+            ctypes.sizeof(acl),
+            2,  # AclSizeInformation
+        ):
+            return False
+        for index in range(acl.ace_count):
+            pointer = ctypes.c_void_p()
+            if not advapi32.GetAce(dacl, index, ctypes.byref(pointer)) or pointer.value is None:
+                return False
+            header = ctypes.cast(pointer, ctypes.POINTER(AceHeader)).contents
+            if header.kind != 0:  # Nur ein gewöhnlicher ACCESS_ALLOWED_ACE ist eindeutig.
+                if header.kind in {5, 9, 11}:
+                    return False
+                continue
+            ace = ctypes.cast(pointer, ctypes.POINTER(AllowedAce)).contents
+            content_read = ace.mask & (0x00000001 | 0x80000000 | 0x10000000)
+            if not content_read:
+                continue
+            sid = ctypes.c_void_p(pointer.value + AllowedAce.sid_start.offset)
+            if not any(
+                advapi32.EqualSid(sid, ctypes.c_void_p(trusted)) for trusted in trusted_sids
+            ):
+                return False
+
+        return True
+    finally:
+        if token:
+            kernel32.CloseHandle(token)
+        kernel32.LocalFree(security_descriptor)
 
 
 class OperatorError(RuntimeError):
@@ -294,8 +516,37 @@ def assign_transaction(path: Path, digest: str, transaction: str) -> None:
 
 def read_token(path: Path) -> str:
     """Liest genau einen 256-Bit-Token aus der externen Datei."""
+    target = path.expanduser()
     try:
-        token = path.expanduser().read_text(encoding="ascii").strip()
+        metadata = target.lstat()
+        junction = getattr(target, "is_junction", None)
+        if (
+            target.is_symlink()
+            or (callable(junction) and junction())
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+        ):
+            raise OSError("Tokendatei ist keine einzelne gewöhnliche Datei")
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(target, flags)
+        try:
+            opened = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(opened.st_mode)
+                or opened.st_nlink != 1
+                or (opened.st_dev, opened.st_ino) != (metadata.st_dev, metadata.st_ino)
+            ):
+                raise OSError("Tokendatei wechselte beim Öffnen")
+            if not _owned_by_current_user(descriptor):
+                raise OSError("Tokendatei gehört nicht dem aktuellen Nutzer")
+            if os.name != "nt" and stat.S_IMODE(opened.st_mode) & 0o077:
+                raise OSError("Tokendatei ist für andere Nutzer zugänglich")
+            raw = os.read(descriptor, MAX_TOKEN_FILE_BYTES + 1)
+        finally:
+            os.close(descriptor)
+        if len(raw) > MAX_TOKEN_FILE_BYTES:
+            raise OSError("Tokendatei ist ungewöhnlich groß")
+        token = raw.decode("ascii").strip()
     except (OSError, UnicodeError) as problem:
         raise OperatorError(
             tr("Der Betreiberzugang ließ sich nicht lesen. Tokendatei auswählen.")
@@ -311,7 +562,18 @@ class OperatorClient:
     """Kleine HTTPS-Gegenstelle des privaten Betreiber-Endpunkts."""
 
     def __init__(self, endpoint: str, token: str) -> None:
-        parsed = urlparse(endpoint)
+        try:
+            checked = validate_http_url(
+                endpoint,
+                allow_http=True,
+                allow_query=False,
+                allow_fragment=False,
+            )
+        except ValueError as problem:
+            raise OperatorError(
+                tr("Die Support-Verwaltung braucht HTTPS. Serveradresse korrigieren.")
+            ) from problem
+        parsed = urlparse(checked)
         local = parsed.hostname in {"127.0.0.1", "localhost", "::1"}
         if parsed.scheme != "https" and not (parsed.scheme == "http" and local):
             raise OperatorError(
@@ -319,7 +581,7 @@ class OperatorClient:
             )
         if TOKEN_PATTERN.fullmatch(token) is None:
             raise OperatorError(tr("Der Betreiberzugang ist nicht verwendbar. Tokendatei prüfen."))
-        self.endpoint = endpoint
+        self.endpoint = checked
         self.token = token
 
     def call(self, action: str, digest: str, reason: str = "") -> dict[str, Any]:
@@ -343,14 +605,44 @@ class OperatorClient:
         )
         status = 0
         answer = b""
+        deadline = deadline_after(OPERATOR_TIMEOUT_SECONDS)
+        strict_timeout = _open_operator is _DEFAULT_OPEN_OPERATOR
         try:
-            with urlopen(request, timeout=10) as response:
+            with _open_operator(request, timeout=OPERATOR_TIMEOUT_SECONDS) as response:
+                if not same_origin(
+                    self.endpoint,
+                    validate_http_url(response_url(response, self.endpoint), allow_http=True),
+                ):
+                    raise OperatorError(
+                        tr("Die Serverantwort war nicht lesbar. Serverprotokoll prüfen.")
+                    )
                 status = response.status
-                answer = response.read()
+                answer = read_limited(
+                    response,
+                    limit=MAX_OPERATOR_RESPONSE_BYTES,
+                    deadline=deadline,
+                    require_timeout=strict_timeout,
+                )
         except HTTPError as problem:
-            status = problem.code
-            answer = problem.read()
-        except (OSError, URLError) as problem:
+            try:
+                status = problem.code
+                try:
+                    answer = read_limited(
+                        problem,
+                        limit=MAX_OPERATOR_RESPONSE_BYTES,
+                        deadline=deadline,
+                        require_timeout=strict_timeout,
+                    )
+                except HttpBoundaryError as boundary:
+                    raise OperatorError(
+                        tr(
+                            "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen "
+                            "und erneut versuchen."
+                        )
+                    ) from boundary
+            finally:
+                problem.close()
+        except (OSError, URLError, ResponseDeadlineError, ResponseTooLargeError) as problem:
             raise OperatorError(
                 tr(
                     "Die Support-Verwaltung ist nicht erreichbar. Verbindung prüfen und "
@@ -358,7 +650,7 @@ class OperatorClient:
                 )
             ) from problem
         try:
-            result = json.loads(answer.decode("utf-8"))
+            result = load_json(answer, max_bytes=MAX_OPERATOR_RESPONSE_BYTES)
         except (UnicodeError, ValueError) as problem:
             raise OperatorError(
                 tr("Die Serverantwort war nicht lesbar. Serverprotokoll prüfen.")
@@ -371,7 +663,11 @@ class OperatorClient:
                 help_text = tr("Aktivierungsdatenbank und Betreiberzugang auf dem Server prüfen.")
             else:
                 help_text = tr("Eingabe prüfen und erneut versuchen.")
-            detail = str(result.get("error", "")) if isinstance(result, dict) else ""
+            detail = (
+                redact_external(result.get("error", ""), limit=300)
+                if isinstance(result, dict)
+                else ""
+            )
             raise OperatorError(
                 f"{detail or tr('Die Support-Handlung wurde abgelehnt.')} {help_text}"
             )

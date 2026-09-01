@@ -13,8 +13,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/activation_common.php';
 
 header('Content-Type: application/json; charset=utf-8');
-header('Cache-Control: no-store');
-header('X-Content-Type-Options: nosniff');
+activation_security_headers();
 
 const OPERATOR_ACTIONS = ['lookup', 'block', 'unblock', 'release', 'reset_attempts'];
 const OPERATOR_REASONS = [
@@ -33,7 +32,8 @@ function operator_expected_token(): string
         'SOLIDON_ACTIVATION_OPERATOR_TOKEN_FILE',
         'operator.token'
     );
-    $text = is_readable($path) ? file_get_contents($path) : false;
+    activation_require_private_file($path);
+    $text = file_get_contents($path);
     $token = $text === false ? '' : trim($text);
     if (preg_match('/^[0-9a-f]{64}$/D', $token) !== 1) {
         throw new ActivationFailure(
@@ -74,12 +74,14 @@ function operator_authenticate(): void
 }
 
 /** Liest eine kleine JSON-Anforderung mit fester Obergrenze. */
-function operator_request(): array
+function operator_request_body(): string
 {
-    $raw = file_get_contents('php://input', false, null, 0, 16385);
-    if ($raw === false || strlen($raw) > 16384) {
-        throw new ActivationFailure('Die Support-Anforderung ist zu groß.', 413, 'invalid_request');
-    }
+    return activation_read_json_body(16384);
+}
+
+/** Prüft die kleine JSON-Anforderung nach erfolgreicher Anmeldung. */
+function operator_request(string $raw): array
+{
     try {
         $request = json_decode($raw, true, 16, JSON_THROW_ON_ERROR);
     } catch (JsonException $problem) {
@@ -93,6 +95,12 @@ function operator_request(): array
     $reason = (string) ($request['reason'] ?? '');
     if (!in_array($action, OPERATOR_ACTIONS, true)) {
         throw new ActivationFailure('Die angeforderte Support-Handlung ist unbekannt.');
+    }
+    $expectedKeys = $action === 'lookup'
+        ? ['action', 'digest']
+        : ['action', 'digest', 'reason'];
+    if (!activation_has_exact_keys($request, $expectedKeys)) {
+        throw new ActivationFailure('Die Support-Anforderung enthält unerwartete Felder.');
     }
     if (preg_match('/^[0-9a-f]{64}$/D', $digest) !== 1) {
         throw new ActivationFailure('Die Lizenzkennung ist nicht verwendbar.');
@@ -223,15 +231,12 @@ function operator_change(PDO $database, array $request): bool
 }
 
 try {
-    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
-        throw new ActivationFailure(
-            'Die private Support-Verwaltung nimmt ausschließlich POST-Anforderungen an.',
-            405,
-            'method_not_allowed'
-        );
-    }
+    activation_require_method('POST');
+    activation_require_trusted_origin();
+    activation_require_json_headers(16384);
+    activation_consume_client_rate('operator', 30, 900);
     operator_authenticate();
-    $request = operator_request();
+    $request = operator_request(operator_request_body());
     $database = activation_database();
     $changed = null;
     if ($request['action'] !== 'lookup') {

@@ -142,7 +142,12 @@ def _window(theme: Theme) -> str:
     # und nicht übersetzt. Wer ein Werkzeug hinzunimmt oder streicht, sieht
     # hier nach; die Reihenfolge ist die der Leiste.
     canvas.box(170, 254, 260, 24, fill=colours.fill)
-    canvas.label(180, 270, str(_("Schnitt · Messen · Bewegen · Analyse · Trennen")), size=9)
+    canvas.label(
+        180,
+        270,
+        str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Trennen")),
+        size=7,
+    )
 
     canvas.box(10, 288, 580, 26, fill=colours.fill)
     canvas.label(20, 306, str(_("Statusleiste: Maße · Auswahl · Fortschritt · Warnungen")), size=10)
@@ -1133,10 +1138,11 @@ FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="ways",
         alt=_(
-            "Drei Abläufe untereinander: ein fremdes Modell anpassen (einlesen, "
+            "Vier Abläufe untereinander: ein fremdes Modell anpassen (einlesen, "
             "reparieren, bohren, exportieren), selbst konstruieren (Maße benennen, "
             "Grundkörper oder Skizze, Bausteine, exportieren) und Erzeugtes aufbereiten "
-            "(erzeugen, Reparaturkette, prüfen, exportieren)."
+            "(erzeugen, Reparaturkette, prüfen, exportieren) sowie organisch formen "
+            "(Grundkörper, verschmelzen, ausformen, exportieren)."
         ),
         caption=_("Zu jedem Weg liegt ein Beispielprojekt auf dem Startbildschirm."),
         build=_ways,

@@ -45,9 +45,9 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `range_check.py` | Der Bereichstest in der Anwendung |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |
 | `scad.py` | Export als OpenSCAD-Quelltext |
-| `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm; mitgereiste und einzeln importierte Herkunft bleiben getrennt (§24.5, §32) |
-| `shared.py` | Lokaler Bausteindatei-Vertrag: begrenztes Lesen, Erlaubnislistenprüfung sowie geprüfte Import- und Exportbytes |
-| `shared_texts.py` | Übersetzbare Befunde der lokalen Bausteindatei-Prüfung |
+| `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
+| `shared.py` | Geschlossener Prüfvertrag für lokale Bausteindateien: Form, Mengen, Ops und Payloads |
+| `part_file.py` | Netzfreier, verlustfreier Import und Export samt striktem Rezeptbau und Dateiherkunft |
 | `user.py` | Eigene Bausteine aus dem Nutzerverzeichnis |
 | `check.py` | Was gesagt werden muss, wenn ein Projekt geöffnet wird (§24.4) |
 
@@ -59,6 +59,46 @@ in einer Projektdatei mitreisen (Regel 13, Entscheidung Robert 24.08.2026).
 
 Ein eigener Baustein als `.py` bleibt dagegen, wo er liegt: im
 Nutzerverzeichnis. Ausführbarer Code reist nie mit.
+
+## Lokaler Baustein-Dateiaustausch
+
+`PartFileIO` hat keine Netzfunktion. Import und Export laufen durch denselben
+geschlossenen Rezeptvertrag und bauen das Rezept einmal vollständig, bevor es
+den Katalog oder das Dateisystem erreicht. Eingebettete Modellbytes dürfen
+mitreisen, werden aber begrenzt, einer relativen Quelle zugeordnet und gegen
+deren SHA-256 geprüft. Unbekannte Felder oder Ops, absolute und übergeordnete
+Pfade sowie widersprüchliche Payloads werden abgewiesen.
+
+Ein Import erhält eine geschlossene `ImportedOrigin`-Quittung aus Prüfsumme der
+exakten Eingangsbytes und UTC-Importzeit — nie aus Pfad, Dateiname oder
+Kontaktangabe. Autor, Lizenz, Parameter, Quellherkunft und Payloads bleiben
+unverändert. `load_all()` und `replace()` stellen die fremde Katalogquelle
+sofort und nach einem Neustart wieder her; erneutes Speichern oder Exportieren
+macht daraus keinen eigenen Baustein. Ein gleichnamiger eigener Baustein wird
+nicht still ersetzt; dieser Konflikt gehört sichtbar in den Importablauf.
+
+Eine Rezeptdatei wird zuerst vollständig in eine Tempdatei ihres Zielordners
+geschrieben und synchronisiert. Erst danach wird sie atomar veröffentlicht:
+beim Import ohne Überschreiben, beim ausdrücklichen Ersetzen per Replace. Die
+vollständigen Folgezustände von Katalog und Operationsregister entstehen vorher
+in isolierten Registern. Nach dem Plattenwechsel werden nur noch diese geprüften
+Zustände aktiviert; auch bei einer Unterbrechung wird vorwärts auf den neuen
+Stand abgeschlossen und niemals die Platte zurückgerollt. Verwaiste eigene
+Tempdateien werden mit Namensraum-, Besitzer- und Altersgrenze beseitigt. So ist
+nach einem Prozessabbruch entweder die alte oder die neue vollständige Datei
+sichtbar, nie ein halbes Rezept oder ein davon abweichendes Register.
+
+Auch das Entfernen ist eine Dateiaktion und kein Szenenschritt. Nur lokale
+Quellen `recipe` und `imported` dürfen diesen Weg nehmen. Der Dateiname wird
+zuerst atomar in einen exklusiven Quarantänenamen desselben Ordners verschoben;
+Hash, Rückgängig-Bytes und Metadaten stammen danach genau aus diesem Eintrag.
+Eine noch nicht festgeschriebene Quarantäne wird beim nächsten Laden
+zurückgelegt, eine festgeschriebene wird aufgeräumt. Nach dem Platten-Commit
+werden Katalog und Operationsregister wie beim Installieren ausschließlich auf
+den vorbereiteten neuen Stand vorwärts gerollt. Die unmittelbare
+Wiederherstellung veröffentlicht die gesicherten Bytes samt Modus und Zeiten
+wieder ohne Überschreiben. Offene Dokumente und ihr Undo bleiben davon
+unberührt.
 
 ## Ein neuer Baustein
 

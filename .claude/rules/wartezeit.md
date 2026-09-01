@@ -26,13 +26,6 @@ gelten weiter und laden zusätzlich.
 Die letzte gültige Darstellung bleibt sichtbar — nie ein leerer Viewport, nie
 ein blockierendes Fenster. Lange Rechnungen laufen nicht im Qt-Hauptthread.
 
-**Eine Schätzung setzt einen bekannten Gesamtumfang voraus.** Auto Split weiß
-die Zahl seiner nötigen Schnitte erst, nachdem jedes neue Teil wieder gegen das
-Bett geprüft wurde. Die Höchstzahl der Teile ist nur eine Sicherheitsgrenze
-und kein Arbeitsumfang. Solange die Liste offen ist, zeigt die Oberfläche
-deshalb einen unbestimmten Balken mit der aktuellen Phase, aber weder Prozent
-noch Restzeit; erst der vollständig gerechnete Plan ist fertig.
-
 **Wo nichts steht, steht die Ladeanzeige.** Der Balken in der Statusleiste ist
 für die Fälle richtig, in denen ein Modell im Bild bleibt; beim Öffnen eines
 Projekts bleibt keines, und dann liegt er als einzige Auskunft dort, wo beim
@@ -507,15 +500,6 @@ der Arbeiter bliebe für immer gehalten.
 
 Das Feld am Dialog bleibt — es ist danach nur noch die Antwort auf „läuft
 gerade einer", nicht mehr die einzige Referenz.
-
-**Ein Ergebnis gehört dem Dokumentstand, an dem seine Arbeit begann.** Ein
-lang laufender Arbeiter, der später eine Operation anwendet, bindet deshalb
-Dokumentidentität und monotonen Revisionsstempel beim Start. Projektwechsel,
-Parameteränderung, Undo und jede andere rechenwirksame Dokumentänderung
-brechen ihn ab und verwerfen seine Antwort still; ein verspätetes Signal darf
-weder den neuen Stand ändern noch dort eine Abbruchmeldung hinterlassen.
-`release()` bricht auch diesen Arbeiter ab und wartet über dieselbe Leine auf
-sein tatsächliches Ende.
 
 **Fünfzehn Arbeiter hielten sich nicht daran, und gefunden hat sie kein
 Suchen.** Ein `grep` nach `worker.start()` findet die Hälfte; die andere heißt

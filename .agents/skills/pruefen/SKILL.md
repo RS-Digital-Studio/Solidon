@@ -45,7 +45,7 @@ irgendwann reißt eine Grenze — zweimal gemessen, beide Male bei 83 Prozent
 hängengeblieben.
 
 Die CI löst das mit je einem Prozess pro Fensterdatei, und dafür gibt es ein
-Skript: `suite-getrennt.sh` unter `.claude/.state/oberflaechen-durchsicht-2026-08-19/`.
+Skript: `suite-getrennt.sh` unter `.Codex/.state/oberflaechen-durchsicht-2026-08-19/`.
 Es sucht die Fensterdateien selbst (`MainWindow|Viewport|pyvista`) und zählt am
 Ende „Läufe mit Fehler: N".
 
@@ -85,14 +85,14 @@ Dann die Suite und die Leistungstests, beide unter dem Schloss, beide in einem
 Aufruf, damit das Schloss nur einmal genommen wird:
 
 ```
-.venv\Scripts\python.exe tools/gate_lock.py run --who "$CLAUDE_SESSION_NAME" --wait 1800 -- bash -c '.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4.txt" 2>&1; echo "geteilt Exit=$?"; .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5.txt" 2>&1; echo "performance Exit=$?"'
+.venv\Scripts\python.exe tools/gate_lock.py run --who "$CLAUDE_SESSION_NAME" --wait 1800 -- bash -c '.Codex/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4.txt" 2>&1; echo "geteilt Exit=$?"; .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5.txt" 2>&1; echo "performance Exit=$?"'
 ```
 
 Alle fünf ausführen, auch wenn einer früh fehlschlägt — ein vollständiges Bild
 ist mehr wert als ein schneller Abbruch. Fehlt `.venv`, sag das mit dem
 Einrichtungsbefehl aus `AGENTS.md`, statt auf das System-Python auszuweichen.
 
-**In einem Arbeitsbaum** gibt es kein `.venv`. Dann den
+**In einem Arbeitsbaum** (`.Codex/worktrees/…`) gibt es kein `.venv`. Dann den
 Interpreter des Hauptbaums mit vollem Pfad rufen und `cwd` im Arbeitsbaum
 lassen; gemessen am 22.08.2026, die Suite läuft so.
 
@@ -136,7 +136,7 @@ unterdrücken, die `filterwarnings = ["error"]` absichtlich zum Fehler macht.
 **Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal
 ist.** Denselben Stand ein zweites Mal fahren, nicht den Vorgängerstand:
 Schwankt die Menge der roten Tests, war es Last. Die Begründung steht in
-`.claude/rules/tests.md`.
+`.Codex/rules/tests.md`.
 
 ## Danach
 

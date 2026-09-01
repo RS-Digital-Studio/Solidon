@@ -17,57 +17,121 @@ scrive in `website/version.json`.
 
 ## 0.3.0
 
+### Primi passi e orientamento
 
-### Primi passi e interfaccia
+- Quattro percorsi guidati spiegano le vie principali dal primo progetto fino al risultato stampabile.
+- La schermata iniziale sfrutta interamente anche le finestre piccole o strette, senza schede tagliate o contenuti coperti.
+- I progetti usati di recente precedono i tour introduttivi e sono quindi raggiungibili più rapidamente.
+- La schermata iniziale non sposta più la selezione senza richiesta e si usa completamente con mouse e tastiera.
+- Le voci *Nuovo*, *Apri* ed *Esempi* sono ordinate più chiaramente e descrivono la destinazione già prima dell’apertura.
+- Feedback e sostegno volontario sono accessibili dalla schermata iniziale anche con tastiera e tecnologie assistive.
+- Chat e rapporto di controllo restano utilizzabili contemporaneamente anche con una finestra poco alta.
+- La barra degli strumenti superiore resta visibile con progetti aperti e finestre strette, senza uscire dall’area di lavoro.
+- Un nuovo esempio di disegno porta direttamente al percorso degli schizzi e completa i progetti di esempio esistenti.
 
-- Quattro tour coprono i percorsi principali: adattare un modello, costruirlo, generarlo da testo o immagine oppure scolpirlo. Altri esempi restano disponibili per approfondire.
-- L’interfaccia è stata riorganizzata in finestre, dialoghi e barre degli strumenti. Spazi chiari, pulsanti coerenti e gruppi compatti la mantengono utilizzabile anche in finestre strette.
-- Il feedback e il sostegno volontario sono due schede nella schermata iniziale. Funzionano con mouse e tastiera, rispettano il movimento ridotto e spiegano le pagine esterne prima di aprirle.
-- Il piano di stampa è traslucido. I pezzi finiti per errore appena sotto restano visibili, mentre griglia e bordo rimangono chiari.
-- È possibile cercare nelle impostazioni di stampa. L’intestazione mostra la stampante selezionata e il materiale effettivamente usato, invece di offrire una seconda selezione in conflitto.
+### Interfaccia e utilizzo
 
-### Disegno e misure
+- I menu hanno titoli ben visibili e colonne di icone allineate in modo uniforme.
+- La panoramica dei comandi allinea scorciatoie e spiegazioni, così le voci lunghe si scorrono più rapidamente.
+- I dialoghi estesi usano colonne uniformi e sfruttano le finestre larghe con chiare viste a due colonne.
+- La precedente pagina unica per adesione, retrazione e filamento è divisa in aree di impostazioni più piccole e ben denominate.
+- Tutte le 56 impostazioni di stampa si possono cercare tramite le etichette tedesche visibili.
+- La ricerca riconosce inoltre 146 termini comuni degli slicer, tra cui *perimeters* e *wall loops*.
+- I campi numerici rispondono correttamente a frecce, incremento e arrotondamento, senza più cambiare i valori in modo inatteso.
+- I cursori hanno un comportamento uniforme e restano precisi anche con intervalli di valori molto fini.
+- Solo lo strumento attivo mantiene il colore in risalto; gli elementi inattivi restano visivamente in secondo piano.
+- I calcoli molto brevi evitano indicatori lampeggianti; quelli medi mostrano l’attesa, quelli lunghi anche avanzamento e annullamento.
+- I suggerimenti restano su una riga quando c’è spazio e vanno a capo in modo controllato nelle finestre strette.
+- Le anteprime nell’albero degli oggetti sono abbastanza grandi da permettere di riconoscere davvero le forme.
+- L’elenco dei filamenti scorre separatamente; *Aggiungi filamento* e *Valori di stampa* restano raggiungibili anche con molte bobine.
+- Avvisi ed errori sono leggibili senza comunicare il loro significato soltanto tramite il colore del testo.
+- I campi di selezione disattivati si distinguono chiaramente da quelli attivi e selezionati.
 
-- Un cerchio richiede il diametro invece del raggio. Il valore inserito è quello misurabile sul pezzo finito.
-- Le misure si possono modificare direttamente con un doppio clic; i campi numerici nelle barre degli strumenti accettano valori esatti senza passare da una grande finestra di dialogo.
-- Esc torna indietro nel disegno per gradi: prima il tratto iniziato, poi lo strumento e solo dopo lo schizzo. Anche Ripeti funziona durante il disegno.
-- Le indicazioni mostrano entrambi i modi per iniziare uno schizzo: disegnare un contorno proprio o inserire una forma base già pronta. Le misurazioni terminano con un riscontro visibile.
+### Disegno e immissione precisa
 
-### Cronologia e modifica
+- I cerchi si inseriscono tramite il diametro; un foro M3 può quindi essere creato direttamente con 3,2 mm.
+- Un vincolo di diametro resta un’espressione modificabile dopo la risoluzione, il salvataggio e la riapertura.
+- Le quote si modificano direttamente con un doppio clic, senza il precedente e lungo percorso di selezione.
+- Posizione X, Y e Z, angolo e scala si possono inserire direttamente nella barra di movimento.
+- Un’immissione esatta crea lo stesso passaggio annullabile di un movimento con il mouse.
+- Durante una rotazione o scalatura esatta, più corpi selezionati usano un centro comune.
+- Esc torna indietro di un solo livello nel disegno: linea corrente, strumento corrente e solo dopo l’intero schizzo.
+- Ripeti funziona ora anche mentre uno schizzo è aperto.
+- Uno schizzo vuoto mostra un’indicazione cliccabile che conduce direttamente allo strumento Rettangolo.
+- Il pulsante delle forme base porta il nome dell’azione eseguita dal clic. Le altre forme si trovano dietro la freccia accanto.
+- Lo strumento di taglio si apre nel corpo invece che in una vista vuota fuori dal modello.
+- Le viste anteriore, laterale, superiore e opposte si allineano correttamente su tutti e sei gli assi.
+- La maniglia di trascinamento resta visibile anche con una telecamera radente o inclinata e mostra una misura utile.
+- Lo strumento di misura conclude una misurazione con un riscontro visibile, invece di dare l’impressione di perdere il risultato.
 
-- Più pezzi selezionati si possono spostare e ruotare insieme. La rotazione mantiene le distanze reciproche e il risultato viene riposizionato sul piano di stampa.
-- I movimenti consecutivi vengono riuniti in un’unica azione comprensibile nella cronologia. I passaggi collegati si possono comprimere e annullare insieme.
-- I modelli scaricati e importati si possono nuovamente tagliare e modificare in modo affidabile. Le facce protette o rilevate restano evidenziate senza nasconderne la forma.
-- La scultura con il pennello salva i tratti di una sessione come un passaggio annullabile. I motivi di superficie segnalano quando un tratto manca il corpo, invece di lasciare geometria staccata.
+### Vista, cronologia e modifica delle forme
 
-### Blocchi come file
+- Più corpi selezionati possono essere spostati insieme.
+- Più corpi selezionati ruotano attorno a un centro comune e mantengono le distanze reciproche.
+- Dopo una rotazione, i corpi possono tornare correttamente sul piano di stampa nello stesso passaggio.
+- I movimenti consecutivi dello stesso corpo sono riuniti in un passaggio comprensibile della cronologia.
+- I passaggi collegati compaiono come una voce espandibile, invece di sovraccaricare la cronologia con righe singole.
+- Un’azione continua dell’utente si può annullare completamente con un solo comando Annulla.
+- Le voci della cronologia mostrano il proprio tipo e un numero di passaggio univoco.
+- I modelli scaricati e importati possono essere tagliati immediatamente.
+- Le facce protette appaiono turchesi e tratteggiate, così restano comprensibili anche senza distinguere i colori.
+- La divisione automatica e manuale considera le superfici visibili protette nella scelta del piano di taglio.
+- Un clic su un riscontro porta in modo affidabile al punto, al corpo o al passaggio della cronologia interessato.
+- Quando si raggiunge un riscontro, la telecamera inquadra l’obiettivo invece di finire in un primo piano grigio.
+- Le facce denominate e le indicazioni si spostano insieme al loro corpo durante disposizione e posizionamento.
+- Nella modellazione a pennello viene segnalato se i tratti mancano il modello o non producono modifiche stampabili.
 
-- I blocchi creati da te si possono esportare come file locali `.solidon-part` e importare nuovamente nel catalogo. Importazione, esportazione e annullamento funzionano interamente dall’interfaccia.
-- Un file di blocco contiene i passaggi modificabili, i valori, l’anteprima e la provenienza del blocco. Non esegue codice sorgente incluso e non contatta alcun servizio di scambio.
-- I blocchi importati restano riconoscibili come provenienti da altrove. Un blocco personale con lo stesso nome non viene sovrascritto senza avviso.
-- I file di blocco si possono associare a Solidon e aprire dal gestore file su Windows, macOS e Linux.
-- Ganci per pannelli forati, cerniere flessibili e motivi di superficie segnalano ora orientamenti inadatti o contatto mancante prima che passi inosservato un risultato plausibile ma non adatto.
+### Blocchi personali e file di scambio
 
-### Divisione e stampa
+- I blocchi personali si possono salvare come file locale .solidon-part e aggiungere nuovamente al catalogo.
+- I file di blocco si possono aprire, trascinare nell’app e importare tramite l’associazione del sistema operativo.
+- Il nome e l’estensione rendono subito evidente che il file appartiene a Solidon.
+- Importazione, condivisione e libreria locale usano testi completi dell’interfaccia in tutte e sei le lingue.
+- Prima del salvataggio, un blocco personale può essere composto da più passaggi e valori modificabili.
+- Durante la condivisione si può scegliere tra uso libero, attribuzione o attribuzione con condivisione alle stesse condizioni.
+- Per un blocco denominato personalmente, il proprio nome prevale su quello incluso nel file.
+- Provenienza e condizioni di condivisione restano rintracciabili durante lo scambio di un blocco.
+- Ganci a scatto, occhielli per cerniere, ganci per pannelli forati e piedini hanno transizioni più robuste, senza superfici interne racchiuse.
+- Le schede del catalogo mantengono la posizione e la faccia selezionata mentre caricano le anteprime.
 
-- Auto Split cerca giunzioni più robuste invece di privilegiare il punto più sottile. In base alla giunzione sceglie perni, coda di rondine oppure maschio e femmina adatti alla superficie disponibile.
-- I collegamenti creati automaticamente restano riproducibili e le ricerche lunghe si possono annullare senza lasciare il documento modificato a metà.
-- I pezzi multicolore e gli assiemi si possono vedere montati e gestire separatamente per la stampa. I riferimenti a materiali e oggetti restano intatti.
-- Le impostazioni di stampa prendono i valori del materiale dalla bobina realmente selezionata. Ricerca, testi di aiuto e motivi visibili di blocco conducono più rapidamente all’impostazione corretta.
+### Divisione, stampa e filamento
 
-### Chat e generazione 3D
+- La divisione automatica privilegia interfacce solide ed evita il precedente possibile punto debole più sottile.
+- Per ogni taglio viene scelto separatamente il tipo di collegamento adatto e salvato come forma concreta.
+- Le indicazioni sui collegamenti incollati restano associate al taglio scelto.
+- La divisione automatica reagisce in modo riproducibile alle indicazioni modificate e si può annullare durante il calcolo.
+- La ricerca dell’orientamento prova solo posizioni realmente diverse e rispetta il tempo previsto anche con corpi complessi.
+- I file 3MF di grandi dimensioni vengono riconosciuti ed elaborati più rapidamente senza modificare il risultato.
+- Materiale, accoppiamento e tolleranze seguono la bobina realmente scelta o la posizione occupata nella stampante.
+- L’intestazione mostra il materiale davvero utilizzato e non offre più una seconda selezione del materiale in conflitto.
+- Il pulsante disattivato *Salva file di stampa* spiega che il file viene creato solo durante lo slicing.
+- Le riparazioni già eseguite nello stesso flusso di lavoro non compaiono più in seguito come consigli ancora aperti.
 
-- Il percorso da testo o immagine passa attraverso una finestra Genera dedicata fino alla stessa scena modificabile. La configurazione locale installa ComfyUI e TripoSG a revisioni fisse e verificabili.
-- Prima della prima chiamata a un modello cloud, Solidon mostra quali input e dati del modello lasciano il computer. I modelli locali linguistici e di generazione restano chiaramente separati.
-- La chat spiega più chiaramente il proprio scopo, il passaggio di lavoro in corso e lo strumento usato. L’agente può gestire insieme dettagli di forma ripetuti, senza doverli ricevere uno alla volta.
+### Rapporto, stabilità, piattaforme e lingue
 
-### Rapporto, stabilità e piattaforme
+- I riscontri simili sono raggruppati senza perdere il riferimento ai corpi e ai punti interessati.
+- Numeri e misure nel rapporto hanno etichette complete invece di singoli valori incomprensibili.
+- Se una riparazione non riesce, il corpo originale invariato viene ripristinato completamente.
+- Una mesh importata chiusa non viene più aperta dalla rimozione affrettata di un triangolo problematico.
+- I pulsanti d’azione del rapporto non mantengono più in memoria, senza farsi notare, una finestra già chiusa.
+- I blocchi inclusi e l’attivazione vengono caricati all’avvio senza bloccarsi a vicenda.
+- La vista 3D viene chiusa correttamente prima della finestra, rendendo più affidabile la chiusura su Windows, Linux e macOS.
+- Cornice e barra del titolo della finestra si adattano in modo sicuro alla rispettiva piattaforma.
+- I pulsanti standard come Apri, Salva e Annulla cambiano lingua immediatamente, senza riavvio.
+- I nomi generati di corpi e blocchi cambiano correttamente lingua anche dopo aver già usato contenuti memorizzati nella cache.
+- Traduzioni e valori del rapporto sono allo stesso livello in tedesco, inglese, spagnolo, francese, italiano e portoghese.
 
-- Il rapporto raggruppa i riscontri duplicati, etichetta completamente le misure e porta al punto interessato quando selezioni un avviso. I pulsanti d’azione restano direttamente disponibili.
-- Le riparazioni automatiche formano un unico passaggio. Se una riparazione non può concludersi, lo stato originale resta intatto e il messaggio propone un passo successivo praticabile.
-- Esempi, blocchi inclusi e attivazione si caricano senza bloccarsi a vicenda. L’applicazione rilascia la vista 3D in modo più affidabile alla chiusura.
-- Solidon apre le finestre in modo affidabile su Windows, macOS e Linux. Adatta la barra del titolo solo dove il sistema lo consente e altrove mantiene l’aspetto abituale della piattaforma.
-- I testi dell’interfaccia in tedesco, inglese, spagnolo, francese, italiano e portoghese restano completi dopo un cambio di lingua; anche i pulsanti standard cambiano immediatamente.
+### Chat e assistenza dei modelli
+
+- La chat accoglie con il proprio scopo concreto e non si apre più con uno spazio vuoto o termini tecnici relativi ai modelli.
+- I contatori tecnici dei token sono stati rimossi dalla normale interfaccia per i clienti.
+- L’assistente riconosce e raggruppa dettagli di forma uguali, invece di trattare ogni occorrenza separatamente.
+- La finestra di generazione trasforma testo o immagine in un modello tramite ComfyUI locale e lo inserisce nella stessa scena modificabile.
+- Il flusso TripoSG fornito crea un file GLB, poi riparato, ridimensionato e controllato automaticamente per la stampa.
+- Ollama locale e ComfyUI locale elaborano uno dopo l’altro, così non occupano contemporaneamente la scheda grafica.
+- Dopo una proposta dell’agente o una generazione 3D, Solidon libera i modelli locali e la memoria grafica.
+- Durante l’annullamento Solidon rimuove solo il proprio incarico ComfyUI; gli altri incarichi in corso restano intatti.
+- Prima del primo uso di un modello cloud, Solidon mostra chiaramente quali contenuti lasciano il computer.
 
 ## 0.2.2
 

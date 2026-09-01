@@ -19,7 +19,13 @@ from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, result, subtract, thread, union
-from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
+from app.core.knowledge.parts.registry import (
+    FACE_GIVES_DIRECTION,
+    FeatureRequirement,
+    PartChange,
+    WallRequirement,
+    register_part,
+)
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, Feature, PartResult
 from app.i18n import _
@@ -174,6 +180,12 @@ class ScrewHoleParams(BaseParams):
     params=ScrewHoleParams,
     subtractive=True,
     features=["bore", "countersink", "washer"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
+    feature_requirements=(
+        FeatureRequirement("bore"),
+        FeatureRequirement("countersink", when="countersink"),
+        FeatureRequirement("washer", when="washer", unless="countersink"),
+    ),
     doc=_(
         "Durchgangsloch zum Verschrauben mit einer metrischen Schraube, auf Wunsch "
         "mit 90-Grad-Senkung "
@@ -369,6 +381,11 @@ def size_for_printed_screw(diameter: float) -> dict[str, Any]:
     at_hole=True,
     at_hole_values=size_for_insert,
     features=["bore", "chamfer"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
+    feature_requirements=(
+        FeatureRequirement("bore"),
+        FeatureRequirement("chamfer", when="lead_in"),
+    ),
     doc=_(
         "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser "
         "ist bewusst knapp: das Material soll beim Einpressen verdrängt werden."
@@ -481,6 +498,11 @@ class NutTrapParams(BaseParams):
     at_hole=True,
     at_hole_values=size_for_nut_trap,
     features=["pocket", "bore"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
+    feature_requirements=(
+        FeatureRequirement("pocket"),
+        FeatureRequirement("bore", when="screw_hole"),
+    ),
     doc=_(
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
         "eingelegt, auf Wunsch mit durchgehendem Schraubenloch."
@@ -592,6 +614,35 @@ PRINTED_SCREW_PREPARES_COUNTERSINK = PartChange(
     ),
 )
 
+PRINTED_SCREW_GEOMETRY_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Beim Senkkopf lagen Kopf und Gewinde auf demselben Längenabschnitt; "
+        "kurze Gewinde verschwanden im Kopf, lange konnten am Übergang zerfallen. "
+        "Zusätzlich berührten Gewindegang und Kern sich nur auf derselben Zylinderfläche."
+    ),
+    effect=(
+        "Die angegebene Gewindelänge beginnt jetzt unter der Senkkopfspitze. "
+        "Eine Senkkopfschraube wird dadurch um ihre Kopfhöhe länger; die "
+        "zylindrische Ausführung bleibt unverändert. Der Gang greift innerhalb "
+        "des Körpers um die Boolesche Überlappung in den Kern."
+    ),
+)
+
+PRINTED_THREAD_ROOT_OVERLAPS_CORE = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Gewindegang und Kern berührten sich nur auf derselben Zylinderfläche; "
+        "die Vereinigung ließ dort koplanar überdeckte Dreiecke zurück."
+    ),
+    effect=(
+        "Der Gang greift jetzt innerhalb des Körpers um die Boolesche Überlappung "
+        "in den Kern. Außenmaß, Steigung, Spiel und Gewindelänge bleiben gleich."
+    ),
+)
+
 
 @op_params
 class ThreadParams(BaseParams):
@@ -649,6 +700,10 @@ class ThreadParams(BaseParams):
     at_hole=True,
     at_hole_values=size_for_thread,
     features=["thread"],
+    wall=WallRequirement.not_applicable(
+        "Das Innengewinde ist ein abtragendes Werkzeug; beim Außengewinde "
+        "werden die Gewindekämme vom massiven Kern getragen."
+    ),
     doc=_(
         "Druckbares Innengewinde in einer Bohrung oder Gewindebolzen auf einer "
         "ebenen Fläche — als Wendel mit abgeflachtem Kamm. Für einen offenen "
@@ -661,7 +716,13 @@ class ThreadParams(BaseParams):
         "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig, "
         "und wo kein Lötkolben zur Hand ist, eine Mutternfalle."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION, THREAD_CUTS_INWARD],
+    changes=[
+        FIRST_RELEASE,
+        PLAY_FROM_PROFILE,
+        FACE_GIVES_DIRECTION,
+        THREAD_CUTS_INWARD,
+        PRINTED_THREAD_ROOT_OVERLAPS_CORE,
+    ],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
     """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich
@@ -692,10 +753,13 @@ def _printed_thread(size: str, length: float, internal: bool, play: float) -> Pa
     if internal:
         # Das Werkzeug: Kern plus Spiel, und die Nut reicht von dort hinaus.
         diameter = screw.nominal - 2.0 * depth + play
-        core = shapes.cylinder(diameter, length)
+        core = shapes.cylinder(diameter + 2.0 * BOOLEAN_OVERLAP, length)
     else:
         diameter = screw.nominal - play
-        core = shapes.cylinder(diameter - 2.0 * depth, length)
+        core = shapes.cylinder(
+            diameter - 2.0 * depth + 2.0 * BOOLEAN_OVERLAP,
+            length,
+        )
 
     ridge = shapes.thread_body(diameter, screw.pitch, length, internal=internal)
     body = union(core, ridge)
@@ -771,6 +835,10 @@ class PrintedScrewParams(BaseParams):
     separate_from_host=True,
     host_cut=lambda raw: _printed_screw_countersink(raw),
     features=["thread", "countersink"],
+    wall=WallRequirement.not_applicable(
+        "Die Gewindekämme werden vom massiven Schraubenkern getragen."
+    ),
+    feature_requirements=(FeatureRequirement("thread"),),
     doc=_(
         "Druckbare Schraube für eine gewählte Bohrung, mit Sechskantkopf oder "
         "automatisch bündig gesenktem Senkkopf und passendem Außengewinde."
@@ -780,20 +848,21 @@ class PrintedScrewParams(BaseParams):
         "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
         "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
-    changes=[PRINTED_FASTENERS, PRINTED_SCREW_PREPARES_COUNTERSINK],
+    changes=[
+        PRINTED_FASTENERS,
+        PRINTED_SCREW_PREPARES_COUNTERSINK,
+        PRINTED_SCREW_GEOMETRY_FIXED,
+    ],
 )
 def printed_screw(raw: BaseParams) -> PartResult:
     """Eine Schraube, deren Gewinde und Kopf an derselben Bohrung sitzen."""
     params = cast(PrintedScrewParams, raw)
     screw = standards.screw(params.size)
-    threaded = as_mesh_data(
-        _printed_thread(params.size, params.length, internal=False, play=params.play).mesh
-    )
-    threaded = shapes.moved(threaded, (0.0, 0.0, -params.length + BOOLEAN_OVERLAP))
-
     diameter = screw.nominal - params.play
+    thread_top = 0.0
     if params.countersunk:
         head_height = (screw.countersink - diameter) / 2.0
+        thread_top = -head_height
         head = shapes.cone(diameter, screw.countersink, head_height)
         # Der breite Rand liegt bündig an der Mündung; der schmale Teil des
         # Kopfes reicht in die Bohrung. Vorher stand auch der Senkkopf auf
@@ -802,13 +871,28 @@ def printed_screw(raw: BaseParams) -> PartResult:
     else:
         head = shapes.hexagon(screw.head, screw.head_height)
 
+    threaded = as_mesh_data(
+        _printed_thread(params.size, params.length, internal=False, play=params.play).mesh
+    )
+    # Die Länge meint ausdrücklich das Gewinde **unter** dem Kopf. Beim
+    # Senkkopf ist dessen schmale Spitze die Trennstelle; z = 0 ist dagegen
+    # der breite, bündige Rand. Vorher endete das Gewinde ebenfalls bei null
+    # und lag damit um die ganze Kopfhöhe im Kopf. Bei kurzen Schrauben blieb
+    # kein Gang außerhalb des Kegels, bei langen zerfiel die Vereinigung an
+    # einzelnen Normgrößen. Ein kleiner Überstand verbindet beide Körper
+    # robust, ohne das zugesagte Längenmaß sichtbar zu verändern.
+    threaded = shapes.moved(
+        threaded,
+        (0.0, 0.0, thread_top - params.length + BOOLEAN_OVERLAP),
+    )
+
     return result(
         union(head, threaded),
         thread(
             "thread_1",
             screw.nominal,
             screw.pitch,
-            (0.0, 0.0, -params.length / 2.0),
+            (0.0, 0.0, thread_top - params.length / 2.0),
         ),
     )
 
@@ -865,13 +949,16 @@ class PrintedNutParams(BaseParams):
     params=PrintedNutParams,
     separate_from_host=True,
     features=["thread"],
+    wall=WallRequirement.not_applicable(
+        "Die Gewindekämme werden von der massiven Mutternhülle getragen."
+    ),
     doc=_("Druckbare Sechskantmutter mit passendem Innengewinde."),
     caveat=_(
         "Zusammen mit der gedruckten Schraube aus demselben Material drucken: Das Spiel "
         "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
         "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
-    changes=[PRINTED_FASTENERS],
+    changes=[PRINTED_FASTENERS, PRINTED_THREAD_ROOT_OVERLAPS_CORE],
 )
 def printed_nut(raw: BaseParams) -> PartResult:
     """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""

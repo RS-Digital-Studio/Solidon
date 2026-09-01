@@ -36,8 +36,8 @@ from app.core.registry import REGISTRY
 
 WEBSITE = Path(__file__).resolve().parent.parent / "website"
 
-#: Die Startseiten. Sie führen die Kennzahlen, die Produktbeschreibung für
-#: Suchmaschinen und die häufigen Fragen — nur sie werden auf diese Inhalte geprüft.
+#: Die Startseiten. Sie führen die Kennzahlen, das Angebot für Suchmaschinen
+#: und die häufigen Fragen — nur sie werden auf diese Inhalte geprüft.
 PAGES = ("index.html", "en/index.html")
 
 #: Jede von Hand gepflegte Verkaufsseite. Handbuch und Rechtstexte stehen nicht
@@ -48,39 +48,6 @@ PAGES = ("index.html", "en/index.html")
 GENERATED = frozenset(
     {"agb.html", "datenschutz.html", "eula.html", "impressum.html", "widerruf.html"}
 )
-
-
-@pytest.mark.parametrize(
-    ("page", "categorical"),
-    (
-        ("ki-modelle.html", ("nimmt die Europäische Union", "Hier stellt sich die Frage nicht")),
-        ("en/ai-models.html", ("excludes the European Union", "question does not arise")),
-        (
-            "es/ai-models.html",
-            ("excluye expresamente a la Unión Europea", "pregunta no se plantea"),
-        ),
-        (
-            "fr/ai-models.html",
-            ("exclut expressément l'Union européenne", "question ne se pose pas"),
-        ),
-        ("it/ai-models.html", ("esclude espressamente l'Unione Europea", "domanda non si pone")),
-        ("pt/ai-models.html", ("exclui expressamente a União Europeia", "questão não se coloca")),
-    ),
-)
-def test_the_hunyuan_comparison_is_neutral_without_weakening_triposg(
-    page: str, categorical: tuple[str, str]
-) -> None:
-    """Die Lizenzseite vergleicht Modelle, entscheidet aber keine Rechtsfrage.
-
-    TripoSG und seine MIT-Lizenz bleiben der klare Weg-3-Vorteil. Über andere
-    Modelle steht nur, dass deren konkrete Bedingungen vor dem Einsatz zu
-    prüfen sind; ein pauschaler Gebietsausschluss wird nicht behauptet.
-    """
-    text = (WEBSITE / page).read_text(encoding="utf-8")
-
-    assert "TripoSG" in text and "MIT" in text
-    assert "Hunyuan3D" in text, "der sachliche Vergleich soll nicht verschwinden"
-    assert not any(claim in text for claim in categorical)
 
 
 def _sales_pages() -> tuple[str, ...]:
@@ -121,8 +88,8 @@ STAT = re.compile(r"<div><b>(\d+)</b><span>([^<]+)</span></div>")
 #: nicht dazu.
 LINK = re.compile(r'(?:src|href)="([^"]+)"')
 
-#: Die einzige absichtliche Außenadresse: Sie wird ausschließlich nach einem
-#: Klick auf „Mit PayPal spenden“ geöffnet. Beim Laden der Website bleibt sie
+#: Die beiden absichtlichen Außenadressen stehen ausschließlich im lokalen
+#: PayPal-Hinweis. Beim Laden der Website und beim ersten Klick bleiben sie
 #: komplett außen vor; ein eingebundenes PayPal-Skript wäre keine gleichwertige
 #: Alternative, weil es jeden Besuch an den Zahlungsdienst meldete.
 PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"
@@ -155,15 +122,17 @@ def _stats(page: str) -> list[int]:
     return [int(m.group(1)) for m in STAT.finditer((WEBSITE / page).read_text(encoding="utf-8"))]
 
 
-def test_activation_privacy_names_the_daily_counter_without_claiming_ip_storage() -> None:
+def test_activation_privacy_names_both_abuse_counters_without_claiming_plain_ip_storage() -> None:
     """Die kurze Aktivierungsseite und die Einzelheiten dürfen sich nicht widersprechen."""
     page = (WEBSITE / "offline-aktivierung.html").read_text(encoding="utf-8")
     privacy = (WEBSITE / "datenschutz.html").read_text(encoding="utf-8")
 
     assert "Tageszähler" in page
-    assert "IP-Adressen" in page
+    assert "HMAC-Pseudonym" in page
+    assert "höchstens 15 Minuten" in page
     assert "gültig signierten Aktivierungsversuche" in privacy
-    assert "ohne weiteren Zugriff" in privacy
+    assert "HMAC-Pseudonym der IP-Adresse" in privacy
+    assert "höchstens 15 Minuten" in privacy
 
 
 def _count(table: str) -> int:
@@ -449,6 +418,31 @@ def test_every_page_lets_the_keyboard_skip_the_header() -> None:
     assert not wrong, "\n".join(wrong)
 
 
+def test_a_link_in_the_open_mobile_menu_closes_its_own_panel() -> None:
+    """Der Ankersprung darf nicht unter dem noch offenen Menü landen.
+
+    Auf dem Rechner ist das gemeinsame Linkpanel als Leiste sichtbar und das
+    zugehörige ``details.menu`` geschlossen. Auf dem Telefon öffnet der
+    Hamburger dasselbe Element. Bis hierher blieb es nach einem Linksklick
+    offen und verdeckte ausgerechnet das Ziel von *Inhalt*. Ein nativer
+    ``click``-Listener deckt Maus, Berührung und die Tastatur gemeinsam ab;
+    ohne ``preventDefault`` bleibt der eigentliche Verweis unangetastet.
+    """
+    script = (WEBSITE / "site.js").read_text(encoding="utf-8")
+    marker = "Das mobile Kopfmenü schließt nach einer Wahl"
+    assert marker in script
+    block = script.split(marker, 1)[1].split("})();", 1)[0]
+
+    assert 'document.querySelectorAll("details.menu")' in block
+    assert "menu.nextElementSibling" in block
+    assert 'panel.matches(".menu-panel")' in block
+    assert 'panel.addEventListener("click"' in block
+    assert 'event.target.closest("a")' in block
+    assert "!menu.open" in block
+    assert "menu.open = false;" in block
+    assert "preventDefault" not in block
+
+
 #: Der Runner-Name eines Auftrags sagt, für welche Familie gepackt wird. Die
 #: Paketmatrix steht als Liste da; die Suite-Matrix daneben baut ihre über
 #: ``fromJSON`` und packt nichts — die eckige Klammer trennt beide.
@@ -555,9 +549,9 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
         for reference in LINK.findall(text)
         if reference.startswith("http") and not reference.startswith("https://solidon3d.de")
     ]
-    assert all(reference == PAYPAL_DONATE_URL for reference in external_hrefs), (
-        f"{page} verweist auf eine nicht freigegebene Außenadresse: {external_hrefs}"
-    )
+    assert all(
+        reference in {PAYPAL_DONATE_URL, PAYPAL_PRIVACY_URL} for reference in external_hrefs
+    ), f"{page} verweist auf eine nicht freigegebene Außenadresse: {external_hrefs}"
     # Protokollrelativ, also ohne ``http`` im Text — die beiden Zeilen darüber
     # sehen davon nichts, und ein Zählpixel schreibt sich genau so.
     assert 'src="//' not in text, f"{page} lädt protokollrelativ von außen"
@@ -852,6 +846,37 @@ def test_the_preview_picture_exists(page: str) -> None:
 #: nur sie.
 START_PAGES = ("index.html", *(f"{code}/index.html" for code in ("en", "es", "fr", "it", "pt")))
 
+PUBLIC_WARNING_MARKERS = (
+    "sicherheitskrit",
+    "safety-critical",
+    "críticos para la seguridad",
+    "critiques pour la sécurité",
+    "critici per la sicurezza",
+    "críticas para a segurança",
+)
+
+PLANNED_1_0_MARKERS = {
+    "index.html": "1. November 2026 geplant",
+    "en/index.html": "planned for 1 November 2026",
+    "es/index.html": "prevista para el 1 de noviembre de 2026",
+    "fr/index.html": "prévue pour le 1er novembre 2026",
+    "it/index.html": "prevista per il 1º novembre 2026",
+    "pt/index.html": "prevista para 1 de novembro de 2026",
+}
+
+RETIRED_MEDIA = (
+    "beleg-erzeugt",
+    "schau-gargoyle",
+    "schau-hand",
+    "schau-knight",
+    "schau-lantern",
+    "schau-skull",
+    "schau-valve",
+    "weg-1-erzeugt",
+    "weg-2-schnitt",
+    "weg3-generieren",
+)
+
 
 @pytest.mark.parametrize("page", START_PAGES)
 def test_each_start_page_makes_the_no_cad_promise_visible(page: str) -> None:
@@ -862,40 +887,81 @@ def test_each_start_page_makes_the_no_cad_promise_visible(page: str) -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_start_page_matches_the_current_demo_policy(
+def test_each_start_page_reads_like_product_copy(page: str) -> None:
+    """Rechtliche Warnlisten bleiben in den Rechtstexten, nicht im Aufmacher."""
+    text = (WEBSITE / page).read_text(encoding="utf-8").casefold()
+    present = [marker for marker in PUBLIC_WARNING_MARKERS if marker in text]
+    assert 'class="hero-safety"' not in text, f"{page}: Rechtswarnung im Aufmacher"
+    assert not present, f"{page}: rechtliche Warnliste in Produkttexten: {present}"
+
+
+@pytest.mark.parametrize(("page", "marker"), PLANNED_1_0_MARKERS.items())
+def test_each_start_page_distinguishes_the_plan_from_an_offer(page: str, marker: str) -> None:
+    """Der Termin bleibt sichtbar, ohne Preis oder Vorbestellung vorzutäuschen."""
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    assert marker in text, f"{page}: Planung für Version 1.0 fehlt"
+    assert "schema.org/PreOrder" not in text, f"{page}: Vorbestellung ausgezeichnet"
+    assert '"priceCurrency"' not in text, f"{page}: noch nicht angebotener Preis"
+
+
+def test_public_pages_reference_no_retired_media() -> None:
+    """Lokal entfernte Bilder und Videos bleiben auch aus dem Webvertrag entfernt."""
+    references: list[str] = []
+    for page in WEBSITE.rglob("*.html"):
+        text = page.read_text(encoding="utf-8").casefold()
+        references.extend(
+            f"{page.relative_to(WEBSITE).as_posix()}: {name}"
+            for name in RETIRED_MEDIA
+            if name in text
+        )
+    assert not references, f"entfernte Medien werden noch genannt: {references}"
+
+
+def test_public_website_has_no_feedback_form() -> None:
+    """Öffentliche Eingaben bleiben auf die eigenständige Aktivierung begrenzt."""
+    unexpected: list[str] = []
+    for page in WEBSITE.rglob("*.html"):
+        for form in re.findall(r"<form\b[^>]*>", page.read_text(encoding="utf-8")):
+            if 'method="dialog"' in form:
+                continue
+            if page == WEBSITE / "offline-aktivierung.html" and 'id="activation-form"' in form:
+                continue
+            unexpected.append(f"{page.relative_to(WEBSITE).as_posix()}: {form}")
+    assert not unexpected, f"unerwartete öffentliche Formulare: {unexpected}"
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_each_start_page_matches_the_demo_activation_policy(
     page: str, shipped_demo_until: object
 ) -> None:
-    """Die Demo-Seiten nennen den Stichtag, aber noch kein Verkaufsangebot."""
+    """Sechs Übersetzungen dürfen die Demo-Laufzeit nicht sechsfach erfinden.
+
+    Die maschinenlesbaren Merkmale stehen am jeweiligen Kundensatz. So prüft
+    der Test die Bedeutung und hängt nicht an sechs übersetzten Formulierungen.
+    """
     text = (WEBSITE / page).read_text(encoding="utf-8")
     expected_deadline = shipped_demo_until.isoformat() if shipped_demo_until is not None else "none"
     assert text.count(f'data-demo-until="{expected_deadline}"') == 1, (
         f"{page}: Demo-Stichtag weicht von store.DEMO_UNTIL ab"
     )
-    for offer_marker in (
-        '"offers":',
-        "https://schema.org/PreOrder",
-        '"priceCurrency"',
-        '"priceValidUntil"',
-        'data-active-devices="',
-        'data-sale-trial-active="',
-    ):
-        assert offer_marker not in text, f"{page}: enthält schon ein 1.0-Angebot ({offer_marker})"
-    assert re.search(r"(?<!\d)(69|99)(?:&nbsp;| )?€|€(?:&nbsp;| )?(69|99)(?!\d)", text) is None, (
-        f"{page}: enthält schon einen festen 1.0-Preis"
-    )
-    terms = re.search(r'<p class="terms">(.*?)</p>', text, re.DOTALL)
-    assert terms is not None, f"{page}: Demokonditionen fehlen"
-    assert "0.2.2" not in terms.group(1), f"{page}: Demokonditionen nennen eine veraltende Fassung"
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_start_page_offers_one_voluntary_paypal_donation(page: str) -> None:
-    """Jede Sprache zeigt denselben freiwilligen, skriptfreien Spendenweg."""
+def test_each_start_page_uses_a_local_step_before_paypal(page: str) -> None:
+    """Jede Sprache zeigt vor PayPal denselben lokalen, freiwilligen Hinweis."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    links = re.findall(r'<a class="donate-button" href="([^"]+)"', text)
-    assert links == [PAYPAL_DONATE_URL], (
-        f"{page}: der Spendenknopf fehlt, ist mehrfach da oder trägt eine andere Adresse: {links}"
+    local_buttons = re.findall(
+        r'<button class="donate-button" type="button" data-choice="support">', text
     )
+    assert len(local_buttons) == 1, f"{page}: der lokale Unterstützen-Knopf fehlt"
+    dialog = text[text.index('<dialog class="auswahl donate-dialog"') :]
+    assert dialog.count(f'href="{PAYPAL_DONATE_URL}"') == 1
+    assert dialog.count(f'href="{PAYPAL_PRIVACY_URL}"') == 1
+    assert PAYPAL_DONATE_URL not in text[: text.index('<dialog class="auswahl donate-dialog"')]
+    assert not re.search(
+        rf'<(?:script|img|iframe|link)[^>]+(?:src|href)="{re.escape(PAYPAL_DONATE_URL)}"',
+        text,
+    ), f"{page}: PayPal würde ohne den zweiten Klick geladen"
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -985,18 +1051,12 @@ def test_hero_keeps_its_picture_in_one_column() -> None:
 def test_each_paypal_donation_says_what_it_does_not_buy(page: str) -> None:
     """Freiwillig steht nicht nur im Konzept, sondern unmittelbar am Knopf."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
-    block = re.search(
-        r'<div class="donate(?: [^"]*)?">\s*<div>(.*?)</div>\s*'
-        r'<a class="donate-button"[^>]*>.*?</a>\s*</div>',
-        text,
-        re.DOTALL,
-    )
-
-    assert block is not None, f"{page}: der Spendenblock fehlt"
-    assert block.group(1).count('class="donate-terms"') == 1, (
+    start = text.index('<div class="donate">')
+    block = text[start : text.index("</section>", start)]
+    assert block.count('class="donate-terms"') == 1, (
         f"{page}: der rechtliche Hinweis am Spendenknopf fehlt oder steht mehrfach da"
     )
-    assert 'href="/datenschutz.html"' in block.group(1), (
+    assert 'href="/datenschutz.html"' in block, (
         f"{page}: der Spendenweg erklärt seine Datenverarbeitung nicht"
     )
 
@@ -1005,10 +1065,14 @@ def test_the_privacy_page_names_paypal_before_any_payment() -> None:
     """Der externe Verweis spart das Einbetten, nicht die Information darüber."""
     text = (WEBSITE / "datenschutz.html").read_text(encoding="utf-8")
 
-    assert "Freiwillige Spende über PayPal" in text
+    assert "Freiwillige Unterstützung über PayPal" in text
     assert PAYPAL_PRIVACY_URL in text
-    assert "Beim Laden unserer Website wird keine Verbindung" in text
+    assert "Beim bloßen Start der Anwendung, beim Laden unserer Website" in text
+    assert "Mit PayPal unterstützen" in text
     assert "keine Bestellung" in text and "nicht auf einen späteren Kauf angerechnet" in text
+    assert "schaltet nichts frei" in text
+    assert "keine steuerliche Bestätigung" in text
+    assert "Zuwendung" not in text
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -1230,7 +1294,7 @@ def test_every_reference_carries_the_stamp_of_the_file_it_points_at() -> None:
     stale: list[str] = []
     for page in sorted(WEBSITE.rglob("*.html")):
         text = page.read_text(encoding="utf-8")
-        for _, reference, existing, _ in stamp.LINK.findall(text):
+        for reference, existing in stamp.references_in(text):
             target = stamp.target_of(page, reference)
             if not target.is_file():
                 continue  # Ein Verweis ins Leere ist ein anderer Fund
@@ -1589,21 +1653,22 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
 
 #: Wie viele Tage vor dem Demo-Ende die Website ihre Datumssätze umstellen muss.
 #:
-#: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich die
-#: befristeten Demo-Sätze in sechs Sprachen umschreiben und hochladen lassen.
-#: Wer am 30. merkt, dass die Seite den 30. verspricht, hat keinen Tag mehr.
+#: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich beides
+#: noch ausgeht: die für den Verkauf bereits entschiedenen Sätze in sechs
+#: Sprachen umschreiben und hochladen. Wer am 30. merkt, dass die Seite den 30.
+#: verspricht, hat keinen Tag mehr.
 TRANSITION_LEAD_DAYS = 5
 
 
 def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     shipped_demo_until: object,
 ) -> None:
-    """Erinnert rechtzeitig an die Umstellung der vier Demo-Datumssätze.
+    """Erinnert rechtzeitig an einen aus dem Paket kommenden Demo-Stichtag.
 
-    „Die Demo läuft bis zum 30. Oktober 2026" steht auf den Startseiten in
-    sechs Sprachen an mehreren Stellen, dazu die Frage „Was passiert am
-    30. Oktober?". Am 31. Oktober werden diese Sätze **still** falsch: Sie
-    sehen aus wie vorher, und niemand bekommt eine Meldung.
+    Ein Datum darf die Website nur aus dem tatsächlich ausgelieferten
+    Paketvertrag übernehmen. Nähert sich dieser Stichtag, muss die
+    Veröffentlichung neu erzeugt und geprüft werden; ein von Hand gepflegtes
+    Verkaufsdatum oder Preisversprechen gibt es nicht.
 
     **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
     (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
@@ -1611,11 +1676,6 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     Website ist das der Tag zu spät. Dieser hier fragt, ob noch Zeit bleibt,
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.
-
-    Version 1.0 ist für den 01.11.2026 geplant, aber noch kein Angebot. Die
-    heutigen Zukunftssätze sind bis zum Demo-Ende richtig; dieser Test sorgt
-    dafür, dass sie rechtzeitig in Gegenwartsform umgeschrieben werden, ohne
-    dabei Preis oder Vertragsbedingungen vorwegzunehmen.
 
     **Er hängt an ``DEMO_UNTIL`` und nicht an einer zweiten Zahl.** Wird die
     Demo verlängert, verschiebt sich die Erinnerung von selbst mit; ein hier
@@ -1630,7 +1690,7 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     from datetime import date, timedelta
 
     if shipped_demo_until is None:
-        pytest.skip("Fassung ohne Demo-Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
+        pytest.skip("Verkaufsversion ohne Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
 
     assert isinstance(shipped_demo_until, date)
     faellig = shipped_demo_until - timedelta(days=TRANSITION_LEAD_DAYS)
@@ -1638,10 +1698,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     assert heute < faellig, (
         f"Die Demo endet am {shipped_demo_until:%d.%m.%Y}, heute ist der "
         f"{heute:%d.%m.%Y}. "
-        "Vier Datumsangaben auf den Startseiten werden danach still falsch: der "
-        "Satz „läuft bis zum 30. Oktober“ (sechs Sprachen, mehrere Stellen), die "
-        "FAQ-Frage „Was passiert am 30. Oktober?“. "
-        "Die Sätze auf den dann tatsächlich geltenden Demo-Status umschreiben. "
+        "Den aus dem Paketvertrag übernommenen Demo-Stichtag auf allen sechs "
+        "Startseiten neu erzeugen und den veröffentlichten Zustand prüfen. "
         "Nur eine neue ausdrückliche Entscheidung darf stattdessen DEMO_UNTIL "
         "in app/core/activation/store.py verschieben; dann wandert diese "
         "Erinnerung mit."
@@ -1796,6 +1854,29 @@ def test_a_video_and_its_poster_both_carry_a_stamp() -> None:
     ]
     for zeile in daneben:
         assert not LINK.search(zeile), f"hätte nicht treffen dürfen: {zeile}"
+
+
+def test_srcset_candidates_carry_individual_asset_stamps(tmp_path: Path) -> None:
+    """Helle und dunkle Handbuchbilder erhalten beide ihre eigene Adresse."""
+    import tools.stamp_assets as stamp
+
+    page = tmp_path / "manual.html"
+    light = tmp_path / "light.svg"
+    dark = tmp_path / "dark.svg"
+    light.write_text("hell", encoding="utf-8")
+    dark.write_text("dunkel", encoding="utf-8")
+    page.write_text(
+        '<picture><source srcset="dark.svg 1x, dark.svg 2x"><img src="light.svg"></picture>',
+        encoding="utf-8",
+    )
+
+    fresh, same, missing = stamp.stamp_page(page, write=True)
+    text = page.read_text(encoding="utf-8")
+
+    assert (fresh, same, missing) == (3, 0, [])
+    assert f"dark.svg?v={stamp.stamp_of(dark)} 1x" in text
+    assert f"dark.svg?v={stamp.stamp_of(dark)} 2x" in text
+    assert f"light.svg?v={stamp.stamp_of(light)}" in text
 
 
 #: Tags, die ohne schließendes Gegenstück stehen dürfen (HTML-Leerelemente).
@@ -1966,9 +2047,9 @@ def test_the_roll_holder_uses_real_operations() -> None:
 
 #: Die Galerieteile und der Parameter, an dem ein Kunde zuerst dreht.
 #:
-#: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus
-#: einer weitergegebenen Datei landet in einem fremden Projekt, und dort setzt
-#: jemand den Wert von Hand. Was nur im gezeigten Punkt hält, hält nicht.
+#: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus der
+#: Börse landet in einem fremden Projekt, und dort setzt jemand den Wert von
+#: Hand. Was nur im gezeigten Punkt hält, hält nicht.
 GALERIETEILE = (
     # 70 bis 200: Das Gehäuse zerfiel bis `bcca1207` unterhalb von 110 mm,
     # weil Schraubdome, Standfüße, Rastnasen und Rippen auf Zahlen saßen,
@@ -2057,8 +2138,15 @@ def test_a_gallery_part_stays_in_one_piece_across_its_range(
 def test_no_delivered_page_is_an_island() -> None:
     """Jede ausgelieferte Seite wird von mindestens einer anderen verlinkt.
 
-    Der Verweis-Test daneben (`..._every_file_the_page_refers_to_exists`) kann
-    das nicht sehen: Er prüft **ausgehende** Verweise auf
+    **Der Anlass war eine später verworfene Unterseite.** Sie war fertig gebaut,
+    geprüft und in sechs Sprachen übersetzt — und **keine** Seite verwies auf
+    sie. Die sechs Börsenseiten verlinkten nur sich selbst; erreichbar war sie
+    allein über die Adresszeile. Robert hat es als Kunde gefunden, nicht als
+    Entwickler: „wo kommt man denn jetzt einfach und schnell zu der
+    katalog/bausteinbörse?"
+
+    Der Verweis-Test daneben (`..._every_file_the_page_refers_to_exists`) hat
+    das nie gesehen und konnte es nicht: Er prüft **ausgehende** Verweise auf
     tote Ziele. Eine Insel hat keine toten Verweise — sie hat gar keine, die
     zu ihr führen. Das ist die Gegenrichtung, und sie braucht eine eigene
     Frage.

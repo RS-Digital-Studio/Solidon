@@ -1,9 +1,10 @@
-"""Legt den Zugang zur Zugriffsstatistik an — ``website/api/.stats-zugang.php``.
+"""Legt den Zugang zur Zugriffsstatistik in ``appdata/stats-access.php`` an.
 
 ``website/api/stats.php`` zeigt, wie oft die Seiten geöffnet und die Pakete
 geladen wurden. Das geht niemanden außer dem Betreiber etwas an, also liegt
-die Seite hinter einer Anmeldung, und die braucht einen Passwort-Hash neben
-sich.
+die Seite hinter einer Anmeldung, und die braucht einen Passwort-Hash. Er
+liegt neben dem Dokumentenstamm; selbst eine falsche Webserverregel kann ihn
+damit nicht ausliefern.
 
 Von Hand ginge das mit ``php -r`` auch, aber dort lauert eine Falle, die still
 zuschlägt: Ein bcrypt-Hash beginnt mit ``$2y$`` und trägt weitere
@@ -24,10 +25,10 @@ der Befehlsgeschichte. An PHP geht es über eine Umgebungsvariable und nicht
 über die Kommandozeile, denn die ist auf einem Mehrbenutzersystem für jeden
 sichtbar.
 
-Danach einzeln hochladen; die Datei ist in ``.gitignore`` und wandert nicht
-mit dem übrigen Bestand:
+Die Datei ist in ``.gitignore`` und wandert nie mit dem öffentlichen
+Website-Abgleich. Der private Deploymentweg legt sie serverseitig als
+``appdata/stats-access.php`` mit Rechten 0600 in einem Ordner mit 0700 ab.
 
-    .venv\\Scripts\\python.exe tools/upload_website.py website/api/.stats-zugang.php
 """
 
 from __future__ import annotations
@@ -45,8 +46,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 ROOT = Path(__file__).resolve().parent.parent
 
-#: Wohin der Zugang gehört — neben die Seite, die ihn liest.
-TARGET = ROOT / "website" / "api" / ".stats-zugang.php"
+#: Wohin der Zugang gehört — neben, niemals unter den Dokumentenstamm.
+TARGET = ROOT / "appdata" / "stats-access.php"
+WEB_ROOT = ROOT / "website"
 
 #: Wie kurz ein Passwort sein darf. Die Seite steht offen im Netz; ein
 #: Passwort, das eine Wörterbuchliste in Minuten durchprobiert, ist keines.
@@ -103,6 +105,36 @@ def run_php(php: str, code: str, password: str, target: Path | None = None) -> s
     return done.stdout.strip()
 
 
+def prepare_target() -> None:
+    """Prüft den privaten Zielpfad und legt seinen Elternordner geschützt an."""
+    target = TARGET.resolve(strict=False)
+    web_root = WEB_ROOT.resolve(strict=False)
+    try:
+        target.relative_to(web_root)
+    except ValueError:
+        pass
+    else:
+        raise SystemExit("Der Statistikzugang darf nicht im Dokumentenstamm liegen.")
+    if TARGET.is_symlink():
+        raise SystemExit("Der Statistikzugang darf kein symbolischer Verweis sein.")
+    TARGET.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    TARGET.parent.chmod(0o700)
+
+
+def write_private(path: Path, text: str) -> None:
+    """Schreibt eine neue Datei ohne Zeitfenster mit zu weiten Rechten."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        stream = os.fdopen(descriptor, "w", encoding="utf-8", newline="\n")
+    except BaseException:
+        os.close(descriptor)
+        raise
+    with stream:
+        stream.write(text)
+    path.chmod(0o600)
+
+
 def main() -> int:
     php = find_php()
 
@@ -112,6 +144,7 @@ def main() -> int:
             print("Nichts geändert.")
             return 0
 
+    prepare_target()
     password = ask_password()
 
     # Erzeugen und gleich hier prüfen: Ein Hash, der sich nicht gegen sein
@@ -131,40 +164,48 @@ def main() -> int:
         # anderes an, würde es die Datei zerlegen, die wir gleich schreiben.
         raise SystemExit(f"PHP hat etwas geliefert, das kein bcrypt-Hash ist: {hashed[:20]}…")
 
-    TARGET.write_text(
-        "<?php\n"
-        "\n"
-        "// Der Passwort-Hash für website/api/stats.php. Angelegt von\n"
-        "// tools/make_stats_access.py; von Hand geändert wird hier nichts.\n"
-        "//\n"
-        "// Die einfachen Anführungszeichen sind kein Geschmack: Ein\n"
-        "// bcrypt-Hash trägt $-Zeichen, und in doppelten Anführungszeichen\n"
-        "// würde PHP sie als Variablen deuten und wegwerfen.\n"
-        "\n"
-        f"return ['hash' => '{hashed}'];\n",
-        encoding="utf-8",
-    )
-
-    # Gegenprobe über den Weg, den stats.php selbst geht: Datei einlesen,
-    # Hash herausholen, Passwort prüfen. Was hier durchgeht, geht dort durch.
-    check = run_php(
-        php,
-        "$a = include getenv('SOLIDON_STATS_FILE');"
-        "$h = is_array($a) ? (string) ($a['hash'] ?? '') : '';"
-        "echo password_verify(getenv('SOLIDON_STATS_PASSWORD'), $h) ? 'ja' : 'nein';",
-        password,
-        TARGET,
-    )
-    if check != "ja":
-        raise SystemExit(
-            f"Die Datei ist geschrieben, prüft sich aber nicht: {TARGET}\n"
-            "Das sollte nicht vorkommen — bitte melden, bevor etwas hochgeht."
+    temporary = TARGET.with_name(f".{TARGET.name}.{os.getpid()}.tmp")
+    created = False
+    try:
+        write_private(
+            temporary,
+            "<?php\n"
+            "\n"
+            "// Der Passwort-Hash für website/api/stats.php. Angelegt von\n"
+            "// tools/make_stats_access.py; von Hand geändert wird hier nichts.\n"
+            "//\n"
+            "// Die einfachen Anführungszeichen sind kein Geschmack: Ein\n"
+            "// bcrypt-Hash trägt $-Zeichen, und in doppelten Anführungszeichen\n"
+            "// würde PHP sie als Variablen deuten und wegwerfen.\n"
+            "\n"
+            f"return ['hash' => '{hashed}'];\n",
         )
+        created = True
+
+        # Gegenprobe vor dem atomaren Austausch: Ein alter gültiger Zugang
+        # bleibt erhalten, wenn die neue Datei sich nicht selbst bestätigt.
+        check = run_php(
+            php,
+            "$a = include getenv('SOLIDON_STATS_FILE');"
+            "$h = is_array($a) ? (string) ($a['hash'] ?? '') : '';"
+            "echo password_verify(getenv('SOLIDON_STATS_PASSWORD'), $h) ? 'ja' : 'nein';",
+            password,
+            temporary,
+        )
+        if check != "ja":
+            raise SystemExit(
+                "Der neue Statistikzugang prüft sich nicht selbst. "
+                "Die bisherige Datei bleibt unverändert."
+            )
+        temporary.replace(TARGET)
+        TARGET.chmod(0o600)
+    finally:
+        if created:
+            temporary.unlink(missing_ok=True)
 
     print(f"Angelegt: {TARGET.relative_to(ROOT)}")
-    print("Sie steht in .gitignore. Hochladen mit:")
-    print(f"  .venv\\Scripts\\python.exe tools/upload_website.py {TARGET.relative_to(ROOT)}")
-    print("Danach ist https://solidon3d.de/api/stats.php mit diesem Passwort offen.")
+    print("Sie steht in .gitignore und gehört nicht in den öffentlichen Website-Abgleich.")
+    print("Der private Deploymentweg legt sie serverseitig unter appdata/stats-access.php ab.")
     return 0
 
 

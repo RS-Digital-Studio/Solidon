@@ -19,11 +19,12 @@ einem modalen Meldungsfenster.
 
 from __future__ import annotations
 
-from html import escape
+from html import escape, unescape
 from pathlib import Path
 
 import pytest
 
+from app.branding import APP_VERSION
 from app.core import figures, manual, markup
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import CATEGORIES, REGISTRY
@@ -35,7 +36,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.i18n.catalog import available_languages
 from app.ui.manual_window import ManualWindow
-from tools.make_figures import SAMPLE_FINDINGS, SAMPLE_OBJECT
+from tools.make_figures import SAMPLE_FINDINGS, SAMPLE_OBJECT, SAMPLE_PRINTER
 
 #: Die erzeugten Handbuchseiten der Website. Sie sind eingecheckt, weil sie
 #: hochgeladen werden — und veralten, sobald jemand am Handbuchtext dreht,
@@ -48,6 +49,17 @@ WEBSITE_PAGES = {
     "it": Path(__file__).parent.parent / "website" / "it" / "manual.html",
     "pt": Path(__file__).parent.parent / "website" / "pt" / "manual.html",
 }
+
+RELEASES = Path(__file__).parent.parent / "Releases"
+
+PUBLIC_WARNING_MARKERS = (
+    "sicherheitskrit",
+    "safety-critical",
+    "críticos para la seguridad",
+    "critiques pour la sécurité",
+    "critici per la sicurezza",
+    "críticas para a segurança",
+)
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +86,73 @@ def test_the_manual_has_pages_at_all() -> None:
     assert len(pages) > 5, f"das Handbuch hat {len(pages)} Seiten"
     assert any(page.generated for page in pages), "keine erzeugte Seite"
     assert any(not page.generated for page in pages), "keine geschriebene Seite"
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_manual_intro_reads_like_product_documentation(language: str) -> None:
+    """Die Einführung verweist auf Rechtstexte, sie wiederholt keine Warnliste."""
+    html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    intro = html.split('<h3 id="what">', 1)[1].split('<h3 id="start">', 1)[0]
+    present = [marker for marker in PUBLIC_WARNING_MARKERS if marker in intro.casefold()]
+    assert not present, f"{language}: rechtliche Warnliste im Handbuch: {present}"
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_checked_in_manual_carries_the_current_version(language: str) -> None:
+    """Die nie veröffentlichte Zwischenfassung darf nicht auf dem Umschlag bleiben."""
+    html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    cover = html.split("</section>", 1)[0]
+
+    assert APP_VERSION in cover, f"{language}: Umschlag nicht auf {APP_VERSION}"
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_checked_in_pdf_carries_the_current_version(language: str) -> None:
+    """Website und PDF tragen denselben Versionsstand auf ihrer Titelseite."""
+    from pypdf import PdfReader
+
+    path = RELEASES / f"Solidon3D-Handbuch-{language}.pdf"
+    assert path.is_file(), f"{path.name} fehlt — tools/make_manual.py ausführen"
+    cover = PdfReader(path).pages[0].extract_text() or ""
+
+    assert APP_VERSION in cover, f"{path.name}: Titelseite nicht auf {APP_VERSION}"
+
+
+def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
+    """Die handgeschriebenen Kapitel nennen den ausgelieferten Zustand."""
+    pages = {page.key: str(page.body) for page in manual.pages()}
+
+    activation = pages["activation"]
+    assert "30. Oktober 2026" in activation
+    assert "vollständig freigeschaltet" in activation
+    assert "startet diese Demo nicht mehr" in activation
+
+    seeing = pages["looking"]
+    for value in (
+        "Schichtnummer und Gesamtzahl",
+        "Z-Höhe",
+        "Querschnittsfläche",
+        "Zahl der Inseln",
+        "Überhangfläche",
+    ):
+        assert value in seeing, f"Schichtvorschau ohne {value}"
+
+    parts = pages["parts"]
+    for title in ("Kugellager einsetzen", "Schraube", "Gedruckte Mutter"):
+        assert title in parts, f"Bausteinübersicht ohne {title}"
+
+    exchange = pages["exchange"]
+    assert "Baustein als Datei weitergeben …" in exchange
+    assert "Baustein aus Datei hinzufügen …" in exchange
+
+    generating = pages["generating"]
+    assert "TripoSG" in generating and "ComfyUI" in generating
+    assert "Reparaturkette läuft ohne Nachfrage" in generating
+
+    extras = pages["extras"]
+    assert "Lokale KI-Arbeit läuft nacheinander" in extras
+    assert "entlädt es das Ollama-Modell" in extras
+    assert "nur den Auftrag, den Solidon selbst gestartet hat" in extras
 
 
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
@@ -787,6 +866,57 @@ def test_no_manual_page_promises_a_chapter_it_cannot_reach(language: str) -> Non
     )
 
 
+def test_an_additional_language_needs_no_manual_generator_code(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine echte siebte Katalogdatei übersetzt auch den ganzen Webrahmen."""
+    from app.core.bootstrap import load_operations
+    from app.i18n import catalog as catalog_module
+    from app.i18n import extract as extract_module
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language, write_catalog
+    from tools import make_manual
+
+    monkeypatch.setattr(catalog_module, "LOCALES_DIR", tmp_path / "locales")
+    messages = extract_module.message_ids()
+    dutch = {key: "NL·" + key.split(chr(4), 1)[-1] for key in messages}
+    write_catalog("nl", dutch)
+    install_language("nl")
+    set_language("nl")
+    load_operations()
+    make_manual.figures.forget()
+
+    try:
+        html = make_manual.page_html("nl", "../handbuch/nl")
+    finally:
+        set_language("de")
+
+    assert '<html lang="nl">' in html
+    assert '<summary aria-label="NL·Sprache wählen">NL</summary>' in html
+    assert 'aria-label="NL·Menü"' in html
+    assert 'href="/nl/features.html">NL·Funktionen</a>' in html
+    assert 'href="/nl/ai-models.html">NL·KI-Modelle</a>' in html
+    assert 'href="/nl/#pricing">NL·Preis</a>' in html
+    assert '<a class="skip" href="#content">NL·Zum Inhalt springen</a>' in html
+    assert '<h2 class="toc-title">NL·Inhalt</h2>' in html
+    assert "NL·Referenz — jede Operation mit ihren Werten" in html
+    assert "NL·Handbuch: 3D-Modelle für den Druck vorbereiten" in html
+    assert "NL·Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck" in html
+
+    german_fallbacks = (
+        'aria-label="Sprache wählen"',
+        'aria-label="Menü"',
+        ">Funktionen</a>",
+        ">KI-Modelle</a>",
+        ">Preis</a>",
+        ">Zum Inhalt springen</a>",
+        '<h2 class="toc-title">Inhalt</h2>',
+    )
+    assert not [text for text in german_fallbacks if text in html]
+
+    assert make_manual.page_for("nl") == ("nl/manual.html", "../handbuch/nl")
+
+
 def test_every_chapter_carries_its_own_heading() -> None:
     """Auch die erzeugten. Vier Kapitel hatten keine — und damit keinen Anker.
 
@@ -970,10 +1100,10 @@ def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:
 def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
     """Die gestellten Texte der Aufnahmen gibt es in jeder Sprache.
 
-    Zwei Texte in ``tools/make_figures.py`` laufen bewusst nicht über den
-    Katalog, weil der Sammler nur ``app/`` liest: die Befunde im Prüfbericht
-    und der Körpername im Operationsdialog. Fehlt eine Sprache, fällt beides
-    still auf Deutsch zurück — und das sieht man dem erzeugten Bild nicht an,
+    Drei gestellte Werte in ``tools/make_figures.py`` sind keine normalen
+    Oberflächentexte: Befunde im Prüfbericht, Körpername im Operationsdialog
+    und Druckername in den Druckeinstellungen. Fehlt eine Sprache, fällt ein
+    Bild still auf Deutsch zurück — und das sieht man dem Erzeugerlauf nicht an,
     man sieht es erst im fertigen Handbuch, wo ein deutscher Befund mitten im
     fremdsprachigen Text steht. Genau das ist im englischen Handbuch schon
     einmal passiert; der Kommentar an der Stelle erzählt davon.
@@ -989,10 +1119,14 @@ def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
     assert not sorted(languages - set(SAMPLE_OBJECT)), (
         f"ohne Körpernamen: {sorted(languages - set(SAMPLE_OBJECT))}"
     )
+    assert not sorted(languages - set(SAMPLE_PRINTER)), (
+        f"ohne Druckernamen: {sorted(languages - set(SAMPLE_PRINTER))}"
+    )
     for language, findings in SAMPLE_FINDINGS.items():
         assert len(findings) == 4, language
         assert all(text.strip() for text in findings), language
         assert SAMPLE_OBJECT[language].strip(), language
+        assert SAMPLE_PRINTER[language].strip(), language
 
 
 def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> None:
@@ -1111,29 +1245,100 @@ def _document_widths(view: object) -> list[tuple[str, int]]:
     return found
 
 
-def test_the_model_page_names_every_model_the_customer_needs() -> None:
-    """**Die Auskunft gab es, verteilt auf vier Stellen.**
-
-    Der Chat-Dialog nannte Größe und Trefferquote, das Handbuch eines davon im
-    Fließtext, der Erzeugungsdialog für den Textweg gar keines („ein
-    SDXL-Modell" — welches, stand nirgends), und was Solidon selbst einrichtet,
-    stand in den Konstanten von ``comfy_setup``. Wer wissen wollte, was er
-    braucht, bevor er anfängt, fand vier Teilantworten.
-    """
-    from app.core.backends import comfy_setup
+def test_the_model_page_names_the_models_solidon_currently_offers() -> None:
+    """Sprach- und Erzeugermodelle stehen aus ihren jeweiligen Quellen da."""
     from app.core.backends.llm import OLLAMA_SUGGESTIONS
 
     seite = manual.models_text()
 
     for name, _gigabytes, _note in OLLAMA_SUGGESTIONS:
         assert name in seite, f"das Sprachmodell {name} fehlt"
-    for modell in ("TripoSG", "BiRefNet", "SDXL"):
-        assert modell in seite, f"das Erzeugungsmodell {modell} fehlt"
+    for model in ("TripoSG", "BiRefNet", "SDXL"):
+        assert model in seite, f"das Erzeugungsmodell {model} fehlt"
+    assert "Hugging Face" in seite
+    assert "Hunyuan3D" not in seite
 
-    # Und für das eine, das der Kunde selbst holt: Name, Quelle, Ordner.
-    assert comfy_setup.IMAGE_MODEL_FILE in seite, "der Dateiname des Bildmodells"
-    assert comfy_setup.IMAGE_MODEL_REPO in seite, "woher es kommt"
-    assert comfy_setup.IMAGE_MODEL_FOLDER in seite, "wohin es gehört"
+
+@pytest.mark.parametrize("language", ("de", "en", "es", "fr", "it", "pt"))
+def test_every_manual_language_describes_the_released_generator_chain(language: str) -> None:
+    """Quellhandbuch und veröffentlichte Seite nennen denselben lokalen Weg."""
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        relevant = [page for page in manual.pages() if page.key in {"generating", "extras"}]
+        source = "\n".join(str(page.body) for page in relevant) + manual.models_text()
+        published = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    finally:
+        set_language("de")
+
+    for text in (source, published):
+        assert "TripoSG" in text, f"{language}: TripoSG fehlt"
+        assert "ComfyUI" in text, f"{language}: ComfyUI fehlt"
+        assert "Hunyuan3D" not in text, f"{language}: ungeprüfte Alternative veröffentlicht"
+
+
+@pytest.mark.parametrize(
+    ("language", "page_title", "transfer_denial"),
+    [
+        (
+            "de",
+            "Bausteindateien austauschen",
+            "Weder die Datei noch Autor, Lizenz oder Herkunft werden an RS Digital übertragen.",
+        ),
+        (
+            "en",
+            "Exchange part files",
+            "Neither the file nor its author, licence or origin is sent to RS Digital.",
+        ),
+        (
+            "es",
+            "Intercambiar archivos de bloques",
+            "Ni el archivo ni su autor, licencia o procedencia se envían a RS Digital.",
+        ),
+        (
+            "fr",
+            "Échanger des fichiers de blocs",
+            "Ni le fichier, ni l’auteur, ni la licence, ni la provenance "
+            "ne sont transmis à RS Digital.",
+        ),
+        (
+            "it",
+            "Scambiare file di blocchi",
+            "Né il file né autore, licenza o provenienza vengono trasmessi a RS Digital.",
+        ),
+        (
+            "pt",
+            "Trocar ficheiros de blocos",
+            "Nem o ficheiro nem o autor, a licença ou a origem são transmitidos à RS Digital.",
+        ),
+    ],
+)
+def test_the_exchange_manual_describes_only_local_files(
+    language: str, page_title: str, transfer_denial: str
+) -> None:
+    """Das Handbuch beschreibt nur den lokalen Dateiaustausch mit Herkunft."""
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        exchange = next(page for page in manual.pages() if page.key == "exchange")
+        body = str(exchange.body)
+        html = WEBSITE_PAGES[language].read_text(encoding="utf-8")
+    finally:
+        set_language("de")
+
+    assert page_title.casefold() in html.casefold()
+    for text in (body, html):
+        assert transfer_denial.casefold() in text.casefold()
+        assert "CC BY" in text
+        assert "CC BY-SA" in text
+        assert "solidon3d.de/boerse" not in text
+        assert "/exchange.html" not in text
 
 
 def test_the_model_page_comes_from_the_code_and_not_from_a_second_list() -> None:
@@ -1154,6 +1359,31 @@ def test_the_model_page_comes_from_the_code_and_not_from_a_second_list() -> None
 
     # Die Vorgabe ist als solche erkennbar.
     assert f"**{DEFAULT_OLLAMA_MODEL}**" in seite, "die Vorgabe steht hervorgehoben"
+
+
+@pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
+def test_the_checked_in_manual_carries_the_current_model_measurements(language: str) -> None:
+    """Die ausgelieferte Seite darf nicht hinter ``OLLAMA_SUGGESTIONS`` stehen.
+
+    Der Generator war korrekt, aber die sechs eingecheckten Seiten nannten
+    weiterhin vier von fünf Aufrufen und rund fünfzehn Sekunden. Geprüft wird
+    deshalb der veröffentlichte HTML-Text in jeder Sprache, nicht nur die
+    Python-Quelle, aus der er beim nächsten Lauf entstehen würde.
+    """
+    from app.core.backends.llm import OLLAMA_SUGGESTIONS
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    if language != "de":
+        install_catalog(language, read_catalog(language))
+    set_language(language)
+    try:
+        text = unescape(WEBSITE_PAGES[language].read_text(encoding="utf-8"))
+        for name, _gigabytes, note in OLLAMA_SUGGESTIONS:
+            assert name in text, f"{language}: {name} fehlt in der ausgelieferten Seite"
+            assert str(note) in text, f"{language}: die aktuelle Messung zu {name} fehlt"
+    finally:
+        set_language("de")
 
 
 def test_the_model_page_is_a_chapter_of_its_own() -> None:

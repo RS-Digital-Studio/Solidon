@@ -1,16 +1,18 @@
 # Website — solidon3d.de
 
-Statische Seiten, **keine externen Ressourcen beim Laden**. Alles in diesem
-Ordner wird unverändert hochgeladen; einen Build-Schritt gibt es nicht. Der
-Spendenknopf ist ein gewöhnlicher Verweis zu PayPal und lädt dort erst nach
+Statische Seiten, **keine externen Ressourcen beim Laden**. Der öffentliche,
+von `upload_website.py` ausgewählte Bestand wird unverändert hochgeladen; einen
+Build-Schritt gibt es nicht. Lokale Quellen unter `teile/` bleiben ausgenommen.
+Die Sperre greift nach jeder Auswahlart und vor dem ersten Serverzugriff. Der
+Unterstützungsknopf ist ein gewöhnlicher Verweis zu PayPal und lädt dort erst nach
 einem ausdrücklichen Klick die Zahlungsseite — kein PayPal-Skript, keine
 Schrift und kein Zählpixel sind in die Seite eingebunden.
 
 Der Hinweis unmittelbar am Knopf hält die rechtliche Grenze fest: keine
 Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf und
-keine Spendenbescheinigung. `datenschutz.html` nennt PayPal als eigenständig
+keine steuerliche Bestätigung. `datenschutz.html` nennt PayPal als eigenständig
 Verantwortlichen, die übermittelten Transaktionsdaten und den Umgang mit
-wiederkehrenden Spenden. Diese Sätze gehören zum Zahlungsweg; sie werden nicht
+wiederkehrenden Zahlungen. Diese Sätze gehören zum Zahlungsweg; sie werden nicht
 aus Platzgründen aus dem Download-Kasten entfernt.
 
 Beide Skripte kommen von hier — kein CDN, keine Bibliothek, keine Schriftart
@@ -43,6 +45,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `changelog.html`, `<sprache>/changelog.html` | Versionsverlauf mit Auswahl — erzeugt von `tools/make_changelog.py` aus derselben Quelle wie das App-Fenster |
 | `site.js` | Markiert Sprungliste und Changelog-Auswahl und zählt im Download-Kasten die Zeit bis zur Demo |
 | `offline-aktivierung.html`, `activation.js` | Drei-Schritt-Seite für die Aktivierung eines Rechners ohne eigenen Netzzugang; sendet dieselbe Anfragedatei an denselben Endpunkt wie die Anwendung |
+| `security.html`, `<sprache>/security.html` | Sicherheitsmeldeweg und Unterstützungsdauer der Verkaufsversion |
 | `api/activation.php`, `api/deactivation.php` | Aktiviert genau einen Geräteplatz beziehungsweise gibt ihn mit signiertem Gerätenachweis wieder frei |
 | `api/operator.php` | Nicht verlinkter JSON-Endpunkt der lokalen Support-Verwaltung; nur mit externem 256-Bit-Betreiberzugang |
 | `api/activation-health.php` | Passive Bereitschaftsprobe ohne Kauf- oder Gerätedaten |
@@ -60,7 +63,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 
 ## Aktivierungsdienst vor dem Verkaufsbau
 
-Die PHP-Dateien brauchen PHP 7.4 oder neuer mit `sodium` und `PDO_SQLite`.
+Die PHP-Dateien brauchen PHP 8.1 oder neuer mit `sodium` und `PDO_SQLite`.
 Private Dateien liegen standardmäßig im Verzeichnis `solidon3d.de/appdata/`
 neben `httpdocs` und sind damit über HTTP nicht erreichbar:
 
@@ -97,10 +100,80 @@ SOLIDON_ACTIVATION_MAJOR=1
 
 Die Bereitschaftsprobe öffnet die Datenbank nur lesend und legt weder Datei
 noch Tabellen an. Gültig signierte Aktivierungsversuche sind je Schlüssel auf
-fünf pro UTC-Tag begrenzt; IP-Adressen werden dafür nicht gespeichert. Beim
-nächsten gültigen Aktivierungsversuch verschwinden alle Zähler älterer
-UTC-Tage. Die Datenschutzerklärung nennt auch den Fall ohne weiteren Zugriff
-ausdrücklich, statt eine sofortige zeitgesteuerte Löschung zu behaupten.
+fünf pro UTC-Tag begrenzt. Daneben begrenzt ein zweckgetrenntes
+HMAC-Pseudonym der IP-Adresse Anfragen für 900 Sekunden; die IP-Adresse selbst
+steht nicht in der Anwendungsdatei. Der unten beschriebene minütliche
+Wartungslauf bereinigt diese kurzlebigen Zustände auch ohne einen weiteren
+Aktivierungsversuch. Hosting-Protokolle bleiben davon getrennt und folgen der
+tatsächlichen netcup-Konfiguration.
+
+Auch der Zugang zur privaten Statistikseite liegt unter
+`solidon3d.de/appdata/stats-access.php`, mit Rechten 0600 in einem Ordner mit
+0700. `python tools/make_stats_access.py` erzeugt das lokale, ignorierte
+Abbild unter `appdata/`; der öffentliche Website-Abgleich darf diese Datei
+nicht übertragen. Ein abweichender absoluter Serverpfad wird ausschließlich
+über `SOLIDON_STATS_ACCESS_FILE` gesetzt. Fehlt die Datei oder sind Lage oder
+Rechte zu weit, bleibt `api/stats.php` mit einer generischen 503-Antwort zu.
+
+### Zeitgesteuerte Löschung privater Missbrauchszähler
+
+`api/cleanup_private_state.php` ist ausschließlich ein CLI-Wartungslauf;
+ein HTTP-Aufruf erhält 404. In Plesk wird unter **Websites & Domains →
+Scheduled Tasks → Add Task** genau der Tasktyp **Run a PHP script** gewählt:
+
+- **PHP-Version:** dieselbe produktive PHP-Auswahl der Domain, mindestens 8.1;
+- **Script path:** der absolute, im Ausführungsraum sichtbare Pfad zu
+  `httpdocs/api/cleanup_private_state.php`;
+- **with arguments:** `--stats-dir <absoluter privater Statistikordner>
+  --activation-rate <absolute private activation-rate.json>
+  --support-rate <absolute private support-rate.json>`;
+- **Run:** minütlich;
+- **System user:** der Domain-Systemnutzer, niemals `root`;
+- **Notify:** bei jedem Fehler beziehungsweise jedem Exitcode ungleich 0.
+
+Plesk kann den Domain-Systemnutzer in einen eingeschränkten Pfadraum setzen.
+Darum müssen Script- und Argumentpfade absolut **innerhalb genau dieses
+Ausführungsraums** sein; ein Hostpfad darf nicht ungeprüft als chroot-sichtbar
+angenommen werden. FastCGI-Umgebungsvariablen ersetzen das separate
+Argumentfeld nicht. Nach dem Speichern wird **Run Now** ausgeführt und die
+vollständige Ausgabe mit Exitcode 0 als Betriebsbeleg gesichert. Diese
+Repository-Anweisung richtet den Task nicht selbst ein. Ohne diesen Beleg gibt
+es bei vollständiger Zugriffsruhe keine garantierte physische Löschung.
+
+Der Lauf leert `stats/rate.json` nach 60 Sekunden,
+`activation-rate.json` und `stats/anmeldeversuche.json` nach 900 Sekunden sowie
+`support-rate.json` nach 3600 Sekunden. `stats/salt.json` wird nach 86400
+Sekunden zuerst dauerhaft geleert und danach gelöscht. Bei einem nachweislich
+minütlichen erfolgreichen Lauf erfolgt die physische Bereinigung beim ersten
+Lauf nach der Frist, nominal also innerhalb von höchstens 120, 960, 3660
+beziehungsweise 86460 Sekunden nach der letzten Dateiänderung. Alte rohe
+SHA-256-IP-Schlüssel entfernt der Lauf unabhängig vom Dateialter unter
+derselben exklusiven Dateisperre.
+
+Für die Reichweitenzeilen gilt eine kalendarische, nicht gleitende
+Aufbewahrung: Nur `YYYY-MM.jsonl` des laufenden und des unmittelbar vorherigen
+UTC-Kalendermonats bleiben erhalten. Das sind höchstens 62 Kalendertage. Ein
+Jahresvergleich und stille Langzeitaggregate werden nicht gebildet. Unter
+derselben sicheren `quota.lock` wie `count.php` prüft der Wartungslauf zuerst
+alle JSONL-Dateien vollständig auf Namen, reguläre Dateiidentität, Rechte,
+Größe, Zeilenschema und einen zum Dateimonat passenden UTC-Zeitpunkt. Erst
+nach einer insgesamt grünen Vorprüfung leert und synchronisiert er jeden
+älteren Monat und entfernt danach die Datei. Ein unerwarteter `.jsonl`-Name
+sperrt den gesamten Lauf, weil er sonst die Frist umgehen könnte. Sicherungen
+müssen dieselbe Höchstfrist von 62 Kalendertagen technisch durchsetzen und
+bleiben bis zu diesem externen Nachweis ein Produktionsgate.
+
+Private Ordner brauchen auf POSIX 0700, Zustandsdateien höchstens 0600. Ein
+Link, Mehrfachverweis, Eigentümerwechsel, Pfadtausch, falsches JSON oder zu
+weite Rechte beendet den gesamten Lauf, bevor eine andere Datei geändert
+wird. Geheimnisdateien wie `stats/rate.key`, `support-rate.json.key`, der
+Aktivierungsstartwert und `stats-access.php` sind keine Bereinigungsziele und
+werden niemals gelöscht.
+
+Die Exitcodes sind Teil des Betriebsvertrags: 0 bedeutet vollständig geprüft,
+64 ungültige oder fehlende Konfiguration, 65 unsichere oder beschädigte Daten,
+74 Ein-/Ausgabe- oder interner Fehler und 75 eine bereits gehaltene Sperre.
+Jeder Wert ungleich 0 muss den Plesk-Task als fehlgeschlagen melden.
 
 `tools/deploy_activation_server.py --apply` verlangt Startwert, Datenbank und
 Betreiber-Token, prüft vor dem Upload PHP-Syntax, Schlüsselpaar und
@@ -162,6 +235,23 @@ Betriebssystem-Dateisperre; vor jedem Schreibvorgang wird das vollständige
 Archiv samt Signaturen und Käuferzuordnung geprüft. Eine MoR-Transaktion kann
 dadurch nie zwei Lizenzen bezeichnen, und auch Schlüssel älterer
 Hauptversionen bleiben über dasselbe Archiv auffindbar.
+
+## Keine gehostete Tauschstelle
+
+Die öffentliche Tauschstelle wird nicht betrieben oder ausgeliefert. Es gibt
+dafür keine PHP-Endpunkte, Datenbank, Kontaktmail, Moderationsoberfläche oder
+öffentlichen Regel-/Textdateien. `tools/upload_website.py` sperrt die früheren
+Pfade zusätzlich, damit alte oder versehentlich neu erzeugte Dateien nicht in
+den Dokumentenstamm gelangen. Lokaler Datei-Import und -Export der Anwendung
+bleiben davon unabhängig.
+
+Ein bestehender Serverstand wird zuerst nur auf die fest benannten Altpfade
+geprüft und erst im zweiten, ausdrücklich bestätigten Lauf bereinigt:
+
+```powershell
+python tools/upload_website.py --entfernte-tauschstelle
+python tools/upload_website.py --entfernte-tauschstelle --wirklich
+```
 
 ## Was Suchmaschinen sehen
 
@@ -351,7 +441,10 @@ eigenes Produkt: **netcup Webhosting 2000**.
    Inhalt dieses Ordners (ohne diese README) nach `solidon3d.de/httpdocs`
    legen. Die Ordnerstruktur beibehalten — `en/` bleibt ein Unterordner.
    Eine früher versehentlich mit hochgeladene README lag dort öffentlich und
-   wurde entfernt — sie gehört nicht auf den Server.
+   wurde entfernt — sie gehört nicht auf den Server. Dasselbe gilt für den
+   vollständigen Ordner `teile/`: Dort liegen ausschließlich lokale
+   Projektquellen für die erzeugten Bilder und Videos. `upload_website.py`
+   schließt ihn unabhängig von Dateinamen und Endung aus.
 7. **Prüfen.** `https://solidon3d.de/` zeigt die Startseite,
    `https://solidon3d.de/version.json` liefert das rohe JSON, und eine
    Testmail an `support@solidon3d.de` kommt an. Zusätzlich eine an

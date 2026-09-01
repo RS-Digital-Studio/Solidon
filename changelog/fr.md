@@ -18,57 +18,121 @@ dans `website/version.json`.
 
 ## 0.3.0
 
+### Premiers pas et orientation
 
-### Premiers pas et interface
+- Quatre parcours guidés expliquent les principales voies, de la première ébauche au résultat imprimable.
+- L’écran d’accueil occupe entièrement les fenêtres petites ou étroites, sans cartes coupées ni contenu masqué.
+- Les projets récemment utilisés précèdent les parcours d’introduction et sont ainsi accessibles plus rapidement.
+- L’écran d’accueil ne déplace plus la sélection sans demande et se commande entièrement à la souris comme au clavier.
+- Les accès *Nouveau*, *Ouvrir* et *Exemples* sont mieux ordonnés et décrivent leur destination avant même l’ouverture.
+- Les avis et le soutien facultatif sont directement accessibles depuis l’écran d’accueil, au clavier comme avec les technologies d’assistance.
+- La discussion et le rapport de contrôle restent utilisables en même temps, même avec une faible hauteur de fenêtre.
+- La barre d’outils supérieure reste visible avec un projet ouvert et une fenêtre étroite, sans sortir de l’espace de travail.
+- Un nouvel exemple de dessin mène directement au parcours d’esquisse et complète les projets d’exemple existants.
 
-- Quatre visites couvrent les voies principales : adapter un modèle, le construire, le générer depuis un texte ou une image, ou le sculpter. D’autres exemples permettent d’aller plus loin.
-- L’interface a été réorganisée dans les fenêtres, les dialogues et les barres d’outils. Des espacements clairs, des boutons cohérents et des groupes compacts la gardent utilisable.
-- Avis et soutien passent par deux cartes sur l’écran d’accueil. Elles fonctionnent à la souris et au clavier, limitent les animations et expliquent les pages externes avant leur ouverture.
-- Le plateau d’impression est translucide. Les pièces placées par erreur juste en dessous restent visibles, tandis que la grille et le bord restent nets.
-- Les réglages d’impression peuvent être recherchés. L’en-tête affiche l’imprimante sélectionnée et le matériau réellement utilisé au lieu de proposer une seconde sélection contradictoire.
+### Interface et utilisation
 
-### Dessin et dimensions
+- Les menus ont des titres bien visibles et des colonnes d’icônes alignées de façon uniforme.
+- La liste des commandes aligne proprement raccourcis et explications afin de parcourir plus vite les longues entrées.
+- Les grands dialogues emploient des colonnes cohérentes et exploitent les fenêtres larges avec des vues claires sur deux colonnes.
+- L’ancienne page réunissant adhérence, rétraction et filament est divisée en sections de réglages plus petites et clairement nommées.
+- Les 56 réglages d’impression peuvent être recherchés sous leurs libellés allemands visibles.
+- La recherche reconnaît aussi 146 termes courants des trancheurs, dont *perimeters* et *wall loops*.
+- Les champs numériques réagissent fidèlement aux flèches, au pas et à l’arrondi, sans plus modifier les valeurs de façon inattendue.
+- Les curseurs ont un comportement uniforme et restent précis, même avec des plages de valeurs fines.
+- Seul l’outil actif conserve la couleur d’accentuation ; les commandes inactives se font visuellement discrètes.
+- Les calculs très courts évitent tout affichage clignotant ; les moyens montrent un curseur d’attente, les longs ajoutent progression et annulation.
+- Les indications d’outils restent sur une ligne si la largeur suffit et passent proprement à la ligne dans les fenêtres étroites.
+- Les aperçus dans l’arborescence des objets sont assez grands pour reconnaître réellement les formes.
+- La liste des filaments défile séparément ; *Ajouter un filament* et *Valeurs d’impression* restent accessibles avec de nombreuses bobines.
+- Les avertissements et erreurs restent lisibles sans transmettre leur sens uniquement par la couleur du texte.
+- Les champs de sélection désactivés se distinguent clairement des champs sélectionnés et actifs.
 
-- Un cercle demande son diamètre plutôt que son rayon. La valeur saisie est celle que vous pouvez mesurer sur la pièce terminée.
-- Les dimensions se modifient directement par un double-clic ; les champs numériques des barres d’outils acceptent des valeurs exactes sans passer par un grand dialogue.
-- Échap remonte dans le dessin par étapes : d’abord le trait commencé, puis l’outil et seulement ensuite l’esquisse. Rétablir fonctionne également pendant le dessin.
-- Les indications présentent les deux manières de commencer une esquisse : dessiner votre propre contour ou insérer une forme de base prête à l’emploi. Une mesure se termine avec un retour visible.
+### Dessin et saisie précise
 
-### Historique et modification
+- Les cercles sont saisis par leur diamètre ; un perçage M3 peut ainsi être créé directement à 3,2 mm.
+- Une contrainte de diamètre reste une expression modifiable après résolution, enregistrement et réouverture.
+- Les cotes se modifient directement par double-clic, sans l’ancien et long détour par la sélection.
+- Les positions X, Y et Z, l’angle et l’échelle se saisissent directement dans la barre de déplacement.
+- Une saisie exacte crée la même étape annulable qu’un déplacement à la souris.
+- Lors d’une rotation ou d’une mise à l’échelle exacte, plusieurs corps sélectionnés utilisent un centre commun.
+- Échap recule d’un seul niveau pendant le dessin : ligne actuelle, outil actuel, puis seulement l’esquisse entière.
+- Rétablir fonctionne désormais même lorsqu’une esquisse est ouverte.
+- Une esquisse vide affiche une indication cliquable qui mène directement à l’outil Rectangle.
+- Le bouton des formes de base porte le nom de l’action du clic. Les autres formes se trouvent derrière la flèche adjacente.
+- L’outil de coupe s’ouvre dans le corps plutôt que dans une vue vide hors du modèle.
+- Les vues avant, latérale, supérieure et opposées s’alignent fidèlement sur les six axes.
+- La poignée de déplacement reste visible même avec une caméra rasante ou oblique et affiche une cote utile.
+- L’outil de mesure termine une mesure par un retour visible, au lieu de donner l’impression de perdre le résultat.
 
-- Plusieurs pièces sélectionnées peuvent être déplacées et tournées ensemble. La rotation conserve leurs écarts et le résultat est replacé sur le plateau d’impression.
-- Les déplacements consécutifs sont regroupés en une seule action compréhensible dans l’historique. Les étapes liées peuvent être repliées et annulées ensemble.
-- Les modèles téléchargés et importés peuvent de nouveau être découpés et modifiés de façon fiable. Les faces protégées ou détectées restent marquées sans masquer leur forme.
-- Le modelage au pinceau enregistre les traits d’une session comme une étape annulable. Les motifs de surface signalent lorsqu’un trait manque le corps au lieu de laisser une géométrie détachée.
+### Vue, historique et modification des formes
 
-### Blocs sous forme de fichiers
+- Plusieurs corps sélectionnés peuvent être déplacés ensemble.
+- Plusieurs corps sélectionnés tournent autour d’un centre commun et conservent leurs distances mutuelles.
+- Après une rotation, les corps peuvent être replacés proprement sur le plateau dans la même étape de travail.
+- Les déplacements successifs d’un même corps sont regroupés en une étape d’historique compréhensible.
+- Les étapes liées apparaissent dans une entrée dépliable au lieu de surcharger l’historique de lignes isolées.
+- Une action utilisateur continue s’annule entièrement avec une seule commande Annuler.
+- Les entrées d’historique indiquent leur type et un numéro d’étape sans ambiguïté.
+- Les modèles téléchargés et importés peuvent être coupés immédiatement.
+- Les faces protégées sont affichées en turquoise et hachurées afin de rester compréhensibles sans perception des couleurs.
+- La séparation automatique et manuelle tient compte des surfaces visibles protégées lors du choix du plan de coupe.
+- Un clic sur un constat du rapport mène fidèlement à l’endroit, au corps ou à l’étape d’historique concernés.
+- Lors du saut vers un constat, la caméra cadre la cible au lieu d’aboutir sur un gros plan gris.
+- Les faces nommées et les indications suivent leur corps pendant l’agencement et le positionnement.
+- Pendant le modelage au pinceau, un message indique si les traits manquent le modèle ou ne produisent aucune modification imprimable.
 
-- Les blocs que vous créez peuvent être exportés en fichiers locaux `.solidon-part` puis réimportés dans le catalogue. L’importation, l’exportation et l’annulation passent entièrement par l’interface.
-- Un fichier de bloc contient les étapes modifiables, les valeurs, l’aperçu et la provenance du bloc. Il n’exécute aucun code source embarqué et ne contacte aucun service d’échange.
-- Les blocs importés restent identifiables comme provenant d’ailleurs. Un bloc personnel portant le même nom n’est pas remplacé silencieusement.
-- Les fichiers de bloc peuvent être associés à Solidon et ouverts depuis le gestionnaire de fichiers sous Windows, macOS et Linux.
-- Les crochets pour panneaux perforés, les charnières souples et les motifs de surface signalent une orientation inadaptée ou l’absence de contact avant que le problème ne passe inaperçu.
+### Blocs personnels et fichiers d’échange
 
-### Séparation et impression
+- Les blocs personnels peuvent être enregistrés dans un fichier local .solidon-part puis réintégrés au catalogue.
+- Les fichiers de bloc s’ouvrent, se glissent dans l’application et s’importent via l’association de fichiers du système.
+- Le nom et l’extension du fichier montrent immédiatement qu’il appartient à Solidon.
+- Importation, partage et bibliothèque locale emploient des textes d’interface complets dans les six langues.
+- Avant l’enregistrement, un bloc personnel peut être composé de plusieurs étapes et valeurs modifiables.
+- Lors du partage, le choix porte sur libre, attribution ou attribution avec partage dans les mêmes conditions.
+- Si vous avez nommé votre bloc, votre propre nom reste prioritaire sur un nom fourni avec le fichier.
+- La provenance et les conditions de partage restent traçables lors de l’échange d’un bloc.
+- Les clips à encliqueter, œillets de charnière, crochets muraux perforés et pieds ont des transitions plus robustes, sans surfaces internes enfermées.
+- Les cartes du catalogue conservent leur position et la face sélectionnée pendant le chargement de leurs aperçus.
 
-- Auto Split recherche des jointures solides plutôt que l’endroit le plus fin. Il choisit des goupilles, une queue d’aronde ou une languette et rainure selon la surface disponible.
-- Les assemblages créés automatiquement restent reproductibles, et les longues recherches peuvent être annulées sans laisser le document à moitié modifié.
-- Les pièces multicolores et assemblées peuvent être affichées ensemble et traitées séparément pour l’impression. Leurs références de matériaux et d’objets sont conservées.
-- Les réglages d’impression prennent les valeurs du matériau de la bobine réellement sélectionnée. La recherche, les textes d’aide et les raisons visibles d’un blocage mènent plus vite au bon réglage.
+### Séparation, impression et filament
 
-### Discussion et génération 3D
+- La séparation automatique privilégie les interfaces solides et évite l’ancien choix possible du point faible le plus fin.
+- Le type d’assemblage adapté est choisi séparément pour chaque coupe et enregistré sous forme concrète.
+- Les indications concernant les assemblages collés restent liées à la coupe sélectionnée.
+- La séparation automatique réagit aux consignes modifiées de façon reproductible et peut être annulée pendant le calcul.
+- La recherche d’orientation n’examine que les positions réellement distinctes et respecte le temps prévu, même avec des corps exigeants.
+- Les gros fichiers 3MF sont reconnus et traités plus rapidement sans modifier le résultat du fichier.
+- Matériau, ajustement et tolérances suivent la bobine réellement choisie ou l’emplacement occupé dans l’imprimante.
+- L’en-tête montre le matériau réellement utilisé et ne propose plus une seconde sélection de matériau contradictoire.
+- Le bouton désactivé *Enregistrer le fichier d’impression* explique que le fichier n’est créé qu’au tranchage.
+- Les réparations déjà effectuées dans le même flux de travail ne sont plus ensuite affichées comme recommandations ouvertes.
 
-- La voie depuis un texte ou une image passe par un dialogue Générer dédié vers la même scène modifiable. La configuration locale installe ComfyUI et TripoSG à des révisions fixes et vérifiables.
-- Avant le premier appel à un modèle dans le cloud, Solidon montre quelles entrées et données du modèle quittent l’ordinateur. Les modèles locaux de langage et de génération restent clairement séparés.
-- La discussion explique son rôle, l’étape en cours et l’outil utilisé. L’agent peut traiter ensemble des détails de forme répétés au lieu de devoir se les faire expliquer un à un.
+### Rapport, stabilité, plateformes et langues
 
-### Rapport, stabilité et plateformes
+- Les constats semblables sont regroupés sans perdre le lien avec les corps et emplacements concernés.
+- Les nombres et mesures du rapport portent des libellés complets plutôt que des valeurs isolées incompréhensibles.
+- Si une réparation échoue, le corps d’origine inchangé est entièrement restauré.
+- Un maillage importé fermé n’est plus ouvert par la suppression trop hâtive d’un triangle problématique.
+- Les boutons d’action du rapport ne retiennent plus discrètement en mémoire une fenêtre déjà fermée.
+- Les blocs fournis et l’activation se chargent au démarrage sans se bloquer mutuellement.
+- La vue 3D se ferme proprement avant la fenêtre, ce qui fiabilise la fermeture sous Windows, Linux et macOS.
+- Le cadre et la barre de titre de la fenêtre s’adaptent sûrement à chaque plateforme.
+- Les boutons standard comme Ouvrir, Enregistrer et Annuler changent immédiatement de langue, sans redémarrage.
+- Les noms de corps et de blocs générés automatiquement changent aussi correctement de langue après l’emploi de contenus mis en cache.
+- Les traductions et valeurs de rapport sont au même niveau en allemand, anglais, espagnol, français, italien et portugais.
 
-- Le rapport regroupe les constats identiques, libelle les mesures et mène à l’endroit concerné quand vous sélectionnez un avertissement. Les boutons d’action restent accessibles.
-- Les réparations automatiques s’exécutent comme une seule étape cohérente. Si une réparation ne peut pas aboutir, l’état d’origine reste intact et le message propose une suite praticable.
-- Les exemples, les blocs fournis et l’activation se chargent sans se bloquer mutuellement. L’application libère plus fiablement sa vue 3D à la fermeture.
-- Solidon ouvre ses fenêtres de façon fiable sous Windows, macOS et Linux. La barre de titre n’est adaptée que si le système le permet ; sinon elle conserve l’apparence habituelle de la plateforme.
-- Les textes de l’interface en allemand, anglais, espagnol, français, italien et portugais restent complets après un changement de langue ; les boutons standard changent eux aussi immédiatement.
+### Discussion et prise en charge des modèles
+
+- La discussion accueille avec son objectif concret et ne démarre plus sur une zone vide ou des termes techniques liés aux modèles.
+- Les compteurs techniques de jetons ont été retirés de l’interface client habituelle.
+- L’assistant reconnaît et regroupe les détails de forme identiques au lieu de traiter chaque occurrence isolément.
+- Le dialogue de génération transforme un texte ou une image en modèle via un ComfyUI local et l’ajoute à la même scène modifiable.
+- Le flux TripoSG fourni crée un fichier GLB, ensuite réparé, mis à l’échelle et contrôlé automatiquement pour l’impression.
+- Ollama local et ComfyUI local calculent l’un après l’autre afin de ne pas occuper simultanément la carte graphique.
+- Après une proposition de l’agent ou une génération 3D, Solidon libère les modèles locaux et la mémoire graphique.
+- Lors de l’annulation, Solidon ne retire que sa propre tâche ComfyUI ; les autres tâches en cours y restent intactes.
+- Avant la première utilisation d’un modèle cloud, Solidon explique clairement quels contenus quittent l’ordinateur.
 
 ## 0.2.2
 

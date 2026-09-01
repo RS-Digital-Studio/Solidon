@@ -78,6 +78,12 @@ Einträge.
 `tests/test_registry_consistency.py` prüft jede: Vollständigkeit, eindeutige
 Kürzel, Startwert wo nötig.
 
+`replace_state()` ist ausschließlich der Commit-Schritt für einen bereits in
+einem isolierten Register vollständig geprüften Rezeptzustand. Er übernimmt die
+vorbereitete Abbildung ohne zweite Validierung; nach einer atomar
+veröffentlichten Rezeptdatei darf kein erneut fehlbarer Aufbau den Speicherstand
+von der Platte trennen.
+
 ## Zwei Dinge, die beim Zählen schiefgehen
 
 - **`REGISTRY` ist erst nach `load_operations()` vollständig.** In einem

@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=be10c386">
+<link rel="stylesheet" href="style.css?v=7e1cf380">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -177,8 +177,7 @@
         <div class="menu-panel">
           <a href="/funktionen.html">Funktionen</a>
           <a href="/ki-modelle.html">KI-Modelle</a>
-
-          <a href="#preis">Preis</a>
+          <a href="#demo">Demo</a>
           <a href="/changelog.html">Neuerungen</a>
           <a href="/handbuch.html">Handbuch</a>
         </div>
@@ -208,14 +207,17 @@
         <p class="lead">Modell hineinziehen, Maß ändern, Bohrung setzen,
         Passung wählen — und Solidon3D prüft vor dem Slicen, ob dein Teil
         druckbar ist. Ohne CAD-Vorkenntnisse, ohne Cloud, ohne Konto.</p>
-
         <p class="hero-act">
           <a class="btn hero-btn" href="#download"
              data-release-href data-release-download
              data-past-text="Kostenlos testen — ohne Konto"
              data-release-text="Jetzt kostenlos herunterladen">Jetzt kostenlos herunterladen</a>
         </p>
-        <p class="hero-kauf">Bis Version 1.0 erscheinen kostenlose 0.x-Demos.</p>
+        <!-- Die Frage „und was kostet es später?" entsteht an dem Knopf, der
+             „kostenlos" sagt — also steht die Antwort dort und nicht erst im
+             Preiskasten. Vorher stand sie in einem Fließtextabsatz weit unten;
+             auf einem Telefon war sie zwölf Bildschirme entfernt. -->
+        <p class="hero-kauf">Bis Version 1.0 erscheinen nur kostenlose 0.x-Demos.</p>
 
       <ul class="assure hero-assure">
         <li>
@@ -321,13 +323,20 @@
       <div class="donate">
         <div>
           <strong>Solidon3D unterstützen</strong>
-          <p>Die Demo bleibt kostenlos. Mit einer freiwilligen Spende finanzierst du Weiterentwicklung, Tests und die nächste Version.</p>
+          <p>Die Demo bleibt kostenlos. Mit einer freiwilligen Unterstützung hilfst du, Weiterentwicklung, Tests und die nächste Version zu finanzieren.</p>
           <details class="donate-fine">
-            <summary>Rechtliches zur Spende</summary>
-            <p class="donate-terms">Keine Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf. Wir stellen keine Spendenbescheinigung aus. PayPal verarbeitet die Zahlung erst nach dem Klick; <a href="/datenschutz.html">Details im Datenschutz</a>.</p>
+            <summary>Rechtliches zur Unterstützung</summary>
+            <p class="donate-terms">Keine Bestellung, keine Gegenleistung, keine Anrechnung auf einen späteren Kauf. Wir stellen keine steuerliche Bestätigung aus; behandeln Sie die Zahlung nicht als steuerlich abziehbar. PayPal wird erst nach der Bestätigung im lokalen Hinweis geöffnet; <a href="/datenschutz.html">Details im Datenschutz</a>.</p>
           </details>
         </div>
-        <a class="donate-button" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4">Mit PayPal spenden <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></a>
+        <button class="donate-button" type="button" data-choice="support">Freiwillig unterstützen <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 19 15.65 12 20 12 20Z" stroke-linejoin="round"/></svg></button>
+        <dialog class="auswahl donate-dialog" id="wahl-support" aria-label="Freiwillige Unterstützung über PayPal">
+          <p class="auswahl-titel">Freiwillig unterstützen</p>
+          <p>Die Zahlung ist keine Bestellung, begründet keine Gegenleistung, schaltet nichts frei und wird nicht auf einen späteren Kauf angerechnet. Wir stellen keine steuerliche Bestätigung aus.</p>
+          <p>Erst der folgende Knopf öffnet PayPal. Dabei verlassen Sie solidon3d.de; es gilt die <a href="https://www.paypal.com/de/legalhub/paypal/privacy-full?locale.x=de_DE">Datenschutzerklärung von PayPal</a>.</p>
+          <a class="btn" href="https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4" rel="noopener noreferrer">Mit PayPal unterstützen</a>
+          <form method="dialog"><button class="btn ghost" value="zu">Zurück</button></form>
+        </dialog>
       </div>
     </div>
   </section>
@@ -354,7 +363,7 @@
       <div class="steps">
         <ol class="steps-list">
           <li><b>Demo laden und starten.</b> Kein Konto, kein Schlüssel,
-          keine Einrichtung — installieren und loslegen. Zehn
+          keine Einrichtung — installieren und loslegen. Elf
           Beispielprojekte liegen im Startbildschirm bereit.</li>
           <li><b>Modell hereinziehen.</b> Eine STL-Datei von Printables oder
           das eigene Projekt: Der Prüfbericht sagt sofort, was beim Drucken
@@ -451,20 +460,20 @@
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
-                 poster="bilder/weg3-generieren.png?v=e858ea35" muted loop playsinline controls
-                 preload="none" aria-label="Eine Aufnahme aus der Anwendung: ein generiertes Eulen-Modell wird eingelesen, auf Größe gebracht, in der Auflösung reduziert und von der Schichtanalyse in die stützärmste Drucklage gedreht — deshalb steht es am Ende kopfüber. Daneben der Prüfbericht ohne Fehler und Warnungen.">
-                   <source src="bilder/weg3-generieren.webm?v=f06d54b0" type="video/webm">
-                   <source src="bilder/weg3-generieren.mp4?v=cb3c2c16" type="video/mp4">
+                 poster="bilder/weg3-generiert-aufbereiten.png?v=75c521e9" muted loop playsinline controls
+                 preload="none" aria-label="Eine Aufnahme aus der Anwendung: Ein selbst erzeugtes Referenznetz wird geöffnet, auf Maß gebracht, repariert und aufs Druckbett gestellt. Links stehen vier Verlaufsschritte; rechts weist der Prüfbericht die Reparaturen und verbleibenden Hinweise aus.">
+                   <source src="bilder/weg3-generiert-aufbereiten.webm?v=895a6484" type="video/webm">
+                   <source src="bilder/weg3-generiert-aufbereiten.mp4?v=1a961a47" type="video/mp4">
           </video>
-          <span class="tag">Weg 3 — Generieren</span>
-          <h3>Aus Text oder Bild</h3>
-          <p>Ein generiertes Mesh durchläuft automatisch die Reparaturkette,
-          wird auf eine Auflösung gebracht, mit der sich arbeiten lässt,
-          bekommt einen Prüfbericht und wird bei Bedarf geteilt und
-          verstiftet — bis es druckbar auf dem Bett liegt. Braucht ein
-          lokal laufendes ComfyUI und eine kräftige Grafikkarte; das
-          Erzeuger-Modell ist TripoSG unter MIT-Lizenz, und ein Befehl richtet
-          es ein. Ohne beides bleiben Weg 1 und 2 vollständig nutzbar.</p>
+          <span class="tag">Weg 3 — Generiertes Modell</span>
+          <h3>GLB oder STL aufbereiten</h3>
+          <p>Eine Datei aus einem Generator deiner Wahl hereinziehen:
+          Solidon3D repariert das Netz, bringt es auf Maß, prüft die
+          Druckbarkeit und teilt oder verstiftet es bei Bedarf. Die
+          automatische Einrichtung eines bestimmten 3D-Modells ist erst
+          wieder verfügbar, wenn dessen vollständige Lizenz- und
+          Herkunftskette belegt ist. Wege 1, 2 und 4 bleiben unabhängig davon
+          vollständig nutzbar.</p>
         </div>
         <div class="way">
           <video class="weg-film" width="1280" height="720"
@@ -575,7 +584,7 @@
 
       <div class="beleg">
         <figure>
-          <img src="handbuch/de/report.png?v=8c6d4cd7" width="620" height="270" loading="lazy"
+          <img src="handbuch/de/report.png?v=e9b093fd" width="620" height="430" loading="lazy"
                alt="Der Prüfbericht mit vier Befunden: das Modell ist an drei Stellen offen, 14 Dreiecke zeigen nach innen, eine Wand ist dünner als zwei Extrusionsbahnen, und die Einheit stand nicht in der Datei">
           <figcaption><b>Der Prüfbericht.</b> Was beim Drucken schiefgeht,
           steht da, bevor der Slicer die Zeit verbraucht — mit Zählung nach
@@ -627,41 +636,14 @@
 
   <section id="generiert">
     <div class="wrap">
-      <h2>Wenn das Modell aus einer KI kommt</h2>
-      <p class="sub">Ein Generator prüft, ob das Netz geschlossen ist. Nicht
-      geprüft wird, ob die Wand dicker ist als deine Düse, ob ein Überhang
-      trägt, ob eine Insel in der Luft anfängt und ob das Ganze auf dein
-      Druckbett passt. Genau da fängt Solidon3D an — und danach lässt sich jede
-      Zahl noch ändern.</p>
-
-      <ul class="schau tight">
-        <li><figure>
-          <img src="bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="Ein gotischer Wasserspeier auf einem Sockel, mit angelegten Flügeln und Krallen">
-          <figcaption>Wasserspeier</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="Eine achteckige Laterne mit durchbrochenen Filigranfeldern">
-          <figcaption>Laterne</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="Ein Industrieventil mit Handrad und verschraubten Flanschen">
-          <figcaption>Industrieventil</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="Ein Drachenschädel mit geschwungenen Hörnern und Zahnreihen">
-          <figcaption>Drachenschädel</figcaption>
-        </figure></li>
-      </ul>
-      <p class="sub">Vier davon aus je einem Satz, in Solidon3D erzeugt und
-      geprüft — alle geschlossen und aus einem Stück, rund zwanzig Sekunden das
-      Stück. Der Generator läuft dabei auf deinem Rechner: kein Konto, kein
-      Upload, und das Modell dahinter steht unter der MIT-Lizenz.</p>
-
-      <a class="btn ghost" href="/ki-modelle.html">Der Weg vom Generator zum Druck</a>
+      <h2>Wenn das Modell aus einem Generator kommt</h2>
+      <p class="sub">GLB oder STL hereinziehen, reparieren, auf Maß bringen,
+      gegen Drucker und Material prüfen, teilen und verstiften: Diese
+      Aufbereitung funktioniert mit Dateien aus dem Generator deiner Wahl und
+      ohne CAD-Vorkenntnisse. Solidon3D lädt derzeit bewusst kein bestimmtes
+      3D-Modell herunter, solange dessen vollständige Lizenz- und
+      Herkunftskette nicht belegt ist.</p>
+      <a class="btn ghost" href="/ki-modelle.html">Vom Generator zum druckbaren Teil</a>
     </div>
   </section>
 
@@ -690,7 +672,8 @@
     </div>
   </section>
 
-  <section id="preis">
+  <section id="demo">
+    <span id="preis" aria-hidden="true"></span>
     <div class="wrap">
       <h2>Kostenlose 0.x-Demos bis Version 1.0</h2>
       <p class="sub">Die aktuelle Demo ist kostenlos und vollständig.
@@ -704,8 +687,8 @@
             <b>Kostenlos</b>
             <em>Demo bis 30.10.2026</em>
           </div>
-          <p class="terms">Die aktuell veröffentlichte Demo ist kostenlos,
-          vollständig, ohne Schlüssel und ohne Konto. Version 1.0
+          <p class="terms">Die veröffentlichte Demo ist Version 0.2.2:
+          kostenlos, vollständig, ohne Schlüssel und ohne Konto. Version 1.0
           ist für den 1. November 2026 geplant, aber noch kein Angebot. Preis
           und Vertragsbedingungen werden vor ihrem Angebot veröffentlicht.</p>
           <a class="btn" href="#download"
@@ -732,13 +715,21 @@
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>KI bleibt optional.</b> Ohne Chat funktioniert die Demo
-              vollständig. Für externe Modelle gilt der vom Nutzer gewählte
-              Anbieter; Ollama kann lokal laufen.</span>
+              vollständig. Vor dem ersten Modellkontakt zeigt Solidon, ob
+              Daten an Anthropic, lokales Ollama oder ein entferntes
+              Ollama-Ziel gehen.</span>
             </li>
             <li>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <span><b>Deine Projekte bleiben lesbar.</b> Eine ZIP-Datei mit
               JSON darin, Export nach STL, 3MF, OBJ, PLY und STEP.</span>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m4 12 5 5L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span><b>Sicherheitslücken vertraulich melden.</b> Der
+              <a href="/security.html">Sicherheitskontakt</a> gilt auch für
+              die Demo. Sicherheitsupdates für die Kaufversion sind bis
+              mindestens 31.10.2031 zugesagt.</span>
             </li>
           </ul>
         </div>
@@ -766,9 +757,9 @@
         Kosten beim Anbieter) oder Ollama mit einem Modell ab etwa
         14 Milliarden Parametern — das braucht eine Grafikkarte mit
         16 GB Speicher</td></tr>
-        <tr><td>Generieren (optional)</td><td>lokal laufendes ComfyUI und eine
-        kräftige Grafikkarte; das Modell TripoSG (MIT) richtet ein
-        mitgeliefertes Werkzeug ein</td></tr>
+        <tr><td>Generiertes Modell (optional)</td><td>eine externe
+        GLB- oder STL-Datei; Solidon3D richtet derzeit bewusst kein
+        bestimmtes 3D-Modell ein</td></tr>
         <tr><td>Weiteres (optional)</td><td>ein Slicer — er wird
         gefunden oder angegeben, Pflicht ist er nicht</td></tr>
       </table>
@@ -908,7 +899,7 @@
         <h2>Das nächste Teil, das passt</h2>
         <p data-past-text="Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig. Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.">Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig.
         Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.</p>
-        <a class="btn" href="/#preis">
+        <a class="btn" href="/#demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
           </svg>
@@ -931,9 +922,9 @@
   <div class="wrap">
     © 2026 RS Digital ·
     <a href="/handbuch.html">Handbuch</a> ·
-     ·
     <a href="/changelog.html">Neuerungen</a> ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
+    <a href="/security.html">Sicherheit</a> ·
     <a href="/impressum.html">Impressum</a> ·
     <a href="/datenschutz.html">Datenschutz</a> ·
     <a href="/agb.html">AGB</a> ·
@@ -947,7 +938,7 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 
 </body>
 </html>

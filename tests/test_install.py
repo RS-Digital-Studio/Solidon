@@ -12,13 +12,14 @@ zur Verfügung, die Befehlszeile, die dort entstünde, schon.
 
 from __future__ import annotations
 
+import io
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QApplication, QLabel
 
-from app.core import install, tools
+from app.core import install, process, tools
 from app.i18n import SOURCE_LANGUAGE
 from app.i18n.catalog import available_languages, read_catalog
 from app.ui.install_dialog import InstallDialog
@@ -31,15 +32,15 @@ def by_id(identifier: str) -> install.Requirement:
 class FakeProcess:
     """Ein Installer, der aus einem Skript antwortet statt aus dem Netz.
 
-    Gebraucht wird die Form, die ``install._stream`` erwartet: ein
-    Kontextmanager mit ``stdout`` zum Zeilenlesen und ``wait``. Gestartet wird
-    seit dem streamenden Lauf über ``Popen`` — die Tests patchten ``run``, und
-    damit prüfte „nichts startet von selbst" nichts mehr.
+    Gebraucht wird die kleine ``Popen``-Oberfläche der gemeinsamen sicheren
+    Prozessgrenze: ein Ausgabestrom, ``wait`` und ein Rückgabewert.
     """
 
     def __init__(self, lines: tuple[str, ...] = (), code: int = 0) -> None:
-        self.stdout = iter(lines)
+        self.stdout = io.BytesIO("".join(lines).encode("utf-8"))
         self._code = code
+        self.returncode = code
+        self.pid = 12345
 
     def __enter__(self) -> FakeProcess:
         return self
@@ -47,11 +48,23 @@ class FakeProcess:
     def __exit__(self, *_args: object) -> None:
         return None
 
-    def wait(self) -> int:
+    def wait(self, timeout: float | None = None) -> int:
         return self._code
 
     def kill(self) -> None:
         return None
+
+
+def fake_process_boundary(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Betriebssystembindung gehört den Tests von ``core.process``.
+
+    Diese Datei prüft den Installer oberhalb der Grenze und ersetzt den
+    Prozess selbst. Eine Attrappe besitzt weder Windows-Handle noch einen
+    angehaltenen Hauptthread, den die echte Grenze binden oder fortsetzen
+    könnte.
+    """
+    monkeypatch.setattr(process, "_attach_process_boundary", lambda *_args: None)
+    monkeypatch.setattr(process, "_resume_process_boundary", lambda *_args: None)
 
 
 def watch_popen(monkeypatch: pytest.MonkeyPatch, **kwargs: object) -> list[object]:
@@ -62,6 +75,7 @@ def watch_popen(monkeypatch: pytest.MonkeyPatch, **kwargs: object) -> list[objec
         started.append(command)
         return FakeProcess(**kwargs)  # type: ignore[arg-type]
 
+    fake_process_boundary(monkeypatch)
     monkeypatch.setattr(install.subprocess, "Popen", fake)
     return started
 
@@ -155,6 +169,41 @@ def test_a_silent_installer_still_hits_the_clock(monkeypatch: pytest.MonkeyPatch
     with pytest.raises(subprocess.TimeoutExpired):
         install._stream([sys.executable, "-c", "import time; time.sleep(5)"], lambda line: None)
     assert time.monotonic() - begin < 4.0, "die Frist beendet den Lauf, nicht das Kind"
+
+
+def test_an_installer_gets_a_safe_environment_and_working_folder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def fake(_command: object, **options: object) -> FakeProcess:
+        calls.append(options)
+        return FakeProcess()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "nicht-weitergeben")
+    fake_process_boundary(monkeypatch)
+    monkeypatch.setattr(install.subprocess, "Popen", fake)
+
+    install._stream(["paketverwaltung"], lambda _line: None)
+
+    options = calls[0]
+    assert options["cwd"] == install.trusted_cwd()
+    assert options["close_fds"] is True
+    assert "OPENAI_API_KEY" not in options["env"]
+
+
+def test_an_installer_with_unbounded_output_is_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sys
+
+    monkeypatch.setattr(install, "INSTALL_OUTPUT_LIMIT", 1024)
+
+    with pytest.raises(install.ProcessOutputLimitExceeded):
+        install._stream(
+            [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(5)"],
+            lambda _line: None,
+        )
 
 
 def test_the_names_come_from_this_file_and_nowhere_else() -> None:
@@ -712,6 +761,7 @@ def test_the_installer_reports_while_it_runs(monkeypatch: pytest.MonkeyPatch) ->
         # Aufrufer, bevor er fertig ist.
         return FakeProcess(lines=("30 %\r", "60 %\r", "fertig\n"))
 
+    fake_process_boundary(monkeypatch)
     monkeypatch.setattr(install.subprocess, "Popen", watched)
 
     install.install(by_id("vhacd"), seen.append)
@@ -726,15 +776,15 @@ def test_a_progress_bar_without_line_breaks_still_arrives(
 ) -> None:
     """winget zeichnet mit Wagenrücklauf und ohne Zeilenumbruch.
 
-    Das ist der Grund, aus dem im Textmodus gelesen wird: Er übersetzt ``\r``
-    in ein Zeilenende, also kommt jede Aktualisierung als eigene Zeile an.
-    Ohne das käme bis zum Schluss keine — und genau dort war der Kunde vorher.
+    Der begrenzte Leser behandelt ``\r`` selbst als Zeilenende, also kommt
+    jede Aktualisierung als eigene Zeile an. Ohne das käme bis zum Schluss
+    keine — und genau dort war der Kunde vorher.
     """
     monkeypatch.setattr(install, "present", lambda _requirement: False)
     monkeypatch.setattr(install, "installable", lambda _requirement: True)
     seen: list[str] = []
-    # So sieht es aus, wenn Pythons Textmodus die Wagenrückläufe schon in
-    # Zeilenenden übersetzt hat — das tut er, und darauf baut ``_stream``.
+    # Der Wagenrücklauf allein ist bei winget die Grenze jeder Aktualisierung.
+    fake_process_boundary(monkeypatch)
     monkeypatch.setattr(
         install.subprocess,
         "Popen",
@@ -753,6 +803,7 @@ def test_only_the_last_lines_travel_on(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.setattr(install, "present", lambda _requirement: False)
     monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    fake_process_boundary(monkeypatch)
     monkeypatch.setattr(
         install.subprocess,
         "Popen",

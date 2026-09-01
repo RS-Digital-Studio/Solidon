@@ -23,7 +23,6 @@ import json
 import math
 import re
 import subprocess
-import sys
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -60,6 +59,12 @@ from app.core.export.slicer_keys import (
 )
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
+from app.core.process import (
+    ProcessCancelled,
+    ProcessOutputLimitExceeded,
+    detached_process_options,
+    run_limited,
+)
 from app.core.slice import gcode
 from app.core.types import (
     BoundingBox,
@@ -78,6 +83,11 @@ _log = get_logger(__name__)
 #: Slicen dauert länger als alles andere, was Solidon außer Haus gibt. Fünf
 #: Minuten sind großzügig für ein Teil und immer noch eine Grenze.
 TIMEOUT_SECONDS: Final = 300.0
+
+#: Konsolenausgaben der Slicer sind Diagnose, keine Druckdatei. Acht MiB
+#: lassen ausführliche Protokolle zu, ohne dass ein defekter Slicer den
+#: Arbeitsprozess mit einer endlosen Ausgabe füllen kann.
+SLICER_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
@@ -1681,8 +1691,12 @@ def _run_slicer(
     # schon im Nutzer-Cache, weil ``sandboxed`` den eigenen Fall jetzt mitzählt.
     launched = discover.on_host(command)
     try:
-        process = subprocess.Popen(
-            launched, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        answer = run_limited(
+            launched,
+            cwd=workspace,
+            timeout=timeout,
+            output_limit=SLICER_OUTPUT_LIMIT,
+            cancelled=(lambda: cancelled.is_cancelled) if cancelled is not None else None,
         )
     except OSError as problem:
         # Eine gewählte Datei kann `flavour_of` bestehen und trotzdem kein
@@ -1696,72 +1710,25 @@ def _run_slicer(
                 EXPORT_ONLY,
             ),
         ) from problem
-    deadline = time.monotonic() + timeout
-    while True:
-        try:
-            stdout, stderr = process.communicate(timeout=_POLL_SECONDS)
-        except subprocess.TimeoutExpired:
-            if cancelled is not None and cancelled.is_cancelled:
-                _stop(process)
-                raise OperationCancelled from None
-            if time.monotonic() >= deadline:
-                _stop(process)
-                raise ExternalToolError(
-                    tool=setup.name,
-                    detail=_("Der Slicer hat das Zeitlimit überschritten."),
-                    values={"seconds": int(timeout)},
-                    suggestions=(
-                        # Derselbe Ausweg wie beim Fehlschlag ohne Druckdatei:
-                        # Wo ein zweiter Slicer daneben steht, ist der Wechsel
-                        # die echte Alternative zu fünf weiteren Minuten.
-                        CHOOSE_SLICER,
-                        EXPORT_ONLY,
-                        # ``RETRY`` und keine eigene Fassung: Der Katalog
-                        # schlüsselt nach dem deutschen Text, und der Punkt am
-                        # Ende hatte daraus einen zweiten Eintrag in fünf
-                        # Sprachen gemacht — bereits auseinandergelaufen
-                        # (it „Riprova." gegen „Prova di nuovo.", pt „Tentar
-                        # novamente." gegen „Tentar de novo."). Derselbe Knopf
-                        # trug zwei Beschriftungen, je nachdem welcher
-                        # Fehlerpfad ihn erzeugte. Zwölf Zeilen weiter unten
-                        # steht die zentrale Fassung längst richtig.
-                        RETRY,
-                    ),
-                ) from None
-            continue
-        return subprocess.CompletedProcess(list(command), process.returncode, stdout, stderr)
-
-
-#: Wie oft der Lauf nach Abbruch und Zeitgrenze sieht. Kurz genug, dass ein
-#: Klick auf Abbrechen sich sofort anfühlt; lang genug, dass das Warten den
-#: Prozessor nicht beschäftigt.
-_POLL_SECONDS: Final = 0.2
-
-
-def _stop(process: subprocess.Popen[bytes]) -> None:
-    """Beendet den Kindprozess — erst höflich, dann endgültig — und schließt
-    seine Rohre.
-
-    **Das Schließen ist nicht Kosmetik.** ``communicate`` räumt die Pipes
-    selbst ab; wer den Prozess abbricht, ruft es nie zu Ende, und die beiden
-    offenen Enden bleiben liegen, bis der Speicherbereiniger sie einsammelt.
-    Der meldet dann eine ``ResourceWarning`` — aus seinem eigenen Lauf heraus,
-    also ohne Stapel und an beliebiger Stelle. In der Suite steht
-    ``filterwarnings = ["error"]``, und dort wurden daraus zwei Fehler in
-    einem Test, der mit Rohren nichts zu tun hatte; unter Windows fiel es nie
-    auf, weil der Bereiniger dort früher zugreift.
-    """
-    try:
-        process.terminate()
-        try:
-            process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.wait(timeout=5)
-    finally:
-        for pipe in (process.stdout, process.stderr):
-            if pipe is not None:
-                pipe.close()
+    except ProcessCancelled:
+        raise OperationCancelled from None
+    except subprocess.TimeoutExpired:
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der Slicer hat das Zeitlimit überschritten."),
+            values={"seconds": int(timeout)},
+            suggestions=(CHOOSE_SLICER, EXPORT_ONLY, RETRY),
+        ) from None
+    except ProcessOutputLimitExceeded as problem:
+        raise ExternalToolError(
+            tool=setup.name,
+            detail=_("Der Slicer ist mit einem Fehlercode zurückgekommen."),
+            values={"reason": str(problem)},
+            suggestions=(SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
+        ) from problem
+    return subprocess.CompletedProcess(
+        list(command), answer.returncode, answer.stdout, answer.stderr
+    )
 
 
 def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
@@ -2206,19 +2173,9 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
     # ``tools.start``: kein Konsolenfenster, kein Kindprozess, der am Ende
     # von Solidon hängt. Und wie jeder Startpfad geht auch dieser auf den
     # Rechner, nicht in den Sandkasten (``discover.on_host``).
-    windows = sys.platform == "win32"
-    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    detached = getattr(subprocess, "DETACHED_PROCESS", 0)
-    command = discover.on_host([str(program), str(model)])
+    command = discover.on_host([str(program.resolve()), str(model.resolve())])
     try:
-        subprocess.Popen(
-            command,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=(no_window | detached) if windows else 0,
-            start_new_session=not windows,
-        )
+        subprocess.Popen(command, **detached_process_options(graphical=True))
     except OSError as problem:
         raise ExternalToolError(
             tool=setup.name,

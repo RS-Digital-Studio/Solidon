@@ -42,57 +42,121 @@ Nutzen da und sonst nichts.
 
 ## 0.3.0
 
+### Einstieg und Orientierung
 
-### Einstieg und Oberfläche
+- Vier geführte Einstiege erklären die wichtigsten Wege vom ersten Entwurf bis zum druckbaren Ergebnis.
+- Der Startbildschirm nutzt auch kleinere und schmalere Fenster vollständig, ohne abgeschnittene Karten oder verdeckte Inhalte.
+- Zuletzt verwendete Projekte stehen vor den Einführungstouren und sind dadurch schneller erreichbar.
+- Der Startbildschirm bewegt die Auswahl nicht mehr ungefragt und lässt sich vollständig mit Maus und Tastatur bedienen.
+- Die Einstiege *Neu*, *Öffnen* und *Beispiele* sind klarer geordnet und beschreiben bereits vor dem Öffnen, wohin sie führen.
+- Rückmeldung und freiwillige Unterstützung sind direkt vom Startbildschirm erreichbar und auch mit Tastatur und Hilfstechniken bedienbar.
+- Chat und Prüfbericht bleiben selbst bei geringer Fensterhöhe gleichzeitig benutzbar.
+- Die obere Werkzeugzeile bleibt bei geöffneten Projekten und schmalen Fenstern sichtbar, statt aus dem Arbeitsbereich zu rutschen.
+- Ein neues Zeichenbeispiel führt direkt in den Skizzenweg und ergänzt die vorhandenen Beispielprojekte.
 
-- Vier geführte Touren führen zu den Hauptwegen: ein Modell anpassen, selbst konstruieren, aus Text oder Bild erzeugen und frei formen. Weitere Beispiele bleiben als Vertiefung erreichbar.
-- Die Oberfläche ist über Fenster, Dialoge und Werkzeugleisten neu geordnet. Klare Abstände, einheitliche Knöpfe und kompakte Gruppen halten auch lange Einstellungen und schmale Fenster bedienbar.
-- Rückmeldung und freiwillige Unterstützung stehen als klare Karten auf der Startseite. Sie reagieren auf Maus und Tastatur, respektieren reduzierte Bewegung und erklären externe Seiten vor dem Öffnen.
-- Die Druckplatte ist durchscheinend. So bleiben Teile sichtbar, die versehentlich knapp unter ihr liegen, während Raster und Rand klar erkennbar bleiben.
-- Druckeinstellungen lassen sich durchsuchen. Die Kopfzeile zeigt den gewählten Drucker und das tatsächlich verwendete Material, statt dort eine zweite, widersprüchliche Auswahl anzubieten.
+### Oberfläche und Bedienung
 
-### Zeichnen und Maße
+- Menüs besitzen deutlich sichtbare Überschriften und einheitlich ausgerichtete Symbolspalten.
+- Die Befehlsübersicht richtet Kürzel und Erklärungen sauber aus, sodass lange Einträge schneller überflogen werden können.
+- Umfangreiche Dialoge verwenden einheitliche Spalten und nutzen breite Fenster mit übersichtlichen Zweispalten-Ansichten.
+- Die frühere Sammelseite für Haftung, Rückzug und Filament ist in kleinere, logisch benannte Einstellungsbereiche aufgeteilt.
+- Alle 56 Druckeinstellungen lassen sich über ihre sichtbaren deutschen Bezeichnungen durchsuchen.
+- Die Suche versteht zusätzlich 146 geläufige Begriffe aus Slicern, darunter *perimeters* und *wall loops*.
+- Zahlenfelder reagieren zuverlässig auf Pfeile, Schrittweite und Rundung und verändern Werte nicht mehr überraschend.
+- Schieberegler besitzen ein einheitliches Verhalten und bleiben auch bei feinen Wertebereichen präzise bedienbar.
+- Nur das aktive Werkzeug trägt dauerhaft die Akzentfarbe; ruhende Bedienelemente treten optisch zurück.
+- Sehr kurze Berechnungen laufen ohne flackernde Anzeige, mittlere zeigen einen Wartezeiger und lange zusätzlich Fortschritt und Abbruch.
+- Werkzeughinweise bleiben bei ausreichender Breite in einer Zeile und brechen bei schmalen Fenstern kontrolliert um.
+- Vorschaubilder im Objektbaum sind groß genug, um Formen tatsächlich zu erkennen.
+- Die Filamentliste scrollt unabhängig; *Filament anlegen* und *Druckwerte* bleiben auch bei vielen Rollen erreichbar.
+- Warnungen und Fehler sind lesbar, ohne ihre Bedeutung ausschließlich über Textfarbe zu vermitteln.
+- Deaktivierte Auswahlfelder lassen sich eindeutig von aktiv ausgewählten Feldern unterscheiden.
 
-- Ein Kreis fragt nach seinem Durchmesser statt nach dem Radius. Was Sie eingeben, ist die Zahl, die Sie am fertigen Teil nachmessen.
-- Maße lassen sich per Doppelklick direkt ändern; Zahlenfelder in den Werkzeugleisten nehmen genaue Werte an, ohne den Weg über einen großen Dialog.
-- Escape nimmt beim Zeichnen schrittweise zurück: zuerst den begonnenen Zug, dann das Werkzeug und erst danach die Skizze. Wiederholen funktioniert auch im Zeichenmodus.
-- Hinweise nennen beide Einstiege in eine Skizze: einen eigenen Umriss zeichnen oder eine fertige Grundform einsetzen. Messungen enden mit einer sichtbaren Rückmeldung.
+### Zeichnen und genaue Eingabe
 
-### Verlauf und Bearbeitung
+- Kreise werden über den Durchmesser eingegeben; eine M3-Bohrung kann damit direkt als 3,2 mm angelegt werden.
+- Eine Durchmesserbedingung bleibt beim Lösen, Speichern und erneuten Öffnen als bearbeitbarer Ausdruck erhalten.
+- Maße lassen sich durch Doppelklick direkt bearbeiten, ohne den bisherigen langen Auswahlweg.
+- X-, Y- und Z-Position, Winkel und Skalierung können unmittelbar in der Bewegungsleiste eingegeben werden.
+- Exakte Eingaben erzeugen denselben rücknehmbaren Arbeitsschritt wie eine Bewegung mit der Maus.
+- Mehrere ausgewählte Körper verwenden bei exakter Drehung und Skalierung einen gemeinsamen Mittelpunkt.
+- Escape geht beim Zeichnen genau eine Stufe zurück: aktuelle Linie, aktuelles Werkzeug und erst danach die ganze Skizze.
+- Wiederholen funktioniert nun auch während einer geöffneten Skizze.
+- Eine leere Skizze zeigt einen anklickbaren Hinweis, der unmittelbar zum Rechteckwerkzeug führt.
+- Der Knopf für die Grundformen heißt nach dem, was ein Klick darauf tut. Die übrigen Formen stehen hinter dem Pfeil daneben.
+- Das Schnittwerkzeug öffnet im Körper statt in einer leeren Ansicht außerhalb des Modells.
+- Vorder-, Seiten-, Ober- und Gegenansichten rasten zuverlässig auf allen sechs Achsen ein.
+- Der Ziehgriff bleibt auch bei flacher oder schräger Kamera sichtbar und zeigt ein brauchbares Maß an.
+- Das Messwerkzeug beendet eine Messung mit einer sichtbaren Rückmeldung, statt das Ergebnis scheinbar zu verlieren.
 
-- Mehrere gewählte Teile lassen sich gemeinsam verschieben und drehen. Beim Drehen bleiben ihre Abstände erhalten, und das Ergebnis wird wieder auf das Druckbett gesetzt.
-- Mehrere aufeinanderfolgende Bewegungen werden als eine verständliche Handlung im Verlauf zusammengefasst. Zusammengehörige Schritte lassen sich einklappen und gemeinsam rückgängig machen.
-- Heruntergeladene und eingelesene Modelle lassen sich wieder zuverlässig schneiden und weiterbearbeiten. Geschützte oder erkannte Flächen bleiben sichtbar markiert, ohne ihre Form zu verdecken.
-- Formen mit dem Pinsel übernimmt alle Züge einer Sitzung als einen rücknehmbaren Schritt. Oberflächenmuster melden, wenn ein Zug den Körper verfehlt, statt lose Geometrie unbemerkt stehen zu lassen.
+### Ansicht, Verlauf und Formen bearbeiten
 
-### Bausteine als Dateien
+- Mehrere ausgewählte Körper können gemeinsam verschoben werden.
+- Mehrere ausgewählte Körper drehen sich um einen gemeinsamen Mittelpunkt und behalten ihre Abstände zueinander.
+- Nach einer Drehung können Körper im selben Arbeitsschritt wieder sauber auf die Druckplatte gesetzt werden.
+- Aufeinanderfolgende Bewegungen desselben Körpers werden zu einem verständlichen Verlaufsschritt zusammengefasst.
+- Zusammengehörige Arbeitsschritte erscheinen als aufklappbarer Eintrag, statt den Verlauf mit Einzelzeilen zu überladen.
+- Eine zusammenhängende Nutzerhandlung lässt sich mit genau einmal Rückgängig vollständig zurücknehmen.
+- Verlaufseinträge zeigen ihre Art und eine eindeutige Schrittnummer.
+- Heruntergeladene und importierte Modelle können unmittelbar geschnitten werden.
+- Geschützte Flächen werden türkis und schraffiert dargestellt und bleiben dadurch auch ohne Farberkennung verständlich.
+- Automatisches und manuelles Teilen berücksichtigen geschützte Sichtflächen bei der Wahl der Schnittstelle.
+- Ein Klick auf einen Prüfhinweis führt zuverlässig zur betroffenen Stelle, zum Körper oder zum passenden Verlaufsschritt.
+- Beim Anspringen eines Fundorts rahmt die Kamera das Ziel ein, statt in einer grauen Nahaufnahme zu landen.
+- Benannte Flächen und Hinweise wandern beim Anordnen und Platzieren zusammen mit ihrem Körper.
+- Beim Modellieren mit dem Pinsel wird gemeldet, wenn Striche das Modell verfehlen oder keine druckbare Änderung erzeugen.
 
-- Eigene Bausteine lassen sich als lokale `.solidon-part`-Datei exportieren und wieder in den Katalog importieren. Import, Export und Rückgängig laufen vollständig über die Oberfläche.
-- Eine Bausteindatei enthält die veränderbaren Schritte, Werte, Vorschau und Herkunft des Bausteins. Sie führt keinen mitgereisten Quelltext aus und nimmt keinen Kontakt zu einem Austauschdienst auf.
-- Importierte Bausteine bleiben als fremde Herkunft erkennbar. Ein eigener Baustein mit demselben Namen wird nicht still überschrieben.
-- Bausteindateien lassen sich unter Windows, macOS und Linux direkt Solidon zuordnen und aus dem Dateimanager öffnen.
-- Lochwand-Einhänger, Filmscharniere und Oberflächenmuster melden jetzt ungünstige Ausrichtungen oder fehlenden Kontakt, bevor ein äußerlich plausibles, aber ungeeignetes Ergebnis unbemerkt bleibt.
+### Eigene Bausteine und Austauschdateien
 
-### Teilen und Drucken
+- Eigene Bausteine können als lokale .solidon-part-Datei gespeichert und wieder in den Katalog aufgenommen werden.
+- Bausteindateien lassen sich öffnen, hineinziehen und über die Dateizuordnung des Betriebssystems importieren.
+- Dateiname und Dateiendung machen sofort sichtbar, dass eine Datei zu Solidon gehört.
+- Import, Teilen und lokale Bibliothek verwenden in allen sechs Sprachen vollständige Oberflächentexte.
+- Ein eigener Baustein kann vor dem Speichern aus mehreren bearbeitbaren Schritten und Werten aufgebaut werden.
+- Beim Weitergeben kann zwischen frei, Namensnennung sowie Namensnennung mit gleichen Bedingungen gewählt werden.
+- Bei einem selbst benannten Baustein bleibt der eigene Name gegenüber einem mitgebrachten Namen maßgeblich.
+- Herkunft und Weitergabebedingungen bleiben beim Austausch eines Bausteins nachvollziehbar.
+- Schnapphaken, Scharnierauge, Lochwandhaken und Fuß besitzen robustere Übergänge ohne eingeschlossene Innenflächen.
+- Katalogkarten behalten beim Nachladen ihrer Vorschaubilder Position und ausgewählte Fläche.
 
-- Auto Split sucht stabilere Schnittstellen statt bevorzugt durch die dünnste Stelle zu schneiden. Je nach Naht wählt es Stifte, Schwalbenschwanz oder Nut und Feder passend zur verfügbaren Fläche.
-- Die automatisch erzeugten Verbindungen bleiben reproduzierbar, und lange Suchen lassen sich abbrechen, ohne einen halbfertigen Dokumentzustand zu hinterlassen.
-- Mehrfarbige und zusammengesetzte Teile lassen sich zusammengebaut ansehen und für den Druck getrennt behandeln. Material- und Objektbezüge bleiben dabei erhalten.
-- Die Druckeinstellungen beziehen Materialwerte von der tatsächlich gewählten Spule. Suche, Hilfetexte und sichtbare Sperrgründe führen schneller zur passenden Einstellung.
+### Teilen, Drucken und Filament
 
-### Chat und 3D-Erzeugung
+- Automatisches Teilen bevorzugt tragfähige Schnittstellen und vermeidet die bisher mögliche dünnste Schwachstelle.
+- Für jede Trennstelle wird die passende Verbindungsart einzeln gewählt und als konkrete Form gespeichert.
+- Hinweise zu Klebeverbindungen bleiben zusammen mit der gewählten Trennstelle erhalten.
+- Automatisches Teilen reagiert auf geänderte Vorgaben reproduzierbar und lässt sich während der Berechnung abbrechen.
+- Die Orientierungssuche prüft nur tatsächlich unterschiedliche Lagen und erreicht auch bei anspruchsvollen Körpern das vorgesehene Zeitbudget.
+- Große 3MF-Dateien werden schneller erkannt und verarbeitet, ohne das Dateiergebnis zu verändern.
+- Material, Passung und Toleranzen richten sich nach der tatsächlich gewählten Filamentrolle beziehungsweise dem belegten Druckerplatz.
+- Die Kopfzeile zeigt das tatsächlich verwendete Material und bietet keine zweite widersprüchliche Materialauswahl mehr an.
+- Der deaktivierte Knopf *Druckdatei speichern* erklärt, dass die Datei erst beim Slicen entsteht.
+- Bereits im selben Arbeitsablauf erledigte Reparaturen werden anschließend nicht erneut als offene Empfehlung angezeigt.
 
-- Der Weg aus Text oder Bild führt über einen eigenen Erzeugen-Dialog in dieselbe bearbeitbare Szene. Die lokale Einrichtung richtet ComfyUI und TripoSG in festgelegten, überprüfbaren Ständen ein.
-- Vor dem ersten Aufruf eines Cloud-Modells zeigt Solidon, welche Eingaben und Modelldaten den Rechner verlassen. Lokale Sprach- und Erzeugermodelle bleiben deutlich davon getrennt.
-- Der Chat nennt Zweck, Arbeitsschritt und verwendetes Werkzeug klarer. Gleichartige Formdetails kann der Agent gemeinsam erfassen, statt jedes einzeln erklärt bekommen zu müssen.
+### Prüfbericht, Stabilität, Plattformen und Sprachen
 
-### Bericht, Stabilität und Plattformen
+- Gleichartige Prüfbefunde werden gebündelt, ohne den Bezug zu den betroffenen Körpern und Stellen zu verlieren.
+- Zahlen und Messwerte im Prüfbericht besitzen vollständige Bezeichnungen statt unverständlicher Einzelwerte.
+- Scheitert eine Reparatur, wird der unveränderte Ausgangskörper vollständig wiederhergestellt.
+- Ein geschlossenes importiertes Netz wird nicht mehr durch das vorschnelle Entfernen eines problematischen Dreiecks aufgerissen.
+- Aktionsknöpfe aus dem Prüfbericht halten ein bereits geschlossenes Fenster nicht mehr unbemerkt im Speicher.
+- Mitgelieferte Bausteine und die Freischaltung werden beim Start ohne gegenseitiges Blockieren geladen.
+- Die 3D-Ansicht wird vor dem Fenster sauber beendet; dadurch schließen Windows-, Linux- und macOS-Fenster zuverlässiger.
+- Fensterrahmen und Titelleiste passen sich sicher an die jeweilige Plattform an.
+- Standardschaltflächen wie Öffnen, Speichern und Abbrechen wechseln ihre Sprache sofort, ohne Neustart.
+- Automatisch erzeugte Körper- und Bausteinnamen wechseln auch nach bereits verwendeten zwischengespeicherten Inhalten korrekt die Sprache.
+- Übersetzungen und Berichtswerte sind in Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch auf demselben Stand.
 
-- Der Prüfbericht bündelt gleiche Befunde, beschriftet Messwerte vollständig und führt beim Anklicken einer Warnung zur betroffenen Stelle. Handlungsknöpfe bleiben direkt erreichbar.
-- Auto-Reparaturen werden als ein zusammengehöriger Schritt ausgeführt. Scheitert eine Reparatur, bleibt der ursprüngliche Zustand erhalten und die Meldung bietet einen gangbaren nächsten Schritt.
-- Beispiele, mitgelieferte Bausteine und die Freischaltung laden ohne gegenseitige Blockade. Die Anwendung räumt ihre 3D-Ansicht beim Schließen zuverlässiger auf.
-- Solidon öffnet seine Fenster unter Windows, macOS und Linux verlässlich. Die Titelleiste wird nur dort angepasst, wo das System es unterstützt, und bleibt sonst systemtypisch.
-- Deutsche, englische, spanische, französische, italienische und portugiesische Oberflächentexte bleiben auch nach einem Sprachwechsel vollständig; Standardknöpfe wechseln unmittelbar mit.
+### Chat und Modellunterstützung
+
+- Der Chat begrüßt mit seinem konkreten Zweck und startet nicht mehr mit einer leeren Fläche oder technischen Modellbegriffen.
+- Technische Token-Zähler wurden aus der normalen Kundenoberfläche entfernt.
+- Der Assistent erkennt und gruppiert gleiche Formdetails, statt jedes Vorkommen ohne Zusammenhang einzeln zu behandeln.
+- Der Erzeugen-Dialog macht aus Text oder Bild über ein lokales ComfyUI ein Modell und übernimmt es in dieselbe bearbeitbare Szene.
+- Der mitgelieferte TripoSG-Ablauf erzeugt eine GLB, die anschließend automatisch repariert, auf Maß gebracht und auf Druckbarkeit geprüft wird.
+- Lokales Ollama und lokales ComfyUI rechnen nacheinander, damit sie die Grafikkarte nicht gleichzeitig belegen.
+- Nach einem Agentenvorschlag oder einer 3D-Erzeugung gibt Solidon lokale Modelle und Grafikspeicher wieder frei.
+- Beim Abbrechen entfernt Solidon nur den eigenen ComfyUI-Auftrag; andere dort laufende Aufträge bleiben unberührt.
+- Vor der ersten Nutzung eines Cloud-Modells zeigt Solidon verständlich, welche Inhalte den Rechner verlassen.
 
 ## 0.2.2
 

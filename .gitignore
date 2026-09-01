@@ -98,12 +98,14 @@ htmlcov/
 # Verweise darauf stehen in den Seiten und sind versioniert, die Dateien nicht.
 website/dl/
 
-# --- Zugang zur Zugriffsstatistik ---------------------------------------------
-# Der Passwort-Hash für website/api/stats.php. Er schützt die einzige Seite der
-# Domain, die nicht öffentlich ist; ein Hash im Repository ist zwar kein
-# Klartext, aber auch kein Geheimnis mehr. Wie die Datei entsteht, steht im Kopf
-# von stats.php — hochgeladen wird sie einzeln:
-#   tools/upload_website.py website/api/.stats-zugang.php
+# --- Private Serverdaten ------------------------------------------------------
+# Startwerte, Tokens, Passwort-Hashes, Datenbanken und Rate-Limits liegen neben
+# dem Dokumentenstamm. Lokal spiegelt appdata/ diesen privaten Serverordner.
+/appdata/
+
+# Der frühere öffentliche Pfad bleibt als Quarantäne ignoriert: Alte lokale
+# Hashdateien werden dadurch nicht versehentlich eingecheckt, aber nicht mehr
+# gelesen oder erzeugt.
 /website/api/.stats-zugang.php
 
 # Was der Zähler auf dem Server schreibt. Falls jemand die PHP-Dateien lokal

@@ -283,6 +283,9 @@ def test_starting_a_service_uses_its_own_command_and_lets_go(
     command, options = calls[0]
     assert command == [str(program), "serve"]
     assert options["stdout"] == tools.subprocess.DEVNULL, "kein Konsolenfenster über der Anwendung"
+    assert options["cwd"] == program.parent
+    assert options["close_fds"] is True
+    assert "OPENAI_API_KEY" not in options["env"]
 
 
 def test_a_service_that_does_not_come_up_says_no(

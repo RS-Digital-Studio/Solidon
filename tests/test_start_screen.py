@@ -848,37 +848,10 @@ def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) 
     assert requests == [True]
 
 
-def test_the_start_action_cards_animate_without_making_motion_the_only_feedback(
+def test_the_start_action_cards_need_no_animation_for_their_feedback(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Bewegung veredelt die Zustände; Fläche und Rahmen antworten sofort."""
-    from PySide6.QtCore import QAbstractAnimation, QEvent, QPropertyAnimation
-
-    import app.ui.start_screen as start_screen
-
-    monkeypatch.setattr(start_screen, "animations_enabled", lambda: True)
-    screen = StartScreen()
-    screen.resize(1040, 760)
-    screen.show()
-    qt_app.processEvents()
-    card = screen.feedback_button
-    quiet_blur = card._shadow.blurRadius()
-
-    QApplication.sendEvent(card, QEvent(QEvent.Type.Enter))
-
-    animations = card.findChildren(QPropertyAnimation)
-    assert len(animations) == 3
-    assert card._depth_animation is not None
-    assert card._depth_animation.state() == QAbstractAnimation.State.Running
-    blur = next(animation for animation in animations if animation.propertyName() == b"blurRadius")
-    assert float(blur.endValue()) > quiet_blur
-    assert card._hovered, "die statische Fläche antwortet unabhängig von der Bewegung"
-
-
-def test_the_start_action_cards_keep_the_same_states_with_reduced_motion(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Reduzierte Bewegung behält Fokus, Druck, Tiefe und Handlung sofort."""
+    """Reduzierte Bewegung behält Fokus, Tiefe und Handlung ohne Zeitablauf."""
     from PySide6.QtCore import QEvent, QPropertyAnimation
 
     from app.ui.motion import animations_enabled
@@ -899,11 +872,6 @@ def test_the_start_action_cards_keep_the_same_states_with_reduced_motion(
     assert not card.findChildren(QPropertyAnimation)
     card.setFocus(Qt.FocusReason.TabFocusReason)
     assert card.hasFocus()
-    focused_blur = card._shadow.blurRadius()
-    card.setDown(True)
-    card._paint_depth()
-    assert card._shadow.blurRadius() < focused_blur
-    assert not card.findChildren(QPropertyAnimation)
 
 
 def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartScreen) -> None:

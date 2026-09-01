@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=be10c386">
+<link rel="stylesheet" href="style.css?v=7e1cf380">
 </head>
 <body>
 <a class="skip" href="#content">Zum Inhalt springen</a>
@@ -45,7 +45,6 @@
         <div class="menu-panel">
           <a href="/funktionen.html">Funktionen</a>
           <a href="/ki-modelle.html" aria-current="page">KI-Modelle</a>
-
           <a href="/#preis">Preis</a>
           <a href="/changelog.html">Neuerungen</a>
           <a href="/handbuch.html">Handbuch</a>
@@ -70,7 +69,7 @@
 
   <section id="anfang">
     <div class="wrap">
-      <div class="hero">
+      <div class="hero hero-copy">
         <div class="hero-text">
           <p class="hero-kicker">GLB und STL — druckbar ohne CAD-Vorkenntnisse</p>
           <h1>Wenn das Modell aus einer KI kommt</h1>
@@ -81,15 +80,6 @@
           <p class="hero-kauf">Ab 1.0 einmal kaufen — kein Abo.</p>
         </div>
 
-        <div class="shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="bilder/beleg-erzeugt.png?v=a0d4e334">
-              <img src="bilder/beleg-erzeugt.png?v=a0d4e334" width="900" height="637" fetchpriority="high"
-                   alt="Solidon3D mit einer aus einem Satz erzeugten Eule: links der Verlauf mit „Modell laden“, „Auf Maß bringen“ und „Auf das Bett setzen“, in der Mitte die Figur auf dem Druckbett, rechts der Prüfbericht">
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -137,107 +127,27 @@
       Passung, Schichtanalyse, und ein Verlauf, in dem sich jede Zahl später
       noch ändern lässt.</p>
 
-      <h2>Wenn du gar keinen Generator hast</h2>
-      <p class="sub">Solidon3D bringt den dritten Weg selbst mit: aus einem
-      Satz oder einem Bild wird ein Körper, und der landet im selben Verlauf
-      wie alles andere. Gerechnet wird das in einem lokalen
-      <b>ComfyUI</b> — auf deinem Rechner, ohne Konto, ohne Upload.</p>
-      <p class="sub">Das Modell dahinter ist <b>TripoSG</b> und steht unter
-      der <b>MIT-Lizenz</b>. Das gibt Weg 3 eine klare Lizenzgrundlage. Andere
-      Modelle, darunter Hunyuan3D, haben eigene Bedingungen, die in der jeweils
-      eingesetzten Fassung vor dem Einsatz geprüft werden müssen.</p>
-      <p class="sub">Der Weg aus einem <b>Bild</b> funktioniert damit sofort.
-      Für den Weg aus einem <b>Satz</b> braucht ComfyUI zusätzlich ein
-      Bildmodell, das du einmal selbst hineinlegst — sieben Gigabyte, die
-      Solidon3D niemandem ungefragt herunterlädt. Welche Datei wohin gehört,
-      steht in der App und im Handbuch unter „Welche Modelle Solidon
-      benutzt“.</p>
-      <table class="compare">
-        <thead>
-          <tr><th>Gemessen</th><th>Ergebnis</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Geschlossen und aus einem Stück</td><td><span class="yes">✓ alle sechs unten</span></td></tr>
-          <tr><td>Offene Kanten</td><td><span class="yes">✓ keine</span></td></tr>
-          <tr><td>Aus einem Satz, ohne Bildvorlage</td><td>rund 20 Sekunden</td></tr>
-          <tr><td>Aus einem eigenen Bild</td><td>rund 13 Sekunden</td></tr>
-          <tr><td>Einrichtung nach der ComfyUI-Installation</td><td>ein Befehl</td></tr>
-        </tbody>
-      </table>
-      <p class="footnote">Die Zeiten sind auf einer NVIDIA RTX 4080
-      (16&nbsp;GB) gemessen. Auf Intel- und AMD-Grafik rechnen die lokalen
-      Wege langsamer oder ganz auf dem Prozessor: Der lokale Chat lädt
-      seinen Systemprompt dort mit 7,8 Token je Sekunde — 51 Minuten,
-      bis eine Antwort beginnt. Umwege gibt es (IPEX-LLM, ROCm,
-      OpenVINO); wir liefern sie nicht mit und haben sie nicht geprüft.
-      Was dort trägt, ist ein API-Schlüssel — die Anwendung misst das
-      selbst und sagt es dir, bevor du wartest.</p>
+      <h2>Dein Generator bleibt deine Wahl</h2>
+      <p class="sub">Eine GLB- oder STL-Datei aus einem Generator deiner Wahl
+      durchläuft in Solidon3D dieselbe Reparatur, Größenanpassung,
+      Druckbarkeitsprüfung, Teilung und Verstiftung wie jedes andere Modell.
+      Dafür brauchst du keine CAD-Vorkenntnisse.</p>
+      <p class="sub">Die automatische Einrichtung und Bewerbung eines
+      bestimmten lokalen 3D-Modells ist derzeit nicht freigegeben. Erst wenn
+      Lizenz, Herkunft und Weitergaberechte der vollständigen Kette belegt
+      sind, erscheint dieser Weg wieder. Solidon3D lädt bis dahin kein solches
+      Modell herunter und verspricht keines; externe GLB- und STL-Dateien
+      bleiben vollständig nutzbar.</p>
 
-      <h2>Sechs Sätze, sechs Körper</h2>
-      <p class="sub">Jedes Stück hier ist ein einziger Satz, den Solidon3D an
-      den Generator gegeben hat — kein Nachbessern, kein zweiter Versuch, keine
-      Auswahl aus zehn Ergebnissen. Ausgesucht sind sie nach dem, woran solche
-      Modelle scheitern: dünne Fortsätze, durchbrochene Wände,
-      Hinterschneidungen, feine Wiederholung.</p>
-      <ul class="schau">
-        <li><figure>
-          <img src="bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="Ein gotischer Wasserspeier auf einem Sockel, mit angelegten Flügeln, Krallen und aufgerissenem Maul">
-          <figcaption><b>Wasserspeier</b>Dünne Fortsätze und Hinterschneidungen</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="Eine achteckige Laterne mit durchbrochenen Filigranfeldern und einem Ring zum Aufhängen">
-          <figcaption><b>Laterne</b>Durchbrochene Wandung</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="Ein Drachenschädel mit geschwungenen Hörnern, Augenhöhlen und Zahnreihen">
-          <figcaption><b>Drachenschädel</b>Hohlräume und feine Zähne</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-hand.webp?v=77a6fab7" width="720" height="720" loading="lazy"
-               alt="Eine mechanische Roboterhand mit beweglichen Fingergliedern und sichtbaren Gelenken">
-          <figcaption><b>Roboterhand</b>Viele getrennte Glieder</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-knight.webp?v=a7bba326" width="720" height="720" loading="lazy"
-               alt="Ein Schachspringer als Figur: ein geschnitzter Pferdekopf auf rundem Sockel">
-          <figcaption><b>Schachspringer</b>Weiche Übergänge, klare Silhouette</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="Ein Industrieventil mit Handrad, verschraubten Flanschen und Rohranschlüssen">
-          <figcaption><b>Industrieventil</b>Runde Flächen und Wiederholung</figcaption>
-        </figure></li>
-      </ul>
-
-      <h2>Und dann fängt die Arbeit an</h2>
-      <p class="sub">Der Generator hat eine Form geliefert. Was daraus ein
-      druckbares Teil macht, sind drei Schritte in Solidon3D — jeder im
-      Verlauf, jeder mit einer Zahl, die sich später noch ändern lässt.</p>
-      <div class="weg">
-        <figure>
-          <img src="bilder/weg-1-erzeugt.webp?v=63d1b19b" width="720" height="720" loading="lazy"
-               alt="Der erzeugte Wasserspeier als geschlossener Körper, von schräg vorn">
-          <figcaption><b>Erzeugt und repariert.</b> Rund 20 Sekunden, danach
-          geschlossen und aus einem Stück. Auf 80 mm gebracht sind das
-          <b>44,7 cm³</b> Material — massiv gedruckt.</figcaption>
-        </figure>
-        <figure>
-          <img src="bilder/weg-2-schnitt.webp?v=ae4be5f7" width="720" height="720" loading="lazy"
-               alt="Derselbe Wasserspeier aufgeschnitten: eine gleichmäßig dünne Wand, innen hohl, die Schnittfläche farbig abgesetzt">
-          <figcaption><b>Ausgehöhlt, 2 mm Wand.</b> Übrig bleiben
-          <b>23,6 cm³</b> — <b>47 % weniger</b> Filament und entsprechend
-          weniger Druckzeit. Die Wandstärke kommt nicht aus dem Gefühl,
-          sondern gegen die Düse dieses Druckers.</figcaption>
-        </figure>
-      </div>
-      <p class="footnote">Danach folgt, was auf dieser Seite oben steht:
-      Prüfbericht, Überhänge, Inseln, Stützbedarf, beste Lage — und wenn es
-      nicht auf das Bett passt, teilen und verstiften. Erzeugen ist der
-      schnellste Teil der Arbeit. Der Rest ist der, der über das Ergebnis
-      entscheidet.</p>
+      <h2>Lokaler Chat: GPU und CPU sauber getrennt</h2>
+      <p class="footnote">Am 31.08.2026 traf <b>qwen3:14b</b> mit 106
+      Werkzeugen fünf von fünf vollständigen Probe-Anweisungen. Auf einer
+      NVIDIA RTX 4080 mit 16&nbsp;GB Grafikspeicher dauerten sie 11,8 bis
+      25,2 Sekunden, im Median 17 Sekunden. 19&nbsp;641 Prompt-Token wurden
+      kalt in 13,1 Sekunden und warm im Median in 2,3 Sekunden eingelesen;
+      das Modell lag vollständig im Grafikspeicher. <b>7,8 Token je Sekunde
+      und rund 42 Minuten gelten ausschließlich für den CPU-Rückfall.</b>
+      Die Anwendung weist aus, ob Ollama die GPU tatsächlich benutzt.</p>
     </div>
   </section>
 
@@ -261,7 +171,6 @@
     <a href="/funktionen.html">Funktionen</a> ·
     <a href="/#wege">Vier Wege</a> ·
     <a href="/handbuch.html">Handbuch</a> ·
-     ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
     <a href="/impressum.html">Impressum</a> ·
     <a href="/datenschutz.html">Datenschutz</a> ·
@@ -273,6 +182,6 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 </body>
 </html>

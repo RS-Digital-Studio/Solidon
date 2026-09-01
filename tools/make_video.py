@@ -652,10 +652,9 @@ def await_result(app: QApplication, session: object, seconds: float = 900.0) -> 
     **Fünfzehn Minuten und nicht eine**, seit dem 31.08.2026 — und die
     Begründung ist enger, als sie zuerst hier stand.
 
-    Belegt ist: Ein **generiertes** Modell kostet beim Öffnen rund eine
-    Minute, weil ``orient_for_print`` auf einem ungefilterten Netz von
-    hunderttausend Dreiecken rechnet (gemessen an ``weg3-eule-generiert.p3d``:
-    61,8 s). Sechzig Sekunden sind dafür genau an der Grenze, und was dann
+    Belegt ist: Ein dichtes importiertes Modell kann beim Öffnen rund eine
+    Minute kosten, wenn ``orient_for_print`` auf hunderttausend Dreiecken
+    rechnet. Sechzig Sekunden sind dafür genau an der Grenze, und was dann
     kommt, ist der Satz „Das Projekt rechnete nicht fertig" — er klingt nach
     Fehler und meint Langsamkeit.
 

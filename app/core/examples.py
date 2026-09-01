@@ -6,8 +6,10 @@ entstehen aus denselben Operationen wie alles andere, gebaut von
 :mod:`tools.make_examples`, und die Suite öffnet und rechnet jedes davon.
 
 Die ersten vier beantworten „wie fange ich an" — eines je Weg aus §2.2 —, die
-übrigen „was kann das eigentlich". Ihre Zahl steht in :data:`EXAMPLES` und
-sonst nirgends: eine zweite Stelle wäre nach dem nächsten Beispiel falsch.
+übrigen „was kann das eigentlich". Ihr UI-Katalog und ihre Zahl stehen in
+:data:`EXAMPLES`. Die rechtliche Positivliste ist davon absichtlich unabhängig
+in ``ASSET-RIGHTS.toml``, dessen Test und ``app/examples/LICENSE`` festgelegt:
+Ein neuer UI-Eintrag darf nicht zugleich eine ungeprüfte Rechtefreigabe sein.
 
 Eines je Weg aus §2.2:
 

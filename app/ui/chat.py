@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QFrame,
@@ -344,23 +344,6 @@ class ChatPanel(QWidget):
         self._progress_item: QListWidgetItem | None = None
         self._locked = False
         self.set_available(False)
-
-    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Vertrag
-        """Wünscht die Inhaltshöhe, obwohl der Rollbereich kleiner schätzt.
-
-        ``QScrollArea`` meldet unabhängig von seinem Inhalt eine pauschale
-        Wunschhöhe. Im gemeinsamen Reiter verkleinerte das auch den gerade
-        sichtbaren Prüfbericht: Eine gewählte Befundzeile füllte dort fast den
-        ganzen Listenbereich und sah wie eine zweite Akzentfläche aus. Der
-        Chat darf in einem kleinen Fenster weiterhin schrumpfen und rollen;
-        nur sein Wunsch für ausreichend großen Raum bleibt der echte Inhalt.
-        """
-        hint = super().sizeHint()
-        missing = max(
-            self.content_viewport.sizeHint().height() - self.content_scroll.sizeHint().height(),
-            0,
-        )
-        return QSize(hint.width(), hint.height() + missing)
 
     # --- state ------------------------------------------------------------------
 

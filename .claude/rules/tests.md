@@ -17,8 +17,8 @@ Regelwerks.
 | `test_core_isolation.py` | `core` ohne Qt importierbar |
 | `test_language_rules.py` | keine deutschen Stämme in Bezeichnern |
 | `test_registry_consistency.py` | jede Op vollständig, Kürzel eindeutig |
-| `test_corpus.py` | Kennzahlen je geometrieändernde Op gegen den Referenzkorpus |
-| `test_errors.py` | jeder nutzersichtbare `AppError` mit passender Handlung |
+| `test_corpus.py` | Kennzahlen je Op gegen den Referenzkorpus |
+| `test_errors.py` | jede Ausnahme mit Handlungsvorschlag |
 | `test_support.py` | die Rückmeldung geht raus — und nur am Knopf (§37.2) |
 | `test_licences.py` | Abhängigkeiten gegen die Freigabeliste |
 | `test_performance.py` | Budget §31, Regressionsschwelle 25 % |

@@ -1,85 +1,81 @@
 # Drittanbieter-Lizenzen
 
-Diese Beilage enthält die Lizenz- und Hinweistexte der Python- und
-nativen Laufzeitbestandteile, die mit Solidon ausgeliefert werden.
-Sie wird deterministisch mit `python tools/make_licence_notices.py`
-aus den eingecheckten Originaltexten erzeugt.
+Erzeugt für Solidon3D 0.3.0 auf `win-amd64`.
+Quelle sind die Lizenzdateien der tatsächlich installierten Ziel-Wheels
+und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 
-| Paket | Version | Lizenz |
-|---|---|---|
-| attrs | 26.1.0 | MIT |
-| cadquery-ocp-novtk | 7.9.3.1.1 | Apache-2.0 AND LGPL-2.1-only WITH OCCT-exception-1.0 |
-| cadquery-ocp-proxy | 7.9.3.1.1 | Apache-2.0 |
-| certifi | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) |
-| cffi | 2.1.1 | MIT |
-| charset-normalizer | 3.5.1 | MIT |
-| contourpy | 1.3.3 | BSD License |
-| cryptography | 50.0.1 | Apache-2.0 OR BSD-3-Clause |
-| cycler | 0.12.1 | BSD License |
-| cyclopts | 4.23.2 | Apache-2.0 |
-| docstring_parser | 0.18.0 | MIT License |
-| fast_simplification | 0.2.0 | MIT |
-| fonttools | 4.63.0 | MIT |
-| idna | 3.19 | BSD-3-Clause |
-| ImageIO | 2.37.4 | BSD-2-Clause |
-| jaraco.classes | 3.4.0 | MIT License |
-| jaraco.context | 6.1.2 | MIT |
-| jaraco.functools | 4.6.0 | MIT |
-| jeepney | 0.9.0 | MIT |
-| keyring | 25.7.0 | MIT |
-| kiwisolver | 1.5.0 | BSD License |
-| lazy-loader | 0.5 | BSD-3-Clause |
-| lxml | 6.1.2 | BSD-3-Clause |
-| manifold3d | 3.5.2 | Apache Software License |
-| markdown-it-py | 4.2.0 | MIT License |
-| matplotlib | 3.11.1 | Python Software Foundation License |
-| mdurl | 0.1.2 | MIT License |
-| more-itertools | 11.1.0 | MIT |
-| networkx | 3.6.1 | BSD-3-Clause |
-| numpy | 2.5.2 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 |
-| packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
-| pillow | 12.3.0 | MIT-CMU |
-| platformdirs | 4.11.4 | MIT |
-| pooch | 1.9.0 | BSD-3-Clause |
-| pycparser | 3.0 | BSD-3-Clause |
-| Pygments | 2.21.0 | BSD-2-Clause |
-| pyparsing | 3.3.2 | MIT |
-| PySide6 | 6.11.2 | LGPL-3.0-only |
-| PySide6_Addons | 6.11.2 | LGPL-3.0-only |
-| PySide6_Essentials | 6.11.2 | LGPL-3.0-only |
-| python-dateutil | 2.9.0.post0 | BSD License, Apache Software License |
-| pyvista | 0.48.4 | MIT |
-| pyvistaqt | 0.12.0 | MIT License |
-| pywin32-ctypes | 0.2.3 | BSD-3-Clause |
-| QtPy | 2.4.3 | MIT License |
-| requests | 2.34.2 | Apache Software License |
-| rich | 15.0.0 | MIT License |
-| rich-rst | 2.1.0 | MIT |
-| scikit-image | 0.26.0 | BSD License |
-| scipy | 1.18.1 | BSD License |
-| scooby | 0.11.2 | MIT |
-| SecretStorage | 3.5.0 | BSD-3-Clause |
-| shapely | 2.1.2 | BSD License |
-| shiboken6 | 6.11.2 | LGPL-3.0-only |
-| six | 1.17.0 | MIT License |
-| svg.path | 7.1 | MIT License |
-| tifffile | 2026.8.23 | BSD-3-Clause |
-| trimesh | 5.0.0 | MIT License |
-| typing_extensions | 4.16.0 | PSF-2.0 |
-| urllib3 | 2.7.0 | MIT |
-| vhacdx | 0.0.10 | BSD-3-Clause |
-| vtk | 9.6.2 | BSD License |
-| xxhash | 4.0.1 | BSD-2-Clause |
+| Paket | Version | SPDX-Ausdruck | Quelle |
+|---|---:|---|---|
+| attrs | 26.1.0 | `MIT` | [Quelltext](https://www.attrs.org/) |
+| cadquery-ocp-novtk | 7.9.3.1.1 | `Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE) |
+| cadquery-ocp-proxy | 7.9.3.1.1 | `Apache-2.0` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE) |
+| certifi | 2026.7.22 | `MPL-2.0` | [Quelltext](https://github.com/certifi/python-certifi) |
+| charset-normalizer | 3.5.1 | `MIT` | [Quelltext](https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md) |
+| contourpy | 1.3.3 | `BSD-3-Clause` | [Quelltext](https://github.com/contourpy/contourpy) |
+| cycler | 0.12.1 | `BSD-3-Clause` | [Quelltext](https://github.com/matplotlib/cycler) |
+| cyclopts | 4.23.2 | `Apache-2.0` | [Quelltext](https://github.com/BrianPugh/cyclopts) |
+| docstring_parser | 0.18.0 | `MIT` | [Quelltext](https://github.com/rr-/docstring_parser) |
+| fast_simplification | 0.2.0 | `MIT` | [Quelltext](https://github.com/pyvista/fast-simplification) |
+| fonttools | 4.63.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
+| idna | 3.19 | `BSD-3-Clause` | [Quelltext](https://github.com/kjd/idna) |
+| ImageIO | 2.37.4 | `BSD-2-Clause` | [Quelltext](https://github.com/imageio/imageio) |
+| jaraco.classes | 3.4.0 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.classes) |
+| jaraco.context | 6.1.2 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.context) |
+| jaraco.functools | 4.6.0 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.functools) |
+| keyring | 25.7.0 | `MIT` | [Quelltext](https://github.com/jaraco/keyring) |
+| kiwisolver | 1.5.0 | `BSD-3-Clause` | [Quelltext](https://github.com/nucleic/kiwi) |
+| lazy-loader | 0.5 | `BSD-3-Clause` | [Quelltext](https://github.com/scientific-python/lazy-loader) |
+| lxml | 6.1.2 | `BSD-3-Clause` | [Quelltext](https://github.com/lxml/lxml) |
+| manifold3d | 3.5.2 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
+| markdown-it-py | 4.2.0 | `MIT` | [Quelltext](https://github.com/executablebooks/markdown-it-py) |
+| matplotlib | 3.11.1 | `LicenseRef-Matplotlib` | [Quelltext](https://matplotlib.org) |
+| mdurl | 0.1.2 | `MIT` | [Quelltext](https://github.com/executablebooks/mdurl) |
+| more-itertools | 11.1.0 | `MIT` | [Quelltext](https://github.com/more-itertools/more-itertools) |
+| networkx | 3.6.1 | `BSD-3-Clause` | [Quelltext](https://networkx.org/) |
+| numpy | 2.5.2 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [Quelltext](https://github.com/numpy/numpy) |
+| packaging | 26.3 | `Apache-2.0 OR BSD-2-Clause` | [Quelltext](https://github.com/pypa/packaging) |
+| pillow | 12.3.0 | `MIT-CMU` | [Quelltext](https://github.com/python-pillow/Pillow) |
+| platformdirs | 4.11.4 | `MIT` | [Quelltext](https://github.com/tox-dev/platformdirs) |
+| pooch | 1.9.0 | `BSD-3-Clause` | [Quelltext](https://www.fatiando.org/pooch) |
+| Pygments | 2.21.0 | `BSD-2-Clause` | [Quelltext](https://github.com/pygments/pygments) |
+| pyparsing | 3.3.2 | `MIT` | [Quelltext](https://github.com/pyparsing/pyparsing.git) |
+| PySide6 | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
+| PySide6_Addons | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
+| PySide6_Essentials | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
+| python-dateutil | 2.9.0.post0 | `BSD-3-Clause OR Apache-2.0` | [Quelltext](https://github.com/dateutil/dateutil) |
+| pyvista | 0.48.4 | `MIT` | [Quelltext](https://github.com/pyvista/pyvista) |
+| pyvistaqt | 0.12.0 | `MIT` | [Quelltext](https://github.com/pyvista/pyvistaqt) |
+| pywin32-ctypes | 0.2.3 | `BSD-3-Clause` | [Quelltext](https://github.com/enthought/pywin32-ctypes) |
+| QtPy | 2.4.3 | `MIT` | [Quelltext](https://github.com/spyder-ide/qtpy) |
+| requests | 2.34.2 | `Apache-2.0` | [Quelltext](https://github.com/psf/requests) |
+| rich | 15.0.0 | `MIT` | [Quelltext](https://github.com/Textualize/rich) |
+| rich-rst | 2.1.0 | `MIT` | [Quelltext](https://github.com/wasi-master/rich-rst) |
+| scikit-image | 0.26.0 | `BSD-3-Clause` | [Quelltext](https://github.com/scikit-image/scikit-image) |
+| scipy | 1.18.1 | `BSD-3-Clause AND BSD-3-Clause-Open-MPI AND (GPL-3.0-or-later WITH GCC-exception-3.1)` | [Quelltext](https://github.com/scipy/scipy) |
+| scooby | 0.11.2 | `MIT` | [Quelltext](https://github.com/banesullivan/scooby) |
+| shapely | 2.1.2 | `BSD-3-Clause AND LGPL-2.1-or-later` | [Quelltext](https://github.com/shapely/shapely) |
+| shiboken6 | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
+| six | 1.17.0 | `MIT` | [Quelltext](https://github.com/benjaminp/six) |
+| svg.path | 7.1 | `MIT` | [Quelltext](https://github.com/regebro/svg.path) |
+| tifffile | 2026.8.23 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
+| trimesh | 5.0.0 | `MIT` | [Quelltext](https://github.com/mikedh/trimesh) |
+| typing_extensions | 4.16.0 | `PSF-2.0` | [Quelltext](https://github.com/python/typing_extensions) |
+| urllib3 | 2.7.0 | `MIT` | [Quelltext](https://github.com/urllib3/urllib3/blob/main/CHANGES.rst) |
+| vhacdx | 0.0.10 | `BSD-3-Clause` | [Quelltext](https://github.com/trimesh/vhacdx) |
+| vtk | 9.6.2 | `BSD-3-Clause` | [Quelltext](https://vtk.org) |
+| xxhash | 4.0.1 | `BSD-2-Clause` | [Quelltext](https://github.com/ifduyue/python-xxhash) |
 
----
+## Vollständige Hinweise und Lizenztexte
 
-## attrs 26.1.0
+### attrs 26.1.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### attrs-26.1.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `attrs/licenses__LICENSE` · SHA-256: `882115c95dfc2af1eeb6714f8ec6d5cbcabf667caff8729f42420da63f714e9f`
+Quelle: wheel:attrs-26.1.0.dist-info/licenses/LICENSE
+
+SHA-256: `882115c95dfc2af1eeb6714f8ec6d5cbcabf667caff8729f42420da63f714e9f`
 
 ```text
 The MIT License (MIT)
@@ -105,44 +101,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## cadquery-ocp-novtk 7.9.3.1.1
+### cadquery-ocp-novtk 7.9.3.1.1
 
-Lizenz: Apache-2.0 AND LGPL-2.1-only WITH OCCT-exception-1.0
+SPDX-Ausdruck: `Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)`
 
-### SOLIDON-LGPL-NOTICE.txt
+#### OCP-Apache-2.0.txt
 
-Quelle im Paketdatensatz: `common/SOLIDON-LGPL-NOTICE.txt` · SHA-256: `711cf5713160f26cfaf81e1f4794f284372d4431a2c72027531607f4cccfbe94`
+Quelle: https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE
 
-```text
-Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
-
-Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
-Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
-Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
-weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
-eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
-Zweck erforderliche Rückentwicklung.
-
-Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
-CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
-Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
-Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
-
-RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
-Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
-LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
-Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
-Person, die dieses Paket erhält, bis mindestens 1. September 2029.
-
-Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.
-```
-
-### Apache-2.0.txt
-
-Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`
+SHA-256: `a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd`
 
 ```text
-
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -331,7 +300,7 @@ Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright 2020 OCP contributors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -346,16 +315,37 @@ Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31
    limitations under the License.
 ```
 
-### LGPL-2.1.txt
+#### OCCT-exception-1.0.txt
 
-Quelle im Paketdatensatz: `common/LGPL-2.1.txt` · SHA-256: `aadc43ac29e3385e70cf70e54432790f47e9527d7a190fd90275b9860d768cb9`
+Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/OCCT_LGPL_EXCEPTION.txt
+
+SHA-256: `04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b`
 
 ```text
-                  GNU LESSER GENERAL PUBLIC LICENSE
-                       Version 2.1, February 1999
+Open CASCADE exception (version 1.0) to GNU LGPL version 2.1.
+
+The object code (i.e. not a source) form of a "work that uses the Library"
+can incorporate material from a header file that is part of the Library.
+As a special exception to the GNU Lesser General Public License version 2.1,
+you may distribute such object code incorporating material from header files
+provided with the Open CASCADE Technology libraries (including code of CDL
+generic classes) under terms of your choice, provided that you give
+prominent notice in supporting documentation to this code that it makes use
+of or is based on facilities provided by the Open CASCADE Technology software.
+```
+
+#### OCCT-LGPL-2.1.txt
+
+Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/LICENSE_LGPL_21.txt
+
+SHA-256: `4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987`
+
+```text
+		  GNU LESSER GENERAL PUBLIC LICENSE
+		       Version 2.1, February 1999
 
  Copyright (C) 1991, 1999 Free Software Foundation, Inc.
- <https://fsf.org/>
+ 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  Everyone is permitted to copy and distribute verbatim copies
  of this license document, but changing it is not allowed.
 
@@ -363,7 +353,7 @@ Quelle im Paketdatensatz: `common/LGPL-2.1.txt` · SHA-256: `aadc43ac29e3385e70c
  as the successor of the GNU Library Public License, version 2, hence
  the version number 2.1.]
 
-                            Preamble
+			    Preamble
 
   The licenses for most software are designed to take away your
 freedom to share and change it.  By contrast, the GNU General Public
@@ -408,7 +398,6 @@ modified by someone else and passed on, the recipients should know
 that what they have is not the original version, so that the original
 author's reputation will not be affected by problems that might be
 introduced by others.
-
 
   Finally, software patents pose a constant threat to the existence of
 any free program.  We wish to make sure that a company cannot
@@ -466,8 +455,7 @@ modification follow.  Pay close attention to the difference between a
 former contains code derived from the library, whereas the latter must
 be combined with the library in order to run.
 
-
-                  GNU LESSER GENERAL PUBLIC LICENSE
+		  GNU LESSER GENERAL PUBLIC LICENSE
    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
   0. This License Agreement applies to any software library or other
@@ -513,7 +501,6 @@ Library.
   You may charge a fee for the physical act of transferring a copy,
 and you may at your option offer warranty protection in exchange for a
 fee.
-
 
   2. You may modify your copy or copies of the Library or any portion
 of it, thus forming a work based on the Library, and copy and
@@ -573,7 +560,6 @@ ordinary GNU General Public License has appeared, then you can specify
 that version instead if you wish.)  Do not make any other change in
 these notices.
 
-
   Once this change is made in a given copy, it is irreversible for
 that copy, so the ordinary GNU General Public License applies to all
 subsequent copies and derivative works made from that copy.
@@ -624,7 +610,6 @@ Library will still fall under Section 6.)
 distribute the object code for the work under the terms of Section 6.
 Any executables containing that work also fall under Section 6,
 whether or not they are linked directly with the Library itself.
-
 
   6. As an exception to the Sections above, you may also combine or
 link a "work that uses the Library" with the Library to produce a
@@ -688,7 +673,6 @@ accompany the operating system.  Such a contradiction means you cannot
 use both them and the Library together in an executable that you
 distribute.
 
-
   7. You may place library facilities that are a work based on the
 Library side-by-side in a single library together with other library
 facilities not covered by this License, and distribute such a combined
@@ -729,7 +713,6 @@ subject to these terms and conditions.  You may not impose any further
 restrictions on the recipients' exercise of the rights granted herein.
 You are not responsible for enforcing compliance by third parties with
 this License.
-
 
   11. If, as a consequence of a court judgment or allegation of patent
 infringement or for any other reason (not limited to patent issues),
@@ -783,7 +766,6 @@ the Free Software Foundation.  If the Library does not specify a
 license version number, you may choose any version ever published by
 the Free Software Foundation.
 
-
   14. If you wish to incorporate parts of the Library into other free
 programs whose distribution conditions are incompatible with these,
 write to the author to ask for permission.  For software which is
@@ -793,7 +775,7 @@ decision will be guided by the two goals of preserving the free status
 of all derivatives of our free software and of promoting the sharing
 and reuse of software generally.
 
-                            NO WARRANTY
+			    NO WARRANTY
 
   15. BECAUSE THE LIBRARY IS LICENSED FREE OF CHARGE, THERE IS NO
 WARRANTY FOR THE LIBRARY, TO THE EXTENT PERMITTED BY APPLICABLE LAW.
@@ -816,8 +798,7 @@ FAILURE OF THE LIBRARY TO OPERATE WITH ANY OTHER SOFTWARE), EVEN IF
 SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGES.
 
-                     END OF TERMS AND CONDITIONS
-
+		     END OF TERMS AND CONDITIONS
 
            How to Apply These Terms to Your New Libraries
 
@@ -846,7 +827,8 @@ convey the exclusion of warranty; and each file should have at least the
     Lesser General Public License for more details.
 
     You should have received a copy of the GNU Lesser General Public
-    License along with this library; if not, see <https://www.gnu.org/licenses/>.
+    License along with this library; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 Also add information on how to contact you by electronic and paper mail.
 
@@ -857,39 +839,23 @@ necessary.  Here is a sample; alter the names:
   Yoyodyne, Inc., hereby disclaims all copyright interest in the
   library `Frob' (a library for tweaking knobs) written by James Random Hacker.
 
-  <signature of Moe Ghoul>, 1 April 1990
-  Moe Ghoul, President of Vice
+  <signature of Ty Coon>, 1 April 1990
+  Ty Coon, President of Vice
 
 That's all there is to it!
 ```
 
-### OCCT_LGPL_EXCEPTION.txt
+### cadquery-ocp-proxy 7.9.3.1.1
 
-Quelle im Paketdatensatz: `common/OCCT_LGPL_EXCEPTION.txt` · SHA-256: `04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b`
+SPDX-Ausdruck: `Apache-2.0`
 
-```text
-Open CASCADE exception (version 1.0) to GNU LGPL version 2.1.
+#### OCP-Apache-2.0.txt
 
-The object code (i.e. not a source) form of a "work that uses the Library"
-can incorporate material from a header file that is part of the Library.
-As a special exception to the GNU Lesser General Public License version 2.1,
-you may distribute such object code incorporating material from header files
-provided with the Open CASCADE Technology libraries (including code of CDL
-generic classes) under terms of your choice, provided that you give
-prominent notice in supporting documentation to this code that it makes use
-of or is based on facilities provided by the Open CASCADE Technology software.
-```
+Quelle: https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE
 
-## cadquery-ocp-proxy 7.9.3.1.1
-
-Lizenz: Apache-2.0
-
-### Apache-2.0.txt
-
-Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`
+SHA-256: `a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd`
 
 ```text
-
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -1078,7 +1044,7 @@ Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright [yyyy] [name of copyright owner]
+   Copyright 2020 OCP contributors
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -1093,13 +1059,15 @@ Quelle im Paketdatensatz: `common/Apache-2.0.txt` · SHA-256: `cfc7749b96f63bd31
    limitations under the License.
 ```
 
-## certifi 2026.7.22
+### certifi 2026.7.22
 
-Lizenz: Mozilla Public License 2.0 (MPL 2.0)
+SPDX-Ausdruck: `MPL-2.0`
 
-### licenses__LICENSE
+#### certifi-2026.7.22.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `certifi/licenses__LICENSE` · SHA-256: `e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7`
+Quelle: wheel:certifi-2026.7.22.dist-info/licenses/LICENSE
+
+SHA-256: `e93716da6b9c0d5a4a1df60fe695b370f0695603d21f6f83f053e42cfc10caf7`
 
 ```text
 This package contains a modified version of ca-bundle.crt:
@@ -1124,46 +1092,15 @@ one at http://mozilla.org/MPL/2.0/.
 @(#) $RCSfile: certdata.txt,v $ $Revision: 1.80 $ $Date: 2011/11/03 15:11:58 $
 ```
 
-## cffi 2.1.1
+### charset-normalizer 3.5.1
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### charset_normalizer-3.5.1.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `cffi/licenses__LICENSE` · SHA-256: `ebb618637439262c8f3afd1837f7c69a2d13a69033caaf0e5cf534b260eed804`
+Quelle: wheel:charset_normalizer-3.5.1.dist-info/licenses/LICENSE
 
-```text
-
-Except when otherwise stated (look for LICENSE files in directories or
-information at the beginning of each file) all software and
-documentation is licensed as follows:
-
-    MIT No Attribution
-
-    Permission is hereby granted, free of charge, to any person
-    obtaining a copy of this software and associated documentation
-    files (the "Software"), to deal in the Software without
-    restriction, including without limitation the rights to use,
-    copy, modify, merge, publish, distribute, sublicense, and/or
-    sell copies of the Software, and to permit persons to whom the
-    Software is furnished to do so.
-
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-    DEALINGS IN THE SOFTWARE.
-```
-
-## charset-normalizer 3.5.1
-
-Lizenz: MIT
-
-### licenses__LICENSE
-
-Quelle im Paketdatensatz: `charset-normalizer/licenses__LICENSE` · SHA-256: `6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887`
+SHA-256: `6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887`
 
 ```text
 MIT License
@@ -1189,13 +1126,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## contourpy 1.3.3
+### contourpy 1.3.3
 
-Lizenz: BSD License
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### LICENSE
+#### contourpy-1.3.3.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `contourpy/LICENSE` · SHA-256: `34170979fc64f4f5e6dfa66ef27dec314ffffc5852000c60f4836ec1dfbf156e`
+Quelle: wheel:contourpy-1.3.3.dist-info/LICENSE
+
+SHA-256: `34170979fc64f4f5e6dfa66ef27dec314ffffc5852000c60f4836ec1dfbf156e`
 
 ```text
 BSD 3-Clause License
@@ -1229,270 +1168,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## cryptography 50.0.1
+### cycler 0.12.1
 
-Lizenz: Apache-2.0 OR BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE
+#### cycler-0.12.1.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `cryptography/licenses__LICENSE` · SHA-256: `3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb`
+Quelle: wheel:cycler-0.12.1.dist-info/LICENSE
 
-```text
-This software is made available under the terms of *either* of the licenses
-found in LICENSE.APACHE or LICENSE.BSD. Contributions to cryptography are made
-under the terms of *both* these licenses.
-```
-
-### licenses__LICENSE.APACHE
-
-Quelle im Paketdatensatz: `cryptography/licenses__LICENSE.APACHE` · SHA-256: `aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe`
-
-```text
-
-                                 Apache License
-                           Version 2.0, January 2004
-                        https://www.apache.org/licenses/
-
-   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
-
-   1. Definitions.
-
-      "License" shall mean the terms and conditions for use, reproduction,
-      and distribution as defined by Sections 1 through 9 of this document.
-
-      "Licensor" shall mean the copyright owner or entity authorized by
-      the copyright owner that is granting the License.
-
-      "Legal Entity" shall mean the union of the acting entity and all
-      other entities that control, are controlled by, or are under common
-      control with that entity. For the purposes of this definition,
-      "control" means (i) the power, direct or indirect, to cause the
-      direction or management of such entity, whether by contract or
-      otherwise, or (ii) ownership of fifty percent (50%) or more of the
-      outstanding shares, or (iii) beneficial ownership of such entity.
-
-      "You" (or "Your") shall mean an individual or Legal Entity
-      exercising permissions granted by this License.
-
-      "Source" form shall mean the preferred form for making modifications,
-      including but not limited to software source code, documentation
-      source, and configuration files.
-
-      "Object" form shall mean any form resulting from mechanical
-      transformation or translation of a Source form, including but
-      not limited to compiled object code, generated documentation,
-      and conversions to other media types.
-
-      "Work" shall mean the work of authorship, whether in Source or
-      Object form, made available under the License, as indicated by a
-      copyright notice that is included in or attached to the work
-      (an example is provided in the Appendix below).
-
-      "Derivative Works" shall mean any work, whether in Source or Object
-      form, that is based on (or derived from) the Work and for which the
-      editorial revisions, annotations, elaborations, or other modifications
-      represent, as a whole, an original work of authorship. For the purposes
-      of this License, Derivative Works shall not include works that remain
-      separable from, or merely link (or bind by name) to the interfaces of,
-      the Work and Derivative Works thereof.
-
-      "Contribution" shall mean any work of authorship, including
-      the original version of the Work and any modifications or additions
-      to that Work or Derivative Works thereof, that is intentionally
-      submitted to Licensor for inclusion in the Work by the copyright owner
-      or by an individual or Legal Entity authorized to submit on behalf of
-      the copyright owner. For the purposes of this definition, "submitted"
-      means any form of electronic, verbal, or written communication sent
-      to the Licensor or its representatives, including but not limited to
-      communication on electronic mailing lists, source code control systems,
-      and issue tracking systems that are managed by, or on behalf of, the
-      Licensor for the purpose of discussing and improving the Work, but
-      excluding communication that is conspicuously marked or otherwise
-      designated in writing by the copyright owner as "Not a Contribution."
-
-      "Contributor" shall mean Licensor and any individual or Legal Entity
-      on behalf of whom a Contribution has been received by Licensor and
-      subsequently incorporated within the Work.
-
-   2. Grant of Copyright License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      copyright license to reproduce, prepare Derivative Works of,
-      publicly display, publicly perform, sublicense, and distribute the
-      Work and such Derivative Works in Source or Object form.
-
-   3. Grant of Patent License. Subject to the terms and conditions of
-      this License, each Contributor hereby grants to You a perpetual,
-      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-      (except as stated in this section) patent license to make, have made,
-      use, offer to sell, sell, import, and otherwise transfer the Work,
-      where such license applies only to those patent claims licensable
-      by such Contributor that are necessarily infringed by their
-      Contribution(s) alone or by combination of their Contribution(s)
-      with the Work to which such Contribution(s) was submitted. If You
-      institute patent litigation against any entity (including a
-      cross-claim or counterclaim in a lawsuit) alleging that the Work
-      or a Contribution incorporated within the Work constitutes direct
-      or contributory patent infringement, then any patent licenses
-      granted to You under this License for that Work shall terminate
-      as of the date such litigation is filed.
-
-   4. Redistribution. You may reproduce and distribute copies of the
-      Work or Derivative Works thereof in any medium, with or without
-      modifications, and in Source or Object form, provided that You
-      meet the following conditions:
-
-      (a) You must give any other recipients of the Work or
-          Derivative Works a copy of this License; and
-
-      (b) You must cause any modified files to carry prominent notices
-          stating that You changed the files; and
-
-      (c) You must retain, in the Source form of any Derivative Works
-          that You distribute, all copyright, patent, trademark, and
-          attribution notices from the Source form of the Work,
-          excluding those notices that do not pertain to any part of
-          the Derivative Works; and
-
-      (d) If the Work includes a "NOTICE" text file as part of its
-          distribution, then any Derivative Works that You distribute must
-          include a readable copy of the attribution notices contained
-          within such NOTICE file, excluding those notices that do not
-          pertain to any part of the Derivative Works, in at least one
-          of the following places: within a NOTICE text file distributed
-          as part of the Derivative Works; within the Source form or
-          documentation, if provided along with the Derivative Works; or,
-          within a display generated by the Derivative Works, if and
-          wherever such third-party notices normally appear. The contents
-          of the NOTICE file are for informational purposes only and
-          do not modify the License. You may add Your own attribution
-          notices within Derivative Works that You distribute, alongside
-          or as an addendum to the NOTICE text from the Work, provided
-          that such additional attribution notices cannot be construed
-          as modifying the License.
-
-      You may add Your own copyright statement to Your modifications and
-      may provide additional or different license terms and conditions
-      for use, reproduction, or distribution of Your modifications, or
-      for any such Derivative Works as a whole, provided Your use,
-      reproduction, and distribution of the Work otherwise complies with
-      the conditions stated in this License.
-
-   5. Submission of Contributions. Unless You explicitly state otherwise,
-      any Contribution intentionally submitted for inclusion in the Work
-      by You to the Licensor shall be under the terms and conditions of
-      this License, without any additional terms or conditions.
-      Notwithstanding the above, nothing herein shall supersede or modify
-      the terms of any separate license agreement you may have executed
-      with Licensor regarding such Contributions.
-
-   6. Trademarks. This License does not grant permission to use the trade
-      names, trademarks, service marks, or product names of the Licensor,
-      except as required for reasonable and customary use in describing the
-      origin of the Work and reproducing the content of the NOTICE file.
-
-   7. Disclaimer of Warranty. Unless required by applicable law or
-      agreed to in writing, Licensor provides the Work (and each
-      Contributor provides its Contributions) on an "AS IS" BASIS,
-      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-      implied, including, without limitation, any warranties or conditions
-      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-      PARTICULAR PURPOSE. You are solely responsible for determining the
-      appropriateness of using or redistributing the Work and assume any
-      risks associated with Your exercise of permissions under this License.
-
-   8. Limitation of Liability. In no event and under no legal theory,
-      whether in tort (including negligence), contract, or otherwise,
-      unless required by applicable law (such as deliberate and grossly
-      negligent acts) or agreed to in writing, shall any Contributor be
-      liable to You for damages, including any direct, indirect, special,
-      incidental, or consequential damages of any character arising as a
-      result of this License or out of the use or inability to use the
-      Work (including but not limited to damages for loss of goodwill,
-      work stoppage, computer failure or malfunction, or any and all
-      other commercial damages or losses), even if such Contributor
-      has been advised of the possibility of such damages.
-
-   9. Accepting Warranty or Additional Liability. While redistributing
-      the Work or Derivative Works thereof, You may choose to offer,
-      and charge a fee for, acceptance of support, warranty, indemnity,
-      or other liability obligations and/or rights consistent with this
-      License. However, in accepting such obligations, You may act only
-      on Your own behalf and on Your sole responsibility, not on behalf
-      of any other Contributor, and only if You agree to indemnify,
-      defend, and hold each Contributor harmless for any liability
-      incurred by, or claims asserted against, such Contributor by reason
-      of your accepting any such warranty or additional liability.
-
-   END OF TERMS AND CONDITIONS
-
-   APPENDIX: How to apply the Apache License to your work.
-
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
-
-   Copyright [yyyy] [name of copyright owner]
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-       https://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-```
-
-### licenses__LICENSE.BSD
-
-Quelle im Paketdatensatz: `cryptography/licenses__LICENSE.BSD` · SHA-256: `602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb`
-
-```text
-Copyright (c) Individual contributors.
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    3. Neither the name of PyCA Cryptography nor the names of its contributors
-       may be used to endorse or promote products derived from this software
-       without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
-ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-## cycler 0.12.1
-
-Lizenz: BSD License
-
-### LICENSE
-
-Quelle im Paketdatensatz: `cycler/LICENSE` · SHA-256: `7eec27ee66da53ba5912cb00b3521ac4428834bb37d0691080bf5d543b0cbb31`
+SHA-256: `7eec27ee66da53ba5912cb00b3521ac4428834bb37d0691080bf5d543b0cbb31`
 
 ```text
 Copyright (c) 2015, matplotlib project
@@ -1524,13 +1208,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## cyclopts 4.23.2
+### cyclopts 4.23.2
 
-Lizenz: Apache-2.0
+SPDX-Ausdruck: `Apache-2.0`
 
-### licenses__LICENSE
+#### cyclopts-4.23.2.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `cyclopts/licenses__LICENSE` · SHA-256: `f14b20048c12393cb9920065c47fadc030210b0f9cab9849ce0a68a063ededc5`
+Quelle: wheel:cyclopts-4.23.2.dist-info/licenses/LICENSE
+
+SHA-256: `f14b20048c12393cb9920065c47fadc030210b0f9cab9849ce0a68a063ededc5`
 
 ```text
                                  Apache License
@@ -1736,13 +1422,15 @@ Quelle im Paketdatensatz: `cyclopts/licenses__LICENSE` · SHA-256: `f14b20048c12
    limitations under the License.
 ```
 
-## docstring_parser 0.18.0
+### docstring_parser 0.18.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE.md
+#### docstring_parser-0.18.0.dist-info/licenses/LICENSE.md
 
-Quelle im Paketdatensatz: `docstring-parser/licenses__LICENSE.md` · SHA-256: `dfe514a337ae8417abd31a8af707bbd6172b03e5430bb083e145899ea97a3eea`
+Quelle: wheel:docstring_parser-0.18.0.dist-info/licenses/LICENSE.md
+
+SHA-256: `dfe514a337ae8417abd31a8af707bbd6172b03e5430bb083e145899ea97a3eea`
 
 ```text
 The MIT License (MIT)
@@ -1768,13 +1456,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## fast_simplification 0.2.0
+### fast_simplification 0.2.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### fast_simplification-0.2.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `fast-simplification/licenses__LICENSE` · SHA-256: `8585978ddf4e1ce39a5bfe67f525dc0aa0008c107fe2c6de4d03ab739ecd5a84`
+Quelle: wheel:fast_simplification-0.2.0.dist-info/licenses/LICENSE
+
+SHA-256: `8585978ddf4e1ce39a5bfe67f525dc0aa0008c107fe2c6de4d03ab739ecd5a84`
 
 ```text
 The MIT License
@@ -1800,13 +1490,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## fonttools 4.63.0
+### fonttools 4.63.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### fonttools-4.63.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `fonttools/licenses__LICENSE` · SHA-256: `6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383`
+Quelle: wheel:fonttools-4.63.0.dist-info/licenses/LICENSE
+
+SHA-256: `6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383`
 
 ```text
 MIT License
@@ -1832,9 +1524,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### licenses__LICENSE.external
+#### fonttools-4.63.0.dist-info/licenses/LICENSE.external
 
-Quelle im Paketdatensatz: `fonttools/licenses__LICENSE.external` · SHA-256: `94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69`
+Quelle: wheel:fonttools-4.63.0.dist-info/licenses/LICENSE.external
+
+SHA-256: `94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69`
 
 ```text
 FontTools includes the following font projects for testing purposes, which are
@@ -2227,13 +1921,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## idna 3.19
+### idna 3.19
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE.md
+#### idna-3.19.dist-info/licenses/LICENSE.md
 
-Quelle im Paketdatensatz: `idna/licenses__LICENSE.md` · SHA-256: `1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04`
+Quelle: wheel:idna-3.19.dist-info/licenses/LICENSE.md
+
+SHA-256: `1a9a4f0e3d479a27240ddd59a9137a66ab4a0f9dfdc8ca6188cc0bfd85187f04`
 
 ```text
 BSD 3-Clause License
@@ -2269,13 +1965,15 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## ImageIO 2.37.4
+### ImageIO 2.37.4
 
-Lizenz: BSD-2-Clause
+SPDX-Ausdruck: `BSD-2-Clause`
 
-### licenses__LICENSE
+#### imageio-2.37.4.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `imageio/licenses__LICENSE` · SHA-256: `246aae8eea14923e415b2f0eed0fbf1e70451feb48592b5683851c71df1e05b0`
+Quelle: wheel:imageio-2.37.4.dist-info/licenses/LICENSE
+
+SHA-256: `246aae8eea14923e415b2f0eed0fbf1e70451feb48592b5683851c71df1e05b0`
 
 ```text
 Copyright (c) 2014-2026, imageio developers
@@ -2303,13 +2001,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## jaraco.classes 3.4.0
+### jaraco.classes 3.4.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### LICENSE
+#### jaraco.classes-3.4.0.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `jaraco-classes/LICENSE` · SHA-256: `86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741`
+Quelle: wheel:jaraco.classes-3.4.0.dist-info/LICENSE
+
+SHA-256: `86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741`
 
 ```text
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -2331,42 +2031,15 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 ```
 
-## jaraco.context 6.1.2
+### jaraco.context 6.1.2
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### jaraco_context-6.1.2.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `jaraco-context/licenses__LICENSE` · SHA-256: `9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683`
+Quelle: wheel:jaraco_context-6.1.2.dist-info/licenses/LICENSE
 
-```text
-MIT License
-
-Copyright (c) 2026 <copyright holders>
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-associated documentation files (the "Software"), to deal in the Software without restriction, including
-without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
-following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial
-portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
-LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
-EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
-
-## jaraco.functools 4.6.0
-
-Lizenz: MIT
-
-### licenses__LICENSE
-
-Quelle im Paketdatensatz: `jaraco-functools/licenses__LICENSE` · SHA-256: `9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683`
+SHA-256: `9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683`
 
 ```text
 MIT License
@@ -2389,45 +2062,46 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## jeepney 0.9.0
+### jaraco.functools 4.6.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### jaraco_functools-4.6.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `jeepney/licenses__LICENSE` · SHA-256: `1b22b049b5267d6dfc23a67bf4a84d8ec04b9fdfb1a51d360e42b4342c8b4154`
+Quelle: wheel:jaraco_functools-4.6.0.dist-info/licenses/LICENSE
+
+SHA-256: `9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683`
 
 ```text
-The MIT License (MIT)
+MIT License
 
-Copyright (c) 2017 Thomas Kluyver
+Copyright (c) 2026 <copyright holders>
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction, including
+without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the
+following conditions:
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## keyring 25.7.0
+### keyring 25.7.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### keyring-25.7.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `keyring/licenses__LICENSE` · SHA-256: `5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d`
+Quelle: wheel:keyring-25.7.0.dist-info/licenses/LICENSE
+
+SHA-256: `5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d`
 
 ```text
 MIT License
@@ -2450,13 +2124,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## kiwisolver 1.5.0
+### kiwisolver 1.5.0
 
-Lizenz: BSD License
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE
+#### kiwisolver-1.5.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `kiwisolver/licenses__LICENSE` · SHA-256: `529c40e5f67f2f88904657a9f7879ae2f8dc76bc9bfef9cb10d988b48804ed61`
+Quelle: wheel:kiwisolver-1.5.0.dist-info/licenses/LICENSE
+
+SHA-256: `529c40e5f67f2f88904657a9f7879ae2f8dc76bc9bfef9cb10d988b48804ed61`
 
 ```text
 =========================
@@ -2532,13 +2208,15 @@ to indicate the copyright and license terms:
 #------------------------------------------------------------------------------
 ```
 
-## lazy-loader 0.5
+### lazy-loader 0.5
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE.md
+#### lazy_loader-0.5.dist-info/licenses/LICENSE.md
 
-Quelle im Paketdatensatz: `lazy-loader/licenses__LICENSE.md` · SHA-256: `797b6937a4f976836efbbbb3ae333d7866ddc3eb3cb152972b2be348d3529372`
+Quelle: wheel:lazy_loader-0.5.dist-info/licenses/LICENSE.md
+
+SHA-256: `797b6937a4f976836efbbbb3ae333d7866ddc3eb3cb152972b2be348d3529372`
 
 ```text
 BSD 3-Clause License
@@ -2572,13 +2250,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## lxml 6.1.2
+### lxml 6.1.2
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE.txt
+#### lxml-6.1.2.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `lxml/licenses__LICENSE.txt` · SHA-256: `8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855`
+Quelle: wheel:lxml-6.1.2.dist-info/licenses/LICENSE.txt
+
+SHA-256: `8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855`
 
 ```text
 BSD 3-Clause License
@@ -2614,9 +2294,11 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__LICENSES.txt
+#### lxml-6.1.2.dist-info/licenses/LICENSES.txt
 
-Quelle im Paketdatensatz: `lxml/licenses__LICENSES.txt` · SHA-256: `388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c`
+Quelle: wheel:lxml-6.1.2.dist-info/licenses/LICENSES.txt
+
+SHA-256: `388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c`
 
 ```text
 lxml is copyright Infrae and distributed under the BSD license (see
@@ -2748,13 +2430,34 @@ be used in advertising or otherwise to promote the sale, use or other deal-
 ings in this Software without prior written authorization from him.
 ```
 
-## manifold3d 3.5.2
+### manifold3d 3.5.2
 
-Lizenz: Apache Software License
+SPDX-Ausdruck: `Apache-2.0`
 
-### licenses__LICENSE
+#### manifold3d-3.5.2.dist-info/licenses/AUTHORS
 
-Quelle im Paketdatensatz: `manifold3d/licenses__LICENSE` · SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
+Quelle: wheel:manifold3d-3.5.2.dist-info/licenses/AUTHORS
+
+SHA-256: `074a43d4b1626a34a0a14a036d00100524dd463604b2570c4d76c7baa63608f3`
+
+```text
+# This is the list of Manifold's significant contributors.
+#
+# This does not necessarily list everyone who has contributed code,
+# especially since many employees of one corporation may be contributing.
+# To see the full list of contributors, see the revision history in
+# source control.
+Emmett Lalish <elalish>
+Chun Kit LAM <pca006132>
+Geoff deRosenroll <geoffder>
+Google LLC
+```
+
+#### manifold3d-3.5.2.dist-info/licenses/LICENSE
+
+Quelle: wheel:manifold3d-3.5.2.dist-info/licenses/LICENSE
+
+SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
 
 ```text
                                  Apache License
@@ -2960,13 +2663,15 @@ Quelle im Paketdatensatz: `manifold3d/licenses__LICENSE` · SHA-256: `c71d239df9
    limitations under the License.
 ```
 
-## markdown-it-py 4.2.0
+### markdown-it-py 4.2.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### markdown_it_py-4.2.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `markdown-it-py/licenses__LICENSE` · SHA-256: `4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484`
+Quelle: wheel:markdown_it_py-4.2.0.dist-info/licenses/LICENSE
+
+SHA-256: `4a2260d6e2cd0f5a151a1e86dbfe7d3ed552b1e2beabf9941c1ba5c49cbce484`
 
 ```text
 MIT License
@@ -2992,9 +2697,11 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### licenses__LICENSE.markdown-it
+#### markdown_it_py-4.2.0.dist-info/licenses/LICENSE.markdown-it
 
-Quelle im Paketdatensatz: `markdown-it-py/licenses__LICENSE.markdown-it` · SHA-256: `792c48c5a849a15fdf9e37e8bcf9e6d1dd13b32b46c642a748a0a46a9919d473`
+Quelle: wheel:markdown_it_py-4.2.0.dist-info/licenses/LICENSE.markdown-it
+
+SHA-256: `792c48c5a849a15fdf9e37e8bcf9e6d1dd13b32b46c642a748a0a46a9919d473`
 
 ```text
 Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
@@ -3021,13 +2728,15 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
 OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## matplotlib 3.11.1
+### matplotlib 3.11.1
 
-Lizenz: Python Software Foundation License
+SPDX-Ausdruck: `LicenseRef-Matplotlib`
 
-### LICENSE
+#### matplotlib-3.11.1.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `matplotlib/LICENSE` · SHA-256: `822e8e528147569a41975592aee19c11992ab667ba50451cd929031d5fc74491`
+Quelle: wheel:matplotlib-3.11.1.dist-info/LICENSE
+
+SHA-256: `822e8e528147569a41975592aee19c11992ab667ba50451cd929031d5fc74491`
 
 ```text
 License agreement for matplotlib versions 1.3.0 and later
@@ -4285,13 +3994,256 @@ License:
   may be found in the (unused) file Gist/host.c.
 ```
 
-## mdurl 0.1.2
+#### matplotlib/mpl-data/fonts/ttf/LICENSE_DEJAVU
 
-Lizenz: MIT License
+Quelle: wheel:matplotlib/mpl-data/fonts/ttf/LICENSE_DEJAVU
 
-### LICENSE
+SHA-256: `a6ed0d41ebee3ca53d22f4d55be20d64291a4f5fa8e303468839993343a830eb`
 
-Quelle im Paketdatensatz: `mdurl/LICENSE` · SHA-256: `7c605df6e28667a9603118e98274f64a49ce3eed0d26fccce9534a345e0ef955`
+```text
+Fonts are (c) Bitstream (see below). DejaVu changes are in public domain.
+Glyphs imported from Arev fonts are (c) Tavmjong Bah (see below)
+
+Bitstream Vera Fonts Copyright
+------------------------------
+
+Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is
+a trademark of Bitstream, Inc.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of the fonts accompanying this license ("Fonts") and associated
+documentation files (the "Font Software"), to reproduce and distribute the
+Font Software, including without limitation the rights to use, copy, merge,
+publish, distribute, and/or sell copies of the Font Software, and to permit
+persons to whom the Font Software is furnished to do so, subject to the
+following conditions:
+
+The above copyright and trademark notices and this permission notice shall
+be included in all copies of one or more of the Font Software typefaces.
+
+The Font Software may be modified, altered, or added to, and in particular
+the designs of glyphs or characters in the Fonts may be modified and
+additional glyphs or characters may be added to the Fonts, only if the fonts
+are renamed to names not containing either the words "Bitstream" or the word
+"Vera".
+
+This License becomes null and void to the extent applicable to Fonts or Font
+Software that has been modified and is distributed under the "Bitstream
+Vera" names.
+
+The Font Software may be sold as part of a larger software package but no
+copy of one or more of the Font Software typefaces may be sold by itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF COPYRIGHT, PATENT,
+TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL BITSTREAM OR THE GNOME
+FOUNDATION BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING
+ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM OTHER DEALINGS IN THE
+FONT SOFTWARE.
+
+Except as contained in this notice, the names of Gnome, the Gnome
+Foundation, and Bitstream Inc., shall not be used in advertising or
+otherwise to promote the sale, use or other dealings in this Font Software
+without prior written authorization from the Gnome Foundation or Bitstream
+Inc., respectively. For further information, contact: fonts at gnome dot
+org.
+
+Arev Fonts Copyright
+------------------------------
+
+Copyright (c) 2006 by Tavmjong Bah. All Rights Reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the fonts accompanying this license ("Fonts") and
+associated documentation files (the "Font Software"), to reproduce
+and distribute the modifications to the Bitstream Vera Font Software,
+including without limitation the rights to use, copy, merge, publish,
+distribute, and/or sell copies of the Font Software, and to permit
+persons to whom the Font Software is furnished to do so, subject to
+the following conditions:
+
+The above copyright and trademark notices and this permission notice
+shall be included in all copies of one or more of the Font Software
+typefaces.
+
+The Font Software may be modified, altered, or added to, and in
+particular the designs of glyphs or characters in the Fonts may be
+modified and additional glyphs or characters may be added to the
+Fonts, only if the fonts are renamed to names not containing either
+the words "Tavmjong Bah" or the word "Arev".
+
+This License becomes null and void to the extent applicable to Fonts
+or Font Software that has been modified and is distributed under the
+"Tavmjong Bah Arev" names.
+
+The Font Software may be sold as part of a larger software package but
+no copy of one or more of the Font Software typefaces may be sold by
+itself.
+
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL
+TAVMJONG BAH BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+
+Except as contained in this notice, the name of Tavmjong Bah shall not
+be used in advertising or otherwise to promote the sale, use or other
+dealings in this Font Software without prior written authorization
+from Tavmjong Bah. For further information, contact: tavmjong @ free
+. fr.
+
+$Id: LICENSE 2133 2007-11-28 02:46:28Z lechimp $
+```
+
+#### matplotlib/mpl-data/fonts/ttf/LICENSE_STIX
+
+Quelle: wheel:matplotlib/mpl-data/fonts/ttf/LICENSE_STIX
+
+SHA-256: `bab3d31dfef07f483624f2f65f2711e76065b8e7273278b1c071ede1041c9959`
+
+```text
+The STIX fonts distributed with matplotlib have been modified from
+their canonical form.  They have been converted from OTF to TTF format
+using Fontforge and this script:
+
+  #!/usr/bin/env fontforge
+  i=1
+  while ( i<$argc )
+    Open($argv[i])
+    Generate($argv[i]:r + ".ttf")
+    i = i+1
+  endloop
+
+The original STIX Font License begins below.
+
+-----------------------------------------------------------
+
+STIX Font License
+
+24 May 2010
+
+Copyright (c) 2001-2010 by the STI Pub Companies, consisting of the American
+Institute of Physics, the American Chemical Society, the American Mathematical
+Society, the American Physical Society, Elsevier, Inc., and The Institute of
+Electrical and Electronic Engineers, Inc. (www.stixfonts.org), with Reserved
+Font Name STIX Fonts, STIX Fonts (TM) is a  trademark of The Institute of
+Electrical and Electronics Engineers, Inc.
+
+Portions copyright (c) 1998-2003 by MicroPress, Inc. (www.micropress-inc.com),
+with Reserved Font Name TM Math. To obtain additional mathematical fonts, please
+contact MicroPress, Inc., 68-30 Harrow Street, Forest Hills, NY 11375, USA,
+Phone: (718) 575-1816.
+
+Portions copyright (c) 1990 by Elsevier, Inc.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://scripts.sil.org/OFL
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+### mdurl 0.1.2
+
+SPDX-Ausdruck: `MIT`
+
+#### mdurl-0.1.2.dist-info/LICENSE
+
+Quelle: wheel:mdurl-0.1.2.dist-info/LICENSE
+
+SHA-256: `7c605df6e28667a9603118e98274f64a49ce3eed0d26fccce9534a345e0ef955`
 
 ```text
 Copyright (c) 2015 Vitaly Puzrin, Alex Kocharin.
@@ -4342,13 +4294,15 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 ```
 
-## more-itertools 11.1.0
+### more-itertools 11.1.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### more_itertools-11.1.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `more-itertools/licenses__LICENSE` · SHA-256: `09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46`
+Quelle: wheel:more_itertools-11.1.0.dist-info/licenses/LICENSE
+
+SHA-256: `09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46`
 
 ```text
 Copyright (c) 2012 Erik Rose
@@ -4372,13 +4326,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## networkx 3.6.1
+### networkx 3.6.1
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE.txt
+#### networkx-3.6.1.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `networkx/licenses__LICENSE.txt` · SHA-256: `3cf7c3a179d817b23b8b8568211769fefdf93797d207d984b8b2fa24d0220b33`
+Quelle: wheel:networkx-3.6.1.dist-info/licenses/LICENSE.txt
+
+SHA-256: `3cf7c3a179d817b23b8b8568211769fefdf93797d207d984b8b2fa24d0220b33`
 
 ```text
 NetworkX is distributed with the 3-clause BSD license.
@@ -4420,13 +4376,15 @@ NetworkX is distributed with the 3-clause BSD license.
    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## numpy 2.5.2
+### numpy 2.5.2
 
-Lizenz: BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+SPDX-Ausdruck: `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0`
 
-### licenses__LICENSE.txt
+#### numpy-2.5.2.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `numpy/licenses__LICENSE.txt` · SHA-256: `a7a1034ce1018ae36675f3e4c85f07854e4cc9ac87c1d0252e75002d52ec95e4`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/LICENSE.txt
+
+SHA-256: `a7a1034ce1018ae36675f3e4c85f07854e4cc9ac87c1d0252e75002d52ec95e4`
 
 ```text
 Copyright (c) 2005-2025, NumPy Developers.
@@ -5344,9 +5302,11 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-### licenses__numpy___core__include__numpy__libdivide__LICENSE.txt
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__include__numpy__libdivide__LICENSE.txt` · SHA-256: `fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt
+
+SHA-256: `fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec`
 
 ```text
   zlib License
@@ -5372,9 +5332,11 @@ Quelle im Paketdatensatz: `numpy/licenses__numpy___core__include__numpy__libdivi
   3. This notice may not be removed or altered from any source distribution.
 ```
 
-### licenses__numpy___core__src__common__pythoncapi-compat__COPYING
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__src__common__pythoncapi-compat__COPYING` · SHA-256: `3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING
+
+SHA-256: `3f2c1ffa76383a55ae0aac01c9737cd70050dff63e1f026694fbe9d662573c98`
 
 ```text
 BSD Zero Clause License
@@ -5393,9 +5355,11 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-### licenses__numpy___core__src__highway__LICENSE
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/highway/LICENSE
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__src__highway__LICENSE` · SHA-256: `b8b1fae5894cfbe213b47f1378bb2269cf82de18b34447e871c0225ace0d3ad7`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/highway/LICENSE
+
+SHA-256: `b8b1fae5894cfbe213b47f1378bb2269cf82de18b34447e871c0225ace0d3ad7`
 
 ```text
 This project is primarily dual-licensed under your choice of either the Apache
@@ -5771,9 +5735,11 @@ express Statement of Purpose.
     this CC0 or use of the Work.
 ```
 
-### licenses__numpy___core__src__multiarray__dragon4_LICENSE.txt
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__src__multiarray__dragon4_LICENSE.txt` · SHA-256: `f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/multiarray/dragon4_LICENSE.txt
+
+SHA-256: `f7b14309e5f54e5022b26448eefd419988ada2aec01d3c1162d84a0ea8f21f2c`
 
 ```text
 Copyright (c) 2014 Ryan Juckett
@@ -5805,9 +5771,11 @@ Ryan Juckett's original code was under the Zlib license; he gave numpy
 permission to include it under the MIT license instead.
 ```
 
-### licenses__numpy___core__src__npysort__x86-simd-sort__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__src__npysort__x86-simd-sort__LICENSE.md` · SHA-256: `211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md
+
+SHA-256: `211e7d737d6179a08f791ebb0a99897ce7cd2457410c542876d125576edfe910`
 
 ```text
 BSD 3-Clause License
@@ -5840,9 +5808,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy___core__src__umath__svml__LICENSE
+#### numpy-2.5.2.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy___core__src__umath__svml__LICENSE` · SHA-256: `c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE
+
+SHA-256: `c17011467b4fe6e20fbfbeda4df09e58c2bca5480a063e55735a4000a379aad9`
 
 ```text
 Copyright (c) 2005-2021, NumPy Developers.
@@ -5877,9 +5847,11 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy__fft__pocketfft__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__fft__pocketfft__LICENSE.md` · SHA-256: `a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md
+
+SHA-256: `a85ca13fdf90160b64a0698215868c13b74d835ad0a4e2ba44713b8c5058a056`
 
 ```text
 Copyright (C) 2010-2018 Max-Planck-Society
@@ -5909,9 +5881,11 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy__linalg__lapack_lite__LICENSE.txt
+#### numpy-2.5.2.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__linalg__lapack_lite__LICENSE.txt` · SHA-256: `a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt
+
+SHA-256: `a14cc25e10d40a3aa705b7de2fb764a6535d8ee9b2db4e1724900585457dfd55`
 
 ```text
 Copyright (c) 1992-2013 The University of Tennessee and The University
@@ -5964,9 +5938,11 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy__ma__LICENSE
+#### numpy-2.5.2.dist-info/licenses/numpy/ma/LICENSE
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__ma__LICENSE` · SHA-256: `4a765ceefcddd40d6518f2f22f0fe2c6d532890be821d8bb1f2c21ebafed8817`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/ma/LICENSE
+
+SHA-256: `4a765ceefcddd40d6518f2f22f0fe2c6d532890be821d8bb1f2c21ebafed8817`
 
 ```text
 * Copyright (c) 2006, University of Georgia and Pierre G.F. Gerard-Marchant
@@ -5995,9 +5971,11 @@ Quelle im Paketdatensatz: `numpy/licenses__numpy__ma__LICENSE` · SHA-256: `4a76
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy__random__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__LICENSE.md` · SHA-256: `1900269b4c2f0ff0c7ad01ecf13f5ded5610968a0cf1fb6bc3a83bccc2b4c38d`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/LICENSE.md
+
+SHA-256: `1900269b4c2f0ff0c7ad01ecf13f5ded5610968a0cf1fb6bc3a83bccc2b4c38d`
 
 ```text
 **This software is dual-licensed under the The University of Illinois/NCSA
@@ -6073,9 +6051,11 @@ often the algorithm's designer. Component licenses are located with
 the component code.
 ```
 
-### licenses__numpy__random__src__distributions__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__distributions__LICENSE.md` · SHA-256: `5f6ed77cd0326d7a2598962550123657845db4e8095ee29904f70e2717c0816e`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/distributions/LICENSE.md
+
+SHA-256: `5f6ed77cd0326d7a2598962550123657845db4e8095ee29904f70e2717c0816e`
 
 ```text
 ## NumPy
@@ -6141,9 +6121,11 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### licenses__numpy__random__src__mt19937__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__mt19937__LICENSE.md` · SHA-256: `ef21afaad4bb20d2020491dc27ed55ba0d042f1b9487911a57f28b46b407a2b7`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md
+
+SHA-256: `ef21afaad4bb20d2020491dc27ed55ba0d042f1b9487911a57f28b46b407a2b7`
 
 ```text
 # MT19937
@@ -6209,9 +6191,11 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### licenses__numpy__random__src__pcg64__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__pcg64__LICENSE.md` · SHA-256: `d7e9361b9533f48dd1e60ff7e4ab4dd1b53230ca2d4bf8d79bf3efa5f53336be`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md
+
+SHA-256: `d7e9361b9533f48dd1e60ff7e4ab4dd1b53230ca2d4bf8d79bf3efa5f53336be`
 
 ```text
 # PCG64
@@ -6238,9 +6222,11 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### licenses__numpy__random__src__philox__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/philox/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__philox__LICENSE.md` · SHA-256: `6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/philox/LICENSE.md
+
+SHA-256: `6f5828a57223d4cc7f8ea505a2623e7b978b242752c1515e355f46ba2cec1800`
 
 ```text
 # PHILOX
@@ -6276,9 +6262,11 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__numpy__random__src__sfc64__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__sfc64__LICENSE.md` · SHA-256: `9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md
+
+SHA-256: `9d4098846018319cd68e228ee6220361787f73bccbf00237a85e4fc9621b998f`
 
 ```text
 # SFC64
@@ -6310,9 +6298,11 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
 
-### licenses__numpy__random__src__splitmix64__LICENSE.md
+#### numpy-2.5.2.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
 
-Quelle im Paketdatensatz: `numpy/licenses__numpy__random__src__splitmix64__LICENSE.md` · SHA-256: `82606ac1b37d264a2260639f8a1646f2a66b713941447e01362e1fef587b73a8`
+Quelle: wheel:numpy-2.5.2.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md
+
+SHA-256: `82606ac1b37d264a2260639f8a1646f2a66b713941447e01362e1fef587b73a8`
 
 ```text
 # SPLITMIX64
@@ -6326,13 +6316,158 @@ worldwide. This software is distributed without any warranty.
 See <http://creativecommons.org/publicdomain/zero/1.0/>.
 ```
 
-## packaging 26.3
+#### numpy/_core/include/numpy/random/LICENSE.txt
 
-Lizenz: Apache-2.0 OR BSD-2-Clause
+Quelle: wheel:numpy/_core/include/numpy/random/LICENSE.txt
 
-### licenses__LICENSE
+SHA-256: `fbc539f47d0cf83bc61378080fb873d5c14630126cacbfe754035c3926daa5ec`
 
-Quelle im Paketdatensatz: `packaging/licenses__LICENSE` · SHA-256: `cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48`
+```text
+  zlib License
+  ------------
+
+  Copyright (C) 2010 - 2019 ridiculous_fish, <libdivide@ridiculousfish.com>
+  Copyright (C) 2016 - 2019 Kim Walisch, <kim.walisch@gmail.com>
+
+  This software is provided 'as-is', without any express or implied
+  warranty.  In no event will the authors be held liable for any damages
+  arising from the use of this software.
+
+  Permission is granted to anyone to use this software for any purpose,
+  including commercial applications, and to alter it and redistribute it
+  freely, subject to the following restrictions:
+
+  1. The origin of this software must not be misrepresented; you must not
+     claim that you wrote the original software. If you use this software
+     in a product, an acknowledgment in the product documentation would be
+     appreciated but is not required.
+  2. Altered source versions must be plainly marked as such, and must not be
+     misrepresented as being the original software.
+  3. This notice may not be removed or altered from any source distribution.
+```
+
+#### numpy/ma/LICENSE
+
+Quelle: wheel:numpy/ma/LICENSE
+
+SHA-256: `4a765ceefcddd40d6518f2f22f0fe2c6d532890be821d8bb1f2c21ebafed8817`
+
+```text
+* Copyright (c) 2006, University of Georgia and Pierre G.F. Gerard-Marchant
+* All rights reserved.
+* Redistribution and use in source and binary forms, with or without
+* modification, are permitted provided that the following conditions are met:
+*
+*     * Redistributions of source code must retain the above copyright
+*       notice, this list of conditions and the following disclaimer.
+*     * Redistributions in binary form must reproduce the above copyright
+*       notice, this list of conditions and the following disclaimer in the
+*       documentation and/or other materials provided with the distribution.
+*     * Neither the name of the University of Georgia nor the
+*       names of its contributors may be used to endorse or promote products
+*       derived from this software without specific prior written permission.
+*
+* THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND ANY
+* EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+* DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE FOR ANY
+* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+#### numpy/random/LICENSE.md
+
+Quelle: wheel:numpy/random/LICENSE.md
+
+SHA-256: `1900269b4c2f0ff0c7ad01ecf13f5ded5610968a0cf1fb6bc3a83bccc2b4c38d`
+
+```text
+**This software is dual-licensed under the The University of Illinois/NCSA
+Open Source License (NCSA) and The 3-Clause BSD License**
+
+# NCSA Open Source License
+**Copyright (c) 2019 Kevin Sheppard. All rights reserved.**
+
+Developed by: Kevin Sheppard (<kevin.sheppard@economics.ox.ac.uk>,
+<kevin.k.sheppard@gmail.com>)
+[http://www.kevinsheppard.com](http://www.kevinsheppard.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal with
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimers.
+
+Redistributions in binary form must reproduce the above copyright notice, this
+list of conditions and the following disclaimers in the documentation and/or
+other materials provided with the distribution.
+
+Neither the names of Kevin Sheppard, nor the names of any contributors may be
+used to endorse or promote products derived from this Software without specific
+prior written permission.
+
+**THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH
+THE SOFTWARE.**
+
+
+# 3-Clause BSD License
+**Copyright (c) 2019 Kevin Sheppard. All rights reserved.**
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors
+   may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+
+**THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.**
+
+# Components
+
+Many parts of this module have been derived from original sources,
+often the algorithm's designer. Component licenses are located with
+the component code.
+```
+
+### packaging 26.3
+
+SPDX-Ausdruck: `Apache-2.0 OR BSD-2-Clause`
+
+#### packaging-26.3.dist-info/licenses/LICENSE
+
+Quelle: wheel:packaging-26.3.dist-info/licenses/LICENSE
+
+SHA-256: `cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48`
 
 ```text
 This software is made available under the terms of *either* of the licenses
@@ -6340,9 +6475,11 @@ found in LICENSE.APACHE or LICENSE.BSD. Contributions to this software is made
 under the terms of *both* these licenses.
 ```
 
-### licenses__LICENSE.APACHE
+#### packaging-26.3.dist-info/licenses/LICENSE.APACHE
 
-Quelle im Paketdatensatz: `packaging/licenses__LICENSE.APACHE` · SHA-256: `0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594`
+Quelle: wheel:packaging-26.3.dist-info/licenses/LICENSE.APACHE
+
+SHA-256: `0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594`
 
 ```text
 
@@ -6524,9 +6661,11 @@ Quelle im Paketdatensatz: `packaging/licenses__LICENSE.APACHE` · SHA-256: `0d54
    END OF TERMS AND CONDITIONS
 ```
 
-### licenses__LICENSE.BSD
+#### packaging-26.3.dist-info/licenses/LICENSE.BSD
 
-Quelle im Paketdatensatz: `packaging/licenses__LICENSE.BSD` · SHA-256: `b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5`
+Quelle: wheel:packaging-26.3.dist-info/licenses/LICENSE.BSD
+
+SHA-256: `b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5`
 
 ```text
 Copyright (c) Donald Stufft and individual contributors.
@@ -6554,13 +6693,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## pillow 12.3.0
+### pillow 12.3.0
 
-Lizenz: MIT-CMU
+SPDX-Ausdruck: `MIT-CMU`
 
-### licenses__LICENSE
+#### pillow-12.3.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `pillow/licenses__LICENSE` · SHA-256: `0598c770109e3a0dbaaeaf111a682457c596c1593f3d23b14e15e9aae6c19a7c`
+Quelle: wheel:pillow-12.3.0.dist-info/licenses/LICENSE
+
+SHA-256: `ab0d05ea62c2817a068c92bf068db7a18a493da84cce4e43ad67acacc4d7b881`
 
 ```text
 The Python Imaging Library (PIL) is
@@ -6892,7 +7033,6 @@ patent must be licensed for everyone's free use or not licensed at all.
   The precise terms and conditions for copying, distribution and
 modification follow.
 
-
 		    GNU GENERAL PUBLIC LICENSE
    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
 
@@ -6947,7 +7087,6 @@ above, provided that you also meet all of these conditions:
     License.  (Exception: if the Program itself is interactive but
     does not normally print such an announcement, your work based on
     the Program is not required to print an announcement.)
-
 
 These requirements apply to the modified work as a whole.  If
 identifiable sections of that work are not derived from the Program,
@@ -7007,7 +7146,6 @@ access to copy the source code from the same place counts as
 distribution of the source code, even though third parties are not
 compelled to copy the source along with the object code.
 
-
   4. You may not copy, modify, sublicense, or distribute the Program
 except as expressly provided under this License.  Any attempt
 otherwise to copy, modify, sublicense or distribute the Program is
@@ -7065,7 +7203,6 @@ impose that choice.
 This section is intended to make thoroughly clear what is believed to
 be a consequence of the rest of this License.
 
-
   8. If the distribution and/or use of the Program is restricted in
 certain countries either by patents or by copyrighted interfaces, the
 original copyright holder who places the Program under this License
@@ -7118,7 +7255,6 @@ PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGES.
 
 		     END OF TERMS AND CONDITIONS
-
 
 	    How to Apply These Terms to Your New Programs
 
@@ -8187,13 +8323,15 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-## platformdirs 4.11.4
+### platformdirs 4.11.4
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### platformdirs-4.11.4.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `platformdirs/licenses__LICENSE` · SHA-256: `29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6`
+Quelle: wheel:platformdirs-4.11.4.dist-info/licenses/LICENSE
+
+SHA-256: `29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6`
 
 ```text
 MIT License
@@ -8219,13 +8357,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## pooch 1.9.0
+### pooch 1.9.0
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__AUTHORS.md
+#### pooch-1.9.0.dist-info/licenses/AUTHORS.md
 
-Quelle im Paketdatensatz: `pooch/licenses__AUTHORS.md` · SHA-256: `6400dc5b23d3c56c955ab82c44fe49db242d4d9a6d9b80f5575d8b9ccdbc4631`
+Quelle: wheel:pooch-1.9.0.dist-info/licenses/AUTHORS.md
+
+SHA-256: `6400dc5b23d3c56c955ab82c44fe49db242d4d9a6d9b80f5575d8b9ccdbc4631`
 
 ```text
 # Project Authors
@@ -8255,9 +8395,11 @@ order by last name) and are considered "The Pooch Developers":
 * [Antonio Valentino](https://github.com/avalentino)
 ```
 
-### licenses__LICENSE.txt
+#### pooch-1.9.0.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `pooch/licenses__LICENSE.txt` · SHA-256: `af0482d59fc7a9d68d9f64682c74ce6e8a4684406bb3a21a191ae329950916b4`
+Quelle: wheel:pooch-1.9.0.dist-info/licenses/LICENSE.txt
+
+SHA-256: `af0482d59fc7a9d68d9f64682c74ce6e8a4684406bb3a21a191ae329950916b4`
 
 ```text
 Copyright (c) 2018 The Pooch Developers
@@ -8287,51 +8429,15 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## pycparser 3.0
+### Pygments 2.21.0
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-2-Clause`
 
-### licenses__LICENSE
+#### pygments-2.21.0.dist-info/licenses/AUTHORS
 
-Quelle im Paketdatensatz: `pycparser/licenses__LICENSE` · SHA-256: `b345a9762fdc5175d3d486d344cdcbb79078aee7c00e47fcc756ef2c4f5dcb61`
+Quelle: wheel:pygments-2.21.0.dist-info/licenses/AUTHORS
 
-```text
-pycparser -- A C parser in Python
-
-Copyright (c) 2008-2022, Eli Bendersky
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification,
-are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
-* Neither the name of the copyright holder nor the names of its contributors may
-  be used to endorse or promote products derived from this software without
-  specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
-LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT
-OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-## Pygments 2.21.0
-
-Lizenz: BSD-2-Clause
-
-### licenses__AUTHORS
-
-Quelle im Paketdatensatz: `pygments/licenses__AUTHORS` · SHA-256: `ea74b9158f4587191549080d5713701859bf6f7b61ce491020338128131847f3`
+SHA-256: `ea74b9158f4587191549080d5713701859bf6f7b61ce491020338128131847f3`
 
 ```text
 Pygments is written and maintained by Georg Brandl <georg@python.org>.
@@ -8632,9 +8738,11 @@ Other contributors, listed alphabetically, are:
 Many thanks for all contributions!
 ```
 
-### licenses__LICENSE
+#### pygments-2.21.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `pygments/licenses__LICENSE` · SHA-256: `a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17`
+Quelle: wheel:pygments-2.21.0.dist-info/licenses/LICENSE
+
+SHA-256: `a9d66f1d526df02e29dce73436d34e56e8632f46c275bbdffc70569e882f9f17`
 
 ```text
 Copyright (c) 2006-2022 by the respective authors (see AUTHORS file).
@@ -8664,13 +8772,15 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## pyparsing 3.3.2
+### pyparsing 3.3.2
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### pyparsing-3.3.2.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `pyparsing/licenses__LICENSE` · SHA-256: `a5425f9dc14ac74d4c5f0b679e941f2442e32cca7452a4418d5b1a49893ebe4e`
+Quelle: wheel:pyparsing-3.3.2.dist-info/licenses/LICENSE
+
+SHA-256: `a5425f9dc14ac74d4c5f0b679e941f2442e32cca7452a4418d5b1a49893ebe4e`
 
 ```text
 Copyright (c) 2003-2025  Paul McGuire
@@ -8695,41 +8805,15 @@ TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## PySide6 6.11.2
+### PySide6 6.11.2
 
-Lizenz: LGPL-3.0-only
+SPDX-Ausdruck: `LGPL-3.0-only`
 
-### SOLIDON-LGPL-NOTICE.txt
+#### LGPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/SOLIDON-LGPL-NOTICE.txt` · SHA-256: `711cf5713160f26cfaf81e1f4794f284372d4431a2c72027531607f4cccfbe94`
+Quelle: https://www.gnu.org/licenses/lgpl-3.0.txt
 
-```text
-Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
-
-Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
-Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
-Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
-weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
-eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
-Zweck erforderliche Rückentwicklung.
-
-Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
-CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
-Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
-Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
-
-RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
-Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
-LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
-Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
-Person, die dieses Paket erhält, bis mindestens 1. September 2029.
-
-Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.
-```
-
-### LGPL-3.0.txt
-
-Quelle im Paketdatensatz: `common/LGPL-3.0.txt` · SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
+SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
 
 ```text
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -8899,9 +8983,11 @@ permanent authorization for you to choose that version for the
 Library.
 ```
 
-### GPL-3.0.txt
+#### GPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/GPL-3.0.txt` · SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
+Quelle: https://www.gnu.org/licenses/gpl-3.0.txt
+
+SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
 
 ```text
                     GNU GENERAL PUBLIC LICENSE
@@ -9580,41 +9666,15 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-## PySide6_Addons 6.11.2
+### PySide6_Addons 6.11.2
 
-Lizenz: LGPL-3.0-only
+SPDX-Ausdruck: `LGPL-3.0-only`
 
-### SOLIDON-LGPL-NOTICE.txt
+#### LGPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/SOLIDON-LGPL-NOTICE.txt` · SHA-256: `711cf5713160f26cfaf81e1f4794f284372d4431a2c72027531607f4cccfbe94`
+Quelle: https://www.gnu.org/licenses/lgpl-3.0.txt
 
-```text
-Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
-
-Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
-Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
-Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
-weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
-eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
-Zweck erforderliche Rückentwicklung.
-
-Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
-CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
-Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
-Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
-
-RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
-Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
-LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
-Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
-Person, die dieses Paket erhält, bis mindestens 1. September 2029.
-
-Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.
-```
-
-### LGPL-3.0.txt
-
-Quelle im Paketdatensatz: `common/LGPL-3.0.txt` · SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
+SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
 
 ```text
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -9784,9 +9844,11 @@ permanent authorization for you to choose that version for the
 Library.
 ```
 
-### GPL-3.0.txt
+#### GPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/GPL-3.0.txt` · SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
+Quelle: https://www.gnu.org/licenses/gpl-3.0.txt
+
+SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
 
 ```text
                     GNU GENERAL PUBLIC LICENSE
@@ -10465,41 +10527,15 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-## PySide6_Essentials 6.11.2
+### PySide6_Essentials 6.11.2
 
-Lizenz: LGPL-3.0-only
+SPDX-Ausdruck: `LGPL-3.0-only`
 
-### SOLIDON-LGPL-NOTICE.txt
+#### LGPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/SOLIDON-LGPL-NOTICE.txt` · SHA-256: `711cf5713160f26cfaf81e1f4794f284372d4431a2c72027531607f4cccfbe94`
+Quelle: https://www.gnu.org/licenses/lgpl-3.0.txt
 
-```text
-Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
-
-Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
-Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
-Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
-weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
-eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
-Zweck erforderliche Rückentwicklung.
-
-Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
-CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
-Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
-Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
-
-RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
-Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
-LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
-Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
-Person, die dieses Paket erhält, bis mindestens 1. September 2029.
-
-Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.
-```
-
-### LGPL-3.0.txt
-
-Quelle im Paketdatensatz: `common/LGPL-3.0.txt` · SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
+SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
 
 ```text
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -10669,9 +10705,11 @@ permanent authorization for you to choose that version for the
 Library.
 ```
 
-### GPL-3.0.txt
+#### GPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/GPL-3.0.txt` · SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
+Quelle: https://www.gnu.org/licenses/gpl-3.0.txt
+
+SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
 
 ```text
                     GNU GENERAL PUBLIC LICENSE
@@ -11350,13 +11388,15 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-## python-dateutil 2.9.0.post0
+### python-dateutil 2.9.0.post0
 
-Lizenz: BSD License, Apache Software License
+SPDX-Ausdruck: `BSD-3-Clause OR Apache-2.0`
 
-### LICENSE
+#### python_dateutil-2.9.0.post0.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `python-dateutil/LICENSE` · SHA-256: `9313256b27c4a1b7666c433acbf70a447383df0ea8c4b59bee0b6e412a281f92`
+Quelle: wheel:python_dateutil-2.9.0.post0.dist-info/LICENSE
+
+SHA-256: `9313256b27c4a1b7666c433acbf70a447383df0ea8c4b59bee0b6e412a281f92`
 
 ```text
 Copyright 2017- Paul Ganssle <paul@ganssle.io>
@@ -11415,13 +11455,15 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The above BSD License Applies to all code, even that also covered by Apache 2.0.
 ```
 
-## pyvista 0.48.4
+### pyvista 0.48.4
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__AUTHORS.rst
+#### pyvista-0.48.4.dist-info/licenses/AUTHORS.rst
 
-Quelle im Paketdatensatz: `pyvista/licenses__AUTHORS.rst` · SHA-256: `ff3c7978fde6dc07a43216b72da8dafe0592e748804abe2d73117be6e4a023d6`
+Quelle: wheel:pyvista-0.48.4.dist-info/licenses/AUTHORS.rst
+
+SHA-256: `ff3c7978fde6dc07a43216b72da8dafe0592e748804abe2d73117be6e4a023d6`
 
 ```text
 .. _authors:
@@ -11471,9 +11513,11 @@ Made with `contrib rocks`_.
 .. _contrib rocks: https://contrib.rocks
 ```
 
-### licenses__LICENSE
+#### pyvista-0.48.4.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `pyvista/licenses__LICENSE` · SHA-256: `ef781b94ef972e69777b03022520150b77ae9bd1c6e0225c452a14e82251e9e5`
+Quelle: wheel:pyvista-0.48.4.dist-info/licenses/LICENSE
+
+SHA-256: `ef781b94ef972e69777b03022520150b77ae9bd1c6e0225c452a14e82251e9e5`
 
 ```text
 The MIT License
@@ -11499,13 +11543,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## pyvistaqt 0.12.0
+### pyvistaqt 0.12.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__AUTHORS.rst
+#### pyvistaqt-0.12.0.dist-info/licenses/AUTHORS.rst
 
-Quelle im Paketdatensatz: `pyvistaqt/licenses__AUTHORS.rst` · SHA-256: `f5b3884d20d064bc6f4b537ae5f77e0fa940f0f4b61845c98b21b193c0465ae3`
+Quelle: wheel:pyvistaqt-0.12.0.dist-info/licenses/AUTHORS.rst
+
+SHA-256: `f5b3884d20d064bc6f4b537ae5f77e0fa940f0f4b61845c98b21b193c0465ae3`
 
 ```text
 .. _authors_ref:
@@ -11529,9 +11575,11 @@ Developers":
 - Guillaume Favelier, (`@GuillaumeFavelier <https://github.com/GuillaumeFavelier/>`_)
 ```
 
-### licenses__LICENSE
+#### pyvistaqt-0.12.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `pyvistaqt/licenses__LICENSE` · SHA-256: `ef781b94ef972e69777b03022520150b77ae9bd1c6e0225c452a14e82251e9e5`
+Quelle: wheel:pyvistaqt-0.12.0.dist-info/licenses/LICENSE
+
+SHA-256: `ef781b94ef972e69777b03022520150b77ae9bd1c6e0225c452a14e82251e9e5`
 
 ```text
 The MIT License
@@ -11557,13 +11605,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## pywin32-ctypes 0.2.3
+### pywin32-ctypes 0.2.3
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### LICENSE.txt
+#### pywin32_ctypes-0.2.3.dist-info/LICENSE.txt
 
-Quelle im Paketdatensatz: `pywin32-ctypes/LICENSE.txt` · SHA-256: `cc03ae891a362c85d508a4e47af954314a2e4ccbd445140cb8dca7e2baee19f7`
+Quelle: wheel:pywin32_ctypes-0.2.3.dist-info/LICENSE.txt
+
+SHA-256: `cc03ae891a362c85d508a4e47af954314a2e4ccbd445140cb8dca7e2baee19f7`
 
 ```text
 This software is OSI Certified Open Source Software.
@@ -11596,13 +11646,15 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## QtPy 2.4.3
+### QtPy 2.4.3
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### AUTHORS.md
+#### QtPy-2.4.3.dist-info/AUTHORS.md
 
-Quelle im Paketdatensatz: `qtpy/AUTHORS.md` · SHA-256: `46149d191d4be4fcf944ed349b46dc9bf8089bd2afa79ec089363d63bf1aec74`
+Quelle: wheel:QtPy-2.4.3.dist-info/AUTHORS.md
+
+SHA-256: `46149d191d4be4fcf944ed349b46dc9bf8089bd2afa79ec089363d63bf1aec74`
 
 ```text
 # Authors
@@ -11627,9 +11679,11 @@ Quelle im Paketdatensatz: `qtpy/AUTHORS.md` · SHA-256: `46149d191d4be4fcf944ed3
 * [The QtPy Contributors](https://github.com/spyder-ide/qtpy/graphs/contributors)
 ```
 
-### LICENSE.txt
+#### QtPy-2.4.3.dist-info/LICENSE.txt
 
-Quelle im Paketdatensatz: `qtpy/LICENSE.txt` · SHA-256: `59ec4225bd380e349a82e6482437ff9475eeb1c2e676a2d1185bb53315d45bf9`
+Quelle: wheel:QtPy-2.4.3.dist-info/LICENSE.txt
+
+SHA-256: `59ec4225bd380e349a82e6482437ff9475eeb1c2e676a2d1185bb53315d45bf9`
 
 ```text
 The MIT License (MIT)
@@ -11655,13 +11709,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## requests 2.34.2
+### requests 2.34.2
 
-Lizenz: Apache Software License
+SPDX-Ausdruck: `Apache-2.0`
 
-### licenses__LICENSE
+#### requests-2.34.2.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `requests/licenses__LICENSE` · SHA-256: `09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b`
+Quelle: wheel:requests-2.34.2.dist-info/licenses/LICENSE
+
+SHA-256: `09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b`
 
 ```text
 
@@ -11841,22 +11897,26 @@ Quelle im Paketdatensatz: `requests/licenses__LICENSE` · SHA-256: `09e8a9bcec80
       of your accepting any such warranty or additional liability.
 ```
 
-### licenses__NOTICE
+#### requests-2.34.2.dist-info/licenses/NOTICE
 
-Quelle im Paketdatensatz: `requests/licenses__NOTICE` · SHA-256: `f5110972dedad2b4e9d314518daf3b7d72d6e02e499acd802181de6f74571dcc`
+Quelle: wheel:requests-2.34.2.dist-info/licenses/NOTICE
+
+SHA-256: `f5110972dedad2b4e9d314518daf3b7d72d6e02e499acd802181de6f74571dcc`
 
 ```text
 Requests
 Copyright 2019 Kenneth Reitz
 ```
 
-## rich 15.0.0
+### rich 15.0.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### rich-15.0.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `rich/licenses__LICENSE` · SHA-256: `deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15`
+Quelle: wheel:rich-15.0.0.dist-info/licenses/LICENSE
+
+SHA-256: `deed7c17a4318158190a3ea239cc879a5a50271cebb98ae7025f48fbe58dca15`
 
 ```text
 Copyright (c) 2020 Will McGugan
@@ -11880,13 +11940,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## rich-rst 2.1.0
+### rich-rst 2.1.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE
+#### rich_rst-2.1.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `rich-rst/licenses__LICENSE` · SHA-256: `888e06810f58da7bb279286a4b143bcb4b24e52db1d70577e010e793708af95c`
+Quelle: wheel:rich_rst-2.1.0.dist-info/licenses/LICENSE
+
+SHA-256: `888e06810f58da7bb279286a4b143bcb4b24e52db1d70577e010e793708af95c`
 
 ```text
 Copyright 2026 Wasi Master
@@ -11898,9 +11960,11 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### licenses__rich_rst___vendor__LICENSES.txt
+#### rich_rst-2.1.0.dist-info/licenses/rich_rst/_vendor/LICENSES.txt
 
-Quelle im Paketdatensatz: `rich-rst/licenses__rich_rst___vendor__LICENSES.txt` · SHA-256: `47ddf53cbbccf3f9b175ff9212ed0e9a7e5a813996516f8816eaa14e748cee00`
+Quelle: wheel:rich_rst-2.1.0.dist-info/licenses/rich_rst/_vendor/LICENSES.txt
+
+SHA-256: `47ddf53cbbccf3f9b175ff9212ed0e9a7e5a813996516f8816eaa14e748cee00`
 
 ```text
 ================================================================================
@@ -12136,13 +12200,255 @@ the installed wheel, and is entirely absent from this vendored copy.
 ================================================================================
 ```
 
-## scikit-image 0.26.0
+#### rich_rst/_vendor/LICENSES.txt
 
-Lizenz: BSD License
+Quelle: wheel:rich_rst/_vendor/LICENSES.txt
 
-### LICENSE.txt
+SHA-256: `47ddf53cbbccf3f9b175ff9212ed0e9a7e5a813996516f8816eaa14e748cee00`
 
-Quelle im Paketdatensatz: `scikit-image/LICENSE.txt` · SHA-256: `611d3207504dcb4a808df209d2e7c9b4f2e89fe690f84735c0d548160966b527`
+```text
+================================================================================
+Licenses for vendored code in rich_rst/_vendor/
+================================================================================
+
+This directory contains a vendored subset of Docutils 0.22.4, copied here to
+eliminate the docutils PyPI dependency and remove GPL code from the dependency
+tree. See VENDORED.md for the full rationale.
+
+All 41 vendored Python modules are either dedicated to the public domain or
+released under the BSD 2-Clause License. No GPL-licensed file is included.
+
+--------------------------------------------------------------------------------
+PART 1 — Public Domain (39 of 41 files)
+--------------------------------------------------------------------------------
+
+The following files have been dedicated to the public domain by their authors.
+They carry no license requirements and no restrictions on copying or usage.
+
+  docutils/__init__.py
+  docutils/core.py
+  docutils/frontend.py
+  docutils/io.py
+  docutils/nodes.py
+  docutils/statemachine.py
+  docutils/languages/__init__.py
+  docutils/languages/en.py
+  docutils/parsers/__init__.py
+  docutils/parsers/rst/__init__.py
+  docutils/parsers/rst/directives/__init__.py
+  docutils/parsers/rst/directives/admonitions.py
+  docutils/parsers/rst/directives/body.py
+  docutils/parsers/rst/directives/html.py
+  docutils/parsers/rst/directives/images.py
+  docutils/parsers/rst/directives/misc.py
+  docutils/parsers/rst/directives/parts.py
+  docutils/parsers/rst/directives/references.py
+  docutils/parsers/rst/directives/tables.py
+  docutils/parsers/rst/languages/__init__.py
+  docutils/parsers/rst/languages/en.py
+  docutils/parsers/rst/roles.py
+  docutils/parsers/rst/states.py
+  docutils/parsers/rst/tableparser.py
+  docutils/readers/__init__.py
+  docutils/readers/doctree.py
+  docutils/readers/standalone.py
+  docutils/transforms/__init__.py
+  docutils/transforms/frontmatter.py
+  docutils/transforms/misc.py
+  docutils/transforms/references.py
+  docutils/transforms/universal.py
+  docutils/utils/__init__.py
+  docutils/utils/_roman_numerals.py
+  docutils/utils/_typing.py
+  docutils/utils/code_analyzer.py
+  docutils/utils/urischemes.py
+  docutils/writers/__init__.py
+  docutils/writers/null.py
+
+Public Domain Dedication (from the Docutils project):
+
+  The persons who have associated their work with this project (the
+  "Dedicator": David Goodger and the many contributors to the Docutils
+  project) hereby dedicate the entire copyright in the work of authorship
+  known as "Docutils" to the public domain.
+
+  Most of the files included in this project have been placed in the public
+  domain, and therefore have no license requirements and no restrictions on
+  copying or usage.
+
+  Upstream project:  https://docutils.sourceforge.io/
+  Upstream COPYING:  https://docutils.sourceforge.io/COPYING.html
+
+--------------------------------------------------------------------------------
+PART 2 — BSD 2-Clause License (2 of 41 files)
+--------------------------------------------------------------------------------
+
+The following files are released under the BSD 2-Clause License:
+
+  docutils/utils/smartquotes.py
+  docutils/utils/punctuation_chars.py
+
+Both files were authored by Günter Milde. smartquotes.py is additionally
+derived from SmartyPants (John Gruber, BSD 3-Clause) and smartypants.py
+(Chad Miller, BSD 2-Clause); their licenses are reproduced below.
+
+------  docutils/utils/punctuation_chars.py  ----------------------------------
+
+  Copyright © 2011, 2017 Günter Milde.
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice,
+     this list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in the
+     documentation and/or other materials provided with the distribution.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+  POSSIBILITY OF SUCH DAMAGE.
+
+------  docutils/utils/smartquotes.py  ----------------------------------------
+
+  Top-level file copyright:
+  Copyright © 2010–2023 Günter Milde,
+              original SmartyPants © 2003 John Gruber,
+              smartypants.py © 2004, 2007 Chad Miller.
+
+  The file is released as a whole under the BSD 2-Clause License (in short:
+  copying and distribution, with or without modification, are permitted in
+  any medium without royalty provided the copyright notices and this notice
+  are preserved; the file is offered as-is, without any warranty).
+
+  The file contains and derives from three separately-licensed components:
+
+  -- SmartyPants (BSD 3-Clause) --
+
+    Copyright (c) 2003 John Gruber (http://daringfireball.net/)
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in
+      the documentation and/or other materials provided with the
+      distribution.
+
+    * Neither the name "SmartyPants" nor the names of its contributors
+      may be used to endorse or promote products derived from this
+      software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+  -- smartypants.py (BSD 2-Clause) --
+
+    smartypants.py is a derivative work of SmartyPants.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in
+      the documentation and/or other materials provided with the
+      distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+  -- Günter Milde adaptations (BSD 2-Clause) --
+
+    Copyright © 2010–2023 Günter Milde.
+
+    Released under the terms of the 2-Clause BSD license:
+    https://opensource.org/licenses/BSD-2-Clause
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are
+    met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in
+       the documentation and/or other materials provided with the
+       distribution.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+--------------------------------------------------------------------------------
+What is NOT vendored
+--------------------------------------------------------------------------------
+
+The following file exists in the Docutils source tree but is NOT vendored here
+and is NOT distributed with any Docutils wheel or sdist Python installation:
+
+  tools/editors/emacs/rst.el  —  GPL v3 or later (Emacs editor support file)
+
+This Emacs Lisp file is the sole reason Docutils' PyPI metadata lists GPL as
+one of its licenses. It is never imported by Python code, was not present in
+the installed wheel, and is entirely absent from this vendored copy.
+
+================================================================================
+```
+
+### scikit-image 0.26.0
+
+SPDX-Ausdruck: `BSD-3-Clause`
+
+#### scikit_image-0.26.0.dist-info/LICENSE.txt
+
+Quelle: wheel:scikit_image-0.26.0.dist-info/LICENSE.txt
+
+SHA-256: `611d3207504dcb4a808df209d2e7c9b4f2e89fe690f84735c0d548160966b527`
 
 ```text
 Files: *
@@ -12299,13 +12605,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## scipy 1.18.1
+### scipy 1.18.1
 
-Lizenz: BSD License
+SPDX-Ausdruck: `BSD-3-Clause AND BSD-3-Clause-Open-MPI AND (GPL-3.0-or-later WITH GCC-exception-3.1)`
 
-### LICENSE.txt
+#### scipy-1.18.1.dist-info/LICENSE.txt
 
-Quelle im Paketdatensatz: `scipy/LICENSE.txt` · SHA-256: `67a391314e31572f714d9f4fd76676904d7a30eb9b5129107d959c55c59f1c57`
+Quelle: wheel:scipy-1.18.1.dist-info/LICENSE.txt
+
+SHA-256: `67a391314e31572f714d9f4fd76676904d7a30eb9b5129107d959c55c59f1c57`
 
 ```text
 Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.
@@ -13225,13 +13533,220 @@ Public License instead of this License.  But first, please read
 <http://www.gnu.org/philosophy/why-not-lgpl.html>.
 ```
 
-## scooby 0.11.2
+#### scipy/_lib/_uarray/LICENSE
 
-Lizenz: MIT
+Quelle: wheel:scipy/_lib/_uarray/LICENSE
 
-### licenses__LICENSE
+SHA-256: `c80c39b5fce06ba4897e14e0b0a88b54458334d951eb1361402ffad2cfb863b4`
 
-Quelle im Paketdatensatz: `scooby/licenses__LICENSE` · SHA-256: `82208b11be7124de546e1ea8d7fd8bc478ffb2d62be46d8221007978d2483a5b`
+```text
+BSD 3-Clause License
+
+Copyright (c) 2018, Quansight-Labs
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its
+  contributors may be used to endorse or promote products derived from
+  this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+#### scipy/fft/_duccfft/LICENSE.md
+
+Quelle: wheel:scipy/fft/_duccfft/LICENSE.md
+
+SHA-256: `c254b2b5fd30ae3c89d36ba061730563b9760fca04f1b746a1b2c3157da2c789`
+
+```text
+Copyright (C) 2010-2019 Max-Planck-Society
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+* Redistributions in binary form must reproduce the above copyright notice, this
+  list of conditions and the following disclaimer in the documentation and/or
+  other materials provided with the distribution.
+* Neither the name of the copyright holder nor the names of its contributors may
+  be used to endorse or promote products derived from this software without
+  specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+#### scipy/integrate/LICENSE_DOP
+
+Quelle: wheel:scipy/integrate/LICENSE_DOP
+
+SHA-256: `ed9bf58c6d74d3fad9d92d1d67d9bff8141d8ab60de784516b0711364fd43357`
+
+```text
+Copyright (C) 2025 SciPy developers
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    a. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    b. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    c. Names of the SciPy Developers may not be used to endorse or promote
+       products derived from this software without specific prior written
+       permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+THE POSSIBILITY OF SUCH DAMAGE.
+
+
+DOP library consisting Dormand-Prince (4)5 and 8(5,3) integrators, is a
+C translation of the Fortran code written by Ernst Hairer, and Gerhard
+Wanner with the original descriptions below.
+
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+    NUMERICAL SOLUTION OF A SYSTEM OF FIRST 0RDER
+    ORDINARY DIFFERENTIAL EQUATIONS  Y'=F(X,Y).
+    THIS IS AN EXPLICIT RUNGE-KUTTA METHOD OF ORDER 8(5,3)
+    DUE TO DORMAND & PRINCE (WITH STEPSIZE CONTROL AND
+    DENSE OUTPUT)
+
+    AUTHORS: E. HAIRER AND G. WANNER
+             UNIVERSITE DE GENEVE, DEPT. DE MATHEMATIQUES
+             CH-1211 GENEVE 24, SWITZERLAND
+             E-MAIL:  Ernst.Hairer@math.unige.ch
+                      Gerhard.Wanner@math.unige.ch
+
+    THIS CODE IS DESCRIBED IN:
+        E. HAIRER, S.P. NORSETT AND G. WANNER, SOLVING ORDINARY
+        DIFFERENTIAL EQUATIONS I. NONSTIFF PROBLEMS. 2ND EDITION.
+        SPRINGER SERIES IN COMPUTATIONAL MATHEMATICS,
+        SPRINGER-VERLAG (1993)
+
+    VERSION OF APRIL 25, 1996
+    (latest correction of a small bug: August 8, 2005)
+
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+    NUMERICAL SOLUTION OF A SYSTEM OF FIRST 0RDER
+    ORDINARY DIFFERENTIAL EQUATIONS  Y'=F(X,Y).
+    THIS IS AN EXPLICIT RUNGE-KUTTA METHOD OF ORDER (4)5
+    DUE TO DORMAND & PRINCE (WITH STEPSIZE CONTROL AND
+    DENSE OUTPUT).
+
+    AUTHORS: E. HAIRER AND G. WANNER
+             UNIVERSITE DE GENEVE, DEPT. DE MATHEMATIQUES
+             CH-1211 GENEVE 24, SWITZERLAND
+             E-MAIL:  Ernst.Hairer@math.unige.ch
+                      Gerhard.Wanner@math.unige.ch
+
+    THIS CODE IS DESCRIBED IN:
+        E. HAIRER, S.P. NORSETT AND G. WANNER, SOLVING ORDINARY
+        DIFFERENTIAL EQUATIONS I. NONSTIFF PROBLEMS. 2ND EDITION.
+        SPRINGER SERIES IN COMPUTATIONAL MATHEMATICS,
+        SPRINGER-VERLAG (1993)
+
+    VERSION OF APRIL 25, 1996
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+```
+
+#### scipy/spatial/qhull_src/COPYING_QHULL.txt
+
+Quelle: wheel:scipy/spatial/qhull_src/COPYING_QHULL.txt
+
+SHA-256: `46b43a287296f766e1a7ba6f643c61a1cbc07325b60317f9e2edefa716a642c2`
+
+```text
+                    Qhull, Copyright (c) 1993-2020
+
+                            C.B. Barber
+                           Arlington, MA
+
+                               and
+
+       The National Science and Technology Research Center for
+        Computation and Visualization of Geometric Structures
+                        (The Geometry Center)
+                       University of Minnesota
+
+                       email: qhull@qhull.org
+
+This software includes Qhull from C.B. Barber and The Geometry Center.
+Files derived from Qhull 1.0 are copyrighted by the Geometry Center.  The
+remaining files are copyrighted by C.B. Barber.  Qhull is free software
+and may be obtained via http from www.qhull.org.  It may be freely copied,
+modified, and redistributed under the following conditions:
+
+1. All copyright notices must remain intact in all files.
+
+2. A copy of this text file must be distributed along with any copies
+   of Qhull that you redistribute; this includes copies that you have
+   modified, or copies of programs or other software products that
+   include Qhull.
+
+3. If you modify Qhull, you must include a notice giving the
+   name of the person performing the modification, the date of
+   modification, and the reason for such modification.
+
+4. When distributing modified versions of Qhull, or other software
+   products that include Qhull, you must provide notice that the original
+   source code may be obtained as noted above.
+
+5. There is no warranty or other guarantee of fitness for Qhull, it is
+   provided solely "as is".  Bug reports or fixes may be sent to
+   qhull_bug@qhull.org; the authors may or may not act on them as
+   they desire.
+```
+
+### scooby 0.11.2
+
+SPDX-Ausdruck: `MIT`
+
+#### scooby-0.11.2.dist-info/licenses/LICENSE
+
+Quelle: wheel:scooby-0.11.2.dist-info/licenses/LICENSE
+
+SHA-256: `82208b11be7124de546e1ea8d7fd8bc478ffb2d62be46d8221007978d2483a5b`
 
 ```text
 MIT License
@@ -13257,49 +13772,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## SecretStorage 3.5.0
+### shapely 2.1.2
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause AND LGPL-2.1-or-later`
 
-### licenses__LICENSE
+#### shapely-2.1.2.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `secretstorage/licenses__LICENSE` · SHA-256: `e700357592bb93704cb040ce4a6663a85292716a4041b6a267f598f21658466f`
+Quelle: wheel:shapely-2.1.2.dist-info/licenses/LICENSE.txt
 
-```text
-Copyright 2012-2025 Dmitry Shachnev <mitya57@gmail.com>
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-1. Redistributions of source code must retain the above copyright notice, this
-   list of conditions and the following disclaimer.
-2. Redistributions in binary form must reproduce the above copyright notice,
-   this list of conditions and the following disclaimer in the documentation
-   and/or other materials provided with the distribution.
-3. Neither the name of the University nor the names of its contributors may be
-   used to endorse or promote products derived from this software without
-   specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-DISCLAIMED. IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE FOR ANY
-DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
-ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-```
-
-## shapely 2.1.2
-
-Lizenz: BSD License
-
-### licenses__LICENSE.txt
-
-Quelle im Paketdatensatz: `shapely/licenses__LICENSE.txt` · SHA-256: `4a207eac9bf257ed286e1c6f0fce253d1abfdb134fc61ec855e37f5692a3f754`
+SHA-256: `4a207eac9bf257ed286e1c6f0fce253d1abfdb134fc61ec855e37f5692a3f754`
 
 ```text
 BSD 3-Clause License
@@ -13333,9 +13814,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### licenses__LICENSE_GEOS
+#### shapely-2.1.2.dist-info/licenses/LICENSE_GEOS
 
-Quelle im Paketdatensatz: `shapely/licenses__LICENSE_GEOS` · SHA-256: `138b2c2f9450073d7c116abe397ca4382625671c752b7a9a5f320b33fc3f3f2a`
+Quelle: wheel:shapely-2.1.2.dist-info/licenses/LICENSE_GEOS
+
+SHA-256: `138b2c2f9450073d7c116abe397ca4382625671c752b7a9a5f320b33fc3f3f2a`
 
 ```text
 This binary distribution of pygeos also bundles the following software:
@@ -13849,9 +14332,11 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 ```
 
-### licenses__LICENSE_win32
+#### shapely-2.1.2.dist-info/licenses/LICENSE_win32
 
-Quelle im Paketdatensatz: `shapely/licenses__LICENSE_win32` · SHA-256: `2ad0ead5166d5d420bee57d045b0e38f54dec3979c8cb3fdbdcd3c47437468f9`
+Quelle: wheel:shapely-2.1.2.dist-info/licenses/LICENSE_win32
+
+SHA-256: `2ad0ead5166d5d420bee57d045b0e38f54dec3979c8cb3fdbdcd3c47437468f9`
 
 ```text
 This binary distribution of pygeos also bundles the following software:
@@ -13882,41 +14367,15 @@ License: MSVC
   VC\atlmfc\lib\amd64\mfcmifc80.dll
 ```
 
-## shiboken6 6.11.2
+### shiboken6 6.11.2
 
-Lizenz: LGPL-3.0-only
+SPDX-Ausdruck: `LGPL-3.0-only`
 
-### SOLIDON-LGPL-NOTICE.txt
+#### LGPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/SOLIDON-LGPL-NOTICE.txt` · SHA-256: `711cf5713160f26cfaf81e1f4794f284372d4431a2c72027531607f4cccfbe94`
+Quelle: https://www.gnu.org/licenses/lgpl-3.0.txt
 
-```text
-Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
-
-Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
-Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
-Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
-weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
-eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
-Zweck erforderliche Rückentwicklung.
-
-Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
-CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
-Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
-Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
-
-RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
-Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
-LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
-Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
-Person, die dieses Paket erhält, bis mindestens 1. September 2029.
-
-Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.
-```
-
-### LGPL-3.0.txt
-
-Quelle im Paketdatensatz: `common/LGPL-3.0.txt` · SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
+SHA-256: `e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118`
 
 ```text
                    GNU LESSER GENERAL PUBLIC LICENSE
@@ -14086,9 +14545,11 @@ permanent authorization for you to choose that version for the
 Library.
 ```
 
-### GPL-3.0.txt
+#### GPL-3.0.txt
 
-Quelle im Paketdatensatz: `common/GPL-3.0.txt` · SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
+Quelle: https://www.gnu.org/licenses/gpl-3.0.txt
+
+SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
 
 ```text
                     GNU GENERAL PUBLIC LICENSE
@@ -14767,13 +15228,15 @@ Public License instead of this License.  But first, please read
 <https://www.gnu.org/licenses/why-not-lgpl.html>.
 ```
 
-## six 1.17.0
+### six 1.17.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### LICENSE
+#### six-1.17.0.dist-info/LICENSE
 
-Quelle im Paketdatensatz: `six/LICENSE` · SHA-256: `4375ba20e2b9c6c4e7cad2940a628fd90e95cc3d50ee92aae755715d8ba1fbd0`
+Quelle: wheel:six-1.17.0.dist-info/LICENSE
+
+SHA-256: `4375ba20e2b9c6c4e7cad2940a628fd90e95cc3d50ee92aae755715d8ba1fbd0`
 
 ```text
 Copyright (c) 2010-2024 Benjamin Peterson
@@ -14796,13 +15259,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## svg.path 7.1
+### svg.path 7.1
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE.txt
+#### svg_path-7.1.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `svg-path/licenses__LICENSE.txt` · SHA-256: `f24c7d91c184417924f5428651bcf394f42901b145137a55e4dbf0743b9d9170`
+Quelle: wheel:svg_path-7.1.dist-info/licenses/LICENSE.txt
+
+SHA-256: `f24c7d91c184417924f5428651bcf394f42901b145137a55e4dbf0743b9d9170`
 
 ```text
 The MIT License (MIT)
@@ -14828,13 +15293,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## tifffile 2026.8.23
+### tifffile 2026.8.23
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE
+#### tifffile-2026.8.23.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `tifffile/licenses__LICENSE` · SHA-256: `3cf196b1625812d2d119518294043e71017fe858355a58eb48e1e35b61213ce9`
+Quelle: wheel:tifffile-2026.8.23.dist-info/licenses/LICENSE
+
+SHA-256: `3cf196b1625812d2d119518294043e71017fe858355a58eb48e1e35b61213ce9`
 
 ```text
 BSD-3-Clause license
@@ -14869,13 +15336,15 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## trimesh 5.0.0
+### trimesh 5.0.0
 
-Lizenz: MIT License
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE.md
+#### trimesh-5.0.0.dist-info/licenses/LICENSE.md
 
-Quelle im Paketdatensatz: `trimesh/licenses__LICENSE.md` · SHA-256: `fe27b5ef8710676cc85255da28a32f394e2ef3f4ce47075a1c732a9ea1d7bd03`
+Quelle: wheel:trimesh-5.0.0.dist-info/licenses/LICENSE.md
+
+SHA-256: `fe27b5ef8710676cc85255da28a32f394e2ef3f4ce47075a1c732a9ea1d7bd03`
 
 ```text
 The MIT License (MIT)
@@ -14901,13 +15370,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## typing_extensions 4.16.0
+### typing_extensions 4.16.0
 
-Lizenz: PSF-2.0
+SPDX-Ausdruck: `PSF-2.0`
 
-### licenses__LICENSE
+#### typing_extensions-4.16.0.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `typing-extensions/licenses__LICENSE` · SHA-256: `3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf`
+Quelle: wheel:typing_extensions-4.16.0.dist-info/licenses/LICENSE
+
+SHA-256: `3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf`
 
 ```text
 A. HISTORY OF THE SOFTWARE
@@ -15191,13 +15662,15 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-## urllib3 2.7.0
+### urllib3 2.7.0
 
-Lizenz: MIT
+SPDX-Ausdruck: `MIT`
 
-### licenses__LICENSE.txt
+#### urllib3-2.7.0.dist-info/licenses/LICENSE.txt
 
-Quelle im Paketdatensatz: `urllib3/licenses__LICENSE.txt` · SHA-256: `130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686`
+Quelle: wheel:urllib3-2.7.0.dist-info/licenses/LICENSE.txt
+
+SHA-256: `130e3a64d5fdd5d096a752694634a7d9df284469de86e5732100268041e3d686`
 
 ```text
 MIT License
@@ -15223,13 +15696,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## vhacdx 0.0.10
+### vhacdx 0.0.10
 
-Lizenz: BSD-3-Clause
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE
+#### vhacdx-0.0.10.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `vhacdx/licenses__LICENSE` · SHA-256: `0cef3813562ecea956317018a5ad41baea84e4317bc57924ff4dfa2ff5c51775`
+Quelle: wheel:vhacdx-0.0.10.dist-info/licenses/LICENSE
+
+SHA-256: `0cef3813562ecea956317018a5ad41baea84e4317bc57924ff4dfa2ff5c51775`
 
 ```text
 MIT License
@@ -15286,13 +15761,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## vtk 9.6.2
+### vtk 9.6.2
 
-Lizenz: BSD License
+SPDX-Ausdruck: `BSD-3-Clause`
 
-### licenses__LICENSE
+#### vtk-9.6.2.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `vtk/licenses__LICENSE` · SHA-256: `11232448be82e0ea2c2c66219c2e36389f42249894070ee10c549ff182fc08b6`
+Quelle: wheel:vtk-9.6.2.dist-info/licenses/LICENSE
+
+SHA-256: `11232448be82e0ea2c2c66219c2e36389f42249894070ee10c549ff182fc08b6`
 
 ```text
 /*=========================================================================
@@ -15331,13 +15808,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 =========================================================================*/
 ```
 
-## xxhash 4.0.1
+### xxhash 4.0.1
 
-Lizenz: BSD-2-Clause
+SPDX-Ausdruck: `BSD-2-Clause`
 
-### licenses__LICENSE
+#### xxhash-4.0.1.dist-info/licenses/LICENSE
 
-Quelle im Paketdatensatz: `xxhash/licenses__LICENSE` · SHA-256: `b76e99529f3e47372029e11914a8f4b95d6313463ed5a1a5c9afe96c3e015114`
+Quelle: wheel:xxhash-4.0.1.dist-info/licenses/LICENSE
+
+SHA-256: `b76e99529f3e47372029e11914a8f4b95d6313463ed5a1a5c9afe96c3e015114`
 
 ```text
 Copyright (c) 2014-2026, Yue Du

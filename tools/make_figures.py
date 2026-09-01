@@ -110,7 +110,7 @@ DIALOG = (520, 460)
 #: geschätzt: die Seite wurde geladen und ausgerechnet. Die Höhe folgt dem
 #: Inhalt und nicht dem Verhältnis — vier Befunde in einer Fläche von 400
 #: Punkten sind zur Hälfte leerer Grund.
-REPORT = (620, 270)
+REPORT = (620, 430)
 
 
 #: Wie lange ein „Durchgang" beim Setzenlassen dauert, in Millisekunden.
@@ -202,7 +202,7 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     if result is None:
         raise SystemExit("nichts gerechnet — kein Bild vom Skizzenmodus")
 
-    topmost: list[tuple[float, float, str]] = []
+    topmost: list[tuple[float, float, str, str]] = []
     for object_id, body in result.scene.objects.items():
         for feature_id, feature in body.features.items():
             normal = feature.params.get("normal", (0.0, 0.0, 0.0))
@@ -217,37 +217,40 @@ def frame_sketch(window: Any, app: QApplication) -> None:
                 (
                     float(centre[2]),
                     float(feature.params.get("area", 0.0)),
-                    # Vollqualifiziert, seit §15.7 zwei Körper denselben
-                    # Merkmalsnamen tragen dürfen: Die Ebenen-Wahl führt
-                    # ``feature:<objekt>:<merkmal>``, und die Kurzform fiel
-                    # kommentarlos auf die Grundebene zurück — der Wächter
-                    # darunter hat es gefangen (30.08.2026).
-                    f"{object_id}:{feature_id}",
+                    object_id,
+                    feature_id,
                 )
             )
     if not topmost:
         raise SystemExit("keine nach oben zeigende Fläche — kein Bild vom Skizzenmodus")
     topmost.sort(reverse=True)
+    object_id, feature_id = topmost[0][2:]
+    plane_key = f"feature:{object_id}:{feature_id}"
+
+    # Eine Tasche braucht einen gewählten Körper. Die alte Aufnahme öffnete
+    # zwar auf seiner Fläche, ließ den Objektbaum aber ohne Wirtskörper — der
+    # sichtbare Knopf *Abtragen* war deshalb gesperrt. Die Aufnahme soll den
+    # echten Einstieg zeigen, auch wenn das Ergebnis unten extrudiert wird.
+    window.object_tree.select_object(object_id)
+    settle(app, 4)
 
     window.start_sketch(
-        # **Extrudieren und nicht Tasche schneiden.** Eine Tasche verbraucht
-        # einen Körper (``consumes=1``), und im Bildlauf ist keiner ausgewählt:
-        # ``run_operation`` bleibt dann in einer modalen Meldung stehen und der
-        # ganze Lauf hängt. Für den Kunden ist dieselbe Stelle ein eigener
-        # Befund — er hat auf der Fläche eines Körpers gezeichnet, und trotzdem
-        # verlangt die Tasche eine Auswahl.
+        # **Extrudieren für das Ergebnisbild.** Rechteck und Kreis werden eine
+        # neue Platte mit Loch — genau das verspricht ihr Alt-Text. Der zuvor
+        # gewählte Wirtskörper macht im Skizzenbild zugleich sichtbar, dass
+        # derselbe Umriss auch als Tasche abgetragen werden kann.
         "sketch_extrude",
         # **Maße auf dem Raster.** Das Raster steht auf fünf Millimetern, und
         # ein Rechteck von 46 mal 24 legt seine Kanten zwischen die Linien —
         # im Bild sieht das aus, als läge die Zeichnung schief im Netz. 50 mal
         # 30 liegt auf ±25 und ±15, der Kreis mit 20 auf ±10.
         sketch_to_text(shapes.rectangle(50.0, 30.0)),
-        plane=f"feature:{topmost[0][2]}",
+        plane=plane_key,
     )
     panel = window._sketch_panel
     if panel is None:
         raise SystemExit("der Skizzenmodus ging nicht auf — kein Bild davon")
-    if str(panel.plane_choice.currentData() or "") != f"feature:{topmost[0][2]}":
+    if str(panel.plane_choice.currentData() or "") != plane_key:
         # ``start_sketch`` schreibt einen Rückfall nur in ein ``announce`` —
         # das Werkzeug hier muss ihn selbst bemerken, sonst zeigt das Bild
         # eine Zeichnung auf der Grundebene und behauptet die Fläche.
@@ -441,8 +444,26 @@ SAMPLE_OBJECT = {
     "pt": "Suporte",
 }
 
+#: Der mitgelieferte Profilname ist absichtlich eine unveränderliche
+#: Druckerbezeichnung. Für ein Handbuchbild wäre er damit in fünf Sprachen
+#: deutsch; die Aufnahme stellt nur den sichtbaren Beispielnamen um und lässt
+#: Profil-ID, Projekt und Benutzereinstellungen unberührt.
+SAMPLE_PRINTER = {
+    "de": "Allgemeiner FDM-Drucker 220 mm",
+    "en": "Generic FDM printer 220 mm",
+    "es": "Impresora FDM genérica de 220 mm",
+    "fr": "Imprimante FDM générique 220 mm",
+    "it": "Stampante FDM generica da 220 mm",
+    "pt": "Impressora FDM genérica de 220 mm",
+}
 
-def sample_findings(language: str) -> list[Finding]:
+
+def sample_findings(
+    language: str,
+    object_id: str,
+    op_id: str,
+    location: tuple[float, float, float],
+) -> list[Finding]:
     """Befunde, wie sie ein eingelesenes Fremdmodell erzeugt.
 
     Gestellt und nicht gerechnet: der Prüfbericht soll auf dem Bild die Sorten
@@ -455,16 +476,35 @@ def sample_findings(language: str) -> list[Finding]:
             code="ingest.not_watertight",
             severity="warning",
             message=open_body,
+            object_id=object_id,
+            op_id=op_id,
             values={"holes": 3},
+            location=location,
         ),
         Finding(
             code="ingest.flipped_faces",
             severity="warning",
             message=flipped,
+            object_id=object_id,
+            op_id=op_id,
             values={"faces": 14},
+            location=location,
         ),
-        Finding(code="slice.thin_wall", severity="info", message=thin),
-        Finding(code="ingest.unit_guessed", severity="info", message=unit),
+        Finding(
+            code="slice.thin_wall",
+            severity="info",
+            message=thin,
+            object_id=object_id,
+            op_id=op_id,
+            location=location,
+        ),
+        Finding(
+            code="ingest.unit_guessed",
+            severity="info",
+            message=unit,
+            object_id=object_id,
+            op_id=op_id,
+        ),
     ]
 
 
@@ -531,7 +571,12 @@ def take_all(app: QApplication, language: str) -> None:
     window._show_start_screen(False)
     if not await_result(app, session):
         raise SystemExit("Die Auswertung wurde nicht fertig — kein Bild vom Hauptfenster")
-    window.report.add_findings(sample_findings(language))
+    sample_object = next(iter(session.last_result.scene.objects.values()))
+    sample_object_id = str(sample_object.id)
+    sample_op_id = str(session.project.document.ops[-1].id)
+    sample_location = tuple(float(value) for value in sample_object.mesh.bounds.centre)
+    findings = sample_findings(language, sample_object_id, sample_op_id, sample_location)
+    window.report.add_findings(findings)
     window.raise_()
     window.activateWindow()
     settle(app, 60)
@@ -583,6 +628,28 @@ def take_all(app: QApplication, language: str) -> None:
     # waren.
     settle(app, 20)
 
+    # Der Prüfbericht als eigener Ausschnitt, aber **weiter unter dem echten
+    # Hauptfenster**: Dort findet er dieselben Handlungshandler wie im Betrieb.
+    # Ein elternloses ReportPanel zeigte zwar die vier Befunde, aber weder die
+    # Körpernamen noch die anklickbaren Handlungen — also ausgerechnet nicht
+    # den aktuellen Stand, den das Bild belegen soll.
+    result = session.last_result
+    if result is None:
+        raise SystemExit("die Auswertung fehlt — kein Bild vom Prüfbericht")
+    report = ReportPanel(window)
+    report.show_result(result, session.project.document)
+    report.add_findings(findings)
+    # Die gestellten Befunde kommen hier nach dem echten Auswertungsergebnis
+    # hinzu. Im Betrieb lägen sie schon darin und würden von ``show_result``
+    # vorgewählt; nach ``add_findings`` bleibt eine bestehende Nichtauswahl
+    # dagegen absichtlich bestehen. Für dasselbe Anfangsbild deshalb noch
+    # einmal den normalen Vorauswahlweg laufen lassen.
+    report._preselect()
+    prepared(report, REPORT)
+    settle(app)
+    shoot(report, "report", language)
+    report.close()
+
     # Unmittelbar vor dem Schließen und nicht früher: Die Auswertung nach dem
     # Undo läuft noch und setzt den Änderungsstand erneut. Ein Reset weiter
     # oben wirkte deshalb nicht — er stand hier trotzdem, bis der Review ihn
@@ -590,15 +657,6 @@ def take_all(app: QApplication, language: str) -> None:
     session._dirty = False
     window.close()
     release_viewport(window)
-
-    # Der Prüfbericht als eigenes Fenster: im Hauptfenster steckt er in einem
-    # Reiter und ist genau so hoch wie der Reiter, was ein Bild von zwölf Pixeln
-    # Höhe ergibt.
-    report = prepared(ReportPanel(), REPORT)
-    report.add_findings(sample_findings(language))
-    settle(app)
-    shoot(report, "report", language)
-    report.close()
 
     # **Nicht auf DIALOG-Höhe zwingen.** Die Dialoge wachsen mit ihrem Inhalt
     # (143 bis 427 Bildpunkte, gemessen); auf 460 gezogen standen zweihundert
@@ -671,6 +729,11 @@ def take_all(app: QApplication, language: str) -> None:
         print_dialog = prepared(
             PrintSettingsDialog(session, window.settings), DIALOG, fit_height=True
         )
+        current_printer = print_dialog.printer_choice.currentIndex()
+        if current_printer >= 0:
+            print_dialog.printer_choice.setItemText(
+                current_printer, SAMPLE_PRINTER.get(language, SAMPLE_PRINTER["de"])
+            )
         # Die Profilsuche läuft im Arbeiter; ein Bild mit „wird
         # durchgesehen …" zeigte einen Moment, keinen Zustand.
         for _ in range(100):

@@ -30,7 +30,12 @@ from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
-from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
+from app.core.knowledge.parts.registry import (
+    FACE_GIVES_DIRECTION,
+    PartChange,
+    WallRequirement,
+    register_part,
+)
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
@@ -38,6 +43,19 @@ from app.i18n import _
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Testkörper für die Selbstkalibrierung (§28.3)."
+)
+
+FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Großes Spiel konnte bei kleinem Nenndurchmesser benachbarte Bohrungen "
+        "verbinden und die Grundplatte zerlegen."
+    ),
+    effect=(
+        "Abstand und Plattentiefe richten sich jetzt auch nach der größten "
+        "Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert."
+    ),
 )
 
 #: Höhe der eingravierten Beschriftungen. Zwei Schichten zu 0,2 mm — lesbar,
@@ -98,16 +116,20 @@ class FitLadderParams(BaseParams):
     # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
     at_face=False,
     params=FitLadderParams,
-    features=["pin", "bore"],
+    features=["pin", "bore", "face"],
+    wall=WallRequirement.not_applicable(
+        "Der Kalibrierkörper vermisst diese Druckgrenze und darf sie deshalb unterschreiten."
+    ),
     doc=_(
         "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, "
         "und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE],
 )
 def fit_ladder(raw: BaseParams) -> PartResult:
     params = cast(FitLadderParams, raw)
-    spacing = params.diameter * 2.2
+    largest_bore = params.diameter + params.first + params.step * (params.steps - 1)
+    spacing = max(params.diameter * 2.2, largest_bore * 1.5)
     base_height = 3.0
     width = spacing * params.steps + spacing
     base = shapes.box(width, spacing * 2.4, base_height)
@@ -194,6 +216,7 @@ class WallLadderParams(BaseParams):
     at_face=False,
     params=WallLadderParams,
     features=["face"],
+    wall=WallRequirement.from_parameter("extrusion"),
     doc=_(
         "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
         "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
@@ -270,6 +293,9 @@ class OverhangFanParams(BaseParams):
     at_face=False,
     params=OverhangFanParams,
     features=["face"],
+    wall=WallRequirement.not_applicable(
+        "Der Kalibrierkörper vermisst diese Druckgrenze und darf sie deshalb unterschreiten."
+    ),
     doc=_(
         "Flächen von steil bis flach. Zeigt, ab welchem Winkel dieser Drucker mit "
         "diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad."

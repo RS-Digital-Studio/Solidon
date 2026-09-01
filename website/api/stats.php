@@ -27,38 +27,35 @@
  * fälschen will, braucht den Hash — und der liegt in einer Datei, die der
  * Webserver nicht herausgibt.
  *
- * **Einrichtung — ohne diesen Schritt bleibt die Seite zu.** Neben dieser
- * Datei muss `.stats-zugang.php` liegen und den Hash eines Passworts
- * enthalten. Sie ist eine PHP-Datei und keine Textdatei, damit der Webserver
- * sie ausführt statt sie herzugeben, falls eine .htaccess einmal nicht greift.
- * Angelegt wird sie von
+ * **Einrichtung — ohne diesen Schritt bleibt die Seite zu.** Der Hash liegt
+ * standardmäßig in `appdata/stats-access.php` neben dem Dokumentenstamm; ein
+ * anderer absoluter, ebenfalls privater Pfad kommt aus
+ * `SOLIDON_STATS_ACCESS_FILE`. Die Datei gehört dem Webserverkonto und trägt
+ * auf POSIX höchstens Rechte 0600. Eine Lage im Dokumentenstamm wird auch dann
+ * abgelehnt, wenn der Webserver PHP-Dateien normalerweise ausführt.
  *
- *     .venv\Scripts\python.exe tools/make_stats_access.py
+ * Die Datei gibt ein Array der Form `['hash' => '<password_hash>']` zurück.
+ * Ein Passwort-Hash im Repository oder Dokumentenstamm ist kein Geheimnis
+ * mehr — und dieses hier schützt die einzige nicht-öffentliche Seite der
+ * Domain.
  *
- * und hochgeladen mit
- *
- *     .venv\Scripts\python.exe tools/upload_website.py website/api/.stats-zugang.php
- *
- * Von Hand über `php -r` geht es auch, aber dabei lauert eine Falle, die
- * still zuschlägt: Ein bcrypt-Hash enthält `$`-Zeichen, und wer ihn in einer
- * Zeichenkette mit doppelten Anführungszeichen ablegt, bekommt eine Datei mit
- * einem verstümmelten Hash — die Anmeldung scheitert dann mit richtigem
- * Passwort. Unten steht deshalb eine Prüfung, die genau das meldet, statt es
- * als falsches Passwort auszugeben.
- *
- * Die Datei steht in .gitignore. Ein Passwort-Hash im Repository ist zwar
- * kein Klartext, aber auch kein Geheimnis mehr — und dieses hier schützt die
- * einzige nicht-öffentliche Seite der Domain.
- *
- * Braucht PHP 7.4 oder neuer.
+ * Braucht PHP 8.1 oder neuer.
  */
 
 declare(strict_types=1);
 
+if (PHP_VERSION_ID < 80100) {
+    http_response_code(503);
+    exit;
+}
+
 // --- Einstellungen ---------------------------------------------------------
 
-/** Woher die Anmeldung ihren Vergleichswert nimmt. */
-const ACCESS_FILE = __DIR__ . '/.stats-zugang.php';
+/** Höchstgröße des einzigen Formularfelds samt Kodierung. */
+const STATS_MAX_BODY = 2048;
+const STATS_MAX_MONTH_BYTES = 16 * 1024 * 1024;
+const STATS_MAX_LINE_BYTES = 1024;
+const STATS_MAX_ROWS = 16384;
 
 /** In welcher Zeitzone die Tage gezählt werden. Gespeichert wird UTC; wer
  *  die Zahlen liest, denkt in seiner eigenen Zeit. */
@@ -78,6 +75,96 @@ const COOKIE_DAYS = 30;
  *  Rateversuche schon von sich aus auf wenige je Sekunde; das hier ist die
  *  zweite Wand dahinter. */
 const MAX_TRIES = 10;
+const MAX_GLOBAL_TRIES = 50;
+/** Im Anmeldezähler bleiben bei jedem Zugriff höchstens 15 Minuten. */
+const STATS_RATE_RETENTION_SECONDS = 900;
+
+/** Schutzköpfe gelten auch für Anmelde- und Einrichtungsfehler. */
+function stats_security_headers(): void
+{
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: no-referrer');
+    header('X-Frame-Options: DENY');
+    header('Permissions-Policy: camera=(), microphone=(), geolocation=()');
+    header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; "
+        . "form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+    header('Cache-Control: no-store');
+}
+
+/** Die Zugangsakte liegt standardmäßig neben, nie unter dem Dokumentenstamm. */
+function access_file(): string
+{
+    $configured = getenv('SOLIDON_STATS_ACCESS_FILE');
+    $path = $configured === false || $configured === ''
+        ? dirname(__DIR__, 2) . '/appdata/stats-access.php'
+        : $configured;
+    if (substr($path, 0, 1) !== DIRECTORY_SEPARATOR
+        && preg_match('#^[A-Za-z]:[\\\\/]#', $path) !== 1) {
+        return '';
+    }
+    $candidate = rtrim(str_replace('\\', '/', strtolower($path)), '/');
+    if (preg_match('#(^|/)\.\.(/|$)#', $candidate) === 1) {
+        return '';
+    }
+    $probe = $path;
+    while (true) {
+        if (is_link($probe)) {
+            return '';
+        }
+        if (file_exists($probe)) {
+            break;
+        }
+        $parent = dirname($probe);
+        if ($parent === $probe) {
+            return '';
+        }
+        $probe = $parent;
+    }
+    $resolved = realpath($probe);
+    if ($resolved === false) {
+        return '';
+    }
+    $candidate = rtrim(str_replace('\\', '/', strtolower($resolved)), '/');
+    $root = realpath((string) ($_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__)))
+        ?: realpath(dirname(__DIR__));
+    if ($root !== false) {
+        $root = rtrim(str_replace('\\', '/', strtolower($root)), '/');
+        if ($candidate === $root || strpos($candidate, $root . '/') === 0) {
+            return '';
+        }
+    }
+    return $path;
+}
+
+stats_security_headers();
+$statsMethod = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
+if (!in_array($statsMethod, ['GET', 'POST'], true)) {
+    header('Allow: GET, POST');
+    http_response_code(405);
+    exit;
+}
+if ($statsMethod === 'POST') {
+    $origin = trim((string) ($_SERVER['HTTP_ORIGIN'] ?? ''));
+    if (!in_array(strtolower($origin), ['https://solidon3d.de', 'https://www.solidon3d.de'], true)) {
+        http_response_code(403);
+        exit;
+    }
+    $type = strtolower(trim(explode(';', (string) ($_SERVER['CONTENT_TYPE'] ?? ''), 2)[0]));
+    if ($type !== 'application/x-www-form-urlencoded') {
+        http_response_code(415);
+        exit;
+    }
+    $declared = (string) ($_SERVER['CONTENT_LENGTH'] ?? '');
+    if ($declared !== '' && (!ctype_digit($declared) || (int) $declared > STATS_MAX_BODY)) {
+        http_response_code(413);
+        exit;
+    }
+    $rawBody = file_get_contents('php://input', false, null, 0, STATS_MAX_BODY + 1);
+    if ($rawBody === false || strlen($rawBody) > STATS_MAX_BODY) {
+        http_response_code(413);
+        exit;
+    }
+}
 
 // --- Anmeldung -------------------------------------------------------------
 
@@ -90,16 +177,23 @@ const MAX_TRIES = 10;
  */
 function stored_hash(): string
 {
-    $access = @include ACCESS_FILE;
+    $path = access_file();
+    $access = $path !== '' && is_file($path) ? @include $path : null;
     $hash = is_array($access) ? (string) ($access['hash'] ?? '') : '';
 
     if ($hash === '') {
         http_response_code(503);
         header('Content-Type: text/plain; charset=utf-8');
-        echo "Diese Seite ist noch nicht eingerichtet.\n\n"
-            . "Es fehlt .stats-zugang.php neben stats.php. Anlegen mit\n"
-            . "  tools/make_stats_access.py\n"
-            . "und einzeln hochladen.\n";
+        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
+        exit;
+    }
+
+    if (DIRECTORY_SEPARATOR === '/'
+        && ((((int) fileperms($path) & 0077) !== 0)
+            || (((int) fileperms(dirname($path)) & 0077) !== 0))) {
+        http_response_code(503);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
         exit;
     }
 
@@ -110,10 +204,7 @@ function stored_hash(): string
     if ((password_get_info($hash)['algo'] ?? null) === null) {
         http_response_code(503);
         header('Content-Type: text/plain; charset=utf-8');
-        echo "Der hinterlegte Passwort-Hash ist unbrauchbar.\n\n"
-            . "In .stats-zugang.php steht keine gültige bcrypt-Zeichenkette —\n"
-            . "meist, weil die \$-Zeichen beim Anlegen verschluckt wurden.\n"
-            . "Neu anlegen mit tools/make_stats_access.py und hochladen.\n";
+        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
         exit;
     }
 
@@ -155,7 +246,10 @@ function token_ok(string $token, string $hash): bool
         return false;
     }
     [$until, $signature] = $parts;
-    if (!ctype_digit($until) || (int) $until < time()) {
+    $now = time();
+    if (!ctype_digit($until) || strlen($signature) !== 64
+        || !ctype_xdigit($signature) || (int) $until < $now
+        || (int) $until > $now + COOKIE_DAYS * 86400) {
         return false;
     }
     return hash_equals(hash_hmac('sha256', $until, signing_key($hash)), $signature);
@@ -167,27 +261,209 @@ function tries_file(): string
     return store_dir() . '/anmeldeversuche.json';
 }
 
-/** Wie viele Fehlversuche in der letzten Viertelstunde stehen. */
-function recent_tries(): int
+/** Zwei ohne den privaten Zugangshash nicht verknüpfbare Viertelstundenkennzeichen. */
+function stats_rate_client_keys(string $hash, int $now): array
 {
-    $stamps = @json_decode((string) @file_get_contents(tries_file()), true);
-    if (!is_array($stamps)) {
-        return 0;
+    $root = hash_hmac('sha256', 'solidon|stats-rate', signing_key($hash), true);
+    $address = (string) ($_SERVER['REMOTE_ADDR'] ?? '-');
+    $bucket = intdiv($now, STATS_RATE_RETENTION_SECONDS);
+    $keys = [];
+    foreach ([$bucket, $bucket - 1] as $number) {
+        $windowSecret = hash_hmac('sha256', (string) $number, $root, true);
+        $keys[] = 'ip:v2:' . hash_hmac('sha256', $address, $windowSecret);
     }
-    $since = time() - 900;
-    return count(array_filter($stamps, static fn ($t): bool => is_int($t) && $t > $since));
+    return array_values(array_unique($keys));
+}
+
+/** Wie viele Fehlversuche in der letzten Viertelstunde stehen. */
+function recent_tries(string $hash): int
+{
+    $counts = stats_update_tries(false, $hash);
+    return count($counts['ip']) >= MAX_TRIES || count($counts['global']) >= MAX_GLOBAL_TRIES
+        ? MAX_TRIES
+        : count($counts['ip']);
 }
 
 /** Einen Fehlversuch vermerken; ältere fallen dabei heraus. */
-function note_try(): void
+function note_try(string $hash): void
 {
-    $stamps = @json_decode((string) @file_get_contents(tries_file()), true);
-    $since = time() - 900;
-    $kept = is_array($stamps)
-        ? array_values(array_filter($stamps, static fn ($t): bool => is_int($t) && $t > $since))
-        : [];
-    $kept[] = time();
-    @file_put_contents(tries_file(), json_encode($kept), LOCK_EX);
+    stats_update_tries(true, $hash);
+}
+
+/** Öffnet den Anmeldezähler ohne Links oder Mehrfachverweise. */
+function stats_open_rate_state(string $path)
+{
+    if (is_link($path)) {
+        return null;
+    }
+    $previousMask = umask(0077);
+    try {
+        $stream = @fopen($path, 'x+b');
+    } finally {
+        umask($previousMask);
+    }
+    $created = is_resource($stream);
+    if (!$created) {
+        if (is_link($path)) {
+            return null;
+        }
+        $stream = @fopen($path, 'r+b');
+    }
+    if (!is_resource($stream) || !flock($stream, LOCK_EX)) {
+        if (is_resource($stream)) {
+            fclose($stream);
+        }
+        return null;
+    }
+    if ($created && DIRECTORY_SEPARATOR === '/' && !@chmod($path, 0600)) {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+        return null;
+    }
+    clearstatcache(true, $path);
+    $opened = fstat($stream);
+    $named = @lstat($path);
+    if (!is_array($opened) || !is_array($named) || is_link($path) || !is_file($path)
+        || (int) ($opened['dev'] ?? -1) !== (int) ($named['dev'] ?? -2)
+        || (int) ($opened['ino'] ?? -1) !== (int) ($named['ino'] ?? -2)
+        || (int) ($opened['nlink'] ?? 0) !== 1 || (int) ($named['nlink'] ?? 0) !== 1
+        || (DIRECTORY_SEPARATOR === '/' && ((int) $opened['mode'] & 0077) !== 0)) {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+        return null;
+    }
+    return $stream;
+}
+
+/** Schreibt jeden angeforderten Byte auf den bereits geöffneten Stream. */
+function stats_write_all($stream, string $data): bool
+{
+    $offset = 0;
+    while ($offset < strlen($data)) {
+        $written = fwrite($stream, substr($data, $offset));
+        if ($written === false || $written === 0) {
+            return false;
+        }
+        $offset += $written;
+    }
+    return true;
+}
+
+/** Erzwingt die Persistenz; Solidon verlangt dafür PHP 8.1 oder neuer. */
+function stats_flush_and_sync($stream): bool
+{
+    return fflush($stream) && fsync($stream);
+}
+
+/** Stellt nach einem fehlgeschlagenen Ersatz den zuvor gelesenen Inhalt wieder her. */
+function stats_restore_stream($stream, string $original): bool
+{
+    $positioned = fseek($stream, 0, SEEK_SET) === 0;
+    $truncated = $positioned && ftruncate($stream, 0);
+    $written = $truncated && stats_write_all($stream, $original);
+    $synced = stats_flush_and_sync($stream);
+    return $positioned && $truncated && $written && $synced;
+}
+
+/** Ersetzt einen Stream transaktional und gibt bei jedem Persistenzfehler false zurück. */
+function stats_replace_stream($stream, string $data): bool
+{
+    if (fseek($stream, 0, SEEK_SET) !== 0) {
+        return false;
+    }
+    $original = stream_get_contents($stream);
+    if (!is_string($original) || fseek($stream, 0, SEEK_SET) !== 0
+        || !ftruncate($stream, 0)) {
+        return false;
+    }
+    if (stats_write_all($stream, $data) && stats_flush_and_sync($stream)) {
+        return true;
+    }
+    if (!stats_restore_stream($stream, $original)) {
+        error_log('Solidon: Wiederherstellung des Statistik-Zählers fehlgeschlagen.');
+    }
+    return false;
+}
+
+/** Schreibt den vollständigen Zähler auf denselben geprüften Handle. */
+function stats_write_rate_state(string $path, $stream, string $data): bool
+{
+    clearstatcache(true, $path);
+    $opened = fstat($stream);
+    $named = @lstat($path);
+    if (!is_array($opened) || !is_array($named) || is_link($path)
+        || (int) ($opened['dev'] ?? -1) !== (int) ($named['dev'] ?? -2)
+        || (int) ($opened['ino'] ?? -1) !== (int) ($named['ino'] ?? -2)
+        || (int) ($opened['nlink'] ?? 0) !== 1 || (int) ($named['nlink'] ?? 0) !== 1
+        || !stats_replace_stream($stream, $data)) {
+        return false;
+    }
+    clearstatcache(true, $path);
+    $named = @lstat($path);
+    return is_array($named) && !is_link($path)
+        && (int) ($opened['dev'] ?? -1) === (int) ($named['dev'] ?? -2)
+        && (int) ($opened['ino'] ?? -1) === (int) ($named['ino'] ?? -2)
+        && (int) ($named['nlink'] ?? 0) === 1;
+}
+
+/** Liest und ändert den IP-bezogenen Fehlversuchszähler unter einer Sperre. */
+function stats_update_tries(bool $add, string $hash): array
+{
+    $path = tries_file();
+    $stream = stats_open_rate_state($path);
+    if (!is_resource($stream)) {
+        $blocked = array_fill(0, MAX_GLOBAL_TRIES, time());
+        return ['ip' => $blocked, 'global' => $blocked];  // Speicherfehler sperrt statt zu öffnen.
+    }
+    try {
+        $raw = stream_get_contents($stream);
+        $state = $raw === '' ? [] : json_decode($raw === false ? '' : $raw, true);
+        if ($raw === false || !is_array($state)) {
+            $blocked = array_fill(0, MAX_GLOBAL_TRIES, time());
+            return ['ip' => $blocked, 'global' => $blocked];
+        }
+        $now = time();
+        $clientKeys = stats_rate_client_keys($hash, $now);
+        $key = $clientKeys[0];
+        $globalKey = 'global';
+        $since = $now - STATS_RATE_RETENTION_SECONDS;
+        foreach ($state as $name => $stamps) {
+            $recent = array_values(array_filter(
+                (array) $stamps,
+                static fn($stamp): bool => is_int($stamp) && $stamp > $since && $stamp <= $now
+            ));
+            if ($recent === [] || ($name !== $globalKey
+                && preg_match('/^ip:v2:[0-9a-f]{64}$/D', (string) $name) !== 1)) {
+                unset($state[$name]);
+            } else {
+                $state[$name] = $recent;
+            }
+        }
+        $kept = [];
+        foreach ($clientKeys as $clientKey) {
+            $kept = array_merge($kept, (array) ($state[$clientKey] ?? []));
+            unset($state[$clientKey]);
+        }
+        $global = array_values(array_filter(
+            (array) ($state[$globalKey] ?? []),
+            static fn($stamp): bool => is_int($stamp) && $stamp > $since && $stamp <= $now
+        ));
+        if ($add) {
+            $kept[] = $now;
+            $global[] = $now;
+        }
+        $state[$key] = $kept;
+        $state[$globalKey] = $global;
+        $encoded = json_encode($state, JSON_UNESCAPED_SLASHES);
+        if (!is_string($encoded) || !stats_write_rate_state($path, $stream, $encoded)) {
+            $blocked = array_fill(0, MAX_GLOBAL_TRIES, $now);
+            return ['ip' => $blocked, 'global' => $blocked];
+        }
+        return ['ip' => $kept, 'global' => $global];
+    } finally {
+        flock($stream, LOCK_UN);
+        fclose($stream);
+    }
 }
 
 /** Das Cookie setzen oder löschen, mit allem, was dazugehört. */
@@ -216,7 +492,7 @@ function require_login(): void
 
     if (isset($_GET['abmelden'])) {
         set_cookie('', time() - 3600);
-        header('Location: ' . strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?'), true, 303);
+        header('Location: /api/stats.php', true, 303);
         exit;
     }
 
@@ -226,14 +502,15 @@ function require_login(): void
 
     $message = '';
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
-        if (recent_tries() >= MAX_TRIES) {
+        if (recent_tries($hash) >= MAX_TRIES) {
             $message = 'Zu viele Versuche. Eine Viertelstunde warten.';
-        } elseif (password_verify((string) ($_POST['password'] ?? ''), $hash)) {
+        } elseif (is_string($_POST['password'] ?? null)
+            && password_verify((string) $_POST['password'], $hash)) {
             set_cookie(make_token($hash), time() + COOKIE_DAYS * 86400);
-            header('Location: ' . strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?'), true, 303);
+            header('Location: /api/stats.php', true, 303);
             exit;
         } else {
-            note_try();
+            note_try($hash);
             $message = 'Das war es nicht.';
         }
     }
@@ -299,11 +576,50 @@ require_login();
  *  zusammenfinden, wenn der Weg nach außen versperrt ist. */
 function store_dir(): string
 {
-    $outside = dirname(__DIR__, 2) . '/solidon-stats';
-    if (@is_dir($outside)) {
-        return $outside;
+    $configured = getenv('SOLIDON_STATS_DIR');
+    $outside = $configured === false || $configured === ''
+        ? dirname(__DIR__, 2) . '/solidon-stats'
+        : $configured;
+    if (substr($outside, 0, 1) !== DIRECTORY_SEPARATOR
+        && preg_match('#^[A-Za-z]:[\\\\/]#', $outside) !== 1) {
+        return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
     }
-    return __DIR__ . '/.stats';
+    $candidate = rtrim(str_replace('\\', '/', strtolower($outside)), '/');
+    $root = realpath((string) ($_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__)))
+        ?: realpath(dirname(__DIR__));
+    if (preg_match('#(^|/)\.\.(/|$)#', $candidate) === 1) {
+        return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+    }
+    $probe = $outside;
+    while (true) {
+        if (is_link($probe)) {
+            return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+        }
+        if (file_exists($probe)) {
+            break;
+        }
+        $parent = dirname($probe);
+        if ($parent === $probe) {
+            return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+        }
+        $probe = $parent;
+    }
+    $resolved = realpath($probe);
+    if ($resolved === false) {
+        return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+    }
+    $candidate = rtrim(str_replace('\\', '/', strtolower($resolved)), '/');
+    if ($root !== false) {
+        $root = rtrim(str_replace('\\', '/', strtolower($root)), '/');
+        if ($candidate === $root || strpos($candidate, $root . '/') === 0) {
+            return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+        }
+    }
+    if (!is_dir($outside)
+        || (DIRECTORY_SEPARATOR === '/' && ((int) fileperms($outside) & 0077) !== 0)) {
+        return dirname(__DIR__, 2) . '/solidon-stats-unavailable';
+    }
+    return $outside;
 }
 
 /** Welche Monate es gibt, neueste zuerst. */
@@ -324,33 +640,60 @@ function months(string $dir): array
  * Eine halb geschriebene letzte Zeile ist im laufenden Betrieb normal, und
  * sie ist kein Grund, den Rest des Monats nicht zu zeigen.
  */
-function entries(string $dir, string $month): array
+function entries(string $dir, string $month, ?bool &$complete = null): array
 {
+    $complete = true;
     $path = $dir . '/' . $month . '.jsonl';
-    if (!is_file($path)) {
+    $size = is_file($path) ? filesize($path) : false;
+    if ($size === false) {
+        return [];
+    }
+    if ($size > STATS_MAX_MONTH_BYTES) {
+        $complete = false;
         return [];
     }
     $zone = new DateTimeZone(DISPLAY_ZONE);
     $rows = [];
-    foreach (file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [] as $line) {
-        $row = json_decode($line, true);
-        if (!is_array($row) || empty($row['t'])) {
-            continue;
+    $stream = @fopen($path, 'rb');
+    if ($stream === false) {
+        return [];
+    }
+    try {
+        while (count($rows) < STATS_MAX_ROWS
+            && ($line = fgets($stream, STATS_MAX_LINE_BYTES + 1)) !== false) {
+            if (strlen($line) > STATS_MAX_LINE_BYTES
+                || (substr($line, -1) !== "\n" && !feof($stream))) {
+                while (!feof($stream) && ($tail = fgets($stream, STATS_MAX_LINE_BYTES + 1)) !== false) {
+                    if (substr($tail, -1) === "\n") {
+                        break;
+                    }
+                }
+                continue;
+            }
+            $row = json_decode(trim($line), true);
+            if (!is_array($row) || empty($row['t'])) {
+                continue;
+            }
+            try {
+                $when = (new DateTimeImmutable((string) $row['t']))->setTimezone($zone);
+            } catch (Exception $error) {
+                continue;
+            }
+            $rows[] = [
+                'day' => $when->format('Y-m-d'),
+                'hour' => (int) $when->format('G'),
+                'weekday' => (int) $when->format('N'),
+                'kind' => (string) ($row['k'] ?? ''),
+                'value' => (string) ($row['v'] ?? ''),
+                'from' => (string) ($row['r'] ?? ''),
+                'mark' => (string) ($row['u'] ?? ''),
+            ];
         }
-        try {
-            $when = (new DateTimeImmutable((string) $row['t']))->setTimezone($zone);
-        } catch (Exception $error) {
-            continue;
+        if (count($rows) >= STATS_MAX_ROWS && fgetc($stream) !== false) {
+            $complete = false;
         }
-        $rows[] = [
-            'day' => $when->format('Y-m-d'),
-            'hour' => (int) $when->format('G'),
-            'weekday' => (int) $when->format('N'),
-            'kind' => (string) ($row['k'] ?? ''),
-            'value' => (string) ($row['v'] ?? ''),
-            'from' => (string) ($row['r'] ?? ''),
-            'mark' => (string) ($row['u'] ?? ''),
-        ];
+    } finally {
+        fclose($stream);
     }
     return $rows;
 }
@@ -484,7 +827,7 @@ if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
     $month = $current;
 }
 
-$rows = entries($dir, $month);
+$rows = entries($dir, $month, $month_complete);
 $pages = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'p');
 $downloads = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'd');
 
@@ -639,6 +982,7 @@ function e(string $text): string
   nav { margin: 0 0 2rem; }
   nav a { margin-right: .75rem; }
   code { font-size: .9em; }
+  .warnung { border: 1px solid #b45309; padding: .75rem 1rem; }
 </style>
 </head>
 <body>
@@ -649,6 +993,12 @@ kommen ohne Cookie und ohne gespeicherte IP-Adresse zustande, je Tag gezählt un
 über den Tag hinaus nicht zusammenführbar. (Ein Cookie gibt es hier doch: dieses
 Fenster. Es merkt sich die Anmeldung, gilt nur unterhalb von <code>/api/</code>
 und geht keinen Besucher etwas an.)</p>
+
+<?php if (!$month_complete): ?>
+<p class="warnung"><b>Unvollständige Auswertung:</b> Die Monatsdatei überschreitet
+die sichere Grenze von 16 MiB oder 16.384 gültigen Zeilen. Die angezeigten Zahlen
+sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p>
+<?php endif; ?>
 
 <?php if (count($available) > 1): ?>
 <nav>Monat:
@@ -662,7 +1012,7 @@ und geht keinen Besucher etwas an.)</p>
 <?php if (!$rows): ?>
   <p class="leer">Für diesen Monat liegt nichts vor. Entweder hat noch niemand
   die Seite geöffnet, oder <code>count.php</code> kommt nicht an seinen
-  Ablageordner (<code><?= e($dir) ?></code>).</p>
+  privaten Ablageordner.</p>
 <?php else: ?>
 
 <div class="zahlen">

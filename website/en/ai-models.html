@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=be10c386">
+<link rel="stylesheet" href="../style.css?v=7e1cf380">
 </head>
 <body>
 <a class="skip" href="#content">Skip to content</a>
@@ -45,7 +45,6 @@
         <div class="menu-panel">
           <a href="/en/features.html">Features</a>
           <a href="/en/ai-models.html" aria-current="page">AI models</a>
-
           <a href="/en/#pricing">Price</a>
           <a href="/en/changelog.html">What’s new</a>
           <a href="/en/manual.html">Manual</a>
@@ -70,7 +69,7 @@
 
   <section id="anfang">
     <div class="wrap">
-      <div class="hero">
+      <div class="hero hero-copy">
         <div class="hero-text">
         <p class="hero-kicker">GLB and STL — printable without CAD experience</p>
         <h1>When the model comes from an AI</h1>
@@ -81,15 +80,6 @@
         <p class="hero-kauf">From 1.0 a one-time purchase — no subscription.</p>
         </div>
 
-        <div class="shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-erzeugt-en.png?v=80b57db7">
-              <img src="../bilder/beleg-erzeugt-en.png?v=80b57db7" width="900" height="637" fetchpriority="high"
-                   alt="Solidon3D with an owl generated from a sentence: the history on the left with “Load model”, “Fit to size” and “Place on bed”, the figure on the build plate in the middle, the check report on the right">
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -134,81 +124,25 @@
       difference sits behind the repair: dimension, fit, layer analysis, and a
       history in which every number can still be changed later.</p>
 
-      <h2>If you have no generator at all</h2>
-      <p class="sub">Solidon3D brings the third way with it: a sentence or a picture becomes a body, and it lands in the same history as everything else. That is computed in a local <b>ComfyUI</b> — on your machine, without an account and without an upload.</p>
-      <p class="sub">The model behind it is <b>TripoSG</b> and carries the <b>MIT licence</b>. That gives the third way a clear licensing basis. Other models, including Hunyuan3D, have their own terms, which need to be checked for the particular version before use.</p>
-      <table class="compare">
-        <thead>
-          <tr><th>Measured</th><th>Result</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Closed and in one piece</td><td><span class="yes">✓ all six below</span></td></tr>
-          <tr><td>Open edges</td><td><span class="yes">✓ none</span></td></tr>
-          <tr><td>From a sentence, without a picture</td><td>around 20 seconds</td></tr>
-          <tr><td>From a picture of your own</td><td>around 13 seconds</td></tr>
-          <tr><td>Setup after installing ComfyUI</td><td>one command</td></tr>
-        </tbody>
-      </table>
-      <p class="footnote">The times are measured on an NVIDIA card
-      with 8&nbsp;GB. On Intel and AMD graphics the local paths run
-      slower or entirely on the CPU: the local chat loads its system
-      prompt there at 7.8 tokens per second — 51 minutes before an
-      answer begins. Workarounds exist (IPEX-LLM, ROCm, OpenVINO); we
-      neither ship nor have tested them. What works there is an API
-      key — the application measures this itself and tells you before
-      you wait.</p>
+      <h2>Your generator remains your choice</h2>
+      <p class="sub">A GLB or STL file from any generator you choose goes
+      through the same repair, sizing, printability check, splitting and
+      pinning in Solidon3D as any other model. No CAD experience is needed.</p>
+      <p class="sub">Automatic setup and promotion of a particular local 3D
+      model is currently not released. That route will return only when the
+      licences, provenance and redistribution rights of the complete chain
+      are documented. Until then Solidon3D downloads and promises no such
+      model; external GLB and STL files remain fully usable.</p>
 
-      <h2>Six sentences, six bodies</h2>
-      <p class="sub">Every piece here is a single sentence that Solidon3D handed to the generator — no touching up, no second attempt, no picking one out of ten. They were chosen for what makes such models fail: thin protrusions, pierced walls, undercuts, fine repetition.</p>
-      <ul class="schau">
-        <li><figure>
-          <img src="../bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="A gothic gargoyle on a plinth, with folded wings, claws and a snarling face">
-          <figcaption><b>Gargoyle</b>Thin protrusions and undercuts</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="An octagonal lantern with pierced filigree panels and a ring to hang it by">
-          <figcaption><b>Lantern</b>Pierced wall</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="A dragon skull with curved horns, eye sockets and rows of teeth">
-          <figcaption><b>Dragon skull</b>Cavities and fine teeth</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-hand.webp?v=77a6fab7" width="720" height="720" loading="lazy"
-               alt="A mechanical robotic hand with articulated fingers and visible joints">
-          <figcaption><b>Robotic hand</b>Many separate limbs</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-knight.webp?v=a7bba326" width="720" height="720" loading="lazy"
-               alt="A chess knight: a carved horse head on a round base">
-          <figcaption><b>Chess knight</b>Soft transitions, clear silhouette</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="An industrial valve with a hand wheel, bolted flanges and pipe connections">
-          <figcaption><b>Industrial valve</b>Round faces and repetition</figcaption>
-        </figure></li>
-      </ul>
-
-      <h2>And then the work begins</h2>
-      <p class="sub">The generator delivered a shape. What turns it into a printable part is three steps in Solidon3D — each in the history, each with a number that can still be changed later.</p>
-      <div class="weg">
-        <figure>
-          <img src="../bilder/weg-1-erzeugt.webp?v=63d1b19b" width="720" height="720" loading="lazy"
-               alt="The generated gargoyle as a closed body, seen from the front left">
-          <figcaption><b>Generated and repaired.</b> Around 20 seconds, closed and in one piece afterwards. Brought to 80 mm that is <b>44.7 cm³</b> of material — printed solid.</figcaption>
-        </figure>
-        <figure>
-          <img src="../bilder/weg-2-schnitt.webp?v=ae4be5f7" width="720" height="720" loading="lazy"
-               alt="The same gargoyle cut open: an evenly thin wall, hollow inside, the cut face set off in colour">
-          <figcaption><b>Hollowed out, 2 mm wall.</b> What remains is <b>23.6 cm³</b> — <b>47 % less</b> filament and correspondingly less print time. The wall thickness does not come from a hunch but from the nozzle of this printer.</figcaption>
-        </figure>
-      </div>
-      <p class="footnote">After that comes what stands at the top of this page: report, overhangs, islands, support, best orientation — and if it does not fit the plate, split and pin it. Generating is the fastest part of the work. The rest is the part that decides the result.</p>
-
+      <h2>Local chat: GPU and CPU measured separately</h2>
+      <p class="footnote">On 31 August 2026, <b>qwen3:14b</b> completed five
+      out of five full probe instructions correctly with 106 tools. On an
+      NVIDIA RTX 4080 with 16&nbsp;GB of graphics memory they took 11.8 to
+      25.2 seconds, with a median of 17 seconds. A 19,641-token prompt was
+      read in 13.1 seconds cold and a warm median of 2.3 seconds; the model
+      was entirely in graphics memory. <b>7.8 tokens per second and about
+      42 minutes apply only to the CPU fallback.</b> The application shows
+      whether Ollama is actually using the GPU.</p>
     </div>
   </section>
 
@@ -230,7 +164,6 @@
     © 2026 RS Digital ·
     <a href="/en/">Home</a> ·
     <a href="/en/manual.html">Manual</a> ·
-     ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
     <a href="/impressum.html">Legal notice</a> ·
     <a href="/datenschutz.html">Privacy</a> ·
@@ -242,6 +175,6 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 </body>
 </html>

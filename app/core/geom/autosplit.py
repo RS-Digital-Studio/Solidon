@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final
 
 import numpy as np
 
@@ -39,9 +39,6 @@ from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
-
-if TYPE_CHECKING:
-    from app.core.geom.pins import ConnectorGeometrySnapshot
 
 _log = get_logger(__name__)
 
@@ -242,7 +239,6 @@ def split_to_fit(
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
     progress: ProgressFn | None = None,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
     nicht richten wird.
@@ -275,10 +271,6 @@ def split_to_fit(
         from app.core.geom.pins import PIN_COUNT
 
         pins = PIN_COUNT
-    if pins > 0 and connector_geometry is None:
-        from app.core.geom.pins import capture_connector_geometry
-
-        connector_geometry = capture_connector_geometry()
 
     outcome = SplitOutcome(parts=[mesh])
 
@@ -323,18 +315,15 @@ def split_to_fit(
             protect=protect,
             cancelled=cancelled,
             connector_count=pins,
-            connector_geometry=connector_geometry,
             progress=(
                 (
-                    # Die Zahl der nötigen Schnitte steht erst fest, nachdem
-                    # jedes neue Kind wieder gegen das Bett geprüft wurde.
-                    # ``max_parts`` ist nur eine Sicherheitsgrenze und kein
-                    # Arbeitsumfang: daraus einen Anteil zu bilden ließ einen
-                    # Ein-Schnitt-Lauf neun Prozent melden und unmittelbar
-                    # danach auf fertig springen. Die laufende Phase
-                    # bleibt deshalb unbestimmt; nur ``finish`` meldet den
-                    # vollständig bekannten Plan mit eins.
-                    lambda _fraction, text: progress(0.0, text)
+                    lambda fraction, text: progress(
+                        min(
+                            0.99,
+                            (len(outcome.cuts) + fraction) / max(max_parts - 1, 1),
+                        ),
+                        text,
+                    )
                 )
                 if progress is not None
                 else None
@@ -527,7 +516,6 @@ def find_plane(
     support_orientations: int = SUPPORT_ORIENTATION_CANDIDATES,
     connector_count: int | None = None,
     progress: ProgressFn | None = None,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
 
@@ -560,10 +548,6 @@ def find_plane(
         from app.core.geom.pins import PIN_COUNT
 
         connector_count = PIN_COUNT
-    if connector_count > 0 and connector_geometry is None:
-        from app.core.geom.pins import capture_connector_geometry
-
-        connector_geometry = capture_connector_geometry()
 
     if progress is not None:
         progress(0.0, str(_("Die Trennebenen werden gesucht …")))
@@ -586,7 +570,6 @@ def find_plane(
             plane_candidates=support_planes,
             orientation_candidates=support_orientations,
             connector_count=connector_count,
-            connector_geometry=connector_geometry,
             cancelled=cancelled,
             progress=progress,
         )
@@ -615,7 +598,6 @@ def find_plane(
         plane_candidates=support_planes,
         orientation_candidates=support_orientations,
         connector_count=connector_count,
-        connector_geometry=connector_geometry,
         cancelled=cancelled,
         progress=progress,
     )
@@ -636,7 +618,6 @@ def _best_by_support(
     cancelled: CancelToken | None,
     connector_count: int = 0,
     progress: ProgressFn | None = None,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> Candidate:
     """Unter guten Nähten das echte Stützvolumen der fertigen Hälften wählen.
 
@@ -659,7 +640,6 @@ def _best_by_support(
         orientation_candidates=orientation_candidates,
         cancelled=cancelled,
         connector_count=connector_count,
-        connector_geometry=connector_geometry,
     )
     if progress is not None:
         progress(0.25 + 0.75 / len(shortlist), str(_("Ausrichtung suchen")))
@@ -671,7 +651,6 @@ def _best_by_support(
             orientation_candidates=orientation_candidates,
             cancelled=cancelled,
             connector_count=connector_count,
-            connector_geometry=connector_geometry,
         )
         if not np.isfinite(best_support) and np.isfinite(support):
             best, best_support = candidate, support
@@ -692,7 +671,6 @@ def _support_after_cut(
     orientation_candidates: int,
     cancelled: CancelToken | None,
     connector_count: int = 0,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> float:
     """Internes Stützvolumen der zwei fertigen, unabhängig gestellten Stücke.
 
@@ -711,14 +689,13 @@ def _support_after_cut(
 
     parts = (first, second)
     if connector_count > 0:
-        # Der Schnappschuss wurde vor der Bewertung erfasst. Hier gibt es
-        # weder Lazy-Import noch Registerzugriff: Parallel geladene eigene
-        # Bausteine dürfen die Rangfolge einer laufenden Suche nicht ändern.
-        from app.core.errors import InternalError
+        # Späte Importe halten den gegenseitigen Vertrag von ``pins`` und
+        # ``autosplit`` importierbar. Der öffentliche PARTS-Zugriff lädt die
+        # mitgelieferten Verbinder auch für einen direkten Kernaufruf.
         from app.core.geom.pins import AUTO, add_pins, plan_pins
+        from app.core.knowledge.parts import PARTS
 
-        if connector_geometry is None:
-            raise InternalError(detail="auto split connector geometry was not injected")
+        PARTS.all()
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         plan = plan_pins(mesh, candidate.plane, count=connector_count, shape=AUTO)
@@ -732,7 +709,6 @@ def _support_after_cut(
             quality="draft",
             cancelled=cancelled,
             batch=True,
-            connector_geometry=connector_geometry,
         )
         if cancelled is not None:
             cancelled.raise_if_cancelled()

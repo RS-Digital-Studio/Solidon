@@ -21,11 +21,13 @@ from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListView,
     QListWidget,
     QListWidgetItem,
+    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -128,16 +130,19 @@ class PartCatalog(QDialog):
 
     partChosen = Signal(str)
     saveRequested = Signal()
-    exportRequested = Signal()
-    importRequested = Signal()
-    """Eine Bausteindatei soll in den Katalog importiert werden.
+    shareRequested = Signal()
+    adoptRequested = Signal()
+    removeRequested = Signal(str)
+    undoFileRequested = Signal()
+    showAffectedStepRequested = Signal()
+    """Eine lokale Bausteindatei soll dauerhaft in den Katalog.
 
-    Braucht keine Auswahl — anders als der Export ist der Import
+    Braucht keine Auswahl — anders als der Export ist das Einlesen
     ohne Vorbedingung, und ein Knopf ohne Vorbedingung wird nicht gesperrt."""
     """Der gewählte Baustein soll als lokale Datei exportiert werden.
 
     Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
-    entsteht und wohin sie geht, weiß das Fenster."""
+    entsteht und wohin sie geschrieben wird, weiß das Fenster."""
     """Der Kunde will den gewählten Ausschnitt als eigenen Baustein ablegen (E4).
 
     Ein Signal und kein Aufruf: Der Katalog hat kein Dokument und keine
@@ -152,6 +157,31 @@ class PartCatalog(QDialog):
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))
         self.search.setAccessibleName(tr("Bausteine durchsuchen"))
         self.search.textChanged.connect(self.show_parts)
+
+        # Import und Weitergabe laufen im Hintergrund. Ihr Ergebnis bleibt im
+        # Katalog sichtbar, statt nur für wenige Sekunden in der Statuszeile
+        # hinter dem Dialog aufzutauchen. Der Text selbst ist zugleich der
+        # zugängliche Name der Zeile.
+        self.file_result = QLabel("", self)
+        self.file_result.setObjectName("partFileResult")
+        self.file_result.setWordWrap(True)
+        self.file_result.setVisible(False)
+        self.file_undo = QPushButton(tr("Rückgängig"), self)
+        self.file_undo.setAutoDefault(False)
+        self.file_undo.setAccessibleName(tr("Rückgängig"))
+        self.file_undo.setVisible(False)
+        self.file_undo.clicked.connect(self.undoFileRequested.emit)
+        self.show_affected_step = QPushButton(tr("Im Verlauf zeigen"), self)
+        self.show_affected_step.setAutoDefault(False)
+        self.show_affected_step.setAccessibleName(tr("Im Verlauf zeigen"))
+        self.show_affected_step.setVisible(False)
+        self.show_affected_step.clicked.connect(self.showAffectedStepRequested.emit)
+        file_result_row = QWidget(self)
+        file_result_layout = QHBoxLayout(file_result_row)
+        file_result_layout.setContentsMargins(0, 0, 0, 0)
+        file_result_layout.addWidget(self.file_result, stretch=1)
+        file_result_layout.addWidget(self.show_affected_step)
+        file_result_layout.addWidget(self.file_undo)
 
         # §2.6 will eine Bibliothek, die man sieht. Als Liste mit bildhohen
         # Zeilen zeigte das Fenster zweieinhalb von dreizehn Bausteinen — als
@@ -195,6 +225,9 @@ class PartCatalog(QDialog):
         self.save_hint = QLabel("", self)
         self.save_hint.setWordWrap(True)
         self.save_hint.setVisible(False)
+        self.share_hint = QLabel("", self)
+        self.share_hint.setWordWrap(True)
+        self.share_hint.setVisible(False)
         # Die Schwester für die andere Hälfte der Knopfzeile: warum gerade
         # nichts eingesetzt werden kann. Ohne sie wählte jemand auf der
         # Startseite einen Baustein, bestätigte — und bekam erst dann
@@ -262,19 +295,26 @@ class PartCatalog(QDialog):
         self.set_can_save(False, "")
 
         # **Neben dem Speichern und nicht in einem Menü**, aus demselben
-        # Grund: Wer sein Teil weitergeben will, denkt an die Bibliothek, in
-        # der es liegt.
-        self.export_part = buttons.addButton(
-            tr("Als Datei exportieren …"), QDialogButtonBox.ButtonRole.ActionRole
+        # Grund: Wer eine lokale Bausteindatei erzeugen will, denkt an die
+        # Bibliothek, in der das Teil liegt.
+        self.share_part = buttons.addButton(
+            tr("Baustein als Datei weitergeben …"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        self.export_part.clicked.connect(self.exportRequested.emit)
-        self.set_can_export(False, "")
+        self.share_part.clicked.connect(self.shareRequested.emit)
+        self.set_can_share(False, "")
 
         # Immer bedienbar: Zum Einlesen braucht es keinen gewählten Baustein.
-        self.import_part = buttons.addButton(
-            tr("Aus Datei importieren …"), QDialogButtonBox.ButtonRole.ActionRole
+        self.adopt_part = buttons.addButton(
+            tr("Baustein aus Datei hinzufügen …"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        self.import_part.clicked.connect(self.importRequested.emit)
+        self.adopt_part.clicked.connect(self.adoptRequested.emit)
+
+        self.remove_part = buttons.addButton(
+            tr("Aus Bibliothek entfernen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.remove_part.setAccessibleName(tr("Aus Bibliothek entfernen"))
+        self.remove_part.setVisible(False)
+        self.remove_part.clicked.connect(self._request_removal)
 
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
@@ -287,8 +327,10 @@ class PartCatalog(QDialog):
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.search)
+        layout.addWidget(file_result_row)
         layout.addWidget(split, stretch=1)
         layout.addWidget(self.save_hint)
+        layout.addWidget(self.share_hint)
         layout.addWidget(self.insert_hint)
         layout.addWidget(buttons)
 
@@ -318,20 +360,21 @@ class PartCatalog(QDialog):
         self.save_hint.setText("" if can else reason)
         self.save_hint.setVisible(bool(reason) and not can)
 
-    def set_can_export(self, can: bool, reason: str = "") -> None:
-        """Ob der gewählte Baustein als Datei exportiert werden darf.
+    def set_can_share(self, can: bool, reason: str = "") -> None:
+        """Ob der gewählte Baustein als Datei exportiert werden kann.
 
-        **Der Grund steht an drei Stellen**, weil eine davon je nach Bedienung
-        ausfällt: im Tooltip für die Maus, im ``statusTip`` für die Statuszeile
-        ohne Wartezeit und in ``accessibleDescription`` für den Bildschirmleser
-        (Regel 18 — nicht nur eine Kodierung). Ein grau gewordener Knopf ohne
-        Grund ist derselbe Fehler wie eine gesperrte Operation ohne Grund.
+        **Der Grund steht sichtbar und am Knopf**, weil Tooltip, Statuszeile
+        und Bildschirmleser je nach Bedienung ausfallen können. Ein grau
+        gewordener Knopf ohne sichtbaren Grund ist derselbe Fehler wie eine
+        gesperrte Operation ohne Grund.
         """
-        self.export_part.setEnabled(can)
+        self.share_part.setEnabled(can)
         hint = "" if can else reason
-        self.export_part.setToolTip(hint)
-        self.export_part.setStatusTip(hint)
-        self.export_part.setAccessibleDescription(hint)
+        self.share_part.setToolTip(hint)
+        self.share_part.setStatusTip(hint)
+        self.share_part.setAccessibleDescription(hint)
+        self.share_hint.setText(hint)
+        self.share_hint.setVisible(bool(hint))
 
     def set_can_insert(self, can: bool, reason: str = "") -> None:
         """Gibt das Einsetzen frei — oder sagt daneben, warum nicht.
@@ -401,6 +444,60 @@ class PartCatalog(QDialog):
         Vorschau.
         """
         self.show_parts(self.search.text())
+        if self._rendering:
+            QTimer.singleShot(0, self, self._render_pending)
+
+    def show_file_result(
+        self,
+        text: str,
+        *,
+        part_name: str | None = None,
+        can_undo: bool = False,
+        can_show_affected_step: bool = False,
+    ) -> None:
+        """Zeigt ein Dateiergebnis und, wenn möglich, den betroffenen Baustein.
+
+        Ein zuvor gesetzter Suchbegriff darf einen frisch hinzugefügten
+        Baustein nicht unsichtbar machen. In diesem Fall wird die Suche
+        geleert, die Liste neu aufgebaut und der Eintrag ausgewählt. Die
+        Datei wird dabei nie still in die Szene eingesetzt.
+        """
+
+        self.file_result.setText(text)
+        self.file_result.setAccessibleName(text)
+        self.file_result.setVisible(bool(text))
+        self.file_undo.setVisible(bool(text) and can_undo)
+        self.file_undo.setEnabled(bool(text) and can_undo)
+        self.show_affected_step.setVisible(bool(text) and can_show_affected_step)
+        self.show_affected_step.setEnabled(bool(text) and can_show_affected_step)
+        if not part_name:
+            return
+
+        item = self._item_named(part_name)
+        if item is None:
+            if self.search.text():
+                self.search.clear()
+            else:
+                self.refresh()
+            item = self._item_named(part_name)
+        if item is None:
+            return
+        self.list.setCurrentItem(item)
+        self.list.scrollToItem(item)
+
+    def _item_named(self, name: str) -> QListWidgetItem | None:
+        """Den sichtbaren Katalogeintrag zu einer internen Bausteinkennung."""
+
+        for row in range(self.list.count()):
+            item = self.list.item(row)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) == name:
+                return item
+        return None
+
+    def invalidate_preview(self, name: str) -> None:
+        """Ein entferntes oder wiederhergestelltes Rezept neu zeichnen lassen."""
+
+        self._previews.pop(name, None)
         if self._rendering:
             QTimer.singleShot(0, self, self._render_pending)
 
@@ -636,24 +733,27 @@ class PartCatalog(QDialog):
                 item.setIcon(QIcon(pixmap))
                 return
 
-    def _export_state(self, spec: PartSpec | None) -> tuple[bool, str]:
-        """Ob dieser Baustein als Datei exportiert werden kann, und warum nicht.
+    def _share_state(self, spec: PartSpec | None) -> tuple[bool, str]:
+        """Ob dieser Baustein als lokale Datei exportiert werden kann.
 
-        Drei Herkünfte, drei Antworten: Ein **eigenes** Rezept liegt als Datei
-        im Nutzerordner und kann hinaus. Ein **eingebauter** Baustein kommt aus
-        Python — es gibt keine Datei, die man weitergeben könnte. Ein
-        **mitgereister** gehört jemand anderem; seine Lizenz kennt nur sein
-        Autor, und die Anwendung zeigt dem Kunden nicht genug, um die
-        Entscheidung zu treffen.
+        Eigene und zuvor importierte Rezepte liegen als geprüfte Datei vor.
+        Ein eingebauter Baustein kommt aus Python und hat keine solche Datei.
+        Ein mit einer Projektdatei gereistes Rezept bleibt an deren Herkunft
+        gebunden und wird nicht still in eine eigenständige Datei umgedeutet.
         """
         if spec is None:
-            return False, tr("Wählen Sie einen Baustein, den Sie weitergeben möchten.")
-        if getattr(spec, "source", "") in ("travelled", "imported"):
+            return False, tr("Wählen Sie einen Baustein, den Sie als Datei weitergeben möchten.")
+        source = getattr(spec, "source", "")
+        if source == "travelled":
             return False, tr(
-                "Dieser Baustein kam von jemand anderem — nur eigene lassen sich weitergeben."
+                "Dieser Baustein gehört zur geöffneten Projektdatei. Speichern Sie ihn "
+                "zuerst als eigenen Baustein, um ihn weiterzugeben."
             )
-        if not getattr(spec, "own", False):
-            return False, tr("Nur eigene Bausteine lassen sich weitergeben.")
+        if source not in ("recipe", "imported"):
+            return False, tr(
+                "Eingebaute Bausteine sind bereits in Solidon enthalten. Speichern Sie "
+                "zuerst einen eigenen Baustein, um ihn weiterzugeben."
+            )
         return True, ""
 
     def _show_detail(self) -> None:
@@ -676,7 +776,10 @@ class PartCatalog(QDialog):
         # nicht in einem eigenen Signalpfad**: Der Zustand hängt an genau
         # derselben Auswahl, und zwei Stellen, die dieselbe Frage
         # beantworten, laufen auseinander.
-        self.set_can_export(*self._export_state(spec))
+        self.set_can_share(*self._share_state(spec))
+        self.remove_part.setVisible(
+            spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
+        )
 
     # --- choosing ---------------------------------------------------------------
 
@@ -697,6 +800,13 @@ class PartCatalog(QDialog):
             self.partChosen.emit(name)
         self.accept()
 
+    def _request_removal(self) -> None:
+        """Die sichtbare lokale Auswahl ohne Rückfrage weiterreichen."""
+
+        name = self.chosen()
+        if name:
+            self.removeRequested.emit(name)
+
 
 def _range_warning(spec: PartSpec) -> str:
     """Der §24.5-Satz zum Bereichstest — oder nichts.
@@ -707,7 +817,7 @@ def _range_warning(spec: PartSpec) -> str:
     dass der Test nie lief — eine von Hand kopierte Datei etwa —, und
     ``False``, dass an den Grenzen kein brauchbarer Körper herauskam.
     """
-    if spec.source not in ("recipe", "travelled") or spec.range_passed is True:
+    if spec.source not in ("recipe", "travelled", "imported") or spec.range_passed is True:
         return ""
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
@@ -722,6 +832,8 @@ def describe(spec: PartSpec) -> str:
         # „Um eine Herkunft mehr" (Konzept §17.1): Der Baustein kam mit einer
         # Projektdatei und gehört ihr — nicht dieser Maschine.
         marker = f" {OWN_MARKER} {tr('mitgereister Baustein')}"
+    if spec.source == "imported":
+        marker = f" {OWN_MARKER} {tr('aus Datei hinzugefügt')}"
     kind = f"\n{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}" if spec.subtractive else ""
     warning = _range_warning(spec)
     checked = f"\n{RANGE_MARKER} {warning}" if warning else ""
@@ -754,13 +866,14 @@ def detail(spec: PartSpec | None) -> str:
             f"{OWN_MARKER} "
             + tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr")
         )
-    # **Eine dritte Herkunft, weil es eine dritte ist.** Die Zeile darüber
-    # nennt eine Projektdatei; wer sie für eine einzeln eingelesene Datei übernimmt,
-    # behauptet die falsche Herkunft an genau der Stelle, an der §32 eine
-    # wahre verlangt. Und sie steht hier und nicht in einer Statuszeile: Die
-    # Auskunft, woher ein Inhalt stammt, muss auch in drei Tagen noch da sein.
+    # Eine lokal importierte Datei trägt eine eng begrenzte Herkunftsquittung:
+    # Prüfsumme der exakten Eingangsbytes und Importzeit, aber keinen lokalen
+    # Pfad und keine erfundene Veröffentlichungsquelle.
     if spec.source == "imported":
-        lines.append(f"{OWN_MARKER} " + tr("Baustein aus Datei — bleibt bei diesem Projekt"))
+        lines.append(
+            f"{OWN_MARKER} "
+            + tr("aus Datei hinzugefügt — Zeitpunkt und eindeutige Dateikennung sind gespeichert")
+        )
     warning = _range_warning(spec)
     if warning:
         lines.append(f"<b>{RANGE_MARKER}</b> {warning}")

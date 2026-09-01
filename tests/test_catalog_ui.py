@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from pathlib import Path
 
 import pytest
 
@@ -562,8 +561,8 @@ def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> No
         katalog.release()
 
 
-def test_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
-    """Der Export-Knopf ist gesperrt, und er sagt jedes Mal, warum.
+def test_part_file_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
+    """Der Datei-Export ist gesperrt, und er sagt jedes Mal, warum.
 
     **Gesperrt mit Grund, nicht versteckt.** Ein eingebauter Baustein kommt
     aus Python — es gibt keine Datei, die man weitergeben könnte. Der Knopf
@@ -583,11 +582,15 @@ def test_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
     """
     catalog = PartCatalog()
     try:
-        assert not catalog.export_part.isEnabled(), "ohne Auswahl gibt es nichts zu exportieren"
-        leer = catalog.export_part.toolTip()
+        catalog.show()
+        QApplication.processEvents()
+        assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es keine Datei zu exportieren"
+        leer = catalog.share_part.toolTip()
         assert leer, "der gesperrte Knopf sagt nicht, was fehlt"
-        assert catalog.export_part.statusTip() == leer, "die Statuszeile schweigt"
-        assert catalog.export_part.accessibleDescription() == leer, (
+        assert catalog.share_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.text() == leer
+        assert catalog.share_part.statusTip() == leer, "die Statuszeile schweigt"
+        assert catalog.share_part.accessibleDescription() == leer, (
             "der Bildschirmleser bekommt den Grund nicht"
         )
 
@@ -602,229 +605,782 @@ def test_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
         else:  # pragma: no cover - der Katalog wäre dann leer
             raise AssertionError("kein eingebauter Baustein im Katalog")
 
-        assert not catalog.export_part.isEnabled(), (
+        assert not catalog.share_part.isEnabled(), (
             f"{eingebaut.name} kommt aus Python und hat keine Datei zum Weitergeben"
         )
-        gewaehlt = catalog.export_part.toolTip()
+        gewaehlt = catalog.share_part.toolTip()
         assert gewaehlt and gewaehlt != leer, (
             "gewählt und nichts gewählt sind zwei Lagen und brauchen zwei Sätze"
         )
+        assert catalog.share_hint.isVisibleTo(catalog)
+        assert catalog.share_hint.text() == gewaehlt
     finally:
         catalog.release()
         catalog.deleteLater()
 
 
-def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_path) -> None:
-    """Der ganze Weg durch die **Oberfläche**: hinaus, herein, angesehen.
+def test_a_file_result_is_visible_and_reveals_the_affected_part(
+    qt_app: QApplication,
+) -> None:
+    """Das Ergebnis bleibt im Katalog und hebt einen zuvor weggefilterten Eintrag hervor."""
+    catalog = PartCatalog()
+    try:
+        wanted = PARTS.all()[0].name
+        catalog.search.setText("dieser Filter findet keinen Baustein")
+        assert wanted not in catalog_names(catalog)
 
-    **Warum durch die Knöpfe und nicht am Kern entlang.** Mein erster Lauf
-    ging über ``export_bytes`` und ``import_file`` direkt und war grün — er hat
-    bewiesen, dass der Kern kann, was er soll, und nichts darüber, ob ein
-    Klick dort ankommt. Die Notiz dazu ist älter als dieser Test: Wer den Kern
-    direkt ruft, misst eine Lage, die kein Klick herstellt.
+        catalog.show()
+        undone: list[bool] = []
+        shown: list[bool] = []
+        catalog.undoFileRequested.connect(lambda: undone.append(True))
+        catalog.showAffectedStepRequested.connect(lambda: shown.append(True))
+        catalog.show_file_result(
+            "Dateiweg abgeschlossen.",
+            part_name=wanted,
+            can_undo=True,
+            can_show_affected_step=True,
+        )
+        QApplication.processEvents()
 
-    Geprüft wird deshalb an der Kette, die ein Kunde geht — Katalog öffnen,
-    Knopf drücken, Datei entsteht; dieselbe Datei über den zweiten Knopf
-    wieder herein; Steckbrief nennt die neue Herkunft.
+        assert catalog.search.text() == ""
+        assert catalog.chosen() == wanted
+        assert catalog.file_result.isVisibleTo(catalog)
+        assert catalog.file_result.text() == "Dateiweg abgeschlossen."
+        assert catalog.file_result.accessibleName() == "Dateiweg abgeschlossen."
+        assert catalog.file_undo.isVisibleTo(catalog)
+        assert catalog.file_undo.focusPolicy() != Qt.FocusPolicy.NoFocus
+        assert catalog.file_undo.accessibleName() == "Rückgängig"
+        assert catalog.show_affected_step.isVisibleTo(catalog)
+        assert catalog.show_affected_step.focusPolicy() != Qt.FocusPolicy.NoFocus
+        assert catalog.show_affected_step.accessibleName() == "Im Verlauf zeigen"
+        catalog.file_undo.click()
+        catalog.show_affected_step.click()
+        assert undone == [True] and shown == [True]
+    finally:
+        catalog.release()
+        catalog.close()
 
-    **Der Dateidialog wird abgefangen, nicht umgangen.** Er ist das einzige
-    Stück, das ohne Mensch nicht antwortet; alles davor und dahinter läuft
-    echt — die Signale des Katalogs, die Handler des Fensters, `export_bytes`,
-    `adopt` und die Zeile im Steckbrief.
 
-    **Und ``action_catalog`` wird wirklich gerufen.** Den Katalog selbst zu
-    bauen und die Signale von Hand zu verbinden wäre derselbe Fehler eine
-    Ebene höher: Der Test bewiese dann, dass meine Testzeilen zusammenpassen,
-    und nicht, dass das Fenster sie verbindet.
+def test_local_part_file_way_runs_through_the_buttons(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Export, Import, Neustart und Re-Export laufen durch die Oberfläche.
+
+    Der Dateidialog wird abgefangen, nicht umgangen. Alles davor und dahinter
+    läuft echt: Katalogsignale, Fensterhandler, ``PartFileIO`` und die
+    Herkunftszeile im Steckbrief. Der zweite Katalog entsteht nach dem erneuten
+    Laden des Rezeptordners; damit prüft der Weg nicht bloß den Zustand, den
+    ``install_file`` gerade im Speicher hinterlassen hat.
     """
-    import json
-
     from PySide6.QtWidgets import QFileDialog
 
-    from app.branding import PART_FILE_SUFFIX
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts.recipe import (
-        IMPORTED_SOURCE,
-        Recipe,
-        register,
-        save,
-    )
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.knowledge.parts.recipe import register, save
     from app.core.registry import REGISTRY
-    from app.core.scene import History, OperationDraft
-    from app.core.scene.project import new_project
     from app.ui.catalog import PartCatalog, detail
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    # Ein eigenes Rezept — nur ein solches darf exportiert werden, und genau das prüft
-    # die Gegenprobe unten.
-    project = new_project()
-    History(project.document).apply(
-        "Quader",
-        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 30.0, "height": 12.0})],
-    )
-    recipe = Recipe(
-        name="probeklotz",
-        title="Probeklotz",
-        group="structure",
-        document=project.document,
-        license="CC0-1.0",
-        author="Probe",
-        features={"face_1": "Grundflaeche"},
-    )
-    # **Gespeichert und registriert.** Der Handler liest die Datei aus dem
-    # Nutzerordner, weil dort das eigene Rezept liegt; nur zu registrieren
-    # ergaebe einen Baustein ohne Datei. Der erste Lauf lief genau hinein und
-    # bekam die richtige Absage — der Fehlerweg ist damit gleich mitgeprueft.
-    save(recipe)
-    register(recipe)
+    name = "probeklotz"
+    operation_name = f"insert_{name}"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
 
-    window = MainWindow(Session(), UiSettings())
-    ziel = tmp_path / f"probeklotz{PART_FILE_SUFFIX}"
+    part = _box_recipe(name)
+    source = save(part)
+    register(part)
+
+    target = tmp_path / f"{name}{PART_FILE_SUFFIX}"
+    forwarded = tmp_path / f"{name}-weitergegeben{PART_FILE_SUFFIX}"
+    save_target = [target]
     catalogs: list[PartCatalog] = []
-    save_requests: list[tuple[object, ...]] = []
-    open_requests: list[tuple[object, ...]] = []
+    calls = {"export": 0, "install": 0}
+    worker_threads: list[bool] = []
+
+    original_export = PartFileIO.export_to_file
+    original_install = PartFileIO.install_file
+
+    def counted_export(codec, chosen, destination):
+        from PySide6.QtCore import QThread
+
+        calls["export"] += 1
+        worker_threads.append(QThread.currentThread() is not QApplication.instance().thread())
+        return original_export(codec, chosen, destination)
+
+    def counted_install(codec, payload, **kwargs):
+        calls["install"] += 1
+        from PySide6.QtCore import QThread
+
+        worker_threads.append(QThread.currentThread() is not QApplication.instance().thread())
+        return original_install(codec, payload, **kwargs)
+
+    monkeypatch.setattr(PartFileIO, "export_to_file", counted_export)
+    monkeypatch.setattr(PartFileIO, "install_file", counted_install)
 
     def instead_of_exec(dialog: PartCatalog) -> int:
         catalogs.append(dialog)
         return int(PartCatalog.DialogCode.Rejected)
 
-    # **Auch der Fehlerdialog wird abgefangen.** Er ist modal: Geht auf dem
-    # Weg etwas schief, bliebe der Testlauf daran stehen, bis ihn jemand
-    # wegklickt — und niemand ist da. Gesammelt statt gezeigt, damit die
-    # Zusicherung unten sagt, *was* schiefging.
     from app.ui import main_window as _mw
 
     troubles: list[object] = []
-    original_error = _mw.show_error
-    _mw.show_error = lambda problem, parent=None: troubles.append(problem)  # type: ignore[assignment]
-
-    original_exec = PartCatalog.exec
-    original_save = QFileDialog.getSaveFileName
-    original_open = QFileDialog.getOpenFileName
-    PartCatalog.exec = instead_of_exec  # type: ignore[method-assign]
-
-    def save_file(*args, **_kwargs):
-        save_requests.append(args)
-        return str(ziel), ""
-
-    def open_file(*args, **_kwargs):
-        open_requests.append(args)
-        return str(ziel), ""
-
-    QFileDialog.getSaveFileName = staticmethod(save_file)  # type: ignore[method-assign]
-    QFileDialog.getOpenFileName = staticmethod(open_file)  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        _mw,
+        "show_error",
+        lambda problem, parent=None, handlers=None: troubles.append(problem),
+    )
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(save_target[0]), "")),
+    )
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "")),
+    )
+    window = MainWindow(Session(), UiSettings())
+    restarted = None
     try:
         window.action_catalog()
         assert catalogs, "action_catalog hat keinen Katalog gebaut"
         catalog = catalogs[0]
 
-        # --- Gegenprobe: was nicht exportiert werden darf, bleibt gesperrt
+        # Eingebaute Python-Bausteine haben keine exportierbare Bausteindatei.
         builtin = next(entry for entry in PARTS.all() if not entry.own)
         _choose(catalog, builtin.name)
-        assert not catalog.export_part.isEnabled(), (
+        assert not catalog.share_part.isEnabled(), (
             f"{builtin.name} kommt aus Python und hat keine Datei zum Weitergeben"
         )
-        assert catalog.export_part.toolTip(), "der gesperrte Knopf sagt nicht, warum"
+        assert catalog.share_part.toolTip(), "der gesperrte Knopf sagt nicht, warum"
 
-        # --- Export
-        _choose(catalog, "probeklotz")
-        assert catalog.export_part.isEnabled(), "ein eigenes Rezept darf exportiert werden"
-        catalog.export_part.click()
+        _choose(catalog, name)
+        assert catalog.share_part.isEnabled(), "ein eigenes Rezept muss exportierbar sein"
+        catalog.share_part.click()
+        wait_until(target.is_file, "der Exportarbeiter schrieb die Bausteindatei nicht")
         assert not troubles, f"der Export meldete einen Fehler: {troubles}"
-        assert ziel.is_file(), "der Klick hat keine Datei geschrieben"
-        assert save_requests and str(save_requests[0][2]).endswith(PART_FILE_SUFFIX)
-        assert f"*{PART_FILE_SUFFIX}" in str(save_requests[0][3])
-        valid_payload = ziel.read_bytes()
-        data = json.loads(valid_payload)
-        assert data, "die geschriebene Datei ist leer"
+        assert target.is_file(), "der Klick hat keine Datei geschrieben"
+        assert target.stat().st_size > 0, "die geschriebene Datei ist leer"
 
-        # --- Import, aus demselben Klickweg
-        # **Beide Register.** Ein Rezept steht im Katalog *und* als Operation;
-        # `PARTS.remove` allein ist der Rollback fuer einen halben
-        # Registrierlauf, das sagt sein Docstring. Wer nur ihn ruft, laesst
-        # `insert_probeklotz` stehen, und das naechste Einlesen scheitert an
-        # "registered twice". Entfernt wird hier, um einen **fremden** Rechner
-        # nachzustellen: Beim selben Kunden faende `adopt` denselben Stand und
-        # taete richtigerweise nichts.
-        PARTS.remove("probeklotz")
-        REGISTRY.remove("insert_probeklotz")
+        # Der Import beginnt wie auf einem zweiten Rechner: kein Eintrag, keine
+        # Operation und keine gleichnamige Datei im dortigen Rezeptordner.
+        PARTS.remove(name)
+        REGISTRY.remove(operation_name)
+        source.unlink()
+        catalog.adopt_part.click()
+        wait_until(lambda: PARTS.has(name), "der Importarbeiter ergänzte den Katalog nicht")
 
-        # Eine abgelehnte Datei darf weder einen Katalogeintrag noch eine
-        # falsche Erfolgsmeldung hinterlassen. Danach läuft derselbe Klick mit
-        # den unveränderten Exportbytes erfolgreich durch.
-        data["__class__"] = "os.system"
-        ziel.write_text(json.dumps(data), encoding="utf-8")
-        status_before = window.statusBar().currentMessage()
-        catalog.import_part.click()
-        assert troubles, "der ungültige Import zeigte keinen bedienbaren Fehler"
-        assert window.statusBar().currentMessage() == status_before
-        assert not PARTS.has("probeklotz")
-
-        troubles.clear()
-        ziel.write_bytes(valid_payload)
-        catalog.import_part.click()
-        assert not troubles, f"der gültige Import meldete einen Fehler: {troubles}"
-        assert open_requests and f"*{PART_FILE_SUFFIX}" in str(open_requests[0][3])
-
-        spec = next((entry for entry in PARTS.all() if entry.name == "probeklotz"), None)
+        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
         assert spec is not None, "nach dem Einlesen steht der Baustein nicht im Katalog"
-        assert spec.source == IMPORTED_SOURCE, (
-            f"Herkunft {spec.source!r} statt {IMPORTED_SOURCE!r} — "
-            "der Steckbrief nennte damit eine Projektdatei"
+        assert spec.source == recipe_module.IMPORTED_SOURCE
+        assert "aus Datei hinzugefügt" in detail(spec)
+        assert recipe_module.recipes_dir().joinpath(f"{name}.json").is_file()
+        _choose(catalog, name)
+        wait_until(
+            catalog.share_part.isEnabled,
+            "die Erfolgsrückmeldung gab den Weitergabe-Knopf nicht wieder frei",
         )
-        assert "Baustein aus Datei" in detail(spec), (
-            "der Steckbrief verschweigt die Herkunft aus einer Datei (§32)"
+        assert catalog.share_part.isEnabled(), (
+            "die geprüfte Dateiherkunft muss beim lokalen Weiterexport erhalten bleiben"
         )
+
+        # Neustart: Nur die dauerhafte Datei bleibt. Katalog und Operation
+        # werden daraus neu aufgebaut, anschließend geht derselbe Exportknopf.
+        catalog.release()
+        window.close()
+        PARTS.remove(name)
+        REGISTRY.remove(operation_name)
+        loaded = recipe_module.load_all()
+        assert loaded.loaded == (name,)
+        assert not loaded.findings
+
+        restarted = MainWindow(Session(), UiSettings())
+        save_target[0] = forwarded
+        restarted.action_catalog()
+        after_restart = catalogs[-1]
+        _choose(after_restart, name)
+        spec_after_restart = PARTS.get(name)
+        assert spec_after_restart.source == recipe_module.IMPORTED_SOURCE
+        assert "aus Datei hinzugefügt" in detail(spec_after_restart)
+        assert after_restart.share_part.isEnabled()
+        after_restart.share_part.click()
+        wait_until(forwarded.is_file, "der Re-Exportarbeiter schrieb die Datei nicht")
+
+        assert not troubles, f"der Re-Export meldete einen Fehler: {troubles}"
+        assert forwarded.is_file()
+        forwarded_recipe = PartFileIO().validate(forwarded.read_bytes())
+        assert forwarded_recipe.imported_origin is not None
+        assert forwarded_recipe.author == "Probe"
+        assert forwarded_recipe.license == "CC0-1.0"
+        assert calls == {"export": 2, "install": 1}, (
+            "der produktive Weg muss genau über export_to_file/install_file laufen"
+        )
+        assert worker_threads and all(worker_threads), (
+            "Prüfung und Schreiben müssen vollständig außerhalb des Qt-Hauptthreads laufen"
+        )
+        after_restart.release()
     finally:
-        _mw.show_error = original_error  # type: ignore[assignment]
-        PartCatalog.exec = original_exec  # type: ignore[method-assign]
-        QFileDialog.getSaveFileName = original_save  # type: ignore[method-assign]
-        QFileDialog.getOpenFileName = original_open  # type: ignore[method-assign]
-        # Der eingelesene Baustein lebt in beiden globalen Registern. Ohne
-        # diese symmetrische Aufräumung sehen nachfolgende Website- und
-        # Handbuchtests 96 statt 95 Operationen und halten den Testbaustein
-        # fälschlich für ausgelieferten Produktinhalt.
-        PARTS.remove("probeklotz")
-        REGISTRY.remove("insert_probeklotz")
+        PARTS.remove(name)
+        REGISTRY.remove(operation_name)
+        if restarted is not None:
+            restarted.close()
         window.close()
 
 
-def test_open_path_routes_part_files_to_the_local_import(
-    qt_app: QApplication,
-    tmp_path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_open_path_routes_a_part_file_through_the_catalog_worker(
+    qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
-    """Eine Betriebssystem-Zuordnung darf nie in den Modellimport fallen."""
-    from app.branding import PART_FILE_SUFFIX
-    from app.core.knowledge.parts import shared
+    """Startargument, Finder und Ablage nutzen denselben geprüften Importweg."""
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.registry import REGISTRY
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    source = tmp_path / f"Prüfteil mit Leerzeichen{PART_FILE_SUFFIX}"
-    source.write_text("{}", encoding="utf-8")
-    imported: list[Path] = []
+    name = "direkt_geoeffnet"
+    incoming = tmp_path / f"{name}{PART_FILE_SUFFIX}"
+    incoming.write_bytes(PartFileIO().export_file(_box_recipe(name)))
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    catalogs: list[PartCatalog] = []
 
-    def import_part(path: str | Path, *_args, **_kwargs):
-        imported.append(Path(path))
-        return []
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.open_path(incoming)
+        wait_until(lambda: PARTS.has(name), "open_path erreichte den Importarbeiter nicht")
+
+        assert len(catalogs) == 1
+        catalog = catalogs[0]
+        wait_until(catalog.file_result.isVisible, "das Importergebnis blieb unsichtbar")
+        assert catalog.chosen() == name
+        assert "Baustein hinzugefügt" in catalog.file_result.text()
+        assert catalog.file_undo.isVisibleTo(catalog)
+        stored = recipe_module.recipes_dir().joinpath(f"{name}.json")
+        exact = stored.read_bytes()
+
+        catalog.file_undo.click()
+        wait_until(lambda: not PARTS.has(name), "Rückgängig entfernte den Import nicht")
+        wait_until(
+            lambda: window._part_file_worker is None,
+            "der Entfernungsarbeiter wurde nicht abgebaut",
+        )
+        assert "Baustein entfernt" in catalog.file_result.text()
+        assert catalog.file_undo.isVisibleTo(catalog)
+
+        catalog.file_undo.click()
+        wait_until(lambda: PARTS.has(name), "Rückgängig stellte den Import nicht wieder her")
+        wait_until(
+            lambda: window._part_file_worker is None,
+            "der Wiederherstellungsarbeiter wurde nicht abgebaut",
+        )
+        assert stored.read_bytes() == exact, "der echte Kerntoken muss dieselben Bytes liefern"
+        assert PARTS.get(name).source == recipe_module.IMPORTED_SOURCE
+        assert catalog.remove_part.isVisibleTo(catalog), (
+            "ein aus Datei hinzugefügter Baustein muss wieder entfernbar sein"
+        )
+        catalog.release()
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        window.close()
+
+
+def test_removing_a_used_local_part_is_immediate_exact_and_points_to_history(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Entfernen fragt nicht, nennt Verwendungen und stellt Datei sowie Vorschau wieder her."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QPixmap
+    from PySide6.QtWidgets import QMessageBox
+
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.recipe import register, save
+    from app.core.registry import REGISTRY
+    from app.core.types import Operation, Transaction
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "entfernungsprobe"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    part = _box_recipe(name)
+    path = save(part)
+    register(part)
+    exact = path.read_bytes()
+    catalogs: list[PartCatalog] = []
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    window = MainWindow(Session(), UiSettings())
+    document = window.session.project.document
+    used_op = 91
+    document.ops.append(
+        Operation(
+            id=used_op,
+            op=f"insert_{name}",
+            outputs=("obj_91",),
+            params={},
+        )
+    )
+    document.transactions.append(Transaction(id=9, title="Baustein einsetzen", ops=(used_op,)))
+    window.history_panel.show_document(document)
+    original_ops = tuple(document.ops)
+    original_transactions = tuple(document.transactions)
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        for spec in PARTS.all():
+            catalog._previews[spec.name] = QPixmap(1, 1)
+        _choose(catalog, name)
+        catalog.show()
+        QApplication.processEvents()
+
+        assert catalog.remove_part.isVisibleTo(catalog)
+        builtin = next(spec for spec in PARTS.all() if spec.source not in ("recipe", "imported"))
+        _choose(catalog, builtin.name)
+        assert catalog.remove_part.isHidden(), "eingebaute und mitgereiste Bausteine bleiben"
+        _choose(catalog, name)
+
+        monkeypatch.setattr(
+            QMessageBox,
+            "exec",
+            lambda *_args, **_values: pytest.fail("Entfernen darf nicht nachfragen"),
+        )
+        catalog.remove_part.click()
+        wait_until(lambda: not PARTS.has(name), "der lokale Baustein blieb im Register")
+        wait_until(lambda: window._part_file_worker is None, "der Entfernungsworker blieb hängen")
+
+        assert not path.exists()
+        assert name not in catalog._previews, "eine entfernte Vorschau darf nicht im Cache bleiben"
+        assert "Baustein entfernt" in catalog.file_result.text()
+        assert "einem Schritt" in catalog.file_result.text()
+        assert catalog.file_undo.isVisibleTo(catalog)
+        assert catalog.show_affected_step.isVisibleTo(catalog)
+        assert tuple(document.ops) == original_ops
+        assert tuple(document.transactions) == original_transactions
+
+        catalog.show_affected_step.click()
+        current = window.history_panel.list.currentItem()
+        assert current is not None
+        assert current.data(Qt.ItemDataRole.UserRole) == used_op
+
+        catalog.show()
+        catalog.file_undo.click()
+        wait_until(lambda: PARTS.has(name), "der echte Rücknahmetoken stellte nichts wieder her")
+        wait_until(
+            lambda: window._part_file_worker is None,
+            "der Wiederherstellungsworker blieb hängen",
+        )
+        wait_until(lambda: name in catalog._previews, "die Vorschau wurde nicht neu aufgebaut")
+
+        assert path.read_bytes() == exact
+        assert tuple(document.ops) == original_ops
+        assert tuple(document.transactions) == original_transactions
+        assert "Baustein wiederhergestellt" in catalog.file_result.text()
+        assert catalog.file_undo.isVisibleTo(catalog)
+        assert catalog.chosen() == name
+        assert catalog.remove_part.isVisibleTo(catalog)
+        catalog.release()
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        window.close()
+
+
+def test_the_picker_keeps_historical_json_and_reads_it_in_the_worker(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Nur der Picker kennt Alt-JSON; selbst dessen Lesen blockiert den Qt-Thread nicht."""
+    from pathlib import Path
+
+    from PySide6.QtCore import QThread
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PartFileIO
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "historische_json_probe"
+    source = tmp_path / f"{name}.json"
+    source.write_bytes(PartFileIO().export_file(_box_recipe(name)))
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    offered: list[tuple[str, str]] = []
+    read_off_main: list[bool] = []
+    original_read = Path.read_bytes
+
+    def choose(*args, **kwargs):
+        offered.append((str(args[1]), str(args[3])))
+        return str(source), ""
+
+    def watched_read(path: Path) -> bytes:
+        if path == source:
+            application = QApplication.instance()
+            assert application is not None
+            read_off_main.append(QThread.currentThread() is not application.thread())
+        return original_read(path)
+
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(choose))
+    monkeypatch.setattr(Path, "read_bytes", watched_read)
+    monkeypatch.setattr(
+        PartCatalog,
+        "exec",
+        lambda dialog: int(PartCatalog.DialogCode.Rejected),
+    )
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_adopt_part_file()
+        wait_until(lambda: PARTS.has(name), "das historische JSON wurde nicht hinzugefügt")
+        wait_until(lambda: window._part_file_worker is None, "der Importworker blieb hängen")
+
+        assert offered
+        title, file_filter = offered[0]
+        assert title == "Baustein hinzufügen"
+        assert "*.solidon-part" in file_filter and "*.json" in file_filter
+        assert read_off_main == [True]
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        window.close()
+
+
+def test_the_application_path_rejects_an_unreferenced_executable_payload(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Auch der echte Importknopf lässt ein verstecktes ``plugin.py`` nicht durch."""
+    import base64
+    import hashlib
+    import json
+
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.errors import AppError
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.registry import REGISTRY
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "payload_probe"
+    operation_name = f"insert_{name}"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+
+    data = json.loads(PartFileIO().export_file(_box_recipe(name)))
+    source_id = "plugin_source"
+    executable = b"import os\n"
+    data["document"]["sources"] = {
+        source_id: {
+            "type": "import",
+            "path": "sources/plugin.py",
+            "sha256": hashlib.sha256(executable).hexdigest(),
+            "embedded": True,
+            "ingest": {},
+        }
+    }
+    data["payloads"] = {source_id: base64.b64encode(executable).decode("ascii")}
+    # Ein gewöhnliches Textfeld darf eine Quellenkennung erwähnen. Erreichbar
+    # wird der Payload erst über ein als Quelle registriertes Parameterschema.
+    data["document"]["ops"][0]["params"]["name"] = source_id
+    malicious = tmp_path / f"fremder-baustein{PART_FILE_SUFFIX}"
+    malicious.write_text(json.dumps(data), encoding="utf-8")
+
+    catalogs: list[PartCatalog] = []
+    troubles: list[AppError] = []
+    calls = 0
+    original_install = PartFileIO.install_file
+
+    def counted_install(codec, payload, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_install(codec, payload, **kwargs)
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    from app.ui import main_window as _mw
+
+    monkeypatch.setattr(PartFileIO, "install_file", counted_install)
+    monkeypatch.setattr(
+        _mw,
+        "show_error",
+        lambda problem, parent=None, handlers=None: troubles.append(problem),
+    )
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(malicious), "")),
+    )
 
     window = MainWindow(Session(), UiSettings())
-    monkeypatch.setattr(shared, "import_file", import_part)
-    monkeypatch.setattr(
-        window.session,
-        "import_model",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(
-            AssertionError(".solidon-part erreichte den Modellimport")
-        ),
-    )
     try:
-        window.open_path(source)
-        assert imported == [source]
-        assert window.statusBar().currentMessage() == ("Importiert. Der Baustein steht im Katalog.")
+        window.action_catalog()
+        catalog = catalogs[-1]
+        catalog.adopt_part.click()
+        wait_until(lambda: bool(troubles), "die abgelehnte Bausteindatei meldete sich nicht")
+
+        assert calls == 1, "der Importknopf hat install_file umgangen"
+        assert len(troubles) == 1
+        problem = troubles[0]
+        assert problem.suggestions, "die Ablehnung braucht einen nächsten Schritt"
+        assert source_id not in str(problem.values), "fremde Kennungen bleiben intern"
+        assert str(malicious) not in str(problem), "lokale Pfade gehören nicht in die Meldung"
+        assert not PARTS.has(name)
+        assert not REGISTRY.has(operation_name)
+        assert not recipe_module.recipes_dir().joinpath(f"{name}.json").exists()
+        catalog.release()
     finally:
+        PARTS.remove(name)
+        REGISTRY.remove(operation_name)
+        window.close()
+
+
+def test_a_name_collision_uses_the_free_name_from_the_error_action(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Der Hauptknopf der Kollision wiederholt exakt dieselben Bytes mit Namen."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.knowledge.parts.recipe import register, save
+    from app.core.registry import REGISTRY
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "kollisionsprobe"
+    operation_name = f"insert_{name}"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    existing = _box_recipe(name)
+    source = save(existing)
+    register(existing)
+    incoming = tmp_path / f"eingang{PART_FILE_SUFFIX}"
+    incoming.write_bytes(PartFileIO().export_file(existing))
+
+    catalogs: list[PartCatalog] = []
+    attempted_names: list[str | None] = []
+    original_install = PartFileIO.install_file
+
+    def counted_install(codec, payload, **kwargs):
+        attempted_names.append(kwargs.get("name"))
+        return original_install(codec, payload, **kwargs)
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    from app.ui import main_window as _mw
+
+    chosen_actions: list[str] = []
+
+    def choose_suggestion(problem, parent=None, handlers=None):
+        ids = {action.id for action in problem.suggestions}
+        if "use_suggested_name" in ids:
+            assert handlers is not None
+            chosen_actions.append("use_suggested_name")
+            handlers["use_suggested_name"](problem)
+
+    monkeypatch.setattr(PartFileIO, "install_file", counted_install)
+    monkeypatch.setattr(_mw, "show_error", choose_suggestion)
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(incoming), "")),
+    )
+
+    window = MainWindow(Session(), UiSettings())
+    suggested = ""
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        catalog.adopt_part.click()
+        wait_until(lambda: len(attempted_names) == 2, "der freie Name wurde nicht erneut versucht")
+        suggested = next((entry for entry in attempted_names if entry), "") or ""
+        wait_until(lambda: bool(suggested) and PARTS.has(suggested), "der freie Name kam nicht an")
+
+        assert attempted_names == [None, suggested]
+        assert chosen_actions == ["use_suggested_name"]
+        assert suggested != name
+        assert source.read_bytes(), "der vorhandene Baustein darf nicht ersetzt werden"
+        catalog.release()
+    finally:
+        for part_name in filter(None, (name, suggested)):
+            PARTS.remove(part_name)
+            REGISTRY.remove(f"insert_{part_name}")
+        REGISTRY.remove(operation_name)
+        window.close()
+
+
+@pytest.mark.parametrize("first_kind", ["invalid", "unreadable"])
+def test_an_unusable_part_file_action_opens_the_picker_again(
+    qt_app: QApplication, tmp_path, monkeypatch, first_kind: str
+) -> None:
+    """Formatfehler und Lesefehler führen mit „Auswählen“ zurück zur Datei."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.registry import REGISTRY
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = f"auswahlprobe_{first_kind}"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    invalid = tmp_path / f"ungueltig{PART_FILE_SUFFIX}"
+    if first_kind == "invalid":
+        invalid.write_bytes(b"kein json")
+    valid = tmp_path / f"gueltig{PART_FILE_SUFFIX}"
+    valid.write_bytes(PartFileIO().export_file(_box_recipe(name)))
+    choices = iter((str(invalid), str(valid)))
+    picker_calls = 0
+    catalogs: list[PartCatalog] = []
+
+    def choose_file(*args, **kwargs):
+        nonlocal picker_calls
+        picker_calls += 1
+        return next(choices), ""
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    from app.ui import main_window as _mw
+
+    def choose_again(problem, parent=None, handlers=None):
+        assert "choose" in {action.id for action in problem.suggestions}
+        assert handlers is not None
+        handlers["choose"](problem)
+
+    monkeypatch.setattr(_mw, "show_error", choose_again)
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", staticmethod(choose_file))
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        catalog.adopt_part.click()
+        wait_until(lambda: PARTS.has(name), "die zweite, gültige Datei wurde nicht hinzugefügt")
+
+        assert picker_calls == 2
+        catalog.release()
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        window.close()
+
+
+@pytest.mark.parametrize("action_id", ["retry", "save_elsewhere"])
+def test_a_part_export_write_error_performs_the_chosen_action(
+    qt_app: QApplication, tmp_path, monkeypatch, action_id: str
+) -> None:
+    """Erneut nutzt denselben Pfad; anderer Ort öffnet den Speicherdialog neu."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.errors import FileWriteError
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.part_file import PART_FILE_SUFFIX, PartFileIO
+    from app.core.knowledge.parts.recipe import register, save
+    from app.core.registry import REGISTRY
+    from app.i18n import tr
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = f"schreibprobe_{action_id}"
+    storage = tmp_path / "user-parts"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: storage)
+    part = _box_recipe(name)
+    source = save(part)
+    register(part)
+    first = tmp_path / f"erster-ort{PART_FILE_SUFFIX}"
+    second = tmp_path / f"anderer-ort{PART_FILE_SUFFIX}"
+    offered_targets = iter((str(first), str(second)))
+    picker_calls = 0
+    written_targets: list[object] = []
+    catalogs: list[PartCatalog] = []
+    original_export = PartFileIO.export_to_file
+
+    def choose_target(*args, **kwargs):
+        nonlocal picker_calls
+        picker_calls += 1
+        return next(offered_targets), ""
+
+    def fail_once(codec, recipe, target):
+        written_targets.append(target)
+        if len(written_targets) == 1:
+            raise FileWriteError(
+                target=getattr(target, "name", "part.json"),
+                detail=tr("Die Datei ließ sich nicht schreiben."),
+            )
+        return original_export(codec, recipe, target)
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    window: MainWindow
+
+    def choose_recovery(problem, parent=None, handlers=None):
+        available = window.error_handlers()
+        assert action_id in available
+        available[action_id](problem)
+
+    from app.ui import main_window as _mw
+
+    monkeypatch.setattr(PartFileIO, "export_to_file", fail_once)
+    monkeypatch.setattr(_mw, "show_error", choose_recovery)
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(choose_target))
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        _choose(catalog, name)
+        catalog.share_part.click()
+        expected = first if action_id == "retry" else second
+        wait_until(expected.is_file, "die gewählte Schreibhandlung führte nicht zum Ziel")
+
+        assert written_targets == ([first, first] if action_id == "retry" else [first, second])
+        assert picker_calls == (1 if action_id == "retry" else 2)
+        catalog.release()
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        if source.exists():
+            source.unlink()
         window.close()
 
 
@@ -836,3 +1392,37 @@ def _choose(catalog, name: str) -> None:
             catalog.list.setCurrentItem(item)
             return
     raise AssertionError(f"{name} steht nicht im Katalog")
+
+
+def _box_recipe(name: str):
+    """Ein kleines, vollständig registrierbares Rezept für den UI-Dateiweg."""
+    from app.core.knowledge.parts.recipe import Recipe
+    from app.core.scene.migrations import FORMAT_VERSION
+    from app.core.types import Document, Operation
+
+    return Recipe(
+        name=name,
+        title="Probeklotz",
+        group="structure",
+        document=Document(
+            format_version=FORMAT_VERSION,
+            app_version="test",
+            ops=[
+                Operation(
+                    id=1,
+                    op="create_box",
+                    outputs=("obj_1",),
+                    params={
+                        "width": 40.0,
+                        "depth": 30.0,
+                        "height": 12.0,
+                        "anchor": "corner",
+                        "name": "",
+                    },
+                )
+            ],
+        ),
+        license="CC0-1.0",
+        author="Probe",
+        features={"top": "face_top"},
+    )

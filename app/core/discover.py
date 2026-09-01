@@ -67,8 +67,10 @@ from urllib.parse import urlparse
 
 from app.branding import APP_NAME
 from app.core import errors
+from app.core.http import RejectRedirects
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
+from app.core.process import run_limited, trusted_cwd
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -570,11 +572,11 @@ def is_dir_on_host(folder: Path) -> bool:
     if not in_flatpak():
         return folder.is_dir()
     try:
-        answer = subprocess.run(
+        answer = run_limited(
             ["flatpak-spawn", "--host", "test", "-d", str(folder)],
-            capture_output=True,
+            cwd=trusted_cwd(),
             timeout=5.0,
-            check=False,
+            output_limit=64 * 1024,
         )
     except (OSError, subprocess.SubprocessError) as problem:
         _log.info("cannot ask the host about %s: %s", folder, problem)
@@ -690,18 +692,16 @@ def _from_host(names: tuple[str, ...]) -> Path | None:
         try:
             # Fester Befehl, und die Namen kommen aus dem Register - keine
             # Zeichenkette aus Nutzerhand, keine Shell.
-            answer = subprocess.run(
+            answer = run_limited(
                 ["flatpak-spawn", "--host", "which", name],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
+                cwd=trusted_cwd(),
                 timeout=5.0,
-                check=False,
+                output_limit=64 * 1024,
             )
         except (OSError, subprocess.SubprocessError) as problem:
             _log.info("cannot ask the host for %s: %s", name, problem)
             return None
-        found = answer.stdout.strip().splitlines()
+        found = answer.stdout.decode("utf-8", errors="replace").strip().splitlines()
         if answer.returncode == 0 and found:
             _log.info("found %s on the host: %s", name, found[0])
             return Path(found[0])
@@ -989,8 +989,8 @@ def opener_for(url: str) -> urllib.request.OpenerDirector:
     Antwort, die niemand kennt, bevor er das Problem hat.
     """
     if is_local_address(url):
-        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    return urllib.request.build_opener()
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}), RejectRedirects())
+    return urllib.request.build_opener(RejectRedirects())
 
 
 def service_url(tool_id: str, default: str) -> str:

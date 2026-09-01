@@ -1,379 +1,154 @@
-format = 1
+# Fest eingecheckte Lizenztexte für Ziel-Wheels, die den gewählten
+# Open-Source-Lizenzweg nicht selbst vollständig mitbringen. Jede Quelle ist
+# auf eine unveränderliche Fassung festgelegt; der Generator prüft die Bytes.
 
-[[package]]
-name = "attrs"
-version = "26.1.0"
-licence = "MIT"
-files = ["attrs/licenses__LICENSE"]
+[[text]]
+path = "third_party_licenses/LGPL-3.0.txt"
+packages = ["PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"]
+versions = ["6.11.2"]
+source = "https://www.gnu.org/licenses/lgpl-3.0.txt"
+sha256 = "e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118"
 
-[[package]]
-name = "cadquery-ocp-novtk"
-version = "7.9.3.1.1"
-licence = "Apache-2.0 AND LGPL-2.1-only WITH OCCT-exception-1.0"
-files = ["common/SOLIDON-LGPL-NOTICE.txt", "common/Apache-2.0.txt", "common/LGPL-2.1.txt", "common/OCCT_LGPL_EXCEPTION.txt"]
+[[text]]
+path = "third_party_licenses/GPL-3.0.txt"
+packages = ["PySide6", "PySide6_Addons", "PySide6_Essentials", "shiboken6"]
+versions = ["6.11.2"]
+source = "https://www.gnu.org/licenses/gpl-3.0.txt"
+sha256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
 
-[[package]]
-name = "cadquery-ocp-proxy"
-version = "7.9.3.1.1"
-licence = "Apache-2.0"
-files = ["common/Apache-2.0.txt"]
+[[text]]
+path = "third_party_licenses/OCP-Apache-2.0.txt"
+packages = ["cadquery-ocp-novtk", "cadquery-ocp-proxy"]
+versions = ["7.9.3.1.1"]
+source = "https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE"
+sha256 = "a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd"
 
-[[package]]
-name = "certifi"
-version = "2026.7.22"
-licence = "Mozilla Public License 2.0 (MPL 2.0)"
-files = ["certifi/licenses__LICENSE"]
+[[text]]
+path = "third_party_licenses/OCCT-exception-1.0.txt"
+packages = ["cadquery-ocp-novtk"]
+versions = ["7.9.3.1.1"]
+source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/OCCT_LGPL_EXCEPTION.txt"
+sha256 = "04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b"
 
-[[package]]
-name = "cffi"
-version = "2.1.1"
-licence = "MIT"
-files = ["cffi/licenses__LICENSE"]
+[[text]]
+path = "third_party_licenses/OCCT-LGPL-2.1.txt"
+packages = ["cadquery-ocp-novtk"]
+versions = ["7.9.3.1.1"]
+source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/LICENSE_LGPL_21.txt"
+sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 
-[[package]]
-name = "charset-normalizer"
-version = "3.5.1"
-licence = "MIT"
-files = ["charset-normalizer/licenses__LICENSE"]
+[[text]]
+path = "third_party_licenses/OCP-Apache-2.0.txt"
+runtime = ["openssl"]
+source = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+sha256 = "a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd"
 
-[[package]]
-name = "contourpy"
-version = "1.3.3"
-licence = "BSD License"
-files = ["contourpy/LICENSE"]
+[[text]]
+path = "third_party_licenses/libffi-3.4.8.txt"
+runtime = ["libffi"]
+source = "https://raw.githubusercontent.com/libffi/libffi/v3.4.8/LICENSE"
+sha256 = "67894089811f93fca47a76f85e017da6f8582d4ba0905963c6e0f1ad6df7a195"
 
-[[package]]
-name = "cryptography"
-version = "50.0.1"
-licence = "Apache-2.0 OR BSD-3-Clause"
-files = ["cryptography/licenses__LICENSE", "cryptography/licenses__LICENSE.APACHE", "cryptography/licenses__LICENSE.BSD"]
+[[text]]
+path = "third_party_licenses/AppImage-type2-runtime-dd6cebe.txt"
+runtime = ["appimage-type2-runtime"]
+source = "https://raw.githubusercontent.com/AppImage/type2-runtime/dd6cebe/LICENSE"
+sha256 = "c7622e449c9c01fca503a98bc74846ff9595b254ec2b3d4979d42bf884bd1a88"
 
-[[package]]
-name = "cycler"
-version = "0.12.1"
-licence = "BSD License"
-files = ["cycler/LICENSE"]
+[[text]]
+path = "third_party_licenses/OCCT-LGPL-2.1.txt"
+runtime = ["appimage-type2-runtime"]
+source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 
-[[package]]
-name = "cyclopts"
-version = "4.23.2"
-licence = "Apache-2.0"
-files = ["cyclopts/licenses__LICENSE"]
+# Laufzeitfamilien werden erst aus dem fertigen Kundenartefakt übernommen.
+# ``notice_package`` bezeichnet die Distribution, deren mitgelieferte Texte
+# den nativen Bestandteil abdecken. ``source_delivery`` sperrt den Release,
+# bis ein RS-kontrolliertes Quellarchiv und Austauschhinweise belegt sind.
 
-[[package]]
-name = "docstring_parser"
-version = "0.18.0"
-licence = "MIT License"
-files = ["docstring-parser/licenses__LICENSE.md"]
+[[runtime]]
+id = "cpython"
+name = "CPython runtime"
+notice_source = "python-runtime"
+source = "https://github.com/python/cpython/tree/v3.13.14"
+versions = ["3.13.14"]
 
-[[package]]
-name = "fast_simplification"
-version = "0.2.0"
-licence = "MIT"
-files = ["fast-simplification/licenses__LICENSE"]
+[[runtime]]
+id = "appimage-type2-runtime"
+name = "AppImage type-2 runtime"
+source = "https://github.com/AppImage/type2-runtime/tree/dd6cebe"
+source_delivery = true
+versions = ["20251108"]
 
-[[package]]
-name = "fonttools"
-version = "4.63.0"
-licence = "MIT"
-files = ["fonttools/licenses__LICENSE", "fonttools/licenses__LICENSE.external"]
+[[runtime]]
+id = "pyinstaller-bootloader"
+name = "PyInstaller bootloader"
+notice_package = "pyinstaller"
+source = "https://github.com/pyinstaller/pyinstaller/tree/v6.22.2"
+versions = ["6.22.2"]
 
-[[package]]
-name = "idna"
-version = "3.19"
-licence = "BSD-3-Clause"
-files = ["idna/licenses__LICENSE.md"]
+[[runtime]]
+id = "openssl"
+name = "OpenSSL"
+source = "https://github.com/openssl/openssl/tree/openssl-3.0.21"
+versions = ["3.0.21"]
 
-[[package]]
-name = "ImageIO"
-version = "2.37.4"
-licence = "BSD-2-Clause"
-files = ["imageio/licenses__LICENSE"]
+[[runtime]]
+id = "libffi"
+name = "libffi"
+source = "https://github.com/libffi/libffi/tree/v3.4.8"
 
-[[package]]
-name = "jaraco.classes"
-version = "3.4.0"
-licence = "MIT License"
-files = ["jaraco-classes/LICENSE"]
+[[runtime]]
+id = "openblas-numpy"
+name = "OpenBLAS (numpy)"
+notice_package = "numpy"
+source = "https://github.com/OpenMathLib/OpenBLAS"
 
-[[package]]
-name = "jaraco.context"
-version = "6.1.2"
-licence = "MIT"
-files = ["jaraco-context/licenses__LICENSE"]
+[[runtime]]
+id = "openblas-scipy"
+name = "OpenBLAS (scipy)"
+notice_package = "scipy"
+source = "https://github.com/OpenMathLib/OpenBLAS"
 
-[[package]]
-name = "jaraco.functools"
-version = "4.6.0"
-licence = "MIT"
-files = ["jaraco-functools/licenses__LICENSE"]
+[[runtime]]
+id = "gcc-runtime"
+name = "GCC Runtime Libraries"
+notice_package = "scipy"
+source = "https://gcc.gnu.org/git/?p=gcc.git"
 
-[[package]]
-name = "jeepney"
-version = "0.9.0"
-licence = "MIT"
-files = ["jeepney/licenses__LICENSE"]
+[[runtime]]
+id = "microsoft-visual-cpp-runtime"
+name = "Microsoft Visual C++ Runtime"
+notice_required = false
+source = "https://visualstudio.microsoft.com/license-terms/"
 
-[[package]]
-name = "keyring"
-version = "25.7.0"
-licence = "MIT"
-files = ["keyring/licenses__LICENSE"]
+[[runtime]]
+id = "qt"
+name = "Qt"
+notice_package = "PySide6_Essentials"
+source = "https://code.qt.io/cgit/qt/qt5.git/tag/?h=v6.11.2"
+source_delivery = true
+versions = ["6.11.2"]
 
-[[package]]
-name = "kiwisolver"
-version = "1.5.0"
-licence = "BSD License"
-files = ["kiwisolver/licenses__LICENSE"]
+[[runtime]]
+id = "opencascade-technology"
+name = "Open CASCADE Technology"
+notice_package = "cadquery-ocp-novtk"
+source = "https://github.com/Open-Cascade-SAS/OCCT/tree/V7_9_3"
+source_delivery = true
+versions = ["7.9.3"]
 
-[[package]]
-name = "lazy-loader"
-version = "0.5"
-licence = "BSD-3-Clause"
-files = ["lazy-loader/licenses__LICENSE.md"]
+[[runtime]]
+id = "geos"
+name = "GEOS"
+notice_package = "shapely"
+source = "https://github.com/libgeos/geos/tree/3.13.1"
+source_delivery = true
+versions = ["3.13.1"]
 
-[[package]]
-name = "lxml"
-version = "6.1.2"
-licence = "BSD-3-Clause"
-files = ["lxml/licenses__LICENSE.txt", "lxml/licenses__LICENSES.txt"]
-
-[[package]]
-name = "manifold3d"
-version = "3.5.2"
-licence = "Apache Software License"
-files = ["manifold3d/licenses__LICENSE"]
-
-[[package]]
-name = "markdown-it-py"
-version = "4.2.0"
-licence = "MIT License"
-files = ["markdown-it-py/licenses__LICENSE", "markdown-it-py/licenses__LICENSE.markdown-it"]
-
-[[package]]
-name = "matplotlib"
-version = "3.11.1"
-licence = "Python Software Foundation License"
-files = ["matplotlib/LICENSE"]
-
-[[package]]
-name = "mdurl"
-version = "0.1.2"
-licence = "MIT License"
-files = ["mdurl/LICENSE"]
-
-[[package]]
-name = "more-itertools"
-version = "11.1.0"
-licence = "MIT"
-files = ["more-itertools/licenses__LICENSE"]
-
-[[package]]
-name = "networkx"
-version = "3.6.1"
-licence = "BSD-3-Clause"
-files = ["networkx/licenses__LICENSE.txt"]
-
-[[package]]
-name = "numpy"
-version = "2.5.2"
-licence = "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0"
-files = ["numpy/licenses__LICENSE.txt", "numpy/licenses__numpy___core__include__numpy__libdivide__LICENSE.txt", "numpy/licenses__numpy___core__src__common__pythoncapi-compat__COPYING", "numpy/licenses__numpy___core__src__highway__LICENSE", "numpy/licenses__numpy___core__src__multiarray__dragon4_LICENSE.txt", "numpy/licenses__numpy___core__src__npysort__x86-simd-sort__LICENSE.md", "numpy/licenses__numpy___core__src__umath__svml__LICENSE", "numpy/licenses__numpy__fft__pocketfft__LICENSE.md", "numpy/licenses__numpy__linalg__lapack_lite__LICENSE.txt", "numpy/licenses__numpy__ma__LICENSE", "numpy/licenses__numpy__random__LICENSE.md", "numpy/licenses__numpy__random__src__distributions__LICENSE.md", "numpy/licenses__numpy__random__src__mt19937__LICENSE.md", "numpy/licenses__numpy__random__src__pcg64__LICENSE.md", "numpy/licenses__numpy__random__src__philox__LICENSE.md", "numpy/licenses__numpy__random__src__sfc64__LICENSE.md", "numpy/licenses__numpy__random__src__splitmix64__LICENSE.md"]
-
-[[package]]
-name = "packaging"
-version = "26.3"
-licence = "Apache-2.0 OR BSD-2-Clause"
-files = ["packaging/licenses__LICENSE", "packaging/licenses__LICENSE.APACHE", "packaging/licenses__LICENSE.BSD"]
-
-[[package]]
-name = "pillow"
-version = "12.3.0"
-licence = "MIT-CMU"
-files = ["pillow/licenses__LICENSE"]
-
-[[package]]
-name = "platformdirs"
-version = "4.11.4"
-licence = "MIT"
-files = ["platformdirs/licenses__LICENSE"]
-
-[[package]]
-name = "pooch"
-version = "1.9.0"
-licence = "BSD-3-Clause"
-files = ["pooch/licenses__AUTHORS.md", "pooch/licenses__LICENSE.txt"]
-
-[[package]]
-name = "pycparser"
-version = "3.0"
-licence = "BSD-3-Clause"
-files = ["pycparser/licenses__LICENSE"]
-
-[[package]]
-name = "Pygments"
-version = "2.21.0"
-licence = "BSD-2-Clause"
-files = ["pygments/licenses__AUTHORS", "pygments/licenses__LICENSE"]
-
-[[package]]
-name = "pyparsing"
-version = "3.3.2"
-licence = "MIT"
-files = ["pyparsing/licenses__LICENSE"]
-
-[[package]]
-name = "PySide6"
-version = "6.11.2"
-licence = "LGPL-3.0-only"
-files = ["common/SOLIDON-LGPL-NOTICE.txt", "common/LGPL-3.0.txt", "common/GPL-3.0.txt"]
-
-[[package]]
-name = "PySide6_Addons"
-version = "6.11.2"
-licence = "LGPL-3.0-only"
-files = ["common/SOLIDON-LGPL-NOTICE.txt", "common/LGPL-3.0.txt", "common/GPL-3.0.txt"]
-
-[[package]]
-name = "PySide6_Essentials"
-version = "6.11.2"
-licence = "LGPL-3.0-only"
-files = ["common/SOLIDON-LGPL-NOTICE.txt", "common/LGPL-3.0.txt", "common/GPL-3.0.txt"]
-
-[[package]]
-name = "python-dateutil"
-version = "2.9.0.post0"
-licence = "BSD License, Apache Software License"
-files = ["python-dateutil/LICENSE"]
-
-[[package]]
-name = "pyvista"
-version = "0.48.4"
-licence = "MIT"
-files = ["pyvista/licenses__AUTHORS.rst", "pyvista/licenses__LICENSE"]
-
-[[package]]
-name = "pyvistaqt"
-version = "0.12.0"
-licence = "MIT License"
-files = ["pyvistaqt/licenses__AUTHORS.rst", "pyvistaqt/licenses__LICENSE"]
-
-[[package]]
-name = "pywin32-ctypes"
-version = "0.2.3"
-licence = "BSD-3-Clause"
-files = ["pywin32-ctypes/LICENSE.txt"]
-
-[[package]]
-name = "QtPy"
-version = "2.4.3"
-licence = "MIT License"
-files = ["qtpy/AUTHORS.md", "qtpy/LICENSE.txt"]
-
-[[package]]
-name = "requests"
-version = "2.34.2"
-licence = "Apache Software License"
-files = ["requests/licenses__LICENSE", "requests/licenses__NOTICE"]
-
-[[package]]
-name = "rich"
-version = "15.0.0"
-licence = "MIT License"
-files = ["rich/licenses__LICENSE"]
-
-[[package]]
-name = "rich-rst"
-version = "2.1.0"
-licence = "MIT"
-files = ["rich-rst/licenses__LICENSE", "rich-rst/licenses__rich_rst___vendor__LICENSES.txt"]
-
-[[package]]
-name = "scikit-image"
-version = "0.26.0"
-licence = "BSD License"
-files = ["scikit-image/LICENSE.txt"]
-
-[[package]]
-name = "scipy"
-version = "1.18.1"
-licence = "BSD License"
-files = ["scipy/LICENSE.txt"]
-
-[[package]]
-name = "scooby"
-version = "0.11.2"
-licence = "MIT"
-files = ["scooby/licenses__LICENSE"]
-
-[[package]]
-name = "SecretStorage"
-version = "3.5.0"
-licence = "BSD-3-Clause"
-files = ["secretstorage/licenses__LICENSE"]
-
-[[package]]
-name = "shapely"
-version = "2.1.2"
-licence = "BSD License"
-files = ["shapely/licenses__LICENSE.txt", "shapely/licenses__LICENSE_GEOS", "shapely/licenses__LICENSE_win32"]
-
-[[package]]
-name = "shiboken6"
-version = "6.11.2"
-licence = "LGPL-3.0-only"
-files = ["common/SOLIDON-LGPL-NOTICE.txt", "common/LGPL-3.0.txt", "common/GPL-3.0.txt"]
-
-[[package]]
-name = "six"
-version = "1.17.0"
-licence = "MIT License"
-files = ["six/LICENSE"]
-
-[[package]]
-name = "svg.path"
-version = "7.1"
-licence = "MIT License"
-files = ["svg-path/licenses__LICENSE.txt"]
-
-[[package]]
-name = "tifffile"
-version = "2026.8.23"
-licence = "BSD-3-Clause"
-files = ["tifffile/licenses__LICENSE"]
-
-[[package]]
-name = "trimesh"
-version = "5.0.0"
-licence = "MIT License"
-files = ["trimesh/licenses__LICENSE.md"]
-
-[[package]]
-name = "typing_extensions"
-version = "4.16.0"
-licence = "PSF-2.0"
-files = ["typing-extensions/licenses__LICENSE"]
-
-[[package]]
-name = "urllib3"
-version = "2.7.0"
-licence = "MIT"
-files = ["urllib3/licenses__LICENSE.txt"]
-
-[[package]]
-name = "vhacdx"
-version = "0.0.10"
-licence = "BSD-3-Clause"
-files = ["vhacdx/licenses__LICENSE"]
-
-[[package]]
-name = "vtk"
-version = "9.6.2"
-licence = "BSD License"
-files = ["vtk/licenses__LICENSE"]
-
-[[package]]
-name = "xxhash"
-version = "4.0.1"
-licence = "BSD-2-Clause"
-files = ["xxhash/licenses__LICENSE"]
+[[runtime]]
+id = "vtk-native"
+name = "VTK native libraries"
+notice_package = "vtk"
+source = "https://gitlab.kitware.com/vtk/vtk/-/tree/v9.6.2"
+versions = ["9.6.2"]

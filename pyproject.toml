@@ -135,7 +135,7 @@ include = ["app*"]
 # Startbildschirm-Inhalt zugleich (§37.2). Die Handbuchbilder dazu — die
 # gezeichneten und gerenderten entstehen im Lauf, die Bildschirmfotos nicht,
 # also reisen sie als Dateien (ein Ordner je Sprache).
-"app" = ["examples/*.p3d", "images/manual/*/*.png"]
+"app" = ["examples/*.p3d", "examples/*.svg", "examples/LICENSE", "images/manual/*/*.png"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

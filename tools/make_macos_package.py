@@ -36,6 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, WEBSITE_URL
+from tools import asset_rights
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "dist"
@@ -159,6 +160,11 @@ def build(architecture: str, identity: str = "") -> int:
     """
     if not BUNDLE.is_dir():
         print(f"Kein Bundle unter {BUNDLE} — zuerst: pyinstaller packaging/solidon3d.spec")
+        return 1
+    try:
+        asset_rights.require_customer_artifact_cleared(BUNDLE, "darwin")
+    except RuntimeError as problem:
+        print(problem)
         return 1
     if not LICENCE_FILE.is_file():
         print("packaging/eula.txt fehlt — zuerst: python tools/make_legal.py")

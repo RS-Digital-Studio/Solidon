@@ -36,6 +36,7 @@ from typing import Final, Literal
 from app.core import discover
 from app.core.backends import llm, mesh
 from app.core.log import get_logger
+from app.core.process import detached_process_options, trusted_cwd
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -343,27 +344,19 @@ def start_detailed(
     target_address = tool.url or tool.address()
 
     # Losgelöst und ohne Fenster: ein Konsolenfenster, das über der Anwendung
-    # aufgeht, ist für den Nutzer ein Fehler und für uns nichts. Die beiden
-    # Windows-Merker über ``getattr`` — sie gibt es dort nur, und eine
-    # Typprüfung, die unter Linux läuft, kennt sie nicht.
-    windows = sys.platform == "win32"
-    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+    # aufgeht, ist für den Nutzer ein Fehler und für uns nichts. Die gemeinsame
+    # Prozessgrenze setzt dafür je Plattform eine eigene Gruppe.
     # **Auch dieser Start geht auf den Rechner, nicht in den Sandkasten.**
     # ``program`` kommt aus ``discover.find_program`` und ist im Flatpak ein
     # Host-Pfad; im Sandkasten gibt es ihn nicht. Ohne ``on_host`` endet der
     # Knopf in einem ``OSError``, einer Protokollzeile und ``False`` — er tut
     # sichtbar nichts, und daneben steht weiter „Antwortet nicht".
     launched = discover.on_host(command)
+    working_folder = (
+        program.parent if program.is_absolute() and program.parent.is_dir() else trusted_cwd()
+    )
     try:
-        subprocess.Popen(
-            launched,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=(no_window | detached) if windows else 0,
-            start_new_session=not windows,
-        )
+        subprocess.Popen(launched, **detached_process_options(cwd=working_folder))
     except OSError as problem:
         _log.warning("could not start %s: %s", tool.id, problem)
         return StartResult(

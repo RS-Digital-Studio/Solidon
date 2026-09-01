@@ -5,6 +5,8 @@
 - [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) — liegt in Dokumenten, gehört in den Passwortmanager (§8).
 - [MSVC-Erkennung bei VS 18](msvc-erkennung-vs18.md) — Compiler da, setuptools findet ihn nicht; über vcvars64.bat bauen.
 - [Lizenzmanifest nach Grenzdatei neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) — Grenzdatei geändert → test_packaging rot; neu bauen, nicht löschen.
+- [SBOM aus dem Kundenartefakt](sbom-aus-dem-kundenartefakt.md) — Analyse wählt Distributionen, das fertige Paket liefert CPython und jede native Datei; `pip freeze` ist kein Auslieferungsbeleg.
+- [Signierung ist ein eigener Vertrauensraum](signierung-ist-ein-eigener-vertrauensraum.md) — App- und Installersignatur getrennt um den ungeschützten Paketbau; OIDC/PFX/Apple-Schlüssel nur in ihren festen Signierphasen.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain; scheitert die Anmeldung, ist es meist der SSH-Schalter.
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
 - [Sitzung sendet, ohne erreichbar zu sein](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht zwangsläufig beidseitig; ein Befund an sie ist dann verloren.
@@ -18,20 +20,18 @@
 - [Agenten-Suite-Lauf in der Praxis](agenten-suite-lauf-praxis.md) — ~1,5 h je Modell, Ausgabe gepuffert; Exit 1 ist eine Quote, kein Fehlschlag.
 - [.venv verliert einzelne Dateien](venv-dateien-verschwinden.md) — sieht aus wie ein Codefehler; RECORD nennt die fehlende Datei, check_env nicht.
 - [Native Bibliotheken zerlegen den Speicher](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss am Prozessende sind eine Familie; erst wiederholen.
+- [Der Entwickler sieht den Cache-Fehler nie](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt beim täglichen Bauen auf; der Kunde fährt denselben Cache wochenlang.
 - [Lokale Umgebung: Python-Version](lokale-umgebung-python-version.md) — die .venv muss 3.13 fahren; sonst prüft mypy still null Dateien.
-- [TripoSG statt Hunyuan](triposg-statt-hunyuan.md) — MIT statt EU-Ausschluss; drei Fallen und die gemessenen Vorgaben.
+- [Modellkette vor Erzeugerfreigabe](modellkette-vor-erzeugerfreigabe.md) — eine Repository-Lizenz beweist nicht Code, Gewichte und Abhängigkeiten; ohne vollständige Kette bleiben Einrichtung, Aussagen und Altmedien gesperrt.
 - [ComfyUI-Installation](comfyui-installation-d-ai.md) — liegt auf D:\AI; Hunyuan3D 2.1 hat andere Knotennamen und keinen Texteingang.
 - [Lokale KI teilt eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) — Ollama und ComfyUI serialisieren, gezielt abbrechen und danach VRAM freigeben.
 - [Ollama: Werkzeugaufrufe](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx schneidet Ollama den Prompt still ab.
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} bleibt stehen; in der Oberfläche richtig, im Kern nicht.
 - [Fehlertexte zeigten nur den Titel](fehlertexte-nur-titel.md) — der ist je Klasse gleich; der Grund steht im detail.
 - [Oberfläche von Hand fahren](oberflaeche-von-hand-fahren.md) — echte Plattform, Vollbild, modale Dialoge **und Popups** abfangen, Ausgabe in eine Datei.
-- [KI-Hinweis sperrt den ersten Modellaufruf](ki-hinweis-sperrt-den-ersten-modellaufruf.md) — der Hinweis muss vor der ersten externen KI-Anfrage abgeschlossen sein; Sichtbarkeit allein ist keine Sperre.
-- [Startfläche braucht Breite und Skalierung](startflaeche-braucht-breite-und-skalierung.md) — 1920 × 1080 und schmale Fenster getrennt prüfen; Mindestgrößen dürfen die Oberfläche nicht aufblasen.
 - [Qt-Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — processEvents stellt DeferredDelete nicht zu; Nicht-Monotonie ist das Warnsignal.
 - [Katalogschlüssel sind Wörter](katalog-schluessel-sind-woerter.md) — ein neues Label kapert still einen vergebenen Quelltext; der Test sieht es nicht.
 - [Marke im span zerteilt](marke-im-span-zerteilt.md) — ein Tag, der den Namen teilt, lässt ihn jeder Suche entkommen.
-- [Der Entwickler sieht den Cache-Fehler nie](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt beim täglichen Bauen auf; der Kunde fährt denselben Cache wochenlang.
 - [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus nur über Chromium-Flags.
 - [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung.
 - [Register zählen](register-zaehlen-load-operations.md) — ohne load_operations() fehlen die Bausteine; die Zahl bewegt sich, das Muster bleibt.
@@ -78,12 +78,13 @@
 - [Mutation, die den Fall nicht trifft](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht", nicht „der Test prüft nichts".
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — beim dritten Fehlbefund war die Messung echt und galt woanders.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders und war schon auf HEAD rot.
+- [Fortschrittszeichen zählen nicht wie collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) — die Position eines `F` trifft nicht die n-te collect-Zeile; die falsche Entwarnung ging an zwei Sitzungen.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt sich später" setzt jemanden voraus, der heilen kann.
 - [Rezept ist der Fund, die Op ist die Ursache](rezept-ist-der-fund-op-ist-die-ursache.md) — zwei „Bausteinfehler“ lagen im Rezept, und beide Male fehlte in Wahrheit eine Prüfung in der Operation; dazu: der Boden verrät, was die Hüllgröße verschweigt.
+- [Datei zuerst, Register danach](datei-zuerst-register-danach.md) — Registerzustand isoliert vorbereiten, Datei atomar veröffentlichen und danach ausschließlich vorwärts aktivieren.
 - [Fehlalarm, den mehrere für einen halten](fehlalarm-den-mehrere-fuer-einen-halten.md) — „das ist doch nur eine Messung“ gilt nicht, sobald sie verrechnet wird; und die Wirkung war null, während mein Kommentar mehr behauptete.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
-- [Der Zeuge wird beim Messen überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — vor jeder Wiederholung den Diff der gemessenen Dateien lesen; der Prüfling kann sich im geteilten Baum geändert haben.
 
 - [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
 - [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
@@ -108,6 +109,12 @@
 - [Firmennutzung ist ein Marktsignal](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs; Amsler & Frey validiert einen Einsatz, Millionenwerte bleiben unbelegte Szenarien.
 - [Review immer vollständig](review-immer-vollstaendig.md) — jeden Diff ganz lesen, keine Stichproben-Ökonomie.
 - [Übersetzung neu statt geflickt](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz eigenständig ist; sonst neu.
+- [Generatorrahmen ist Teil der Sprache](generatorrahmen-ist-teil-der-sprache.md) — Inhalt aus dem Katalog reicht nicht, wenn Navigation und PDF-Rand daneben auf Deutsch zurückfallen.
+- [Bausteinbereich ist ein Produktionsvertrag](bausteinbereich-ist-ein-produktionsvertrag.md) — vollständiges Parameterprodukt, Wandvertrag und bedingte Merkmale gehören an den registrierten Baustein.
+- [KI-Hinweis sperrt den ersten Modellaufruf](ki-hinweis-sperrt-den-ersten-modellaufruf.md) — der Hinweis schützt an jeder echten Modellgrenze und nach jedem Zielwechsel erneut.
+- [Startfläche braucht Breite und Skalierung](startflaeche-braucht-breite-und-skalierung.md) — Fensterbreite und Schriftskalierung getrennt prüfen; ein Rollbereich muss sein Kind wirklich schrumpfen können.
+- [Ein Kalenderdatum folgt der App-Sprache](kalenderdatum-folgt-appsprache.md) — `QLocale()` ohne Argument folgt dem Prozess; nach einem Sprachwechsel bleibt der Monat sonst in der alten Sprache.
+- [Neu speichern ändert keine Urheberschaft](neu-speichern-aendert-keine-urheberschaft.md) — lokale Kopie ist kein Rechteübergang; CC BY/CC BY-SA und Provenienz bleiben sichtbar.
 - [Baustein heißt je Sprache ein Wort](baustein-begriff-je-sprache.md) — es bloque, fr bloc, it blocco, pt bloco; pieza/peça bleiben für „Teil".
 - [Eine Warnungsmarke ist semantischer Zustand](warnungsmarke-ist-semantischer-zustand.md) — VTK-Aktoren überleben keinen Szenenaufbau; dieselbe Auswertung zeichnet ohne neue Frist nach, ein neues Ergebnis verwirft alles.
 - [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — bei einer neuen Variante den alten Namen durch conftest und Wächter grepen.
@@ -137,6 +144,7 @@
 - [Ein Probe-Worktree altert](probe-worktree-altert.md) — sein Baum ist ein Zustand, kein Diff; gegen den **aktuellen** HEAD prüfen.
 - [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) — eine Messung, die den Bestand ändert, gehört in einen eigenen Worktree.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund kann längst repariert sein; `git diff HEAD` vorher.
+- [Der Zeuge wird beim Messen überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — vor jeder Wiederholung den Diff der gemessenen Dateien lesen; der Prüfling kann sich im geteilten Baum geändert haben.
 - [Fremde Zwischenstände verfälschen Messungen](fremde-zwischenstaende-verfaelschen-messungen.md) — bei rotem Lauf zuerst den Zeitstempel der genannten Datei lesen, nicht den eigenen Code.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben in dieselben Dateien; eine alte Zahl sieht aktuell aus.
 - [Probe mit Commits schaltet den Push ab](probe-die-commits-erzeugt-schaltet-push-ab.md) — der post-commit läuft in jedem Worktree; sonst landet die Probe auf origin.

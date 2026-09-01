@@ -85,6 +85,7 @@ from app.core.agent.tools import (
 from app.core.backends import llm
 from app.core.errors import (
     CANCEL,
+    CHOOSE,
     REPAIR_AND_RETRY,
     AppError,
     ExternalToolError,
@@ -552,7 +553,14 @@ class _ProgressState:
     immediate: bool
 
 
-_PROGRESS_PRIORITY: Final = ("split", "download", "export", "agent", "evaluation")
+_PROGRESS_PRIORITY: Final = (
+    "split",
+    "download",
+    "export",
+    "part_file",
+    "agent",
+    "evaluation",
+)
 
 
 class _ExportWorker(Worker):
@@ -651,6 +659,141 @@ class _ExportWorker(Worker):
             sources=self._sources,
         )
         return write_plan(plan, self._target.parent, self._format), list(plan.findings)
+
+
+class _PartImportWorker(Worker):
+    """Eine Bausteindatei prüfen und atomar installieren (§2.8, §24.5).
+
+    Die Prüfung umfasst nicht nur JSON, sondern auch Quellen, Ressourcen,
+    Operationen und einen Geometrie-Probelauf. Das kann länger als ein
+    Lidschlag dauern und gehört deshalb nicht in den Qt-Hauptthread. Ein
+    Abbruch wird nicht angeboten: Datei und Register werden im Kern als eine
+    Transaktion veröffentlicht und dürfen nicht auf halbem Weg stehen bleiben.
+    """
+
+    done = Signal(object)
+    failed = Signal(object, object)
+
+    def __init__(self, source: bytes | Path, name: str | None = None) -> None:
+        super().__init__()
+        self._source = source
+        self._name = name
+
+    def work(self) -> None:
+        from app.core.knowledge.parts.part_file import PartFileIO
+
+        if isinstance(self._source, Path):
+            try:
+                payload = self._source.read_bytes()
+            except OSError:
+                self.failed.emit(
+                    ValidationError(
+                        field="title",
+                        detail=tr(
+                            "Die gewählte Bausteindatei ließ sich nicht öffnen. "
+                            "Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte."
+                        ),
+                        constraint="part_file_unreadable",
+                        suggestions=(CHOOSE, CANCEL),
+                    ),
+                    None,
+                )
+                return
+        else:
+            payload = self._source
+        try:
+            installed = PartFileIO().install_file(payload, name=self._name)
+        except AppError as error:
+            self.failed.emit(error, payload)
+            return
+        self.done.emit(installed)
+
+
+class _PartExportWorker(Worker):
+    """Eine Bausteindatei prüfen und atomar an den gewählten Ort schreiben.
+
+    Wie beim Import ist die vollständige Dateiprüfung der teure Teil. Das
+    Fenster bleibt währenddessen bedienbar; ein Abbruch fehlt absichtlich,
+    weil der atomare Schreiber ohne sichtbare Zwischenfassung fertig wird.
+    """
+
+    done = Signal(object)
+    failed = Signal(object)
+
+    def __init__(self, data: Mapping[str, Any], target: Path) -> None:
+        super().__init__()
+        self._data = dict(data)
+        self._target = target
+
+    def work(self) -> None:
+        from app.core.knowledge.parts.part_file import PartFileIO
+        from app.core.knowledge.parts.recipe import from_data
+
+        try:
+            recipe = from_data(dict(self._data))
+            PartFileIO().export_to_file(recipe, self._target)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        except (TypeError, ValueError):
+            self.failed.emit(
+                ValidationError(
+                    field="title",
+                    detail=tr(
+                        "Die Datei dieses Bausteins ließ sich nicht lesen. "
+                        "Speichern Sie ihn neu, dann steht sie wieder."
+                    ),
+                    constraint="part_file_unavailable",
+                    suggestions=(CANCEL,),
+                )
+            )
+            return
+        self.done.emit(self._target)
+
+
+class _PartRemoveWorker(Worker):
+    """Einen lokalen Bibliothekseintrag samt exaktem Rückweg entfernen."""
+
+    done = Signal(object)
+    failed = Signal(object)
+
+    def __init__(self, name: str, expected_sha256: str | None = None) -> None:
+        super().__init__()
+        self._name = name
+        self._expected_sha256 = expected_sha256
+
+    def work(self) -> None:
+        from app.core.knowledge.parts.part_file import PartFileIO
+
+        try:
+            removed = PartFileIO().remove_from_library(
+                self._name, expected_sha256=self._expected_sha256
+            )
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self.done.emit(removed)
+
+
+class _PartRestoreWorker(Worker):
+    """Den bytegenauen Rückweg einer Bibliotheksentfernung ausführen."""
+
+    done = Signal(object)
+    failed = Signal(object)
+
+    def __init__(self, token: Any) -> None:
+        super().__init__()
+        self._token = token
+
+    def work(self) -> None:
+        from app.core.knowledge.parts.part_file import PartFileIO
+
+        try:
+            restored = PartFileIO().restore_to_library(self._token)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self.done.emit(restored)
 
 
 class _SliceWorker(Worker):
@@ -1002,6 +1145,17 @@ class MainWindow(QMainWindow):
         Auslaufen seines Threads."""
         self._export_attempt: tuple[Path, ExportFormat] | None = None
         """Wohin der laufende Export schreibt — für einen zweiten Anlauf."""
+        self._part_file_worker: Any = None
+        self._part_file_button: Any = None
+        """Der lokale Bausteindateiweg und sein vorübergehend gesperrter Knopf.
+
+        Ein eigenes Feld neben ``_export_worker``: Ein Bausteinexport ist kein
+        Szenenexport, teilt aber dessen Fortschrittsbereich und dieselbe
+        Halteleine. Der Knopf wird nach jedem Ausgang wieder freigegeben.
+        """
+        self._part_file_undo: tuple[str, Any] | None = None
+        self._part_file_affected_step: int | None = None
+        """Die genau eine sichtbare Rücknahme und ihr erster verwendeter Schritt."""
         self._write_failure: _WriteFailure | None = None
         """Was nach einem gescheiterten Schreiben möglich ist — oder ``None``.
 
@@ -1834,6 +1988,19 @@ class MainWindow(QMainWindow):
                 False,
                 False,
                 True,
+            ),
+            "part_file": _ProgressState(
+                False,
+                "",
+                0,
+                0,
+                0,
+                generic_name,
+                generic_description,
+                generic_cancel,
+                False,
+                False,
+                False,
             ),
             "download": _ProgressState(
                 False,
@@ -4760,6 +4927,32 @@ class MainWindow(QMainWindow):
         """§24.3: die Bibliothek, die man sehen kann. Einen Baustein zu wählen
         führt seine Operation aus.
         """
+        self._open_catalog()
+
+    def action_adopt_part_file(self) -> None:
+        """Eine lokale Bausteindatei wählen und im sichtbaren Katalog prüfen."""
+        catalog = self._make_catalog()
+        catalog.show()
+        self._adopt_part(catalog)
+        self._exec_catalog(catalog)
+
+    def action_share_part_file(self) -> None:
+        """Den Katalog zur Auswahl des weiterzugebenden Bausteins öffnen."""
+        self._open_catalog()
+
+    def _open_part_file(self, path: Path) -> None:
+        """Eine direkt geöffnete Bausteindatei im Katalog einlesen."""
+        catalog = self._make_catalog()
+        catalog.show()
+        self._import_part_path(catalog, path)
+        self._exec_catalog(catalog)
+
+    def _open_catalog(self) -> None:
+        """Den gemeinsamen Katalogaufbau öffnen."""
+        self._exec_catalog(self._make_catalog())
+
+    def _make_catalog(self) -> PartCatalog:
+        """Den Katalog für alle drei lokalen Zugänge gleich verdrahten."""
         catalog = PartCatalog(self)
         catalog.set_can_save(*self._recipe_readiness())
         catalog.set_can_insert(*self._insert_readiness())
@@ -4769,8 +4962,15 @@ class MainWindow(QMainWindow):
         # aber sie sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
         catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
-        catalog.exportRequested.connect(lambda: self._export_part(catalog))
-        catalog.importRequested.connect(lambda: self._import_part(catalog))
+        catalog.shareRequested.connect(lambda: self._share_part(catalog))
+        catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
+        catalog.removeRequested.connect(lambda name: self._remove_part(catalog, name))
+        catalog.undoFileRequested.connect(lambda: self._undo_part_file(catalog))
+        catalog.showAffectedStepRequested.connect(lambda: self._show_part_affected_step(catalog))
+        return catalog
+
+    def _exec_catalog(self, catalog: PartCatalog) -> None:
+        """Den Katalog ausführen und eine bestätigte Einfügeauswahl anwenden."""
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
@@ -4818,104 +5018,135 @@ class MainWindow(QMainWindow):
             )
         return True, ""
 
-    def _import_part(self, catalog: PartCatalog) -> None:
-        """Importiert eine lokale Bausteindatei in den Katalog.
+    def _adopt_part(self, catalog: PartCatalog) -> None:
+        """Prüft und installiert eine lokale Bausteindatei.
 
         **Der Kern entscheidet, was mit ihr geschieht, nicht dieser Handler.**
-        ``import_file`` prüft die Formatgrenze und kennt die drei Lagen aus
-        Konzept §17.1 — freier Name,
-        gleicher Stand, anderer Stand — und in allen dreien gilt „lokal
-        schlägt mitgereist". Geschrieben wird **nichts** in den Nutzerordner:
-        Das Rezept gehört der Datei, mit der es kam.
+        ``PartFileIO.install_file`` prüft Struktur, Ressourcen, Quellen und
+        Geometrie, setzt die Herkunftsquittung und legt Datei, Katalogeintrag
+        und Operation als eine Einheit an. Eine Namenskollision ersetzt
+        nichts; der Befund nennt den freien Vorschlag.
 
-        **Die Herkunft reist mit** (§32). ``catalog_source`` unterscheidet, ob
-        ein Rezept aus einer Projektdatei kam oder einzeln eingelesen wurde; der
-        Katalog macht daraus zwei verschiedene Zeilen im Steckbrief. Ohne
-        diese Angabe stünde dort „kam mit einer Projektdatei", und das wäre an
-        der Stelle falsch, an der es am meisten zählt.
-
-        Lesen, Formatprüfung und Aufnahme liegen in einem Kernaufruf. So kann
-        dieser Handler weder eine zu große Datei vollständig laden noch nach
-        einer abgelehnten Aufnahme Erfolg melden.
+        Die Herkunft besteht ausschließlich aus SHA-256 der exakten
+        Eingangsbytes und UTC-Importzeit. Lokaler Pfad und Dateiname reisen
+        nicht mit; eine gehostete oder veröffentlichte Quelle wird nicht
+        behauptet.
         """
         source, _filter = QFileDialog.getOpenFileName(
             catalog,
-            tr("Baustein aus Datei importieren"),
+            tr("Baustein hinzufügen"),
             "",
             f"{tr('Baustein hinzufügen')} (*{PART_FILE_SUFFIX} *.json)",
         )
         if not source:
             return
-        self._open_part_file(Path(source), catalog)
+        self._import_part_path(catalog, Path(source))
 
-    def _open_part_file(self, path: Path, catalog: PartCatalog | None = None) -> None:
-        """Importiert eine lokale Bausteindatei aus Dialog, Drop oder Dateizuordnung.
+    def _import_part_path(self, catalog: PartCatalog, source: Path) -> None:
+        """Einen gewählten Pfad lesen und dem gemeinsamen Importarbeiter geben."""
+        self._start_part_import(catalog, source)
 
-        Ein einziger Handler hält die drei Einstiege gleich. Insbesondere darf
-        die vom Betriebssystem zugeordnete Produktendung nicht in
-        :meth:`Session.import_model` fallen: Eine Bausteindatei ergänzt den
-        Katalog und ersetzt weder Projekt noch Szene.
-        """
-        try:
-            from app.core.knowledge.parts.shared import import_file
+    def _start_part_import(
+        self,
+        catalog: PartCatalog,
+        source: bytes | Path,
+        *,
+        name: str | None = None,
+    ) -> None:
+        """Pfad und Prüfung im Arbeiter lesen, oder gelesene Bytes erneut prüfen."""
+        self._clear_part_file_result(catalog)
+        worker = _PartImportWorker(source, name)
+        worker.done.connect(lambda installed: self._part_import_done(catalog, installed))
+        worker.failed.connect(
+            lambda error, payload: self._part_import_failed(
+                catalog,
+                cast(bytes | None, payload),
+                cast(AppError, error),
+            )
+        )
+        worker.crashed.connect(lambda detail: self._part_file_crashed(catalog, str(detail)))
+        worker.finished.connect(lambda done=worker: self._part_file_worker_done(done))
+        self._start_part_file_worker(
+            worker,
+            catalog.adopt_part,
+            tr("Baustein hinzufügen"),
+        )
 
-            findings = import_file(path)
-        except AppError as problem:
-            show_error(problem, catalog or self)
-            return
+    def _part_import_done(self, catalog: PartCatalog, installed: Any) -> None:
+        """Den neuen Eintrag zeigen und die Herkunft dauerhaft ausweisen."""
+        self._end_part_file_attempt()
+        name = installed.recipe.name
+        affected = self._part_usage(name)
+        self._part_file_undo = ("remove", (name, installed.stored_sha256, affected))
+        self._part_file_affected_step = affected[0] if affected else None
+        catalog.invalidate_preview(name)
+        catalog.refresh()
+        text = self._part_usage_text(tr("Baustein hinzugefügt"), len(affected))
+        catalog.show_file_result(
+            text,
+            part_name=name,
+            can_undo=True,
+            can_show_affected_step=bool(affected),
+        )
+        self.statusBar().showMessage(text, 8000)
+        _log.info("part file imported: %s", installed.sha256)
 
-        if catalog is not None:
-            catalog.refresh()
-        # Die Befunde des Kerns sind die Auskunft über fremde Herkunft und
-        # über alles, was an der Datei nicht stimmte. Sie stehen im
-        # Prüfbericht, weil sie dort auch nach dem nächsten Klick noch stehen.
-        if findings:
-            self.report.add_findings(findings)
-            self.right.setCurrentWidget(self.report)
-        self.statusBar().showMessage(tr("Importiert. Der Baustein steht im Katalog."), 8000)
+    def _part_import_failed(
+        self,
+        catalog: PartCatalog,
+        payload: bytes | None,
+        problem: AppError,
+    ) -> None:
+        """Eine Ablehnung mit den zwei echten lokalen Auswegen zeigen."""
+        self._end_part_file_attempt()
+        self._show_part_import_error(problem, catalog, payload)
 
-    def _export_part(self, catalog: PartCatalog) -> None:
+    def _show_part_import_error(
+        self,
+        problem: AppError,
+        catalog: PartCatalog,
+        payload: bytes | None = None,
+    ) -> None:
+        """Den Dateifehler mit lokalen, ausführbaren Handlungen verbinden."""
+        handlers = self.error_handlers()
+        handlers["choose"] = lambda _error: self._adopt_part(catalog)
+        if payload is not None:
+            handlers["use_suggested_name"] = lambda error: self._use_suggested_part_name(
+                catalog, payload, error
+            )
+        show_error(problem, catalog, handlers)
+
+    def _use_suggested_part_name(
+        self,
+        catalog: PartCatalog,
+        payload: bytes,
+        problem: AppError,
+    ) -> None:
+        """Den vom Kern gelieferten freien Namen ausdrücklich übernehmen."""
+        suggested = problem.values.get("suggested_name")
+        if isinstance(suggested, str) and suggested:
+            self._start_part_import(catalog, payload, name=suggested)
+
+    def _share_part(self, catalog: PartCatalog) -> None:
         """Exportiert den gewählten Baustein als lokale Bausteindatei.
 
-        **Geprüft wird vor dem Fragen.** ``export_bytes`` erzeugt die Datei und
-        prüft sie in einem Zug; scheitert sie, hätte der Kunde sonst erst einen
-        Ordner ausgesucht, einen Namen getippt und danach eine Absage bekommen.
-        Die Reihenfolge kostet nichts und erspart genau diesen Weg.
+        **Geschrieben wird über den einen lokalen Dateivertrag und nie über
+        ``json.dumps(file_data(...))``.** Die eigene Serialisierung wäre ein
+        zweiter Weg an Struktur-, Quellen- und Ressourcenprüfung vorbei.
 
-        **Geschrieben wird über ``shared.export_bytes`` und nie über
-        ``json.dumps(file_data(...))``.** Die eigene Serialisierung wäre der
-        zweite Weg, der an der Prüfung vorbeiführt — und das sieht man der
-        Zeile nicht an. Die Prüfung selbst liegt im Kern; hier steht nur der
-        Ruf.
-
-        Der Baustein ist an dieser Stelle ein **eigenes** Rezept: Der Katalog
-        sperrt den Knopf bei allem anderen und sagt auch, warum
-        (``_export_state``). Fehlt die Datei trotzdem, ist das ein Fall für
-        einen Befund und nicht für einen Absturz — ein Rezept kann von Hand
-        aus dem Ordner genommen worden sein, während der Katalog offen stand.
+        Der Baustein ist an dieser Stelle ein eigenes oder zuvor importiertes
+        Rezept: Der Katalog sperrt den Knopf bei allem anderen und sagt, warum
+        (``_share_state``). Seine geprüften Rezeptdaten stehen am Katalogeintrag
+        selbst. Damit bleibt der Export auch nach einem Neustart und nach dem
+        Verschieben der ursprünglich importierten Datei derselbe Kernweg.
         """
-        import json
-
-        from app.core.knowledge.parts.recipe import from_data, recipes_dir
-        from app.core.knowledge.parts.shared import export_bytes
+        from app.core.knowledge.parts.registry import PARTS
 
         name = catalog.chosen()
         if not name:
             return
-        source = recipes_dir() / f"{name}.json"
-        try:
-            recipe = from_data(json.loads(source.read_text(encoding="utf-8")))
-            payload = export_bytes(recipe)
-        except AppError as problem:
-            # Der Regelfall: ``export_bytes`` hat abgelehnt und sagt selbst,
-            # warum und was zu tun ist.
-            show_error(problem, catalog)
-            return
-        except (OSError, ValueError) as problem:
-            # Die Datei fehlt oder ist beschädigt. Das ist kein Eingabefehler,
-            # aber es endet nicht mit "fehlgeschlagen" (Regel 17): Der Kunde
-            # erfährt, welche Datei gemeint ist und dass ein erneutes
-            # Speichern sie wiederherstellt.
+        data = PARTS.get(name).recipe_data
+        if data is None:
             show_error(
                 ValidationError(
                     field="title",
@@ -4923,8 +5154,7 @@ class MainWindow(QMainWindow):
                         "Die Datei dieses Bausteins ließ sich nicht lesen. "
                         "Speichern Sie ihn neu, dann steht sie wieder."
                     ),
-                    values={"file": source.name, "reason": str(problem)[:200]},
-                    constraint="recipe_unreadable",
+                    constraint="part_file_unavailable",
                     suggestions=(CANCEL,),
                 ),
                 catalog,
@@ -4933,34 +5163,295 @@ class MainWindow(QMainWindow):
 
         target, _filter = QFileDialog.getSaveFileName(
             catalog,
-            tr("Baustein als Datei exportieren"),
+            tr("Baustein weitergeben"),
             f"{name}{PART_FILE_SUFFIX}",
             f"{tr('Baustein weitergeben')} (*{PART_FILE_SUFFIX})",
         )
         if not target:
             return
-        destination = Path(target)
-        if destination.suffix.lower() != PART_FILE_SUFFIX:
-            destination = destination.with_suffix(PART_FILE_SUFFIX)
-        try:
-            destination.write_bytes(payload)
-        except OSError as problem:
-            show_error(
-                ValidationError(
-                    field="title",
-                    detail=tr(
-                        "Die Datei ließ sich dort nicht anlegen. Wählen Sie einen anderen Ordner."
-                    ),
-                    values={"file": str(destination), "reason": str(problem)[:200]},
-                    constraint="write_failed",
-                    suggestions=(CANCEL,),
-                ),
-                catalog,
-            )
-            return
-        self.statusBar().showMessage(
-            tr("Exportiert. Diese Datei können Sie jetzt weitergeben."), 8000
+        self._start_part_export(catalog, name, data, Path(target))
+
+    def _start_part_export(
+        self,
+        catalog: PartCatalog,
+        name: str,
+        data: Mapping[str, Any],
+        target: Path,
+    ) -> None:
+        """Prüfung und atomare Ausgabe ohne weiteren Dateidialog beginnen."""
+        self._clear_part_file_result(catalog)
+        self._write_failure = None
+        worker = _PartExportWorker(data, target)
+        worker.done.connect(
+            lambda written: self._part_export_done(catalog, name, cast(Path, written))
         )
+        worker.failed.connect(
+            lambda error: self._part_export_failed(
+                catalog,
+                name,
+                data,
+                target,
+                cast(AppError, error),
+            )
+        )
+        worker.crashed.connect(lambda detail: self._part_file_crashed(catalog, str(detail)))
+        worker.finished.connect(lambda done=worker: self._part_file_worker_done(done))
+        self._start_part_file_worker(
+            worker,
+            catalog.share_part,
+            tr("Baustein weitergeben"),
+        )
+
+    def _part_export_done(self, catalog: PartCatalog, name: str, _target: Path) -> None:
+        """Die dauerhafte Rückmeldung am Baustein und in der Statuszeile zeigen."""
+        self._end_part_file_attempt()
+        self._write_failure = None
+        text = tr("Baustein weitergegeben. Die Datei kann lokal hinzugefügt werden.")
+        catalog.show_file_result(text, part_name=name)
+        self.statusBar().showMessage(text, 8000)
+
+    def _remove_part(self, catalog: PartCatalog, name: str) -> None:
+        """Einen lokalen Baustein sofort entfernen; der Rückweg folgt im Ergebnis."""
+
+        self._start_part_remove(catalog, name, None, self._part_usage(name))
+
+    def _start_part_remove(
+        self,
+        catalog: PartCatalog,
+        name: str,
+        expected_sha256: str | None,
+        affected: tuple[int, ...],
+    ) -> None:
+        """Eine bytegebundene Entfernung im Arbeiter beginnen."""
+
+        self._clear_part_file_result(catalog)
+        worker = _PartRemoveWorker(name, expected_sha256)
+        worker.done.connect(lambda removed: self._part_remove_done(catalog, removed, affected))
+        worker.failed.connect(
+            lambda error: self._part_remove_failed(
+                catalog,
+                name,
+                expected_sha256,
+                affected,
+                cast(AppError, error),
+            )
+        )
+        worker.crashed.connect(lambda detail: self._part_file_crashed(catalog, str(detail)))
+        worker.finished.connect(lambda done=worker: self._part_file_worker_done(done))
+        self._start_part_file_worker(worker, catalog.remove_part, tr("Baustein entfernen"))
+
+    def _part_remove_done(
+        self,
+        catalog: PartCatalog,
+        removed: Any,
+        affected: tuple[int, ...],
+    ) -> None:
+        """Entfernung, Verwendungsort und bytegenauen Rückweg sichtbar halten."""
+
+        self._end_part_file_attempt()
+        name = removed.recipe.name
+        self._part_file_undo = ("restore", (removed.undo, affected))
+        self._part_file_affected_step = affected[0] if affected else None
+        catalog.invalidate_preview(name)
+        catalog.refresh()
+        text = self._part_usage_text(tr("Baustein entfernt"), len(affected))
+        catalog.show_file_result(
+            text,
+            can_undo=True,
+            can_show_affected_step=bool(affected),
+        )
+        self.statusBar().showMessage(text, 8000)
+
+    def _part_remove_failed(
+        self,
+        catalog: PartCatalog,
+        name: str,
+        expected_sha256: str | None,
+        affected: tuple[int, ...],
+        problem: AppError,
+    ) -> None:
+        """Eine gescheiterte Entfernung mit demselben sicheren Versuch verbinden."""
+
+        self._end_part_file_attempt()
+        handlers = self.error_handlers()
+        handlers["retry"] = lambda _error: self._start_part_remove(
+            catalog, name, expected_sha256, affected
+        )
+        show_error(problem, catalog, handlers)
+
+    def _start_part_restore(
+        self,
+        catalog: PartCatalog,
+        token: Any,
+        affected: tuple[int, ...],
+    ) -> None:
+        """Den unveränderten Kern-Rücknahmetoken im Arbeiter wiederherstellen."""
+
+        self._clear_part_file_result(catalog)
+        worker = _PartRestoreWorker(token)
+        worker.done.connect(
+            lambda installed: self._part_restore_done(catalog, installed, token, affected)
+        )
+        worker.failed.connect(
+            lambda error: self._part_restore_failed(catalog, token, affected, cast(AppError, error))
+        )
+        worker.crashed.connect(lambda detail: self._part_file_crashed(catalog, str(detail)))
+        worker.finished.connect(lambda done=worker: self._part_file_worker_done(done))
+        self._start_part_file_worker(worker, catalog.file_undo, tr("Baustein wiederherstellen"))
+
+    def _part_restore_done(
+        self,
+        catalog: PartCatalog,
+        installed: Any,
+        _token: Any,
+        affected: tuple[int, ...],
+    ) -> None:
+        """Wiederhergestellten Eintrag neu rendern und erneut rücknehmbar machen."""
+
+        self._end_part_file_attempt()
+        name = installed.recipe.name
+        self._part_file_undo = ("remove", (name, installed.stored_sha256, affected))
+        self._part_file_affected_step = affected[0] if affected else None
+        catalog.invalidate_preview(name)
+        catalog.refresh()
+        text = self._part_usage_text(tr("Baustein wiederhergestellt"), len(affected))
+        catalog.show_file_result(
+            text,
+            part_name=name,
+            can_undo=True,
+            can_show_affected_step=bool(affected),
+        )
+        self.statusBar().showMessage(text, 8000)
+
+    def _part_restore_failed(
+        self,
+        catalog: PartCatalog,
+        token: Any,
+        affected: tuple[int, ...],
+        problem: AppError,
+    ) -> None:
+        """Eine gescheiterte Wiederherstellung am unveränderten Token wiederholen."""
+
+        self._end_part_file_attempt()
+        handlers = self.error_handlers()
+        handlers["retry"] = lambda _error: self._start_part_restore(catalog, token, affected)
+        show_error(problem, catalog, handlers)
+
+    def _undo_part_file(self, catalog: PartCatalog) -> None:
+        """Nur die sichtbare Bibliothekshandlung zurücknehmen, nie die Szene."""
+
+        pending = self._part_file_undo
+        if pending is None:
+            return
+        kind, data = pending
+        if kind == "remove":
+            name, expected_sha256, affected = cast(tuple[str, str, tuple[int, ...]], data)
+            self._start_part_remove(catalog, name, expected_sha256, affected)
+            return
+        token, affected = cast(tuple[Any, tuple[int, ...]], data)
+        self._start_part_restore(catalog, token, affected)
+
+    def _clear_part_file_result(self, catalog: PartCatalog) -> None:
+        """Eine alte Ergebnisaktion vor der nächsten Bibliothekshandlung einziehen."""
+
+        self._part_file_undo = None
+        self._part_file_affected_step = None
+        catalog.show_file_result("")
+
+    def _part_usage(self, name: str) -> tuple[int, ...]:
+        """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden."""
+
+        operation = part_op_name(name)
+        return tuple(
+            entry.id for entry in self.session.project.document.ops if entry.op == operation
+        )
+
+    @staticmethod
+    def _part_usage_text(text: str, count: int) -> str:
+        """Eine Bibliotheksmeldung um die sichtbare Auswirkung im Verlauf ergänzen."""
+
+        if count == 1:
+            usage = tr("Der Baustein wird in einem Schritt des geöffneten Projekts verwendet.")
+        elif count > 1:
+            usage = tr(
+                "Der Baustein wird in {count} Schritten des geöffneten Projekts verwendet."
+            ).format(count=count)
+        else:
+            return text
+        return f"{text}. {usage}"
+
+    def _show_part_affected_step(self, catalog: PartCatalog) -> None:
+        """Den Katalog schließen und den ersten betroffenen Verlaufsschritt zeigen."""
+
+        op_id = self._part_file_affected_step
+        if op_id is None:
+            return
+        catalog.reject()
+        if self.history_panel.point_at(op_id):
+            open_section(self.history_panel)
+
+    def _part_export_failed(
+        self,
+        catalog: PartCatalog,
+        name: str,
+        data: Mapping[str, Any],
+        target: Path,
+        problem: AppError,
+    ) -> None:
+        """Denselben Zielpfad oder einen neuen Ort als echte Handlung anbieten."""
+        self._end_part_file_attempt()
+        self._write_failure = _WriteFailure(
+            again=partial(self._start_part_export, catalog, name, data, target),
+            elsewhere=partial(self._share_part, catalog),
+        )
+        show_error(problem, catalog)
+
+    def _start_part_file_worker(
+        self,
+        worker: Worker,
+        button: Any,
+        text: str,
+    ) -> None:
+        """Einen lokalen Dateilauf sichtbar und gegen Doppelklick geschützt starten."""
+        previous = self._part_file_worker
+        if previous is not None and previous.isRunning():
+            # Das Fehlersignal kommt unmittelbar vor dem Thread-Ende. Klickt
+            # der Kunde seine Handlung sofort, darf dieser kurze Auslauf den
+            # neuen Versuch nicht verschlucken; die Halteleine übernimmt ihn.
+            self._retire(previous)
+        self._part_file_worker = worker
+        self._part_file_button = button
+        button.setEnabled(False)
+        self._set_progress_state(
+            "part_file",
+            active=True,
+            text=text,
+            minimum=0,
+            maximum=0,
+            value=0,
+            accessible_description=text,
+        )
+        self._update_waiting_state()
+        self._leash.start(worker)
+
+    def _end_part_file_attempt(self) -> None:
+        """Fortschritt und Knopfsperre nach jedem Ausgang zuverlässig lösen."""
+        self._set_progress_state("part_file", active=False)
+        button = self._part_file_button
+        self._part_file_button = None
+        if button is not None and isValid(button):
+            button.setEnabled(True)
+        self._progress_idle()
+
+    def _part_file_crashed(self, catalog: PartCatalog, detail: str) -> None:
+        """Auch ein unerwarteter Workerfehler lässt keinen Wartezustand zurück."""
+        self._end_part_file_attempt()
+        show_error(InternalError(detail=detail), catalog)
+
+    def _part_file_worker_done(self, worker: Any) -> None:
+        if self._part_file_worker is worker:
+            self._part_file_worker = None
+        self._hold_until_done(worker)
 
     def _save_as_part(self, catalog: PartCatalog) -> None:
         """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).
@@ -5253,6 +5744,16 @@ class MainWindow(QMainWindow):
                 self.action_print_settings,
             ),
             "file.catalog": (tr("Bausteinkatalog …"), "Ctrl+K", self.action_catalog),
+            "file.part_adopt": (
+                tr("Baustein aus Datei hinzufügen …"),
+                "",
+                self.action_adopt_part_file,
+            ),
+            "file.part_share": (
+                tr("Baustein als Datei weitergeben …"),
+                "",
+                self.action_share_part_file,
+            ),
             "edit.settings": (tr("Einstellungen …"), "Ctrl+,", self.action_settings),
             "edit.undo": (tr("Rückgängig"), "Ctrl+Z", self.action_undo),
             "edit.redo": (tr("Wiederholen"), "Ctrl+Y", self.action_redo),
@@ -7696,7 +8197,7 @@ class MainWindow(QMainWindow):
         self._render_progress_state(force_visible=True)
 
     def _on_split_progress(self, fraction: float, text: str) -> None:
-        """Zeigt die Suche unbestimmt, solange ihre Gesamtschnittzahl offen ist."""
+        """Zeigt Grobsuche unbestimmt, Stützbewertung bestimmt und monoton."""
         fraction = min(1.0, max(0.0, fraction))
         if not text:
             # Der Kern beendet mit ``progress(1.0, "")``. Der leere Text
@@ -7719,14 +8220,15 @@ class MainWindow(QMainWindow):
                     "split", accessible_description=self._split_accessibility()
                 )
             return
-        # Auch die Ausrichtungsbewertung ist nur der lokale Fortschritt einer
-        # einzelnen Trennebene. Ob danach noch ein Kind zu groß ist und einen
-        # weiteren Schnitt braucht, weiß der Kern erst anschließend. Prozent
-        # und Restzeit wären hier deshalb eine Behauptung über einen noch
-        # unbekannten Gesamtumfang.
-        self._split_determinate = False
-        self._split_fraction = max(self._split_fraction, fraction)
-        minimum, maximum = 0, 0
+        support = text == tr("Ausrichtung suchen")
+        if support:
+            self._split_determinate = True
+            self._split_fraction = max(self._split_fraction, fraction)
+            minimum, maximum = 0, 100
+        else:
+            self._split_determinate = False
+            self._split_fraction = max(self._split_fraction, fraction)
+            minimum, maximum = 0, 0
         self._split_progress_text = text
         parts = [text]
         if self._split_determinate:
@@ -10674,6 +11176,7 @@ class MainWindow(QMainWindow):
             # wurde.
             self._download_worker,
             self._export_worker,
+            self._part_file_worker,
             *self._leash.pending(),
         ):
             if worker is not None and worker.isRunning():

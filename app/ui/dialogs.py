@@ -44,6 +44,7 @@ from app.branding import (
     APP_VERSION,
     COPYRIGHT,
     DONATION_URL,
+    SECURITY_SUPPORT_UNTIL,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
 )
@@ -70,6 +71,7 @@ from app.ui.ai_disclosure import (
 from app.ui.labels import (
     UNEXPECTED_CRASH,
     NumberSpin,
+    calendar_date,
     deadline_date,
     fill_parameter_units,
     value_line,
@@ -920,6 +922,10 @@ class KeyDialog(QDialog):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.model_field.setMinimumContentsLength(18)
+        self.model_note = QLabel(section)
+        self.model_note.setWordWrap(True)
+        self.model_field.currentIndexChanged.connect(self._show_model_note)
+        self.model_field.editTextChanged.connect(self._show_model_note)
         self._fill_models()
 
         self.pull_button = QPushButton(tr("Modell holen"), section)
@@ -948,6 +954,7 @@ class KeyDialog(QDialog):
         inner.addWidget(note)
         inner.addLayout(service_row)
         inner.addLayout(row)
+        inner.addWidget(self.model_note)
         inner.addWidget(self.pull_progress)
         inner.addWidget(self.probe_result)
         # Bis die Erhebung antwortet, steht hier ein Satz und kein Zustand,
@@ -1036,27 +1043,55 @@ class KeyDialog(QDialog):
         """
         chosen = self._chosen_model() if self.model_field.count() else llm.configured_ollama_model()
         self.model_field.clear()
+        seen: set[str] = set()
         for name in here:
-            # **Auch das installierte Modell sagt, was es kann.** Hier stand
-            # nur der Name — „sie sind einen Klick entfernt" —, und damit sah
-            # ein unbrauchbares Modell aus wie ein gutes. Wer ``mistral-nemo``
-            # liegen hat, soll lesen, dass es Werkzeuge nicht aufruft, bevor
-            # er einen Zug abwartet, der nichts tut.
-            note = llm.known_model_note(name)
-            self.model_field.addItem(f"{name} — {note}" if note else name, name)
-        for name, gigabytes, what in llm.OLLAMA_SUGGESTIONS:
-            if name in here:
+            family = llm.normalised_model_name(name)
+            if family in seen:
                 continue
-            # „GB" ist keine Beschriftung, sondern die Einheit selbst — und
-            # die Zahl bekommt ihr Komma aus der aktiven Sprache (§13).
-            size = f"{format_decimal(gigabytes, 1)} GB"
-            self.model_field.addItem(f"{name} — {size}, {what}", name)
+            self.model_field.addItem(name, name)
+            seen.add(family)
+        for name, _gigabytes, _what in llm.OLLAMA_SUGGESTIONS:
+            family = llm.normalised_model_name(name)
+            if family in seen:
+                continue
+            self.model_field.addItem(name, name)
+            seen.add(family)
         if not self.model_field.count():
             self.model_field.addItem(llm.DEFAULT_OLLAMA_MODEL, llm.DEFAULT_OLLAMA_MODEL)
         self._select_model(chosen)
+        self._show_model_note()
+
+    def _show_model_note(self, *_args: object) -> None:
+        """Die Entscheidungshilfe unter der Auswahl, nicht im Modellnamen.
+
+        Im editierbaren Aufklappfeld sprang die lange Zeile beim Fokussieren
+        nach rechts. Sichtbar blieb das Ende der Erklärung, während der Name
+        links verschwand. Der Name bleibt deshalb kurz; Größe und Messung
+        stehen unmittelbar darunter und dürfen umbrechen.
+        """
+        name = self._chosen_model()
+        suggestion = llm.known_model_suggestion(name)
+        if suggestion is not None:
+            gigabytes, note = suggestion
+            size = f"{format_decimal(gigabytes, 1)} GB"
+            self.model_note.setText(f"{tr('Download: {size}', size=size)} — {note}")
+            return
+        self.model_note.setText(
+            tr(
+                "Für dieses Modell liegt keine Messung vor. „Werkzeuge prüfen“ "
+                "probiert es auf diesem Rechner aus."
+            )
+        )
 
     def _select_model(self, wanted: str) -> None:
         index = self.model_field.findData(wanted)
+        if index < 0:
+            family = llm.normalised_model_name(wanted)
+            for candidate in range(self.model_field.count()):
+                data = self.model_field.itemData(candidate)
+                if isinstance(data, str) and llm.normalised_model_name(data) == family:
+                    index = candidate
+                    break
         if index >= 0:
             self.model_field.setCurrentIndex(index)
         else:
@@ -1205,7 +1240,7 @@ class KeyDialog(QDialog):
             )
             return
         # **Die Geschwindigkeit schlägt die Werkzeugfrage.** „Das Modell ruft
-        # Werkzeuge auf" ist wahr und nutzlos, wenn eine Antwort einundvierzig
+        # Werkzeuge auf" ist wahr und nutzlos, wenn eine Antwort zweiundvierzig
         # Minuten braucht — gemessen auf einer Maschine mit Intel-Arc-Grafik,
         # die Ollama nicht anspricht. Der Kunde soll das erfahren, bevor er es
         # als Fehler der Anwendung erlebt.
@@ -1214,7 +1249,11 @@ class KeyDialog(QDialog):
             self._show_probe_result("warning", slow)
             return
         if usable:
-            self._show_probe_result("ok", tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."))
+            success = self._speed_success_text(speed)
+            self._show_probe_result(
+                "ok",
+                success or tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."),
+            )
             return
         self._show_probe_result(
             "warning",
@@ -1283,6 +1322,20 @@ class KeyDialog(QDialog):
             tokens=f"{round(llm.PROMPT_TOKENS, -3):n}",
             minutes=round(speed.prompt_minutes),
         )
+
+    @staticmethod
+    def _speed_success_text(speed: object) -> str:
+        """Bei genutzter Grafikkarte die erfolgreiche Gegenprobe zeigen.
+
+        Keine Zeit hochrechnen: Die kurze Geschwindigkeitsprobe trägt nur ein
+        Werkzeug. Auf den vollständigen Auftrag hochgerechnet nannte sie im
+        sichtbaren Dialog 41 Sekunden, obwohl der ganze Zug nach 13,3 Sekunden
+        fertig war. Karte oder Prozessor trennt sie zuverlässig; für eine
+        belastbare Zeit gibt es die Messreihe mit allen Werkzeugen.
+        """
+        if not isinstance(speed, llm.Speed) or speed.on_gpu is not True:
+            return ""
+        return tr("Das Modell ruft Werkzeuge auf und ist brauchbar. Die Grafikkarte wird genutzt.")
 
     def _probe_finished(self) -> None:
         # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig
@@ -2601,7 +2654,7 @@ class DonationDialog(QDialog):
 
 
 class AboutDialog(QDialog):
-    """Version, Rechteinhaber und die Drittanbieter-Lizenzen (§36, §37.2)."""
+    """Version, Supportzeitraum, Rechte und Drittanbieter-Lizenzen (§36, §37.2)."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2616,6 +2669,31 @@ class AboutDialog(QDialog):
 
         support = QLabel(f"{tr('Support und Kontakt')}: {SUPPORT_ADDRESS}", self)
         support.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+
+        security_heading = QLabel(tr("Aktualisierungen und Sicherheit"), self)
+        set_level(security_heading, "section")
+        security = QLabel(self)
+        security.setObjectName("security_support")
+        security.setWordWrap(True)
+        security.setTextFormat(Qt.TextFormat.RichText)
+        security.setTextInteractionFlags(
+            Qt.TextInteractionFlag.LinksAccessibleByMouse
+            | Qt.TextInteractionFlag.LinksAccessibleByKeyboard
+            | Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        security.setOpenExternalLinks(True)
+        security.setText(
+            tr(
+                "Solidon 1 ist eine kostenpflichtige Kauflizenz. Der Kaufpreis umfasst "
+                "Sicherheits- und Funktionsaktualisierungen innerhalb 1.x. "
+                "Sicherheitsunterstützung und -aktualisierungen gibt es bis mindestens "
+                "{date}."
+            ).format(date=calendar_date(SECURITY_SUPPORT_UNTIL))
+            + "<br>"
+            + tr("Sicherheitsproblem melden")
+            + f': <a href="mailto:{SUPPORT_ADDRESS}">{SUPPORT_ADDRESS}</a> · '
+            + f'<a href="{_security_page_url()}">{tr("Sicherheitsseite öffnen")}</a>'
+        )
 
         # §2 I H2: der Über-Dialog nennt den Freischaltzustand beim Namen.
         # Wer einen personalisierten Schlüssel weitergibt, gibt seinen Namen
@@ -2644,6 +2722,8 @@ class AboutDialog(QDialog):
         layout.addWidget(rights)
         layout.addWidget(support)
         layout.addWidget(licensed)
+        layout.addWidget(security_heading)
+        layout.addWidget(security)
         layout.addWidget(exceptions)
         layout.addWidget(QLabel(tr("Fremde Bestandteile"), self))
         layout.addWidget(third_party, stretch=1)
@@ -2656,6 +2736,13 @@ class AboutDialog(QDialog):
         # akzentuierten Knopf; das ist kein Verstoß gegen „ein Hauptknopf je
         # Fenster", sondern deren Kehrseite.
         no_primary(self)
+
+
+def _security_page_url() -> str:
+    """Die Sicherheitsseite in der Sprache der geöffneten Oberfläche."""
+    language = get_language()
+    page = "security.html" if language == "de" else f"{language}/security.html"
+    return f"{WEBSITE_URL}{page}"
 
 
 def damaged_line() -> str:
@@ -2750,7 +2837,12 @@ def _third_party_text() -> str:
     wird.
     """
     try:
-        return licences.notices()
+        text = licences.notices()
+        return text.replace(
+            "| Paket | Lizenz |",
+            f"| {tr('Paket')} | {tr('Lizenz')} |",
+            1,
+        )
     except Exception as problem:  # pragma: no cover - Metadaten sind maschinenabhängig
         _log.warning("could not build the licence list: %s", problem)
         return tr("Die Liste der Fremdbestandteile ließ sich nicht lesen.")

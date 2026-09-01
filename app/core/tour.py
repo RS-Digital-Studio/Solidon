@@ -332,9 +332,9 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Das war Weg 3. Eigene Körper erzeugen Sie unter Datei → Modell "
-            "erzeugen, sobald ein ComfyUI eingerichtet ist — bis dahin bringt dieses "
-            "Beispiel sein Netz mit."
+            "Das war Weg 3. Ein extern erzeugtes GLB- oder STL-Modell ziehen Sie "
+            "in Solidon, prüfen es und bearbeiten es danach wie jeden anderen Körper. "
+            "Bild/Text zu 3D ist in dieser Version deaktiviert."
         ),
     ),
     Tour(

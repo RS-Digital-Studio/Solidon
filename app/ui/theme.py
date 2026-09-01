@@ -109,6 +109,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "grid_minor": "#39414b",
         "grid_major": "#55606f",
         "text": "#e6e9ee",
+        "link": "#f0a54a",
         "disabled": "#7c848f",
         "muted": "#a8b0ba",
         "highlight": _SELECTION,
@@ -132,6 +133,7 @@ THEMES: dict[Theme, dict[str, str]] = {
         "grid_minor": "#dbdee3",
         "grid_major": "#b1b8c3",
         "text": "#1c2026",
+        "link": "#9a4a11",
         "disabled": "#8b929b",
         "muted": "#5d646d",
         "highlight": _SELECTION,
@@ -198,6 +200,12 @@ def build_palette(theme: Theme) -> QPalette:
     palette.setColor(QPalette.ColorRole.Base, QColor(colours["base"]))
     palette.setColor(QPalette.ColorRole.AlternateBase, QColor(colours["alternate"]))
     palette.setColor(QPalette.ColorRole.Text, QColor(colours["text"]))
+    # Links dürfen nicht aus der Systempalette kommen. Unter Windows war
+    # deren helle Vorgabe auf dem hellen Solidon-Fenster nahezu unsichtbar.
+    # Ein besuchter Link bleibt gleich laut: In einem Dialog ist seine
+    # Vergangenheit keine zusätzliche Bedeutung, seine Erreichbarkeit schon.
+    palette.setColor(QPalette.ColorRole.Link, QColor(colours["link"]))
+    palette.setColor(QPalette.ColorRole.LinkVisited, QColor(colours["link"]))
     palette.setColor(QPalette.ColorRole.Button, QColor(colours["window"]))
     palette.setColor(QPalette.ColorRole.ButtonText, QColor(colours["text"]))
     palette.setColor(QPalette.ColorRole.ToolTipBase, QColor(colours["tooltip"]))
@@ -232,6 +240,8 @@ def build_palette(theme: Theme) -> QPalette:
     for role in (
         QPalette.ColorRole.Text,
         QPalette.ColorRole.ButtonText,
+        QPalette.ColorRole.Link,
+        QPalette.ColorRole.LinkVisited,
         # ``WindowText`` fehlte, und daran hängen genau die Elemente, die das
         # Stylesheet nicht anfasst: QLabel, QCheckBox, QRadioButton,
         # QGroupBox. Ein gesperrtes Ankreuzfeld war pixelgleich mit einem

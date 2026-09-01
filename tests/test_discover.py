@@ -704,21 +704,46 @@ def test_the_host_is_asked_last_and_only_from_inside(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(discover, "in_flatpak", lambda: False)
     assert discover._from_host(("prusa-slicer",)) is None, "draußen wird niemand gefragt"
 
-    calls: list[list[str]] = []
+    calls: list[tuple[list[str], dict[str, object]]] = []
 
     class Answer:
         returncode = 0
-        stdout = "/usr/bin/prusa-slicer\n"
+        stdout = b"/usr/bin/prusa-slicer\n"
 
     def fake_run(command, **kwargs):  # type: ignore[no-untyped-def]
-        calls.append(list(command))
+        calls.append((list(command), kwargs))
         return Answer()
 
     monkeypatch.setattr(discover, "in_flatpak", lambda: True)
-    monkeypatch.setattr(discover.subprocess, "run", fake_run)
+    monkeypatch.setattr(discover, "run_limited", fake_run)
 
     assert discover._from_host(("prusa-slicer",)) == Path("/usr/bin/prusa-slicer")
-    assert calls == [["flatpak-spawn", "--host", "which", "prusa-slicer"]]
+    command, options = calls[0]
+    assert command == ["flatpak-spawn", "--host", "which", "prusa-slicer"]
+    assert options["cwd"] == discover.trusted_cwd()
+    assert options["output_limit"] == 64 * 1024
+
+
+def test_a_host_folder_probe_is_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[list[str], dict[str, object]]] = []
+
+    class Answer:
+        returncode = 0
+
+    def fake_run(command, **options):  # type: ignore[no-untyped-def]
+        calls.append((list(command), options))
+        return Answer()
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(discover, "run_limited", fake_run)
+
+    folder = Path("host-folder")
+    assert discover.is_dir_on_host(folder)
+    command, options = calls[0]
+    assert command == ["flatpak-spawn", "--host", "test", "-d", str(folder)]
+    assert options["cwd"] == discover.trusted_cwd()
+    assert options["timeout"] == 5.0
+    assert options["output_limit"] == 64 * 1024
 
 
 def _appimage(folder: Path, name: str) -> Path:

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from email.message import Message
 from pathlib import Path
 
 import pytest
 
 from app.branding import DISTRIBUTION_NAME
 from app.core.knowledge import licences
-from tools import make_licence_notices
 
 NOTICE_FILE = Path(__file__).parent.parent / "THIRD-PARTY-NOTICES.md"
 
@@ -26,8 +27,8 @@ def test_the_runtime_tree_is_actually_walked() -> None:
 
 def test_gpl_is_refused_and_lgpl_is_not() -> None:
     policy = licences.load_policy()
-    assert any("GPL-3" in entry for entry in policy.forbidden)
-    assert "LGPL" in policy.allowed, "PySide6 is LGPL and is allowed when linked dynamically"
+    assert "GPL-3.0-only" in policy.forbidden
+    assert "LGPL-3.0-only" in policy.allowed
 
 
 def test_the_banned_packages_are_not_installed() -> None:
@@ -40,10 +41,103 @@ def test_a_gpl_package_would_be_caught() -> None:
     """Ein Wächter für die Prüfung selbst — sonst bewiese ein grüner Lauf
     nichts.
     """
+    assert not licences.licence_allowed("GPL-3.0-or-later")
+
+
+@pytest.mark.parametrize(
+    ("expression", "allowed"),
+    [
+        ("LGPL-3.0-only OR GPL-3.0-only", True),
+        ("LGPL-3.0-only AND GPL-3.0-only", False),
+        ("LGPL-3.0-only AND AGPL-3.0-only", False),
+        ("MIT OR (Apache-2.0 AND BSD-3-Clause)", True),
+        ("mit AND apache-2.0", True),
+        ("MIT AND LicenseRef-Proprietary", False),
+        ("GPL-3.0-or-later WITH GCC-exception-3.1", True),
+        ("GPL-3.0-or-later WITH Classpath-exception-2.0", False),
+    ],
+)
+def test_spdx_operators_are_evaluated_instead_of_searched(expression: str, allowed: bool) -> None:
+    assert licences.licence_allowed(expression) is allowed
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "MIT-ish",
+        "permit",
+        "BSD",
+        "LGPL-3.0-only OR",
+        "(MIT AND Apache-2.0",
+        "MIT WITH",
+    ],
+)
+def test_unknown_or_malformed_licence_text_is_not_a_substring_match(expression: str) -> None:
+    try:
+        allowed = licences.licence_allowed(expression)
+    except ValueError:
+        allowed = False
+    assert not allowed
+
+
+class FakeDistribution:
+    """Paketmetadaten für die Randfälle des Lizenzfelds."""
+
+    def __init__(self, *, licence: str = "", expression: str = "") -> None:
+        self.metadata = Message()
+        if licence:
+            self.metadata["License"] = licence
+        if expression:
+            self.metadata["License-Expression"] = expression
+
+
+def test_a_long_free_text_licence_is_not_mistaken_for_an_spdx_expression() -> None:
+    package = FakeDistribution(licence="Copyright und Bedingungen\n" * 40)
+    assert licences.declared_licence(package) == ""
+
+
+def test_a_machine_readable_expression_wins_even_beside_a_long_licence_text() -> None:
+    package = FakeDistribution(
+        licence="Copyright und Bedingungen\n" * 40,
+        expression="MIT AND Apache-2.0",
+    )
+    assert licences.declared_licence(package) == "MIT AND Apache-2.0"
+
+
+def test_an_unrecorded_direct_mit_dependency_is_a_violation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Eine zulässige Lizenz ersetzt nicht die ausdrückliche Vorabfreigabe."""
     policy = licences.load_policy()
-    text = "GPL-3.0-or-later".lower()
-    assert any(entry.lower() in text for entry in policy.forbidden)
-    assert "lgpl" not in text
+    known = {
+        name: record
+        for name, record in policy.known.items()
+        if licences.normalise(name) != "certifi"
+    }
+    monkeypatch.setattr(licences, "load_policy", lambda: replace(policy, known=known))
+
+    violations = licences.check()
+
+    assert any(
+        licences.normalise(entry.package) == "certifi"
+        and "direkte Abhängigkeit ohne Eintrag" in entry.reason
+        for entry in violations
+    )
+
+
+def test_an_unrecorded_transitive_mit_dependency_is_checked_semantically(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Transitive Pakete brauchen keinen vorgetäuschten Direkteintrag."""
+    policy = licences.load_policy()
+    known = {
+        name: record for name, record in policy.known.items() if licences.normalise(name) != "attrs"
+    }
+    monkeypatch.setattr(licences, "load_policy", lambda: replace(policy, known=known))
+
+    violations = licences.check()
+
+    assert not any(licences.normalise(entry.package) == "attrs" for entry in violations)
 
 
 def test_notices_list_every_package() -> None:
@@ -72,98 +166,23 @@ def test_the_notice_file_names_every_runtime_package() -> None:
     assert not missing, (
         "THIRD-PARTY-NOTICES.md nennt diese Laufzeitpakete nicht:\n"
         + "\n".join(missing)
-        + "\n\nNeu erzeugen: python -m app.core.knowledge.licences"
+        + "\n\nNeu erzeugen: python tools/make_licence_notices.py"
     )
 
 
-def test_the_notice_file_names_every_platform_package() -> None:
-    """Auch die Pakete der **anderen** Plattformen (§36).
+def test_every_known_platform_package_has_an_exact_policy_record() -> None:
+    """Andere Zielsysteme sind freigegeben, ohne Wheel-Texte vorzutäuschen.
 
-    Der Test darüber prüft, was hier installiert ist. Genau das ist seine
-    Lücke: ``PLATFORM_PACKAGES`` sind die Pakete, die je nach Betriebssystem
-    dazukommen, und ``runtime_packages()`` sieht auf dieser Maschine nur die
-    eigenen. Gemessen auf Windows ist von den sechs Einträgen genau einer
-    dabei — ``pywin32-ctypes``; die fünf für Linux fehlen dem Baum. Ein
-    verschwundenes ``SecretStorage`` bliebe damit unbemerkt, und die
-    Hinweisdatei reist trotzdem zu einem Linux-Kunden.
-
-    Deshalb hier gegen die Tabelle statt gegen die Umgebung. Geprüft wird der
-    **Name**, aus demselben Grund wie oben: An einer geänderten Schreibweise
-    der Lizenz soll kein Lauf scheitern.
+    Die vollständige Beilage wird auf jedem Zielsystem aus dessen echten
+    Wheels erzeugt. Eine Windows-Beilage darf deshalb keine Linux-Wheel-Akte
+    behaupten; deren Ausdrücke müssen aber vor dem jeweiligen Baulauf bereits
+    exakt geprüft und freigegeben sein.
     """
-    text = NOTICE_FILE.read_text(encoding="utf-8")
-    missing = sorted(name for name in licences.PLATFORM_PACKAGES if name not in text)
-    assert not missing, (
-        "THIRD-PARTY-NOTICES.md nennt diese Plattformpakete nicht:\n"
-        + "\n".join(missing)
-        + "\n\nNeu erzeugen: python -m app.core.knowledge.licences"
-    )
-
-
-def test_the_notice_manifest_is_exactly_the_shipped_runtime() -> None:
-    """Kein Text ohne Paket und kein Paket ohne Text."""
-    expected = {licences.normalise(name) for name in licences.runtime_packages()}
-    expected.update(licences.normalise(name) for name in licences.PLATFORM_PACKAGES)
-    recorded = {licences.normalise(entry.name) for entry in make_licence_notices.load_manifest()}
-    assert recorded == expected, (
-        "Drittanbieter-Manifest und Laufzeitbaum unterscheiden sich: "
-        f"fehlt={sorted(expected - recorded)}, zu viel={sorted(recorded - expected)}"
-    )
-
-
-def test_notice_versions_match_the_installed_runtime() -> None:
-    """Der Volltext gehört zur festgeschriebenen Distribution, nicht nur zum Namen."""
-    recorded = {
-        licences.normalise(name): version
-        for name, (version, _licence) in licences.notice_packages().items()
-    }
-    for name in licences.runtime_packages():
-        installed = licences.metadata.distribution(name).version
-        assert recorded[licences.normalise(name)] == installed, (
-            f"{name} läuft als {installed}, die Lizenzquelle gehört zu "
-            f"{recorded[licences.normalise(name)]}"
-        )
-
-
-def test_every_notice_package_carries_a_complete_source_text() -> None:
-    """Eine SPDX-Zeile ersetzt bei einer Binärauslieferung keinen Lizenztext."""
-    for package in make_licence_notices.load_manifest():
-        assert package.files, f"{package.name} hat keinen Lizenz- oder Hinweistext"
-        size = sum(
-            len((make_licence_notices.SOURCE_DIR / path).read_text(encoding="utf-8"))
-            for path in package.files
-        )
-        assert size >= 500, f"{package.name} trägt nur {size} Zeichen statt eines Volltexts"
-
-
-def test_the_notice_file_is_reproducible_from_committed_sources() -> None:
-    assert make_licence_notices.write_notice(check=True), (
-        "THIRD-PARTY-NOTICES.md ist veraltet — python tools/make_licence_notices.py ausführen"
-    )
-
-
-def test_the_dialog_fallback_stops_after_the_summary_table() -> None:
-    text = licences._notices_from_file()
-    assert text is not None
-    assert len(text.splitlines()) == len(make_licence_notices.load_manifest()) + 2
-
-
-def test_lgpl_runtime_carries_the_licence_and_occt_exception() -> None:
-    text = NOTICE_FILE.read_text(encoding="utf-8")
-    for marker in (
-        "GNU LESSER GENERAL PUBLIC LICENSE",
-        "GNU GENERAL PUBLIC LICENSE",
-        "Open CASCADE exception",
-    ):
-        assert marker in text, f"Volltext fehlt: {marker}"
-
-
-def test_packaging_refuses_a_stale_notice_file() -> None:
-    root = Path(__file__).parent.parent
-    spec = (root / "packaging" / "solidon3d.spec").read_text(encoding="utf-8")
-    workflow = (root / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
-    assert "write_notice(check=True)" in spec
-    assert "python tools/make_licence_notices.py --check" in workflow
+    policy = licences.load_policy()
+    known = {licences.normalise(name): record for name, record in policy.known.items()}
+    for name in licences.PLATFORM_PACKAGES:
+        expression = known[licences.normalise(name)]["licence"]
+        assert licences.licence_allowed(expression, policy), name
 
 
 @pytest.mark.parametrize("package", ["pymeshlab", "PyQt5", "PyQt6"])
@@ -190,35 +209,21 @@ def test_every_package_solidon_installs_elsewhere_is_on_record() -> None:
     """
     from app.core.backends import comfy_setup
 
-    text = licences._DATA_FILE.read_text(encoding="utf-8")
+    policy = licences.load_policy()
+    known = {licences.normalise(name): record for name, record in policy.known.items()}
     for entry in comfy_setup.PACKAGES:
-        name = entry.split("==")[0]
-        assert name in text, (
-            f"{name} is in comfy_setup.PACKAGES but not in {licences._DATA_FILE.name} "
-            "- rule 22 wants the record first"
-        )
+        name = licences.normalise(entry.split("==")[0])
+        assert name in known, f"{name} fehlt als direkte externe Freigabe"
+        assert licences.licence_allowed(known[name]["licence"], policy), name
 
 
 def test_the_shipped_workflows_name_no_gpl_node() -> None:
-    """**Regel 15 hing an einer Datendatei, und keine Prüfung sah dorthin.**
-
-    Beide mitgelieferten ComfyUI-Abläufe sprachen ``RMBG`` an — den Knoten aus
-    ``ComfyUI-RMBG``, GPL-3.0. Damit verlangte Solidon vom Kunden eine
-    GPL-Installation, damit Weg 3 läuft, und ``licences.check()`` konnte es
-    nicht sehen: Es liest die eigene Laufzeit, und ein ComfyUI-Knoten steht
-    dort nicht.
-
-    Geprüft werden deshalb die Namen in den Ablaufdateien. Die Liste ist bewusst
-    kurz und nennt, was bekannt ist — sie ersetzt keine Lizenzrecherche für
-    einen neuen Knoten, aber sie fängt die Rückkehr eines bekannten.
-    """
+    """Mitgelieferte Abläufe dürfen keinen ausgeschlossenen Knoten verlangen."""
     import json
 
     from app.core.backends import mesh
 
-    #: Knotensammlungen, deren Lizenz Regel 15 ausschließt.
     refused = {"RMBG": "ComfyUI-RMBG is GPL-3.0"}
-
     for name in ("image_to_mesh", "text_to_mesh"):
         graph = json.loads((mesh.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
         kinds = {str(entry.get("class_type")) for entry in graph.values()}
@@ -252,10 +257,11 @@ def test_the_notices_survive_a_build_without_own_metadata(
     text = licences.notices()
 
     assert "PySide6" in text, "die LGPL-Zusage fehlt im Paket"
-    assert text.startswith("| Paket | Lizenz |"), text[:60]
+    assert text.startswith("| Paket | Version | SPDX-Ausdruck | Quelle |"), text[:80]
     assert all(line.startswith("|") for line in text.splitlines()), (
         "die Erklärung aus dem Kopf der Beilage gehört nicht in den Dialog"
     )
+    assert "contrib.rocks" not in text, "eine Tabelle aus einem Lizenzvolltext lief mit ein"
 
 
 def test_the_notice_file_travels_where_the_fallback_looks_for_it() -> None:

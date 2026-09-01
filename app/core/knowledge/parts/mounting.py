@@ -29,7 +29,9 @@ from app.core.knowledge.parts.mechanics import SNAP_LEAD_ANGLE, SNAP_MIN_ARM, SN
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MOUTH_AT_ORIGIN,
+    FeatureRequirement,
     PartChange,
+    WallRequirement,
     register_part,
 )
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
@@ -39,6 +41,19 @@ from app.i18n import _
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
+)
+
+WALL_MOUNT_KEEPS_HOLE_WALLS = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Kleine Rückplatten konnten große oder dicht gesetzte Schraubenlöcher "
+        "nicht als zusammenhängenden druckbaren Körper halten."
+    ),
+    effect=(
+        "Die eingetragene Breite und Höhe bleiben Mindestmaße; die Rückplatte "
+        "wächst nur dann, wenn Schraubengröße oder Lochzahl mehr Rand und Steg brauchen."
+    ),
 )
 
 _MAGNETS = standards.magnet_sizes()
@@ -241,6 +256,7 @@ class MagnetPocketParams(BaseParams):
     params=MagnetPocketParams,
     subtractive=True,
     features=["pocket"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     doc=_(
         "Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken "
         "und einer Haltelippe am Rand."
@@ -380,32 +396,46 @@ class WallMountParams(BaseParams):
     group="mounting",
     params=WallMountParams,
     features=["plate", "bore"],
+    wall=WallRequirement.from_parameter("thickness"),
     doc=_(
         "Rückplatte mit Schraubenlöchern und nach vorn stehender Auflage. "
         "Die Löcher sind Durchgangslöcher aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_MOUNT_KEEPS_HOLE_WALLS],
 )
 def wall_mount(raw: BaseParams) -> PartResult:
     params = cast(WallMountParams, raw)
     screw = standards.screw(params.size)
 
-    plate = shapes.box(params.width, params.thickness, params.height)
+    # Die Rückplatte wächst nur an unmöglichen Kombinationen: Ein Abstand von
+    # anderthalb Lochdurchmessern lässt zwischen zwei Bohrungen einen halben
+    # Durchmesser Material. Auch am Rand bleibt so mindestens ein Durchmesser.
+    # Das skaliert mit dem gewählten Normteil und erfindet keine Profiltoleranz.
+    hole_pitch = screw.clearance * 1.5
+    width = max(params.width, hole_pitch * (params.holes + 1))
+    height = max(params.height, screw.clearance * 2.0)
+
+    plate = shapes.box(width, params.thickness, height)
     body = plate
     if params.lip > 0.0:
-        shelf = shapes.box(params.width, params.lip, params.thickness)
+        join_depth = min(params.thickness / 2.0, params.lip)
+        shelf = shapes.box(width, params.lip + join_depth, params.thickness)
         body = union(
-            body, shapes.moved(shelf, (0.0, params.thickness / 2.0 + params.lip / 2.0, 0.0))
+            body,
+            shapes.moved(
+                shelf,
+                (0.0, params.thickness / 2.0 + params.lip / 2.0 - join_depth / 2.0, 0.0),
+            ),
         )
 
-    features = [face("plate_1", params.width * params.height, (0.0, 0.0, params.height / 2.0))]
-    spacing = params.width / (params.holes + 1)
+    features = [face("plate_1", width * height, (0.0, 0.0, height / 2.0))]
+    spacing = width / (params.holes + 1)
     for index in range(1, params.holes + 1):
-        x = -params.width / 2.0 + spacing * index
-        z = params.height * 0.75
+        x = -width / 2.0 + spacing * index
+        z = height / 2.0
         hole = shapes.cylinder(screw.clearance, params.thickness + 2.0 * BOOLEAN_OVERLAP)
         hole = shapes.turned(hole, -90.0, (1.0, 0.0, 0.0))
-        hole = shapes.moved(hole, (x, params.thickness / 2.0 + BOOLEAN_OVERLAP, z))
+        hole = shapes.moved(hole, (x, -params.thickness / 2.0 - BOOLEAN_OVERLAP, z))
         body = subtract(body, hole)
         features.append(
             bore(
@@ -489,6 +519,7 @@ class KeyholeParams(BaseParams):
     params=KeyholeParams,
     subtractive=True,
     features=["pocket", "bore"],
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     # Ein Schlüsselloch hat ein Oben: Der Schlitz muss senkrecht stehen, sonst
     # trägt er nicht. Dieselbe Frage wie beim Lochwand-Einhänger — und
     # ``rotation_between`` beantwortet sie an drei von vier Wänden falsch.
@@ -688,7 +719,14 @@ class _LatchTongue:
 
 
 def _latch_tongue(
-    *, width: float, travel: float, through: float, lip: float, sunk: float, system: str
+    *,
+    width: float,
+    slot_width: float,
+    travel: float,
+    through: float,
+    lip: float,
+    sunk: float,
+    system: str,
 ) -> _LatchTongue:
     """Die Zunge, gerechnet aus dem Körper, in dem der Arm sitzt.
 
@@ -708,13 +746,12 @@ def _latch_tongue(
 
     **Wo der Federweg herkommt.** Nicht aus einer Zahl daneben, sondern aus dem
     Arm: Für einen Rechteckquerschnitt ist die Randdehnung an der Wurzel
-    ``ε = 3·t·δ/(2·L²)``. Nach der Länge aufgelöst und ``δ = t`` gesetzt — die
-    Schulter steht eine Armstärke über, dieselbe Regel wie beim
-    Schnappverbinder — ergibt das ``L = t·√(3/(2ε))``, bei 2 % also das
-    8,66-fache der Stärke. Die Bibliothek rechnet Federarme seit je mit zehn zu
-    eins (``SNAP_RATIO``), und das ist der strengere der beiden Werte; genommen
-    wird er, damit nicht zwei Regeln dieselbe Frage beantworten. Die Dehnung
-    bleibt damit bei 1,5 %.
+    ``ε = 3·t·δ/(2·L²)``. Das Rastmaß ``δ`` gleicht neben einer Armstärke auch
+    das halbe seitliche Spiel des Zapfens aus — sonst könnte die Schulter am
+    oberen Rand des erlaubten Bereichs mit durch die Schlitzrundung wandern.
+    Die nötige Länge folgt unmittelbar aus der Formel. Beim kleinsten Rastmaß
+    bleibt zusätzlich das seit je verwendete Verhältnis von zehn zu eins
+    (``SNAP_RATIO``) die strengere Untergrenze.
 
     **Und der Arm hat Platz, obwohl der Zapfen zu kurz ist.** Die Durchsicht
     vom 25.08.2026 hat ihn in der *Höhe* des Zapfens gesucht — 7,38 mm bei
@@ -728,18 +765,25 @@ def _latch_tongue(
     anschlägt. Herunterfallen kann es nicht.
     """
     thickness = SNAP_MIN_ARM
-    # Halb so breit wie der Zapfen: Was darüber hinausgeht, kostet mehr
-    # Kuppenabstand, als es an Auflagefläche einbringt — und der Kuppenabstand
-    # geht direkt vom Rastmaß ab.
-    tongue = width / 2.0
-    radius = width / 2.0
+    radius = slot_width / 2.0
+    # So breit wie möglich, ohne den Federweg unter eine Armstärke zu drücken.
+    # Eine halbe Zapfenbreite genügte im Normalfall, glitt beim größten Spiel
+    # aber mitsamt Schulter durch die Rundung des Schlitzes. Die Sehne aus dem
+    # verbleibenden Kuppenraum ist die breiteste Zunge, die sich weiterhin um
+    # ihr vollständiges Rastmaß einfedern lässt.
+    head_room_limit = max(0.0, travel - 2.0 * thickness)
+    chord_height = min(radius, head_room_limit)
+    tongue = min(width, 2.0 * math.sqrt(max(radius**2 - (radius - chord_height) ** 2, 0.0)))
     head_room = radius - math.sqrt(max(radius**2 - (tongue / 2.0) ** 2, 0.0))
 
     # Der freie Weg über dem Zapfen gehört ganz der Zunge: Kuppenabstand,
-    # Zungenstärke, Federweg. Was davon übrig bliebe, wäre Hub, den das Teil
-    # zusätzlich hätte — und Hub ist genau das, was die Zunge verhindern soll.
+    # Zungenstärke, Federweg. Das Rastmaß gleicht zusätzlich das halbe
+    # seitliche Spiel aus: In der runden Schlitzkuppe kann der schmalere Zapfen
+    # um genau diesen Betrag seitlich ausweichen, ohne dass das nominelle
+    # Höhenmaß der Schulter noch sperrt.
+    step = thickness + (slot_width - width) / 2.0
     gap = travel - head_room - thickness
-    if gap < thickness:
+    if gap < step:
         raise ValidationError(
             field="latch",
             detail=_(
@@ -747,24 +791,26 @@ def _latch_tongue(
                 "federnde Zunge. Ohne sie hält der Einhänger trotzdem — er "
                 "löst sich nur, wenn jemand das Teil anhebt."
             ),
-            values={"board": system, "room": f"{gap:.2f}", "needed": f"{thickness:.2f}"},
+            values={"board": system, "room": f"{gap:.2f}", "needed": f"{step:.2f}"},
         )
 
     run = thickness / math.tan(math.radians(SNAP_LEAD_ANGLE))
-    # Zehn zu eins, mindestens; wo neben dem Zapfen mehr Platz ist, wird der
-    # Arm so lang wie der Zapfen tief ist und die Zunge schließt bündig mit der
-    # Nase ab. Die Wurzel ist ein Block von einer Armstärke — mit einer
-    # Rückplatte übernimmt die Platte sie, und der Arm wird an ihrer Oberseite
-    # frei.
+    # Zehn zu eins, mindestens; bei größerem Rastmaß wächst der Arm so weit,
+    # dass dieselbe zulässige Randdehnung erhalten bleibt. Wo neben dem Zapfen
+    # mehr Platz ist, wird er mindestens so lang wie der Zapfen tief ist und
+    # die Zunge schließt bündig mit der Nase ab. Die Wurzel ist ein Block von
+    # einer Armstärke — mit einer Rückplatte übernimmt die Platte sie, und der
+    # Arm wird an ihrer Oberseite frei.
     root = max(sunk + thickness, 0.0)
-    arm = max(SNAP_RATIO * thickness, through + lip - run - root)
+    strain_arm = math.sqrt(3.0 * thickness * step / (2.0 * LATCH_STRAIN))
+    arm = max(SNAP_RATIO * thickness, strain_arm, through + lip - run - root)
     return _LatchTongue(
         thickness=thickness,
         width=tongue,
         gap=gap,
         lock=root + arm,
         run=run,
-        step=thickness,
+        step=step,
     )
 
 
@@ -857,6 +903,14 @@ class PegboardHookParams(BaseParams):
     group="mounting",
     params=PegboardHookParams,
     features=["hook", "latch"],
+    wall=WallRequirement.not_applicable(
+        "Die 0,8-mm-Federzunge ist absichtlich biegsam; ohne Rückplatte "
+        "verbindet joined_by_host die Haken ausdrücklich erst im Wirtsbauteil."
+    ),
+    feature_requirements=(
+        FeatureRequirement("hook"),
+        FeatureRequirement("latch", when="latch"),
+    ),
     keeps_up=True,
     # Ohne Rückplatte ist jeder Haken ein eigener Körper; verbunden werden sie
     # von dem Teil, an das sie kommen. Mit Rückplatte hängen sie ohnehin
@@ -985,6 +1039,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     tongue = (
         _latch_tongue(
             width=width,
+            slot_width=board.slot_width,
             travel=travel,
             through=through,
             lip=lip,
@@ -1208,6 +1263,12 @@ class FootParams(BaseParams):
     group="mounting",
     params=FootParams,
     features=["foot"],
+    wall=WallRequirement(
+        parameter="height",
+        reason="Die Taschenstellung ist ein abtragender Werkzeugkörper.",
+        when="kind",
+        equals="pocket",
+    ),
     doc=_(
         "Ein Fuß unter einem Gehäuse — gedruckt, oder als Tasche für einen "
         "gekauften aus Gummi. Vier davon halten ein Gerät ruhig und die "

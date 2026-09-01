@@ -446,13 +446,17 @@ def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:
 
     Jede Ollama-Antwort bringt ``prompt_eval_count`` und
     ``prompt_eval_duration`` mit; ihr Verhältnis trennt Karte von Prozessor um
-    Größenordnungen. Gemessen am 31.08.2026 mit denselben 19 641 Token: **2 025
+    Größenordnungen. Gemessen am 31.08.2026 mit denselben 19 641 Token: **1 504
     Token je Sekunde** auf einer RTX 4080, **28** auf dem Prozessor. Ein
     ``api/ps`` je Zug wäre eine Messlast im Kundenzug, und die trägt kein Chat.
     """
     from app.core.backends.llm import GPU_PROMPT_TOKENS_PER_SECOND
 
-    schnell = {**ollama_answer(), "prompt_eval_count": 19641, "prompt_eval_duration": 9_700_000_000}
+    schnell = {
+        **ollama_answer(),
+        "prompt_eval_count": 19641,
+        "prompt_eval_duration": 13_059_000_000,
+    }
     langsam = {
         **ollama_answer(),
         "prompt_eval_count": 19641,
@@ -462,7 +466,7 @@ def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:
     auf_karte = OllamaBackend(transport=Recorder(schnell))
     auf_karte.complete([Message(role="user", content="Halter")])
     assert auf_karte.on_gpu is True, (
-        f"{19641 / 9.7:.0f} Token/s ist über {GPU_PROMPT_TOKENS_PER_SECOND}"
+        f"{19641 / 13.059:.0f} Token/s ist über {GPU_PROMPT_TOKENS_PER_SECOND}"
     )
 
     auf_prozessor = OllamaBackend(transport=Recorder(langsam))
@@ -620,6 +624,10 @@ def test_a_small_model_gets_the_sentence_from_the_spec() -> None:
 
     assert warning is not None
     assert "Milliarden" in str(warning)
+    assert "RTX 4080" in str(warning)
+    assert "14 GB" not in str(warning)
+    assert "Prozessor" in str(warning)
+    assert "braucht eine Grafikkarte mit 16 GB" not in str(warning)
 
 
 def test_a_big_model_passes_in_silence() -> None:
@@ -682,7 +690,9 @@ def test_the_shipped_graphs_name_no_non_commercial_model() -> None:
 
     Geprüft wird der Text der Graphen und nicht ein geladener Knoten: die
     Datei ist das, was ausgeliefert wird, und ein Modellname darin ist eine
-    Vorgabe an jeden, der sie benutzt.
+    Vorgabe an jeden, der sie benutzt. Solange kein vollständig kommerziell
+    freigegebener Ersatz vorliegt, ist ein leeres Verzeichnis der sichere und
+    ausdrücklich zulässige Zustand.
     """
     from pathlib import Path
 
@@ -690,7 +700,6 @@ def test_the_shipped_graphs_name_no_non_commercial_model() -> None:
 
     ordner = Path(backends.__file__).parent / "data"
     graphen = sorted(ordner.glob("*.json"))
-    assert graphen, "ohne Graphen prüft dieser Test nichts"
     for graph in graphen:
         text = graph.read_text(encoding="utf-8")
         for modell in NON_COMMERCIAL_MODELS:
@@ -790,6 +799,8 @@ class _PullServer:
     def __init__(self, lines: list[bytes]) -> None:
         self.lines = lines
         self.asked = ""
+        self.headers: dict[str, str] = {}
+        self._body = b"".join(lines)
 
     def __call__(self, request: Any, timeout: float = 0.0) -> Any:
         import json as json_module
@@ -799,10 +810,17 @@ class _PullServer:
         return self
 
     def __enter__(self) -> Any:
-        return iter(self.lines)
+        return self
 
     def __exit__(self, *_args: object) -> None:
         return None
+
+    def set_read_timeout(self, seconds: float) -> None:
+        assert seconds > 0
+
+    def read(self, size: int = -1) -> bytes:
+        chunk, self._body = self._body[:size], self._body[size:]
+        return chunk
 
 
 def test_pulling_a_model_reports_a_real_share(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -946,19 +964,44 @@ def test_a_slow_local_model_is_not_a_program_fault(monkeypatch: pytest.MonkeyPat
 
 
 def test_a_local_model_gets_more_time_than_a_hosted_one() -> None:
-    """Zwei Minuten sind für ein lokales Modell keine Frist, sondern ein Abbruch.
+    """Die lokale Frist folgt dem Rechenweg und bleibt trotzdem begrenzt.
 
     Der Kunde riss bei 122 Sekunden — das Limit stand auf 120. Ein gehostetes
-    Modell antwortet in Sekunden, ein lokales rechnet Minuten; dieselbe Zahl
-    für beide misst beim einen die Erreichbarkeit und beim anderen die
-    Rechenleistung des Kunden.
+    Modell und ein lokales Modell auf einer geeigneten Grafikkarte antworten in
+    Sekunden; ein CPU-Rückfall würde dagegen viele Minuten brauchen. Die 600
+    Sekunden sind die Grenze des noch synchronen Transports, kein Versprechen,
+    den gemessenen CPU-Lauf fertig rechnen zu lassen.
 
-    Das Zeitlimit gilt dem **Hängen**, nicht der Langsamkeit — dieselbe Regel
-    wie bei ComfyUI (``.claude/rules/kern.md``).
+    Die technische Gesamtfrist begrenzt den synchronen Transport unabhängig
+    davon, ob der Dienst hängt oder nur zu langsam rechnet. Deshalb wird ein
+    gemessener CPU-Rückfall vor seinem Ergebnis beendet und als ungeeigneter
+    Rechenweg erklärt.
     """
     assert llm.LOCAL_TIMEOUT_SECONDS > llm.TIMEOUT_SECONDS
-    assert llm.LOCAL_TIMEOUT_SECONDS >= 600.0, "unter zehn Minuten ist kein Hängen, sondern Rechnen"
+    assert llm.LOCAL_TIMEOUT_SECONDS == 600.0, (
+        "länger darf der noch synchrone, nicht sofort abbrechbare Transport nicht blockieren"
+    )
     assert llm.OllamaBackend().transport is llm.post_json_local
+
+
+def test_the_local_model_expectation_separates_gpu_and_cpu_measurements() -> None:
+    """7,8 Token je Sekunde waren der CPU-Rückfall, nicht die GPU-Leistung."""
+    note = str(llm.local_model_expectation())
+
+    assert "fünf von fünf" in note
+    assert "zwei Messläufen" in note
+    assert "jeweils fünf von fünf" in note
+    assert "11 bis 26 Sekunden" in note
+    assert "Median rund 17" in note
+    assert "vollständig auf der Grafikkarte" in note
+    assert "7,8 Token je Sekunde" in note
+    assert "Prozessor" in note
+    assert "42 Minuten" in note
+    assert "Zehn-Minuten-Grenze" in note
+    assert "kann so nicht abgeschlossen werden" in note
+    assert "geeignete Grafikkarte" in note
+    assert "gehostetes Modell" in note
+    assert "drei von fünf" not in note
 
 
 # --- Die Adresse, die der Kunde einträgt (24.08.2026) ------------------------------
@@ -1245,6 +1288,11 @@ def test_a_json_list_is_not_an_answer_either() -> None:
     assert "no such model" in str(problem.values["answer"])
 
 
+@pytest.mark.parametrize("raw", [b'{"value":NaN}', (b"[" * 65) + b"0" + (b"]" * 65)])
+def test_an_unsafe_json_answer_is_reported_as_unreadable(raw: bytes) -> None:
+    assert isinstance(unreadable(raw), ExternalToolError)
+
+
 def test_a_text_content_block_does_not_crash_the_hosted_path() -> None:
     """``content`` als Zeichenkette ließ die Schleife über *Zeichen* laufen und
     ``block.get`` einen ``AttributeError`` werfen.
@@ -1302,6 +1350,21 @@ def test_arguments_that_are_no_json_are_marked_as_unreadable() -> None:
         "und bleibt für jeden anderen Leser ein leeres Objekt"
     )
     assert reply.tool_calls[0].name == "drill_hole"
+
+
+def test_non_finite_tool_arguments_are_marked_as_unreadable() -> None:
+    reply = llm._from_ollama(
+        {
+            "message": {
+                "tool_calls": [
+                    {"function": {"name": "drill_hole", "arguments": '{"diameter":NaN}'}}
+                ]
+            }
+        },
+        "qwen3:14b",
+    )
+
+    assert isinstance(reply.tool_calls[0].arguments, llm.UnreadableArguments)
 
 
 def test_arguments_that_are_really_empty_are_not_marked() -> None:

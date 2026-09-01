@@ -5,8 +5,32 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 493de4ef-2355-4029-9d86-1e68996c4909
-  modified: 2026-08-26T09:40:39.081Z
+  modified: 2026-08-31T18:00:00.000Z
 ---
+
+## Ergebnis vom 31.08.2026 — die aktuelle Kundenlage
+
+Auf der RTX 4080 mit 16 GB, Ollama 0.33.2 und `qwen3:14b` wurde der
+**vollständige** aktuelle Satz aus 106 Werkzeugen (rund 156 KB Schema) neu
+gefahren. Fünf von fünf vollständigen Anweisungen riefen das richtige Werkzeug
+auf. Die einzelnen Züge brauchten 17,0 / 17,4 / 11,8 / 25,2 / 13,6 Sekunden,
+Median 17 Sekunden; das Modell lag vollständig im Grafikspeicher.
+
+Die unabhängige Wiederholung desselben Laufs am Abend blieb bei **5/5**:
+16,5 / 25,8 / 11,2 / 21,6 / 12,8 Sekunden, Median 16,5 Sekunden, erneut
+**100 % im Grafikspeicher**.
+
+Der vollständige Prompt umfasste 19 641 Token. Sein kaltes Einlesen brauchte
+13,1 Sekunden (1 504 Token/s), warm lag der Median bei 2,3 Sekunden. Die früher
+genannten 7,8 Token/s und rund 42 Minuten beschreiben ausschließlich einen
+**CPU-Rückfall**, bei dem Ollama die Grafikkarte nicht nutzte. Sie sind keine
+GPU-Leistung und kein allgemeiner Ollama-Wert.
+
+Die 16 GB sind die Ausstattung des gemessenen Rechners, keine abgeleitete
+Mindestanforderung. Ob ein anderer Rechner das Modell vollständig auf seiner
+Grafikkarte hält und Werkzeuge korrekt aufruft, beantwortet nur die eingebaute
+Probe auf diesem Rechner. Die historischen Tabellen darunter erklären die
+Fehlerentwicklung; für eine aktuelle Empfehlung gilt dieser Abschnitt.
 
 > **Achtung (26.08.2026): Jede Messtabelle in dieser Notiz außer der
 > Fenster-Tabelle im Nachtrag vom 08.08 wurde OHNE `num_ctx` gemessen — also
@@ -61,15 +85,20 @@ des Fensters statt bei der echten Promptgröße, wurde gekürzt.
 | **32 768** | **21 162** | **21,2 s** | **3 von 3** |
 
 Seit „Der Agent hatte den Auftrag nie gesehen" (a5da6a2) setzt
-`OLLAMA_CONTEXT_TOKENS = 32768`. Kostet 14 GB statt 9,3 — die
-Systemvoraussetzung steht deshalb bei 16 GB Grafikspeicher, nicht mehr bei 10.
+`OLLAMA_CONTEXT_TOKENS = 32768`. Der damalige Lauf belegte auf diesem Rechner
+rund 14 GB statt 9,3. Daraus folgt keine allgemeine Mindestanforderung; die
+aktuelle Messung und ihre Grenze stehen oben.
 
 **Damit sind die Messreihen darunter Vorgeschichte.** Die Werkzeugmengen-Tabelle
 misst nicht, wie ein Modell mit vielen Werkzeugen umgeht, sondern ab wann sie
 nicht mehr ins Fenster passen. Und der Modellvergleich verglich zwei Modelle,
 von denen keines den Systemprompt ganz bekam — bevor daraus eine Anschaffung
-wird, gehört er wiederholt. `TIMEOUT_SECONDS` bleibt bei 120: die
-Zeitüberschreitungen kamen vom CPU-Anteil, nicht von der Grenze.
+wird, gehört er wiederholt. `TIMEOUT_SECONDS` für gehostete Modelle bleibt bei
+120, der getrennte lokale `LOCAL_TIMEOUT_SECONDS` bei 600. Die gemessene
+CPU-Rückfallphase von rund 42 Minuten würde diesen noch synchronen Transport
+nie abschließen und ließe sich während des Wartens nicht zuverlässig abbrechen.
+Die Probe führt deshalb zu GPU oder gehostetem Zugang; eine längere Grenze darf
+erst mit einem wirklich abbrechbaren Transport kommen.
 
 ---
 

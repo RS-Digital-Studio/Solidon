@@ -189,11 +189,19 @@ def test_every_platform_is_asked_where_it_keeps_the_pointer_size(
 
     class Answer:
         returncode = 0
-        stdout = "2\n"
+        stdout = b"2\n"
 
-    monkeypatch.setattr(cursors.subprocess, "run", lambda *a, **k: Answer())
+    options: dict[str, object] = {}
+
+    def answer(*_args: object, **kwargs: object) -> Answer:
+        options.update(kwargs)
+        return Answer()
+
+    monkeypatch.setattr(cursors, "run_limited", answer)
     cursors.forget()
     assert cursors.system_size("darwin") == 2 * cursors.BASE_SIZE, "der Faktor mal die Basis"
+    assert options["cwd"] == cursors.trusted_cwd()
+    assert options["output_limit"] == 4096
 
     monkeypatch.setenv("XCURSOR_SIZE", "24")
     cursors.forget()
@@ -211,9 +219,9 @@ def test_a_platform_that_says_nothing_says_nothing(monkeypatch: pytest.MonkeyPat
 
     class Missing:
         returncode = 1
-        stdout = ""
+        stdout = b""
 
-    monkeypatch.setattr(cursors.subprocess, "run", lambda *a, **k: Missing())
+    monkeypatch.setattr(cursors, "run_limited", lambda *a, **k: Missing())
     monkeypatch.delenv("XCURSOR_SIZE", raising=False)
     cursors.forget()
     assert cursors.system_size("darwin") == 0
@@ -222,7 +230,7 @@ def test_a_platform_that_says_nothing_says_nothing(monkeypatch: pytest.MonkeyPat
     def missing_program(*args: object, **kwargs: object) -> object:
         raise FileNotFoundError("defaults")
 
-    monkeypatch.setattr(cursors.subprocess, "run", missing_program)
+    monkeypatch.setattr(cursors, "run_limited", missing_program)
     cursors.forget()
     assert cursors.system_size("darwin") == 0
 

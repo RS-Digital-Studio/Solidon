@@ -2729,6 +2729,7 @@ class ReportPanel(QWidget):
         self._alerts = 0
         """Fehler und Warnungen im aktuellen Bericht — siehe :meth:`alerts`."""
         self.list = QListWidget(self)
+        self.list.setObjectName("reportFindings")
         self.list.setAccessibleName(tr("Befunde"))
         # §2.7 schreibt die Sätze, die hier stehen — im schmalen rechten
         # Bereich endeten sie mitten im Wort hinter einer horizontalen

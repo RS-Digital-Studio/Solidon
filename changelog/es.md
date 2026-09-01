@@ -18,57 +18,121 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.3.0
 
+### Primeros pasos y orientación
 
-### Primeros pasos e interfaz
+- Cuatro introducciones guiadas explican las vías principales desde el primer diseño hasta un resultado imprimible.
+- La pantalla de inicio aprovecha por completo las ventanas pequeñas y estrechas, sin tarjetas recortadas ni contenido oculto.
+- Los proyectos recientes aparecen antes de los recorridos introductorios y son más rápidos de abrir.
+- La pantalla de inicio ya no mueve la selección sin pedirlo y se puede manejar por completo con ratón y teclado.
+- Las entradas *Nuevo*, *Abrir* y *Ejemplos* están mejor ordenadas y explican adónde conducen antes de abrirse.
+- Los comentarios y el apoyo voluntario están en la pantalla de inicio y funcionan con teclado y tecnologías de asistencia.
+- El chat y el informe siguen siendo utilizables al mismo tiempo, incluso con poca altura de ventana.
+- La barra de herramientas superior permanece visible en proyectos abiertos y ventanas estrechas, sin salirse del área de trabajo.
+- Un nuevo ejemplo de dibujo conduce directamente al flujo de bocetos y complementa los proyectos de ejemplo existentes.
 
-- Cuatro recorridos cubren las vías principales: adaptar un modelo, construir uno, generarlo desde texto o imagen y modelarlo libremente. Hay más ejemplos para profundizar.
-- La interfaz se ha reorganizado en ventanas, diálogos y barras. El espaciado claro, los botones coherentes y los grupos compactos mantienen utilizables los ajustes extensos y las ventanas estrechas.
-- Los comentarios y el apoyo voluntario aparecen como tarjetas en la pantalla de inicio. Funcionan con ratón y teclado, respetan el movimiento reducido y explican las páginas externas antes de abrirlas.
-- La placa de impresión es translúcida. Las piezas que queden por error justo debajo siguen visibles, mientras la cuadrícula y el borde permanecen claros.
-- Se puede buscar en los ajustes de impresión. La cabecera muestra la impresora seleccionada y el material realmente utilizado, en lugar de ofrecer allí una segunda selección contradictoria.
+### Interfaz y manejo
 
-### Dibujo y medidas
+- Los menús tienen encabezados claramente visibles y columnas de iconos alineadas de forma uniforme.
+- El resumen de comandos alinea bien los atajos y las explicaciones para recorrer con rapidez las entradas largas.
+- Los diálogos extensos usan columnas uniformes y aprovechan las ventanas anchas con vistas claras en dos columnas.
+- La antigua página conjunta de adherencia, retracción y filamento se divide en áreas de ajustes más pequeñas y bien nombradas.
+- Los 56 ajustes de impresión se pueden buscar por sus nombres visibles en español.
+- La búsqueda también entiende 146 términos habituales de los slicers, entre ellos *perimeters* y *wall loops*.
+- Los campos numéricos responden bien a las flechas, los pasos y el redondeo, sin cambiar valores de forma inesperada.
+- Los controles deslizantes se comportan de forma uniforme y siguen siendo precisos incluso en intervalos pequeños.
+- Solo la herramienta activa conserva el color de acento; los controles inactivos pasan visualmente a segundo plano.
+- Los cálculos muy breves no muestran parpadeos, los medios usan un cursor de espera y los largos añaden progreso y cancelación.
+- Las indicaciones de las herramientas ocupan una línea cuando hay espacio y se ajustan de forma controlada en ventanas estrechas.
+- Las miniaturas del árbol de objetos son lo bastante grandes para reconocer las formas.
+- La lista de filamentos se desplaza por separado; *Añadir filamento* y *Valores de impresión* siguen accesibles con muchas bobinas.
+- Los avisos y errores se leen bien sin transmitir su significado solo mediante el color del texto.
+- Los campos de selección desactivados se distinguen claramente de los campos seleccionados y activos.
 
-- Un círculo pide su diámetro en lugar del radio. El valor introducido es el que se puede medir en la pieza terminada.
-- Las medidas se pueden cambiar directamente con un doble clic; los campos numéricos de las barras de herramientas admiten valores exactos sin pasar por un diálogo grande.
-- Escape retrocede por el dibujo en orden: primero el trazo empezado, después la herramienta y solo entonces el boceto. Rehacer también funciona mientras se dibuja.
-- Las indicaciones muestran las dos formas de comenzar un boceto: dibujar un contorno propio o insertar una forma básica preparada. Las mediciones terminan con una respuesta visible.
+### Dibujo y entrada precisa
 
-### Historial y edición
+- Los círculos se introducen por su diámetro, de modo que un agujero M3 se puede crear directamente con 3,2 mm.
+- Una restricción de diámetro sigue siendo una expresión editable después de resolver, guardar y volver a abrir.
+- Las medidas se editan directamente con un doble clic, sin el largo recorrido de selección anterior.
+- La posición X, Y y Z, el ángulo y la escala se pueden introducir directamente en la barra de movimiento.
+- Una entrada exacta crea el mismo paso reversible que un movimiento con el ratón.
+- Varios cuerpos seleccionados usan un centro común al girarlos y escalarlos con valores exactos.
+- Escape retrocede exactamente un nivel al dibujar: línea actual, herramienta actual y, después, todo el boceto.
+- Rehacer funciona ahora también mientras hay un boceto abierto.
+- Un boceto vacío muestra una indicación pulsable que lleva directamente a la herramienta Rectángulo.
+- El botón de las formas básicas se llama como lo que hace un clic. Las demás formas están tras la flecha contigua.
+- La herramienta de sección se abre dentro del cuerpo en lugar de en una vista vacía fuera del modelo.
+- Las vistas frontal, lateral, superior y opuesta se ajustan de forma fiable a los seis ejes.
+- El asa de arrastre sigue visible con la cámara plana o inclinada y muestra una medida útil.
+- La herramienta de medición termina cada medida con una respuesta visible, en lugar de parecer que pierde el resultado.
 
-- Se pueden mover y girar conjuntamente varias piezas seleccionadas. Al girarlas conservan sus distancias y el resultado vuelve a colocarse sobre la placa de impresión.
-- Los movimientos consecutivos se agrupan como una sola acción comprensible en el historial. Los pasos relacionados se pueden plegar y deshacer juntos.
-- Los modelos descargados e importados se pueden cortar y seguir editando de forma fiable. Las caras protegidas o detectadas permanecen marcadas sin ocultar su forma.
-- El modelado con pincel guarda los trazos de una sesión como un paso reversible. Los patrones de superficie avisan si un trazo no alcanza el cuerpo, en lugar de dejar geometría suelta.
+### Vista, historial y edición de formas
 
-### Bloques como archivos
+- Se pueden mover conjuntamente varios cuerpos seleccionados.
+- Varios cuerpos seleccionados giran alrededor de un centro común y conservan sus distancias.
+- Después de girarlos, los cuerpos pueden volver a colocarse bien sobre la placa en el mismo paso.
+- Los movimientos consecutivos del mismo cuerpo se agrupan en un paso comprensible del historial.
+- Las acciones relacionadas aparecen como una entrada desplegable, sin saturar el historial con líneas individuales.
+- Una acción continua se puede revertir por completo con una sola orden de Deshacer.
+- Las entradas del historial muestran su tipo y un número de paso inequívoco.
+- Los modelos descargados e importados se pueden cortar de inmediato.
+- Las caras protegidas se muestran en turquesa y rayadas, por lo que se entienden incluso sin distinguir el color.
+- La división automática y manual tiene en cuenta las caras visibles protegidas al elegir la unión.
+- Al seleccionar un hallazgo, Solidon lleva al lugar, al cuerpo o al paso del historial correspondiente.
+- Al saltar a un hallazgo, la cámara encuadra el destino en lugar de acabar en un primer plano gris.
+- Las caras con nombre y los hallazgos se mueven con su cuerpo al organizarlo y colocarlo.
+- El modelado con pincel avisa si los trazos no alcanzan el modelo o no producen un cambio imprimible.
 
-- Los bloques propios se pueden exportar como archivos locales `.solidon-part` y volver a importar al catálogo. Importar, exportar y deshacer funcionan enteramente desde la interfaz.
-- Un archivo de bloque contiene los pasos editables, los valores, la vista previa y la procedencia del bloque. No ejecuta código fuente incluido ni se conecta a un servicio de intercambio.
-- Los bloques importados siguen identificados como procedentes de otra fuente. Un bloque propio con el mismo nombre no se sobrescribe sin avisar.
-- Los archivos de bloque se pueden asociar a Solidon y abrir desde el gestor de archivos en Windows, macOS y Linux.
-- Los ganchos para panel perforado, las bisagras flexibles y los patrones de superficie avisan de una orientación inadecuada o falta de contacto antes de que el problema pase inadvertido.
+### Bloques propios y archivos de intercambio
 
-### División e impresión
+- Los bloques propios se pueden guardar como archivos locales .solidon-part y volver a añadir al catálogo.
+- Los archivos de bloque se pueden abrir, arrastrar e importar mediante la asociación de archivos del sistema operativo.
+- El nombre y la extensión muestran de inmediato que un archivo pertenece a Solidon.
+- La importación, el intercambio y la biblioteca local usan textos completos de interfaz en los seis idiomas.
+- Antes de guardarlo, un bloque propio se puede construir con varios pasos y valores editables.
+- Al compartirlo se puede elegir entre uso libre, atribución o atribución con las mismas condiciones.
+- Si se da un nombre propio a un bloque, este prevalece sobre el nombre que traiga el archivo.
+- El origen y las condiciones de uso siguen siendo reconocibles al intercambiar un bloque.
+- Los ganchos de encaje, ojales de bisagra, ganchos para panel y pies tienen transiciones más robustas sin superficies internas cerradas.
+- Las tarjetas del catálogo conservan su posición y la cara seleccionada cuando terminan de cargar sus vistas previas.
 
-- Auto Split busca uniones más resistentes en lugar de favorecer la zona más fina. Según la unión, elige pasadores, cola de milano o lengüeta y ranura para adaptarse a la superficie disponible.
-- Las uniones creadas automáticamente siguen siendo reproducibles y las búsquedas largas se pueden cancelar sin dejar el documento a medio modificar.
-- Las piezas multicolor y los conjuntos se pueden ver montados y tratar por separado para imprimir. Se conservan sus referencias a materiales y objetos.
-- Los ajustes de impresión toman los valores de material de la bobina realmente seleccionada. La búsqueda, los textos de ayuda y los motivos visibles de bloqueo conducen antes al ajuste correcto.
+### División, impresión y filamento
 
-### Chat y generación 3D
+- La división automática prefiere uniones resistentes y evita elegir el punto débil más fino posible.
+- Para cada unión se elige por separado el conector adecuado y se guarda como una forma concreta.
+- Las indicaciones sobre uniones pegadas permanecen asociadas a la unión elegida.
+- La división automática responde de forma reproducible a nuevos requisitos y se puede cancelar durante el cálculo.
+- La búsqueda de orientación solo comprueba posiciones distintas y respeta el tiempo previsto incluso con cuerpos exigentes.
+- Los archivos 3MF grandes se reconocen y procesan más rápido sin cambiar el archivo resultante.
+- El material, el ajuste y las tolerancias siguen la bobina realmente elegida o la ranura ocupada de la impresora.
+- La cabecera muestra el material realmente usado y ya no ofrece una segunda selección contradictoria.
+- Cuando está desactivado, *Guardar archivo de impresión* explica que el archivo solo se crea al laminar.
+- Las reparaciones ya completadas en el mismo flujo de trabajo no vuelven a aparecer como recomendaciones pendientes.
 
-- La vía desde texto o imagen pasa por un diálogo específico de generación hasta la misma escena editable. La configuración local instala ComfyUI y TripoSG en revisiones fijas y verificables.
-- Antes de la primera llamada a un modelo en la nube, Solidon muestra qué entradas y datos del modelo salen del ordenador. Los modelos locales de lenguaje y generación permanecen claramente separados.
-- El chat explica mejor su finalidad, el paso de trabajo actual y la herramienta utilizada. El agente puede tratar conjuntamente detalles de forma repetidos, sin tener que describirlos uno a uno.
+### Informe, estabilidad, plataformas e idiomas
 
-### Informe, estabilidad y plataformas
+- Los hallazgos similares se agrupan sin perder la relación con los cuerpos y lugares afectados.
+- Los números y medidas del informe tienen nombres completos en vez de valores sueltos incomprensibles.
+- Si una reparación falla, se restaura por completo el cuerpo original sin modificar.
+- Una malla importada cerrada ya no se abre por eliminar demasiado pronto un triángulo problemático.
+- Los botones de acción del informe ya no mantienen en memoria una ventana que ya se ha cerrado.
+- Los bloques incluidos y la activación se cargan al iniciar sin bloquearse entre sí.
+- La vista 3D se cierra antes que la ventana; así, las ventanas de Windows, Linux y macOS se cierran con mayor fiabilidad.
+- El marco y la barra de título se adaptan de forma segura a cada plataforma.
+- Los botones estándar como Abrir, Guardar y Cancelar cambian de idioma al instante, sin reiniciar.
+- Los nombres creados automáticamente para cuerpos y bloques cambian bien de idioma incluso después de usar contenido en caché.
+- Las traducciones y los valores del informe están al mismo nivel en alemán, inglés, español, francés, italiano y portugués.
 
-- El informe agrupa hallazgos duplicados, etiqueta por completo las medidas y lleva al lugar afectado al seleccionar una advertencia. Los botones de acción permanecen disponibles directamente.
-- Las reparaciones automáticas se ejecutan como un único paso coherente. Si una reparación no se puede completar, se conserva el estado original y el mensaje ofrece un siguiente paso práctico.
-- Los ejemplos, los bloques incluidos y la activación se cargan sin bloquearse entre sí. La aplicación libera su vista 3D de forma más fiable al cerrarse.
-- Solidon abre sus ventanas de forma fiable en Windows, macOS y Linux. Solo adapta la barra de título donde el sistema lo admite; en los demás casos conserva el aspecto habitual de la plataforma.
-- Los textos de la interfaz en alemán, inglés, español, francés, italiano y portugués siguen completos tras cambiar de idioma; los botones estándar también cambian de inmediato.
+### Chat y compatibilidad con modelos
+
+- El chat se abre con una explicación concreta de su finalidad, no con un área vacía ni términos técnicos de modelos.
+- Los contadores técnicos de tokens se han retirado de la interfaz normal para clientes.
+- El asistente reconoce y agrupa detalles de forma iguales, en vez de tratar cada aparición por separado.
+- El diálogo Generar convierte texto o una imagen en un modelo mediante ComfyUI local y lo incorpora a la misma escena editable.
+- El flujo TripoSG incluido crea un GLB que después se repara, se escala y se comprueba para la impresión automáticamente.
+- Ollama local y ComfyUI local calculan uno tras otro para no ocupar la tarjeta gráfica al mismo tiempo.
+- Tras una propuesta del agente o una generación 3D, Solidon descarga los modelos locales y libera la memoria gráfica.
+- Al cancelar, Solidon elimina solo su propia tarea de ComfyUI; las demás tareas que se ejecuten allí permanecen intactas.
+- Antes de usar un modelo en la nube por primera vez, Solidon muestra claramente qué contenido sale del ordenador.
 
 ## 0.2.2
 

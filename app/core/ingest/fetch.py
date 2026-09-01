@@ -27,16 +27,30 @@ from __future__ import annotations
 import re
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import Final
-from urllib.parse import unquote, urlsplit
+from time import monotonic
+from typing import Any, Final
+from urllib.parse import unquote, urljoin, urlsplit
 
 from app.core.errors import OPEN_IN_BROWSER, ExternalToolError, ValidationError
+from app.core.http import (
+    HttpBoundaryError,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    UnsafeUrlError,
+    deadline_after,
+    iter_limited,
+    open_public_url,
+    response_url,
+    validate_download_redirect,
+    validate_http_url,
+)
 from app.core.ingest.loader import MAX_FILE_BYTES
 from app.core.ingest.plan import MODEL_SUFFIXES
-from app.core.log import get_logger
+from app.core.log import get_logger, redact_external, redact_url
 from app.core.types import ProgressFn
 from app.i18n import _
 
@@ -68,6 +82,7 @@ _DISPOSITION = re.compile(r'filename\*?=(?:UTF-8\'\')?"?([^";]+)"?', re.IGNORECA
 #: Ein Kennwort, das sagt, wer da anfragt. Ohne eines antworten manche Server
 #: mit 403 — und die Wahrheit ist die freundlichste Angabe.
 USER_AGENT: Final = "Solidon3D"
+MAX_REDIRECTS: Final = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,22 +104,50 @@ def check_url(url: str) -> str:
     Festplatte auslesen, und eine Adresse aus der Zwischenablage ist kein Ort,
     an dem man das zulässt (§32).
     """
-    parts = urlsplit(url.strip())
-    if parts.scheme.lower() not in ("http", "https"):
-        raise ValidationError(
+    try:
+        return validate_http_url(url, allow_http=True, allow_fragment=True)
+    except UnsafeUrlError as problem:
+        raise _url_validation_error(url, problem) from problem
+
+
+def _url_validation_error(url: str, problem: UnsafeUrlError) -> ValidationError:
+    """Übersetzt die Sicherheitsgründe in stabile Oberflächenkennungen."""
+    reason = problem.reason
+    if reason == "scheme":
+        parts = urlsplit(url.strip())
+        return ValidationError(
             field="url",
             detail=_("Es gehen nur Adressen, die mit http:// oder https:// beginnen."),
             constraint="scheme",
-            values={"url": url, "scheme": parts.scheme},
+            values={"url": redact_url(url), "scheme": parts.scheme},
         )
-    if not parts.netloc:
-        raise ValidationError(
+    if reason == "host":
+        return ValidationError(
             field="url",
             detail=_("In der Adresse fehlt der Rechnername."),
             constraint="host",
-            values={"url": url},
+            values={"url": redact_url(url)},
         )
-    return url.strip()
+    if reason == "userinfo":
+        return ValidationError(
+            field="url",
+            detail=_("Eine Modelladresse darf keine Anmeldedaten enthalten."),
+            constraint="userinfo",
+            values={"url": redact_url(url)},
+        )
+    if reason in {"private_destination", "private_redirect"}:
+        return ValidationError(
+            field="url",
+            detail=_("Eine Modelladresse darf nicht in ein privates Netz führen."),
+            constraint="private_destination",
+            values={"url": redact_url(url)},
+        )
+    return ValidationError(
+        field="url",
+        detail=_("Die Adresse war nicht erreichbar."),
+        constraint="unsafe_url",
+        values={"url": redact_url(url), "reason": reason},
+    )
 
 
 def suffix_of(name: str) -> str:
@@ -113,11 +156,37 @@ def suffix_of(name: str) -> str:
     return PurePosixPath(name).suffix.lower()
 
 
+def _open_download(address: str, deadline: float) -> tuple[object, str]:
+    """Folgt wenigen geprüften Download-Weiterleitungen innerhalb der Restzeit."""
+    current = address
+    for _attempt in range(MAX_REDIRECTS + 1):
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise ResponseDeadlineError("download deadline exceeded")
+        try:
+            return (
+                open_public_url(
+                    current,
+                    deadline=deadline,
+                    headers={"User-Agent": USER_AGENT},
+                ),
+                current,
+            )
+        except urllib.error.HTTPError as problem:
+            location = problem.headers.get("Location") if problem.headers is not None else None
+            status = int(problem.code)
+            problem.close()
+            if status not in {301, 302, 303, 307, 308} or not location:
+                raise
+            current = validate_download_redirect(address, urljoin(current, str(location)))
+    raise UnsafeUrlError("redirect_limit")
+
+
 def fetch_model(
     url: str,
     *,
     progress: ProgressFn | None = None,
-    opener: object | None = None,
+    opener: Callable[..., Any] | None = None,
 ) -> FetchedModel:
     """Holt eine Modelldatei und gibt sie mit ihrer Herkunft zurück.
 
@@ -125,11 +194,14 @@ def fetch_model(
     einen eigenen Server, statt ins Netz zu greifen.
     """
     address = check_url(url)
-    request = urllib.request.Request(address, headers={"User-Agent": USER_AGENT})
-    open_url = opener if callable(opener) else urllib.request.urlopen
-
+    deadline = deadline_after(TIMEOUT_SECONDS)
+    answer: Any
     try:
-        answer = open_url(request, timeout=TIMEOUT_SECONDS)
+        if callable(opener):
+            request = urllib.request.Request(address, headers={"User-Agent": USER_AGENT})
+            answer = opener(request, timeout=TIMEOUT_SECONDS)
+        else:
+            answer, address = _open_download(address, deadline)
     except urllib.error.HTTPError as error:
         # Ein HTTPError ist selbst eine offene Antwort. Wer ihn nur auswertet,
         # lässt einen Socket zurück — im Testlauf eine ResourceWarning, in
@@ -141,41 +213,76 @@ def fetch_model(
             # Kern setzt sie nicht ein — die Zahl reist in ``values`` mit und
             # steht in der Meldung der Oberfläche.
             detail=_("Der Server hat die Datei nicht herausgegeben."),
-            values={"url": address, "status": error.code},
+            values={"url": redact_url(address), "status": error.code},
         ) from error
+    except ResponseDeadlineError as problem:
+        raise ExternalToolError(
+            tool="download",
+            detail=_("Die Adresse war nicht erreichbar."),
+            values={"url": redact_url(address), "reason": "timeout"},
+        ) from problem
     except (urllib.error.URLError, OSError) as error:
         raise ExternalToolError(
             tool="download",
             detail=_("Die Adresse war nicht erreichbar."),
-            values={"url": address, "reason": str(error)},
+            values={"url": redact_url(address), "reason": redact_external(error)},
         ) from error
-
-    with answer:
-        # Noch einmal dieselbe Prüfung, jetzt am *erreichten* Ort. Die Prüfung
-        # oben gilt der eingetippten Adresse; dazwischen liegt der
-        # Weiterleitungs-Handler von urllib, und der folgt auch nach `ftp:` —
-        # ein http-Server, der mit `Location: ftp://…` antwortet, käme so an
-        # der Schemaprüfung vorbei (§32). Gelesen wird erst danach.
-        address = check_url(str(getattr(answer, "url", address) or address))
-        # Erst die Herkunft, dann der Name: Eine Modellseite trägt keine Endung
-        # (der Normalfall beim Kopieren aus dem Browser), und ``_name_from``
-        # warf dafür „Format nicht erkannt", bevor der hilfreiche Satz „hier
-        # steht eine Webseite, lade die Datei dort" überhaupt drankam. Den Namen
-        # braucht diese Meldung nicht; sie führt ihn nur zur Ansicht mit.
-        _reject_web_page(answer, "", address)
-        name = _name_from(answer, address)
-        payload = _read_limited(answer, progress)
+    except UnsafeUrlError as problem:
+        raise _url_validation_error(address, problem) from problem
+    try:
+        with answer:
+            # Ein öffentlicher Download darf auf ein CDN wechseln, aber weder
+            # HTTPS herabstufen noch in ein lokales Netz umbiegen (§32).
+            address = validate_download_redirect(address, response_url(answer, address))
+            public_address = redact_url(address)
+            # Erst die Herkunft, dann der Name: Eine Modellseite trägt keine
+            # Endung. Die hilfreiche Meldung dazu geht der Endungsprüfung vor.
+            _reject_web_page(answer, "", public_address)
+            name = _name_from(answer, public_address)
+            payload = _read_limited(
+                answer,
+                progress,
+                deadline=deadline,
+                require_timeout=opener is None,
+            )
+    except UnsafeUrlError as problem:
+        raise _url_validation_error(address, problem) from problem
+    except ResponseTooLargeError as problem:
+        raise ValidationError(
+            field="file",
+            detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
+            constraint="file_too_large",
+            values={"size": problem.received, "limit": MAX_FILE_BYTES},
+        ) from problem
+    except ResponseDeadlineError as problem:
+        raise ExternalToolError(
+            tool="download",
+            detail=_("Die Adresse war nicht erreichbar."),
+            values={"url": redact_url(address), "reason": "timeout"},
+        ) from problem
+    except HttpBoundaryError as problem:
+        raise ExternalToolError(
+            tool="download",
+            detail=_("Die Adresse war nicht erreichbar."),
+            values={"url": redact_url(address)},
+        ) from problem
 
     _log.info("fetched %d bytes from %s", len(payload), urlsplit(address).netloc)
     return FetchedModel(
         name=name,
         payload=payload,
-        url=address,
+        url=public_address,
         retrieved=datetime.now(UTC).isoformat(timespec="seconds"),
     )
 
 
-def _read_limited(answer: object, progress: ProgressFn | None) -> bytes:
+def _read_limited(
+    answer: object,
+    progress: ProgressFn | None,
+    *,
+    deadline: float,
+    require_timeout: bool,
+) -> bytes:
     """Liest mit Fortschritt und bricht ab, sobald die Grenze überschritten
     ist.
 
@@ -185,18 +292,14 @@ def _read_limited(answer: object, progress: ProgressFn | None) -> bytes:
     announced = _announced_length(answer)
     chunks: list[bytes] = []
     seen = 0
-    while True:
-        chunk = answer.read(CHUNK_BYTES)  # type: ignore[attr-defined]
-        if not chunk:
-            break
+    for chunk in iter_limited(
+        answer,  # type: ignore[arg-type]
+        limit=MAX_FILE_BYTES,
+        deadline=deadline,
+        require_timeout=require_timeout,
+        chunk_size=CHUNK_BYTES,
+    ):
         seen += len(chunk)
-        if seen > MAX_FILE_BYTES:
-            raise ValidationError(
-                field="file",
-                detail=_("Die Datei ist größer, als diese Anwendung verarbeitet."),
-                constraint="file_too_large",
-                values={"size": seen, "limit": MAX_FILE_BYTES},
-            )
         chunks.append(chunk)
         if progress is not None:
             share = min(seen / announced, 1.0) if announced else 0.0

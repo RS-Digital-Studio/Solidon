@@ -47,7 +47,9 @@ from app.core.agent.tools import (
     SET_PRINT_TARGET,
     STANDARD_KINDS,
     UNDO_TRANSACTION,
+    is_untrusted_recipe_source,
     tool_schemas,
+    untrusted_recipe_text,
 )
 from app.core.backends.llm import LLMBackend, Message, ToolCall, UnreadableArguments
 from app.core.errors import AppError, UserError, ValidationError
@@ -991,4 +993,19 @@ def find_part_text(description: str) -> str:
     found = PARTS.search(description)
     if not found:
         return tr("Dazu gibt es keinen Baustein.")
-    return "\n".join(f"{op_name(spec.name)}: {spec.title} — {spec.doc}" for spec in found[:6])
+    lines: list[str] = []
+    for spec in found[:6]:
+        operation = op_name(spec.name)
+        if is_untrusted_recipe_source(spec.source):
+            # Das Suchergebnis ist eine Tool-Nachricht und damit niedriger
+            # eingestuft als Systemprompt und Werkzeugschema. Trotzdem braucht
+            # jeder fremde Datensatz seinen eigenen Rahmen: Ein gemischtes
+            # Ergebnis darf den Hinweis nicht von genau der Zeile trennen, für
+            # die er gilt. Die Operation ist eine validierte interne Kennung;
+            # nur Titel und Beschreibung stammen vom Veröffentlicher.
+            title = untrusted_recipe_text(spec.source, spec.title)
+            document = untrusted_recipe_text(spec.source, spec.doc)
+            lines.append(f"{title} operation={operation}; description={document}")
+            continue
+        lines.append(f"{operation}: {spec.title} — {spec.doc}")
+    return "\n".join(lines)

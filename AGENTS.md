@@ -21,48 +21,30 @@ aktiviert. Ohne KI bleibt nur der Chat aus.
 
 ## Harte Regeln
 
-Jede hat eine überprüfbare Abnahme. Ein Verstoß ist ein roter Lauf, keine
-Geschmacksfrage. Der benannte Geltungsbereich gehört zur Regel: Eine Ausnahme,
-die ihn still erweitert, und eine Prüfung, die nur einen engeren Fall sieht,
-sind beide Fehler.
+Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 
 **Aufbau**
 1. **Kein Qt unterhalb von `ui/`.** `core` ohne installiertes Qt importierbar.
-2. **Der gespeicherte Szenenzustand ändert seine Geometrie nur durch die
-   Auswertung registrierter Ops.** Oberfläche, Agent und Editoren dürfen nur
-   temporäre Vorschauen und Analysen erzeugen. Eine Folge von Nutzergesten wird
-   als serialisierbarer Parameter genau einer Op gespeichert und bleibt daraus
-   vollständig reproduzierbar; Abbrechen lässt Dokument, Stack und Szene
-   unverändert.
+2. **Keine Geometrieänderung außerhalb einer Op** — auch nicht „kurz" im
+   Viewport, auch nicht im Agenten. Eine Op darf beliebig viele Nutzergesten
+   zu einem Schritt zusammenfassen, wenn sie **vollständig aus ihren
+   Parametern reproduzierbar** ist: Ein Editor sammelt Gesten in einen
+   Parameterwert, das Ergebnis entsteht erst bei der Auswertung. Was der
+   Editor zeigt, während er offen ist, ist eine Vorschau und kein
+   Dokumentzustand.
 3. **`OpContext.scene` ist nur lesend.** Ops erzeugen Objekte, sie ändern
    keine.
-4. **Keine gespeicherte Op ohne vollständigen Registervertrag.** Jede Op hat
-   genau einen Registereintrag, ein Parameterschema — auch wenn es leer ist —,
-   erzeugte Oberflächen, übersetzte Texte und einen Wirkungstest. Eine
-   geometrieändernde Op braucht zusätzlich einen Geometrietest gegen einen
-   analytischen Körper oder den Korpus.
-5. **Verträge zuerst.** Die Verträge aus Bauplan §9 sind im Kern genau einmal
-   kanonisch definiert; Anbieter und Verbraucher verwenden keine
-   Schattenverträge. Änderungen an persistenten Verträgen ziehen
-   Formatmigration, alte Beispieldatei und Rundreisetest nach.
+4. **Keine Op ohne Registereintrag**, Parameterschema, Geometrietest und
+   übersetzte Texte.
+5. **Verträge zuerst.** Signaturen aus Bauplan §9 stehen fest, bevor ein Modul
+   entsteht.
 
 **Zahlen**
-6. **Der Kern speichert und berechnet Längen in Millimetern mit doppelter
-   Genauigkeit.** Einheiten werden nur an Importgrenze und Anzeige umgerechnet.
-   Geometrische Gleichheit oder Gültigkeit wird nie mit exaktem
-   Fließkommavergleich entschieden, sondern mit der dafür benannten Toleranz.
-   Rundung aus der Anzeige fließt nie in Dokument oder Geometrie zurück.
-7. **Numerische und fertigungstechnische Toleranzen werden getrennt.**
-   Geometrievergleiche verwenden ausschließlich `EPS_GEOM`, `EPS_DISPLAY` oder
-   `EPS_MATCH` gemäß Bauplan §11.2. Fertigungsspiel, Passung und
-   druckerabhängige Abstände stammen aus dem Materialprofil; in gespeicherten
-   Daten stehen sie als Profilverweis wie `auto:<material>`, nie als lokale
-   Zahlenkonstante.
-8. **Konstruktionsmaße sind keine Streuzahlen.** Ein Hauptmaß oder ein
-   wiederverwendeter Nutzerwert wird als Projektparameter benannt; die Ops
-   verweisen per Ausdruck darauf. Einmalige Detailwerte, Schemavorgaben,
-   Normtabellenwerte und algorithmische Konstanten sind keine
-   Projektparameter.
+6. **Der Kern rechnet in Millimetern und doppelter Genauigkeit.** Gerundet wird
+   nur in der Anzeige. Fließkommavergleich nie mit `==`.
+7. **Keine Zahlenkonstante für Toleranzen** — Verweis ins Materialprofil
+   (`auto:<material>`).
+8. **Keine Streuzahl, wo ein Projektparameter passt.**
 9. **Jede randomisierte Prozedur führt einen gespeicherten Startwert** und ist
    als `deterministic=False` markiert.
 
@@ -73,13 +55,19 @@ sind beide Fehler.
     Weg mehr dorthin; die Regel steht jetzt als Sperre: Wer einen neuen baut,
     baut die Prüfung mit.
 12. **Keine absoluten Pfade** in Projektdateien.
-13. **Keine geöffnete oder importierte Datei führt Code aus oder erweitert den
-    Operationsbestand** (§24.5). Projekt- und Bausteindateien enthalten nur
-    geschlossene Daten: registrierte Op-Namen, geprüfte Werte, Ressourcen und
-    Provenienz. Eigene `.py`-Bausteine bleiben im lokalen Nutzerordner und
-    reisen nie mit. Historischer Quelltext bleibt ausschließlich inerte
-    Migrationslast und erreicht weder `eval`, `exec`, Importlader noch
-    Unterprozess.
+13. **Ausführbarer Code reist nie in einer Projektdatei mit** (§24.5). Er
+    kommt aus der Installation und dem Nutzerordner, nie aus einer geöffneten
+    Datei — ein eigener Baustein als `.py` bleibt deshalb, wo er liegt. Ein
+    Baustein als **Rezept** darf mitreisen (Entscheidung Robert, 24.08.2026):
+    Er ist eine Liste registrierter Operationen mit Werten, führt also nichts
+    aus, was eine Projektdatei nicht ohnehin auslöst. **Seit dem Ausbau von
+    OpenSCAD (26.08.2026) steht das ohne Vorbehalt.** Vorher konnte ein Wert
+    selbst Quelltext sein — `create_from_scad` trug ihn im Parameter
+    `source` —, und die Erlaubnis hielt nur zusammen mit Regel 11. Diese
+    Öffnung gibt es nicht mehr: Eine Projektdatei trägt Operationen und Werte,
+    und keiner davon wird ausgeführt. `scene/foreign.py` weist fremde Herkunft
+    weiterhin aus (§32) — nicht mehr, weil etwas laufen könnte, sondern weil
+    der Nutzer wissen soll, woher der Inhalt stammt.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
 15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Einen Slicer
@@ -88,11 +76,8 @@ sind beide Fehler.
 **Bedienung**
 16. **Jeder Agentenvorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn
     vollständig zurück.
-17. **Jeder dem Nutzer gezeigte Fehler führt weiter.** Ein `AppError` oder
-    gescheiterter asynchroner Vorgang nennt, was nicht ging, die Ursacheklasse
-    und was jetzt möglich ist, und trägt mindestens eine passende, wirksam
-    angebundene Handlung. Ein Abbruch ist ein normaler Ausgang und kein Fehler;
-    ein Stapelabzug erscheint nie im Nutzerdialog.
+17. **Jede Ausnahme trägt mindestens einen Handlungsvorschlag.** Ein Fehler
+    endet nie mit „fehlgeschlagen".
 18. **Keine Bedeutung allein über Farbe.** Immer eine zweite Kodierung.
 19. **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Einzige
     ausdrücklich gewünschte Ausnahme: Vor dem Löschen von Verlaufsschritten
@@ -101,14 +86,8 @@ sind beide Fehler.
     `tr()`.
 
 **Haltung**
-21. **Eine erforderliche fachliche Entscheidung wird nie stillschweigend
-    getroffen.** Ist sie weder durch Eingabe noch deklarierte Vorgabe
-    eindeutig, hält der Ablauf an. Ops und Auswertung fragen über `ctx.ask`,
-    der Agent über `ask_user`; tiefere Kernfunktionen melden Mehrdeutigkeit an
-    den Aufrufer und öffnen keinen Dialog. Eine Antwort wird vor einem
-    dauerhaften oder cachebaren Ergebnis in Op-Parametern oder einem dafür
-    vorgesehenen Operationsfeld gespeichert. Eine dokumentierte, eindeutig
-    getrennte Ableitung oder Schemavorgabe ist kein Raten.
+21. **Nie stillschweigend raten.** Mehrdeutigkeit hält an und fragt — über
+    `ctx.ask`, nie über einen Dialog aus dem Kern heraus.
 22. **Keine neue Abhängigkeit** ohne Eintrag in der Lizenzliste.
 
 ---
@@ -211,8 +190,7 @@ Dialoge.
 4. Bei Zufall: Startwert aus `ctx.seed`, `deterministic=False`
 5. Beide Qualitätsstufen bedienen (`ctx.quality`)
 6. Befunde als `findings` zurückgeben, nicht selbst protokollieren
-7. Verhaltenstest; bei Geometrieänderung zusätzlich ein Geometrietest gegen
-   den Korpus mit erwarteten Kennzahlen
+7. Geometrietest gegen den Korpus
 8. Texte übersetzbar — deutsche Quelle, und jeder Katalog aus
    `app/i18n/locales/` zieht nach
 
@@ -267,18 +245,17 @@ Dialoge.
 | Sprachregelung | keine deutschen Stämme in Bezeichnern |
 | Registerkonsistenz | jede Op vollständig, Kürzel eindeutig, Startwert wo nötig |
 | Auswertung | zweimal = identisch; Objektzahländerung hält an |
-| Geometrie | Kennzahlen je geometrieändernde Op gegen den Korpus |
+| Geometrie | Kennzahlen je Op gegen den Korpus |
 | Rückfallkette | jede Stufe einmal erzwungen |
 | Determinismus | gleicher Startwert → gleiches Ergebnis |
 | Bausteine | Parameterbereich, Vorschaubild |
-| Bausteindatei | lokaler Export/Import als verlustfreie Rundreise, Metadaten, Größen-/Integritätsgrenzen, kein Code und kein Netz |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Kennzahlen gegen analytische Körper, Inselerkennung |
 | Parameter | Grammatik, Zyklen, Ablehnung |
 | Passungen | Verletzung wird erkannt |
 | Migrationen | alte Beispieldateien öffnen |
 | Zuordnung | ID-Stabilität, Mehrdeutigkeit |
-| Fehler | jeder nutzersichtbare `AppError` mit passender Handlung |
+| Fehler | jede Ausnahme mit Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
 | Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Werkzeuge, acht Felder vorn |
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
@@ -293,11 +270,10 @@ Dialoge.
 ## Was NICHT gebaut wird
 
 Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage von Projekten,
-gehostete Tauschbörse, Plugin-System, Telemetrie, Verzweigungen im Op-Stack,
-Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern, Bearbeitung im gehosteten
-Backend, Betriebsarten-Umschaltung in der Oberfläche, **eigener G-Code-Slicer**
-(Schichtanalyse ja, G-Code nein — §22). Der lokale Baustein-Export und -Import
-per Datei bleibt ausdrücklich erhalten (§24.5).
+Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Verrundungen auf
+Mesh-Kanten vor dem B-Rep-Kern, Bearbeitung im gehosteten Backend,
+Betriebsarten-Umschaltung in der Oberfläche, **eigener G-Code-Slicer**
+(Schichtanalyse ja, G-Code nein — §22).
 
 Wenn eine Aufgabe eines dieser Dinge zu verlangen scheint, ist die Aufgabe
 falsch verstanden — nachfragen statt bauen.

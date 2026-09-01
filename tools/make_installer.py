@@ -13,6 +13,7 @@ packaging/solidon3d.spec) und ein installiertes Inno Setup 6.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import shutil
 import subprocess
@@ -32,11 +33,13 @@ from app.branding import (
     WEBSITE_URL,
 )
 from app.core.activation import integrity
+from tools import asset_rights
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
 OUTPUT_DIR = ROOT / "dist"
 SCRIPT = ROOT / "packaging" / "solidon3d.iss"
+SIGNING_HANDOFF = ROOT / "packaging" / "build" / "windows-signing.json"
 
 #: Wo ISCC üblicherweise liegt, wenn es nicht auf dem PATH steht.
 #:
@@ -124,6 +127,11 @@ def stale_reason() -> str:
     if drift:
         return drift
 
+    try:
+        asset_rights.require_customer_artifact_cleared(SOURCE_DIR, "win32")
+    except RuntimeError as problem:
+        return str(problem)
+
     leftovers = sorted(path.name for path in SOURCE_DIR.rglob("*.autosave"))
     if leftovers:
         return f"Im Bau liegen Sicherungsdateien eines Laufs: {', '.join(leftovers)} — entfernen"
@@ -144,6 +152,104 @@ def _licence_file() -> Path:
         print("packaging/eula.txt fehlt — zuerst: .venv\\Scripts\\python.exe tools/make_legal.py")
         raise SystemExit(1)
     return text
+
+
+def _sha256(path: Path) -> str:
+    """Liefert die Prüfsumme eines Übergabebestandteils."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _handoff_name(path: Path) -> str:
+    """Liefert einen kanonischen relativen Namen innerhalb des Repositorys."""
+    root = ROOT.resolve()
+    try:
+        relative = path.relative_to(ROOT)
+    except ValueError as exc:
+        raise ValueError(f"Signiereingang liegt außerhalb des Repositorys: {path}") from exc
+    current = ROOT
+    for part in relative.parts:
+        current /= part
+        if current.is_symlink():
+            raise ValueError(f"Signiereingang darf kein symbolischer Verweis sein: {path}")
+    try:
+        path.resolve(strict=True).relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Signiereingang verlässt das Repository: {path}") from exc
+    name = relative.as_posix()
+    if not name or name.startswith("/") or ".." in Path(name).parts or "\\" in name:
+        raise ValueError(f"Ungültiger relativer Signierpfad: {name}")
+    return name
+
+
+def _signing_inputs() -> list[Path]:
+    """Liefert den vollständigen, unveränderlich gebundenen Installer-Eingang."""
+    licence = _licence_file()
+    fixed = (
+        SCRIPT,
+        licence,
+        ROOT / "packaging" / "solidon3d.ico",
+        ROOT / "packaging" / "build" / "licence.manifest",
+    )
+    entries = list(SOURCE_DIR.rglob("*"))
+    links = [path for path in entries if path.is_symlink()]
+    if links:
+        names = ", ".join(sorted(path.relative_to(SOURCE_DIR).as_posix() for path in links))
+        raise ValueError(f"Der Windows-Bau enthält symbolische Verweise: {names}")
+    files = [path for path in entries if path.is_file()]
+    files.extend(fixed)
+    return sorted(files, key=_handoff_name)
+
+
+def signing_handoff() -> dict[str, object]:
+    """Beschreibt den geprüften Windows-Bau für den isolierten Signierjob."""
+    application = SOURCE_DIR / f"{APP_NAME}.exe"
+    licence = _licence_file()
+    manifest = ROOT / "packaging" / "build" / "licence.manifest"
+    icon = ROOT / "packaging" / "solidon3d.ico"
+    files = _signing_inputs()
+    return {
+        "schema_version": 1,
+        "app_name": APP_NAME,
+        "app_version": APP_VERSION,
+        "app_vendor": APP_VENDOR,
+        "app_id": APP_ID,
+        "app_url": WEBSITE_URL,
+        "project_suffix": PROJECT_SUFFIX,
+        "part_file_suffix": PART_FILE_SUFFIX,
+        "part_file_mime_type": PART_FILE_MIME_TYPE,
+        "application": _handoff_name(application),
+        "source_dir": _handoff_name(SOURCE_DIR),
+        "output_dir": OUTPUT_DIR.relative_to(ROOT).as_posix(),
+        "script": _handoff_name(SCRIPT),
+        "licence": _handoff_name(licence),
+        "icon": _handoff_name(icon),
+        "licence_manifest": _handoff_name(manifest),
+        "setup_filename": f"{APP_NAME}-Setup-{APP_VERSION}.exe",
+        "input_sha256": {_handoff_name(path): _sha256(path) for path in files},
+    }
+
+
+def write_signing_handoff() -> int:
+    """Schreibt die prüfsummengebundene Übergabe für den Signierjob."""
+    if not (SOURCE_DIR / f"{APP_NAME}.exe").is_file():
+        print(f"Kein Bau unter {SOURCE_DIR} — zuerst: pyinstaller packaging/solidon3d.spec")
+        return 1
+    stale = stale_reason()
+    if stale:
+        print(stale)
+        return 1
+    SIGNING_HANDOFF.parent.mkdir(parents=True, exist_ok=True)
+    SIGNING_HANDOFF.write_text(
+        json.dumps(signing_handoff(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    print(f"Signierübergabe: {SIGNING_HANDOFF}")
+    return 0
 
 
 def main() -> int:
@@ -187,4 +293,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] == ["--signing-handoff"]:
+        raise SystemExit(write_signing_handoff())
+    if sys.argv[1:]:
+        print("Unbekannte Angabe — erlaubt: --signing-handoff")
+        raise SystemExit(2)
     raise SystemExit(main())

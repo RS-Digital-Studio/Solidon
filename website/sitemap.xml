@@ -62,6 +62,16 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
+    <loc>https://solidon3d.de/en/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/es/ai-models.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html"/>
@@ -112,6 +122,16 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
+    <loc>https://solidon3d.de/es/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/fr/ai-models.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html"/>
@@ -160,6 +180,16 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/fr/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/funktionen.html</loc>
@@ -242,6 +272,16 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
   </url>
   <url>
+    <loc>https://solidon3d.de/it/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
+  </url>
+  <url>
     <loc>https://solidon3d.de/ki-modelle.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/ki-modelle.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/ai-models.html"/>
@@ -300,5 +340,25 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/manual.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/manual.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/handbuch.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/pt/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
+  </url>
+  <url>
+    <loc>https://solidon3d.de/security.html</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/security.html"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/security.html"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/security.html"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/security.html"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/security.html"/>
+    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/security.html"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/security.html"/>
   </url>
 </urlset>

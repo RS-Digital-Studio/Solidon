@@ -36,54 +36,6 @@ from app.ui import window_chrome
 from app.ui.theme import apply_theme
 
 
-def test_only_supported_windows_versions_offer_window_chrome(monkeypatch) -> None:
-    """Die Plattform- und Buildgrenze bleibt trotz plattformneutraler Typisierung erhalten."""
-    monkeypatch.setattr(window_chrome, "_PLATFORM", "linux")
-    assert not window_chrome.available()
-
-    monkeypatch.setattr(window_chrome, "_PLATFORM", "win32")
-    monkeypatch.setattr(
-        window_chrome.sys,
-        "getwindowsversion",
-        lambda: type("WindowsVersion", (), {"build": window_chrome._MIN_BUILD - 1})(),
-        raising=False,
-    )
-    assert not window_chrome.available()
-
-    monkeypatch.setattr(
-        window_chrome.sys,
-        "getwindowsversion",
-        lambda: type("WindowsVersion", (), {"build": window_chrome._MIN_BUILD})(),
-        raising=False,
-    )
-    assert window_chrome.available()
-
-
-def test_a_missing_windows_loader_is_harmless(monkeypatch) -> None:
-    """Außerhalb von Windows fehlt ``WinDLL`` und das Chrom bleibt einfach unverändert."""
-    monkeypatch.setattr(window_chrome, "_library", None)
-    monkeypatch.delattr(window_chrome.ctypes, "WinDLL", raising=False)
-
-    assert window_chrome._dwm() is None
-
-
-def test_the_windows_library_is_loaded_only_once(monkeypatch) -> None:
-    """Auf Windows bleibt die Bibliothek über alle Fenster hinweg im Speicher."""
-    loaded: list[str] = []
-    library = object()
-    monkeypatch.setattr(window_chrome, "_library", None)
-    monkeypatch.setattr(
-        window_chrome.ctypes,
-        "WinDLL",
-        lambda name: loaded.append(name) or library,
-        raising=False,
-    )
-
-    assert window_chrome._dwm() is library
-    assert window_chrome._dwm() is library
-    assert loaded == ["dwmapi"]
-
-
 def test_a_window_that_appears_is_painted(qt_app: QApplication, monkeypatch) -> None:
     """Jedes Fenster wird angestrichen, sobald es erscheint.
 

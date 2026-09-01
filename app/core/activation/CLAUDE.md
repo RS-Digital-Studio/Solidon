@@ -46,6 +46,12 @@ Löschen. Die CI überspringt diesen Test.
 ## Grenzen
 
 - Nichts hier zeigt einen Dialog. Der Kern meldet, die Oberfläche fragt.
+- `__init__.py` lädt kein Untermodul beim Paketimport. Öffentliche Re-Exporte
+  kommen über `app.core.lazy`; die Grenzfunktionen importieren
+  `certificate`, `integrity`, `key` und `store` erst unmittelbar vor ihrem
+  Gebrauch. So bleibt die Sicherheitsreihenfolge innerhalb jeder Funktion
+  erhalten, während gleichzeitiger Paket-/Untermodulimport keinen
+  Modul-Lock-Deadlock mehr bilden kann.
 - Der Netzweg liegt in `app/core/licence_service.py` und wird nur nach einem
   ausdrücklichen Klick geladen; der Dateiweg benutzt dieselben Dokumente.
 - Eine abgelaufene Frist ist kein Absturz, sondern ein Zustand mit Weg nach

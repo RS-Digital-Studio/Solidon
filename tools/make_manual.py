@@ -37,25 +37,19 @@ if hasattr(sys.stdout, "reconfigure"):
 from app.branding import APP_NAME, APP_VENDOR, APP_VERSION, COPYRIGHT, WEBSITE_URL
 from app.core import figures, manual
 from app.core.bootstrap import load_operations
-from app.i18n import install_catalog, set_language, tr
+from app.i18n import SOURCE_LANGUAGE, install_catalog, language_name, set_language
 from app.i18n.catalog import available_languages, read_catalog
-from tools.site_nav import ENTRIES, nav_menu
+from tools.site_nav import entries_for, nav_menu, site_text
 
 ROOT = Path(__file__).resolve().parent.parent
 WEBSITE = ROOT / "website"
 RELEASES = ROOT / "Releases"
 
-#: Wie die Handbuchseite je Sprache heißt und wo sie liegt. Deutsch ist die
-#: Wurzel der Website, jede andere Sprache wohnt in ihrem eigenen Unterordner
-#: — also auch ihr Handbuch.
-PAGES = {
-    "de": ("handbuch.html", "handbuch/de"),
-    "en": ("en/manual.html", "../handbuch/en"),
-    "es": ("es/manual.html", "../handbuch/es"),
-    "fr": ("fr/manual.html", "../handbuch/fr"),
-    "it": ("it/manual.html", "../handbuch/it"),
-    "pt": ("pt/manual.html", "../handbuch/pt"),
-}
+#: Beschriftung des Tastatur-Sprungs für die aktuell installierten Sprachen.
+#: Die Website-Prüfung liest dieselbe Zuordnung wie der Generator. Eine später
+#: hinzugefügte Sprache fällt beim Erzeugen trotzdem auf ihren Katalog zurück;
+#: sie braucht keine Änderung an diesem Modul.
+SKIP = {language: site_text("Zum Inhalt springen", language) for language in available_languages()}
 
 
 def page_for(language: str) -> tuple[str, str]:
@@ -66,8 +60,8 @@ def page_for(language: str) -> tuple[str, str]:
     schon offen, während der Handbuchbauer beim ersten neuen Kürzel mit einem
     ``KeyError`` abbricht.
     """
-    if language in PAGES:
-        return PAGES[language]
+    if language == SOURCE_LANGUAGE:
+        return "handbuch.html", "handbuch/de"
     return f"{language}/manual.html", f"../handbuch/{language}"
 
 
@@ -326,133 +320,10 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
     return sources, dark_sources
 
 
-#: Die Überschrift des Inhaltsverzeichnisses. Nicht über ``tr()``: der
-#: Textsammler liest nur ``app/``, und ein Wort, das nur auf der Website
-#: vorkommt, gehört nicht in den Katalog der Anwendung — es stünde dort für
-#: immer als unübersetzbar herum.
-CONTENTS = {
-    "de": "Inhalt",
-    "en": "Contents",
-    "es": "Índice",
-    "fr": "Sommaire",
-    "it": "Indice",
-    "pt": "Índice",
-}
-
-#: Die Zwischenüberschrift im Verzeichnis, dort wo die geschriebenen Kapitel
-#: enden und die aus dem Register erzeugten beginnen.
-#:
-#: Ohne sie war das Verzeichnis eine flache Liste von vierzig Einträgen, in
-#: der „Meldungen im Wortlaut" und „Szene, Reparatur, Transformation" ohne
-#: Fuge aufeinander folgten — erzählte Seiten und Nachschlagewerk sahen gleich
-#: aus. Nicht über ``tr()``, aus demselben Grund wie :data:`CONTENTS`.
-REFERENCE_HEADING = {
-    "de": "Referenz — jede Operation mit ihren Werten",
-    "en": "Reference — every operation with its values",
-    "es": "Referencia — cada operación con sus valores",
-    "fr": "Référence — chaque opération avec ses valeurs",
-    "it": "Riferimento — ogni operazione con i suoi valori",
-    "pt": "Referência — cada operação com os seus valores",
-}
-
 #: Die Adresse, unter der die Seiten liegen — für canonical, hreflang und die
 #: Vorschau beim Teilen. Aus ``branding.WEBSITE_URL``, damit sie an einer
 #: Stelle steht.
 SITE = WEBSITE_URL
-
-#: Was eine Suchmaschine und eine geteilte Vorschau vom Handbuch zeigen. Nicht
-#: über ``tr()``, aus demselben Grund wie ``CONTENTS``.
-DESCRIPTION = {
-    "de": "Das Handbuch zu Solidon3D: {pages} Kapitel von den ersten fünfzehn Minuten "
-    "bis zu jeder Operation mit ihren Werten und Bereichen. Die Referenzhälfte "
-    "kommt aus demselben Register wie die Menüs.",
-    "en": "The Solidon3D manual: {pages} chapters, from the first fifteen minutes to "
-    "every operation with its values and ranges. The reference half comes from "
-    "the same registry as the menus.",
-    "es": "El manual de Solidon3D: {pages} capítulos, desde los primeros quince "
-    "minutos hasta cada operación con sus valores y rangos. La mitad de "
-    "referencia sale del mismo registro que los menús.",
-    "fr": "Le manuel de Solidon3D : {pages} chapitres, des quinze premières minutes "
-    "à chaque opération avec ses valeurs et ses plages. La moitié de référence "
-    "vient du même registre que les menus.",
-    "it": "Il manuale di Solidon3D: {pages} capitoli, dai primi quindici minuti a "
-    "ogni operazione con i suoi valori e intervalli. La metà di riferimento "
-    "viene dallo stesso registro dei menu.",
-    "pt": "O manual do Solidon3D: {pages} capítulos, dos primeiros quinze minutos "
-    "a cada operação com os seus valores e intervalos. A metade de referência "
-    "vem do mesmo registo que os menus.",
-}
-
-#: Der Titel der Seite. „Handbuch — Solidon3D" war zutreffend und trug
-#: nichts: nach „Handbuch" sucht niemand, und der Markenname allein findet
-#: nur, wer ihn schon kennt. Was hier steht, ist die Frage, die jemand
-#: eintippt, bevor er Solidon3D kennt — und das Handbuch beantwortet sie auf
-#: {pages} Kapiteln. Nicht über ``tr()``, aus demselben Grund wie ``COVER``.
-TITLE = {
-    "de": "Handbuch: 3D-Modelle für den Druck vorbereiten",
-    "en": "Manual: preparing 3D models for printing",
-    "es": "Manual: preparar modelos 3D para imprimir",
-    "fr": "Manuel : préparer des modèles 3D pour l'impression",
-    "it": "Manuale: preparare modelli 3D per la stampa",
-    "pt": "Manual: preparar modelos 3D para impressão",
-}
-
-#: Die Texte des Deckblatts, aus demselben Grund nicht über ``tr()``.
-COVER = {
-    "de": ("Handbuch", "Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", "Version"),
-    "en": ("Manual", "Design, generate and prepare for 3D printing", "Version"),
-    "es": ("Manual", "Construir, generar y preparar para la impresión 3D", "Versión"),
-    "fr": ("Manuel", "Concevoir, générer et préparer pour l'impression 3D", "Version"),
-    "it": ("Manuale", "Costruire, generare e preparare per la stampa 3D", "Versione"),
-    "pt": ("Manual", "Construir, gerar e preparar para a impressão 3D", "Versão"),
-}
-
-#: Die Kopfzeile der Seite — dieselbe wie auf der Startseite, damit das
-#: Handbuch als Teil des Auftritts gelesen wird und nicht als Anhang. Je
-#: Sprache: Verzeichnis-Link, Sprachwechsel (Text und Ziel) und der Knopf
-#: zur Startseite mit ihrer Preis-Sprungmarke. Nicht über ``tr()``, aus
-#: demselben Grund wie ``CONTENTS``.
-HEADER_NAV = {
-    "de": ("Inhalt", "Testen", "./#preis"),
-    "en": ("Contents", "Try it", "./#pricing"),
-    "es": ("Índice", "Probar", "./#pricing"),
-    "fr": ("Sommaire", "Essayer", "./#pricing"),
-    "it": ("Indice", "Prova", "./#pricing"),
-    "pt": ("Índice", "Experimentar", "./#pricing"),
-}
-
-#: Der Sprung an den Inhalt, die erste Sprungmarke jeder Seite (WCAG 2.4.1).
-#: Der Verweis „Inhalt" in der Kopfzeile führt zum Verzeichnis und ist etwas
-#: anderes: Er steht *hinter* den Bedienelementen, die er überspringen müsste.
-SKIP = {
-    "de": "Zum Inhalt springen",
-    "en": "Skip to content",
-    "es": "Saltar al contenido",
-    "fr": "Aller au contenu",
-    "it": "Vai al contenuto",
-    "pt": "Ir para o conteúdo",
-}
-
-#: Der Satz unter dem Titel. Er sagt in einer Zeile, was die Seite ist und
-#: woher sie kommt — nicht über ``tr()``, wie alles hier.
-LEDE = {
-    "de": "{pages} Kapitel — von den ersten fünfzehn Minuten bis zur Referenz "
-    "jeder Operation, erzeugt aus derselben Quelle wie das Handbuch in der "
-    "Anwendung.",
-    "en": "{pages} chapters — from the first fifteen minutes to the reference "
-    "of every operation, generated from the same source as the manual inside "
-    "the application.",
-    "es": "{pages} capítulos — desde los primeros quince minutos hasta la "
-    "referencia de cada operación, generados de la misma fuente que el manual "
-    "dentro de la aplicación.",
-    "fr": "{pages} chapitres — des quinze premières minutes à la référence de "
-    "chaque opération, générés depuis la même source que le manuel dans "
-    "l'application.",
-    "it": "{pages} capitoli — dai primi quindici minuti al riferimento di ogni "
-    "operazione, generati dalla stessa fonte del manuale nell'applicazione.",
-    "pt": "{pages} capítulos — dos primeiros quinze minutos à referência de "
-    "cada operação, gerados da mesma fonte que o manual dentro da aplicação.",
-}
 
 #: Das Markenzeichen der Kopfzeile, identisch mit der Startseite.
 BRAND_MARK = (
@@ -475,26 +346,6 @@ def _switch_target(current: str, other: str) -> str:
     return "../handbuch.html" if other == "de" else f"../{other}/manual.html"
 
 
-#: Sprachnamen und Menü-Beschriftung des Sprachwechsels, je in der eigenen
-#: Sprache — wer Deutsch nicht liest, findet seinen Eintrag trotzdem.
-LANGUAGE_NAMES = {
-    "de": "Deutsch",
-    "en": "English",
-    "es": "Español",
-    "fr": "Français",
-    "it": "Italiano",
-    "pt": "Português",
-}
-SWITCHER_LABELS = {
-    "de": "Sprache wählen",
-    "en": "Choose language",
-    "es": "Elegir idioma",
-    "fr": "Choisir la langue",
-    "it": "Scegli la lingua",
-    "pt": "Escolher idioma",
-}
-
-
 def _switcher(language: str) -> str:
     """Der Sprachwechsel als Aufklappmenü — zu sehen ist das eigene Kürzel,
     offen stehen alle sechs Sprachen ausgeschrieben.
@@ -505,32 +356,36 @@ def _switcher(language: str) -> str:
     rows = "".join(
         f'<li><a href="{_switch_target(language, other)}" hreflang="{other}" lang="{other}"'
         + (' aria-current="page"' if other == language else "")
-        + f">{LANGUAGE_NAMES[other]}</a></li>"
-        for other in sorted(PAGES)
+        + f">{language_name(other)}</a></li>"
+        for other in sorted(available_languages())
     )
     return (
         '<details class="langs">'
-        f'<summary aria-label="{SWITCHER_LABELS[language]}">{language.upper()}</summary>'
+        f'<summary aria-label="{site_text("Sprache wählen", language)}">'
+        f"{language.upper()}</summary>"
         f"<ul>{rows}</ul></details>"
     )
 
 
 def _header(language: str) -> str:
     """Die Kopfzeile — am Bildschirm klebt sie oben, im Druck fehlt sie."""
-    toc_label, cta_label, cta_target = HEADER_NAV.get(language, HEADER_NAV["de"])
+    toc_label = site_text("Inhalt", language)
+    cta_label = site_text("Testen", language)
+    cta_target = "./#preis" if language == SOURCE_LANGUAGE else "./#pricing"
+    entries = entries_for(language)
     toc_link = f'<a href="#toc">{toc_label}</a>'
     return (
         '<header class="site no-print"><div class="wrap">'
         f'<a class="brand" href="./">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
         # **Das gemeinsame Menü zuerst, der Inhaltsverweis danach.** Das
-        # Handbuch trägt dieselben fünf Wege wie jede andere Seite — sonst
+        # Handbuch trägt dieselben sechs Wege wie jede andere Seite — sonst
         # ist es eine Sackgasse, aus der nur der Zurück-Knopf führt. Sein
         # eigenes Inhaltsverzeichnis kommt dazu, nicht an ihrer Stelle.
         # Der Sprung ins Inhaltsverzeichnis gehört **in** das Menü, nicht
         # daneben: außerhalb verschwände er auf einem Telefon ganz, während
-        # die fünf gemeinsamen Wege im Aufklapper erreichbar bleiben.
-        f"{nav_menu(language, current=ENTRIES[language][-1][0], extra=toc_link)}"
+        # die sechs gemeinsamen Wege im Aufklapper erreichbar bleiben.
+        f"{nav_menu(language, current=entries[-1][0], extra=toc_link)}"
         f"{_switcher(language)}"
         f'<a class="cta" href="{cta_target}">{cta_label}</a>'
         "</nav></div></header>"
@@ -547,16 +402,6 @@ PDF_MARGIN_TOP = 16.0
 #: sofort. Großzügig, weil ein Handbuch mit vierzig Bildern auf einer
 #: ausgelasteten Maschine länger braucht als auf einer leeren.
 PDF_PRINT_LIMIT_MS = 150_000
-
-#: Wie die Fußzeile die Seite zählt.
-PAGE_OF = {
-    "de": "Seite {page} von {total}",
-    "en": "Page {page} of {total}",
-    "es": "Página {page} de {total}",
-    "fr": "Page {page} sur {total}",
-    "it": "Pagina {page} di {total}",
-    "pt": "Página {page} de {total}",
-}
 
 #: Die Farben des hellen Themas (``website/style.css``). Gedruckt wird auf
 #: Papier, also gilt hell — und es sind dieselben Werte, mit denen die
@@ -602,13 +447,13 @@ def contents(language: str) -> str:
     written = [(number, page) for number, page in enumerate(pages, start=1) if not page.generated]
     generated = [(number, page) for number, page in enumerate(pages, start=1) if page.generated]
 
-    heading = CONTENTS.get(language, CONTENTS["de"])
+    heading = site_text("Inhalt", language)
     blocks = [f'<h2 class="toc-title">{heading}</h2>']
     blocks.append("<ol>" + "".join(entry(number, page) for number, page in written) + "</ol>")
     if generated:
         # Die Fuge, an der aus Lesen Nachschlagen wird. Die Nummern laufen
         # durch: sie stehen so auch über den Kapiteln selbst.
-        divider = REFERENCE_HEADING.get(language, REFERENCE_HEADING["de"])
+        divider = site_text("Referenz — jede Operation mit ihren Werten", language)
         blocks.append(f'<h3 class="toc-divider">{divider}</h3>')
         blocks.append(
             f'<ol start="{generated[0][0]}">'
@@ -803,16 +648,26 @@ def page_html(language: str, prefix: str) -> str:
     # dunklem Grund hat seinen Grund schon selbst.
     body = re.sub(r'<figure><img (src="[^"]+\.png"[^>]*)>', _staged, body)
     body = _defer_offscreen_pictures(body)
-    title = f"{TITLE.get(language, TITLE['de'])} — {APP_NAME}"
+    title = f"{site_text('Handbuch: 3D-Modelle für den Druck vorbereiten', language)} — {APP_NAME}"
     pages = len(manual.pages())
-    description = DESCRIPTION[language].format(pages=pages)
-    lede = LEDE.get(language, LEDE["de"]).format(pages=pages)
+    description = site_text(
+        "Das Handbuch zu Solidon3D: {pages} Kapitel von den ersten fünfzehn Minuten "
+        "bis zu jeder Operation mit ihren Werten und Bereichen. Die Referenzhälfte "
+        "kommt aus demselben Register wie die Menüs.",
+        language,
+    ).format(pages=pages)
+    lede = site_text(
+        "{pages} Kapitel — von den ersten fünfzehn Minuten bis zur Referenz "
+        "jeder Operation, erzeugt aus derselben Quelle wie das Handbuch in der "
+        "Anwendung.",
+        language,
+    ).format(pages=pages)
     canonical = f"{SITE}{page_for(language)[0]}"
     # Jede Sprache nennt jede — sechs Zeilen aus derselben Tabelle, die auch
     # die Seiten baut, statt zweier von Hand gepflegter.
     alternates = "".join(
         f'<link rel="alternate" hreflang="{code}" href="{SITE}{page_for(code)[0]}">\n'
-        for code in sorted(PAGES)
+        for code in sorted(available_languages())
     )
     return (
         f'<!doctype html>\n<html lang="{language}">\n<head>\n'
@@ -837,10 +692,11 @@ def page_html(language: str, prefix: str) -> str:
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
         f"<style>{STYLE}</style>\n</head>\n<body>\n"
-        f'<a class="skip" href="#content">{SKIP.get(language, SKIP["de"])}</a>\n'
+        f'<a class="skip" href="#content">'
+        f"{SKIP.get(language, site_text('Zum Inhalt springen', language))}</a>\n"
         f'{_header(language)}\n<main id="content">\n'
         f"{_cover_block(language)}\n"
-        f'<h1 class="no-print">{tr("Handbuch")}</h1>\n'
+        f'<h1 class="no-print">{site_text("Handbuch", language)}</h1>\n'
         f'<p class="lede no-print">{lede}</p>\n'
         f"{contents(language)}\n"
         f"{anchored(body)}\n"
@@ -857,7 +713,9 @@ def _cover_block(language: str) -> str:
     zweite Quelle wäre: ein Titel, der sich ändert, müsste an zwei Stellen
     nachgezogen werden, und die zweite vergisst man.
     """
-    title, subtitle, version_word = COVER.get(language, COVER["de"])
+    title = site_text("Handbuch", language)
+    subtitle = site_text("Konstruieren, Erzeugen und Bearbeiten für den 3D-Druck", language)
+    version_word = site_text("Version", language)
     return (
         f'<section class="cover">'
         f"<h1>{APP_NAME}</h1>"
@@ -1049,7 +907,7 @@ def _stamp(pdf: Path, language: str) -> None:
         writer.add_page(page)
     writer.add_metadata(
         {
-            "/Title": f"{tr('Handbuch')} — {APP_NAME}",
+            "/Title": f"{site_text('Handbuch', language)} — {APP_NAME}",
             "/Author": APP_VENDOR,
             "/Creator": f"{APP_NAME} {APP_VERSION}",
         }
@@ -1086,7 +944,7 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
 
     width = writer.width()
     height = writer.height()
-    label = PAGE_OF.get(language, PAGE_OF["de"])
+    label = site_text("Seite {page} von {total}", language)
 
     painter = QPainter(writer)
     try:
@@ -1132,7 +990,7 @@ def _overlay(target: Path, chapters: list[str], total: int, language: str) -> Pa
             painter.drawText(
                 foot,
                 int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop),
-                f"{tr('Handbuch')} · {APP_NAME} {APP_VERSION}",
+                f"{site_text('Handbuch', language)} · {APP_NAME} {APP_VERSION}",
             )
             painter.drawText(
                 foot,
@@ -1155,17 +1013,11 @@ def main() -> int:
     os.environ.pop("QT_QPA_PLATFORM", None)
 
     load_operations()
-    # Nur die Sprachen, für die es eine Seite auf der Website gibt. Seit die
-    # Kataloge für ES, FR, IT und PT dazugekommen sind, liefert
-    # ``available_languages()`` mehr, als hier gebaut werden kann: Jede Sprache
-    # braucht ihren Ordner, ihre Navigation und einen Sprachwechsler, der alle
-    # vorhandenen Ziele kennt. Das ist ein eigenes Stück Arbeit, und bis es getan ist, ist
-    # eine Meldung ehrlicher als ein Abbruch mit KeyError.
-    known = [language for language in available_languages() if language in PAGES]
-    missing = [language for language in available_languages() if language not in PAGES]
-    if missing:
-        print(f"ohne Handbuchseite, übersprungen: {', '.join(sorted(missing))}")
-    for language in known:
+    # Der Katalog ist die Anmeldung einer Sprache (§4.1). ``page_for`` und die
+    # sichtbaren Rahmentexte stammen für jedes Kürzel aus demselben Katalog;
+    # ein unvollständiger Katalog macht die Übersetzungsprüfung rot. Eine
+    # zweite Sprachliste würde den Erzeugerlauf wieder still unvollständig machen.
+    for language in available_languages():
         install_catalog(language, read_catalog(language))
         set_language(language)
         figures.forget()

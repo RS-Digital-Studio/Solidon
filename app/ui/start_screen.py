@@ -22,16 +22,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import (
-    QByteArray,
-    QEvent,
-    QParallelAnimationGroup,
-    QPoint,
-    QPropertyAnimation,
-    QSize,
-    Qt,
-    Signal,
-)
+from PySide6.QtCore import QByteArray, QEvent, QPoint, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QDragEnterEvent,
@@ -68,7 +59,6 @@ from app.core.ingest.plan import MODEL_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
-from app.ui.motion import CURVE, SHORT_MS, animations_enabled
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, TIGHT, WIDE, make_large_target, make_primary, set_level
 from app.ui.theme import THEMES
@@ -523,53 +513,18 @@ class StartActionCard(QPushButton):
         self._hovered = False
         self._shadow = QGraphicsDropShadowEffect(self)
         self.setGraphicsEffect(self._shadow)
-        self._depth_animation: QParallelAnimationGroup | None = None
-        self._paint_depth(at_once=True)
+        self._paint_depth()
         self._refresh_icon()
 
     def _refresh_icon(self) -> None:
         size = QSize(24, 24)
         self.icon_label.setPixmap(icon(self._symbol, self).pixmap(size))
 
-    def _paint_depth(self, *, at_once: bool = False) -> None:
-        """Führt die Karte weich zwischen Ruhe, Einladung und Druck.
-
-        Fläche und Fokusrahmen antworten durch das Stylesheet sofort. Der
-        Schatten führt dieselbe Aussage kurz weiter, ohne Geometrie oder
-        Trefferfläche zu bewegen. Bei reduzierter Bewegung werden exakt
-        dieselben Endzustände unmittelbar gesetzt.
-        """
-        pressed = self.isDown()
+    def _paint_depth(self) -> None:
         active = self._hovered or self.hasFocus()
-        blur = 5.0 if pressed else 18.0 if active else 7.0
-        offset = 0.0 if pressed else 3.0 if active else 1.0
-        colour = QColor(0, 0, 0, 26 if pressed else 82 if active else 34)
-
-        if self._depth_animation is not None:
-            self._depth_animation.stop()
-            self._depth_animation.deleteLater()
-            self._depth_animation = None
-
-        if at_once or not animations_enabled():
-            self._shadow.setBlurRadius(blur)
-            self._shadow.setOffset(0.0, offset)
-            self._shadow.setColor(colour)
-            return
-
-        movement = QParallelAnimationGroup(self)
-        for property_name, start, end in (
-            (b"blurRadius", self._shadow.blurRadius(), blur),
-            (b"yOffset", self._shadow.yOffset(), offset),
-            (b"color", self._shadow.color(), colour),
-        ):
-            animation = QPropertyAnimation(self._shadow, property_name, movement)
-            animation.setDuration(SHORT_MS)
-            animation.setEasingCurve(CURVE)
-            animation.setStartValue(start)
-            animation.setEndValue(end)
-            movement.addAnimation(animation)
-        self._depth_animation = movement
-        movement.start()
+        self._shadow.setBlurRadius(16.0 if active else 7.0)
+        self._shadow.setOffset(0.0, 2.0 if active else 1.0)
+        self._shadow.setColor(QColor(0, 0, 0, 72 if active else 34))
 
     def enterEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         self._hovered = True
@@ -598,7 +553,6 @@ class StartActionCard(QPushButton):
             if not event.isAutoRepeat() and self._keyboard_key is None:
                 self._keyboard_key = int(event.key())
                 self.setDown(True)
-                self._paint_depth()
             event.accept()
             return
         super().keyPressEvent(event)
@@ -608,7 +562,6 @@ class StartActionCard(QPushButton):
             armed = not event.isAutoRepeat()
             self._keyboard_key = None
             self.setDown(False)
-            self._paint_depth()
             if armed:
                 self.click()
             event.accept()
@@ -620,7 +573,8 @@ class StartActionCard(QPushButton):
         if event.button() == Qt.MouseButton.LeftButton:
             self._mouse_armed = True
             self.setDown(True)
-            self._paint_depth()
+            self._shadow.setBlurRadius(5.0)
+            self._shadow.setOffset(0.0, 0.0)
             event.accept()
             return
         super().mousePressEvent(event)
@@ -1005,6 +959,7 @@ class StartScreen(QWidget):
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         """Ein Tastaturziel bleibt beim Durchlaufen vollständig sichtbar."""
         if stop_watching_the_dying(self, watched, event):
+            self._focus_targets.discard(watched)
             return False
         if event.type() == QEvent.Type.FocusIn and watched in self._focus_targets:
             self.page_scroll.ensureWidgetVisible(watched, NORMAL, NORMAL)

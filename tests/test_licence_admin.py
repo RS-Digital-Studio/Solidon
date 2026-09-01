@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
 import json
+import os
+import subprocess
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
@@ -15,6 +18,117 @@ from tools.licence_archive import ArchiveBusyError, archive_lock
 from tools.make_licence_keys import make_key
 
 LICENCE_SEED = bytes.fromhex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+
+
+def _make_token_private_on_windows(path: Path) -> None:
+    if os.name != "nt":
+        return
+    identity = next(
+        csv.reader([subprocess.check_output(["whoami", "/user", "/fo", "csv", "/nh"], text=True)])
+    )[1]
+    subprocess.run(
+        [
+            "icacls",
+            str(path),
+            "/inheritance:r",
+            "/grant:r",
+            f"*{identity}:(F)",
+            "*S-1-5-18:(F)",
+            "*S-1-5-32-544:(F)",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_a_private_regular_token_file_is_read(tmp_path: Path) -> None:
+    token_file = tmp_path / "operator.token"
+    token_file.write_text("ab" * 32 + "\n", encoding="ascii")
+    token_file.chmod(0o600)
+    _make_token_private_on_windows(token_file)
+
+    assert licence_admin.read_token(token_file) == "ab" * 32
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-DACL")
+@pytest.mark.parametrize(
+    "foreign_sid",
+    [
+        "S-1-1-0",  # Everyone
+        "S-1-5-11",  # Authenticated Users
+        "S-1-5-32-545",  # Users
+        "S-1-5-32-546",  # Guests als sonstiger fremder Prinzipal
+    ],
+)
+def test_a_windows_token_readable_by_a_foreign_principal_is_refused(
+    tmp_path: Path,
+    foreign_sid: str,
+) -> None:
+    token_file = tmp_path / "operator.token"
+    token_file.write_text("ab" * 32, encoding="ascii")
+    _make_token_private_on_windows(token_file)
+    subprocess.run(
+        ["icacls", str(token_file), "/grant", f"*{foreign_sid}:(R)"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.read_token(token_file)
+
+
+def test_a_token_link_is_never_followed(tmp_path: Path) -> None:
+    target = tmp_path / "wirklich.token"
+    target.write_text("ab" * 32, encoding="ascii")
+    target.chmod(0o600)
+    link = tmp_path / "operator.token"
+    try:
+        link.symlink_to(target)
+    except OSError as problem:
+        pytest.skip(f"Symbolische Verknüpfungen sind nicht verfügbar: {problem}")
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.read_token(link)
+
+
+def test_a_hard_link_is_not_accepted_as_the_private_token(tmp_path: Path) -> None:
+    target = tmp_path / "wirklich.token"
+    target.write_text("ab" * 32, encoding="ascii")
+    target.chmod(0o600)
+    link = tmp_path / "operator.token"
+    try:
+        os.link(target, link)
+    except OSError as problem:
+        pytest.skip(f"Harte Verknüpfungen sind nicht verfügbar: {problem}")
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.read_token(link)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX-Dateirechte")
+def test_a_token_readable_by_other_users_is_refused(tmp_path: Path) -> None:
+    token_file = tmp_path / "operator.token"
+    token_file.write_text("ab" * 32, encoding="ascii")
+    token_file.chmod(0o640)
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.read_token(token_file)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX-Dateieigentümer")
+def test_a_token_owned_by_another_user_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    token_file = tmp_path / "operator.token"
+    token_file.write_text("ab" * 32, encoding="ascii")
+    token_file.chmod(0o600)
+    monkeypatch.setattr(os, "getuid", lambda: token_file.stat().st_uid + 1)
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.read_token(token_file)
 
 
 def _archive(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str, str]:
@@ -189,22 +303,25 @@ def test_operator_client_sends_only_digest_reason_and_two_token_headers(
     class Answer:
         status = 200
 
+        def __init__(self) -> None:
+            self.body = b'{"ok":true,"licence":{"status":"blocked"}}'
+
         def __enter__(self) -> Answer:
             return self
 
         def __exit__(self, *_args: object) -> None:
             return None
 
-        @staticmethod
-        def read() -> bytes:
-            return b'{"ok":true,"licence":{"status":"blocked"}}'
+        def read(self, size: int = -1) -> bytes:
+            chunk, self.body = self.body[:size], self.body[size:]
+            return chunk
 
     def open_request(request: object, timeout: int) -> Answer:
         seen["request"] = request
         seen["timeout"] = timeout
         return Answer()
 
-    monkeypatch.setattr(licence_admin, "urlopen", open_request)
+    monkeypatch.setattr(licence_admin, "_open_operator", open_request)
     token = "cd" * 32
     digest = "ab" * 32
 
@@ -229,6 +346,42 @@ def test_operator_client_never_sends_a_token_over_plain_remote_http() -> None:
         licence_admin.OperatorClient("http://solidon3d.de/api/operator.php", "cd" * 32)
 
     assert "HTTPS" in str(raised.value)
+
+
+def test_operator_client_rejects_credentials_and_url_secrets() -> None:
+    token = "cd" * 32
+    for endpoint in (
+        "https://name:kennwort@solidon3d.de/api/operator.php",
+        "https://solidon3d.de/api/operator.php?token=geheim",
+        "https://solidon3d.de/api/operator.php#geheim",
+    ):
+        with pytest.raises(licence_admin.OperatorError):
+            licence_admin.OperatorClient(endpoint, token)
+
+
+def test_operator_client_bounds_every_server_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Answer:
+        status = 200
+
+        def __init__(self) -> None:
+            self.body = b"x" * (licence_admin.MAX_OPERATOR_RESPONSE_BYTES + 1)
+
+        def __enter__(self) -> Answer:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, size: int = -1) -> bytes:
+            chunk, self.body = self.body[:size], self.body[size:]
+            return chunk
+
+    monkeypatch.setattr(licence_admin, "_open_operator", lambda request, timeout: Answer())
+
+    with pytest.raises(licence_admin.OperatorError):
+        licence_admin.OperatorClient("https://solidon3d.de/api/operator.php", "cd" * 32).call(
+            "lookup", "ab" * 32
+        )
 
 
 def test_a_late_server_answer_never_overwrites_the_new_selection(

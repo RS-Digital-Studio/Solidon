@@ -1,0 +1,75 @@
+Nutzungsbedingungen für Solidon3D-Beispiele
+=============================================
+
+Copyright (c) 2026 RS Digital, Robert Schneider. Alle Rechte vorbehalten.
+
+RS Digital behält das Urheberrecht an den mitgelieferten Beispielprojekten
+und ihren Vorschaubildern. Für rechtmäßig erhaltene Beispiele gewährt
+RS Digital ein einfaches, nicht ausschließliches und zeitlich unbefristetes
+Nutzungsrecht im nachfolgend beschriebenen Umfang. Es entfällt nicht allein
+durch Ablauf der Demo oder das Ende der Softwarenutzung; gesetzliche oder
+vertragliche Beendigungsgründe bleiben unberührt. Die Nutzungsfreigabe gilt
+ausschließlich für die jeweilige `.p3d`-Projektdatei und das separat
+gespeicherte `.svg`-Vorschaubild der folgenden elf Namen:
+
+`aushoehlen-und-teilen`, `dose-mit-deckel`, `drucker-kalibrieren`,
+`gehaeuse-mit-bausteinen`, `passung-nach-materialwechsel`,
+`schild-zweifarbig`, `skizze-mit-massen`, `weg1-halterung-anpassen`,
+`weg2-halter-konstruieren`, `weg3-generiert-aufbereiten` und
+`weg4-figur-formen`.
+
+Im Rahmen einer rechtmäßigen Solidon3D-Nutzung dürfen Sie diese Beispiele:
+
+* öffnen und für die eigene Arbeit lokal kopieren;
+* bearbeiten, drucken und in andere 3D-Dateiformate exportieren;
+* gedruckte Gegenstände privat oder gewerblich nutzen und weitergeben;
+* eigene, mit Solidon3D daraus geschaffene und individuell bearbeitete
+  digitale Ergebnisse privat oder gewerblich nutzen und weitergeben.
+
+Ohne eine gesonderte Erlaubnis dürfen Sie die unveränderten ursprünglichen
+`.p3d`-Projektdateien oder `.svg`-Vorschaubilder nicht veröffentlichen,
+weiterverkaufen, unterlizenzieren oder als Vorlagen- beziehungsweise
+Beispielsammlung weitergeben. Eine bloße Umbenennung oder Formatumwandlung ist
+keine individuell bearbeitete eigene Fassung.
+
+Eingebettete Geometrie aus dem eigenen MIT-lizenzierten Referenzkorpus von
+RS Digital in `tests/data/` behält die Rechte aus `tests/data/LICENSE`. Diese
+Nutzungsfreigabe erfasst keine anderen Dateien, importierten Inhalte Dritter
+oder früheren Tripo-Ausgaben. Rechte Dritter und zwingende gesetzliche Rechte
+bleiben unberührt.
+
+Die Nutzungsfreigabe ist keine Aussage über Druckbarkeit, Festigkeit,
+Lebensmittelechtheit oder die Sicherheit eines Modells oder Ausdrucks.
+
+
+Terms of use for Solidon3D examples
+===================================
+
+Copyright (c) 2026 RS Digital, Robert Schneider. All rights reserved.
+
+RS Digital retains copyright in the bundled example projects and previews.
+For lawfully obtained examples, RS Digital grants a non-exclusive licence for
+an unlimited term within the scope stated below. It does not end merely because
+the demo expires or use of the software ends; statutory or contractual grounds
+for termination remain unaffected. This permission applies only to the `.p3d`
+project and separately stored `.svg` preview for each of the eleven names
+listed above.
+
+As part of lawful use of Solidon3D, you may open and locally copy these
+examples for your own work, edit them, print them, and export them to other 3D
+file formats. You may use and distribute physical printed objects privately or
+commercially. You may also use and distribute your own individually modified
+digital results created from them with Solidon3D, privately or commercially.
+
+Without separate permission, you may not publish, resell, sublicense, or
+redistribute the unchanged original `.p3d` projects or `.svg` previews, either
+individually or as a template or example collection. Renaming or format
+conversion alone does not create an individually modified result.
+
+Embedded geometry from RS Digital's own MIT-licensed reference corpus in
+`tests/data/` retains the rights stated in `tests/data/LICENSE`. This
+permission does not cover other files, third-party imports, or former Tripo
+output. Third-party rights and mandatory statutory rights remain unaffected.
+
+This permission is not a statement about printability, strength, food safety,
+or the safety of any model or printed object.

@@ -56,6 +56,9 @@ from app.core.backends.llm import (
     ollama_endpoint,
 )
 from app.core.bootstrap import load_operations
+from app.core.http import deadline_after, read_limited
+from app.core.json_boundary import StrictJsonError
+from app.core.json_boundary import loads as load_json
 
 #: Wie lange eine einzelne Anfrage höchstens dauern darf.
 #:
@@ -68,6 +71,9 @@ REQUEST_TIMEOUT_SECONDS = 1800
 #: Nur so lange, wie der Lauf dauert — länger als das Sicherheitsnetz des
 #: Produkts. Ein Messwerkzeug, das warmhält, gibt den Speicher am Ende zurück.
 MEASURE_KEEP_ALIVE = "10m"
+MAX_STATE_RESPONSE_BYTES = 1024 * 1024
+MAX_CHAT_RESPONSE_BYTES = 8 * 1024 * 1024
+MAX_UNLOAD_RESPONSE_BYTES = 64 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +90,19 @@ class Turn:
         return self.prompt_tokens / self.seconds if self.seconds else 0.0
 
 
+def _answer_json(answer: object, *, limit: int, timeout: float) -> dict[str, object]:
+    """Liest eine Ollama-Antwort mit Gesamt-, Byte- und Strukturgrenze."""
+    raw = read_limited(
+        answer,  # type: ignore[arg-type]
+        limit=limit,
+        deadline=deadline_after(timeout),
+    )
+    value = load_json(raw, max_bytes=limit)
+    if not isinstance(value, dict):
+        raise StrictJsonError("Ollama-Antwort ist kein Objekt")
+    return dict(value)
+
+
 def model_state() -> tuple[bool | None, int | None]:
     """Wo das Modell gerade liegt — ``(ganz im VRAM?, Anteil in Prozent)``.
 
@@ -93,14 +112,27 @@ def model_state() -> tuple[bool | None, int | None]:
     """
     try:
         with urllib.request.urlopen("http://localhost:11434/api/ps", timeout=15) as answer:
-            models = json.loads(answer.read().decode("utf-8")).get("models") or []
+            raw_models = _answer_json(
+                answer,
+                limit=MAX_STATE_RESPONSE_BYTES,
+                timeout=15,
+            ).get("models")
     except (urllib.error.URLError, OSError, ValueError, TimeoutError):
         return None, None
-    if not models:
+    if not isinstance(raw_models, list) or not raw_models or not isinstance(raw_models[0], dict):
         return None, None
-    entry = models[0]
-    size = int(entry.get("size", 0))
-    vram = int(entry.get("size_vram", 0))
+    entry = raw_models[0]
+    raw_size = entry.get("size")
+    raw_vram = entry.get("size_vram")
+    if (
+        not isinstance(raw_size, int)
+        or isinstance(raw_size, bool)
+        or not isinstance(raw_vram, int)
+        or isinstance(raw_vram, bool)
+    ):
+        return None, None
+    size = raw_size
+    vram = raw_vram
     if not size:
         return None, None
     share = 100 * vram // size
@@ -138,15 +170,23 @@ def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
     started = time.monotonic()
     try:
         with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as answer:
-            data = json.loads(answer.read().decode("utf-8"))
+            data = _answer_json(
+                answer,
+                limit=MAX_CHAT_RESPONSE_BYTES,
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
         print(f"    Abbruch nach {time.monotonic() - started:.0f} s — {type(error).__name__}")
         return None
     seconds = time.monotonic() - started
     on_gpu, share = model_state()
+    raw_tokens = data.get("prompt_eval_count")
+    prompt_tokens = (
+        raw_tokens if isinstance(raw_tokens, int) and not isinstance(raw_tokens, bool) else 0
+    )
     return Turn(
         seconds=seconds,
-        prompt_tokens=int(data.get("prompt_eval_count", 0)),
+        prompt_tokens=prompt_tokens,
         on_gpu=on_gpu,
         vram_share=share,
     )
@@ -161,7 +201,11 @@ def unload(model: str) -> None:
     )
     try:
         with urllib.request.urlopen(request, timeout=120) as answer:
-            reason = json.loads(answer.read().decode("utf-8")).get("done_reason")
+            reason = _answer_json(
+                answer,
+                limit=MAX_UNLOAD_RESPONSE_BYTES,
+                timeout=120,
+            ).get("done_reason")
         print(f"  entladen ({reason})")
     except (urllib.error.URLError, OSError, ValueError, TimeoutError) as error:
         print(f"  ENTLADEN GESCHEITERT ({type(error).__name__}) — von Hand nachholen:")

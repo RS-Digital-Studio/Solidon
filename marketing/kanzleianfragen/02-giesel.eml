@@ -1,0 +1,195 @@
+From: Robert Schneider <support@solidon3d.de>
+To: bamberg@giesel.legal
+Reply-To: support@solidon3d.de
+Subject: Rechtliche Begleitung von Solidon3D - Anfrage aus Bamberg
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrter Herr Giesel,
+
+ich entwickle in Bamberg unter der Geschäftsbezeichnung RS-Digital die
+Desktopanwendung Solidon3D. Bei der Suche nach einem Ansprechpartner vor Ort
+bin ich auf Ihre Tätigkeit im IT-Recht, bei Softwareverträgen, Lizenzen,
+Datenschutz und gewerblichem Rechtsschutz gestoßen.
+
+Die Gewerbeanmeldung als Nebenerwerb habe ich am 24. August 2026 eingereicht;
+die behördliche Empfangsbescheinigung steht noch aus. Als Beginn der Tätigkeit
+ist der 24. August 2026 angegeben. Der kostenpflichtige Verkauf hat noch nicht
+begonnen. Mir ist wichtig, die rechtlichen und geschäftlichen Grundlagen vor
+dem Verkaufsstart richtig aufzustellen und nicht erst später einzelne Probleme
+zu korrigieren.
+
+Solidon3D ist eine lokal installierte Konstruktionssoftware für den
+Hobbybereich. Sie richtet sich in erster Linie an Maker, 3D-Druck-Anwender und
+Menschen, die eigene Teile konstruieren möchten, ohne dafür ein klassisches
+CAD-Programm erlernen zu müssen. Eine gewerbliche Nutzung soll möglich sein,
+ist aber nicht die bestimmende Zwecksetzung der Anwendung. Solidon3D wird für
+Windows, macOS und Linux entwickelt. Projekte und Konstruktionsdaten bleiben
+grundsätzlich auf dem Rechner des Nutzers. Es gibt keine verpflichtende
+Cloud-Ablage, keine Telemetrie und kein Benutzerkonto.
+
+Derzeit läuft die kostenlose öffentliche 0.x-Demophase; die aktuell
+veröffentlichte Fassung ist 0.2.2. Bis zum Wechsel auf 1.x können weitere
+kostenlose 0.x-Fassungen erscheinen. Die Demo ist unbeschnitten, benötigt
+keinen Lizenzschlüssel und hat keinen zugesagten Endtermin. Bereits in der
+ersten Woche hatte die Website rund 3.300 Besucher; die
+Demo wurde etwa 1.000-mal heruntergeladen. Das sind keine Verkaufs-, Umsatz-
+oder Nutzerzahlen. Die Resonanz zeigt aber, dass die Software bereits
+öffentlich verbreitet wird. Zusammen mit den ersten Anfragen von Unternehmen
+ist das für mich der Anlass, die rechtliche Prüfung schon während der Demo
+durchzuführen.
+
+Eine kostenpflichtige 1.x-Fassung soll erst nach Abschluss aller rechtlichen,
+technischen und betrieblichen Freigabegates erscheinen; ein Startdatum sage
+ich derzeit nicht zu. Vorgesehen ist kein Abonnement, sondern eine einmalig
+zu erwerbende dauerhafte Nutzungslizenz. Die aktuelle Preiskalkulation liegt
+bei 69 Euro zur Einführung und später 99 Euro. Noch nicht entschieden ist, ob ich den Verkauf selbst oder
+über einen Merchant of Record abwickle. Während der Demo gibt es nur eine
+freiwillige Unterstützung über PayPal. Diese ist kein Kauf, schaltet keine
+Funktion frei und wird nicht auf eine spätere Lizenz angerechnet.
+
+Für die Verkaufsversion ist eine Geräteaktivierung vorgesehen. Normalerweise
+wird dabei einmalig mein Aktivierungsdienst angesprochen. Für Arbeitsrechner
+ohne Internetzugang gibt es zusätzlich einen Dateiweg über ein zweites,
+verbundenes Gerät. Nach der Freischaltung prüft die Anwendung das
+Gerätezertifikat lokal und führt keine regelmäßige Lizenzabfrage durch. Ich
+möchte sicherstellen, dass Lizenzbedingungen, Datenschutzinformation und der
+tatsächliche Aktivierungsablauf zueinander passen.
+
+Optional kann der Nutzer innerhalb der Anwendung einen KI-Chat verwenden. Ich
+betreibe dafür kein eigenes Sprachmodell und stelle keinen zentralen
+KI-Zugang bereit. Der Nutzer kann entweder einen eigenen API-Schlüssel von
+Anthropic hinterlegen oder ein lokal installiertes Modell über Ollama
+verwenden. Ohne Chat bleibt die übrige Anwendung vollständig nutzbar. Hier
+müssen insbesondere die datenschutzrechtlichen Rollen, die notwendigen
+Hinweise innerhalb der Anwendung und die Anforderungen des AI Acts geklärt
+werden.
+
+Über eine freiwillige Supportfunktion kann der Nutzer eine Nachricht an mich
+senden. Nur nach ausdrücklicher Auswahl werden zusätzlich ein Bildschirmfoto,
+lokale Protokolldaten oder eine Projektdatei übertragen. Eine Projektdatei
+kann das Modell, den Konstruktionsverlauf und den Chatverlauf enthalten. Vor
+dem Absenden zeigt die Anwendung den vollständigen Inhalt an. Auch dieser Weg
+soll mit der Datenschutzerklärung und den Informationen in der Oberfläche
+abgeglichen werden.
+
+Solidon3D soll keine öffentliche Tauschstelle oder sonstige Plattform für
+Nutzerinhalte betreiben. Vorgesehen bleibt lediglich der lokale, vollständig
+offline mögliche und verlustfreie Export und Import von Bausteinrezepten.
+Nutzer können solche Dateien auf eigenen Wegen miteinander austauschen.
+RS-Digital nimmt sie nicht zum öffentlichen Abruf entgegen, speichert oder
+verteilt sie nicht und bietet dafür weder Galerie noch Suche, Nutzerkonten,
+Profile, Kommentare, Bewertungen, Zahlungen oder Moderation an. Ausführbarer
+Programmcode wird beim Import nicht angenommen. Für diesen begrenzten
+Dateiweg möchte ich nur prüfen lassen, wie Herkunft, Rechtehinweis,
+Fremdkennzeichnung und Haftungsabgrenzung in EULA und Oberfläche formuliert
+werden sollten.
+
+Inzwischen gibt es trotz dieser Ausrichtung erste konkrete Anfragen aus der
+Kunststoffbranche. Zudem wurde Solidon3D einem Zahnarzt empfohlen, der mit der
+Herstellung von Operationsschablonen arbeitet. Diese Kontakte ändern die
+Zielgruppe und Zwecksetzung nicht. Die Anwendung wurde für solche Einsätze
+nicht entwickelt, und ich plane ausdrücklich keine dentalen, medizinischen
+oder unternehmensspezifischen Funktionen. Solidon3D soll ein Werkzeug für den
+Hobby- und Makerbereich bleiben und weder eine medizinische Bewertung noch
+eine Freigabe für einen bestimmten Verwendungszweck vornehmen.
+
+Ich möchte deshalb klären, wie diese Zwecksetzung in der EULA, auf der
+Website und gegenüber Interessenten formuliert werden sollte. Es soll kein
+falscher Eindruck über eine medizinische Eignung entstehen. Gleichzeitig
+möchte ich eine eigenverantwortliche gewerbliche Nutzung nicht pauschal
+verbieten.
+
+Solidon3D verwendet mehrere Open-Source-Komponenten für die
+Benutzeroberfläche, Geometrieberechnung und Verarbeitung von 3D-Dateien. Eine
+interne Lizenzprüfung, eine automatisierte Software-Stückliste und eine
+Zusammenstellung der Lizenztexte sind bereits vorhanden. Vor dem Verkauf muss
+aber noch geprüft werden, ob alle Lizenzhinweise, Quellcodeangebote und
+sonstigen Pflichten in den tatsächlich ausgelieferten Paketen für Windows,
+macOS und Linux vollständig erfüllt werden.
+
+Die Anwendung und die Website stehen in sechs Sprachen zur Verfügung. Der
+Vertrieb soll nicht auf Deutschland beschränkt bleiben; bereits jetzt gibt es
+Kontakte in die Schweiz. Deshalb stellen sich auch Fragen zum
+grenzüberschreitenden Verbraucherverkauf, zum Datenschutz, zur Umsatzsteuer,
+zur Exportkontrolle und zu möglichen Sanktionsprüfungen.
+
+AGB, EULA, Datenschutzerklärung und Widerrufsbelehrung liegen bereits als
+Entwürfe vor. Zusätzlich habe ich eine ausführliche interne Prüfung der
+rechtlichen, technischen und lizenzrechtlichen Risiken erstellt. Anwaltlich
+geprüft wurden die Unterlagen noch nicht. Neben den Texten müssen aus meiner
+Sicht insbesondere der Bestell- und Widerrufsprozess, die Aktivierung, die
+Supportfunktion, der lokale Rezeptimport, die Produktbeschreibung und die
+ausgelieferten Installationspakete betrachtet werden. Eine früher erwogene
+öffentliche Tauschstelle wird nicht umgesetzt.
+
+Weitere Themen sind nach meiner bisherigen Vorbereitung der Cyber Resilience
+Act, die GPSR, Produkthaftung, der AI Act,
+Barrierefreiheitsanforderungen an Website und Verkaufsprozess sowie die
+Prüfung und gegebenenfalls Anmeldung der Marke Solidon. Wegen der bereits
+laufenden Demo möchte ich außerdem wissen, welche Anforderungen schon jetzt
+gelten, was kurzfristig geändert werden muss und was bis zum kostenpflichtigen
+Verkaufsstart am 1. November umgesetzt sein muss.
+
+Mir wäre ein fester Ansprechpartner in Bamberg sehr angenehm. Gleichzeitig
+ist mir bewusst, dass diese Themen möglicherweise nicht vollständig von einer
+Person bearbeitet werden. Deshalb möchte ich gerne wissen, welche Bereiche
+Sie selbst übernehmen können und ob Sie die weiteren Gebiete gegebenenfalls
+über Kollegen oder feste Kooperationspartner koordinieren können.
+
+Mein Ziel ist eine vollständige Prüfung vor dem Verkaufsstart. Zunächst möchte
+ich ausdrücklich noch kein umfassendes Umsetzungsmandat erteilen. Die erste
+Phase soll nur aus einem Erstgespräch, der Sichtung eines von mir geordnet
+bereitgestellten Unterlagenpakets und einer kurzen schriftlichen Lückenliste
+bestehen. Die Liste soll die Punkte in „während der 0.x-Demophase sofort",
+„spätestens vor Verkaufsstart von 1.x" und „später" einteilen und erkennen
+lassen, welche Fachgebiete Sie selbst abdecken können.
+
+Nicht Gegenstand dieser ersten Phase sind die Überarbeitung oder Neuerstellung
+von Rechtstexten, Änderungen an Anwendung, Website oder technischen Abläufen,
+Markenanmeldungen, Behördenkontakte oder die Einschaltung weiterer Berater.
+Diese Anfrage enthält den Sachverhalt deshalb bereits möglichst vollständig.
+Verbleibende Rückfragen können Sie gerne gesammelt vor dem Erstgespräch
+übersenden. Die tatsächlich erforderlichen Arbeiten sollen erst danach
+einzeln beschrieben und gesondert angeboten werden.
+
+Für eine spätere Begleitung wünsche ich möglichst getrennte Arbeitspakete für
+Sofortmaßnahmen der laufenden 0.x-Demo, Verkaufs- und Vertragstexte,
+Datenschutz und KI, Produktsicherheit und Cyber Resilience, Exportkontrolle
+sowie die abschließende Prüfung des Verkaufsablaufs. Bitte rechnen Sie jede
+Stufe erst nach meiner schriftlichen Freigabe ab; ein offenes monatliches
+Dauermandat möchte ich zunächst nicht erteilen.
+
+Bitte teilen Sie mir vor einer Terminvereinbarung mit, ob und in welcher Höhe
+das Erstgespräch einschließlich einer etwaigen Vorbereitung kostenpflichtig
+ist, welcher Zeitumfang darin enthalten ist und ob die Vergütung bei einer
+anschließenden Beauftragung angerechnet wird. Bitte nennen Sie außerdem die
+maßgeblichen Stundensätze, Abrechnungseinheiten, Nebenkosten und die
+Umsatzsteuer sowie mögliche Kosten weiterer Fachanwälte oder externer
+Spezialisten.
+
+Für Erstgespräch, Vorbereitung, Sichtung, schriftliche Lückenliste und eine
+kurze Abschlussbesprechung wünsche ich einen Festpreis oder einen
+verbindlichen Kostendeckel von insgesamt höchstens 2.000 Euro netto. Sollte
+dieser Rahmen für die beschriebene erste Phase nicht ausreichen, bitte ich vor
+jeder Beauftragung um einen Vorschlag für einen entsprechend kleineren Umfang.
+Bei einer Abrechnung nach Zeit möchte ich bei 75 Prozent des Kostendeckels eine
+Zwischenmeldung erhalten. Über diese erste Phase hinaus sollen keine Arbeiten
+beginnen und keine Dritten eingeschaltet werden, bevor ich einem weiteren
+schriftlichen Angebot zugestimmt habe.
+
+Die aktuelle Anwendung, die Website, die vorhandenen Rechtstexte und meine
+interne Risiko- und Lizenzprüfung kann ich Ihnen nach Ihrer Rückmeldung
+gebündelt zur Verfügung stellen. Für ein persönliches Erstgespräch in Bamberg
+stehe ich ebenfalls gerne zur Verfügung.
+
+Mit freundlichen Grüßen
+
+Robert Schneider
+RS-Digital
+Aufbaustraße 10
+96049 Bamberg
+support@solidon3d.de
+https://solidon3d.de

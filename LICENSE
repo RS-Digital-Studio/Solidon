@@ -11,8 +11,8 @@ ganz oder in Teilen zu kopieren, zu verändern, zu übersetzen, zu verbreiten,
 Erlaubt bleibt, was das Urheberrecht zwingend gestattet — insbesondere die
 Nutzung durch rechtmäßige Erwerber im vertraglich vereinbarten Umfang.
 
-Ausnahmen
----------
+Abweichende Lizenzen und Nutzungsrechte
+--------------------------------------
 
 Zwei Teile dieses Repositorys stehen ausdrücklich unter der MIT-Lizenz, weil
 ihr Inhalt in den Ergebnissen der Nutzer landet:
@@ -21,22 +21,40 @@ ihr Inhalt in den Ergebnissen der Nutzer landet:
   Datei `LICENSE`;
 * der Referenzkorpus in `tests/data/` — siehe die dortige Datei `LICENSE`.
 
+Für die elf in `app/examples/LICENSE` einzeln benannten Beispielprojekt-/
+Vorschaupaare in `app/examples/` gilt eine zusätzliche Nutzungsfreigabe.
+RS Digital behält das Urheberrecht. Nutzer dürfen die Beispiele öffnen,
+bearbeiten, drucken und exportieren sowie gedruckte Gegenstände und eigene,
+individuell bearbeitete digitale Ergebnisse privat oder gewerblich nutzen und
+weitergeben.
+Die unveränderten ursprünglichen Vorlagen dürfen ohne gesonderte Erlaubnis
+nicht als Dateien oder Sammlung weitergegeben werden.
+
 Fremde Bestandteile
 -------------------
 
 Die verwendeten Fremdbibliotheken stehen unter ihren eigenen Lizenzen; die
-Übersicht führt `THIRD-PARTY-NOTICES.md`. Insbesondere wird PySide6 (LGPL-3.0)
-dynamisch gebunden und unverändert weitergegeben. OpenSCAD und Slicer stehen
-unter der GPL und werden ausschließlich als extern installierte Programme
-aufgerufen, niemals mitgeliefert.
+vollständige Beilage führt `THIRD-PARTY-NOTICES.md`. **Für jeden fremden
+Bestandteil geht dessen Lizenz diesen Bestimmungen vor.** Keine Bestimmung
+dieser Lizenz beschränkt ein Recht, das eine Fremdlizenz oder zwingendes Recht
+einräumt — insbesondere Austausch, Rückentwicklung oder Änderung einer
+dynamisch gebundenen LGPL-Bibliothek zum Zweck der Fehlerbehebung,
+Interoperabilität oder erneuten Verknüpfung.
 
-Keine Gewährleistung
---------------------
+Insbesondere wird PySide6 (LGPL-3.0) dynamisch gebunden und unverändert
+weitergegeben. Slicer stehen unter ihren jeweiligen Lizenzen und werden
+ausschließlich als extern installierte Programme aufgerufen, niemals
+mitgeliefert.
 
-Die Software wird ohne jede Gewährleistung bereitgestellt, soweit gesetzlich
-zulässig. RS Digital haftet nicht für Schäden, die aus der Nutzung entstehen —
-insbesondere nicht für Materialkosten, Druckzeit oder Folgeschäden fehlerhafter
-Modelle.
+Gewährleistung und Haftung
+-------------------------
+
+Für Endnutzer richten sich Gewährleistung und Haftung nach dem
+Endnutzer-Lizenzvertrag, insbesondere dessen Nummer 11. Diese Lizenz beschränkt
+weder die Haftung für Vorsatz oder grobe Fahrlässigkeit, für Schäden aus der
+Verletzung von Leben, Körper oder Gesundheit noch eine zwingende Haftung nach
+dem Produkthaftungsgesetz. Im Übrigen gelten die gesetzlichen und vertraglich
+vereinbarten Grenzen.
 
 
 English summary
@@ -49,15 +67,24 @@ translating, distributing, publishing, sublicensing or selling it, in whole or
 in part, requires prior written permission from RS Digital, except where
 mandatory law provides otherwise.
 
-Two parts of this repository are licensed under the MIT licence instead,
-because their content ends up in the users' own results: the part library in
-`app/core/knowledge/parts/` and the reference corpus in `tests/data/`. Each
-carries its own LICENSE file.
+The part library in `app/core/knowledge/parts/` and the reference corpus in
+`tests/data/` are licensed under MIT. RS Digital retains copyright in the
+eleven example-project/preview pairs individually listed in
+`app/examples/LICENSE`. That file grants users permission to open, edit,
+print, and export the examples and to use physical prints and their own
+individually modified digital results privately or commercially and to
+distribute them. It does not
+permit redistribution of the unchanged original templates or preview files.
 
-Third-party components keep their own licences; see `THIRD-PARTY-NOTICES.md`.
-PySide6 (LGPL-3.0) is linked dynamically and shipped unmodified. OpenSCAD and
-slicers are GPL software and are only ever invoked as separately installed
-programs.
+Third-party components keep their own licences; see the complete notices in
+`THIRD-PARTY-NOTICES.md`. Their licence terms prevail over these terms. Nothing
+in this licence restricts rights granted by a third-party licence or mandatory
+law, including replacement, modification and reverse engineering needed to
+relink a dynamically linked LGPL library. PySide6 (LGPL-3.0) is linked
+dynamically and shipped unmodified. Slicers are only ever invoked as
+separately installed programs.
 
-The software is provided without warranty of any kind, to the extent permitted
-by law.
+Warranty and liability for end users are governed by the End User Licence
+Agreement, especially section 11. Nothing in this licence excludes liability
+that cannot legally be excluded, including liability for intent or gross
+negligence, injury to life, body or health, or mandatory product liability.

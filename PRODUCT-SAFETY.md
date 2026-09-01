@@ -7,6 +7,13 @@ gegen das tatsächliche Kundenpaket und die zugehörige Versionsakte zu prüfen.
 Eine Freigabe setzt ausgefüllte Nachweise, benannte Stellvertretung und die
 fachliche Prüfung der Einordnung nach der Verordnung (EU) 2023/988 voraus.
 
+Die Akte ist ein Risikomanagement- und Rückverfolgbarkeitsnachweis. Sie
+behauptet kein besonderes Zertifizierungs- oder Konformitätsbewertungsverfahren
+nach der GPSR und verleiht weder Solidon noch einer Exportdatei eine
+CE-Kennzeichnung. Die fachliche Prüfung soll die Anwendbarkeit und den
+konkreten Pflichtenumfang bestätigen, nicht eine gesetzlich nicht vorgesehene
+Zertifizierung erfinden.
+
 ## Produktidentifikation und Zweckbestimmung
 
 - Produkt: Solidon3D, kurz Solidon; Desktopsoftware für Windows, macOS und
@@ -20,9 +27,34 @@ fachliche Prüfung der Einordnung nach der Verordnung (EU) 2023/988 voraus.
 - Vertriebsmodell: lokale Einmalkauflizenz ohne Pflichtkonto und ohne
   Abonnement; die Demo 0.x ist unentgeltlich.
 - Nicht umfasst: medizinische oder dentale Zweckbestimmung, klinische
-  Entscheidung, patientenbezogener Arbeitsablauf, Freigabe eines Druckteils,
-  eigener G-Code-Slicer oder Zusage der Eignung für einen konkreten
-  Sicherheitszweck.
+  Entscheidung, patientenbezogener Arbeitsablauf, Auslegung oder Freigabe
+  sicherheitskritischer Bauteile, eigener G-Code-Slicer oder Zusage der Eignung
+  für einen konkreten Sicherheitszweck.
+
+„Druckbar“ bezeichnet nur die geometrische und drucktechnische Eignung zur
+weiteren Verarbeitung anhand der gewählten Prüfparameter. Es ist keine Aussage
+über Tragfähigkeit, Lebensmittelechtheit, medizinische Eignung, elektrische
+Sicherheit, Gas- oder Druckfestigkeit, Schutzwirkung oder die Konformität des
+gedruckten Gegenstands. Medizin, Fahrzeuge, Luft- und Raumfahrt,
+Schutzvorrichtungen einschließlich persönlicher Schutzausrüstung,
+Gas-/Druckanwendungen, elektrische Sicherheit und tragende Konstruktionen
+liegen außerhalb der Zweckbestimmung.
+
+Die Herkunft wird je Inhalt als Nutzerinhalt, Agentenausgabe oder mitgelieferter
+Inhalt nachvollziehbar gehalten. Lokal importierte Bausteindateien bewahren
+Herkunft, Autor und Lizenz; sie werden nicht von RS Digital gehostet oder
+freigegeben. Für mitgelieferte Vorlagen und Bausteine führt RS Digital einen
+eigenen Qualitäts- und Rechtenachweis. Eine Datei oder ein einzelnes STL erhält
+durch Export, Prüfbericht oder Bezeichnung als „druckbar“ keine CE-Kennzeichnung
+und keine Sicherheitszertifizierung.
+
+Bringt ein Nutzer einen gedruckten Gegenstand im eigenen Namen auf den Markt,
+muss er seine konkrete Hersteller- oder sonstige Wirtschaftsakteursrolle und
+die Produktsicherheit des Gegenstands selbst bestimmen und erfüllen. Die bloße
+Verwendung von Solidon3D macht RS Digital nicht automatisch zum Hersteller
+jedes späteren Ausdrucks. Davon getrennt bleiben die gesetzlichen Pflichten von
+RS Digital für die Software, mitgelieferte digitale Konstruktionsunterlagen und
+eigene Produkt- oder Sicherheitszusagen bestehen.
 
 Die Verwendung durch ein Unternehmen oder in einer regulierten Branche ändert
 die Zweckbestimmung nicht. RS Digital wirbt insbesondere nicht mit
@@ -58,6 +90,7 @@ eigenständigen Zweck und Rechtsgrund in diese Akte.
 | Fehlgeleitete KI-Ausgabe | Modell rät, Prompt-Injection, unvollständiger Kontext | ungeeignete Konstruktion oder falsche Sicherheitserwartung | KI-Offenlegung, eine rücknehmbare Transaktion, Prüfungen nach Ops, Mehrdeutigkeit hält an |
 | Veraltete oder kompromittierte Fassung | fehlendes Update, Lieferkettenfehler | bekannte Fehlfunktion oder Angriff | signierte Updates, SBOM, Sicherheitszeitraum, Incident- und Rückrufverfahren |
 | Zweckentfremdung in Medizin/Sicherheit | Nutzer oder Vertrieb stellt regulierte Eignung her | Personen- oder Sachschaden | klare allgemeine Zweckbestimmung, keine entsprechenden Claims/Funktionen, Eskalationssperre |
+| Unklare Herkunft oder Fremdrechte | importierte Datei oder Agentenausgabe wird wie mitgelieferter Inhalt behandelt | Rechtsverletzung oder falsches Vertrauen in eine Freigabe | sichtbare Provenienz, Lizenzangaben reisen mit, getrennter Qualitätsnachweis für mitgelieferte Inhalte |
 
 Jede Gefährdung wird je Fassung mit Schwere 1–5 und Wahrscheinlichkeit 1–5
 bewertet. Ab 12 Punkten oder bei möglichem schweren Personenschaden ist eine
@@ -91,7 +124,8 @@ Klassifizierung schließt den Vorgang nicht.
 
 Vor einer öffentlichen Verkaufsfassung müssen mindestens belegt sein:
 
-- [ ] fachlich bestätigte Anwendbarkeit und Produktkategorie,
+- [ ] dokumentierte und fachlich geprüfte GPSR-Anwendbarkeitsentscheidung samt
+      konkretem Pflichtenumfang; keine unbelegte Zertifizierungsbehauptung,
 - [ ] vollständige Risikobewertung der konkreten Fassung,
 - [ ] Warnungen und Zweckbestimmung in allen ausgelieferten Sprachen,
 - [ ] geprüfter Beschwerde-, Unfall-, Korrektur- und Rückrufablauf,
@@ -99,6 +133,10 @@ Vor einer öffentlichen Verkaufsfassung müssen mindestens belegt sein:
 - [ ] Verantwortlicher und erreichbare Stellvertretung,
 - [ ] Produkthaftpflicht und Deckungsumfang geprüft,
 - [ ] Versionsakte, Kundenpakete, Hashes, SBOM und Anleitung archiviert.
+- [ ] CRA-Klassifizierung, Updatezeitraum und Schwachstellenbehandlung für die
+      konkrete Fassung dokumentiert und fachlich bestätigt,
+- [ ] Qualitäts- und Rechteakte aller mitgelieferten Vorlagen und Bausteine
+      vollständig; keine CE- oder Sicherheitszusage je Exportdatei,
 
 Solange ein Punkt offen ist, bleibt die Verkaufsfreigabe gesperrt. Die
 kostenlose Demo wird wegen ihrer bereits erfolgten öffentlichen Verbreitung
@@ -109,8 +147,11 @@ gesondert bewertet; „kostenlos“ ersetzt keine Produktsicherheitsprüfung.
 Arbeitsgrundlage sind insbesondere die Verordnung (EU) 2023/988, die
 Produktsicherheitsinformationen der EU-Kommission und das deutsche
 Produktsicherheitsrecht. Zusätzlich wird die Umsetzung der Richtlinie (EU)
-2024/2853 für ab 9. Dezember 2026 in Verkehr gebrachte Software und digitale
-Fertigungsunterlagen vor diesem Stichtag erneut geprüft.
+2024/2853 für Produkte, die nach dem 8. Dezember 2026, also ab 9. Dezember
+2026, in Verkehr gebracht oder in Betrieb genommen werden, vor diesem
+Stichtag erneut geprüft. Die Richtlinie
+erfasst Software und digitale Konstruktionsunterlagen ausdrücklich; maßgeblich
+bleibt ihre Umsetzung in deutsches Recht.
 
 Wiedervorlage: vor jeder öffentlichen Fassung, nach jedem Unfall oder Rückruf,
 bei neuer Zielgruppe/Funktion und spätestens jährlich.

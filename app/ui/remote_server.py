@@ -18,7 +18,11 @@ selbst getan hat, sieht es im Verlauf statt es zu erraten.
 
 from __future__ import annotations
 
+import json
+import socket
 import threading
+import time
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
@@ -42,6 +46,89 @@ ENDPOINT = "/mcp"
 #: alles darüber ist kein Aufruf, sondern ein Versuch.
 MAX_BODY = 1 << 20
 
+#: Höchstens so viele Antworten rechnen gleichzeitig. ``ThreadingHTTPServer``
+#: startet sonst für jede Verbindung einen neuen Thread; ein lokaler Prozess
+#: könnte mit offenen Rümpfen oder langsamen Aufrufen beliebig viele erzeugen.
+MAX_WORKERS = 4
+
+#: Auch Kopf und Antwort sind begrenzt. Der Rumpfdeckel allein schützt weder
+#: vor vielen großen Kopfzeilen noch vor einem Werkzeug, das sehr viel Text
+#: zurückgibt.
+MAX_HEADERS = 32
+MAX_HEADER_BYTES = 32 * 1024
+MAX_RESPONSE_BODY = 2 << 20
+
+#: Ein unvollständiger Rumpf hält einen Worker nur endlich fest. Das ist kein
+#: Zeitlimit für die Operation selbst; die läuft hinter der Brücke und hat mit
+#: :data:`CALL_TIMEOUT` ihren eigenen, großzügigeren Deckel.
+REQUEST_TIMEOUT = 5.0
+
+#: Überlastantworten laufen außerhalb des Annahmethreads, aber ebenfalls nur
+#: in einer festen Zahl. Ein kurzer, gedeckelter Nachlauf vermeidet auf Windows
+#: den RST, durch den der Client sonst nicht einmal die 503-Antwort sieht.
+MAX_BUSY_WORKERS = 2
+BUSY_REJECT_TIMEOUT = 0.25
+BUSY_DRAIN_LIMIT = 64 * 1024
+
+#: Nach einer bereits gesendeten 413-Antwort dürfen unmittelbar anliegende
+#: Bytes kurz verworfen werden. Das ermöglicht auf Windows eine saubere
+#: HTTP-Antwort, ohne auf einen angekündigten langsamen Rumpf zu warten.
+OVERSIZE_DRAIN_TIMEOUT = 0.25
+OVERSIZE_DRAIN_LIMIT = MAX_BODY + 64 * 1024
+
+_RESPONSE_TOO_LARGE = json.dumps(
+    {
+        "jsonrpc": "2.0",
+        "id": None,
+        "error": {
+            "code": remote.INTERNAL_ERROR,
+            "message": (
+                "Die MCP-Antwort überschreitet die sichere Größengrenze. "
+                "Grenzen Sie die Anfrage ein und versuchen Sie es erneut."
+            ),
+        },
+    },
+    ensure_ascii=False,
+).encode("utf-8")
+
+type _SocketRequest = socket.socket | tuple[bytes, socket.socket]
+
+
+class _HeaderLimitError(Exception):
+    """Die rohen Kopfzeilen überschreiten eine Anwendungsgrenze."""
+
+
+class _LimitedHeaderReader:
+    """Begrenzt die stdlib schon während des Kopfzeilenlesens.
+
+    ``BaseHTTPRequestHandler`` deckelt selbst erst bei 100 Zeilen und 64 KiB
+    je Zeile. Der nachträgliche Blick auf ``self.headers`` ist für unsere
+    kleinere Grenze zu spät: Dann wurden die Bytes bereits vollständig
+    eingelesen und geparst. Dieser schmale Leser bleibt nur für
+    ``parse_request`` eingesetzt; der Nachrichtenrumpf läuft danach wieder
+    direkt über den ursprünglichen gepufferten Strom.
+    """
+
+    def __init__(self, stream: Any) -> None:
+        self._stream = stream
+        self._bytes = 0
+        self._lines = 0
+
+    def readline(self, size: int = -1) -> bytes:
+        remaining = MAX_HEADER_BYTES - self._bytes
+        wanted = remaining + 1
+        if size >= 0:
+            wanted = min(wanted, size)
+        line: bytes = self._stream.readline(wanted)
+        self._bytes += len(line)
+        if self._bytes > MAX_HEADER_BYTES:
+            raise _HeaderLimitError
+        if line not in (b"", b"\n", b"\r\n"):
+            self._lines += 1
+            if self._lines > MAX_HEADERS:
+                raise _HeaderLimitError
+        return line
+
 
 class _Call(QEvent):
     """Ein Aufruf auf dem Weg in den Hauptthread."""
@@ -55,6 +142,7 @@ class _Call(QEvent):
         self.done = threading.Event()
         self.answer = ""
         self.error: BaseException | None = None
+        self.cancelled = threading.Event()
 
 
 class WindowBridge(QObject):
@@ -70,21 +158,61 @@ class WindowBridge(QObject):
     def __init__(self, run: Any, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._run = run
+        self._pending: dict[int, _Call] = {}
+        self._pending_lock = threading.Lock()
+        self._accepting = True
+
+    @property
+    def has_pending_calls(self) -> bool:
+        """Ob ein Serverworker gerade auf diese Brücke wartet."""
+        with self._pending_lock:
+            return bool(self._pending)
 
     def call(self, name: str, arguments: dict[str, Any]) -> str:
         event = _Call(name, arguments)
-        QCoreApplication.postEvent(self, event)
-        if not event.done.wait(CALL_TIMEOUT):
-            raise TimeoutError(name)
-        if event.error is not None:
-            raise event.error
-        return event.answer
+        with self._pending_lock:
+            if not self._accepting:
+                raise TimeoutError(name)
+            self._pending[id(event)] = event
+        try:
+            QCoreApplication.postEvent(self, event)
+            if not event.done.wait(CALL_TIMEOUT):
+                # Liegt das Ereignis noch in der Qt-Warteschlange, darf es nach
+                # dem Timeout nicht verspätet am Dokument arbeiten. Eine
+                # bereits laufende Operation lässt sich hier nicht sicher
+                # unterbrechen; sie beendet den Hauptthreadweg regulär.
+                event.cancelled.set()
+                raise TimeoutError(name)
+            if event.error is not None:
+                raise event.error
+            return event.answer
+        finally:
+            with self._pending_lock:
+                self._pending.pop(id(event), None)
+
+    def cancel_pending(self) -> None:
+        """Wartende Worker lösen und noch eingereihte Qt-Aufrufe verwerfen."""
+        with self._pending_lock:
+            self._accepting = False
+            pending = tuple(self._pending.values())
+        for event in pending:
+            event.cancelled.set()
+            event.error = TimeoutError(event.name)
+            event.done.set()
+
+    def start_accepting(self) -> None:
+        """Nach einem erneuten Serverstart wieder Brückenaufrufe annehmen."""
+        with self._pending_lock:
+            self._accepting = True
 
     def event(self, event: QEvent) -> bool:
         if event.type() != _Call.TYPE:
             handled: bool = super().event(event)
             return handled
         assert isinstance(event, _Call)
+        if event.cancelled.is_set():
+            event.done.set()
+            return True
         try:
             event.answer = self._run(event.name, event.arguments)
         except BaseException as problem:  # der Aufrufer bekommt ihn, nicht der Server
@@ -100,6 +228,28 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     bridge: remote.Bridge
 
+    def setup(self) -> None:
+        super().setup()
+        self.connection.settimeout(REQUEST_TIMEOUT)
+
+    def parse_request(self) -> bool:
+        original = self.rfile
+        self.rfile = _LimitedHeaderReader(original)  # type: ignore[assignment]
+        try:
+            parsed = super().parse_request()
+        except _HeaderLimitError:
+            self._send(431, b"")
+            return False
+        finally:
+            self.rfile = original
+        if not parsed:
+            return False
+        size = sum(len(name) + len(value) + 4 for name, value in self.headers.items())
+        if len(self.headers) > MAX_HEADERS or size > MAX_HEADER_BYTES:
+            self._send(431, b"")
+            return False
+        return True
+
     def do_POST(self) -> None:
         if not remote.allowed(self.client_address[0]):
             # Die zweite der drei Prüfungen. Die erste ist die Bindung; wer
@@ -114,50 +264,101 @@ class _Handler(BaseHTTPRequestHandler):
             _log.warning("remote call refused, origin %s", origin)
             self._send(403, b"")
             return
-        length = int(self.headers.get("Content-Length") or 0)
+        length, length_error = self._content_length()
+        if length_error is not None:
+            self._send(length_error, b"")
+            return
+        assert length is not None
         if self.path.rstrip("/") != ENDPOINT:
-            self._drain(length)
             self._send(404, b"")
             return
         if length > MAX_BODY:
-            self._drain(length)
             self._send(413, b"")
+            self._discard_oversized_body(length)
             return
-        payload = self.rfile.read(length)
-        self._send(200, remote.answer_bytes(payload, self.bridge))
+        try:
+            payload = self.rfile.read(length)
+        except (TimeoutError, OSError):
+            self._send(408, b"")
+            return
+        if len(payload) != length:
+            self._send(400, b"")
+            return
+        try:
+            answer = remote.answer_bytes(payload, self.bridge, max_bytes=MAX_RESPONSE_BODY)
+        except remote.ResponseTooLargeError:
+            self._send(500, _RESPONSE_TOO_LARGE)
+            return
+        self._send(200, answer)
 
-    def _drain(self, length: int) -> None:
-        """Den Rumpf einer abgelehnten Anfrage wegwerfen, statt ihn liegen zu
-        lassen.
+    def _content_length(self) -> tuple[int | None, int | None]:
+        """Eine einzige kanonische, nichtnegative Rumpflänge lesen.
 
-        Ungelesen bleibt er im Sockel stehen; der Client schreibt weiter, und
-        die Gegenseite bricht ab, bevor er die Antwort gelesen hat — er sieht
-        einen Verbindungsabbruch statt „zu groß" und weiß nicht, warum. Gelesen
-        wird höchstens :data:`MAX_BODY`: wer mehr schickt, bekommt seine
-        Antwort und danach eine geschlossene Leitung.
+        ``int`` allein ist hier keine Prüfung: ``-1`` wird zu ``read(-1)`` und
+        liest bis zum Leitungsende; ``+1`` wird still akzeptiert; kaputter Text
+        wirft aus dem Handler und liefert gar keine Antwort. Mehrere Längen
+        sind wegen Request-Smuggling immer ungültig, auch wenn sie gleich
+        aussehen. Chunked Transfer wird vom Standardserver nicht dekodiert und
+        deshalb ebenfalls geschlossen abgewiesen.
         """
-        remaining = min(length, MAX_BODY)
-        while remaining > 0:
-            chunk = self.rfile.read(min(remaining, 64 * 1024))
-            if not chunk:
-                break
-            remaining -= len(chunk)
+        if self.headers.get("Transfer-Encoding") is not None:
+            return None, 400
+        values = self.headers.get_all("Content-Length", failobj=[]) or []
+        if not values:
+            return None, 411
+        if len(values) != 1:
+            return None, 400
+        raw = values[0].strip()
+        if not raw or len(raw) > len(str(MAX_BODY)) or not raw.isascii() or not raw.isdigit():
+            return None, 400
+        return int(raw), None
+
+    def _discard_oversized_body(self, length: int) -> None:
+        """Nach der Ablehnung kurz anliegende Bytes ohne Verarbeitung lesen.
+
+        Die Größenentscheidung und die 413-Antwort fallen vorher. Dieser
+        begrenzte Nachlauf verhindert lediglich einen Windows-RST, wenn ein
+        gutartiger Client den knapp zu großen Rumpf bereits vollständig
+        sendet. Ein langsamer oder beliebig großer Rumpf wird weder abgewartet
+        noch vollständig eingelesen.
+        """
+        remaining = min(length, OVERSIZE_DRAIN_LIMIT)
+        deadline = time.monotonic() + OVERSIZE_DRAIN_TIMEOUT
+        try:
+            while remaining:
+                timeout = deadline - time.monotonic()
+                if timeout <= 0:
+                    return
+                self.connection.settimeout(timeout)
+                chunk = self.rfile.read1(min(8192, remaining))
+                if not chunk:
+                    return
+                remaining -= len(chunk)
+        except (TimeoutError, OSError):
+            return
 
     def _send(self, status: int, body: bytes) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
-        if status >= 400:
-            # Bei einer Ablehnung liegt der Rumpf der Anfrage ungelesen im
-            # Sockel — bei 413 mit Absicht. Unter HTTP/1.1 hält die Leitung
-            # danach offen, der Client schreibt weiter, und Windows bricht
-            # die Verbindung ab, bevor er die Antwort gelesen hat: er sieht
-            # einen Abbruch statt „zu groß" und weiß nicht, warum.
+        if len(body) > MAX_RESPONSE_BODY:
+            status = 500
+            body = _RESPONSE_TOO_LARGE
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            # Eine Verbindung trägt genau eine Anfrage. Damit kann kein Client
+            # einen der wenigen Worker nach der Antwort durch untätiges
+            # Keep-Alive festhalten, und ein abgewiesener Rumpf wird nie als
+            # Anfang der nächsten Anfrage fehlgedeutet.
             self.send_header("Connection", "close")
             self.close_connection = True
-        self.end_headers()
-        if body:
-            self.wfile.write(body)
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+                self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+            # Der Client oder ``stop`` hat die Leitung abgebrochen. Die
+            # Antwort wird nicht erneut versucht und hält keinen Worker fest.
+            pass
 
     def log_message(self, format: str, *args: Any) -> None:
         """Nicht auf die Konsole — ins Protokoll, wie alles andere auch."""
@@ -175,7 +376,7 @@ class RemoteServer:
     def __init__(self, bridge: remote.Bridge, port: int = remote.DEFAULT_PORT) -> None:
         self._bridge = bridge
         self._port = port
-        self._server: ThreadingHTTPServer | None = None
+        self._server: _BoundedHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
     @property
@@ -189,8 +390,10 @@ class RemoteServer:
     def start(self) -> None:
         if self._server is not None:
             return
+        if isinstance(self._bridge, WindowBridge):
+            self._bridge.start_accepting()
         handler = type("_Bound", (_Handler,), {"bridge": self._bridge})
-        self._server = ThreadingHTTPServer((remote.HOST, self._port), handler)
+        self._server = _BoundedHTTPServer((remote.HOST, self._port), handler)
         self._port = self._server.server_address[1]
         self._thread = threading.Thread(target=self._server.serve_forever, name="mcp", daemon=True)
         self._thread.start()
@@ -199,10 +402,151 @@ class RemoteServer:
     def stop(self) -> None:
         if self._server is None:
             return
-        self._server.shutdown()
-        self._server.server_close()
+        server = self._server
+        server.begin_shutdown()
+        if isinstance(self._bridge, WindowBridge):
+            self._bridge.cancel_pending()
+        server.shutdown()
+        server.abort_active()
+        server.server_close()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
         self._server = None
         self._thread = None
         _log.info("mcp server stopped")
+
+
+class _BoundedHTTPServer(ThreadingHTTPServer):
+    """Standardserver mit festem Arbeiterbudget und abbrechbaren Sockeln."""
+
+    daemon_threads = True
+    block_on_close = False
+    request_queue_size = MAX_WORKERS
+
+    def __init__(self, address: tuple[str, int], handler: type[BaseHTTPRequestHandler]) -> None:
+        self._workers = threading.BoundedSemaphore(MAX_WORKERS)
+        self._busy_workers = threading.BoundedSemaphore(MAX_BUSY_WORKERS)
+        self._active: set[socket.socket] = set()
+        self._busy_active: set[socket.socket] = set()
+        self._active_lock = threading.Lock()
+        self._stopping = threading.Event()
+        super().__init__(address, handler)
+
+    def process_request(self, request: _SocketRequest, client_address: Any) -> None:
+        assert isinstance(request, socket.socket)
+        if self._stopping.is_set():
+            self.shutdown_request(request)
+            return
+        if not self._workers.acquire(blocking=False):
+            self._start_busy_rejection(request)
+            return
+        with self._active_lock:
+            self._active.add(request)
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._finished(request)
+            self.shutdown_request(request)
+            raise
+
+    def process_request_thread(self, request: _SocketRequest, client_address: Any) -> None:
+        assert isinstance(request, socket.socket)
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._finished(request)
+
+    def _finished(self, request: socket.socket) -> None:
+        with self._active_lock:
+            if request not in self._active:
+                return
+            self._active.remove(request)
+        self._workers.release()
+
+    def begin_shutdown(self) -> None:
+        """Vor dem Serverstopp keine neue Anfrage mehr zu einem Worker geben."""
+        self._stopping.set()
+
+    def _start_busy_rejection(self, request: socket.socket) -> None:
+        """Übergibt eine Ablehnung an einen der fest begrenzten Nebenworker."""
+        if not self._busy_workers.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        with self._active_lock:
+            self._busy_active.add(request)
+        busy_thread = threading.Thread(
+            target=self._reject_busy,
+            args=(request,),
+            name="mcp-busy",
+            daemon=True,
+        )
+        try:
+            busy_thread.start()
+        except BaseException:
+            with self._active_lock:
+                self._busy_active.discard(request)
+            self._busy_workers.release()
+            self.shutdown_request(request)
+            raise
+
+    def _reject_busy(self, request: socket.socket) -> None:
+        """Liest kurz und gedeckelt nach, ohne den Annahmethread zu berühren."""
+        deadline = time.monotonic() + BUSY_REJECT_TIMEOUT
+        received = bytearray()
+        expected = 0
+        try:
+            while len(received) < BUSY_DRAIN_LIMIT:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                request.settimeout(remaining)
+                chunk = request.recv(min(4096, BUSY_DRAIN_LIMIT - len(received)))
+                if not chunk:
+                    break
+                received.extend(chunk)
+                marker = received.find(b"\r\n\r\n")
+                if marker < 0:
+                    continue
+                if expected == 0:
+                    expected = self._busy_request_size(received, marker)
+                if len(received) >= expected:
+                    break
+            request.sendall(
+                b"HTTP/1.1 503 Service Unavailable\r\n"
+                b"Content-Length: 0\r\nConnection: close\r\n\r\n"
+            )
+        except OSError:
+            pass
+        finally:
+            with self._active_lock:
+                self._busy_active.discard(request)
+            self.shutdown_request(request)
+            self._busy_workers.release()
+
+    @staticmethod
+    def _busy_request_size(received: bytearray, marker: int) -> int:
+        """Gesamtgröße einer kanonischen kleinen Anfrage, sonst nur Kopf."""
+        header_end = marker + 4
+        for line in received[:marker].split(b"\r\n")[1:]:
+            name, separator, value = line.partition(b":")
+            value = value.strip()
+            if (
+                separator
+                and name.strip().lower() == b"content-length"
+                and value.isdigit()
+                and len(value) <= len(str(BUSY_DRAIN_LIMIT))
+            ):
+                length = int(value)
+                if length <= BUSY_DRAIN_LIMIT - header_end:
+                    return header_end + length
+        return header_end
+
+    def abort_active(self) -> None:
+        """Alle gerade lesenden oder schreibenden Leitungen abbrechen."""
+        with self._active_lock:
+            active = tuple(self._active | self._busy_active)
+        for request in active:
+            with suppress(OSError):
+                request.shutdown(socket.SHUT_RDWR)
+            with suppress(OSError):
+                request.close()

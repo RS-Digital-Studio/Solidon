@@ -30,18 +30,23 @@ angehoben (``update_default_lifted`` in ``app/ui/settings.py``).
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import platform
 import shlex
+import stat
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Final
+from time import monotonic, sleep
+from typing import Any, BinaryIO, Final, cast
 from urllib.parse import urlsplit
 
 from app.branding import APP_ID, APP_VERSION
@@ -55,14 +60,43 @@ from app.core.errors import (
     ExternalToolError,
     FileWriteError,
 )
-from app.core.ingest.fetch import CHUNK_BYTES
+from app.core.http import (
+    READ_CHUNK_BYTES,
+    HttpBoundaryError,
+    RejectRedirects,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    deadline_after,
+    iter_limited,
+    read_limited,
+    response_url,
+    same_origin,
+    validate_http_url,
+)
 from app.core.install import packaged
-from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_cache_dir
+from app.core.json_boundary import StrictJsonError
+from app.core.json_boundary import loads as load_json
+from app.core.log import get_logger, redact_external, redact_url
+from app.core.paths import user_cache_dir
+from app.core.process import detached_process_options
 from app.core.types import CancelToken, ProgressFn
 from app.i18n import SOURCE_LANGUAGE, _, get_language
 
+if os.name == "nt":
+    import ctypes
+    import msvcrt
+
 _log = get_logger(__name__)
+CHUNK_BYTES: Final = READ_CHUNK_BYTES
+_UPDATE_OPENER = urllib.request.build_opener(RejectRedirects())
+
+
+def _open_update(request: urllib.request.Request, *, timeout: float) -> Any:
+    """Öffnet eine feste Update-Adresse ohne Weiterleitung."""
+    return _UPDATE_OPENER.open(request, timeout=timeout)
+
+
+_DEFAULT_OPEN_UPDATE = _open_update
 
 #: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
 VERSION_URL: Final = "https://solidon3d.de/version.json"
@@ -239,10 +273,15 @@ KIND_SOURCE: Final = "source"
 #:
 #: AppImage und Archiv bleiben außen: Das Archiv ist nur ein Bauartefakt, das
 #: AppImage wird ab der nächsten Version zwar ausgeliefert, ersetzt sich aber
-#: nicht selbst. Erkannt werden beide trotzdem — sonst bekäme ein
+#: nicht selbst. macOS bleibt ebenfalls beim Download-Hinweis: ``open`` reicht
+#: ein Dokument über LaunchServices an die Installer-App weiter. Diese erbt
+#: Solidons geprüften Dateideskriptor nicht; ``/dev/fd/N`` würde dort deshalb
+#: einen anderen oder gar keinen Deskriptor bezeichnen. Ein erneutes Öffnen des
+#: Cachepfads wäre dagegen derselbe Austauschspalt, den die Startprüfung
+#: schließen soll. Erkannt werden alle Arten trotzdem — sonst bekäme ein
 #: AppImage-Nutzer ein ``flatpak install``, das scheitern muss, und die
 #: Auskunft „geht hier nicht" wäre eine Vermutung statt einer Feststellung.
-REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_MACOS_PACKAGE, KIND_FLATPAK})
+REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_FLATPAK})
 
 #: Womit die Setup-Datei beim Update aufgerufen wird.
 #:
@@ -268,15 +307,19 @@ SETUP_ARGUMENTS: Final = ("/SILENT", "/NORESTART", "/RESTARTAPP=1")
 class Package:
     """Ein Installationspaket, wie die Versionsdatei es beschreibt.
 
-    Vier Angaben, und jede hat eine Aufgabe: ``file`` steht in der Meldung,
-    ``url`` wird geholt, ``size`` deckelt das Lesen und ``sha256`` entscheidet,
-    ob das Geholte je gestartet wird.
+    ``file`` steht in der Meldung, ``url`` wird geholt, ``size`` deckelt das
+    Lesen und ``sha256`` entscheidet, ob das Geholte je gestartet wird. Die
+    drei letzten Felder halten zusätzlich genau die signierte Freigabe fest,
+    die unmittelbar vor dem Start noch einmal geprüft wird.
     """
 
     file: str
     url: str
     size: int = 0
     sha256: str = ""
+    release_key: str = ""
+    signed_release: bytes = b""
+    release_signature: bytes = b""
 
 
 @dataclass(frozen=True, slots=True)
@@ -512,7 +555,7 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         url=url if url.startswith("https://") else "",
         notes=_field(payload.get("notes")),
         notes_by_language=_notes(payload.get("notes_by_language")),
-        packages=_packages(payload.get("packages"), origin=address),
+        packages=_packages(payload.get("packages"), origin=address, release=payload),
         changes=_changes(payload.get("changes")),
         groups=_groups(payload.get("groups")),
     )
@@ -605,7 +648,12 @@ def _groups(raw: object) -> dict[str, tuple[Group, ...]]:
     return found
 
 
-def _packages(raw: object, *, origin: str) -> dict[str, Package]:
+def _packages(
+    raw: object,
+    *,
+    origin: str,
+    release: Mapping[str, Any] | None = None,
+) -> dict[str, Package]:
     """Die Pakete aus der Antwort — verworfen wird alles, was nicht passt.
 
     **Der Rechnername muss derselbe sein wie der der Versionsdatei.** Das ist
@@ -621,15 +669,38 @@ def _packages(raw: object, *, origin: str) -> dict[str, Package]:
     """
     if not isinstance(raw, dict):
         return {}
-    host = urlsplit(origin).netloc.lower()
+    try:
+        checked_origin = validate_http_url(
+            origin,
+            allow_http=False,
+            allow_query=False,
+            allow_fragment=False,
+        )
+    except ValueError:
+        return {}
+    host = urlsplit(checked_origin).hostname or ""
+    signed_release = signed_payload(release) if release is not None else b""
+    raw_signature = release.get(SIGNATURE_FIELD) if release is not None else None
+    try:
+        release_signature = bytes.fromhex(raw_signature) if isinstance(raw_signature, str) else b""
+    except ValueError:
+        release_signature = b""
     found: dict[str, Package] = {}
     for key, value in raw.items():
         if not isinstance(value, dict):
             continue
         address = _field(value.get("url"))
         digest = _field(value.get("sha256")).lower()
-        parts = urlsplit(address)
-        if parts.scheme != "https" or parts.netloc.lower() != host:
+        try:
+            checked_address = validate_http_url(
+                address,
+                allow_http=False,
+                allow_query=False,
+                allow_fragment=False,
+            )
+        except ValueError:
+            checked_address = ""
+        if not checked_address or not same_origin(checked_origin, checked_address):
             _log.info("update package %s ignored: %s is not on %s", key, address, host)
             continue
         if len(digest) != 64 or not all(character in "0123456789abcdef" for character in digest):
@@ -637,9 +708,12 @@ def _packages(raw: object, *, origin: str) -> dict[str, Package]:
             continue
         found[str(key)[:MAX_FIELD_LENGTH]] = Package(
             file=_field(value.get("file")),
-            url=address,
+            url=checked_address,
             size=_as_size(value.get("size")),
             sha256=digest,
+            release_key=str(key)[:MAX_FIELD_LENGTH],
+            signed_release=signed_release,
+            release_signature=release_signature,
         )
     return found
 
@@ -683,16 +757,25 @@ def _text(value: object) -> str:
 
 
 def _get(url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
-    import urllib.request
-
-    request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
-        # Ein Byte mehr als erlaubt wird noch gelesen, damit „zu lang" von
-        # „gerade noch" unterscheidbar bleibt.
-        raw = answer.read(MAX_ANSWER_BYTES + 1)
-    if len(raw) > MAX_ANSWER_BYTES:
-        raise ValueError("version file is too large")
-    return dict(json.loads(raw.decode("utf-8")))
+    address = validate_http_url(
+        url,
+        allow_http=False,
+        allow_query=False,
+        allow_fragment=False,
+    )
+    deadline = deadline_after(TIMEOUT_SECONDS)
+    request = urllib.request.Request(address, headers=headers)
+    with _open_update(request, timeout=TIMEOUT_SECONDS) as answer:
+        final = validate_http_url(response_url(answer, address), allow_http=False)
+        if not same_origin(address, final):
+            raise ValueError("version endpoint redirected")
+        raw = read_limited(
+            answer,
+            limit=MAX_ANSWER_BYTES,
+            deadline=deadline,
+            require_timeout=_open_update is _DEFAULT_OPEN_UPDATE,
+        )
+    return dict(load_json(raw, max_bytes=MAX_ANSWER_BYTES))
 
 
 # --- Das Paket holen ------------------------------------------------------------
@@ -706,7 +789,115 @@ def target_dir() -> Path:
     gestartet wurde, hat seine Aufgabe erfüllt — liegen bleiben soll es nicht,
     es wiegt so viel wie die Anwendung selbst.
     """
-    return ensure_dir(user_cache_dir() / "updates")
+    folder = user_cache_dir() / "updates"
+    junction = getattr(folder, "is_junction", None)
+    if folder.is_symlink() or (callable(junction) and junction()):
+        raise FileWriteError(detail=_("Der Update-Zwischenspeicher ist eine Verknüpfung."))
+    try:
+        folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+        root = folder.parent.resolve(strict=True)
+        resolved = folder.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as problem:
+        raise FileWriteError(
+            detail=_("Der Update-Zwischenspeicher liegt außerhalb des Nutzerordners."),
+            values={"path": str(folder)},
+        ) from problem
+    if resolved != folder:
+        raise FileWriteError(detail=_("Der Update-Zwischenspeicher ist eine Verknüpfung."))
+    if os.name != "nt":
+        metadata = resolved.stat()
+        getuid = cast(Callable[[], int], vars(os)["getuid"])
+        if metadata.st_uid != getuid():
+            raise FileWriteError(
+                detail=_("Der Update-Zwischenspeicher gehört einem anderen Nutzer.")
+            )
+        try:
+            resolved.chmod(0o700)
+        except OSError as problem:
+            raise FileWriteError(
+                detail=_("Der Update-Zwischenspeicher ließ sich nicht privat absichern.")
+            ) from problem
+    return resolved
+
+
+def _descriptor_path(descriptor: int) -> Path | None:
+    """Der kanonische Pfad eines offenen Handles, soweit die Plattform ihn anbietet."""
+    if os.name == "nt":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetFinalPathNameByHandleW.argtypes = (
+            ctypes.c_void_p,
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        )
+        kernel32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
+        handle = ctypes.c_void_p(msvcrt.get_osfhandle(descriptor))
+        length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
+        if not length:
+            return None
+        buffer = ctypes.create_unicode_buffer(length + 1)
+        if not kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0):
+            return None
+        name = buffer.value
+        if name.startswith("\\\\?\\UNC\\"):
+            name = "\\\\" + name[8:]
+        elif name.startswith("\\\\?\\"):
+            name = name[4:]
+        return Path(name).resolve(strict=True)
+    descriptor_path = Path("/proc/self/fd") / str(descriptor)
+    return descriptor_path.resolve(strict=True) if descriptor_path.exists() else None
+
+
+def _posix_lock(descriptor: int, *, exclusive: bool) -> None:
+    """Sperrt eine Datei über das erst auf POSIX geladene Systemmodul."""
+    module = importlib.import_module("fcntl")
+    flock = cast(Callable[[int, int], None], vars(module)["flock"])
+    if exclusive:
+        operation = int(vars(module)["LOCK_EX"]) | int(vars(module)["LOCK_NB"])
+    else:
+        operation = int(vars(module)["LOCK_UN"])
+    flock(descriptor, operation)
+
+
+@contextmanager
+def _cache_lock(folder: Path) -> Any:
+    """Sperrt Bereinigung, Download und atomaren Wechsel pro Nutzerprofil."""
+    lock_path = folder.parent / ".solidon-updates.lock"
+    flags = os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(lock_path, flags, 0o600)
+    try:
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            raise FileWriteError(detail=_("Die Update-Sperre ist keine gewöhnliche Datei."))
+        opened = _descriptor_path(descriptor)
+        expected_lock = folder.parent.resolve(strict=True) / lock_path.name
+        if opened is not None and opened != expected_lock:
+            raise FileWriteError(detail=_("Die Update-Sperre ist eine Verknüpfung."))
+        if os.name != "nt":
+            os.fchmod(descriptor, 0o600)
+        deadline = monotonic() + 10.0
+        while True:
+            try:
+                if os.name == "nt":
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                else:
+                    _posix_lock(descriptor, exclusive=True)
+                break
+            except OSError as problem:
+                if monotonic() >= deadline:
+                    raise FileWriteError(
+                        detail=_("Ein anderer Update-Vorgang benutzt den Zwischenspeicher.")
+                    ) from problem
+                sleep(0.05)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                _posix_lock(descriptor, exclusive=False)
+    finally:
+        os.close(descriptor)
 
 
 def _safe_name(name: str, fallback: str) -> str:
@@ -742,10 +933,17 @@ def download(
     weiter. Wer sie ruft, hat danach eine Datei und immer noch die Wahl.
     """
     folder = target_dir()
-    _clear(folder)
     file = folder / _safe_name(package.file, "solidon-update")
-    open_url = opener if callable(opener) else urllib.request.urlopen
-    request = urllib.request.Request(package.url, headers={"User-Agent": f"Solidon/{APP_VERSION}"})
+    open_url = opener if callable(opener) else _open_update
+    strict_timeout = opener is None
+    address = validate_http_url(
+        package.url,
+        allow_http=False,
+        allow_query=False,
+        allow_fragment=False,
+    )
+    deadline = deadline_after(DOWNLOAD_TIMEOUT_SECONDS)
+    request = urllib.request.Request(address, headers={"User-Agent": f"Solidon/{APP_VERSION}"})
 
     try:
         answer = open_url(request, timeout=DOWNLOAD_TIMEOUT_SECONDS)
@@ -757,66 +955,148 @@ def download(
             tool="update",
             detail=_("Der Server hat das Paket nicht herausgegeben."),
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
-            values={"url": package.url, "status": error.code},
+            values={"url": redact_url(address), "status": error.code},
         ) from error
     except (urllib.error.URLError, OSError) as error:
         raise ExternalToolError(
             tool="update",
             detail=_("Die Adresse war nicht erreichbar."),
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
-            values={"url": package.url, "reason": str(error)},
+            values={"url": redact_url(address), "reason": redact_external(error)},
         ) from error
 
+    with _cache_lock(folder):
+        return _store_download(
+            answer,
+            package,
+            file,
+            address=address,
+            deadline=deadline,
+            strict_timeout=strict_timeout,
+            progress=progress,
+            cancelled=cancelled,
+        )
+
+
+_VERIFIED_PACKAGES: dict[Path, Package] = {}
+
+
+def _store_download(
+    answer: Any,
+    package: Package,
+    file: Path,
+    *,
+    address: str,
+    deadline: float,
+    strict_timeout: bool,
+    progress: ProgressFn | None,
+    cancelled: CancelToken | None,
+) -> Path:
+    """Schreibt einen Download exklusiv, prüft ihn und wechselt ihn atomar ein."""
+    _clear(file.parent)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{file.name}.",
+        suffix=".part",
+        dir=file.parent,
+    )
+    temporary = Path(temporary_name)
     expected = package.size or MAX_PACKAGE_BYTES
     digest = hashlib.sha256()
     read = 0
     try:
-        with answer, file.open("wb") as sink:
-            while True:
+        with os.fdopen(descriptor, "wb") as sink, answer:
+            opened_temporary = _descriptor_path(sink.fileno())
+            if opened_temporary is not None and opened_temporary != temporary.resolve(strict=True):
+                raise FileWriteError(
+                    detail=_("Der Update-Zwischenspeicher wechselte während des Downloads.")
+                )
+            final = validate_http_url(response_url(answer, address), allow_http=False)
+            if not same_origin(address, final):
+                raise ExternalToolError(
+                    tool="update",
+                    detail=_("Der Server hat das Paket nicht herausgegeben."),
+                    suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+                    values={"url": redact_url(address)},
+                )
+            for chunk in iter_limited(
+                answer,
+                limit=expected,
+                deadline=deadline,
+                require_timeout=strict_timeout,
+                chunk_size=CHUNK_BYTES,
+            ):
                 if cancelled is not None:
                     cancelled.raise_if_cancelled()
-                chunk = answer.read(CHUNK_BYTES)
-                if not chunk:
-                    break
                 read += len(chunk)
-                if read > expected:
-                    raise ExternalToolError(
-                        tool="update",
-                        detail=_("Das Paket ist größer als angekündigt."),
-                        suggestions=(OPEN_DOWNLOAD_PAGE,),
-                        values={"url": package.url, "expected": expected, "read": read},
-                    )
-                sink.write(chunk)
+                try:
+                    sink.write(chunk)
+                except OSError as problem:
+                    raise FileWriteError(
+                        detail=str(problem), values={"path": str(file)}
+                    ) from problem
                 digest.update(chunk)
                 if progress is not None:
                     progress(read / expected, _megabytes(read, package.size))
-    except OSError as error:
-        _remove(file)
-        raise FileWriteError(detail=str(error), values={"path": str(file)}) from error
+            sink.flush()
+            os.fsync(sink.fileno())
+    except ResponseTooLargeError as error:
+        _remove(temporary)
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das Paket ist größer als angekündigt."),
+            suggestions=(OPEN_DOWNLOAD_PAGE,),
+            values={"url": redact_url(address), "expected": expected, "read": error.received},
+        ) from error
+    except (ResponseDeadlineError, OSError, HttpBoundaryError) as error:
+        _remove(temporary)
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Die Adresse war nicht erreichbar."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+            values={"url": redact_url(address), "reason": redact_external(error)},
+        ) from error
     except BaseException:
         # Abbruch, zu großes Paket, was auch immer: eine halbe Datei bleibt
         # nicht liegen. Sie sähe aus wie eine ganze — der Name stimmt, die
         # Endung stimmt —, und der nächste Lauf fände sie vor.
-        _remove(file)
+        _remove(temporary)
         raise
 
     if package.size and read != package.size:
-        _remove(file)
+        _remove(temporary)
         raise ExternalToolError(
             tool="update",
             detail=_("Das Paket ist unvollständig angekommen."),
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
-            values={"url": package.url, "expected": package.size, "read": read},
+            values={"url": redact_url(address), "expected": package.size, "read": read},
         )
     if digest.hexdigest() != package.sha256:
-        _remove(file)
+        _remove(temporary)
         raise ExternalToolError(
             tool="update",
             detail=_("Das geladene Paket ist beschädigt und wurde gelöscht."),
             suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
-            values={"url": package.url, "expected": package.sha256, "got": digest.hexdigest()},
+            values={
+                "url": redact_url(address),
+                "expected": package.sha256,
+                "got": digest.hexdigest(),
+            },
         )
 
+    try:
+        temporary.replace(file)
+        if os.name != "nt":
+            folder_descriptor = os.open(file.parent, os.O_RDONLY)
+            try:
+                os.fsync(folder_descriptor)
+            finally:
+                os.close(folder_descriptor)
+    except OSError as problem:
+        _remove(file)
+        raise FileWriteError(detail=str(problem), values={"path": str(file)}) from problem
+    finally:
+        _remove(temporary)
+    _VERIFIED_PACKAGES[file.resolve(strict=True)] = package
     _log.info("update package verified: %s (%d bytes)", file.name, read)
     return file
 
@@ -872,7 +1152,7 @@ def _flatpak_is_user(info: str | None = None) -> bool:
     return True
 
 
-def _flatpak_command(file: Path) -> list[str]:
+def _flatpak_command(file: Path, *, forwarded_descriptor: int | None = None) -> list[str]:
     """Das Bundle einspielen und Solidon danach wieder starten.
 
     Beides in **einer** Kette auf dem Rechner, und beides muss dort laufen:
@@ -888,12 +1168,10 @@ def _flatpak_command(file: Path) -> list[str]:
     unmittelbar und aktualisiert damit die vorhandene Installation — genau das
     Paket, das die Download-Seite ohnehin anbietet.
 
-    Und der Pfad stimmt auf beiden Seiten: Der Zwischenspeicher liegt unter
-    ``$XDG_CACHE_HOME``, und das ist im Flatpak ``~/.var/app/<kennung>/cache``
-    — derselbe Pfad, den der Rechner sieht. Er wird trotzdem gequotet: Er
-    trägt den Dateinamen aus der Versionsdatei, und der kommt von einem Server
-    (``_safe_name`` hat ihn entschärft, aber eine Shell-Zeile baut man nicht
-    auf ein Vertrauen, das eine andere Funktion herstellt).
+    Beim echten Start reist kein erneut aufzulösender Cachepfad nach draußen,
+    sondern der bereits geprüfte Deskriptor über ``--forward-fd``. Der dafür
+    gebildete ``/proc/self/fd``-Pfad wird trotzdem gequotet; auch ein intern
+    gebauter Wert rechtfertigt keine ungequotete Shell-Zeile.
     """
     scope = "--user" if _flatpak_is_user() else "--system"
     identifier = os.environ.get("FLATPAK_ID") or APP_ID
@@ -901,29 +1179,209 @@ def _flatpak_command(file: Path) -> list[str]:
         f"flatpak install {scope} --assumeyes {shlex.quote(str(file))}"
         f" && flatpak run {shlex.quote(identifier)}"
     )
-    return discover.on_host(["sh", "-c", line])
+    command = ["sh", "-c", line]
+    if discover.in_flatpak():
+        prefix = ["flatpak-spawn", "--host"]
+        if forwarded_descriptor is not None:
+            prefix.append(f"--forward-fd={forwarded_descriptor}")
+        return [*prefix, *command]
+    return command
 
 
-def _install_command(file: Path) -> list[str]:
+def _install_command(file: Path, *, forwarded_descriptor: int | None = None) -> list[str]:
     """Der Befehl, der dieses Paket einspielt — je Installationsart ein anderer.
 
     Hier stand eine Zeile mit einer Verzweigung darin: Windows startete die
     Datei, alles andere gab sie an ``open``. Das war für macOS richtig und für
     Linux nie erreichbar, weil dort gar kein Paket angeboten wurde.
 
-    Drei Wege, und jeder ist der, den sein Format vorsieht: Die Setup-Datei
-    nimmt Schalter (:data:`SETUP_ARGUMENTS`), das ``.pkg`` geht an ``open`` und
-    zeigt Apples Installer, das Flatpak-Bundle geht an ``flatpak install``.
+    Zwei sichere Wege, und jeder ist der, den sein Format vorsieht: Die
+    Setup-Datei nimmt Schalter (:data:`SETUP_ARGUMENTS`), das Flatpak-Bundle
+    geht über seinen vererbten Deskriptor an ``flatpak install``. macOS bleibt
+    beim Download-Hinweis, weil LaunchServices diesen Deskriptor verliert.
     """
     kind = install_kind()
     if kind == KIND_WINDOWS_SETUP:
         return [str(file), *SETUP_ARGUMENTS]
     if kind == KIND_FLATPAK:
-        return _flatpak_command(file)
-    # macOS: ``open`` übergibt das Paket dem Installer des Systems, der den
-    # Lizenzvertrag zeigt und den Ort wählen lässt (Entscheidung Robert,
-    # 28.08.2026 — der Weg bleibt, wie er ist).
-    return ["open", str(file)]
+        return _flatpak_command(file, forwarded_descriptor=forwarded_descriptor)
+    if kind == KIND_MACOS_PACKAGE:
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das macOS-Paket lässt sich aus Solidon nicht sicher öffnen."),
+            suggestions=(OPEN_DOWNLOAD_PAGE,),
+        )
+    raise ExternalToolError(
+        tool="update",
+        detail=_("Diese Installationsart lässt sich nicht aus Solidon aktualisieren."),
+        suggestions=(OPEN_DOWNLOAD_PAGE,),
+    )
+
+
+def _package_authorized(package: Package) -> bool:
+    """Prüft die signierte Paketangabe unmittelbar vor dem Start erneut."""
+    if not package.signed_release or not package.release_signature or not package.release_key:
+        return False
+    if not ed25519.verify(
+        RELEASE_PUBLIC_KEY,
+        package.signed_release,
+        package.release_signature,
+    ):
+        return False
+    try:
+        release = load_json(package.signed_release, max_bytes=MAX_ANSWER_BYTES)
+        entry = release["packages"][package.release_key]
+    except (KeyError, TypeError, StrictJsonError):
+        return False
+    if not isinstance(entry, dict):
+        return False
+    return (
+        _field(entry.get("file")) == package.file
+        and _field(entry.get("url")) == package.url
+        and _as_size(entry.get("size")) == package.size
+        and _field(entry.get("sha256")).lower() == package.sha256
+    )
+
+
+def _open_start_locked(file: Path) -> BinaryIO:
+    """Öffnet ein Paket so, dass Windows es bis zum Prozessstart nicht austauscht."""
+    if os.name != "nt":
+        flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+        return os.fdopen(os.open(file, flags), "rb")
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = (
+        ctypes.c_wchar_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.c_uint32,
+        ctypes.c_void_p,
+    )
+    kernel32.CreateFileW.restype = ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = ctypes.c_int
+    handle = kernel32.CreateFileW(
+        str(file),
+        0x80000000,  # GENERIC_READ
+        0x00000001,  # FILE_SHARE_READ, ausdrücklich kein Schreiben oder Löschen
+        None,
+        3,  # OPEN_EXISTING
+        0x08000080,  # FILE_FLAG_SEQUENTIAL_SCAN | FILE_ATTRIBUTE_NORMAL
+        None,
+    )
+    if handle in (None, ctypes.c_void_p(-1).value):
+        raise OSError(ctypes.get_last_error(), "Update-Paket ließ sich nicht sperren")
+    try:
+        descriptor = msvcrt.open_osfhandle(
+            int(handle),
+            os.O_RDONLY | getattr(os, "O_BINARY", 0),
+        )
+    except BaseException:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        raise
+    return os.fdopen(descriptor, "rb")
+
+
+def _inherited_descriptor_path(descriptor: int) -> Path:
+    """Nennt denselben offenen POSIX-Deskriptor im gestarteten Prozess.
+
+    Ein offener Handle allein sperrt auf POSIX keinen Namenswechsel. Der
+    Installer bekommt deshalb nicht den erneut aufzulösenden Cachepfad,
+    sondern genau den Deskriptor, dessen Inhalt soeben geprüft wurde.
+    """
+    for folder in (Path("/proc/self/fd"), Path("/dev/fd")):
+        if folder.is_dir():
+            return folder / str(descriptor)
+    raise ExternalToolError(
+        tool="update",
+        detail=_("Dieses System kann das geprüfte Update-Paket nicht sicher übergeben."),
+        suggestions=(OPEN_DOWNLOAD_PAGE,),
+    )
+
+
+@contextmanager
+def _verified_package(file: Path) -> Iterator[tuple[Path, Package, BinaryIO]]:
+    """Hält den identitätsgebunden geprüften Inhalt bis zum Prozessstart offen."""
+    folder = target_dir()
+    junction = getattr(file, "is_junction", None)
+    if file.is_symlink() or (callable(junction) and junction()):
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das Update-Paket ist keine gewöhnliche Datei."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+        )
+    try:
+        resolved = file.resolve(strict=True)
+        resolved.relative_to(folder)
+    except (OSError, ValueError) as problem:
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das Paket liegt nicht mehr da, wo es geladen wurde."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+            values={"path": str(file)},
+        ) from problem
+    package = _VERIFIED_PACKAGES.get(resolved)
+    if package is None or not _package_authorized(package):
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Die Freigabe des Update-Pakets ist nicht mehr gültig."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+        )
+    digest = hashlib.sha256()
+    read = 0
+    source: BinaryIO | None = None
+    try:
+        source = _open_start_locked(resolved)
+        opened = _descriptor_path(source.fileno())
+        if opened is not None and opened != resolved:
+            raise OSError("Paketpfad wechselte beim Öffnen")
+        before = os.fstat(source.fileno())
+        if not stat.S_ISREG(before.st_mode):
+            raise OSError("Paket ist keine gewöhnliche Datei")
+        while chunk := source.read(CHUNK_BYTES):
+            read += len(chunk)
+            if read > MAX_PACKAGE_BYTES:
+                raise OSError("Paket überschreitet die Größenobergrenze")
+            digest.update(chunk)
+        after = os.fstat(source.fileno())
+        path_state = resolved.stat()
+    except OSError as problem:
+        if source is not None:
+            source.close()
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das Update-Paket ließ sich nicht erneut prüfen."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+        ) from problem
+    except BaseException:
+        if source is not None:
+            source.close()
+        raise
+
+    assert source is not None
+
+    def identity(state: os.stat_result) -> tuple[int, int, int, int]:
+        return state.st_dev, state.st_ino, state.st_size, state.st_mtime_ns
+
+    if (
+        identity(before) != identity(after)
+        or identity(after) != identity(path_state)
+        or read != package.size
+        or digest.hexdigest() != package.sha256
+    ):
+        source.close()
+        raise ExternalToolError(
+            tool="update",
+            detail=_("Das Update-Paket wurde nach dem Herunterladen verändert."),
+            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
+        )
+    source.seek(0)
+    try:
+        yield resolved, package, source
+    finally:
+        source.close()
 
 
 def start_installer(file: Path) -> None:
@@ -933,26 +1391,37 @@ def start_installer(file: Path) -> None:
     das Fenster und nicht der Kern. Diese Funktion startet ein Programm und
     kehrt zurück.
     """
-    if not file.is_file():
-        raise ExternalToolError(
-            tool="update",
-            detail=_("Das Paket liegt nicht mehr da, wo es geladen wurde."),
-            suggestions=(RETRY, OPEN_DOWNLOAD_PAGE),
-            values={"path": str(file)},
-        )
-    command = _install_command(file)
-    try:
-        # Kein Warten auf das Ende: Der Installer läuft weiter, wenn Solidon
-        # nicht mehr da ist — darauf zu warten hieße, auf das eigene Ende zu
-        # warten.
-        subprocess.Popen(command)
-    except OSError as error:
-        raise ExternalToolError(
-            tool="update",
-            detail=_("Das Installationsprogramm ließ sich nicht starten."),
-            suggestions=(OPEN_DOWNLOAD_PAGE,),
-            values={"path": str(file), "reason": str(error)},
-        ) from error
+    with (
+        _cache_lock(target_dir()),
+        _verified_package(file) as (
+            verified_file,
+            _package,
+            source,
+        ),
+    ):
+        options = detached_process_options(graphical=True)
+        if os.name == "nt":
+            command = _install_command(verified_file)
+        else:
+            descriptor = source.fileno()
+            inherited_path = _inherited_descriptor_path(descriptor)
+            command = _install_command(
+                inherited_path,
+                forwarded_descriptor=descriptor,
+            )
+            options["pass_fds"] = (descriptor,)
+        try:
+            # Windows hält den Namen bis zu CreateProcess gegen Austausch
+            # gesperrt. POSIX startet ausdrücklich vom vererbten Deskriptor;
+            # dort wäre der weiter offene Cachepfad allein keine Sperre.
+            subprocess.Popen(command, **options)
+        except OSError as error:
+            raise ExternalToolError(
+                tool="update",
+                detail=_("Das Installationsprogramm ließ sich nicht starten."),
+                suggestions=(OPEN_DOWNLOAD_PAGE,),
+                values={"path": str(verified_file), "reason": str(error)},
+            ) from error
 
 
 def _megabytes(done: int, total: int) -> str:
@@ -965,9 +1434,16 @@ def _megabytes(done: int, total: int) -> str:
 
 def _clear(folder: Path) -> None:
     """Räumt den Zwischenspeicher, bevor etwas Neues hineinkommt."""
+    _VERIFIED_PACKAGES.clear()
     for old in folder.glob("*"):
-        if old.is_file():
+        junction = getattr(old, "is_junction", None)
+        if old.is_symlink() or old.is_file():
             _remove(old)
+        elif old.is_dir() or (callable(junction) and junction()):
+            raise FileWriteError(
+                detail=_("Im Update-Zwischenspeicher liegt ein unerwarteter Ordner."),
+                values={"path": str(old)},
+            )
 
 
 def _remove(file: Path) -> None:

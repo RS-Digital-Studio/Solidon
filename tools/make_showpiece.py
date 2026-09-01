@@ -76,7 +76,7 @@ from app.core.scene.project import (  # noqa: E402
     new_project,
     save,
 )
-from app.core.types import Parameter, Source  # noqa: E402
+from app.core.types import Parameter, Source, SourceOrigin  # noqa: E402
 
 #: Die Maße des Gehäuses, als benannte Projektparameter.
 #:
@@ -657,7 +657,16 @@ def build_adapted() -> tuple[Project, int, int]:
     # die Bytes daneben. ``save`` schreibt beides in den Container und rechnet
     # die Prüfsumme.
     project.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/rollenhalter-import.stl", sha256=""
+        id="src_1",
+        kind="import",
+        path="sources/rollenhalter-import.stl",
+        sha256="",
+        origin=SourceOrigin(
+            title="Deterministisch erzeugter Rollenhalter",
+            author="RS Digital, Robert Schneider",
+            licence="LicenseRef-Solidon-Proprietary",
+            retrieved="2026-08-31",
+        ),
     )
     project.sources["src_1"] = data
 
@@ -882,121 +891,6 @@ def build_stone() -> tuple[Project, int, int]:
     return project, built, len(blank) + len(shaping)
 
 
-#: Wo eine generierte Datei erfahrungsgemäß liegt.
-#:
-#: **Sie reist nicht im Repository mit**, und das ist Absicht: Sie ist
-#: Nutzerausgabe, vier Megabyte groß, und das fertige Schaustück trägt sie
-#: ohnehin eingebettet. Wer die Bauart ohne diese Datei fährt, bekommt einen
-#: Satz, der sagt was fehlt — nicht einen Pfad, den kein Mensch liest.
-GENERATED_GUESS = Path("D:/AI/ComfyUI_windows_portable/ComfyUI/output/solidon/text_00009_.glb")
-
-#: Wie stark das generierte Modell vergrößert wird.
-#:
-#: **Ein generiertes Modell kommt ohne Maßstab.** Die Eule maß 1,9 Einheiten;
-#: mal hundert sind daraus 190 Millimeter, und das ist ein Teil, das aufs Bett
-#: passt und in der Hand etwas hermacht. Das erste, was Solidon mit einer
-#: solchen Datei tut, ist ihr eine Größe zu geben — deshalb steht dieser
-#: Schritt gleich hinter dem Einlesen.
-GENERATED_SCALE = 100.0
-
-#: Auf wie viele Dreiecke reduziert wird.
-#:
-#: Gemessen an derselben Datei: Bei 150 000 und 100 000 bleibt das Netz
-#: sauber; bei 60 000 entstehen zwei Kanten mit drei Nachbarn, bei 30 000
-#: vier, und der Prüfbericht meldet zu Recht „Der Körper war geschlossen und
-#: ist es jetzt nicht mehr". Bei hunderttausend verschwindet außerdem der
-#: Hinweis „sehr fein vernetzt" — der Schritt hat damit eine sichtbare
-#: Wirkung und keinen Preis.
-GENERATED_TRIANGLES = 100000
-
-
-def build_generated(source: Path) -> tuple[Project, int, int]:
-    """Das Schaustück für Weg 3: ein generiertes Modell wird druckbar.
-
-    **Das Motiv ist echte Produktausgabe**, keine Nachbildung — eine
-    TripoSG-Datei aus dem ComfyUI-Ausgabeordner, wie Weg 3 sie erzeugt. Was
-    Solidon daraus macht, ist die ganze Sektion: Sie kommt ohne Maßstab an, zu
-    fein vernetzt und beliebig gedreht, und jeder der fünf Schritte antwortet
-    auf genau eine dieser drei Eigenschaften.
-
-    **``repair`` fehlt bewusst.** Seit dem Wächter in ``ingest/loader.py``
-    kommt die Datei mit null offenen Kanten an; ein Schritt, der „an diesem
-    Netz war nichts zu reparieren" meldet, ist im Verlauf eine leere Zeile.
-    """
-    from app.core.scene.project import ProjectSources
-
-    if not source.is_file():
-        raise SystemExit(
-            "Für Weg 3 fehlt die generierte Datei. Sie entsteht in der Anwendung über "
-            f"„Erzeugen“ und liegt danach im ComfyUI-Ausgabeordner; erwartet wurde "
-            f"{source}. Ein anderer Pfad geht als zweites Argument mit."
-        )
-
-    project = new_project()
-    project.document.sources["src_1"] = Source(
-        id="src_1", kind="import", path="sources/generiert.glb", sha256=""
-    )
-    project.sources["src_1"] = source.read_bytes()
-    history = History(project.document)
-    profile = profiles.make_profile()
-    reader = ProjectSources(project)
-
-    plan: list[tuple[str, list[OperationDraft]]] = [
-        (
-            "Modell einlesen",
-            [OperationDraft(op="load", params={"source": "src_1", "unit": "mm", "name": "Eule"})],
-        ),
-        (
-            "Auf Größe bringen",
-            [
-                OperationDraft(
-                    op="scale_object", inputs=("obj_1",), params={"factor": GENERATED_SCALE}
-                )
-            ],
-        ),
-        (
-            "Auflösung reduzieren",
-            [
-                OperationDraft(
-                    op="decimate_mesh", inputs=("obj_1",), params={"triangles": GENERATED_TRIANGLES}
-                )
-            ],
-        ),
-        (
-            "Für den Druck ausrichten",
-            [OperationDraft(op="orient_for_print", inputs=("obj_1",), params={})],
-        ),
-        ("Auf das Bett", [OperationDraft(op="place_on_bed", inputs=("obj_1",))]),
-    ]
-
-    built = 0
-    print(f"{'Schritt':26} {'Ergebnis':10} {'Dreiecke':>9}")
-    for title, drafts in plan:
-        try:
-            history.apply(title, drafts)
-        except Exception as problem:
-            print(f"{title:26} {'ABGELEHNT':10} {'—':>9}  {problem}")
-            continue
-        result = evaluate(project.document, profile, sources=reader)
-        if not result.complete:
-            for entry in result.scene.report.findings:
-                if entry.code.startswith("op."):
-                    print(f"{'':26} {entry.code}: {entry.message}")
-            print(f"{title:26} {'HÄLT AN':10}")
-            history.undo()
-            continue
-        built += 1
-        body = next(iter(result.scene.objects.values()))
-        print(f"{title:26} {'gebaut':10} {body.mesh.triangle_count:9}")
-        # Auch ein gelungener Schritt kann etwas zu sagen haben. Befunde nur
-        # beim Anhalten zu zeigen ist der Grund, aus dem vier wirkungslose
-        # Züge unbemerkt blieben — siehe ``_stone_top``.
-        for entry in result.scene.report.findings:
-            if entry.severity in ("warning", "error"):
-                print(f"{'':26} {entry.severity}: {entry.message}")
-    return project, built, len(plan)
-
-
 def main() -> int:
     # ``rollenhalter`` als Argument wählt das zweite Schaustück. Kein eigenes
     # Werkzeug daneben: Beide sind Teile für dieselbe Website, und zwei
@@ -1005,15 +899,7 @@ def main() -> int:
     # ``anpassen`` baut auf ``rollenhalter`` auf und schreibt ein anderes
     # Projekt — deshalb ein eigener Zweig und keine dritte Bedingung in der
     # Zeile darunter.
-    if "generiert" in sys.argv:
-        # Ein Argument, das nicht auf ``.p3d`` endet und ein Pfad ist, ist die
-        # Quelle. Kein eigener Schalter: Sie ist das einzige, was diese Bauart
-        # von außen braucht.
-        given = [
-            entry for entry in sys.argv[1:] if not entry.endswith(".p3d") and entry != "generiert"
-        ]
-        project, built, total = build_generated(Path(given[0]) if given else GENERATED_GUESS)
-    elif "stein" in sys.argv:
+    if "stein" in sys.argv:
         project, built, total = build_stone()
     elif "anpassen" in sys.argv:
         project, built, total = build_adapted()
@@ -1033,9 +919,7 @@ def main() -> int:
         print("\nNicht vollständig — das Schaustück wird nicht geschrieben.")
         return 1
     chosen = [entry for entry in sys.argv[1:] if entry.endswith(".p3d")]
-    if "generiert" in sys.argv:
-        default = ROOT / "website" / "teile" / "weg3-eule-generiert.p3d"
-    elif "stein" in sys.argv:
+    if "stein" in sys.argv:
         default = ROOT / "website" / "teile" / "weg4-stein-formen.p3d"
     elif "anpassen" in sys.argv:
         default = ROOT / "website" / "teile" / "weg1-halter-anpassen.p3d"

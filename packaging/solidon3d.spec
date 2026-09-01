@@ -26,12 +26,16 @@ ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
-from tools.make_licence_notices import write_notice  # noqa: E402
+from tools import asset_rights, make_sbom  # noqa: E402
 
-if not write_notice(check=True):
-    raise SystemExit(
-        "Die Drittanbieter-Beilage ist veraltet — erst: python tools/make_licence_notices.py"
-    )
+# Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
+# PyInstaller dieselbe Freigabe auf allen drei Zielsystemen. Website-only-
+# Sperren gehören nicht hierher; eine Anwendungssperre beendet den Bau mit dem
+# konkreten Nachweis, statt das Medium still wegzulassen.
+try:
+    asset_rights.require_application_assets_cleared(sys.platform)
+except RuntimeError as problem:
+    raise SystemExit(str(problem)) from problem
 
 # Windows will ein ICO, macOS ein ICNS. Beide entstehen aus derselben SVG-
 # Quelle in tools/make_icon.py und liegen daneben — hier wird nur gewählt.
@@ -221,7 +225,20 @@ analysis = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     # app.core.activation: siehe oben — kompiliert statt Bytecode (H5).
-    excludes=["tkinter", "pytest", "mypy", "ruff", "app.core.activation"],
+    # Cython/setuptools bauen oben die beiden Prüfmodule. PyInstallers Cython-
+    # Hook zieht sonst den vollständigen Compiler samt Buildwerkzeug in die
+    # Anwendung, obwohl der fertige Maschinencode beides nicht importiert.
+    excludes=[
+        "tkinter",
+        "pytest",
+        "mypy",
+        "ruff",
+        "Cython",
+        "cython",
+        "pyximport",
+        "setuptools",
+        "app.core.activation",
+    ],
     # Die vier Grenzdateien aus §2 C reisen als Quelltext, nicht im Archiv:
     # integrity.intact() hasht genau die Datei, aus der Python sie lädt —
     # ein von Hand verändertes writer.py im Paket fällt damit auf (H4).
@@ -233,6 +250,35 @@ analysis = Analysis(
     },
     noarchive=False,
 )
+
+# **Die gemeinsame Build-Grenze für jede Plattform.** Erst Analysis weiß,
+# welche der installierten Laufzeitdistributionen im Kundenpaket liegen. Die
+# Liste der Besitzer entsteht deshalb aus ihren tatsächlichen
+# PYMODULE-/BINARY-/DATA-Einträgen. Die Stückliste selbst folgt erst nach dem
+# fertigen Artefakt: Nur dort stehen auch CPython, Bootloader und jede wirklich
+# mitgereiste native Datei fest. Ein ``pip freeze`` oder die gesamte
+# deklarierte Umgebung wäre nur eine Prognose.
+_included_distributions = make_sbom.distributions_for_analysis(
+    [*analysis.pure, *analysis.binaries, *analysis.datas]
+)
+
+# Qt für Windows bindet an die ICU des Betriebssystems. PyInstaller sucht eine
+# unversionierte ``icuuc.dll`` jedoch zusätzlich im ``PATH`` des Baurechners.
+# Auf der Codex-Maschine fand es dort Popplers ICU 78, legte sie ins Paket und
+# erzeugte einen Kundenbau, dessen erster Import von ``QtCore`` mit „Prozedur
+# nicht gefunden“ endete. Die direkt gestartete PySide6-Installation lädt
+# dagegen nachweislich ``C:\Windows\System32\icuuc.dll``. Darum darf der
+# Windows-Bau weder diese fremde DLL noch ihre Datendatei übernehmen.
+if sys.platform == "win32":
+    analysis.binaries = [
+        binary
+        for binary in analysis.binaries
+        if not (
+            (name := Path(binary[0]).name.lower()) == "icuuc.dll"
+            or (name.startswith("icudt") and name.endswith(".dll"))
+        )
+    ]
+
 pyz = PYZ(analysis.pure)
 
 executable = EXE(
@@ -328,3 +374,28 @@ if sys.platform == "darwin":
             ],
         },
     )
+
+# **Jetzt** existiert das Kundenartefakt. Auf Windows/Linux ist es der
+# COLLECT-Ordner, auf macOS die .app nach BUNDLE. Die Datei wird direkt dort
+# geschrieben und inventarisiert dadurch nicht nur importierte Distributionen,
+# sondern jede tatsächlich mitgereiste PE-/ELF-/Mach-O-Datei. Signiert wird in
+# der CI erst danach; deshalb reist genau diese eine Stückliste mit.
+_artifact = Path(DISTPATH) / (f"{APP_NAME}.app" if sys.platform == "darwin" else APP_NAME)
+_sbom_folder = (
+    _artifact / "Contents" / "Resources" if sys.platform == "darwin" else _artifact / "_internal"
+)
+_sbom = make_sbom.write_bom(
+    _sbom_folder / "Solidon3D.cdx.json",
+    included_distributions=_included_distributions,
+    customer_artifact=_artifact,
+)
+print(
+    f"Laufzeit-Stückliste: {len(_sbom['components'])} Komponenten aus dem fertigen Kundenartefakt"
+)
+
+# Der Quellbaum war vor Analysis freigegeben; dieser zweite Beleg bindet die
+# Freigabe an die tatsächlich kopierten Medienbytes und an genau diese Spec.
+# Die nachfolgenden Installerwerkzeuge lehnen einen alten oder nachträglich
+# veränderten dist-Ordner ab.
+_rights_receipt = asset_rights.write_customer_artifact_receipt(_artifact, sys.platform)
+print(f"Rechtebeleg im Kundenartefakt: {_rights_receipt.relative_to(_artifact)}")

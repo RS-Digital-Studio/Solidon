@@ -8,6 +8,23 @@
 Sie tragen die ersten fünf Minuten (§2.3). Der Startbildschirm bietet sie an,
 `app/core/tour.py` führt hindurch, und `app/core/examples.py` liest sie.
 
+## Rechte
+
+Für die elf in `LICENSE` einzeln benannten, von RS Digital erzeugten
+P3D/SVG-Paare behält RS Digital das Urheberrecht. Die dortige
+Nutzungsfreigabe erlaubt Bearbeiten, Drucken, Export und die private oder
+gewerbliche Nutzung eigener Ergebnisse, aber keine unveränderte Weitergabe
+der ursprünglichen Vorlagen. Eingebettete Geometrie aus dem eigenen
+MIT-Referenzkorpus in `tests/data/` behält ihre MIT-Rechte. Eine neue Quelle
+oder ein neues Beispiel muss vor dem Erzeugen als eigene oder anderweitig
+freigegebene Geometrie belegt und in `ASSET-RIGHTS.toml` ausdrücklich ergänzt
+sein. Importierte Inhalte Dritter und frühere Tripo-Ausgaben erben diese
+Freigabe nie.
+
+Die Rechtefreigabe ist keine Aussage über Druckbarkeit, Festigkeit oder sichere
+Verwendung. Mitgelieferte Beispiele werden zusätzlich in der
+Produktsicherheitsakte mit ihrer Zweckgrenze, Version und Prüfung geführt.
+
 ## Was das für Änderungen heißt
 
 - **Eine Projektdatei hier wird nicht bearbeitet.** Wer ein Beispiel ändern

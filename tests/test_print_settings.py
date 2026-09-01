@@ -1817,16 +1817,20 @@ def test_open_in_slicer_starts_the_window_with_the_file(
     executable.write_bytes(b"")
     model = tmp_path / "teil.3mf"
     model.write_bytes(b"x")
-    started: list[list[str]] = []
+    started: list[tuple[list[str], dict[str, object]]] = []
 
     class _Detached:
         def __init__(self, command: list[str], **kwargs: object) -> None:
-            started.append(list(command))
+            started.append((list(command), kwargs))
 
     monkeypatch.setattr(handover.subprocess, "Popen", _Detached)
     handover.open_in_slicer(model, handover.SlicerSetup(executable=executable, flavour="orca"))
 
-    assert started == [[str(executable), str(model)]]
+    command, options = started[0]
+    assert command == [str(executable.resolve()), str(model.resolve())]
+    assert options["close_fds"] is True
+    assert options["stdout"] == handover.subprocess.DEVNULL
+    assert "OPENAI_API_KEY" not in options["env"]
 
 
 def test_an_unknown_arrange_flag_falls_back_and_reports(
@@ -2973,6 +2977,22 @@ def test_a_cancelled_slicer_run_stops_the_child_quickly(tmp_path: Path) -> None:
         handover._run_slicer(command, tmp_path, 60.0, setup, signal)
 
     assert clock.perf_counter() - started < 15.0, "der Kindprozess stirbt, nicht der Nutzer wartet"
+
+
+def test_a_slicer_with_endless_output_is_stopped(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein redseliger Fehlerprozess bleibt innerhalb der Speichergrenze."""
+    import sys
+
+    monkeypatch.setattr(handover, "SLICER_OUTPUT_LIMIT", 1024)
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(5)"]
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer(command, tmp_path, 4.0, setup, None)
+
+    assert caught.value.suggestions
 
 
 def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:

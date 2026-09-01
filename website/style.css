@@ -533,7 +533,7 @@ nav.lang a.cta:hover {
 /* **Der Aufmacher trägt eine Handlung, nicht zwölf.** Vorher stand hier der
    ganze Download-Kasten mit Countdown, Laufzeit, Kaufmodell, fünf
    Plattform-Knöpfen, vier Installationshinweisen und den sechs Zusagen —
-   daneben, direkt unter dem Produktbild, der Spendenkasten samt Rechtstext.
+   daneben, direkt unter dem Produktbild, der Unterstützungskasten samt Rechtstext.
    Er bat um Geld, bevor das Produkt begehrt war. Geblieben sind Kicker,
    Überschrift, Lead, ein Knopf und die Zusagen als eine Zeile; alles andere
    hat jetzt seinen eigenen Ort (Befunde WB1, WB6, WB9). */
@@ -721,7 +721,7 @@ nav.lang a.cta:hover {
   margin: 0 auto;
 }
 
-/* Die Spende steht nach den vier Wegen und vor den Funktionen: Der
+/* Die Unterstützung steht nach den vier Wegen und vor den Funktionen: Der
    Produktkern ist dort gezeigt, die Seite aber noch nicht durch. Der erste
    Anlauf legte sie hinter den Preis — gemessen auf 75 % der Seitenhöhe, nach
    neun von zwölf Bildschirmen. „Nicht im Aufmacher" heißt eben nicht „ganz
@@ -732,7 +732,7 @@ nav.lang a.cta:hover {
 }
 
 /* **Genau die Breite der Downloadkarte, an der sie jetzt hängt.** Die 64rem
-   hier stammten aus der Zeit, als die Spende am Seitenende stand und gegen
+   hier stammten aus der Zeit, als die Unterstützung am Seitenende stand und gegen
    die Fläche um Aufmerksamkeit kämpfte. Seit sie unmittelbar unter dem
    Download-Kasten sitzt, ist die Rechnung eine andere: Gemessen ergaben die
    64rem 1024 Punkt gegen 928 darüber — die untere Karte stand links und
@@ -786,6 +786,24 @@ nav.lang a.cta:hover {
     max-width: 38rem;
   }
 
+  /* Unterseiten ohne Produktbild nutzen die ganze Zeile für eine klare,
+     ruhige Aussage. Ohne diese Variante bliebe rechts die frühere Bildspalte
+     leer und der Aufmacher sähe wie ein nicht geladenes Medium aus. */
+  .hero.hero-copy {
+    grid-template-columns: minmax(0, 52rem);
+    justify-content: center;
+    text-align: center;
+  }
+
+  .hero.hero-copy .hero-text {
+    max-width: 52rem;
+  }
+
+  .hero.hero-copy p.lead {
+    margin-inline: auto;
+    max-width: 56ch;
+  }
+
   .hero .hero-side {
     align-self: start;
     margin-top: 0;
@@ -832,7 +850,7 @@ nav.lang a.cta:hover {
 
 /* Die Handlung kommt vor der Erklärung: Wer die Demo laden möchte, bekommt
    die passende Plattform sofort. Laufzeit und Kaufmodell bleiben vollständig
-   erhalten, folgen aber erst danach. Die freiwillige Spende ist ein eigener
+   erhalten, folgen aber erst danach. Die freiwillige Unterstützung ist ein eigener
    Block neben dem Download und gehört deshalb nicht in diese Reihenfolge. */
 .download {
   display: flex;
@@ -869,13 +887,13 @@ nav.lang a.cta:hover {
   font-size: var(--t-sm);
 }
 
-/* Die Spende steht direkt unter dem Produktbild und verlängert nicht den
+/* Die Unterstützung steht direkt unter dem Produktbild und verlängert nicht den
    Downloadkasten. Sie trägt bewusst nicht dessen kräftige Handlungsfarbe:
    Die freiwillige Finanzierung ist kein Schritt, den jemand zum Ausprobieren
    des Programms erledigen muss. Der Verweis lädt keine PayPal-Ressource; erst
    ein ausdrücklicher Klick verlässt die Seite. */
 
-/* Der Spendenkasten stand mit neutralem Rand auf fast dem Grundton der Seite:
+/* Der Unterstützungskasten stand mit neutralem Rand auf fast dem Grundton der Seite:
    ``--accent-soft`` ist im dunklen Thema #33261a, der Grund #171614, die Linie
    #35322d — drei Töne, die sich kaum unterscheiden. „Fällt nicht auf und wirkt
    trostlos", gemeldet am 29.08.2026. Was ihn jetzt trägt, ist eine warme Kante
@@ -886,7 +904,7 @@ nav.lang a.cta:hover {
    Radius und Kantenstärke sind identisch — zwei Elemente untereinander, die
    sich um wenige Zehntel unterscheiden, wirken nicht verschieden, sondern
    ungenau. Was sie trennt, ist die Höhe: Der Download trägt die Hauptsache
-   und darf Raum nehmen, die Spende ordnet sich unter.
+   und darf Raum nehmen, die Unterstützung ordnet sich unter.
 
    Der Rahmen liegt innen als Schatten und nicht als `border`: Er kostet keine
    Layoutbreite und trägt feiner auf, weil ein Punkt Rahmen auf heller Fläche
@@ -922,7 +940,7 @@ nav.lang a.cta:hover {
 
 /* **Das Rechtliche bleibt, es steht nur nicht mehr in der ersten Zeile.** Wer
    gerade herunterlädt, liest „keine Bestellung, keine Gegenleistung" nicht —
-   wer spenden will, findet es in einem Griff. Im Dokument, im Text und für
+   wer unterstützen will, findet es in einem Griff. Im Dokument, im Text und für
    jede Suche ist es unverändert da; das ist der Unterschied zwischen
    Wegklappen und Weglassen. */
 .donate-fine {
@@ -963,6 +981,8 @@ nav.lang a.cta:hover {
   border: 0;
   border-radius: var(--r-md);
   color: var(--bg);
+  cursor: pointer;
+  font: inherit;
   font-weight: 600;
   line-height: 1.3;
   text-decoration: none;
@@ -3491,6 +3511,20 @@ p.footnote {
 
 .weg figcaption b { color: var(--ink); }
 
+.wrap > .hero-text {
+  padding-top: clamp(2rem, 6vw, 4.5rem);
+  padding-bottom: clamp(1.5rem, 4vw, 3rem);
+}
+
+.hero-safety {
+  max-width: 58ch;
+  margin: -0.8rem 0 1.5rem;
+  color: var(--muted);
+  font-size: var(--t-sm);
+  line-height: 1.5;
+}
+
+.hero-safety b { color: var(--ink); }
 @media (prefers-color-scheme: dark) {
   .schau img,
   .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
@@ -3765,7 +3799,10 @@ footer.site a,
 .release-picker select,
 .activation-language select,
 .activation-file .activation-file-button,
-.activation-paste summary {
+.activation-paste summary,
+.boerse-suche input,
+.boerse-suche select,
+.boerse-hochladen input {
   min-block-size: var(--target-min);
 }
 

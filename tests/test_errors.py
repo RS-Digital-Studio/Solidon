@@ -244,36 +244,41 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
 #: der Kunde ändern kann.
 _NOT_A_RANGE = frozenset(
     {
-        "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme", "checksum",
-        "choices",
+        "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme",
+        "checksum", "choices",
         # „#RRGGBB" ist ein Format und keine Spanne: Eine Filamentfarbe kann
         # nicht „zu groß" sein, sie ist lesbar oder nicht.
-        "colour",
+        "changed", "colour",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
-        "empty", "exists", "file_too_large", "format", "grammar", "history_moved", "host",
+        "empty", "exists", "expected_sha256", "file_too_large",
+        "format", "grammar", "history_moved", "host",
         "inverted",
         "known_pattern",
-        "known_structure", "missing_file", "missing_gathered", "missing_link", "missing_payload",
+        "json_depth", "known_structure", "library_state", "missing_file", "missing_gathered",
+        "missing_link",
+        "missing_payload",
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
         "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile",
         "no_repair_target", "no_section",
         "no_shapes", "no_sources", "no_split", "not_a_face", "not_a_hole", "not_a_number",
-        "not_a_project",
+        "not_a_project", "private_destination",
         "not_a_twin", "not_outline", "not_step", "not_upright", "one_body", "point_count",
-        "repair_not_for_exact_body", "required",
+        "recipe_format", "remove_failed", "restore_failed",
+        "repair_not_for_exact_body",
+        "required",
         "scheme",
-        # Die Dateiprüfung weist aus mehreren Gründen ab — Link im Text,
-        # unbekannte Operation, Titel zu lang. Eine Zahl ist nur einer davon,
+        # Der Dateiprüfer weist eine Datei aus mehreren Gründen ab — unbekannte
+        # Operation, Titel zu lang. Eine Zahl ist nur einer davon,
         # und der Titel „Ein Wert liegt außerhalb des zulässigen Bereichs"
         # stünde über den anderen falsch.
-        "part_file_invalid", "part_file_unreadable",
+        "shared_resource_limit", "shared_rules", "source",
         "sweep_needs_xy", "target_behind", "target_count", "target_parallel", "toml",
         "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
         "unknown_placeholder", "unknown_region", "unknown_shape", "unknown_source",
         "unknown_target",
         "unknown_transaction", "unreadable", "unsupported_compression", "unsupported_format",
-        "unwritable",
+        "undo", "unsafe_url", "unwritable", "userinfo",
         "value_not_allowed", "web_page",
     }
 )  # fmt: skip

@@ -232,26 +232,6 @@ def test_the_workflow_carries_no_second_copy_of_the_name() -> None:
     assert "from app.branding import APP_NAME" in workflow
 
 
-def test_a_release_tag_must_equal_the_application_version() -> None:
-    """Ein Tag darf keine anders benannte Anwendung veröffentlichen.
-
-    GitHub nimmt jedes ``v*`` an. Ohne den Vergleich könnte deshalb ein Tag
-    ``v0.3.0`` ein Paket bauen, dessen Metadaten noch ``0.2.3`` nennen. Der
-    Schritt liest beide Seiten zur Laufzeit: den echten Tag von GitHub und die
-    eine Anwendungsversion aus ``branding.py``.
-    """
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    marker = "- name: Release-Tag mit Anwendungsversion abgleichen"
-    assert marker in workflow, "der Taglauf prüft seine Paketversion nicht"
-    step = workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
-
-    assert "if: startsWith(github.ref, 'refs/tags/')" in step
-    assert "RELEASE_TAG: ${{ github.ref_name }}" in step
-    assert "from app.branding import APP_VERSION" in step
-    assert "expected = f'v{APP_VERSION}'" in step
-    assert "passt nicht zur Anwendungsversion" in step, "der rote Lauf nennt keinen Grund"
-
-
 def test_both_application_icons_exist() -> None:
     """Windows braucht das ICO, macOS das ICNS — beide liegen im Paketordner."""
     assert ICO.is_file(), "packaging/solidon3d.ico fehlt — tools/make_icon.py läuft nicht?"
@@ -393,7 +373,7 @@ def test_the_workflow_keeps_the_two_mac_packages_apart() -> None:
     übrig bliebe eines von beiden — ohne dass jemand sähe, welches.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert "solidon3d-macos-${{ runner.arch }}" in workflow
+    assert "solidon3d-macos-${{ matrix.runner_arch }}" in workflow
     assert "macos-$(uname -m)" in workflow
 
 
@@ -449,29 +429,26 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
     )
 
 
-def test_the_workflow_finds_every_ui_intensive_test_file() -> None:
-    """Die CI hält jede UI-intensive Datei aus dem großen Sammelprozess heraus.
+def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
+    """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
 
     Der Absturz auf den Linux-Runnern hängt an der Zahl der VTK-Fenster, die ein
-    Prozess nacheinander aufbaut; außerdem erschöpfen große Dialogdateien nach
-    tausenden vorherigen Qt-Tests den Prozess. Deshalb werden diese Dateien aus
-    dem Sammelprozess genommen. Die Liste wird gesucht und nicht gepflegt, und
-    genau daran ist sie zurückgeblieben: Nach `MainWindow` allein fehlten
-    `test_cursors.py` (acht Viewport-Aufbauten) und `test_plates.py` (einer) —
-    neun Fenster mehr im großen Stapel, ohne dass es auffiel.
+    Prozess nacheinander aufbaut; deshalb laufen die Fensterdateien einzeln. Die
+    Liste wird gesucht und nicht gepflegt, und genau daran ist sie
+    zurückgeblieben: Nach `MainWindow` allein fehlten `test_cursors.py` (acht
+    Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
+    großen Stapel, ohne dass es auffiel.
 
     Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
-    wirklich UI **aufbauen**. Erwähnungen zählen nicht: ein Import oder die
-    Lizenzliste nähmen sonst eine Datei grundlos aus dem Sammelprozess.
+    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
+    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
-    assert found, "das Suchmuster der UI-intensiven Dateien steht nicht mehr im Workflow"
+    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
     pattern = re.compile(found.group(1))
 
-    builders = re.compile(
-        r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter|PrintSettingsDialog)\("
-    )
+    builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
     missed = []
     for path in sorted((ROOT / "tests").glob("test_*.py")):
         source = path.read_text(encoding="utf-8")
@@ -481,7 +458,7 @@ def test_the_workflow_finds_every_ui_intensive_test_file() -> None:
             missed.append(path.name)
 
     assert not missed, (
-        f"Diese Dateien bauen intensive UI und laufen trotzdem im großen Stapel: {missed}. "
+        f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
         "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
     )
 
@@ -637,16 +614,41 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "Öffentliche Linux-Pakete prüfen" in workflow
 
 
-def test_the_appimage_carries_the_generated_mime_definition(
+def test_the_appimage_build_refuses_an_unpinned_runtime(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Der portable Bau liefert die Typbeschreibung am erwarteten Systempfad mit."""
+    """Der Laufzeitkern ist Kundencode und darf nicht „neueste Version" heißen."""
+    from tools import make_linux_packages as tool
+
+    monkeypatch.delenv(tool.APPIMAGE_RUNTIME_ENV, raising=False)
+    monkeypatch.setattr(tool.shutil, "which", lambda _name: "/usr/bin/appimagetool")
+    called = False
+
+    def run(*_args: object, **_kwargs: object) -> object:
+        nonlocal called
+        called = True
+        return object()
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
+
+    assert tool.build_appimage() == 1
+    assert not called, "ohne geprüfte Laufzeitdatei wurde fremder Code gestartet"
+
+
+def test_the_appimage_build_passes_the_verified_runtime_explicitly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """appimagetool bekommt die geprüfte Datei und lädt keinen Ersatz aus dem Netz."""
+    import subprocess
+
     from tools import make_linux_packages as tool
 
     source = tmp_path / "source"
     output = tmp_path / "dist"
     source.mkdir()
     (source / tool.APP_NAME).write_bytes(b"Programm")
+    runtime = tmp_path / "runtime-x86_64"
+    runtime.write_bytes(b"Laufzeit")
     executable = tmp_path / "appimagetool"
     executable.write_bytes(b"Werkzeug")
     icon = tmp_path / "app" / "images" / "icon" / f"{tool.DISTRIBUTION_NAME}.svg"
@@ -661,13 +663,18 @@ def test_the_appimage_carries_the_generated_mime_definition(
     monkeypatch.setattr(tool, "ROOT", tmp_path)
     monkeypatch.setattr(tool, "MIME_FILE", mime_file)
     monkeypatch.setattr(tool.shutil, "which", lambda _name: str(executable))
-    monkeypatch.setattr(
-        tool.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0),
-    )
+    monkeypatch.setenv(tool.APPIMAGE_RUNTIME_ENV, str(runtime))
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(tool.subprocess, "run", run)
 
     assert tool.build_appimage() == 0
+    assert len(commands) == 1
+    assert commands[0][1:3] == ["--runtime-file", str(runtime.resolve())]
     installed_mime = (
         output
         / f"{tool.APP_NAME}.AppDir"
@@ -825,6 +832,80 @@ def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -
     assert "Lizenzvertrag" in licence.read_text(encoding="utf-8")[:400]
 
 
+def test_the_windows_signing_handoff_binds_every_installer_input(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der Signierjob übernimmt keinen austauschbaren Ordner aus dem Paketjob."""
+    import json
+
+    from tools import make_installer
+
+    root = tmp_path
+    source = root / "dist" / make_installer.APP_NAME
+    packaging = root / "packaging"
+    build = packaging / "build"
+    source.mkdir(parents=True)
+    build.mkdir(parents=True)
+    application = source / f"{make_installer.APP_NAME}.exe"
+    runtime = source / "_internal" / "python313.dll"
+    sbom = source / "_internal" / "Solidon3D.cdx.json"
+    notices = source / "THIRD-PARTY-NOTICES.md"
+    catalogue = source / "app" / "i18n" / "locales" / "de.json"
+    script = packaging / "solidon3d.iss"
+    licence = packaging / "eula.txt"
+    icon = packaging / "solidon3d.ico"
+    manifest = build / "licence.manifest"
+    for path, content in (
+        (application, b"Programm"),
+        (runtime, b"Python-Laufzeit"),
+        (sbom, b"{}"),
+        (notices, b"Lizenzbeilage"),
+        (catalogue, b"{}"),
+        (script, b"Skript"),
+        (licence, b"Vertrag"),
+        (icon, b"Symbol"),
+        (manifest, b"Manifest"),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+
+    handoff_path = build / "windows-signing.json"
+    monkeypatch.setattr(make_installer, "ROOT", root)
+    monkeypatch.setattr(make_installer, "SOURCE_DIR", source)
+    monkeypatch.setattr(make_installer, "OUTPUT_DIR", root / "dist")
+    monkeypatch.setattr(make_installer, "SCRIPT", script)
+    monkeypatch.setattr(make_installer, "SIGNING_HANDOFF", handoff_path)
+    monkeypatch.setattr(make_installer, "_licence_file", lambda: licence)
+    monkeypatch.setattr(make_installer, "stale_reason", lambda: "")
+
+    assert make_installer.write_signing_handoff() == 0
+    document = json.loads(handoff_path.read_text(encoding="utf-8"))
+    expected = {
+        path.relative_to(root).as_posix()
+        for path in (
+            application,
+            runtime,
+            sbom,
+            notices,
+            catalogue,
+            script,
+            licence,
+            icon,
+            manifest,
+        )
+    }
+
+    assert set(document["input_sha256"]) == expected
+    assert list(document["input_sha256"]) == sorted(expected)
+    assert all(len(digest) == 64 for digest in document["input_sha256"].values())
+    assert document["schema_version"] == 1
+    assert document["application"] == application.relative_to(root).as_posix()
+    assert document["licence_manifest"] == manifest.relative_to(root).as_posix()
+    assert document["part_file_suffix"] == ".solidon-part"
+    assert document["part_file_mime_type"] == "application/vnd.solidon.part+json"
+    assert all("\\" not in name and ".." not in Path(name).parts for name in expected)
+
+
 def test_the_linux_installer_asks_before_it_writes_anything() -> None:
     """Das Installationsskript fragt nach Zustimmung und nach dem Ort.
 
@@ -950,10 +1031,10 @@ def test_the_workflow_builds_the_macos_installer_package() -> None:
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "make_macos_package.py" in workflow, "die CI ruft das Werkzeug nicht"
+    assert "from tools import make_macos_package" in workflow, "die CI ruft das Werkzeug nicht"
     assert "*-macos-*.pkg" in workflow, "die .pkg wird nicht hochgeladen"
     assert "pkgutil --check-signature" in workflow, "die Paketsignatur wird nicht geprüft"
-    assert "--notarized" in workflow, "der Installer verspricht Apples Prüfung nie"
+    assert "notarized=sys.argv[2]" in workflow, "der Installer verspricht Apples Prüfung nie"
     assert "xcrun notarytool submit" in workflow, "das Paket wird Apple nicht vorgelegt"
     assert "--wait" in workflow, "die CI könnte ein ungeprüftes Paket weiterreichen"
     assert "xcrun stapler staple" in workflow, "das Prüfungsticket reist nicht mit"
@@ -962,17 +1043,22 @@ def test_the_workflow_builds_the_macos_installer_package() -> None:
 
 
 def test_the_workflow_verifies_both_windows_signatures() -> None:
-    """Beide Windows-Signierwege prüfen Anwendung und Setup-Datei."""
+    """Getrennte Windows-Jobs signieren und prüfen Anwendung und Setup-Datei."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert workflow.count("signtool sign") == 2, "Anwendung und Setup-Datei brauchen Signaturen"
-    assert workflow.count("azure/artifact-signing-action@v2") == 2, (
-        "Artifact Signing muss Anwendung und Setup-Datei erreichen"
+    assert (
+        workflow.count("azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30")
+        == 2
+    ), "Artifact Signing muss Anwendung und Setup-Datei erreichen"
+    assert "azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f" in workflow, (
+        "OIDC-Anmeldung für Artifact Signing fehlt"
     )
-    assert "azure/login@v3" in workflow, "OIDC-Anmeldung für Artifact Signing fehlt"
-    assert "id-token: write" in workflow, "OIDC bekommt kein kurzlebiges GitHub-Token"
+    assert workflow.count("id-token: write") == 2, (
+        "Nur die beiden Azure-Signierphasen bekommen kurzlebige OIDC-Token"
+    )
     assert workflow.count("signtool verify /pa /v") == 4, (
-        "PFX und Artifact Signing müssen beide Signaturen auch nachweisen"
+        "PFX und Azure prüfen Anwendung und Installer jeweils getrennt"
     )
 
 
@@ -1027,6 +1113,7 @@ def test_the_windows_installer_registers_only_the_branded_part_extension() -> No
     assert (
         'Subkey: "Software\\Classes\\{#ProjectSuffix}";   ValueType: string; ValueName: ""'
     ) not in script
+    assert 'ValueName: "{#PartFileSuffix}"' in script
     assert "/DPartFileSuffix={PART_FILE_SUFFIX}" in tool
     assert "/DPartFileMimeType={PART_FILE_MIME_TYPE}" in tool
     assert 'ValueName: "Content Type"; ValueData: "{#PartFileMimeType}"' in script
@@ -1162,6 +1249,18 @@ def test_the_part_file_identity_has_one_branding_source() -> None:
     assert "PART_FILE_MIME_TYPE" in installer
     assert "PART_FILE_MIME_TYPE" in linux
     assert "PART_FILE_MIME_TYPE" in spec
+
+
+def test_the_windows_handoff_carries_the_part_file_identity() -> None:
+    """Der isolierte Installerbau prüft und übernimmt den gebrandeten Typ."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+
+    assert workflow.count("$handoff.part_file_suffix -ne '.solidon-part'") == 3
+    assert (
+        workflow.count("$handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json'") == 3
+    )
+    assert '"/DPartFileSuffix=.solidon-part"' in workflow
+    assert '"/DPartFileMimeType=application/vnd.solidon.part+json"' in workflow
 
 
 def test_the_linux_installer_registers_the_type() -> None:

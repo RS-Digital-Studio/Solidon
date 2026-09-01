@@ -40,11 +40,6 @@ bevor es jemand wusste:
 
 - **`session.last_result` ist die ausgewertete Szene.** Ein
   `session.scene` gibt es nicht.
-- **`split_async()` wartet nie synchron auf `last_result`.** Läuft noch eine
-  Auswertung, bleibt der Klick an Dokumentidentität und Revision gebunden und
-  startet erst nach deren endgültigem, erfolgreichem Abschluss mit genau
-  diesem Netz. Druckübergabe und Chatverlauf sind Projektmetadaten; sie ändern
-  diese Geometrierevision nicht.
 - **`evaluate_now()` ist der synchrone Weg** — für Kommandozeile, Tests und
   Export. Er gibt das Ergebnis zurück, statt es nur anzustoßen.
 - **`session.apply()` endet mit `evaluate_async()`.** Nach dem Aufruf steht
@@ -137,10 +132,6 @@ vollständig und markiert ins Feld zurück.
 `catalog.py` (Bausteinkatalog, §24.3) · `filament_picker.py` (Farbe und Name
 statt einer Zahl von 0 bis 7)
 
-Der Katalog bietet den lokalen Bausteindatei-Weg als **Import** und **Export**.
-Lesen, Formatprüfung und Aufnahme bleiben im Qt-freien Kern; die Oberfläche
-wählt nur den Pfad und meldet Erfolg erst nach einer vollständigen Aufnahme.
-
 **Erscheinung**
 
 `style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
@@ -161,6 +152,10 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 ## Grenzen
 
 - **Keine feste Zeichenkette** — alles über `tr()` (Regel 20).
+- **Sprachabhängige Qt-Formate lesen die aktive Solidon-Sprache.**
+  `QLocale()` ohne Argument folgt der Prozesssprache; für ausgeschriebene
+  Datumswerte deshalb `QLocale(get_language())` verwenden und alle
+  ausgelieferten Sprachen am gerenderten Fenster prüfen.
 - **Berichtshandlungen lesen ihren Zielkörper aus Befund oder Dokument.** Eine
   aktuelle Auswahl ist kein Ersatz. „Reparieren und erneut versuchen“ steht
   nur am aktuell angehaltenen Netzschritt mit lebenden Eingängen oder an einem

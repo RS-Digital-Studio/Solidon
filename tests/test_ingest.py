@@ -23,7 +23,7 @@ from app.core.ingest.loader import (
 from app.core.ingest.ops import unit_question
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
-from app.core.scene.project import Project, ProjectSources, new_project
+from app.core.scene.project import Project, ProjectSources, checksum, new_project
 from app.core.types import Profile, Source
 from app.i18n import _
 
@@ -716,7 +716,7 @@ def test_a_linked_source_is_read_relative_to_the_project(profile: Profile, tmp_p
         id="src_1",
         kind="import",
         path="meshes/cube_clean.stl",
-        sha256="",
+        sha256=checksum((MESHES / "cube_clean.stl").read_bytes()),
         embedded=False,
     )
     history = History(project.document)

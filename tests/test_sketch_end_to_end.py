@@ -22,6 +22,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Profile
+from app.i18n import source_text
 
 pytestmark = pytest.mark.skipif(not available(), reason="OpenCASCADE is an optional dependency")
 
@@ -95,7 +96,7 @@ def test_the_reference_part_runs_from_empty_scene_to_export(
     # Gehäuse und Deckel stehen beide in der Szene.
     bodies = result.scene.objects
     housing = next(entry for entry in bodies.values() if entry.name == "Gehäuse")
-    lid = next(entry for entry in bodies.values() if "Deckel" in str(entry.name))
+    lid = next(entry for entry in bodies.values() if "Deckel" in source_text(entry.name))
     assert housing.kind == "brep"
 
     # Die Wand ist eine Handrechnung: außen 60 x 40, Ecken r5, innen um die

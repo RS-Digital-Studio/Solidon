@@ -25,7 +25,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=be10c386">
+<link rel="stylesheet" href="../style.css?v=7e1cf380">
 </head>
 <body>
 <a class="skip" href="#content">Saltar al contenido</a>
@@ -45,7 +45,6 @@
         <div class="menu-panel">
           <a href="/es/features.html">Funciones</a>
           <a href="/es/ai-models.html" aria-current="page">Modelos de IA</a>
-
           <a href="/es/#pricing">Precio</a>
           <a href="/es/changelog.html">Novedades</a>
           <a href="/es/manual.html">Manual</a>
@@ -70,7 +69,7 @@
 
   <section id="anfang">
     <div class="wrap">
-      <div class="hero">
+      <div class="hero hero-copy">
         <div class="hero-text">
         <p class="hero-kicker">GLB y STL — imprimibles sin conocimientos de CAD</p>
         <h1>Cuando el modelo viene de una IA</h1>
@@ -81,15 +80,6 @@
         <p class="hero-kauf">Desde la 1.0, una compra única — sin suscripción.</p>
         </div>
 
-        <div class="shot">
-          <div class="stage">
-            <div class="chrome" aria-hidden="true"><i></i><i></i><i></i></div>
-            <a href="../bilder/beleg-erzeugt-es.png?v=af85b78c">
-              <img src="../bilder/beleg-erzeugt-es.png?v=af85b78c" width="900" height="637" fetchpriority="high"
-                   alt="Solidon3D con un búho generado a partir de una frase: a la izquierda el historial con «Cargar modelo», «Ajustar a medida» y «Colocar en la placa», en el centro la figura sobre la placa, a la derecha el informe">
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   </section>
@@ -138,81 +128,28 @@
       análisis de capas y un historial en el que cada número aún puede
       cambiarse después.</p>
 
-      <h2>Si no tienes ningún generador</h2>
-      <p class="sub">Solidon3D trae consigo el tercer camino: una frase o una imagen se convierte en un cuerpo, y este entra en el mismo historial que todo lo demás. El cálculo ocurre en un <b>ComfyUI</b> local — en tu equipo, sin cuenta y sin subida.</p>
-      <p class="sub">El modelo que hay detrás es <b>TripoSG</b> y tiene la <b>licencia MIT</b>. Esto proporciona al tercer camino una base de licencia clara. Otros modelos, incluido Hunyuan3D, tienen sus propias condiciones, que deben comprobarse para la versión concreta antes de usarlos.</p>
-      <table class="compare">
-        <thead>
-          <tr><th>Medido</th><th>Resultado</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>Cerrado y de una sola pieza</td><td><span class="yes">✓ los seis de abajo</span></td></tr>
-          <tr><td>Aristas abiertas</td><td><span class="yes">✓ ninguna</span></td></tr>
-          <tr><td>A partir de una frase, sin imagen</td><td>unos 20 segundos</td></tr>
-          <tr><td>A partir de una imagen propia</td><td>unos 13 segundos</td></tr>
-          <tr><td>Instalación tras instalar ComfyUI</td><td>un comando</td></tr>
-        </tbody>
-      </table>
-      <p class="footnote">Los tiempos están medidos en una tarjeta
-      NVIDIA de 8&nbsp;GB. En gráficas Intel y AMD los caminos locales
-      van más lentos o directamente en el procesador: el chat local
-      carga allí su prompt de sistema a 7,8 tokens por segundo — 51
-      minutos hasta que empieza una respuesta. Hay rodeos (IPEX-LLM,
-      ROCm, OpenVINO); no los incluimos ni los hemos probado. Lo que
-      allí funciona es una clave de API — la aplicación lo mide por sí
-      misma y te lo dice antes de que esperes.</p>
+      <h2>Tu generador sigue siendo tu elección</h2>
+      <p class="sub">Un archivo GLB o STL de cualquier generador que elijas
+      pasa en Solidon3D por la misma reparación, ajuste de tamaño,
+      comprobación de imprimibilidad, división y espigado que cualquier otro
+      modelo. No necesitas experiencia con CAD.</p>
+      <p class="sub">La instalación automática y la promoción de un modelo 3D
+      local concreto no están publicadas actualmente. Ese camino solo volverá
+      cuando estén documentadas las licencias, la procedencia y los derechos
+      de redistribución de toda la cadena. Hasta entonces Solidon3D no descarga
+      ni promete tal modelo; los archivos GLB y STL externos siguen siendo
+      plenamente utilizables.</p>
 
-      <h2>Seis frases, seis cuerpos</h2>
-      <p class="sub">Cada pieza de aquí es una sola frase que Solidon3D entregó al generador — sin retoques, sin segundo intento, sin elegir una entre diez. Están escogidas por aquello en lo que fallan estos modelos: salientes finos, paredes caladas, contrasalidas, repetición fina.</p>
-      <ul class="schau">
-        <li><figure>
-          <img src="../bilder/schau-gargoyle.webp?v=661b926a" width="720" height="720" loading="lazy"
-               alt="Una gárgola gótica sobre un pedestal, con alas plegadas, garras y gesto feroz">
-          <figcaption><b>Gárgola</b>Salientes finos y contrasalidas</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-lantern.webp?v=fc7a3925" width="720" height="720" loading="lazy"
-               alt="Un farol octogonal con paneles de filigrana calada y una anilla para colgarlo">
-          <figcaption><b>Farol</b>Pared calada</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-skull.webp?v=ab4527e7" width="720" height="720" loading="lazy"
-               alt="Un cráneo de dragón con cuernos curvos, cuencas y filas de dientes">
-          <figcaption><b>Cráneo de dragón</b>Cavidades y dientes finos</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-hand.webp?v=77a6fab7" width="720" height="720" loading="lazy"
-               alt="Una mano robótica mecánica con dedos articulados y juntas visibles">
-          <figcaption><b>Mano robótica</b>Muchos miembros separados</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-knight.webp?v=a7bba326" width="720" height="720" loading="lazy"
-               alt="Un caballo de ajedrez: una cabeza de caballo tallada sobre base redonda">
-          <figcaption><b>Caballo de ajedrez</b>Transiciones suaves, silueta clara</figcaption>
-        </figure></li>
-        <li><figure>
-          <img src="../bilder/schau-valve.webp?v=c8e834ce" width="720" height="720" loading="lazy"
-               alt="Una válvula industrial con volante, bridas atornilladas y conexiones de tubo">
-          <figcaption><b>Válvula industrial</b>Caras redondas y repetición</figcaption>
-        </figure></li>
-      </ul>
-
-      <h2>Y entonces empieza el trabajo</h2>
-      <p class="sub">El generador ha entregado una forma. Lo que la convierte en una pieza imprimible son tres pasos en Solidon3D — cada uno en el historial, cada uno con un número que aún puede cambiarse después.</p>
-      <div class="weg">
-        <figure>
-          <img src="../bilder/weg-1-erzeugt.webp?v=63d1b19b" width="720" height="720" loading="lazy"
-               alt="La gárgola generada como cuerpo cerrado, vista desde delante a la izquierda">
-          <figcaption><b>Generada y reparada.</b> Unos 20 segundos, después cerrada y de una sola pieza. Llevada a 80 mm son <b>44,7 cm³</b> de material — impresa maciza.</figcaption>
-        </figure>
-        <figure>
-          <img src="../bilder/weg-2-schnitt.webp?v=ae4be5f7" width="720" height="720" loading="lazy"
-               alt="La misma gárgola abierta por un corte: una pared fina y uniforme, hueca por dentro, con la superficie de corte resaltada en color">
-          <figcaption><b>Ahuecada, pared de 2 mm.</b> Quedan <b>23,6 cm³</b> — <b>un 47 % menos</b> de filamento y, en consecuencia, menos tiempo de impresión. El grosor de pared no sale de la intuición, sino de la boquilla de esta impresora.</figcaption>
-        </figure>
-      </div>
-      <p class="footnote">Después viene lo que figura arriba en esta página: informe, voladizos, islas, soportes, mejor orientación — y si no cabe en la placa, dividir y espigar. Generar es la parte más rápida del trabajo. El resto es la que decide el resultado.</p>
-
+      <h2>Chat local: GPU y CPU medidas por separado</h2>
+      <p class="footnote">El 31.08.2026, <b>qwen3:14b</b> resolvió
+      correctamente cinco de cinco instrucciones de prueba completas con 106
+      herramientas. En una NVIDIA RTX 4080 con 16&nbsp;GB de memoria gráfica
+      tardaron entre 11,8 y 25,2 segundos, con una mediana de 17 segundos. Un
+      prompt de 19.641 tokens se leyó en 13,1 segundos en frío y en una
+      mediana de 2,3 segundos en caliente; el modelo estaba por completo en
+      la memoria gráfica. <b>7,8 tokens por segundo y unos 42 minutos solo
+      corresponden al modo de reserva en CPU.</b> La aplicación muestra si
+      Ollama utiliza realmente la GPU.</p>
     </div>
   </section>
 
@@ -234,7 +171,6 @@
     © 2026 RS Digital ·
     <a href="/es/">Inicio</a> ·
     <a href="/es/manual.html">Manual</a> ·
-     ·
     <a href="mailto:support@solidon3d.de">support@solidon3d.de</a> ·
     <a href="/impressum.html">Aviso legal</a> ·
     <a href="/datenschutz.html">Privacidad</a>
@@ -247,6 +183,6 @@
   </div>
 </footer>
 
-<script src="/site.js?v=51734509" defer></script>
+<script src="/site.js?v=0c565d22" defer></script>
 </body>
 </html>

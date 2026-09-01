@@ -79,6 +79,19 @@ def test_broken_json_gets_an_answer_too() -> None:
     assert json.loads(answer)["error"]["code"] == remote.PARSE_ERROR
 
 
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b'{"jsonrpc":"2.0","method":"initialize","id":NaN}',
+        (b"[" * 65) + b"0" + (b"]" * 65),
+    ],
+)
+def test_unsafe_json_gets_a_protocol_parse_error(raw: bytes) -> None:
+    answer = json.loads(remote.answer_bytes(raw, _Bridge()))
+
+    assert answer["error"]["code"] == remote.PARSE_ERROR
+
+
 # --- Die Auflagen ---------------------------------------------------------------
 
 
@@ -130,6 +143,23 @@ def test_an_operation_that_runs_foreign_source_never_travels_over_the_wire(
         # Schritt nach oben.
         "file:///C:/Windows/System32/config",
         "file:///etc/passwd",
+        # Relative Angaben sind ebenfalls Pfade. Sie gegen das aktuelle
+        # Arbeitsverzeichnis aufzulösen würde nur einen scheinbar sicheren
+        # Workspace-Bezug erzeugen: Der Server darf keinen Dateipfad annehmen,
+        # auch keinen, dessen Basis erst der Prozess liefert.
+        "./model.stl",
+        ".\\model.stl",
+        "models/part.stl",
+        "models\\part.stl",
+        "part.stl",
+        "mein modell.stl",
+        "payload.diesisteineungewoehnlichlangeendung",
+        "payload.dies-ist-eine-ungewöhnlich-lange-endung",
+        "part.stl:stream",
+        "README:stream",
+        "README:stream:$DATA",
+        "README::$DATA",
+        ".",
     ],
 )
 def test_a_value_that_looks_like_a_path_is_refused(value: str) -> None:

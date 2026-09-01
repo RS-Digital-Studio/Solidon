@@ -40,7 +40,7 @@ from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.registry import PartSpec
+from app.core.knowledge.parts.registry import PARTS
 from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
@@ -101,44 +101,6 @@ SNAP_MIN_REACH = 8.0
 PIN_WALL = 1.6
 
 FeatureSide = Literal[-1, 0, 1]
-
-
-@dataclass(frozen=True, slots=True)
-class ConnectorGeometrySnapshot:
-    """Die zwei Bausteine eines Verbinders, vor einer Rechnung eingefroren.
-
-    Das globale Register ist absichtlich veränderlich: eigene Bausteine und
-    Rezepte kommen beim Anwendungsstart hinzu. Eine Hintergrundsuche darf es
-    deshalb weder verzögert laden noch während einer Bewertung erneut lesen.
-    ``PartSpec`` ist unveränderlich; dieser kleine Schnappschuss hält genau die
-    zwei Funktionen fest, die ein Auto-Split wirklich braucht.
-    """
-
-    dowel: PartSpec
-    snap_connector: PartSpec
-
-    def get(self, name: str) -> PartSpec:
-        """Gibt einen der beiden eingefrorenen Verbinder zurück."""
-        if name == "dowel":
-            return self.dowel
-        if name == "snap_connector":
-            return self.snap_connector
-        from app.core.errors import InternalError
-
-        raise InternalError(
-            detail="connector geometry snapshot was asked for an unknown part",
-            values={"part": name},
-        )
-
-
-def capture_connector_geometry() -> ConnectorGeometrySnapshot:
-    """Erfasst die mitgelieferten Verbinder vor dem Start eines Arbeiters."""
-    from app.core.knowledge.parts import PARTS
-
-    return ConnectorGeometrySnapshot(
-        dowel=PARTS.get("dowel"),
-        snap_connector=PARTS.get("snap_connector"),
-    )
 
 
 def next_connector_index(features: Mapping[FeatureId, Feature]) -> int:
@@ -609,7 +571,6 @@ def add_pins(
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
     batch: bool = False,
-    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> PinnedPair:
     """Setzt die Stifte in die eine Hälfte und die Bohrungen in die andere.
 
@@ -627,8 +588,6 @@ def add_pins(
     if not plan.count:
         return pair
 
-    geometry = connector_geometry or capture_connector_geometry()
-
     clearance = profile.material.clearance if play is None else play
     if plan.shape == SNAP:
         # Der Schnapper ist ein eigener Baustein und kein Querschnitt: Arm mit
@@ -640,11 +599,8 @@ def add_pins(
         # Nahtfläche, an der er angeschweißt wird. Beide Körper stehen deshalb
         # auf der Naht und reichen gleich weit hinein.
         reach = plan.length / 2.0
-        pin_body = _part(
-            geometry, "snap_connector", diameter=plan.diameter, length=reach, kind="pin"
-        )
+        pin_body = _part("snap_connector", diameter=plan.diameter, length=reach, kind="pin")
         bore_body = _part(
-            geometry,
             "snap_connector",
             diameter=plan.diameter,
             length=reach,
@@ -654,7 +610,6 @@ def add_pins(
         pin_offset = 0.0
     else:
         pin_body = _part(
-            geometry,
             "dowel",
             diameter=plan.diameter,
             length=plan.length,
@@ -663,7 +618,6 @@ def add_pins(
             play=0.0,
         )
         bore_body = _part(
-            geometry,
             "dowel",
             diameter=plan.diameter,
             length=plan.length / 2.0 + BORE_RELIEF,
@@ -791,11 +745,11 @@ def _add_connector_geometry(
         pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
 
 
-def _part(geometry: ConnectorGeometrySnapshot, name: str, **values: Any) -> MeshData:
+def _part(name: str, **values: Any) -> MeshData:
     """Ein Körper aus der Bibliothek. Bausteine vor Primitiven (§39), auch hier."""
     from app.core.geom.mesh import as_mesh_data
 
-    spec = geometry.get(name)
+    spec = PARTS.get(name)
     return as_mesh_data(spec.fn(spec.params(**values)).mesh)
 
 

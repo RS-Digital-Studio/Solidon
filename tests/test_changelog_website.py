@@ -12,7 +12,7 @@ from app.branding import APP_VERSION
 from app.core import changes
 from app.i18n.catalog import available_languages
 from tools import make_changelog
-from tools.make_changelog import page_path, path_for, render_page, version_id
+from tools.make_changelog import page_path, path_for, published_version, render_page, version_id
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
@@ -30,7 +30,33 @@ def test_the_picker_offers_every_bundled_version(language: str) -> None:
     expected = tuple(entry.version for entry in changes.history(language))
 
     assert offered == expected
-    assert re.search(rf'<option value="{re.escape(APP_VERSION)}" selected>', text)
+    public = published_version()
+    assert re.search(rf'<option value="{re.escape(public)}" selected>', text)
+    if public != APP_VERSION:
+        assert f'<option value="{APP_VERSION}">{APP_VERSION}</option>' in text
+
+
+def test_the_development_version_is_not_labelled_as_published(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """0.3.0 kann im Verlauf stehen, während öffentlich noch 0.2.2 gilt."""
+    monkeypatch.setattr(make_changelog, "published_version", lambda: "0.2.2")
+
+    text = render_page("de")
+
+    assert '<option value="0.2.2" selected>0.2.2 — diese Version</option>' in text
+    assert '<option value="0.3.0">0.3.0</option>' in text
+    assert 'data-version="0.2.2"' in text and 'data-version="0.3.0"' in text
+
+
+def test_a_missing_public_version_stops_with_the_next_action(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Veröffentlichungsstand darf der Generator kein Badge raten."""
+    monkeypatch.setattr(make_changelog, "WEBSITE", tmp_path)
+
+    with pytest.raises(RuntimeError, match=r"version\.json.*make_download\.py"):
+        make_changelog.published_version()
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
@@ -82,15 +108,16 @@ def test_each_release_starts_with_a_plain_language_summary() -> None:
     assert 'data-changelog-status aria-live="polite"' in text
 
 
-def test_an_empty_history_becomes_a_customer_message(
+def test_a_public_version_missing_from_history_stops_with_the_next_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(make_changelog.changes, "history", lambda _language: ())
+    monkeypatch.setattr(make_changelog, "published_version", lambda: "9.9.9")
 
-    text = render_page("de")
-
-    assert "Für diese Version liegt kein Verlauf bei." in text
-    assert "data-changelog-select" not in text
+    with pytest.raises(
+        RuntimeError,
+        match=r"veröffentlichte Version 9\.9\.9.*app/core/changes\.py.*erneut",
+    ):
+        render_page("de")
 
 
 def test_the_release_run_always_rebuilds_the_pages(
@@ -101,9 +128,39 @@ def test_the_release_run_always_rebuilds_the_pages(
 
     calls = []
     monkeypatch.setattr(sys, "argv", ["make_download.py"])
-    monkeypatch.setattr(make_download, "write_changelog_pages", lambda: calls.append(True) or ())
-    monkeypatch.setattr(make_download, "write_pages", lambda _packages: None)
-    monkeypatch.setattr(make_download, "write_version", lambda _packages: None)
+    monkeypatch.setattr(
+        make_download, "write_changelog_pages", lambda: calls.append("changelog") or ()
+    )
+    monkeypatch.setattr(make_download, "write_pages", lambda _packages: calls.append("pages"))
+    monkeypatch.setattr(make_download, "write_version", lambda _packages: calls.append("version"))
 
     assert make_download.main() == 0
-    assert calls == [True]
+    assert calls == ["pages", "version", "changelog"], (
+        "erst die veröffentlichte Version schreiben, dann ihr öffentliches Badge erzeugen"
+    )
+
+
+def test_a_release_with_packages_builds_the_badge_after_version_json(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch der echte Paketzweig erzeugt den Verlauf aus dem neuen Stand."""
+    from tools import make_download
+
+    calls = []
+    package = object()
+    monkeypatch.setattr(sys, "argv", ["make_download.py", "solidon-setup.exe"])
+    monkeypatch.setattr(make_download, "read_packages", lambda _paths: [package])
+    monkeypatch.setattr(
+        make_download, "write_pages", lambda packages: calls.append(("pages", packages))
+    )
+    monkeypatch.setattr(
+        make_download, "write_version", lambda packages: calls.append(("version", packages))
+    )
+    monkeypatch.setattr(
+        make_download,
+        "write_changelog_pages",
+        lambda: calls.append(("changelog", None)) or (),
+    )
+
+    assert make_download.main() == 0
+    assert [name for name, _value in calls] == ["pages", "version", "changelog"]

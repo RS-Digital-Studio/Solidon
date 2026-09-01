@@ -13,73 +13,54 @@ trugen ihre eigene. Drei Orte für dieselbe Sache sind der Grund, warum sie
 auseinanderlief. Hier steht sie einmal; dass die statischen Seiten dazu passen,
 prüft `tests/test_website.py`.
 
-Kein Eintrag wird auf schmalen Schirmen ausgeblendet. Ein Weg, den nur der
-Desktop zeigt, ist für die Hälfte der Besucher keiner.
+Auf schmalem Schirm bleibt jeder Eintrag über den Aufklapper erreichbar. Ein
+Weg, den nur der Desktop zeigt, ist für die Hälfte der Besucher keiner.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-#: Je Sprache die fünf Einträge: Ziel, Beschriftung, Ausblendeklasse.
-#: Die Reihenfolge hier ist die Reihenfolge im Menü. Alle Beschriftungen
-#: stammen aus dem Bestand.
-ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
-    "de": [
-        ("/funktionen.html", "Funktionen", ""),
-        ("/ki-modelle.html", "KI-Modelle", ""),
-        ("#preis", "Preis", ""),
-        ("/changelog.html", "Neuerungen", ""),
-        ("/handbuch.html", "Handbuch", ""),
-    ],
-    "en": [
-        ("/en/features.html", "Features", ""),
-        ("/en/ai-models.html", "AI models", ""),
-        ("#pricing", "Price", ""),
-        ("/en/changelog.html", "What’s new", ""),  # noqa: RUF001
-        ("/en/manual.html", "Manual", ""),
-    ],
-    "es": [
-        ("/es/features.html", "Funciones", ""),
-        ("/es/ai-models.html", "Modelos de IA", ""),
-        ("#pricing", "Precio", ""),
-        ("/es/changelog.html", "Novedades", ""),
-        ("/es/manual.html", "Manual", ""),
-    ],
-    "fr": [
-        ("/fr/features.html", "Fonctions", ""),
-        ("/fr/ai-models.html", "Modèles IA", ""),
-        ("#pricing", "Prix", ""),
-        ("/fr/changelog.html", "Nouveautés", ""),
-        ("/fr/manual.html", "Manuel", ""),
-    ],
-    "it": [
-        ("/it/features.html", "Funzioni", ""),
-        ("/it/ai-models.html", "Modelli IA", ""),
-        ("#pricing", "Prezzo", ""),
-        ("/it/changelog.html", "Novità", ""),
-        ("/it/manual.html", "Manuale", ""),
-    ],
-    "pt": [
-        ("/pt/features.html", "Funções", ""),
-        ("/pt/ai-models.html", "Modelos de IA", ""),
-        ("#pricing", "Preço", ""),
-        ("/pt/changelog.html", "Novidades", ""),
-        ("/pt/manual.html", "Manual", ""),
-    ],
-}
+from app.i18n import SOURCE_LANGUAGE, _, source_text
+from app.i18n.catalog import available_languages, read_catalog
 
-#: Die Startseite je Sprache. Ein Anker wirkt nur auf der Seite, die ihn
-#: trägt — von einer Unterseite aus muss er die Startseite mitnennen, sonst
-#: springt er ins Nichts der eigenen Seite.
-HOME: Final[dict[str, str]] = {
-    "de": "/",
-    "en": "/en/",
-    "es": "/es/",
-    "fr": "/fr/",
-    "it": "/it/",
-    "pt": "/pt/",
-}
+#: Die fünf Wege als Quellpfad, Unterordnerpfad und deutscher Textschlüssel.
+#: Sprache sieben braucht damit nur ihren Katalog; sie bekommt weder deutsche
+#: Beschriftungen noch Verweise auf die deutsche Seite.
+ENTRY_SPECS: Final = (
+    ("funktionen.html", "features.html", _("Funktionen")),
+    ("ki-modelle.html", "ai-models.html", _("KI-Modelle")),
+    ("#preis", "#pricing", _("Preis")),
+    ("changelog.html", "changelog.html", _("Neuerungen")),
+    ("handbuch.html", "manual.html", _("Handbuch")),
+)
+
+
+def site_text(source: str, language: str) -> str:
+    """Ein Rahmentext aus dem Katalog, Deutsch als Quellsprache."""
+    if language == SOURCE_LANGUAGE:
+        return source
+    return read_catalog(language).get(source, source)
+
+
+def entries_for(language: str) -> list[tuple[str, str, str]]:
+    """Die fünf Menüwege einer Sprache aus Pfadschema und Katalog."""
+    entries = []
+    for german_path, translated_path, label in ENTRY_SPECS:
+        if language == SOURCE_LANGUAGE:
+            target = german_path
+        elif translated_path.startswith("#"):
+            target = translated_path
+        else:
+            target = f"{language}/{translated_path}"
+        address = target if target.startswith("#") else f"/{target}"
+        entries.append((address, site_text(source_text(label), language), ""))
+    return entries
+
+
+#: Rückwärtskompatible Momentaufnahme für Erzeuger, die ausschließlich die
+#: bereits vorhandenen Sprachen brauchen. Neue Wege rufen :func:`entries_for`.
+ENTRIES: Final = {language: entries_for(language) for language in available_languages()}
 
 
 def nav_links(language: str, *, current: str = "", on_home: bool = False) -> str:
@@ -90,28 +71,18 @@ def nav_links(language: str, *, current: str = "", on_home: bool = False) -> str
     ``on_home`` sagt, ob die Seite selbst die Startseite ist — nur dort
     bleiben Anker kurz.
     """
-    entries = ENTRIES.get(language, ENTRIES["de"])
+    entries = entries_for(language)
     parts: list[str] = []
     for target, label, hide in entries:
         address = target
         if target.startswith("#") and not on_home:
-            address = HOME.get(language, "/") + target
+            home = "/" if language == SOURCE_LANGUAGE else f"/{language}/"
+            address = home + target
         marker = ' aria-current="page"' if current and target == current else ""
         attribute = f' class="{hide}"' if hide else ""
         parts.append(f'<a{attribute} href="{address}"{marker}>{label}</a>')
     return "".join(parts)
 
-
-#: Die Beschriftung des Aufklappmenüs je Sprache. Sie steht nur für
-#: Vorlesegeräte da — sichtbar ist das Symbol.
-MENU_LABELS: Final[dict[str, str]] = {
-    "de": "Menü",
-    "en": "Menu",
-    "es": "Menú",
-    "fr": "Menu",
-    "it": "Menu",
-    "pt": "Menu",
-}
 
 #: Drei Striche als Symbol. **Kein Zeichen aus einer Schrift und kein Emoji**
 #: (Hausregel): Ein Glyph hängt davon ab, was der Rechner installiert hat,
@@ -123,11 +94,11 @@ MENU_MARK: Final[str] = (
 
 
 def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: str = "") -> str:
-    """Die sechs Verweise in einem Aufklapper, der am Rechner keiner ist.
+    """Die fünf Verweise in einem Aufklapper, der am Rechner keiner ist.
 
-    **Warum ein ``details`` und kein Skript.** Auf einem Handy passten von
-    fünf Einträgen nur zwei in die Zeile; die übrigen drei wurden per CSS
-    ausgeblendet, und damit kannte die Hälfte der Besucher vier Wege nicht.
+    **Warum ein ``details`` und kein Skript.** Auf einem Handy passten nur
+    zwei Einträge in die Zeile; die übrigen wurden per CSS ausgeblendet, und
+    damit kannte die Hälfte der Besucher mehrere Wege nicht.
     Robert am 31.08.2026: „mach doch ein aufklappmenü für mobil."
 
     Am Rechner soll dieselbe Leiste aber eine Leiste bleiben — ein Aufklapper,
@@ -149,7 +120,7 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: 
     """
     return (
         f'<details class="menu">'
-        f'<summary aria-label="{MENU_LABELS.get(language, MENU_LABELS["de"])}">'
+        f'<summary aria-label="{site_text("Menü", language)}">'
         f"{MENU_MARK}</summary></details>"
         f'<div class="menu-panel">'
         f"{nav_links(language, current=current, on_home=on_home)}"

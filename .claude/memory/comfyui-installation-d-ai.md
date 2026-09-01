@@ -8,6 +8,11 @@ metadata:
   modified: 2026-08-30T08:11:06.391Z
 ---
 
+> **Nur lokale Diagnose, keine Produktfreigabe.** Die hier genannten Knoten,
+> Gewichte und Messungen belegen eine technische Installation, aber keine
+> vollständige Lizenz- und Weitergabekette; siehe
+> [[modellkette-vor-erzeugerfreigabe]].
+>
 > **Überholt am 30.08.2026: Es läuft ein anderes ComfyUI.** `find_comfyui()`
 > findet das **Comfy Desktop** unter
 > `C:\Users\rober\AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI`
@@ -28,8 +33,8 @@ Stand (07.08.2026): ComfyUI 0.22.0, embedded Python 3.12.10, PyTorch
 `python_embeded\python.exe -s ComfyUI\main.py --windows-standalone-build
 --disable-auto-launch`, Port 8188.
 
-Solidons eigener Ablauf benutzt diese Sammlung **nicht mehr** — siehe
-[[triposg-statt-hunyuan]]. Sie ist aber weiterhin installiert, und wer einen
+Solidons ausgelieferter Ablauf benutzt diese Sammlung **nicht** — siehe
+[[modellkette-vor-erzeugerfreigabe]]. Sie ist aber weiterhin installiert, und wer einen
 eigenen Graphen fährt, findet sie so vor:
 
 Für die 3D-Erzeugung ist **`ComfyUI-Hunyuan3d-2-1`** installiert, nicht Kijais

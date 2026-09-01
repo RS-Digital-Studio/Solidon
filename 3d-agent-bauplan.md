@@ -52,12 +52,6 @@ der Nicht-bauen-Liste zurück. Was dazukommt, sind Stellen, an denen der Plan
 hinter dem Code zurückhing, fünf Entscheidungen, auf die das Register von
 `ROADMAP.md` ausdrücklich gewartet hat, und ein Kapitel, das gefehlt hat.
 
-**Produktgrenze für 0.3.0:** Die öffentliche, gehostete Tauschbörse entfällt.
-Bausteinrezepte werden ausschließlich als lokale Dateien exportiert und
-importiert; dieser Weg bleibt vollständig, verlustfrei und offline nutzbar.
-Gestrichen sind nur Galerie, Upload, Serverdownload und die daran hängenden
-Konten-, Bewertungs- und Moderationswege — nicht das Rezeptformat (§24.5).
-
 **Neu: §37.3 Regulatorische Auflagen** — der teuerste Fund. Die Verordnung
 über Cyberresilienz gilt für jedes kommerziell in Verkehr gebrachte Erzeugnis
 mit digitalen Elementen, und Solidon ist eines. Ab dem **11.09.2026** — drei
@@ -324,16 +318,13 @@ Kriterium; Eindeutigkeit und maschinelle Abnahme sind es.
 
 - **Abnahmekriterien statt Zeitschätzungen.** Jede Phase in §40 endet mit
   Bedingungen, die grün sein müssen.
-- **Tests sind die Definition von fertig.** Jede Operation hat einen
-  Verhaltenstest; für jede geometrieändernde Operation existiert zusätzlich
-  ein Test mit festem Eingangs-Mesh (§34) und erwarteten Kennzahlen.
+- **Tests sind die Definition von fertig.** Für jede Geometrieoperation
+  existiert ein Test mit festem Eingangs-Mesh (§34) und erwarteten Kennzahlen.
 - **Kleine Schritte.** Nach jedem Schritt läuft die vollständige Suite.
 - **Verbote sind Prüfungen, keine Absichten.** Jede harte Regel aus
   `AGENTS.md` hat einen Test.
-- **Verträge zuerst.** Die Signaturen aus §9 sind die eine kanonische
-  Definition; Anbieter und Verbraucher legen keine Schattenverträge an.
-  Änderungen an persistenten Verträgen ziehen Formatmigration, alte
-  Beispieldatei und Rundreisetest nach.
+- **Verträge zuerst.** Bei jedem neuen Modul steht die Signatur aus §9 fest,
+  bevor die Umsetzung beginnt.
 - **Konsistenz vor Vollständigkeit.** Acht Ops, die überall identisch
   auftauchen, schlagen zwanzig, die auseinanderdriften.
 - **Keine stillen Erweiterungen.** Neue Abhängigkeiten, Ops, Formatversionen
@@ -391,7 +382,8 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
-| Lizenz | `licence` | Nutzungsrechte an einem weitergegebenen Rezept — **aber das Dataclass-Feld und der Schlüssel in der Rezeptdatei heißen `license`**. Technischer Schlüssel amerikanisch wie das Dateiformat, Oberflächentext britisch wie der Katalog. Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
+| Bausteindatei | `part_file` | lokaler, offline geprüfter Import und Export eines Bausteinrezepts |
+| Lizenz | `licence` | Nutzungsrechte an einer Bausteindatei; das Dataclass-Feld und der Dateischlüssel heißen `license`, der Parametername bleibt wegen der Builtin-Schattung `licence` |
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.
@@ -405,7 +397,7 @@ Tabelle, dann in den Code.
 | **Produkt** | Desktop-Anwendung, als Download veröffentlicht |
 | **Online** | Website mit Doku und Downloads |
 | **Online, optional** | gehosteter Generierungs-Backend für Nutzer ohne GPU |
-| **Ausdrücklich nicht** | Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage, gehostete Tauschbörse |
+| **Ausdrücklich nicht** | Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage |
 
 Wichtigster Nebeneffekt: **Auf dem Server läuft niemals Code, den ein LLM
 erzeugt hat.** Er läuft auch lokal nicht (§32); der gehostete Backend nimmt
@@ -699,10 +691,8 @@ def resize_hole(ctx: OpContext) -> OpResult: ...
 | Prüfungen im Stack | `consumes`/`produces`, `reversible`, `deterministic` |
 
 **Konsistenztest**: Jede Op erscheint in allen Ausgaben, besitzt Schema,
-Verhaltenstest und übersetzte Texte; eine geometrieändernde Op besitzt außerdem
-einen Geometrietest mit erwarteten Kennzahlen. Kein Kürzel ist doppelt,
-nicht-deterministische Ops führen einen Startwert, und `applies_to` nennt nur
-bekannte Feature-Arten.
+Geometrietest und übersetzte Texte; kein Kürzel doppelt; nicht-deterministische
+Ops führen einen Startwert; `applies_to` nennt nur bekannte Feature-Arten.
 
 **Parameterschema** trägt Grenzen, Einheiten, Vorgabewerte und die Zuordnung
 zu Vorder- oder Rückseite des Dialogs (§2.4) — dieselbe Definition validiert
@@ -726,12 +716,8 @@ erreicht den Kern nie. Umrechnungen passieren genau zweimal: beim Import
 | `EPS_DISPLAY` | 0,01 mm | Rundung in Bemaßung, Steckbrief, Berichten |
 | `EPS_MATCH` | relativ, ~0,5 % der Modelldiagonale | Feature-Vergleich |
 
-Fertigungsspiel und materialabhängige Grenzen sind Projekt- oder Profilwerte,
-keine der drei Rechentoleranzen. Für numerische Robustheit gilt: `EPS_GEOM`
-absolut, `EPS_MATCH` relativ, `EPS_DISPLAY` nur für die Anzeige. Gerundet wird
-nur in der Anzeige. Physische oder geometrisch berechnete Fließkommawerte
-werden nie mit `==` verglichen; ausdrücklich kanonische Wächterwerte sind keine
-Messergebnisse.
+Merkregel: **absolut für Fertigung, relativ für Vergleiche.** Gerundet wird nur
+in der Anzeige. Fließkommazahlen werden nie mit `==` verglichen.
 
 ### 11.3 Determinismus
 **Drei Stellen sind randomisiert**: Jitter-Rückfallstufe (§17.2),
@@ -1553,16 +1539,14 @@ Projekte still anders, und Leitprinzip 4 ist verletzt.
   Maße
 - **Beim Öffnen**: Hinweis, welche *benutzten* Bausteine sich seither geändert
   haben, mit der Wahl zwischen „neu rechnen" und „alten Stand beibehalten".
-  **Für einen eigenen `.py`-Baustein (§24.5) trägt dieser Weg nicht**, und das
-  ist eine offene Stelle und keine Ausnahme: Die Prüfung liest die gepflegten
+  **Für einen eigenen Baustein (§24.5) trägt dieser Weg nicht**, und das ist
+  eine offene Stelle und keine Ausnahme: Die Prüfung liest die gepflegten
   Änderungsverläufe, und wer an seinem eigenen Baustein ein Maß ändert und
   speichert, pflegt keinen. Was sie stattdessen lesen müsste, ist der Zustand
   der Dateien selbst — Name, Änderungszeit, Größe unter
-  `<Nutzerdaten>/parts/*.py`. Genau diese Auskunft braucht auch der
-  Plattencache (§38), um für einen geänderten eigenen Baustein nicht das alte
-  Ergebnis zurückzugeben; sie wird also ohnehin gebildet. Ein Rezept trägt
-  seine Version als Hash seiner kanonischen Daten und braucht diesen
-  Sonderweg nicht
+  `<Nutzerdaten>/parts/`. Genau diese Auskunft braucht auch der Plattencache
+  (§38), um für einen geänderten eigenen Baustein nicht das alte Ergebnis
+  zurückzugeben; sie wird also ohnehin gebildet
 - Der alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt; wird er
   entfernt, verhält sich das wie eine Migration (§16.2)
 
@@ -1572,8 +1556,7 @@ Dieselbe Registrierung aus einem Nutzerverzeichnis
 gekennzeichnet.
 
 **Das ist kein Plugin-System.** Der Unterschied ist die Reichweite: Eigene
-`.py`-Bausteine gelten nur auf dem Rechner, auf dem sie liegen. Rezepte sind
-Daten und dürfen deshalb mit einem Projekt oder als lokale Datei reisen.
+Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
 
 - Ein eigener Baustein **als `.py` reist nie in einer Projektdatei mit** —
   sonst wäre die Regel aus §32 umgangen, dass eine fremde Datei keinen Code
@@ -1587,17 +1570,14 @@ Daten und dürfen deshalb mit einem Projekt oder als lokale Datei reisen.
   dieselbe Sperre wie für jeden anderen Weg. Der Katalog weist die Herkunft
   aus, und ein mitgereistes Rezept überschreibt nie einen gleichnamigen
   eigenen Baustein
-- **Rezept-Export und -Import sind ausschließlich lokale Dateiwege** und
-  bleiben verlustfrei und offline nutzbar. Der Export schreibt eine Datei,
-  der Import liest eine bewusst ausgewählte Datei; Solidon lädt kein Rezept
-  hoch, ruft keines von einem Server ab und durchsucht keine öffentliche
-  Sammlung. Die Datei führt Autor, Lizenz und Herkunft mit. Vor der Übernahme
-  werden Format, Größe und Integrität geprüft; ausführbarer Quelltext bleibt
-  durch §32 ausgeschlossen
-- Lokal weitergegebene Rezepte dürfen eingebettete Modelldaten oder andere
-  Mesh-Payloads enthalten, wie eine Projektdatei auch. Der Import weist die
-  fremde Herkunft aus, und ein eingelesenes Rezept überschreibt nie
-  stillschweigend einen gleichnamigen lokalen Baustein
+- **Rezept-Export und -Import bleiben lokal, verlustfrei und offline
+  nutzbar.** RS Digital betreibt keine öffentliche Tauschstelle, Galerie,
+  Upload-, Download-, Vermittlungs- oder Moderationsfunktion. Nutzer geben
+  Bausteindateien ausschließlich über einen selbst gewählten Weg weiter
+- Lokale Bausteindateien dürfen erforderliche Modelldaten oder andere
+  Payloads mitführen. Solidon prüft Format, Größe, Struktur, Integrität,
+  Operationsnamen, Herkunft, Autor und Lizenz vor der Übernahme. Importieren,
+  Bearbeiten oder neu Speichern entfernt die fremde Herkunft nicht
 - Öffnet jemand ein Projekt, das einen unbekannten eigenen Baustein benutzt,
   hält die Auswertung an und meldet, was fehlt (§15.2)
 - Sie erweitern nicht die Anwendung, sondern nur die Bibliothek — keine neuen
@@ -2144,11 +2124,10 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
   dasselbe Maß — sie ist ebenfalls ein ZIP, und sie reist ausdrücklich zwischen
   Leuten (§16.2). Eine Grenze, die nur an einem von zwei Eingängen steht, ist
   die Lehre, die nur halb gezogen wurde
-- **Eigene `.py`-Bausteine (§24.5) reisen nie mit.** Ein Projekt verweist auf
-  sie nur namentlich; fehlt der Baustein, hält die Auswertung an. Ein Rezept
-  darf als Daten mitreisen oder über eine lokale Datei eingelesen werden.
-  Ausführbarer Code kommt ausschließlich aus der Installation und dem
-  Nutzerverzeichnis, nie aus einer geöffneten Datei.
+- **Eigene Bausteine (§24.5) reisen nie mit.** Ein Projekt verweist auf sie
+  nur namentlich; fehlt der Baustein, hält die Auswertung an. Ausführbarer
+  Code kommt ausschließlich aus der Installation und dem Nutzerverzeichnis,
+  nie aus einer geöffneten Datei.
 
 ---
 
@@ -2174,11 +2153,8 @@ umgekehrt. `UserError` und `GeometryError` erscheinen als Vorschlag nach §2.7,
 `InternalError` als Fehlerdialog mit Berichtsangebot, `ExternalToolError` mit
 Hinweis auf die Einstellung, in der das Programm konfiguriert wird.
 
-Jeder `AppError`, der die Oberfläche erreicht, trägt `suggestions:
-list[Action]` — anklickbare, zum Fehlertyp passende Handlungen statt bloßer
-Prosa. Ein `InternalError` bietet Bericht und Details an; eine interne
-Programmierausnahme wird diagnostiziert und an der Oberflächengrenze als
-`InternalError` übersetzt, statt eine erfundene Reparatur vorzuschlagen.
+Jede Ausnahme trägt `suggestions: list[Action]` — anklickbare Handlungen, keine
+Prosa. Eine Ausnahme ohne Vorschlag ist unfertig.
 
 ### 33.2 Protokoll
 Rotierende Datei im Nutzerverzeichnis, rein lokal. Format: Zeitstempel, Ebene,
@@ -2244,7 +2220,6 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Rückfallkette | jede Stufe einmal erzwungen |
 | Determinismus | gleicher Startwert → gleiches Ergebnis, alle vier Stellen |
 | Bausteine | Parameterbereich vollständig, Vorschaubild erzeugbar |
-| Bausteindatei | lokaler Export und Import als verlustfreie Rundreise; Autor, Lizenz und Herkunft bleiben erhalten; Größen- und Integritätsgrenzen greifen; kein ausführbarer Quelltext und kein Netzzugriff |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Fläche und Volumen gegen analytisch bekannte Körper; `island_tower` erkannt |
 | Parameter | Grammatik, Zyklen, Ablehnung von allem Übrigen |
@@ -2951,13 +2926,11 @@ Schwelle bleibt, wird als Cluster gemeldet und nicht geraten (Regel 21).
 Ergebnisnotiz. Speist die Regelsammlung.
 
 **Bewusst nicht:** Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage
-von Projekten, gehostete Tauschbörse, Plugin-System, Telemetrie, eigener
-G-Code-Slicer.
+von Projekten, Plugin-System, Telemetrie, eigener G-Code-Slicer.
 
 Zur Abgrenzung: Eigene Bausteine (§24.5) sind **kein** Plugin-System. Sie
 erweitern die Bibliothek, nicht die Anwendung, gelten nur lokal und reisen nie
-als `.py` mit einer Projektdatei. Ein Bausteinrezept ist Daten statt Code und
-darf deshalb als Projektinhalt oder über den lokalen Datei-Import reisen.
+mit einer Projektdatei.
 
 ---
 

@@ -461,6 +461,16 @@ class Registry:
         """
         self._ops.pop(name, None)
 
+    def replace_state(self, prepared: Registry) -> None:
+        """Aktiviert einen vollständig vorbereiteten Registerstand.
+
+        Der Zustand wurde bereits in einem isolierten Register validiert.
+        Die Referenzübernahme ist der nicht erneut fehlbare Commit-Schritt für
+        Rezeptdateien, nachdem deren vollständige Datei veröffentlicht ist.
+        """
+
+        self._ops = prepared._ops
+
     def get(self, name: str) -> OperationSpec:
         if name not in self._ops:
             raise InternalError(

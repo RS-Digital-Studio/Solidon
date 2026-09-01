@@ -38,6 +38,17 @@ if [ "${SOLIDON_KEIN_PUSH:-}" = "1" ]; then
   exit 0
 fi
 
+# Eine laufende Arbeitsrunde kann den automatischen Weg für **alle** parallelen
+# Sitzungen dieses Klons sperren. Eine Umgebungsvariable erreicht nur den
+# Prozess, der sie gesetzt hat; die lokale Git-Konfiguration teilen dagegen
+# alle Arbeitsprozesse dieses Repositories. Bewusst lokal statt als Datei im
+# Arbeitsbaum, damit eine Betriebssperre nie versehentlich mit ausgeliefert
+# wird. Aufheben: `git config --local --unset solidon.noAutoPush`.
+if [ "$(git config --bool --get solidon.noAutoPush 2>/dev/null || printf 'false')" = "true" ]; then
+  echo "post-commit: solidon.noAutoPush=true, kein Push." >&2
+  exit 0
+fi
+
 echo "post-commit: pushe $zweig nach origin …" >&2
 if git push --quiet origin "$zweig" 2>&1; then
   echo "post-commit: $zweig ist auf der Gegenstelle." >&2

@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+import app.core.http as http_boundary
 from app.core.errors import ExternalToolError, ValidationError
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, check_url, fetch_model
 
@@ -25,6 +26,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         payload = (MESHES / "cube_clean.stl").read_bytes()
+        if self.path.startswith("/weiter"):
+            self.send_response(302)
+            self.send_header("Location", "/wuerfel.stl")
+            self.end_headers()
+            return
         if self.path.startswith("/seite"):
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -59,7 +65,20 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
 
 @pytest.fixture
-def server() -> Iterator[str]:
+def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
+    # Der Produktivtransport lehnt private Ziele ab. Dieser In-Process-Server
+    # steht stellvertretend für eine bereits öffentlich geprüfte und gepinnte
+    # Adresse; der eigentliche Negativfall steht separat unten.
+    monkeypatch.setattr(
+        http_boundary,
+        "resolve_public_addresses",
+        lambda _url, **_kwargs: ("127.0.0.1",),
+    )
+    monkeypatch.setattr(
+        http_boundary,
+        "verify_public_peer",
+        lambda peer, expected: None,
+    )
     httpd = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -85,6 +104,13 @@ def test_the_server_may_name_the_file(server: str) -> None:
     """Content-Disposition schlägt den Pfad — dort steht der Name, den der
     Anbieter meint."""
     assert fetch_model(f"{server}/benannt?id=17").name == "halterung.stl"
+
+
+def test_a_real_redirect_is_checked_and_remains_inside_the_total_deadline(server: str) -> None:
+    fetched = fetch_model(f"{server}/weiter")
+
+    assert fetched.name == "wuerfel.stl"
+    assert fetched.url.endswith("/wuerfel.stl")
 
 
 def test_progress_is_reported(server: str) -> None:
@@ -147,6 +173,40 @@ def test_only_http_gets_through(url: str) -> None:
         check_url(url)
 
 
+def test_credentials_in_a_model_url_are_rejected_and_never_echoed() -> None:
+    with pytest.raises(ValidationError) as raised:
+        check_url("https://name:kennwort@example.invalid/teil.stl?token=geheim")
+
+    assert raised.value.values["constraint"] == "userinfo"
+    rendered = str(raised.value.values)
+    for secret in ("name", "kennwort", "token", "geheim"):
+        assert secret not in rendered
+
+
+def test_a_dns_name_resolving_to_a_private_address_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        http_boundary.socket,
+        "getaddrinfo",
+        lambda *_args, **_kwargs: [
+            (
+                http_boundary.socket.AF_INET,
+                http_boundary.socket.SOCK_STREAM,
+                6,
+                "",
+                ("127.0.0.1", 443),
+            )
+        ],
+    )
+
+    with pytest.raises(ValidationError) as caught:
+        fetch_model("https://modelle.example/teil.stl")
+
+    assert caught.value.constraint == "private_destination"
+    assert caught.value.suggestions
+
+
 class _Redirected:
     """Eine Antwort, die von woanders herkommt, als angefragt wurde.
 
@@ -202,6 +262,40 @@ def test_a_redirect_within_http_goes_through() -> None:
     )
 
     assert fetched.url == "https://cdn.example.invalid/teil.stl"
+
+
+def test_a_download_does_not_store_a_signed_query_in_its_provenance() -> None:
+    class _Body(_Redirected):
+        def read(self, size: int) -> bytes:
+            payload = getattr(self, "_rest", b"solid teil\n")
+            self._rest = b""
+            return payload
+
+    fetched = fetch_model(
+        "https://example.invalid/teil.stl?token=geheim#ansicht",
+        opener=lambda request, timeout: _Body(
+            "https://cdn.example.invalid/teil.stl?signature=noch-geheimer"
+        ),
+    )
+
+    assert fetched.url == "https://cdn.example.invalid/teil.stl"
+    assert "geheim" not in fetched.url
+
+
+@pytest.mark.parametrize(
+    "final",
+    (
+        "http://example.invalid/teil.stl",
+        "https://127.0.0.1/teil.stl",
+        "https://name:kennwort@cdn.example.invalid/teil.stl",
+    ),
+)
+def test_a_public_https_download_cannot_redirect_to_a_weaker_boundary(final: str) -> None:
+    with pytest.raises(ValidationError):
+        fetch_model(
+            "https://example.invalid/teil.stl",
+            opener=lambda request, timeout: _Redirected(final),
+        )
 
 
 def test_the_readable_formats_are_the_same_ones_the_drop_area_takes() -> None:

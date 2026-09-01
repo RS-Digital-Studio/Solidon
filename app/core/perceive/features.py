@@ -894,6 +894,7 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
         axis = np.asarray(fit.axis, dtype=float)
         centre = np.asarray(fit.centre, dtype=float)
         stack = [index]
+        coaxial = [index]
         for other_index, (other, _other_patch) in enumerate(found):
             if other_index == index or other_index in used:
                 continue
@@ -901,22 +902,35 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
                 math.radians(SINK_AXIS_LIMIT)
             ):
                 continue
-            if abs(other.radius - fit.radius) > fit.radius * CYLINDER_TOLERANCE:
-                continue
             offset = np.asarray(other.centre, dtype=float) - centre
             across = offset - float(offset @ axis) * axis
             if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
                 continue
-            stack.append(other_index)
-        if len(stack) >= THREAD_TURNS:
-            used.update(stack)
+            coaxial.append(other_index)
+            if abs(other.radius - fit.radius) <= fit.radius * CYLINDER_TOLERANCE:
+                stack.append(other_index)
+
+        thread_stack = stack
+        if len(thread_stack) < THREAD_TURNS and len(coaxial) >= THREAD_TURNS:
+            # Nach einer robusteren Vereinigung erscheinen die Windungen nicht
+            # mehr als viele gleich große Ringe, sondern als drei koaxiale
+            # Zylinder verschiedener Radien, die sich über denselben axialen
+            # Abschnitt überlagern. Drei gewöhnliche Stufen liegen dagegen
+            # hintereinander. Nur eine echte gemeinsame Spanne macht aus der
+            # zweiten Form deshalb ebenfalls einen Gewindestapel.
+            spans = [_axial_span(body, found[entry][1], fit.axis) for entry in coaxial]
+            if min(high for _low, high in spans) > max(low for low, _high in spans) + EPS_GEOM:
+                thread_stack = coaxial
+
+        if len(thread_stack) >= THREAD_TURNS:
+            used.update(thread_stack)
             # **Und was zwischen den Windungen liegt, gehört dazu.** Der Kern
             # und der Auslauf eines Gewindes sind koaxial, aber dicker als ein
             # Gang; über den Durchmesser fallen sie nicht in den Stapel. Am
             # M6-Gewinde blieb sonst einer von acht übrig — ein Phantom weniger
             # als vorher und immer noch eins.
-            low = min(_axial_span(body, found[entry][1], fit.axis)[0] for entry in stack)
-            high = max(_axial_span(body, found[entry][1], fit.axis)[1] for entry in stack)
+            low = min(_axial_span(body, found[entry][1], fit.axis)[0] for entry in thread_stack)
+            high = max(_axial_span(body, found[entry][1], fit.axis)[1] for entry in thread_stack)
             for other_index, (other, other_patch) in enumerate(found):
                 if other_index in used:
                     continue
