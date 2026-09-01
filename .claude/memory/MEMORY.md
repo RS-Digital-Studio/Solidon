@@ -25,9 +25,12 @@
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} bleibt stehen; in der Oberfläche richtig, im Kern nicht.
 - [Fehlertexte zeigten nur den Titel](fehlertexte-nur-titel.md) — der ist je Klasse gleich; der Grund steht im detail.
 - [Oberfläche von Hand fahren](oberflaeche-von-hand-fahren.md) — echte Plattform, Vollbild, modale Dialoge **und Popups** abfangen, Ausgabe in eine Datei.
+- [KI-Hinweis sperrt den ersten Modellaufruf](ki-hinweis-sperrt-den-ersten-modellaufruf.md) — der Hinweis muss vor der ersten externen KI-Anfrage abgeschlossen sein; Sichtbarkeit allein ist keine Sperre.
+- [Startfläche braucht Breite und Skalierung](startflaeche-braucht-breite-und-skalierung.md) — 1920 × 1080 und schmale Fenster getrennt prüfen; Mindestgrößen dürfen die Oberfläche nicht aufblasen.
 - [Qt-Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — processEvents stellt DeferredDelete nicht zu; Nicht-Monotonie ist das Warnsignal.
 - [Katalogschlüssel sind Wörter](katalog-schluessel-sind-woerter.md) — ein neues Label kapert still einen vergebenen Quelltext; der Test sieht es nicht.
 - [Marke im span zerteilt](marke-im-span-zerteilt.md) — ein Tag, der den Namen teilt, lässt ihn jeder Suche entkommen.
+- [Der Entwickler sieht den Cache-Fehler nie](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt beim täglichen Bauen auf; der Kunde fährt denselben Cache wochenlang.
 - [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus nur über Chromium-Flags.
 - [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung.
 - [Register zählen](register-zaehlen-load-operations.md) — ohne load_operations() fehlen die Bausteine; die Zahl bewegt sich, das Muster bleibt.
@@ -79,6 +82,7 @@
 - [Rezept ist der Fund, die Op ist die Ursache](rezept-ist-der-fund-op-ist-die-ursache.md) — zwei „Bausteinfehler“ lagen im Rezept, und beide Male fehlte in Wahrheit eine Prüfung in der Operation; dazu: der Boden verrät, was die Hüllgröße verschweigt.
 - [Fehlalarm, den mehrere für einen halten](fehlalarm-den-mehrere-fuer-einen-halten.md) — „das ist doch nur eine Messung“ gilt nicht, sobald sie verrechnet wird; und die Wirkung war null, während mein Kommentar mehr behauptete.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — vor der Behauptung einer Lücke über py/md/toml suchen; der Hook injiziert Regeln oben.
+- [Der Zeuge wird beim Messen überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — vor jeder Wiederholung den Diff der gemessenen Dateien lesen; der Prüfling kann sich im geteilten Baum geändert haben.
 
 - [Zusicherung wird stumpf, ohne rot zu werden](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — eine Änderung anderswo nimmt einem Test die Schärfe; er bleibt grün.
 - [Zahl im Fließtext hat Begleiter](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit, und ein Satz zählt die Dinge auf; eine Zehn über neun Dingen findet kein Test.
