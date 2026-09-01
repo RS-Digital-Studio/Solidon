@@ -57,6 +57,17 @@ jobs:
           python-version: "3.13"
           cache: pip
 
+      - name: Release-Tag mit Anwendungsversion abgleichen
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          python -c "import os, sys; from app.branding import APP_VERSION;
+          actual = os.environ['RELEASE_TAG']; expected = f'v{APP_VERSION}';
+          sys.exit(0) if actual == expected else sys.exit(
+          f'Release-Tag {actual} passt nicht zur Anwendungsversion {APP_VERSION};
+          erwartet ist {expected}.')"
+
       - name: Qt-Systembibliotheken (Linux)
         # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
         # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim

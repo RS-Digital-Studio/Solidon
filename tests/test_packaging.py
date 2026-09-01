@@ -232,6 +232,26 @@ def test_the_workflow_carries_no_second_copy_of_the_name() -> None:
     assert "from app.branding import APP_NAME" in workflow
 
 
+def test_a_release_tag_must_equal_the_application_version() -> None:
+    """Ein Tag darf keine anders benannte Anwendung veröffentlichen.
+
+    GitHub nimmt jedes ``v*`` an. Ohne den Vergleich könnte deshalb ein Tag
+    ``v0.3.0`` ein Paket bauen, dessen Metadaten noch ``0.2.3`` nennen. Der
+    Schritt liest beide Seiten zur Laufzeit: den echten Tag von GitHub und die
+    eine Anwendungsversion aus ``branding.py``.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    marker = "- name: Release-Tag mit Anwendungsversion abgleichen"
+    assert marker in workflow, "der Taglauf prüft seine Paketversion nicht"
+    step = workflow.split(marker, 1)[1].split("\n      - name:", 1)[0]
+
+    assert "if: startsWith(github.ref, 'refs/tags/')" in step
+    assert "RELEASE_TAG: ${{ github.ref_name }}" in step
+    assert "from app.branding import APP_VERSION" in step
+    assert "expected = f'v{APP_VERSION}'" in step
+    assert "passt nicht zur Anwendungsversion" in step, "der rote Lauf nennt keinen Grund"
+
+
 def test_both_application_icons_exist() -> None:
     """Windows braucht das ICO, macOS das ICNS — beide liegen im Paketordner."""
     assert ICO.is_file(), "packaging/solidon3d.ico fehlt — tools/make_icon.py läuft nicht?"
