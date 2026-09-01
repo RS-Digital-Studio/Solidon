@@ -8,6 +8,7 @@ import pytest
 
 from app.branding import DISTRIBUTION_NAME
 from app.core.knowledge import licences
+from tools import make_licence_notices
 
 NOTICE_FILE = Path(__file__).parent.parent / "THIRD-PARTY-NOTICES.md"
 
@@ -97,6 +98,72 @@ def test_the_notice_file_names_every_platform_package() -> None:
         + "\n".join(missing)
         + "\n\nNeu erzeugen: python -m app.core.knowledge.licences"
     )
+
+
+def test_the_notice_manifest_is_exactly_the_shipped_runtime() -> None:
+    """Kein Text ohne Paket und kein Paket ohne Text."""
+    expected = {licences.normalise(name) for name in licences.runtime_packages()}
+    expected.update(licences.normalise(name) for name in licences.PLATFORM_PACKAGES)
+    recorded = {licences.normalise(entry.name) for entry in make_licence_notices.load_manifest()}
+    assert recorded == expected, (
+        "Drittanbieter-Manifest und Laufzeitbaum unterscheiden sich: "
+        f"fehlt={sorted(expected - recorded)}, zu viel={sorted(recorded - expected)}"
+    )
+
+
+def test_notice_versions_match_the_installed_runtime() -> None:
+    """Der Volltext gehört zur festgeschriebenen Distribution, nicht nur zum Namen."""
+    recorded = {
+        licences.normalise(name): version
+        for name, (version, _licence) in licences.notice_packages().items()
+    }
+    for name in licences.runtime_packages():
+        installed = licences.metadata.distribution(name).version
+        assert recorded[licences.normalise(name)] == installed, (
+            f"{name} läuft als {installed}, die Lizenzquelle gehört zu "
+            f"{recorded[licences.normalise(name)]}"
+        )
+
+
+def test_every_notice_package_carries_a_complete_source_text() -> None:
+    """Eine SPDX-Zeile ersetzt bei einer Binärauslieferung keinen Lizenztext."""
+    for package in make_licence_notices.load_manifest():
+        assert package.files, f"{package.name} hat keinen Lizenz- oder Hinweistext"
+        size = sum(
+            len((make_licence_notices.SOURCE_DIR / path).read_text(encoding="utf-8"))
+            for path in package.files
+        )
+        assert size >= 500, f"{package.name} trägt nur {size} Zeichen statt eines Volltexts"
+
+
+def test_the_notice_file_is_reproducible_from_committed_sources() -> None:
+    assert make_licence_notices.write_notice(check=True), (
+        "THIRD-PARTY-NOTICES.md ist veraltet — python tools/make_licence_notices.py ausführen"
+    )
+
+
+def test_the_dialog_fallback_stops_after_the_summary_table() -> None:
+    text = licences._notices_from_file()
+    assert text is not None
+    assert len(text.splitlines()) == len(make_licence_notices.load_manifest()) + 2
+
+
+def test_lgpl_runtime_carries_the_licence_and_occt_exception() -> None:
+    text = NOTICE_FILE.read_text(encoding="utf-8")
+    for marker in (
+        "GNU LESSER GENERAL PUBLIC LICENSE",
+        "GNU GENERAL PUBLIC LICENSE",
+        "Open CASCADE exception",
+    ):
+        assert marker in text, f"Volltext fehlt: {marker}"
+
+
+def test_packaging_refuses_a_stale_notice_file() -> None:
+    root = Path(__file__).parent.parent
+    spec = (root / "packaging" / "solidon3d.spec").read_text(encoding="utf-8")
+    workflow = (root / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    assert "write_notice(check=True)" in spec
+    assert "python tools/make_licence_notices.py --check" in workflow
 
 
 @pytest.mark.parametrize("package", ["pymeshlab", "PyQt5", "PyQt6"])

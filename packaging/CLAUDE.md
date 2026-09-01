@@ -19,6 +19,10 @@ Gebaut wird nicht von hier, sondern über `tools/` und den Skill `/erzeugen`.
 | `eula.txt` | Die Fassung, die der Installer zeigt — **erzeugt** von `tools/make_legal.py` aus `EULA.md` |
 | `DATENSCHUTZ.md` | Lokale, mitgelieferte Fassung für den KI-Hinweis; ohne Webabruf im Fenster gelesen |
 
+`THIRD-PARTY-NOTICES.md` liegt im Projektstamm und reist neben der Anwendung.
+Die Spec bricht ab, wenn sie nicht bytegenau aus dem Manifest und den
+eingecheckten Originaltexten mit `tools/make_licence_notices.py` erzeugbar ist.
+
 ## Die Symbolquelle liegt woanders
 
 `app/images/icon/solidon3d.svg` (und `-small.svg`) ist die Quelle.

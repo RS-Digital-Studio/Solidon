@@ -24,6 +24,7 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
+_NOTICE_DATA_FILE: Final = Path(__file__).parent / "data" / "third_party_licenses.toml"
 
 #: Die Lizenzbeilage, wie sie neben der Anwendung liegt.
 #:
@@ -108,6 +109,16 @@ def load_policy() -> Policy:
 
 def normalise(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def notice_packages() -> dict[str, tuple[str, str]]:
+    """Liest Version und gewählte Lizenz aller mitgelieferten Laufzeitpakete."""
+    with _NOTICE_DATA_FILE.open("rb") as stream:
+        data: dict[str, Any] = tomllib.load(stream)
+    return {
+        str(entry["name"]): (str(entry["version"]), str(entry["licence"]))
+        for entry in data.get("package", ())
+    }
 
 
 def declared_licence(distribution: metadata.Distribution) -> str:
@@ -241,7 +252,11 @@ def _notices_from_file() -> str | None:
     lines = text.splitlines()
     for index, line in enumerate(lines):
         if line.startswith("| Paket |"):
-            table = [entry for entry in lines[index:] if entry.startswith("|")]
+            table: list[str] = []
+            for entry in lines[index:]:
+                if not entry.startswith("|"):
+                    break
+                table.append(entry)
             return "\n".join(table) + "\n" if len(table) > 2 else None
     _log.warning("the licence notice carries no table: %s", NOTICE_FILE)
     return None
@@ -251,28 +266,18 @@ def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
     """Die Liste für den Über-Dialog und die Drittanbieter-Hinweise (§36,
     §37.2).
     """
-    lines = ["| Paket | Lizenz |", "|---|---|"]
-    policy = load_policy()
-    known = {normalise(key): value for key, value in policy.known.items()}
-    # Was hier installiert ist, **und** was auf einer anderen Plattform
-    # dazukommt: Die Datei reist mit jedem Paket, und ein Hinweis, der nur die
-    # Pakete des Baurechners nennt, fehlt auf allen anderen.
+    del extras  # Die Beilage deckt immer den vollständigen Plattform-Satz.
     try:
-        found = dict(runtime_packages(extras))
-    except metadata.PackageNotFoundError:
-        # Im gebauten Paket ist die Anwendung keine installierte Distribution.
-        # Dann steht die Liste in der Beilage, die neben ihr liegt — sonst
-        # sieht der Kunde an dieser Stelle einen Ersatzsatz statt der
-        # Lizenzhinweise, die BSD, MIT und LGPL verlangen.
+        packages = notice_packages()
+    except OSError:
+        # Ein beschädigtes Paket kann die danebenliegende Beilage noch lesen.
         from_file = _notices_from_file()
         if from_file is None:
             raise
         return from_file
-    for package, licence in PLATFORM_PACKAGES.items():
-        found.setdefault(package, licence)
-    for package, licence in sorted(found.items()):
-        text = licence or known.get(normalise(package), {}).get("licence", "—")
-        lines.append(f"| {package} | {text} |")
+    lines = ["| Paket | Lizenz |", "|---|---|"]
+    for package, (_version, licence) in packages.items():
+        lines.append(f"| {package} | {licence} |")
     return "\n".join(lines) + "\n"
 
 

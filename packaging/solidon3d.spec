@@ -25,6 +25,12 @@ ROOT = Path(SPECPATH).resolve().parent
 # Solidon3D.exe, die es nicht gab.
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
+from tools.make_licence_notices import write_notice  # noqa: E402
+
+if not write_notice(check=True):
+    raise SystemExit(
+        "Die Drittanbieter-Beilage ist veraltet — erst: python tools/make_licence_notices.py"
+    )
 
 # Windows will ein ICO, macOS ein ICNS. Beide entstehen aus derselben SVG-
 # Quelle in tools/make_icon.py und liegen daneben — hier wird nur gewählt.

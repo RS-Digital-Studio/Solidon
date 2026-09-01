@@ -1,0 +1,21 @@
+Hinweis zu den dynamisch gebundenen LGPL-Bibliotheken
+
+Solidon3D 0.3.0 verwendet PySide6, PySide6 Essentials, PySide6 Addons und
+Shiboken6 in Version 6.11.2 unter der GNU Lesser General Public License,
+Version 3. Die Bibliotheken werden unverändert und dynamisch gebunden
+weitergegeben. Sie dürfen diese Bibliotheken untersuchen, verändern und durch
+eine kompatible eigene Fassung ersetzen. Solidon3D untersagt keine für diesen
+Zweck erforderliche Rückentwicklung.
+
+Solidon3D 0.3.0 verwendet über cadquery-ocp-novtk 7.9.3.1.1 außerdem Open
+CASCADE Technology 7.9.3 unter der GNU Lesser General Public License,
+Version 2.1, mit der Open-CASCADE-Ausnahme 1.0. Der Objektcode macht damit von
+Einrichtungen Gebrauch, die Open CASCADE Technology bereitstellt.
+
+RS Digital stellt auf Anfrage an support@solidon3d.de eine maschinenlesbare
+Kopie des vollständigen korrespondierenden Quelltexts dieser unveränderten
+LGPL-Bestandteile einschließlich der zum Erstellen und Installieren nötigen
+Skripte ohne Berechnung weiterer Kosten bereit. Dieses Angebot gilt für jede
+Person, die dieses Paket erhält, bis mindestens 1. September 2029.
+
+Die vollständigen Lizenztexte und die OCCT-Ausnahme folgen in dieser Beilage.

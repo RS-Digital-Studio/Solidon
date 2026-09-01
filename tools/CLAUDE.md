@@ -66,6 +66,7 @@ mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
+`make_licence_notices.py` (setzt die vollständige Drittanbieter-Beilage aus eingecheckten Originaltexten zusammen) ·
 `make_video.py` · `make_showpiece.py` (das Schaustück der Website — ein
 Teil, das in einem Bild beantwortet, warum man das Programm haben will;
 gebaut über die Operations-API wie von einem Nutzer) ·

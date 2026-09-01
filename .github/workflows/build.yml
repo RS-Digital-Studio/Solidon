@@ -346,6 +346,9 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: python tools/make_examples.py
 
+      - name: Drittanbieter-Lizenzbeilage prüfen
+        run: python tools/make_licence_notices.py --check
+
       - name: Rechen- und Prüfmodule kompilieren, Manifest signieren
         # Die schnelle Konturverkettung aus §31 muss auf genau der Plattform
         # entstehen, für die PyInstaller gleich darunter das Kundenpaket baut.
