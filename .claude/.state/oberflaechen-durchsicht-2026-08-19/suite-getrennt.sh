@@ -44,11 +44,13 @@ fi
 trap 'rm -f "$SUITE_KOPIE"' EXIT
 cd "$SUITE_WURZEL" || exit 1
 
-# **Der Interpreter, auch wenn er nicht hier liegt.** Ein eigener Arbeitsbaum
-# (`claude --worktree`) hat keine `.venv` — sie ist per `.gitignore` draußen und
-# gehört dem Hauptbaum. Fest verdrahtet gab dieses Skript dort **jede**
-# Fensterdatei mit Exit 127 zurück („Befehl nicht gefunden"), und das sieht aus
-# wie der bekannte Absturz beim Abbau, ist aber keiner.
+# **Der Interpreter, auch wenn er nicht hier liegt.** Der reine Funktionsmodus
+# braucht ihn nicht und darf deshalb auch ohne plattformspezifische `.venv`
+# geladen werden. Ein echter Lauf aus einem eigenen Arbeitsbaum
+# (`claude --worktree`) hat dagegen keine `.venv` — sie ist per `.gitignore`
+# draußen und gehört dem Hauptbaum. Fest verdrahtet gab dieses Skript dort
+# **jede** Fensterdatei mit Exit 127 zurück („Befehl nicht gefunden"), und das
+# sieht aus wie der bekannte Absturz beim Abbau, ist aber keiner.
 #
 # Gesucht wird in dieser Reihenfolge: was der Aufrufer nennt (`SUITE_PYTHON`,
 # das setzt `tools/to_main.py`), dann die eigene `.venv`, dann die des
@@ -58,14 +60,16 @@ cd "$SUITE_WURZEL" || exit 1
 # absolut wird, zerlegt die Shell ihn an der Lücke und meldet
 # "F:/3D: No such file or directory" — als Exit 127, das aussieht wie der
 # bekannte Absturz beim Abbau.
-PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
-if [ ! -x "$PY" ]; then
-  haupt=$(git rev-parse --git-common-dir 2>/dev/null)
-  PY="${haupt%/.git}/.venv/Scripts/python.exe"
-fi
-if [ ! -x "$PY" ]; then
-  echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
-  exit 2
+if [ -z "${SUITE_NUR_FUNKTIONEN:-}" ]; then
+  PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
+  if [ ! -x "$PY" ]; then
+    haupt=$(git rev-parse --git-common-dir 2>/dev/null)
+    PY="${haupt%/.git}/.venv/Scripts/python.exe"
+  fi
+  if [ ! -x "$PY" ]; then
+    echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
+    exit 2
+  fi
 fi
 # **Zuerst die Frage, ob der Baum überhaupt importierbar ist.**
 #
@@ -85,16 +89,6 @@ fi
 # denselben Kern importieren, hat er alle zwölf umgeworfen.
 #
 # Vorgeschlagen von 3d-druck-64 nach dem Fall.
-import_meldung=$(mktemp)
-if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
-  echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
-  echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
-  echo "Datei, bevor du im eigenen Diff suchst:"
-  sed 's/^/    /' "$import_meldung"
-  rm -f "$import_meldung"
-  exit 4
-fi
-rm -f "$import_meldung"
 # Pytest löst auch indirekte Fixtures aus ``conftest.py`` auf. Damit hängt die
 # Trennung daran, ob ein Test wirklich ``qt_app`` braucht — nicht daran, ob in
 # Quelltext oder Docstring zufällig MainWindow, Viewport oder pyvista steht.
@@ -107,6 +101,16 @@ rm -f "$import_meldung"
 if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ]; then
   windowed=""
 else
+  import_meldung=$(mktemp)
+  if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
+    echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
+    echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
+    echo "Datei, bevor du im eigenen Diff suchst:"
+    sed 's/^/    /' "$import_meldung"
+    rm -f "$import_meldung"
+    exit 4
+  fi
+  rm -f "$import_meldung"
   windowed=$("$PY" tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
 fi
 ignores=""
