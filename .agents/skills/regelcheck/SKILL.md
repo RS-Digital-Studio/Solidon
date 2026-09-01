@@ -25,26 +25,33 @@ Geh die Regeln in dieser Reihenfolge durch und prüfe jede ausdrücklich am
 geänderten Code. Regeln, die das geänderte Gebiet nicht berühren, überspringst
 du stillschweigend — behaupte nicht, sie geprüft zu haben.
 
-**Aufbau (1–5)** — Qt unterhalb `ui/`? Geometrieänderung außerhalb einer Op?
-Schreiben auf `ctx.scene`? Op ohne Registereintrag, Schema, Test, Texte?
-Signatur abweichend von Bauplan §9?
+**Aufbau (1–5)** — Qt unterhalb `ui/`? Gespeicherte Geometrie ohne registrierte
+Op? Schreiben auf `ctx.scene`? Op ohne vollständigen Registervertrag,
+Wirkungstest oder Texte? Geometrieändernde Op ohne Geometrietest?
+Schattenvertrag neben der kanonischen Definition aus Bauplan §9? Persistenter
+Vertrag ohne Migration, alte Beispieldatei und Rundreisetest?
 
-**Zahlen (6–9)** — Rundung im Kern? `==` auf Fließkomma? Toleranz als
-Zahlenkonstante statt `auto:<material>`? Streuzahl statt Projektparameter?
-Zufall ohne `ctx.seed` oder ohne `deterministic=False`?
+**Zahlen (6–9)** — Rundung aus der Anzeige im Kern? Geometrische Gleichheit
+oder Gültigkeit mit exaktem Fließkommavergleich? Fertigungstoleranz als Zahl
+statt Profilwert? Lokale Rechentoleranz statt `EPS_GEOM`, `EPS_DISPLAY` oder
+`EPS_MATCH`? Hauptmaß oder wiederverwendeter Nutzerwert als Streuzahl statt
+Projektparameter? Zufall ohne `ctx.seed` oder ohne `deterministic=False`?
 
-**Sicherheit (10–15)** — `eval`? OpenSCAD ohne Quelltextprüfung? Absoluter Pfad
-in einer Projektdatei? Eigener Baustein, der mitreisen könnte? Kennzahlen aus
-Schichtanalyse und G-Code vermischt? Neue Abhängigkeit ohne Lizenzeintrag oder
-mit GPL?
+**Sicherheit (10–15)** — `eval`? Fremder Quelltext an `eval`, `exec`,
+Importlader oder Unterprozess? Absoluter Pfad in einer Projektdatei? Eigener
+`.py`-Baustein, der mitreisen könnte, oder eine Datei, die das Register
+erweitert? Kennzahlen aus Schichtanalyse und G-Code vermischt? Neue
+Abhängigkeit ohne Lizenzeintrag oder mit GPL?
 
 **Bedienung (16–20)** — Agentenvorschlag mit mehr als einer Transaktion?
-Ausnahme ohne Handlungsvorschlag? Bedeutung allein über Farbe?
+Nutzersichtbarer `AppError` ohne passende Handlung? Bedeutung allein über Farbe?
 Bestätigungsdialog vor einer rücknehmbaren Handlung? Feste Zeichenkette statt
 `tr()`?
 
-**Haltung (21–22)** — Wurde geraten, wo `ctx.ask` hingehört? Neue Abhängigkeit
-ohne Eintrag in der Lizenzliste?
+**Haltung (21–22)** — Wurde geraten, wo in einer Op `ctx.ask`, im Agenten
+`ask_user` oder in einem anderen Kernweg eine strukturierte Mehrdeutigkeit
+hingehört? Öffnet der Kern einen Dialog? Neue Abhängigkeit ohne Eintrag in der
+Lizenzliste?
 
 Dazu, ohne Regelnummer, aber genauso ein Fund: deutscher Bezeichner oder
 Docstring in `app/`, fehlende Übersetzung, fehlender Test zu neuem Verhalten.

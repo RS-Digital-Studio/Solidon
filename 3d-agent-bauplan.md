@@ -324,13 +324,16 @@ Kriterium; Eindeutigkeit und maschinelle Abnahme sind es.
 
 - **Abnahmekriterien statt Zeitschätzungen.** Jede Phase in §40 endet mit
   Bedingungen, die grün sein müssen.
-- **Tests sind die Definition von fertig.** Für jede Geometrieoperation
-  existiert ein Test mit festem Eingangs-Mesh (§34) und erwarteten Kennzahlen.
+- **Tests sind die Definition von fertig.** Jede Operation hat einen
+  Verhaltenstest; für jede geometrieändernde Operation existiert zusätzlich
+  ein Test mit festem Eingangs-Mesh (§34) und erwarteten Kennzahlen.
 - **Kleine Schritte.** Nach jedem Schritt läuft die vollständige Suite.
 - **Verbote sind Prüfungen, keine Absichten.** Jede harte Regel aus
   `AGENTS.md` hat einen Test.
-- **Verträge zuerst.** Bei jedem neuen Modul steht die Signatur aus §9 fest,
-  bevor die Umsetzung beginnt.
+- **Verträge zuerst.** Die Signaturen aus §9 sind die eine kanonische
+  Definition; Anbieter und Verbraucher legen keine Schattenverträge an.
+  Änderungen an persistenten Verträgen ziehen Formatmigration, alte
+  Beispieldatei und Rundreisetest nach.
 - **Konsistenz vor Vollständigkeit.** Acht Ops, die überall identisch
   auftauchen, schlagen zwanzig, die auseinanderdriften.
 - **Keine stillen Erweiterungen.** Neue Abhängigkeiten, Ops, Formatversionen
@@ -696,8 +699,10 @@ def resize_hole(ctx: OpContext) -> OpResult: ...
 | Prüfungen im Stack | `consumes`/`produces`, `reversible`, `deterministic` |
 
 **Konsistenztest**: Jede Op erscheint in allen Ausgaben, besitzt Schema,
-Geometrietest und übersetzte Texte; kein Kürzel doppelt; nicht-deterministische
-Ops führen einen Startwert; `applies_to` nennt nur bekannte Feature-Arten.
+Verhaltenstest und übersetzte Texte; eine geometrieändernde Op besitzt außerdem
+einen Geometrietest mit erwarteten Kennzahlen. Kein Kürzel ist doppelt,
+nicht-deterministische Ops führen einen Startwert, und `applies_to` nennt nur
+bekannte Feature-Arten.
 
 **Parameterschema** trägt Grenzen, Einheiten, Vorgabewerte und die Zuordnung
 zu Vorder- oder Rückseite des Dialogs (§2.4) — dieselbe Definition validiert
@@ -721,8 +726,12 @@ erreicht den Kern nie. Umrechnungen passieren genau zweimal: beim Import
 | `EPS_DISPLAY` | 0,01 mm | Rundung in Bemaßung, Steckbrief, Berichten |
 | `EPS_MATCH` | relativ, ~0,5 % der Modelldiagonale | Feature-Vergleich |
 
-Merkregel: **absolut für Fertigung, relativ für Vergleiche.** Gerundet wird nur
-in der Anzeige. Fließkommazahlen werden nie mit `==` verglichen.
+Fertigungsspiel und materialabhängige Grenzen sind Projekt- oder Profilwerte,
+keine der drei Rechentoleranzen. Für numerische Robustheit gilt: `EPS_GEOM`
+absolut, `EPS_MATCH` relativ, `EPS_DISPLAY` nur für die Anzeige. Gerundet wird
+nur in der Anzeige. Physische oder geometrisch berechnete Fließkommawerte
+werden nie mit `==` verglichen; ausdrücklich kanonische Wächterwerte sind keine
+Messergebnisse.
 
 ### 11.3 Determinismus
 **Drei Stellen sind randomisiert**: Jitter-Rückfallstufe (§17.2),
@@ -2165,8 +2174,11 @@ umgekehrt. `UserError` und `GeometryError` erscheinen als Vorschlag nach §2.7,
 `InternalError` als Fehlerdialog mit Berichtsangebot, `ExternalToolError` mit
 Hinweis auf die Einstellung, in der das Programm konfiguriert wird.
 
-Jede Ausnahme trägt `suggestions: list[Action]` — anklickbare Handlungen, keine
-Prosa. Eine Ausnahme ohne Vorschlag ist unfertig.
+Jeder `AppError`, der die Oberfläche erreicht, trägt `suggestions:
+list[Action]` — anklickbare, zum Fehlertyp passende Handlungen statt bloßer
+Prosa. Ein `InternalError` bietet Bericht und Details an; eine interne
+Programmierausnahme wird diagnostiziert und an der Oberflächengrenze als
+`InternalError` übersetzt, statt eine erfundene Reparatur vorzuschlagen.
 
 ### 33.2 Protokoll
 Rotierende Datei im Nutzerverzeichnis, rein lokal. Format: Zeitstempel, Ebene,

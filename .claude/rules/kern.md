@@ -15,24 +15,30 @@ zusätzlich zu `AGENTS.md`.
 - Kommunikation nach außen ausschließlich über den `OpContext`:
   `ctx.progress`, `ctx.ask`, `ctx.cancelled`, `ctx.quality`, `ctx.seed`.
   Keine globalen Objekte, kein Logger, der etwas anzeigt, kein Dialog.
-- **Fragen statt raten** (Regel 21): Mehrdeutigkeit geht über `ctx.ask`.
-  Der Kern entscheidet nicht für den Nutzer.
+- **Fragen statt raten** (Regel 21): In einer Op-Auswertung geht
+  Mehrdeutigkeit über `ctx.ask`, der Agent verwendet `ask_user`; andere
+  Kernwege geben strukturierte Optionen zurück. Der Kern entscheidet nicht
+  für den Nutzer und öffnet keinen Dialog.
 
 ## Zahlen
 
 - Millimeter und `float` (doppelte Genauigkeit). Gerundet wird in der Anzeige,
   nie im Kern.
-- Kein `==` auf Fließkomma. Toleranzen kommen aus dem Materialprofil
-  (`auto:<material>`), nicht als Zahl in den Code.
+- Geometrische Gleichheit oder Gültigkeit wird nie mit exaktem
+  Fließkommavergleich entschieden. Fertigungstoleranzen kommen aus Projekt oder
+  Materialprofil (`auto:<material>`), numerische Robustheit aus `EPS_GEOM`,
+  `EPS_DISPLAY` oder `EPS_MATCH`.
 - Jede randomisierte Prozedur nimmt `ctx.seed` und trägt `deterministic=False`.
   Ohne beides ist sie falsch, auch wenn sie funktioniert.
 
 ## Fehler
 
-Jede Ausnahme erbt von `AppError` und trägt `suggestions: list[Action]` —
-anklickbare Handlungen, keine Prosa. Ein Fehler endet nie mit
-„fehlgeschlagen", sondern nennt: was nicht ging, warum, was jetzt möglich ist
-(§2.7, §33.1).
+Jeder Fehler, der die Oberfläche erreicht, ist ein `AppError` und trägt
+`suggestions: list[Action]` — anklickbare, passende Handlungen statt bloßer
+Prosa. Interne Assertions und Programmierausnahmen werden diagnostiziert und
+an der Oberflächengrenze als `InternalError` übersetzt. Ein Fehler endet nie
+mit „fehlgeschlagen", sondern nennt: was nicht ging, warum, was jetzt möglich
+ist (§2.7, §33.1).
 
 Die Hierarchie unterscheidet Bedienfehler von Programmfehlern:
 `UserError` (korrigierbar), `GeometryError` (mit Vorschlag),
