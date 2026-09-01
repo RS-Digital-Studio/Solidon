@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import math
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -20,6 +21,7 @@ import numpy as np
 import pytest
 
 from app.core.geom.boolean import boolean
+from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles, standards
 from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
@@ -185,6 +187,42 @@ def test_a_part_holds_over_its_whole_range(spec: PartSpec, profile: Profile) -> 
         assert min(mesh.bounds.size) > minimum_wall / 4.0, (
             f"{spec.name} {values} is thinner than a printer can make"
         )
+
+
+@pytest.mark.parametrize(
+    "name",
+    ("snap_fit", "hinge_eye", "pegboard_hook", "foot"),
+)
+def test_corrected_part_geometry_is_clean_over_its_whole_range(name: str) -> None:
+    """Die vier Korrekturen bleiben an jeder kartesischen Bereichsecke sauber."""
+    spec = PARTS.get(name)
+
+    for values in corners(spec):
+        built = spec.fn(spec.params(**values))
+
+        assert built.mesh.is_watertight, f"{name} {values} ist nicht wasserdicht"
+        assert built.mesh.volume > 0.0, f"{name} {values} hat kein Volumen"
+        if not spec.joined_by_host:
+            assert built.mesh.component_count == spec.bodies, (
+                f"{name} {values}: {built.mesh.component_count} Teile statt {spec.bodies}"
+            )
+        assert built.mesh.raw.is_volume, f"{name} {values} ist kein geschlossenes Volumen"
+        assert built.features, f"{name} {values} liefert keine Merkmale"
+
+
+def test_corrected_parts_report_library_version_13() -> None:
+    """§24.4 meldet jede maßändernde Korrektur an ältere Projekte."""
+    from app.core.knowledge.parts.registry import changed_since_library
+
+    changed = ("foot", "hinge_eye", "pegboard_hook", "snap_fit")
+
+    for name in changed:
+        spec = PARTS.get(name)
+        assert spec.version == "13", name
+        assert spec.changes[-1].version == "13", name
+        assert spec.changes[-1].effect, name
+    assert changed_since_library("12", changed) == changed
+    assert changed_since_library(LIBRARY_VERSION, changed) == ()
 
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
@@ -3663,3 +3701,94 @@ def test_the_two_ways_to_stand_a_hook_upright_stay_silent(profile: Profile) -> N
         assert result.complete, [str(f.message) for f in result.scene.report.findings]
         flat = [f for f in result.scene.report.findings if f.code == "parts.up_points_nowhere"]
         assert not flat, f"{params} steht aufrecht und wird trotzdem gemeldet: {flat}"
+
+
+def test_the_smallest_snap_fit_hook_protrudes_without_intersecting_its_arm() -> None:
+    """Hakenfläche und sichtbare Geometrie liegen auf derselben Außenseite."""
+    from app.core.units import EPS_DISPLAY
+
+    spec = PARTS.get("snap_fit")
+    values = spec.params(width=2.0, length=4.0, thickness=0.6, hook=0.2, lead_angle=10.0)
+    built = spec.fn(values)
+
+    assert built.mesh.is_watertight and built.mesh.component_count == 1
+    assert built.mesh.raw.is_volume
+    assert float(built.mesh.bounds.maximum[1]) == pytest.approx(
+        values.thickness / 2.0 + values.hook,
+        abs=EPS_DISPLAY,
+    )
+    assert built.features["hook_1"].params["centre"][1] == pytest.approx(
+        values.thickness / 2.0 + values.hook / 2.0,
+        abs=EPS_DISPLAY,
+    )
+
+
+def test_a_flat_large_snap_fit_hook_extends_the_arm_instead_of_crossing_its_base() -> None:
+    """Der Anlaufkeil wächst bei kurzer Vorgabe nicht unter die Ansatzfläche."""
+    from app.core.units import EPS_DISPLAY
+
+    spec = PARTS.get("snap_fit")
+    values = spec.params(width=2.0, length=4.0, thickness=0.6, hook=6.0, lead_angle=10.0)
+    built = spec.fn(values)
+    expected_length = max(
+        values.length,
+        values.thickness * 10.0,
+        values.hook / math.tan(math.radians(values.lead_angle)),
+    )
+
+    assert built.mesh.is_watertight and built.mesh.component_count == 1
+    assert built.mesh.raw.is_volume
+    assert float(built.mesh.bounds.minimum[2]) == pytest.approx(0.0, abs=EPS_DISPLAY)
+    assert float(built.mesh.bounds.maximum[2]) == pytest.approx(expected_length, abs=EPS_DISPLAY)
+    assert built.features["arm_1"].params["area"] == pytest.approx(
+        values.width * expected_length,
+        abs=EPS_DISPLAY,
+    )
+
+
+def test_the_smallest_hinge_eye_keeps_its_declared_wall() -> None:
+    """Die polygonale Kreisannäherung unterschreitet die zugesagte Wand nicht."""
+    from app.core.units import EPS_GEOM
+
+    spec = PARTS.get("hinge_eye")
+    values = spec.params(pin=1.0, width=2.0, reach=1.0, wall=0.8, play=0.0)
+    built = spec.fn(values).mesh
+    outer = float(built.bounds.maximum[2])
+    measured = wall_thickness(built, (0.0, values.reach, outer), (0.0, 0.0, -1.0))
+
+    assert measured is not None
+    assert measured >= values.wall - EPS_GEOM
+
+
+@pytest.mark.parametrize("chamfer", [0.0, 10.0], ids=("automatisch", "volle-vorgabe"))
+def test_the_shortest_foot_has_no_internal_shelf(chamfer: float) -> None:
+    """Die Fase hinterlässt keine dünne Ringschulter in der zugesagten Höhe."""
+    from app.core.units import EPS_DISPLAY
+
+    spec = PARTS.get("foot")
+    built = spec.fn(spec.params(kind="foot", diameter=3.0, height=0.6, chamfer=chamfer)).mesh
+    measured = wall_thickness(built, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+
+    assert built.is_watertight and built.component_count == 1
+    assert float(built.bounds.size[2]) == pytest.approx(0.6, abs=EPS_DISPLAY)
+    assert measured is not None
+    assert measured >= 0.6 - EPS_DISPLAY
+
+
+def test_pegboard_hook_joins_shaft_and_catch_without_intersection() -> None:
+    """Zapfen und Nase bleiben bei Hakenanzahl, Rastung und Spiel sauber."""
+    spec = PARTS.get("pegboard_hook")
+    variants = (
+        {"latch": False, "plate": 0.0, "play": 1.5, "lip": 0.0},
+        {"latch": True, "plate": 10.0, "play": 0.25, "lip": 0.0},
+        {"latch": True, "plate": 10.0, "play": 1.5, "lip": 6.0},
+    )
+
+    for variant in variants:
+        for count in (1, 2, 6):
+            built = spec.fn(
+                spec.params(system="skadis", count=count, steps=1, upright=True, **variant)
+            ).mesh
+
+            assert built.is_watertight
+            assert built.raw.is_volume, f"count={count}, {variant}"

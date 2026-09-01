@@ -568,7 +568,11 @@ def register_part(
 #: Lagersitz und optionale Sondermaße für Magnet und Kabel hinzu; Letztere
 #: ändern bestehende Projekte nicht und stehen deshalb nicht in deren
 #: Maßänderungsverlauf (28.08.2026).
-LIBRARY_VERSION: Final = "12"
+#: Version 13: Schnapphaken und Lochwand-Einhänger vereinigen ihre Teilkörper
+#: ohne innere Schnittflächen, die polygonale Scharnieraußenwand hält ihr
+#: Nennmaß, und Fuß sowie Fußtasche entstehen aus je einem Drehprofil
+#: (``mechanics.py``, ``mounting.py``, 31.08.2026).
+LIBRARY_VERSION: Final = "13"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

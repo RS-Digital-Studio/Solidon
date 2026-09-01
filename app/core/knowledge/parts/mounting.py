@@ -626,6 +626,19 @@ HOOK_FEATURE_ON_A_REAL_FACE = PartChange(
     ),
 )
 
+HOOK_BODIES_JOIN_WITH_VOLUME = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Zapfen und Nase überlappten nur um die Boolesche Rechenschwelle; "
+        "Grenzkombinationen hinterließen dadurch sich schneidende Dreiecke."
+    ),
+    effect=(
+        "Außenmaße, Rastweg und Plattensitz bleiben gleich; Zapfen und Nase "
+        "greifen innerhalb des Körpers jetzt über eine tragende Fläche ineinander."
+    ),
+)
+
 _BOARDS = standards.board_sizes()
 
 #: Zulässige Randdehnung eines gedruckten Federarms beim Einrasten.
@@ -864,7 +877,12 @@ class PegboardHookParams(BaseParams):
         "gegen eine bemaßte Zeichnung geprüft; die Plattendicke ist mit 5 mm am "
         "28.08.2026 gemessen — daraus folgen Tiefe von Nase und Zunge."
     ),
-    changes=[PEGBOARD_HOOK_ADDED, HOOK_FEATURE_ON_A_REAL_FACE, HOOK_HOLDS_WHEN_LIFTED],
+    changes=[
+        PEGBOARD_HOOK_ADDED,
+        HOOK_FEATURE_ON_A_REAL_FACE,
+        HOOK_HOLDS_WHEN_LIFTED,
+        HOOK_BODIES_JOIN_WITH_VOLUME,
+    ],
 )
 def pegboard_hook(raw: BaseParams) -> PartResult:
     """Einhänger im Raster, direkt am Teil — mit federnder Rastzunge.
@@ -1032,8 +1050,9 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).
-        catch = shapes.turned(shapes.slot(width, shank + nose, lip), 90.0)
-        parts.append(shapes.moved(catch, (x, y, through - BOOLEAN_OVERLAP)))
+        hook_join = min(through / 2.0, lip / 2.0)
+        catch = shapes.turned(shapes.slot(width, shank + nose, lip + hook_join), 90.0)
+        parts.append(shapes.moved(catch, (x, y, through - hook_join)))
         # **Das Merkmal liegt auf der Rückseite der Nase**, und das ist die
         # einzige Fläche des Hakens, die es dort wirklich gibt. Vorher stand es
         # auf der Höhe der Plattenrückseite mitten im Zapfen — gemessen zu 99 %
@@ -1044,7 +1063,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
             face(
                 f"hook_{index + 1}",
                 _slot_area(width, shank + nose),
-                (x, y, through - BOOLEAN_OVERLAP + lip),
+                (x, y, through + lip),
                 (0.0, 0.0, 1.0),
             )
         )
@@ -1120,6 +1139,19 @@ FOOT_ADDED = PartChange(
     reason="Standfuß — was auf dem Tisch steht, steht sonst auf seiner Druckkante.",
 )
 
+FOOT_PROFILE_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason=(
+        "Überlappende Körper hinterließen am Fasenansatz des Fußes eine "
+        "Ringschulter und durchschnitten sich bei tiefen Taschen."
+    ),
+    effect=(
+        "Fuß und Tasche entstehen jetzt jeweils aus einem einzigen Drehprofil. "
+        "Höhe, Sitzmaß, Standfläche und Fase bleiben gleich; innere Flächen entfallen."
+    ),
+)
+
 
 @op_params
 class FootParams(BaseParams):
@@ -1186,7 +1218,7 @@ class FootParams(BaseParams):
         "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
         "hineingesetzt stünde die Schraube auf dem Tisch."
     ),
-    changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE],
+    changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE, FOOT_PROFILE_FIXED],
 )
 def foot(raw: BaseParams) -> PartResult:
     """Ein Kegelstumpf, der auf der schmalen Seite steht — oder ein Loch dafür.
@@ -1241,26 +1273,12 @@ def foot(raw: BaseParams) -> PartResult:
         # Die Tasche: An der Mündung weitet eine Schräge das Loch, damit der
         # Gummifuß sich fangen lässt; darunter hat der Sitz den vollen
         # Durchmesser, sonst passt der Fuß nicht hinein, für den er gedacht ist.
-        mouth = shapes.cone(wide, wide + 2.0 * chamfer, chamfer)
-        shaft = shapes.cylinder(wide, params.height - chamfer + BOOLEAN_OVERLAP)
-        # Ein Haar über die Fläche hinaus, wie bei jedem anderen abziehenden
-        # Baustein: Zwei Volumen, die sich nur in einer Fläche berühren, sind
-        # der Fall, an dem eine Boolesche Operation bricht (§39). Die Tasche
-        # endete als einzige exakt auf z = 0 — gemessen ohne Schaden, aber der
-        # Fall tritt nicht bei jedem Netz auf, und darauf beruht die Regel.
-        rim = shapes.cylinder(wide + 2.0 * chamfer, 2.0 * BOOLEAN_OVERLAP)
-        body = union(
-            shapes.moved(mouth, (0.0, 0.0, -chamfer)),
-            shapes.moved(shaft, (0.0, 0.0, -params.height)),
-            shapes.moved(rim, (0.0, 0.0, -BOOLEAN_OVERLAP)),
-        )
+        body = _pocket_profile(wide, params.height, chamfer)
         marker = bore("foot_1", wide, (0.0, 0.0, -params.height / 2.0), depth=params.height)
     else:
         # Der Fuß: Die Säule steht am Teil, die Verjüngung am Boden — dort
         # quetscht der Elefantenfuß ins Leere.
-        column = shapes.cylinder(wide, params.height - chamfer + BOOLEAN_OVERLAP)
-        taper = shapes.cone(wide, narrow, chamfer)
-        body = union(column, shapes.moved(taper, (0.0, 0.0, params.height - chamfer)))
+        body = _foot_profile(wide, narrow, params.height, chamfer)
         # Die Standfläche ist die äußerste, nicht die am Teil: Sie berührt den
         # Tisch, und sie schaut vom Teil weg.
         marker = face(
@@ -1271,3 +1289,38 @@ def foot(raw: BaseParams) -> PartResult:
         )
 
     return result(body, marker)
+
+
+def _foot_profile(wide: float, narrow: float, height: float, chamfer: float) -> MeshData:
+    """Säule und Standfase als ein geschlossenes Drehprofil.
+
+    Zwei überlappende Körper hinterließen am Beginn der Fase eine waagerechte
+    Ringschulter: Die Säule reichte um ``BOOLEAN_OVERLAP`` in den schon
+    schmaler werdenden Kegel. Ein nach innen laufender Strahl traf dort diese
+    Schulter statt die Unterseite und maß nur den Säulenrest. Das gemeinsame
+    Profil trägt dieselbe Außenkontur ohne innere Fläche.
+    """
+    from app.core.deferred import trimesh
+
+    outline = [
+        [0.0, 0.0],
+        [wide / 2.0, 0.0],
+        [wide / 2.0, height - chamfer],
+        [narrow / 2.0, height],
+        [0.0, height],
+    ]
+    return MeshData.of(trimesh.creation.revolve(outline, sections=shapes.SEGMENTS))
+
+
+def _pocket_profile(wide: float, height: float, chamfer: float) -> MeshData:
+    """Sitz und Einführfase als ein geschlossenes abtragendes Drehprofil."""
+    from app.core.deferred import trimesh
+
+    outline = [
+        [0.0, 0.0],
+        [wide / 2.0 + chamfer, 0.0],
+        [wide / 2.0, -chamfer],
+        [wide / 2.0, -height],
+        [0.0, -height],
+    ][::-1]
+    return MeshData.of(trimesh.creation.revolve(outline, sections=shapes.SEGMENTS))

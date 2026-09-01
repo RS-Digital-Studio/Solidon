@@ -23,7 +23,7 @@ from app.core.knowledge.parts.build import bore, face, pin, result, subtract, un
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 FIRST_RELEASE = PartChange(
@@ -61,6 +61,17 @@ SNAP_RATIO = 10.0
 #: eines Tages nachjustiert, hätte den Verbinder zurückgelassen
 #: (27.08.2026).
 SNAP_LEAD_ANGLE: Final = 35.0
+
+SNAP_FIT_HOOK_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason="Der Schnapphaken ragte zur falschen Seite in den Federarm hinein.",
+    effect=(
+        "Der Haken steht jetzt um den angegebenen Überstand aus dem Arm heraus. "
+        "Damit stimmen Geometrie und benannte Hakenfläche überein, und die kleinste "
+        "Parameterkombination schneidet sich nicht mehr selbst."
+    ),
+)
 
 
 @op_params
@@ -199,19 +210,16 @@ class SnapFitParams(BaseParams):
         "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
         "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, SNAP_FIT_HOOK_FIXED],
 )
 def snap_fit(raw: BaseParams) -> PartResult:
     params = cast(SnapFitParams, raw)
-    length = max(params.length, params.thickness * SNAP_RATIO)
-
-    arm = shapes.box(params.width, params.thickness, length)
     hook_height = params.hook / math.tan(math.radians(params.lead_angle))
-    hook = shapes.wedge(params.width, params.thickness + params.hook, hook_height, params.thickness)
-    hook = shapes.turned(hook, 180.0, (1.0, 0.0, 0.0))
-    hook = shapes.moved(hook, (0.0, params.thickness / 2.0, length))
-
-    body = union(arm, hook)
+    # Wie die Federstärke darf auch der Anlaufkeil die wirksame Armlänge
+    # erhöhen. Sonst wächst ein großer Haken mit flachem Winkel unter Z = 0
+    # durch die Ansatzfläche, statt vollständig auf dem Arm zu liegen.
+    length = max(params.length, params.thickness * SNAP_RATIO, hook_height)
+    body = _snap_fit_body(params.width, length, params.thickness, params.hook, hook_height)
     return result(
         body,
         face("arm_1", params.width * length, (0.0, 0.0, length / 2.0), (0.0, -1.0, 0.0)),
@@ -222,6 +230,47 @@ def snap_fit(raw: BaseParams) -> PartResult:
             (0.0, 0.0, -1.0),
         ),
     )
+
+
+def _snap_fit_body(
+    width: float,
+    length: float,
+    thickness: float,
+    hook: float,
+    hook_height: float,
+) -> MeshData:
+    """Federarm und Anlaufkeil als ein einziger extrudierter Umriss.
+
+    Zwei überlappende Prismen ließen bei extrem langen, dünnen Armen trotz
+    Boolescher Vereinigung innere Dreiecke zurück. Der gemeinsame Seitenriss
+    enthält dieselbe Form ohne innere Grenzfläche: Der Arm endet oben in der
+    Haltefläche, der Keil läuft darunter bis zur Armseite zurück.
+    """
+    from shapely.geometry import Polygon
+
+    from app.core.deferred import trimesh
+
+    half = thickness / 2.0
+    points = [(-half, 0.0), (half, 0.0)]
+    # Bei gleicher Keil- und Armlänge fällt die Schulter mit der unteren Ecke
+    # zusammen. Ein doppelter Polygonpunkt erzeugt dort entartete Dreiecke;
+    # geometrisch ist diese Stellung einfach ein vierseitiger Umriss.
+    if hook_height < length:
+        points.append((half, length - hook_height))
+    points.extend(((half + hook, length), (-half, length)))
+    outline = Polygon(points)
+    body = trimesh.creation.extrude_polygon(outline, height=width)
+    # Der Umriss liegt in XY und wächst entlang Z. Gesucht sind Tiefe auf Y,
+    # Höhe auf Z und die Extrusion mittig entlang X.
+    body.apply_transform(
+        (
+            (0.0, 0.0, 1.0, -width / 2.0),
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+        )
+    )
+    return MeshData.of(body)
 
 
 @op_params
@@ -776,6 +825,16 @@ HINGE_EYE_ADDED = PartChange(
     reason="Scharnierauge — das Filmscharnier biegt, dieses hier dreht.",
 )
 
+HINGE_EYE_FACET_WALL_FIXED = PartChange(
+    version="13",
+    date="2026-08-31",
+    reason="Die polygonale Kreisannäherung unterschritt die zugesagte Augenwand.",
+    effect=(
+        "Der Außendurchmesser wächst um die analytische Facettenkorrektur. "
+        "Bohrung und Spiel bleiben unverändert; die kleinste Wand hält jetzt ihr Nennmaß."
+    ),
+)
+
 
 @op_params
 class HingeEyeParams(BaseParams):
@@ -840,7 +899,7 @@ class HingeEyeParams(BaseParams):
         "Ein halbes Scharnier: Das zweite Auge gehört an das Gegenstück, der "
         "Bolzen kommt aus der Bibliothek (Passstift) oder aus dem Handel."
     ),
-    changes=[HINGE_EYE_ADDED],
+    changes=[HINGE_EYE_ADDED, HINGE_EYE_FACET_WALL_FIXED],
 )
 def hinge_eye(raw: BaseParams) -> PartResult:
     """Lasche mit Auge, die Achse liegt parallel zur Fläche.
@@ -859,8 +918,15 @@ def hinge_eye(raw: BaseParams) -> PartResult:
     """
     params = cast(HingeEyeParams, raw)
 
-    outer = params.pin + params.play + 2.0 * params.wall
     bore_width = params.pin + params.play
+    # Ein Kreis mit ``SEGMENTS`` Ecken hat zwischen zwei Eckradien nur den
+    # Apothem. Außen- und Bohrungszylinder sind gleich ausgerichtet; ihre
+    # gemessene Wand ist deshalb ``wall * cos(pi / SEGMENTS)``. Der
+    # Kehrwert gleicht ausschließlich diese Repräsentationsabweichung aus;
+    # zwei Geometrietoleranzen halten die Boolesche Rundung innerhalb des
+    # zugesagten Nennmaßes.
+    faceted_wall = (params.wall + 2.0 * EPS_GEOM) / math.cos(math.pi / shapes.SEGMENTS)
+    outer = bore_width + 2.0 * faceted_wall
 
     def lying(diameter: float, length: float) -> MeshData:
         """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
