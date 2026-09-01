@@ -186,19 +186,62 @@ def test_qt_standard_buttons_speak_the_application_language(qt_app: object) -> N
 
     Geprüft am echten Artefakt: einer QDialogButtonBox, nicht am Katalog.
     """
+    from PySide6.QtCore import QTranslator
     from PySide6.QtWidgets import QDialogButtonBox
 
     from app.ui.app import install_qt_translations
 
-    translator = install_qt_translations(qt_app, "de")  # type: ignore[arg-type]
-    assert translator is not None, "PySide6 liefert qtbase_de.qm mit — Laden darf nicht scheitern"
-    try:
-        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel)
-        cancel = box.button(QDialogButtonBox.StandardButton.Cancel)
-        assert cancel is not None
-        assert cancel.text().replace("&", "") == "Abbrechen"
-    finally:
-        qt_app.removeTranslator(translator)  # type: ignore[attr-defined]
+    expected = {
+        "de": ("Speichern", "Abbrechen", "OK", "Schließen"),
+        "en": ("Save", "Cancel", "OK", "Close"),
+        "es": ("Guardar", "Cancelar", "Aceptar", "Cerrar"),
+        "fr": ("Enregistrer", "Annuler", "OK", "Fermer"),
+        "it": ("Salva", "Annulla", "OK", "Chiudi"),
+        "pt": ("Salvar", "Cancelar", "OK", "Fechar"),
+    }
+    assert set(expected) == set(available_languages()), (
+        "jede angebotene Sprache braucht geprüfte Qt-Standardknöpfe"
+    )
+    standards = (
+        QDialogButtonBox.StandardButton.Save,
+        QDialogButtonBox.StandardButton.Cancel,
+        QDialogButtonBox.StandardButton.Ok,
+        QDialogButtonBox.StandardButton.Close,
+    )
+
+    # Absichtlich Deutsch vor Englisch: Qts englischer Katalog enthält nicht
+    # jeden englischen Ausgangstext. Ein liegen gebliebener deutscher
+    # Übersetzer machte den englischen Dialog deshalb zweisprachig.
+    for language, labels in expected.items():
+        translator = install_qt_translations(qt_app, language)  # type: ignore[arg-type]
+        assert translator is not None, (
+            f"PySide6 liefert qtbase_{language}.qm mit — Laden darf nicht scheitern"
+        )
+        selected = QDialogButtonBox.StandardButton.NoButton
+        for standard in standards:
+            selected |= standard
+        box = QDialogButtonBox(selected)
+        actual = tuple(box.button(standard).text().replace("&", "") for standard in standards)
+        assert actual == labels
+
+    ours = [
+        translator
+        for translator in qt_app.findChildren(QTranslator)  # type: ignore[attr-defined]
+        if translator.objectName() == "solidon.qtbase.translator"
+    ]
+    assert len(ours) == 1, "beim Sprachwechsel darf nur der aktuelle Qt-Katalog bleiben"
+    qt_app.removeTranslator(ours[0])  # type: ignore[attr-defined]
+
+
+def test_every_used_qt_standard_button_is_covered_by_the_language_test() -> None:
+    """Eine neue Qt-Knopfart braucht vor ihrem ersten Einsatz sechs geprüfte Texte."""
+    pattern = re.compile(r"QDialogButtonBox\.StandardButton\.([A-Za-z]+)")
+    used = {
+        match
+        for path in UI_DIR.rglob("*.py")
+        for match in pattern.findall(path.read_text(encoding="utf-8"))
+    }
+    assert used == {"Save", "Cancel", "Ok", "Close"}
 
 
 #: Ein Dateifilter für Qt: eine Beschriftung, dann die Endungen in Klammern.

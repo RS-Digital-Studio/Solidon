@@ -42,6 +42,8 @@ if TYPE_CHECKING:
 
 _log = get_logger(__name__)
 
+_QT_TRANSLATOR_OBJECT_NAME = "solidon.qtbase.translator"
+
 
 def install_qt_translations(application: QCoreApplication, language: str) -> QTranslator | None:
     """Bringt Qt selbst die Anwendungssprache bei.
@@ -57,10 +59,26 @@ def install_qt_translations(application: QCoreApplication, language: str) -> QTr
     # stünden dann Komma im Feld und Punkt im Text daneben.
     QLocale.setDefault(QLocale(language))
 
+    # Beim Sprachwechsel lebt die Anwendung weiter. Ein neu installierter
+    # Katalog überstimmt den alten nur, solange er selbst einen passenden
+    # Eintrag enthält. Der englische Qt-Katalog lässt die englischen
+    # Ausgangstexte absichtlich aus; bliebe der deutsche Katalog darunter
+    # installiert, hieße deshalb ein englischer Knopf weiter „Abbrechen“.
+    # Nur unseren eigenen Katalog entfernen — andere Bibliotheken dürfen ihre
+    # Übersetzer unabhängig an derselben Anwendung halten.
+    for previous in application.findChildren(QTranslator):
+        if previous.objectName() == _QT_TRANSLATOR_OBJECT_NAME:
+            application.removeTranslator(previous)
+            previous.setParent(None)
+            previous.deleteLater()
+
     translator = QTranslator(application)
+    translator.setObjectName(_QT_TRANSLATOR_OBJECT_NAME)
     directory = QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath)
     if not translator.load(QLocale(language), "qtbase", "_", directory):
         _log.warning("no qtbase translation for %s in %s", language, directory)
+        translator.setParent(None)
+        translator.deleteLater()
         return None
     application.installTranslator(translator)
     return translator
