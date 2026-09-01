@@ -284,6 +284,7 @@ def test_the_pyinstaller_analysis_reduces_the_conservative_runtime_preview() -> 
 
 def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Distributionen allein verschweigen Interpreter, Bootloader und Vendor-DLLs."""
     names = (
@@ -306,6 +307,15 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b"MZ\x90\x00native")
     (tmp_path / "_internal" / "not-native.dll").write_text("nur Text", encoding="utf-8")
+    monkeypatch.setattr(
+        make_sbom,
+        "_pe_file_version",
+        lambda path: (
+            "14.44.35211.0"
+            if path.name.casefold().startswith(("msvcp", "vcruntime", "ucrtbase", "api-ms-win-crt"))
+            else "unbekannt"
+        ),
+    )
 
     files = make_sbom.artifact_files(tmp_path)
     bom = make_sbom.build_bom(customer_artifact=tmp_path)
@@ -323,6 +333,15 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
         "GCC Runtime Libraries",
         "Microsoft Visual C++ Runtime",
     } <= component_names
+    assert components["Microsoft Visual C++ Runtime"]["version"] == "14.44.35211.0"
+    assert (
+        next(
+            item["value"]
+            for item in components["Microsoft Visual C++ Runtime"]["properties"]
+            if item["name"] == "solidon:version-source"
+        )
+        == "PE FileVersion der gebündelten Laufzeitdateien"
+    )
     assert set(names) <= component_names
     assert components["_internal/vendor/without-owner.dll"]["properties"] == [
         {"name": "solidon:artifact-path", "value": "_internal/vendor/without-owner.dll"},

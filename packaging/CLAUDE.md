@@ -108,8 +108,10 @@ fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
   seine nativen Bibliotheken als eigene Komponenten mit gewählter
   Lizenzgrundlage aus. Windows bindet die exakte libffi-Version an den
   festgeschriebenen CPython-Patchstand; Linux liest sie über `pkg-config` aus
-  der tatsächlich gebündelten Systembibliothek. Die CI prüft auf macOS nur die
-  `.app`, nicht zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
+  der tatsächlich gebündelten Systembibliothek. Die Microsoft-Laufzeit trägt
+  die sortierte Menge der `FileVersion`-Werte aller mitgereisten PE-Dateien,
+  nicht die bloße Compilerangabe. Die CI prüft auf macOS nur die `.app`, nicht
+  zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
 - **Die Lizenzbeilage** entsteht nach der SBOM mit
   `make_licence_notices.py --sbom`: `THIRD-PARTY-NOTICES.md` liegt genau einmal
   im fertigen App-Baum, das Schema-2-JSON bleibt in der CRA-/Buildakte. Vor der

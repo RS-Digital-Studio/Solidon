@@ -77,6 +77,7 @@ class ArtifactFile:
     path: str
     owner: str
     version: str
+    binary_version: str = "unbekannt"
 
 
 NATIVE_COMPONENTS: Final = (
@@ -313,6 +314,37 @@ def _runtime_owner(relative: str) -> str:
     return "unassigned-native"
 
 
+def _pe_file_version(path: Path) -> str:
+    """Liest die feste vierteilige Dateiversion direkt aus einer PE-Datei."""
+    try:
+        import pefile  # type: ignore[import-untyped]
+    except ImportError:
+        return "unbekannt"
+
+    image: Any = None
+    try:
+        image = pefile.PE(str(path), fast_load=True)
+        image.parse_data_directories(
+            directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_RESOURCE"]]
+        )
+        records = getattr(image, "VS_FIXEDFILEINFO", None) or ()
+        if not records:
+            return "unbekannt"
+        record = records[0]
+        parts = (
+            int(record.FileVersionMS) >> 16,
+            int(record.FileVersionMS) & 0xFFFF,
+            int(record.FileVersionLS) >> 16,
+            int(record.FileVersionLS) & 0xFFFF,
+        )
+        return ".".join(str(part) for part in parts)
+    except (OSError, ValueError, pefile.PEFormatError):
+        return "unbekannt"
+    finally:
+        if image is not None:
+            image.close()
+
+
 def artifact_files(
     root: Path,
     *,
@@ -347,7 +379,7 @@ def artifact_files(
         else:
             owner = _runtime_owner(relative)
             version = "unbekannt"
-        found.append(ArtifactFile(relative, owner, version))
+        found.append(ArtifactFile(relative, owner, version, _pe_file_version(path)))
     return found
 
 
@@ -437,6 +469,20 @@ def _libffi_version(
     return version, "pkg-config --modversion libffi"
 
 
+def _msvc_runtime_version(entries: Iterable[ArtifactFile]) -> str:
+    """Bindet die Laufzeitfamilie an alle tatsächlich mitgereisten PE-Versionen."""
+    selected = tuple(
+        entry
+        for entry in entries
+        if Path(entry.path)
+        .name.casefold()
+        .startswith(("msvcp", "vcruntime", "ucrtbase", "api-ms-win-crt"))
+    )
+    if not selected or any(entry.binary_version == "unbekannt" for entry in selected):
+        return "unbekannt"
+    return ",".join(sorted({entry.binary_version for entry in selected}))
+
+
 def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
     """Logische Komponenten für die im Artefakt erkannten Laufzeitfamilien."""
     entries = tuple(files)
@@ -522,10 +568,10 @@ def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
             _runtime_component(
                 "microsoft-visual-cpp-runtime",
                 "Microsoft Visual C++ Runtime",
-                platform.python_compiler(),
+                _msvc_runtime_version(entries),
                 "Microsoft Visual Studio Runtime license",
                 "https://visualstudio.microsoft.com/license-terms/",
-                "Compilerangabe des Zielinterpreters",
+                "PE FileVersion der gebündelten Laufzeitdateien",
             )
         )
     return components
