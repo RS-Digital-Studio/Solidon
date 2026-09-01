@@ -449,24 +449,24 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
     )
 
 
-def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
-    """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
+def test_the_workflow_finds_every_ui_intensive_test_file() -> None:
+    """Die CI hält jede UI-intensive Datei aus dem großen Sammelprozess heraus.
 
     Der Absturz auf den Linux-Runnern hängt an der Zahl der VTK-Fenster, die ein
     Prozess nacheinander aufbaut; außerdem erschöpfen große Dialogdateien nach
-    tausenden vorherigen Qt-Tests den Prozess. Deshalb laufen diese Dateien
-    einzeln. Die Liste wird gesucht und nicht gepflegt, und genau daran ist sie
-    zurückgeblieben: Nach `MainWindow` allein fehlten `test_cursors.py` (acht
-    Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
-    großen Stapel, ohne dass es auffiel.
+    tausenden vorherigen Qt-Tests den Prozess. Deshalb werden diese Dateien aus
+    dem Sammelprozess genommen. Die Liste wird gesucht und nicht gepflegt, und
+    genau daran ist sie zurückgeblieben: Nach `MainWindow` allein fehlten
+    `test_cursors.py` (acht Viewport-Aufbauten) und `test_plates.py` (einer) —
+    neun Fenster mehr im großen Stapel, ohne dass es auffiel.
 
     Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
-    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
-    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
+    wirklich UI **aufbauen**. Erwähnungen zählen nicht: ein Import oder die
+    Lizenzliste nähmen sonst eine Datei grundlos aus dem Sammelprozess.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
-    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
+    assert found, "das Suchmuster der UI-intensiven Dateien steht nicht mehr im Workflow"
     pattern = re.compile(found.group(1))
 
     builders = re.compile(
@@ -481,7 +481,7 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
             missed.append(path.name)
 
     assert not missed, (
-        f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
+        f"Diese Dateien bauen intensive UI und laufen trotzdem im großen Stapel: {missed}. "
         "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
     )
 
