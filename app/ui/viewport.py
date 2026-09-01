@@ -1147,6 +1147,16 @@ BED_COLOUR = "#5a6472"
 #: als der Hintergrund, damit beides sichtbar bleibt.
 BED_SURFACE_COLOUR = "#2a303a"
 
+#: Die Plattenfläche bleibt aus der Draufsicht als Fläche lesbar und lässt
+#: zugleich erkennen, ob ein Körper knapp unter ihr liegt. Ihre Rückseite
+#: wird weiterhin vollständig verworfen; siehe :meth:`Viewport._draw_one_bed`.
+BED_SURFACE_OPACITY = 0.68
+
+#: Das Raster liegt über der durchscheinenden Fläche. Etwas kräftiger als die
+#: alte Deckkraft, damit Linien und Außenkante in beiden Themen klar bleiben,
+#: obwohl der Grund nun einen Teil des Körpers darunter durchlässt.
+BED_GRID_OPACITY = 0.55
+
 #: Abstand der Maßzahlen an der Platte, in Millimetern. Fünfzig, weil das
 #: Raster bei zehn liegt: eine Zahl an jeder Rasterlinie wäre ein Zaun aus
 #: Ziffern, und eine alle hundert ließe eine 220er-Platte mit zwei Zahlen
@@ -4572,6 +4582,7 @@ class Viewport(QWidget):
             ambient=0.45,
             diffuse=0.55,
             specular=0.0,
+            opacity=BED_SURFACE_OPACITY,
             name=f"bed_surface_{plate}",
             render=False,
             reset_camera=False,
@@ -4581,18 +4592,20 @@ class Viewport(QWidget):
         # Unterseite bearbeitet, dreht die Ansicht unter das Teil — und sah
         # dort die Platte statt des Teils.
         #
-        # ``culling`` und nicht ``opacity``: Die Fläche gibt es, damit ein
-        # Schatten auf etwas fällt, und eine durchscheinende Platte nähme ihm
-        # den Grund. Die Ebene zeigt mit ``direction=(0, 0, 1)`` nach oben;
-        # von unten sieht man ihre **Rückseite**, und die lässt sich wegwerfen,
-        # ohne die Vorderseite anzufassen. Gemessen von 3d-druck-3a an einem
-        # roten Körper über grauer Platte, in Bildpunkten gezählt:
+        # **Zwei Sichtfragen, zwei Eigenschaften.** ``opacity`` lässt aus der
+        # Draufsicht erkennen, ob ein Körper knapp unter der Platte liegt.
+        # ``culling`` wirft zusätzlich die ganze Rückseite weg, damit die
+        # Platte bei der Bearbeitung von unten gar nicht vor dem Teil steht.
+        # Die Ebene zeigt mit ``direction=(0, 0, 1)`` nach oben; von unten
+        # sieht man ihre Rückseite. Gemessen von 3d-druck-3a an einem roten
+        # Körper über grauer Platte, in Bildpunkten gezählt:
         #
         #     ohne culling   von unten:    0 rot   von oben: 4014
         #     culling back   von unten: 2417 rot   von oben: 4014
         #
-        # Von oben ändert sich nichts — dieselbe Zahl, also bleiben Fläche und
-        # Schatten, wie sie waren.
+        # Die Rückseitenregel bleibt unverändert. Von oben ist die Fläche nun
+        # bewusst durchscheinend; Raster, Kante und Kontaktschatten liegen als
+        # eigene Actors darüber und bleiben klar.
         surface.prop.culling = "back"
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
@@ -4608,7 +4621,7 @@ class Viewport(QWidget):
             bed,
             color=self._bed_colour,
             style="wireframe",
-            opacity=0.35,
+            opacity=BED_GRID_OPACITY,
             name=f"bed_{plate}",
             render=False,
             reset_camera=False,

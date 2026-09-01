@@ -1056,29 +1056,27 @@ def test_a_callback_after_the_view_is_gone_stays_quiet(
     calls.on_paint(10, 20, True)
 
 
-def test_the_bed_surface_can_be_seen_through_from_below(
+def test_the_bed_surface_is_translucent_from_above_and_absent_from_below(
     profile: Profile, qt_app: QApplication
 ) -> None:
-    """Von unten schaut man durch die Platte hindurch.
+    """Von oben scheint ein versunkener Körper durch, von unten nichts vor.
 
     **Robert am 23.08.2026:** „Man kann unten noch nicht durch die Druckfläche
     schauen, also die Platte. Das müsste auch noch behoben werden, dass man da
     durchschauen kann, wenn man's von unten bearbeiten will."
 
-    Die Fläche wird gebraucht — ohne sie fiele der Schatten auf nichts —, aber
-    nur von oben. ``culling = "back"`` wirft ihre Rückseite weg: Die Ebene
-    zeigt mit ``direction=(0, 0, 1)`` nach oben, von unten sieht man ihre
-    Rückseite, und die verschwindet, ohne die Vorderseite anzufassen.
-
-    **``opacity`` wäre die falsche Antwort gewesen** — eine durchscheinende
-    Platte nähme dem Schatten seinen Grund, und von oben sähe sie falsch aus.
+    Die Fläche bleibt aus der Draufsicht sichtbar, ist aber bewusst
+    durchscheinend: Ein Körper knapp unter null darf nicht hinter einer
+    deckenden Platte verschwinden. ``culling = "back"`` bleibt die zweite,
+    unabhängige Aussage. Die Ebene zeigt mit ``direction=(0, 0, 1)`` nach
+    oben; von unten sieht man ihre Rückseite, und die verschwindet vollständig.
 
     Belegt wurde die Wirkung an Bildern aus einem eigenen Arbeitsbaum: Der
     Stand davor zeigte von unten nur die Platte, danach den Körper. Dieser Test
     hält fest, dass die Eigenschaft gesetzt **wird** — ein Bild kann er nicht
     ansehen, und eine Zahl daraus war untauglich (sie zählte die Achsenmarke).
     """
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import BED_SURFACE_OPACITY, Viewport
 
     viewport = Viewport()
     plotter = _RecordingPlotter()
@@ -1086,15 +1084,51 @@ def test_the_bed_surface_can_be_seen_through_from_below(
     viewport.show_build_volume(profile)
 
     flaechen = [
-        actor
+        (actor, kwargs)
         for actor, (_art, kwargs) in zip(plotter.actors, plotter.drawn, strict=False)
         if str(kwargs.get("name", "")).startswith("bed_surface_")
     ]
     assert flaechen, "keine Plattenfläche gezeichnet — dann prüft der Test nichts"
-    for actor in flaechen:
+    for actor, kwargs in flaechen:
         assert actor.prop.culling == "back", (
             f"die Rückseite der Plattenfläche bleibt stehen: {actor.prop.culling}"
         )
+        assert kwargs.get("opacity") == BED_SURFACE_OPACITY
+        assert 0.55 <= BED_SURFACE_OPACITY < 0.8, (
+            "die Fläche soll Körper darunter zeigen, aber als Platte lesbar bleiben"
+        )
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_translucent_bed_keeps_body_grid_and_edge_readable(theme: str) -> None:
+    """Der Durchblick kostet weder Körpererkennung noch Plattenorientierung."""
+    from app.ui.palette import contrast_ratio
+    from app.ui.viewport import BED_GRID_OPACITY, BED_SURFACE_OPACITY
+
+    def mixed(foreground: str, background: str, opacity: float) -> str:
+        """Zwei sRGB-Farben so mischen, wie die flachen VTK-Actors im Bild."""
+        front = tuple(int(foreground[index : index + 2], 16) for index in (1, 3, 5))
+        back = tuple(int(background[index : index + 2], 16) for index in (1, 3, 5))
+        values = tuple(
+            round(opacity * one + (1.0 - opacity) * behind)
+            for one, behind in zip(front, back, strict=True)
+        )
+        return "#" + "".join(f"{value:02x}" for value in values)
+
+    colours = viewport_colours(theme)  # type: ignore[arg-type]
+    surface = mixed(colours["bed_surface"], colours["bottom"], BED_SURFACE_OPACITY)
+    body_below = mixed(colours["bed_surface"], colours["object"], BED_SURFACE_OPACITY)
+    grid = mixed(colours["bed"], surface, BED_GRID_OPACITY)
+
+    assert contrast_ratio(body_below, surface) >= 1.25, (
+        f"{theme}: ein Körper knapp unter der Platte verschwindet"
+    )
+    assert contrast_ratio(grid, surface) >= 1.15, (
+        f"{theme}: das Raster verliert sich auf der durchscheinenden Fläche"
+    )
+    assert contrast_ratio(surface, colours["bottom"]) >= 1.08, (
+        f"{theme}: die Plattenkante verliert sich im Hintergrund"
+    )
 
 
 def test_each_plate_draws_under_its_own_names(profile: Profile, qt_app: QApplication) -> None:
