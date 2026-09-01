@@ -15,7 +15,7 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
-## 0.2.3
+## 0.3.0
 
 
 ### Sharing parts

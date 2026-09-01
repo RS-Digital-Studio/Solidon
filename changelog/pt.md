@@ -15,7 +15,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
-## 0.2.3
+## 0.3.0
 
 
 ### Partilhar blocos

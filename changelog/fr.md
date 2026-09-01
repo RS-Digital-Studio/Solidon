@@ -16,7 +16,7 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
-## 0.2.3
+## 0.3.0
 
 
 ### Partager des blocs

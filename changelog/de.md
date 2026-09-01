@@ -40,7 +40,7 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
-## 0.2.3
+## 0.3.0
 
 
 ### Bausteine weitergeben

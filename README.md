@@ -12,7 +12,7 @@ ein zweites Gerät aktiviert. Ohne KI bleibt nur der Chat aus.
 
 Projektdateien tragen die Endung `.p3d`.
 
-## Version 0.2.2 — die öffentliche Demo
+## Version 0.3.0 — die öffentliche Demo
 
 Die aktuelle Version ist eine **Demo**: vollständig, unentgeltlich, ohne
 Schlüssel und ohne Konto, **befristet bis zum 30. Oktober 2026**. Danach
