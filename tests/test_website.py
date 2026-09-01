@@ -36,8 +36,8 @@ from app.core.registry import REGISTRY
 
 WEBSITE = Path(__file__).resolve().parent.parent / "website"
 
-#: Die Startseiten. Sie führen die Kennzahlen, das Angebot für Suchmaschinen
-#: und die häufigen Fragen — nur sie werden auf diese Inhalte geprüft.
+#: Die Startseiten. Sie führen die Kennzahlen, die Produktbeschreibung für
+#: Suchmaschinen und die häufigen Fragen — nur sie werden auf diese Inhalte geprüft.
 PAGES = ("index.html", "en/index.html")
 
 #: Jede von Hand gepflegte Verkaufsseite. Handbuch und Rechtstexte stehen nicht
@@ -829,26 +829,30 @@ def test_each_start_page_makes_the_no_cad_promise_visible(page: str) -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
-def test_each_start_page_matches_the_sale_activation_policy(
-    page: str, shipped_demo_until: object, shipped_trial_from: object
+def test_each_start_page_matches_the_current_demo_policy(
+    page: str, shipped_demo_until: object
 ) -> None:
-    """Sechs Übersetzungen dürfen die Lizenzgrenze nicht sechsfach erfinden.
-
-    Die maschinenlesbaren Merkmale stehen am jeweiligen Kundensatz. So prüft
-    der Test die Bedeutung und hängt nicht an sechs übersetzten Formulierungen.
-    """
+    """Die Demo-Seiten nennen den Stichtag, aber noch kein Verkaufsangebot."""
     text = (WEBSITE / page).read_text(encoding="utf-8")
     expected_deadline = shipped_demo_until.isoformat() if shipped_demo_until is not None else "none"
     assert text.count(f'data-demo-until="{expected_deadline}"') == 1, (
         f"{page}: Demo-Stichtag weicht von store.DEMO_UNTIL ab"
     )
-    assert text.count('data-active-devices="1"') == 1, (
-        f"{page}: genau ein gleichzeitig aktives Gerät fehlt im Angebot"
+    for offer_marker in (
+        '"offers":',
+        "https://schema.org/PreOrder",
+        '"priceCurrency"',
+        '"priceValidUntil"',
+        'data-active-devices="',
+        'data-sale-trial-active="',
+    ):
+        assert offer_marker not in text, f"{page}: enthält schon ein 1.0-Angebot ({offer_marker})"
+    assert re.search(r"(?<!\d)(69|99)(?:&nbsp;| )?€|€(?:&nbsp;| )?(69|99)(?!\d)", text) is None, (
+        f"{page}: enthält schon einen festen 1.0-Preis"
     )
-    expected_trial = "true" if shipped_trial_from is not None else "false"
-    assert text.count(f'data-sale-trial-active="{expected_trial}"') == 1, (
-        f"{page}: Testphasen-Aussage weicht von store.TRIAL_FROM ab"
-    )
+    terms = re.search(r'<p class="terms">(.*?)</p>', text, re.DOTALL)
+    assert terms is not None, f"{page}: Demokonditionen fehlen"
+    assert "0.2.2" not in terms.group(1), f"{page}: Demokonditionen nennen eine veraltende Fassung"
 
 
 @pytest.mark.parametrize("page", START_PAGES)
@@ -1552,10 +1556,9 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
 
 #: Wie viele Tage vor dem Demo-Ende die Website ihre Datumssätze umstellen muss.
 #:
-#: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich beides
-#: noch ausgeht: die für den Verkauf bereits entschiedenen Sätze in sechs
-#: Sprachen umschreiben und hochladen. Wer am 30. merkt, dass die Seite den 30.
-#: verspricht, hat keinen Tag mehr.
+#: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich die
+#: befristeten Demo-Sätze in sechs Sprachen umschreiben und hochladen lassen.
+#: Wer am 30. merkt, dass die Seite den 30. verspricht, hat keinen Tag mehr.
 TRANSITION_LEAD_DAYS = 5
 
 
@@ -1566,9 +1569,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
 
     „Die Demo läuft bis zum 30. Oktober 2026" steht auf den Startseiten in
     sechs Sprachen an mehreren Stellen, dazu die Frage „Was passiert am
-    30. Oktober?" und der Einführungspreis bis 31.01.2027. Am 31. Oktober
-    werden diese Sätze **still** falsch: Sie sehen aus wie vorher, und niemand
-    bekommt eine Meldung.
+    30. Oktober?". Am 31. Oktober werden diese Sätze **still** falsch: Sie
+    sehen aus wie vorher, und niemand bekommt eine Meldung.
 
     **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
     (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
@@ -1577,10 +1579,10 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
     Tests, dieselbe Quelle.
 
-    Was danach gilt, ist seit dem 28.08.2026 entschieden: Verkauf ab 01.11.,
-    keine zusätzliche Testphase, 69 Euro bis 31.01.2027 und danach 99 Euro.
-    Die heutigen Zukunftssätze sind bis zum Demo-Ende richtig; dieser Test
-    sorgt dafür, dass sie rechtzeitig in Gegenwartsform umgeschrieben werden.
+    Version 1.0 ist für den 01.11.2026 geplant, aber noch kein Angebot. Die
+    heutigen Zukunftssätze sind bis zum Demo-Ende richtig; dieser Test sorgt
+    dafür, dass sie rechtzeitig in Gegenwartsform umgeschrieben werden, ohne
+    dabei Preis oder Vertragsbedingungen vorwegzunehmen.
 
     **Er hängt an ``DEMO_UNTIL`` und nicht an einer zweiten Zahl.** Wird die
     Demo verlängert, verschiebt sich die Erinnerung von selbst mit; ein hier
@@ -1595,7 +1597,7 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
     from datetime import date, timedelta
 
     if shipped_demo_until is None:
-        pytest.skip("Verkaufsversion ohne Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
+        pytest.skip("Fassung ohne Demo-Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
 
     assert isinstance(shipped_demo_until, date)
     faellig = shipped_demo_until - timedelta(days=TRANSITION_LEAD_DAYS)
@@ -1605,9 +1607,8 @@ def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
         f"{heute:%d.%m.%Y}. "
         "Vier Datumsangaben auf den Startseiten werden danach still falsch: der "
         "Satz „läuft bis zum 30. Oktober“ (sechs Sprachen, mehrere Stellen), die "
-        "FAQ-Frage „Was passiert am 30. Oktober?“ und der Einführungspreis bis "
-        "31.01.2027. "
-        "Die Sätze auf den bereits entschiedenen Verkaufszustand umschreiben. "
+        "FAQ-Frage „Was passiert am 30. Oktober?“. "
+        "Die Sätze auf den dann tatsächlich geltenden Demo-Status umschreiben. "
         "Nur eine neue ausdrückliche Entscheidung darf stattdessen DEMO_UNTIL "
         "in app/core/activation/store.py verschieben; dann wandert diese "
         "Erinnerung mit."
