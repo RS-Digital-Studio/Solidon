@@ -7,4 +7,4 @@ Icon=de.rsdigital.solidon3d
 StartupWMClass=Solidon3D
 Categories=Graphics;3DGraphics;Engineering;
 Terminal=false
-MimeType=application/x-solidon3d-project;
+MimeType=application/x-solidon3d-project;application/vnd.solidon.part+json;

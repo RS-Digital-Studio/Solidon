@@ -40,6 +40,8 @@ from app.branding import (
     APP_VENDOR,
     APP_VERSION,
     DISTRIBUTION_NAME,
+    PART_FILE_MIME_TYPE,
+    PART_FILE_SUFFIX,
     PROJECT_SUFFIX,
     WEBSITE_URL,
 )
@@ -80,6 +82,16 @@ MIME_COMMENTS = {
     "fr": f"Projet {APP_NAME}",
     "it": f"Progetto {APP_NAME}",
     "pt": f"Projeto {APP_NAME}",
+}
+
+#: Bezeichnung der portablen Bausteindatei in denselben Sprachen. Ihr MIME-Typ
+#: ist herstellergebunden und zentral in :mod:`app.branding` festgelegt.
+PART_MIME_COMMENTS = {
+    "de": f"{APP_NAME}-Baustein",
+    "es": f"Componente de {APP_NAME}",
+    "fr": f"Composant {APP_NAME}",
+    "it": f"Componente {APP_NAME}",
+    "pt": f"Componente do {APP_NAME}",
 }
 
 #: Was der Eintrag im Menü sagt. Kurz, denn die Software-Verwaltung schneidet
@@ -378,7 +390,7 @@ def desktop_entry() -> str:
         "Terminal=false\n"
         # Die eigene Projektdatei, damit ein Doppelklick im Dateimanager
         # ankommt. Der Typ wird in der Flatpak-Installation mitgeliefert.
-        f"MimeType=application/x-{DISTRIBUTION_NAME}-project;\n"
+        f"MimeType={MIME_TYPE};{PART_FILE_MIME_TYPE};\n"
     )
 
 
@@ -579,6 +591,10 @@ def mime_definition() -> str:
     comments = "".join(
         f'    <comment xml:lang="{code}">{text}</comment>\n' for code, text in MIME_COMMENTS.items()
     )
+    part_comments = "".join(
+        f'    <comment xml:lang="{code}">{text}</comment>\n'
+        for code, text in PART_MIME_COMMENTS.items()
+    )
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         "<!-- Erzeugt von tools/make_linux_packages.py — Werte aus app/branding.py. -->\n"
@@ -588,6 +604,13 @@ def mime_definition() -> str:
         f"{comments}"
         '    <sub-class-of type="application/zip" />\n'
         f'    <glob pattern="*{PROJECT_SUFFIX}" />\n'
+        f'    <icon name="{APP_ID}" />\n'
+        "  </mime-type>\n"
+        f'  <mime-type type="{PART_FILE_MIME_TYPE}">\n'
+        f"    <comment>{APP_NAME} part</comment>\n"
+        f"{part_comments}"
+        '    <sub-class-of type="application/json" />\n'
+        f'    <glob pattern="*{PART_FILE_SUFFIX}" />\n'
         f'    <icon name="{APP_ID}" />\n'
         "  </mime-type>\n"
         "</mime-info>\n"
@@ -710,6 +733,10 @@ def build_appimage() -> int:
         shutil.rmtree(appdir)
     (appdir / "usr").mkdir(parents=True)
     shutil.copytree(SOURCE_DIR, appdir / "usr" / "bin")
+
+    mime_target = appdir / "usr" / "share" / "mime" / "packages" / f"{APP_ID}.xml"
+    mime_target.parent.mkdir(parents=True)
+    shutil.copyfile(MIME_FILE, mime_target)
 
     (appdir / f"{APP_ID}.desktop").write_text(desktop_entry(), encoding="utf-8", newline="\n")
     icon = ROOT / "app" / "images" / "icon" / f"{DISTRIBUTION_NAME}.svg"

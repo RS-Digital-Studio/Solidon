@@ -25,6 +25,7 @@ ROOT = Path(SPECPATH).resolve().parent
 # Solidon3D.exe, die es nicht gab.
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
+from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
 from tools.make_licence_notices import write_notice  # noqa: E402
 
 if not write_notice(check=True):
@@ -294,7 +295,13 @@ if sys.platform == "darwin":
                     "CFBundleTypeRole": "Editor",
                     "LSHandlerRank": "Owner",
                     "LSItemContentTypes": [f"{APP_ID}.project"],
-                }
+                },
+                {
+                    "CFBundleTypeName": f"{APP_NAME} part",
+                    "CFBundleTypeRole": "Editor",
+                    "LSHandlerRank": "Owner",
+                    "LSItemContentTypes": [f"{APP_ID}.part"],
+                },
             ],
             "UTExportedTypeDeclarations": [
                 {
@@ -308,7 +315,16 @@ if sys.platform == "darwin":
                     "UTTypeTagSpecification": {
                         "public.filename-extension": [PROJECT_SUFFIX.lstrip(".")]
                     },
-                }
+                },
+                {
+                    "UTTypeIdentifier": f"{APP_ID}.part",
+                    "UTTypeDescription": f"{APP_NAME} part",
+                    "UTTypeConformsTo": ["public.data", "public.json"],
+                    "UTTypeTagSpecification": {
+                        "public.filename-extension": [PART_FILE_SUFFIX.lstrip(".")],
+                        "public.mime-type": PART_FILE_MIME_TYPE,
+                    },
+                },
             ],
         },
     )

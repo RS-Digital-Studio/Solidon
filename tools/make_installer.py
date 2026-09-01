@@ -26,6 +26,8 @@ from app.branding import (
     APP_NAME,
     APP_VENDOR,
     APP_VERSION,
+    PART_FILE_MIME_TYPE,
+    PART_FILE_SUFFIX,
     PROJECT_SUFFIX,
     WEBSITE_URL,
 )
@@ -168,6 +170,8 @@ def main() -> int:
             # Registrierung ein. Auch sie steht in app/branding.py und
             # nirgends sonst.
             f"/DProjectSuffix={PROJECT_SUFFIX}",
+            f"/DPartFileSuffix={PART_FILE_SUFFIX}",
+            f"/DPartFileMimeType={PART_FILE_MIME_TYPE}",
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
             f"/DLicenseFile={_licence_file()}",

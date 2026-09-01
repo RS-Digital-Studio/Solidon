@@ -637,6 +637,49 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "Öffentliche Linux-Pakete prüfen" in workflow
 
 
+def test_the_appimage_carries_the_generated_mime_definition(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der portable Bau liefert die Typbeschreibung am erwarteten Systempfad mit."""
+    from tools import make_linux_packages as tool
+
+    source = tmp_path / "source"
+    output = tmp_path / "dist"
+    source.mkdir()
+    (source / tool.APP_NAME).write_bytes(b"Programm")
+    executable = tmp_path / "appimagetool"
+    executable.write_bytes(b"Werkzeug")
+    icon = tmp_path / "app" / "images" / "icon" / f"{tool.DISTRIBUTION_NAME}.svg"
+    icon.parent.mkdir(parents=True)
+    icon.write_text("<svg/>", encoding="utf-8")
+    mime_file = tmp_path / "packaging" / f"{tool.APP_ID}.xml"
+    mime_file.parent.mkdir(parents=True)
+    mime_file.write_text(tool.mime_definition(), encoding="utf-8", newline="\n")
+
+    monkeypatch.setattr(tool, "SOURCE_DIR", source)
+    monkeypatch.setattr(tool, "OUTPUT_DIR", output)
+    monkeypatch.setattr(tool, "ROOT", tmp_path)
+    monkeypatch.setattr(tool, "MIME_FILE", mime_file)
+    monkeypatch.setattr(tool.shutil, "which", lambda _name: str(executable))
+    monkeypatch.setattr(
+        tool.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(command, 0),
+    )
+
+    assert tool.build_appimage() == 0
+    installed_mime = (
+        output
+        / f"{tool.APP_NAME}.AppDir"
+        / "usr"
+        / "share"
+        / "mime"
+        / "packages"
+        / f"{tool.APP_ID}.xml"
+    )
+    assert installed_mime.read_bytes() == mime_file.read_bytes()
+
+
 def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
     """Die Quelle darf nicht der Ordner sein, in den der Bau selbst schreibt.
 
@@ -967,6 +1010,38 @@ def test_the_windows_installer_registers_the_project_extension() -> None:
     )
 
 
+def test_the_windows_installer_registers_only_the_branded_part_extension() -> None:
+    """Bausteindateien öffnen Solidon, ohne alle JSON-Dateien zu beanspruchen."""
+    from app.branding import APP_ID, PART_FILE_SUFFIX
+
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    tool = (ROOT / "tools" / "make_installer.py").read_text(encoding="utf-8")
+
+    assert "{#PartFileSuffix}\\OpenWithProgids" in script
+    assert "{#AppId}.part" in script
+    assert (
+        'Subkey: "Software\\Classes\\{#PartFileSuffix}";   ValueType: string; '
+        'ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue; '
+        "Tasks: associate"
+    ) in script
+    assert (
+        'Subkey: "Software\\Classes\\{#ProjectSuffix}";   ValueType: string; ValueName: ""'
+    ) not in script
+    assert "/DPartFileSuffix={PART_FILE_SUFFIX}" in tool
+    assert "/DPartFileMimeType={PART_FILE_MIME_TYPE}" in tool
+    assert 'ValueName: "Content Type"; ValueData: "{#PartFileMimeType}"' in script
+    assert 'Name: "associate"; Description: "{cm:FileAssociationTask}"' in script
+    assert (
+        'Subkey: "Software\\Classes\\Applications\\{#AppName}.exe\\SupportedTypes";   '
+        'ValueType: string; ValueName: "{#PartFileSuffix}"; ValueData: "";   '
+        "Flags: uninsdeletevalue"
+    ) in script
+    assert PART_FILE_SUFFIX not in script, "die Endung steht fest im Installer"
+    assert APP_ID not in script, "die Kennung steht fest im Installer"
+    assert "UserChoice" not in script
+    assert 'ValueName: ".json"' not in script
+
+
 def test_the_bundle_owns_the_project_type_on_macos() -> None:
     """Das Bundle meldet den Dokumenttyp an — und erklärt ihn auch.
 
@@ -988,6 +1063,20 @@ def test_the_bundle_owns_the_project_type_on_macos() -> None:
     assert "public.zip-archive" in spec
     assert 'PROJECT_SUFFIX.lstrip(".")' in spec, "die Endung steht fest in der Spec"
     assert PROJECT_SUFFIX not in spec.replace("PROJECT_SUFFIX", "")
+
+
+def test_the_bundle_owns_the_part_type_as_json_on_macos() -> None:
+    """Der Finder kennt den gebrandeten JSON-Typ, nicht jede JSON-Datei."""
+    from app.branding import PART_FILE_SUFFIX
+
+    spec = SPEC.read_text(encoding="utf-8")
+
+    assert 'f"{APP_ID}.part"' in spec
+    assert 'PART_FILE_SUFFIX.lstrip(".")' in spec
+    assert '"public.mime-type": PART_FILE_MIME_TYPE' in spec
+    assert '"public.json"' in spec
+    assert PART_FILE_SUFFIX not in spec.replace("PART_FILE_SUFFIX", "")
+    assert '"public.filename-extension": ["json"]' not in spec
 
 
 def test_the_linux_type_is_defined_and_not_only_claimed() -> None:
@@ -1026,6 +1115,53 @@ def test_the_linux_type_is_defined_and_not_only_claimed() -> None:
     named = {node.get("{http://www.w3.org/XML/1998/namespace}lang") for node in entry}
     missing = sorted(set(available_languages()) - named - {"en"})
     assert not missing, f"der Typ bleibt in diesen Sprachen englisch: {missing}"
+
+
+def test_the_linux_part_type_is_generated_beside_the_project_type() -> None:
+    """Desktop und MIME-XML führen beide eigenen Typen ohne JSON-Übergriff."""
+    import xml.etree.ElementTree as ET
+
+    from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX, PROJECT_SUFFIX
+    from tools import make_linux_packages as tool
+
+    root = ET.fromstring(tool.mime_definition())
+    space = "{http://www.freedesktop.org/standards/shared-mime-info}"
+    entries = {entry.get("type"): entry for entry in root.findall(f"{space}mime-type")}
+
+    assert set(entries) == {tool.MIME_TYPE, PART_FILE_MIME_TYPE}
+    project_glob = entries[tool.MIME_TYPE].find(f"{space}glob")
+    part_glob = entries[PART_FILE_MIME_TYPE].find(f"{space}glob")
+    part_parent = entries[PART_FILE_MIME_TYPE].find(f"{space}sub-class-of")
+    assert project_glob is not None and project_glob.get("pattern") == f"*{PROJECT_SUFFIX}"
+    assert part_glob is not None and part_glob.get("pattern") == f"*{PART_FILE_SUFFIX}"
+    assert part_parent is not None and part_parent.get("type") == "application/json"
+    assert all(node.get("pattern") != "*.json" for node in root.iter(f"{space}glob"))
+    assert f"MimeType={tool.MIME_TYPE};{PART_FILE_MIME_TYPE};" in tool.desktop_entry()
+
+
+def test_the_checked_in_linux_mime_file_matches_the_generator() -> None:
+    """Die Paketquelle darf nicht hinter der zentralen Dateitypdefinition zurückbleiben."""
+    from tools import make_linux_packages as tool
+
+    assert tool.MIME_FILE.read_text(encoding="utf-8") == tool.mime_definition()
+
+
+def test_the_part_file_identity_has_one_branding_source() -> None:
+    """Alle Paketgeneratoren lesen denselben Dateityp aus der Produktidentität."""
+    from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX
+
+    assert PART_FILE_SUFFIX == ".solidon-part"
+    assert PART_FILE_MIME_TYPE == "application/vnd.solidon.part+json"
+
+    installer = (ROOT / "tools" / "make_installer.py").read_text(encoding="utf-8")
+    linux = (ROOT / "tools" / "make_linux_packages.py").read_text(encoding="utf-8")
+    spec = SPEC.read_text(encoding="utf-8")
+    for source in (installer, linux, spec):
+        assert "PART_FILE_SUFFIX" in source
+        assert PART_FILE_SUFFIX not in source.replace("PART_FILE_SUFFIX", "")
+    assert "PART_FILE_MIME_TYPE" in installer
+    assert "PART_FILE_MIME_TYPE" in linux
+    assert "PART_FILE_MIME_TYPE" in spec
 
 
 def test_the_linux_installer_registers_the_type() -> None:

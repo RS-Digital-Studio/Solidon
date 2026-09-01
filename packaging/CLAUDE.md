@@ -79,6 +79,10 @@ fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
   mit, wenn die `.spec` es kennt.
 - **Die Version** kommt aus `app/branding.py` über `tools/bump_version.py` —
   hier wird sie nicht getippt.
+- **Eigene Dateitypen** lesen Endung und MIME-Typ aus `app/branding.py` und
+  werden auf Windows, macOS und Linux gemeinsam eingetragen. `.p3d` bleibt der
+  Projektcontainer; `.solidon-part` ist das portable JSON-Rezept eines
+  Bausteins. Die allgemeine Endung `.json` wird nie Solidon zugeordnet.
 
 `tests/test_packaging.py` prüft, was sich prüfen lässt, ohne zu bauen.
 

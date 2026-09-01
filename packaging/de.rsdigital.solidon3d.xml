@@ -12,4 +12,15 @@
     <glob pattern="*.p3d" />
     <icon name="de.rsdigital.solidon3d" />
   </mime-type>
+  <mime-type type="application/vnd.solidon.part+json">
+    <comment>Solidon3D part</comment>
+    <comment xml:lang="de">Solidon3D-Baustein</comment>
+    <comment xml:lang="es">Componente de Solidon3D</comment>
+    <comment xml:lang="fr">Composant Solidon3D</comment>
+    <comment xml:lang="it">Componente Solidon3D</comment>
+    <comment xml:lang="pt">Componente do Solidon3D</comment>
+    <sub-class-of type="application/json" />
+    <glob pattern="*.solidon-part" />
+    <icon name="de.rsdigital.solidon3d" />
+  </mime-type>
 </mime-info>

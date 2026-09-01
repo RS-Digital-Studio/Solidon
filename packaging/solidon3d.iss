@@ -86,6 +86,18 @@ es.ProjectFileType=Proyecto de {#AppName}
 fr.ProjectFileType=Projet {#AppName}
 it.ProjectFileType=Progetto {#AppName}
 pt.ProjectFileType=Projeto {#AppName}
+de.PartFileType={#AppName}-Baustein
+en.PartFileType={#AppName} part
+es.PartFileType=Componente de {#AppName}
+fr.PartFileType=Composant {#AppName}
+it.PartFileType=Componente {#AppName}
+pt.PartFileType=Componente do {#AppName}
+de.FileAssociationTask={#AppName}-Projekte und -Bausteine mit {#AppName} öffnen
+en.FileAssociationTask=Open {#AppName} projects and parts with {#AppName}
+es.FileAssociationTask=Abrir proyectos y componentes de {#AppName} con {#AppName}
+fr.FileAssociationTask=Ouvrir les projets et composants {#AppName} avec {#AppName}
+it.FileAssociationTask=Apri progetti e componenti {#AppName} con {#AppName}
+pt.FileAssociationTask=Abrir projetos e componentes do {#AppName} com o {#AppName}
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -93,7 +105,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; ein Programm für Projektdateien installiert, will sie damit öffnen. Abwählbar
 ; bleibt sie trotzdem — auf einem Rechner mit zwei Versionen nebeneinander ist
 ; genau das die Frage, die zählt.
-Name: "associate"; Description: "{cm:AssocFileExtension,{#AppName},{#ProjectSuffix}}"
+Name: "associate"; Description: "{cm:FileAssociationTask}"
 
 ; Die Zuordnung von {#ProjectSuffix}. Sie hängt an der Aufgabe darüber und
 ; verschwindet mit der Deinstallation wieder — ``uninsdeletekey`` auf dem
@@ -107,10 +119,17 @@ Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}\OpenWithProgids";   ValueT
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project";   ValueType: string; ValueName: ""; ValueData: "{cm:ProjectFileType}";   Flags: uninsdeletekey; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\{#AppId}.project\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.part"; ValueData: "";   Flags: uninsdeletevalue; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: ""; ValueData: "{#AppId}.part";   Flags: uninsdeletevalue; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#PartFileSuffix}";   ValueType: string; ValueName: "Content Type"; ValueData: "{#PartFileMimeType}";   Flags: uninsdeletevalue; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.part";   ValueType: string; ValueName: ""; ValueData: "{cm:PartFileType}";   Flags: uninsdeletekey; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.part\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.part\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
 ; Damit die Anwendung auch im Dialog „Öffnen mit" steht, wenn die Zuordnung
 ; abgewählt wurde oder ein anderes Programm sie später übernimmt.
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Flags: uninsdeletekey
 Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#PartFileSuffix}"; ValueData: "";   Flags: uninsdeletevalue
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

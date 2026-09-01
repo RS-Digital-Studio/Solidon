@@ -53,6 +53,10 @@ DONATION_URL: Final = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU
 #: Endung des Projektcontainers (Bauplan §16.1).
 PROJECT_SUFFIX: Final = ".p3d"
 
+#: Endung und MIME-Typ des portablen Bausteinrezepts.
+PART_FILE_SUFFIX: Final = ".solidon-part"
+PART_FILE_MIME_TYPE: Final = "application/vnd.solidon.part+json"
+
 #: Anwendungsversion, gespiegelt in jede Projektdatei als ``app_version``.
 #:
 #: **Die 0.x-Reihe sind die öffentlichen Demos** (Demo-Konzept §2 D), nicht
