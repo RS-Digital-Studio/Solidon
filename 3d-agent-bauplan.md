@@ -52,6 +52,12 @@ der Nicht-bauen-Liste zurück. Was dazukommt, sind Stellen, an denen der Plan
 hinter dem Code zurückhing, fünf Entscheidungen, auf die das Register von
 `ROADMAP.md` ausdrücklich gewartet hat, und ein Kapitel, das gefehlt hat.
 
+**Produktgrenze für 0.3.0:** Die öffentliche, gehostete Tauschbörse entfällt.
+Bausteinrezepte werden ausschließlich als lokale Dateien exportiert und
+importiert; dieser Weg bleibt vollständig, verlustfrei und offline nutzbar.
+Gestrichen sind nur Galerie, Upload, Serverdownload und die daran hängenden
+Konten-, Bewertungs- und Moderationswege — nicht das Rezeptformat (§24.5).
+
 **Neu: §37.3 Regulatorische Auflagen** — der teuerste Fund. Die Verordnung
 über Cyberresilienz gilt für jedes kommerziell in Verkehr gebrachte Erzeugnis
 mit digitalen Elementen, und Solidon ist eines. Ab dem **11.09.2026** — drei
@@ -382,9 +388,7 @@ Prüfung prüft jede gefundene Datei, nicht die englische.
 | Passung | `Fit` | benannte Beziehung zweier Features |
 | Profil | `Profile` | Drucker- oder Materialeinstellungen |
 | Regelsammlung | `rules` | Druckregeln für Agent und Prüfungen |
-| Tauschbörse | `shared` | öffentlich geteilte Rezepte auf der Website (`shared_parts`, `SharedPart`) |
-| Melden | `flag` | Beschwerde über einen fremden Beitrag der Tauschbörse |
-| Lizenz | `licence` | Nutzungsrechte an einem öffentlich geteilten Rezept — **aber das Dataclass-Feld heißt `license`**: `shared-rules.json` leitet ihre Erlaubnisliste aus `dataclasses.fields(Recipe)` ab, der Feldname ist also zugleich Schlüssel in Regel- und Rezeptdatei, und `serialise.py` schreibt das Format schon so. Zwei Schreibungen wären dort eine Übersetzungsstelle zwischen Python und PHP. Technischer Schlüssel amerikanisch wie das Format, Oberflächentext britisch wie der Katalog (36 Substantive mit `licence` gegen 6 mit `license`, und die sechs sind Partizipien und ein Eigenname). Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
+| Lizenz | `licence` | Nutzungsrechte an einem weitergegebenen Rezept — **aber das Dataclass-Feld und der Schlüssel in der Rezeptdatei heißen `license`**. Technischer Schlüssel amerikanisch wie das Dateiformat, Oberflächentext britisch wie der Katalog. Als Parametername bleibt `licence`, weil `license` ein Python-Builtin ist (ruff A002) |
 
 Diese Zuordnung ist verbindlich. Ein neuer Begriff kommt zuerst in diese
 Tabelle, dann in den Code.
@@ -398,7 +402,7 @@ Tabelle, dann in den Code.
 | **Produkt** | Desktop-Anwendung, als Download veröffentlicht |
 | **Online** | Website mit Doku und Downloads |
 | **Online, optional** | gehosteter Generierungs-Backend für Nutzer ohne GPU |
-| **Ausdrücklich nicht** | Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage |
+| **Ausdrücklich nicht** | Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage, gehostete Tauschbörse |
 
 Wichtigster Nebeneffekt: **Auf dem Server läuft niemals Code, den ein LLM
 erzeugt hat.** Er läuft auch lokal nicht (§32); der gehostete Backend nimmt
@@ -1540,14 +1544,16 @@ Projekte still anders, und Leitprinzip 4 ist verletzt.
   Maße
 - **Beim Öffnen**: Hinweis, welche *benutzten* Bausteine sich seither geändert
   haben, mit der Wahl zwischen „neu rechnen" und „alten Stand beibehalten".
-  **Für einen eigenen Baustein (§24.5) trägt dieser Weg nicht**, und das ist
-  eine offene Stelle und keine Ausnahme: Die Prüfung liest die gepflegten
+  **Für einen eigenen `.py`-Baustein (§24.5) trägt dieser Weg nicht**, und das
+  ist eine offene Stelle und keine Ausnahme: Die Prüfung liest die gepflegten
   Änderungsverläufe, und wer an seinem eigenen Baustein ein Maß ändert und
   speichert, pflegt keinen. Was sie stattdessen lesen müsste, ist der Zustand
   der Dateien selbst — Name, Änderungszeit, Größe unter
-  `<Nutzerdaten>/parts/`. Genau diese Auskunft braucht auch der Plattencache
-  (§38), um für einen geänderten eigenen Baustein nicht das alte Ergebnis
-  zurückzugeben; sie wird also ohnehin gebildet
+  `<Nutzerdaten>/parts/*.py`. Genau diese Auskunft braucht auch der
+  Plattencache (§38), um für einen geänderten eigenen Baustein nicht das alte
+  Ergebnis zurückzugeben; sie wird also ohnehin gebildet. Ein Rezept trägt
+  seine Version als Hash seiner kanonischen Daten und braucht diesen
+  Sonderweg nicht
 - Der alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt; wird er
   entfernt, verhält sich das wie eine Migration (§16.2)
 
@@ -1557,7 +1563,8 @@ Dieselbe Registrierung aus einem Nutzerverzeichnis
 gekennzeichnet.
 
 **Das ist kein Plugin-System.** Der Unterschied ist die Reichweite: Eigene
-Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
+`.py`-Bausteine gelten nur auf dem Rechner, auf dem sie liegen. Rezepte sind
+Daten und dürfen deshalb mit einem Projekt oder als lokale Datei reisen.
 
 - Ein eigener Baustein **als `.py` reist nie in einer Projektdatei mit** —
   sonst wäre die Regel aus §32 umgangen, dass eine fremde Datei keinen Code
@@ -1571,20 +1578,17 @@ Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
   dieselbe Sperre wie für jeden anderen Weg. Der Katalog weist die Herkunft
   aus, und ein mitgereistes Rezept überschreibt nie einen gleichnamigen
   eigenen Baustein
-- **Rezept-Export und -Import bleiben lokal, verlustfrei und offline
-  nutzbar.** Die optionale öffentliche Community-Tauschstelle auf der Website
-  dient dem unentgeltlichen Austausch bestehender Bausteinrezepte zwischen
-  Nutzern und ist **kein Marktplatz**. Die kostenpflichtige Kauflizenz ab
-  Solidon3D 1.x bleibt davon unberührt; 0.x-Fassungen sind weiterhin Demo-
-  Fassungen. Der Startumfang der Tauschstelle ist: Rezepte suchen, ansehen,
-  hochladen und herunterladen. Es gibt dort keine Konten, Profile, Zahlungen,
-  Provisionen oder Direktnachrichten; Likes und Kommentare gehören nicht zum
-  Startumfang
-- Öffentlich getauschte Rezepte führen **keine eingebetteten Modelldaten oder
-  sonstigen Mesh-Payloads** mit. Lokal dürfen solche Daten in Projektdateien
-  weiterhin mitreisen. Für jeden öffentlichen Beitrag bleiben ausgewiesene
-  Herkunft und Lizenz, die serverseitige Erlaubnisprüfung sowie ein Melde- und
-  Entfernungsweg verpflichtend
+- **Rezept-Export und -Import sind ausschließlich lokale Dateiwege** und
+  bleiben verlustfrei und offline nutzbar. Der Export schreibt eine Datei,
+  der Import liest eine bewusst ausgewählte Datei; Solidon lädt kein Rezept
+  hoch, ruft keines von einem Server ab und durchsucht keine öffentliche
+  Sammlung. Die Datei führt Autor, Lizenz und Herkunft mit. Vor der Übernahme
+  werden Format, Größe und Integrität geprüft; ausführbarer Quelltext bleibt
+  durch §32 ausgeschlossen
+- Lokal weitergegebene Rezepte dürfen eingebettete Modelldaten oder andere
+  Mesh-Payloads enthalten, wie eine Projektdatei auch. Der Import weist die
+  fremde Herkunft aus, und ein eingelesenes Rezept überschreibt nie
+  stillschweigend einen gleichnamigen lokalen Baustein
 - Öffnet jemand ein Projekt, das einen unbekannten eigenen Baustein benutzt,
   hält die Auswertung an und meldet, was fehlt (§15.2)
 - Sie erweitern nicht die Anwendung, sondern nur die Bibliothek — keine neuen
@@ -2131,10 +2135,11 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
   dasselbe Maß — sie ist ebenfalls ein ZIP, und sie reist ausdrücklich zwischen
   Leuten (§16.2). Eine Grenze, die nur an einem von zwei Eingängen steht, ist
   die Lehre, die nur halb gezogen wurde
-- **Eigene Bausteine (§24.5) reisen nie mit.** Ein Projekt verweist auf sie
-  nur namentlich; fehlt der Baustein, hält die Auswertung an. Ausführbarer
-  Code kommt ausschließlich aus der Installation und dem Nutzerverzeichnis,
-  nie aus einer geöffneten Datei.
+- **Eigene `.py`-Bausteine (§24.5) reisen nie mit.** Ein Projekt verweist auf
+  sie nur namentlich; fehlt der Baustein, hält die Auswertung an. Ein Rezept
+  darf als Daten mitreisen oder über eine lokale Datei eingelesen werden.
+  Ausführbarer Code kommt ausschließlich aus der Installation und dem
+  Nutzerverzeichnis, nie aus einer geöffneten Datei.
 
 ---
 
@@ -2227,6 +2232,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Rückfallkette | jede Stufe einmal erzwungen |
 | Determinismus | gleicher Startwert → gleiches Ergebnis, alle vier Stellen |
 | Bausteine | Parameterbereich vollständig, Vorschaubild erzeugbar |
+| Bausteindatei | lokaler Export und Import als verlustfreie Rundreise; Autor, Lizenz und Herkunft bleiben erhalten; Größen- und Integritätsgrenzen greifen; kein ausführbarer Quelltext und kein Netzzugriff |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Fläche und Volumen gegen analytisch bekannte Körper; `island_tower` erkannt |
 | Parameter | Grammatik, Zyklen, Ablehnung von allem Übrigen |
@@ -2933,11 +2939,13 @@ Schwelle bleibt, wird als Cluster gemeldet und nicht geraten (Regel 21).
 Ergebnisnotiz. Speist die Regelsammlung.
 
 **Bewusst nicht:** Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage
-von Projekten, Plugin-System, Telemetrie, eigener G-Code-Slicer.
+von Projekten, gehostete Tauschbörse, Plugin-System, Telemetrie, eigener
+G-Code-Slicer.
 
 Zur Abgrenzung: Eigene Bausteine (§24.5) sind **kein** Plugin-System. Sie
 erweitern die Bibliothek, nicht die Anwendung, gelten nur lokal und reisen nie
-mit einer Projektdatei.
+als `.py` mit einer Projektdatei. Ein Bausteinrezept ist Daten statt Code und
+darf deshalb als Projektinhalt oder über den lokalen Datei-Import reisen.
 
 ---
 

@@ -249,6 +249,7 @@ Dialoge.
 | Rückfallkette | jede Stufe einmal erzwungen |
 | Determinismus | gleicher Startwert → gleiches Ergebnis |
 | Bausteine | Parameterbereich, Vorschaubild |
+| Bausteindatei | lokaler Export/Import als verlustfreie Rundreise, Metadaten, Größen-/Integritätsgrenzen, kein Code und kein Netz |
 | Bausteinversion | geänderter Baustein wird beim Öffnen gemeldet |
 | Schichtanalyse | Kennzahlen gegen analytische Körper, Inselerkennung |
 | Parameter | Grammatik, Zyklen, Ablehnung |
@@ -270,10 +271,11 @@ Dialoge.
 ## Was NICHT gebaut wird
 
 Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage von Projekten,
-Plugin-System, Telemetrie, Verzweigungen im Op-Stack, Verrundungen auf
-Mesh-Kanten vor dem B-Rep-Kern, Bearbeitung im gehosteten Backend,
-Betriebsarten-Umschaltung in der Oberfläche, **eigener G-Code-Slicer**
-(Schichtanalyse ja, G-Code nein — §22).
+gehostete Tauschbörse, Plugin-System, Telemetrie, Verzweigungen im Op-Stack,
+Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern, Bearbeitung im gehosteten
+Backend, Betriebsarten-Umschaltung in der Oberfläche, **eigener G-Code-Slicer**
+(Schichtanalyse ja, G-Code nein — §22). Der lokale Baustein-Export und -Import
+per Datei bleibt ausdrücklich erhalten (§24.5).
 
 Wenn eine Aufgabe eines dieser Dinge zu verlangen scheint, ist die Aufgabe
 falsch verstanden — nachfragen statt bauen.
