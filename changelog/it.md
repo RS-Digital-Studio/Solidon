@@ -18,32 +18,19 @@ scrive in `website/version.json`.
 ## 0.3.0
 
 
-### Condividere blocchi
+### Avvio e vista
 
-- Un blocco che hai costruito tu si passa come ricetta, e quelli altrui si riprendono allo stesso modo. Una ricetta è l'elenco dei tuoi passi con i loro valori.
-- Chi riprende una ricetta non riceve una forma finita, ma i tuoi passi — e può cambiarne ogni numero.
-- Nel passarlo scegli che cosa possono farne gli altri: usarlo liberamente, citarti, oppure citarti e ricondividere alle stesse condizioni.
-- Un blocco ripreso resta segnalato come altrui. Se uno dei tuoi porta lo stesso nome, il tuo ha la precedenza.
+- Il feedback e il sostegno volontario sono ora due schede chiare nella schermata iniziale. Rispondono a mouse e tastiera con profondità visibile, o senza animazione quando i movimenti sono ridotti.
+- Il piano di stampa ora è traslucido. I pezzi finiti per errore appena sotto restano visibili, mentre griglia e bordo rimangono chiari.
 
-### Cronologia e annulla
+### Blocchi come file
 
-- Chi spinge un pezzo tre volte di seguito ottiene un passo nella cronologia, non tre. Un solo annulla ritira tutto il movimento.
-- I passi che vanno insieme compaiono come una voce e si possono richiudere. La cronologia resta leggibile anche quando ne contiene molti.
-- Dopo la rotazione il pezzo torna a posarsi sul piatto. Le due cose insieme sono un passo, e un annulla le ritira entrambe.
+- I blocchi creati da te si possono salvare come file locale e aggiungere di nuovo al catalogo. Importazione, esportazione e annullamento funzionano interamente dall’interfaccia.
+- Lo scambio ospitato è stato rimosso. I blocchi ora si condividono solo tramite file locali, senza account né collegamento a un servizio di scambio.
 
-### Disegno e misure
+### Windows, macOS e Linux
 
-- Un cerchio chiede il suo diametro e non il raggio. Quello che digiti è il numero che misurerai sul pezzo finito.
-- Esc ritira ciò a cui stai lavorando: prima la linea iniziata, poi lo strumento, poi lo schizzo.
-- Il pulsante delle forme di base porta il nome di ciò che fa un clic su di esso. Le altre forme restano dietro la freccia accanto.
-- L'avviso dello schizzo nomina entrambe le strade: disegnare un contorno oppure inserire una forma già pronta.
-- Un nuovo progetto di esempio mostra il disegno con misure e vincoli. Chi percorre gli esempi lo incontra già all'inizio.
-
-### Quando qualcosa non terrà, adesso lo dice
-
-- Un gancio da pannello forato il cui perno non punta verso l'alto lo dice quando lo posi. Prima nasceva un pezzo che sembrava giusto e non teneva.
-- Una cerniera a film messa di taglio nel pezzo viene segnalata invece che stampata. Stampata così si rompe alla prima apertura.
-- Un motivo di superficie che manca il corpo lo dice. Prima restavano pezzi staccati accanto senza che nulla lo segnalasse.
+- Solidon ora apre le finestre in modo affidabile su tutte e tre le piattaforme. Adatta la barra del titolo solo dove il sistema lo consente e altrove mantiene l’aspetto abituale della piattaforma.
 
 ## 0.2.2
 

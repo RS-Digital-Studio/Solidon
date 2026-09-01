@@ -18,32 +18,19 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ## 0.3.0
 
 
-### Partilhar blocos
+### Início e vista
 
-- Um bloco que construiu passa-se como receita, e os alheios adotam-se da mesma maneira. Uma receita é a lista dos seus passos com os seus valores.
-- Quem adota uma receita não recebe uma forma acabada, mas os seus passos — e pode mudar cada número.
-- Ao passá-lo escolhe o que os outros podem fazer: usá-lo livremente, mencioná-lo, ou mencioná-lo e partilhar nas mesmas condições.
-- Um bloco adotado fica assinalado como alheio. Se um dos seus tiver o mesmo nome, o seu tem prioridade.
+- A opinião e o apoio voluntário aparecem agora como dois cartões claros no ecrã inicial. Respondem ao rato e ao teclado com profundidade visível, ou sem animação quando o movimento reduzido está ativo.
+- A mesa de impressão é agora translúcida. As peças que fiquem por engano logo abaixo continuam visíveis, enquanto a grelha e o contorno permanecem nítidos.
 
-### Histórico e desfazer
+### Blocos como ficheiros
 
-- Quem empurra uma peça três vezes seguidas obtém um passo no histórico, não três. Um único desfazer retira todo o movimento.
-- Os passos que andam juntos aparecem como uma entrada e podem fechar-se. O histórico continua legível mesmo com muita coisa dentro.
-- Depois de rodar, a peça volta a assentar na mesa. As duas coisas juntas são um passo, e um desfazer retira ambas.
+- Os blocos que criar podem ser guardados como ficheiro local e novamente adicionados ao catálogo. Importar, exportar e desfazer funcionam inteiramente pela interface.
+- A troca alojada foi removida. Os blocos são agora partilhados apenas por ficheiros locais, sem conta nem ligação a um serviço de troca.
 
-### Desenho e medidas
+### Windows, macOS e Linux
 
-- Um círculo pede o seu diâmetro e não o raio. O que escreve é o número que vai medir na peça acabada.
-- Escape retira aquilo em que está: primeiro a linha começada, depois a ferramenta, depois o esboço.
-- O botão das formas básicas chama-se pelo que um clique nele faz. As outras formas continuam atrás da seta ao lado.
-- O aviso do esboço nomeia os dois caminhos: desenhar um contorno ou inserir uma forma já feita.
-- Um novo projeto de exemplo mostra o desenho com medidas e restrições. Quem percorre os exemplos encontra-o logo no início.
-
-### Quando algo não vai segurar, agora di-lo
-
-- Um gancho de painel perfurado cujo pino não aponta para cima di-lo ao ser colocado. Antes saía uma peça que parecia certa e não segurava.
-- Uma dobradiça de película colocada ao alto dentro da peça é assinalada em vez de impressa. Impressa assim parte-se na primeira abertura.
-- Um padrão de superfície que falha o corpo di-lo. Antes ficavam pedaços soltos ao lado sem nada que o avisasse.
+- O Solidon abre agora as janelas de forma fiável nas três plataformas. A barra de título só é adaptada onde o sistema o permite; nos restantes casos mantém o aspeto habitual da plataforma.
 
 ## 0.2.2
 

@@ -18,32 +18,19 @@ it into `website/version.json`.
 ## 0.3.0
 
 
-### Sharing parts
+### Start and view
 
-- You can pass on a part you built yourself as a recipe, and adopt other people's the same way. A recipe is the list of your steps with their values.
-- Whoever adopts a recipe gets no finished shape but your steps — and can change every number in them.
-- When you pass one on, you choose what others may do with it: use it freely, credit you, or credit you and share alike.
-- An adopted part stays marked as someone else's. If one of your own carries the same name, yours takes precedence.
+- Feedback and voluntary support are now two clear cards on the start screen. They respond to mouse and keyboard with visible depth, or without animation when reduced motion is enabled.
+- The print bed is now translucent. Parts accidentally sitting just below it remain visible, while the grid and edge stay clear.
 
-### History and undo
+### Parts as files
 
-- Nudge a part three times in a row and you get one step in the history, not three. A single undo takes back the whole movement.
-- Steps that belong together appear as one entry and can be folded. The history stays readable even when there is a lot in it.
-- After rotating, the part sits back down on the print bed. The two together are one step, and one undo takes both.
+- Parts you create can now be saved as a local file and added back to the catalogue. Import, export and undo all work through the interface.
+- The hosted exchange has been removed. Parts are now passed on only as local files — without an account or a connection to an exchange service.
 
-### Drawing and dimensions
+### Windows, macOS and Linux
 
-- A circle asks for its diameter, not its radius. What you type is the number you measure on the finished part.
-- Escape takes back whatever you are in the middle of: first the line you started, then the tool, then the sketch.
-- The button for the basic shapes is named after what a click on it does. The other shapes are still behind the arrow beside it.
-- The sketch hint names both ways: draw an outline, or insert a ready-made shape.
-- A new example project shows drawing with dimensions and constraints. Anyone working through the examples now meets it right at the start.
-
-### When something will not hold, it says so now
-
-- A pegboard hook whose peg does not point upward says so as you place it. Before, you got a part that looked right and did not hold.
-- A living hinge standing on edge inside the part is reported instead of printed. Printed that way it breaks the first time it is opened.
-- A surface pattern that misses the body says so. Before, loose pieces were left lying beside it with nothing to point it out.
+- Solidon now opens its windows reliably on all three platforms. It adapts the title bar only where the system supports it and otherwise keeps the platform’s normal appearance.
 
 ## 0.2.2
 

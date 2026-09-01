@@ -19,32 +19,19 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ## 0.3.0
 
 
-### Compartir bloques
+### Inicio y vista
 
-- Un bloque que ha construido usted se pasa como receta, y los ajenos se adoptan igual. Una receta es la lista de sus pasos con sus valores.
-- Quien adopta una receta no recibe una forma acabada, sino sus pasos — y puede cambiar cada número.
-- Al pasarlo elige qué pueden hacer los demás: usarlo libremente, citarle a usted, o citarle y compartir en las mismas condiciones.
-- Un bloque adoptado queda marcado como ajeno. Si uno de los suyos lleva el mismo nombre, el suyo tiene prioridad.
+- Los comentarios y el apoyo voluntario aparecen como dos tarjetas claras en la pantalla de inicio. Responden al ratón y al teclado con profundidad visible, o sin animación si se reduce el movimiento.
+- La placa de impresión es ahora translúcida. Las piezas que queden por error justo debajo siguen visibles, mientras la cuadrícula y el borde permanecen claros.
 
-### Historial y deshacer
+### Bloques como archivos
 
-- Quien empuja una pieza tres veces seguidas obtiene un paso en el historial, no tres. Un solo deshacer retira todo el movimiento.
-- Los pasos que van juntos aparecen como una entrada y se pueden plegar. El historial sigue leyéndose aunque haya mucho en él.
-- Tras girar, la pieza vuelve a posarse en la placa. Ambas cosas son un paso, y un deshacer retira las dos.
+- Los bloques propios se pueden guardar como archivo local y volver a añadir al catálogo. La importación, la exportación y deshacer funcionan enteramente desde la interfaz.
+- Se ha eliminado el intercambio alojado. Los bloques solo se comparten mediante archivos locales, sin cuenta ni conexión con un servicio de intercambio.
 
-### Dibujo y medidas
+### Windows, macOS y Linux
 
-- Un círculo pide su diámetro y no su radio. Lo que escribe es el número que medirá en la pieza acabada.
-- Escape retira aquello en lo que está: primero la línea empezada, luego la herramienta, luego el boceto.
-- El botón de las formas básicas se llama como lo que hace un clic en él. Las demás formas siguen tras la flecha de al lado.
-- El aviso del boceto nombra los dos caminos: dibujar un contorno o insertar una forma ya hecha.
-- Un nuevo proyecto de ejemplo muestra el dibujo con medidas y restricciones. Quien recorre los ejemplos se topa con él ya al principio.
-
-### Cuando algo no va a sujetar, ahora lo dice
-
-- Un gancho de panel perforado cuya espiga no apunta hacia arriba lo dice al colocarlo. Antes salía una pieza que parecía correcta y no sujetaba.
-- Una bisagra de película puesta de canto dentro de la pieza se avisa en lugar de imprimirse. Así impresa se rompe la primera vez que se abre.
-- Un patrón de superficie que no acierta al cuerpo lo dice. Antes quedaban trozos sueltos al lado sin que nada lo advirtiera.
+- Solidon abre ahora sus ventanas de forma fiable en las tres plataformas. Solo adapta la barra de título donde el sistema lo admite; en los demás casos conserva el aspecto habitual de la plataforma.
 
 ## 0.2.2
 

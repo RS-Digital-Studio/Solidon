@@ -43,32 +43,19 @@ Nutzen da und sonst nichts.
 ## 0.3.0
 
 
-### Bausteine weitergeben
+### Start und Ansicht
 
-- Einen selbst gebauten Baustein geben Sie als Rezept weiter, und fremde übernehmen Sie genauso. Ein Rezept ist die Liste Ihrer Schritte mit ihren Werten.
-- Wer ein Rezept übernimmt, bekommt keine fertige Form, sondern Ihre Schritte — und kann jede Zahl darin ändern.
-- Beim Weitergeben wählen Sie, was andere damit dürfen: frei verwenden, mit Namensnennung, oder mit Namensnennung und unter denselben Bedingungen.
-- Ein übernommener Baustein bleibt als fremder gekennzeichnet. Trägt einer Ihrer eigenen denselben Namen, hat Ihrer Vorrang.
+- Rückmeldung und freiwillige Unterstützung stehen jetzt als zwei klare Karten auf der Startseite. Sie reagieren auf Maus und Tastatur mit sichtbarer Tiefe; bei reduzierter Bewegung ohne Animation.
+- Die Druckplatte ist jetzt durchscheinend. So bleiben Teile sichtbar, die versehentlich knapp unter der Platte liegen, während Raster und Rand klar erkennbar bleiben.
 
-### Verlauf und Rückgängig
+### Bausteine als Dateien
 
-- Wer ein Teil dreimal hintereinander schiebt, hat danach einen Schritt im Verlauf und nicht drei. Ein Rückgängig nimmt die ganze Bewegung zurück.
-- Schritte, die zusammengehören, stehen als Oberpunkt und lassen sich einklappen. Der Verlauf bleibt lesbar, auch wenn viel darin steht.
-- Nach dem Drehen setzt sich das Teil wieder auf das Druckbett. Beides zusammen ist ein Schritt, und ein Rückgängig nimmt beides.
+- Eigene Bausteine lassen sich als lokale Datei speichern und wieder in den Katalog aufnehmen. Import, Export und Rückgängig laufen vollständig über die Oberfläche.
+- Die gehostete Tauschbörse ist entfernt. Bausteine werden nur noch über lokale Dateien weitergegeben — ohne Konto und ohne Verbindung zu einem Austauschdienst.
 
-### Zeichnen und Maße
+### Windows, macOS und Linux
 
-- Ein Kreis fragt nach seinem Durchmesser statt nach dem Radius. Was Sie eintippen, ist die Zahl, die Sie am fertigen Teil nachmessen.
-- Escape nimmt zurück, woran Sie gerade sind: erst die angefangene Linie, dann das Werkzeug, dann die Skizze.
-- Der Knopf für die Grundformen heißt nach dem, was ein Klick darauf tut. Die übrigen Formen stehen weiter hinter dem Pfeil daneben.
-- Der Skizzenhinweis nennt beide Wege: einen Umriss zeichnen oder eine fertige Form einsetzen.
-- Ein neues Beispielprojekt zeigt das Zeichnen mit Maßen und Bedingungen. Wer die Beispiele durchgeht, begegnet ihm jetzt gleich zu Anfang.
-
-### Wenn etwas nicht hält, sagt es das jetzt
-
-- Ein Lochwand-Einhänger, dessen Zapfen nicht nach oben zeigt, meldet das beim Setzen. Vorher entstand ein Teil, das aussah wie geplant und nicht hielt.
-- Ein Filmscharnier, das hochkant im Teil steht, wird gemeldet statt gedruckt. So gedruckt bricht es beim ersten Öffnen.
-- Ein Oberflächenmuster, das den Körper verfehlt, sagt es. Vorher blieben lose Stücke daneben liegen, ohne dass etwas darauf hinwies.
+- Solidon öffnet seine Fenster jetzt auf allen drei Plattformen verlässlich. Die Titelleiste wird nur dort angepasst, wo das System es unterstützt, und bleibt sonst systemtypisch.
 
 ## 0.2.2
 
