@@ -12,10 +12,12 @@ from __future__ import annotations
 import dataclasses
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+import trimesh
 
 pytest.importorskip("PySide6")
 
@@ -32,12 +34,21 @@ from PySide6.QtWidgets import (
 
 from app.core import errors
 from app.core.export import handover
+from app.core.geom import autosplit
 from app.core.geom.measure import Measurement
+from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY, catalogue_operations
 from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
-from app.core.types import MaterialSlot, Parameter, SlotOverride
+from app.core.types import (
+    MaterialSlot,
+    Parameter,
+    PrintSettings,
+    Profile,
+    SceneObject,
+    SlotOverride,
+)
 from app.i18n import tr
 from app.ui import main_window as main_window_module
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
@@ -2199,8 +2210,11 @@ def test_a_running_export_keeps_the_bar_when_the_evaluation_ends(window: MainWin
         # Die Zusage lautet „bleibt", nicht „erscheint" — und seit die Anzeige
         # gestuft ist (§2.8), sind das zwei verschiedene Sätze: Ein Balken, den
         # noch niemand angeschaltet hat, kann nicht bleiben.
-        window.progress.setRange(0, 0)
-        window.progress.setVisible(True)
+        window._set_progress_state(
+            "export",
+            active=True,
+            text=tr("Exportiert wird … {name}").format(name="teil.3mf"),
+        )
         window._on_busy(False)
         assert window.progress.isVisibleTo(window), "der Export trägt den Balken weiter"
         assert not window.cancel_button.isVisibleTo(window), (
@@ -2208,6 +2222,7 @@ def test_a_running_export_keeps_the_bar_when_the_evaluation_ends(window: MainWin
         )
     finally:
         window._exporting = False
+        window._set_progress_state("export", active=False)
     window._on_busy(False)
     assert not window.progress.isVisibleTo(window), "ohne Export endet der Balken"
 
@@ -2914,6 +2929,38 @@ def test_the_too_large_map_offers_the_operation_that_helps(
     handler["decimate_mesh"](fehler)
 
     assert gerufen == ["decimate_mesh"], f"die Operation wurde nicht ausgelöst: {gerufen}"
+
+
+def test_an_auto_split_finding_opens_the_drawn_split_tool(
+    window: MainWindow,
+) -> None:
+    """Der Berichtsknopf führt in die sichtbare manuelle Trennung (§2.7)."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.types import Finding
+
+    window.report.add_findings(
+        [
+            Finding(
+                code="split.no_plane",
+                severity="warning",
+                message="Keine belastbare Trennebene gefunden.",
+            )
+        ]
+    )
+    window.report.list.setCurrentRow(0)
+
+    buttons = {
+        button.text().replace("&", ""): button
+        for button in window.report._offers.findChildren(QPushButton)
+    }
+    label = tr("An gezeichneter Linie trennen")
+    assert label in buttons, f"angeboten wurden nur: {sorted(buttons)}"
+    buttons[label].click()
+
+    assert window.tools.active() == "split"
+    assert window.split_bar.isVisibleTo(window.tools), "die Handlung öffnet ihre bedienbare Leiste"
+    assert window.viewport._splitting, "Klicks im Viewport werden jetzt als Trennlinie gelesen"
 
 
 def test_an_unreachable_address_opens_that_address_not_the_product_page(
@@ -5559,6 +5606,401 @@ def test_the_catalog_grid_never_scrolls_sideways(qt_app: QApplication) -> None:
 # --- Auto Split abseits des Hauptthreads (§2.8) ----------------------------------
 
 
+def test_the_split_worker_forwards_the_core_progress(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Arbeiter reicht den echten Kernfortschritt bis zu seinem Signal."""
+    from app.ui import session as session_module
+
+    snapshot = session_module.capture_connector_geometry()
+
+    def planned(
+        *_args: object,
+        progress=None,
+        connector_geometry: object | None = None,
+        **_kwargs: object,
+    ) -> object:
+        assert progress is not None, "der Kern bekam keinen Fortschrittskanal"
+        assert connector_geometry is snapshot, "der Worker las das globale Register erneut"
+        progress(0.25, "Grobsuche")
+        progress(0.75, "Stützbewertung")
+        progress(1.0, "")
+        return object()
+
+    monkeypatch.setattr(session_module, "plan_split", planned)
+    worker = session_module._SplitWorker(object(), "obj_1", session.profile, {}, snapshot)
+    seen: list[tuple[float, str]] = []
+    worker.progressed.connect(lambda fraction, text: seen.append((fraction, text)))
+
+    worker.work()
+
+    assert seen == [(0.25, "Grobsuche"), (0.75, "Stützbewertung"), (1.0, "")]
+
+
+def test_only_the_current_split_worker_can_report_progress(session: Session) -> None:
+    """Nachzügler und verworfene Suchen überschreiben keine neue Anzeige."""
+    current = object()
+    session._split = current
+    seen: list[tuple[float, str]] = []
+    cancelled: list[bool] = []
+    session.splitProgressChanged.connect(lambda value, text: seen.append((value, text)))
+    session.splitCancelled.connect(lambda: cancelled.append(True))
+    try:
+        session._split_progress(object(), 0.2, "alt")
+        session._split_progress(current, 0.3, "aktuell")
+        session._split_cancelled(object())
+        assert not cancelled, "ein veralteter Arbeiter bestätigte den Abbruch"
+        session._split_cancelled(current)
+        session._split_discarded = True
+        session._split_progress(current, 0.8, "verworfen")
+    finally:
+        session._split = None
+        session._split_discarded = False
+
+    assert seen == [(0.3, "aktuell")]
+    assert cancelled == [True]
+
+
+def _progress_snapshot(window: MainWindow) -> tuple[object, ...]:
+    """Der vollständige sichtbare Vertrag des gemeinsamen Fortschrittsbereichs."""
+
+    return (
+        window.status_message.text(),
+        window.progress.minimum(),
+        window.progress.maximum(),
+        window.progress.value(),
+        window.progress.accessibleName(),
+        window.progress.accessibleDescription(),
+        window.progress.isVisibleTo(window),
+        window.cancel_button.isVisibleTo(window),
+        window.cancel_button.isEnabled(),
+        window.cancel_button.accessibleDescription(),
+    )
+
+
+class _RunningSplit:
+    """Der minimale laufende Arbeiter für die Signalkette des Fensters."""
+
+    def __init__(self) -> None:
+        from app.core.scene.cancel import CancelSignal
+
+        self.cancel = CancelSignal()
+
+    def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+        return True
+
+
+def _show_split_progress(window: MainWindow) -> None:
+    window.session._split = _RunningSplit()
+    window.session.splitBusyChanged.emit(True)
+    window.session.splitProgressChanged.emit(0.65, tr("Ausrichtung suchen"))
+    window._split_patience.timeout.emit()
+    window._split_bar_delay.timeout.emit()
+
+
+def _finish_split_progress(window: MainWindow) -> None:
+    window.session._split = None
+    window.session._split_discarded = False
+    window.session.splitBusyChanged.emit(False)
+
+
+def test_split_restores_the_complete_agent_progress(window: MainWindow) -> None:
+    """Split überdeckt den Agenten, ohne dessen Anzeige oder Abbruch zu verlieren."""
+
+    window.session.busyChanged.emit(True)
+    window._on_agent_busy(True)
+    window._on_agent_progress(3, "boolesche Operation")
+    expected = _progress_snapshot(window)
+
+    _show_split_progress(window)
+    assert window._progress_owner == "split"
+    split_worker = window.session._split
+    assert split_worker is not None
+    window.cancel_button.click()
+    assert split_worker.cancel.is_cancelled
+    assert not window.session.agent_cancel.is_cancelled
+    assert not window.session.cancel_signal.is_cancelled
+    _finish_split_progress(window)
+
+    assert window._progress_owner == "agent"
+    assert _progress_snapshot(window) == expected
+    window.cancel_button.click()
+    assert window.session.agent_cancel.is_cancelled, "der wieder sichtbare Knopf gilt dem Agenten"
+    assert not window.session.cancel_signal.is_cancelled, "die verdeckte Auswertung läuft weiter"
+    window._on_agent_busy(False)
+    assert window._progress_owner == "evaluation"
+    window.cancel_button.click()
+    assert window.session.cancel_signal.is_cancelled, (
+        "nach Agentenende gilt der Knopf der Auswertung"
+    )
+    window.session.busyChanged.emit(False)
+
+
+def test_split_restores_the_complete_download_progress(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nach Split stehen Downloadtext, Anteil, Hilfetext und Abbruch wieder da."""
+
+    monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    window.session.busyChanged.emit(True)
+    window._on_agent_busy(True)
+    window.download_model("https://beispiel.invalid/halter.stl")
+    worker = window._download_worker
+    assert worker is not None
+    window._on_download_progress(0.42, tr("Modell herunterladen …"))
+    expected = _progress_snapshot(window)
+
+    _show_split_progress(window)
+    assert window._progress_owner == "split"
+    split_worker = window.session._split
+    assert split_worker is not None
+    window.cancel_button.click()
+    assert split_worker.cancel.is_cancelled
+    assert not window.session.agent_cancel.is_cancelled
+    assert not window.session.cancel_signal.is_cancelled
+    _finish_split_progress(window)
+
+    assert window._progress_owner == "download"
+    assert _progress_snapshot(window) == expected
+    window.cancel_button.click()
+    assert worker.cancel.is_cancelled, "der wieder sichtbare Knopf gilt dem Download"
+    assert not window.session.agent_cancel.is_cancelled
+    assert not window.session.cancel_signal.is_cancelled
+    window._download_stopped()
+    window._download_worker = None
+    assert window._progress_owner == "agent"
+    window._on_agent_busy(False)
+    window.session.busyChanged.emit(False)
+
+
+def test_split_restores_the_complete_export_progress(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der nicht abbrechbare Export kehrt nach Split ohne fremden Knopf zurück."""
+
+    monkeypatch.setattr(window._leash, "start", lambda _worker: None)
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window._start_export(tmp_path / "halter.stl", "stl")
+    assert window._export_worker is not None
+    expected = _progress_snapshot(window)
+    try:
+        _show_split_progress(window)
+        assert window._progress_owner == "split"
+        _finish_split_progress(window)
+
+        assert window._progress_owner == "export"
+        assert _progress_snapshot(window) == expected
+        assert not window.cancel_button.isVisibleTo(window)
+    finally:
+        window._exporting = False
+        window._export_worker = None
+        window._set_progress_state("export", active=False)
+
+
+def test_split_uses_its_own_real_status_and_bar_timers(window: MainWindow) -> None:
+    """Ein sichtbarer Agent schenkt dem neuen Split keine seiner Wartezeit."""
+    from PySide6.QtTest import QTest
+
+    window._on_agent_busy(True)
+    window._on_agent_progress(2, "Netz prüfen")
+    agent = _progress_snapshot(window)
+    window.session._split = _RunningSplit()
+    try:
+        window.session.splitBusyChanged.emit(True)
+        window.session.splitProgressChanged.emit(0.65, tr("Ausrichtung suchen"))
+
+        QTest.qWait(main_window_module.DELAY_MS // 2)
+        assert _progress_snapshot(window) == agent, (
+            "vor 0,2 s bleibt der Agent vollständig sichtbar"
+        )
+
+        QTest.qWait(main_window_module.DELAY_MS)
+        between = _progress_snapshot(window)
+        assert between[0].startswith(tr("Ausrichtung suchen"))
+        assert between[1:] == agent[1:], "vor zwei Sekunden bleiben Balken und Abbruch beim Agenten"
+
+        QTest.qWait(main_window_module.BAR_AFTER_MS - 2 * main_window_module.DELAY_MS)
+        before_bar = _progress_snapshot(window)
+        assert before_bar[0].startswith(tr("Ausrichtung suchen"))
+        assert before_bar[1:] == agent[1:], "auch kurz vor zwei Sekunden bleibt der Agent"
+
+        QTest.qWait(main_window_module.DELAY_MS)
+        assert window._progress_owner == "split"
+        assert window.progress.accessibleName() == tr("Fortschritt: Automatisch teilen")
+        assert window.cancel_button.accessibleDescription() == tr(
+            "Bricht die automatische Teilung ab. Modell und Verlauf bleiben unverändert."
+        )
+    finally:
+        _finish_split_progress(window)
+        window._on_agent_busy(False)
+
+
+def test_auto_split_uses_delayed_accessible_and_unknown_progress(
+    window: MainWindow,
+) -> None:
+    """Der echte Ein-Schnitt-Lauf bleibt bis zum vollständigen Plan unbestimmt."""
+
+    class Running:
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+    window.session._split = Running()
+    window.announce("Vorherige Meldung")
+    try:
+        window.session.splitBusyChanged.emit(True)
+        window.session.splitProgressChanged.emit(0.25, tr("Die Trennebenen werden gesucht …"))
+
+        assert window.status_message.text() == "Vorherige Meldung"
+        assert not window.progress.isVisibleTo(window), "der Balken kam vor zwei Sekunden"
+        assert not window.cancel_button.isVisibleTo(window)
+        assert window.progress.minimum() == 0
+        assert window.progress.maximum() == 100, "vor der Freigabe bleibt der Ruhewert stehen"
+        assert not window.veil.isVisibleTo(window), "der Viewport darf nicht verdeckt werden"
+
+        window._patience.timeout.emit()
+        window._split_patience.timeout.emit()
+        assert window.cursor().shape() == Qt.CursorShape.BusyCursor
+        assert window.status_message.text() == tr("Die Trennebenen werden gesucht …")
+        assert not window.progress.isVisibleTo(window)
+
+        window._split_bar_delay.timeout.emit()
+        assert window.progress.isVisibleTo(window)
+        assert window.cancel_button.isVisibleTo(window)
+        assert window.progress.accessibleName() == tr("Fortschritt: Automatisch teilen")
+        assert tr("Die Trennebenen werden gesucht …") in window.progress.accessibleDescription()
+        assert tr("Abbrechen ist verfügbar.") in window.progress.accessibleDescription()
+        assert window.cancel_button.accessibleName() == tr("Abbrechen")
+        assert window.cancel_button.accessibleDescription() == tr(
+            "Bricht die automatische Teilung ab. Modell und Verlauf bleiben unverändert."
+        )
+
+        events: list[tuple[float, str]] = []
+        outcome = autosplit.split_to_fit(
+            MeshData.of(trimesh.creation.box(extents=(400.0, 60.0, 40.0))),
+            window.session.profile,
+            pins=0,
+            progress=lambda fraction, text: events.append((fraction, text)),
+        )
+        assert len(outcome.cuts) == 1
+
+        window._split_started = main_window_module.time.monotonic() - 11.0
+        for fraction, text in events:
+            window.session.splitProgressChanged.emit(fraction, text)
+
+        assert window.progress.minimum() == 0
+        assert window.progress.maximum() == 0, "unbekannte Gesamtschnittzahl bekam Prozent"
+        assert "%" not in window.status_message.text()
+        assert tr("gleich fertig") not in window.status_message.text()
+        assert tr("Ausrichtung suchen") in window.progress.accessibleDescription()
+        assert "%" not in window.progress.accessibleDescription()
+        assert tr("Abbrechen ist verfügbar.") in window.progress.accessibleDescription()
+    finally:
+        window.session._split = None
+        window.session.splitBusyChanged.emit(False)
+    assert window.progress.accessibleName() == tr("Fortschritt")
+    assert window.progress.accessibleDescription() == tr(
+        "Zeigt den Fortschritt der laufenden Aufgabe."
+    )
+    assert window.cancel_button.accessibleDescription() == tr("Bricht die laufende Aufgabe ab.")
+
+
+def test_undo_replaces_the_auto_split_result_with_the_current_state(
+    window: MainWindow,
+) -> None:
+    """Nach Rückgängig darf die Statuszeile keine entfernte Teilung behaupten."""
+    from app.core.split import SplitApplied
+
+    title = tr("Teilen und verstiften")
+    assert window.session.apply(
+        title,
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 20.0, "depth": 20.0, "height": 20.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    transaction = window.session.project.document.transactions[-1]
+    object_id = next(iter(window.session.last_result.scene.objects))
+    window._split_done(SplitApplied(object_ids=[object_id], transaction=transaction.id))
+    assert window._announcement.startswith(tr("Geteilt"))
+
+    window.action_undo()
+    window.session.wait_for_idle()
+
+    assert window._announcement == tr("{name} zurückgenommen.").format(name=title)
+
+
+def test_the_auto_split_cancel_button_disables_itself_immediately(window: MainWindow) -> None:
+    """Ein Klick verwirft genau einmal und lässt die Rückmeldung stehen."""
+    from app.core.scene.cancel import CancelSignal
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+    worker = Running()
+    window.session._split = worker
+    try:
+        window.session.splitBusyChanged.emit(True)
+        window._split_bar_delay.timeout.emit()
+        window.cancel_button.click()
+
+        assert worker.cancel.is_cancelled
+        assert not window.cancel_button.isEnabled()
+        requested = tr("Teilung wird abgebrochen …")
+        assert window.status_message.text() == requested
+        assert window._announcement == requested
+
+        window.session._split_cancelled(worker)
+        finished = tr("Teilung abgebrochen. Modell und Verlauf sind unverändert.")
+        assert window.status_message.text() == finished
+        assert window._announcement == finished
+    finally:
+        window.session._split = None
+        window.session._split_discarded = False
+        window.session.splitBusyChanged.emit(False)
+
+
+def test_escape_cancels_auto_split_before_touching_the_selection(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Escape verwirft die Suche sofort; Dokument und Auswahl bleiben stehen."""
+    from app.core.scene.cancel import CancelSignal
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+    worker = Running()
+    window.session._split = worker
+    selection_touched: list[bool] = []
+    monkeypatch.setattr(window, "_step_selection_out", lambda: selection_touched.append(True))
+    try:
+        window.session.splitBusyChanged.emit(True)
+        window._split_bar_delay.timeout.emit()
+        window._escape()
+
+        message = tr("Teilung wird abgebrochen …")
+        assert worker.cancel.is_cancelled
+        assert not selection_touched, "Escape baute die Auswahl statt der Suche ab"
+        assert not window.cancel_button.isEnabled(), "der Abbruchknopf blieb mehrfach klickbar"
+        assert window.status_message.text() == message
+        assert window._announcement == message, "die Rückmeldung überlebt den auslaufenden Arbeiter"
+    finally:
+        window.session._split = None
+        window.session._split_discarded = False
+        window.session.splitBusyChanged.emit(False)
+
+
 def test_auto_split_runs_in_a_worker(session: Session) -> None:
     """Die Trennebenensuche lief mit Wartezeiger im Hauptthread — jetzt
     meldet sie sich über ``splitBusyChanged`` und liefert ihr Ergebnis an
@@ -5577,6 +6019,305 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     applied = results[0]
     assert applied.transaction is None, "ein 20-mm-Würfel passt aufs Bett"
     assert states and states[0] is True and states[-1] is False
+
+
+def test_auto_split_queues_behind_the_current_evaluation_and_uses_its_result(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Klick wartet asynchron auf genau den Dokumentstand seiner Revision."""
+    from app.core.geom.autosplit import SplitOutcome
+    from app.core.split import SplitPlan
+    from app.ui import session as session_module
+
+    created = session.history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 20.0, "depth": 60.0, "height": 40.0},
+            )
+        ],
+    )
+    session._mark_document_changed()
+    old_result = session.evaluate_now()
+
+    session.history.change_params(created.ops[0], {"width": 400.0})
+    session._mark_document_changed()
+    current_result = session.run_evaluation()
+    assert session.last_result is old_result, "der Test braucht sichtbar noch das alte Netz"
+
+    class CurrentEvaluation:
+        running = True
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return self.running
+
+    evaluation = CurrentEvaluation()
+    session._worker = evaluation
+    widths: list[float] = []
+
+    def planned(mesh: MeshData, *_args: object, **_kwargs: object) -> SplitPlan:
+        widths.append(float(mesh.raw.extents[0]))
+        return SplitPlan((), SplitOutcome(parts=[mesh]))
+
+    monkeypatch.setattr(session_module, "plan_split", planned)
+    original_wait = session.wait_for_idle
+    monkeypatch.setattr(
+        session,
+        "wait_for_idle",
+        lambda *_args, **_kwargs: pytest.fail("split_async blockierte den Qt-Hauptthread"),
+    )
+
+    delivered: list[object] = []
+    session.split_async("obj_1", delivered.append)
+
+    assert not widths, "der Split-Arbeiter startete noch auf dem alten Netz"
+    monkeypatch.setattr(session, "wait_for_idle", original_wait)
+    session._on_finished(current_result, finished=evaluation)  # type: ignore[arg-type]
+    evaluation.running = False
+    session._on_thread_done(evaluation)  # type: ignore[arg-type]
+    original_wait()
+
+    assert widths == [pytest.approx(400.0)]
+    assert delivered, "der eingereihte Split lieferte sein Ergebnis nicht"
+
+
+@pytest.mark.parametrize("change", ("print_settings", "discard_proposal"))
+def test_metadata_changes_keep_a_running_split_valid(session: Session, change: str) -> None:
+    """Druckübergabe und Chatverlauf verändern die ausgewertete Geometrie nicht."""
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.cancel import CancelSignal
+    from app.ui.session import ProposalPreview
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+    worker = Running()
+    session._split = worker
+    revision = session._document_revision
+    changed: list[bool] = []
+    session.projectChanged.connect(lambda: changed.append(True))
+    try:
+        if change == "print_settings":
+            session.set_print_settings(PrintSettings(title="Fein"))
+            assert session.project.document.print_settings.title == "Fein"
+        else:
+            session.discard_proposal(ProposalPreview(proposal=Proposal(request="Nicht bauen")))
+            assert len(session.project.document.chat) == 2
+            assert session.project.document.chat[0].text == "Nicht bauen"
+
+        assert session.modified
+        assert changed == [True]
+        assert session._document_revision == revision
+        assert not worker.cancel.is_cancelled
+        assert not session._split_discarded
+    finally:
+        session._split = None
+        session._split_discarded = False
+
+
+def test_main_window_auto_split_is_one_undoable_transaction(window: MainWindow) -> None:
+    """Der echte Menüklick teilt vollständig; ein Rückgängig stellt alles wieder her."""
+    assert window.session.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 400.0, "depth": 60.0, "height": 40.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    before_ops = list(document.ops)
+    before_fits = list(document.fits)
+    before_transactions = list(document.transactions)
+    before_body = window.session.last_result.scene.objects["obj_1"].mesh
+    before_volume = before_body.volume
+    before_bounds = before_body.bounds
+    window.object_tree.select_object("obj_1")
+
+    window.action_auto_split()
+    window.session.wait_for_idle()
+
+    split_objects = list(window.session.last_result.scene.objects.values())
+    assert len(split_objects) == 2
+    assert len(document.transactions) == len(before_transactions) + 1
+    assert len(document.fits) > len(before_fits)
+    assert window._announcement.startswith(tr("Geteilt"))
+
+    window.action_undo()
+    window.session.wait_for_idle()
+
+    restored = list(window.session.last_result.scene.objects.values())
+    assert document.ops == before_ops
+    assert document.fits == before_fits
+    assert document.transactions == before_transactions
+    assert len(restored) == 1
+    assert restored[0].mesh.volume == pytest.approx(before_volume)
+    assert restored[0].mesh.bounds.minimum == pytest.approx(before_bounds.minimum)
+    assert restored[0].mesh.bounds.maximum == pytest.approx(before_bounds.maximum)
+    assert window._announcement == tr("Teilen und verstiften zurückgenommen.")
+
+
+def test_auto_split_uses_the_objects_material_for_search_and_fits(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Projektmaterial und Körpermaterial dürfen beim Teilen nicht zusammenfallen."""
+    from app.ui import session as session_module
+
+    session.project.document.printer = "centauri-carbon-2"
+    session.project.document.material = "petg"
+    session.history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 400.0, "depth": 60.0, "height": 40.0},
+            )
+        ],
+    )
+    session.evaluate_async()
+    session.wait_for_idle()
+    assert session.last_result is not None
+    entry = session.last_result.scene.objects["obj_1"]
+    entry.material = "pla"
+
+    chosen: list[Profile] = []
+    searched: list[Profile] = []
+    real_for_object = session_module.profiles.for_object
+    real_apply_split = session_module.apply_split
+
+    def choose(base: Profile, body: SceneObject | None) -> Profile:
+        profile = real_for_object(base, body)
+        chosen.append(profile)
+        return profile
+
+    def apply(*args: Any, **values: Any) -> Any:
+        searched.append(args[3])
+        return real_apply_split(*args, **values)
+
+    monkeypatch.setattr(session_module.profiles, "for_object", choose)
+    monkeypatch.setattr(session_module, "apply_split", apply)
+    monkeypatch.setattr(session, "evaluate_async", lambda: None)
+
+    applied = session.auto_split("obj_1")
+
+    assert len(chosen) == 1, "das Objektprofil wird genau einmal bestimmt"
+    assert searched == chosen and searched[0].material.id == "pla"
+    assert {fit.tolerance for fit in applied.fits} == {"auto:pla"}
+
+
+def test_drawn_split_uses_the_spool_material_for_its_fits(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der gezeichnete Schnitt liest das Material von Spule null (§12)."""
+    from app.core.geom.section import SectionPlane
+    from app.ui import session as session_module
+
+    session.project.document.printer = "centauri-carbon-2"
+    session.project.document.material = "petg"
+    session.history.apply(
+        "Anlegen",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 400.0, "depth": 60.0, "height": 40.0},
+            )
+        ],
+    )
+    session.evaluate_async()
+    session.wait_for_idle()
+    assert session.last_result is not None
+    entry = session.last_result.scene.objects["obj_1"]
+    entry.material_slots = [MaterialSlot(index=0, name="PLA", material_type="PLA")]
+
+    chosen: list[Profile] = []
+    applied_with: list[Profile] = []
+    real_for_object = session_module.profiles.for_object
+    real_apply_line_split = session_module.apply_line_split
+
+    def choose(base: Profile, body: SceneObject | None) -> Profile:
+        profile = real_for_object(base, body)
+        chosen.append(profile)
+        return profile
+
+    def apply(*args: Any, **values: Any) -> Any:
+        applied_with.append(args[3])
+        return real_apply_line_split(*args, **values)
+
+    monkeypatch.setattr(session_module.profiles, "for_object", choose)
+    monkeypatch.setattr(session_module, "apply_line_split", apply)
+    monkeypatch.setattr(session, "evaluate_async", lambda: None)
+
+    applied = session.split_along("obj_1", SectionPlane((1.0, 0.0, 0.0), 0.0), pins=2)
+
+    assert len(chosen) == 1, "das Spulenprofil wird genau einmal bestimmt"
+    assert applied_with == chosen and applied_with[0].material.id == "pla"
+    assert {fit.tolerance for fit in applied.fits} == {"auto:pla"}
+
+
+def test_async_split_keeps_one_object_profile_from_search_through_apply(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Profiländerung während der Suche darf deren Plan nicht umdeuten."""
+    from app.core.split import SplitApplied
+    from app.ui import session as session_module
+
+    session.project.document.printer = "centauri-carbon-2"
+    session.project.document.material = "petg"
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+    assert session.last_result is not None
+    entry = session.last_result.scene.objects["obj_1"]
+    entry.material_slots = [MaterialSlot(index=0, name="PLA", material_type="PLA")]
+
+    started = threading.Event()
+    release = threading.Event()
+    chosen: list[Profile] = []
+    searched: list[Profile] = []
+    applied_with: list[Profile] = []
+    real_for_object = session_module.profiles.for_object
+    plan = object()
+
+    def choose(base: Profile, body: SceneObject | None) -> Profile:
+        profile = real_for_object(base, body)
+        chosen.append(profile)
+        return profile
+
+    def search(_mesh: object, _object_id: str, profile: Profile, **_values: object) -> object:
+        searched.append(profile)
+        started.set()
+        assert release.wait(2.0), "die blockierte Suche wurde nicht freigegeben"
+        return plan
+
+    def apply(
+        _document: object, received: object, object_id: str, profile: Profile
+    ) -> SplitApplied:
+        assert received is plan
+        applied_with.append(profile)
+        return SplitApplied(object_ids=[object_id])
+
+    monkeypatch.setattr(session_module.profiles, "for_object", choose)
+    monkeypatch.setattr(session_module, "plan_split", search)
+    monkeypatch.setattr(session_module, "apply_planned", apply)
+
+    results: list[object] = []
+    session.split_async("obj_1", results.append)
+    assert started.wait(2.0), "der Split-Arbeiter ist nicht angelaufen"
+    session.project.document.material = "tpu-95a"
+    release.set()
+    session.wait_for_idle()
+
+    assert len(chosen) == 1, "das Objektprofil wird genau einmal bestimmt"
+    assert searched == chosen and searched[0].material.id == "pla"
+    assert applied_with == searched and applied_with[0] is searched[0]
+    assert len(results) == 1
 
 
 def test_a_failed_import_plan_leaves_no_orphan_source(
@@ -5657,8 +6398,8 @@ def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> Non
 def test_the_split_end_reports_when_the_thread_is_truly_gone(session: Session) -> None:
     """Das endgültige Ende der Trennsuche meldet im finished-Pfad (§2.8).
 
-    ``cancel_split`` und ``_split_cancelled`` melden früher, aber dort läuft
-    der Thread noch: ``_on_split_busy`` fragt ``_anything_running()``, liest
+    ``_split_cancelled`` bestätigt den Abbruch früher, aber dort läuft der
+    Thread noch: ``_on_split_busy`` fragt ``_anything_running()``, liest
     ``split_running`` als True und ließ Balken und Abbrechen für immer
     stehen — nach dem Auslaufen kam nie wieder ein False (Update-Review,
     Fund 30). Doppelt gemeldet ist folgenlos, die Anzeige stellt nur einen
@@ -5682,6 +6423,36 @@ def test_the_split_end_reports_when_the_thread_is_truly_gone(session: Session) -
     assert session._split is None, "und das Feld ist geräumt"
 
 
+def test_cancelling_an_already_finished_split_is_confirmed_once(session: Session) -> None:
+    """Die Lücke zwischen fachlichem Ende und ``finished`` bleibt nicht hängen."""
+    from app.core.scene.cancel import CancelSignal
+
+    class Done:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return False
+
+    worker = Done()
+    session._split = worker
+    requested: list[bool] = []
+    confirmed: list[bool] = []
+    session.splitCancelRequested.connect(lambda: requested.append(True))
+    session.splitCancelled.connect(lambda: confirmed.append(True))
+
+    session.cancel_split()
+    assert requested == [True]
+    assert not confirmed, "vor dem endgültigen Thread-Signal ist noch nichts bestätigt"
+
+    session._split_cancelled(worker)
+    assert confirmed == [True], "das fachliche Ende bestätigt den Abbruch"
+    session._on_split_done(worker)
+
+    assert confirmed == [True], "das endgültige Ende bestätigt genau einmal"
+    assert session._split is None
+
+
 def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     """Was ein überlebender Arbeiter noch meldet, wird nicht mehr angewandt.
 
@@ -5698,7 +6469,7 @@ def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     reported: list[object] = []
     session.failed.connect(reported.append)
 
-    session._split_planned(stale, object(), "obj_1", called.append)
+    session._split_planned(stale, object(), "obj_1", session.profile, called.append)
     assert not called and not busy, "ein fremder Plan wird nicht angewandt"
 
     session._split_failed(stale, errors.InternalError(detail="stale"))
@@ -5709,6 +6480,170 @@ def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
     try:
         session._on_split_done(stale)
         assert session._split is keeper, "das Auslaufen eines Fremden räumt das Feld nicht"
+    finally:
+        session._split = None
+
+
+@pytest.mark.parametrize("way", ("start_new", "open_project"))
+def test_switching_projects_silently_discards_the_running_split(
+    session: Session, tmp_path: Path, way: str
+) -> None:
+    """Ein Plan des alten Dokuments darf das neue Projekt nie erreichen."""
+    from app.core.scene.cancel import CancelSignal
+    from app.core.scene.project import new_project, save
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+    worker = Running()
+    session._split = worker
+    requested: list[bool] = []
+    session.splitCancelRequested.connect(lambda: requested.append(True))
+    try:
+        if way == "start_new":
+            session.start_new()
+        else:
+            other = save(
+                new_project("centauri-carbon-2", "petg"),
+                tmp_path / "anderes-projekt.p3d",
+            )
+            session.open_project(other)
+
+        assert worker.cancel.is_cancelled, "die Suche des alten Projekts rechnet weiter"
+        assert session._split_discarded, "ein verspäteter Plan blieb gültig"
+        assert not requested, "ein Projektwechsel sieht nicht wie ein Abbruchknopf-Klick aus"
+    finally:
+        session._split = None
+        session.wait_for_idle()
+
+
+def test_a_split_plan_is_bound_to_the_document_that_started_it(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ohne rechtzeitiges Abbruchsignal bleibt die Dokumentgrenze hart."""
+    from app.core.scene.cancel import CancelSignal
+    from app.ui import session as session_module
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+    source_document = session.project.document
+    session.start_new()
+    session.wait_for_idle()
+    worker = Running()
+    session._split = worker
+    applied: list[object] = []
+    monkeypatch.setattr(
+        session_module,
+        "apply_planned",
+        lambda *_args, **_kwargs: applied.append(object()),
+    )
+    try:
+        session._split_planned(
+            worker,
+            object(),
+            "obj_1",
+            session.profile,
+            lambda _result: None,
+            source_document=source_document,
+        )
+        assert not applied, "der alte Split-Plan wurde auf das neue Dokument angewandt"
+    finally:
+        session._split = None
+
+
+def test_parameter_change_and_undo_each_discard_a_running_split(session: Session) -> None:
+    """Eine Suche auf alter Geometrie endet bei jeder Stapeländerung."""
+    from app.core.scene.cancel import CancelSignal
+
+    session.add_parameter(Parameter(name="width", value=40.0))
+    session.wait_for_idle()
+
+    for change in (lambda: session.change_parameter("width", 50.0), session.undo):
+
+        class Running:
+            def __init__(self) -> None:
+                self.cancel = CancelSignal()
+
+        worker = Running()
+        session._split = worker
+        session._split_discarded = False
+        try:
+            change()
+            assert worker.cancel.is_cancelled
+            assert session._split_discarded
+        finally:
+            session._split = None
+        session.wait_for_idle()
+
+
+def test_a_split_plan_is_bound_to_the_revision_that_started_it(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein alter Plan bleibt selbst am selben Dokument wirkungslos."""
+    from app.core.scene.cancel import CancelSignal
+    from app.ui import session as session_module
+
+    source_document = session.project.document
+    source_revision = session._document_revision
+    session.add_parameter(Parameter(name="width", value=40.0))
+    session.wait_for_idle()
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+    worker = Running()
+    session._split = worker
+    session._split_discarded = False
+    applied: list[object] = []
+    monkeypatch.setattr(
+        session_module,
+        "apply_planned",
+        lambda *_args, **_kwargs: applied.append(object()),
+    )
+    try:
+        session._split_planned(
+            worker,
+            object(),
+            "obj_1",
+            session.profile,
+            lambda _result: None,
+            source_document=source_document,
+            source_revision=source_revision,
+        )
+        assert not applied
+        assert worker.cancel.is_cancelled
+    finally:
+        session._split = None
+
+
+def test_releasing_a_session_cancels_its_running_split(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Fensterabbau lässt keinen Auto-Split-Thread zurück."""
+    from app.core.scene.cancel import CancelSignal
+
+    class Running:
+        def __init__(self) -> None:
+            self.cancel = CancelSignal()
+
+    worker = Running()
+    session._split = worker
+    waited: list[int] = []
+    monkeypatch.setattr(session, "wait_for_idle", waited.append)
+    monkeypatch.setattr(session._leash, "wait_all", lambda: None)
+    try:
+        session.release(37)
+
+        assert worker.cancel.is_cancelled, "release ließ die Teilung weiterlaufen"
+        assert session._split_discarded
+        assert waited == [37]
     finally:
         session._split = None
 
@@ -7413,6 +8348,45 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
 
 
+def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der Dateidialog bewahrt den Ladehinweis über den Projektanfang."""
+    from PySide6.QtWidgets import QFileDialog
+
+    window.announce("Bereit")
+    seen: list[tuple[Any, str, str]] = []
+    real = window.session.import_model
+
+    def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
+        seen.append(
+            (
+                QApplication.overrideCursor(),
+                window.status_message.text(),
+                window._announcement,
+            )
+        )
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(window.session, "import_model", watched)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(MESHES / "cube_clean.stl"), "")),
+    )
+
+    window.action_import()
+    window.session.wait_for_idle()
+
+    assert seen, "gelesen wurde nichts — der Test misst am falschen Ort"
+    cursor, status, announcement = seen[0]
+    assert cursor is not None and cursor.shape() == Qt.CursorShape.WaitCursor
+    assert status == tr("Modell einfügen …"), "der Projektanfang löschte den Ladehinweis"
+    assert announcement == "Bereit", "der vorübergehende Hinweis wurde dauerhaft angekündigt"
+    assert window._announcement == "Bereit"
+    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+
+
 def test_a_broken_file_takes_the_wait_cursor_with_it(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -7511,16 +8485,16 @@ def test_the_veil_leaves_the_toolbar_reachable(window: MainWindow) -> None:
 
 
 def test_the_veil_can_be_cancelled(window: MainWindow) -> None:
-    """Regel 17: keine Sackgasse. Der Knopf hält an, was läuft.
-
-    Derselbe Doppelgriff wie in der Statusleiste — die Trennebenensuche hat
-    ihr eigenes Verwerfen und würde sonst weiterlaufen, während davor
-    „Abbrechen" steht.
-    """
+    """Der Schleier gehört der Auswertung und hält keine parallele Aufgabe an."""
+    split_worker = _RunningSplit()
+    window.session._split = split_worker
     window._on_busy(True)
     window.veil.cancel.click()
 
     assert window.session.cancel_signal.is_cancelled
+    assert not window.session.agent_cancel.is_cancelled
+    assert not split_worker.cancel.is_cancelled
+    window.session._split = None
     window._on_busy(False)
 
 

@@ -20,7 +20,7 @@ from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
-from app.core.types import Finding, Vec3
+from app.core.types import CancelToken, Finding, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -113,6 +113,52 @@ def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
     )
 
 
+def ranked_orientations(
+    mesh: MeshData,
+    *,
+    limit: int | None = None,
+    cancelled: CancelToken | None = None,
+) -> list[Orientation]:
+    """Grundflächen nach der billigen Heuristik, beste zuerst.
+
+    Die Schichtanalyse benutzt diese Liste als Vorauswahl: Nur wenige Lagen
+    werden danach wirklich geschnitten. Darum ist die Reihenfolge vollständig
+    bestimmt — auch bei gleichem Score entscheidet die Richtung und nicht die
+    zufällige Reihenfolge eines Sortierverfahrens.
+
+    Doppelte Richtungen fallen vorher heraus. Achsen stehen sowohl fest in der
+    Liste als auch unter den größten Flächennormalen; sie ein zweites Mal zu
+    prüfen ändert kein Urteil und kostet auf einem dichten Netz spürbar Zeit.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    directions: list[Vec3] = []
+    for direction in candidates(mesh):
+        if any(math.dist(direction, previous) <= EPS_GEOM for previous in directions):
+            continue
+        directions.append(direction)
+
+    scored: list[Orientation] = []
+    for direction in directions:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        scored.append(evaluate_direction(mesh, direction))
+
+    ranked = sorted(
+        scored,
+        key=lambda entry: (
+            -entry.score,
+            -entry.footprint,
+            entry.overhang,
+            entry.height,
+            entry.direction,
+        ),
+    )
+    if limit is None:
+        return ranked
+    return ranked[: max(1, limit)]
+
+
 def rotation_to_down(direction: Vec3) -> np.ndarray:
     """Die Drehung, die ``direction`` auf -Z bringt.
 
@@ -155,10 +201,10 @@ def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
     return np.asarray(translation((0.0, 0.0, -lifted.bounds.minimum[2])) @ turn, dtype=float)
 
 
-def orient_for_print(mesh: MeshData) -> OrientResult:
+def orient_for_print(mesh: MeshData, *, cancelled: CancelToken | None = None) -> OrientResult:
     """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
-    scored = [evaluate_direction(mesh, direction) for direction in candidates(mesh)]
-    best = max(scored, key=lambda entry: entry.score)
+    scored = ranked_orientations(mesh, cancelled=cancelled)
+    best = scored[0]
     matrix = print_transform(mesh, best.direction)
     turned = apply(mesh, matrix)
 

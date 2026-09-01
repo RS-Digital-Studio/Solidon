@@ -21,7 +21,13 @@ from typing import Any
 
 from app.core.geom.autosplit import SplitOutcome, split_to_fit
 from app.core.geom.mesh import MeshData
-from app.core.geom.pins import PIN_COUNT, feature_side, next_connector_index, plan_pins
+from app.core.geom.pins import (
+    PIN_COUNT,
+    ConnectorGeometrySnapshot,
+    feature_side,
+    next_connector_index,
+    plan_pins,
+)
 from app.core.geom.section import SectionPlane
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
@@ -36,6 +42,7 @@ from app.core.types import (
     ObjectId,
     Origin,
     Profile,
+    ProgressFn,
     TransactionId,
 )
 from app.i18n import _
@@ -86,6 +93,8 @@ def plan_split(
     pins: int = PIN_COUNT,
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
+    progress: ProgressFn | None = None,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> SplitPlan:
     """Sucht die Schnitte und macht Operationen daraus.
 
@@ -101,7 +110,17 @@ def plan_split(
     die in ``split_pinned`` stünde, wäre ein Parameter, den niemand
     auswertet — die Suche hat da längst stattgefunden.
     """
-    outcome = split_to_fit(mesh, profile, pins=pins, protect=protect, cancelled=cancelled)
+    outcome = split_to_fit(
+        mesh,
+        profile,
+        pins=pins,
+        protect=protect,
+        cancelled=cancelled,
+        progress=progress,
+        connector_geometry=connector_geometry,
+    )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     drafts = [
         OperationDraft(
             op="split_pinned",
@@ -131,6 +150,7 @@ def plan_split(
                 step.plane.plane,
                 pins,
                 shape=step.connector_shape,
+                cancelled=cancelled,
             )
             for step in outcome.cuts
         ),
@@ -139,7 +159,12 @@ def plan_split(
 
 
 def fitting_pins(
-    mesh: MeshData | None, plane: SectionPlane, wanted: int, *, shape: str = "round"
+    mesh: MeshData | None,
+    plane: SectionPlane,
+    wanted: int,
+    *,
+    shape: str = "round",
+    cancelled: CancelToken | None = None,
 ) -> int:
     """Wie viele Stifte an dieser Naht wirklich sitzen werden.
 
@@ -160,11 +185,16 @@ def fitting_pins(
     sondern der Verlust der Passungen, die es vor dieser Änderung gab. Der
     Fall tritt auf, wenn noch keine Auswertung vorliegt.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if not wanted:
         return 0
     if mesh is None:
         return wanted
-    return plan_pins(mesh, plane, count=wanted, shape=shape).count
+    plan = plan_pins(mesh, plane, count=wanted, shape=shape)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return plan.count
 
 
 def apply_split(
@@ -176,9 +206,20 @@ def apply_split(
     features: Mapping[FeatureId, Feature] | None = None,
     pins: int = PIN_COUNT,
     protect: Sequence[Any] = (),
+    cancelled: CancelToken | None = None,
+    progress: ProgressFn | None = None,
 ) -> SplitApplied:
     """Schneidet, bis es passt, und hält jede Naht als Passungspaar fest (§14)."""
-    plan = plan_split(mesh, object_id, profile, features=features, pins=pins, protect=protect)
+    plan = plan_split(
+        mesh,
+        object_id,
+        profile,
+        features=features,
+        pins=pins,
+        protect=protect,
+        cancelled=cancelled,
+        progress=progress,
+    )
     return apply_planned(document, plan, object_id, profile, pins=pins)
 
 
@@ -202,43 +243,64 @@ def apply_planned(
 
     history = History(document)
     pieces: list[ObjectId] = [object_id]
-    existing = list(document.fits)  # Passungen aus früheren Transaktionen
-    created: list[Fit] = []  # was dieser Lauf angelegt hat und noch lebt
+    created: list[Fit] = []
     dropped: list[Fit] = []
-    connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
-    transaction = None
-
-    for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
+    highest_object = max(
+        document.highest_object,
+        max(
+            (
+                int(output[4:])
+                for entry in document.ops
+                for output in entry.outputs
+                if output.startswith("obj_") and output[4:].isdigit()
+            ),
+            default=0,
+        ),
+    )
+    prepared: list[OperationDraft] = []
+    for step, draft in zip(plan.outcome.cuts, plan.drafts, strict=True):
         target = pieces[step.part_index]
-        # Ein Stück, das ein späterer Schnitt desselben Laufs noch einmal teilt,
-        # ist danach zwei — die Passungen, die es benennen, zeigen ins Leere.
-        # Sie entfallen, gleich ob sie vor diesem Lauf im Dokument standen oder
-        # ein früherer Schnitt sie eben erst angelegt hat. **Beide Listen
-        # werden geprüft:** ``change_for`` schreibt die vollständige neue Liste,
-        # und eine tote Passung aus dem eigenen Lauf käme sonst über den
-        # Akkumulator erneut ins Dokument — der Prüfbericht meldete danach je
-        # verwaister Naht ein ``fit.missing_feature`` (§14). Umgehängt wird
-        # nichts: der zweite Schnitt vergibt wieder ``pin_1``, ein Verweis
-        # darauf zeigte auf einen anderen Stift als gemeint (:func:`_fits_without`).
-        existing, gone_old = _partition_fits(existing, target)
-        created, gone_new = _partition_fits(created, target)
-        dropped.extend(gone_old)
-        dropped.extend(gone_new)
-        feature_start = connector_starts.pop(target, 1)
-        made: list[ObjectId] = []
+        first = f"obj_{highest_object + 1}"
+        second = f"obj_{highest_object + 2}"
+        highest_object += 2
+        outputs = (first, second)
+        prepared.append(
+            OperationDraft(
+                op=draft.op,
+                inputs=(target,),
+                outputs=outputs,
+                params=dict(draft.params),
+            )
+        )
+        pieces[step.part_index : step.part_index + 1] = list(outputs)
 
-        # Die Schleifenvariablen wandern als Vorgabewerte hinein: Ein
-        # Abschluss, der sie erst beim Aufruf liest, läse den Stand der
-        # letzten Runde.
-        def change(
-            planned: Sequence[Any],
-            made: list[ObjectId] = made,
-            existing: list[Fit] = existing,
-            created: list[Fit] = created,
-            seated: int = plan.pins_at(index, pins),
-            feature_start: int = feature_start,
-        ) -> Any:
-            made.extend(planned[0].outputs)
+    def change(planned: Sequence[Any]) -> Any:
+        """Alle Nahtpassungen aus den gemeinsam geplanten Ausgaben bilden."""
+        existing = list(document.fits)  # Passungen aus früheren Transaktionen
+        connector_starts: dict[ObjectId, int] = {object_id: plan.connector_start}
+        created.clear()
+        dropped.clear()
+        for index, operation in enumerate(planned):
+            target = operation.inputs[0]
+            # Ein Stück, das ein späterer Schnitt desselben Laufs noch einmal
+            # teilt, ist danach zwei — die Passungen, die es benennen, zeigen
+            # ins Leere. Sie entfallen, gleich ob sie vor diesem Lauf im
+            # Dokument standen oder ein früherer Schnitt sie eben erst
+            # angelegt hat. **Beide Listen werden geprüft:** ``change_for``
+            # schreibt die vollständige neue Liste, und eine tote Passung aus
+            # dem eigenen Lauf käme sonst über den Akkumulator erneut ins
+            # Dokument — der Prüfbericht meldete danach je verwaister Naht ein
+            # ``fit.missing_feature`` (§14). Umgehängt wird nichts: der zweite
+            # Schnitt vergibt wieder ``pin_1``, ein Verweis darauf zeigte auf
+            # einen anderen Stift als gemeint (:func:`_fits_without`).
+            existing, gone_old = _partition_fits(existing, target)
+            kept_created, gone_new = _partition_fits(created, target)
+            created[:] = kept_created
+            dropped.extend(gone_old)
+            dropped.extend(gone_new)
+            feature_start = connector_starts.pop(target, 1)
+            made = operation.outputs
+            seated = plan.pins_at(index, pins)
             next_start = feature_start + seated
             connector_starts[made[0]] = next_start
             connector_starts[made[1]] = next_start
@@ -255,22 +317,20 @@ def apply_planned(
                     feature_start=feature_start,
                 )
             )
-            return change_for(document, fits=[*existing, *created])
+        return change_for(document, fits=[*existing, *created])
 
-        applied = history.apply(
-            _("Teilen und verstiften"),
-            [OperationDraft(op=draft.op, inputs=(target,), params=dict(draft.params))],
-            Origin(by="user"),
-            changes=change,
-        )
-        transaction = applied.id
-        pieces[step.part_index : step.part_index + 1] = list(made)
+    applied = history.apply(
+        _("Teilen und verstiften"),
+        prepared,
+        Origin(by="user"),
+        changes=change,
+    )
 
     _log.info("split into %d part(s) with %d fit pair(s)", len(pieces), len(created))
     return SplitApplied(
         object_ids=pieces,
         fits=created,
-        transaction=transaction,
+        transaction=applied.id,
         findings=[*plan.outcome.findings, *(_fit_dropped(fit) for fit in dropped)],
     )
 

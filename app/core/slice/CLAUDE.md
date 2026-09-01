@@ -33,7 +33,7 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 | `advise.py` | **Einstellungen, die die Geometrie selbst verlangt** (§22.2, §29) — knapp 1 000 Zeilen Schlussfolgerung |
 | `gcode.py` | G-Code zurücklesen (§28.1, §28.2) |
 | `estimate.py` | Was ein Teil kostet, ohne es zu schneiden |
-| `orientation.py` | Die Suche nach einer Druckorientierung (§22.3) |
+| `orientation.py` | Die Suche nach einer Druckorientierung; eine kleine Grundflächen-Vorauswahl für Auto Split wird mit demselben echten Stützvolumen und derselben Fünf-Prozent-Grenze entschieden (§22.3) |
 
 Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
 `tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.

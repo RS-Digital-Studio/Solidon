@@ -33,13 +33,14 @@ from typing import Any, Literal
 
 import numpy as np
 
+from app.core.errors import BooleanFailedError
 from app.core.geom.autosplit import sections_across, upright_normal
 from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.registry import PARTS
+from app.core.knowledge.parts.registry import PartSpec
 from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
@@ -100,6 +101,44 @@ SNAP_MIN_REACH = 8.0
 PIN_WALL = 1.6
 
 FeatureSide = Literal[-1, 0, 1]
+
+
+@dataclass(frozen=True, slots=True)
+class ConnectorGeometrySnapshot:
+    """Die zwei Bausteine eines Verbinders, vor einer Rechnung eingefroren.
+
+    Das globale Register ist absichtlich veränderlich: eigene Bausteine und
+    Rezepte kommen beim Anwendungsstart hinzu. Eine Hintergrundsuche darf es
+    deshalb weder verzögert laden noch während einer Bewertung erneut lesen.
+    ``PartSpec`` ist unveränderlich; dieser kleine Schnappschuss hält genau die
+    zwei Funktionen fest, die ein Auto-Split wirklich braucht.
+    """
+
+    dowel: PartSpec
+    snap_connector: PartSpec
+
+    def get(self, name: str) -> PartSpec:
+        """Gibt einen der beiden eingefrorenen Verbinder zurück."""
+        if name == "dowel":
+            return self.dowel
+        if name == "snap_connector":
+            return self.snap_connector
+        from app.core.errors import InternalError
+
+        raise InternalError(
+            detail="connector geometry snapshot was asked for an unknown part",
+            values={"part": name},
+        )
+
+
+def capture_connector_geometry() -> ConnectorGeometrySnapshot:
+    """Erfasst die mitgelieferten Verbinder vor dem Start eines Arbeiters."""
+    from app.core.knowledge.parts import PARTS
+
+    return ConnectorGeometrySnapshot(
+        dowel=PARTS.get("dowel"),
+        snap_connector=PARTS.get("snap_connector"),
+    )
 
 
 def next_connector_index(features: Mapping[FeatureId, Feature]) -> int:
@@ -569,16 +608,26 @@ def add_pins(
     play: float | None = None,
     quality: Quality = "fine",
     cancelled: CancelToken | None = None,
+    batch: bool = False,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> PinnedPair:
     """Setzt die Stifte in die eine Hälfte und die Bohrungen in die andere.
 
     ``first`` trägt die Stifte. Welche Hälfte das ist, ist mechanisch egal —
     wichtig ist, dass die beiden auseinandergehalten werden, denn das
     Passungspaar benennt je eine (§14).
+
+    ``batch`` fasst mehrere voneinander getrennte Stifte und Bohrungen je zu
+    einer Booleschen Operation zusammen. Die Auto-Split-Bewertung braucht nur
+    die fertigen Körper und spart damit zwei große Kernläufe. Versagt der
+    gemeinsame direkte Lauf, gilt wieder exakt die bewährte sequenzielle
+    Rückfallkette; ein anderer Solver wird nicht still als gleich ausgegeben.
     """
     pair = PinnedPair(first=first, second=second, findings=list(plan.findings))
     if not plan.count:
         return pair
+
+    geometry = connector_geometry or capture_connector_geometry()
 
     clearance = profile.material.clearance if play is None else play
     if plan.shape == SNAP:
@@ -591,8 +640,11 @@ def add_pins(
         # Nahtfläche, an der er angeschweißt wird. Beide Körper stehen deshalb
         # auf der Naht und reichen gleich weit hinein.
         reach = plan.length / 2.0
-        pin_body = _part("snap_connector", diameter=plan.diameter, length=reach, kind="pin")
+        pin_body = _part(
+            geometry, "snap_connector", diameter=plan.diameter, length=reach, kind="pin"
+        )
         bore_body = _part(
+            geometry,
             "snap_connector",
             diameter=plan.diameter,
             length=reach,
@@ -602,6 +654,7 @@ def add_pins(
         pin_offset = 0.0
     else:
         pin_body = _part(
+            geometry,
             "dowel",
             diameter=plan.diameter,
             length=plan.length,
@@ -610,6 +663,7 @@ def add_pins(
             play=0.0,
         )
         bore_body = _part(
+            geometry,
             "dowel",
             diameter=plan.diameter,
             length=plan.length / 2.0 + BORE_RELIEF,
@@ -634,22 +688,24 @@ def add_pins(
     # ist die Tiefe null und dieser Versatz verschwindet von selbst.
     bore_offset = -float(bore_body.raw.bounds[0][2])
 
-    for index, position in enumerate(plan.positions, start=start):
-        # Bis zu zwölf Boolesche je Teilung, jede mit voller Rückfallkette
-        # (§15.6): zwischen zwei Stiften gehört der Abbruch gefragt und in die
-        # Kette hinein durchgereicht.
+    placed_pins: list[MeshData] = []
+    placed_bores: list[MeshData] = []
+    for position in plan.positions:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        placed_pin = _along_normal(pin_body, plan.normal, position, pin_offset)
-        placed_bore = _along_normal(bore_body, plan.normal, position, bore_offset)
+        placed_pins.append(_along_normal(pin_body, plan.normal, position, pin_offset))
+        placed_bores.append(_along_normal(bore_body, plan.normal, position, bore_offset))
 
-        raised = boolean("union", [pair.first, placed_pin], quality=quality, cancelled=cancelled)
-        drilled = boolean(
-            "difference", [pair.second, placed_bore], quality=quality, cancelled=cancelled
-        )
-        pair.first, pair.second = raised.mesh, drilled.mesh
-        pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
+    _add_connector_geometry(
+        pair,
+        placed_pins,
+        placed_bores,
+        quality=quality,
+        cancelled=cancelled,
+        batch=batch,
+    )
 
+    for index, position in enumerate(plan.positions, start=start):
         axis_vector = plan.normal
         pair.pin_features[f"pin_{index}"] = Feature(
             id=f"pin_{index}",
@@ -678,11 +734,68 @@ def add_pins(
     return pair
 
 
-def _part(name: str, **values: Any) -> MeshData:
+def _add_connector_geometry(
+    pair: PinnedPair,
+    placed_pins: list[MeshData],
+    placed_bores: list[MeshData],
+    *,
+    quality: Quality,
+    cancelled: CancelToken | None,
+    batch: bool,
+) -> None:
+    """Setzt die vorbereiteten Verbinder gemeinsam oder sicher nacheinander.
+
+    Der schnelle Weg wird absichtlich nur auf der direkten Stufe versucht.
+    Gelingt sie, entspricht sein Solver den einzelnen direkten Läufen. Muss
+    irgendein Körper zurückfallen, beginnt der bisherige Weg unverändert von
+    vorn und ``deepest`` hält wieder die schlechteste tatsächlich verwendete
+    Stufe fest.
+    """
+    if batch and len(placed_pins) > 1:
+        try:
+            raised = boolean(
+                "union",
+                [pair.first, *placed_pins],
+                quality=quality,
+                stages=("direct",),
+                cancelled=cancelled,
+            )
+            drilled = boolean(
+                "difference",
+                [pair.second, *placed_bores],
+                quality=quality,
+                stages=("direct",),
+                cancelled=cancelled,
+            )
+        except BooleanFailedError:
+            # Ein gemeinsamer Kernlauf ist eine Beschleunigung, keine neue
+            # Geometrieantwort. Bei jedem Zweifel übernimmt der alte Weg.
+            pass
+        else:
+            pair.first, pair.second = raised.mesh, drilled.mesh
+            pair.solver = deepest([raised.solver, drilled.solver])
+            return
+
+    for placed_pin, placed_bore in zip(placed_pins, placed_bores, strict=True):
+        # Bis zu zwölf Boolesche je Teilung, jede mit voller Rückfallkette
+        # (§15.6): zwischen zwei Stiften gehört der Abbruch gefragt und in die
+        # Kette hinein durchgereicht.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+
+        raised = boolean("union", [pair.first, placed_pin], quality=quality, cancelled=cancelled)
+        drilled = boolean(
+            "difference", [pair.second, placed_bore], quality=quality, cancelled=cancelled
+        )
+        pair.first, pair.second = raised.mesh, drilled.mesh
+        pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
+
+
+def _part(geometry: ConnectorGeometrySnapshot, name: str, **values: Any) -> MeshData:
     """Ein Körper aus der Bibliothek. Bausteine vor Primitiven (§39), auch hier."""
     from app.core.geom.mesh import as_mesh_data
 
-    spec = PARTS.get(name)
+    spec = geometry.get(name)
     return as_mesh_data(spec.fn(spec.params(**values)).mesh)
 
 

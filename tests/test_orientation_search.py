@@ -10,12 +10,12 @@ import trimesh
 
 from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
-from app.core.geom.orient import orient_for_print
+from app.core.geom.orient import Orientation, orient_for_print, ranked_orientations
 from app.core.geom.transform import apply, place_on_bed, rotation
 from app.core.ingest.loader import normalise
 from app.core.scene import CancelSignal
 from app.core.slice.analysis import slice_body
-from app.core.slice.orientation import judge, sample_directions, search
+from app.core.slice.orientation import best_face_candidate, judge, sample_directions, search
 from app.core.types import Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -227,3 +227,124 @@ def test_the_search_reports_progress() -> None:
     )
 
     assert seen and seen[-1] == pytest.approx(1.0)
+
+
+def test_the_face_shortlist_is_decided_by_real_support(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Flächenheuristik darf vorauswählen, aber nicht das Ergebnis spielen."""
+    from app.core.slice import orientation
+
+    directions = [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, -1.0)]
+    coarse = [
+        Orientation(direction, 100.0 - index, 0.0, 10.0)
+        for index, direction in enumerate(directions)
+    ]
+    support = {directions[0]: 1000.0, directions[1]: 10.0, directions[2]: 0.0}
+    seen: list[tuple[float, float, float]] = []
+    monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
+
+    def record(
+        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+    ) -> orientation.Candidate:
+        seen.append(direction)
+        return orientation.Candidate(direction, support[direction], 100.0, 10.0)
+
+    monkeypatch.setattr(orientation, "judge", record)
+
+    chosen = best_face_candidate(MeshData.of(trimesh.creation.box()), count=2, profile=profile)
+
+    assert seen == directions[:2], "nur die feste Vorauswahl wird geschnitten"
+    assert chosen.direction == directions[1], "danach entscheidet das echte Stützvolumen"
+
+
+def test_the_face_shortlist_can_be_cancelled(profile: Profile) -> None:
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        best_face_candidate(corpus("cube_clean.stl"), count=3, profile=profile, cancelled=signal)
+
+
+def test_the_face_shortlist_stops_before_the_real_slice(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.slice import orientation
+
+    signal = CancelSignal()
+    coarse = [Orientation((0.0, 0.0, -1.0), 1.0, 1.0, 1.0)]
+
+    def rank_and_cancel(*_args: object, **_kwargs: object) -> list[Orientation]:
+        signal.cancel()
+        return coarse
+
+    monkeypatch.setattr(orientation, "ranked_orientations", rank_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        best_face_candidate(corpus("cube_clean.stl"), count=1, profile=profile, cancelled=signal)
+
+
+def test_an_already_cancelled_shortlist_does_not_collect_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.geom import orient
+
+    signal = CancelSignal()
+    signal.cancel()
+    monkeypatch.setattr(
+        orient,
+        "candidates",
+        lambda _mesh: pytest.fail("nach dem Abbruch wurden noch Kandidaten gesammelt"),
+    )
+
+    with pytest.raises(OperationCancelled):
+        ranked_orientations(corpus("cube_clean.stl"), cancelled=signal)
+
+
+def test_the_face_shortlist_stops_after_a_real_slice(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.slice import orientation
+
+    signal = CancelSignal()
+    directions = [(0.0, 0.0, -1.0)]
+    coarse = [
+        Orientation(direction, 2.0 - index, 1.0, 1.0) for index, direction in enumerate(directions)
+    ]
+    seen: list[tuple[float, float, float]] = []
+    monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
+
+    def judge_and_cancel(
+        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+    ) -> orientation.Candidate:
+        seen.append(direction)
+        signal.cancel()
+        return orientation.Candidate(direction, 0.0, 10.0, 1.0)
+
+    monkeypatch.setattr(orientation, "judge", judge_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        best_face_candidate(corpus("cube_clean.stl"), count=1, profile=profile, cancelled=signal)
+    assert seen == directions[:1]
+
+
+def test_the_full_search_stops_after_the_baseline_slice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.slice import orientation
+
+    signal = CancelSignal()
+    seen: list[tuple[float, float, float]] = []
+
+    def judge_and_cancel(
+        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+    ) -> orientation.Candidate:
+        seen.append(direction)
+        signal.cancel()
+        return orientation.Candidate(direction, 0.0, 10.0, 1.0)
+
+    monkeypatch.setattr(orientation, "judge", judge_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        search(corpus("cube_clean.stl"), count=1, cancelled=signal)
+    assert seen == [(0.0, 0.0, -1.0)]

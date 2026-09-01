@@ -21,12 +21,14 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 from statistics import median
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from app.core import deferred
 from app.core.export.threemf import AssemblyPart, read_objects, write_assembly
+from app.core.geom.autosplit import find_plane
 from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.section import SectionPlane, cut
@@ -36,6 +38,7 @@ from app.core.perceive.maps import wall_thickness_map
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.scene.project import load as load_project
+from app.core.slice import analysis as slice_analysis
 from app.core.slice.analysis import slice_body
 from app.core.slice.orientation import search
 from app.core.types import Profile, Source
@@ -549,6 +552,58 @@ def test_the_orientation_search_over_two_hundred_candidates() -> None:
     mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
     taken = measure("orient_200", lambda: search(mesh, count=200, layer_height=0.4))
     assert taken < 20.0, "the §31 target, and it holds"
+
+
+def test_support_aware_auto_split_stays_within_the_orientation_budget(
+    profile: Profile,
+) -> None:
+    """T2: drei Nähte mal drei Grundflächen auf exakt 200 000 Dreiecken.
+
+    §31 nennt für die verwandte, größere Orientierungssuche zwanzig Sekunden.
+    Auto Split darf mit seiner begrenzten Vorauswahl nicht darüber liegen;
+    die lokale Marke fängt zusätzlich jede Verschlechterung über ein Viertel.
+    Erzeugung und Streckung liegen vor der Uhr, gemessen wird nur die Suche.
+    """
+    mesh = slice_target_mesh()
+    raw = mesh.raw.copy()
+    raw.apply_scale((4.0, 1.0, 1.0))  # type: ignore[no-untyped-call]
+    oversized = MeshData.of(raw)
+    assert oversized.triangle_count == 200_000
+
+    taken = measure(_autosplit_support_mark(), lambda: find_plane(oversized, profile))
+
+    assert taken < 20.0, "die T2-Suche bleibt unter dem §31-Budget der Orientierung"
+
+
+def _autosplit_support_mark() -> str:
+    """Trennt die lokale Marke nach tatsächlich verfügbarem Schnittkern."""
+    backend = (
+        "native"
+        if slice_analysis._chain is not None and hasattr(slice_analysis._chain, "plane_segments")
+        else "fallback"
+    )
+    return f"autosplit_support_200k_{backend}"
+
+
+@pytest.mark.parametrize(
+    ("chain", "expected"),
+    [
+        pytest.param(
+            SimpleNamespace(plane_segments=object()),
+            "autosplit_support_200k_native",
+            id="native",
+        ),
+        pytest.param(object(), "autosplit_support_200k_fallback", id="without-plane-segments"),
+        pytest.param(None, "autosplit_support_200k_fallback", id="fallback"),
+    ],
+)
+def test_auto_split_performance_marks_distinguish_the_slice_backend(
+    monkeypatch: pytest.MonkeyPatch, chain: object | None, expected: str
+) -> None:
+    """Beide gleichwertigen Wege dürfen nie gegeneinander regressionsprüfen."""
+    monkeypatch.setattr(slice_analysis, "_chain", chain)
+
+    assert _autosplit_support_mark() == expected
 
 
 def test_scrubbing_through_the_layers_is_free() -> None:

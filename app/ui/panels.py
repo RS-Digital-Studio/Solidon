@@ -50,9 +50,11 @@ from app.core.errors import (
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
+    SHOW_DETAILS,
     SHOW_HISTORY,
     SHOW_LOCATIONS,
     SHOW_STEP_VALUES,
+    SPLIT_ALONG_LINE,
     SPLIT_MODEL,
     Action,
     AppError,
@@ -302,6 +304,13 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # dort soll ein Klick genau das tun, was er sagt.
     "arrange.above_bed": (PLACE_ON_BED, ARRANGE_ON_BED),
     "arrange.off_the_plate": (ARRANGE_ON_BED,),
+    # Auto Split fand keine belastbare Naht. Noch einmal automatisch zu
+    # teilen wäre dieselbe Sackgasse; die gezeichnete Linie gibt die
+    # Entscheidung sichtbar zurück. Druckerprofil und Details ergänzen nur,
+    # wo Bauraum oder Suchgrenze die Antwort verändern können.
+    "split.no_plane": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
+    "split.cut_failed": (SPLIT_ALONG_LINE, SHOW_DETAILS),
+    "split.too_many_parts": (SPLIT_ALONG_LINE, CHOOSE_PRINTER, SHOW_DETAILS),
     # Die Druckdatei ist niedriger als das Modell: CuraEngine schneidet unter
     # ``z = 0`` wortlos ab (gemessen 30.08.2026, 50 statt 100 Schichten). Die
     # Ursache ist dieselbe wie bei ``arrange.below_bed`` — das Teil steckt

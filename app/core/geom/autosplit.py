@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 
@@ -35,9 +35,13 @@ from app.core.geom.mesh import MeshData
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
-from app.core.types import CancelToken, Finding, Profile, Vec3
+from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
+from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
+
+if TYPE_CHECKING:
+    from app.core.geom.pins import ConnectorGeometrySnapshot
 
 _log = get_logger(__name__)
 
@@ -109,6 +113,15 @@ HINT_THRESHOLD = 0.3
 #: Raum für eine Naht, und ein exakt auf die Grenze geschnittenes Stück lässt
 #: sich neben nichts anordnen.
 FIRST_SLICE_SHARE = 0.7
+
+#: Wie viele gute Nahtlagen die teure zweite Stufe wirklich teilt. Die Zahl
+#: wird gegen drei und fünf gemessen; sie bleibt fest, damit dieselbe Datei
+#: nicht je nach Rechnerlast an einer anderen Stelle getrennt wird (§11.3).
+SUPPORT_PLANE_CANDIDATES = 3
+
+#: Wie viele Grundflächen je Teilstück nach der billigen Flächenheuristik
+#: tatsächlich durch die interne Schichtanalyse laufen.
+SUPPORT_ORIENTATION_CANDIDATES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,6 +241,8 @@ def split_to_fit(
     pins: int | None = None,
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
+    progress: ProgressFn | None = None,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
     nicht richten wird.
@@ -260,21 +275,34 @@ def split_to_fit(
         from app.core.geom.pins import PIN_COUNT
 
         pins = PIN_COUNT
+    if pins > 0 and connector_geometry is None:
+        from app.core.geom.pins import capture_connector_geometry
+
+        connector_geometry = capture_connector_geometry()
 
     outcome = SplitOutcome(parts=[mesh])
+
+    def finish() -> SplitOutcome:
+        """Den vollständig gerechneten Plan samt ehrlichem Ende melden."""
+        if progress is not None:
+            progress(1.0, "")
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        return outcome
+
     # Die Stiftzugabe je Stück und Achse, in Lockschritt mit ``outcome.parts``.
     # Der ganze Körper trägt keine (er ist nicht verstiftet), erst ein Schnitt
     # legt eine an.
     reserves: list[Vec3] = [(0.0, 0.0, 0.0)]
     if fits(mesh, profile):
-        return outcome
+        return finish()
 
     while len(outcome.parts) < max_parts:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         index = _worst(outcome.parts, profile, reserves)
         if index is None:
-            return outcome
+            return finish()
 
         part = outcome.parts[index]
         reserve = reserves[index]
@@ -285,7 +313,7 @@ def split_to_fit(
         # Mitte gemessen, weil dort der Querschnitt für ein prismatisches Stück
         # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den
         # Stift lässt) und in die Reserve der Kinder.
-        allowance = _pin_allowance(part, axis, profile, pins)
+        allowance = _pin_allowance(part, axis, profile, pins, cancelled=cancelled)
         candidate = find_plane(
             part,
             profile,
@@ -294,7 +322,26 @@ def split_to_fit(
             samples=samples,
             protect=protect,
             cancelled=cancelled,
+            connector_count=pins,
+            connector_geometry=connector_geometry,
+            progress=(
+                (
+                    # Die Zahl der nötigen Schnitte steht erst fest, nachdem
+                    # jedes neue Kind wieder gegen das Bett geprüft wurde.
+                    # ``max_parts`` ist nur eine Sicherheitsgrenze und kein
+                    # Arbeitsumfang: daraus einen Anteil zu bilden ließ einen
+                    # Ein-Schnitt-Lauf neun Prozent melden und unmittelbar
+                    # danach auf fertig springen. Die laufende Phase
+                    # bleibt deshalb unbestimmt; nur ``finish`` meldet den
+                    # vollständig bekannten Plan mit eins.
+                    lambda _fraction, text: progress(0.0, text)
+                )
+                if progress is not None
+                else None
+            ),
         )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if candidate is None:
             outcome.findings.append(
                 Finding(
@@ -306,9 +353,13 @@ def split_to_fit(
                     },
                 )
             )
-            return outcome
+            return finish()
 
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         first, second = _cut_in_two(part, candidate)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if first is None or second is None:
             outcome.findings.append(
                 Finding(
@@ -318,19 +369,23 @@ def split_to_fit(
                     values={"axis": candidate.axis, "position": round(candidate.position, 2)},
                 )
             )
-            return outcome
+            return finish()
 
         connector_shape = "round"
         connector_glue = False
         if pins > 0:
             from app.core.geom.pins import AUTO, plan_pins
 
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             connector_plan = plan_pins(
                 part,
                 candidate.plane,
                 count=pins,
                 shape=AUTO,
             )
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             connector_shape = connector_plan.shape
             connector_glue = bool(
                 connector_plan.choice is not None and connector_plan.choice.requires_glue
@@ -373,7 +428,7 @@ def split_to_fit(
                 values={"parts": len(outcome.parts), "limit": max_parts},
             )
         )
-    return outcome
+    return finish()
 
 
 def _worst(parts: list[MeshData], profile: Profile, reserves: list[Vec3]) -> int | None:
@@ -399,7 +454,14 @@ def _add_on_axis(reserve: Vec3, axis: Axis, extra: float) -> Vec3:
     return (values[0], values[1], values[2])
 
 
-def _pin_allowance(mesh: MeshData, axis: Axis, profile: Profile, pins: int) -> float:
+def _pin_allowance(
+    mesh: MeshData,
+    axis: Axis,
+    profile: Profile,
+    pins: int,
+    *,
+    cancelled: CancelToken | None = None,
+) -> float:
     """Wie weit ein Passstift über die Schnittfläche dieser Achse stünde, in mm.
 
     Der Überstand ist die halbe Stiftlänge (``plan.length / 2``) — der Teil, der
@@ -416,7 +478,12 @@ def _pin_allowance(mesh: MeshData, axis: Axis, profile: Profile, pins: int) -> f
 
     centre = float(mesh.bounds.centre["xyz".index(axis)])
     plane = SectionPlane(normal=AXIS_NORMALS[axis], position=centre)
-    return plan_pins(mesh, plane, count=pins, shape=AUTO).length / 2.0
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    plan = plan_pins(mesh, plane, count=pins, shape=AUTO)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    return plan.length / 2.0
 
 
 def cuts_through(plane: SectionPlane, protect: Sequence[Any]) -> bool:
@@ -456,6 +523,11 @@ def find_plane(
     samples: int = SAMPLES,
     protect: Sequence[Any] = (),
     cancelled: CancelToken | None = None,
+    support_planes: int = SUPPORT_PLANE_CANDIDATES,
+    support_orientations: int = SUPPORT_ORIENTATION_CANDIDATES,
+    connector_count: int | None = None,
+    progress: ProgressFn | None = None,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
 ) -> Candidate | None:
     """Die beste Trennebene für diesen Körper, oder ``None``, wenn keine hilft.
 
@@ -474,11 +546,27 @@ def find_plane(
     nichts, gibt es keine Naht: ``None``, wie bei einem Körper, den
     Schneiden nicht rettet. Was der Nutzer daraus zu wählen bekommt,
     entscheidet die Ebene darüber.
+
+    ``connector_count`` ist die Zahl der Verbinder im späteren Schritt. Ohne
+    ausdrücklichen Wert gilt T4s Vorgabe; null bewertet absichtlich einen
+    Schnitt ohne Verbinder. Die Suche rechnet nie eine erzwungene Form,
+    sondern lässt ``plan_pins(..., shape="auto")`` an jeder Naht entscheiden.
     """
     if axis is None:
         axis = _axis_to_cut(mesh, profile)
     if axis is None:
         return None
+    if connector_count is None:
+        from app.core.geom.pins import PIN_COUNT
+
+        connector_count = PIN_COUNT
+    if connector_count > 0 and connector_geometry is None:
+        from app.core.geom.pins import capture_connector_geometry
+
+        connector_geometry = capture_connector_geometry()
+
+    if progress is not None:
+        progress(0.0, str(_("Die Trennebenen werden gesucht …")))
 
     window = _window(mesh, profile, axis, allowance)
     positions = np.linspace(window[0], window[1], samples)
@@ -487,9 +575,21 @@ def find_plane(
         for entry in _judge(mesh, axis, positions, cancelled=cancelled)
         if entry.area > EPS_GEOM and not cuts_through(entry.plane, protect)
     ]
-    best = min(candidates, key=lambda entry: entry.score) if candidates else None
+    if progress is not None:
+        progress(0.25, str(_("Die Trennebenen werden gesucht …")))
+    best = min(candidates, key=_candidate_order) if candidates else None
     if best is not None and best.score <= HINT_THRESHOLD:
-        return best
+        return _best_by_support(
+            mesh,
+            profile,
+            candidates,
+            plane_candidates=support_planes,
+            orientation_candidates=support_orientations,
+            connector_count=connector_count,
+            connector_geometry=connector_geometry,
+            cancelled=cancelled,
+            progress=progress,
+        )
 
     # Nichts Überzeugendes unter den abgetasteten Ebenen: die Zerlegung
     # fragen, wo der Körper von selbst auseinanderfällt, und diese Position
@@ -497,16 +597,159 @@ def find_plane(
     # steht davor die zweite Abfrage.
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    hinted = _from_decomposition(mesh, axis, window)
+    hinted = _from_decomposition(mesh, axis, window, cancelled=cancelled)
     if hinted is not None and cuts_through(hinted.plane, protect):
         # Auch die zweite Meinung hält sich an die Sperre. Ohne diese Zeile
         # wäre sie der Weg, auf dem eine verbotene Naht doch gewinnt — und
         # zwar genau dann, wenn die abgetasteten Ebenen alle mittelmäßig
         # sind, also im schwierigen Fall.
         hinted = None
-    if hinted is not None and (best is None or hinted.score < best.score):
-        return hinted
+    if hinted is not None:
+        candidates.append(hinted)
+    if not candidates:
+        return None
+    return _best_by_support(
+        mesh,
+        profile,
+        candidates,
+        plane_candidates=support_planes,
+        orientation_candidates=support_orientations,
+        connector_count=connector_count,
+        connector_geometry=connector_geometry,
+        cancelled=cancelled,
+        progress=progress,
+    )
+
+
+def _candidate_order(candidate: Candidate) -> tuple[float, str, float]:
+    """Stabile Reihenfolge der billigen Nahtbewertung."""
+    return (candidate.score, candidate.axis, candidate.position)
+
+
+def _best_by_support(
+    mesh: MeshData,
+    profile: Profile,
+    candidates: Sequence[Candidate],
+    *,
+    plane_candidates: int,
+    orientation_candidates: int,
+    cancelled: CancelToken | None,
+    connector_count: int = 0,
+    progress: ProgressFn | None = None,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
+) -> Candidate:
+    """Unter guten Nähten das echte Stützvolumen der fertigen Hälften wählen.
+
+    Die Nahtbewertung und das Stützvolumen haben verschiedene Einheiten und
+    werden deshalb nicht addiert. Die erste Stufe begrenzt das Feld auf gute
+    Nähte. Darin gewinnt weniger Stützvolumen; innerhalb derselben
+    Fünf-Prozent-Grenze wie bei der Orientierung bleibt die bessere Naht vorn.
+
+    Gewertet wird die Geometrie, die Auto Split anschließend wirklich baut:
+    ``plan_pins`` entscheidet die konkrete Verbinderform aus den Nahtdaten,
+    ``add_pins`` setzt sie in beide Hälften. So darf ein großer
+    Schwalbenschwanz die Rangfolge nicht erst nach der Suche umkehren.
+    """
+    shortlist = sorted(candidates, key=_candidate_order)[: max(1, plane_candidates)]
+    best = shortlist[0]
+    best_support = _support_after_cut(
+        mesh,
+        best,
+        profile,
+        orientation_candidates=orientation_candidates,
+        cancelled=cancelled,
+        connector_count=connector_count,
+        connector_geometry=connector_geometry,
+    )
+    if progress is not None:
+        progress(0.25 + 0.75 / len(shortlist), str(_("Ausrichtung suchen")))
+    for index, candidate in enumerate(shortlist[1:], start=2):
+        support = _support_after_cut(
+            mesh,
+            candidate,
+            profile,
+            orientation_candidates=orientation_candidates,
+            cancelled=cancelled,
+            connector_count=connector_count,
+            connector_geometry=connector_geometry,
+        )
+        if not np.isfinite(best_support) and np.isfinite(support):
+            best, best_support = candidate, support
+        elif np.isfinite(support):
+            reference = max(best_support, support, EPS_GEOM)
+            if support < best_support - reference * SUPPORT_TIE:
+                best, best_support = candidate, support
+        if progress is not None:
+            progress(0.25 + 0.75 * index / len(shortlist), str(_("Ausrichtung suchen")))
     return best
+
+
+def _support_after_cut(
+    mesh: MeshData,
+    candidate: Candidate,
+    profile: Profile,
+    *,
+    orientation_candidates: int,
+    cancelled: CancelToken | None,
+    connector_count: int = 0,
+    connector_geometry: ConnectorGeometrySnapshot | None = None,
+) -> float:
+    """Internes Stützvolumen der zwei fertigen, unabhängig gestellten Stücke.
+
+    ``connector_count=0`` misst bewusst die nackten Hälften für Diagnose und
+    Vergleichstests. Ein positiver Wert plant dagegen mit T4 dieselbe
+    automatische Form wie der spätere Auto-Split-Schritt und beurteilt deren
+    wirklich hinzugefügte bzw. abgetragene Geometrie.
+    """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    first, second = _cut_in_two(mesh, candidate)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if first is None or second is None:
+        return float("inf")
+
+    parts = (first, second)
+    if connector_count > 0:
+        # Der Schnappschuss wurde vor der Bewertung erfasst. Hier gibt es
+        # weder Lazy-Import noch Registerzugriff: Parallel geladene eigene
+        # Bausteine dürfen die Rangfolge einer laufenden Suche nicht ändern.
+        from app.core.errors import InternalError
+        from app.core.geom.pins import AUTO, add_pins, plan_pins
+
+        if connector_geometry is None:
+            raise InternalError(detail="auto split connector geometry was not injected")
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        plan = plan_pins(mesh, candidate.plane, count=connector_count, shape=AUTO)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        pair = add_pins(
+            first,
+            second,
+            plan,
+            profile,
+            quality="draft",
+            cancelled=cancelled,
+            batch=True,
+            connector_geometry=connector_geometry,
+        )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        parts = (pair.first, pair.second)
+
+    total = 0.0
+    for part in parts:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        orientation = best_face_candidate(
+            part,
+            count=orientation_candidates,
+            profile=profile,
+            cancelled=cancelled,
+        )
+        total += orientation.support_volume
+    return total
 
 
 def _axis_to_cut(mesh: MeshData, profile: Profile, reserve: Vec3 = (0.0, 0.0, 0.0)) -> Axis | None:
@@ -785,7 +1028,11 @@ def _cut_in_two(mesh: MeshData, candidate: Candidate) -> tuple[MeshData | None, 
 
 
 def _from_decomposition(
-    mesh: MeshData, axis: Axis, window: tuple[float, float]
+    mesh: MeshData,
+    axis: Axis,
+    window: tuple[float, float],
+    *,
+    cancelled: CancelToken | None = None,
 ) -> Candidate | None:
     """Fragt, wo der Körper von selbst auseinanderfällt, und beurteilt einen
     Schnitt dort.
@@ -795,7 +1042,11 @@ def _from_decomposition(
     ein genähertes Teil. Genommen wird von ihr eine Zahl — die Position, an
     der zwei ihrer Stücke entlang der Schnittachse aneinanderstoßen.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     pieces = convex_parts(mesh)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if len(pieces) < 2:
         return None
 
@@ -806,7 +1057,7 @@ def _from_decomposition(
     if not inside:
         return None
 
-    judged = _judge(mesh, axis, np.array(inside))
+    judged = _judge(mesh, axis, np.array(inside), cancelled=cancelled)
     usable = [entry for entry in judged if entry.area > EPS_GEOM]
     return min(usable, key=lambda entry: entry.score) if usable else None
 

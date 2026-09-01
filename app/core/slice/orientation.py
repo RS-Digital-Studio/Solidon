@@ -22,7 +22,7 @@ import numpy as np
 
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import candidates as face_candidates
-from app.core.geom.orient import rotation_to_down
+from app.core.geom.orient import ranked_orientations, rotation_to_down
 from app.core.geom.transform import apply, place_on_bed
 from app.core.log import get_logger
 from app.core.slice.analysis import slice_body
@@ -177,6 +177,40 @@ def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
     )
 
 
+def best_face_candidate(
+    mesh: MeshData,
+    *,
+    count: int,
+    profile: Profile,
+    layer_height: float = SEARCH_LAYER_HEIGHT,
+    cancelled: CancelToken | None = None,
+) -> Candidate:
+    """Die beste der grob vorausgewählten Grundflächen, echt geschnitten.
+
+    ``geom.orient`` ordnet Flächen schnell nach Auflage, Überhangfläche und
+    Höhe. Das ist nur die Vorauswahl. Zwischen ihren besten Richtungen gilt
+    anschließend dieselbe Entscheidung wie in der großen Orientierungssuche:
+    Eine Lage muss stehen können, dann gewinnt das echte interne
+    Stützvolumen, bei höchstens fünf Prozent Abstand die Grundfläche.
+    """
+    coarse = ranked_orientations(mesh, limit=count, cancelled=cancelled)[: max(1, count)]
+    first, *rest = coarse
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    best = judge(mesh, first.direction, layer_height)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    for orientation in rest:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        candidate = judge(mesh, orientation.direction, layer_height)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if better(candidate, best, profile.smallest_first_layer):
+            best = candidate
+    return best
+
+
 def search(
     mesh: MeshData,
     *,
@@ -195,7 +229,11 @@ def search(
     """
     floor = profile.smallest_first_layer if profile is not None else 0.0
     baseline_direction: Vec3 = (0.0, 0.0, -1.0)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     baseline = judge(mesh, baseline_direction, layer_height)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     best = baseline
     tried = 1
 
@@ -212,6 +250,8 @@ def search(
             progress(index / max(len(directions), 1), str(_("Ausrichtung suchen")))
 
         candidate = judge(mesh, direction, layer_height)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         tried += 1
         if better(candidate, best, floor):
             best = candidate

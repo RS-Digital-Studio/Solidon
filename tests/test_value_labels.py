@@ -261,6 +261,24 @@ def test_the_report_offers_what_helps(qt_app: object) -> None:
     )
 
 
+def test_auto_split_findings_offer_a_manual_line_without_repeating_the_search() -> None:
+    """Eine gescheiterte Suche führt zur Linie und nicht in dieselbe Suche."""
+    from app.core.errors import CHOOSE_PRINTER, SHOW_DETAILS, SPLIT_ALONG_LINE
+    from app.ui.panels import FINDING_ACTIONS
+
+    assert FINDING_ACTIONS["split.no_plane"] == (
+        SPLIT_ALONG_LINE,
+        CHOOSE_PRINTER,
+        SHOW_DETAILS,
+    )
+    assert FINDING_ACTIONS["split.cut_failed"] == (SPLIT_ALONG_LINE, SHOW_DETAILS)
+    assert FINDING_ACTIONS["split.too_many_parts"] == (
+        SPLIT_ALONG_LINE,
+        CHOOSE_PRINTER,
+        SHOW_DETAILS,
+    )
+
+
 def test_a_body_below_the_bed_gets_the_click_that_helps() -> None:
     """Teilen und Verkleinern helfen dem verrutschten Koerper nicht.
 

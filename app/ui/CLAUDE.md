@@ -40,6 +40,11 @@ bevor es jemand wusste:
 
 - **`session.last_result` ist die ausgewertete Szene.** Ein
   `session.scene` gibt es nicht.
+- **`split_async()` wartet nie synchron auf `last_result`.** Läuft noch eine
+  Auswertung, bleibt der Klick an Dokumentidentität und Revision gebunden und
+  startet erst nach deren endgültigem, erfolgreichem Abschluss mit genau
+  diesem Netz. Druckübergabe und Chatverlauf sind Projektmetadaten; sie ändern
+  diese Geometrierevision nicht.
 - **`evaluate_now()` ist der synchrone Weg** — für Kommandozeile, Tests und
   Export. Er gibt das Ergebnis zurück, statt es nur anzustoßen.
 - **`session.apply()` endet mit `evaluate_async()`.** Nach dem Aufruf steht

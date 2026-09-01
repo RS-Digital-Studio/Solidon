@@ -67,6 +67,7 @@ CANCEL_SPLIT = Action("cancel_split", _("Die laufende Teilung abbrechen"), prima
 USE_VOXEL_STAGE = Action("use_voxel_stage", _("Gröber rechnen — Maße werden gerundet"))
 SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
+SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
 ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=True)
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))

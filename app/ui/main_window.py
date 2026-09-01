@@ -535,6 +535,26 @@ class _WriteFailure:
     elsewhere: Callable[[], None]
 
 
+@dataclass(frozen=True, slots=True)
+class _ProgressState:
+    """Eine Aufgabe, die sich den gemeinsamen Fortschrittsbereich teilt."""
+
+    active: bool
+    text: str
+    minimum: int
+    maximum: int
+    value: int
+    accessible_name: str
+    accessible_description: str
+    cancel_description: str
+    cancellable: bool
+    cancel_enabled: bool
+    immediate: bool
+
+
+_PROGRESS_PRIORITY: Final = ("split", "download", "export", "agent", "evaluation")
+
+
 class _ExportWorker(Worker):
     """Der Export, abseits des Oberflächen-Threads (§2.8, §29).
 
@@ -1037,6 +1057,14 @@ class MainWindow(QMainWindow):
 
         Am Fenster und nicht am Balken: Der Balken kennt nur seinen Wert,
         und aus einem Wert allein lässt sich nicht hochrechnen."""
+        self._split_fraction = 0.0
+        self._split_progress_text = ""
+        self._split_determinate = False
+        self._split_started: float | None = None
+        """Der letzte gültige Stand der laufenden Trennebenensuche.
+
+        Er wird sofort gesammelt, aber erst nach der 0,2-s-Schwelle gezeigt.
+        Die bestimmte Stützbewertung darf dabei nie rückwärts laufen."""
         """Was zuletzt zu melden war — siehe :meth:`announce`. Ein laufender
         Fortschritt legt sich darüber und gibt es danach wieder frei."""
         self._patience = QTimer(self)
@@ -1062,6 +1090,16 @@ class MainWindow(QMainWindow):
         self._bar_delay.setSingleShot(True)
         self._bar_delay.setInterval(BAR_AFTER_MS)
         self._bar_delay.timeout.connect(self._show_progress_bar)
+        self._split_patience = QTimer(self)
+        self._split_patience.setSingleShot(True)
+        self._split_patience.setInterval(DELAY_MS)
+        self._split_patience.timeout.connect(self._release_split_status)
+        self._split_bar_delay = QTimer(self)
+        self._split_bar_delay.setSingleShot(True)
+        self._split_bar_delay.setInterval(BAR_AFTER_MS)
+        self._split_bar_delay.timeout.connect(self._release_split_bar)
+        self._split_status_released = False
+        self._split_bar_released = False
         self._waits = False
         """Ob gerade etwas läuft, das die Stufen von §2.8 trägt.
 
@@ -1681,10 +1719,10 @@ class MainWindow(QMainWindow):
         # Auskunft an der Stelle, an der niemand hinsieht.
         self.veil = LoadingVeil(self)
         self.veil.set_theme(self.settings.theme)
-        # Derselbe Doppelgriff wie am Knopf der Statusleiste: abgebrochen wird,
-        # was gerade läuft, und die Trennebenensuche hat ihr eigenes Verwerfen.
-        self.veil.cancelRequested.connect(self.session.cancel)
-        self.veil.cancelRequested.connect(self.session.cancel_split)
+        # Der Schleier gehört ausschließlich zur Auswertung einer leeren Szene.
+        # Ein Agentenzug oder Split kann parallel laufen und bleibt davon
+        # unberührt; der gemeinsame Statusknopf entscheidet dagegen per Owner.
+        self.veil.cancelRequested.connect(self.session.cancel_evaluation)
         # Solange der Schleier steht, wird die Ansicht verborgen, nicht nur
         # verdeckt — warum, steht am Signal ``appeared`` in loading.py.
         self.veil.appeared.connect(self._on_veil_appeared)
@@ -1744,14 +1782,85 @@ class MainWindow(QMainWindow):
         self.progress = QProgressBar(self)
         self.progress.setTextVisible(False)
         self.progress.setMaximumWidth(180)
+        self.progress.setAccessibleName(tr("Fortschritt"))
+        self.progress.setAccessibleDescription(tr("Zeigt den Fortschritt der laufenden Aufgabe."))
         self.progress.setVisible(False)
         self.cancel_button = QPushButton(tr("Abbrechen"), self)
+        self.cancel_button.setAccessibleName(tr("Abbrechen"))
+        self.cancel_button.setAccessibleDescription(tr("Bricht die laufende Aufgabe ab."))
         self.cancel_button.setVisible(False)
-        self.cancel_button.clicked.connect(self.session.cancel)
-        self.cancel_button.clicked.connect(self._cancel_download)
-        # Der Knopf gilt für alles, was gerade läuft — auch für die
-        # Trennebenensuche, die ihr eigenes Verwerfen hat (§15.6).
-        self.cancel_button.clicked.connect(self.session.cancel_split)
+        self.cancel_button.clicked.connect(self._cancel_visible_progress)
+        generic_name = tr("Fortschritt")
+        generic_description = tr("Zeigt den Fortschritt der laufenden Aufgabe.")
+        generic_cancel = tr("Bricht die laufende Aufgabe ab.")
+        self._progress_states = {
+            "evaluation": _ProgressState(
+                False,
+                "",
+                0,
+                100,
+                0,
+                generic_name,
+                generic_description,
+                generic_cancel,
+                True,
+                True,
+                False,
+            ),
+            "agent": _ProgressState(
+                False,
+                tr("Der Agent denkt nach."),
+                0,
+                0,
+                0,
+                generic_name,
+                tr("Der Agent denkt nach."),
+                generic_cancel,
+                True,
+                True,
+                True,
+            ),
+            "export": _ProgressState(
+                False,
+                "",
+                0,
+                0,
+                0,
+                generic_name,
+                generic_description,
+                generic_cancel,
+                False,
+                False,
+                True,
+            ),
+            "download": _ProgressState(
+                False,
+                tr("Modell herunterladen …"),
+                0,
+                100,
+                0,
+                tr("Modell herunterladen"),
+                tr("Modell herunterladen …"),
+                generic_cancel,
+                True,
+                True,
+                True,
+            ),
+            "split": _ProgressState(
+                False,
+                tr("Die Trennebenen werden gesucht …"),
+                0,
+                0,
+                0,
+                tr("Fortschritt: Automatisch teilen"),
+                tr("Die Trennebenen werden gesucht …"),
+                tr("Bricht die automatische Teilung ab. Modell und Verlauf bleiben unverändert."),
+                True,
+                True,
+                False,
+            ),
+        }
+        self._progress_owner: str | None = None
 
         # §2.5 nennt für die Statusleiste „Maße · Auswahl · Fortschritt ·
         # Warnungen". Material und Dauer gehören dazu: sie sind das Maß, das
@@ -1807,6 +1916,94 @@ class MainWindow(QMainWindow):
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
+
+    def _set_progress_state(self, owner: str, **changes: Any) -> None:
+        """Speichert genau einen Aufgabenstand und wählt danach die Anzeige."""
+
+        self._progress_states[owner] = replace(self._progress_states[owner], **changes)
+        self._render_progress_state()
+
+    def _active_progress_owner(self) -> str | None:
+        """Wählt bei überlappenden Aufgaben immer denselben sichtbaren Besitzer."""
+
+        return next(
+            (owner for owner in _PROGRESS_PRIORITY if self._progress_states[owner].active),
+            None,
+        )
+
+    def _visible_progress_owner(self, *, split_released: bool) -> str | None:
+        """Wählt einen Besitzer, dessen eigene Sichtbarkeitsschwelle erreicht ist."""
+
+        return next(
+            (
+                owner
+                for owner in _PROGRESS_PRIORITY
+                if self._progress_states[owner].active and (owner != "split" or split_released)
+            ),
+            None,
+        )
+
+    def _render_progress_state(self, *, force_visible: bool = False) -> None:
+        """Überträgt ausschließlich den gewählten Aufgabenstand in die Widgets."""
+
+        previous_owner = self._progress_owner
+        was_visible = self.progress.isVisibleTo(self)
+        owner = self._visible_progress_owner(split_released=self._split_bar_released)
+        status_owner = self._visible_progress_owner(split_released=self._split_status_released)
+        self._progress_owner = owner
+        if owner is None:
+            self.progress.setRange(0, 100)
+            self.progress.setValue(0)
+            self.progress.setAccessibleName(tr("Fortschritt"))
+            self.progress.setAccessibleDescription(
+                tr("Zeigt den Fortschritt der laufenden Aufgabe.")
+            )
+            self.progress.setVisible(False)
+            self.cancel_button.setEnabled(True)
+            self.cancel_button.setAccessibleDescription(tr("Bricht die laufende Aufgabe ab."))
+            self.cancel_button.setVisible(False)
+        else:
+            state = self._progress_states[owner]
+            self.progress.setRange(state.minimum, state.maximum)
+            self.progress.setValue(state.value)
+            self.progress.setAccessibleName(state.accessible_name)
+            self.progress.setAccessibleDescription(state.accessible_description)
+            self.cancel_button.setEnabled(state.cancel_enabled)
+            self.cancel_button.setAccessibleDescription(state.cancel_description)
+
+            visible = (
+                state.immediate or force_visible or (previous_owner is not None and was_visible)
+            )
+            self.progress.setVisible(visible)
+            self.cancel_button.setVisible(visible and state.cancellable)
+
+        if status_owner is None:
+            self.status_message.setText(self._announcement)
+            return
+        status = self._progress_states[status_owner]
+        if status.immediate or status_owner == "split" or self._waiting:
+            self.status_message.setText(status.text or self._announcement)
+        else:
+            self.status_message.setText(self._announcement)
+
+    def _cancel_visible_progress(self) -> None:
+        """Bricht nur die Aufgabe ab, die der gemeinsame Bereich gerade nennt."""
+
+        owner = self._visible_progress_owner(split_released=self._split_bar_released)
+        if owner is None:
+            return
+        state = self._progress_states[owner]
+        if not state.cancellable or not state.cancel_enabled:
+            return
+        handlers = {
+            "evaluation": self.session.cancel_evaluation,
+            "agent": self.session.cancel_agent,
+            "download": self._cancel_download,
+            "split": self.session.cancel_split,
+        }
+        handler = handlers.get(owner)
+        if handler is not None:
+            handler()
 
     def _build_menus(self) -> None:
         self._workspace_menus: list[QMenu] = []
@@ -3399,6 +3596,9 @@ class MainWindow(QMainWindow):
         self.session.agentBusyChanged.connect(self._on_agent_busy)
         self.session.agentProgress.connect(self._on_agent_progress)
         self.session.splitBusyChanged.connect(self._on_split_busy)
+        self.session.splitProgressChanged.connect(self._on_split_progress)
+        self.session.splitCancelRequested.connect(self._on_split_cancel_requested)
+        self.session.splitCancelled.connect(self._on_split_cancelled)
         self.session.evaluationCancelled.connect(self._on_evaluation_cancelled)
         self._refresh_chat_availability()
 
@@ -3516,6 +3716,11 @@ class MainWindow(QMainWindow):
                 else:
                     if starting_fresh:
                         self.session.start_new(self.settings.printer, self.settings.material)
+                        # Der Projektwechsel zeichnet den gemeinsamen
+                        # Fortschrittsbereich neu; der Lesehinweis gehört
+                        # unmittelbar vor den weiterhin synchronen Zugriff.
+                        self.status_message.setText(tr("Modell einfügen …"))
+                        self.status_message.repaint()
                     self.session.import_model(path, raise_on_error=True)
             if project_file:
                 # Beide fragen etwas, und beide erst außerhalb des
@@ -3616,6 +3821,11 @@ class MainWindow(QMainWindow):
                     # aus den Einstellungen, wie es open_path beim Ablegen
                     # einer Datei auch anlegt.
                     self.session.start_new(self.settings.printer, self.settings.material)
+                    # ``start_new`` zeichnet den gemeinsamen
+                    # Fortschrittsbereich neu. Der vorübergehende Lesehinweis
+                    # wird danach erneut gesetzt, ohne ihn anzukündigen.
+                    self.status_message.setText(tr("Modell einfügen …"))
+                    self.status_message.repaint()
                 self.session.import_model(Path(name), raise_on_error=True)
         except AppError as error:
             self.status_message.setText(self._announcement)
@@ -3667,25 +3877,34 @@ class MainWindow(QMainWindow):
         worker.crashed.connect(lambda detail: self._download_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._download_worker_done(done))
         self._downloading = True
-        self.status_message.setText(tr("Modell herunterladen …"))
-        self.progress.setRange(0, 100)
-        self.progress.setValue(0)
-        self.progress.setVisible(True)
-        # Der Knopf, nicht nur der Balken: ``_on_busy`` zeigt ihn nur bei
-        # Auswertungen, und ein reiner Download lief ohne erreichbares
-        # Abbrechen — ``_cancel_download`` hing an einem unsichtbaren Knopf.
-        self.cancel_button.setVisible(True)
+        text = tr("Modell herunterladen …")
+        self._set_progress_state(
+            "download",
+            active=True,
+            text=text,
+            minimum=0,
+            maximum=100,
+            value=0,
+            accessible_description=text,
+            cancel_enabled=True,
+        )
         self._leash.start(worker)
 
     def _on_download_progress(self, share: float, label: str) -> None:
         """Wie weit die Datei ist. Ein Server ohne Längenangabe liefert
         ``0.0`` — dann läuft der Balken endlos, statt auf null zu stehen."""
         if share > 0.0:
-            self.progress.setRange(0, 100)
-            self.progress.setValue(int(share * 100))
+            minimum, maximum, value = 0, 100, int(share * 100)
         else:
-            self.progress.setRange(0, 0)
-        self.status_message.setText(label)
+            minimum, maximum, value = 0, 0, 0
+        self._set_progress_state(
+            "download",
+            text=label,
+            minimum=minimum,
+            maximum=maximum,
+            value=value,
+            accessible_description=label,
+        )
 
     def _download_worker_done(self, worker: Any) -> None:
         if self._download_worker is worker:
@@ -3742,10 +3961,8 @@ class MainWindow(QMainWindow):
 
     def _end_download(self) -> None:
         self._downloading = False
+        self._set_progress_state("download", active=False)
         self._progress_idle()
-        # Dieselbe Frage wie in ``_on_busy``: Läuft sonst nichts Abbrechbares,
-        # geht der Knopf mit dem Download.
-        self.cancel_button.setVisible(self._anything_cancellable())
 
     def _anything_running(self) -> bool:
         """Ob irgendetwas läuft, das den Balken trägt (§2.8).
@@ -3764,17 +3981,6 @@ class MainWindow(QMainWindow):
             or self._downloading
         )
 
-    def _anything_cancellable(self) -> bool:
-        """Ob der Abbrechen-Knopf gerade etwas hätte, das er abbricht.
-
-        Getrennt vom Balken: Der Export läuft mit Balken und ohne Abbrechen
-        (sein Docstring begründet das), und ein Knopf, der nichts täte, wäre
-        schlimmer als keiner.
-        """
-        return (
-            self.session.busy or self.chat.busy or self.session.split_running or self._downloading
-        )
-
     def _progress_idle(self) -> None:
         """Die Anzeige zurück in den Ruhezustand — aber nur, wenn nicht schon
         etwas anderes rechnet.
@@ -3784,15 +3990,13 @@ class MainWindow(QMainWindow):
         loswerden, und keiner darf dabei den laufenden Auswertungsbalken
         ausknipsen.
         """
-        self.progress.setRange(0, 100)
-        if not self._anything_running():
+        if self._active_progress_owner() is None and not self._anything_running():
             # Mit dem Balken gehen die Zeitgeber und der Zeiger: Ein Arbeiter,
             # der den Balken selbst anschaltet, hat die Stufung übersprungen,
             # und ein Wartezeiger ohne laufende Rechnung sieht aus wie ein
             # hängendes Programm.
             self._stop_waiting()
-            self.progress.setVisible(False)
-        self.status_message.setText(self._announcement)
+        self._render_progress_state()
 
     def action_generate(self) -> None:
         """Weg 3 (§2.2): ein Satz oder ein Bild wird ein Körper in der Szene."""
@@ -3963,7 +4167,9 @@ class MainWindow(QMainWindow):
         # bekommt die Sitzung als eine Transaktion (Regel 16).
         if self.restore_discarded_sketch() or self.undo_sculpt_stroke() or self.undo_bone():
             return
-        self.session.undo()
+        transaction = self.session.undo()
+        if transaction is not None:
+            self.announce(tr("{name} zurückgenommen.").format(name=str(transaction.title)))
 
     def action_redo(self) -> None:
         self.session.redo()
@@ -4473,9 +4679,16 @@ class MainWindow(QMainWindow):
         # exportieren und erfuhr nicht, warum.
         worker.crashed.connect(lambda detail: self._export_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._export_worker_done(done))
-        self.status_message.setText(tr("Exportiert wird … {name}").format(name=target.name))
-        self.progress.setRange(0, 0)
-        self.progress.setVisible(True)
+        text = tr("Exportiert wird … {name}").format(name=target.name)
+        self._set_progress_state(
+            "export",
+            active=True,
+            text=text,
+            minimum=0,
+            maximum=0,
+            value=0,
+            accessible_description=text,
+        )
         # Solange geschrieben wird, führt der Menüeintrag nirgendwo hin: ein
         # zweiter Lauf schriebe in dieselben Dateien, und welcher von beiden
         # gewinnt, entschiede die Reihenfolge zweier Threads.
@@ -4486,6 +4699,7 @@ class MainWindow(QMainWindow):
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
         # Das Ende kommt vor dem Auslaufen des Threads (siehe Feld-Docstring).
         self._exporting = False
+        self._set_progress_state("export", active=False)
         # Geschrieben heißt: es gibt nichts zu wiederholen.
         self._export_attempt = None
         self._write_failure = None
@@ -4511,6 +4725,8 @@ class MainWindow(QMainWindow):
         wiederholt werden soll, weiß allein diese Stelle; deshalb steht das Ziel
         hier und nicht in der Handlung.
         """
+        self._exporting = False
+        self._set_progress_state("export", active=False)
         attempt = self._export_attempt
         if attempt is not None:
             self._write_failure = _WriteFailure(
@@ -4529,6 +4745,8 @@ class MainWindow(QMainWindow):
     def _export_worker_done(self, worker: Any) -> None:
         if self._export_worker is worker:
             self._export_worker = None
+            self._exporting = False
+            self._set_progress_state("export", active=False)
             self._progress_idle()
             self._update_actions()
         self._hold_until_done(worker)
@@ -5217,10 +5435,16 @@ class MainWindow(QMainWindow):
     def _escape(self) -> None:
         """Escape verlässt, was gerade offen ist — ein Werkzeug oder die Skizze.
 
-        Die Skizze zuerst: sie liegt vor der Ansicht, und wer zeichnet, meint
-        mit Escape sie und nicht eine Leiste darunter. Verworfen wird dabei
-        nichts Gerechnetes — die Skizze war noch keine Operation.
+        Eine laufende Trennsuche zuerst, dann die Skizze: Beide liegen vor der
+        Auswahl, und wer dort arbeitet, meint mit Escape die aktuelle Handlung
+        statt einer Ebene darunter. Verworfen wird dabei nichts Gerechnetes.
         """
+        if self.session.split_running:
+            # Die lange Suche ist die oberste laufende Handlung. Erst sie
+            # anhalten; die Auswahl darunter bleibt stehen und zeigt weiter,
+            # welches Modell unverändert blieb.
+            self.session.cancel_split()
+            return
         if self._sketch_panel is not None:
             # Zwei Stufen: erst das Zeichenwerkzeug ablegen, dann die Skizze
             # verlassen. Vorher lag auf dieser Taste auch ein Kürzel des
@@ -7390,22 +7614,23 @@ class MainWindow(QMainWindow):
         das Schließen des Fensters zu beenden.
         """
         self.chat.set_busy(busy)
-        self.status_message.setText(tr("Der Agent denkt nach.") if busy else self._announcement)
         if busy:
             # Wie viele Schritte ein Zug braucht, steht vorher nicht fest —
             # ein Balken ohne Ende sagt „es läuft", ohne etwas zu versprechen.
-            self.progress.setRange(0, 0)
-            self.progress.setVisible(True)
-            self.cancel_button.setVisible(True)
+            text = tr("Der Agent denkt nach.")
+            self._set_progress_state(
+                "agent",
+                active=True,
+                text=text,
+                minimum=0,
+                maximum=0,
+                value=0,
+                accessible_description=text,
+                cancel_enabled=True,
+            )
             return
-        # Erst aufräumen, dann fragen: ``isVisible()`` vor dem Ausblenden
-        # gelesen hielt den Abbrechen-Knopf nach jedem Agentenzug am Leben —
-        # ohne laufende Rechnung, bis das nächste busyChanged ihn zufällig
-        # mitnahm. Der Nachbar ``_on_split_busy`` machte es richtig vor.
-        if not self._anything_running():
-            self.progress.setRange(0, 100)
-            self.progress.setVisible(False)
-        self.cancel_button.setVisible(self._anything_cancellable())
+        self._set_progress_state("agent", active=False)
+        self._update_waiting_state()
 
     def _on_agent_progress(self, step: int, label: str) -> None:
         """Was der Zug gerade tut, statt nur dass er läuft (§2.8).
@@ -7417,7 +7642,8 @@ class MainWindow(QMainWindow):
         """
         if not self.chat.busy:
             return
-        self.status_message.setText(f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}")
+        text = f"{tr('Schritt')} {step}/{MAX_STEPS} — {label}"
+        self._set_progress_state("agent", text=text, accessible_description=text)
         # **Und im Chat**, wo der Nutzer während eines Zuges hinsieht. Die
         # Statuszeile bleibt: Sie trägt den Deckel (``/MAX_STEPS``) und steht
         # auch dann, wenn der Chat zugeklappt ist.
@@ -7426,20 +7652,119 @@ class MainWindow(QMainWindow):
     def _on_split_busy(self, busy: bool) -> None:
         """Die Trennebenensuche läuft — Fortschritt und Abbrechen wie bei
         jedem anderen Lauf über zwei Sekunden (§2.8)."""
-        self.status_message.setText(
-            tr("Die Trennebenen werden gesucht …") if busy else self._announcement
-        )
         if busy:
-            # Wie viele Ebenen die Suche prüft, steht vorher nicht fest —
-            # derselbe endlose Balken wie beim Agentenzug.
-            self.progress.setRange(0, 0)
-            self.progress.setVisible(True)
-            self.cancel_button.setVisible(True)
+            self._split_status_released = False
+            self._split_bar_released = False
+            self._split_patience.start()
+            self._split_bar_delay.start()
+            self._split_fraction = 0.0
+            self._split_progress_text = tr("Die Trennebenen werden gesucht …")
+            self._split_determinate = False
+            self._split_started = time.monotonic()
+            self._set_progress_state(
+                "split",
+                active=True,
+                text=self._split_progress_text,
+                minimum=0,
+                maximum=0,
+                value=0,
+                accessible_description=self._split_accessibility(),
+                cancel_enabled=True,
+            )
+        if not busy:
+            self._split_patience.stop()
+            self._split_bar_delay.stop()
+            self._split_status_released = False
+            self._split_bar_released = False
+            self._split_started = None
+            self._set_progress_state("split", active=False, cancel_enabled=True)
+        self._update_waiting_state()
+
+    def _release_split_status(self) -> None:
+        """Gibt nach 0,2 Sekunden ausschließlich den Split-Statustext frei."""
+
+        if not self._progress_states["split"].active:
             return
-        if not self._anything_running():
-            self.progress.setRange(0, 100)
-            self.progress.setVisible(False)
-        self.cancel_button.setVisible(self._anything_cancellable())
+        self._split_status_released = True
+        self._render_progress_state()
+
+    def _release_split_bar(self) -> None:
+        """Gibt nach zwei Sekunden Split-Balken und -Abbruch gemeinsam frei."""
+
+        if not self._progress_states["split"].active:
+            return
+        self._split_bar_released = True
+        self._render_progress_state(force_visible=True)
+
+    def _on_split_progress(self, fraction: float, text: str) -> None:
+        """Zeigt die Suche unbestimmt, solange ihre Gesamtschnittzahl offen ist."""
+        fraction = min(1.0, max(0.0, fraction))
+        if not text:
+            # Der Kern beendet mit ``progress(1.0, "")``. Der leere Text
+            # beendet die Phase nicht: Er bestätigt ihren vollständigen
+            # Anteil, und Hilfstechnik soll weiter wissen, was fertig wurde.
+            self._split_fraction = max(self._split_fraction, fraction)
+            if self._split_determinate:
+                value = round(self._split_fraction * 100)
+                text = f"{self._split_progress_text}  ·  {value} %"
+                self._set_progress_state(
+                    "split",
+                    text=text,
+                    minimum=0,
+                    maximum=100,
+                    value=value,
+                    accessible_description=self._split_accessibility(),
+                )
+            else:
+                self._set_progress_state(
+                    "split", accessible_description=self._split_accessibility()
+                )
+            return
+        # Auch die Ausrichtungsbewertung ist nur der lokale Fortschritt einer
+        # einzelnen Trennebene. Ob danach noch ein Kind zu groß ist und einen
+        # weiteren Schnitt braucht, weiß der Kern erst anschließend. Prozent
+        # und Restzeit wären hier deshalb eine Behauptung über einen noch
+        # unbekannten Gesamtumfang.
+        self._split_determinate = False
+        self._split_fraction = max(self._split_fraction, fraction)
+        minimum, maximum = 0, 0
+        self._split_progress_text = text
+        parts = [text]
+        if self._split_determinate:
+            parts.append(f"{round(self._split_fraction * 100)} %")
+            if left_over := remaining_time(self._split_started, self._split_fraction):
+                parts.append(left_over)
+        self._set_progress_state(
+            "split",
+            text="  ·  ".join(parts),
+            minimum=minimum,
+            maximum=maximum,
+            value=round(self._split_fraction * 100),
+            accessible_description=self._split_accessibility(),
+        )
+
+    def _split_accessibility(self) -> str:
+        """Nennt Phase, Anteil und verfügbaren Ausweg ohne Farbaussage."""
+        parts = [self._split_progress_text]
+        if self._split_determinate:
+            parts.append(f"{round(self._split_fraction * 100)} %")
+        if self._progress_states["split"].cancel_enabled:
+            parts.append(tr("Abbrechen ist verfügbar."))
+        return "  ·  ".join(part for part in parts if part)
+
+    def _on_split_cancel_requested(self) -> None:
+        """Der Knopf wirkt sofort; der Arbeiter bestätigt das Ende später."""
+        self._set_progress_state(
+            "split",
+            text=tr("Teilung wird abgebrochen …"),
+            accessible_description=tr("Teilung wird abgebrochen …"),
+            cancel_enabled=False,
+        )
+        self.announce(tr("Teilung wird abgebrochen …"))
+
+    def _on_split_cancelled(self) -> None:
+        """Erst der Arbeiter bestätigt, dass die Suche wirklich beendet ist."""
+        self.announce(tr("Teilung abgebrochen. Modell und Verlauf sind unverändert."))
 
     def _on_proposal(self, preview: Any) -> None:
         """Ein Vorschlag ist da: zeigen, was er änderte — und entscheiden
@@ -8831,16 +9156,22 @@ class MainWindow(QMainWindow):
         sich nur darüber und gibt sie danach wieder frei.
         """
         self._announcement = text
-        self.status_message.setText(text)
+        if self._active_progress_owner() is None:
+            self.status_message.setText(text)
+        else:
+            self._render_progress_state()
 
     def _on_progress(self, fraction: float, text: str) -> None:
-        self.progress.setValue(int(fraction * 100))
         self.veil.step(fraction, text)
         if not text:
             # Ein leerer Text heißt, der Lauf ist vorbei; dann kommt zurück,
             # was zuletzt zu sagen war (§2.8).
             self._run_started = None
-            self.status_message.setText(self._announcement)
+            self._set_progress_state(
+                "evaluation",
+                text=self._announcement,
+                value=int(fraction * 100),
+            )
             return
         if self._run_started is None:
             self._run_started = time.monotonic()
@@ -8857,7 +9188,15 @@ class MainWindow(QMainWindow):
         parts = [text, f"{round(fraction * 100)} %"]
         if left_over:
             parts.append(left_over)
-        self.status_message.setText("  ·  ".join(parts))
+        display = "  ·  ".join(parts)
+        self._set_progress_state(
+            "evaluation",
+            text=display,
+            minimum=0,
+            maximum=100,
+            value=int(fraction * 100),
+            accessible_description=display,
+        )
 
     def _show_wait_cursor(self) -> None:
         """Stufe zwei: der Zeiger sagt, dass gerechnet wird (§2.8).
@@ -8886,6 +9225,7 @@ class MainWindow(QMainWindow):
         if self._waits and not self._waiting:
             self.setCursor(Qt.CursorShape.BusyCursor)
             self._waiting = True
+            self._render_progress_state()
 
     def _show_progress_bar(self) -> None:
         """Stufe drei: ab zwei Sekunden will man wissen, wie weit es ist.
@@ -8897,8 +9237,7 @@ class MainWindow(QMainWindow):
         nicht — das ist die Zusage, nicht eine zweite Abfrage.
         """
         if self._waits:
-            self.progress.setVisible(True)
-            self.cancel_button.setVisible(self._anything_cancellable() or self._waits)
+            self._render_progress_state(force_visible=True)
 
     def _stop_waiting(self) -> None:
         """Alle Stufen zurück — Zeitgeber, Zeiger, Balken, Knopf.
@@ -8916,10 +9255,22 @@ class MainWindow(QMainWindow):
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
-        # Agent, Trennebenensuche, Export und Download können neben der
-        # Auswertung laufen; dann bleibt der Balken stehen, statt mit ihr zu
-        # verschwinden — und der Knopf zeigt sich nur, wo er etwas abbricht.
-        running = busy or self._anything_running()
+        self._set_progress_state(
+            "evaluation",
+            active=busy,
+            minimum=0,
+            maximum=100,
+            value=0 if busy else self._progress_states["evaluation"].value,
+            accessible_description=tr("Zeigt den Fortschritt der laufenden Aufgabe."),
+            cancel_enabled=True,
+        )
+        self._update_waiting_state()
+        self._update_veil(busy)
+
+    def _update_waiting_state(self) -> None:
+        """Führt die gestufte Warteanzeige für den gewählten Besitzer nach."""
+
+        running = self._active_progress_owner() is not None or self._anything_running()
         # **Gestuft und nicht sofort** (§2.8). Die Zeitgeber und ihre Zahlen
         # sind bei ihrer Anlage begründet; hier steht nur, wann sie laufen.
         # Ein Lauf, der noch aussteht, startet sie nicht neu — sonst schöbe
@@ -8933,20 +9284,7 @@ class MainWindow(QMainWindow):
                 self._bar_delay.start()
         else:
             self._stop_waiting()
-            self.progress.setVisible(False)
-        # Der Knopf zeigt sich nur neben dem Balken: Er ist die Handlung zu
-        # dem, was der Balken meldet, und allein in einer leeren Leiste wäre er
-        # eine Aufforderung ohne Gegenstand.
-        # ``isVisibleTo`` und nicht ``isVisible``: Letzteres antwortet falsch,
-        # solange das Fenster nie gezeigt wurde, und beantwortet damit die
-        # Frage nach dem *Bildschirm* statt die nach dem *Zustand*. Gemeint
-        # ist „steht der Balken", nicht „sieht ihn gerade jemand".
-        self.cancel_button.setVisible(
-            (busy or self._anything_cancellable()) and self.progress.isVisibleTo(self)
-        )
-        if busy:
-            self.progress.setRange(0, 100)
-        self._update_veil(busy)
+        self._render_progress_state()
         if not running:
             self.status_message.setText(self._announcement)
 
@@ -9081,6 +9419,7 @@ class MainWindow(QMainWindow):
             "repair_and_retry": self._repair_after_error,
             "remove_small_parts": self._remove_small_parts,
             "split_model": self._split_after_error,
+            "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,

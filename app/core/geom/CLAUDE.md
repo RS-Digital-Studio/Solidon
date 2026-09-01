@@ -68,9 +68,14 @@ das ganze Register.
 **Druckvorbereitung**
 
 `prepare.py` und `prepare_ops.py` (Bohrungen, Teilen, Anordnen, Kollisionen,
-§18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt, §22.3) ·
+§18.6) · `autosplit.py` (schneiden, bis es auf die Platte passt; nach einer
+billigen Naht-Vorauswahl entscheidet das interne Stützvolumen der fertig
+verstifteten Hälften, §22.3) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
-Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
+Materialtiefe und hält den Kleberhinweis als Operationsparameter fest; die
+beiden Verbinder-Bausteine werden vor einer Hintergrundsuche als
+unveränderlicher `ConnectorGeometrySnapshot` erfasst, nie während der
+Nahtbewertung aus dem globalen Register gelesen) ·
 `orient.py`
 
 **Messen und Schneiden**

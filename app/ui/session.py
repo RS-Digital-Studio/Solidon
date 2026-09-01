@@ -40,6 +40,7 @@ from app.core.errors import (
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
+from app.core.geom.pins import ConnectorGeometrySnapshot, capture_connector_geometry
 from app.core.geom.section import SectionPlane
 from app.core.ingest.loader import read_local_payload
 from app.core.ingest.plan import import_plan
@@ -256,6 +257,7 @@ class _SplitWorker(Worker):
     done = Signal(object)
     failedWith = Signal(object)
     cancelled = Signal()
+    progressed = Signal(float, str)
 
     def __init__(
         self,
@@ -263,12 +265,14 @@ class _SplitWorker(Worker):
         object_id: str,
         profile: Profile,
         features: Mapping[FeatureId, Feature],
+        connector_geometry: ConnectorGeometrySnapshot,
     ) -> None:
         super().__init__()
         self._mesh = mesh
         self._object_id = object_id
         self._profile = profile
         self._features = dict(features)
+        self._connector_geometry = connector_geometry
         #: Ein eigenes Token, wie bei der Vorschau: Die Suche kann Minuten
         #: laufen, und wer sie abbricht, will nicht auf sie warten.
         self.cancel = CancelSignal()
@@ -281,6 +285,8 @@ class _SplitWorker(Worker):
                 self._profile,
                 features=self._features,
                 cancelled=self.cancel,
+                progress=self.progressed.emit,
+                connector_geometry=self._connector_geometry,
             )
         except OperationCancelled:
             self.cancelled.emit()
@@ -288,6 +294,16 @@ class _SplitWorker(Worker):
             self.failedWith.emit(error)
         else:
             self.done.emit(plan)
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingSplit:
+    """Eine Split-Anfrage, die auf die laufende Auswertung ihrer Revision wartet."""
+
+    object_id: str
+    then: Any
+    document: Any
+    revision: int
 
 
 def _no_questions(question: str, choices: list[str]) -> str:
@@ -326,6 +342,12 @@ class Session(QObject):
     agentBusyChanged = Signal(bool)
     splitBusyChanged = Signal(bool)
     """Die Trennebenensuche läuft oder ist fertig (§2.8)."""
+    splitProgressChanged = Signal(float, str)
+    """Fortschritt ausschließlich der aktuellen Trennebenensuche (§2.8)."""
+    splitCancelRequested = Signal()
+    """Der Nutzer hat den Abbruch der laufenden Trennebenensuche verlangt."""
+    splitCancelled = Signal()
+    """Der aktuelle Arbeiter hat den verlangten Abbruch bestätigt (§2.8)."""
     evaluationCancelled = Signal()
     """Ein Mensch hat die Auswertung angehalten (§2.8).
 
@@ -380,6 +402,8 @@ class Session(QObject):
         self._worker: _EvaluationWorker | None = None
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
+        self._pending_split: _PendingSplit | None = None
+        """Ein Klick, der erst nach der aktuellen Auswertung starten darf."""
         self._leash = WorkerLeash(self)
         """Hält jeden ausgelaufenen Arbeiter, bis Qt mit ihm durch ist.
 
@@ -399,6 +423,8 @@ class Session(QObject):
         self._split_discarded = False
         """Ob das laufende Split-Ergebnis verworfen wurde — der Arbeiter
         läuft dann aus, ohne dass jemand sein Ergebnis anwendet."""
+        self._split_cancel_confirmed = False
+        """Ob der Abbruch des aktuellen Split-Arbeiters schon bestätigt wurde."""
         self._previews: list[_PreviewWorker] = []
         """Jeder laufende Vorschau-Arbeiter, festgehalten bis ``finished``.
 
@@ -418,6 +444,16 @@ class Session(QObject):
         self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
+        self._document_revision = 0
+        """Monotoner Stempel jeder Änderung, die die Szene beeinflussen kann.
+
+        Auto Split sucht auf einem ausgewerteten Netz. Ändert sich dessen
+        Dokument währenddessen, gehört der gefundene Plan nicht mehr dazu.
+        """
+        self._last_result_document: Any | None = None
+        self._last_result_revision = -1
+        self._evaluation_succeeded = False
+        """Provenienz des letzten gültigen Netzes für einen Split-Start."""
 
     # --- state ------------------------------------------------------------------
 
@@ -550,13 +586,33 @@ class Session(QObject):
             write_autosave(self.project, self.path)
 
     def _reset_for(self, path: Path | None) -> None:
+        # Ein Plan gehört dem Dokument, an dem seine Suche begann. Beim
+        # Wechsel rechnet der Arbeiter womöglich noch kurz aus; sein Ergebnis
+        # darf aber weder die neue Datei treffen noch dort einen Abbruchtext
+        # hinterlassen.
+        self._discard_split(notify=False)
         self.history = History(self.project.document)
         self.cache.clear()
         self.path = path
         self._dirty = False
         self.last_result = None
-        self.projectChanged.emit()
+        self._last_result_document = None
+        self._last_result_revision = -1
+        self._evaluation_succeeded = False
+        self._mark_document_changed()
         self.evaluate_async()
+
+    def _mark_document_changed(self, *, keep_split: bool = False) -> None:
+        """Stempelt eine rechenwirksame Änderung und entwertet alte Suchen."""
+
+        self._document_revision += 1
+        if not keep_split:
+            self._discard_split(notify=False)
+        self.projectChanged.emit()
+
+    def _mark_project_changed(self) -> None:
+        """Meldet gespeicherte Metadaten, ohne ein weiterhin gültiges Netz zu entwerten."""
+        self.projectChanged.emit()
 
     # --- editing ----------------------------------------------------------------
 
@@ -589,7 +645,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -606,7 +662,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -649,7 +705,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -687,7 +743,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -728,7 +784,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -775,7 +831,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -807,7 +863,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -819,7 +875,7 @@ class Session(QObject):
             self.failed.emit(error)
             return
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
 
     def removal_closure(self, op_ids: Sequence[int]) -> tuple[int, ...]:
@@ -838,7 +894,7 @@ class Session(QObject):
             self.failed.emit(error)
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
@@ -856,7 +912,7 @@ class Session(QObject):
             self.failed.emit(error)
             return
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
 
     def change_kernel(self, op_id: int, op_name: str, params: dict[str, Any]) -> None:
@@ -871,7 +927,7 @@ class Session(QObject):
             self.failed.emit(error)
             return
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
 
     def bake_strokes(self, op_id: int) -> bool:
@@ -957,7 +1013,7 @@ class Session(QObject):
             return
         self.project.document.print_settings = settings
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_project_changed()
 
     def import_model(
         self,
@@ -1078,7 +1134,7 @@ class Session(QObject):
         activation.require(activation.CHANGE)
         source_id = self._embed_source("import", path.name, path.read_bytes())
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         return source_id
 
     def import_image(self, path: Path) -> str:
@@ -1100,7 +1156,7 @@ class Session(QObject):
         activation.require(activation.CHANGE)
         source_id = self._embed_source("image", path.name, path.read_bytes())
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         return source_id
 
     def add_generated(self, result: GeneratedMesh) -> str:
@@ -1111,7 +1167,7 @@ class Session(QObject):
         """
         generation = generate_into(self.project, result)
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return generation.object_id
 
@@ -1132,17 +1188,18 @@ class Session(QObject):
                 detail="auto split was asked for an object that is not in the scene",
                 values={"object": object_id},
             )
+        object_profile = profiles.for_object(self.profile, entry)
 
         applied = apply_split(
             self.project.document,
             as_mesh_data(entry.mesh),
             object_id,
-            self.profile,
+            object_profile,
             features=entry.features,
         )
         if applied.transaction is not None:
             self._dirty = True
-            self.projectChanged.emit()
+            self._mark_document_changed()
             self.evaluate_async()
         return applied
 
@@ -1164,18 +1221,19 @@ class Session(QObject):
         """
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
+        object_profile = profiles.for_object(self.profile, entry)
         applied = apply_line_split(
             self.project.document,
             object_id,
             plane,
-            self.profile,
+            object_profile,
             mesh=as_mesh_data(entry.mesh) if entry is not None else None,
             features=entry.features if entry is not None else None,
             pins=pins,
             shape=shape,
         )
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return applied
 
@@ -1195,7 +1253,7 @@ class Session(QObject):
         """
         applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return applied
 
@@ -1293,10 +1351,50 @@ class Session(QObject):
                 )
             )
             return
-        self.wait_for_idle()
+        request = _PendingSplit(
+            object_id=object_id,
+            then=then,
+            document=self.project.document,
+            revision=self._document_revision,
+        )
+        self._pending_split = request
+        if self._worker is not None or self._rerun_pending:
+            # Der Auswertungsbalken bleibt der ehrliche Besitzer. Erst ihr
+            # endgültiges ``finished`` startet die Trennsuche auf genau dem
+            # Ergebnis, das zu dieser Revision gehört.
+            return
+        if (
+            not self._evaluation_succeeded
+            or self._last_result_document is not request.document
+            or self._last_result_revision != request.revision
+        ):
+            self.evaluate_async()
+            return
+        self._start_pending_split()
+
+    def _start_pending_split(self) -> None:
+        """Startet die eingereihte Suche ausschließlich auf ihrem aktuellen Netz."""
+        request = self._pending_split
+        if request is None or self._worker is not None or self._rerun_pending:
+            return
+        if (
+            request.document is not self.project.document
+            or request.revision != self._document_revision
+            or not self._evaluation_succeeded
+            or self._last_result_document is not request.document
+            or self._last_result_revision != request.revision
+        ):
+            # Ein Fehler oder Abbruch der Auswertung hat kein aktuelles Netz
+            # geliefert. Deren eigener Fehlerpfad hat die Ursache bereits
+            # gemeldet; ein Split auf dem alten Bild wäre keine Alternative.
+            self._pending_split = None
+            return
+
         result = self.last_result
+        object_id = request.object_id
         entry = result.scene.objects.get(object_id) if result is not None else None
         if entry is None:
+            self._pending_split = None
             self.failed.emit(
                 InternalError(
                     detail="auto split was asked for an object that is not in the scene",
@@ -1305,16 +1403,42 @@ class Session(QObject):
             )
             return
 
+        object_profile = profiles.for_object(self.profile, entry)
+        source_document = request.document
+        source_revision = request.revision
+        then = request.then
+        self._pending_split = None
         self._split_discarded = False
-        worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile, entry.features)
+        self._split_cancel_confirmed = False
+        connector_geometry = capture_connector_geometry()
+        worker = _SplitWorker(
+            as_mesh_data(entry.mesh),
+            object_id,
+            object_profile,
+            entry.features,
+            connector_geometry,
+        )
         # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
         # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.
-        worker.done.connect(lambda plan: self._split_planned(worker, plan, object_id, then))
+        worker.done.connect(
+            lambda plan: self._split_planned(
+                worker,
+                plan,
+                object_id,
+                object_profile,
+                then,
+                source_document=source_document,
+                source_revision=source_revision,
+            )
+        )
         worker.failedWith.connect(lambda error: self._split_failed(worker, error))
         worker.crashed.connect(
             lambda detail: self._split_failed(worker, InternalError(detail=detail))
         )
-        worker.cancelled.connect(self._split_cancelled)
+        worker.cancelled.connect(lambda: self._split_cancelled(worker))
+        worker.progressed.connect(
+            lambda fraction, text: self._split_progress(worker, fraction, text)
+        )
         worker.finished.connect(lambda: self._on_split_done(worker))
         self._split = worker
         self.splitBusyChanged.emit(True)
@@ -1322,7 +1446,10 @@ class Session(QObject):
 
     @property
     def split_running(self) -> bool:
-        return self._split is not None and self._split.isRunning()
+        # Auch die Warteschlange und die kurze Lücke zwischen fachlichem Ende
+        # und QThreads ``finished`` gehören noch demselben Start. Ein zweiter
+        # Klick dürfte sonst den Empfänger des ersten überschreiben.
+        return self._pending_split is not None or self._split is not None
 
     def cancel_split(self) -> None:
         """Anhalten und verwerfen — beides, und in dieser Reihenfolge.
@@ -1332,11 +1459,37 @@ class Session(QObject):
         Minuten lang, für einen Plan, den schon niemand mehr wollte. Das Token
         erreicht sie zwischen den Blöcken der Abtastung (§15.6).
         """
+        self._discard_split(notify=True)
+
+    def _discard_split(self, *, notify: bool) -> None:
+        """Entwertet wartende und laufende Suche; beim Dokumentwechsel still."""
+
+        self._pending_split = None
         if self._split is None:
             return
-        self._split.cancel.cancel()
-        self._split_discarded = True
+        fresh = not self._split_discarded
+        if fresh:
+            self._split.cancel.cancel()
+            self._split_discarded = True
+        if notify:
+            if fresh:
+                self.splitCancelRequested.emit()
+            return
+        # Das neue Dokument darf weder die Anforderung noch die spätere
+        # Bestätigung des alten Abbruchs als eigene Rückmeldung erhalten.
+        self._split_cancel_confirmed = True
         self.splitBusyChanged.emit(False)
+
+    def _split_progress(self, worker: object, fraction: float, text: str) -> None:
+        """Reicht nur Meldungen des noch gültigen Split-Arbeiters weiter.
+
+        Ein verworfener oder ausgelaufener Arbeiter kann bereits zugestellte
+        Qt-Signale hinterlassen. Sie dürfen weder den neuen Lauf noch die
+        dauerhafte Abbruchmeldung überschreiben.
+        """
+        if worker is not self._split or self._split_discarded:
+            return
+        self.splitProgressChanged.emit(fraction, text)
 
     def _split_failed(self, worker: object, error: AppError) -> None:
         if worker is not self._split:
@@ -1345,32 +1498,61 @@ class Session(QObject):
         if not self._split_discarded:
             self.failed.emit(error)
 
-    def _split_cancelled(self) -> None:
+    def _split_cancelled(self, worker: object) -> None:
         """Die Suche hat aufgehört, weil jemand es wollte — kein Fehler.
 
         Ein abgebrochener Lauf als Fehlermeldung zu zeigen wäre eine Antwort
         auf eine Frage, die der Nutzer selbst schon beantwortet hat.
         """
+        if worker is not self._split:
+            return
+        self._confirm_split_cancelled(worker)
         self.splitBusyChanged.emit(False)
 
-    def _split_planned(self, worker: object, plan: Any, object_id: str, then: Any) -> None:
+    def _confirm_split_cancelled(self, worker: object) -> None:
+        """Bestätigt den Abbruch des aktuellen Arbeiters höchstens einmal."""
+
+        if worker is not self._split or self._split_cancel_confirmed:
+            return
+        self._split_cancel_confirmed = True
+        self.splitCancelled.emit()
+
+    def _split_planned(
+        self,
+        worker: object,
+        plan: Any,
+        object_id: str,
+        profile: Profile,
+        then: Any,
+        *,
+        source_document: Any | None = None,
+        source_revision: int | None = None,
+    ) -> None:
         if worker is not self._split:
+            return
+        if (source_document is not None and source_document is not self.project.document) or (
+            source_revision is not None and source_revision != self._document_revision
+        ):
+            self._discard_split(notify=False)
             return
         self.splitBusyChanged.emit(False)
         if self._split_discarded:
             return
-        applied = apply_planned(self.project.document, plan, object_id, self.profile)
+        applied = apply_planned(self.project.document, plan, object_id, profile)
         if applied.transaction is not None:
             self._dirty = True
-            self.projectChanged.emit()
+            self._mark_document_changed(keep_split=True)
             self.evaluate_async()
         then(applied)
 
-    def undo(self) -> None:
-        if self.history.undo() is not None:
-            self._dirty = True
-            self.projectChanged.emit()
-            self.evaluate_async()
+    def undo(self) -> Transaction | None:
+        transaction = self.history.undo()
+        if transaction is None:
+            return None
+        self._dirty = True
+        self._mark_document_changed()
+        self.evaluate_async()
+        return transaction
 
     def undo_applied(self, transaction: str) -> bool:
         """Der Weg zurück aus der Übernommen-Leiste (§26.5) — genau diese
@@ -1385,14 +1567,14 @@ class Session(QObject):
         if not agent_apply.undo_applied(self.history, transaction):
             return False
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return True
 
     def redo(self) -> None:
         if self.history.redo() is not None:
             self._dirty = True
-            self.projectChanged.emit()
+            self._mark_document_changed()
             self.evaluate_async()
 
     # --- evaluation -------------------------------------------------------------
@@ -1405,6 +1587,7 @@ class Session(QObject):
             return
         self.cancel_signal.reset()
         self._cancel_by_user = False
+        self._evaluation_succeeded = False
         self.busyChanged.emit(True)
         worker = _EvaluationWorker(self)
         # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
@@ -1468,11 +1651,14 @@ class Session(QObject):
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
+        self._last_result_document = self.project.document
+        self._last_result_revision = self._document_revision
+        self._evaluation_succeeded = True
         self.sceneChanged.emit(result)
         return result
 
     def cancel(self) -> None:
-        """Der eine Knopf hält beides an, was gerade laufen kann (§2.8).
+        """Der eine Aufräumweg hält alles an, was gerade laufen kann (§2.8).
 
         **Auch den eingereihten Nachlauf.** Ein Ersetzen behält ihn mit
         Absicht (siehe ``_on_thread_done``) — ein Nutzer-Abbruch nicht: Wer
@@ -1481,9 +1667,20 @@ class Session(QObject):
         eingereihte Lauf an. Die Maschine rechnete weiter, das Wort stand
         daneben.
         """
+        self.cancel_evaluation()
+        self.cancel_agent()
+        self.cancel_split()
+
+    def cancel_evaluation(self) -> None:
+        """Hält nur die Auswertung samt eingereihtem Nachlauf an."""
+
         self._cancel_by_user = True
         self._rerun_pending = False
         self.cancel_signal.cancel()
+
+    def cancel_agent(self) -> None:
+        """Hält nur den laufenden Agentenzug an."""
+
         self.agent_cancel.cancel()
 
     # --- der Agent (§26) --------------------------------------------------------
@@ -1637,7 +1834,7 @@ class Session(QObject):
         transaction = agent_apply.accept(preview.proposal, self.history)
         self._accepted[preview.proposal.request] = transaction.id if transaction else None
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_document_changed()
         self.evaluate_async()
         return transaction
 
@@ -1645,7 +1842,7 @@ class Session(QObject):
         """Wirft ihn weg — das Gespräch behält beide Beiträge (§26.3)."""
         agent_apply.discard(preview.proposal, self.project.document)
         self._dirty = True
-        self.projectChanged.emit()
+        self._mark_project_changed()
 
     # --- context callbacks ------------------------------------------------------
 
@@ -1707,7 +1904,10 @@ class Session(QObject):
         matched = self.history.record_matches(result.matches)
         if answered or matched:
             self._dirty = True
-            self.projectChanged.emit()
+            self._mark_document_changed()
+        self._last_result_document = self.project.document
+        self._last_result_revision = self._document_revision
+        self._evaluation_succeeded = True
         self.sceneChanged.emit(result)
 
     def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
@@ -1717,6 +1917,7 @@ class Session(QObject):
             # Lauf, der gerade gut läuft.
             _log.info("evaluation failed after being superseded: %s", error)
             return
+        self._evaluation_succeeded = False
         _log.warning("evaluation failed: %s", error)
         if self._backend is not None and not self._backend.available:
             # Die Gegenseite hat den Zugang abgelehnt (``llm.reject``). Das
@@ -1740,6 +1941,7 @@ class Session(QObject):
         _log.info("evaluation cancelled")
         if self._outdated(finished):
             return
+        self._evaluation_succeeded = False
         if self._cancel_by_user:
             self._cancel_by_user = False
             self.evaluationCancelled.emit()
@@ -1763,6 +1965,12 @@ class Session(QObject):
         reist der Arbeiter als Argument und wird nicht aus dem Feld gelesen.)
         """
         current = worker is self._split
+        if current and self._split_discarded:
+            # ``cancel_split`` kann den Arbeiter in der Lücke nach seinem
+            # fachlichen Ende, aber vor ``finished`` treffen. Dann kommt kein
+            # ``cancelled`` mehr; das endgültige Thread-Ende bestätigt trotzdem
+            # genau einmal, dass der verlangte Abbruch abgeschlossen ist.
+            self._confirm_split_cancelled(worker)
         if current:
             # Die Tauschform, kein nacktes Nullen des Feldes: Der Wächter in
             # test_ui verbietet jenes Muster, weil es andernorts die letzte
@@ -1770,8 +1978,9 @@ class Session(QObject):
             worker, self._split = self._split, None
         self._leash.hold_until_done(worker)
         if current:
-            # Erst jetzt ist das Ende wahr. ``cancel_split`` und
-            # ``_split_cancelled`` melden früher, aber dort läuft der Thread
+            # Erst jetzt ist der Thread vollständig ausgelaufen.
+            # ``_split_cancelled`` bestätigt vorher den fachlichen Abbruch,
+            # aber dort läuft der Thread
             # noch, und ``_on_split_busy`` fragt ``_anything_running()`` —
             # das liest ``split_running`` als True und lässt Balken und
             # Abbrechen-Knopf stehen, für immer, denn danach kam nichts mehr.
@@ -1813,6 +2022,7 @@ class Session(QObject):
             self._rerun_pending = False
             self.evaluate_async()
             return
+        self._start_pending_split()
         self.busyChanged.emit(False)
 
     def release(self, timeout_ms: int = 10_000) -> None:

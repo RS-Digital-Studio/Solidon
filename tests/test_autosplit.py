@@ -14,16 +14,17 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import BooleanFailedError, OperationCancelled, ValidationError
 from app.core.geom import autosplit, pins
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import split_at_plane
-from app.core.geom.section import SectionPlane
+from app.core.geom.section import Axis, SectionPlane
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
-from app.core.scene.cancel import NeverCancelled
+from app.core.scene.cancel import CancelSignal, NeverCancelled
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
+from app.core.slice.orientation import best_face_candidate
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import OpContext, Profile, Scene, SceneObject, Source
 
@@ -39,6 +40,37 @@ def body(name: str = "oversized.stl") -> MeshData:
 
 def bar(length: float = 400.0) -> MeshData:
     return MeshData.of(trimesh.creation.box(extents=(length, 60.0, 40.0)))
+
+
+def crossed_overhangs() -> MeshData:
+    """Zwei rechtwinklige Überhänge dicht rechts von der Körpermitte.
+
+    Der lange Balken macht den Körper zu groß für das Bett. Ein Schnitt in
+    seiner Mitte sieht für die billige Nahtbewertung vollkommen aus: eine
+    Kontur, prismatisch, ausgewogen. Dann bleiben aber beide Überhänge am
+    rechten Teil und verlangen widersprüchliche Grundflächen. Bei x = 3,25 mm
+    werden sie getrennt und können unabhängig liegen.
+
+    Alle Maße sind Quadermaße. Das Stützvolumen ist damit kein Urteil über
+    einen Modellnamen, sondern die Säule unter zwei analytischen Decken.
+    """
+    pieces = []
+    beam = trimesh.creation.box(extents=(400.0, 12.0, 12.0))
+    beam.apply_translation((0.0, 0.0, 6.0))
+    pieces.append(beam)
+
+    upright_stem = trimesh.creation.box(extents=(2.0, 14.0, 35.0))
+    upright_stem.apply_translation((1.5, 0.0, 17.5))
+    upright_roof = trimesh.creation.box(extents=(2.0, 45.0, 6.0))
+    upright_roof.apply_translation((1.5, 0.0, 38.0))
+    pieces.extend((upright_stem, upright_roof))
+
+    sideways_stem = trimesh.creation.box(extents=(2.0, 35.0, 14.0))
+    sideways_stem.apply_translation((6.0, 17.5, 6.0))
+    sideways_roof = trimesh.creation.box(extents=(2.0, 6.0, 45.0))
+    sideways_roof.apply_translation((6.0, 38.0, 6.0))
+    pieces.extend((sideways_stem, sideways_roof))
+    return MeshData.of(trimesh.boolean.union(pieces))
 
 
 def dumbbell(neck: float = 30.0, flank: float = 60.0) -> MeshData:
@@ -111,6 +143,547 @@ def test_the_plane_lands_in_the_slim_middle(profile: Profile) -> None:
     assert -85.0 < candidate.position < 85.0, "inside the middle bar"
     assert candidate.contours == 1, "one seam, not several thin bridges"
     assert candidate.area == pytest.approx(40.0 * 30.0), "the section of the middle"
+
+
+def test_real_support_moves_the_seam_between_crossed_overhangs(profile: Profile) -> None:
+    """T2, §22.3: echtes Stützvolumen schlägt die billige Mittenlage.
+
+    Ohne die zweite Stufe gewinnt die gute Naht knapp links der Mitte. Dort
+    bleiben die zwei rechtwinkligen Überhänge an derselben Hälfte. Schon der
+    nächste gute Kandidat rechts davon trennt sie; beide Hälften dürfen dann
+    ihre eigene Grundfläche wählen und brauchen zusammen wesentlich weniger
+    Stützen.
+    """
+    mesh = crossed_overhangs()
+
+    axis: Axis = "x"
+    window = autosplit._window(mesh, profile, axis)
+    positions = np.linspace(window[0], window[1], autosplit.SAMPLES)
+    cheap = min(autosplit._judge(mesh, axis, positions), key=autosplit._candidate_order)
+
+    candidate = autosplit.find_plane(mesh, profile)
+
+    assert candidate is not None
+    assert cheap.position < 0.0, "die erste Stufe bleibt absichtlich bei der Nahtheuristik"
+    assert candidate.position > 2.0, (
+        f"die Naht blieb bei {candidate.position:.2f} mm in der billigen Mitte, "
+        "obwohl dort beide Überhänge an einem Teil bleiben"
+    )
+    cheap_support = autosplit._support_after_cut(
+        mesh, cheap, profile, orientation_candidates=3, cancelled=None
+    )
+    chosen_support = autosplit._support_after_cut(
+        mesh, candidate, profile, orientation_candidates=3, cancelled=None
+    )
+    assert chosen_support < cheap_support * 0.5, (
+        f"die gewählte Naht braucht {chosen_support:.0f} statt {cheap_support:.0f} mm³ — "
+        "der analytische Körper soll den Unterschied deutlich, nicht im Rauschen zeigen"
+    )
+
+
+def test_support_within_five_percent_keeps_the_better_seam(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Millimeter³ werden nicht in den dimensionslosen Naht-Score addiert.
+
+    Die Vorauswahl hält die Nahtqualität fest. Erst mehr als die vorhandene
+    Fünf-Prozent-Grenze der Orientierung darf sie umwerfen.
+    """
+    mesh = crossed_overhangs()
+    better_seam = autosplit.Candidate("x", 0.0, 144.0, 1, 0.0)
+    worse_seam = autosplit.Candidate("x", 3.25, 144.0, 1, 0.1)
+    support = {better_seam.position: 100.0, worse_seam.position: 96.0}
+    monkeypatch.setattr(
+        autosplit,
+        "_support_after_cut",
+        lambda _mesh, candidate, _profile, **_kwargs: support[candidate.position],
+    )
+
+    chosen = autosplit._best_by_support(
+        mesh,
+        profile,
+        (worse_seam, better_seam),
+        plane_candidates=2,
+        orientation_candidates=3,
+        cancelled=None,
+    )
+
+    assert chosen is better_seam
+
+
+def test_support_above_five_percent_can_move_the_seam(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    better_seam = autosplit.Candidate("x", 0.0, 144.0, 1, 0.0)
+    worse_seam = autosplit.Candidate("x", 3.25, 144.0, 1, 0.1)
+    support = {better_seam.position: 100.0, worse_seam.position: 94.0}
+    monkeypatch.setattr(
+        autosplit,
+        "_support_after_cut",
+        lambda _mesh, candidate, _profile, **_kwargs: support[candidate.position],
+    )
+
+    chosen = autosplit._best_by_support(
+        crossed_overhangs(),
+        profile,
+        (better_seam, worse_seam),
+        plane_candidates=2,
+        orientation_candidates=3,
+        cancelled=None,
+    )
+
+    assert chosen is worse_seam
+
+
+def test_a_failed_probe_cut_does_not_hide_a_usable_candidate(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mesh = crossed_overhangs()
+    failed = autosplit.Candidate("x", 0.0, 144.0, 1, 0.0)
+    usable = autosplit.Candidate("x", 3.25, 144.0, 1, 0.1)
+    support = {failed.position: float("inf"), usable.position: 100.0}
+    monkeypatch.setattr(
+        autosplit,
+        "_support_after_cut",
+        lambda _mesh, candidate, _profile, **_kwargs: support[candidate.position],
+    )
+
+    chosen = autosplit._best_by_support(
+        mesh,
+        profile,
+        (failed, usable),
+        plane_candidates=2,
+        orientation_candidates=3,
+        cancelled=None,
+    )
+
+    assert chosen is usable
+
+
+def test_only_the_fixed_shortlist_is_sliced(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die 33 billigen Ebenen werden nicht zu 33 Schichtanalysen."""
+    seen: list[float] = []
+
+    def record(
+        _mesh: MeshData, candidate: autosplit.Candidate, _profile: Profile, **_kwargs: object
+    ) -> float:
+        seen.append(candidate.position)
+        return abs(candidate.position)
+
+    monkeypatch.setattr(autosplit, "_support_after_cut", record)
+
+    autosplit.find_plane(crossed_overhangs(), profile, support_planes=3)
+
+    assert len(seen) == 3
+
+
+def test_support_refinement_is_reproducible(profile: Profile) -> None:
+    mesh = crossed_overhangs()
+
+    first = autosplit.find_plane(mesh, profile)
+    second = autosplit.find_plane(mesh, profile)
+
+    assert first == second
+
+
+def test_support_refinement_stops_before_the_probe_cut(profile: Profile) -> None:
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        autosplit._support_after_cut(
+            crossed_overhangs(),
+            autosplit.Candidate("x", 0.0, 144.0, 1, 0.0),
+            profile,
+            orientation_candidates=3,
+            cancelled=signal,
+        )
+
+
+def test_support_refinement_stops_after_the_probe_cut(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    mesh = crossed_overhangs()
+
+    def cut_and_cancel(
+        _mesh: MeshData, _candidate: autosplit.Candidate
+    ) -> tuple[MeshData, MeshData]:
+        signal.cancel()
+        return mesh, mesh
+
+    monkeypatch.setattr(autosplit, "_cut_in_two", cut_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        autosplit._support_after_cut(
+            mesh,
+            autosplit.Candidate("x", 0.0, 144.0, 1, 0.0),
+            profile,
+            orientation_candidates=3,
+            cancelled=signal,
+        )
+
+
+def test_support_refinement_stops_after_the_connector_plan(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    connector_geometry = pins.capture_connector_geometry()
+    original = pins.plan_pins
+
+    def plan_and_cancel(*args: object, **kwargs: object):
+        plan = original(*args, **kwargs)
+        signal.cancel()
+        return plan
+
+    monkeypatch.setattr(pins, "plan_pins", plan_and_cancel)
+    monkeypatch.setattr(
+        pins,
+        "add_pins",
+        lambda *_args, **_kwargs: pytest.fail("nach dem Abbruch wurden Verbinder gebaut"),
+    )
+
+    with pytest.raises(OperationCancelled):
+        autosplit._support_after_cut(
+            crossed_overhangs(),
+            autosplit.Candidate("x", 0.0, 144.0, 1, 0.0),
+            profile,
+            orientation_candidates=3,
+            cancelled=signal,
+            connector_count=pins.PIN_COUNT,
+            connector_geometry=connector_geometry,
+        )
+
+
+def test_support_refinement_stops_after_adding_connectors(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connector_geometry = pins.capture_connector_geometry()
+    signal = CancelSignal()
+    original = pins.add_pins
+
+    def add_and_cancel(*args: object, **kwargs: object):
+        pair = original(*args, **kwargs)
+        signal.cancel()
+        return pair
+
+    monkeypatch.setattr(pins, "add_pins", add_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        autosplit._support_after_cut(
+            crossed_overhangs(),
+            autosplit.Candidate("x", 0.0, 144.0, 1, 0.0),
+            profile,
+            orientation_candidates=3,
+            cancelled=signal,
+            connector_count=pins.PIN_COUNT,
+            connector_geometry=connector_geometry,
+        )
+
+
+def test_support_scoring_uses_only_the_injected_connector_geometry(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Bewertung lädt und liest im Arbeiter kein veränderliches Register."""
+    from app.core.knowledge.parts import builtin
+    from app.core.knowledge.parts.registry import PartRegistry
+
+    connector_geometry = pins.capture_connector_geometry()
+
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("die Hintergrundbewertung griff auf das globale Bausteinregister zu")
+
+    monkeypatch.setattr(builtin, "load", forbidden)
+    monkeypatch.setattr(PartRegistry, "get", forbidden)
+    monkeypatch.setattr(PartRegistry, "all", forbidden)
+
+    support = autosplit._support_after_cut(
+        MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 40.0))),
+        autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0),
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=pins.PIN_COUNT,
+        connector_geometry=connector_geometry,
+    )
+
+    assert np.isfinite(support)
+
+
+def test_the_decomposition_path_checks_cancellation_before_vhacd(profile: Profile) -> None:
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        autosplit._from_decomposition(crossed_overhangs(), "x", (-10.0, 10.0), cancelled=signal)
+
+
+def test_the_decomposition_path_checks_cancellation_after_vhacd(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    signal = CancelSignal()
+    mesh = crossed_overhangs()
+
+    def decompose_and_cancel(_mesh: MeshData) -> list[MeshData]:
+        signal.cancel()
+        return [mesh, mesh]
+
+    monkeypatch.setattr(autosplit, "convex_parts", decompose_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        autosplit._from_decomposition(mesh, "x", (-10.0, 10.0), cancelled=signal)
+
+
+def test_one_cut_reports_unknown_total_until_the_plan_is_complete(profile: Profile) -> None:
+    """Eine Schnittsuche ist kein Anteil an einer bekannten Gesamtschnittzahl.
+
+    Ein 400-mm-Balken braucht auf diesem Profil genau einen Schnitt. Selbst in
+    diesem einfachen echten Lauf kennt ``split_to_fit`` die endgültige Zahl
+    aber erst, nachdem die Kinder geprüft wurden. Jeder Zwischenstand bleibt
+    deshalb unbestimmt; nur der vollständige Plan meldet eins.
+    """
+    seen: list[tuple[float, str]] = []
+
+    outcome = autosplit.split_to_fit(
+        bar(),
+        profile,
+        pins=0,
+        progress=lambda fraction, text: seen.append((fraction, text)),
+    )
+
+    assert len(outcome.cuts) == 1, "der Testkörper bildet einen echten Ein-Schnitt-Lauf"
+    assert seen[-1] == (1.0, "")
+    assert {fraction for fraction, _text in seen[:-1]} == {0.0}
+    assert any(text for _fraction, text in seen[:-1]), "der Balken nennt die laufende Arbeit"
+
+
+def test_cancellation_during_plane_search_starts_no_final_cut(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+
+    def find_and_cancel(*_args: object, **_kwargs: object) -> autosplit.Candidate:
+        signal.cancel()
+        return autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0)
+
+    monkeypatch.setattr(autosplit, "find_plane", find_and_cancel)
+    monkeypatch.setattr(
+        autosplit,
+        "_cut_in_two",
+        lambda *_args: pytest.fail("nach dem Abbruch begann noch der endgültige Schnitt"),
+    )
+
+    with pytest.raises(OperationCancelled):
+        autosplit.split_to_fit(bar(), profile, cancelled=signal)
+
+
+def test_cancellation_after_the_final_cut_starts_no_pin_plan(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    half = MeshData.of(trimesh.creation.box(extents=(200.0, 60.0, 40.0)))
+
+    def cut_and_cancel(*_args: object) -> tuple[MeshData, MeshData]:
+        signal.cancel()
+        return half, half
+
+    monkeypatch.setattr(
+        autosplit,
+        "find_plane",
+        lambda *_args, **_kwargs: autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0),
+    )
+    monkeypatch.setattr(autosplit, "_cut_in_two", cut_and_cancel)
+    monkeypatch.setattr(autosplit, "_pin_allowance", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(
+        pins,
+        "plan_pins",
+        lambda *_args, **_kwargs: pytest.fail("nach dem Abbruch begann noch die Stiftplanung"),
+    )
+
+    with pytest.raises(OperationCancelled):
+        autosplit.split_to_fit(bar(), profile, cancelled=signal)
+
+
+def test_cancelled_pin_allowance_starts_no_pin_plan(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    signal.cancel()
+    monkeypatch.setattr(
+        pins,
+        "plan_pins",
+        lambda *_args, **_kwargs: pytest.fail("nach dem Abbruch begann noch die Stiftplanung"),
+    )
+
+    with pytest.raises(OperationCancelled):
+        autosplit._pin_allowance(bar(), "x", profile, pins.PIN_COUNT, cancelled=signal)
+
+
+def test_pin_allowance_stops_after_pin_planning(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    original = pins.plan_pins
+
+    def plan_and_cancel(*args: object, **kwargs: object):
+        plan = original(*args, **kwargs)
+        signal.cancel()
+        return plan
+
+    monkeypatch.setattr(pins, "plan_pins", plan_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        autosplit._pin_allowance(bar(), "x", profile, pins.PIN_COUNT, cancelled=signal)
+
+
+def test_split_stops_after_final_connector_planning(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signal = CancelSignal()
+    original = pins.plan_pins
+    calls = 0
+
+    def plan_and_cancel_final(*args: object, **kwargs: object):
+        nonlocal calls
+        calls += 1
+        plan = original(*args, **kwargs)
+        if calls == 2:
+            signal.cancel()
+        return plan
+
+    monkeypatch.setattr(pins, "plan_pins", plan_and_cancel_final)
+    monkeypatch.setattr(
+        autosplit,
+        "find_plane",
+        lambda *_args, **_kwargs: autosplit.Candidate("x", 0.0, 2400.0, 1, 0.0),
+    )
+
+    with pytest.raises(OperationCancelled):
+        autosplit.split_to_fit(bar(), profile, max_parts=2, cancelled=signal)
+    assert calls == 2
+
+
+def test_plan_split_stops_after_counting_fitting_pins(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import split as split_core
+
+    signal = CancelSignal()
+    outcome = autosplit.split_to_fit(bar(), profile)
+    original = split_core.plan_pins
+
+    def plan_and_cancel(*args: object, **kwargs: object):
+        plan = original(*args, **kwargs)
+        signal.cancel()
+        return plan
+
+    monkeypatch.setattr(split_core, "split_to_fit", lambda *_args, **_kwargs: outcome)
+    monkeypatch.setattr(split_core, "plan_pins", plan_and_cancel)
+
+    with pytest.raises(OperationCancelled):
+        plan_split(bar(), "obj_1", profile, cancelled=signal)
+
+
+def test_final_progress_cancellation_applies_no_split(profile: Profile) -> None:
+    """Auch ein Abbruch am 100-Prozent-Signal lässt das Dokument unangetastet."""
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 400.0, "depth": 60.0, "height": 40.0})],
+    )
+    mesh = bar()
+    signal = CancelSignal()
+    before_ops = tuple(project.document.ops)
+    before_fits = tuple(project.document.fits)
+    before_transactions = tuple(project.document.transactions)
+
+    def cancel_at_the_end(fraction: float, _text: str) -> None:
+        if fraction >= 1.0:
+            signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        apply_split(
+            project.document,
+            mesh,
+            "obj_1",
+            profile,
+            pins=0,
+            cancelled=signal,
+            progress=cancel_at_the_end,
+        )
+
+    assert tuple(project.document.ops) == before_ops
+    assert tuple(project.document.fits) == before_fits
+    assert tuple(project.document.transactions) == before_transactions
+
+
+def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> None:
+    """Die Nahtsuche bewertet die Verbinder, die Auto Split wirklich baut.
+
+    Der analytische Körper erweitert den Balken aus ``crossed_overhangs`` auf
+    einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
+    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht deutlich; nach ihrem
+    Aufbau braucht die linke weniger Stützen. Genau diese Mutation hält fest,
+    dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    PARTS.all()
+    wide_beam = trimesh.creation.box(extents=(400.0, 22.0, 22.0))
+    wide_beam.apply_translation((0.0, 0.0, 11.0))
+    mesh = MeshData.of(trimesh.boolean.union([crossed_overhangs().raw, wide_beam]))
+    left = autosplit.Candidate("x", -3.25, 484.0, 1, 0.0)
+    right = autosplit.Candidate("x", 3.25, 484.0, 1, 0.0)
+
+    def final_support(candidate: autosplit.Candidate) -> float:
+        first, second = autosplit._cut_in_two(mesh, candidate)
+        assert first is not None and second is not None
+        plan = pins.plan_pins(mesh, candidate.plane, count=pins.PIN_COUNT, shape=pins.AUTO)
+        assert plan.shape == "dovetail"
+        pair = pins.add_pins(first, second, plan, profile, quality="draft")
+        return sum(
+            best_face_candidate(part, count=3, profile=profile).support_volume
+            for part in (pair.first, pair.second)
+        )
+
+    bare_left = autosplit._support_after_cut(
+        mesh, left, profile, orientation_candidates=3, cancelled=None
+    )
+    bare_right = autosplit._support_after_cut(
+        mesh, right, profile, orientation_candidates=3, cancelled=None
+    )
+    left_final = final_support(left)
+    right_final = final_support(right)
+    evaluated_left = autosplit._support_after_cut(
+        mesh,
+        left,
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=pins.PIN_COUNT,
+        connector_geometry=pins.capture_connector_geometry(),
+    )
+    evaluated_right = autosplit._support_after_cut(
+        mesh,
+        right,
+        profile,
+        orientation_candidates=3,
+        cancelled=None,
+        connector_count=pins.PIN_COUNT,
+        connector_geometry=pins.capture_connector_geometry(),
+    )
+
+    assert bare_right < bare_left * 0.5
+    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE)
+    assert evaluated_left == pytest.approx(left_final)
+    assert evaluated_right == pytest.approx(right_final)
+
+    chosen = autosplit.find_plane(mesh, profile)
+
+    assert chosen is not None
+    assert chosen.position == pytest.approx(left.position)
 
 
 def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:
@@ -468,6 +1041,97 @@ def connector_body(depth: float, face: float) -> MeshData:
 
 
 CONNECTOR_PLANE = SectionPlane(normal=(1.0, 0.0, 0.0), position=0.0)
+
+
+@pytest.mark.parametrize("shape", ["round", "dovetail", "snap"])
+def test_batched_connectors_equal_the_sequential_product_geometry(
+    shape: str, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Produktboolesche ergeben dieselben Körper wie bisher vier.
+
+    Rundstift, Schwalbenschwanz und Schnapper durchlaufen denselben echten
+    Baustein- und Booleschen Weg. Verglichen werden nicht nur Volumen, sondern
+    ihr vollständiges gemeinsames Volumen, Wasserdichtheit, Merkmale, Befunde
+    und Rückfallstufe. Die Dreiecksaufteilung der ebenen Naht darf abweichen.
+    """
+    from app.core.geom.boolean import shared_volume
+    from app.core.knowledge.parts import PARTS
+
+    PARTS.all()
+    whole = connector_body(40.0, 40.0)
+    candidate = autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0)
+    first, second = autosplit._cut_in_two(whole, candidate)
+    assert first is not None and second is not None
+    plan = pins.plan_pins(whole, CONNECTOR_PLANE, count=2, shape=shape)
+    assert plan.count == 2
+
+    sequential = pins.add_pins(first, second, plan, profile, quality="draft")
+    calls: list[str] = []
+    original = pins.boolean
+
+    def record(kind: str, meshes: list[MeshData], **kwargs: object):
+        calls.append(kind)
+        return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pins, "boolean", record)
+    batched = pins.add_pins(first, second, plan, profile, quality="draft", batch=True)
+
+    assert calls == ["union", "difference"]
+    assert batched.solver == sequential.solver
+    assert batched.findings == sequential.findings
+    assert batched.pin_features == sequential.pin_features
+    assert batched.bore_features == sequential.bore_features
+    for result, reference in (
+        (batched.first, sequential.first),
+        (batched.second, sequential.second),
+    ):
+        assert result.is_watertight == reference.is_watertight is True
+        assert result.volume == pytest.approx(reference.volume, rel=1e-12)
+        assert shared_volume(result.raw, reference.raw) == pytest.approx(
+            abs(reference.volume), rel=1e-12
+        )
+
+
+def test_failed_connector_batch_uses_the_sequential_fallback(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der schnelle Versuch darf die bewährte Rückfallkette nie ersetzen."""
+    from app.core.geom.boolean import shared_volume
+    from app.core.knowledge.parts import PARTS
+
+    PARTS.all()
+    whole = connector_body(40.0, 40.0)
+    candidate = autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0)
+    first, second = autosplit._cut_in_two(whole, candidate)
+    assert first is not None and second is not None
+    plan = pins.plan_pins(whole, CONNECTOR_PLANE, count=2, shape="round")
+    reference = pins.add_pins(first, second, plan, profile, quality="draft")
+    original = pins.boolean
+    calls: list[tuple[str, object]] = []
+
+    def fail_the_batch_once(kind: str, meshes: list[MeshData], **kwargs: object):
+        calls.append((kind, kwargs.get("stages")))
+        if len(calls) == 1:
+            raise BooleanFailedError(detail="erzwungene Batch-Gegenprobe", attempted=("direct",))
+        return original(kind, meshes, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(pins, "boolean", fail_the_batch_once)
+    result = pins.add_pins(first, second, plan, profile, quality="draft", batch=True)
+
+    assert calls == [
+        ("union", ("direct",)),
+        ("union", None),
+        ("difference", None),
+        ("union", None),
+        ("difference", None),
+    ]
+    assert result.solver == reference.solver
+    assert shared_volume(result.first.raw, reference.first.raw) == pytest.approx(
+        abs(reference.first.volume), rel=1e-12
+    )
+    assert shared_volume(result.second.raw, reference.second.raw) == pytest.approx(
+        abs(reference.second.volume), rel=1e-12
+    )
 
 
 def test_auto_connector_uses_a_dovetail_on_a_roomy_joining_face() -> None:
@@ -1099,6 +1763,43 @@ def test_auto_split_leaves_no_dead_fit_after_two_cuts(profile: Profile) -> None:
     live = set(applied.object_ids)
     for fit in project.document.fits:
         assert fit.a.object_id in live and fit.b.object_id in live, fit.name
+
+
+def test_one_undo_restores_a_complete_multi_cut_auto_split(profile: Profile) -> None:
+    """Mehrere Auto-Split-Nähte sind genau eine History-Transaktion."""
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 600.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(600.0, 60.0, 40.0)))
+    before_ops = tuple(project.document.ops)
+    before_fits = tuple(project.document.fits)
+    before_transactions = tuple(project.document.transactions)
+
+    original = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert set(original.scene.objects) == {"obj_1"}
+    assert not autosplit.fits(original.scene.objects["obj_1"].mesh, profile)
+
+    applied = apply_split(project.document, block, "obj_1", profile)
+
+    assert len(applied.object_ids) == 3
+    assert len(project.document.transactions) == len(before_transactions) + 1
+    assert len(project.document.transactions[-1].ops) == 2
+    assert project.document.fits
+
+    History(project.document).undo()
+    restored = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert tuple(project.document.ops) == before_ops
+    assert tuple(project.document.fits) == before_fits
+    assert tuple(project.document.transactions) == before_transactions
+    assert set(restored.scene.objects) == {"obj_1"}
+    restored_mesh = restored.scene.objects["obj_1"].mesh
+    assert restored_mesh.volume == pytest.approx(block.volume)
+    assert restored_mesh.bounds.size == pytest.approx(block.bounds.size)
+    assert not autosplit.fits(restored_mesh, profile)
 
 
 def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:
