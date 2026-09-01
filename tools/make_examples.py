@@ -28,6 +28,7 @@ from app.core.types import Parameter, Source, SourceKind
 from app.i18n import TranslatableText, _
 
 CORPUS = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
+EXAMPLE_GENERATION_DATE = "2026-08-31"
 
 
 def with_source(project: Project, name: str, mesh: str, kind: SourceKind = "import") -> None:
@@ -148,6 +149,12 @@ def way_three() -> Project:
     # er gehört zur Provenienz (`SourceOrigin.prompt`) und beschreibt, was
     # jemand eingegeben hat, nicht was das Ergebnis heißt.
     generation = from_text(project, backend, "eine kleine Figur", seed=7, name="Figur")
+    source = project.document.sources[generation.source_id]
+    assert source.origin is not None
+    project.document.sources[generation.source_id] = dataclasses.replace(
+        source,
+        origin=dataclasses.replace(source.origin, retrieved=EXAMPLE_GENERATION_DATE),
+    )
 
     History(project.document).apply(
         _("Auf das Bett"), [OperationDraft(op="place_on_bed", inputs=(generation.object_id,))]
