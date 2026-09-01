@@ -1,20 +1,13 @@
-"""Die Formatprüfung der geteilten Bausteine — Missbrauchs- und Grenzfälle.
-
-Seit Kunden ohne Sichtung hochladen (Robert, 30.08.2026), ist diese Prüfung
-**die erste und einzige vor der Veröffentlichung**. Was hier durchkommt, steht
-in der Galerie.
-
-Jeder Fall hier ist eine Datei, die jemand hochladen könnte — nicht ein
-Aufruf, den ein Test sich zurechtlegt. Der Unterschied ist gemessen teuer: Ein
-selbst gebautes Projekt enthält, was der Test hineinlegt, ein ausgeliefertes
-enthält, was die Anwendung erzeugt, und acht von neun Beispielen fielen einmal
-an genau dieser Naht.
-"""
+"""Die lokale Bausteindatei — Format-, Import- und Exportgrenzen."""
 
 from __future__ import annotations
 
 import base64
+import io
 import json
+import socket
+import urllib.request
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -22,10 +15,12 @@ import pytest
 from app.core.bootstrap import load_operations
 from app.core.knowledge.parts.shared import (
     MAX_DOC_CHARS,
+    MAX_FILE_BYTES,
     MAX_TITLE_CHARS,
-    MAX_UPLOAD_BYTES,
-    for_upload,
+    export_bytes,
+    import_file,
     inspect,
+    read_recipe_file,
     rules,
 )
 
@@ -78,7 +73,7 @@ def codes(findings: list) -> set[str]:
 def test_the_list_of_allowed_operations_comes_from_the_registry() -> None:
     """Von Hand geführt wäre sie beim nächsten Zuwachs falsch (Konzept §3.1).
 
-    Die Börse wiese dann Rezepte ab, die die Anwendung selbst erzeugt hat — und
+    Die Dateiprüfung wiese dann Rezepte ab, die die Anwendung selbst erzeugt hat — und
     der Kunde sähe nur, dass sein Baustein verschwindet. Deshalb ist die Liste
     abgeleitet und nicht aufgezählt.
     """
@@ -175,7 +170,7 @@ def test_an_overlong_text_and_a_link_are_both_refused() -> None:
     """Werbung braucht Platz und einen Link (Konzept §3.2).
 
     Beides ist begrenzt, und beides wird einzeln gemeldet: Wer einen zu langen
-    Text **mit** Link schickt, soll nicht zweimal hochladen müssen, um beide
+    Text **mit** Link weitergibt, soll nicht zweimal nachbessern müssen, um beide
     Gründe zu erfahren.
     """
     long_title = inspect(recipe(title="x" * (MAX_TITLE_CHARS + 1)))
@@ -206,16 +201,44 @@ def test_a_file_over_the_size_limit_is_refused_before_anything_else() -> None:
     zuerst zu prüfen ist keine Optimierung, sondern die Zusage: Eine Datei, die
     zu groß ist, wird nicht erst geparst.
     """
-    huge = b'{"name": "x", "title": "' + b"z" * (MAX_UPLOAD_BYTES + 10) + b'"}'
+    huge = b'{"name": "x", "title": "' + b"z" * (MAX_FILE_BYTES + 10) + b'"}'
     findings = inspect(huge)
-    assert "upload_too_large" in codes(findings), findings
+    assert codes(findings) == {"file_too_large"}, findings
+
+
+def test_reading_stops_one_byte_after_the_file_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine fremde Datei bekommt keine unbegrenzte Speicherzusage."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import shared
+
+    monkeypatch.setattr(shared, "MAX_FILE_BYTES", 64)
+    requested: list[int] = []
+
+    class RecordingStream(io.BytesIO):
+        def read(self, size: int = -1) -> bytes:
+            requested.append(size)
+            return super().read(size)
+
+    stream = RecordingStream(b"x" * 1000)
+
+    def opened(_path: Path, mode: str) -> io.BytesIO:
+        assert mode == "rb"
+        return stream
+
+    monkeypatch.setattr(Path, "open", opened)
+
+    with pytest.raises(ValidationError) as refused:
+        read_recipe_file("beliebig.json")
+
+    assert requested == [65]
+    assert refused.value.constraint == "part_file_invalid"
 
 
 def test_a_payload_that_is_not_base64_is_refused() -> None:
     """Anhänge werden gemessen, nicht ausgeführt — aber sie müssen lesbar sein.
 
     Ein Anhang, der kein base64 ist, kommt nie bei einem Empfänger an; ihn
-    anzunehmen hieße, eine Kachel zu veröffentlichen, die beim ersten Öffnen
+    anzunehmen hieße, eine Datei weiterzugeben, die beim ersten Öffnen
     scheitert.
     """
     good = base64.b64encode(b"solid netz\n").decode("ascii")
@@ -242,87 +265,6 @@ def test_every_finding_is_reported_at_once() -> None:
     assert len(findings) >= 4, f"vier Gründe, gemeldet wurden {len(findings)}: {findings}"
 
 
-def test_the_file_beside_the_php_matches_what_the_application_knows() -> None:
-    """Die erzeugte Datei ist aktuell — sonst prüfen zwei Seiten Verschiedenes.
-
-    **Eine erzeugte Datei, die niemand neu erzeugt, ist beim nächsten Zuwachs
-    falsch.** Genau das ist am 27.08.2026 einem Paketbau passiert: Neun Tests
-    fragten eingecheckte Beispiele ab und blieben grün, während das Werkzeug,
-    das sie erzeugt, seit fünf Stunden etwas anderes geschrieben hätte.
-
-    Hier wiegt es schwerer als dort. Die PHP-Seite liest diese Datei, und wenn
-    sie eine Operation nicht kennt, weist sie ein Rezept ab, das die Anwendung
-    selbst geschrieben hat — der Kunde sieht dann nur, dass sein Baustein
-    verschwindet, ohne einen Grund, den er beheben könnte.
-    """
-    import subprocess
-    import sys
-    from pathlib import Path
-
-    from tools.make_shared_rules import TARGET, written
-
-    assert TARGET.exists(), (
-        f"{TARGET.name} fehlt — einmal `python tools/make_shared_rules.py` genügt"
-    )
-    assert TARGET.read_text(encoding="utf-8") == written(), (
-        f"{TARGET.name} ist nicht mehr das, was die Anwendung sagt. "
-        "Einmal `python tools/make_shared_rules.py`, dann stimmt es wieder."
-    )
-
-    # Und zweimal erzeugen ergibt zweimal dasselbe: Ohne diese Zusage meldete
-    # der Wächter oben irgendwann einen Unterschied, den niemand gemacht hat.
-    assert written() == written()
-
-    # Das Werkzeug läuft auch als eigener Prozess — die Suite hat das Register
-    # schon geladen, ein frischer Aufruf nicht, und genau daran ist die
-    # Erlaubnisliste schon einmal leer geblieben.
-    root = Path(__file__).parent.parent
-    result = subprocess.run(
-        [sys.executable, str(root / "tools" / "make_shared_rules.py")],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        cwd=root,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert TARGET.read_text(encoding="utf-8") == written(), (
-        "der eigene Prozess schrieb etwas anderes als die Suite — "
-        "vermutlich fehlt ihm ein load_operations()"
-    )
-
-
-def test_the_rules_file_carries_what_both_sides_need() -> None:
-    """Was in der Datei fehlt, kann die PHP-Seite nicht prüfen.
-
-    Der Wächter darüber hält beide Seiten **gleich**; dieser hier hält sie
-    **vollständig**. Eine Regel, die nur im Python steht, ist eine Prüfung, die
-    der Server nicht macht — und der Server ist laut Konzept die erste und
-    einzige Instanz vor der Veröffentlichung.
-    """
-    import json as _json
-    from pathlib import Path
-
-    from tools.make_shared_rules import TARGET
-
-    known = _json.loads(Path(TARGET).read_text(encoding="utf-8"))
-    for key in (
-        "operations",
-        "recipe_keys",
-        "recipe_format_versions",
-        "max_upload_bytes",
-        "max_title_chars",
-        "max_doc_chars",
-    ):
-        assert key in known, f"„{key}“ fehlt in der Datei, die der Server liest"
-        assert known[key], f"„{key}“ steht leer da — eine leere Regel prüft nichts"
-
-    # Und die Prüfung der Anwendung läuft gegen genau diese Datei: Was hier
-    # steht, ist keine zweite Wahrheit, sondern dieselbe.
-    assert inspect(recipe(), known=known) == []
-    assert inspect(recipe(format_version=99), known=known)
-
-
 # --- Der Anschluss: die Anwendung weist ab, was die Prüfung abweist -----------
 
 
@@ -331,7 +273,7 @@ def a_recipe(**changes: Any) -> Any:
 
     Der Baukasten oben (:func:`recipe`) baut die **Datei**; dieser baut das
     **Objekt**, aus dem sie entsteht. Beide werden gebraucht, und zwar an den
-    zwei Enden derselben Kette: Was der Server sieht, sind Bytes; was der
+    zwei Enden derselben Kette: Was die Dateiprüfung sieht, sind Bytes; was der
     Kunde in der Hand hat, ist ein ``Recipe``.
     """
     from app.core.knowledge.parts.recipe import Recipe
@@ -373,11 +315,103 @@ def test_the_share_file_comes_out_of_one_door_and_that_door_checks() -> None:
     steht hier zuerst die Zusicherung, dass überhaupt etwas herauskommt: echte
     Bytes, gültiges JSON, und von der Prüfung selbst nicht beanstandet.
     """
-    payload = for_upload(a_recipe())
+    payload = export_bytes(a_recipe())
 
     assert payload, "aus einem gültigen Rezept muss eine Datei entstehen"
     assert json.loads(payload)["name"] == "halter"
     assert inspect(payload) == [], "die Tür gibt heraus, was ihre eigene Prüfung ablehnt"
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        pytest.param("Baustein mit Leerzeichen.json", id="Windows-Leerzeichen"),
+        pytest.param("größe_µ.json", id="Linux-Unicode"),
+        pytest.param("Größe.json", id="macOS-Normalform"),
+    ],
+)
+def test_local_export_import_round_trip_is_portable_and_never_uses_the_network(
+    filename: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bytes hinaus, lokale Datei hinein — ohne Konto, URL oder Netzaufruf."""
+    from app.core.knowledge.parts.recipe import IMPORTED_SOURCE
+    from app.core.knowledge.parts.registry import PartRegistry
+    from app.core.registry import Registry
+
+    def network_forbidden(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("Der lokale Bausteindatei-Weg hat das Netzwerk aufgerufen.")
+
+    monkeypatch.setattr(socket, "create_connection", network_forbidden)
+    monkeypatch.setattr(urllib.request, "urlopen", network_forbidden)
+
+    target = tmp_path / filename
+    target.write_bytes(export_bytes(a_recipe()))
+    parts, registry = PartRegistry(), Registry()
+
+    assert import_file(target, parts, registry) == []
+    assert parts.get("halter").source == IMPORTED_SOURCE
+
+
+@pytest.mark.parametrize(
+    ("payload", "named"),
+    [
+        pytest.param(
+            lambda: json.dumps({**json.loads(recipe()), "__class__": "os.system"}).encode(),
+            "__class__",
+            id="unbekannter Schlüssel",
+        ),
+        pytest.param(
+            lambda: recipe(
+                document={
+                    "format_version": 19,
+                    "ops": [{"id": 1, "op": "run_shell_command", "params": {}}],
+                }
+            ),
+            "run_shell_command",
+            id="unbekannte Operation",
+        ),
+    ],
+)
+def test_import_rejects_unknown_content_before_registration(
+    payload: Any,
+    named: str,
+    tmp_path: Path,
+) -> None:
+    """Eine abgelehnte Datei erzeugt weder Katalogeintrag noch Erfolgslage."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts.registry import PartRegistry
+    from app.core.registry import Registry
+
+    target = tmp_path / "fremd.json"
+    target.write_bytes(payload())
+    parts, registry = PartRegistry(), Registry()
+
+    with pytest.raises(ValidationError) as refused:
+        import_file(target, parts, registry)
+
+    assert named in refused.value.values["findings"]
+    assert not parts.has("halter")
+
+
+def test_import_keeps_the_local_recipe_and_marks_the_arriving_copy(tmp_path: Path) -> None:
+    """„Lokal gewinnt" bleibt wahr; die fremde Fassung steht erkennbar daneben."""
+    from app.core.knowledge.parts.recipe import IMPORTED_SOURCE, fingerprint, register
+    from app.core.knowledge.parts.registry import PartRegistry
+    from app.core.registry import Registry
+
+    parts, registry = PartRegistry(), Registry()
+    local = a_recipe(doc="lokaler Stand")
+    register(local, parts, registry)
+    local_mark = fingerprint(local)
+
+    target = tmp_path / "anderer Stand.json"
+    target.write_bytes(export_bytes(a_recipe(doc="importierter Stand")))
+    assert import_file(target, parts, registry) == []
+
+    assert parts.get("halter").version == local_mark
+    assert parts.get("halter_imported").source == IMPORTED_SOURCE
 
 
 @pytest.mark.parametrize(
@@ -396,8 +430,8 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
     """Nicht „die Prüfung kann prüfen", sondern „die Anwendung weist ab".
 
     Der Unterschied ist der ganze Punkt. ``inspect`` stand eine Stunde lang
-    vollständig da — zwölf Grenzfälle, drei Wächter, eine Regeldatei, die der
-    Server liest — und hatte **keinen einzigen Aufrufer**: gemessen mit
+    vollständig da — zwölf Grenzfälle und drei Wächter — und hatte **keinen
+    einzigen Aufrufer**: gemessen mit
     ``grep`` über den ganzen Baum, ein Treffer, und der galt ``rules``. Eine
     Kette endet am letzten Glied, und das letzte Glied fehlte.
 
@@ -411,7 +445,7 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
     faulty = a_recipe(**changes)
 
     with pytest.raises(ValidationError) as refused:
-        for_upload(faulty)
+        export_bytes(faulty)
 
     assert refused.value.values["findings"], "die Absage nennt den Grund nicht"
     assert refused.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“ (Regel 17)"
@@ -421,10 +455,10 @@ def test_the_application_refuses_to_hand_out_what_the_check_refuses(
 
 
 def test_the_licences_come_from_the_recipe_core_not_from_a_second_list() -> None:
-    """Die Wertemenge gehört dem Kern; die Börse gibt heraus, was sie vorfindet.
+    """Die Wertemenge gehört dem Kern; die Dateiprüfung leitet sie daraus ab.
 
-    Andersherum — die Börse führt die Liste, der Kern liest sie — wäre der Kern
-    von der Börse abhängig, und das ist die falsche Richtung. Der Test hält die
+    Andersherum — der Dateiprüfer führt die Liste, der Kern liest sie — wäre der
+    Kern vom Austauschformat abhängig. Der Test hält die
     Richtung fest, nicht die Werte: Wer eine vierte Lizenz zulässt, ändert eine
     Zeile in ``recipe.py`` und diese Liste zieht nach.
     """
@@ -456,7 +490,7 @@ def test_the_check_asks_whether_a_value_is_allowed_never_whether_it_is_there(
     **eine Adresse ist keine Werbung:** ``Recipe.author`` ist ausdrücklich „ein
     Name, ein Kürzel, eine Adresse", also gilt dort das Link-Verbot aus
     ``FORBIDDEN_TEXT`` nicht — das ``<`` verbietet ein eigenes Muster weiter,
-    denn die Börse zeigt das Feld öffentlich.
+    denn fremde Dateien können das Feld in der Oberfläche anzeigen.
 
     Ein gemeinsames Muster für Titel und Autor hätte eines von beiden falsch
     entschieden, und zwar still.
@@ -475,153 +509,3 @@ def test_a_recipe_without_licence_or_author_passes() -> None:
     """
     assert "license" not in json.loads(recipe())
     assert inspect(recipe()) == []
-
-
-def test_the_cases_on_disk_still_say_what_the_check_says_today() -> None:
-    """Die Vergleichsdateien für die Server-Seite altern, wenn niemand sie neu
-    erzeugt.
-
-    Sie liegen im Repository, weil an diesem Projekt drei Maschinen arbeiten
-    und wer die PHP-Seite prüft, nicht an dem Rechner sitzt, der sie erzeugt
-    hat. Damit sind sie ein eingechecktes Erzeugnis — und das überlebt seinen
-    Erzeuger: Am 27.08.2026 hat genau diese Sorte einen Paketbau auf vier
-    Plattformen gekostet, weil zwischen zwei Läufen fünf Stunden lagen.
-
-    **Gelesen wird von der Platte, nicht aus dem Werkzeug.** Ein Vergleich von
-    ``cases()`` gegen ``verdicts()`` liefe im selben Prozess durch dieselbe
-    Funktion und wäre immer grün — der Sollwert käme aus dem Prüfling. Der
-    Test nimmt deshalb die Bytes, die eingecheckt sind, und fragt die heutige
-    Prüfung.
-    """
-    from pathlib import Path as _Path
-
-    from tools.make_shared_cases import TARGET
-
-    folder = _Path(TARGET)
-    if not folder.exists():
-        pytest.skip("Die Fälle sind noch nicht erzeugt — `python tools/make_shared_cases.py`")
-
-    expected = json.loads((folder / "erwartet.json").read_text(encoding="utf-8"))
-    assert expected, "das abgelegte Urteil ist leer — dann vergleicht die Server-Seite nichts"
-    assert any(findings for findings in expected.values()), "kein einziger Fall wird abgewiesen"
-    assert any(not findings for findings in expected.values()), (
-        "kein einziger Fall kommt durch — davon ist eine Server-Seite, die alles "
-        "abweist, nicht zu unterscheiden"
-    )
-
-    files = sorted(folder.glob("*.bin"))
-    assert {path.stem for path in files} == set(expected), (
-        "Dateien und Urteil gehen auseinander. Einmal "
-        "`python tools/make_shared_cases.py`, dann stimmt es wieder."
-    )
-
-    def as_data(findings: list) -> list[dict[str, object]]:
-        """Dieselbe Gestalt wie in der Datei — Schlüssel und Werte, kein Satz.
-
-        Verglichen wird, was die Server-Seite vergleicht. Über die **Sätze** zu
-        vergleichen wäre seit der gemeinsamen Textquelle wertlos: Beide Seiten
-        holen dann denselben Satz aus derselben Datei, und der Vergleich
-        stimmt immer.
-        """
-        return [{"code": one.code, "values": one.values} for one in findings]
-
-    drifted = {
-        path.stem: (expected[path.stem], as_data(inspect(path.read_bytes())))
-        for path in files
-        if as_data(inspect(path.read_bytes())) != expected[path.stem]
-    }
-    assert not drifted, (
-        "Das abgelegte Urteil ist nicht mehr das, was die Prüfung sagt — die "
-        f"Server-Seite vergliche gegen einen alten Stand: {sorted(drifted)}"
-    )
-
-
-# --- Die Sätze, die der Server spricht ---------------------------------------
-
-
-def _shared_texts_file():
-    from tools.make_shared_texts import TARGET
-
-    return TARGET
-
-
-def test_the_sentences_beside_the_php_are_what_the_core_says() -> None:
-    """Eine erzeugte Datei, die niemand neu erzeugt, ist beim nächsten Satz falsch.
-
-    Dieselbe Zusicherung wie für ``shared-rules.json`` und aus demselben Grund
-    — nur wiegt sie hier schwerer: Die Regeldatei entscheidet, was abgewiesen
-    wird, diese hier entscheidet, **was der Kunde liest**. Ein Satz, der im
-    Kern geändert und hier nicht nachgezogen wurde, steht auf dem Server in
-    seiner alten Fassung, und keine Prüfung dort merkt es.
-    """
-    from tools.make_shared_texts import written
-
-    ziel = _shared_texts_file()
-    assert ziel.exists(), (
-        "shared-texts.json fehlt. Sie ist erzeugt und eingecheckt — einmal "
-        "`python tools/make_shared_texts.py`."
-    )
-    assert ziel.read_text(encoding="utf-8") == written(), (
-        "shared-texts.json ist nicht mehr das, was der Kern sagt. Einmal "
-        "`python tools/make_shared_texts.py`, dann stimmt es wieder."
-    )
-
-
-def test_every_sentence_the_server_asks_for_exists_and_the_other_way_round() -> None:
-    """Beide Richtungen, und die zweite ist die, die sonst niemand prüft.
-
-    Ein **fehlender** Schlüssel ist eine leere Meldung beim Kunden: PHP fragt
-    ``shared_text('comment_empty')``, die Datei kennt ihn nicht, und der Kunde
-    liest den Schlüsselnamen statt eines Satzes. Ein **überzähliger** ist
-    Arbeit für sechs Sprachen ohne Leser — billiger, aber er wächst, und in
-    einem Jahr weiß niemand mehr, welche der 39 Sätze noch jemand ausgibt.
-
-    **Die Grundmenge wird gezählt, bevor gefiltert wird.** Solange die
-    PHP-Seite ihre Sätze noch als deutsche Literale trägt, findet die Suche
-    null Aufrufe — und ein Verbotstest über einer leeren Menge ist immer grün.
-    Er hält deshalb an und sagt es, statt zu bestehen.
-    """
-    import json as _json
-    import re as _re
-    from pathlib import Path as _Path
-
-    ziel = _shared_texts_file()
-    assert ziel.exists(), (
-        "shared-texts.json fehlt. Sie ist erzeugt und eingecheckt — einmal "
-        "`python tools/make_shared_texts.py`."
-    )
-
-    tabellen = _json.loads(ziel.read_text(encoding="utf-8"))
-    assert tabellen, "die Satzliste ist leer"
-    vorhanden = set(next(iter(tabellen.values())))
-    assert vorhanden, "die Satzliste kennt keinen einzigen Schlüssel"
-
-    api = _Path("website/api")
-    gefragt: set[str] = set()
-    for datei in sorted(api.glob("*.php")):
-        # **Alle drei Zugänge, nicht nur der offensichtliche.** Die Mailtexte
-        # laufen über ``shared_mail_body``, das ``shared_text`` ruft und die
-        # Zeilenenden umsetzt — ein Muster nur auf ``shared_text`` meldete sie
-        # als „Sätze, die niemand ausgibt", und sie standen in jeder Mail.
-        # Dasselbe noch einmal bei den Prüfbefunden: Die PHP-Seite baut sie mit
-        # ``shared_finding('…')`` und übersetzt erst am Ausgang — der Schlüssel
-        # steht literal da, nur in einer anderen Funktion.
-        gefragt |= set(
-            _re.findall(
-                r"shared_(?:text|mail_body|finding)\(\s*'([a-z0-9_]+)'",
-                datei.read_text("utf-8"),
-            )
-        )
-
-    assert gefragt, (
-        "Kein einziger shared_text()-Aufruf in website/api — dann prüft dieser "
-        "Test nichts. Trägt die PHP-Seite ihre Sätze noch als Literale?"
-    )
-
-    fehlend = sorted(gefragt - vorhanden)
-    assert not fehlend, (
-        f"PHP fragt Sätze an, die es nicht gibt — der Kunde liest den Schlüssel: {fehlend}"
-    )
-
-    tot = sorted(vorhanden - gefragt)
-    assert not tot, f"Sätze, die niemand ausgibt — sechs Sprachen ohne Leser: {tot}"

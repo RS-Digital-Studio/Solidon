@@ -262,11 +262,11 @@ _NOT_A_RANGE = frozenset(
         "not_a_twin", "not_outline", "not_step", "not_upright", "one_body", "point_count",
         "repair_not_for_exact_body", "required",
         "scheme",
-        # Die Börse weist eine Datei aus mehreren Gründen ab — Link im Text,
+        # Die Dateiprüfung weist aus mehreren Gründen ab — Link im Text,
         # unbekannte Operation, Titel zu lang. Eine Zahl ist nur einer davon,
         # und der Titel „Ein Wert liegt außerhalb des zulässigen Bereichs"
         # stünde über den anderen falsch.
-        "shared_rules",
+        "part_file_invalid", "part_file_unreadable",
         "sweep_needs_xy", "target_behind", "target_count", "target_parallel", "toml",
         "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",

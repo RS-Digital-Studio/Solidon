@@ -81,11 +81,9 @@ RECIPES_DIRNAME = "recipes"
 
 #: Unter welchen Lizenzen ein Rezept weitergegeben werden darf.
 #:
-#: **Die Quelle steht hier und nicht in der Börse.** Eine feste Wertemenge an
-#: einem Rezeptfeld ist Rezept-Domäne; führte die Prüfseite sie, hinge der Kern
-#: an der Börse, und das ist die falsche Richtung (abgestimmt mit der
-#: Börsen-Sitzung, 30.08.2026). ``shared.rules()`` liest diese Konstante und
-#: gibt sie an die PHP-Seite weiter, damit beide Seiten dieselbe Liste prüfen.
+#: **Die Quelle steht hier und nicht in einem Dateidialog.** Eine feste
+#: Wertemenge an einem Rezeptfeld ist Rezept-Domäne. ``shared.rules()`` liest
+#: diese Konstante, damit Prüfung und Rezept dieselben Werte verwenden.
 #:
 #: Alle drei erlauben die Weitergabe und die kommerzielle Nutzung — was ein
 #: Kunde herunterlädt, darf er drucken und verkaufen. Was sie unterscheiden,
@@ -119,14 +117,14 @@ RECIPE_SOURCE = "recipe"
 #: gehört der Datei, mit der es kam, nicht dieser Maschine.
 TRAVELLED_SOURCE = "travelled"
 
-#: Herkunft eines Rezepts, das aus der Tauschbörse eingelesen wurde.
+#: Herkunft eines Rezepts, das einzeln aus einer Datei eingelesen wurde.
 #:
 #: **Es kam nicht mit einer Projektdatei, und das ist der Unterschied.** Beide
 #: Wege nehmen dasselbe :func:`adopt`, aber die Katalogzeile sagt beim einen
-#: „kam mit einer Projektdatei und bleibt bei ihr" — für eine Börsendatei wäre
+#: „kam mit einer Projektdatei und bleibt bei ihr" — für eine einzelne Datei wäre
 #: das eine falsche Herkunft, an genau der Stelle, an der §32 eine wahre
-#: verlangt. Abgestimmt mit der Börsen-Sitzung am 31.08.2026.
-PUBLISHED_SOURCE = "published"
+#: verlangt.
+IMPORTED_SOURCE = "imported"
 
 #: Wo Rezepte in einer Projektdatei liegen (Konzept §17.1).
 CONTAINER_PREFIX = "recipes/"
@@ -195,7 +193,7 @@ class Recipe:
     Dokumentformat aus demselben Grund schon so."""
     author: str = ""
     """Wer das Rezept gebaut hat, oder leer. Freitext — ein Name, ein
-    Kürzel, eine Adresse; die Börse prüft die Länge, nicht die Gestalt."""
+    Kürzel, eine Adresse; die Dateiprüfung begrenzt die Länge, nicht die Gestalt."""
     format_version: int = FORMAT_VERSION
     range_report: Any = None
     """Der letzte Bereichstest (:mod:`range_check`), oder ``None``.
@@ -730,7 +728,7 @@ def capture(
 
     Die Naht zu Paket E4: Der Dialog sammelt Name, Titel, Gruppe, die
     gewählten Schritte, die freigegebenen Parameter samt ihren Angaben, die
-    benannten Merkmale und — für die Börse — Lizenz und Autor. Hier entsteht
+    benannten Merkmale und — für die Weitergabe — Lizenz und Autor. Hier entsteht
     daraus das Rezept, und die **Probe läuft sofort**: einmal auswerten, genau
     ein Körper, jedes benannte Merkmal vorhanden (Konzept §18a und §18d). Was
     hier durchgeht, steht danach im Katalog; was nicht, sagt beim Speichern
@@ -857,8 +855,8 @@ def adopt(
     """Nimmt ein mitgereistes Rezept auf — „lokal schlägt mitgereist, immer".
 
     **``catalog_source`` sagt, woher die Datei kam.** Die Vorgabe ist der
-    mitgereiste Weg, für den diese Funktion gebaut wurde; der Importweg der
-    Börse reicht :data:`PUBLISHED_SOURCE` durch. Die Aufnahme ist in beiden
+    mitgereiste Weg, für den diese Funktion gebaut wurde; der einzelne
+    Dateiimport reicht :data:`IMPORTED_SOURCE` durch. Die Aufnahme ist in beiden
     Fällen dieselbe — was sich unterscheidet, ist die Zeile, die der Katalog
     darüber schreibt, und die soll nicht die falsche Herkunft behaupten. Das
     Argument heißt nicht ``source``, weil das hier schon das Register ist.
@@ -901,7 +899,8 @@ def adopt(
             local = source.get(name)
             if local.version == mark:
                 return announced
-            name = f"{arrived.name}_travelled"
+            suffix = "imported" if catalog_source == IMPORTED_SOURCE else "travelled"
+            name = f"{arrived.name}_{suffix}"
             # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
             # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
             # den unumbenannten Abdruck wäre nie gleich — jedes erneute

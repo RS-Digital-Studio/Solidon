@@ -105,9 +105,8 @@ def test_a_licence_does_not_change_the_version(profile: Profile) -> None:
     plötzlich ein anderes: Sein Projekt meldete beim Öffnen einen geänderten
     Baustein, den niemand geometrisch geändert hat.
 
-    Abgestimmt mit der Börsen-Sitzung am 30.08.2026; ihre Prüfseite benutzt
-    den Fingerabdruck nicht als Identität, es spricht also auch von dort
-    nichts dagegen.
+    Die lokale Dateiprüfung benutzt den Fingerabdruck nicht als Identität;
+    Metadaten und Geometrie bleiben damit sauber getrennt.
     """
     ohne = _recipe(profile)
     mit = dataclasses.replace(ohne, license="CC0-1.0", author="Robert")
@@ -122,8 +121,7 @@ def test_licence_and_author_travel_in_the_file(profile: Profile) -> None:
     """Aus dem Hash heraus heißt nicht: aus der Datei heraus.
 
     Beide hängen **neben** den Daten wie der Bereichstest-Bericht — sie müssen
-    die Rundreise trotzdem überstehen, sonst wüsste die Börse nichts von
-    ihnen.
+    die Rundreise trotzdem überstehen, sonst verlöre der Empfänger sie.
     """
     made = dataclasses.replace(_recipe(profile), license="CC-BY-4.0", author="RS Digital")
 
@@ -197,12 +195,11 @@ def test_capture_passes_the_licence_through(profile: Profile) -> None:
     assert made.author == "Robert", "capture hat den Autor nicht durchgereicht"
 
 
-def test_the_licence_list_is_the_source_for_the_exchange() -> None:
-    """Die Wertemenge steht im Kern, und die Börse liest sie von hier.
+def test_the_licence_list_is_the_source_for_the_file_check() -> None:
+    """Die Wertemenge steht im Kern, und die Dateiprüfung liest sie von hier.
 
-    Führte die Prüfseite sie, hinge der Kern an der Börse — die falsche
-    Richtung (abgestimmt am 30.08.2026). Alle drei erlauben Weitergabe und
-    kommerzielle Nutzung; wer herunterlädt, darf drucken und verkaufen.
+    Führte die Prüfseite sie, hinge der Kern am Austauschformat — die falsche
+    Richtung. Alle drei erlauben Weitergabe und kommerzielle Nutzung.
     """
     assert recipe.RECIPE_LICENSES == ("CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0")
     assert all(kennung.startswith("CC") for kennung in recipe.RECIPE_LICENSES)
@@ -1194,14 +1191,13 @@ def test_replace_rolls_back_when_the_disk_refuses(profile: Profile, tmp_path: Pa
 
 
 def test_an_adopted_recipe_says_which_door_it_came_through(profile: Profile) -> None:
-    """Mitgereist und veröffentlicht sind zwei Herkünfte, nicht eine.
+    """Mitgereist und importiert sind zwei Herkünfte, nicht eine.
 
     Beide Wege nehmen dasselbe :func:`adopt`, aber der Katalog schreibt eine
     Zeile dazu: „kam mit einer Projektdatei und bleibt bei ihr". Für eine
-    Börsendatei wäre das eine **falsche** Herkunft — an genau der Stelle, an
-    der §32 eine wahre verlangt. Abgestimmt mit der Börsen-Sitzung am
-    31.08.2026; die Vorgabe bleibt der mitgereiste Weg, damit sich für den
-    bestehenden Aufrufer nichts ändert.
+    einzeln importierte Datei wäre das eine **falsche** Herkunft — an genau der
+    Stelle, an der §32 eine wahre verlangt. Die Vorgabe bleibt der mitgereiste
+    Weg, damit sich für den bestehenden Aufrufer nichts ändert.
     """
     from app.core.knowledge.parts.registry import PARTS
 
@@ -1214,9 +1210,9 @@ def test_an_adopted_recipe_says_which_door_it_came_through(profile: Profile) -> 
         )
         _clean_globals("probe_halter")
 
-        assert recipe.adopt(recipe.file_data(made), catalog_source=recipe.PUBLISHED_SOURCE) == []
-        assert PARTS.get("probe_halter").source == recipe.PUBLISHED_SOURCE, (
-            "aus der Börse eingelesen ist nicht mitgereist"
+        assert recipe.adopt(recipe.file_data(made), catalog_source=recipe.IMPORTED_SOURCE) == []
+        assert PARTS.get("probe_halter").source == recipe.IMPORTED_SOURCE, (
+            "einzeln importiert ist nicht mitgereist"
         )
     finally:
         _clean_globals("probe_halter")

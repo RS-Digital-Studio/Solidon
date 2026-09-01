@@ -4766,8 +4766,8 @@ class MainWindow(QMainWindow):
         # aber sie sagt es vorher statt als Fehler danach (Robert, 29.08.2026).
         catalog.set_feature_chosen(self.object_tree.selected_feature() is not None)
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
-        catalog.shareRequested.connect(lambda: self._share_part(catalog))
-        catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
+        catalog.exportRequested.connect(lambda: self._export_part(catalog))
+        catalog.importRequested.connect(lambda: self._import_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
@@ -4815,58 +4815,38 @@ class MainWindow(QMainWindow):
             )
         return True, ""
 
-    def _adopt_part(self, catalog: PartCatalog) -> None:
-        """Nimmt eine veröffentlichte Datei in den Katalog auf.
+    def _import_part(self, catalog: PartCatalog) -> None:
+        """Importiert eine lokale Bausteindatei in den Katalog.
 
         **Der Kern entscheidet, was mit ihr geschieht, nicht dieser Handler.**
-        ``adopt`` kennt die drei Lagen aus Konzept §17.1 — freier Name,
+        ``import_file`` prüft die Formatgrenze und kennt die drei Lagen aus
+        Konzept §17.1 — freier Name,
         gleicher Stand, anderer Stand — und in allen dreien gilt „lokal
         schlägt mitgereist". Geschrieben wird **nichts** in den Nutzerordner:
         Das Rezept gehört der Datei, mit der es kam.
 
         **Die Herkunft reist mit** (§32). ``catalog_source`` unterscheidet, ob
-        ein Rezept aus einer Projektdatei kam oder aus der Tauschbörse; der
+        ein Rezept aus einer Projektdatei kam oder einzeln eingelesen wurde; der
         Katalog macht daraus zwei verschiedene Zeilen im Steckbrief. Ohne
         diese Angabe stünde dort „kam mit einer Projektdatei", und das wäre an
         der Stelle falsch, an der es am meisten zählt.
 
-        **Gerufen wird ``adopt`` und nicht ``adopt_payload``.** Die zweite Tür
-        ist für ein Rezept gedacht, das noch als Text in einem Container
-        liegt, und reicht ``catalog_source`` nicht durch. Hier ist die Datei
-        selbst die Quelle, also wird sie hier gelesen — und ihr Lesefehler
-        hier behandelt: Eine unlesbare Datei ist ein Befund, kein Abbruch
-        (Regel 17), und der Kunde erfährt, dass er vielleicht die falsche
-        gewählt hat.
+        Lesen, Formatprüfung und Aufnahme liegen in einem Kernaufruf. So kann
+        dieser Handler weder eine zu große Datei vollständig laden noch nach
+        einer abgelehnten Aufnahme Erfolg melden.
         """
-        import json
-
-        from app.core.knowledge.parts.recipe import PUBLISHED_SOURCE, adopt
+        from app.core.knowledge.parts.shared import import_file
 
         source, _filter = QFileDialog.getOpenFileName(
             catalog,
-            tr("Veröffentlichten Baustein einlesen"),
+            tr("Baustein aus Datei importieren"),
             "",
-            tr("Börsendatei (*.json)"),
+            tr("Bausteindatei (*.json)"),
         )
         if not source:
             return
         try:
-            data = json.loads(Path(source).read_text(encoding="utf-8"))
-        except (OSError, ValueError) as problem:
-            show_error(
-                ValidationError(
-                    field="title",
-                    detail=tr("Diese Datei ließ sich nicht lesen. Ist es eine Börsendatei?"),
-                    values={"file": Path(source).name, "reason": str(problem)[:200]},
-                    constraint="not_a_shared_file",
-                    suggestions=(CANCEL,),
-                ),
-                catalog,
-            )
-            return
-
-        try:
-            findings = adopt(data, catalog_source=PUBLISHED_SOURCE)
+            findings = import_file(Path(source))
         except AppError as problem:
             show_error(problem, catalog)
             return
@@ -4878,32 +4858,32 @@ class MainWindow(QMainWindow):
         if findings:
             self.report.add_findings(findings)
             self.right.setCurrentWidget(self.report)
-        self.statusBar().showMessage(tr("Eingelesen. Der Baustein steht im Katalog."), 8000)
+        self.statusBar().showMessage(tr("Importiert. Der Baustein steht im Katalog."), 8000)
 
-    def _share_part(self, catalog: PartCatalog) -> None:
-        """Schreibt den gewählten Baustein als Börsendatei.
+    def _export_part(self, catalog: PartCatalog) -> None:
+        """Exportiert den gewählten Baustein als lokale Bausteindatei.
 
-        **Geprüft wird vor dem Fragen.** ``for_upload`` erzeugt die Datei und
+        **Geprüft wird vor dem Fragen.** ``export_bytes`` erzeugt die Datei und
         prüft sie in einem Zug; scheitert sie, hätte der Kunde sonst erst einen
         Ordner ausgesucht, einen Namen getippt und danach eine Absage bekommen.
         Die Reihenfolge kostet nichts und erspart genau diesen Weg.
 
-        **Geschrieben wird über ``shared.for_upload`` und nie über
+        **Geschrieben wird über ``shared.export_bytes`` und nie über
         ``json.dumps(file_data(...))``.** Die eigene Serialisierung wäre der
         zweite Weg, der an der Prüfung vorbeiführt — und das sieht man der
-        Zeile nicht an. Die Prüfung selbst liegt im Kern, weil der Server
-        dieselbe fährt; hier steht nur der Ruf.
+        Zeile nicht an. Die Prüfung selbst liegt im Kern; hier steht nur der
+        Ruf.
 
         Der Baustein ist an dieser Stelle ein **eigenes** Rezept: Der Katalog
         sperrt den Knopf bei allem anderen und sagt auch, warum
-        (``_share_state``). Fehlt die Datei trotzdem, ist das ein Fall für
+        (``_export_state``). Fehlt die Datei trotzdem, ist das ein Fall für
         einen Befund und nicht für einen Absturz — ein Rezept kann von Hand
         aus dem Ordner genommen worden sein, während der Katalog offen stand.
         """
         import json
 
         from app.core.knowledge.parts.recipe import from_data, recipes_dir
-        from app.core.knowledge.parts.shared import for_upload
+        from app.core.knowledge.parts.shared import export_bytes
 
         name = catalog.chosen()
         if not name:
@@ -4911,9 +4891,9 @@ class MainWindow(QMainWindow):
         source = recipes_dir() / f"{name}.json"
         try:
             recipe = from_data(json.loads(source.read_text(encoding="utf-8")))
-            payload = for_upload(recipe)
+            payload = export_bytes(recipe)
         except AppError as problem:
-            # Der Regelfall: ``for_upload`` hat abgelehnt und sagt selbst,
+            # Der Regelfall: ``export_bytes`` hat abgelehnt und sagt selbst,
             # warum und was zu tun ist.
             show_error(problem, catalog)
             return
@@ -4939,9 +4919,9 @@ class MainWindow(QMainWindow):
 
         target, _filter = QFileDialog.getSaveFileName(
             catalog,
-            tr("Baustein veröffentlichen"),
+            tr("Baustein als Datei exportieren"),
             f"{name}.json",
-            tr("Börsendatei (*.json)"),
+            tr("Bausteindatei (*.json)"),
         )
         if not target:
             return
@@ -4962,7 +4942,7 @@ class MainWindow(QMainWindow):
             )
             return
         self.statusBar().showMessage(
-            tr("Gespeichert. Diese Datei können Sie auf die Tauschbörse laden."), 8000
+            tr("Exportiert. Diese Datei können Sie jetzt weitergeben."), 8000
         )
 
     def _save_as_part(self, catalog: PartCatalog) -> None:

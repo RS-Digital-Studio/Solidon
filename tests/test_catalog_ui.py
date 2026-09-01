@@ -561,8 +561,8 @@ def test_a_rendered_preview_replaces_the_placeholder(qt_app: QApplication) -> No
         katalog.release()
 
 
-def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
-    """Der Veröffentlichen-Knopf ist gesperrt, und er sagt jedes Mal, warum.
+def test_export_stays_shut_and_says_why(qt_app: QApplication) -> None:
+    """Der Export-Knopf ist gesperrt, und er sagt jedes Mal, warum.
 
     **Gesperrt mit Grund, nicht versteckt.** Ein eingebauter Baustein kommt
     aus Python — es gibt keine Datei, die man weitergeben könnte. Der Knopf
@@ -582,11 +582,11 @@ def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
     """
     catalog = PartCatalog()
     try:
-        assert not catalog.share_part.isEnabled(), "ohne Auswahl gibt es nichts zu veröffentlichen"
-        leer = catalog.share_part.toolTip()
+        assert not catalog.export_part.isEnabled(), "ohne Auswahl gibt es nichts zu exportieren"
+        leer = catalog.export_part.toolTip()
         assert leer, "der gesperrte Knopf sagt nicht, was fehlt"
-        assert catalog.share_part.statusTip() == leer, "die Statuszeile schweigt"
-        assert catalog.share_part.accessibleDescription() == leer, (
+        assert catalog.export_part.statusTip() == leer, "die Statuszeile schweigt"
+        assert catalog.export_part.accessibleDescription() == leer, (
             "der Bildschirmleser bekommt den Grund nicht"
         )
 
@@ -601,10 +601,10 @@ def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
         else:  # pragma: no cover - der Katalog wäre dann leer
             raise AssertionError("kein eingebauter Baustein im Katalog")
 
-        assert not catalog.share_part.isEnabled(), (
+        assert not catalog.export_part.isEnabled(), (
             f"{eingebaut.name} kommt aus Python und hat keine Datei zum Weitergeben"
         )
-        gewaehlt = catalog.share_part.toolTip()
+        gewaehlt = catalog.export_part.toolTip()
         assert gewaehlt and gewaehlt != leer, (
             "gewählt und nichts gewählt sind zwei Lagen und brauchen zwei Sätze"
         )
@@ -613,11 +613,11 @@ def test_publish_stays_shut_and_says_why(qt_app: QApplication) -> None:
         catalog.deleteLater()
 
 
-def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_path) -> None:
+def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_path) -> None:
     """Der ganze Weg durch die **Oberfläche**: hinaus, herein, angesehen.
 
     **Warum durch die Knöpfe und nicht am Kern entlang.** Mein erster Lauf
-    ging über ``for_upload`` und ``adopt`` direkt und war grün — er hat
+    ging über ``export_bytes`` und ``import_file`` direkt und war grün — er hat
     bewiesen, dass der Kern kann, was er soll, und nichts darüber, ob ein
     Klick dort ankommt. Die Notiz dazu ist älter als dieser Test: Wer den Kern
     direkt ruft, misst eine Lage, die kein Klick herstellt.
@@ -628,7 +628,7 @@ def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_pat
 
     **Der Dateidialog wird abgefangen, nicht umgangen.** Er ist das einzige
     Stück, das ohne Mensch nicht antwortet; alles davor und dahinter läuft
-    echt — die Signale des Katalogs, die Handler des Fensters, `for_upload`,
+    echt — die Signale des Katalogs, die Handler des Fensters, `export_bytes`,
     `adopt` und die Zeile im Steckbrief.
 
     **Und ``action_catalog`` wird wirklich gerufen.** Den Katalog selbst zu
@@ -642,7 +642,7 @@ def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_pat
 
     from app.core.knowledge.parts import PARTS
     from app.core.knowledge.parts.recipe import (
-        PUBLISHED_SOURCE,
+        IMPORTED_SOURCE,
         Recipe,
         register,
         save,
@@ -655,7 +655,7 @@ def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_pat
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    # Ein eigenes Rezept — nur ein solches darf hinaus, und genau das prüft
+    # Ein eigenes Rezept — nur ein solches darf exportiert werden, und genau das prüft
     # die Gegenprobe unten.
     project = new_project()
     History(project.document).apply(
@@ -711,24 +711,25 @@ def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_pat
         assert catalogs, "action_catalog hat keinen Katalog gebaut"
         catalog = catalogs[0]
 
-        # --- Gegenprobe: was nicht hinaus darf, kann den Knopf nicht drücken
+        # --- Gegenprobe: was nicht exportiert werden darf, bleibt gesperrt
         builtin = next(entry for entry in PARTS.all() if not entry.own)
         _choose(catalog, builtin.name)
-        assert not catalog.share_part.isEnabled(), (
+        assert not catalog.export_part.isEnabled(), (
             f"{builtin.name} kommt aus Python und hat keine Datei zum Weitergeben"
         )
-        assert catalog.share_part.toolTip(), "der gesperrte Knopf sagt nicht, warum"
+        assert catalog.export_part.toolTip(), "der gesperrte Knopf sagt nicht, warum"
 
-        # --- hinaus
+        # --- Export
         _choose(catalog, "probeklotz")
-        assert catalog.share_part.isEnabled(), "ein eigenes Rezept darf veröffentlicht werden"
-        catalog.share_part.click()
-        assert not troubles, f"der Weg hinaus meldete einen Fehler: {troubles}"
+        assert catalog.export_part.isEnabled(), "ein eigenes Rezept darf exportiert werden"
+        catalog.export_part.click()
+        assert not troubles, f"der Export meldete einen Fehler: {troubles}"
         assert ziel.is_file(), "der Klick hat keine Datei geschrieben"
-        data = json.loads(ziel.read_text(encoding="utf-8"))
+        valid_payload = ziel.read_bytes()
+        data = json.loads(valid_payload)
         assert data, "die geschriebene Datei ist leer"
 
-        # --- herein, aus demselben Klickweg
+        # --- Import, aus demselben Klickweg
         # **Beide Register.** Ein Rezept steht im Katalog *und* als Operation;
         # `PARTS.remove` allein ist der Rollback fuer einen halben
         # Registrierlauf, das sagt sein Docstring. Wer nur ihn ruft, laesst
@@ -738,16 +739,31 @@ def test_the_exchange_way_runs_through_the_buttons(qt_app: QApplication, tmp_pat
         # taete richtigerweise nichts.
         PARTS.remove("probeklotz")
         REGISTRY.remove("insert_probeklotz")
-        catalog.adopt_part.click()
+
+        # Eine abgelehnte Datei darf weder einen Katalogeintrag noch eine
+        # falsche Erfolgsmeldung hinterlassen. Danach läuft derselbe Klick mit
+        # den unveränderten Exportbytes erfolgreich durch.
+        data["__class__"] = "os.system"
+        ziel.write_text(json.dumps(data), encoding="utf-8")
+        status_before = window.statusBar().currentMessage()
+        catalog.import_part.click()
+        assert troubles, "der ungültige Import zeigte keinen bedienbaren Fehler"
+        assert window.statusBar().currentMessage() == status_before
+        assert not PARTS.has("probeklotz")
+
+        troubles.clear()
+        ziel.write_bytes(valid_payload)
+        catalog.import_part.click()
+        assert not troubles, f"der gültige Import meldete einen Fehler: {troubles}"
 
         spec = next((entry for entry in PARTS.all() if entry.name == "probeklotz"), None)
         assert spec is not None, "nach dem Einlesen steht der Baustein nicht im Katalog"
-        assert spec.source == PUBLISHED_SOURCE, (
-            f"Herkunft {spec.source!r} statt {PUBLISHED_SOURCE!r} — "
+        assert spec.source == IMPORTED_SOURCE, (
+            f"Herkunft {spec.source!r} statt {IMPORTED_SOURCE!r} — "
             "der Steckbrief nennte damit eine Projektdatei"
         )
-        assert "Tauschbörse" in detail(spec), (
-            "der Steckbrief verschweigt, woher der Baustein kam (§32)"
+        assert "Baustein aus Datei" in detail(spec), (
+            "der Steckbrief verschweigt die Herkunft aus einer Datei (§32)"
         )
     finally:
         _mw.show_error = original_error  # type: ignore[assignment]

@@ -45,7 +45,9 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `range_check.py` | Der Bereichstest in der Anwendung |
 | `preview.py` | Vorschaubilder — **gerendert, nicht von Hand gepflegt** |
 | `scad.py` | Export als OpenSCAD-Quelltext |
-| `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm (§24.5) |
+| `recipe.py` | Ein eigener Baustein als **Rezept**: Daten statt Programm; mitgereiste und einzeln importierte Herkunft bleiben getrennt (§24.5, §32) |
+| `shared.py` | Lokaler Bausteindatei-Vertrag: begrenztes Lesen, Erlaubnislistenprüfung sowie geprüfte Import- und Exportbytes |
+| `shared_texts.py` | Übersetzbare Befunde der lokalen Bausteindatei-Prüfung |
 | `user.py` | Eigene Bausteine aus dem Nutzerverzeichnis |
 | `check.py` | Was gesagt werden muss, wenn ein Projekt geöffnet wird (§24.4) |
 

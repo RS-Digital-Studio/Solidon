@@ -55,7 +55,7 @@ Parameterstellung keine Vorbereitung braucht.
 #: Wie ein Bausteinname aussehen darf.
 #:
 #: Öffentlich, weil zwei Module ihn brauchen: Diese Prüfung hier beim
-#: Einsetzen, und die Börsenprüfung, bevor eine Datei überhaupt hinausgeht
+#: Einsetzen und die Dateiprüfung, bevor eine Datei überhaupt hinausgeht
 #: (shared.rules). Als private Konstante hätte die zweite Seite ihn
 #: abschreiben müssen — und ein abgeschriebenes Muster ist eines, das beim
 #: nächsten Zuwachs auseinanderläuft.

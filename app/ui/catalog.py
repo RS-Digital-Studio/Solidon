@@ -128,13 +128,13 @@ class PartCatalog(QDialog):
 
     partChosen = Signal(str)
     saveRequested = Signal()
-    shareRequested = Signal()
-    adoptRequested = Signal()
-    """Eine veröffentlichte Datei soll in den Katalog.
+    exportRequested = Signal()
+    importRequested = Signal()
+    """Eine Bausteindatei soll in den Katalog importiert werden.
 
-    Braucht keine Auswahl — anders als das Veröffentlichen ist das Einlesen
+    Braucht keine Auswahl — anders als der Export ist der Import
     ohne Vorbedingung, und ein Knopf ohne Vorbedingung wird nicht gesperrt."""
-    """Der gewählte Baustein soll zur Tauschbörse gehen.
+    """Der gewählte Baustein soll als lokale Datei exportiert werden.
 
     Wie ``saveRequested`` nur ein Ruf und keine Handlung: Welche Datei
     entsteht und wohin sie geht, weiß das Fenster."""
@@ -264,17 +264,17 @@ class PartCatalog(QDialog):
         # **Neben dem Speichern und nicht in einem Menü**, aus demselben
         # Grund: Wer sein Teil weitergeben will, denkt an die Bibliothek, in
         # der es liegt.
-        self.share_part = buttons.addButton(
-            tr("Veröffentlichen …"), QDialogButtonBox.ButtonRole.ActionRole
+        self.export_part = buttons.addButton(
+            tr("Als Datei exportieren …"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        self.share_part.clicked.connect(self.shareRequested.emit)
-        self.set_can_share(False, "")
+        self.export_part.clicked.connect(self.exportRequested.emit)
+        self.set_can_export(False, "")
 
         # Immer bedienbar: Zum Einlesen braucht es keinen gewählten Baustein.
-        self.adopt_part = buttons.addButton(
-            tr("Aus Datei einlesen …"), QDialogButtonBox.ButtonRole.ActionRole
+        self.import_part = buttons.addButton(
+            tr("Aus Datei importieren …"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        self.adopt_part.clicked.connect(self.adoptRequested.emit)
+        self.import_part.clicked.connect(self.importRequested.emit)
 
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
@@ -318,8 +318,8 @@ class PartCatalog(QDialog):
         self.save_hint.setText("" if can else reason)
         self.save_hint.setVisible(bool(reason) and not can)
 
-    def set_can_share(self, can: bool, reason: str = "") -> None:
-        """Ob der gewählte Baustein zur Tauschbörse darf — und warum nicht.
+    def set_can_export(self, can: bool, reason: str = "") -> None:
+        """Ob der gewählte Baustein als Datei exportiert werden darf.
 
         **Der Grund steht an drei Stellen**, weil eine davon je nach Bedienung
         ausfällt: im Tooltip für die Maus, im ``statusTip`` für die Statuszeile
@@ -327,11 +327,11 @@ class PartCatalog(QDialog):
         (Regel 18 — nicht nur eine Kodierung). Ein grau gewordener Knopf ohne
         Grund ist derselbe Fehler wie eine gesperrte Operation ohne Grund.
         """
-        self.share_part.setEnabled(can)
+        self.export_part.setEnabled(can)
         hint = "" if can else reason
-        self.share_part.setToolTip(hint)
-        self.share_part.setStatusTip(hint)
-        self.share_part.setAccessibleDescription(hint)
+        self.export_part.setToolTip(hint)
+        self.export_part.setStatusTip(hint)
+        self.export_part.setAccessibleDescription(hint)
 
     def set_can_insert(self, can: bool, reason: str = "") -> None:
         """Gibt das Einsetzen frei — oder sagt daneben, warum nicht.
@@ -636,8 +636,8 @@ class PartCatalog(QDialog):
                 item.setIcon(QIcon(pixmap))
                 return
 
-    def _share_state(self, spec: PartSpec | None) -> tuple[bool, str]:
-        """Ob dieser Baustein veröffentlicht werden kann, und warum nicht.
+    def _export_state(self, spec: PartSpec | None) -> tuple[bool, str]:
+        """Ob dieser Baustein als Datei exportiert werden kann, und warum nicht.
 
         Drei Herkünfte, drei Antworten: Ein **eigenes** Rezept liegt als Datei
         im Nutzerordner und kann hinaus. Ein **eingebauter** Baustein kommt aus
@@ -648,12 +648,12 @@ class PartCatalog(QDialog):
         """
         if spec is None:
             return False, tr("Wählen Sie einen Baustein, den Sie weitergeben möchten.")
-        if getattr(spec, "source", "") in ("travelled", "published"):
+        if getattr(spec, "source", "") in ("travelled", "imported"):
             return False, tr(
-                "Dieser Baustein kam von jemand anderem — nur eigene lassen sich veröffentlichen."
+                "Dieser Baustein kam von jemand anderem — nur eigene lassen sich weitergeben."
             )
         if not getattr(spec, "own", False):
-            return False, tr("Nur eigene Bausteine lassen sich veröffentlichen.")
+            return False, tr("Nur eigene Bausteine lassen sich weitergeben.")
         return True, ""
 
     def _show_detail(self) -> None:
@@ -676,7 +676,7 @@ class PartCatalog(QDialog):
         # nicht in einem eigenen Signalpfad**: Der Zustand hängt an genau
         # derselben Auswahl, und zwei Stellen, die dieselbe Frage
         # beantworten, laufen auseinander.
-        self.set_can_share(*self._share_state(spec))
+        self.set_can_export(*self._export_state(spec))
 
     # --- choosing ---------------------------------------------------------------
 
@@ -755,21 +755,16 @@ def detail(spec: PartSpec | None) -> str:
             + tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr")
         )
     # **Eine dritte Herkunft, weil es eine dritte ist.** Die Zeile darüber
-    # nennt eine Projektdatei; wer sie für eine Börsendatei übernimmt,
+    # nennt eine Projektdatei; wer sie für eine einzeln eingelesene Datei übernimmt,
     # behauptet die falsche Herkunft an genau der Stelle, an der §32 eine
     # wahre verlangt. Und sie steht hier und nicht in einer Statuszeile: Die
     # Auskunft, woher ein Inhalt stammt, muss auch in drei Tagen noch da sein.
-    if spec.source == "published":
-        lines.append(
-            f"{OWN_MARKER} "
-            + tr(
-                "veröffentlichter Baustein — kam aus der Tauschbörse und bleibt bei diesem Projekt"
-            )
-        )
+    if spec.source == "imported":
+        lines.append(f"{OWN_MARKER} " + tr("Baustein aus Datei — bleibt bei diesem Projekt"))
     warning = _range_warning(spec)
     if warning:
         lines.append(f"<b>{RANGE_MARKER}</b> {warning}")
-    if spec.subtractive or spec.own or spec.source in ("travelled", "published") or warning:
+    if spec.subtractive or spec.own or spec.source in ("travelled", "imported") or warning:
         lines.append("")
 
     lines.append(f"<b>{tr('Parameter')}</b>")

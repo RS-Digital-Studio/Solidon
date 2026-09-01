@@ -137,6 +137,10 @@ vollständig und markiert ins Feld zurück.
 `catalog.py` (Bausteinkatalog, §24.3) · `filament_picker.py` (Farbe und Name
 statt einer Zahl von 0 bis 7)
 
+Der Katalog bietet den lokalen Bausteindatei-Weg als **Import** und **Export**.
+Lesen, Formatprüfung und Aufnahme bleiben im Qt-freien Kern; die Oberfläche
+wählt nur den Pfad und meldet Erfolg erst nach einer vollständigen Aufnahme.
+
 **Erscheinung**
 
 `style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
