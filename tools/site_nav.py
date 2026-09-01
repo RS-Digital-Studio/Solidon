@@ -7,35 +7,27 @@ KI-Seite wieder andere drei. Robert: „die seitenverteilung ist auch bisschen
 schwer über das menü." Wer auf einer Seite einen Weg sieht und ihn auf der
 nächsten nicht wiederfindet, lernt ihn nicht.
 
-Schlimmer war, was **keines** der sechs Menüs nannte: die Tauschbörse. Sie war
-gebaut, geprüft und in sechs Sprachen übersetzt — und hatte **null** eingehende
-Verweise. Eine Insel, erreichbar nur über die Adresszeile.
-
 Beide Erzeuger bauten ihre Kopfzeile bis dahin selbst zusammen
 (`make_manual._header`, `make_changelog._header`), und die statischen Seiten
 trugen ihre eigene. Drei Orte für dieselbe Sache sind der Grund, warum sie
 auseinanderlief. Hier steht sie einmal; dass die statischen Seiten dazu passen,
 prüft `tests/test_website.py`.
 
-**Die Börse trägt als einzige keine Ausblendeklasse.** Auf schmalem Schirm
-verschwinden Funktionen, KI-Modelle, Preis und Neuerungen der Reihe nach;
-Börse und Handbuch bleiben. Ein Weg, den nur der Desktop zeigt, ist für die
-Hälfte der Besucher keiner.
+Kein Eintrag wird auf schmalen Schirmen ausgeblendet. Ein Weg, den nur der
+Desktop zeigt, ist für die Hälfte der Besucher keiner.
 """
 
 from __future__ import annotations
 
 from typing import Final
 
-#: Je Sprache die sechs Einträge: Ziel, Beschriftung, Ausblendeklasse.
+#: Je Sprache die fünf Einträge: Ziel, Beschriftung, Ausblendeklasse.
 #: Die Reihenfolge hier ist die Reihenfolge im Menü. Alle Beschriftungen
-#: stammen aus dem Bestand — jede stand schon in einem der alten Menüs; neu
-#: ist allein die Börse, deren Wort aus dem Titel ihrer Seite kommt.
+#: stammen aus dem Bestand.
 ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "de": [
         ("/funktionen.html", "Funktionen", ""),
         ("/ki-modelle.html", "KI-Modelle", ""),
-        ("/boerse.html", "Tauschbörse", ""),
         ("#preis", "Preis", ""),
         ("/changelog.html", "Neuerungen", ""),
         ("/handbuch.html", "Handbuch", ""),
@@ -43,7 +35,6 @@ ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "en": [
         ("/en/features.html", "Features", ""),
         ("/en/ai-models.html", "AI models", ""),
-        ("/en/exchange.html", "Exchange", ""),
         ("#pricing", "Price", ""),
         ("/en/changelog.html", "What’s new", ""),  # noqa: RUF001
         ("/en/manual.html", "Manual", ""),
@@ -51,7 +42,6 @@ ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "es": [
         ("/es/features.html", "Funciones", ""),
         ("/es/ai-models.html", "Modelos de IA", ""),
-        ("/es/exchange.html", "Intercambio", ""),
         ("#pricing", "Precio", ""),
         ("/es/changelog.html", "Novedades", ""),
         ("/es/manual.html", "Manual", ""),
@@ -59,7 +49,6 @@ ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "fr": [
         ("/fr/features.html", "Fonctions", ""),
         ("/fr/ai-models.html", "Modèles IA", ""),
-        ("/fr/exchange.html", "Échange", ""),
         ("#pricing", "Prix", ""),
         ("/fr/changelog.html", "Nouveautés", ""),
         ("/fr/manual.html", "Manuel", ""),
@@ -67,7 +56,6 @@ ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "it": [
         ("/it/features.html", "Funzioni", ""),
         ("/it/ai-models.html", "Modelli IA", ""),
-        ("/it/exchange.html", "Scambio", ""),
         ("#pricing", "Prezzo", ""),
         ("/it/changelog.html", "Novità", ""),
         ("/it/manual.html", "Manuale", ""),
@@ -75,7 +63,6 @@ ENTRIES: Final[dict[str, list[tuple[str, str, str]]]] = {
     "pt": [
         ("/pt/features.html", "Funções", ""),
         ("/pt/ai-models.html", "Modelos de IA", ""),
-        ("/pt/exchange.html", "Troca", ""),
         ("#pricing", "Preço", ""),
         ("/pt/changelog.html", "Novidades", ""),
         ("/pt/manual.html", "Manual", ""),
@@ -96,7 +83,7 @@ HOME: Final[dict[str, str]] = {
 
 
 def nav_links(language: str, *, current: str = "", on_home: bool = False) -> str:
-    """Die sechs Verweise als HTML, ohne das umgebende ``<nav>``.
+    """Die fünf Verweise als HTML, ohne das umgebende ``<nav>``.
 
     ``current`` ist der Pfad der Seite, die das Menü trägt (etwa
     ``/en/manual.html``); der passende Eintrag bekommt ``aria-current``.
@@ -139,7 +126,7 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: 
     """Die sechs Verweise in einem Aufklapper, der am Rechner keiner ist.
 
     **Warum ein ``details`` und kein Skript.** Auf einem Handy passten von
-    sechs Einträgen nur zwei in die Zeile; die übrigen vier wurden per CSS
+    fünf Einträgen nur zwei in die Zeile; die übrigen drei wurden per CSS
     ausgeblendet, und damit kannte die Hälfte der Besucher vier Wege nicht.
     Robert am 31.08.2026: „mach doch ein aufklappmenü für mobil."
 
@@ -154,7 +141,7 @@ def nav_menu(language: str, *, current: str = "", on_home: bool = False, extra: 
     ``extra`` nimmt einen Weg auf, den nur **diese** Seite hat — im Handbuch
     den Sprung ins Inhaltsverzeichnis. Er gehört **in** das Panel und nicht
     daneben: Außerhalb verschwände er auf einem Telefon ganz, während die
-    sechs gemeinsamen Wege im Aufklapper erreichbar bleiben — und ein
+    fünf gemeinsamen Wege im Aufklapper erreichbar bleiben — und ein
     Handbuch ohne Sprung ins Inhaltsverzeichnis ist dort schwer zu benutzen.
 
     Dieselbe Bauart trägt der Sprachwechsel daneben seit jeher — und sie

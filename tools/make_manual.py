@@ -524,12 +524,12 @@ def _header(language: str) -> str:
         f'<a class="brand" href="./">{BRAND_MARK}Solidon<span>3D</span></a>'
         '<nav class="lang">'
         # **Das gemeinsame Menü zuerst, der Inhaltsverweis danach.** Das
-        # Handbuch trägt dieselben sechs Wege wie jede andere Seite — sonst
+        # Handbuch trägt dieselben fünf Wege wie jede andere Seite — sonst
         # ist es eine Sackgasse, aus der nur der Zurück-Knopf führt. Sein
         # eigenes Inhaltsverzeichnis kommt dazu, nicht an ihrer Stelle.
         # Der Sprung ins Inhaltsverzeichnis gehört **in** das Menü, nicht
         # daneben: außerhalb verschwände er auf einem Telefon ganz, während
-        # die sechs gemeinsamen Wege im Aufklapper erreichbar bleiben.
+        # die fünf gemeinsamen Wege im Aufklapper erreichbar bleiben.
         f"{nav_menu(language, current=ENTRIES[language][-1][0], extra=toc_link)}"
         f"{_switcher(language)}"
         f'<a class="cta" href="{cta_target}">{cta_label}</a>'

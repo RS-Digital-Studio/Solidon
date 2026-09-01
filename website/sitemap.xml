@@ -2,16 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
-    <loc>https://solidon3d.de/boerse.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
-  </url>
-  <url>
     <loc>https://solidon3d.de/changelog.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/changelog.html"/>
@@ -40,16 +30,6 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
-  </url>
-  <url>
-    <loc>https://solidon3d.de/en/exchange.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/en/features.html</loc>
@@ -102,16 +82,6 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
   </url>
   <url>
-    <loc>https://solidon3d.de/es/exchange.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
-  </url>
-  <url>
     <loc>https://solidon3d.de/es/features.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html"/>
@@ -160,16 +130,6 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
-  </url>
-  <url>
-    <loc>https://solidon3d.de/fr/exchange.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/fr/features.html</loc>
@@ -252,16 +212,6 @@
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
   </url>
   <url>
-    <loc>https://solidon3d.de/it/exchange.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
-  </url>
-  <url>
     <loc>https://solidon3d.de/it/features.html</loc>
     <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/funktionen.html"/>
     <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/features.html"/>
@@ -320,16 +270,6 @@
     <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/changelog.html"/>
     <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/changelog.html"/>
-  </url>
-  <url>
-    <loc>https://solidon3d.de/pt/exchange.html</loc>
-    <xhtml:link rel="alternate" hreflang="de" href="https://solidon3d.de/boerse.html"/>
-    <xhtml:link rel="alternate" hreflang="en" href="https://solidon3d.de/en/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://solidon3d.de/es/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="fr" href="https://solidon3d.de/fr/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="it" href="https://solidon3d.de/it/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="pt" href="https://solidon3d.de/pt/exchange.html"/>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://solidon3d.de/boerse.html"/>
   </url>
   <url>
     <loc>https://solidon3d.de/pt/features.html</loc>

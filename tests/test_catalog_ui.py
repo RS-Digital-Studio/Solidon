@@ -782,6 +782,12 @@ def test_the_local_file_way_runs_through_the_buttons(qt_app: QApplication, tmp_p
         PartCatalog.exec = original_exec  # type: ignore[method-assign]
         QFileDialog.getSaveFileName = original_save  # type: ignore[method-assign]
         QFileDialog.getOpenFileName = original_open  # type: ignore[method-assign]
+        # Der eingelesene Baustein lebt in beiden globalen Registern. Ohne
+        # diese symmetrische Aufräumung sehen nachfolgende Website- und
+        # Handbuchtests 96 statt 95 Operationen und halten den Testbaustein
+        # fälschlich für ausgelieferten Produktinhalt.
+        PARTS.remove("probeklotz")
+        REGISTRY.remove("insert_probeklotz")
         window.close()
 
 

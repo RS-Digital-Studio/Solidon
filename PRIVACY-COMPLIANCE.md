@@ -28,7 +28,6 @@ Verantwortlicher und Stand:
 | Support und Sicherheitsmeldungen | freiwillig ausgewählte Anhänge, Protokolle, Projekt-/Chatinhalt nur nach Vorschau, Tickets und Löschung |
 | Anthropic mit eigenem API-Schlüssel | direkte Nutzlast, Anbieterrolle, Empfängerland, Transfergrundlage, Speicher-/Trainingseinstellung |
 | Lokales Ollama | grundsätzlich lokale Verarbeitung; Netz-/Installationswege und Protokolle gesondert abgrenzen |
-| Tauschbörse | Upload, Autor/Lizenz, verschlüsselte Kontaktadresse, Bestätigung, Kommentar/Like, Meldung/Moderation, Fristen |
 | Sicherheits-, Produkt- und Complianceakte | Beweise, Ansprechpartner, Behörden-/Versichererkommunikation, Zugriffsschutz |
 
 Für jede Tätigkeit wird die tatsächliche Produktionskonfiguration geprüft.
@@ -38,8 +37,8 @@ Weg.
 ## Interessenabwägungen nach Art. 6 Abs. 1 lit. f DSGVO
 
 Eine LIA ist vor Aktivierung mindestens nötig für Missbrauchs-/Ratelimitdaten,
-notwendige Sicherheitsprotokolle, die zufällige Like-Kennung, Durchsetzung von
-Lizenz-/Sanktionsregeln und gegebenenfalls Betrugsabwehr. Jede LIA enthält:
+notwendige Sicherheitsprotokolle, Durchsetzung von Lizenz-/Sanktionsregeln
+und gegebenenfalls Betrugsabwehr. Jede LIA enthält:
 
 1. konkretes berechtigtes Interesse und Verantwortlichen,
 2. Erforderlichkeit und geprüfte mildere Mittel,
@@ -65,7 +64,7 @@ vor dem ersten Senden zur Verfügung.
 
 Ein Eingang erhält `DSR-JJJJ-NNN`, Identität wird verhältnismäßig geprüft und
 Frist/Verlängerung dokumentiert. Der Suchplan umfasst produktive Datenbank,
-Mail/Ticket, Aktivierung, Tauschbörse, Abrechnung, Backups und Behördenakten.
+Mail/Ticket, Aktivierung, Abrechnung, Backups und Behördenakten.
 Antwort, Datenkopie, Ablehnung, Rechtsgrund und tatsächliche Löschung werden
 belegt. Andere Betroffene und Geschäftsgeheimnisse werden geschützt.
 
@@ -77,8 +76,6 @@ erfassen. Gesetzliche Aufbewahrung wird eng getrennt von operativer Nutzung.
 ## Sicherheit und Datenschutz durch Technikgestaltung
 
 - Datenminimierung und lokale Verarbeitung sind Voreinstellung.
-- Kontaktadressen der Tauschbörse werden mit AES-256-GCM und getrenntem
-  Schlüssel gespeichert; HMAC-Zwecke sind domänengetrennt.
 - Schlüssel, Tokens und Klartextkontakte stehen weder im Repository noch in
   Protokollen oder Fehlerantworten.
 - Rollen, Zugriffe, Exporte, Schlüsselwechsel und Wiederherstellung werden
@@ -111,5 +108,5 @@ die Entscheidung erneut.
 - [ ] Datenschutzerklärung stimmt mit Produktion und Fristen überein.
 
 Offene Punkte sperren ausschließlich den betroffenen Verarbeitungsweg; wenn
-dieser für Verkauf, Aktivierung oder Börse zwingend ist, sperren sie auch
+dieser für Verkauf oder Aktivierung zwingend ist, sperren sie auch
 diesen Start.

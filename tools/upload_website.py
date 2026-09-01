@@ -48,6 +48,27 @@ ACCESS_FILE = ROOT / ".webserver.json"
 #: abgebildet: ``website/api/support.php`` → ``<root>/api/support.php``.
 LOCAL_ROOT = ROOT / "website"
 
+#: Entfernte gehostete Austauschwege bleiben auch dann vom Upload ausgeschlossen,
+#: wenn eine alte Arbeitskopie oder ein Erzeuger sie versehentlich zurückbringt.
+RETIRED_HOSTED_PATHS = frozenset(
+    {
+        "api/shared-rules.json",
+        "api/shared-texts.json",
+        "api/shared.php",
+        "api/shared_common.php",
+        "api/shared_moderate.php",
+        "api/shared_store.php",
+        "boerse.html",
+        "boerse.js",
+        "en/exchange.html",
+        "es/exchange.html",
+        "fr/exchange.html",
+        "it/exchange.html",
+        "pt/exchange.html",
+        "tauschboerse-bedingungen.html",
+    }
+)
+
 #: Was in der Zugangsdatei stehen muss.
 TEMPLATE: dict[str, Any] = {
     "host": "a2f21.netcup.net",
@@ -154,7 +175,10 @@ def wanted(path: Path) -> bool:
         ".solidon-activation",
     )
     return (
-        relative.parts[0] != "dl" and path.suffix != ".md" and not lower.endswith(private_endings)
+        relative.as_posix() not in RETIRED_HOSTED_PATHS
+        and relative.parts[0] != "dl"
+        and path.suffix != ".md"
+        and not lower.endswith(private_endings)
     )
 
 

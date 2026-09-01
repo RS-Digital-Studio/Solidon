@@ -50,6 +50,39 @@ GENERATED = frozenset(
 )
 
 
+@pytest.mark.parametrize(
+    ("page", "categorical"),
+    (
+        ("ki-modelle.html", ("nimmt die Europäische Union", "Hier stellt sich die Frage nicht")),
+        ("en/ai-models.html", ("excludes the European Union", "question does not arise")),
+        (
+            "es/ai-models.html",
+            ("excluye expresamente a la Unión Europea", "pregunta no se plantea"),
+        ),
+        (
+            "fr/ai-models.html",
+            ("exclut expressément l'Union européenne", "question ne se pose pas"),
+        ),
+        ("it/ai-models.html", ("esclude espressamente l'Unione Europea", "domanda non si pone")),
+        ("pt/ai-models.html", ("exclui expressamente a União Europeia", "questão não se coloca")),
+    ),
+)
+def test_the_hunyuan_comparison_is_neutral_without_weakening_triposg(
+    page: str, categorical: tuple[str, str]
+) -> None:
+    """Die Lizenzseite vergleicht Modelle, entscheidet aber keine Rechtsfrage.
+
+    TripoSG und seine MIT-Lizenz bleiben der klare Weg-3-Vorteil. Über andere
+    Modelle steht nur, dass deren konkrete Bedingungen vor dem Einsatz zu
+    prüfen sind; ein pauschaler Gebietsausschluss wird nicht behauptet.
+    """
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+
+    assert "TripoSG" in text and "MIT" in text
+    assert "Hunyuan3D" in text, "der sachliche Vergleich soll nicht verschwinden"
+    assert not any(claim in text for claim in categorical)
+
+
 def _sales_pages() -> tuple[str, ...]:
     """Jede von Hand gepflegte Verkaufsseite, in allen Sprachen.
 
@@ -1933,9 +1966,9 @@ def test_the_roll_holder_uses_real_operations() -> None:
 
 #: Die Galerieteile und der Parameter, an dem ein Kunde zuerst dreht.
 #:
-#: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus der
-#: Börse landet in einem fremden Projekt, und dort setzt jemand den Wert von
-#: Hand. Was nur im gezeigten Punkt hält, hält nicht.
+#: Die Spanne geht über das hinaus, was auf der Seite steht: Ein Rezept aus
+#: einer weitergegebenen Datei landet in einem fremden Projekt, und dort setzt
+#: jemand den Wert von Hand. Was nur im gezeigten Punkt hält, hält nicht.
 GALERIETEILE = (
     # 70 bis 200: Das Gehäuse zerfiel bis `bcca1207` unterhalb von 110 mm,
     # weil Schraubdome, Standfüße, Rastnasen und Rippen auf Zahlen saßen,
@@ -2024,15 +2057,8 @@ def test_a_gallery_part_stays_in_one_piece_across_its_range(
 def test_no_delivered_page_is_an_island() -> None:
     """Jede ausgelieferte Seite wird von mindestens einer anderen verlinkt.
 
-    **Der Anlass ist die Tauschbörse.** Sie war am 31.08.2026 fertig gebaut,
-    geprüft und in sechs Sprachen übersetzt — und **keine** Seite verwies auf
-    sie. Die sechs Börsenseiten verlinkten nur sich selbst; erreichbar war sie
-    allein über die Adresszeile. Robert hat es als Kunde gefunden, nicht als
-    Entwickler: „wo kommt man denn jetzt einfach und schnell zu der
-    katalog/bausteinbörse?"
-
-    Der Verweis-Test daneben (`..._every_file_the_page_refers_to_exists`) hat
-    das nie gesehen und konnte es nicht: Er prüft **ausgehende** Verweise auf
+    Der Verweis-Test daneben (`..._every_file_the_page_refers_to_exists`) kann
+    das nicht sehen: Er prüft **ausgehende** Verweise auf
     tote Ziele. Eine Insel hat keine toten Verweise — sie hat gar keine, die
     zu ihr führen. Das ist die Gegenrichtung, und sie braucht eine eigene
     Frage.

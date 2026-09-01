@@ -31,7 +31,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.branding import APP_NAME, APP_VENDOR  # noqa: E402
-from tools.site_nav import ENTRIES  # noqa: E402
 
 WEBSITE = ROOT / "website"
 
@@ -60,7 +59,7 @@ _AUTOLINK = re.compile(r"&lt;(https?://[^&\s]+|mailto:[^&\s]+|[^&\s@]+@[^&\s]+)&
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
-#: Eine Sprungmarke am Ende einer Überschrift: ``## Die Tauschbörse {#boerse}``.
+#: Eine Sprungmarke am Ende einer Überschrift: ``## Rückgabe {#rueckgabe}``.
 #: Kleinbuchstaben, Ziffern und Bindestrich — mehr braucht ein Anker nicht, und
 #: mehr zuzulassen hieße, jede Eingabe für ein ``id``-Attribut zu maskieren.
 _ANCHOR = re.compile(r"^(.*?)\s*\{#([a-z][a-z0-9-]*)\}$")
@@ -69,10 +68,8 @@ _ANCHOR = re.compile(r"^(.*?)\s*\{#([a-z][a-z0-9-]*)\}$")
 def _split_anchor(title: str) -> tuple[str, str]:
     """Trennt eine Überschrift von ihrer Sprungmarke.
 
-    **Ohne sie kann ein Rechtstext nicht auf sich selbst verweisen.** Die
-    Datenschutzerklärung braucht genau das: Der Absatz über die statischen
-    Seiten nimmt die Tauschbörse aus und verweist auf deren Abschnitt weiter
-    unten. Ein Verweis ohne Ziel ist schlechter als keiner —
+    **Ohne sie kann ein Rechtstext nicht auf sich selbst verweisen.** Ein
+    Verweis ohne Ziel ist schlechter als keiner —
     ``tests/test_website.py`` prüft jede Sprungmarke gegen ihr Ziel.
 
     Steht keine Marke da, bleibt die Überschrift, wie sie war; die drei
@@ -353,9 +350,9 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<footer class="site">\n  <div class="wrap">\n'
         f"    © 2026 {APP_VENDOR} ·\n"
         # Die Rechtstexte tragen kein Kopfmenü — hier ist die Fußzeile
-        # der einzige Weg zurück, und die Börse gehört auf jeden davon.
+        # der gemeinsame Weg zurück.
         f'    <a href="/">Startseite</a> ·\n'
-        f'    <a href="{ENTRIES["de"][2][0]}">{ENTRIES["de"][2][1]}</a>{siblings}\n'
+        f"{siblings}\n"
         # Auch die Rechtstexte: Wer wissen will, ob jemand das Widerrufs-
         # recht liest, braucht die Zeile. Was gezählt wird, steht in der
         # Datenschutzerklärung selbst — der Pfad und sonst nichts.
@@ -376,8 +373,8 @@ def main() -> int:
         source = ROOT / source_name
         markdown = source.read_text(encoding="utf-8")
 
-        others = "".join(
-            f' ·\n    <a href="/{name}">{label}</a>'
+        others = " ·\n".join(
+            f'    <a href="/{name}">{label}</a>'
             for name, label in links.items()
             if name != target_name
         )

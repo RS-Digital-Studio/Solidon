@@ -25,8 +25,8 @@ Von Hand: `index.html`, `funktionen.html`, `ki-modelle.html`, `style.css`,
 `bilder/` — und **`impressum.html`**.
 
 `datenschutz.html` und `impressum.html` standen bis zum 30.08.2026 in
-**keiner** der beiden Listen, und das Börsen-Konzept hat sich darauf
-verlassen: Es nannte `make_legal.py` als den Weg, auf dem der Datenschutz
+**keiner** der beiden Listen, und der Seitenaufbau hat sich darauf
+verlassen: Er nannte `make_legal.py` als den Weg, auf dem der Datenschutz
 entsteht — das Werkzeug erzeugte aber nur drei Dokumente und **verlinkte** die
 beiden anderen. Eine Datei, die weder als erzeugt noch als handgepflegt
 geführt ist, bekommt beim nächsten Umbau von jedem eine andere Behandlung.

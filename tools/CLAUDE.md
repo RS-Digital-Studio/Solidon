@@ -47,11 +47,6 @@ Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
 Serverzustand lesen und Geräteplätze verwalten) ·
 `qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
 `list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen) ·
-`make_shared_cases.py` (die Grenzfälle der Börsenprüfung als Dateien samt
-Sollwerten — **eine gemeinsame Regelliste macht zwei Prüfer nicht gleich**:
-Python und PHP lesen dasselbe `shared-rules.json` und können es trotzdem
-verschieden anwenden; der Ordner wird eingecheckt, weil die Server-Seite auf
-einer anderen Maschine geprüft wird) ·
 `window_bench.py` (Beispiel im **echten** Fenster öffnen und die Wartezeit in
 Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 

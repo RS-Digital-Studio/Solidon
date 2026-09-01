@@ -61,9 +61,6 @@ def test_interactive_components_use_shared_target_height() -> None:
         ".activation-language select",
         ".activation-file .activation-file-button",
         ".activation-paste summary",
-        ".boerse-suche input",
-        ".boerse-suche select",
-        ".boerse-hochladen input",
     )
     for selector in selectors:
         assert rules[selector]["min-block-size"] == TARGET_SIZE, selector
