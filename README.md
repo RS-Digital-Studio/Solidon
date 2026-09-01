@@ -286,9 +286,12 @@ Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
 ### Welches Modell, und warum dieses
 
-Der mitgelieferte Ablauf benutzt **TripoSG**, das unter der MIT-Lizenz steht —
-Quelltext wie Gewichte. Das ist der Grund für die Wahl: Das verbreitetere
-Hunyuan3D nimmt in seiner Lizenz die Europäische Union ausdrücklich aus.
+Der mitgelieferte Ablauf benutzt **TripoSG**. Quelltext und Gewichte stehen
+unter der permissiven MIT-Lizenz; zusammen mit der reproduzierbaren lokalen
+Einrichtung ist das der Grund für die voreingestellte Wahl. Solidon liefert
+keine Gewichte mit: Erst die vom Nutzer gestartete Einrichtung holt sie in
+dessen ComfyUI. Andere Modelle, darunter Hunyuan3D, haben eigene Bedingungen,
+die für die konkret eingesetzte Fassung vor dem Einsatz geprüft werden müssen.
 
 Gemessen auf einer RTX 4080 braucht ein Körper rund 13 Sekunden und kommt mit
 300 000 bis 600 000 Dreiecken geschlossen und aus einem Stück heraus. Die

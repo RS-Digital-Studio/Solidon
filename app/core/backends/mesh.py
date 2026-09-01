@@ -22,22 +22,21 @@ Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
 ``optional`` deklarierter: die Oberfläche schickt sie immer alle mit, und
 mancher Knoten liest sie ungeprüft.
 
-**Warum TripoSG und nicht Hunyuan3D.** Die Lizenz der Gewichte ist nicht
-unsere, und sie entscheidet, wer die Anwendung benutzen darf. Hunyuan3D 2.1
-steht unter der Tencent Community License, deren Geltungsbereich die
-Europäische Union, das Vereinigte Königreich und Südkorea ausdrücklich
-ausnimmt — für eine Anwendung, die hier verkauft wird, ist das keine
-Fußnote, sondern ein Ausschluss. TripoSG (VAST-AI-Research) steht unter MIT,
-Quelltext wie Gewichte, und liefert Formen derselben Güte. Gemessen an vier
-Fällen vom glatten Drehkörper bis zur Figur mit dünnen Fortsätzen kam jedes
-Mal ein geschlossener Körper aus einem Stück heraus.
+**Warum TripoSG voreingestellt ist.** TripoSG (VAST-AI-Research) steht mit
+Quelltext und Gewichten unter der permissiven MIT-Lizenz und lässt sich lokal
+reproduzierbar einrichten. Gemessen an vier Fällen vom glatten Drehkörper bis
+zur Figur mit dünnen Fortsätzen kam jedes Mal ein geschlossener Körper aus
+einem Stück heraus. Andere Modelle, darunter Hunyuan3D, haben eigene
+Bedingungen, die für die konkret eingesetzte Fassung vor dem Einsatz geprüft
+werden müssen.
 
-Solidon liefert weiterhin keine Gewichte mit und lädt keine — der Nutzer
-installiert ComfyUI und seine Modelle selbst, und was er einsetzt, entscheidet
-er. Der mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``) und keine
-Datei: wer ein anderes Modell mit derselben Rolle installiert, benutzt es ohne
-eine Zeile Code zu ändern. Weitere frei lizenzierte Kerne für dieselbe Aufgabe
-sind Step1X-3D (Apache-2.0) und TRELLIS (MIT).
+Solidon liefert weiterhin keine Gewichte mit. Erst die ausdrücklich gestartete
+Einrichtung holt sie in das lokale ComfyUI; welches Modell eingesetzt wird,
+entscheidet der Nutzer. Der mitgelieferte Graph nennt deshalb Rollen
+(``{model:shape}``) und keine Datei: Wer ein anderes Modell mit derselben Rolle
+installiert, benutzt es ohne eine Zeile Code zu ändern. Weitere frei
+lizenzierte Kerne für dieselbe Aufgabe sind Step1X-3D (Apache-2.0) und TRELLIS
+(MIT).
 
 **Freigestellt wird mit ComfyUIs eigenen Knoten**, und dahinter steht eine
 Lizenzsache: Der Ablauf sprach ``RMBG`` aus ``ComfyUI-RMBG`` an, und das ist
