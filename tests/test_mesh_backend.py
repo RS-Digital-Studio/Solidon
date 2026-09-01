@@ -8,6 +8,7 @@ samt dem Nachfragen und den Platzhaltern im Workflow.
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -510,6 +511,70 @@ def test_a_cancelled_setup_keeps_what_it_has(
     assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"
 
 
+def test_triposg_source_uses_and_verifies_the_fixed_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Installationsstand darf nicht davon abhängen, wann jemand einrichtet.
+
+    Ein flacher Klon von ``HEAD`` war zwar klein, holte aber bei jedem Lauf
+    potenziell anderen Quelltext. Der feste Commit muss deshalb schon im Fetch
+    stehen, ausgecheckt werden und als tatsächlicher ``HEAD`` geprüft werden.
+    LICENSE und NOTICE reisen weiterhin neben den Knoten mit.
+    """
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "ComfyUI" / "custom_nodes" / comfy_setup.NODE_NAME
+    target.mkdir(parents=True)
+    scratch = target / "_clone"
+    commands: list[list[str]] = []
+
+    monkeypatch.setattr(comfy_setup.discover, "find_program", lambda *_args: Path("git"))
+
+    def run(
+        command: list[str],
+        _what: object,
+        _progress: object,
+        _cancelled: object = None,
+    ) -> None:
+        commands.append(command)
+        if command[1] == "init":
+            scratch.mkdir()
+        if "checkout" in command:
+            (scratch / "triposg").mkdir()
+            (scratch / "LICENSE").write_text("MIT", encoding="utf-8")
+            (scratch / "NOTICE").write_text("Hinweise", encoding="utf-8")
+
+    monkeypatch.setattr(comfy_setup, "_run", run)
+
+    comfy_setup.fetch_triposg(target)
+
+    commit = comfy_setup.TRIPOSG_COMMIT
+    assert [
+        "git",
+        "-C",
+        str(scratch),
+        "fetch",
+        "--depth",
+        "1",
+        comfy_setup.TRIPOSG_REPO,
+        commit,
+    ] in commands
+    assert ["git", "-C", str(scratch), "checkout", "--detach", commit] in commands
+    assert [
+        command[6:]
+        for command in commands
+        if command[3:6] == ["merge-base", "--is-ancestor", commit]
+    ] == [["HEAD"]]
+    assert [
+        command[6:]
+        for command in commands
+        if command[3:6] == ["merge-base", "--is-ancestor", "HEAD"]
+    ] == [[commit]]
+    assert (target / "triposg").is_dir()
+    assert (target / "LICENSE-TripoSG").read_text(encoding="utf-8") == "MIT"
+    assert (target / "NOTICE-TripoSG").read_text(encoding="utf-8") == "Hinweise"
+
+
 # --- läuft es, und kennt es die Knoten? (§27) -------------------------------------
 
 
@@ -909,6 +974,98 @@ def test_the_weights_are_downloaded_through_a_short_folder() -> None:
     ordner = comfy_setup.scratch_dir("dl-triposg")
     assert user_cache_dir() in ordner.parents, "er liegt im Nutzer-Cache"
     assert ordner.is_dir(), "und er ist angelegt, bevor jemand hineinlädt"
+
+
+def test_triposg_weights_use_and_verify_the_fixed_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch die 7,5 GB müssen bei jedem Einrichten denselben Stand ergeben."""
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 500.0)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        comfy_setup,
+        "_run_repeatedly",
+        lambda command, *_args, **_kwargs: commands.append(command),
+    )
+
+    comfy_setup.fetch_weights(tmp_path / "ComfyUI", Path("python"))
+
+    assert len(commands) == 1
+    command = commands[0]
+    assert command[-1] == comfy_setup.WEIGHTS_REVISION
+    program = comfy_setup._FETCH_WEIGHTS
+
+    calls: list[tuple[str, str, str]] = []
+
+    def download(repo: str, *, revision: str, local_dir: str, max_workers: int) -> str:
+        assert max_workers == 8
+        calls.append(("laden", repo, revision))
+        (Path(local_dir) / "model_index.json").write_text("{}", encoding="utf-8")
+        return local_dir
+
+    class Api:
+        def model_info(self, repo: str, *, revision: str) -> SimpleNamespace:
+            calls.append(("prüfen", repo, revision))
+            return SimpleNamespace(sha=revision)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(HfApi=Api, snapshot_download=download),
+    )
+    monkeypatch.setattr(sys, "argv", ["-c", *command[4:]])
+
+    exec(program, {})
+
+    expected = (comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION)
+    assert calls == [("laden", *expected), ("prüfen", *expected)]
+    assert (tmp_path / "ComfyUI" / "models" / "triposg" / "TripoSG").is_dir()
+
+
+def test_triposg_weights_reject_a_different_resolved_revision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Revisionsparameter allein genügt nicht; sein Ergebnis wird geprüft."""
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "target"
+    scratch = tmp_path / "scratch"
+
+    def download(_repo: str, **kwargs: object) -> str:
+        local_dir = Path(str(kwargs["local_dir"]))
+        (local_dir / "model_index.json").write_text("{}", encoding="utf-8")
+        return str(local_dir)
+
+    class Api:
+        def model_info(self, _repo: str, *, revision: str) -> SimpleNamespace:
+            assert revision == comfy_setup.WEIGHTS_REVISION
+            return SimpleNamespace(sha="0" * 40)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(HfApi=Api, snapshot_download=download),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "-c",
+            str(target),
+            comfy_setup.WEIGHTS_REPO,
+            str(scratch),
+            comfy_setup.WEIGHTS_REVISION,
+        ],
+    )
+
+    with pytest.raises(RuntimeError, match="Modellstand"):
+        exec(comfy_setup._FETCH_WEIGHTS, {})
+
+    assert scratch.is_dir(), "der falsche Stand wird nicht an den Zielort verschoben"
+    assert not target.exists()
 
 
 def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:

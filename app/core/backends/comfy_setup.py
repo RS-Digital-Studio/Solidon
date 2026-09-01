@@ -48,7 +48,9 @@ NODE_SOURCE: Final = Path(__file__).parent / "data" / "comfyui" / "ComfyUI-Tripo
 NODE_NAME: Final = "ComfyUI-TripoSG-Solidon"
 
 TRIPOSG_REPO: Final = "https://github.com/VAST-AI-Research/TripoSG.git"
+TRIPOSG_COMMIT: Final = "fc5c40990181e2a756c4e0b1c2f4d6b5202faf8c"
 WEIGHTS_REPO: Final = "VAST-AI/TripoSG"
+WEIGHTS_REVISION: Final = "2c1c516d22d58db486a058d98d31bb6177344e06"
 
 #: Das Freistell-Modell, ohne das der Bildweg nicht läuft: TripoSG will ein
 #: freigestelltes Objekt, kein Lichtbild mit Zimmer dahinter.
@@ -557,7 +559,13 @@ def copy_nodes(comfyui: Path, progress: ProgressFn = _silent) -> Path:
 def fetch_triposg(
     target: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
 ) -> None:
-    """Den TripoSG-Quelltext neben die Knoten holen."""
+    """Den festgelegten TripoSG-Quelltext neben die Knoten holen.
+
+    ``git clone --branch`` nimmt keinen nackten Commit an. Deshalb wird das
+    leere Ziel initialisiert und genau der eine Commit flach geholt. Die beiden
+    Gegenprüfungen beweisen danach, dass ``HEAD`` und der Pin derselbe Commit
+    sind: Jeder muss Vorfahr des anderen sein.
+    """
     if (target / "triposg").is_dir():
         return
     # Gefragt wird über ``discover``, nicht über ``shutil.which``: Im Flatpak
@@ -575,12 +583,42 @@ def fetch_triposg(
             )
         )
     scratch = target / "_clone"
-    _run(
-        ["git", "clone", "--depth", "1", TRIPOSG_REPO, str(scratch)],
-        _("TripoSG holen"),
-        progress,
-        cancelled,
+    step = _("TripoSG holen")
+    progress(step)
+    commands = (
+        ["git", "init", str(scratch)],
+        [
+            "git",
+            "-C",
+            str(scratch),
+            "fetch",
+            "--depth",
+            "1",
+            TRIPOSG_REPO,
+            TRIPOSG_COMMIT,
+        ],
+        ["git", "-C", str(scratch), "checkout", "--detach", TRIPOSG_COMMIT],
+        [
+            "git",
+            "-C",
+            str(scratch),
+            "merge-base",
+            "--is-ancestor",
+            TRIPOSG_COMMIT,
+            "HEAD",
+        ],
+        [
+            "git",
+            "-C",
+            str(scratch),
+            "merge-base",
+            "--is-ancestor",
+            "HEAD",
+            TRIPOSG_COMMIT,
+        ],
     )
+    for command in commands:
+        _run(command, step, _silent, cancelled)
     shutil.move(str(scratch / "triposg"), str(target / "triposg"))
     for extra in ("LICENSE", "NOTICE"):
         if (scratch / extra).is_file():
@@ -770,12 +808,20 @@ def weights_present(comfyui: Path) -> bool:
 _FETCH_WEIGHTS = """
 import shutil, sys
 from pathlib import Path
-from huggingface_hub import snapshot_download
+from huggingface_hub import HfApi, snapshot_download
 
 target = Path(sys.argv[1])
+repo = sys.argv[2]
 scratch = Path(sys.argv[3])
+revision = sys.argv[4]
 scratch.mkdir(parents=True, exist_ok=True)
-snapshot_download(sys.argv[2], local_dir=str(scratch), max_workers=8)
+snapshot_download(repo, revision=revision, local_dir=str(scratch), max_workers=8)
+resolved = HfApi().model_info(repo, revision=revision).sha
+if resolved != revision:
+    raise RuntimeError(
+        f"Der geladene Modellstand ist {resolved} statt {revision}. "
+        "Löschen Sie den Zwischenordner und starten Sie die Einrichtung erneut."
+    )
 shutil.rmtree(scratch / ".cache", ignore_errors=True)
 print("Verschieben", flush=True)
 target.parent.mkdir(parents=True, exist_ok=True)
@@ -936,6 +982,7 @@ def fetch_weights(
             str(target),
             WEIGHTS_REPO,
             str(scratch),
+            WEIGHTS_REVISION,
         ],
         _("Gewichte laden — rund 7,5 GB, das dauert"),
         progress,

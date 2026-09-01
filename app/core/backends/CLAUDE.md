@@ -22,6 +22,16 @@ Die Regeln stehen in `.claude/rules/agentenschicht.md`.
 Weil `tools/` im gebauten Paket **nicht mitreist**. Was der Nutzer aus der
 laufenden Anwendung heraus einrichten können soll, muss hier stehen.
 
+## TripoSG bleibt reproduzierbar
+
+Quelltext und Gewichte tragen in `comfy_setup.py` jeweils einen vollständigen
+Commit-Pin. Der Quelltext wird direkt von
+`github.com/VAST-AI-Research/TripoSG` auf diesen Commit geholt und danach gegen
+`HEAD` geprüft; `snapshot_download` erhält die feste Revision von
+`huggingface.co/VAST-AI/TripoSG`, deren aufgelöster Stand ebenfalls geprüft
+wird. Ein Wechsel zieht immer Pin, Setup und die beiden Reproduzierbarkeitstests
+gemeinsam nach. LICENSE und NOTICE bleiben Teil der eingerichteten Knoten.
+
 ## `scripted.py` ist der Grund, warum Agententests ohne Geld laufen
 
 Ein Modell mit vorgeschriebenen Antworten. Damit sind Sitzungsverlauf,
