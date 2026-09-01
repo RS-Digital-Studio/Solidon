@@ -18,19 +18,56 @@ scrive in `website/version.json`.
 ## 0.3.0
 
 
-### Avvio e vista
+### Primi passi e interfaccia
 
-- Il feedback e il sostegno volontario sono ora due schede chiare nella schermata iniziale. Rispondono a mouse e tastiera con profondità visibile, o senza animazione quando i movimenti sono ridotti.
-- Il piano di stampa ora è traslucido. I pezzi finiti per errore appena sotto restano visibili, mentre griglia e bordo rimangono chiari.
+- Quattro tour coprono i percorsi principali: adattare un modello, costruirlo, generarlo da testo o immagine oppure scolpirlo. Altri esempi restano disponibili per approfondire.
+- L’interfaccia è stata riorganizzata in finestre, dialoghi e barre degli strumenti. Spazi chiari, pulsanti coerenti e gruppi compatti la mantengono utilizzabile anche in finestre strette.
+- Il feedback e il sostegno volontario sono due schede nella schermata iniziale. Funzionano con mouse e tastiera, rispettano il movimento ridotto e spiegano le pagine esterne prima di aprirle.
+- Il piano di stampa è traslucido. I pezzi finiti per errore appena sotto restano visibili, mentre griglia e bordo rimangono chiari.
+- È possibile cercare nelle impostazioni di stampa. L’intestazione mostra la stampante selezionata e il materiale effettivamente usato, invece di offrire una seconda selezione in conflitto.
+
+### Disegno e misure
+
+- Un cerchio richiede il diametro invece del raggio. Il valore inserito è quello misurabile sul pezzo finito.
+- Le misure si possono modificare direttamente con un doppio clic; i campi numerici nelle barre degli strumenti accettano valori esatti senza passare da una grande finestra di dialogo.
+- Esc torna indietro nel disegno per gradi: prima il tratto iniziato, poi lo strumento e solo dopo lo schizzo. Anche Ripeti funziona durante il disegno.
+- Le indicazioni mostrano entrambi i modi per iniziare uno schizzo: disegnare un contorno proprio o inserire una forma base già pronta. Le misurazioni terminano con un riscontro visibile.
+
+### Cronologia e modifica
+
+- Più pezzi selezionati si possono spostare e ruotare insieme. La rotazione mantiene le distanze reciproche e il risultato viene riposizionato sul piano di stampa.
+- I movimenti consecutivi vengono riuniti in un’unica azione comprensibile nella cronologia. I passaggi collegati si possono comprimere e annullare insieme.
+- I modelli scaricati e importati si possono nuovamente tagliare e modificare in modo affidabile. Le facce protette o rilevate restano evidenziate senza nasconderne la forma.
+- La scultura con il pennello salva i tratti di una sessione come un passaggio annullabile. I motivi di superficie segnalano quando un tratto manca il corpo, invece di lasciare geometria staccata.
 
 ### Blocchi come file
 
-- I blocchi creati da te si possono salvare come file locale e aggiungere di nuovo al catalogo. Importazione, esportazione e annullamento funzionano interamente dall’interfaccia.
-- Lo scambio ospitato è stato rimosso. I blocchi ora si condividono solo tramite file locali, senza account né collegamento a un servizio di scambio.
+- I blocchi creati da te si possono esportare come file locali `.solidon-part` e importare nuovamente nel catalogo. Importazione, esportazione e annullamento funzionano interamente dall’interfaccia.
+- Un file di blocco contiene i passaggi modificabili, i valori, l’anteprima e la provenienza del blocco. Non esegue codice sorgente incluso e non contatta alcun servizio di scambio.
+- I blocchi importati restano riconoscibili come provenienti da altrove. Un blocco personale con lo stesso nome non viene sovrascritto senza avviso.
+- I file di blocco si possono associare a Solidon e aprire dal gestore file su Windows, macOS e Linux.
+- Ganci per pannelli forati, cerniere flessibili e motivi di superficie segnalano ora orientamenti inadatti o contatto mancante prima che passi inosservato un risultato plausibile ma non adatto.
 
-### Windows, macOS e Linux
+### Divisione e stampa
 
-- Solidon ora apre le finestre in modo affidabile su tutte e tre le piattaforme. Adatta la barra del titolo solo dove il sistema lo consente e altrove mantiene l’aspetto abituale della piattaforma.
+- Auto Split cerca giunzioni più robuste invece di privilegiare il punto più sottile. In base alla giunzione sceglie perni, coda di rondine oppure maschio e femmina adatti alla superficie disponibile.
+- I collegamenti creati automaticamente restano riproducibili e le ricerche lunghe si possono annullare senza lasciare il documento modificato a metà.
+- I pezzi multicolore e gli assiemi si possono vedere montati e gestire separatamente per la stampa. I riferimenti a materiali e oggetti restano intatti.
+- Le impostazioni di stampa prendono i valori del materiale dalla bobina realmente selezionata. Ricerca, testi di aiuto e motivi visibili di blocco conducono più rapidamente all’impostazione corretta.
+
+### Chat e generazione 3D
+
+- Il percorso da testo o immagine passa attraverso una finestra Genera dedicata fino alla stessa scena modificabile. La configurazione locale installa ComfyUI e TripoSG a revisioni fisse e verificabili.
+- Prima della prima chiamata a un modello cloud, Solidon mostra quali input e dati del modello lasciano il computer. I modelli locali linguistici e di generazione restano chiaramente separati.
+- La chat spiega più chiaramente il proprio scopo, il passaggio di lavoro in corso e lo strumento usato. L’agente può gestire insieme dettagli di forma ripetuti, senza doverli ricevere uno alla volta.
+
+### Rapporto, stabilità e piattaforme
+
+- Il rapporto raggruppa i riscontri duplicati, etichetta completamente le misure e porta al punto interessato quando selezioni un avviso. I pulsanti d’azione restano direttamente disponibili.
+- Le riparazioni automatiche formano un unico passaggio. Se una riparazione non può concludersi, lo stato originale resta intatto e il messaggio propone un passo successivo praticabile.
+- Esempi, blocchi inclusi e attivazione si caricano senza bloccarsi a vicenda. L’applicazione rilascia la vista 3D in modo più affidabile alla chiusura.
+- Solidon apre le finestre in modo affidabile su Windows, macOS e Linux. Adatta la barra del titolo solo dove il sistema lo consente e altrove mantiene l’aspetto abituale della piattaforma.
+- I testi dell’interfaccia in tedesco, inglese, spagnolo, francese, italiano e portoghese restano completi dopo un cambio di lingua; anche i pulsanti standard cambiano immediatamente.
 
 ## 0.2.2
 

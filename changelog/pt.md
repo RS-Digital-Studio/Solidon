@@ -18,19 +18,56 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ## 0.3.0
 
 
-### Início e vista
+### Primeiros passos e interface
 
-- A opinião e o apoio voluntário aparecem agora como dois cartões claros no ecrã inicial. Respondem ao rato e ao teclado com profundidade visível, ou sem animação quando o movimento reduzido está ativo.
-- A mesa de impressão é agora translúcida. As peças que fiquem por engano logo abaixo continuam visíveis, enquanto a grelha e o contorno permanecem nítidos.
+- Quatro visitas cobrem os caminhos principais: adaptar um modelo, construí-lo, gerá-lo a partir de texto ou imagem e modelá-lo livremente. Há mais exemplos para aprofundar.
+- A interface foi reorganizada em janelas, diálogos e barras. Espaços claros, botões coerentes e grupos compactos mantêm utilizáveis as definições extensas e as janelas estreitas.
+- A opinião e o apoio voluntário aparecem como cartões no ecrã inicial. Funcionam com rato e teclado, respeitam o movimento reduzido e explicam as páginas externas antes de as abrir.
+- A mesa de impressão é translúcida. As peças que fiquem por engano logo abaixo continuam visíveis, enquanto a grelha e o contorno permanecem nítidos.
+- É possível pesquisar nas definições de impressão. O cabeçalho mostra a impressora selecionada e o material realmente utilizado, em vez de oferecer ali uma segunda seleção contraditória.
+
+### Desenho e medidas
+
+- Um círculo pede o diâmetro em vez do raio. O valor introduzido é aquele que pode ser medido na peça acabada.
+- As medidas podem ser alteradas diretamente com um duplo clique; os campos numéricos das barras de ferramentas aceitam valores exatos sem passar por um diálogo grande.
+- Escape recua no desenho por etapas: primeiro o traço iniciado, depois a ferramenta e só então o esboço. Refazer também funciona enquanto desenha.
+- As indicações mostram as duas formas de iniciar um esboço: desenhar o seu próprio contorno ou inserir uma forma básica pronta. As medições terminam com uma resposta visível.
+
+### Histórico e edição
+
+- É possível mover e rodar em conjunto várias peças selecionadas. A rotação mantém as distâncias entre elas e o resultado volta a ser colocado na mesa de impressão.
+- Os movimentos consecutivos são reunidos numa única ação compreensível no histórico. Os passos relacionados podem ser recolhidos e desfeitos em conjunto.
+- Os modelos descarregados e importados podem voltar a ser cortados e editados de forma fiável. As faces protegidas ou detetadas permanecem assinaladas sem esconder a sua forma.
+- A modelação com pincel guarda os traços de uma sessão como um passo reversível. Os padrões de superfície avisam quando um traço falha o corpo, em vez de deixar geometria solta.
 
 ### Blocos como ficheiros
 
-- Os blocos que criar podem ser guardados como ficheiro local e novamente adicionados ao catálogo. Importar, exportar e desfazer funcionam inteiramente pela interface.
-- A troca alojada foi removida. Os blocos são agora partilhados apenas por ficheiros locais, sem conta nem ligação a um serviço de troca.
+- Os blocos que criar podem ser exportados como ficheiros locais `.solidon-part` e novamente importados para o catálogo. Importar, exportar e desfazer funcionam inteiramente pela interface.
+- Um ficheiro de bloco contém os passos editáveis, os valores, a pré-visualização e a proveniência do bloco. Não executa código-fonte incluído nem contacta qualquer serviço de troca.
+- Os blocos importados continuam identificados como provenientes de outra origem. Um bloco próprio com o mesmo nome não é substituído silenciosamente.
+- Os ficheiros de bloco podem ser associados ao Solidon e abertos no gestor de ficheiros no Windows, macOS e Linux.
+- Ganchos para painéis perfurados, dobradiças flexíveis e padrões de superfície indicam uma orientação inadequada ou falta de contacto antes que o problema passe despercebido.
 
-### Windows, macOS e Linux
+### Divisão e impressão
 
-- O Solidon abre agora as janelas de forma fiável nas três plataformas. A barra de título só é adaptada onde o sistema o permite; nos restantes casos mantém o aspeto habitual da plataforma.
+- O Auto Split procura uniões mais resistentes em vez de favorecer o ponto mais fino. Conforme a união, escolhe pinos, cauda de andorinha ou macho e fêmea adequados à área disponível.
+- As ligações criadas automaticamente permanecem reproduzíveis e as pesquisas demoradas podem ser canceladas sem deixar o documento parcialmente modificado.
+- As peças multicoloridas e os conjuntos podem ser vistos montados e tratados separadamente para impressão. As referências a materiais e objetos são preservadas.
+- As definições de impressão obtêm os valores do material da bobina realmente selecionada. A pesquisa, os textos de ajuda e os motivos visíveis de bloqueio conduzem mais rapidamente à definição correta.
+
+### Chat e geração 3D
+
+- O caminho a partir de texto ou imagem passa por um diálogo Gerar próprio até à mesma cena editável. A configuração local instala o ComfyUI e o TripoSG em revisões fixas e verificáveis.
+- Antes da primeira chamada a um modelo na nuvem, o Solidon mostra que entradas e dados do modelo saem do computador. Os modelos locais de linguagem e geração permanecem claramente separados.
+- O chat explica melhor a sua finalidade, o passo em curso e a ferramenta utilizada. O agente trata em conjunto detalhes de forma repetidos, sem precisar que cada um seja explicado separadamente.
+
+### Relatório, estabilidade e plataformas
+
+- O relatório agrupa resultados duplicados, identifica completamente as medições e leva ao local afetado quando seleciona um aviso. Os botões de ação permanecem diretamente disponíveis.
+- As reparações automáticas são executadas como um único passo coerente. Se uma reparação não puder ser concluída, o estado original permanece intacto e a mensagem oferece um passo seguinte viável.
+- Os exemplos, os blocos incluídos e a ativação carregam sem se bloquearem mutuamente. A aplicação liberta a vista 3D de forma mais fiável ao fechar.
+- O Solidon abre as janelas de forma fiável no Windows, macOS e Linux. A barra de título só é adaptada onde o sistema o permite; nos restantes casos mantém o aspeto habitual da plataforma.
+- Os textos da interface em alemão, inglês, espanhol, francês, italiano e português permanecem completos após mudar o idioma; os botões padrão também mudam imediatamente.
 
 ## 0.2.2
 

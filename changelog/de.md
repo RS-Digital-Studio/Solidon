@@ -43,19 +43,56 @@ Nutzen da und sonst nichts.
 ## 0.3.0
 
 
-### Start und Ansicht
+### Einstieg und Oberfläche
 
-- Rückmeldung und freiwillige Unterstützung stehen jetzt als zwei klare Karten auf der Startseite. Sie reagieren auf Maus und Tastatur mit sichtbarer Tiefe; bei reduzierter Bewegung ohne Animation.
-- Die Druckplatte ist jetzt durchscheinend. So bleiben Teile sichtbar, die versehentlich knapp unter der Platte liegen, während Raster und Rand klar erkennbar bleiben.
+- Vier geführte Touren führen zu den Hauptwegen: ein Modell anpassen, selbst konstruieren, aus Text oder Bild erzeugen und frei formen. Weitere Beispiele bleiben als Vertiefung erreichbar.
+- Die Oberfläche ist über Fenster, Dialoge und Werkzeugleisten neu geordnet. Klare Abstände, einheitliche Knöpfe und kompakte Gruppen halten auch lange Einstellungen und schmale Fenster bedienbar.
+- Rückmeldung und freiwillige Unterstützung stehen als klare Karten auf der Startseite. Sie reagieren auf Maus und Tastatur, respektieren reduzierte Bewegung und erklären externe Seiten vor dem Öffnen.
+- Die Druckplatte ist durchscheinend. So bleiben Teile sichtbar, die versehentlich knapp unter ihr liegen, während Raster und Rand klar erkennbar bleiben.
+- Druckeinstellungen lassen sich durchsuchen. Die Kopfzeile zeigt den gewählten Drucker und das tatsächlich verwendete Material, statt dort eine zweite, widersprüchliche Auswahl anzubieten.
+
+### Zeichnen und Maße
+
+- Ein Kreis fragt nach seinem Durchmesser statt nach dem Radius. Was Sie eingeben, ist die Zahl, die Sie am fertigen Teil nachmessen.
+- Maße lassen sich per Doppelklick direkt ändern; Zahlenfelder in den Werkzeugleisten nehmen genaue Werte an, ohne den Weg über einen großen Dialog.
+- Escape nimmt beim Zeichnen schrittweise zurück: zuerst den begonnenen Zug, dann das Werkzeug und erst danach die Skizze. Wiederholen funktioniert auch im Zeichenmodus.
+- Hinweise nennen beide Einstiege in eine Skizze: einen eigenen Umriss zeichnen oder eine fertige Grundform einsetzen. Messungen enden mit einer sichtbaren Rückmeldung.
+
+### Verlauf und Bearbeitung
+
+- Mehrere gewählte Teile lassen sich gemeinsam verschieben und drehen. Beim Drehen bleiben ihre Abstände erhalten, und das Ergebnis wird wieder auf das Druckbett gesetzt.
+- Mehrere aufeinanderfolgende Bewegungen werden als eine verständliche Handlung im Verlauf zusammengefasst. Zusammengehörige Schritte lassen sich einklappen und gemeinsam rückgängig machen.
+- Heruntergeladene und eingelesene Modelle lassen sich wieder zuverlässig schneiden und weiterbearbeiten. Geschützte oder erkannte Flächen bleiben sichtbar markiert, ohne ihre Form zu verdecken.
+- Formen mit dem Pinsel übernimmt alle Züge einer Sitzung als einen rücknehmbaren Schritt. Oberflächenmuster melden, wenn ein Zug den Körper verfehlt, statt lose Geometrie unbemerkt stehen zu lassen.
 
 ### Bausteine als Dateien
 
-- Eigene Bausteine lassen sich als lokale Datei speichern und wieder in den Katalog aufnehmen. Import, Export und Rückgängig laufen vollständig über die Oberfläche.
-- Die gehostete Tauschbörse ist entfernt. Bausteine werden nur noch über lokale Dateien weitergegeben — ohne Konto und ohne Verbindung zu einem Austauschdienst.
+- Eigene Bausteine lassen sich als lokale `.solidon-part`-Datei exportieren und wieder in den Katalog importieren. Import, Export und Rückgängig laufen vollständig über die Oberfläche.
+- Eine Bausteindatei enthält die veränderbaren Schritte, Werte, Vorschau und Herkunft des Bausteins. Sie führt keinen mitgereisten Quelltext aus und nimmt keinen Kontakt zu einem Austauschdienst auf.
+- Importierte Bausteine bleiben als fremde Herkunft erkennbar. Ein eigener Baustein mit demselben Namen wird nicht still überschrieben.
+- Bausteindateien lassen sich unter Windows, macOS und Linux direkt Solidon zuordnen und aus dem Dateimanager öffnen.
+- Lochwand-Einhänger, Filmscharniere und Oberflächenmuster melden jetzt ungünstige Ausrichtungen oder fehlenden Kontakt, bevor ein äußerlich plausibles, aber ungeeignetes Ergebnis unbemerkt bleibt.
 
-### Windows, macOS und Linux
+### Teilen und Drucken
 
-- Solidon öffnet seine Fenster jetzt auf allen drei Plattformen verlässlich. Die Titelleiste wird nur dort angepasst, wo das System es unterstützt, und bleibt sonst systemtypisch.
+- Auto Split sucht stabilere Schnittstellen statt bevorzugt durch die dünnste Stelle zu schneiden. Je nach Naht wählt es Stifte, Schwalbenschwanz oder Nut und Feder passend zur verfügbaren Fläche.
+- Die automatisch erzeugten Verbindungen bleiben reproduzierbar, und lange Suchen lassen sich abbrechen, ohne einen halbfertigen Dokumentzustand zu hinterlassen.
+- Mehrfarbige und zusammengesetzte Teile lassen sich zusammengebaut ansehen und für den Druck getrennt behandeln. Material- und Objektbezüge bleiben dabei erhalten.
+- Die Druckeinstellungen beziehen Materialwerte von der tatsächlich gewählten Spule. Suche, Hilfetexte und sichtbare Sperrgründe führen schneller zur passenden Einstellung.
+
+### Chat und 3D-Erzeugung
+
+- Der Weg aus Text oder Bild führt über einen eigenen Erzeugen-Dialog in dieselbe bearbeitbare Szene. Die lokale Einrichtung richtet ComfyUI und TripoSG in festgelegten, überprüfbaren Ständen ein.
+- Vor dem ersten Aufruf eines Cloud-Modells zeigt Solidon, welche Eingaben und Modelldaten den Rechner verlassen. Lokale Sprach- und Erzeugermodelle bleiben deutlich davon getrennt.
+- Der Chat nennt Zweck, Arbeitsschritt und verwendetes Werkzeug klarer. Gleichartige Formdetails kann der Agent gemeinsam erfassen, statt jedes einzeln erklärt bekommen zu müssen.
+
+### Bericht, Stabilität und Plattformen
+
+- Der Prüfbericht bündelt gleiche Befunde, beschriftet Messwerte vollständig und führt beim Anklicken einer Warnung zur betroffenen Stelle. Handlungsknöpfe bleiben direkt erreichbar.
+- Auto-Reparaturen werden als ein zusammengehöriger Schritt ausgeführt. Scheitert eine Reparatur, bleibt der ursprüngliche Zustand erhalten und die Meldung bietet einen gangbaren nächsten Schritt.
+- Beispiele, mitgelieferte Bausteine und die Freischaltung laden ohne gegenseitige Blockade. Die Anwendung räumt ihre 3D-Ansicht beim Schließen zuverlässiger auf.
+- Solidon öffnet seine Fenster unter Windows, macOS und Linux verlässlich. Die Titelleiste wird nur dort angepasst, wo das System es unterstützt, und bleibt sonst systemtypisch.
+- Deutsche, englische, spanische, französische, italienische und portugiesische Oberflächentexte bleiben auch nach einem Sprachwechsel vollständig; Standardknöpfe wechseln unmittelbar mit.
 
 ## 0.2.2
 
