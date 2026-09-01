@@ -144,6 +144,11 @@ jobs:
         # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
         # sonst einen eigenen Prozess für nichts.
         #
+        # `PrintSettingsDialog(` gehört ebenfalls in die Suche: Die Datei baut
+        # kein VTK-Fenster, erzeugt aber so viele umfangreiche Qt-Dialoge, dass
+        # der bereits gefüllte Sammelprozess reproduzierbar in Qt abstürzt. Ein
+        # einzelner betroffener Test besteht in einem frischen Prozess.
+        #
         # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
         # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
         # `window`-Fixture von `test_analysis_ui.py` (`QThread.__init__`,
@@ -180,7 +185,7 @@ jobs:
           GALLIUM_DRIVER: llvmpipe
         run: |
           set -e
-          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
+          windowed=$(grep -lE "MainWindow|Viewport\(|PrintSettingsDialog\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           # Xvfb nur, wo es eines gibt.
@@ -229,7 +234,7 @@ jobs:
           }
           attempt -m "not performance" $ignores
 
-          # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
+          # **Die UI-intensiven Dateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
           #
           # Kein Runner hat eine Grafikkarte. VTK sucht trotzdem einen echten
@@ -251,7 +256,7 @@ jobs:
           # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
           # Sie schließt sich, sobald VTK dort läuft oder die Runner GL
           # bekommen; bis dahin steht sie in ROADMAP.md.
-          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          echo "::warning::UI-intensive Dateien übersprungen (Qt/VTK ohne GL): $windowed"
 
   package:
     name: Paket (${{ matrix.os }})
@@ -761,8 +766,8 @@ jobs:
         # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
         # geht unter — er prüft deshalb, was er hier prüfen kann.
         run: |
-          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
+          windowed=$(grep -lE "MainWindow|Viewport\(|PrintSettingsDialog\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
-          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          echo "::warning::UI-intensive Dateien übersprungen (Qt/VTK ohne GL): $windowed"
           python -m pytest -q -m "not performance" $ignores

@@ -453,8 +453,9 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
 
     Der Absturz auf den Linux-Runnern hängt an der Zahl der VTK-Fenster, die ein
-    Prozess nacheinander aufbaut; deshalb laufen die Fensterdateien einzeln. Die
-    Liste wird gesucht und nicht gepflegt, und genau daran ist sie
+    Prozess nacheinander aufbaut; außerdem erschöpfen große Dialogdateien nach
+    tausenden vorherigen Qt-Tests den Prozess. Deshalb laufen diese Dateien
+    einzeln. Die Liste wird gesucht und nicht gepflegt, und genau daran ist sie
     zurückgeblieben: Nach `MainWindow` allein fehlten `test_cursors.py` (acht
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
@@ -468,7 +469,9 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
     pattern = re.compile(found.group(1))
 
-    builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
+    builders = re.compile(
+        r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter|PrintSettingsDialog)\("
+    )
     missed = []
     for path in sorted((ROOT / "tests").glob("test_*.py")):
         source = path.read_text(encoding="utf-8")
