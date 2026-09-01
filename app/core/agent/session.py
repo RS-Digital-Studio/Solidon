@@ -281,6 +281,14 @@ class AgentSession:
         """Beantwortet eine Anfrage mit einem Vorschlag. Am Dokument wird nichts
         angewandt.
         """
+        resource_session = getattr(self.backend, "resource_session", None)
+        if not callable(resource_session):
+            return self._propose(request)
+        with resource_session(self.cancelled):
+            return self._propose(request)
+
+    def _propose(self, request: str) -> Proposal:
+        """Führt den Zug innerhalb einer gegebenenfalls belegten Ressourcenspur aus."""
         # §2 C: der Chat braucht die Freischaltung — schon der Vorschlag, nicht
         # erst das Übernehmen, denn er kostet Modellaufrufe und liefert Arbeit.
         activation.require(activation.CHAT)
@@ -331,9 +339,22 @@ class AgentSession:
             if remaining < MIN_ANSWER_TOKENS:
                 proposal.stopped = "tokens"
                 break
-            reply = self.backend.complete(
-                messages, tools, temperature=self.temperature, max_output_tokens=remaining
-            )
+            cancellable = getattr(self.backend, "complete_cancelable", None)
+            if callable(cancellable) and self.cancelled is not None:
+                reply = cancellable(
+                    messages,
+                    tools,
+                    temperature=self.temperature,
+                    max_output_tokens=remaining,
+                    cancelled=self.cancelled,
+                )
+            else:
+                reply = self.backend.complete(
+                    messages,
+                    tools,
+                    temperature=self.temperature,
+                    max_output_tokens=remaining,
+                )
             proposal.steps += 1
             # Alle Zahlen kommen aus der Antwort und nicht aus einer eigenen
             # Schätzung — aber es sind zwei Auskünfte und nicht eine.

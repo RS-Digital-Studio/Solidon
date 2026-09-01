@@ -69,10 +69,13 @@ class Comfy:
         self.ready_after = ready_after
         self.payload = payload if payload is not None else stl()
         self.requests: list[str] = []
+        self.posts: list[tuple[str, bytes | None]] = []
         self.graphs: list[dict] = []
 
     def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
         self.requests.append(url)
+        if body is not None:
+            self.posts.append((url, body))
         if url.endswith("/prompt"):
             self.graphs.append(json.loads((body or b"{}").decode("utf-8"))["prompt"])
             return b'{"prompt_id": "job-1"}'
@@ -1800,6 +1803,39 @@ def test_a_running_generation_can_be_cancelled() -> None:
 
     with pytest.raises(OperationCancelled):
         generator.text_to_mesh("ein Halter", cancelled=abgebrochen)
+
+    posts = [
+        (url.rsplit("/", 1)[-1], json.loads((body or b"{}").decode("utf-8")))
+        for url, body in server.posts
+    ]
+    assert ("queue", {"delete": ["job-1"]}) in posts
+    assert ("interrupt", {"prompt_id": "job-1"}) in posts
+    assert ("free", {"unload_models": True, "free_memory": True}) in posts
+
+
+def test_a_successful_local_generation_releases_comfy_models() -> None:
+    """Nach dem Import gehört der Grafikspeicher wieder Viewport und Schichtanalyse."""
+    server = Comfy()
+
+    ComfyBackend(transport=server, poll_seconds=0.0).text_to_mesh("ein Halter")
+
+    assert any(
+        url.endswith("/free")
+        and json.loads((body or b"{}").decode("utf-8"))
+        == {"unload_models": True, "free_memory": True}
+        for url, body in server.posts
+    )
+
+
+def test_a_remote_comfy_server_is_not_unloaded() -> None:
+    """Ein geteilter Server auf einem anderen Rechner gehört nicht Solidon allein."""
+    server = Comfy()
+
+    ComfyBackend(url="http://192.0.2.1:8188", transport=server, poll_seconds=0.0).text_to_mesh(
+        "ein Halter"
+    )
+
+    assert not any(url.endswith("/free") for url, _body in server.posts)
 
 
 def test_without_a_callback_nothing_changes() -> None:

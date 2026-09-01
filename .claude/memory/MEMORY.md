@@ -21,6 +21,7 @@
 - [Lokale Umgebung: Python-Version](lokale-umgebung-python-version.md) — die .venv muss 3.13 fahren; sonst prüft mypy still null Dateien.
 - [TripoSG statt Hunyuan](triposg-statt-hunyuan.md) — MIT statt EU-Ausschluss; drei Fallen und die gemessenen Vorgaben.
 - [ComfyUI-Installation](comfyui-installation-d-ai.md) — liegt auf D:\AI; Hunyuan3D 2.1 hat andere Knotennamen und keinen Texteingang.
+- [Lokale KI teilt eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) — Ollama und ComfyUI serialisieren, gezielt abbrechen und danach VRAM freigeben.
 - [Ollama: Werkzeugaufrufe](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx schneidet Ollama den Prompt still ab.
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} bleibt stehen; in der Oberfläche richtig, im Kern nicht.
 - [Fehlertexte zeigten nur den Titel](fehlertexte-nur-titel.md) — der ist je Klasse gleich; der Grund steht im detail.

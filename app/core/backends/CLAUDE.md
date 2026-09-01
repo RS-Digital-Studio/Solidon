@@ -12,6 +12,7 @@ Die Regeln stehen in `.claude/rules/agentenschicht.md`.
 |---|---|
 | `llm.py` | Das Sprachmodell hinter dem Agenten — gehostet oder lokal (Ollama) |
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
+| `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
 | `scripted.py` | Ein Modell, das sagt, was man ihm aufgetragen hat — **die Grundlage jedes Agententests** (§35, §40) |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36) |
@@ -44,6 +45,15 @@ fragen. Die echte Messung ist die Agenten-Suite und etwas anderes.
 Werkzeuge nicht aufruft, ist dann nicht zu dumm — es hat sie nie gesehen.
 `tools/check_local_model.py` prüft genau das, bevor eine Modellmessung
 etwas aussagt.
+
+## Lokale KI teilt eine Grafikkarte
+
+Ollama und ComfyUI laufen auf demselben Rechner nie gleichzeitig durch
+Solidon. `resources.local_ai_slot()` serialisiert nur Loopback-Adressen;
+entfernte, möglicherweise geteilte Server bleiben unberührt. Ollama hält das
+Modell innerhalb eines vollständigen Agentenvorschlags warm und entlädt es im
+`finally`. ComfyUI löscht oder unterbricht beim Abbruch nur Solidons eigene
+Auftrags-ID und gibt seinen lokalen Modellcache nach jedem Auftrag frei.
 
 ## Grenzen
 

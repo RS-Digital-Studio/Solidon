@@ -19,18 +19,31 @@ frischen Rechner.
 from __future__ import annotations
 
 import base64
+import http.client
 import json
+import socket
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, opener_for
-from app.core.errors import CANCEL, OPEN_SETTINGS, RETRY, AppError, ExternalToolError
+from app.core.backends.resources import local_ai_slot
+from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, is_local_address, opener_for
+from app.core.errors import (
+    CANCEL,
+    OPEN_SETTINGS,
+    RETRY,
+    AppError,
+    ExternalToolError,
+    OperationCancelled,
+)
 from app.core.log import get_logger
+from app.core.types import CancelToken
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -328,6 +341,82 @@ def post_json_local(url: str, headers: dict[str, str], payload: dict[str, Any]) 
     return post_json(url, headers, payload, timeout=LOCAL_TIMEOUT_SECONDS)
 
 
+def post_json_local_cancelable(
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    cancelled: CancelToken,
+) -> dict[str, Any]:
+    """Lokales JSON-POST, dessen Verbindung ein Nutzerabbruch wirklich schließt."""
+    cancelled.raise_if_cancelled()
+    parts = urllib.parse.urlsplit(url)
+    if not is_local_address(url) or parts.scheme not in {"http", "https"}:
+        answer = post_json_local(url, headers, payload)
+        cancelled.raise_if_cancelled()
+        return answer
+    if not parts.hostname:
+        raise BackendUnavailable(detail=_("Die Adresse enthält keinen Rechnernamen."))
+
+    connection_type = (
+        http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
+    )
+    connection = connection_type(
+        parts.hostname,
+        parts.port,
+        timeout=LOCAL_TIMEOUT_SECONDS,
+    )
+    finished = threading.Event()
+    body = json.dumps(payload).encode("utf-8")
+    target = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
+    answers: list[dict[str, Any]] = []
+    errors: list[BaseException] = []
+
+    def request() -> None:
+        try:
+            connection.request(
+                "POST",
+                target,
+                body=body,
+                headers={"Content-Type": "application/json", **headers},
+            )
+            response = connection.getresponse()
+            raw = response.read()
+            if response.status >= 400:
+                raise BackendUnavailable(
+                    status=response.status,
+                    detail=raw.decode("utf-8", errors="replace")[:500],
+                )
+            answers.append(_as_object(raw, url))
+        except TimeoutError as error:
+            errors.append(BackendTooSlow(seconds=LOCAL_TIMEOUT_SECONDS))
+            errors[-1].__cause__ = error
+        except (OSError, http.client.HTTPException) as error:
+            errors.append(BackendUnavailable(detail=str(error)))
+            errors[-1].__cause__ = error
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            finished.set()
+            connection.close()
+
+    worker = threading.Thread(target=request, name="ollama-request", daemon=True)
+    worker.start()
+    while not finished.wait(0.05):
+        if not cancelled.is_cancelled:
+            continue
+        sock = connection.sock
+        if sock is not None:
+            with suppress(OSError):
+                sock.shutdown(socket.SHUT_RDWR)
+        connection.close()
+        raise OperationCancelled
+
+    cancelled.raise_if_cancelled()
+    if errors:
+        raise errors[0]
+    return answers[0]
+
+
 class BackendUnavailable(ExternalToolError):
     """Das Modell war nicht erreichbar oder hat abgelehnt.
 
@@ -339,7 +428,12 @@ class BackendUnavailable(ExternalToolError):
 
     default_title = _("Das Sprachmodell hat nicht geantwortet.")
 
-    def __init__(self, status: int | None = None, detail: str = "", provider: str = "") -> None:
+    def __init__(
+        self,
+        status: int | None = None,
+        detail: TranslatableText | str = "",
+        provider: str = "",
+    ) -> None:
         # **Der Anbieter gehört in die Meldung, und zwar aus einem gemessenen
         # Grund.** Ein Kunde richtete am 24.08.2026 sein lokales Ollama ein und
         # las über einem Anthropic-Schlüsselfehler „Das Sprachmodell hat nicht
@@ -855,37 +949,29 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: meldete — das Modell rechnete vollständig auf der CPU. ``prompt_eval_count``
 #: zählt trotzdem die Nutzlast: Die Dauer gehört der Maschine, die Token
 #: gehören dem Schema.
-#: Wie lange Ollama das Modell nach einer Antwort geladen hält.
+#: Wie lange Ollama das Modell zwischen zwei Schritten desselben Vorschlags hält.
 #:
-#: **Ohne diese Angabe gilt Ollamas Vorgabe von fünf Minuten**, und die ist
-#: für einen Chat neben einer Konstruktion zu kurz: Wer eine Frage stellt,
-#: sich das Ergebnis ansieht, eine Bohrung setzt und dann weiterfragt, ist
-#: leicht darüber — und zahlt dann den vollen Kaltstart. Gemessen am
-#: 31.08.2026 auf einer Maschine, deren Ollama auf der CPU rechnete:
-#: **219 Sekunden kalt gegen 6 Sekunden warm** für dieselbe Anfrage. Auf einer
-#: Karte ist der Abstand kleiner und bleibt spürbar.
-#:
-#: Dreißig Minuten, nicht mehr: Das Modell belegt bei ``qwen3:14b`` rund
-#: 15 GB, und dieselbe Maschine soll nebenher rendern und slicen. Wer den
-#: Chat eine halbe Stunde nicht anfasst, arbeitet gerade an etwas anderem —
-#: dann gehört der Speicher dorthin.
-OLLAMA_KEEP_ALIVE = "30m"
+#: Ein Werkzeugaufruf und die abschließende Antwort gehören zu einem Zug und
+#: sollen nicht zweimal kalt starten. Nach dem gesamten Zug entlädt
+#: :meth:`OllamaBackend.resource_session` ausdrücklich. Die eine Minute ist nur das
+#: Sicherheitsnetz für einen Prozessabbruch und direkte Diagnoseaufrufe.
+OLLAMA_KEEP_ALIVE = "60s"
 
 #: Wie lange warmgehalten wird, wenn das Modell auf dem Prozessor rechnet.
 #:
 #: **Dort kostet Warmhalten mehr, als es bringt.** Gemessen am 31.08.2026 auf
 #: derselben Maschine, einmal vor und einmal nach einem Neustart, der Ollamas
 #: GPU-Erkennung reparierte: auf der Karte 19 641 Token in **9,7 Sekunden**,
-#: auf dem Prozessor dieselben 19 641 in **701**. Wer elf Minuten auf eine
-#: Antwort wartet, fragt nicht gleich noch einmal — die dreißig Minuten
-#: blockieren dann 15 GB Arbeitsspeicher für einen zweiten Zug, der so bald
-#: nicht kommt, und derselbe Rechner soll nebenher rendern und slicen.
+#: auf dem Prozessor dieselben 19 641 in **701**. Zwischen Werkzeugaufruf und
+#: Abschluss liegen trotzdem nur Sekunden; dafür reicht der kürzere Rückfall.
 #:
-#: Fünf Minuten sind Ollamas eigene Vorgabe. Auf dem Prozessor ist das der
-#: Zustand, den der Kunde ohnehin kannte, bevor es diese Einstellung gab: Die
-#: Kopplung nimmt dort eine Verbesserung zurück, wo sie schadet, statt eine
-#: Verschlechterung einzuführen.
-OLLAMA_KEEP_ALIVE_ON_CPU = "5m"
+#: Dreißig Sekunden reichen zwischen zwei unmittelbar aufeinanderfolgenden
+#: Schritten. Nach dem Zug gilt ohnehin die ausdrückliche Freigabe.
+OLLAMA_KEEP_ALIVE_ON_CPU = "30s"
+
+#: Entladen ist eine Verwaltungsanfrage, keine Modellrechnung. Bleibt sie
+#: länger offen, darf der fertige Vorschlag trotzdem zur Oberfläche zurück.
+OLLAMA_RELEASE_SECONDS = 10.0
 
 OLLAMA_CONTEXT_TOKENS = 32768
 
@@ -994,6 +1080,37 @@ class OllamaBackend:
             # von einer anderen.
             return False
 
+    @contextmanager
+    def resource_session(self, cancelled: CancelToken | None) -> Iterator[None]:
+        """Hält einen vollständigen Agentenzug exklusiv und räumt danach auf."""
+        address = ollama_endpoint(self.url)
+        with local_ai_slot(address, cancelled):
+            try:
+                yield
+            finally:
+                self.release()
+
+    def release(self) -> None:
+        """Entlädt ausschließlich ein Ollama auf diesem Rechner."""
+        address = ollama_endpoint(self.url)
+        if not is_local_address(address):
+            return
+        payload = {
+            "model": self.model,
+            "messages": [],
+            "stream": False,
+            "keep_alive": 0,
+        }
+        try:
+            if self.transport is post_json_local:
+                post_json(address, {}, payload, timeout=OLLAMA_RELEASE_SECONDS)
+            else:
+                self.transport(address, {}, payload)
+        except (AppError, OSError, ValueError):
+            # Freigabe ist Aufräumen. Ein fertiger Vorschlag bleibt gültig,
+            # selbst wenn ein gerade beendetes Ollama dabei nicht mehr antwortet.
+            _log.warning("Ollama-Modell %s konnte nicht entladen werden", self.model)
+
     def complete(
         self,
         messages: Sequence[Message],
@@ -1001,6 +1118,41 @@ class OllamaBackend:
         *,
         temperature: float = 0.0,
         max_output_tokens: int | None = None,
+    ) -> Reply:
+        return self._complete(
+            messages,
+            tools,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            cancelled=None,
+        )
+
+    def complete_cancelable(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[dict[str, Any]] = (),
+        *,
+        temperature: float = 0.0,
+        max_output_tokens: int | None = None,
+        cancelled: CancelToken,
+    ) -> Reply:
+        """Wie :meth:`complete`, mit echtem Abbruch für das lokale Ollama."""
+        return self._complete(
+            messages,
+            tools,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
+            cancelled=cancelled,
+        )
+
+    def _complete(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[dict[str, Any]],
+        *,
+        temperature: float,
+        max_output_tokens: int | None,
+        cancelled: CancelToken | None,
     ) -> Reply:
         # ``max_output_tokens`` wird hier bewusst nicht angewandt: lokal
         # kostet eine Antwort kein Geld, und ``num_predict`` schnitte sie
@@ -1012,15 +1164,13 @@ class OllamaBackend:
             # dafür, dass der Auftrag überhaupt ankommt — siehe
             # :data:`OLLAMA_CONTEXT_TOKENS`.
             "options": {"temperature": temperature, "num_ctx": OLLAMA_CONTEXT_TOKENS},
-            # Zwischen zwei Fragen geladen bleiben (:data:`OLLAMA_KEEP_ALIVE`).
-            # Ohne das Feld entlädt Ollama nach fünf Minuten, und die zweite
-            # Frage eines Gesprächs zahlt den Kaltstart noch einmal.
+            # Zwischen zwei Schritten desselben Vorschlags geladen bleiben
+            # (:data:`OLLAMA_KEEP_ALIVE`). Danach entlädt ``resource_session``.
             #
             # **Auf dem Prozessor kürzer** (:data:`OLLAMA_KEEP_ALIVE_ON_CPU`):
-            # Dort dauert eine Antwort Minuten, ein zweiter Zug kommt so bald
-            # nicht, und dreißig Minuten blockierten 15 GB. Die Lage steht in
-            # :attr:`on_gpu` und kommt aus der vorigen Antwort — der erste Zug
-            # einer Sitzung hält lang warm, weil er es noch nicht weiß.
+            # Dort dauert eine Antwort Minuten; die Lage steht in
+            # :attr:`on_gpu` und kommt aus der vorigen Antwort. Der erste
+            # Schritt nimmt den minutenlangen Rückfall nicht mehr mit.
             "keep_alive": (OLLAMA_KEEP_ALIVE_ON_CPU if self.on_gpu is False else OLLAMA_KEEP_ALIVE),
             "messages": [_as_ollama(entry) for entry in messages],
         }
@@ -1038,7 +1188,15 @@ class OllamaBackend:
             ]
 
         try:
-            answer = self.transport(ollama_endpoint(self.url), {}, payload)
+            address = ollama_endpoint(self.url)
+            if cancelled is not None and self.transport is post_json_local:
+                answer = post_json_local_cancelable(address, {}, payload, cancelled)
+            else:
+                if cancelled is not None:
+                    cancelled.raise_if_cancelled()
+                answer = self.transport(address, {}, payload)
+                if cancelled is not None:
+                    cancelled.raise_if_cancelled()
         except BackendUnavailable as error:
             # Kein ``reject``: Ollama hat keinen Schlüssel, den man falsch
             # eintragen könnte. Der Name gehört trotzdem in die Meldung — er

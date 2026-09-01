@@ -104,13 +104,11 @@ class _Worker(Worker):
         self._stop = threading.Event()
 
     def cancel(self) -> None:
-        """Niemand wartet mehr auf diesen Wurf.
+        """Beendet Solidons eigenen Auftrag auch im lokalen ComfyUI.
 
-        Was aufhört, ist das **Warten** — der Auftrag steht in der
-        Warteschlange des fremden Programms und gehört ihm; ihn dort zu
-        unterbrechen träfe unter Umständen den Auftrag eines anderen
-        (``backends/mesh.py``). Genau das Warten ist aber, was der Nutzer
-        angeklickt hat.
+        Das Backend kennt die Auftrags-ID. Damit entfernt es genau diesen
+        wartenden Eintrag oder unterbricht genau diesen laufenden Auftrag;
+        fremde Aufträge bleiben unangetastet (``backends/mesh.py``).
         """
         self._stop.set()
 
@@ -833,12 +831,10 @@ class GenerateDialog(QDialog):
             worker.cancel()
 
     def reject(self) -> None:
-        """Abbrechen hält das Warten an und wartet auf den Thread.
+        """Abbrechen beendet den Auftrag und wartet auf den Thread.
 
-        **Der Auftrag auf der anderen Seite läuft weiter.** Die Schnittstelle
-        aus §27 hat keinen Aufruf, ihn zurückzunehmen, und einen zu erfinden,
-        der lügt, wäre schlechter, als nichts zu sagen — was Solidon aufhört,
-        ist das Warten darauf, und genau das hat der Nutzer angeklickt.
+        ComfyUI erhält dabei die konkrete Auftrags-ID. Das ist ein gezielter
+        Abbruch und kein globales „alles anhalten".
         """
         self._stop_worker()
         self.wait_for_workers()

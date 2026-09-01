@@ -9,6 +9,7 @@ ist jede Operation schemageprüft, bevor irgendetwas gerechnet wird.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +68,74 @@ def session(
         sources=ProjectSources(project),
         **extra,  # type: ignore[arg-type]
     )
+
+
+def test_the_agent_uses_the_backends_resource_session(project: Project, profile: Profile) -> None:
+    """Mehrere Werkzeugschritte teilen eine Sperre; danach wird sicher aufgeräumt."""
+
+    class ResourceBackend(ScriptedBackend):
+        entered = 0
+        left = 0
+
+        @contextmanager
+        def resource_session(self, _cancelled: object):
+            self.entered += 1
+            try:
+                yield
+            finally:
+                self.left += 1
+
+    backend = ResourceBackend(answers=[Reply(text="fertig")])
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    agent.propose("Beschreibe das Modell")
+
+    assert (backend.entered, backend.left) == (1, 1)
+
+
+def test_the_agent_passes_its_cancel_token_into_a_cancellable_backend(
+    project: Project, profile: Profile
+) -> None:
+    from app.core.scene.cancel import CancelSignal
+
+    class CancellableBackend(ScriptedBackend):
+        received: object = None
+
+        def complete_cancelable(
+            self,
+            messages: Sequence[Message],
+            tools: Sequence[dict[str, Any]] = (),
+            *,
+            temperature: float = 0.0,
+            max_output_tokens: int | None = None,
+            cancelled: object,
+        ) -> Reply:
+            self.received = cancelled
+            return self.complete(
+                messages,
+                tools,
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            )
+
+    token = CancelSignal()
+    backend = CancellableBackend(answers=[Reply(text="fertig")])
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+        cancelled=token,
+    )
+
+    agent.propose("Beschreibe das Modell")
+
+    assert backend.received is token
 
 
 # --- context (§26.1) --------------------------------------------------------------

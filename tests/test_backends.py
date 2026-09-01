@@ -4,7 +4,9 @@ heraushält (Bauplan §27).
 
 from __future__ import annotations
 
+import http.server
 import json
+import threading
 import time
 from collections.abc import Callable
 from types import SimpleNamespace
@@ -343,21 +345,16 @@ def test_the_local_backend_opens_a_window_big_enough_for_the_tools() -> None:
     assert OLLAMA_CONTEXT_TOKENS >= 25361, "so viel brauchen die Werkzeuge allein"
 
 
-def test_the_local_model_stays_loaded_between_two_questions() -> None:
-    """Ohne ``keep_alive`` entlädt Ollama nach fünf Minuten.
+def test_the_local_model_stays_loaded_between_two_steps() -> None:
+    """Ohne ``keep_alive`` kann Ollama zwischen Werkzeugaufruf und Antwort entladen.
 
-    Für einen Chat neben einer Konstruktion ist das zu kurz: Wer eine Frage
-    stellt, sich das Ergebnis ansieht, eine Bohrung setzt und dann weiterfragt,
-    ist leicht darüber — und zahlt den vollen Kaltstart ein zweites Mal.
-    Gemessen am 31.08.2026 an derselben Anfrage: **219 Sekunden kalt gegen
-    6 Sekunden warm** (auf einer Maschine, deren Ollama auf der CPU rechnete;
-    auf einer Karte ist der Abstand kleiner und bleibt spürbar).
+    Ein Vorschlag braucht regelmäßig zwei Modellaufrufe: Werkzeug wählen und
+    Ergebnis erklären. Gemessen am 31.08.2026 an derselben Anfrage: **219
+    Sekunden kalt gegen 6 Sekunden warm** auf dem Prozessor.
 
     Geprüft wird, **dass** das Feld mitgeht, nicht welche Zahl darin steht: Die
-    Dauer ist eine Abwägung gegen den Speicher, den dieselbe Maschine zum
-    Rendern und Slicen braucht, und sie darf sich ändern. Was sich nicht
-    ändern darf, ist das stillschweigende Zurückfallen auf Ollamas fünf
-    Minuten.
+    Dauer ist ein Sicherheitsnetz; nach dem gesamten Vorschlag wird das Modell
+    ausdrücklich entladen.
     """
     from app.core.backends.llm import OLLAMA_KEEP_ALIVE
 
@@ -369,6 +366,79 @@ def test_the_local_model_stays_loaded_between_two_questions() -> None:
         "ohne keep_alive im Payload gilt Ollamas Vorgabe von fünf Minuten"
     )
     assert OLLAMA_KEEP_ALIVE, "eine leere Angabe ist dasselbe wie keine"
+
+
+def test_a_local_ollama_session_always_unloads_its_model() -> None:
+    """Erfolg oder Ausnahme: außerhalb eines Agentenzugs bleiben keine 15 GB belegt."""
+    transport = Recorder(ollama_answer())
+    backend = OllamaBackend(transport=transport)
+
+    with backend.resource_session(None):
+        backend.complete([Message(role="user", content="Halter")])
+
+    assert transport.calls[-1][2] == {
+        "model": backend.model,
+        "messages": [],
+        "stream": False,
+        "keep_alive": 0,
+    }
+
+    with pytest.raises(RuntimeError), backend.resource_session(None):
+        raise RuntimeError("gezielter Testfehler")
+
+    assert transport.calls[-1][2]["keep_alive"] == 0
+
+
+def test_a_remote_ollama_session_does_not_unload_a_shared_model() -> None:
+    transport = Recorder(ollama_answer())
+    backend = OllamaBackend(url="http://192.0.2.1:11434", transport=transport)
+
+    with backend.resource_session(None):
+        pass
+
+    assert transport.calls == []
+
+
+def test_a_blocking_local_ollama_request_can_be_cancelled() -> None:
+    """Abbrechen schließt die laufende Verbindung und wartet nicht zehn Minuten."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    started = threading.Event()
+
+    class Blocking(http.server.BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            started.set()
+            time.sleep(5.0)
+
+        def log_message(self, _format: str, *_args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Blocking)
+    server.daemon_threads = True
+    serving = threading.Thread(target=server.serve_forever, daemon=True)
+    serving.start()
+    token = CancelSignal()
+    backend = OllamaBackend(url=f"http://127.0.0.1:{server.server_port}")
+    errors: list[BaseException] = []
+
+    def ask() -> None:
+        try:
+            backend.complete_cancelable([Message(role="user", content="Halter")], cancelled=token)
+        except BaseException as error:
+            errors.append(error)
+
+    worker = threading.Thread(target=ask)
+    worker.start()
+    assert started.wait(1.0)
+    token.cancel()
+    worker.join(1.0)
+    server.shutdown()
+    server.server_close()
+
+    assert not worker.is_alive(), "der lokale HTTP-Aufruf läuft trotz Abbruch weiter"
+    assert len(errors) == 1 and isinstance(errors[0], OperationCancelled)
 
 
 def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:
@@ -400,24 +470,21 @@ def test_the_backend_learns_from_its_own_answer_where_it_computes() -> None:
     assert auf_prozessor.on_gpu is False, f"{19641 / 701:.0f} Token/s ist unter der Marke"
 
 
-def test_a_model_on_the_processor_is_not_kept_warm_for_half_an_hour() -> None:
+def test_a_model_on_the_processor_uses_the_shorter_fallback() -> None:
     """Warmhalten kostet auf dem Prozessor mehr, als es bringt.
 
-    Dort dauert dieselbe Anfrage 701 statt 9,7 Sekunden. Wer elf Minuten auf
-    eine Antwort wartet, fragt nicht gleich noch einmal — die dreißig Minuten
-    blockierten dann 15 GB Arbeitsspeicher für einen zweiten Zug, der so bald
-    nicht kommt, und derselbe Rechner soll nebenher rendern und slicen.
+    Dort dauert dieselbe Anfrage 701 statt 9,7 Sekunden. Zwischen zwei
+    Schritten desselben Vorschlags reicht deshalb ein kürzeres Sicherheitsnetz.
 
-    **Der erste Zug einer Sitzung hält lang warm**, weil die Lage dann noch
-    nicht gemessen ist: ``None`` heißt „nicht zu sagen" und nicht „Prozessor".
+    ``None`` heißt weiterhin „nicht zu sagen" und nicht „Prozessor".
     """
     from app.core.backends.llm import OLLAMA_KEEP_ALIVE, OLLAMA_KEEP_ALIVE_ON_CPU
 
     assert OLLAMA_KEEP_ALIVE_ON_CPU != OLLAMA_KEEP_ALIVE, "sonst ist die Kopplung wirkungslos"
 
     for lage, erwartet, warum in (
-        (None, OLLAMA_KEEP_ALIVE, "ungemessen hält lang warm"),
-        (True, OLLAMA_KEEP_ALIVE, "auf der Karte lohnt es"),
+        (None, OLLAMA_KEEP_ALIVE, "ungemessen nutzt den allgemeinen Rückfall"),
+        (True, OLLAMA_KEEP_ALIVE, "auf der Karte gilt der allgemeine Rückfall"),
         (False, OLLAMA_KEEP_ALIVE_ON_CPU, "auf dem Prozessor nicht"),
     ):
         transport = Recorder(ollama_answer())

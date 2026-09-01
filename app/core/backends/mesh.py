@@ -76,7 +76,14 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
-from app.core.discover import BROKEN_ADDRESS, PROBE_SECONDS, UNUSABLE_ADDRESS, opener_for
+from app.core.backends.resources import local_ai_slot
+from app.core.discover import (
+    BROKEN_ADDRESS,
+    PROBE_SECONDS,
+    UNUSABLE_ADDRESS,
+    is_local_address,
+    opener_for,
+)
 from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError, OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
@@ -941,26 +948,36 @@ class ComfyBackend:
         progress: ProgressFn,
         cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
-        progress(0.1, str(_("Auftrag abschicken")))
-        payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
-        answer = self.transport(
-            f"{self.base}/prompt", payload, {"Content-Type": "application/json"}
-        )
-        job = json.loads(answer.decode("utf-8")).get("prompt_id")
-        if not job:
-            raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
+        with local_ai_slot(self.base, cancelled):
+            progress(0.1, str(_("Auftrag abschicken")))
+            payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
+            answer = self.transport(
+                f"{self.base}/prompt", payload, {"Content-Type": "application/json"}
+            )
+            job = json.loads(answer.decode("utf-8")).get("prompt_id")
+            if not job:
+                raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
 
-        outputs = self._wait(str(job), progress, cancelled or _never)
-        progress(0.9, str(_("Modell holen")))
-        payload_bytes, suffix = self._download(outputs)
-        return GeneratedMesh(
-            mesh=read_mesh(payload_bytes, suffix),
-            payload=payload_bytes,
-            suffix=suffix,
-            backend=self.id,
-            prompt=prompt,
-            seed=seed,
-        )
+            complete = False
+            try:
+                outputs = self._wait(str(job), progress, cancelled or _never)
+                complete = True
+                progress(0.9, str(_("Modell holen")))
+                payload_bytes, suffix = self._download(outputs)
+                return GeneratedMesh(
+                    mesh=read_mesh(payload_bytes, suffix),
+                    payload=payload_bytes,
+                    suffix=suffix,
+                    backend=self.id,
+                    prompt=prompt,
+                    seed=seed,
+                )
+            except BaseException:
+                if not complete:
+                    self._cancel_job(str(job))
+                raise
+            finally:
+                self._release_resources()
 
     def _wait(
         self, job: str, progress: ProgressFn, cancelled: CancelledFn = _never
@@ -993,12 +1010,6 @@ class ComfyBackend:
         started = time.monotonic()
         while True:
             if cancelled():
-                # **Abgebrochen wird das Warten, nicht die fremde Rechnung.**
-                # Dasselbe, was der Satz zu :data:`STUCK_SECONDS` sagt: Der
-                # Auftrag steht in ComfyUIs Schlange, gehört ihm, und ihn dort
-                # zu unterbrechen träfe unter Umständen den Auftrag eines
-                # anderen Programms. Was Solidon aufhört, ist das Warten — und
-                # das ist genau das, was der Nutzer angeklickt hat.
                 _log.info("waiting for %s cancelled", job)
                 raise OperationCancelled
             answer = self.transport(f"{self.base}/history/{job}", None, {})
@@ -1015,12 +1026,43 @@ class ComfyBackend:
                 raise GenerationFailed(
                     detail=_(
                         "Der Generator rechnet seit einer Stunde an diesem Auftrag. "
-                        "Abgebrochen wird er hier, in ComfyUI läuft er "
-                        "gegebenenfalls weiter."
+                        "Der Auftrag wird jetzt auch in ComfyUI beendet."
                     )
                 )
             progress(0.5, self._waiting_text(job, waited))
             time.sleep(self.poll_seconds)
+
+    def _cancel_job(self, job: str) -> None:
+        """Entfernt genau diesen wartenden Auftrag oder unterbricht genau ihn."""
+        actions = (
+            ("queue", {"delete": [job]}),
+            ("interrupt", {"prompt_id": job}),
+        )
+        for path, values in actions:
+            try:
+                self.transport(
+                    f"{self.base}/{path}",
+                    json.dumps(values).encode("utf-8"),
+                    {"Content-Type": "application/json"},
+                )
+            except (AppError, OSError, ValueError):
+                _log.warning("ComfyUI job %s could not be cancelled via %s", job, path)
+
+    def _release_resources(self) -> None:
+        """Gibt lokal zwischengespeicherte Modelle nach Solidons Auftrag frei."""
+        if not is_local_address(self.base):
+            return
+        try:
+            self.transport(
+                f"{self.base}/free",
+                json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"),
+                {"Content-Type": "application/json"},
+            )
+        except (AppError, OSError, ValueError):
+            # Das Ergebnis des Auftrags bleibt gültig. Der Rückfall ist
+            # ComfyUIs eigene Speicherverwaltung, kein Grund, das Netz zu
+            # verwerfen, das bereits bei Solidon angekommen ist.
+            _log.warning("ComfyUI resources could not be released")
 
     def _still_working(self, job: str) -> bool:
         """Steht dieser Auftrag in ComfyUIs Warteschlange — laufend oder wartend?

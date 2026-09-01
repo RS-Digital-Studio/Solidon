@@ -65,8 +65,8 @@ REQUEST_TIMEOUT_SECONDS = 1800
 
 #: Wie lange zwischen den Zügen warmgehalten wird.
 #:
-#: Nur so lange, wie der Lauf dauert — nicht die dreißig Minuten des Produkts.
-#: Ein Messwerkzeug, das warmhält, gibt den Speicher am Ende zurück.
+#: Nur so lange, wie der Lauf dauert — länger als das Sicherheitsnetz des
+#: Produkts. Ein Messwerkzeug, das warmhält, gibt den Speicher am Ende zurück.
 MEASURE_KEEP_ALIVE = "10m"
 
 
