@@ -1272,11 +1272,11 @@ def test_a_broken_pull_frees_the_button(
 def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Gemessene zweiundvierzig Minuten, bis die erste Antwort beginnt.**
+    """**Auf der CPU gemessene 42 Minuten, bis die erste Antwort beginnt.**
 
     Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
-    und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
-    Auftrag dieser Anwendung ist rund 24 000 Token lang. „Das Modell ruft
+    und fällt auf den Prozessor zurück: 7,8 Token je Sekunde beim Einlesen, und
+    der gemessene Auftrag dieser Anwendung ist 19 641 Token lang. „Das Modell ruft
     Werkzeuge auf" ist dann wahr und nutzlos — der Kunde sieht ein Fenster, das
     nichts tut, und hält es für einen Fehler der Anwendung.
 
