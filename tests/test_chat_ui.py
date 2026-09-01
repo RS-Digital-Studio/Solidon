@@ -1272,7 +1272,7 @@ def test_a_broken_pull_frees_the_button(
 def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Gemessene einundfünfzig Minuten, bis die erste Antwort beginnt.**
+    """**Gemessene zweiundvierzig Minuten, bis die erste Antwort beginnt.**
 
     Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
     und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
@@ -1293,7 +1293,7 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     gesagt = dialog.probe_result.text()
     assert "Prozessor" in gesagt
     assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
-    assert "51" in gesagt, "und was sie für den Kunden bedeutet"
+    assert "42" in gesagt, "und was sie für den Kunden bedeutet"
     assert "{" not in gesagt, "die Platzhalter sind gefüllt"
     assert "Schlüssel" in gesagt, "Regel 17: der Vorschlag gehört dazu"
 
@@ -1621,13 +1621,16 @@ def test_the_empty_chat_greets_instead_of_showing_a_dark_box(qt_app: QApplicatio
         assert panel.welcome.isVisibleTo(panel), "der leere Chat begrüßt nicht"
         assert "Maßen" in panel.welcome.text(), panel.welcome.text()
 
-        layout = panel.layout()
+        layout = panel.content_layout
         assert layout is not None
         order = [layout.itemAt(index).widget() for index in range(layout.count())]
         assert order.index(panel.welcome) < order.index(panel.turns), (
             "die Begrüßung steht unter der Liste"
         )
-        assert order.index(panel.hint) > order.index(panel.turns), (
+        outer = panel.layout()
+        assert outer is not None
+        outer_order = [outer.itemAt(index).widget() for index in range(outer.count())]
+        assert outer_order.index(panel.hint) > outer_order.index(panel.content_scroll), (
             "die Modellzeile steht wieder vor dem Gespräch"
         )
 
@@ -1637,3 +1640,111 @@ def test_the_empty_chat_greets_instead_of_showing_a_dark_box(qt_app: QApplicatio
         assert not panel.welcome.isVisibleTo(panel), "die Begrüßung bleibt über dem Gespräch stehen"
     finally:
         panel.deleteLater()
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "needs_scroll"),
+    ((320, 416, True), (268, 544, True), (320, 576, True)),
+)
+def test_a_short_chat_scrolls_its_content_without_covering_the_input(
+    qt_app: QApplication, width: int, height: int, needs_scroll: bool
+) -> None:
+    """Hinweis und Beispiele bleiben erreichbar; die Eingabe bleibt fest darunter."""
+    from PySide6.QtCore import QRect
+
+    from app.ui.chat import ChatPanel
+
+    panel = ChatPanel()
+    panel.set_available(True, "ollama:qwen3:14b")
+    notice = (
+        "Unabhängig geprüft: fünf von fünf Werkzeugaufrufen waren korrekt. "
+        "Auf einer RTX 4080 lief das Modell vollständig über die Grafikkarte; "
+        "7,8 Token pro Sekunde war nur der langsamere CPU-Rückfallweg."
+    )
+    panel.set_notice(notice)
+    panel.resize(width, height)
+    panel.show()
+    qt_app.processEvents()
+
+    assert (panel.content_scroll.verticalScrollBar().maximum() > 0) is needs_scroll
+    assert panel.content_scroll.horizontalScrollBar().maximum() == 0
+    assert panel.content_viewport.width() <= panel.content_scroll.viewport().width()
+    assert panel.notice.text() == notice
+    assert panel.notice.heightForWidth(panel.notice.contentsRect().width()) <= panel.notice.height()
+    assert panel.input.isVisibleTo(panel)
+    assert panel.send.isVisibleTo(panel)
+    assert panel.input.geometry().bottom() < panel.hint.geometry().top()
+    assert panel.hint.geometry().bottom() <= panel.contentsRect().bottom()
+    assert not QRect(panel.input.geometry()).intersects(panel.content_scroll.geometry())
+
+    panel.content_scroll.verticalScrollBar().setValue(
+        panel.content_scroll.verticalScrollBar().maximum()
+    )
+    qt_app.processEvents()
+    assert panel.starters.isVisibleTo(panel.content_viewport), (
+        "die Beispielanfragen sind am Ende des Rollwegs nicht erreichbar"
+    )
+
+
+def test_keyboard_focus_scrolls_each_chat_starter_into_view(qt_app: QApplication) -> None:
+    """Ein Starter mit Tastaturfokus wird nicht unter der inneren Kante versteckt."""
+    from PySide6.QtCore import QPoint, QRect, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.chat import ChatPanel
+
+    panel = ChatPanel()
+    panel.set_available(True, "ollama:qwen3:14b")
+    panel.set_notice(
+        "Die lokale Messung erklärt Grafikkarte, Prozessor und die erwartete Wartezeit."
+    )
+    panel.resize(320, 416)
+    panel.show()
+    qt_app.processEvents()
+    buttons = panel.starters.findChildren(QPushButton)
+    assert len(buttons) >= 2
+    bar = panel.content_scroll.verticalScrollBar()
+    bar.setValue(0)
+    buttons[0].setFocus(Qt.FocusReason.TabFocusReason)
+    bar.setValue(0)
+
+    for expected in buttons[1:]:
+        QTest.keyClick(panel, Qt.Key.Key_Tab)
+        qt_app.processEvents()
+        assert QApplication.focusWidget() is expected
+
+    target = buttons[-1]
+    top_left = target.mapTo(panel.content_scroll.viewport(), QPoint(0, 0))
+    assert bar.value() > 0
+    assert panel.content_scroll.viewport().rect().contains(QRect(top_left, target.size()))
+
+
+def test_the_cpu_probe_result_fits_its_real_wrapped_text_on_a_640_by_720_screen(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Breiten-Clamp darf die CPU-Warnung nicht nachträglich abschneiden."""
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    class SmallScreen:
+        def availableGeometry(self) -> QRect:  # noqa: N802 - Qt-Vertrag
+            return QRect(0, 0, 640, 720)
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    monkeypatch.setattr(KeyDialog, "screen", lambda _dialog: SmallScreen())
+    dialog = KeyDialog()
+    dialog.show()
+    qt_app.processEvents()
+    dialog._probe_done(True, llm.Speed(tokens_per_second=7.8))
+    qt_app.processEvents()
+
+    required = dialog.probe_result.heightForWidth(dialog.probe_result.width())
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert dialog.width() <= 640 and dialog.height() <= 720
+    assert dialog.probe_result.height() >= required
+    assert dialog.contentsRect().contains(dialog.probe_result.geometry().bottomRight())
+    assert buttons is not None and dialog.contentsRect().contains(buttons.geometry().bottomRight())

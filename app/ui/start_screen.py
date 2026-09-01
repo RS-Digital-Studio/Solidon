@@ -17,11 +17,21 @@ sieht, dass man sie anklicken kann.
 
 from __future__ import annotations
 
+import time
 from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, Signal
+from PySide6.QtCore import (
+    QByteArray,
+    QEvent,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    QSize,
+    Qt,
+    Signal,
+)
 from PySide6.QtGui import (
     QColor,
     QDragEnterEvent,
@@ -45,6 +55,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -56,6 +67,8 @@ from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.plan import MODEL_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
+from app.ui.leash import stop_watching_the_dying
+from app.ui.motion import CURVE, SHORT_MS, animations_enabled
 from app.ui.panels import collapsible
 from app.ui.style import NORMAL, TIGHT, WIDE, make_large_target, make_primary, set_level
 from app.ui.theme import THEMES
@@ -94,7 +107,7 @@ TILE_MIN_WIDTH = 420
 TILE_GRID_SPACING = NORMAL
 
 #: Tatsächlich verfügbare Breite, ab der das Raster zwei Spalten tragen kann.
-MEDIUM_LAYOUT_MIN_WIDTH = 2 * TILE_MIN_WIDTH + TILE_GRID_SPACING
+MEDIUM_LAYOUT_MIN_WIDTH = 2 * TILE_MIN_WIDTH + TILE_GRID_SPACING + WIDE
 
 #: Wie breit die Spalte wird, wenn drei Kacheln nebeneinander passen.
 #:
@@ -439,6 +452,213 @@ def accepted_path(event: QDragEnterEvent | QDropEvent) -> Path | None:
     return None
 
 
+class StartActionCard(QPushButton):
+    """Eine ruhige Nebenhandlung mit Symbol, Titel und sachlichem Grund."""
+
+    def __init__(
+        self,
+        title: str,
+        detail: str,
+        hint: str,
+        symbol: str,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("startActionCard")
+        self.setAutoDefault(False)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(title)
+        self.setAccessibleDescription(detail)
+        self.setMinimumWidth(44)
+        self.setMinimumHeight(76)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._symbol = symbol
+        self._keyboard_key: int | None = None
+        self._mouse_armed = False
+        self._last_mouse_activation = 0.0
+
+        self.icon_label = QLabel(self)
+        self.icon_label.setFixedSize(28, 28)
+        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.icon_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+        self.title_label = QLabel(title, self)
+        self.title_label.setWordWrap(True)
+        self.title_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        set_level(self.title_label, "section")
+
+        self.detail_label = QLabel(detail, self)
+        self.detail_label.setWordWrap(True)
+        self.detail_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        set_level(self.detail_label, "caption")
+
+        self.hint_label = QLabel(hint, self)
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.hint_label.setProperty("cardHint", True)
+        set_level(self.hint_label, "caption")
+        self.setAccessibleDescription(f"{detail} {hint}")
+
+        words = QVBoxLayout()
+        words.setContentsMargins(0, 0, 0, 0)
+        words.setSpacing(TIGHT)
+        words.addWidget(self.title_label)
+        words.addWidget(self.detail_label)
+        words.addWidget(self.hint_label)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
+        layout.setSpacing(NORMAL)
+        layout.addWidget(self.icon_label, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(words, stretch=1)
+        make_large_target(self)
+
+        # Dieselbe unmittelbare Tiefenrückmeldung wie die Beispielkacheln.
+        # Sie bewegt nichts und braucht deshalb auch bei reduzierter Bewegung
+        # keinen Ersatz: Fläche, Rahmen und Schatten antworten sofort.
+        self._hovered = False
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self.setGraphicsEffect(self._shadow)
+        self._depth_animation: QParallelAnimationGroup | None = None
+        self._paint_depth(at_once=True)
+        self._refresh_icon()
+
+    def _refresh_icon(self) -> None:
+        size = QSize(24, 24)
+        self.icon_label.setPixmap(icon(self._symbol, self).pixmap(size))
+
+    def _paint_depth(self, *, at_once: bool = False) -> None:
+        """Führt die Karte weich zwischen Ruhe, Einladung und Druck.
+
+        Fläche und Fokusrahmen antworten durch das Stylesheet sofort. Der
+        Schatten führt dieselbe Aussage kurz weiter, ohne Geometrie oder
+        Trefferfläche zu bewegen. Bei reduzierter Bewegung werden exakt
+        dieselben Endzustände unmittelbar gesetzt.
+        """
+        pressed = self.isDown()
+        active = self._hovered or self.hasFocus()
+        blur = 5.0 if pressed else 18.0 if active else 7.0
+        offset = 0.0 if pressed else 3.0 if active else 1.0
+        colour = QColor(0, 0, 0, 26 if pressed else 82 if active else 34)
+
+        if self._depth_animation is not None:
+            self._depth_animation.stop()
+            self._depth_animation.deleteLater()
+            self._depth_animation = None
+
+        if at_once or not animations_enabled():
+            self._shadow.setBlurRadius(blur)
+            self._shadow.setOffset(0.0, offset)
+            self._shadow.setColor(colour)
+            return
+
+        movement = QParallelAnimationGroup(self)
+        for property_name, start, end in (
+            (b"blurRadius", self._shadow.blurRadius(), blur),
+            (b"yOffset", self._shadow.yOffset(), offset),
+            (b"color", self._shadow.color(), colour),
+        ):
+            animation = QPropertyAnimation(self._shadow, property_name, movement)
+            animation.setDuration(SHORT_MS)
+            animation.setEasingCurve(CURVE)
+            animation.setStartValue(start)
+            animation.setEndValue(end)
+            movement.addAnimation(animation)
+        self._depth_animation = movement
+        movement.start()
+
+    def enterEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._hovered = True
+        self._paint_depth()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._hovered = False
+        self._paint_depth()
+        super().leaveEvent(event)
+
+    def focusInEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        super().focusInEvent(event)
+        self._paint_depth()
+
+    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        self._keyboard_key = None
+        self.setDown(False)
+        super().focusOutEvent(event)
+        self._paint_depth()
+
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Eingabe und Leertaste lösen erst beim Loslassen genau einmal aus."""
+        keys = (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space)
+        if event.key() in keys:
+            if not event.isAutoRepeat() and self._keyboard_key is None:
+                self._keyboard_key = int(event.key())
+                self.setDown(True)
+                self._paint_depth()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        if self._keyboard_key == int(event.key()):
+            armed = not event.isAutoRepeat()
+            self._keyboard_key = None
+            self.setDown(False)
+            self._paint_depth()
+            if armed:
+                self.click()
+            event.accept()
+            return
+        super().keyReleaseEvent(event)
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Gedrückt gibt die Tiefe sofort nach; die Karte selbst bewegt sich nie."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._mouse_armed = True
+            self.setDown(True)
+            self._paint_depth()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton:
+            armed = self._mouse_armed and self.rect().contains(event.position().toPoint())
+            self._mouse_armed = False
+            self.setDown(False)
+            if armed:
+                self._last_mouse_activation = time.monotonic()
+                self.click()
+            event.accept()
+            self._paint_depth()
+            return
+        super().mouseReleaseEvent(event)
+        self._paint_depth()
+
+    def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Ein hastiger Doppelklick bleibt genau eine Dialoganforderung."""
+        if event.button() == Qt.MouseButton.LeftButton:
+            interval = QApplication.doubleClickInterval() / 1000.0
+            # Auf echten Plattformen kam unmittelbar davor schon der erste
+            # Klick; QTest und einzelne Hilfsmittel senden dagegen nur das
+            # Doppelklick-Ereignis. In beiden Fällen folgt höchstens ein Zug.
+            fresh = time.monotonic() - self._last_mouse_activation > interval
+            self._mouse_armed = False
+            self.setDown(False)
+            if fresh:
+                self._last_mouse_activation = time.monotonic()
+                self.click()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
+
+    def changeEvent(self, event: QEvent) -> None:  # noqa: N802 — Qt-Name
+        super().changeEvent(event)
+        if event.type() in (QEvent.Type.PaletteChange, QEvent.Type.FontChange):
+            self._refresh_icon()
+
+
 class StartScreen(QWidget):
     """Was gezeigt wird, bevor ein Projekt offen ist."""
 
@@ -454,6 +674,10 @@ class StartScreen(QWidget):
     manualRequested = Signal()
     """Das Handbuch soll aufgehen — hier, wo es gebraucht wird, nicht erst
     im Hilfemenü eines Fensters, das ein neuer Nutzer noch nie gesehen hat."""
+    feedbackRequested = Signal()
+    """Die bestehende Rückmeldung soll vom ersten Bildschirm aus aufgehen."""
+    supportRequested = Signal()
+    """Der lokale Hinweis zur freiwilligen Unterstützung soll aufgehen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -538,12 +762,46 @@ class StartScreen(QWidget):
         self.manual_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.manual_button.clicked.connect(self.manualRequested)
 
+        # Zwei zusammengehörige Nebenwege unter den vier Einstiegen. Sie
+        # erklären knapp, warum es sie gibt, und öffnen nur vorhandene lokale
+        # Dialoge: Rückmeldung versendet erst nach der Vorschau,
+        # Unterstützung geht erst im folgenden Hinweis zu PayPal.
+        feedback_detail = tr(
+            "Eine Person entwickelt Solidon unabhängig. Was soll für Sie besser werden?"
+        )
+        self.feedback_button = StartActionCard(
+            tr("Feedback geben"),
+            feedback_detail,
+            tr("Vorschau vor dem Senden"),
+            "feedback",
+            self,
+        )
+        self.feedback_button.clicked.connect(self.feedbackRequested)
+
+        support_detail = tr("Hilft bei Veröffentlichung, Signierung, Tests und Website")
+        self.support_button = StartActionCard(
+            tr("Solidon freiwillig unterstützen"),
+            support_detail,
+            tr("PayPal erst im nächsten Schritt"),
+            "support",
+            self,
+        )
+        self.support_button.clicked.connect(self.supportRequested)
+        self.secondary_actions = [self.feedback_button, self.support_button]
+
         buttons = QHBoxLayout()
         buttons.setSpacing(NORMAL)
         buttons.addWidget(self.new_button)
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.manual_button)
         buttons.addStretch(1)
+
+        self.secondary_area = QWidget(self)
+        self.secondary_grid = QGridLayout(self.secondary_area)
+        self.secondary_grid.setContentsMargins(0, 0, 0, 0)
+        self.secondary_grid.setSpacing(TILE_GRID_SPACING)
+        self._secondary_columns = 2
+        self._layout_secondary_actions(2)
 
         column = QWidget(self)
         self.column = column
@@ -571,6 +829,7 @@ class StartScreen(QWidget):
             _caption(tr("Wo fange ich an? Vier geführte Touren, Schritt für Schritt."), self)
         )
         inner.addWidget(self.examples_area)
+        inner.addWidget(self.secondary_area)
         # **Die fünf weiteren Beispiele klappen zu, die vier Wege nicht.**
         # Auf 1600x900 — der häufigsten Laptop-Auflösung — brauchte der
         # Startbildschirm 1040 Bildpunkte und rollte damit um 140; die
@@ -635,6 +894,7 @@ class StartScreen(QWidget):
         # Inhalt, den man erst durch Probieren findet.
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setWidget(centred)
+        self.page_scroll: QScrollArea = scroll
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -666,14 +926,39 @@ class StartScreen(QWidget):
         # Der Rollbereich darf bei 640 Punkten nicht an seiner Wunschbreite
         # festhalten. Im einspaltigen Rückweg reichen kompakte Außenränder;
         # die Kacheln selbst behalten ihren großzügigen Innenraum.
-        margin = NORMAL if narrow else WIDE * 2
-        self._middle.setContentsMargins(margin, margin, margin, margin)
+        horizontal_margin = NORMAL if narrow else WIDE * 2
+        # Auf niedrigen Fenstern bleibt der Inhalt vollständig sichtbar,
+        # ohne die Karten oder Touren zusammenzustauchen. Breite Bildschirme
+        # behalten ihre ruhige Einfassung; nur die ohnehin knappe Höhe nutzt
+        # den Rand als Reserve.
+        vertical_margin = NORMAL if self.height() < 800 else horizontal_margin
+        self._middle.setContentsMargins(
+            horizontal_margin,
+            vertical_margin,
+            horizontal_margin,
+            vertical_margin,
+        )
         self.column.setMaximumWidth(WIDE_COLUMN_WIDTH if wide_enough else COLUMN_WIDTH)
         columns = 3 if wide_enough else NARROW_COLUMNS if narrow else TILE_COLUMNS
+        self._layout_secondary_actions(1 if narrow else 2)
         if columns == self._columns:
             return
         self._columns = columns
         self.show_examples()
+
+    def _layout_secondary_actions(self, columns: int) -> None:
+        """Die zwei Karten liegen breit als Paar und schmal als klare Folge."""
+        if columns == self._secondary_columns and self.secondary_grid.count():
+            return
+        for column in range(max(self._secondary_columns, columns)):
+            self.secondary_grid.setColumnStretch(column, 0)
+        while self.secondary_grid.count():
+            self.secondary_grid.takeAt(0)
+        for index, card in enumerate(self.secondary_actions):
+            self.secondary_grid.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            self.secondary_grid.setColumnStretch(column, 1)
+        self._secondary_columns = columns
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden das Kachelraster neu teilen."""
@@ -694,9 +979,33 @@ class StartScreen(QWidget):
         Gesetzt wird die Kette und nicht die Anordnung: Wo etwas steht,
         entscheidet weiterhin das Layout.
         """
-        chain = [self.new_button, self.open_button, self.manual_button, *self.tiles]
+        guided = [tile for tile in self.tiles if tile.entry.way]
+        deeper = [tile for tile in self.tiles if not tile.entry.way]
+        heading = self.more_section.findChild(QToolButton, "sectionHeading")
+        assert heading is not None
+        chain = [
+            self.new_button,
+            self.open_button,
+            self.manual_button,
+            self.recent_list,
+            *guided,
+            *self.secondary_actions,
+            heading,
+            *deeper,
+        ]
+        self._focus_targets = set(chain)
+        for target in chain:
+            target.installEventFilter(self)
         for first, second in pairwise(chain):
             QWidget.setTabOrder(first, second)
+
+    def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Ein Tastaturziel bleibt beim Durchlaufen vollständig sichtbar."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if event.type() == QEvent.Type.FocusIn and watched in self._focus_targets:
+            self.page_scroll.ensureWidgetVisible(watched, NORMAL, NORMAL)
+        return super().eventFilter(watched, event)
 
     def show_recent(self, paths: list[Path]) -> None:
         """Die zuletzt geöffneten Projekte — oder eine Zeile, wenn es keine gibt.

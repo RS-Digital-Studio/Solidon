@@ -1033,6 +1033,25 @@ def test_a_field_keeps_the_edge_that_is_its_only_one(theme: str) -> None:
     )
 
 
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_resting_start_card_edge_meets_non_text_contrast_on_both_sides(theme: str) -> None:
+    """Die Kartenkante trägt mindestens 3:1 zur Karte und zum Fenster."""
+    from app.ui.theme import contrast_ratio
+
+    colours = THEMES[theme]  # type: ignore[index]
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    rule = sheet.split("QPushButton#startActionCard {")[1].split("}")[0]
+    found = re.search(r"border:\s*1px solid (#[0-9a-fA-F]{6})", rule)
+    assert found, f"{theme}: die Startkarte nennt keine ruhende Kantenfarbe: {rule}"
+    edge = found.group(1)
+    assert edge == colours["start_card_line"]
+    for surface in ("base", "window"):
+        ratio = contrast_ratio(edge, colours[surface])
+        assert ratio >= 3.0, (
+            f"{theme}: Startkartenkante {edge} bringt gegen {surface} nur {ratio:.2f}:1"
+        )
+
+
 @pytest.mark.parametrize("theme", ["dark", "light"])
 def test_a_scrollbar_handle_can_be_grabbed_in_both_directions(theme: str) -> None:
     """``min-height`` wirkt nur senkrecht — der waagerechte Griff braucht sein

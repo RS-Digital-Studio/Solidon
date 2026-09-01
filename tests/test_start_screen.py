@@ -14,7 +14,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QLabel, QWidget
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton, QWidget
 
 from app.core import examples
 from app.ui.start_screen import (
@@ -206,19 +207,42 @@ def test_a_tile_is_one_real_action_for_mouse_and_keyboard(screen: StartScreen) -
         assert opened[before:] == [str(tile.path)]
 
 
-def test_the_tab_chain_reaches_the_first_tile_after_the_three_actions(
-    screen: StartScreen,
+@pytest.mark.parametrize(("width", "height"), ((1040, 760), (800, 600)))
+def test_the_tab_chain_follows_the_visible_page_and_scrolls_each_target_into_view(
+    screen: StartScreen, width: int, height: int
 ) -> None:
-    """Die Schaltflächen stehen vor den Kacheln, wie sie im Bild gelesen werden."""
-    from PySide6.QtCore import Qt
+    """Tab folgt von oben nach unten und lässt kein Ziel außerhalb des Rollfensters."""
+    from PySide6.QtCore import QPoint, QRect, Qt
     from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QScrollArea, QToolButton
 
+    screen.show_recent([Path("mein-projekt.p3d")])
+    screen.resize(width, height)
     screen.show()
     QApplication.processEvents()
+    scroll = screen.findChild(QScrollArea)
+    heading = screen.more_section.findChild(QToolButton, "sectionHeading")
+    assert scroll is not None and heading is not None
+    guided = [tile for tile in screen.tiles if tile.entry.way]
     screen.new_button.setFocus(Qt.FocusReason.OtherFocusReason)
-    for expected in (screen.open_button, screen.manual_button, screen.tiles[0]):
+    for expected in (
+        screen.open_button,
+        screen.manual_button,
+        screen.recent_list,
+        *guided,
+        screen.feedback_button,
+        screen.support_button,
+        heading,
+    ):
         QTest.keyClick(screen, Qt.Key.Key_Tab)
+        QApplication.processEvents()
         assert QApplication.focusWidget() is expected
+        top_left = expected.mapTo(scroll.viewport(), QPoint(0, 0))
+        assert scroll.viewport().rect().contains(QRect(top_left, expected.size())), (
+            f"{expected!r} hat Fokus, liegt aber außerhalb des sichtbaren Rollfensters"
+        )
+    if width == 800:
+        assert scroll.verticalScrollBar().value() > 0
 
 
 @pytest.mark.parametrize("theme", ("dark", "light"))
@@ -602,6 +626,264 @@ def test_primary_start_actions_are_large_and_examples_are_readable(
             screen.deleteLater()
     finally:
         apply_theme(qt_app, before)
+
+
+def test_the_start_screen_offers_feedback_and_voluntary_support_as_two_action_cards(
+    qt_app: QApplication,
+) -> None:
+    """Die zwei Nebenwege bleiben zugänglich, ohne einen fünften Hauptweg vorzutäuschen."""
+    from app.ui.style import TARGET_SIZE, stylesheet
+
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", 10))
+    screen = StartScreen()
+    feedback: list[bool] = []
+    support: list[bool] = []
+    screen.feedbackRequested.connect(lambda: feedback.append(True))
+    screen.supportRequested.connect(lambda: support.append(True))
+    screen.resize(800, 600)
+    screen.show()
+    qt_app.processEvents()
+
+    assert screen.secondary_actions == [screen.feedback_button, screen.support_button]
+    assert screen.feedback_button.accessibleName() == "Feedback geben"
+    assert screen.support_button.accessibleName() == "Solidon freiwillig unterstützen"
+    assert "PayPal" not in screen.support_button.accessibleName()
+    assert "Eine Person" in screen.feedback_button.detail_label.text()
+    assert screen.feedback_button.hint_label.text() == "Vorschau vor dem Senden"
+    assert screen.support_button.detail_label.text() == (
+        "Hilft bei Veröffentlichung, Signierung, Tests und Website"
+    )
+    assert screen.support_button.hint_label.text() == "PayPal erst im nächsten Schritt"
+    for button in screen.secondary_actions:
+        assert isinstance(button, QPushButton)
+        assert button.objectName() == "startActionCard"
+        assert min(button.sizeHint().height(), button.height()) >= TARGET_SIZE
+        assert button.minimumWidth() >= TARGET_SIZE
+        assert button.focusPolicy() == Qt.FocusPolicy.StrongFocus
+        assert button.accessibleDescription()
+        assert button.detail_label.text() in button.accessibleDescription()
+        assert button.hint_label.text() in button.accessibleDescription()
+        assert button.icon_label.pixmap() is not None
+        assert not button.icon_label.pixmap().isNull()
+        assert not button.findChildren(QPushButton), "die ganze Karte ist genau ein Schaltziel"
+
+    screen.feedback_button.click()
+    screen.support_button.click()
+
+    assert feedback == [True]
+    assert support == [True]
+
+    from PySide6.QtGui import QAccessible
+
+    for button in screen.secondary_actions:
+        interface = QAccessible.queryAccessibleInterface(button)
+        assert interface is not None and interface.role() == QAccessible.Role.Button
+    screen.deleteLater()
+    qt_app.setStyleSheet(before)
+
+
+@pytest.mark.parametrize(
+    ("width", "height", "columns"),
+    ((1920, 1080, 2), (1040, 760, 2), (800, 600, 1), (640, 720, 1)),
+)
+def test_the_two_quiet_start_actions_never_add_a_horizontal_scroll_axis(
+    qt_app: QApplication, width: int, height: int, columns: int
+) -> None:
+    """Breit stehen die Karten als Paar, schmal gestapelt und niemals seitlich."""
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.ui.style import stylesheet
+
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("dark", 10))
+    screen = StartScreen()
+    screen.resize(width, height)
+    screen.show()
+    qt_app.processEvents()
+
+    scroll = screen.findChild(QScrollArea)
+    assert scroll is not None
+    assert scroll.horizontalScrollBar().maximum() == 0
+    assert screen._secondary_columns == columns
+    positions = [
+        screen.secondary_grid.getItemPosition(index)[:2]
+        for index in range(screen.secondary_grid.count())
+    ]
+    assert max(column for _row, column in positions) + 1 == columns
+    for button in screen.secondary_actions:
+        assert button.width() <= screen.column.width()
+        assert button.height() >= 44
+        assert button.detail_label.heightForWidth(button.detail_label.width()) <= (
+            button.detail_label.height()
+        )
+        assert button.hint_label.heightForWidth(button.hint_label.width()) <= (
+            button.hint_label.height()
+        )
+    if columns == 2:
+        assert abs(screen.feedback_button.width() - screen.support_button.width()) <= 1
+    else:
+        assert all(
+            abs(button.width() - screen.secondary_area.width()) <= 1
+            for button in screen.secondary_actions
+        )
+    screen.deleteLater()
+    qt_app.setStyleSheet(before)
+
+
+def test_the_feedback_card_opens_the_existing_survey_kind(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Startaktion öffnet den halbstündigen Bogen, nicht den Ideenmodus."""
+    from app.core.support import KIND_SURVEY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    kinds: list[str] = []
+    shown: list[str] = []
+
+    class SurveyDialog:
+        def show(self) -> None:
+            shown.append("show")
+
+        def raise_(self) -> None:
+            shown.append("raise")
+
+    def make_dialog(kind: str) -> SurveyDialog:
+        kinds.append(kind)
+        return SurveyDialog()
+
+    monkeypatch.setattr(window, "_support_dialog", make_dialog)
+    window.start_screen.feedback_button.click()
+
+    assert kinds == [KIND_SURVEY]
+    assert shown == ["show", "raise"]
+
+
+def test_the_support_card_opens_only_the_local_notice_dialog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Karte selbst öffnet weder Website noch PayPal, sondern nur den Hinweis."""
+    from app.ui.dialogs import DonationDialog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    shown: list[str] = []
+    before = (
+        tuple(window.session.project.document.ops),
+        tuple(window.session.project.document.transactions),
+    )
+    monkeypatch.setattr(
+        DonationDialog, "exec", lambda dialog: shown.append(dialog.windowTitle()) or 0
+    )
+
+    window.start_screen.support_button.click()
+
+    assert shown == ["Solidon3D unterstützen"]
+    after = (
+        tuple(window.session.project.document.ops),
+        tuple(window.session.project.document.transactions),
+    )
+    assert after == before, "eine Nebenaktion verändert weder Szene noch Verlauf"
+
+
+@pytest.mark.parametrize("key", (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space))
+def test_a_start_action_card_activates_once_on_key_release(
+    qt_app: QApplication, key: Qt.Key
+) -> None:
+    """Tastatur und Maus lösen denselben einen Dialogzug aus — beim Loslassen."""
+    from PySide6.QtTest import QTest
+
+    screen = StartScreen()
+    screen.show()
+    qt_app.processEvents()
+    requests: list[bool] = []
+    screen.feedbackRequested.connect(lambda: requests.append(True))
+    card = screen.feedback_button
+    card.setFocus(Qt.FocusReason.TabFocusReason)
+
+    QTest.keyPress(card, key)
+    assert not requests
+    QTest.keyRelease(card, key)
+
+    assert requests == [True]
+
+
+def test_a_double_click_requests_at_most_one_start_action(qt_app: QApplication) -> None:
+    """Ein hastiger Doppelklick öffnet keine zwei modalen Fenster übereinander."""
+    from PySide6.QtTest import QTest
+
+    screen = StartScreen()
+    screen.show()
+    qt_app.processEvents()
+    requests: list[bool] = []
+    screen.supportRequested.connect(lambda: requests.append(True))
+
+    QTest.mouseDClick(screen.support_button, Qt.MouseButton.LeftButton)
+
+    assert requests == [True]
+
+
+def test_the_start_action_cards_animate_without_making_motion_the_only_feedback(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bewegung veredelt die Zustände; Fläche und Rahmen antworten sofort."""
+    from PySide6.QtCore import QAbstractAnimation, QEvent, QPropertyAnimation
+
+    import app.ui.start_screen as start_screen
+
+    monkeypatch.setattr(start_screen, "animations_enabled", lambda: True)
+    screen = StartScreen()
+    screen.resize(1040, 760)
+    screen.show()
+    qt_app.processEvents()
+    card = screen.feedback_button
+    quiet_blur = card._shadow.blurRadius()
+
+    QApplication.sendEvent(card, QEvent(QEvent.Type.Enter))
+
+    animations = card.findChildren(QPropertyAnimation)
+    assert len(animations) == 3
+    assert card._depth_animation is not None
+    assert card._depth_animation.state() == QAbstractAnimation.State.Running
+    blur = next(animation for animation in animations if animation.propertyName() == b"blurRadius")
+    assert float(blur.endValue()) > quiet_blur
+    assert card._hovered, "die statische Fläche antwortet unabhängig von der Bewegung"
+
+
+def test_the_start_action_cards_keep_the_same_states_with_reduced_motion(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reduzierte Bewegung behält Fokus, Druck, Tiefe und Handlung sofort."""
+    from PySide6.QtCore import QEvent, QPropertyAnimation
+
+    from app.ui.motion import animations_enabled
+
+    monkeypatch.setenv("SOLIDON3D_MOTION", "aus")
+    assert not animations_enabled()
+    screen = StartScreen()
+    screen.resize(1040, 760)
+    screen.show()
+    qt_app.processEvents()
+    card = screen.feedback_button
+    quiet_blur = card._shadow.blurRadius()
+
+    QApplication.sendEvent(card, QEvent(QEvent.Type.Enter))
+    qt_app.processEvents()
+
+    assert card._shadow.blurRadius() > quiet_blur
+    assert not card.findChildren(QPropertyAnimation)
+    card.setFocus(Qt.FocusReason.TabFocusReason)
+    assert card.hasFocus()
+    focused_blur = card._shadow.blurRadius()
+    card.setDown(True)
+    card._paint_depth()
+    assert card._shadow.blurRadius() < focused_blur
+    assert not card.findChildren(QPropertyAnimation)
 
 
 def test_the_wide_layout_starts_only_when_a_third_column_has_room(screen: StartScreen) -> None:

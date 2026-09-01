@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QFrame,
@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -158,6 +160,7 @@ class ChatPanel(QWidget):
         self.welcome.setObjectName("chatWelcome")
 
         self.hint = QLabel("", self)
+        self.hint.setObjectName("chatModelHint")
         self.hint.setWordWrap(True)
         # §2.7: ein Hinweis, der nur feststellt, was fehlt, lässt den
         # Benutzer stehen. Der Knopf daneben führt dorthin, wo es behoben
@@ -210,10 +213,15 @@ class ChatPanel(QWidget):
         starters_lead = QLabel(tr("Zum Beispiel:"), self.starters)
         set_level(starters_lead, "caption")
         starters_layout.addWidget(starters_lead)
+        self.starter_buttons: list[QPushButton] = []
         for starter in STARTERS:
             button = QPushButton(str(starter), self.starters)
             button.setFlat(True)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Der Satz bestimmt nicht die Mindestbreite der rechten Spalte.
+            # Bei sichtbarem senkrechtem Rollbalken muss der Inhalt um dessen
+            # Breite schrumpfen können, sonst liegt sein rechter Rand darunter.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             # Linksbündig wie ein Vorschlag, nicht mittig wie ein Knopf: was
             # hier steht, ist ein Satz zum Weiterschreiben.
             button.setStyleSheet("text-align: left;")
@@ -221,6 +229,8 @@ class ChatPanel(QWidget):
             # hielte das Lambda, und ``self`` hält den Knopf. Zehn losgelassene
             # ``ChatPanel`` überlebten damit alle zehn.
             button.clicked.connect(weak_slot(self, ChatPanel._take_starter, str(starter)))
+            button.installEventFilter(self)
+            self.starter_buttons.append(button)
             starters_layout.addWidget(button)
 
         self.summary = QLabel("", self)
@@ -293,15 +303,33 @@ class ChatPanel(QWidget):
         decision_layout.addLayout(decision_row)
         self.decision.setVisible(False)
 
+        # Alles oberhalb der Eingabe ist Inhalt und darf bei geringer Höhe
+        # rollen. Die Eingabe selbst bleibt fest erreichbar: Zuvor drückten
+        # der Ollama-Hinweis, die Begrüßung und vier Beispiele sie bei 800 mal 600
+        # unter die Panelkante und überlagerten einander dort.
+        self.content_viewport = QWidget(self)
+        self.content_viewport.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self.content_layout = QVBoxLayout(self.content_viewport)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.addWidget(self.notice)
+        self.content_layout.addWidget(self.setup)
+        self.content_layout.addWidget(self.unlock)
+        self.content_layout.addWidget(self.welcome)
+        self.content_layout.addWidget(self.turns, stretch=1)
+        self.content_layout.addWidget(self.starters)
+        self.content_layout.addWidget(self.decision)
+
+        self.content_scroll = QScrollArea(self)
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.content_scroll.setWidget(self.content_viewport)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        layout.addWidget(self.notice)
-        layout.addWidget(self.setup)
-        layout.addWidget(self.unlock)
-        layout.addWidget(self.welcome)
-        layout.addWidget(self.turns, stretch=1)
-        layout.addWidget(self.starters)
-        layout.addWidget(self.decision)
+        layout.addWidget(self.content_scroll, stretch=1)
         layout.addLayout(entry_row)
         # **Zuletzt, nicht zuerst.** „Modell: ollama:qwen3:14b" stand als
         # oberste Zeile des Reiters; es beantwortet eine Frage, die niemand
@@ -316,6 +344,23 @@ class ChatPanel(QWidget):
         self._progress_item: QListWidgetItem | None = None
         self._locked = False
         self.set_available(False)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Vertrag
+        """Wünscht die Inhaltshöhe, obwohl der Rollbereich kleiner schätzt.
+
+        ``QScrollArea`` meldet unabhängig von seinem Inhalt eine pauschale
+        Wunschhöhe. Im gemeinsamen Reiter verkleinerte das auch den gerade
+        sichtbaren Prüfbericht: Eine gewählte Befundzeile füllte dort fast den
+        ganzen Listenbereich und sah wie eine zweite Akzentfläche aus. Der
+        Chat darf in einem kleinen Fenster weiterhin schrumpfen und rollen;
+        nur sein Wunsch für ausreichend großen Raum bleibt der echte Inhalt.
+        """
+        hint = super().sizeHint()
+        missing = max(
+            self.content_viewport.sizeHint().height() - self.content_scroll.sizeHint().height(),
+            0,
+        )
+        return QSize(hint.width(), hint.height() + missing)
 
     # --- state ------------------------------------------------------------------
 
@@ -551,6 +596,8 @@ class ChatPanel(QWidget):
         """
         if stop_watching_the_dying(self, watched, event):
             return False
+        if watched in self.starter_buttons and event.type() == QEvent.Type.FocusIn:
+            self.content_scroll.ensureWidgetVisible(watched, NORMAL, NORMAL)
         if watched is self.input and event.type() == QEvent.Type.KeyPress:
             enter = event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
             if enter and not event.modifiers() & Qt.KeyboardModifier.ShiftModifier:

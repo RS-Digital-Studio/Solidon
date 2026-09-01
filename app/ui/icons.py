@@ -216,6 +216,16 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M12 6.5c2-1.5 4.5-2 8-2v13c-3.5 0-6 .5-8 2" />'
         '<path d="M12 6.5v15" />'
     ),
+    # Rückmeldung: eine Sprechblase mit zwei lesbaren Zeilen. Das Zeichen
+    # ergänzt den ausgeschriebenen Titel; allein müsste niemand es erraten.
+    "feedback": ('<path d="M4 4.5h16v11H10l-4.5 4v-4H4z" /><path d="M8 8.5h8M8 12h5" />'),
+    # Freiwillige Unterstützung: das ruhige Herz aus derselben offenen
+    # Strichsprache wie alle übrigen Oberflächensymbole.
+    "support": (
+        '<path d="M12 20s-7-4.35-7-10.1C5 7.75 6.75 6 8.9 6c1.32 0 2.55.68 '
+        "3.1 1.77C12.55 6.68 13.78 6 15.1 6 17.25 6 19 7.75 19 9.9 "
+        '19 15.65 12 20 12 20Z" />'
+    ),
     # Der Info-Kreis für „Über". Punkt oben, Strich darunter — die einzige
     # Form, die weltweit dasselbe heißt.
     "about": ('<circle cx="12" cy="12" r="8.5" /><path d="M12 11v5.5" /><path d="M12 7.8v.8" />'),

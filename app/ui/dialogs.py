@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QLocale, Qt, QUrl, QUrlQuery, Signal
+from PySide6.QtCore import QLocale, Qt, QTimer, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -1199,8 +1199,7 @@ class KeyDialog(QDialog):
     def _probe_done(self, usable: object, speed: object) -> None:
         self.probe_button.setEnabled(True)
         if usable is None:
-            set_role(
-                self.probe_result,
+            self._show_probe_result(
                 "warning",
                 tr("Ollama hat nicht geantwortet. Läuft es? „ollama serve“ startet es."),
             )
@@ -1212,21 +1211,56 @@ class KeyDialog(QDialog):
         # als Fehler der Anwendung erlebt.
         slow = self._speed_text(speed)
         if slow:
-            set_role(self.probe_result, "warning", slow)
+            self._show_probe_result("warning", slow)
             return
         if usable:
-            set_role(
-                self.probe_result, "ok", tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar.")
-            )
+            self._show_probe_result("ok", tr("Das Modell ruft Werkzeuge auf. Es ist brauchbar."))
             return
-        set_role(
-            self.probe_result,
+        self._show_probe_result(
             "warning",
             tr(
                 "Das Modell schreibt seine Aufrufe als Text, statt sie zu tun — der "
                 "Chat antwortet damit, führt aber nichts aus. Ein anderes Modell hilft."
             ),
         )
+
+    def _show_probe_result(self, role: str, text: str) -> None:
+        """Das nachgereichte Ergebnis sichtbar machen, einschließlich Knöpfen."""
+        set_role(self.probe_result, role, text)
+        self._fit_probe_result()
+        QTimer.singleShot(0, self, self._fit_probe_result)
+
+    def _fit_probe_result(self) -> None:
+        """Nach dem Breiten-Clamp mit Qts echtem Textumbruch in die Höhe gehen."""
+        layout = self.layout()
+        if layout is not None:
+            layout.activate()
+        self.adjustSize()
+        hint = self.sizeHint()
+        screen = self.screen()
+        available = screen.availableGeometry().size() if screen is not None else hint
+        width = min(max(self.width(), hint.width()), available.width())
+        # ``sizeHint`` gehört noch zur breiteren Fassung. Wird der Dialog auf
+        # einen schmalen Bildschirm begrenzt, gewinnt der Ergebnistext Zeilen;
+        # erst ``heightForWidth`` kennt deren tatsächliche Höhe.
+        wrapped_height = layout.heightForWidth(width) if layout is not None else -1
+        height = max(self.height(), hint.height(), wrapped_height)
+        self.resize(
+            width,
+            min(height, available.height()),
+        )
+        if layout is not None:
+            layout.activate()
+        result_height = self.probe_result.heightForWidth(self.probe_result.width())
+        self.probe_result.setMinimumHeight(max(0, result_height))
+        if layout is not None:
+            layout.invalidate()
+            layout.activate()
+            wrapped_height = layout.heightForWidth(width)
+        final_height = max(self.height(), self.sizeHint().height(), wrapped_height)
+        self.resize(width, min(final_height, available.height()))
+        if layout is not None:
+            layout.activate()
 
     @staticmethod
     def _speed_text(speed: object) -> str:

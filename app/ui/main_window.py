@@ -1740,6 +1740,8 @@ class MainWindow(QMainWindow):
         self.start_screen.manualRequested.connect(
             weak_slot(self, lambda view: view.action_manual(manual.FIRST_MINUTES))
         )
+        self.start_screen.feedbackRequested.connect(self._open_survey)
+        self.start_screen.supportRequested.connect(self.action_donate)
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
