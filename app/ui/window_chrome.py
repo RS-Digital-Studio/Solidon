@@ -67,10 +67,14 @@ _TEXT_COLOR = 36
 #: deshalb wird vorher gefragt und nicht hinterher geprüft.
 _MIN_BUILD = 22000
 
+#: Als allgemeine Zeichenkette halten, damit die Typprüfung den Windows-Zweig
+#: auch auf Linux und macOS prüft.
+_PLATFORM: str = sys.platform
+
 
 def available() -> bool:
     """Ob dieses Windows die Attribute kennt. Auf Linux und macOS nie."""
-    if sys.platform != "win32":
+    if _PLATFORM != "win32":
         return False
     version = getattr(sys, "getwindowsversion", None)
     return version is not None and version().build >= _MIN_BUILD
@@ -85,8 +89,11 @@ def _dwm() -> Any:
     """dwmapi beim ersten Mal laden und behalten."""
     global _library
     if _library is None:
+        loader = getattr(ctypes, "WinDLL", None)
+        if loader is None:
+            return None
         try:
-            _library = ctypes.WinDLL("dwmapi")
+            _library = loader("dwmapi")
         except OSError:  # pragma: no cover — auf Windows ist sie da
             _log.debug("dwmapi not available", exc_info=True)
             return None
