@@ -71,11 +71,14 @@ SOURCE_FOLDER: Final = "sources"
 AUTOSAVE_SUFFIX: Final = ".autosave"
 
 #: Grenzen für fremde Projektcontainer (§32). Die Nutzlast folgt derselben
-#: Obergrenze wie ein direkter Modellimport; die äußere Datei bekommt nur den
-#: notwendigen Spielraum für ZIP-Verzeichnis und Kompressionskopfzeilen.
+#: Staffelung wie ein direkter Import: Je Eintrag gilt die Obergrenze eines
+#: direkten Modellimports; die Summe darf das Doppelte tragen, sonst wären
+#: zwei einzeln erlaubte Modelle zusammen nicht mehr speicherbar (Review
+#: 02.09.2026). Die äußere Datei bekommt nur den notwendigen Spielraum für
+#: ZIP-Verzeichnis und Kompressionskopfzeilen.
 MAX_ARCHIVE_ENTRY_BYTES: Final = MAX_FILE_BYTES
-MAX_ARCHIVE_UNPACKED_BYTES: Final = MAX_FILE_BYTES
-MAX_PROJECT_FILE_BYTES: Final = MAX_FILE_BYTES + 16 * 1024 * 1024
+MAX_ARCHIVE_UNPACKED_BYTES: Final = 2 * MAX_FILE_BYTES
+MAX_PROJECT_FILE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES + 16 * 1024 * 1024
 MAX_ARCHIVE_ENTRIES: Final = 4096
 
 #: Strukturierte Beilagen sind um Größenordnungen kleiner als ein Quellnetz.
@@ -104,7 +107,12 @@ MAX_PROJECT_FITS: Final = 100_000
 MAX_PROJECT_TRANSACTIONS: Final = 100_000
 MAX_PROJECT_CHAT_ENTRIES: Final = 100_000
 MAX_REPORT_FINDINGS: Final = 100_000
-MAX_LINKED_SOURCE_BYTES: Final = MAX_FILE_BYTES
+#: Die Summe über **alle** verknüpften Quellen — dieselbe Regel wie für die
+#: eingebetteten und aus demselben Grund. Sie stand bis zum 02.09.2026 auf der
+#: Grenze einer *einzelnen* Datei: Zwei verknüpfte Modelle, jedes für sich
+#: zulässig, öffneten damit zusammen nicht. Die Grenze je Datei prüft
+#: ``_read_linked_source`` weiterhin selbst (``MAX_FILE_BYTES``).
+MAX_LINKED_SOURCE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES
 
 #: Ein sehr kleines, gut komprimierbares JSON darf ein hohes Verhältnis
 #: haben. Ab einem MiB ist ein Verhältnis über 250 dagegen kein sinnvoller
@@ -588,6 +596,46 @@ def _check_output_entries(entries: list[tuple[str, str | bytes]]) -> None:
             )
 
 
+def _check_written_ratios(infos: list[zipfile.ZipInfo]) -> None:
+    """Dieselbe Verhältnisprüfung, die der Leser fährt — am fertigen Container.
+
+    **Wie stark sich etwas packt, weiß erst das Ergebnis.** ``deflate`` macht
+    aus vier Mebibyte gleicher Bytes rund zwölf Kilobyte: Verhältnis 342, und
+    der Leser lehnt ab 250 ab (§32). Vor dem 02.09.2026 lief das Speichern
+    durch, und beim Öffnen stand „Die Datei entpackt sich größer, als diese
+    Anwendung verarbeitet" — ein Projekt, das nur Solidon selbst anlegen
+    konnte, mit einer Fehlermeldung über eine Grenze, die der Kunde nicht
+    gerissen hat.
+
+    Geprüft wird deshalb hier und nicht in :func:`_check_output_entries`: Dort
+    stehen die Nutzlasten, aber nicht ihre gepackte Größe. Der Aufruf steht vor
+    dem Wechsel auf den Zielnamen — was schon da war, bleibt stehen.
+    """
+    unpacked = 0
+    compressed = 0
+    for info in infos:
+        unpacked += info.file_size
+        compressed += info.compress_size
+        if info.file_size < MIN_RATIO_ENTRY_BYTES:
+            continue
+        ratio = info.file_size / max(info.compress_size, 1)
+        if ratio > MAX_COMPRESSION_RATIO:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                entry=info.filename,
+                ratio=round(ratio, 1),
+                limit=MAX_COMPRESSION_RATIO,
+            )
+    if unpacked >= MIN_RATIO_ENTRY_BYTES:
+        ratio = unpacked / max(compressed, 1)
+        if ratio > MAX_COMPRESSION_RATIO:
+            raise _too_large(
+                _("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                ratio=round(ratio, 1),
+                limit=MAX_COMPRESSION_RATIO,
+            )
+
+
 def _validate_json_tree(value: object) -> None:
     """Begrenzt einen decodierten JSON-Baum iterativ und verlangt endliche Zahlen."""
     stack: list[tuple[object, int]] = [(value, 0)]
@@ -915,6 +963,10 @@ def save(project: Project, path: Path) -> Path:
             with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as container:
                 for name, entry_payload in entries:
                     _write(container, name, entry_payload)
+            # Erst jetzt stehen die gepackten Größen fest — und nur sie
+            # beantworten die Frage, ob der Leser diesen Container wieder
+            # aufmacht.
+            _check_written_ratios(container.infolist())
             stream.flush()
             os.fsync(stream.fileno())
             size = os.fstat(stream.fileno()).st_size

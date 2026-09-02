@@ -123,9 +123,10 @@ def _own_parts_stamp() -> str:
     Die Fassung im Pfad deckt alles ab, was mit einer Auslieferung kommt —
     Operationen, mitgelieferte Bausteine, Bibliotheken. Sie deckt **nicht** ab,
     was der Nutzer selbst schreibt: Ein eigener Baustein aus
-    ``<Nutzerdaten>/parts/*.py`` (§24.5) ist eine Operation wie jede andere,
-    und ändert er sich, bleiben Op-Name und Parameter gleich. Der
-    Operations-Hash sieht die Änderung nicht.
+    ``<Nutzerdaten>/parts/`` (§24.5) — als ``.py`` oder als Rezept unter
+    ``recipes/*.json`` — ist eine Operation wie jede andere, und ändert er
+    sich, bleiben Op-Name und Parameter gleich. Der Operations-Hash sieht die
+    Änderung nicht.
 
     Im Speicher war das gleichgültig, dort lebt der Cache so lang wie die
     Sitzung. Auf der Platte hieße es: Wer an seinem eigenen Baustein ein Maß
@@ -146,7 +147,14 @@ def _own_parts_stamp() -> str:
     stamps = []
     # ``rglob`` und nicht ``glob``: Bausteine liest der Lader oben auf, aber ein
     # Baustein darf einen Helfer daneben legen, und der rechnet mit.
-    for entry in sorted(folder.rglob("*.py")):
+    #
+    # **Und ``.json`` gehört dazu, nicht nur ``.py``.** Ein Rezept (§24.5) ist
+    # eine Datendatei unter ``recipes/`` und wird trotzdem eine Operation wie
+    # jede andere. Wer daran ein Maß ändert, ändert weder Op-Name noch
+    # Parameter — der Operations-Hash sieht nichts, und der Plattencache gab
+    # weiter die alte Geometrie heraus. Genau der Fall, gegen den dieser
+    # Stempel gebaut ist, nur in der anderen Dateiendung.
+    for entry in sorted(path for suffix in ("*.py", "*.json") for path in folder.rglob(suffix)):
         with suppress(OSError):
             state = entry.stat()
             stamps.append(f"{entry.name}:{state.st_mtime_ns}:{state.st_size}")

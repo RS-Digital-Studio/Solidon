@@ -431,3 +431,56 @@ def test_a_declined_sketch_plane_stays_untouched(scene: Scene) -> None:
     assert document.ops[0].params["sketch"] == before
     assert result.rewritten == 0 and result.removed == 0
     assert result.findings and result.findings[0].code == "feature.orphaned"
+
+
+def test_a_resized_hole_keeps_its_name_and_raises_no_orphan(profile: Profile) -> None:
+    """Weg 1: Wer eine erkannte Bohrung bewusst vergrößert, behält ihre Kennung.
+
+    *Bohrung ändern* gibt die Bohrung unter ihrem Namen selbst wieder aus, weil
+    der Sprung im Durchmesser die Zuordnungstoleranz sprengt. Bis zum 02.09.2026
+    blieb die alte ``hole_1`` trotzdem im Vergleich stehen, fand dort keinen
+    Partner mehr und galt als verwaist (Befund ``perceive.orphaned``) — unter
+    genau dem Schritt, der sie bewusst geändert hatte.
+    """
+    from app.core.scene import History, OperationDraft, ResultCache, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (
+        Path(__file__).parent / "data" / "meshes" / "plate_holes.stl"
+    ).read_bytes()
+    history = History(project.document)
+    history.apply(
+        "Modell laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources, cache=cache)
+    old = before.scene.objects["obj_1"].features["hole_1"]
+    assert float(old.params["diameter"]) < 6.0
+
+    history.apply(
+        "Bohrung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "diameter": 7.0},
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, sources=sources, cache=cache)
+    assert after.complete
+    features = after.scene.objects["obj_1"].features
+    assert float(features["hole_1"].params["diameter"]) > 6.5
+    for name in ("hole_2", "hole_3", "hole_4"):
+        was = before.scene.objects["obj_1"].features[name].params["centre"]
+        now = features[name].params["centre"]
+        drift = max(abs(float(a) - float(b)) for a, b in zip(was, now, strict=True))
+        assert drift < 1e-3, f"{name} wanderte um {drift:.6f} mm: {was} -> {now}"
+    orphaned = [f for f in after.scene.report.findings if f.code == "perceive.orphaned"]
+    assert not orphaned, [dict(f.values) for f in orphaned]

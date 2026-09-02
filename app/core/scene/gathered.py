@@ -18,6 +18,7 @@ Eigenschaft der Datei, nicht des Dokuments.
 
 from __future__ import annotations
 
+import re
 from typing import Any, Final
 
 from app.core.errors import ValidationError
@@ -36,17 +37,52 @@ _log = get_logger(__name__)
 #: die jemand liest, sondern ein Datenblock.
 GATHERED_LIMIT: Final = 200_000
 
-#: Woran ein ausgelagerter Wert zu erkennen ist. Ein Doppelpunkt kommt in
-#: keinem JSON-Text eines Editors an erster Stelle vor — die Sammelwerte
-#: beginnen alle mit ``[`` oder ``{``.
+#: Woran ein ausgelagerter Wert beginnt. Ein Doppelpunkt kommt in keinem
+#: JSON-Text eines Editors an erster Stelle vor — die Sammelwerte beginnen
+#: alle mit ``[`` oder ``{``. Erkannt wird ein Verweis trotzdem nicht am
+#: Präfix allein, sondern an :data:`_REFERENCE` und :func:`_collects`: Der
+#: Satz gilt für Sammelwerte und nicht für jeden anderen Parameter.
 GATHERED_PREFIX: Final = "source:"
 
 #: Wo die ausgelagerten Werte im Container liegen.
 GATHERED_DIR: Final = "sources/gathered"
 
+#: Genau die Gestalt, die :func:`externalise` schreibt — nicht nur ihr Anfang.
+#:
+#: Das Präfix allein reichte nicht: Wer sein Objekt ``source:meiner`` nannte,
+#: speicherte ein Projekt, das er nicht mehr öffnen konnte. Das Laden hielt
+#: mit „Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container" an, und
+#: der Container war heil — nur der Name sah aus wie ein Verweis.
+_REFERENCE = re.compile(rf"^{re.escape(GATHERED_PREFIX)}gathered_\d+$")
+
 
 def _is_reference(value: object) -> bool:
-    return isinstance(value, str) and value.startswith(GATHERED_PREFIX)
+    """Ob dieser Wert die Gestalt eines ausgelagerten Verweises hat."""
+    return isinstance(value, str) and _REFERENCE.match(value) is not None
+
+
+def _collects(op_name: object, param_name: str) -> bool:
+    """Ob dieser Parameter dieser Operation überhaupt ein Sammelwert ist.
+
+    Die zweite Hälfte derselben Absicherung: Ausgelagert wird, was ein Editor
+    gesammelt hat (``GATHERED_KINDS`` — Skizze, Strichliste, Skelett), und
+    sonst nichts. Ein Name, ein Text, ein Dateipfad ist nie ein Verweis, wie
+    immer er aussieht.
+
+    **Kennt das Register die Operation nicht, gilt der Parameter als
+    möglicher Sammelwert.** Das ist die vorsichtigere Antwort: Ein Verweis,
+    den niemand auflöst, wäre für die Operation dahinter ein Text ohne Inhalt
+    und ein leeres Ergebnis ohne Fehlermeldung — teurer als ein Halt, der
+    sagt, was fehlt.
+    """
+    from app.core.registry import GATHERED_KINDS, REGISTRY
+
+    if not isinstance(op_name, str) or not REGISTRY.has(op_name):
+        return True
+    return any(
+        entry.name == param_name and entry.kind in GATHERED_KINDS
+        for entry in REGISTRY.get(op_name).params.spec()
+    )
 
 
 def externalise(data: dict[str, Any], next_id: int) -> dict[SourceId, bytes]:
@@ -64,7 +100,7 @@ def externalise(data: dict[str, Any], next_id: int) -> dict[SourceId, bytes]:
         for name, value in list(params.items()):
             if not isinstance(value, str) or len(value) <= GATHERED_LIMIT:
                 continue
-            if _is_reference(value):
+            if _is_reference(value) or not _collects(operation.get("op"), name):
                 continue
             source_id = f"gathered_{next_id}"
             next_id += 1
@@ -94,7 +130,7 @@ def inline(data: dict[str, Any], payloads: dict[SourceId, bytes]) -> None:
         if not isinstance(params, dict):
             continue
         for name, value in list(params.items()):
-            if not _is_reference(value):
+            if not _is_reference(value) or not _collects(operation.get("op"), name):
                 continue
             source_id = str(value)[len(GATHERED_PREFIX) :]
             payload = payloads.get(source_id)
@@ -118,8 +154,8 @@ def references(data: dict[str, Any]) -> set[SourceId]:
         params = operation.get("params")
         if not isinstance(params, dict):
             continue
-        for value in params.values():
-            if _is_reference(value):
+        for name, value in params.items():
+            if _is_reference(value) and _collects(operation.get("op"), name):
                 found.add(str(value)[len(GATHERED_PREFIX) :])
     return found
 

@@ -375,9 +375,10 @@ class History:
         # Der Anker zeigt auf das Bündel, das gerade offen ist — und nur ein
         # Zug, der eines eröffnet hat, darf später eines fortsetzen.
         self._open_bundle = transaction.id if bundle else None
-        self._record_numbering()
         if settled is not None:
-            restore(self.document, settled.after)
+            self._settle(settled.after)
+        else:
+            self._record_numbering()
         return transaction
 
     def repair_and_retry(self, stopped_at: OpId) -> Transaction:
@@ -478,8 +479,7 @@ class History:
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
-        restore(self.document, changes.after)
-        self._record_numbering()
+        self._settle(changes.after)
         return transaction
 
     def _bundle_into_last(self, drafts: Sequence[OperationDraft]) -> Transaction | None:
@@ -971,8 +971,7 @@ class History:
             changes=changes,
         )
         self.document.transactions.append(transaction)
-        self._record_numbering()
-        restore(self.document, changes.after)
+        self._settle(changes.after)
         _log.info("removed operation(s) %s", list(removed_ids))
         return transaction
 
@@ -1009,8 +1008,7 @@ class History:
             changes=changes,
         )
         self.document.transactions.append(transaction)
-        self._record_numbering()
-        restore(self.document, changes.after)
+        self._settle(changes.after)
         return changed
 
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
@@ -1130,7 +1128,12 @@ class History:
                 constraint="range",
                 values={"op": spec.name, "minimum": low, "maximum": high},
             )
-        return max(count, 1)
+        # Zurück kommt die Zahl, die dasteht. Hier stand ein ``max(count, 1)``,
+        # und das war eine zweite, stille Untergrenze neben der deklarierten:
+        # Wer eines Tages ``minimum=0`` schreibt, bekäme eine Operation, die
+        # eine Ausgabe erzeugt, obwohl ihr Schema keine verlangt. Was zulässig
+        # ist, entscheidet das Schema — und die Zeile darüber setzt es durch.
+        return count
 
     def _check_params(self, op_name: str, specs: Iterable[Any], params: Mapping[str, Any]) -> None:
         """Namen und Ausdruckssyntax. Werte werden nach dem Auflösen
@@ -1270,6 +1273,33 @@ class History:
         self.document.highest_transaction = self._highest_transaction_number()
         self.document.highest_op = self._highest_op_id()
         self.document.highest_object = self._highest_object_index()
+
+    def _settle(self, state: DocumentState) -> None:
+        """Wasserlinie, Änderungsseite zurücklegen, Wasserlinie — in dieser
+        Reihenfolge (§15.4, §15.5).
+
+        **Zweimal, weil beide Seiten Kennungen halten.** Vor dem Zurücklegen
+        steht im Dokument die *alte* Fassung eines geänderten Schritts, danach
+        die *neue*, und ``_highest_object_index`` liest immer nur, was gerade
+        dasteht. Wer nur einmal schreibt, verliert die eine oder die andere
+        Hälfte.
+
+        Verloren ging bis zum 02.09.2026 die neue: ``_swap_operation`` schrieb
+        die Wasserlinie vor dem ``restore``. Nach *Objekt duplizieren* mit
+        Stückzahl 2, umgestellt auf 3, standen ``obj_3`` und ``obj_4`` im
+        Stapel und die Wasserlinie weiter auf 2 — ein Rückgängig nahm die neue
+        Fassung heraus, ein zweites Verlaufsobjekt über demselben Dokument
+        vergab ``obj_3`` erneut, und nach dem Wiederherstellen war ``obj_3``
+        die Ausgabe zweier Operationen. Die Auswertung sortiert nach Kennung
+        (§15); ab dort rechnet sie auf dem falschen Körper weiter.
+
+        Beides ist gefahrlos, weil die Getter monoton sind: Sie nehmen das
+        Maximum aus dem Bestand **und** der bereits eingetragenen Wasserlinie.
+        Ein zweiter Aufruf kann sie nur heben, nie senken.
+        """
+        self._record_numbering()
+        restore(self.document, state)
+        self._record_numbering()
 
     def _all_operations(self) -> list[Operation]:
         """Was Kennungen belegt: der Stapel **und** das Zurückgenommene.

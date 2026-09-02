@@ -56,11 +56,29 @@ def _same_anchor(older: Mapping[str, Any], newer: Mapping[str, Any]) -> bool:
     return True
 
 
+def _number(value: Any) -> float | None:
+    """Der Wert als Zahl — oder ``None``, wenn er keine ist.
+
+    Ein Parameter darf ein **Ausdruck** sein (§13): ``=@dx`` steht dann als
+    Text im Zug und wird erst beim Rechnen der Szene zur Zahl. ``float()``
+    warf darüber einen rohen ``ValueError`` — ohne Handlungsvorschlag, aus
+    ``History.apply`` heraus, für eine Eingabe, die ausdrücklich erlaubt ist.
+
+    Zwei Ausdrücke ließen sich auch nicht summieren: ``=@dx`` plus ``=@dx``
+    ist keine Zahl, und eine Zeichenkette daraus zu bauen hieße, im Stapel
+    einen Ausdruck zu erfinden, den niemand geschrieben hat.
+    """
+    return float(value) if isinstance(value, (int, float)) else None
+
+
 def _translate(older: Mapping[str, Any], newer: Mapping[str, Any]) -> dict[str, Any] | None:
     """Zwei Verschiebungen sind ihre Summe."""
     merged = dict(older)
     for axis in ("dx", "dy", "dz"):
-        merged[axis] = float(older.get(axis, 0.0)) + float(newer.get(axis, 0.0))
+        one, other = _number(older.get(axis, 0.0)), _number(newer.get(axis, 0.0))
+        if one is None or other is None:
+            return None
+        merged[axis] = one + other
     return merged
 
 
@@ -72,8 +90,11 @@ def _rotate(older: Mapping[str, Any], newer: Mapping[str, Any]) -> dict[str, Any
     """
     if older.get("axis") != newer.get("axis"):
         return None
+    one, other = _number(older.get("angle", 0.0)), _number(newer.get("angle", 0.0))
+    if one is None or other is None:
+        return None
     merged = dict(older)
-    merged["angle"] = float(older.get("angle", 0.0)) + float(newer.get("angle", 0.0))
+    merged["angle"] = one + other
     return merged
 
 
@@ -98,6 +119,10 @@ def merge_params(
     dann einen eigenen Schritt an, und das ist der sichere Ausgang — ein
     Bündel zu viel verfälscht Geometrie, ein Bündel zu wenig kostet einen
     Eintrag im Verlauf.
+
+    **Und jeder Ausgang läuft über dieses ``None``**, auch ein Wert, der keine
+    Zahl ist: Ein Ausdruck (§13) ist eine erlaubte Eingabe und kein Fehler,
+    also wird er hier nicht zur Ausnahme, sondern zum eigenen Schritt.
     """
     rule = _RULES.get(op)
     if rule is None or not _same_anchor(older, newer):

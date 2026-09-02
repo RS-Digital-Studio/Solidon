@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.core.errors import ValidationError
-from app.core.registry import Registry, op_params, param, register_op
+from app.core.registry import VARIABLE, Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
 from app.core.scene.project import Project, load, save
@@ -122,6 +122,20 @@ def registry() -> Registry:
     )
     def combine(ctx: OpContext) -> OpResult:
         return OpResult(outputs=[])
+
+    @register_op(
+        name="copy_object",
+        title=_("Objekt duplizieren"),
+        category="scene",
+        params=SeedParams,
+        consumes=1,
+        produces=VARIABLE,
+        produces_from="count",
+        doc=_("Testversion — die Stückzahl steht im Parameter."),
+        registry=own,
+    )
+    def copy_object(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=list(ctx.inputs))
 
     return own
 
@@ -975,6 +989,69 @@ def test_a_second_history_does_not_reuse_an_undone_number(
     assert len(set(names)) == len(names), f"doppelte Transaktionskennung: {names}"
     objects = [name for entry in document.ops for name in entry.outputs]
     assert len(set(objects)) == len(objects), f"doppelte Objektkennung: {objects}"
+
+
+def test_a_changed_count_raises_the_watermark(document: Document, registry: Registry) -> None:
+    """Szenario C: eine geänderte Stückzahl vergibt Kennungen — und sie zählen.
+
+    ``change_params`` legt für eine Operation mit variabler Ausgabe frische
+    Objektkennungen an. Die Wasserlinie wurde bis zum 02.09.2026 **vor** dem
+    Zurücklegen der neuen Fassung geschrieben, las also noch die alte: Nach
+    Stückzahl 2 → 3 standen ``obj_3`` und ``obj_4`` im Stapel und die
+    Wasserlinie weiter auf 2.
+
+    Folgenreich wird das nach einem Rückgängig, genau wie in Szenario B: Die
+    neue Fassung ist dann aus ``document.ops`` heraus, ein zweites
+    Verlaufsobjekt zählt nur den Bestand und vergibt ``obj_3`` erneut — und
+    das Wiederherstellen macht daraus die Ausgabe zweier Operationen.
+    """
+    session = History(document, registry)
+    create(session)
+    session.apply(_("Duplizieren"), [OperationDraft(op="copy_object", inputs=("obj_1",))])
+    copied = session.operations[-1]
+
+    session.change_params(copied.id, {"count": 3})
+
+    assert session.operations[-1].outputs == ("obj_1", "obj_3", "obj_4")
+    assert document.highest_object == 4, "die frisch vergebenen Kennungen stehen darin"
+
+    session.undo()
+    other = History(document, registry)
+    other.apply(_("Über den anderen"), [OperationDraft(op="make_object")])
+    session.redo()
+
+    # Nur die **frisch** vergebenen zählen: Eine Kennung, die ein Schritt als
+    # Eingang bekommt und unverändert zurückgibt, steht zu Recht zweimal da.
+    fresh = [name for entry in document.ops for name in entry.outputs if name not in entry.inputs]
+    assert len(set(fresh)) == len(fresh), f"doppelt vergebene Objektkennung: {fresh}"
+
+
+def test_removing_a_step_keeps_its_numbers_reserved(registry: Registry) -> None:
+    """Die Gegenrichtung derselben Wasserlinie: Was hinausgeht, bleibt vergeben.
+
+    ``remove_operations`` nimmt den Schritt aus ``document.ops`` heraus — ein
+    Rückgängig holt ihn zurück, also gehört seine Kennung weiter ihm. Eine
+    Datei ohne Wasserlinie (vor Format v14) hat dafür nur den Bestand, und der
+    ist nach dem Löschen um genau diesen Schritt kürzer. Deshalb wird die
+    Wasserlinie **vor** dem Zurücklegen geschrieben und danach noch einmal.
+    """
+    from app.core.types import Operation, Transaction
+
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(Operation(id=1, op="make_object", outputs=("obj_1",)))
+    document.ops.append(Operation(id=2, op="make_object", outputs=("obj_2",)))
+    document.transactions.append(Transaction(id="t1", title=_("Angelegt"), ops=(1, 2)))
+    session = History(document, registry)
+
+    session.remove_operations([2])
+
+    assert document.highest_op == 2, "die Kennung des gelöschten Schritts bleibt vergeben"
+    assert document.highest_object == 2, "und die seines Körpers ebenso"
+
+    session.apply(_("Danach"), [OperationDraft(op="make_object")])
+
+    assert document.ops[-1].id == 3
+    assert document.ops[-1].outputs == ("obj_3",)
 
 
 def test_an_old_file_counts_from_its_stock(registry: Registry) -> None:

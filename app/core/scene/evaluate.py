@@ -183,7 +183,10 @@ def evaluate(
     operations = sorted(document.ops, key=lambda entry: entry.id)
     total = len(operations) or 1
 
-    values = expressions.resolve(document.parameters)
+    try:
+        values = expressions.resolve(document.parameters)
+    except AppError as error:
+        return _unresolved_parameters(document, profile, error, operations)
     parameters = _evaluated_parameters(document.parameters, values)
 
     objects: dict[ObjectId, SceneObject] = {}
@@ -1087,6 +1090,18 @@ def _with_features(
         if getattr(feature, "provenance", "detected") != "generated"
     }
     previous = {**previous, **checked}
+    # **Was die Operation unter einem alten Namen neu ausgibt, ist dessen
+    # Nachfolger.** *Bohrung ändern* gibt ``hole_1`` mit dem neuen Durchmesser
+    # selbst zurück (``_recognised_resized_feature``), weil ein Sprung von
+    # 5,19 auf 7,18 mm die Zuordnungstoleranz sprengt und genau hier die
+    # ausdrückliche Absicht ist. Die Zuordnung der benannten Merkmale oben hat
+    # den erkannten Zwilling dann schon gestrichen — und die alte ``hole_1``
+    # fände im Vergleich keinen Partner mehr. Bis zum 02.09.2026 verwaiste sie
+    # deshalb: ``perceive.orphaned`` stand unter dem Schritt, der diese
+    # Bohrung bewusst geändert hatte, und die Kennung überlebte nur über den
+    # neuen Eintrag. Der Vorgänger eines neu ausgegebenen Namens hat hier
+    # nichts mehr zu suchen.
+    previous = {name: feature for name, feature in previous.items() if name not in declared}
     if not previous:
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
@@ -1480,6 +1495,56 @@ def _carrier_hashes(
         if carrier_id in hashes
         and feature_id in objects[carrier_id].features
         and (carrier_id == object_id if object_id is not None else True)
+    )
+
+
+def _unresolved_parameters(
+    document: Document,
+    profile: Profile,
+    error: AppError,
+    operations: Sequence[Operation],
+) -> EvaluationResult:
+    """Die Auswertung, die gar nicht anfangen konnte (§15.3).
+
+    ``expressions.resolve`` stand als einzige Zeile von :func:`evaluate`
+    außerhalb jedes ``try``. Eine Division durch null, ein Kreis oder ein
+    Verweis auf einen Parameter, den es nicht gibt, kam damit als **Ausnahme**
+    aus der Auswertung heraus — während jeder andere Fehler eine Zeile im
+    Prüfbericht ist. Der Kunde verlor dabei mehr als die Meldung: §15.3 sagt
+    zu, dass der letzte vollständig gerechnete Zustand stehen bleibt, und ein
+    Aufrufer, der eine Ausnahme fängt, hat kein Ergebnis, aus dem er ihn nimmt.
+
+    Angehalten wird am **ersten** Schritt: Ohne aufgelöste Parameter ist keiner
+    von ihnen zu rechnen, und ``stopped_at`` ist die Zahl, an der die
+    Oberfläche den Verlauf markiert. Ein Dokument ohne Stapel hat keinen —
+    dort steht der Befund allein, denn die Parameterleiste zeigt den Zustand
+    an, und ein leerer Bericht hieße „alles in Ordnung".
+    """
+    stopped_at = operations[0].id if operations else None
+    detail = error.detail if error.detail is not None else error.title
+    finding = Finding(
+        code="parameter.unresolvable",
+        severity="error",
+        message=_(
+            "Ein Parameterausdruck lässt sich nicht auflösen — bis er stimmt, "
+            "rechnet Solidon die Szene nicht."
+        ),
+        op_id=stopped_at,
+        values={
+            **{key: str(value) for key, value in error.values.items()},
+            "reason": str(detail),
+        },
+        suggestions=tuple(error.suggestions),
+    )
+    _log.warning("evaluation could not resolve the parameters: %s", detail)
+    return EvaluationResult(
+        scene=Scene(
+            parameters=dict(document.parameters),
+            fits=list(document.fits),
+            profile=profile,
+            report=Report((finding,)),
+        ),
+        stopped_at=stopped_at,
     )
 
 

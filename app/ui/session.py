@@ -300,6 +300,21 @@ def _no_questions(question: str, choices: list[str]) -> str:
     raise OperationCancelled
 
 
+def _unresolvable(parameters: Mapping[str, Parameter]) -> AppError | None:
+    """Der Fehler, an dem dieser Parametersatz scheitert — oder ``None``.
+
+    Dieselbe Rechnung, die die Auswertung als Erstes macht (§13). Sie hier
+    vorwegzunehmen kostet Mikrosekunden und erspart dem Kunden den Umweg über
+    den Prüfbericht: Wer eine Zahl dreht, an der ein fremder Ausdruck hängt,
+    bekommt den Satz an der Leiste, an der er gerade steht.
+    """
+    try:
+        expressions.resolve(parameters)
+    except AppError as error:
+        return error
+    return None
+
+
 def _with_findings(result: EvaluationResult, extra: list[Finding]) -> EvaluationResult:
     """Trägt die Befunde der Prüfung in den Bericht, den das Fenster zeigt."""
     if not extra:
@@ -649,6 +664,19 @@ class Session(QObject):
             return False
 
         changed = dataclasses.replace(existing, value=value)
+        # Die Zahl selbst ist harmlos — was an ihr hängt, nicht: Steht
+        # ``=10/@a`` in einem zweiten Maß, macht eine Null hier die ganze Szene
+        # unauswertbar. Der Kern hält deswegen an und schreibt einen Befund
+        # (§15.3); hier lässt sich der Satz aber noch dort sagen, wo der Kunde
+        # gerade dreht, statt ihn im Prüfbericht zu suchen.
+        #
+        # **Nur, wenn genau diese Zahl das Problem ist.** Eine Datei, deren
+        # Ausdrücke schon vorher nicht aufgingen, muss änderbar bleiben — sonst
+        # wäre die einzige Stelle gesperrt, an der man sie repariert (§2.1).
+        problem = _unresolvable({**parameters, name: changed})
+        if problem is not None and _unresolvable(parameters) is None:
+            self.failed.emit(problem)
+            return False
         try:
             self.history.apply(
                 f"{tr('Parameter')} {name}",
