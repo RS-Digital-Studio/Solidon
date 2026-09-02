@@ -48,6 +48,13 @@ jobs:
   suite:
     name: Suite (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    # **Eine Frist, damit ein Hänger nach einer Stunde rot wird und nicht nach
+    # sechs.** Die Suite lag bis zum 02.09.2026 bei 19 bis 23 Minuten; an dem
+    # Tag standen drei Läufe je vier Stunden in einer einzigen Testdatei,
+    # bevor GitHub sie abbrach, und niemand hat es gesehen, weil ein laufender
+    # Lauf wie ein langsamer aussieht. Sechzig Minuten sind das Dreifache des
+    # Normalen: Wer sie reißt, hat einen Hänger, keinen langen Lauf.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
