@@ -300,7 +300,12 @@ def split_to_fit(
         reserve = reserves[index]
         axis = _axis_to_cut(part, profile, reserve)
         if axis is None:
-            return outcome
+            # Erreichbar ist das nicht — ``_worst`` gibt nur einen Index heraus,
+            # wenn dieses Stück übersteht, und dann findet ``_axis_to_cut``
+            # seine Achse. Der Ausgang meldet trotzdem das Ende wie jeder
+            # andere: Ein Rückweg, der die Fortschrittsanzeige bei 0,99 stehen
+            # ließe, wäre der eine Fall, den niemand nachstellt.
+            return finish()
         # Wie weit der Stift dieser Naht überstünde — an einer Ebene durch die
         # Mitte gemessen, weil dort der Querschnitt für ein prismatisches Stück
         # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den

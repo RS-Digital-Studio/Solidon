@@ -93,8 +93,12 @@ def angle_between(first: Vec3, second: Vec3) -> float:
     lengths = float(np.linalg.norm(one)) * float(np.linalg.norm(two))
     if lengths <= EPS_GEOM:
         return 0.0
+    # ``abs`` ist der „immer der kleinere" aus der Zusage: Eine Richtung und
+    # ihre Gegenrichtung spannen denselben Winkel auf. Hier standen zwei
+    # Zweige, und der für ``cosine >= 0`` rechnete dasselbe — ``abs`` einer
+    # nichtnegativen Zahl ist sie selbst.
     cosine = float(np.clip(float(np.dot(one, two)) / lengths, -1.0, 1.0))
-    return math.degrees(math.acos(abs(cosine))) if cosine < 0 else math.degrees(math.acos(cosine))
+    return math.degrees(math.acos(abs(cosine)))
 
 
 def bounding_box_of(meshes: list[MeshData]) -> BoundingBox:

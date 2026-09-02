@@ -7,10 +7,11 @@ und die erste Brücke darüber sackt durch. Die Entlüftung ist hier also keine
 Option — sie ist die zweite Hälfte der Operation, und die Vorgabe.
 
 Wie die Innenwand gefunden wird: der Körper kommt auf dasselbe Raster wie die
-Analysekarten (§18.4), das Raster wird um die Wandstärke erodiert, und was
-übrig bleibt, wird neu vernetzt. Das ist die Voxelstufe aus §17.2 mit ihrer
-Genauigkeit und ihrer Ehrlichkeit — die Wand stimmt auf einen halben
-Rasterschritt, und der Bericht sagt es.
+Analysekarten (§18.4), das Raster wird um die Wandstärke erodiert — mit einer
+Kugel als Strukturelement, sonst steht die Wand nur an achsparallelen Flächen
+(:func:`_ball`) —, und was übrig bleibt, wird neu vernetzt. Das ist die
+Voxelstufe aus §17.2 mit ihrer Genauigkeit und ihrer Ehrlichkeit — die Wand
+stimmt auf einen halben Rasterschritt, und der Bericht sagt es.
 
 Ein Versatz auf den Dreiecken selbst wäre exakt und faltete sich an jeder
 konkaven Ecke ein — genau dort, wo ein hohles Teil die Wand am nötigsten
@@ -318,10 +319,39 @@ def _inner_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, Vec3, float] 
 
     steps, pitch = erosion_steps(wall)
     field = solid_field(mesh, pitch)
-    inner = ndimage.binary_erosion(field.filled, iterations=steps)
+    inner = ndimage.binary_erosion(field.filled, structure=_ball(steps))
     if not inner.any():
         return None
     return inner, field.origin, pitch
+
+
+def _ball(steps: int) -> np.ndarray:
+    """Das Strukturelement der Erosion: eine Kugel von ``steps`` Zellen Radius.
+
+    **Die Vorgabe von ``binary_erosion`` ist das Kreuz**, und ``steps`` Kreuze
+    hintereinander sind eine Kugel der L1-Norm — ein Oktaeder. Senkrecht zu
+    einer 45°-Fläche reicht der nur ``steps · pitch / √2`` weit, und genau so
+    dünn blieb dort die Wand: Am 40er Würfel, um 45° um Z gedreht, standen bei
+    3 mm Vorgabe 2,371 mm — außerhalb der Toleranz, die der Befund nennt,
+    während die waagerechte Decke mit 3,5 mm richtig war. Der Fehler wuchs mit
+    der Wand und war an keiner achsparallelen Fläche zu sehen; an einer Kugel
+    lag er über die ganze Oberfläche (2,60 statt 3,0 mm).
+    Eine Kugel als Strukturelement misst in jede Richtung gleich weit.
+
+    Gerechnet in ganzen Zellen und nicht in Millimetern: ``steps`` ist eine
+    ganze Zahl, ``offset² ≤ steps²`` damit eine Ganzzahlrechnung ohne
+    Rundungsfrage. Ein Radius in Millimetern legte die Zelle, die genau auf ihm
+    liegt, auf ein letztes Bit — und die achsparallele Wand hinge an dessen
+    Vorzeichen, also an einem Sprung um einen ganzen Rasterschritt.
+
+    Eine euklidische Distanztransformation (``distance_transform_edt``) rechnet
+    dasselbe und ist gemessen worden: gleiches Ergebnis, aber an einem
+    300³-Raster 1323 MB Spitze gegen 27 MB und 2,5 s gegen 1,0 s. Sie legt
+    ihren Abstandswert für jede Zelle ab; hier wird nur die Schwelle gebraucht.
+    """
+    reach = np.arange(-steps, steps + 1)
+    offsets = np.stack(np.meshgrid(reach, reach, reach, indexing="ij"))
+    return np.asarray((offsets**2).sum(axis=0) <= steps**2)
 
 
 def erosion_steps(wall: float) -> tuple[int, float]:

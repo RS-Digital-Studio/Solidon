@@ -46,6 +46,17 @@ _ANCHORS = ("centre", "corner")
 #: zählte die oberste Segmentreihe einer Kugel als Deckfläche.
 FLAT_ENOUGH = 0.9998
 
+#: Wie fein die Kugel höchstens wird. Der Regler heißt „Segmente" und geht bis
+#: 128; seine Zahl ging als **Unterteilungstiefe** in die Icosphere, und die
+#: wächst mit ``20 · 4ⁿ``. Bei 128 waren das 20 971 520 Dreiecke — kein
+#: langsamer Körper, sondern eine angehaltene Sitzung: Jeder Schritt danach
+#: rechnet, speichert und zeichnet sie wieder. Fünf Unterteilungen sind 20 480
+#: Dreiecke; das ist bei einer 20-mm-Kugel eine Kantenlänge von 0,3 mm und
+#: damit feiner, als ein Drucker sie legt. Der Regler bleibt bei 128, weil
+#: gespeicherte Projekte ihn dort stehen haben — er wird nur nicht mehr
+#: geglaubt, und sein ``doc`` sagt das.
+MAX_SPHERE_SUBDIVISIONS = 5
+
 
 @op_params
 class BoxParams(BaseParams):
@@ -179,7 +190,9 @@ class SphereParams(BaseParams):
         minimum=8,
         maximum=128,
         placement="advanced",
-        doc=_("Mehr Segmente heißt runder und langsamer."),
+        doc=_(
+            "Mehr Segmente heißt runder und langsamer — ab 60 ist die Kugel so rund, wie sie wird."
+        ),
     )
     name: str = param(
         title=_("Name"),
@@ -203,7 +216,8 @@ def create_sphere(ctx: OpContext) -> OpResult:
 
     params = cast(SphereParams, ctx.params)
     body = trimesh.creation.icosphere(
-        subdivisions=max(1, params.segments // 12), radius=params.diameter / 2.0
+        subdivisions=min(MAX_SPHERE_SUBDIVISIONS, max(1, params.segments // 12)),
+        radius=params.diameter / 2.0,
     )
     body.apply_translation([0.0, 0.0, params.diameter / 2.0])
     mesh = MeshData.of(body)

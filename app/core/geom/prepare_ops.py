@@ -1238,9 +1238,16 @@ def _cut_and_pin(
     first, second, findings = split_at_plane(mesh, plane)
     _both_halves_or_stop(first, second, plane.position)
 
-    plan = plan_pins(mesh, plane, count=pins, shape=shape) if pins else None
-    if plan is not None and diameter:
-        plan = dataclasses.replace(plan, diameter=diameter)
+    # **Der Wunschdurchmesser geht in die Planung hinein**, nicht hinterher in
+    # ihr Ergebnis. Bis zum 02.09.2026 stand hier ein ``dataclasses.replace``
+    # auf dem fertigen Plan: Es tauschte das eine Feld und ließ Sitzpuffer,
+    # Materialtiefe, Länge und Formwahl stehen, wie sie für den *abgeleiteten*
+    # Durchmesser gerechnet waren. Ein 8-mm-Stift in einer 10 mm starken Platte
+    # ließ damit 0,875 mm Wand stehen statt der geforderten 1,6 und band 4,5 mm
+    # ein statt der nötigen 6,0 — ohne einen einzigen Befund.
+    plan = (
+        plan_pins(mesh, plane, count=pins, shape=shape, diameter=diameter or None) if pins else None
+    )
 
     # **``ctx.profile`` ist nach §9 keine Option**, und die zweite Bedingung
     # hier war es doch: ``plan is not None and ctx.profile is not None``. Der
@@ -1746,7 +1753,9 @@ class CollisionParams(BaseParams):
 
 @register_op(
     name="check_collisions",
-    title=_("Kollisionen prüfen"),
+    # „Überschneidungen" statt „Kollisionen": Der Kunde denkt bei Kollision an
+    # einen Zusammenstoß, gemeint ist, dass zwei Teile ineinanderstecken.
+    title=_("Überschneidungen prüfen"),
     category="scene",
     params=CollisionParams,
     consumes=0,

@@ -263,6 +263,7 @@ def plan_pins(
     count: int = PIN_COUNT,
     wall: float = PIN_WALL,
     shape: str = "round",
+    diameter: float | None = None,
 ) -> PinPlan:
     """Sucht Platz für Stifte auf der Schnittfläche von ``plane``.
 
@@ -274,6 +275,16 @@ def plan_pins(
     Liefert einen Plan ohne Positionen, wenn beides nicht zusammengeht — eine
     Naht ohne Stifte klebt immer noch, ein Stift, der aus der Wand ausbricht,
     nicht.
+
+    ``diameter`` ist ein **Wunsch und keine Ansage**: Er tritt an die Stelle des
+    aus der Fläche abgeleiteten Maßes und läuft danach durch dieselben
+    Prüfungen — Sitzpuffer, Materialtiefe, Einbindung, Länge, Formwahl. Ihn
+    hier hineinzureichen statt ihn hinterher in den fertigen Plan zu schreiben,
+    ist der ganze Unterschied zwischen „passt nicht, und das steht im Bericht"
+    und „passt nicht, wird aber trotzdem gebohrt": Bis zum 02.09.2026 tauschte
+    *Teilen* das Feld im fertigen Plan, und ein 8-mm-Stift in einer 10 mm
+    starken Platte ließ 0,875 mm Wand stehen, wo 1,6 gefordert sind, und band
+    4,5 mm ein, wo 6,0 nötig gewesen wären — ohne ein Wort.
     """
     normal = _unit(plane.normal)
     section = sections_across(mesh, normal, np.array([plane.position]))[0]
@@ -281,7 +292,8 @@ def plan_pins(
         return PinPlan((), 0.0, 0.0, normal, ROUND if shape == AUTO else shape, (_no_face(),))
 
     largest = max(getattr(section, "geoms", (section,)), key=lambda entry: entry.area)
-    diameter = _diameter(largest)
+    wish = diameter
+    diameter = _diameter(largest) if wish is None else wish
     seats = _seat(mesh, largest, plane, normal, diameter, count, wall)
     if seats is None:
         return PinPlan(
@@ -300,9 +312,12 @@ def plan_pins(
     # wird an der *tiefsten* Stelle — sie bestimmt, was überhaupt möglich ist;
     # welche Stellen es dann mittragen, entscheidet sich danach.
     thickest = max((raw for _point, _usable, raw in seats), default=0.0)
-    deepest = max((usable for _point, usable, _raw in seats), default=0.0)
-    if deepest < diameter * PIN_MIN_ENGAGEMENT:
-        thinner = deepest / PIN_MIN_ENGAGEMENT
+    # Nicht ``deepest``: So heißt die Funktion, die nebenan aus mehreren
+    # Rückfallstufen die schlechteste heraussucht (``boolean.deepest``), und sie
+    # ist in diesem Modul importiert.
+    deepest_seat = max((usable for _point, usable, _raw in seats), default=0.0)
+    if deepest_seat < diameter * PIN_MIN_ENGAGEMENT:
+        thinner = deepest_seat / PIN_MIN_ENGAGEMENT
         if thinner < PIN_MIN:
             needed = PIN_MIN * PIN_MIN_ENGAGEMENT + BORE_RELIEF + wall
             return PinPlan(
@@ -351,6 +366,8 @@ def plan_pins(
     reach = min(diameter * PIN_DEPTH_FACTOR, room)
     points = tuple(point for point, _usable in seated)
     findings: list[Finding] = []
+    if wish is not None and diameter < wish - EPS_GEOM:
+        findings.append(_thinner_than_wanted(wish, diameter, deepest_seat))
     choice = None
 
     if shape == AUTO:
@@ -635,12 +652,26 @@ def add_pins(
     # zu tun hatte, und die zweite bekam kein Loch. Stifte ohne Gegenloch, und
     # der Prüfbericht sagte nichts, weil geometrisch alles glatt blieb.
     #
-    # Versetzt wird um die **gemessene** Tiefe des Körpers, nicht um die
-    # übergebene Länge: Der Schnappverbinder rechnet sich seine Entlastung
-    # selbst dazu (5,4 angefordert, 5,8 geliefert), und eine Zahl aus dem
-    # Aufruf wäre für ihn falsch. Wächst ein Baustein später wieder nach oben,
-    # ist die Tiefe null und dieser Versatz verschwindet von selbst.
-    bore_offset = -float(bore_body.raw.bounds[0][2])
+    # **Gewendet, nicht verschoben.** Bis zum 02.09.2026 stand hier ein Versatz
+    # um die gemessene Tiefe des Körpers. Der brachte die Bohrung zwar in die
+    # richtige Hälfte, aber falsch herum: Die Mündung mit der Einführfase saß
+    # am Grund des Sacklochs, an der Naht brach die Kante ungefast ab, und die
+    # Fase weitete das Loch dort, wo es eng bleiben soll — gemessen an der
+    # geteilten 40er Platte 2,525 mm Radius an der Naht gegen 2,725 am Grund,
+    # also ein Hinterschnitt im Sackloch. Beim Schnappverbinder war es mehr als
+    # eine Kante: Seine Rastkante gehört zwischen Mündung und Haken (§24.1,
+    # Bausteinversion 4), und der Versatz nahm sie mit ans tiefe Ende, wo der
+    # Arm nichts fand, hinter das er springen konnte.
+    #
+    # Gewendet wird über die Gegenrichtung der Naht, und zwar ohne Versatz: Die
+    # Mündung liegt im Baustein auf z = 0, also genau auf der Naht. Es ist
+    # dieselbe halbe Drehung um die eigene Y-Achse, mit der man die Hälften
+    # zusammensteckt (``tests/test_split_line.py`` misst den Baustein in dieser
+    # Lage) — und für jeden Verbinderquerschnitt eine Deckbewegung: Rund ist
+    # drehsymmetrisch, Sechskant und Schwalbenschwanz sind zu ihr
+    # spiegelsymmetrisch, und die Tasche des Schnappers behält ihre Rastkante
+    # auf ihrer Seite.
+    into_material = (-plan.normal[0], -plan.normal[1], -plan.normal[2])
 
     placed_pins: list[MeshData] = []
     placed_bores: list[MeshData] = []
@@ -648,7 +679,7 @@ def add_pins(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         placed_pins.append(_along_normal(pin_body, plan.normal, position, pin_offset))
-        placed_bores.append(_along_normal(bore_body, plan.normal, position, bore_offset))
+        placed_bores.append(_along_normal(bore_body, into_material, position, 0.0))
 
     _add_connector_geometry(
         pair,
@@ -848,6 +879,33 @@ def _seam_too_thin(diameter: float, found: float, needed: float) -> Finding:
             "diameter_mm": round(diameter, 2),
             "depth_mm": round(found, 2),
             "needed_mm": round(needed, 2),
+        },
+    )
+
+
+def _thinner_than_wanted(wanted: float, used: float, depth: float) -> Finding:
+    """Der gewünschte Durchmesser hätte tiefer sitzen müssen, als Material da
+    ist — der Stift ist dünner geworden.
+
+    Dünner statt gar nicht ist die richtige Antwort: Einbindung und
+    Durchmesser hängen aneinander (:data:`PIN_MIN_ENGAGEMENT`), ein dünnerer
+    Stift braucht weniger Tiefe. Stillschweigend darf das aber nur bleiben,
+    solange niemand einen Durchmesser genannt hat — wer 8 mm einträgt und 5
+    bekommt, soll es hier lesen und nicht am gedruckten Teil. Ohne Wunsch
+    bleibt es stumm wie bisher: Dort hat die Planung das Maß selbst gewählt und
+    korrigiert sich damit nur selbst.
+    """
+    return Finding(
+        code="split.pin_thinner",
+        severity="info",
+        message=_(
+            "Hinter der Naht steht zu wenig Material für einen Stift dieses "
+            "Durchmessers — er ist dünner geworden, damit er trägt."
+        ),
+        values={
+            "wanted_mm": round(wanted, 2),
+            "diameter_mm": round(used, 2),
+            "depth_mm": round(depth, 2),
         },
     )
 

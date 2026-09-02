@@ -380,15 +380,27 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
 
 
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
-    """Ein Ergebnis muss Volumen haben; ein leerer oder umgestülpter Körper ist
-    keine Antwort.
+    """Ein Ergebnis muss ein Körper sein: geschlossen, mit positivem Volumen.
+    Ein leerer, ein offener oder ein umgestülpter ist keine Antwort.
+
+    **Der Satz stand hier schon, die Prüfung hielt ihn nicht.** ``abs(volume)``
+    nimmt ein umgestülptes Ergebnis an — dessen Volumen ist negativ und sein
+    Betrag groß —, und ein Körper mit einem Loch kam ohnehin durch: trimesh
+    rechnet auch über eine offene Fläche ein Integral, es bedeutet nur nichts.
+    Beides ist genau der Fall, für den es die Rückfallkette gibt; angenommen
+    endete er als Ergebnis der ersten Stufe.
+
+    Strenger heißt hier nicht öfter Stufe 4: Gemessen an 213 angenommenen
+    Ergebnissen aus fünf Testdateien war keines offen und keines umgestülpt.
+    Die Kette verliert dadurch nichts, sie hört nur auf, ein Nicht-Ergebnis für
+    eines zu halten.
 
     Außer der Aufrufer sagt es anders — siehe ``allow_empty`` in
     :func:`boolean`.
     """
-    if allow_empty and mesh.triangle_count == 0:
-        return True
-    return mesh.triangle_count > 0 and abs(mesh.volume) > EPS_GEOM
+    if mesh.triangle_count == 0:
+        return allow_empty
+    return mesh.volume > EPS_GEOM and bool(mesh.raw.is_watertight)
 
 
 def _findings_for(stage: SolverStage) -> list[Finding]:
