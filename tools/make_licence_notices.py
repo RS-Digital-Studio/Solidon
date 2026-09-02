@@ -231,10 +231,21 @@ def _generic_identifier(component: dict[str, Any]) -> str:
 
 
 def _python_runtime_text() -> NoticeText:
-    """Liest die mit dem Build-Interpreter ausgelieferte CPython-Lizenzakte."""
+    """Liest die mit dem Build-Interpreter ausgelieferte CPython-Lizenzakte.
+
+    Der Windows-Installer legt sie neben die ``python.exe``; ein ``make
+    install`` auf Linux und macOS legt sie in die Standardbibliothek
+    (``lib/python3.X/LICENSE.txt``) — dort suchte bis zum 02.09.2026 niemand,
+    und der Lauf auf dem Ubuntu-Runner starb mit „fehlt in der Zielumgebung",
+    obwohl die Datei da war. Dieselbe Liste wie CPythons eingebautes
+    ``license()``.
+    """
+    stdlib = Path(sysconfig.get_paths()["stdlib"])
     candidates = (
         Path(sys.base_prefix) / "LICENSE.txt",
         Path(sys.base_prefix) / "LICENSE",
+        stdlib / "LICENSE.txt",
+        stdlib / "LICENSE",
     )
     path = next((entry for entry in candidates if entry.is_file()), None)
     if path is None:

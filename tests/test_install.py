@@ -1409,13 +1409,20 @@ def test_the_dialog_says_once_that_it_is_searching(qt_app: QApplication) -> None
     dialog = InstallDialog()
     try:
         dialog.show()
-        qt_app.processEvents()
+        # **Vor dem ersten Ereignisdurchlauf**, nicht danach: Die Erhebung
+        # läuft seit dem Bau in ihrem Thread, und auf einem Runner ohne einen
+        # einzigen Slicer ist sie fertig, bevor der Test hinsieht — der Slot
+        # blendet den Balken dann zu Recht aus, und ``processEvents`` stellte
+        # ihn zu. Gemessen in der Linux-CI am 02.09.2026 (rot), lokal grün,
+        # weil die Erhebung auf Windows länger braucht. Geprüft wird der
+        # Zustand, den der Docstring meint: während gesucht wird.
+        assert dialog.progress.isVisibleTo(dialog), "und der Balken sagt es ohne Worte"
         texts = [label.text() for label in dialog.findChildren(QLabel) if label.text().strip()]
         searching = [text for text in texts if "gesucht" in text]
         assert len(searching) <= 1, (
             f"{len(searching)} Zeilen sagen zugleich, dass gesucht wird: {searching[:3]}"
         )
-        assert dialog.progress.isVisibleTo(dialog), "und der Balken sagt es ohne Worte"
+        qt_app.processEvents()
     finally:
         dialog.hide()
         dialog.release()

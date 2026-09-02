@@ -62,10 +62,28 @@ def test_notice_generation_enforces_direct_dependency_approval(
 
 
 def test_checked_in_notice_is_the_deterministic_target_output() -> None:
+    """Die eingecheckte Beilage ist das Erzeugnis **ihrer** Plattform, Byte für Byte.
+
+    Sie trägt in der dritten Zeile, wofür sie erzeugt wurde — und das kann nur
+    eine Plattform sein: Die Wheels unterscheiden sich (cffi, jeepney und
+    SecretStorage auf Linux, pywin32-ctypes auf Windows). Bis zum 02.09.2026
+    verglich der Test blind, und die Linux-CI war rot, sobald jemand die Datei
+    unter Windows neu erzeugt hatte (df8fae68). Auf der falschen Plattform
+    überspringt er sich jetzt und sagt es; das Kundenpaket bekommt seine
+    Beilage ohnehin je Plattform aus der Endartefakt-SBOM (build.yml).
+    """
+    checked_in = make_licence_notices.OUTPUT.read_text(encoding="utf-8")
+    head = checked_in.splitlines()[2] if checked_in.count("\n") >= 2 else ""
+    here = sysconfig.get_platform()
+    if f"`{here}`" not in head:
+        pytest.skip(
+            f"die eingecheckte Beilage wurde für eine andere Plattform erzeugt ({head.strip()}); "
+            f"hier läuft {here} — sie prüft nur die Plattform, für die sie gilt"
+        )
     components = make_licence_notices.collect_components()
     expected = make_licence_notices.render_notices(components)
 
-    assert make_licence_notices.OUTPUT.read_text(encoding="utf-8") == expected
+    assert checked_in == expected
     assert make_licence_notices.render_notices(components) == expected
 
 

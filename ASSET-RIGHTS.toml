@@ -399,7 +399,7 @@ inputs = ["app/examples/weg3-generiert-aufbereiten.p3d", "tests/data/meshes/gene
 derivative_status = "generated_from_mit_source"
 evidence = ["tools/make_video.py", "tools/make_examples.py", "tests/data/make_corpus.py", "tests/data/LICENSE", "website/CLAUDE.md"]
 content_sha256 = {"website/bilder/weg3-generiert-aufbereiten.mp4" = "1a961a4713614eccdc13765c981ea3701924a22b23d7e2f2a3b7f6c6acf3f2ea", "website/bilder/weg3-generiert-aufbereiten.png" = "75c521e9452cdb3a1236731c711dd335f2c1a018ea7468198f181a8ff0be161d", "website/bilder/weg3-generiert-aufbereiten.webm" = "895a6484d4788aafc6687d7f252866025150f3b84c3768a9c77bca0620903467"}
-input_sha256 = {"app/examples/weg3-generiert-aufbereiten.p3d" = "6defe6b3287e5c96f8ade9c587e9f43c325dcf33bd39914c833334d01596174a", "tests/data/meshes/generated_figure.stl" = "f5aa84dd37fd6719bf68b661876a64ecaac629968810f1bb228e33888a1fcf1b"}
+input_sha256 = {"app/examples/weg3-generiert-aufbereiten.p3d" = "6174f0b39f12be9ca90d109e28eb87bd1c6c243db62c6f5db7689add9391a3f7", "tests/data/meshes/generated_figure.stl" = "f5aa84dd37fd6719bf68b661876a64ecaac629968810f1bb228e33888a1fcf1b"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
 status = "cleared"
