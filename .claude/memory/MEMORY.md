@@ -121,6 +121,7 @@
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Befunde waren welche.
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — fast keinen Fehler fand sein Urheber; der eigene Blick folgt der eigenen Absicht.
 - [Ein Bündel erbt nicht das erste Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — gezählte Zeilen bleiben Bedienhandlungen; Ziele und Auswege müssen für jedes Mitglied stimmen.
+- [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Flatpak-Manifest behoben, im AppImage fünf Tage später noch da; die Regel gehört in den Startpfad, das Register nennt die Reichweite.
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
