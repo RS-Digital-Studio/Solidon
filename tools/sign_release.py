@@ -398,12 +398,19 @@ def write_checksum(target: Path) -> Path:
     return checksum
 
 
-def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: Path) -> None:
+def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: Path) -> str:
     """Schreibt die Release-Evidenz für den signierten Installer und prüft die Akte.
 
     Dieselben zwei Aufrufe wie im CI-Prüfjob ``windows-release-check``. Der
     Installer wird vorher in die Ablage der Evidenz kopiert, weil der Prüfer
     nur relative Pfade darin auflöst.
+
+    Liefert leer, wenn beides gelungen ist, sonst die Warnung. Ein Fehlschlag
+    dieser zwei Schritte hält die Kette **nicht** an — Entscheidung Robert,
+    02.09.2026, dieselbe wie in der CI: Kein Release hängt an einer Prüfung,
+    die zum ersten Mal läuft. Was fehlt, kommt ins Register. Eine fehlende
+    SBOM im Arbeitsordner bleibt dagegen ein Halt, weil sie den gebundenen
+    App-Baum selbst betrifft.
     """
     artifact_root = resolve_handoff_path(stage, str(handoff["source_dir"]))
     sboms = sorted(artifact_root.rglob(f"{APP_NAME}.cdx.json"))
@@ -428,7 +435,7 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         check=False,
     )
     if written.returncode != 0:
-        raise SigningError(
+        return (
             "Die Release-Evidenz wurde nicht geschrieben — Ausgabe darüber lesen; "
             "die Umgebung braucht die Extras geom, ui, agent und brep."
         )
@@ -447,9 +454,8 @@ def release_check(stage: Path, handoff: dict[str, Any], setup: Path, evidence: P
         check=False,
     )
     if checked.returncode != 0:
-        raise SigningError(
-            "Die Releasebelege passen nicht zum signierten Installer — Ausgabe darüber lesen."
-        )
+        return "Die Releasebelege passen nicht zum signierten Installer — Ausgabe darüber lesen."
+    return ""
 
 
 def run(
@@ -485,7 +491,13 @@ def run(
     sign_file(tool, setup, subject=subject, thumbprint=thumbprint, timestamp_url=timestamp_url)
     checksum = write_checksum(setup)
     _step("Release-Evidenz schreiben und Releaseakte prüfen")
-    release_check(stage, handoff, setup, evidence)
+    warning = release_check(stage, handoff, setup, evidence)
+    if warning:
+        print(f"WARNUNG: {warning}")
+        print(
+            "Der signierte Installer wird trotzdem abgelegt — kein Release hängt an einer "
+            "Prüfung, die zum ersten Mal läuft. Den Befund ins Register von ROADMAP.md."
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     result = output_dir / setup.name
     shutil.copy2(setup, result)

@@ -100,7 +100,10 @@ die Setup-Datei mit Inno Setup bauen, sie genauso signieren und prüfen, die
 (`make_licence_notices.py --write-evidence`) und fährt `--release-check`
 gegen den signierten Installer, wie die CI es gegen den unsignierten tut —
 der äußere Hash ist nach der Signatur ein anderer, und die Akte muss den
-nennen, den der Kunde bekommt. Bei zwei Zertifikaten auf denselben Namen
+nennen, den der Kunde bekommt. Scheitert einer der beiden Schritte, warnt
+das Werkzeug und legt den signierten Installer trotzdem ab, wie die CI seit
+dem 02.09.2026: Kein Release hängt an einer Prüfung, die zum ersten Mal
+läuft; der Befund gehört ins Register. Bei zwei Zertifikaten auf denselben Namen
 entscheidet `--thumbprint <SHA-1>` statt `--subject`; `--release-evidence`
 verlegt die Akte (Vorgabe `build/release-evidence.json`).
 

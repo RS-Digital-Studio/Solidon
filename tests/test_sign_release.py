@@ -79,6 +79,7 @@ class FakeTools:
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
         self.verify_fails = False
+        self.evidence_fails = False
         self.application_signed_when_packed: bool | None = None
 
     def __call__(self, command: list[str], *, check: bool) -> subprocess.CompletedProcess[bytes]:
@@ -86,6 +87,8 @@ class FakeTools:
         self.calls.append(list(command))
         name = Path(command[0]).name.lower()
         if len(command) > 1 and command[1].endswith("make_licence_notices.py"):
+            if self.evidence_fails:
+                return subprocess.CompletedProcess(command, 1)
             if command[2] == "--write-evidence":
                 evidence = Path(command[command.index("--release-evidence") + 1])
                 kind, _, package = command[command.index("--package") + 1].partition("=")
@@ -314,6 +317,24 @@ def test_an_invalid_application_signature_stops_before_the_installer_is_built(
     output = signing["output"]
     assert isinstance(output, Path)
     assert not output.exists()
+
+
+def test_a_failing_release_check_warns_but_still_delivers_the_signed_installer(
+    signing: dict[str, object], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Kein Release hängt an einer Prüfung, die zum ersten Mal läuft — wie in der CI."""
+    tools = signing["tools"]
+    assert isinstance(tools, FakeTools)
+    tools.evidence_fails = True
+
+    result = _go(signing)
+
+    assert result.is_file() and result.read_bytes().endswith(FakeTools.SIGNATURE)
+    output = capsys.readouterr().out
+    assert "WARNUNG" in output and "Register" in output
+    assert [call[2] for call in tools.calls if call[1].endswith("make_licence_notices.py")] == [
+        "--write-evidence"
+    ], "nach einer nicht geschriebenen Evidenz gibt es nichts zu prüfen"
 
 
 def test_an_existing_stage_is_never_overwritten(signing: dict[str, object]) -> None:
