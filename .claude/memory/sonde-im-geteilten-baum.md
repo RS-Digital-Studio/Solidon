@@ -10,7 +10,7 @@ wie oft ein Codezweig wirklich läuft. Vier andere Sitzungen arbeiteten im selbe
 Baum. Innerhalb von zwei Minuten meldete eine davon, dass ihr Tor stehe.
 
 **Der Syntaxfehler war nicht das Problem, sondern der Ort.** Ein Heredoc hatte
-mir das `\n` gefaltet ([[heredoc-verschluckt-backslash-n]]), und die Datei parste
+mir das `\n` gefaltet ([[deutscher-text-geht-nicht-durch-die-shell]]), und die Datei parste
 nicht mehr. Aber selbst mit heiler Syntax wäre das Tor rot geworden: Der
 Sondenimport steht nicht am Dateikopf, und `ruff` sagt dazu `E402`. Die kaputte
 Klammer hat nur beschleunigt, was ohnehin passiert wäre.
