@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import codecs
 import ctypes
-import importlib
 import os
 import queue
 import signal
@@ -123,7 +122,6 @@ _SANDBOX_BRIDGE_NAMES: Final = (
 )
 
 DEFAULT_OUTPUT_LIMIT: Final = 1024 * 1024
-DEFAULT_MEMORY_LIMIT: Final = 4 * 1024 * 1024 * 1024
 PROCESS_POLL_SECONDS: Final = 0.05
 PROCESS_STOP_SECONDS: Final = 0.5
 _READ_SIZE: Final = 64 * 1024
@@ -268,36 +266,18 @@ def _taskkill(process_id: int, *, force: bool) -> None:
         return
 
 
-def _memory_options(memory_limit: int, platform: str = sys.platform) -> dict[str, Any]:
-    """Setzt die Speichergrenze vor dem ersten fremden Maschinenbefehl.
+def _attach_windows_job(process: subprocess.Popen[Any]) -> None:
+    """Bindet einen Windows-Prozess an ein Jobobjekt, das er nicht verlassen kann.
 
-    **Auf macOS gibt es sie nicht.** ``setrlimit(RLIMIT_AS)`` lehnt der
-    Darwin-Kern ab (EINVAL), und ``subprocess`` macht daraus „Exception
-    occurred in preexec_fn" — ohne die Ursache, und bevor das Kind auch nur
-    gestartet ist. Der Tag-Lauf 0.3.0 (02.09.2026) zeigte es an sechzehn
-    Tests: Kein Slicer, kein Installer, kein Kindprozess wäre auf dem Mac
-    je gestartet. Ein Kind ohne Speichergrenze ist dort das kleinere Übel
-    als eines, das nicht startet; Zeit- und Ausgabegrenzen gelten weiter.
-    Die Plattform kommt als Parameter herein, damit der Zweig ohne Mac
-    prüfbar ist.
+    **Ohne Speichergrenze** (Entscheidung Robert, 03.09.2026). Bis 0.2.2 gab
+    es hier gar keine; die am 02.09.2026 eingebaute deckelte jeden fremden
+    Prozess und war für den Mac tödlich — ``setrlimit(RLIMIT_AS)`` lehnt der
+    Darwin-Kern ab, ``subprocess`` verschluckt die Ursache, und das Kind
+    startet nie. Sie ist deshalb überall gefallen: Ein Slicer, der viel
+    Speicher braucht, gehört dem Nutzer und nicht uns. Was bleibt, ist das
+    Jobobjekt selbst — es beendet die Nachkommen mit dem Elternprozess, und
+    das hat mit Speicher nichts zu tun.
     """
-    if os.name == "nt" or platform == "darwin":
-        return {}
-    resource = importlib.import_module("resource")
-    setrlimit = cast(
-        Callable[[int, tuple[int, int]], None],
-        vars(resource)["setrlimit"],
-    )
-    address_space = int(vars(resource)["RLIMIT_AS"])
-
-    def limit_address_space() -> None:
-        setrlimit(address_space, (memory_limit, memory_limit))
-
-    return {"preexec_fn": limit_address_space}
-
-
-def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> None:
-    """Bindet einen Windows-Prozess an ein nicht verlassbares, begrenztes Jobobjekt."""
 
     class IoCounters(ctypes.Structure):
         _fields_ = [
@@ -353,8 +333,9 @@ def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> No
             "Windows-Jobobjekt konnte nicht angelegt werden",
         )
     limits = ExtendedLimits()
-    limits.basic.limit_flags = 0x00002000 | 0x00000200
-    limits.job_memory = memory_limit
+    # Nur KILL_ON_JOB_CLOSE (0x2000). JOB_OBJECT_LIMIT_JOB_MEMORY (0x200) mit
+    # ``job_memory`` ist mit der Speichergrenze gefallen (siehe Docstring).
+    limits.basic.limit_flags = 0x00002000
     if not kernel32.SetInformationJobObject(
         job,
         9,
@@ -372,9 +353,9 @@ def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> No
     process._solidon_job = int(job)  # type: ignore[attr-defined]
 
 
-def _attach_process_boundary(process: subprocess.Popen[Any], memory_limit: int) -> None:
+def _attach_process_boundary(process: subprocess.Popen[Any]) -> None:
     if os.name == "nt":
-        _attach_windows_job(process, memory_limit)
+        _attach_windows_job(process)
 
 
 def _resume_windows_process(process_id: int) -> None:
@@ -657,7 +638,6 @@ def run_limited(
     cwd: Path,
     timeout: float,
     output_limit: int = DEFAULT_OUTPUT_LIMIT,
-    memory_limit: int = DEFAULT_MEMORY_LIMIT,
     cancelled: Callable[[], bool] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Führt einen Befehl mit Zeit-, Ausgabe- und Prozessbaumgrenze aus."""
@@ -665,8 +645,6 @@ def run_limited(
         raise ValueError("timeout")
     if output_limit <= 0:
         raise ValueError("output_limit")
-    if memory_limit <= 0:
-        raise ValueError("memory_limit")
 
     launched = list(command)
     process = subprocess.Popen(
@@ -676,13 +654,12 @@ def run_limited(
         stderr=subprocess.PIPE,
         cwd=cwd,
         env=trusted_environment(),
-        **_memory_options(memory_limit),
         **process_group_options(no_window=True, suspended=True),
     )
     assert process.stdout is not None
     assert process.stderr is not None
     try:
-        _attach_process_boundary(process, memory_limit)
+        _attach_process_boundary(process)
         _resume_process_boundary(process)
     except BaseException:
         terminate_process_tree(process)
@@ -756,7 +733,6 @@ def run_stream_limited(
     timeout: float,
     output_limit: int,
     on_line: Callable[[str], None],
-    memory_limit: int = DEFAULT_MEMORY_LIMIT,
     cancelled: Callable[[], bool] | None = None,
 ) -> subprocess.CompletedProcess[bytes]:
     """Führt einen Befehl begrenzt aus und reicht vollständige Ausgabezeilen weiter."""
@@ -764,8 +740,6 @@ def run_stream_limited(
         raise ValueError("timeout")
     if output_limit <= 0:
         raise ValueError("output_limit")
-    if memory_limit <= 0:
-        raise ValueError("memory_limit")
 
     launched = list(command)
     process = subprocess.Popen(
@@ -775,12 +749,11 @@ def run_stream_limited(
         stderr=subprocess.STDOUT,
         cwd=cwd,
         env=trusted_environment(),
-        **_memory_options(memory_limit),
         **process_group_options(no_window=True, suspended=True),
     )
     assert process.stdout is not None
     try:
-        _attach_process_boundary(process, memory_limit)
+        _attach_process_boundary(process)
         _resume_process_boundary(process)
     except BaseException:
         terminate_process_tree(process)

@@ -139,8 +139,18 @@ class _PinOnImport:
 sys.meta_path.insert(0, _PinOnImport())
 
 
+#: Die Testdateien, in denen verwaiste Dialoge zwischen den Tests sterben —
+#: und **nur** sie. Gemessen am 03.09.2026: Ein Sammellauf nach jedem Test
+#: über die ganze Suite reißt selbst (0xc0000374, Stapel „Garbage-collecting",
+#: zweimal von zwei), sobald Geometrie im Prozess liegt; dieselbe Gruppe ohne
+#: ihn läuft 636 grün in 57 s. Das ist die Kehrseite derselben Mine, die in
+#: ``_no_worker_outlives_its_window`` steht: Zerstörung zur falschen Zeit.
+#: Wer eine Datei aufnimmt, misst sie vorher am Stück und in Gesellschaft.
+_DIALOG_MODULES = frozenset({"test_print_settings_ui", "test_install"})
+
+
 @pytest.fixture(autouse=True)
-def _orphaned_widgets_die_between_tests() -> Iterator[None]:
+def _orphaned_widgets_die_between_tests(request: pytest.FixtureRequest) -> Iterator[None]:
     """Verwaiste Widgets sterben zwischen zwei Tests — nie mitten im Bau des nächsten.
 
     **Die Mine, mit Messreihe vom 02.09.2026.** ``test_print_settings_ui.py``
@@ -157,6 +167,11 @@ def _orphaned_widgets_die_between_tests() -> Iterator[None]:
     rot. Die ganze Datei: ohne Abbau Segfault, mit Abbau 114 grün in drei
     Sekunden. Die Anwendung ist nicht betroffen — sie baut den Dialog mit
     Parent und ruft ``deleteLater`` nach ``exec``.
+
+    **Und nur in den zwei Dateien aus ``_DIALOG_MODULES``.** Über die ganze
+    Suite gelegt riss der Sammellauf am 03.09.2026 selbst — der Kommentar
+    dort nennt die Messung. Die Bedingung ist eine gemessene Grenze und keine
+    Vorsicht: Wer eine dritte Datei aufnimmt, misst sie vorher.
 
     **Nur dort, wo die Suite keine Fenster hält.** Ein ``gc.collect()`` nach
     jedem Test ist am 23.08.2026 gefallen (die Messreihe steht in
@@ -179,6 +194,8 @@ def _orphaned_widgets_die_between_tests() -> Iterator[None]:
     Fenster und nach jedem ``monkeypatch``.
     """
     yield
+    if request.node.module.__name__.rpartition(".")[2] not in _DIALOG_MODULES:
+        return
     if "PySide6.QtWidgets" not in sys.modules or _PINNED_UI:
         return
     from PySide6.QtWidgets import QApplication

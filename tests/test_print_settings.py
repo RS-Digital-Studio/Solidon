@@ -2998,20 +2998,21 @@ def test_a_slicer_with_endless_output_is_stopped(
     assert caught.value.suggestions
 
 
-def test_the_slicer_gets_its_own_memory_limit(
+def test_the_slicer_runs_without_a_memory_limit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Vier GiB sind für einen Slicer keine Grenze, sondern eine Absage.
+    """Der Slicer bekommt von Solidon keine Speichergrenze (Robert, 03.09.2026).
 
-    ``run_limited`` deckelt den Prozessbaum mit ``DEFAULT_MEMORY_LIMIT``, und
-    das sind vier GiB — gedacht für kleine Werkzeuge, die Text liefern. Ein
-    Slicer über einem feinen Netz kommt darüber, und 0.2.2 kannte gar keine
-    Grenze: Der Kunde bekam auf einem Rechner mit 64 GB einen Speicherfehler
-    aus einem Programm, das mit derselben Datei von Hand durchläuft.
+    Hier stand die Gegenprobe: dass der Lauf eine **eigene**, weitere Grenze
+    trägt, weil die allgemeine von vier GiB für einen Slicer eine Absage war.
+    Beide sind gefallen. Ein Slicer baut über einem feinen Netz Millionen von
+    Segmenten auf; wie viel Speicher er dafür nimmt, entscheidet der Rechner
+    des Kunden und nicht Solidon — bis 0.2.2 war es genauso. Zeitgrenze,
+    Ausgabegrenze und das Beenden der Nachkommen bleiben; sie stehen in den
+    Tests darüber.
     """
     import sys
 
-    from app.core import process
     from app.core.errors import OperationCancelled
     from app.core.process import ProcessCancelled
 
@@ -3027,12 +3028,11 @@ def test_the_slicer_gets_its_own_memory_limit(
     with pytest.raises(OperationCancelled):
         handover._run_slicer([sys.executable], tmp_path, 5.0, setup, None)
 
-    assert seen.get("memory_limit") == handover.SLICER_MEMORY_LIMIT, (
-        f"der Lauf trägt keine eigene Speichergrenze: {seen}"
+    assert "memory_limit" not in seen, f"der Lauf trägt wieder eine Speichergrenze: {seen}"
+    assert seen.get("timeout") and seen.get("output_limit"), (
+        f"Zeit- und Ausgabegrenze müssen bleiben: {seen}"
     )
-    assert handover.SLICER_MEMORY_LIMIT > process.DEFAULT_MEMORY_LIMIT, (
-        "eine eigene Grenze, die enger ist als die allgemeine, wäre keine"
-    )
+    assert not hasattr(handover, "SLICER_MEMORY_LIMIT"), "die eigene Slicer-Grenze ist wieder da"
 
 
 def test_a_slicer_that_says_too_much_is_not_an_error_code(

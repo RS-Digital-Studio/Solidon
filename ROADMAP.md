@@ -157,7 +157,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Releaseakte meldet, sie blockiert nicht | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | den Tag-Lauf 0.3.0 als erste Messung: Ihre zwei Schritte (`--write-evidence`, `--release-check`) stehen seit dem Abend als Warnung im Lauf und halten das Artefakt nicht auf (Entscheidung Robert, 02.09.2026: kein Release hängt an einer Prüfung, die zum ersten Mal läuft); was dort steht, wird behoben, dann werden sie wieder scharf |
 | Der Schlüsseldialog wartet beim Sterben 2,3 s | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung, wer da wartet (`WorkerLeash`?), und einen Abbruch statt einer Frist beim Zerstören — sichtbar in jedem Teardown von `test_chat_ui` (61 s statt 19) und beim Kunden, wenn er den Dialog schließt, während die Modellabfrage läuft |
 | Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Vorprüfung in `minimum_width`, die ohne Aufweitung auskommt — 32 Öffnungen je Lauf sind die Vorprüfung, nur zwei Schichten gehen in die Bisektion; `simplify` als Vorprüfung ist gemessen teurer (0,17 s je Schicht) und bleibt draußen |
-| Auf dem Mac hat kein Kindprozess eine Speichergrenze | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | ein Mittel, das Darwin annimmt — `RLIMIT_AS` lehnt der Kern ab, und bis zum 02.09.2026 startete deshalb auf dem Mac kein Slicer und kein Installer; seither gilt dort nur Zeit- und Ausgabegrenze |
+| Der Sammellauf zwischen zwei Tests gilt nur für zwei Dateien | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Zerstörung, die nicht am Speicherbereiniger hängt — über die ganze Suite gelegt reißt er selbst (0xc0000374, zweimal von zwei); `_DIALOG_MODULES` in `tests/conftest.py` grenzt ihn auf `test_print_settings_ui` und `test_install` ein, gemessen 636 grün statt Absturz |
 | Zwei Zwillinge lesen den Pfad eines offenen Handles | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Funktion statt zweier: `scene.project._opened_file_path` und `updates._descriptor_path` tragen denselben Windows- und Mac-Code, und der Mac-Fehler musste zweimal behoben werden |
 | Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung auf einem Mac, was `_around_the_list` dort übersieht (Umbruch des Hinweises? Knopfhöhe?); bis dahin ist der Test dort ein erwarteter Fehlschlag |
 | Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Besitzer-SID vom Runner (`runneradmin`) — vermutlich die Administratorengruppe; bis das gemessen ist, überspringt sich der Test dort mit Grund |
@@ -14257,16 +14257,25 @@ bleibt, steht hier mit Kästchen.
   verliert — ein Eingriff in die Öffnungslogik, gemessen an Rändelplatte,
   Rippenplatte (`tests/test_slice_findings.py`) und Kugel, nicht in der
   Nacht vor einem Paket.
-- [ ] **Auf dem Mac hat kein Kindprozess eine Speichergrenze.** Der Tag-Lauf
-  0.3.0 war der erste, der die Suite auf macOS überhaupt gemessen hat, und
-  sechzehn Tests rissen an einer Stelle: `setrlimit(RLIMIT_AS)` im
-  `preexec_fn` — Darwin lehnt es ab, `subprocess` verschluckt die Ursache
-  („Exception occurred in preexec_fn"), und das Kind startet nie. Bis dahin
-  hätte auf dem Mac kein Slicer und kein Installer gestartet.
-  `process._memory_options` setzt auf Darwin deshalb nichts; Zeit- und
-  Ausgabegrenze gelten weiter, die Plattform kommt als Parameter herein und
-  ist ohne Mac geprüft. Was fehlt, ist ein Mittel, das Darwin annimmt
-  (`RLIMIT_DATA`? ein Wächter über `rusage`?) — gemessen auf einem Mac.
+- [x] **Kein Kindprozess hat mehr eine Speichergrenze — überall, nicht nur
+  auf dem Mac.** Der Tag-Lauf 0.3.0 war der erste, der die Suite auf macOS
+  gemessen hat, und sechzehn Tests rissen an einer Stelle:
+  `setrlimit(RLIMIT_AS)` im `preexec_fn` — Darwin lehnt es ab, `subprocess`
+  verschluckt die Ursache („Exception occurred in preexec_fn"), und das Kind
+  startet nie. Auf dem Mac wäre also kein Slicer und kein Installer je
+  gestartet.
+
+  Der erste Fix nahm sie nur dort heraus. **Entscheidung Robert am
+  03.09.2026: ganz raus**, und das Argument ist stärker als der Mac-Fall —
+  bis 0.2.2 gab es gar keine Grenze, sie ist am 02.09. mit dem
+  0.3-Integrationscommit entstanden, und ein Slicer über einem feinen Netz
+  braucht mehr Speicher, als wir ihm zugestehen können, ohne ihn irgendwann
+  grundlos anzuhalten. Gefallen sind `_memory_options`,
+  `DEFAULT_MEMORY_LIMIT`, `SLICER_MEMORY_LIMIT` und das Speicherflag des
+  Windows-Jobobjekts; geblieben sind Zeitgrenze, Ausgabegrenze, getrimmte
+  Umgebung und `KILL_ON_JOB_CLOSE` — die Nachkommen sterben weiter mit dem
+  Elternprozess. Bauplan §32 ist nachgezogen, zwei Tests halten die
+  Abwesenheit fest.
 - [ ] **Zwei Zwillinge lesen den Pfad eines offenen Handles.**
   `scene.project._opened_file_path` und `updates._descriptor_path` tragen
   denselben Windows-Code (`GetFinalPathNameByHandleW`) und dieselbe
@@ -14275,6 +14284,18 @@ bleibt, steht hier mit Kästchen.
   Quelle galt als absoluter Pfad (acht Tests). Beide fragen jetzt zuerst
   `F_GETPATH`; zusammengelegt sind sie nicht, weil ein Umzug von
   ctypes-Code nicht in die Nacht vor ein Paket gehört.
+- [ ] **Der Sammellauf zwischen zwei Tests gilt nur noch für zwei Dateien.**
+  Die Fixture `_orphaned_widgets_die_between_tests` löst die Mine unter
+  `test_print_settings_ui` — und riss am 03.09.2026 selbst, sobald sie über
+  der ganzen Suite lag: In der Gruppe `test_print_settings` und neun weiteren
+  Dateien starb der Lauf zweimal von zwei an `0xc0000374`, Stapel
+  „Garbage-collecting" mitten in ihr. Die Gegenprobe in einem eigenen
+  Arbeitsbaum ohne sie: 636 grün in 57 s. Sie greift deshalb nur noch in
+  `test_print_settings_ui` und `test_install` (`_DIALOG_MODULES`), und mit
+  dieser Grenze ist dieselbe Gruppe 636 grün in 48 s, die zwei Dialogdateien
+  weiter 114 und 65 am Stück. Was offen bleibt, ist die Mine selbst:
+  Zerstörung eines Qt-Objekts zur falschen Zeit, gleich durch wen — die
+  andere Hälfte steht in „Fünf Fensterdateien reißen".
 - [ ] **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
   `test_the_filament_card_shares_the_height_instead_of_taking_it` meldet auf
   macos-latest „eine knapp bemessene Karte muss sich auch klein machen":

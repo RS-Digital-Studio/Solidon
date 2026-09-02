@@ -89,18 +89,6 @@ TIMEOUT_SECONDS: Final = 300.0
 #: Arbeitsprozess mit einer endlosen Ausgabe füllen kann.
 SLICER_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
 
-#: Wie viel Speicher der Slicer haben darf.
-#:
-#: ``run_limited`` deckelt jeden Prozessbaum, und seine Vorgabe von vier GiB
-#: ist für kleine Werkzeuge gedacht, die Text liefern. Ein Slicer ist keines:
-#: Er baut über einem feinen Netz Millionen von Segmenten auf, und über der
-#: Vorgabe stirbt er an einer Grenze, die Solidon gesetzt hat — auf einem
-#: Rechner mit 64 GB, an einer Datei, die von Hand durchläuft. Bis 0.2.2 gab es
-#: gar keine Grenze; sechzehn GiB sind großzügig genug, um kein Teil
-#: abzulehnen, und eng genug, dass ein durchdrehender Slicer den Rechner nicht
-#: auffrisst.
-SLICER_MEMORY_LIMIT: Final = 16 * 1024 * 1024 * 1024
-
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
 #: **Dieselbe Liste, die der Öffnen-Dialog anbietet** (`ui.main_window`
@@ -1738,7 +1726,6 @@ def _run_slicer(
             cwd=workspace,
             timeout=timeout,
             output_limit=SLICER_OUTPUT_LIMIT,
-            memory_limit=SLICER_MEMORY_LIMIT,
             cancelled=(lambda: cancelled.is_cancelled) if cancelled is not None else None,
         )
     except OSError as problem:

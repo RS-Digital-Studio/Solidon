@@ -287,21 +287,28 @@ def test_a_blocking_stream_callback_cannot_disable_cancellation(tmp_path: Path) 
     assert time.monotonic() - begun < 3.0
 
 
-@pytest.mark.skipif(
-    sys.platform == "darwin", reason="Darwin setzt RLIMIT_AS nicht — siehe _memory_options"
-)
-def test_limited_process_enforces_the_memory_budget(tmp_path: Path) -> None:
-    script = "chunks = []\nwhile True:\n    chunks.append(bytearray(2 * 1024 * 1024))"
+def test_no_child_gets_a_memory_limit_from_us(tmp_path: Path) -> None:
+    """Ein Kind darf so viel Speicher nehmen, wie der Rechner hergibt.
+
+    **Die Grenze ist am 03.09.2026 überall gefallen** (Entscheidung Robert).
+    Bis 0.2.2 gab es keine; die am 02.09. eingebaute deckelte jeden fremden
+    Prozess auf vier GiB und war auf dem Mac tödlich — ``RLIMIT_AS`` lehnt der
+    Darwin-Kern ab, und das Kind startete gar nicht. Der Slicer gehört dem
+    Nutzer; wie viel Speicher er nimmt, entscheidet nicht Solidon.
+
+    Geprüft wird die Zusage und nicht ihre Abwesenheit: 96 MiB in einem Zug,
+    was unter jeder früheren Grenze gelegen hätte, kommen sauber zurück.
+    """
+    script = "import sys; block = bytearray(96 * 1024 * 1024); sys.exit(0 if block else 1)"
 
     answer = process.run_limited(
         [sys.executable, "-c", script],
         cwd=tmp_path,
-        timeout=10.0,
+        timeout=30.0,
         output_limit=4096,
-        memory_limit=64 * 1024 * 1024,
     )
 
-    assert answer.returncode != 0
+    assert answer.returncode == 0, "der Kindprozess wurde an einer Speichergrenze angehalten"
 
 
 def test_detached_options_are_closed_and_sanitized(
@@ -362,12 +369,18 @@ def test_posix_process_group_options_start_a_new_session(
     assert options == {"close_fds": True, "start_new_session": True}
 
 
-def test_darwin_gets_no_address_space_limit_and_linux_does() -> None:
-    """Der Zweig ohne Mac geprüft: Auf Darwin keine Vorbereitung, sonst ``preexec_fn``.
+def test_no_start_option_prepares_a_memory_limit() -> None:
+    """Kein Startweg legt mehr eine Speichergrenze an — auf keiner Plattform.
 
-    Der Tag-Lauf 0.3.0 riss auf dem Mac an sechzehn Kindprozessen, weil der
-    Kern ``RLIMIT_AS`` ablehnt und ``subprocess`` die Ursache verschluckt.
+    Der Wächter zur Entscheidung vom 03.09.2026: ``preexec_fn`` war der Griff,
+    mit dem die Grenze gesetzt wurde, und genau er ließ auf dem Mac kein Kind
+    mehr starten. Wer sie wieder einbaut, macht diesen Test rot und liest den
+    Grund im Register.
     """
-    assert process._memory_options(64 * 1024 * 1024, platform="darwin") == {}
-    if os.name != "nt":
-        assert "preexec_fn" in process._memory_options(64 * 1024 * 1024, platform="linux")
+    for options in (
+        process.process_group_options(no_window=True, suspended=True),
+        process.process_group_options(detached=True, no_window=True),
+    ):
+        assert "preexec_fn" not in options, options
+    assert not hasattr(process, "_memory_options"), "die Speichergrenze ist wieder da"
+    assert not hasattr(process, "DEFAULT_MEMORY_LIMIT"), "die Speichergrenze ist wieder da"

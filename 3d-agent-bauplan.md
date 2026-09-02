@@ -2111,8 +2111,15 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
   Zusage steht als **Sperre** für jeden künftigen Weg — wer einen baut, baut
   die Prüfung mit
 - **Jedes externe Werkzeug läuft eingehegt**: fester Arbeitsordner je Aufruf,
-  Zeit- und Speichergrenze, getrimmte Umgebung. Das gilt für die Übergabe an
-  den Slicer (§28) wie für jedes weitere Programm, das der Kern startet (§27)
+  Zeitgrenze, Ausgabegrenze, getrimmte Umgebung, und die Nachkommen sterben
+  mit dem Elternprozess. Das gilt für die Übergabe an den Slicer (§28) wie
+  für jedes weitere Programm, das der Kern startet (§27). **Keine
+  Speichergrenze** (Entscheidung Robert, 03.09.2026): Bis 0.2.2 gab es keine;
+  die am 02.09.2026 eingebaute ließ auf macOS überhaupt kein Kind mehr starten
+  (`setrlimit(RLIMIT_AS)` lehnt der Darwin-Kern ab) und hätte auf den übrigen
+  Plattformen einen Slicer angehalten, der über einem feinen Netz mehr
+  Speicher braucht, als wir ihm zugestehen. Wie viel Speicher ein Programm des
+  Nutzers nimmt, entscheidet sein Rechner
 - **Warnhinweis beim Öffnen** einer fremden Datei mit externen Verweisen —
   nicht mehr, weil etwas laufen könnte, sondern damit der Nutzer weiß, woher
   der Inhalt stammt
