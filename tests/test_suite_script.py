@@ -95,9 +95,11 @@ def explain(question: str, log: str, tmp_path: Path) -> str:
         [
             BASH or "bash",
             "-c",
-            f'source "{script}"; echo "--- fortschritt:"; fortschritt "{protocol!s}" | od -c | head -5; '
+            f'source "{script}"; '
+            f'echo "--- fortschritt:"; fortschritt "{protocol!s}" | od -c | head -5; '
             f'echo "--- Protokoll:"; od -c "{protocol!s}" | head -8; '
-            f'echo "--- Werkzeuge:"; sed --version | head -1; grep --version | head -1; bash --version | head -1; '
+            'echo "--- Werkzeuge:"; sed --version | head -1; grep --version | head -1; '
+            "bash --version | head -1; "
             f"echo '--- Spur:'; set -x; {call}",
         ],
         capture_output=True,
