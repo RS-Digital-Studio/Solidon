@@ -370,7 +370,6 @@ def repair(
         # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
         # Fläche, die fehlte. Wer den Bericht liest, erkennt, ob sein Modell
         # eine Lücke hatte oder nur einen Buchhaltungsfehler.
-        open_before = open_edge_count(result.mesh)
         result.mesh, seams = stitch_t_junctions(result.mesh)
         if seams:
             result.changed = True
@@ -383,6 +382,11 @@ def repair(
                 )
             )
 
+        # **Gezählt wird erst nach dem Vernähen.** Vorher gezählt, schrieb die
+        # Meldung die vernähten Kanten dem Löcherschließen zu — „von 400
+        # offenen Kanten geschlossen" über einem Modell, dessen Löcher gar
+        # nicht so groß waren. Die Naht hat ihre eigene Zeile darüber.
+        open_before = open_edge_count(result.mesh)
         # `stitch=False`: das Vernähen ist gerade gelaufen — es erneut zu
         # zahlen war der gemessene Faktor 2,1 auf dem Normalfall „Reparieren
         # an einem heruntergeladenen Modell".

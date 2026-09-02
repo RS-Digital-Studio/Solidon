@@ -334,7 +334,8 @@ TOURS: Final[tuple[Tour, ...]] = (
         closing=_(
             "Das war Weg 3. Ein extern erzeugtes GLB- oder STL-Modell ziehen Sie "
             "in Solidon, prüfen es und bearbeiten es danach wie jeden anderen Körper. "
-            "Bild/Text zu 3D ist in dieser Version deaktiviert."
+            "Aus Text oder Bild erzeugt der Dialog *Modell erzeugen* ein Modell über "
+            "ein lokales ComfyUI, sobald es eingerichtet ist."
         ),
     ),
     Tour(

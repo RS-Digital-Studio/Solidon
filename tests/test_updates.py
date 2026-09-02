@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import urllib.error
@@ -1268,3 +1269,31 @@ def test_the_shipped_version_file_is_read_without_complaint() -> None:
         f"die ausgelieferte Datei wiegt {size / 1024:.1f} KB, gelesen werden "
         f"{updates.MAX_ANSWER_BYTES / 1024:.1f} KB"
     )
+
+
+def test_a_short_name_cache_path_is_not_mistaken_for_a_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``ROSCHN~1`` ist keine Verknüpfung — ``resolve()`` macht nur den Namen lang.
+
+    Auf einer Maschine, deren Nutzerordner den 8.3-Kurznamen trägt, sperrte der
+    Vergleich ``resolved != folder`` jedes Update als „Verknüpfung" — 16 rote
+    Tests am 02.09.2026. Verglichen wird seither mit dem aufgelösten Elternpfad
+    plus dem eigenen Namen.
+    """
+    if os.name != "nt":
+        pytest.skip("8.3-Kurznamen gibt es nur unter Windows")
+    import ctypes
+
+    long_dir = tmp_path / "LangerOrdnernameFuerKurznamen"
+    long_dir.mkdir()
+    buffer = ctypes.create_unicode_buffer(260)
+    length = ctypes.windll.kernel32.GetShortPathNameW(str(long_dir), buffer, 260)
+    short = Path(buffer.value) if length else long_dir
+    if short == long_dir:
+        pytest.skip("8.3-Kurznamen sind auf diesem Laufwerk abgeschaltet")
+    monkeypatch.setattr(updates, "user_cache_dir", lambda: short / "cache")
+
+    folder = updates.target_dir()
+
+    assert folder == (long_dir / "cache" / "updates").resolve()

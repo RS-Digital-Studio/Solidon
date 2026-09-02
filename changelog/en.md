@@ -25,7 +25,7 @@ it into `website/version.json`.
 - The start screen no longer moves the selection unexpectedly and is fully usable with mouse and keyboard.
 - The *New*, *Open* and *Examples* entries are more clearly organised and explain where they lead before opening.
 - Feedback and voluntary support are available directly from the start screen and work with the keyboard and assistive technologies.
-- Chat and report remain usable at the same time, even with a low window height.
+- The chat remains usable even with a low window height: the input stays fixed at the bottom while the content scrolls.
 - The top toolbar remains visible with open projects and narrow windows instead of slipping out of the workspace.
 - A new drawing example leads directly into the sketch workflow and complements the existing example projects.
 
@@ -33,13 +33,13 @@ it into `website/version.json`.
 
 - Menus have clearly visible headings and consistently aligned icon columns.
 - The command overview aligns shortcuts and explanations cleanly, making long entries easier to scan.
-- Extensive dialogs use consistent columns and take advantage of wide windows with clear two-column views.
+- Extensive dialogs use consistent columns and field widths.
 - The former combined page for adhesion, retraction and filament is split into smaller, logically named settings areas.
 - All 56 print settings can be searched by their visible English labels.
 - Search also recognises 146 common slicer terms, including *perimeters* and *wall loops*.
 - Number fields respond reliably to arrow keys, step sizes and rounding without changing values unexpectedly.
-- Sliders behave consistently and remain precise even across fine value ranges.
-- Only the active tool keeps the accent colour; inactive controls recede visually.
+- Sliders have a consistent look with an easy-to-grab handle.
+- The accent colour is reserved for the main button; the active tool is marked at its edge, and inactive controls recede visually.
 - Very short calculations run without a flickering indicator, medium ones show a wait cursor, and long ones add progress and cancellation.
 - Tool hints stay on one line where space allows and wrap in a controlled way in narrow windows.
 - Thumbnails in the object tree are large enough to recognise the actual shapes.
@@ -57,7 +57,7 @@ it into `website/version.json`.
 - Multiple selected bodies use a shared centre for exact rotation and scaling.
 - Escape steps back by exactly one drawing level: current line, current tool, then the entire sketch.
 - Redo now also works while a sketch is open.
-- An empty sketch shows a clickable hint that leads directly to the rectangle tool.
+- An empty sketch shows a clickable hint that opens the ready-made basic shapes.
 - The basic-shapes button is named after what one click does. The remaining shapes are behind the arrow beside it.
 - The section tool opens inside the body instead of in an empty view outside the model.
 - Front, side, top and opposite views snap reliably to all six axes.
@@ -74,8 +74,6 @@ it into `website/version.json`.
 - One continuous user action can be completely reverted with a single Undo.
 - History entries show their type and a unique step number.
 - Downloaded and imported models can be cut immediately.
-- Protected faces are shown in turquoise with hatching, making them clear even without colour recognition.
-- Automatic and manual splitting account for protected visible faces when choosing the seam.
 - Selecting a report finding reliably goes to the affected location, body or matching history step.
 - When jumping to a finding, the camera frames the target instead of ending in a grey close-up.
 - Named faces and findings move with their body during arrangement and placement.
@@ -116,7 +114,7 @@ it into `website/version.json`.
 - Action buttons from the report no longer keep an already closed window in memory unnoticed.
 - Bundled parts and activation load at startup without blocking each other.
 - The 3D view closes before the window, helping Windows, Linux and macOS windows shut down more reliably.
-- Window frames and title bars adapt safely to each platform.
+- On Windows 11 the title bar follows the application's colour scheme; other platforms remain unchanged.
 - Standard buttons such as Open, Save and Cancel change language immediately without a restart.
 - Automatically created body and part names switch language correctly even after cached content has already been used.
 - Translations and report values are equally up to date in German, English, Spanish, French, Italian and Portuguese.
@@ -125,7 +123,7 @@ it into `website/version.json`.
 
 - Chat opens with a clear description of its purpose instead of an empty area or technical model terms.
 - Technical token counters have been removed from the normal customer interface.
-- The assistant recognises and groups identical shape details instead of treating every occurrence in isolation.
+- Identical notes about lost shape details reach the assistant counted instead of one by one.
 - The Generate dialog turns text or an image into a model through local ComfyUI and brings it into the same editable scene.
 - The bundled TripoSG workflow creates a GLB that is then repaired, scaled and checked for printability automatically.
 - Local Ollama and local ComfyUI run one after the other so that they do not occupy the graphics card at the same time.

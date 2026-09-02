@@ -9,6 +9,7 @@ Hüllquader, Lage im Raum.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import pytest
 
@@ -263,6 +264,59 @@ def test_a_pocket_beside_the_mesh_says_so() -> None:
     ), (
         f"der Befund sollte von der wirkungslosen Differenz sprechen: "
         f"{[entry.code for entry in result.findings]}"
+    )
+
+
+def test_the_pocket_reports_the_stage_of_the_union(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zwei Umrisse in einer Zeichnung: auch ihre Vereinigung meldet ihre Stufe.
+
+    Der Mesh-Weg fährt die Rückfallkette **zweimal** — erst werden die
+    Werkzeuge vereint, dann wird abgezogen —, und nur der zweite Lauf kam im
+    Ergebnis an. Ein Werkzeug, das die Voxelstufe geglättet hat, schneidet eine
+    gerundete Tasche, und der Verlauf behauptete dazu ``direct``; die Befunde
+    der Vereinigung fielen mit weg (§17.2).
+    """
+    from app.core.geom import boolean as mesh_boolean
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import SceneObject, Sketch, SketchElement
+
+    def square(size: float, at: tuple[float, float]) -> tuple[SketchElement, ...]:
+        half = size / 2.0
+        x, y = at
+        corners = [
+            (x - half, y - half),
+            (x + half, y - half),
+            (x + half, y + half),
+            (x - half, y + half),
+        ]
+        return tuple(
+            SketchElement(kind="line", points=(corners[index], corners[(index + 1) % 4]))
+            for index in range(4)
+        )
+
+    chain = mesh_boolean.boolean
+
+    def forced(kind: str, meshes: list, **options: Any):
+        # Nur die Vereinigung der Werkzeuge wird auf die Voxelstufe gezwungen;
+        # der Abzug danach läuft, wie er immer läuft.
+        if kind == "union":
+            options["stages"] = ("voxel",)
+        return chain(kind, meshes, **options)
+
+    monkeypatch.setattr(mesh_boolean, "boolean", forced)
+
+    body = SceneObject(id="obj_1", name="Teil", mesh=_mesh_box(40.0, 30.0, 10.0))
+    drawing = Sketch(
+        plane="plane:xy", elements=square(8.0, (-10.0, 0.0)) + square(8.0, (10.0, 0.0))
+    )
+    result = _pocket(body, sketch=sketch_to_text(drawing), depth=4.0)
+
+    assert result.solver is not None, "die Stufe der Vereinigung fiel ganz weg"
+    assert result.solver.strategy == "voxel", (
+        f"gemeldet wurde {result.solver.strategy} — die geglättete Vereinigung fehlt darin"
+    )
+    assert any(entry.code == "boolean.voxel" for entry in result.findings), (
+        f"der Befund der Vereinigung fehlt: {[entry.code for entry in result.findings]}"
     )
 
 

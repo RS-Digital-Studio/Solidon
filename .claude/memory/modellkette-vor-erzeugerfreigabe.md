@@ -7,11 +7,19 @@ Laufzeitabhängigkeiten, deren Lizenzen und die Weitergaberechte des
 resultierenden Pakets einzeln feststehen.
 
 Bei TripoSG war die frühere Kurzfassung „MIT für Quelltext und Gewichte“
-falsch. Das offizielle `NOTICE` nennt weitere Modell- und Community-Lizenzen;
-mindestens eine davon begrenzt das Nutzungsgebiet. Deshalb sind der
-automatische Download, der mitgelieferte Knotenpfad und jedes sichtbare
-Lizenzversprechen fail-closed gesperrt, bis eine vollständige, gepinnte Kette
-geprüft ist.
+zu kurz: Quelltext und Modellkarte weisen MIT aus, das offizielle `NOTICE`
+nennt daneben weitere Modell- und Community-Lizenzen (HunyuanDiT, FlashVDM),
+und mindestens eine davon begrenzt das Nutzungsgebiet. Ein Verstoß ist nicht
+festgestellt.
+
+**Entscheidung Robert (02.09.2026): TripoSG ist nicht gesperrt und wird
+benutzt, solange die Rechtsprüfung nichts anderes ergibt.** Der Setupweg,
+der Menüeintrag, der Changelog-Punkt und die Handbuchseite bleiben aktiv;
+sichtbare Lizenzaussagen sagen nur, was belegt ist („Quelltext und
+Modellkarte MIT; die vollständige Kette der Gewichte wird geprüft“). Die
+Gegenposition „fail-closed sperren“ (Codex, 02.09. 01:11) ist damit
+zurückgenommen; der Code war ihr nie gefolgt. Offen bleibt die Kanzleifrage
+zur Kette (Register P9).
 
 Alte Ausgaben lassen sich nicht nachträglich freigeben, wenn Prompt oder
 Eingabe, Startwert, Backend-Revision und Gewichtsrevision fehlen. Eine

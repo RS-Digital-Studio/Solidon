@@ -120,8 +120,17 @@ class _OpFormatter(logging.Formatter):
     """Hängt die Op-Nummer an, wo eine bekannt ist — der Anker fürs spätere
     Lesen."""
 
-    def format(self, record: logging.LogRecord) -> str:
-        text = super().format(record)
+    def formatMessage(self, record: logging.LogRecord) -> str:  # noqa: N802 - logging gibt den Namen
+        """Redigiert die **Meldung** — den Stapel hängt ``format`` unberührt an.
+
+        Redigiert wurde bis hierher der ganze fertige Eintrag, und ``redact``
+        macht aus jedem Zeilenumbruch ein ``\\n`` und kappt bei 8192 Zeichen:
+        Ein Traceback kam damit einzeilig und abgeschnitten im Protokoll an —
+        und genau den liest, wer einen Fehlerbericht bekommt (§33.2). Die
+        Meldung bleibt redigiert; sie ist die Stelle, an der ein fremder Text
+        hereinkommt, ein Stapel unseres eigenen Codes ist es nicht.
+        """
+        text = super().formatMessage(record)
         op_id = getattr(record, "op", None)
         if op_id is not None:
             text = f"{text}  [op {redact(op_id, limit=80)}]"

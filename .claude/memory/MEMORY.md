@@ -22,7 +22,7 @@
 - [Native Bibliotheken zerlegen den Speicher](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss am Prozessende sind eine Familie; erst wiederholen.
 - [Der Entwickler sieht den Cache-Fehler nie](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt beim täglichen Bauen auf; der Kunde fährt denselben Cache wochenlang.
 - [Lokale Umgebung: Python-Version](lokale-umgebung-python-version.md) — die .venv muss 3.13 fahren; sonst prüft mypy still null Dateien.
-- [Modellkette vor Erzeugerfreigabe](modellkette-vor-erzeugerfreigabe.md) — eine Repository-Lizenz beweist nicht Code, Gewichte und Abhängigkeiten; ohne vollständige Kette bleiben Einrichtung, Aussagen und Altmedien gesperrt.
+- [Modellkette vor Erzeugerfreigabe](modellkette-vor-erzeugerfreigabe.md) — eine Repository-Lizenz beweist nicht Code, Gewichte und Abhängigkeiten; TripoSG bleibt laut Robert (02.09.2026) in Betrieb, solange die Rechtsprüfung nichts anderes ergibt, Aussagen nennen nur Belegtes.
 - [ComfyUI-Installation](comfyui-installation-d-ai.md) — liegt auf D:\AI; Hunyuan3D 2.1 hat andere Knotennamen und keinen Texteingang.
 - [Lokale KI teilt eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) — Ollama und ComfyUI serialisieren, gezielt abbrechen und danach VRAM freigeben.
 - [Ollama: Werkzeugaufrufe](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx schneidet Ollama den Prompt still ab.

@@ -808,7 +808,12 @@ def target_dir() -> Path:
             detail=_("Der Update-Zwischenspeicher liegt außerhalb des Nutzerordners."),
             values={"path": str(folder)},
         ) from problem
-    if resolved != folder:
+    # Verglichen wird mit dem aufgelösten Elternpfad plus dem eigenen Namen,
+    # nicht mit ``folder`` selbst: Ein 8.3-Kurzname im Nutzerordner
+    # (``ROSCHN~1``) löst sich zum langen Namen auf, ohne eine Verknüpfung zu
+    # sein — und sperrte so jedes Update auf einer Maschine, deren
+    # ``%LOCALAPPDATA%`` den Kurznamen trägt (gemessen 02.09.2026).
+    if resolved != root / folder.name:
         raise FileWriteError(detail=_("Der Update-Zwischenspeicher ist eine Verknüpfung."))
     if os.name != "nt":
         metadata = resolved.stat()

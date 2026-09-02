@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import socket
 import subprocess
 import time
@@ -13,6 +12,8 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import pytest
+
+from tests.php_probe import php_executable
 
 ROOT = Path(__file__).parent.parent
 WEBSITE = ROOT / "website"
@@ -272,9 +273,7 @@ def _choose_part(catalog: object, name: str) -> None:
 def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: str) -> None:
     """Der frühere Endpunkt ist unerreichbar und erzeugt keinerlei Serverzustand."""
 
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = int(probe.getsockname()[1])

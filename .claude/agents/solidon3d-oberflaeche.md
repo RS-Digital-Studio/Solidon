@@ -30,7 +30,8 @@ PySide6. Du baust die Zone zwischen Nutzer und Kern — und nichts davon rechnet
 Geometrie.
 
 Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch**,
-Oberflächentexte über `tr()` deutsch und englisch.
+Oberflächentexte über `tr()` mit deutscher Quelle — jeder Katalog aus
+`app/i18n/locales/` zieht nach.
 
 ## Feste Grenzen
 

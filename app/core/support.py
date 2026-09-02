@@ -340,6 +340,13 @@ def send(ticket: Ticket, url: str = SUPPORT_URL, sender: Sender | None = None) -
         raise
     except Exception as problem:  # ein Netz oder ein Server scheitert auf viele Arten
         _log.warning("support ticket did not go out: %s", problem)
+        # Ein ``HTTPError`` ist selbst eine offene Antwort. Geschlossen wird
+        # über die Eigenschaft, nicht über den Typ — wie beim Status darunter;
+        # sonst bleibt ein Handle zurück, das Python 3.14 beim Aufräumen als
+        # ResourceWarning meldet, und zwar in irgendeinem späteren Test.
+        close = getattr(problem, "close", None)
+        if callable(close):
+            close()
         # Der Grund steht in ``values`` und nicht im Satz: Ein ``{reason}`` im
         # Text eines Kernfehlers bleibt stehen, wie es dasteht — der Kern
         # formatiert nichts, das erst die Anzeige auflöst.

@@ -3,7 +3,7 @@ name: solidon3d-agentenschicht
 description: >
   Arbeitet an der LLM-Schicht von Solidon: Systemprompt, Werkzeuge, Steckbrief,
   Vorschlag als eine Transaktion, Prüfungen nach jeder Op, Regelsammlung und die
-  Agenten-Suite. Kennt die vier Vorrangregeln und die Sicherheitsauflagen aus §32.
+  Agenten-Suite. Kennt die drei Vorrangregeln und die Sicherheitsauflagen aus §32.
 
   <example>
   Context: Agent rät statt zu fragen
@@ -38,9 +38,10 @@ dem, was dort bereits steht.
 
 - **Ein Vorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn vollständig
   zurück. Wer zwei Dinge auf einmal vorschlägt, hat einen Fehler gebaut.
-- **Bausteine vor Primitiven, Op-Liste vor OpenSCAD, Parameter vor Zahlen,
-  Fragen vor Raten.** Alle vier im Systemprompt verankert, alle vier in der
-  Suite gemessen.
+- **Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten.** Alle
+  drei im Systemprompt verankert, alle drei in der Suite gemessen. Es waren
+  vier — „Op-Liste vor OpenSCAD" ist seit dem OpenSCAD-Ausbau am 26.08.2026
+  gegenstandslos (`.claude/rules/agentenschicht.md`).
 - **`ask_user` ist Pflicht.** Die Suite enthält absichtlich mehrdeutige
   Anfragen und zählt, ob gefragt statt geraten wurde.
 - **Jeder Chatbeitrag verweist auf seine Transaktion.** Wird sie
@@ -55,9 +56,13 @@ dem, was dort bereits steht.
 ## Sicherheit ist hier nicht optional
 
 Quelltext aus dem Modell ist so fremd wie Quelltext aus einer geschickten
-Datei: OpenSCAD wird vor jedem Lauf geprüft (`import`, `include`, `use`,
-`surface` nur relativ, unterhalb des Arbeitsordners), kein `eval` für
-Ausdrücke, fester Arbeitsordner, Zeit- und Speicherlimit, kein Netzzugriff.
+Datei — und seit dem OpenSCAD-Ausbau am 26.08.2026 gibt es keinen Weg mehr,
+der ihn ausführt. Aus der Prüfung, die dort stand, ist eine **Zusage**
+geworden: Eine Projektdatei kann nichts starten. Wer je wieder eine Operation
+baut, die Quelltext entgegennimmt, baut die Prüfung mit (Regel 11) und trägt
+sie in `foreign.SCRIPTED_OPS` ein. Dazu: kein `eval` für Ausdrücke, fester
+Arbeitsordner für jedes externe Programm, Zeit- und Speicherlimit, kein
+Netzzugriff (`.claude/rules/agentenschicht.md`, Abschnitt Sicherheit).
 
 ## Messen statt behaupten
 

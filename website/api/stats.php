@@ -178,22 +178,23 @@ if ($statsMethod === 'POST') {
 function stored_hash(): string
 {
     $path = access_file();
-    $access = $path !== '' && is_file($path) ? @include $path : null;
+    $present = $path !== '' && is_file($path);
+
+    // Die Rechte werden geprüft, **bevor** die Datei geladen wird: Eine zu
+    // offene Zugangsdatei ist PHP, und wer sie erst ausführt und dann
+    // abweist, hat den fremden Code schon laufen lassen.
+    $exposed = $present
+        && DIRECTORY_SEPARATOR === '/'
+        && ((((int) fileperms($path) & 0077) !== 0)
+            || (((int) fileperms(dirname($path)) & 0077) !== 0));
+    $access = $present && !$exposed ? @include $path : null;
     $hash = is_array($access) ? (string) ($access['hash'] ?? '') : '';
 
-    if ($hash === '') {
+    if ($hash === '' || $exposed) {
         http_response_code(503);
         header('Content-Type: text/plain; charset=utf-8');
-        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
-        exit;
-    }
-
-    if (DIRECTORY_SEPARATOR === '/'
-        && ((((int) fileperms($path) & 0077) !== 0)
-            || (((int) fileperms(dirname($path)) & 0077) !== 0))) {
-        http_response_code(503);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo "Diese Seite ist vorübergehend nicht verfügbar.\n";
+        echo "Diese Seite ist vorübergehend nicht verfügbar.
+";
         exit;
     }
 

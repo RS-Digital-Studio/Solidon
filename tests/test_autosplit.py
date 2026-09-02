@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -588,9 +589,32 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
 
     Der analytische Körper erweitert den Balken aus ``crossed_overhangs`` auf
     einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
-    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht deutlich; nach ihrem
-    Aufbau braucht die linke weniger Stützen. Genau diese Mutation hält fest,
-    dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
+    Schwalbenschwänze.
+
+    **Welche Naht gewinnt, entscheidet die Lage der zwei Überhänge, und daran
+    ändern die Verbinder nichts.** Der stehende Überhang sitzt bei x 0,5…2,5,
+    der liegende bei x 5…7. Eine Naht bei −3,25 liegt **vor beiden**: Sie
+    lässt sie zusammen auf der rechten Hälfte, und die verlangt zwei
+    widersprüchliche Grundflächen. Eine Naht bei +3,25 **trennt** sie, und
+    jede Hälfte darf sich unabhängig legen — genau das sagt
+    ``crossed_overhangs`` über sich selbst. Gemessen, Stützvolumen in mm³:
+
+        links (−3,25)    nackt 7004,8   mit Verbindern 7144,4
+        rechts (+3,25)   nackt 2137,5   mit Verbindern 3485,2
+
+    Die Schwalbenschwänze heben **beide** Zahlen und kehren die Rangfolge
+    nicht um; rechts bleibt die bessere Naht. Was dieser Test belegt, ist
+    deshalb kein Umschlag, sondern dass T2 überhaupt die fertige Geometrie
+    misst: Der Zuschlag ist ungleich verteilt (rechts +63 %, links +2 %), und
+    ``evaluated_*`` trifft ``final_*`` auf die Stelle. Rechnete
+    ``_support_after_cut`` ohne ``connector_count``, stünde dort die nackte
+    Zahl — nachgestellt, und der Test wird rot.
+
+    Die beiden Kandidaten sind nicht frei gewählt: Bei diesem Drucker legt
+    ``_window`` das Fenster auf [−52, 52] und ``SAMPLES`` 33 Stellen hinein,
+    also Schritte von 3,25 mm. ±3,25 sind damit genau die zwei besten Stellen
+    des Rasters (billige Punktzahl 0,004063, gleichauf), und die Suche
+    entscheidet zwischen ihnen allein über das Stützvolumen.
     """
     from app.core.knowledge.parts import PARTS
 
@@ -638,14 +662,20 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     )
 
     assert bare_right < bare_left * 0.5
-    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE)
+    assert right_final < left_final * (1.0 - autosplit.SUPPORT_TIE)
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
     chosen = autosplit.find_plane(mesh, profile)
 
     assert chosen is not None
-    assert chosen.position == pytest.approx(left.position)
+    # Beide liegen auf dem Raster und haben dieselbe billige Punktzahl; bei
+    # Gleichstand nimmt ``_candidate_order`` die kleinere Position, die Suche
+    # startet also links. Dass sie trotzdem rechts endet, ist genau der
+    # Schritt über das Stützvolumen.
+    assert chosen.position == pytest.approx(right.position), (
+        f"die Naht liegt bei {chosen.position} statt bei {right.position}"
+    )
 
 
 def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:
@@ -714,6 +744,49 @@ def test_a_prismatic_waist_is_still_the_right_seam(profile: Profile) -> None:
 
     assert candidate is not None
     assert candidate.area == pytest.approx(40.0 * 30.0), "weiterhin der Querschnitt der Mitte"
+
+
+def test_the_profile_curve_measures_at_its_own_stations(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Einschnürungskurve misst dort, wo sie hinsieht (§22.3).
+
+    ``_sections_in_blocks`` liefert zu jeder Position drei Schnitte — einen
+    halben Millimeter darunter, auf der Position, einen halben darüber. Wer
+    davon das erste Drittel nimmt, hat die Kurve um ``PRISM_STEP`` nach unten
+    verschoben und nebenher neununddreißig Schnitte gerechnet statt dreizehn.
+
+    Ein Kegel zeigt beides: Sein Querschnitt fällt stetig, also gehört zu jeder
+    Verschiebung ein anderer Wert, und die Tiefe an einer Station muss zu dem
+    Querschnitt passen, der an dieser Station steht.
+    """
+    cone = MeshData.of(trimesh.creation.cone(radius=20.0, height=60.0, sections=64))
+    measure = autosplit.sections_along
+    asked: list[np.ndarray] = []
+
+    def recording(mesh: MeshData, axis: Axis, heights: np.ndarray) -> list[Any]:
+        asked.append(np.asarray(heights, dtype=float))
+        return measure(mesh, axis, heights)
+
+    monkeypatch.setattr(autosplit, "sections_along", recording)
+    depth_at = autosplit._notch_depth(cone, "z")
+
+    low = float(cone.bounds.minimum[2]) + autosplit.PRISM_STEP
+    high = float(cone.bounds.maximum[2]) - autosplit.PRISM_STEP
+    stations = np.linspace(low, high, autosplit.PROFILE_SAMPLES)
+    heights = np.concatenate(asked)
+
+    assert len(heights) == autosplit.PROFILE_SAMPLES, (
+        f"die Profilkurve nimmt {len(heights)} Schnitte statt {autosplit.PROFILE_SAMPLES}"
+    )
+    assert np.allclose(np.sort(heights), stations), (
+        f"die Schnitte liegen nicht auf den Stationen: {np.sort(heights)}"
+    )
+
+    areas = [float(entry.area) for entry in measure(cone, "z", stations)]
+    middle = autosplit.PROFILE_SAMPLES // 2
+    expected = (max(areas) - areas[middle]) / max(areas)
+    assert depth_at(float(stations[middle])) == pytest.approx(expected, rel=1e-9), (
+        "die Tiefe gehört zu einem anderen Querschnitt als dem an dieser Stelle"
+    )
 
 
 def shield(low: float, high: float, y: float = 30.0, z: float = 20.0) -> np.ndarray:

@@ -332,12 +332,20 @@ def test_reading_a_million_triangles(profile: Profile) -> None:
     hatte ihn längst ein Vorgänger bezahlt — dieselbe Marke maß je nach
     Sammelumfang zwei verschiedene Dinge (gemessen 1072 ms allein gegen
     427–443 im Volllauf, Register 30.08.2026). Der Import steht deshalb vor
-    der Uhr und trägt seine eigene Marke: ``deferred_geometry`` hält fest,
-    was der verzögerte Import kostet — die Verschiebung aus dem Kundenstart
-    bleibt damit messbar festgehalten, nur nicht mehr im Lesen versteckt —,
-    und ``read_dense`` misst in jedem Kontext dasselbe: das Lesen.
+    der Uhr, und ``read_dense`` misst in jedem Kontext dasselbe: das Lesen.
+
+    **Eine eigene Marke trägt der Import nicht mehr.** ``deferred_geometry``
+    stand hier und maß nichts: Beim Sammeln importieren 38 Testmodule
+    ``trimesh`` selbst, im Testprozess ist es also längst geladen, und die
+    Marke hielt einen Attributzugriff fest — Mikrosekunden, in jedem Kontext.
+    Was der verzögerte Import den Kunden kostet, misst
+    ``test_the_application_is_usable_quickly`` in einem **eigenen Prozess**;
+    dass das Register ihn nicht auslöst, hält
+    ``test_loading_the_registry_defers_geometry_libraries`` fest. Beides
+    gilt dort, wo ein frischer Prozess anfängt — hier gibt es keinen.
     """
-    measure("deferred_geometry", lambda: deferred.trimesh.__version__)
+    # Vor der Uhr, damit ein Solo-Lauf nicht den ersten trimesh-Import mitmisst.
+    assert deferred.trimesh.__version__
     taken = measure("read_dense", dense_mesh)
     assert taken < 30.0
 
@@ -1027,7 +1035,7 @@ def test_building_the_display_version_of_a_million_triangles() -> None:
 
     mesh = dense_mesh()
     taken = measure("display_decimate_1m", lambda: decimate(mesh, DISPLAY_TRIANGLES))
-    assert taken < 30.0, "no target in §31 yet; this bound only catches a runaway"
+    assert taken < 30.0, "the target is four seconds (§31); thirty catches an order of magnitude"
 
 
 def test_a_parameter_change_reaches_the_screen_in_time(profile: Profile) -> None:

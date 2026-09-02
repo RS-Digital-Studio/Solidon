@@ -188,7 +188,12 @@ def to_html(markdown: str) -> str:
             continue
 
         numbered = _NUMBERED.match(line)
-        if numbered:
+        # Eine Zahl mit Punkt am Zeilenanfang ist nur dann eine Aufzählung,
+        # wenn eine läuft, sie mit 1 beginnt oder kein Absatz offen ist —
+        # sonst ist es ein Datum am Umbruch: Der Vertrag zeigte „1. Oktober
+        # 2026", weil „30. Oktober 2026." hinter „nennt den" auf einer
+        # neuen Zeile stand.
+        if numbered and (numbers or numbered.group(1) == "1" or not paragraph):
             if paragraph or bullets or quote:
                 flush()
             numbers.append(numbered.group(2))

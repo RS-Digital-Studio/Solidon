@@ -191,6 +191,24 @@ def test_every_optional_dependency_the_package_needs_is_a_hidden_import() -> Non
         )
 
 
+def test_the_spec_carries_xxhash_so_trimesh_does_not_fall_back_silently() -> None:
+    """``xxhash`` steht in keinem Installationsregister — und muss trotzdem mit.
+
+    ``trimesh`` fragt es in einem ``try/except`` am Modulkopf ab und fällt
+    ohne es still auf ``blake2b`` zurück; der Kunde merkt nur, dass jede
+    Auswertung großer Baugruppen langsamer ist. Der Test darüber prüft die
+    Namen aus ``install.REQUIREMENTS``, und dort steht ``xxhash`` zu Recht
+    nicht: Es ist keine Abhängigkeit der Anwendung, sondern eine von
+    ``trimesh``. Deshalb hängt es hier an seiner eigenen Zeile — als
+    Paketvertrag, damit ein Bau ohne ``xxhash`` auffällt statt schleichend
+    langsam zu sein.
+    """
+    assert "xxhash" in _literal_hidden_imports(), (
+        "xxhash steht nicht in den hiddenimports von packaging/solidon3d.spec — "
+        "trimesh fällt im Paket dann still auf blake2b zurück"
+    )
+
+
 def test_the_spec_names_the_application_from_branding() -> None:
     """Kein zweiter Ort für den Namen. Der erste hat schon eine Umbenennung
     verschlafen.

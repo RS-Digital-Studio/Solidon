@@ -76,6 +76,18 @@ jobs:
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
             libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
 
+      - name: PHP für die Endpunkttests (Linux)
+        # Die Tests gegen `website/api` starten PHPs eingebauten Server und
+        # brauchen `pdo_sqlite` für den Aktivierungsdienst. Bis zum 02.09.2026
+        # richtete dieser Lauf PHP nie ein — der Ubuntu-Runner brachte es
+        # zufällig mit, und ohne es hätten sich 88 Testfälle still
+        # übersprungen. Ausdrücklich eingerichtet, und unter `CI` ist fehlendes
+        # PHP auf Linux ein roter Test (`tests/php_probe.py`); Windows und
+        # macOS richten keines ein und überspringen weiter. Die Paketlisten
+        # hat der Schritt davor schon geholt.
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y --no-install-recommends php-cli php-sqlite3
+
       - name: Abhängigkeiten
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
         # sich, wenn OpenCASCADE fehlt (§30). Gegen `constraints.txt`, damit

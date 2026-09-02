@@ -21,6 +21,8 @@ from urllib.request import Request, urlopen
 
 import pytest
 
+from tests.php_probe import php_executable
+
 ROOT = Path(__file__).parent.parent
 API = ROOT / "website" / "api"
 CLEANUP = API / "cleanup_private_state.php"
@@ -49,9 +51,7 @@ def _php_server(
     *,
     prepend: Path | None = None,
 ) -> Iterator[str]:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
+    php = php_executable("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
     port = _free_port()
     environment = os.environ.copy()
     environment["SOLIDON_STATS_DIR"] = str(tmp_path / "stats")
@@ -155,9 +155,7 @@ def _write_month(path: Path, month: str, *, timestamp_month: str | None = None) 
 
 
 def _run_cleanup(tmp_path: Path, paths: dict[str, Path]) -> subprocess.CompletedProcess[str]:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     return subprocess.run(
         [
             php,
@@ -227,9 +225,7 @@ def _fault_stream_php() -> str:
 
 @pytest.mark.parametrize("name", ENDPOINTS)
 def test_every_public_endpoint_is_valid_php(name: str) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     result = subprocess.run(
         [php, "-l", str(API / name)], capture_output=True, text=True, timeout=30
     )
@@ -265,9 +261,7 @@ def test_private_writers_require_php_81_and_plesk_uses_the_php_task_contract() -
 
 
 def test_private_cleanup_is_valid_php_and_cannot_run_over_http(tmp_path: Path) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     lint = subprocess.run([php, "-l", str(CLEANUP)], capture_output=True, text=True, timeout=30)
     assert lint.returncode == 0, lint.stdout + lint.stderr
 
@@ -278,9 +272,7 @@ def test_private_cleanup_is_valid_php_and_cannot_run_over_http(tmp_path: Path) -
 
 
 def test_private_cleanup_requires_all_absolute_cli_paths(tmp_path: Path) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
 
     result = subprocess.run(
         [php, str(CLEANUP), "--stats-dir", str(tmp_path)],
@@ -398,9 +390,7 @@ def test_private_cleanup_rejects_group_readable_state(tmp_path: Path) -> None:
 
 
 def test_private_cleanup_fails_fast_at_a_parallel_writer(tmp_path: Path) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     paths = _prepare_cleanup_state(tmp_path, {"count": 70})
     count_before = paths["count"].read_bytes()
     locker = subprocess.Popen(
@@ -452,9 +442,7 @@ def test_private_cleanup_keeps_only_current_and_previous_utc_month(tmp_path: Pat
 
 
 def test_private_cleanup_utc_month_window_handles_the_year_boundary() -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = CLEANUP.read_text(encoding="utf-8")
     function = _php_function(source, "cleanup_month_window")
     code = function + "\necho json_encode(cleanup_month_window(gmmktime(12, 0, 0, 1, 15, 2027)));"
@@ -529,9 +517,7 @@ def test_private_cleanup_validates_every_month_before_deleting_any(
 
 
 def test_private_cleanup_restores_earlier_month_if_a_later_clear_fails() -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = CLEANUP.read_text(encoding="utf-8")
     function = _php_function(source, "cleanup_remove_old_months")
     code = (
@@ -641,9 +627,7 @@ def test_private_cleanup_rejects_group_readable_quota_lock(tmp_path: Path) -> No
 
 
 def test_private_cleanup_respects_the_live_count_quota_lock(tmp_path: Path) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     paths = _prepare_cleanup_state(tmp_path)
     old = tmp_path / "stats" / f"{_utc_month(-2)}.jsonl"
     old_data = _write_month(old, _utc_month(-2))
@@ -691,9 +675,7 @@ def test_private_cleanup_respects_the_live_count_quota_lock(tmp_path: Path) -> N
 def test_every_rate_writer_rejects_linked_state_files(
     tmp_path: Path, source_name: str, function_name: str, link_kind: str
 ) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     target = tmp_path / f"{function_name}-target.json"
     target.write_text("{}", encoding="ascii")
     _chmod_private(target)
@@ -763,9 +745,7 @@ def test_every_rate_writer_rejects_linked_state_files(
 def test_every_rate_writer_rejects_group_readable_state(
     tmp_path: Path, source_name: str, function_name: str
 ) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     state = tmp_path / f"{function_name}.json"
     state.write_text("{}", encoding="ascii")
     state.chmod(0o640)
@@ -826,9 +806,7 @@ def test_every_rate_writer_rejects_group_readable_state(
 def test_every_private_state_writer_restores_after_write_and_flush_failures(
     source_name: str, function_name: str
 ) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = (API / source_name).read_text(encoding="utf-8")
     prefix = function_name.removesuffix("_replace_stream")
     code = (
@@ -871,9 +849,7 @@ def test_every_private_state_writer_restores_after_write_and_flush_failures(
 def test_every_private_state_writer_persists_with_real_fsync(
     tmp_path: Path, source_name: str, function_name: str
 ) -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = (API / source_name).read_text(encoding="utf-8")
     prefix = function_name.removesuffix("_replace_stream")
     state = tmp_path / f"{prefix}.json"
@@ -899,9 +875,7 @@ def test_every_private_state_writer_persists_with_real_fsync(
 
 
 def test_count_append_restores_recoverable_failures_and_blocks_irreparable_ones() -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = (API / "count.php").read_text(encoding="utf-8")
     code = (
         _fault_stream_php()
@@ -930,9 +904,7 @@ def test_count_append_restores_recoverable_failures_and_blocks_irreparable_ones(
 
 
 def test_count_rate_window_survives_utc_midnight_without_the_day_salt() -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     source = (API / "count.php").read_text(encoding="utf-8")
     function = _php_function(source, "count_rate_client_keys")
     code = (
@@ -1155,9 +1127,7 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     tmp_path: Path,
 ) -> None:
     """Kein Missbrauchszähler lässt eine offline erratbare IP-Kennung liegen."""
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
 
     now = int(time.time())
     raw_ip_hash = hashlib.sha256(b"127.0.0.1").hexdigest()
@@ -1337,9 +1307,7 @@ def test_corrupt_rate_limit_states_fail_closed(tmp_path: Path) -> None:
     access_dir = tmp_path / "access"
     access_dir.mkdir(mode=0o700)
     _chmod_private(access_dir)
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     password_hash = subprocess.run(
         [php, "-r", "echo password_hash('richtig', PASSWORD_DEFAULT);"],
         capture_output=True,
@@ -1498,9 +1466,7 @@ def test_stats_reads_months_as_a_bounded_stream() -> None:
 
 
 def test_activation_document_rejects_unknown_json_fields() -> None:
-    php = shutil.which("php")
-    if php is None:
-        pytest.skip("PHP fehlt")
+    php = php_executable()
     common = (API / "activation_common.php").as_posix().replace("'", "\\'")
     code = (
         f"require '{common}';"
@@ -1674,3 +1640,33 @@ def test_private_rate_secrets_reject_symlinked_files(tmp_path: Path) -> None:
     assert support_target.read_text(encoding="utf-8") == "unverändert"
     assert count_target.read_text(encoding="utf-8") == "unverändert"
     assert list(stats_dir.glob("*.jsonl")) == []
+
+
+def test_missing_php_is_red_in_the_linux_ci_and_a_skip_elsewhere(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne PHP überspringen sich 88 Testfälle — und in der CI sah das niemand.
+
+    ``build.yml`` richtete PHP nie ein; der Ubuntu-Runner brachte es zufällig
+    mit. Hätte das Runner-Bild es weggelassen, wäre der Lauf grün geblieben
+    und kein Endpunkt mehr geprüft worden. Unter ``CI`` auf Linux ist
+    fehlendes PHP deshalb ein Fehler; Windows und macOS richten dort keines
+    ein und überspringen weiter, wie ein Entwicklerrechner ohne PHP.
+    """
+    import sys
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setenv("CI", "true")
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(pytest.fail.Exception, match="PHP fehlt in der CI"):
+        php_executable()
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    with pytest.raises(pytest.skip.Exception):
+        php_executable()
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    monkeypatch.delenv("CI")
+    with pytest.raises(pytest.skip.Exception):
+        php_executable()

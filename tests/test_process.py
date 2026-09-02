@@ -15,6 +15,14 @@ from app.core import process
 
 
 def test_trusted_environment_drops_secrets_and_loader_changes() -> None:
+    """Schlüssel, Suchpfade und Loader-Eingriffe bleiben hier.
+
+    **Der Proxy reist seit dem 02.09.2026 mit, seine Zugangsdaten nicht.** Ohne
+    ihn erreicht im Firmennetz weder ``pip`` noch ``winget`` seinen Server, und
+    die Nachinstallation endet an einem Zeitlimit ohne Grund. Die Zusage dieses
+    Moduls gilt den *Zugangsdaten*, und die hält: ``name:passwort`` wird aus der
+    Adresse geschnitten, bevor sie einen Unterprozess erreicht.
+    """
     source = {
         "PATH": "Programme",
         "TEMP": "Zwischenablage",
@@ -31,7 +39,43 @@ def test_trusted_environment_drops_secrets_and_loader_changes() -> None:
         "PATH": "Programme",
         "TEMP": "Zwischenablage",
         "LANG": "de_DE.UTF-8",
+        "HTTPS_PROXY": "http://example.invalid",
     }
+    assert "passwort" not in str(answer)
+
+
+def test_the_way_out_of_a_company_network_travels_without_its_credentials() -> None:
+    """Proxy, Zertifikatssatz und Paketquelle reisen mit — ohne Zugangsdaten.
+
+    ``pip`` und ``winget`` laufen als Unterprozess mit genau dieser Umgebung.
+    Fehlten die Namen, lief die Nachinstallation (§36) in einem Firmennetz in
+    ein Zeitlimit, und die Meldung nannte den Grund nicht.
+
+    Zugangsdaten in einer Adresse sind der Fall, für den der Schnitt da ist:
+    Ein Unterprozess trägt seine Umgebung in die Prozessliste, in seinen
+    Absturzbericht und in sein eigenes Protokoll.
+    """
+    source = {
+        "HTTP_PROXY": "http://name:passwort@proxy.example.invalid:8080",
+        "https_proxy": "http://name:passwort@proxy.example.invalid:8080",
+        "NO_PROXY": "localhost,127.0.0.1",
+        "SSL_CERT_FILE": "/etc/ssl/firma.pem",
+        "REQUESTS_CA_BUNDLE": "/etc/ssl/firma.pem",
+        "PIP_INDEX_URL": "https://leser:geheim@pakete.example.invalid/simple",
+    }
+
+    answer = process.trusted_environment(source)
+
+    assert answer == {
+        "HTTP_PROXY": "http://proxy.example.invalid:8080",
+        "https_proxy": "http://proxy.example.invalid:8080",
+        "NO_PROXY": "localhost,127.0.0.1",
+        "SSL_CERT_FILE": "/etc/ssl/firma.pem",
+        "REQUESTS_CA_BUNDLE": "/etc/ssl/firma.pem",
+        "PIP_INDEX_URL": "https://pakete.example.invalid/simple",
+    }
+    for secret in ("passwort", "geheim"):
+        assert secret not in str(answer)
 
 
 def test_bounded_environment_drops_gui_session_capabilities() -> None:
@@ -46,6 +90,36 @@ def test_bounded_environment_drops_gui_session_capabilities() -> None:
 
     assert process.trusted_environment(source) == {"PATH": "Programme"}
     assert process.trusted_environment(source, graphical=True) == source
+
+
+def test_the_sandbox_bridge_travels_out_of_the_own_flatpak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Im eigenen Flatpak reisen Busadresse und Laufzeitverzeichnis mit.
+
+    ``discover.on_host`` legt dort vor jeden Start ein ``flatpak-spawn --host``,
+    und das spricht über den Sitzungsbus mit dem Flatpak-Dienst. Beide Namen
+    standen nur in den grafischen Befugnissen — die bekommt ein begrenzter Lauf
+    nicht, und genau begrenzte Läufe starten Slicer, Suchläufe und
+    Nachinstallation. Im Linux-Paket kam damit keiner von ihnen heraus.
+
+    Der Displayserver bleibt trotzdem draußen: Die Brücke ist keine Oberfläche.
+    """
+    from app.core import discover
+
+    source = {
+        "PATH": "Programme",
+        "DISPLAY": ":0",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=sitzung",
+        "XDG_RUNTIME_DIR": "/run/user/1000",
+    }
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+
+    assert process.trusted_environment(source) == {
+        "PATH": "Programme",
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=sitzung",
+        "XDG_RUNTIME_DIR": "/run/user/1000",
+    }
 
 
 def test_limited_process_gets_explicit_cwd_without_application_secrets(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import json
+import os
+import stat
 import zipfile
 from pathlib import Path
 
@@ -1063,6 +1065,54 @@ def test_a_damaged_container_is_reported_not_raised_raw(tmp_path: Path) -> None:
     with pytest.raises(ValidationError) as caught:
         load(path)
     assert caught.value.constraint == "damaged"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="Umask und Dateirechte gibt es nur auf POSIX")
+def test_a_saved_project_gets_the_permissions_of_a_normal_file(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    """Ein gespeichertes Projekt trägt die Rechte, die die Umask vorgibt.
+
+    Geschrieben wird über ``mkstemp``, und das legt mit 0600 an — beim
+    Umbenennen reisen diese Rechte mit. Auf Linux und macOS gehörte die
+    ``.p3d`` danach allein dem Nutzer: keine Gruppe, kein zweites Konto, auch
+    wo die Umask des Systems etwas anderes sagt.
+    """
+    mask = os.umask(0o022)
+    try:
+        path = save(filled, tmp_path / "rechte.p3d")
+    finally:
+        os.umask(mask)
+
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644, (
+        f"gespeichert mit {stat.S_IMODE(path.stat().st_mode):04o} statt 0644 — "
+        "die Rechte des Zwischenstands sind mitgereist"
+    )
+
+
+def test_a_programming_error_while_reading_is_not_a_damaged_file(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein falscher Aufruf im Leser sieht aus wie eine kaputte Datei — und ist keiner.
+
+    ``load`` fing ``TypeError`` und ``AttributeError`` mit ein und meldete
+    „Der Projektinhalt ist beschädigt". Damit las der Kunde, seine Datei sei
+    hin, während in Wahrheit unser Code falsch aufgerufen wurde — kein
+    Fehlerbericht, keine Spur, und die Datei öffnet auf keinem Rechner
+    (``errors.PROGRAMMING_ERRORS``).
+    """
+    path = save(filled, tmp_path / "programmfehler.p3d")
+
+    def wrong(*_args: object, **_kwargs: object) -> None:
+        raise TypeError("document_from_data() got an unexpected keyword argument")
+
+    monkeypatch.setattr(project_module, "document_from_data", wrong)
+
+    with pytest.raises(TypeError):
+        load(path)
 
 
 def test_a_zip_without_a_project_is_not_a_project(tmp_path: Path) -> None:

@@ -844,7 +844,13 @@ def _notch_depth(
         return lambda _position: 0.0
 
     stations = np.linspace(low, high, PROFILE_SAMPLES)
-    sections = _sections_in_blocks(mesh, axis, stations, cancelled)[:PROFILE_SAMPLES]
+    # Die Kurve will die Querschnitte **auf** den Stationen, nicht die
+    # Nachbarschaft darum: ``_sections_in_blocks`` liefert drei Gruppen, und
+    # ihr erstes Drittel liegt um ``PRISM_STEP`` tiefer. Dreizehn Schnitte
+    # kosten drei Millisekunden, also fragt sie sie in einem Zug.
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    sections = sections_along(mesh, axis, stations)
     areas = [
         float(entry.area) if entry is not None and not entry.is_empty else 0.0 for entry in sections
     ]

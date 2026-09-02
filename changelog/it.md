@@ -25,7 +25,7 @@ scrive in `website/version.json`.
 - La schermata iniziale non sposta più la selezione senza richiesta e si usa completamente con mouse e tastiera.
 - Le voci *Nuovo*, *Apri* ed *Esempi* sono ordinate più chiaramente e descrivono la destinazione già prima dell’apertura.
 - Feedback e sostegno volontario sono accessibili dalla schermata iniziale anche con tastiera e tecnologie assistive.
-- Chat e rapporto di controllo restano utilizzabili contemporaneamente anche con una finestra poco alta.
+- La chat resta utilizzabile anche con una finestra poco alta: l’inserimento resta fisso in basso e il contenuto scorre.
 - La barra degli strumenti superiore resta visibile con progetti aperti e finestre strette, senza uscire dall’area di lavoro.
 - Un nuovo esempio di disegno porta direttamente al percorso degli schizzi e completa i progetti di esempio esistenti.
 
@@ -33,13 +33,13 @@ scrive in `website/version.json`.
 
 - I menu hanno titoli ben visibili e colonne di icone allineate in modo uniforme.
 - La panoramica dei comandi allinea scorciatoie e spiegazioni, così le voci lunghe si scorrono più rapidamente.
-- I dialoghi estesi usano colonne uniformi e sfruttano le finestre larghe con chiare viste a due colonne.
+- I dialoghi estesi usano colonne e larghezze di campo uniformi.
 - La precedente pagina unica per adesione, retrazione e filamento è divisa in aree di impostazioni più piccole e ben denominate.
 - Tutte le 56 impostazioni di stampa si possono cercare tramite le etichette tedesche visibili.
 - La ricerca riconosce inoltre 146 termini comuni degli slicer, tra cui *perimeters* e *wall loops*.
 - I campi numerici rispondono correttamente a frecce, incremento e arrotondamento, senza più cambiare i valori in modo inatteso.
-- I cursori hanno un comportamento uniforme e restano precisi anche con intervalli di valori molto fini.
-- Solo lo strumento attivo mantiene il colore in risalto; gli elementi inattivi restano visivamente in secondo piano.
+- I cursori hanno un aspetto uniforme con una maniglia facile da afferrare.
+- Il colore in risalto è riservato al pulsante principale; lo strumento attivo si riconosce dal bordo e gli elementi inattivi restano visivamente in secondo piano.
 - I calcoli molto brevi evitano indicatori lampeggianti; quelli medi mostrano l’attesa, quelli lunghi anche avanzamento e annullamento.
 - I suggerimenti restano su una riga quando c’è spazio e vanno a capo in modo controllato nelle finestre strette.
 - Le anteprime nell’albero degli oggetti sono abbastanza grandi da permettere di riconoscere davvero le forme.
@@ -57,7 +57,7 @@ scrive in `website/version.json`.
 - Durante una rotazione o scalatura esatta, più corpi selezionati usano un centro comune.
 - Esc torna indietro di un solo livello nel disegno: linea corrente, strumento corrente e solo dopo l’intero schizzo.
 - Ripeti funziona ora anche mentre uno schizzo è aperto.
-- Uno schizzo vuoto mostra un’indicazione cliccabile che conduce direttamente allo strumento Rettangolo.
+- Uno schizzo vuoto mostra un suggerimento cliccabile che apre le forme di base pronte.
 - Il pulsante delle forme base porta il nome dell’azione eseguita dal clic. Le altre forme si trovano dietro la freccia accanto.
 - Lo strumento di taglio si apre nel corpo invece che in una vista vuota fuori dal modello.
 - Le viste anteriore, laterale, superiore e opposte si allineano correttamente su tutti e sei gli assi.
@@ -74,8 +74,6 @@ scrive in `website/version.json`.
 - Un’azione continua dell’utente si può annullare completamente con un solo comando Annulla.
 - Le voci della cronologia mostrano il proprio tipo e un numero di passaggio univoco.
 - I modelli scaricati e importati possono essere tagliati immediatamente.
-- Le facce protette appaiono turchesi e tratteggiate, così restano comprensibili anche senza distinguere i colori.
-- La divisione automatica e manuale considera le superfici visibili protette nella scelta del piano di taglio.
 - Un clic su un riscontro porta in modo affidabile al punto, al corpo o al passaggio della cronologia interessato.
 - Quando si raggiunge un riscontro, la telecamera inquadra l’obiettivo invece di finire in un primo piano grigio.
 - Le facce denominate e le indicazioni si spostano insieme al loro corpo durante disposizione e posizionamento.
@@ -116,7 +114,7 @@ scrive in `website/version.json`.
 - I pulsanti d’azione del rapporto non mantengono più in memoria, senza farsi notare, una finestra già chiusa.
 - I blocchi inclusi e l’attivazione vengono caricati all’avvio senza bloccarsi a vicenda.
 - La vista 3D viene chiusa correttamente prima della finestra, rendendo più affidabile la chiusura su Windows, Linux e macOS.
-- Cornice e barra del titolo della finestra si adattano in modo sicuro alla rispettiva piattaforma.
+- Su Windows 11 la barra del titolo segue lo schema di colori dell’applicazione; le altre piattaforme restano invariate.
 - I pulsanti standard come Apri, Salva e Annulla cambiano lingua immediatamente, senza riavvio.
 - I nomi generati di corpi e blocchi cambiano correttamente lingua anche dopo aver già usato contenuti memorizzati nella cache.
 - Traduzioni e valori del rapporto sono allo stesso livello in tedesco, inglese, spagnolo, francese, italiano e portoghese.
@@ -125,7 +123,7 @@ scrive in `website/version.json`.
 
 - La chat accoglie con il proprio scopo concreto e non si apre più con uno spazio vuoto o termini tecnici relativi ai modelli.
 - I contatori tecnici dei token sono stati rimossi dalla normale interfaccia per i clienti.
-- L’assistente riconosce e raggruppa dettagli di forma uguali, invece di trattare ogni occorrenza separatamente.
+- Le segnalazioni identiche su dettagli di forma persi raggiungono l’assistente conteggiate invece che una per una.
 - La finestra di generazione trasforma testo o immagine in un modello tramite ComfyUI locale e lo inserisce nella stessa scena modificabile.
 - Il flusso TripoSG fornito crea un file GLB, poi riparato, ridimensionato e controllato automaticamente per la stampa.
 - Ollama locale e ComfyUI locale elaborano uno dopo l’altro, così non occupano contemporaneamente la scheda grafica.

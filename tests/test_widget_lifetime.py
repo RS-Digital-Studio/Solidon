@@ -515,3 +515,82 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
         + ", ".join(without)
         + " — siehe app/ui/leash.py:stop_watching_the_dying"
     )
+
+
+# --- Dialoge, die das Fenster als sein Kind baut und verdrahtet -----------------
+
+
+def _openers() -> list[tuple[str, str, Callable[[object], None]]]:
+    """Fensterwege, die einen Dialog als eigenes Kind bauen und verdrahten.
+
+    Der parametrisierte Test oben baut jeden Dialog **für sich** und sieht
+    damit nur dessen eigene Ringe. Was er nicht sieht, ist der Ring, der beim
+    Verdrahten entsteht: Sechs Lambdas in ``_make_catalog`` und zwei in
+    ``_generate`` fangen das Fenster, der Dialog ist sein Kind, und ohne
+    Freigeben leben beide bis zum Prozessende.
+    """
+
+    def open_catalogue(window: object) -> None:
+        window._open_catalog()  # type: ignore[attr-defined]
+
+    def open_generator(window: object) -> None:
+        window._generate(None)  # type: ignore[attr-defined]
+
+    return [
+        ("Bausteinkatalog", "app.ui.catalog.PartCatalog", open_catalogue),
+        ("Erzeugen-Dialog", "app.ui.generate_dialog.GenerateDialog", open_generator),
+    ]
+
+
+@pytest.mark.parametrize("name,dialog_path,open_it", _openers())
+def test_a_window_that_opened_a_dialog_still_lets_go(
+    name: str,
+    dialog_path: str,
+    open_it: Callable[[object], None],
+    monkeypatch: pytest.MonkeyPatch,
+    qt_app: QApplication,
+    unpinned_windows: None,
+) -> None:
+    """Öffnen, abbrechen, loslassen — und das Fenster ist weg.
+
+    ``exec()`` wird ersetzt und nicht wirklich gefahren: Es hielte den Lauf an,
+    bis jemand klickt. Zurückgegeben wird *abgebrochen* — der Weg dessen, der
+    das Fenster wieder schließt, und genau der, auf dem niemand aufräumte.
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtWidgets import QApplication, QDialog
+
+    from app.ui import leash
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(
+        dialog_path + ".exec", lambda self: QDialog.DialogCode.Rejected, raising=True
+    )
+
+    watchers = []
+    for _ in range(HOW_MANY):
+        window = MainWindow(Session(), UiSettings())
+        open_it(window)
+        window.release()
+        watchers.append(weakref.ref(window))
+        del window
+
+    leash.wait_for_all()
+    application = QApplication.instance()
+    if application is not None:
+        for _ in range(EVENT_ROUNDS):
+            application.processEvents()
+        # **``processEvents`` räumt kein ``deleteLater`` ab.** Eine
+        # aufgeschobene Löschung wird erst zugestellt, wenn die Ereignisschleife
+        # endet, die sie eingereiht hat — im Betrieb ist das die des Fensters,
+        # hier gibt es keine. Ohne diese Zeile misst der Test den Fix nicht.
+        application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
+
+    alive = [watch for watch in watchers if watch() is not None]
+    assert not alive, (
+        f"{len(alive)} von {HOW_MANY} Fenstern überlebten, nachdem sie den "
+        f"{name} geöffnet hatten — der Dialog wird nicht freigegeben"
+    )

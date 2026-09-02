@@ -311,6 +311,59 @@ def test_the_delivered_file_stays_readable_for_an_old_client() -> None:
     assert not leer, f"ohne Punkte in {leer} — dort sähe der Kunde ein Update ohne Text"
 
 
+def test_a_written_package_is_one_the_application_would_take(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was ``write_version`` schreibt, muss die Anwendung auch annehmen.
+
+    **Der Anschluss zwischen Auslieferungswerkzeug und Update-Weg.** Beide
+    Seiten waren für sich geprüft: ``make_download`` schrieb Einträge,
+    ``updates`` nahm Einträge an — nur nicht dieselben. Die geschriebene
+    Adresse lief über ``api/count.php?f=…``, und ``_packages`` verwirft nach
+    §37.2 jede Adresse mit Anhängsel (``allow_query=False``); dazu folgt der
+    Update-Weg keiner Weiterleitung, und ``count.php`` antwortet mit einer.
+    Eine ausgelieferte Anwendung hätte damit nie ein Paket geholt, und beide
+    Testseiten blieben grün, weil die Update-Tests ihre Adressen selbst bauen.
+
+    Gemessen wird darum die Kette: ein Paket hinein, die geschriebene Datei
+    durch den Leser der Anwendung, mindestens ein Paket muss ankommen. Der
+    Zähler bleibt den Verweisen der Seite (``download_link``) — dort klickt ein
+    Mensch, und dort darf eine Weiterleitung stehen.
+    """
+    import tools.make_download as make_download
+    from app.core import updates
+
+    version_file = tmp_path / "version.json"
+    version_file.write_text(
+        json.dumps({"url": "https://solidon3d.de", "notes": "Neue Fassung"}, ensure_ascii=False)
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(make_download, "VERSION_FILE", version_file)
+
+    make_download.write_version(
+        [
+            make_download.Package(
+                kind="windows",
+                name="Solidon3D-Setup-9.9.9.exe",
+                bytes_=199_048_177,
+                hash_="e5bf396c5c915006454436aa24ffe9d435898a4c5fe7db01d6d102c3c3d77fbc",
+            )
+        ]
+    )
+
+    data = json.loads(version_file.read_text(encoding="utf-8"))
+    geschrieben = data.get("packages")
+    assert geschrieben, "write_version hat gar keinen Paketeintrag hinterlassen"
+
+    found = updates._packages(geschrieben, origin=updates.VERSION_URL, release=data)
+
+    assert found, (
+        "die Anwendung verwirft jeden geschriebenen Paketeintrag — geschrieben "
+        f"wurde {[eintrag['url'] for eintrag in geschrieben.values()]}"
+    )
+
+
 # --- der festgeschriebene Versionssatz -------------------------------------------
 #
 # `constraints.txt` hält fest, *in welcher* Version ein Paket installiert wird.

@@ -2995,6 +2995,72 @@ def test_a_slicer_with_endless_output_is_stopped(
     assert caught.value.suggestions
 
 
+def test_the_slicer_gets_its_own_memory_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vier GiB sind für einen Slicer keine Grenze, sondern eine Absage.
+
+    ``run_limited`` deckelt den Prozessbaum mit ``DEFAULT_MEMORY_LIMIT``, und
+    das sind vier GiB — gedacht für kleine Werkzeuge, die Text liefern. Ein
+    Slicer über einem feinen Netz kommt darüber, und 0.2.2 kannte gar keine
+    Grenze: Der Kunde bekam auf einem Rechner mit 64 GB einen Speicherfehler
+    aus einem Programm, das mit derselben Datei von Hand durchläuft.
+    """
+    import sys
+
+    from app.core import process
+    from app.core.errors import OperationCancelled
+    from app.core.process import ProcessCancelled
+
+    seen: dict[str, object] = {}
+
+    def watching(command: list[str], **options: object) -> object:
+        seen.update(options)
+        raise ProcessCancelled
+
+    monkeypatch.setattr(handover, "run_limited", watching)
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+
+    with pytest.raises(OperationCancelled):
+        handover._run_slicer([sys.executable], tmp_path, 5.0, setup, None)
+
+    assert seen.get("memory_limit") == handover.SLICER_MEMORY_LIMIT, (
+        f"der Lauf trägt keine eigene Speichergrenze: {seen}"
+    )
+    assert handover.SLICER_MEMORY_LIMIT > process.DEFAULT_MEMORY_LIMIT, (
+        "eine eigene Grenze, die enger ist als die allgemeine, wäre keine"
+    )
+
+
+def test_a_slicer_that_says_too_much_is_not_an_error_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zu viel Ausgabe ist etwas anderes als ein Fehlercode.
+
+    Der Zweig meldete „Der Slicer ist mit einem Fehlercode zurückgekommen" —
+    dabei ist gar keiner gekommen: Solidon hat den Lauf abgebrochen, weil die
+    Ausgabe die Sammelgrenze überschritt. Wer den Satz liest, sucht den Fehler
+    im Slicer statt in der Menge (§2.7).
+    """
+    import sys
+
+    monkeypatch.setattr(handover, "SLICER_OUTPUT_LIMIT", 1024)
+    setup = handover.SlicerSetup(executable=Path(sys.executable), flavour="orca")
+    command = [sys.executable, "-c", "import os, time; os.write(1, b'x' * 2048); time.sleep(5)"]
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._run_slicer(command, tmp_path, 4.0, setup, None)
+
+    said = str(caught.value.detail)
+    assert "Fehlercode" not in said, f"der Satz spricht vom falschen Grund: {said}"
+    assert "Ausgabe" in said, said
+    assert {action.id for action in caught.value.suggestions} >= {
+        "show_output",
+        "choose_slicer",
+        "export_only",
+    }
+
+
 def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
     """Eine gewählte Datei kann ``flavour_of`` bestehen und trotzdem kein
     Programm sein — eine DLL zum Beispiel. Der ``OSError`` beim Start flog

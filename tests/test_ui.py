@@ -5169,6 +5169,48 @@ def test_a_late_layer_analysis_finds_no_dialog(window: MainWindow) -> None:
     assert window._settings_dialog is None
 
 
+def test_closing_the_print_settings_keeps_what_was_changed(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Weg hinaus heißt *Schließen*, und Schließen verwirft nichts.
+
+    Der Dialog schreibt jeden getippten Wert sofort in sein Modell, das Fenster
+    übernimmt es nach ``exec`` — auch wenn niemand *Übernehmen* gedrückt hat,
+    denn es gibt keines. Das ist die Bauart einer Einstellungsseite und kein
+    Versehen: Beim Schließen wird auch die Slicer-Profilwahl festgeschrieben
+    (``_remember_slicer_choice``), und die soll gerade nicht verlorengehen.
+
+    **Getragen wird sie allein von der Beschriftung.** Ein Knopf *Abbrechen*
+    verspräche hier das Gegenteil dessen, was geschieht; dass dort *Schließen*
+    steht, hält ``test_the_close_button_speaks_german`` fest. Dieser Test hält
+    die andere Hälfte: dass die Werte den geschlossenen Dialog überleben.
+    """
+    from PySide6.QtWidgets import QSpinBox
+
+    from app.ui import main_window as module
+
+    class ClosingDialog(module.PrintSettingsDialog):
+        """Wie ein Kunde, der einen Wert ändert und das Fenster wieder zumacht."""
+
+        def exec(self) -> int:
+            editor = self._editors["shell.wall_count"]
+            assert isinstance(editor, QSpinBox)
+            editor.setValue(7)
+            self.reject()
+            return int(self.result())
+
+    monkeypatch.setattr(module, "PrintSettingsDialog", ClosingDialog)
+
+    window.action_print_settings()
+
+    settings = window.session.project.document.print_settings
+    assert settings is not None, "das Fenster hat die Einstellungen gar nicht übernommen"
+    assert settings.shell.wall_count == 7, (
+        f"nach dem Schließen stehen {settings.shell.wall_count} Wandbahnen statt 7 — "
+        "der Knopf heißt „Schließen“ und darf nichts verwerfen"
+    )
+
+
 def test_a_failed_slicer_precheck_reaches_the_main_report(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -7167,6 +7209,35 @@ def test_switching_it_on_binds_only_to_this_machine(window: MainWindow) -> None:
         window.settings.remote_enabled = False
         window._apply_remote()
     assert window._remote is None
+
+
+def test_a_blocked_port_says_so_instead_of_only_logging(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17: Ein belegter Port endete im Protokoll und sonst nirgends.
+
+    Der Haken in den Einstellungen blieb gesetzt, die Fernsteuerung lief
+    nicht, und nichts sagte es — wer ein fremdes Programm darauf zeigen ließ,
+    suchte den Fehler dort. Die Meldung nennt den Port und den Weg zurück zu
+    ihm; ein modaler Dialog wäre hier die falsche Antwort (§2.8).
+    """
+    from app.ui import main_window as module
+
+    def refuse(*_args: object, **_kwargs: object) -> object:
+        raise OSError("address already in use")
+
+    monkeypatch.setattr(module, "RemoteServer", refuse)
+    window.settings.remote_enabled = True
+    window.settings.remote_port = 5123
+    try:
+        window._apply_remote()
+    finally:
+        window.settings.remote_enabled = False
+
+    assert window._remote is None, "die Fernsteuerung gilt trotz Fehler als gestartet"
+    said = window.status_message.text()
+    assert "5123" in said, f"die Meldung nennt den Port nicht: {said!r}"
+    assert "Einstellungen" in said, f"die Meldung nennt keine Handlung: {said!r}"
 
 
 def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:

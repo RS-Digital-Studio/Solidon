@@ -1895,7 +1895,7 @@ class PrintSettingsDialog(QDialog):
     def _build_search(self) -> QHBoxLayout:
         """Die Zeile, mit der man eine von sechsundfünfzig Einstellungen findet.
 
-        Der Dialog trägt acht Gruppen, und bis hierhin half nur Aufklappen und
+        Der Dialog trägt zehn Gruppen, und bis hierhin half nur Aufklappen und
         Lesen — die Geste, die jeder Slicer mitbringt, fehlte als einzige.
         """
         row = QHBoxLayout()
@@ -1945,16 +1945,25 @@ class PrintSettingsDialog(QDialog):
         aus derselben Tabelle, mit der die Übergabe schreibt
         (``slicer_keys.keys_for``): ein zweites Verzeichnis wäre eines, das
         altert, sobald ein Schlüssel sich ändert.
+
+        **Und der Unterstrich zählt wie ein Leerzeichen.** Die Schlüssel heißen
+        ``wall_loops``, gelesen und gesprochen wird „wall loops" — wer es so
+        eintippt, bekam nichts, obwohl die Zeile danebensteht. Beide Seiten
+        werden deshalb gleich geschrieben, der Begriff wie der Heuhaufen.
         """
         from app.core.export.slicer_keys import keys_for
         from app.ui.command_palette import fold
 
-        wanted = fold(term).strip()
+        def flatten(text: str) -> str:
+            """Gefaltet, und der Unterstrich als Leerzeichen."""
+            return fold(text).replace("_", " ")
+
+        wanted = flatten(term).strip()
         if not wanted:
             return []
         hits = []
         for field in FIELDS:
-            haystack = fold(
+            haystack = flatten(
                 " ".join(
                     (
                         str(field.title),

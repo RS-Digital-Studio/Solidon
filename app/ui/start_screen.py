@@ -957,11 +957,19 @@ class StartScreen(QWidget):
             QWidget.setTabOrder(first, second)
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
-        """Ein Tastaturziel bleibt beim Durchlaufen vollständig sichtbar."""
+        """Ein Tastaturziel bleibt beim Durchlaufen vollständig sichtbar.
+
+        **Die Menge wird über ``getattr`` geholt**, denn dieser Filter läuft
+        auch im Abbau: Ist das Python-Objekt schon halb ausgeräumt, gibt es
+        ``_focus_targets`` nicht mehr, und ein ``AttributeError`` aus einem
+        Ereignisfilter kommt bei niemandem an, den er etwas anginge.
+        """
+        targets = getattr(self, "_focus_targets", None)
         if stop_watching_the_dying(self, watched, event):
-            self._focus_targets.discard(watched)
+            if targets is not None:
+                targets.discard(watched)
             return False
-        if event.type() == QEvent.Type.FocusIn and watched in self._focus_targets:
+        if event.type() == QEvent.Type.FocusIn and targets is not None and watched in targets:
             self.page_scroll.ensureWidgetVisible(watched, NORMAL, NORMAL)
         return super().eventFilter(watched, event)
 

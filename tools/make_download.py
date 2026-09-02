@@ -56,6 +56,10 @@ STORE = WEBSITE / "dl"
 #: abgebrochener Download fortsetzbar bleibt. Fehlt die PHP-Datei auf dem
 #: Server, führt der Verweis ins Leere — sie gehört zu jedem Hochladen dazu,
 #: so wie ``api/support.php``.
+#:
+#: **Nur für die Verweise der Seite, nicht für ``version.json``.** Die
+#: Anwendung nimmt eine Paketadresse mit Anhängsel nicht an und folgt keiner
+#: Weiterleitung (§37.2); dort steht die Adresse unter ``dl/`` unmittelbar.
 COUNTER = "/api/count.php?f="
 
 #: Die Startseiten, die einen Download-Kasten tragen.
@@ -855,14 +859,30 @@ def write_version(packages: list[Package]) -> None:
         key = version_key(package)
         if not key:
             continue
+        # **Hier ohne den Zähler, anders als bei den Verweisen der Seite.** Die
+        # Anwendung holt ein Paket nach §37.2 nur über eine Adresse ohne
+        # Anhängsel (`_packages` prüft mit `allow_query=False`) und folgt
+        # keiner Weiterleitung; `api/count.php?f=…` ist beides. Sie verwürfe
+        # jeden so geschriebenen Eintrag und zeigte nur noch auf die
+        # Download-Seite. Gezählt wird, was ein Mensch anklickt — der Zähler
+        # bleibt in `download_link`.
         entries[key] = {
             "file": package.name,
-            "url": f"{site}{COUNTER}{quote(package.name)}",
+            "url": f"{site}/dl/{quote(package.name)}",
             "size": package.bytes_,
             "sha256": package.hash_,
         }
 
     data["version"] = APP_VERSION
+    # **Vor der Kappung eingehängt**, aus demselben Grund wie die Gruppen: Die
+    # Kappung misst die geschriebene Datei, und in der stehen die Pakete. Stand
+    # die Zuweisung dahinter, maß sie die Einträge der *vorigen* Veröffentlichung
+    # — bei mehr oder längeren Paketnamen zu wenig, und die Datei ginge über die
+    # Lesegrenze der ausgelieferten Fassungen hinaus.
+    if entries:
+        data["packages"] = entries
+    else:
+        data.pop("packages", None)
     changes = changes_for(APP_VERSION)
     if changes:
         data["changes"] = changes
@@ -883,10 +903,6 @@ def write_version(packages: list[Package]) -> None:
     else:
         data.pop("changes", None)
         data.pop("groups", None)
-    if entries:
-        data["packages"] = entries
-    else:
-        data.pop("packages", None)
     # **Die alte Unterschrift ist mit diesem Schreiben hinfällig** (§37.2): Sie
     # galt dem alten Inhalt, und der ist gerade ersetzt worden. Stehen lassen
     # wäre schlimmer als weglassen — eine Datei mit einer Unterschrift, die

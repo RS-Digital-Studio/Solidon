@@ -153,7 +153,14 @@ def test_way_three_tour_recognises_its_actions() -> None:
 
 
 def test_way_three_names_the_current_external_model_contract() -> None:
-    """Weg 3 verspricht nur den belegten Dateiimport, keinen Generator."""
+    """Weg 3 nennt beides: den Dateiimport und den Erzeugen-Dialog.
+
+    Am 02.09.2026 stand hier „Bild/Text zu 3D ist in dieser Version
+    deaktiviert" — neben einem aktiven Menüeintrag und einem Changelog, der
+    den Weg bewirbt. Entscheidung Robert (02.09.2026): TripoSG bleibt in
+    Betrieb, solange die Rechtsprüfung nichts anderes ergibt; die Tour sagt
+    deshalb, was die Anwendung tut, und nennt nichts als abgeschaltet.
+    """
     tour = tour_for("weg3-generiert-aufbereiten")
     assert tour is not None
     closing = str(tour.closing)
@@ -161,8 +168,8 @@ def test_way_three_names_the_current_external_model_contract() -> None:
     assert "GLB" in closing
     assert "STL" in closing
     assert "extern" in closing
-    assert "deaktiviert" in closing
-    assert "ComfyUI" not in closing
+    assert "deaktiviert" not in closing
+    assert "ComfyUI" in closing
 
 
 def test_way_four_tour_recognises_its_actions() -> None:

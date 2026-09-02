@@ -2137,8 +2137,11 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
     **ein** Besitzer der Taste —, denn sie ist unabhängig davon, welches Fenster
     ein Testlauf gerade für das aktive hält.
 
-    Dazu die zwei Stufen: Wer eine Linie zieht, meint mit Escape das Werkzeug;
-    wer nur schaut, meint die Skizze.
+    Dazu die drei Stufen, alle über den Fensterweg: Wer eine Linie angefangen
+    hat, meint mit Escape die halbfertige Kette; wer das Werkzeug hält, das
+    Werkzeug; wer nur schaut, die Skizze. Die erste Stufe prüfte bisher nur
+    ``test_escape_gives_back_one_thing_at_a_time`` direkt an ``drop_tool`` —
+    und das Fenster ist der einzige Weg, auf dem die Taste sie je erreicht.
     """
     from PySide6.QtGui import QShortcut
 
@@ -2165,13 +2168,19 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
 
         panel.choose_tool("line")
         assert panel.canvas.tool == "line"
+        panel.canvas._pending_world.append((1.0, 1.0))
 
         window._escape()
-        assert panel.canvas.tool == "select", "Escape legt zuerst das Werkzeug ab"
+        assert not panel.canvas._pending_world, "Escape verwirft zuerst die angefangene Kette"
+        assert panel.canvas.tool == "line", "und lässt das Werkzeug dabei in der Hand"
+        assert window.sketching(), "und die Zeichnung steht"
+
+        window._escape()
+        assert panel.canvas.tool == "select", "beim zweiten Mal legt es das Werkzeug ab"
         assert window.sketching(), "und wirft die Zeichnung nicht gleich mit weg"
 
         window._escape()
-        assert not window.sketching(), "beim zweiten Mal verlässt es die Skizze"
+        assert not window.sketching(), "beim dritten Mal verlässt es die Skizze"
     finally:
         window.deleteLater()
 

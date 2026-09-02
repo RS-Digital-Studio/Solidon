@@ -316,9 +316,18 @@ def test_end_artifact_notice_sbom_and_source_archives_reconcile(tmp_path: Path) 
     for binary in binaries:
         binary.parent.mkdir(parents=True, exist_ok=True)
         binary.write_bytes(b"MZ\x90\x00native")
+    # Die Stückliste beschreibt das Kundenartefakt, nicht diesen Interpreter:
+    # Auf einer Maschine mit 3.14 scheiterte der Abgleich sonst an der
+    # geprüften Quellenfassung 3.13 (02.09.2026).
+    runtime = next(
+        policy
+        for policy in make_licence_notices._runtime_policies().values()
+        if policy.name == "CPython runtime"
+    )
     sbom = make_sbom.build_bom(
         customer_artifact=artifact,
         platform=sysconfig.get_platform(),
+        python_version=min(runtime.versions),
     )
     sbom_path = artifact / "Solidon3D.cdx.json"
     sbom_path.write_text(json.dumps(sbom), encoding="utf-8")

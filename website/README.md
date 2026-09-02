@@ -53,7 +53,7 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `handbuch.html`, `en/manual.html` | Handbuch — erzeugt von `tools/make_manual.py`, nie von Hand ändern |
 | `handbuch/` | Abbildungen des Handbuchs, je Sprache ein Ordner |
 | `icon.svg` | Anwendungssymbol als Favicon — erzeugt von `tools/make_icon.py` |
-| `impressum.html` | Impressum — **Entwurf, Anschrift fehlt noch** |
+| `impressum.html` | Impressum — von Hand gepflegt, Anschrift und Vertretung stehen |
 | `datenschutz.html` | Datenschutzerklärung — **Entwurf mit Platzhaltern** |
 | `eula.html`, `agb.html`, `widerruf.html` | Rechtstexte — erzeugt von `tools/make_legal.py` aus `EULA.md`, `AGB.md` und `WIDERRUF.md`, nie von Hand ändern |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
@@ -453,7 +453,7 @@ eigenes Produkt: **netcup Webhosting 2000**.
 
 ## Vor der Veröffentlichung
 
-- Platzhalter ersetzen: Anschrift in `impressum.html` und `WIDERRUF.md`,
+- Platzhalter ersetzen (Anschrift steht seit dem 01.09.2026):
   Zahlungsdienstleister in `AGB.md` (die Kontaktadresse support@solidon3d.de
   steht schon; der Hoster in `datenschutz.html` ist seit der Bestellung
   eingetragen — netcup). Danach `tools/make_legal.py` laufen lassen — die

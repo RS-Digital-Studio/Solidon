@@ -925,11 +925,8 @@ def _with_features(
         rigid_shift: Transform | None = transform
         if rigid_shift is None and previous_bounds is not None:
             before, now = previous_bounds, mesh.bounds
-            gleich = all(
-                abs(now.size[axis] - before.size[axis]) <= EPS_DISPLAY for axis in range(3)
-            )
             shift = tuple(now.centre[axis] - before.centre[axis] for axis in range(3))
-            if gleich and any(abs(value) > EPS_DISPLAY for value in shift):
+            if _same_size(before, now) and any(abs(value) > EPS_DISPLAY for value in shift):
                 rigid_shift = (
                     (1.0, 0.0, 0.0, shift[0]),
                     (0.0, 1.0, 0.0, shift[1]),

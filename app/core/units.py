@@ -14,6 +14,8 @@ from __future__ import annotations
 import math
 from typing import Final, Literal
 
+from app.i18n import TranslatableText, _
+
 # --- Die drei benannten Toleranzen (§11.2) -------------------------------------
 
 #: Zusammenfallende Punkte, Null-Flächen, Verschweißen. Absolut, fürs Fertigen.
@@ -48,6 +50,22 @@ _UNIT_DECIMALS: Final[dict[LengthUnit, int]] = {"mm": 2, "cm": 3, "m": 5, "in": 
 
 #: Einheiten, die die Oberfläche anbietet (§19.3). Der Kern bleibt bei Millimetern.
 DISPLAY_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "in")
+
+#: Wie eine Einheit heißt, wo sie **allein** steht (§17.1).
+#:
+#: Neben einer Zahl ist „in" eindeutig; als Antwort auf eine Frage nicht — auf
+#: Deutsch ist „in" ein Verhältniswort, und die Einheitenrückfrage bot es als
+#: Knopfbeschriftung an. Der Name sagt, was gemeint ist; das Kürzel daneben
+#: bleibt für den, der es ohnehin kennt.
+#:
+#: Nur für Beschriftungen. Der Wert bleibt überall das Kürzel — er steht in der
+#: Kennung der Handlung, in den Parametern und in der Projektdatei.
+UNIT_NAMES: Final[dict[str, TranslatableText]] = {
+    "mm": _("Millimeter (mm)"),
+    "cm": _("Zentimeter (cm)"),
+    "m": _("Meter (m)"),
+    "in": _("Zoll (in)"),
+}
 
 #: Die Einheit eines Winkels, in jeder Sprache dieselbe.
 #:

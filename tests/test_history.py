@@ -324,6 +324,29 @@ def test_repair_and_retry_rejects_an_input_that_is_no_longer_alive(history: Hist
     assert document_to_data(history.document) == before
 
 
+def test_repair_and_retry_says_no_to_an_operation_it_does_not_know(history: History) -> None:
+    """Ein Schritt aus einer fremden Fassung ist kein Programmfehler.
+
+    Eine Projektdatei kann eine Operation nennen, die dieses Register nicht
+    hat — eine neuere Fassung, ein ausgebautes Werkzeug. ``repair_targets``
+    fragt deshalb zuerst ``has``; ``repair_and_retry`` tat es nicht und griff
+    unmittelbar ``get``, also bekam der Kunde einen ``InternalError`` mit
+    Fehlerbericht statt des Satzes, der sagt, was hier nicht geht.
+    """
+    object_id = create(history)
+    history.apply(_("Gescheitert"), [OperationDraft(op="rename_object", inputs=(object_id,))])
+    failed_id = history.operations[-1].id
+    history.document.ops[-1] = dataclasses.replace(history.operations[-1], op="aus_der_zukunft")
+    before = document_to_data(history.document)
+
+    with pytest.raises(ValidationError) as caught:
+        history.repair_and_retry(failed_id)
+
+    assert caught.value.constraint == "no_repair_target"
+    assert caught.value.suggestions
+    assert document_to_data(history.document) == before
+
+
 def test_repair_and_retry_never_turns_an_exact_shell_into_triangles() -> None:
     """Aushöhlen braucht seinen exakten Körper auch beim erneuten Versuch.
 

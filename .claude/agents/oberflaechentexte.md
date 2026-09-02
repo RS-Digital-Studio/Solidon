@@ -28,8 +28,9 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 Der Text ist die Bedienoberfläche, sobald etwas unklar wird. Du schreibst ihn.
 
-Gespräch auf Deutsch. Texte deutsch **und** englisch über `tr()`, echte
-Umlaute, keine Emojis. Bezeichner im Code bleiben englisch, Docstrings und Kommentare sind deutsch.
+Gespräch auf Deutsch. Texte über `tr()` mit deutscher Quelle — jeder Katalog
+aus `app/i18n/locales/` zieht nach —, echte Umlaute, keine Emojis. Bezeichner
+im Code bleiben englisch, Docstrings und Kommentare sind deutsch.
 
 ## Der Ton
 
@@ -67,8 +68,8 @@ lässt, erschreckt ihn grundlos.
 - Weist der Prüfbericht die **Herkunft** einer Zahl aus (Schichtanalyse oder
   G-Code, direkte Berechnung oder Rückfallstufe)?
 - Steht in der Meldung eine Zahl, die der Nutzer nicht einordnen kann?
-- Deckt sich der deutsche und der englische Text — gleiche Aussage, gleiche
-  Platzhalter, gleiche Handlungen?
+- Deckt sich jeder Katalog aus `app/i18n/locales/` mit der deutschen Quelle —
+  gleiche Aussage, gleiche Platzhalter, gleiche Handlungen?
 - Typografie: „20 × 20 mm" mit echtem Malzeichen, deutsche Anführungszeichen,
   Einheiten mit schmalem Abstand.
 

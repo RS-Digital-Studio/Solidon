@@ -633,6 +633,15 @@ function referrer_host(): string
     }
     $host = strtolower((string) parse_url($referrer, PHP_URL_HOST));
 
+    // Nur ein Hostname aus Buchstaben, Ziffern, Punkt und Bindestrich wird
+    // geschrieben. `parse_url` prüft die Zeichen nicht, und der Wartungslauf
+    // (`cleanup_private_state.php`) weist jede Monatszeile mit Leer- oder
+    // Steuerzeichen als Schemafehler ab — eine einzige solche Zeile machte
+    // damit jeden weiteren Lauf rot.
+    if (preg_match('/^[a-z0-9.-]{1,80}$/D', $host) !== 1) {
+        return '';
+    }
+
     // Der eigene Name ohne Port. ``HTTP_HOST`` trägt ihn mit, sobald der
     // Server nicht auf 80 oder 443 hört — beim Ausprobieren auf dem eigenen
     // Rechner ist das die Regel, und ohne diese Zeile zählte dort jeder

@@ -413,6 +413,10 @@ def post_json_local_cancelable(
     target = urllib.parse.urlunsplit(("", "", parts.path or "/", parts.query, ""))
     answers: list[dict[str, Any]] = []
     errors: list[BaseException] = []
+    # Dieselbe Grenze wie im nicht abbrechbaren Weg: Ein Ollama, das antwortet,
+    # ist noch kein Ollama — hinter der Adresse kann ein beliebiger Dienst
+    # liegen, und ein endloser Strom füllte sonst den Arbeitsspeicher.
+    deadline = deadline_after(LOCAL_TIMEOUT_SECONDS)
 
     def request() -> None:
         try:
@@ -423,11 +427,13 @@ def post_json_local_cancelable(
                 headers={"Content-Type": "application/json", **headers},
             )
             response = connection.getresponse()
-            raw = response.read()
+            raw = read_limited(response, limit=MAX_RESPONSE_BYTES, deadline=deadline)
             if response.status >= 400:
                 raise BackendUnavailable(
                     status=response.status,
-                    detail=raw.decode("utf-8", errors="replace")[:500],
+                    # Fremder Text, also redigiert und gedeckelt — er steht
+                    # gleich in einer Meldung und im Protokoll (§33.2).
+                    detail=redact_external(raw.decode("utf-8", errors="replace"), limit=500),
                 )
             answers.append(_as_object(raw, url))
         except TimeoutError as error:
@@ -435,6 +441,12 @@ def post_json_local_cancelable(
             errors[-1].__cause__ = error
         except (OSError, http.client.HTTPException) as error:
             errors.append(BackendUnavailable(detail=str(error)))
+            errors[-1].__cause__ = error
+        except HttpBoundaryError as error:
+            # Zu große oder nicht begrenzbare Antwort: dieselbe Lage wie in
+            # :func:`post_json`, und dieselbe Antwort — ein Fehler mit
+            # Handlungsvorschlägen statt einer nackten Grenzverletzung.
+            errors.append(BackendUnavailable())
             errors[-1].__cause__ = error
         except BaseException as error:
             errors.append(error)

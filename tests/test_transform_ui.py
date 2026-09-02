@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.mesh import as_mesh_data
@@ -293,6 +295,109 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
     ops = [entry.op for entry in window.session.project.document.ops]
     assert len(ops) > before, "der Klick hat keinen Schritt erzeugt"
     assert ops[-1] == "translate_object", f"letzter Schritt: {ops[-1]}"
+
+
+def test_typing_and_then_clicking_moves_the_part_once(window: MainWindow) -> None:
+    """Tippen, dann auf „Anwenden" klicken — eine Bewegung, ein Schritt.
+
+    **Der Weg, den jeder geht, und der einzige, den die Tests bisher nicht
+    gingen.** Der Knopf nimmt beim Klick den Fokus (``StrongFocus``), und das
+    Feld verliert ihn damit, bevor der Knopf wirkt. Hing das Anwenden am
+    Verlassen des Feldes, wurde derselbe Wert zweimal angewandt: aus 5 mm
+    wurden 10 mm, aus 90° wurden 180°, und zurück brauchte es zwei Strg+Z.
+
+    Gefahren wird deshalb mit echtem Fokus und echtem Mausklick — ohne
+    ``show()`` und ``activateWindow()`` vergibt Qt offscreen gar keinen Fokus,
+    und dann prüft der Test genau das nicht, worum es geht.
+    """
+    window.resize(1600, 900)
+    window.show()
+    window.activateWindow()
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+    window.tools.activate("transform")
+    QApplication.processEvents()
+    # Danach noch einmal aktivieren: Beim Laden entsteht ein elternloser Knopf
+    # (*Auf das Bett setzen*), der offscreen selbst zum aktiven Fenster wird —
+    # und ein Feld in einem inaktiven Fenster bekommt keinen Fokus.
+    window.activateWindow()
+    QApplication.processEvents()
+
+    vorher = len(window.session.project.document.ops)
+    unterkante = min(
+        as_mesh_data(entry.mesh).bounds.minimum[2] for entry in result.scene.objects.values()
+    )
+
+    feld = window.transform_bar.dz
+    feld.setFocus()
+    QApplication.processEvents()
+    assert feld.hasFocus(), "ohne Fokus im Feld misst der Test den Fokusverlust nicht"
+    feld.lineEdit().selectAll()
+    QTest.keyClicks(feld.lineEdit(), "5")
+    QTest.mouseClick(window.transform_bar.apply, Qt.MouseButton.LeftButton)
+    window.session.wait_for_idle()
+
+    ops = [entry.op for entry in window.session.project.document.ops]
+    assert len(ops) == vorher + 1, (
+        f"ein getippter Wert und ein Klick ergaben {len(ops) - vorher} Schritte: {ops[vorher:]}"
+    )
+    gehoben = min(
+        as_mesh_data(entry.mesh).bounds.minimum[2]
+        for entry in window.session.evaluate_now().scene.objects.values()
+    )
+    assert gehoben - unterkante == pytest.approx(5.0, abs=1e-6), (
+        f"aus 5 mm wurden {gehoben - unterkante:.3f} mm — der Wert wirkte mehr als einmal"
+    )
+
+    window.session.undo()
+    window.session.wait_for_idle()
+    zurueck = min(
+        as_mesh_data(entry.mesh).bounds.minimum[2]
+        for entry in window.session.evaluate_now().scene.objects.values()
+    )
+    assert zurueck == pytest.approx(unterkante, abs=1e-6), (
+        f"nach einem Undo steht das Teil bei {zurueck:.3f} statt {unterkante:.3f} mm"
+    )
+
+
+def test_the_return_key_still_applies_the_value(window: MainWindow) -> None:
+    """Die Eingabetaste bleibt der kurze Weg — sie wirkt wie der Knopf.
+
+    Die Gegenprobe zum Test darüber: Angewandt wird auf Return und auf den
+    Knopf, nur nicht auf den Fokuswechsel dazwischen.
+    """
+    window.resize(1600, 900)
+    window.show()
+    window.activateWindow()
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    window._on_scene(result)
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+    window.tools.activate("transform")
+    QApplication.processEvents()
+    # Danach noch einmal aktivieren: Beim Laden entsteht ein elternloser Knopf
+    # (*Auf das Bett setzen*), der offscreen selbst zum aktiven Fenster wird —
+    # und ein Feld in einem inaktiven Fenster bekommt keinen Fokus.
+    window.activateWindow()
+    QApplication.processEvents()
+
+    vorher = len(window.session.project.document.ops)
+    feld = window.transform_bar.dz
+    feld.setFocus()
+    QApplication.processEvents()
+    feld.lineEdit().selectAll()
+    QTest.keyClicks(feld.lineEdit(), "5")
+    QTest.keyClick(feld, Qt.Key.Key_Return)
+    window.session.wait_for_idle()
+
+    ops = [entry.op for entry in window.session.project.document.ops]
+    assert ops[vorher:] == ["translate_object"], (
+        f"die Eingabetaste ergab {ops[vorher:]} statt genau eines Schritts"
+    )
 
 
 def test_a_typed_angle_turns_the_group_around_one_common_point(

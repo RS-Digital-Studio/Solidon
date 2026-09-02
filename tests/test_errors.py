@@ -153,6 +153,22 @@ def test_unit_question_offers_the_units() -> None:
     assert ids[:3] == ["unit:mm", "unit:cm", "unit:in"]
 
 
+def test_the_unit_buttons_are_named_and_not_abbreviated() -> None:
+    """Auf dem Knopf steht der Name der Einheit, nicht ihr Kürzel.
+
+    Neben einer Zahl ist „in" eindeutig; als Antwort auf eine Frage nicht —
+    auf Deutsch ist „in" ein Verhältniswort, und der Kunde sollte raten, was
+    der mittlere von drei Knöpfen bedeutet. Der Wert bleibt, wie er ist: die
+    Kennung trägt ihn (``unit:in``), die Beschriftung nennt ihn.
+    """
+    error = UnitUnknownError()
+    labels = [str(action.label) for action in error.suggestions[:3]]
+
+    assert labels == ["Millimeter (mm)", "Zentimeter (cm)", "Zoll (in)"], (
+        f"die Einheiten stehen als Kürzel auf den Knöpfen: {labels}"
+    )
+
+
 def test_boolean_failure_keeps_stages_and_seed() -> None:
     error = BooleanFailedError(attempted=("direct", "welded"), seed=20260727)
     assert error.attempted == ("direct", "welded")
@@ -370,6 +386,30 @@ def test_a_range_constraint_really_reads_like_one() -> None:
         "„zwischen drei und vierundsechzig Ecken“ nennt beide Grenzen — "
         "der Titel darf nicht vager sein als das Detail"
     )
+
+
+def test_no_action_label_ends_in_a_full_stop() -> None:
+    """Auf einem Knopf steht keine Punktuation — er ist keine Aussage.
+
+    Fünf Beschriftungen endeten mit einem Punkt (``Nur exportieren und selbst
+    slicen.``, ``Ausgabe des Slicers ansehen.``, ``Maschinenprofil prüfen.``,
+    ``Einen anderen Slicer auswählen.``, ``Dreiecke verringern.``), die
+    dreißig übrigen nicht. Nebeneinander im selben Dialog sieht das aus wie
+    zwei Sorten Vorschlag; und der Punkt reist in jeden der fünf Kataloge mit,
+    wo ihn niemand mehr zurücknimmt.
+
+    Gemessen wird über alle Handlungen des Moduls, nicht über eine Liste: Die
+    nächste kommt dazu, ohne dass jemand hier nachträgt.
+    """
+    from app.core.errors import Action
+
+    offenders = {
+        name: str(entry.label)
+        for name in dir(errors)
+        if isinstance(entry := getattr(errors, name), Action) and str(entry.label).endswith(".")
+    }
+
+    assert not offenders, f"Knopfbeschriftungen mit Schlusspunkt: {offenders}"
 
 
 def test_a_suggestion_has_to_fit_the_error() -> None:

@@ -69,7 +69,7 @@ from app.core.types import (
     SolvedSketch,
 )
 from app.core.units import EPS_DISPLAY
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
 from app.ui import cursors, icons, style
 from app.ui.labels import LengthSpin, length, localised
 from app.ui.leash import stop_watching_the_dying, weak_slot
@@ -218,18 +218,23 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
 #: Die Rollen kommen aus dem Docstring von ``SketchElement``: Linie hat Anfang
 #: und Ende, Kreis Mitte und einen Punkt auf dem Rand, Bogen Mitte, Anfang und
 #: Ende. Der Spline hat keine feste Punktzahl und zählt deshalb durch.
-_ELEMENT_NAMES: Final[dict[SketchElementKind, str]] = {
-    "point": "Punkt",
-    "line": "Linie",
-    "circle": "Kreis",
-    "arc": "Bogen",
-    "spline": "Kurve",
+#:
+#: Als ``_()``-Literale und nicht als nackte Zeichenketten mit ``tr()``
+#: darüber: der Extraktor liest den Quelltext, und ``tr(variable)`` sieht er
+#: nicht. Die fünf Namen standen nur zufällig im Katalog, weil dieselben Wörter
+#: anderswo als Literal vorkommen — fällt dort eines weg, ist dieses hier stumm.
+_ELEMENT_NAMES: Final[dict[SketchElementKind, TranslatableText]] = {
+    "point": _("Punkt"),
+    "line": _("Linie"),
+    "circle": _("Kreis"),
+    "arc": _("Bogen"),
+    "spline": _("Kurve"),
 }
 
 
 def _element_name(kind: SketchElementKind, number: int) -> str:
     """„Linie 2" — der Name eines Elements, je Art durchgezählt."""
-    return f"{tr(_ELEMENT_NAMES[kind])} {number}"
+    return f"{_ELEMENT_NAMES[kind]} {number}"
 
 
 def _point_role(kind: SketchElementKind, position: int) -> str:

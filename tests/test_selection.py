@@ -1005,6 +1005,55 @@ def test_a_drag_moves_every_selected_body(window: MainWindow) -> None:
     )
 
 
+def test_two_drags_in_a_row_are_one_step_in_the_history(window: MainWindow) -> None:
+    """Ziehen, nachsehen, nachziehen — eine Absicht, ein Eintrag (§15.5, P9).
+
+    **Die Bündelung war nur am Kern geprüft** (``tests/test_bundling.py``), und
+    das ließ die Hälfte offen: Ob das Angebot ``bundle=True`` aus dem Fenster
+    überhaupt bei der Geschichte ankommt — und ob der zweite Zug dort beim
+    ersten landet —, entscheidet sich auf diesem Weg und nirgends sonst.
+
+    Gemessen an beidem, wie im Kern: an der Zahl der Schritte und an der Lage.
+    Nur zu zählen ließe offen, ob der zweite Zug angekommen ist; nur zu messen
+    ließe offen, ob er einen eigenen Eintrag kostete.
+    """
+    from app.ui.viewport import TransformSteps
+
+    result = window.session.last_result
+    assert result is not None
+    body = next(iter(result.scene.objects))
+    window.object_tree.select_object(body)
+    vorher = len(window.session.project.document.transactions)
+    anfang = centre_of(window, body)
+
+    window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+    window._on_transform_dragged(TransformSteps(offset=(5.0, 0.0, 0.0)))
+    window.session.wait_for_idle()
+
+    schritte = [one.title for one in window.session.project.document.transactions]
+    assert len(schritte) == vorher + 1, (
+        f"zwei Züge hintereinander ergaben {len(schritte) - vorher} Schritte: {schritte}"
+    )
+    mitte = centre_of(window, body)
+    assert mitte[0] - anfang[0] == pytest.approx(10.0, abs=1e-6), (
+        f"der zweite Zug ist nicht angekommen: {mitte[0] - anfang[0]:.3f} mm statt 10"
+    )
+
+    window.session.undo()
+    window.session.wait_for_idle()
+
+    zurueck = centre_of(window, body)
+    assert zurueck[0] == pytest.approx(anfang[0], abs=1e-6), (
+        f"ein Strg+Z ließ das Teil bei {zurueck[0]:.3f} statt {anfang[0]:.3f} mm stehen — "
+        "es nimmt den letzten Zug zurück statt der Handlung"
+    )
+    assert len(window.session.project.document.transactions) == vorher, (
+        "nach einem Undo steht noch ein Teil des Bündels im Verlauf: "
+        f"{[one.title for one in window.session.project.document.transactions]}"
+    )
+
+
 def test_turning_several_bodies_turns_them_as_a_group(window: MainWindow) -> None:
     """Zwei Teile gewählt, einmal gedreht — die Gruppe dreht, nicht jeder für sich.
 

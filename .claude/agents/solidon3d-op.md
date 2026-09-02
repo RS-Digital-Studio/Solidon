@@ -55,7 +55,8 @@ Register, ob es die Op oder eine sehr ähnliche schon gibt.
 6. Befunde als `findings` zurückgeben, nicht selbst protokollieren
 7. Geometrietest gegen den Korpus in `tests/data/` — **zuerst der Test**, dann
    die Umsetzung
-8. Texte über `tr()`, deutsch und englisch in `app/i18n/locales/`
+8. Texte über `tr()` — deutsche Quelle, und jeder Katalog aus
+   `app/i18n/locales/` zieht nach
 
 ## Woran es meistens scheitert
 

@@ -855,6 +855,7 @@ def test_the_slot_limit_is_one_number_not_three() -> None:
 
 #: Zahlwörter, wie die Regeldateien sie schreiben — Ziffern stehen dort nicht.
 _ZAHLWORT: Final[dict[str, int]] = {
+    "elf": 11,
     "zwölf": 12,
     "zwanzig": 20,
     "sechsundzwanzig": 26,
@@ -912,4 +913,64 @@ def test_the_rule_file_counts_the_caveats_it_claims() -> None:
     assert genannt_mit == len(mit_caveat), (
         f"oberflaeche.md nennt {genannt_mit} mit caveat, gezählt sind {len(mit_caveat)} — "
         "den Satz im Abschnitt „Eine Grenze steht dort, wo gewählt wird“ nachziehen"
+    )
+
+
+def test_the_rule_files_count_the_operations_parameters_and_tools_they_claim() -> None:
+    """Dieselbe Klammer wie darüber, um drei weitere Zahlen.
+
+    Gemessen am 02.09.2026: `oberflaeche.md` nannte „457 Parameter der 86
+    Operationen", `agentenschicht.md` „90 Operationen und elf
+    Zusatzwerkzeuge" und „90 Operationen, 101 Werkzeuge". Das Register hatte
+    95 Operationen mit 581 Parametern, der Agent 106 Werkzeuge — drei Sätze,
+    zwei Dateien, alle plausibel und alle falsch. Wer eine Operation oder ein
+    Werkzeug hinzufügt, zieht die Sätze nach oder bekommt einen roten Lauf.
+    """
+    from app.core.agent.tools import EXTRA_TOOLS
+    from app.core.agent.tools import tool_schemas as agent_tool_schemas
+
+    rules = Path(__file__).resolve().parent.parent / ".claude" / "rules"
+    oberflaeche = (rules / "oberflaeche.md").read_text(encoding="utf-8")
+    agentenschicht = (rules / "agentenschicht.md").read_text(encoding="utf-8")
+
+    parameter = re.search(r"(\d+) Parameter der (\d+)\s+Operationen", oberflaeche)
+    heute = re.search(
+        r"heute sind es (\d+)\s+Operationen und\s+([a-zäöüß]+)\s+Zusatzwerkzeuge", agentenschicht
+    )
+    stand = re.search(
+        r"Stand \d\d\.\d\d\.\d{4}: (\d+) Operationen, (\d+) Werkzeuge", agentenschicht
+    )
+    assert parameter, "der Satz „… Parameter der … Operationen“ steht nicht mehr in oberflaeche.md"
+    assert heute, "der Satz „heute sind es … Operationen und … Zusatzwerkzeuge“ fehlt"
+    assert stand, "die Zeile „Stand …: … Operationen, … Werkzeuge“ fehlt in agentenschicht.md"
+    genannt_zusatz = _ZAHLWORT.get(heute.group(2).lower())
+    assert genannt_zusatz is not None, (
+        f"unbekanntes Zahlwort in agentenschicht.md: {heute.group(2)!r} — in _ZAHLWORT eintragen"
+    )
+
+    load_operations()
+    alle = REGISTRY.all()
+    assert alle, "leeres Register — dann prüft dieser Test nichts"
+    parameter_gesamt = sum(len(spec.params.spec()) for spec in alle)
+    werkzeuge = len(agent_tool_schemas())
+
+    assert int(parameter.group(2)) == len(alle), (
+        f"oberflaeche.md nennt {parameter.group(2)} Operationen, das Register hat {len(alle)}"
+    )
+    assert int(parameter.group(1)) == parameter_gesamt, (
+        f"oberflaeche.md nennt {parameter.group(1)} Parameter, gezählt sind {parameter_gesamt}"
+    )
+    assert int(heute.group(1)) == len(alle), (
+        f"agentenschicht.md nennt heute {heute.group(1)} Operationen, das Register hat {len(alle)}"
+    )
+    assert genannt_zusatz == len(EXTRA_TOOLS), (
+        f"agentenschicht.md nennt {genannt_zusatz} Zusatzwerkzeuge, EXTRA_TOOLS hat "
+        f"{len(EXTRA_TOOLS)}"
+    )
+    assert int(stand.group(1)) == len(alle), (
+        f"der Stand in agentenschicht.md nennt {stand.group(1)} Operationen, es sind {len(alle)}"
+    )
+    assert int(stand.group(2)) == werkzeuge, (
+        f"der Stand in agentenschicht.md nennt {stand.group(2)} Werkzeuge, tool_schemas() hat "
+        f"{werkzeuge}"
     )

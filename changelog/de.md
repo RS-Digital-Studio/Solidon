@@ -50,21 +50,21 @@ Nutzen da und sonst nichts.
 - Der Startbildschirm bewegt die Auswahl nicht mehr ungefragt und lässt sich vollständig mit Maus und Tastatur bedienen.
 - Die Einstiege *Neu*, *Öffnen* und *Beispiele* sind klarer geordnet und beschreiben bereits vor dem Öffnen, wohin sie führen.
 - Rückmeldung und freiwillige Unterstützung sind direkt vom Startbildschirm erreichbar und auch mit Tastatur und Hilfstechniken bedienbar.
-- Chat und Prüfbericht bleiben selbst bei geringer Fensterhöhe gleichzeitig benutzbar.
-- Die obere Werkzeugzeile bleibt bei geöffneten Projekten und schmalen Fenstern sichtbar, statt aus dem Arbeitsbereich zu rutschen.
+- Der Chat bleibt auch bei geringer Fensterhöhe benutzbar: Die Eingabe steht fest unten, der Inhalt rollt.
+- Die obere Werkzeugleiste bleibt bei geöffneten Projekten und schmalen Fenstern sichtbar, statt aus dem Arbeitsbereich zu rutschen.
 - Ein neues Zeichenbeispiel führt direkt in den Skizzenweg und ergänzt die vorhandenen Beispielprojekte.
 
 ### Oberfläche und Bedienung
 
 - Menüs besitzen deutlich sichtbare Überschriften und einheitlich ausgerichtete Symbolspalten.
 - Die Befehlsübersicht richtet Kürzel und Erklärungen sauber aus, sodass lange Einträge schneller überflogen werden können.
-- Umfangreiche Dialoge verwenden einheitliche Spalten und nutzen breite Fenster mit übersichtlichen Zweispalten-Ansichten.
+- Umfangreiche Dialoge verwenden einheitliche Spalten und Feldbreiten.
 - Die frühere Sammelseite für Haftung, Rückzug und Filament ist in kleinere, logisch benannte Einstellungsbereiche aufgeteilt.
 - Alle 56 Druckeinstellungen lassen sich über ihre sichtbaren deutschen Bezeichnungen durchsuchen.
 - Die Suche versteht zusätzlich 146 geläufige Begriffe aus Slicern, darunter *perimeters* und *wall loops*.
 - Zahlenfelder reagieren zuverlässig auf Pfeile, Schrittweite und Rundung und verändern Werte nicht mehr überraschend.
-- Schieberegler besitzen ein einheitliches Verhalten und bleiben auch bei feinen Wertebereichen präzise bedienbar.
-- Nur das aktive Werkzeug trägt dauerhaft die Akzentfarbe; ruhende Bedienelemente treten optisch zurück.
+- Schieberegler haben ein einheitliches Aussehen mit gut greifbarem Griff.
+- Die Akzentfarbe bleibt dem Hauptknopf vorbehalten; das aktive Werkzeug ist an seiner Kante erkennbar, ruhende Bedienelemente treten optisch zurück.
 - Sehr kurze Berechnungen laufen ohne flackernde Anzeige, mittlere zeigen einen Wartezeiger und lange zusätzlich Fortschritt und Abbruch.
 - Werkzeughinweise bleiben bei ausreichender Breite in einer Zeile und brechen bei schmalen Fenstern kontrolliert um.
 - Vorschaubilder im Objektbaum sind groß genug, um Formen tatsächlich zu erkennen.
@@ -82,7 +82,7 @@ Nutzen da und sonst nichts.
 - Mehrere ausgewählte Körper verwenden bei exakter Drehung und Skalierung einen gemeinsamen Mittelpunkt.
 - Escape geht beim Zeichnen genau eine Stufe zurück: aktuelle Linie, aktuelles Werkzeug und erst danach die ganze Skizze.
 - Wiederholen funktioniert nun auch während einer geöffneten Skizze.
-- Eine leere Skizze zeigt einen anklickbaren Hinweis, der unmittelbar zum Rechteckwerkzeug führt.
+- Eine leere Skizze zeigt einen anklickbaren Hinweis, der die fertigen Grundformen öffnet.
 - Der Knopf für die Grundformen heißt nach dem, was ein Klick darauf tut. Die übrigen Formen stehen hinter dem Pfeil daneben.
 - Das Schnittwerkzeug öffnet im Körper statt in einer leeren Ansicht außerhalb des Modells.
 - Vorder-, Seiten-, Ober- und Gegenansichten rasten zuverlässig auf allen sechs Achsen ein.
@@ -99,8 +99,6 @@ Nutzen da und sonst nichts.
 - Eine zusammenhängende Nutzerhandlung lässt sich mit genau einmal Rückgängig vollständig zurücknehmen.
 - Verlaufseinträge zeigen ihre Art und eine eindeutige Schrittnummer.
 - Heruntergeladene und importierte Modelle können unmittelbar geschnitten werden.
-- Geschützte Flächen werden türkis und schraffiert dargestellt und bleiben dadurch auch ohne Farberkennung verständlich.
-- Automatisches und manuelles Teilen berücksichtigen geschützte Sichtflächen bei der Wahl der Schnittstelle.
 - Ein Klick auf einen Prüfhinweis führt zuverlässig zur betroffenen Stelle, zum Körper oder zum passenden Verlaufsschritt.
 - Beim Anspringen eines Fundorts rahmt die Kamera das Ziel ein, statt in einer grauen Nahaufnahme zu landen.
 - Benannte Flächen und Hinweise wandern beim Anordnen und Platzieren zusammen mit ihrem Körper.
@@ -141,7 +139,7 @@ Nutzen da und sonst nichts.
 - Aktionsknöpfe aus dem Prüfbericht halten ein bereits geschlossenes Fenster nicht mehr unbemerkt im Speicher.
 - Mitgelieferte Bausteine und die Freischaltung werden beim Start ohne gegenseitiges Blockieren geladen.
 - Die 3D-Ansicht wird vor dem Fenster sauber beendet; dadurch schließen Windows-, Linux- und macOS-Fenster zuverlässiger.
-- Fensterrahmen und Titelleiste passen sich sicher an die jeweilige Plattform an.
+- Die Titelleiste folgt unter Windows 11 dem Farbschema der Anwendung; andere Plattformen bleiben unverändert.
 - Standardschaltflächen wie Öffnen, Speichern und Abbrechen wechseln ihre Sprache sofort, ohne Neustart.
 - Automatisch erzeugte Körper- und Bausteinnamen wechseln auch nach bereits verwendeten zwischengespeicherten Inhalten korrekt die Sprache.
 - Übersetzungen und Berichtswerte sind in Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch auf demselben Stand.
@@ -150,7 +148,7 @@ Nutzen da und sonst nichts.
 
 - Der Chat begrüßt mit seinem konkreten Zweck und startet nicht mehr mit einer leeren Fläche oder technischen Modellbegriffen.
 - Technische Token-Zähler wurden aus der normalen Kundenoberfläche entfernt.
-- Der Assistent erkennt und gruppiert gleiche Formdetails, statt jedes Vorkommen ohne Zusammenhang einzeln zu behandeln.
+- Gleichlautende Hinweise zu verlorenen Formdetails erreichen den Assistenten gezählt statt einzeln.
 - Der Erzeugen-Dialog macht aus Text oder Bild über ein lokales ComfyUI ein Modell und übernimmt es in dieselbe bearbeitbare Szene.
 - Der mitgelieferte TripoSG-Ablauf erzeugt eine GLB, die anschließend automatisch repariert, auf Maß gebracht und auf Druckbarkeit geprüft wird.
 - Lokales Ollama und lokales ComfyUI rechnen nacheinander, damit sie die Grafikkarte nicht gleichzeitig belegen.

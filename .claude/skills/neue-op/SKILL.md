@@ -3,8 +3,8 @@ name: neue-op
 description: >
   Führt durch das vollständige Anlegen einer neuen Operation in Solidon:
   Registereintrag, Parameterschema, Umsetzung gegen manifold3d/trimesh,
-  Rückfallkette, Geometrietest gegen den Korpus und Übersetzungen in beiden
-  Sprachen.
+  Rückfallkette, Geometrietest gegen den Korpus und Übersetzungen in jedem
+  Katalog aus app/i18n/locales/.
 argument-hint: "[was die Operation tun soll]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
@@ -42,7 +42,8 @@ Zwei bestehende Ops im selben Gebiet lesen, bevor die erste Zeile entsteht.
    nach Stufe 2.
 7. **Befunde** als `findings` zurückgeben, nicht selbst protokollieren. Jeder
    Fehlerpfad trägt einen Handlungsvorschlag.
-8. **Texte** über `tr()` in beiden Sprachdateien.
+8. **Texte** über `tr()` — deutsche Quelle, und jeder Katalog aus
+   `app/i18n/locales/` zieht nach.
 
 ## Abschluss
 

@@ -112,8 +112,13 @@ class TransformBar(QWidget):
         # verlassen ergäbe drei Schritte im Verlauf für eine Bewegung; der
         # Knopf macht daraus einen. Die Eingabetaste löst ihn mit aus — wer
         # eine Zahl tippt, will sie anwenden, nicht erst zielen.
+        #
+        # **Die Eingabetaste, und nur sie** — ``editingFinished`` feuert auch
+        # beim Fokusverlust, und der Knopf daneben nimmt den Fokus beim Klick.
+        # Tippen und klicken wandte den Wert damit zweimal an: aus 5 mm wurden
+        # 10 mm, aus 90° 180°, und zurück brauchte es zwei Strg+Z.
         for spin in (self.dx, self.dy, self.dz, self.angle_value, self.factor, self.largest):
-            spin.editingFinished.connect(self._maybe_apply_on_return)
+            spin.lineEdit().returnPressed.connect(self._maybe_apply_on_return)
 
         self.snap = self._snap_button()
 

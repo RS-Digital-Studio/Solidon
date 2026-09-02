@@ -32,10 +32,21 @@ SCRIPT = (
 
 BASH = shutil.which("bash")
 
-pytestmark = pytest.mark.skipif(
-    BASH is None or not SCRIPT.exists(),
-    reason="ohne bash oder ohne das Skript gibt es nichts zu prüfen",
-)
+pytestmark = pytest.mark.skipif(BASH is None, reason="ohne bash gibt es nichts zu prüfen")
+
+
+def test_the_script_lies_where_the_house_rules_point() -> None:
+    """Ein Skip über das fehlende Skript hätte einen Umzug still grün gemacht.
+
+    ``CLAUDE.md`` und `/pruefen` nennen den Pfad wörtlich; wer das Skript
+    verschiebt oder umbenennt, bekommt hier einen roten Test statt einer
+    Datei voller Skips — und die übrigen Prüfungen darunter melden dann nicht
+    „übersprungen", sondern scheitern an einer Ursache, die dieser Test nennt.
+    """
+    assert SCRIPT.exists(), (
+        f"{SCRIPT} fehlt — den Pfad in CLAUDE.md, tests/CLAUDE.md und "
+        ".claude/skills/pruefen/SKILL.md nachziehen, oder das Skript zurücklegen"
+    )
 
 
 def ask(question: str, log: str, tmp_path: Path) -> bool:

@@ -103,8 +103,8 @@ Eine als **Demo** bezeichnete Version (Versionsnummer 0.x) überlassen wir
 Ihnen unentgeltlich und befristet. Sie läuft **vollständig** — keine
 Wasserzeichen, keine Exportsperre, keine gesperrten Funktionen — bis zu dem
 Tag, den die jeweilige Anwendung selbst nennt: in der Statuszeile, im
-Über-Dialog und auf der Website. Die derzeit veröffentlichte Demo nennt den
-30. Oktober 2026. Eine spätere 0.x-Demo kann einen eigenen Stichtag nennen.
+Über-Dialog und auf der Website. Die derzeit veröffentlichte Demo nennt den 30. Oktober 2026.
+Eine spätere 0.x-Demo kann einen eigenen Stichtag nennen.
 
 **Danach lässt sich die Demo nicht mehr starten.** Das ist kein Mangel,
 sondern ihr Zweck: Sie zeigt das Programm für eine begrenzte Zeit, sie ist
@@ -232,7 +232,7 @@ den folgenden, sichtbaren Wegen:
   lokal; bei einer selbst eingetragenen entfernten Ollama-Adresse gehen sie an
   diesen anderen Rechner;
 * die **Rückmeldung an den Support**, die Sie selbst absenden — über „Hilfe →
-  Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo einmal
+  Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo bis zu dreimal
   von sich aus anbietet. Beide Wege führen in denselben Dialog. Übertragen
   wird, was er vor dem Senden anzeigt — Ihr Text und die Programmversion, dazu
   nur die dort angehakten Anhänge (Bildschirmfoto, Protokoll, laufende

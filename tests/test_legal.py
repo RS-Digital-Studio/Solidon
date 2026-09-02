@@ -347,3 +347,22 @@ def test_the_withdrawal_form_survives_the_converter() -> None:
     )
     assert broken != plain, "das Fehlerbild ließ sich nicht nachstellen"
     assert "\\" in broken, "die Gegenprobe erzeugt kein Fehlerbild, das das Verbot fängt"
+
+
+def test_a_date_at_a_line_break_does_not_become_a_numbered_list() -> None:
+    """„nennt den\n30. Oktober 2026." stand im Vertrag als „1. Oktober 2026".
+
+    Der Umbruch vor dem Datum ließ die Zahl am Zeilenanfang stehen, und der
+    Erzeuger las sie als Aufzählung — der Browser zählt eine ``<ol>`` ab eins.
+    Eine Zahl mit Punkt beginnt eine Liste nur, wenn eine läuft, sie mit 1
+    beginnt oder kein Absatz offen ist (so hält es auch CommonMark).
+    """
+    from make_legal import body_html
+
+    broken = "Die Demo nennt den\n30. Oktober 2026. Danach nicht mehr.\n"
+    html = body_html(broken, True)
+    assert "<ol>" not in html
+    assert "30. Oktober 2026" in html
+
+    real_list = "Es gilt:\n\n1. erstens\n2. zweitens\n"
+    assert body_html(real_list, True).count("<li>") == 2

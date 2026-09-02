@@ -32,10 +32,12 @@ from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from pathlib import Path
 from typing import Any, Final, cast
+from urllib.parse import urlsplit, urlunsplit
 
 #: Nur Werte, die ein gewöhnliches lokales Programm für Betriebssystem,
-#: Sprache, Benutzerordner oder grafische Sitzung braucht. Proxy-Zugangsdaten,
-#: API-Schlüssel, Python-Suchpfade und Loader-Eingriffe reisen nicht mit.
+#: Sprache, Benutzerordner, grafische Sitzung oder den Weg ins Netz braucht.
+#: Proxy-Zugangsdaten, API-Schlüssel, Python-Suchpfade und Loader-Eingriffe
+#: reisen nicht mit.
 _ENVIRONMENT_NAMES: Final = (
     "PATH",
     "PATHEXT",
@@ -59,6 +61,37 @@ _ENVIRONMENT_NAMES: Final = (
     "XDG_CONFIG_HOME",
     "XDG_CACHE_HOME",
     "__CF_USER_TEXT_ENCODING",
+    # **Wie der Rechner ins Netz kommt** — ohne diese Namen erreicht im
+    # Firmennetz weder ``pip`` noch ``winget`` seinen Server, und die
+    # Nachinstallation (§36) endet an einem Zeitlimit ohne Grund. Die
+    # Kleinschreibung steht daneben, weil sie auf Unix die übliche ist und
+    # ``pip`` beide liest; wer nur die großen mitgibt, hat den Fehler auf
+    # Linux und macOS behoben gelassen.
+    #
+    # **Zugangsdaten reisen trotzdem nicht mit**: Was wie eine Adresse
+    # aussieht, geht durch :func:`_without_credentials`.
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "NO_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+    "SSL_CERT_FILE",
+    "REQUESTS_CA_BUNDLE",
+    "PIP_INDEX_URL",
+)
+
+#: Welche dieser Werte eine Adresse sind und damit ``benutzer:kennwort@``
+#: tragen können. ``NO_PROXY`` steht nicht dabei — es ist eine Liste von
+#: Rechnernamen, und ein ``@`` darin bedeutet nichts.
+_URL_ENVIRONMENT_NAMES: Final = frozenset(
+    {
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "PIP_INDEX_URL",
+    }
 )
 
 #: Nur Programme, deren Oberfläche der Nutzer ausdrücklich übernimmt,
@@ -70,6 +103,23 @@ _GRAPHICAL_ENVIRONMENT_NAMES: Final = (
     "XAUTHORITY",
     "XDG_RUNTIME_DIR",
     "DBUS_SESSION_BUS_ADDRESS",
+)
+
+#: Was ein Aufruf braucht, der den Sandkasten verlässt — und sonst niemand.
+#:
+#: Läuft Solidon selbst als Flatpak, legt ``discover.on_host`` vor jeden Start
+#: ein ``flatpak-spawn --host``. Das spricht über den Sitzungsbus mit dem
+#: Flatpak-Dienst: Ohne die Adresse des Busses und das Laufzeitverzeichnis, in
+#: dem sein Socket liegt, kommt der Aufruf nicht heraus und meldet, den Portal
+#: nicht zu finden. Beide Namen stehen zwar auch in den grafischen Befugnissen
+#: — nur bekommt die kein begrenzter Lauf, und genau die begrenzten Läufe sind
+#: es, die im Linux-Paket Slicer, Paketmanager und Suchläufe starten.
+#:
+#: **Zugangsdaten sind das keine**: der eine Wert ist eine Socket-Adresse, der
+#: andere ein Pfad.
+_SANDBOX_BRIDGE_NAMES: Final = (
+    "DBUS_SESSION_BUS_ADDRESS",
+    "XDG_RUNTIME_DIR",
 )
 
 DEFAULT_OUTPUT_LIMIT: Final = 1024 * 1024
@@ -96,15 +146,57 @@ class ProcessCancelled(subprocess.SubprocessError):
     """Der Aufrufer hat den begrenzten Prozesslauf abgebrochen."""
 
 
+def _without_credentials(value: str) -> str:
+    """Dieselbe Adresse, aber ohne ``benutzer:kennwort@``.
+
+    Ein Firmenproxy steht regelmäßig als ``http://name:kennwort@proxy:8080`` in
+    der Umgebung. Die **Adresse** braucht das fremde Programm, die Zugangsdaten
+    nicht — und ein Unterprozess ist genau der Ort, an dem sie sonst hängen
+    bleiben: in der Prozessliste, im Absturzbericht und im Protokoll des
+    fremden Programms.
+
+    Was keine Adresse ist, bleibt unverändert.
+    """
+    parts = urlsplit(value)
+    if not parts.scheme or "@" not in parts.netloc:
+        return value
+    host = parts.netloc.rsplit("@", 1)[1]
+    return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
+
+
+def _in_sandbox() -> bool:
+    """Läuft Solidon selbst in einem Flatpak?
+
+    Der Import steht im Rumpf, weil ``discover`` dieses Modul benutzt — oben
+    wäre es ein Kreis. Zur Aufrufzeit ist es geladen.
+    """
+    from app.core.discover import in_flatpak
+
+    return in_flatpak()
+
+
 def trusted_environment(
     source: Mapping[str, str] | None = None,
     *,
     graphical: bool = False,
 ) -> dict[str, str]:
-    """Die kleinste gemeinsame Umgebung für lokale Fremdprogramme."""
+    """Die kleinste gemeinsame Umgebung für lokale Fremdprogramme.
+
+    Im eigenen Flatpak kommen die zwei Namen dazu, ohne die kein Aufruf den
+    Sandkasten verlässt (:data:`_SANDBOX_BRIDGE_NAMES`). Adressen werden dabei
+    von Zugangsdaten befreit (:func:`_without_credentials`).
+    """
     available = os.environ if source is None else source
     names = _ENVIRONMENT_NAMES + (_GRAPHICAL_ENVIRONMENT_NAMES if graphical else ())
-    return {name: available[name] for name in names if name in available}
+    if _in_sandbox():
+        names += _SANDBOX_BRIDGE_NAMES
+    chosen: dict[str, str] = {}
+    for name in names:
+        if name not in available:
+            continue
+        value = available[name]
+        chosen[name] = _without_credentials(value) if name in _URL_ENVIRONMENT_NAMES else value
+    return chosen
 
 
 def trusted_cwd() -> Path:

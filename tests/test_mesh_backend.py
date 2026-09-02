@@ -1680,7 +1680,7 @@ def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
     **Der Text bleibt, wie er ist, und die Konstante wird zur Zusicherung.**
     Die Zahl in die Message-ID hineinzuformatieren wäre der andere Weg —
     ``NEEDED_GIGABYTES`` macht es zwei Dutzend Zeilen weiter genau so
-    (``.format(noetig=…)``) und ist damit das Vorbild. Hier kostet er fünf
+    (``.format(needed=…)``) und ist damit das Vorbild. Hier kostet er fünf
     Übersetzungen für zwei Sätze, und die kann diese Sitzung nicht liefern; ein
     Test kostet nichts und fängt dasselbe.
     """
@@ -1783,17 +1783,10 @@ def test_every_request_goes_to_the_normalised_address() -> None:
 # --- Abbrechen wirkt, solange gewartet wird ----------------------------------------
 
 
-def test_a_running_generation_can_be_cancelled() -> None:
-    """**Bis zu einer Stunde war eine laufende Erzeugung nicht abbrechbar.**
-
-    Der Dialog wartet beim Schließen fünfzig Millisekunden auf seinen Arbeiter
-    und lässt dann los; der Arbeiter rechnete weiter und meldete sein Ergebnis
-    an ein Fenster, das es nicht mehr gab. Gefragt wird jetzt in der
-    Warteschleife — dort wird die Zeit verbracht.
-    """
+def _cancel_and_collect(server: Comfy) -> list[tuple[str, dict]]:
+    """Bricht einen laufenden Auftrag ab und gibt zurück, was dabei gesendet wurde."""
     from app.core.errors import OperationCancelled
 
-    server = Comfy(ready_after=99)
     generator = ComfyBackend(transport=server, poll_seconds=0.0)
     versuche = {"n": 0}
 
@@ -1804,13 +1797,64 @@ def test_a_running_generation_can_be_cancelled() -> None:
     with pytest.raises(OperationCancelled):
         generator.text_to_mesh("ein Halter", cancelled=abgebrochen)
 
-    posts = [
+    return [
         (url.rsplit("/", 1)[-1], json.loads((body or b"{}").decode("utf-8")))
         for url, body in server.posts
     ]
+
+
+def test_a_running_generation_can_be_cancelled() -> None:
+    """**Bis zu einer Stunde war eine laufende Erzeugung nicht abbrechbar.**
+
+    Der Dialog wartet beim Schließen fünfzig Millisekunden auf seinen Arbeiter
+    und lässt dann los; der Arbeiter rechnete weiter und meldete sein Ergebnis
+    an ein Fenster, das es nicht mehr gab. Gefragt wird jetzt in der
+    Warteschleife — dort wird die Zeit verbracht.
+
+    Unterbrochen wird, weil dieser Auftrag in ``queue_running`` steht: Der
+    Test daneben zeigt den wartenden Fall, in dem ``/interrupt`` ausbleibt.
+    """
+
+    class Running(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            # Nur die Frage nach der Schlange wird beantwortet; das Löschen ist
+            # ein POST auf dieselbe Adresse und gehört in die Liste der Sendungen.
+            if url.endswith("/queue") and body is None:
+                return json.dumps(
+                    {"queue_running": [[0, "job-1", {}]], "queue_pending": []}
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    posts = _cancel_and_collect(Running(ready_after=99))
+
     assert ("queue", {"delete": ["job-1"]}) in posts
     assert ("interrupt", {"prompt_id": "job-1"}) in posts
     assert ("free", {"unload_models": True, "free_memory": True}) in posts
+
+
+def test_cancelling_a_waiting_job_leaves_a_foreign_job_alone() -> None:
+    """**``/interrupt`` wählt nicht aus — es beendet, was gerade rechnet.**
+
+    Das ``prompt_id`` im Rumpf sieht wie eine Auswahl aus und ist keine.
+    Unbedingt geschickt, traf der Abbruch auf einem geteilten ComfyUI den
+    fremden Auftrag, der gerade lief, während der eigene unversehrt in der
+    Schlange stand. Wartet der eigene Auftrag nur, genügt darum ``delete``.
+    """
+
+    class Queued(Comfy):
+        def __call__(self, url: str, body: bytes | None, headers: dict[str, str]) -> bytes:
+            if url.endswith("/queue") and body is None:
+                return json.dumps(
+                    {"queue_running": [[0, "fremd", {}]], "queue_pending": [[1, "job-1"]]}
+                ).encode()
+            return super().__call__(url, body, headers)
+
+    posts = _cancel_and_collect(Queued(ready_after=99))
+
+    assert ("queue", {"delete": ["job-1"]}) in posts
+    assert not [entry for entry in posts if entry[0] == "interrupt"], (
+        "der eigene Auftrag wartete nur — unterbrochen worden wäre der fremde"
+    )
 
 
 def test_a_successful_local_generation_releases_comfy_models() -> None:

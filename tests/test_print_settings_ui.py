@@ -2560,7 +2560,7 @@ def test_a_body_without_anything_falls_back_and_says_so(
 
 
 def test_the_search_finds_a_setting_by_its_words(qt_app: QApplication, session: Session) -> None:
-    """56 Einstellungen in acht Gruppen, und die Geste, die jeder Slicer hat.
+    """56 Einstellungen in zehn Gruppen, und die Geste, die jeder Slicer hat.
 
     Gesucht wird über das, was der Kunde liest: Titel, Einheit, Gruppenname
     und den Satz darunter. Der **Satz** gehört ausdrücklich dazu, und das ist
@@ -2639,6 +2639,25 @@ def test_the_search_also_knows_the_name_from_the_slicer(
     assert len(mit_namen) == len(FIELDS), (
         f"nur {len(mit_namen)} von {len(FIELDS)} Feldern haben einen Slicer-Namen"
     )
+
+
+def test_the_search_reads_an_underscore_as_a_space(qt_app: QApplication, session: Session) -> None:
+    """„wall loops" ist derselbe Schlüssel wie ``wall_loops``.
+
+    Der Schlüssel steht mit Unterstrich in der Tabelle, gelesen und
+    ausgesprochen wird er mit Leerzeichen — und wer ihn aus einem Forumsbeitrag
+    abschreibt, tippt mal das eine, mal das andere. Gefunden hat bis hierhin
+    nur die Schreibweise der Tabelle; die andere gab **nichts** zurück, obwohl
+    die Zeile danebensteht.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    mit_strich = dialog.search_hits("wall_loops")
+    assert "shell.wall_count" in mit_strich, "die Schreibweise der Tabelle muss weiter finden"
+    assert dialog.search_hits("wall loops") == mit_strich, (
+        "mit Leerzeichen getippt findet die Suche etwas anderes als mit Unterstrich"
+    )
+    assert dialog.search_hits("support material") == dialog.search_hits("support_material")
 
 
 def test_the_search_lifts_the_hit_instead_of_hiding_the_rest(

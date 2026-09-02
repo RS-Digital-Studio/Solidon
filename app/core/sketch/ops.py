@@ -506,10 +506,17 @@ def _pocket_in_mesh(
             suggestions=(CORRECT_INPUT,),
         )
 
-    tool = tools[0]
-    if len(tools) > 1:
-        joined = mesh_boolean.boolean("union", tools, quality=ctx.quality, seed=ctx.seed)
-        tool = joined.mesh
+    # **Die Vereinigung ist ein eigener Lauf der Kette.** Ihre Stufe und ihre
+    # Befunde fielen weg, und damit meldete eine Tasche aus einem geglätteten
+    # Werkzeug ``direct`` — der Abbruch fehlte hier ebenso.
+    joined = (
+        mesh_boolean.boolean(
+            "union", tools, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+        )
+        if len(tools) > 1
+        else None
+    )
+    tool = tools[0] if joined is None else joined.mesh
     outcome = mesh_boolean.boolean(
         "difference",
         # Der Aufrufer kommt aus der Weiche in ``sketch_pocket`` und hat dort
@@ -527,8 +534,14 @@ def _pocket_in_mesh(
         # Leeres Wörterbuch, nicht die alten Merkmale: Die Kanten, auf die sie
         # zeigten, hat der Schnitt gerade verändert.
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
-        findings=[*outcome.findings, *([nothing] if nothing is not None else [])],
-        solver=outcome.solver,
+        findings=[
+            *(joined.findings if joined is not None else []),
+            *outcome.findings,
+            *([nothing] if nothing is not None else []),
+        ],
+        solver=mesh_boolean.deepest(
+            [joined.solver if joined is not None else None, outcome.solver]
+        ),
     )
 
 

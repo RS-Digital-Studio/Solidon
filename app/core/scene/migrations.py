@@ -349,8 +349,7 @@ def _name_the_radius_a_radius(data: dict[str, Any]) -> dict[str, Any]:
 
     **Umgedeutet wird nur, was eindeutig ist** (Auflage aus der Freigabe): die
     beiden Punkte müssen Mittelpunkt und Rand **desselben** Kreises sein, und
-    zwar in dieser Reihenfolge und ohne dass ein weiteres Element dieselben
-    Indizes belegt. Im Zweifel bleibt ``distance`` stehen. Ein stehen
+    zwar in dieser Reihenfolge. Im Zweifel bleibt ``distance`` stehen. Ein stehen
     gebliebenes ist eine kosmetische Restzweisprachigkeit im Einzelfall; ein
     falsch umgedeutetes wäre eine falsche Beschriftung an einer
     Kundenbemaßung, und die fällt niemandem auf.
@@ -388,7 +387,6 @@ def _rename_circle_measures(text: str) -> str:
     # dieselbe wie in ``edit.flat_points``: Elemente in ihrer Reihenfolge,
     # jedes mit seinen Punkten.
     circles: dict[tuple[int, int], bool] = {}
-    taken: set[int] = set()
     cursor = 0
     for element in elements:
         if not isinstance(element, dict):
@@ -399,7 +397,6 @@ def _rename_circle_measures(text: str) -> str:
         count = len(points)
         if element.get("kind") == "circle" and count == 2:
             circles[(cursor, cursor + 1)] = True
-        taken.update(range(cursor, cursor + count))
         cursor += count
 
     changed = False

@@ -158,6 +158,32 @@ def test_the_central_formatter_redacts_credentials_urls_and_log_injection() -> N
     assert "\n" not in rendered
 
 
+def test_a_traceback_keeps_its_lines_in_the_log() -> None:
+    """Der Stapel wird angehängt, nicht redigiert (§33.2).
+
+    ``redact`` ersetzt jeden Zeilenumbruch durch ``\\n`` und kappt bei tausend
+    Zeichen. Über den **ganzen** Eintrag gelegt, machte es aus einem Traceback
+    eine einzige, abgeschnittene Zeile — und genau die liest, wer einen
+    Fehlerbericht bekommt. Die Meldung bleibt redigiert; sie ist die Stelle,
+    an der ein fremder Text hineinkommt, ein Stapel ist es nicht.
+    """
+    import sys
+
+    try:
+        raise ValueError("etwas ging schief")
+    except ValueError:
+        info = sys.exc_info()
+
+    record = logging.LogRecord("app.test", logging.ERROR, __file__, 1, "Angehalten", (), info)
+    rendered = _OpFormatter("%(message)s").format(record)
+
+    assert rendered.count("\n") >= 2, f"der Stapel kam einzeilig an: {rendered!r}"
+    assert "Traceback (most recent call last)" in rendered
+    assert rendered.rstrip().endswith("ValueError: etwas ging schief"), (
+        f"der Stapel wurde gekappt: {rendered!r}"
+    )
+
+
 def test_redaction_has_a_hard_character_limit_for_foreign_content() -> None:
     assert len(redact("x" * 10_000, limit=120)) == 120
 
@@ -187,6 +213,83 @@ def test_llm_rejects_an_oversized_success_body(monkeypatch: pytest.MonkeyPatch) 
 
     with pytest.raises(llm.BackendUnavailable):
         llm.post_json("https://example.org/chat", {}, {})
+
+
+class _LocalAnswer(_Body):
+    """Ein Antwortstrom mit Statuszeile, wie ihn ``http.client`` zurückgibt."""
+
+    def __init__(self, body: bytes, status: int = 200) -> None:
+        super().__init__(body)
+        self.status = status
+
+
+class _LocalConnection:
+    """Ein ``http.client``-Ersatz für den abbrechbaren lokalen Weg."""
+
+    def __init__(self, answer: _LocalAnswer) -> None:
+        self.answer = answer
+        self.sock: Any = None
+
+    def request(self, *_args: object, **_options: object) -> None:
+        return None
+
+    def getresponse(self) -> _LocalAnswer:
+        return self.answer
+
+    def close(self) -> None:
+        return None
+
+
+class _NeverCancelled:
+    """Ein Abbruchmarker, der nie zuschlägt — geprüft wird die Byte-Grenze."""
+
+    @property
+    def is_cancelled(self) -> bool:
+        return False
+
+    def raise_if_cancelled(self) -> None:
+        return None
+
+
+def test_the_cancelable_local_transport_rejects_an_oversized_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Auch der abbrechbare Weg zum lokalen Modell liest begrenzt.**
+
+    Er las mit ``response.read()`` ohne Grenze und ohne Frist, während der Weg
+    daneben (``post_json``) beides seit §37.2 einhält. Hinter ``127.0.0.1:11434``
+    muss kein Ollama liegen — was dort antwortet, füllte sonst den
+    Arbeitsspeicher, und ein Abbruch half nicht, weil das Lesen selbst nie
+    zurückkam.
+    """
+    connection = _LocalConnection(_LocalAnswer(b"x" * (llm.MAX_RESPONSE_BYTES + 1)))
+    monkeypatch.setattr(llm.http.client, "HTTPConnection", lambda *_a, **_o: connection)
+
+    with pytest.raises(llm.BackendUnavailable):
+        llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, _NeverCancelled())
+
+
+def test_the_cancelable_local_transport_redacts_a_foreign_error_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Text einer fremden Fehlerantwort wird redigiert und gedeckelt.
+
+    Er stand ungefiltert in der Meldung und damit im Protokoll (§33.2) — ein
+    Proxy, der einen Schlüssel zurückspiegelt, hätte ihn dort hinterlassen.
+    """
+    antwort = _LocalAnswer(
+        b"Authorization: Bearer topsecret\n" + b"y" * 10_000,
+        status=500,
+    )
+    connection = _LocalConnection(antwort)
+    monkeypatch.setattr(llm.http.client, "HTTPConnection", lambda *_a, **_o: connection)
+
+    with pytest.raises(llm.BackendUnavailable) as raised:
+        llm.post_json_local_cancelable("http://127.0.0.1:11434/api/chat", {}, {}, _NeverCancelled())
+
+    detail = str(raised.value.detail)
+    assert "topsecret" not in detail
+    assert len(detail) <= 500
 
 
 class _ContextBody(_Body):

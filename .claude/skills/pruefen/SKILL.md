@@ -113,13 +113,18 @@ Die Zusicherung ist immer der **Exit-Code**, nie eine Zeile im Text.
 
 Drei Fensterdateien enden nach „N passed" mit `0xC0000409` oder einer
 Zugriffsverletzung — ein Riss beim **Abbau**, nachdem jeder Test bestanden hat
-(`test_ui.py`, `test_chat_ui.py`, `test_first_run.py`). `suite-getrennt.sh`
-zählt sie als Fehler und gibt einen Exit ungleich null, obwohl kein Test
-fehlgeschlagen ist.
+(`test_ui.py`, `test_chat_ui.py`, `test_first_run.py`). Zwei Fensterdateien
+enden inzwischen mit **127** statt mit dem bekannten Code, einzeln gefahren
+auch — ein eigener offener Punkt, nicht derselbe Absturz.
 
-Der offene Punkt dazu steht in `ROADMAP.md`. Wer das nicht weiß, sucht den
-Fehler in einem Test, der nie fehlgeschlagen ist — also erst ins Protokoll
-sehen, ob vor dem Abbruch „N passed" steht.
+`suite-getrennt.sh` unterscheidet das selbst: `zaehlt_als_fehler` vergleicht
+die Zahl der Fortschrittszeichen mit der Sollgröße aus `--collect-only`, und
+ein Lauf, der alle Tests durch hatte und erst beim Aufräumen riss, zählt als
+grün (`tests/test_suite_script.py`). **Ein Exit ungleich null des Skripts ist
+deshalb ein echter Befund** — ein roter Test, oder ein Riss, der Tests
+verschluckt hat. Wer ihn für den bekannten Abbau-Abriss hält, sucht an der
+falschen Stelle; das Protokoll sagt, wie viele Zeichen vor dem Abbruch
+standen. Der offene Punkt steht in `ROADMAP.md`.
 
 ## Melden
 

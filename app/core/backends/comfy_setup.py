@@ -31,6 +31,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -457,7 +458,11 @@ def _run(
     """
     progress(what)
     _log.info("comfy setup: %s", command[0])
-    lines: list[str] = []
+    # **Nur der Schluss wird behalten**, denn nur er wird gebraucht: Die
+    # Fehlermeldung unten zeigt die letzten sechs Zeilen. Ein Download von
+    # 7,5 GB schreibt Zehntausende Fortschrittszeilen, und sie alle zu sammeln
+    # kostete Speicher für etwas, das niemand liest.
+    lines: deque[str] = deque(maxlen=6)
     deadline = time.monotonic() + STEP_TIMEOUT_SECONDS
     # **Die Einrichtung läuft auf dem Rechner, nicht im Sandkasten.** ComfyUI
     # liegt dort, ``git`` liegt dort, und das Python, mit dem installiert wird,
@@ -501,7 +506,7 @@ def _run(
     except (OSError, subprocess.SubprocessError) as problem:
         raise SetupFailed(f"{what}: {problem}") from problem
     if code:
-        raise SetupFailed(str(what) + chr(10) + chr(10).join(lines[-6:]))
+        raise SetupFailed(str(what) + chr(10) + chr(10).join(lines))
 
 
 #: Wie oft ein Download wiederholt wird, bevor er als gescheitert gilt.
@@ -935,12 +940,12 @@ def _space_or_stop(where: Path) -> None:
     raise SetupFailed(
         str(
             _(
-                "Auf dem Datenträger von {drive} sind {frei:.1f} GB frei, gebraucht "
-                "werden {noetig:.0f}. Schaffen Sie dort Platz — geladen wird in den "
+                "Auf dem Datenträger von {drive} sind {free:.1f} GB frei, gebraucht "
+                "werden {needed:.0f}. Schaffen Sie dort Platz — geladen wird in den "
                 "Zwischenordner, und von dort wandern die Gewichte nach "
                 "models/triposg; beide Orte müssen sie fassen."
             )
-        ).format(drive=where, frei=free, noetig=NEEDED_GIGABYTES)
+        ).format(drive=where, free=free, needed=NEEDED_GIGABYTES)
     )
 
 

@@ -26,7 +26,7 @@ dans `website/version.json`.
 - L’écran d’accueil ne déplace plus la sélection sans demande et se commande entièrement à la souris comme au clavier.
 - Les accès *Nouveau*, *Ouvrir* et *Exemples* sont mieux ordonnés et décrivent leur destination avant même l’ouverture.
 - Les avis et le soutien facultatif sont directement accessibles depuis l’écran d’accueil, au clavier comme avec les technologies d’assistance.
-- La discussion et le rapport de contrôle restent utilisables en même temps, même avec une faible hauteur de fenêtre.
+- La discussion reste utilisable même avec une faible hauteur de fenêtre : la saisie reste fixée en bas et le contenu défile.
 - La barre d’outils supérieure reste visible avec un projet ouvert et une fenêtre étroite, sans sortir de l’espace de travail.
 - Un nouvel exemple de dessin mène directement au parcours d’esquisse et complète les projets d’exemple existants.
 
@@ -34,13 +34,13 @@ dans `website/version.json`.
 
 - Les menus ont des titres bien visibles et des colonnes d’icônes alignées de façon uniforme.
 - La liste des commandes aligne proprement raccourcis et explications afin de parcourir plus vite les longues entrées.
-- Les grands dialogues emploient des colonnes cohérentes et exploitent les fenêtres larges avec des vues claires sur deux colonnes.
+- Les grands dialogues emploient des colonnes et des largeurs de champ cohérentes.
 - L’ancienne page réunissant adhérence, rétraction et filament est divisée en sections de réglages plus petites et clairement nommées.
 - Les 56 réglages d’impression peuvent être recherchés sous leurs libellés allemands visibles.
 - La recherche reconnaît aussi 146 termes courants des trancheurs, dont *perimeters* et *wall loops*.
 - Les champs numériques réagissent fidèlement aux flèches, au pas et à l’arrondi, sans plus modifier les valeurs de façon inattendue.
-- Les curseurs ont un comportement uniforme et restent précis, même avec des plages de valeurs fines.
-- Seul l’outil actif conserve la couleur d’accentuation ; les commandes inactives se font visuellement discrètes.
+- Les curseurs ont un aspect uniforme avec une poignée facile à saisir.
+- La couleur d’accentuation est réservée au bouton principal ; l’outil actif se reconnaît à son bord et les commandes inactives se font visuellement discrètes.
 - Les calculs très courts évitent tout affichage clignotant ; les moyens montrent un curseur d’attente, les longs ajoutent progression et annulation.
 - Les indications d’outils restent sur une ligne si la largeur suffit et passent proprement à la ligne dans les fenêtres étroites.
 - Les aperçus dans l’arborescence des objets sont assez grands pour reconnaître réellement les formes.
@@ -58,7 +58,7 @@ dans `website/version.json`.
 - Lors d’une rotation ou d’une mise à l’échelle exacte, plusieurs corps sélectionnés utilisent un centre commun.
 - Échap recule d’un seul niveau pendant le dessin : ligne actuelle, outil actuel, puis seulement l’esquisse entière.
 - Rétablir fonctionne désormais même lorsqu’une esquisse est ouverte.
-- Une esquisse vide affiche une indication cliquable qui mène directement à l’outil Rectangle.
+- Une esquisse vide affiche une indication cliquable qui ouvre les formes de base prêtes à l’emploi.
 - Le bouton des formes de base porte le nom de l’action du clic. Les autres formes se trouvent derrière la flèche adjacente.
 - L’outil de coupe s’ouvre dans le corps plutôt que dans une vue vide hors du modèle.
 - Les vues avant, latérale, supérieure et opposées s’alignent fidèlement sur les six axes.
@@ -75,8 +75,6 @@ dans `website/version.json`.
 - Une action utilisateur continue s’annule entièrement avec une seule commande Annuler.
 - Les entrées d’historique indiquent leur type et un numéro d’étape sans ambiguïté.
 - Les modèles téléchargés et importés peuvent être coupés immédiatement.
-- Les faces protégées sont affichées en turquoise et hachurées afin de rester compréhensibles sans perception des couleurs.
-- La séparation automatique et manuelle tient compte des surfaces visibles protégées lors du choix du plan de coupe.
 - Un clic sur un constat du rapport mène fidèlement à l’endroit, au corps ou à l’étape d’historique concernés.
 - Lors du saut vers un constat, la caméra cadre la cible au lieu d’aboutir sur un gros plan gris.
 - Les faces nommées et les indications suivent leur corps pendant l’agencement et le positionnement.
@@ -117,7 +115,7 @@ dans `website/version.json`.
 - Les boutons d’action du rapport ne retiennent plus discrètement en mémoire une fenêtre déjà fermée.
 - Les blocs fournis et l’activation se chargent au démarrage sans se bloquer mutuellement.
 - La vue 3D se ferme proprement avant la fenêtre, ce qui fiabilise la fermeture sous Windows, Linux et macOS.
-- Le cadre et la barre de titre de la fenêtre s’adaptent sûrement à chaque plateforme.
+- Sous Windows 11, la barre de titre suit le schéma de couleurs de l’application ; les autres plateformes restent inchangées.
 - Les boutons standard comme Ouvrir, Enregistrer et Annuler changent immédiatement de langue, sans redémarrage.
 - Les noms de corps et de blocs générés automatiquement changent aussi correctement de langue après l’emploi de contenus mis en cache.
 - Les traductions et valeurs de rapport sont au même niveau en allemand, anglais, espagnol, français, italien et portugais.
@@ -126,7 +124,7 @@ dans `website/version.json`.
 
 - La discussion accueille avec son objectif concret et ne démarre plus sur une zone vide ou des termes techniques liés aux modèles.
 - Les compteurs techniques de jetons ont été retirés de l’interface client habituelle.
-- L’assistant reconnaît et regroupe les détails de forme identiques au lieu de traiter chaque occurrence isolément.
+- Les indications identiques sur des détails de forme perdus parviennent à l’assistant comptées plutôt qu’une par une.
 - Le dialogue de génération transforme un texte ou une image en modèle via un ComfyUI local et l’ajoute à la même scène modifiable.
 - Le flux TripoSG fourni crée un fichier GLB, ensuite réparé, mis à l’échelle et contrôlé automatiquement pour l’impression.
 - Ollama local et ComfyUI local calculent l’un après l’autre afin de ne pas occuper simultanément la carte graphique.

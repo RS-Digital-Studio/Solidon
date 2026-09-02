@@ -89,6 +89,18 @@ TIMEOUT_SECONDS: Final = 300.0
 #: Arbeitsprozess mit einer endlosen Ausgabe füllen kann.
 SLICER_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
 
+#: Wie viel Speicher der Slicer haben darf.
+#:
+#: ``run_limited`` deckelt jeden Prozessbaum, und seine Vorgabe von vier GiB
+#: ist für kleine Werkzeuge gedacht, die Text liefern. Ein Slicer ist keines:
+#: Er baut über einem feinen Netz Millionen von Segmenten auf, und über der
+#: Vorgabe stirbt er an einer Grenze, die Solidon gesetzt hat — auf einem
+#: Rechner mit 64 GB, an einer Datei, die von Hand durchläuft. Bis 0.2.2 gab es
+#: gar keine Grenze; sechzehn GiB sind großzügig genug, um kein Teil
+#: abzulehnen, und eng genug, dass ein durchdrehender Slicer den Rechner nicht
+#: auffrisst.
+SLICER_MEMORY_LIMIT: Final = 16 * 1024 * 1024 * 1024
+
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
 #: **Dieselbe Liste, die der Öffnen-Dialog anbietet** (`ui.main_window`
@@ -1084,7 +1096,7 @@ def _machine_name(setup: SlicerSetup) -> str:
 
 
 def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
-    """Das Maschinenprofil fuer die Orca-Familie — ausgeschrieben.
+    """Das Maschinenprofil für die Orca-Familie — ausgeschrieben.
 
     Bisher bekam der Slicer hier den **Namen** eines Profils aus seinem
     eigenen Bestand, und alles Weitere löste er selbst auf. Das ging, solange
@@ -1696,6 +1708,7 @@ def _run_slicer(
             cwd=workspace,
             timeout=timeout,
             output_limit=SLICER_OUTPUT_LIMIT,
+            memory_limit=SLICER_MEMORY_LIMIT,
             cancelled=(lambda: cancelled.is_cancelled) if cancelled is not None else None,
         )
     except OSError as problem:
@@ -1720,9 +1733,12 @@ def _run_slicer(
             suggestions=(CHOOSE_SLICER, EXPORT_ONLY, RETRY),
         ) from None
     except ProcessOutputLimitExceeded as problem:
+        # **Kein Fehlercode** — es ist gar keiner gekommen: Solidon hat den
+        # Lauf abgebrochen, weil die Ausgabe die Sammelgrenze überschritt. Der
+        # alte Satz schickte den Leser in den Slicer, wo nichts zu finden ist.
         raise ExternalToolError(
             tool=setup.name,
-            detail=_("Der Slicer ist mit einem Fehlercode zurückgekommen."),
+            detail=_("Der Slicer hat mehr Ausgabe erzeugt, als gesammelt wird."),
             values={"reason": str(problem)},
             suggestions=(SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
         ) from problem

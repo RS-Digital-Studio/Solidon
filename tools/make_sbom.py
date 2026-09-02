@@ -483,8 +483,14 @@ def _msvc_runtime_version(entries: Iterable[ArtifactFile]) -> str:
     return ",".join(sorted({entry.binary_version for entry in selected}))
 
 
-def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
-    """Logische Komponenten für die im Artefakt erkannten Laufzeitfamilien."""
+def runtime_components(
+    files: Iterable[ArtifactFile], *, python_version: str | None = None
+) -> list[dict[str, Any]]:
+    """Logische Komponenten für die im Artefakt erkannten Laufzeitfamilien.
+
+    ``python_version`` nennt die Laufzeit des Artefakts; ohne Angabe die des
+    laufenden Interpreters.
+    """
     entries = tuple(files)
     owners = {entry.owner for entry in entries}
     paths = {entry.path.casefold() for entry in entries}
@@ -495,7 +501,7 @@ def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
             _runtime_component(
                 "cpython",
                 "CPython runtime",
-                platform.python_version(),
+                python_version or platform.python_version(),
                 "PSF-2.0",
                 "https://www.python.org/psf/license/",
                 "laufender Build-Interpreter",
@@ -524,7 +530,7 @@ def runtime_components(files: Iterable[ArtifactFile]) -> list[dict[str, Any]]:
             )
         )
     if "libffi" in owners:
-        version, version_source = _libffi_version()
+        version, version_source = _libffi_version(python_version=python_version)
         components.append(
             _runtime_component(
                 "libffi",
@@ -729,8 +735,14 @@ def build_bom(
     platform: str | None = None,
     included_distributions: Iterable[str] | None = None,
     customer_artifact: Path | None = None,
+    python_version: str | None = None,
 ) -> dict[str, Any]:
-    """Baut eine deterministische CycloneDX-1.6-Stückliste."""
+    """Baut eine deterministische CycloneDX-1.6-Stückliste.
+
+    ``python_version`` ist die Laufzeit des Artefakts — ohne Angabe die des
+    laufenden Interpreters. Ein Test auf einer Entwicklermaschine mit 3.14
+    beschreibt damit trotzdem das Paket, das die CI mit 3.13 baut.
+    """
     selected_extras = tuple(extras)
     graph = runtime_graph(
         distribution=distribution,
@@ -738,7 +750,9 @@ def build_bom(
         environment=environment,
     )
     target = platform or sysconfig.get_platform()
-    python_version = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    python_version = python_version or (
+        f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    )
     product_ref = _purl(DISTRIBUTION_NAME, version)
     included: set[str]
     if included_distributions is None:
@@ -786,7 +800,7 @@ def build_bom(
         components.append(component)
         file_refs.setdefault(entry.owner, []).append(str(component["bom-ref"]))
 
-    packaged_runtime = runtime_components(packaged_files)
+    packaged_runtime = runtime_components(packaged_files, python_version=python_version)
     components.extend(packaged_runtime)
     runtime_refs = {str(component["bom-ref"]) for component in packaged_runtime}
     components.sort(key=lambda component: (str(component["name"]).casefold(), component["version"]))

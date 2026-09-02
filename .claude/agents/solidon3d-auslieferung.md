@@ -33,8 +33,8 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 ## Lizenzen
 
-- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. OpenSCAD und
-  Slicer werden extern aufgerufen, nie mitgeliefert.
+- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Ein Slicer wird
+  extern aufgerufen, nie mitgeliefert.
 - LGPL-Bibliotheken (PySide6, OCCT hinter `cadquery-ocp`) bleiben **dynamisch
   gebunden**.
 - Jede neue Abhängigkeit: Lizenz feststellen, in die Freigabeliste eintragen,

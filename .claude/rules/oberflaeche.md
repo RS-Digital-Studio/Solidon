@@ -18,8 +18,9 @@ Die Nachfrage nennt mitbetroffene Schritte und den Rückweg über Strg+Z.
 
 ## Texte
 
-Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsch und
-englisch. **Das gilt auch für Auswahlwerte**: `raised`, `flat`, `linear` sind
+Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsche
+Quelle, und jeder Katalog aus `app/i18n/locales/` zieht nach. **Das gilt auch
+für Auswahlwerte**: `raised`, `flat`, `linear` sind
 Schlüssel und keine Beschriftungen. Der Name steht in `_CHOICE_NAMES`
 (`app/ui/labels.py`), und `tests/test_translations.py` lässt nur durch, was
 sein eigener Name ist — M4, 6x3, mm, x, DejaVu Sans.
@@ -43,7 +44,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-457 Parameter der 86 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+581 Parameter der 95 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile; im Operationsdialog holt
 `QFormLayout.labelForField` die Beschriftung, die `addRow` aus der Zeichenkette
 gebaut hat (`_explain` in `op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
@@ -433,14 +434,17 @@ braucht und nicht das Register:
 |---|---|
 | Menüs in der Leiste | ≤ 9 |
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
-| Umschalter in der Werkzeugzeile | ≤ 8 — **erreicht**: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen, Bemalen — auf `Alt+1` bis `Alt+8` |
+| Umschalter in der Werkzeugzeile | ≤ 8 — heute sieben: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen — auf `Alt+1` bis `Alt+7` |
 | Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
 | Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
-Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
-kein Werkzeug mehr ist.
+Die Werkzeugzeile hat sieben von acht Plätzen belegt, seit das Bemalen mit dem
+Punkt-Radius-Pinsel fiel — Färben läuft über das Kontextmenü am Merkmal. Der
+achte Platz ist keine Einladung: Eine Funktion, die eine Leiste will,
+verdrängt eine andere, oder sie ist keine wert (`MAX_TOOLS` in
+`tests/test_interface_limits.py`).
 
 **Und gefaltet wird, weil es sein muss — je Kategorie, nicht je Gruppe.** Wer
 ein Menü über die Zeilengrenze wachsen lässt, bekommt kein Untermenü für die
@@ -642,15 +646,19 @@ formuliert.
 es gibt keinen Eingangskörper, der der falsche sein könnte. Wer einen Zwilling
 mit Eingang dazunimmt, nimmt diese Frage mit.
 
-**Und der Zwilling heißt wie sein Partner, mit einem Wort davor.** „Quader
-anlegen" → „Exakten Quader anlegen", „Bohrung setzen" → „Exakte Bohrung
-setzen": das Substantiv bleibt stehen, „exakt" tritt flektiert davor. Nicht neu
-formuliert — „Exakt bohren" war der erste Entwurf und ließ `test_theme_and_
-palette` fallen, weil die Befehlspalette nach Titel sortiert und der Eintrag
-bei der Suche nach „bohren" *vor* „Bohrung setzen" landete. Der
-Reihenfolgefehler war die Folge; die Ursache war die abweichende Benennung.
-Dahinter steht der Kunde: Er sucht das **Substantiv** („Bohrung"), und wer den
-Zwilling umformuliert, nimmt ihm eine der beiden Antworten aus der Liste.
+**Und der Zwilling heißt genau wie sein Partner.** `create_brep_box` trägt
+„Quader anlegen", `drill_brep_hole` „Bohrung setzen" (`app/core/brep/ops.py`)
+— denselben Titel wie `create_box` und `drill_hole`. Den Unterschied nennt
+nicht der Titel, sondern der Haken im Dialog des Partners („Flächen und Kanten
+später bearbeiten", `_EXACT_TOGGLE` in `registry.py`); in der Palette steht
+der Zwilling nicht ein zweites Mal (`hidden_from_the_menu`). Zwei Stufen
+davor lagen falsch: „Exakt bohren" ließ `test_theme_and_palette` fallen, weil
+die Befehlspalette nach Titel sortiert und der Eintrag bei der Suche nach
+„bohren" *vor* „Bohrung setzen" landete; „Exakten Quader anlegen" mit dem
+Wort davor las sich wie eine Qualitätsstufe („das andere ist also ungenau?"),
+obwohl es den Rechenkern meint. Dahinter steht der Kunde: Er sucht das
+**Substantiv** („Bohrung"), und wer den Zwilling umformuliert, nimmt ihm eine
+der beiden Antworten aus der Liste.
 
 **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur
 die Rechnung: `OperationDialog.switch_variant` blendet aus, was die gewählte

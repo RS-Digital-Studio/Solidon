@@ -13,10 +13,12 @@ Kumulationsregel hat, bekommt einen eigenen Schritt.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.scene import bundling
+from app.core.scene import bundling, project
 from app.core.scene.history import History, OperationDraft
 from app.core.scene.project import new_project
 
@@ -219,3 +221,72 @@ def test_a_shift_without_the_offer_never_bundles(history: History) -> None:
     _shift(history, target, 4.0, bundle=False)
 
     assert len(history.document.transactions) == vorher + 2
+
+
+def test_a_saved_step_is_never_reopened_after_loading(history: History, tmp_path: Path) -> None:
+    """Ein gespeicherter Schritt bündelt nach dem Öffnen nicht weiter.
+
+    Der Kundenfall: gestern geschoben, gespeichert, geschlossen. Heute geöffnet
+    und ein zweites Mal geschoben — und der Zug von heute verschwand im Schritt
+    von gestern. Ein Bündel gehört zu einer Geste, nicht zu einer Datei.
+    """
+    target = _box(history)
+    _shift(history, target, 3.0)
+    path = project.save(project.Project(document=history.document), tmp_path / "gestern.p3d")
+
+    heute = History(project.load(path).document)
+    vorher = len(heute.document.transactions)
+    _shift(heute, target, 4.0)
+
+    assert len(heute.document.transactions) == vorher + 1, (
+        "der erste Zug nach dem Öffnen wurde in den gespeicherten Schritt gezogen"
+    )
+    assert heute.document.ops[-1].params["dx"] == pytest.approx(4.0), (
+        f"der gespeicherte Schritt wurde nachträglich verändert: {heute.document.ops[-1].params}"
+    )
+
+
+def test_a_move_after_undo_does_not_revive_the_redo_branch(history: History) -> None:
+    """Nach einem Undo beginnt ein Zug einen neuen Schritt — und wirft das Redo weg.
+
+    Bündelte er in den Schritt davor, entstünde keine neue Transaktion, und der
+    zurückgenommene Zweig bliebe stehen: Ein Redo holte danach einen Schritt
+    zurück, den der Kunde längst durch eine neue Handlung ersetzt hat (§15.4).
+    """
+    target = _box(history)
+    _shift(history, target, 3.0)
+    history.apply(
+        "Auf das Bett setzen",
+        [OperationDraft(op="place_on_bed", inputs=(target,))],
+    )
+    history.undo()
+    vorher = len(history.document.transactions)
+
+    _shift(history, target, 4.0)
+
+    assert len(history.document.transactions) == vorher + 1, (
+        "der Zug nach einem Undo wurde in den Schritt davor gezogen"
+    )
+    assert not history.can_redo, "der zurückgenommene Zweig steht nach einer neuen Handlung noch da"
+
+
+def test_a_step_without_the_offer_is_never_changed_afterwards(history: History) -> None:
+    """Ein Schritt ohne ``bundle=True`` bleibt unverändert, auch danach.
+
+    Ein Dialog schreibt einen Wert, den der Kunde eingetippt hat. Zieht er
+    danach am selben Körper, darf der getippte Wert nicht stillschweigend zur
+    Summe werden — der Verlauf zeigte weiter den Dialogschritt, das Modell
+    stünde woanders.
+    """
+    target = _box(history)
+    _shift(history, target, 3.0, bundle=False)
+    vorher = len(history.document.transactions)
+
+    _shift(history, target, 4.0)
+
+    assert len(history.document.transactions) == vorher + 1, (
+        "der Zug wurde in den Dialogschritt gezogen"
+    )
+    assert history.document.ops[-2].params["dx"] == pytest.approx(3.0), (
+        f"der Dialogschritt wurde nachträglich verändert: {history.document.ops[-2].params}"
+    )

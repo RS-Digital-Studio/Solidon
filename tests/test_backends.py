@@ -700,6 +700,12 @@ def test_the_shipped_graphs_name_no_non_commercial_model() -> None:
 
     ordner = Path(backends.__file__).parent / "data"
     graphen = sorted(ordner.glob("*.json"))
+    # **Ein Verbotstest über eine leere Menge ist immer grün.** Leer ist hier
+    # zulässig (siehe oben) — geprüft wird dann aber nichts, und das soll
+    # dastehen statt als Ergebnis durchzugehen. Ein umbenanntes Verzeichnis
+    # sähe sonst genauso aus wie ein sauberer Bestand.
+    if not graphen:
+        pytest.skip("keine Graphen ausgeliefert — hier ist nichts zu prüfen")
     for graph in graphen:
         text = graph.read_text(encoding="utf-8")
         for modell in NON_COMMERCIAL_MODELS:

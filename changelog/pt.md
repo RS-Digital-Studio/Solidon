@@ -25,7 +25,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O ecrã inicial já não move a seleção sem pedido e pode ser usado inteiramente com rato e teclado.
 - As opções *Novo*, *Abrir* e *Exemplos* estão organizadas com mais clareza e descrevem o destino antes de o abrir.
 - A opinião e o apoio voluntário estão acessíveis no ecrã inicial, também por teclado e tecnologias de apoio.
-- O chat e o relatório de verificação continuam utilizáveis em simultâneo mesmo com pouca altura da janela.
+- O chat continua utilizável mesmo com pouca altura da janela: a entrada mantém-se fixa em baixo e o conteúdo desloca-se.
 - A barra de ferramentas superior mantém-se visível com projetos abertos e janelas estreitas, sem sair da área de trabalho.
 - Um novo exemplo de desenho conduz diretamente ao percurso de esboço e complementa os projetos de exemplo existentes.
 
@@ -33,13 +33,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Os menus têm títulos bem visíveis e colunas de ícones alinhadas de forma uniforme.
 - A visão geral dos comandos alinha atalhos e explicações, permitindo percorrer mais depressa as entradas longas.
-- Os diálogos extensos usam colunas uniformes e aproveitam janelas largas com vistas claras em duas colunas.
+- Os diálogos extensos usam colunas e larguras de campo uniformes.
 - A antiga página conjunta para aderência, retração e filamento foi dividida em áreas de definições menores e com nomes claros.
 - Todas as 56 definições de impressão podem ser pesquisadas pelas respetivas designações alemãs visíveis.
 - A pesquisa também reconhece 146 termos comuns de fatiadores, entre os quais *perimeters* e *wall loops*.
 - Os campos numéricos respondem corretamente a setas, incrementos e arredondamentos, sem alterar valores inesperadamente.
-- Os controlos deslizantes têm um comportamento uniforme e mantêm a precisão mesmo em intervalos de valores pequenos.
-- Só a ferramenta ativa mantém a cor de destaque; os controlos inativos ficam visualmente em segundo plano.
+- Os controlos deslizantes têm um aspeto uniforme com um manípulo fácil de agarrar.
+- A cor de destaque fica reservada ao botão principal; a ferramenta ativa distingue-se pelo seu rebordo e os controlos inativos ficam visualmente em segundo plano.
 - Cálculos muito curtos evitam indicadores intermitentes; os médios mostram espera e os longos acrescentam progresso e cancelamento.
 - As indicações mantêm-se numa linha quando há largura e mudam de linha de forma controlada em janelas estreitas.
 - As pré-visualizações na árvore de objetos são suficientemente grandes para permitir reconhecer realmente as formas.
@@ -57,7 +57,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na rotação ou escala exata, vários corpos selecionados usam um centro comum.
 - Escape recua apenas um nível ao desenhar: linha atual, ferramenta atual e só depois o esboço completo.
 - Refazer funciona agora mesmo com um esboço aberto.
-- Um esboço vazio mostra uma indicação clicável que conduz diretamente à ferramenta Retângulo.
+- Um esboço vazio mostra uma indicação clicável que abre as formas básicas prontas.
 - O botão das formas básicas tem o nome da ação do clique. As restantes formas encontram-se atrás da seta ao lado.
 - A ferramenta de corte abre dentro do corpo, em vez de numa vista vazia fora do modelo.
 - As vistas frontal, lateral, superior e opostas alinham-se corretamente com todos os seis eixos.
@@ -74,8 +74,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma ação contínua do utilizador pode ser totalmente anulada com um único comando Desfazer.
 - As entradas do histórico mostram o seu tipo e um número de passo inequívoco.
 - Os modelos descarregados e importados podem ser cortados imediatamente.
-- As faces protegidas aparecem a turquesa e tracejadas, para continuarem compreensíveis sem depender da perceção das cores.
-- A divisão automática e manual considera as superfícies visíveis protegidas ao escolher o plano de corte.
 - Um clique num resultado da verificação conduz de forma fiável ao local, corpo ou passo do histórico afetado.
 - Ao saltar para um resultado, a câmara enquadra o alvo em vez de terminar num grande plano cinzento.
 - As faces designadas e indicações acompanham o corpo durante a disposição e o posicionamento.
@@ -116,7 +114,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os botões de ação do relatório já não mantêm discretamente na memória uma janela que foi fechada.
 - Os blocos incluídos e a ativação carregam ao iniciar sem se bloquearem mutuamente.
 - A vista 3D termina corretamente antes da janela, tornando o fecho mais fiável no Windows, Linux e macOS.
-- A moldura e a barra de título da janela adaptam-se de forma segura a cada plataforma.
+- No Windows 11 a barra de título segue o esquema de cores da aplicação; as outras plataformas mantêm-se inalteradas.
 - Os botões padrão como Abrir, Guardar e Cancelar mudam imediatamente de idioma, sem reiniciar.
 - Os nomes gerados de corpos e blocos mudam corretamente de idioma mesmo após usar conteúdos anteriormente em cache.
 - As traduções e os valores dos relatórios estão ao mesmo nível em alemão, inglês, espanhol, francês, italiano e português.
@@ -125,7 +123,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - O chat apresenta o seu objetivo concreto e já não começa com um espaço vazio ou termos técnicos de modelos.
 - Os contadores técnicos de tokens foram retirados da interface normal do cliente.
-- O assistente reconhece e agrupa detalhes de forma iguais, em vez de tratar cada ocorrência isoladamente.
+- Os avisos idênticos sobre detalhes de forma perdidos chegam ao assistente contados em vez de um a um.
 - O diálogo de geração transforma texto ou imagem num modelo através de um ComfyUI local e insere-o na mesma cena editável.
 - O fluxo TripoSG incluído cria um ficheiro GLB, que é depois reparado, dimensionado e verificado automaticamente para impressão.
 - O Ollama local e o ComfyUI local processam um após o outro, para não ocuparem a placa gráfica em simultâneo.

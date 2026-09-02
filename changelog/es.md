@@ -26,7 +26,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La pantalla de inicio ya no mueve la selección sin pedirlo y se puede manejar por completo con ratón y teclado.
 - Las entradas *Nuevo*, *Abrir* y *Ejemplos* están mejor ordenadas y explican adónde conducen antes de abrirse.
 - Los comentarios y el apoyo voluntario están en la pantalla de inicio y funcionan con teclado y tecnologías de asistencia.
-- El chat y el informe siguen siendo utilizables al mismo tiempo, incluso con poca altura de ventana.
+- El chat sigue siendo utilizable incluso con poca altura de ventana: la entrada permanece fija abajo y el contenido se desplaza.
 - La barra de herramientas superior permanece visible en proyectos abiertos y ventanas estrechas, sin salirse del área de trabajo.
 - Un nuevo ejemplo de dibujo conduce directamente al flujo de bocetos y complementa los proyectos de ejemplo existentes.
 
@@ -34,13 +34,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Los menús tienen encabezados claramente visibles y columnas de iconos alineadas de forma uniforme.
 - El resumen de comandos alinea bien los atajos y las explicaciones para recorrer con rapidez las entradas largas.
-- Los diálogos extensos usan columnas uniformes y aprovechan las ventanas anchas con vistas claras en dos columnas.
+- Los diálogos extensos usan columnas y anchos de campo uniformes.
 - La antigua página conjunta de adherencia, retracción y filamento se divide en áreas de ajustes más pequeñas y bien nombradas.
 - Los 56 ajustes de impresión se pueden buscar por sus nombres visibles en español.
 - La búsqueda también entiende 146 términos habituales de los slicers, entre ellos *perimeters* y *wall loops*.
 - Los campos numéricos responden bien a las flechas, los pasos y el redondeo, sin cambiar valores de forma inesperada.
-- Los controles deslizantes se comportan de forma uniforme y siguen siendo precisos incluso en intervalos pequeños.
-- Solo la herramienta activa conserva el color de acento; los controles inactivos pasan visualmente a segundo plano.
+- Los controles deslizantes tienen un aspecto uniforme con un tirador fácil de agarrar.
+- El color de acento queda reservado al botón principal; la herramienta activa se distingue por su borde y los controles inactivos pasan visualmente a segundo plano.
 - Los cálculos muy breves no muestran parpadeos, los medios usan un cursor de espera y los largos añaden progreso y cancelación.
 - Las indicaciones de las herramientas ocupan una línea cuando hay espacio y se ajustan de forma controlada en ventanas estrechas.
 - Las miniaturas del árbol de objetos son lo bastante grandes para reconocer las formas.
@@ -58,7 +58,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Varios cuerpos seleccionados usan un centro común al girarlos y escalarlos con valores exactos.
 - Escape retrocede exactamente un nivel al dibujar: línea actual, herramienta actual y, después, todo el boceto.
 - Rehacer funciona ahora también mientras hay un boceto abierto.
-- Un boceto vacío muestra una indicación pulsable que lleva directamente a la herramienta Rectángulo.
+- Un boceto vacío muestra una indicación en la que se puede hacer clic y que abre las formas básicas listas.
 - El botón de las formas básicas se llama como lo que hace un clic. Las demás formas están tras la flecha contigua.
 - La herramienta de sección se abre dentro del cuerpo en lugar de en una vista vacía fuera del modelo.
 - Las vistas frontal, lateral, superior y opuesta se ajustan de forma fiable a los seis ejes.
@@ -75,8 +75,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una acción continua se puede revertir por completo con una sola orden de Deshacer.
 - Las entradas del historial muestran su tipo y un número de paso inequívoco.
 - Los modelos descargados e importados se pueden cortar de inmediato.
-- Las caras protegidas se muestran en turquesa y rayadas, por lo que se entienden incluso sin distinguir el color.
-- La división automática y manual tiene en cuenta las caras visibles protegidas al elegir la unión.
 - Al seleccionar un hallazgo, Solidon lleva al lugar, al cuerpo o al paso del historial correspondiente.
 - Al saltar a un hallazgo, la cámara encuadra el destino en lugar de acabar en un primer plano gris.
 - Las caras con nombre y los hallazgos se mueven con su cuerpo al organizarlo y colocarlo.
@@ -117,7 +115,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los botones de acción del informe ya no mantienen en memoria una ventana que ya se ha cerrado.
 - Los bloques incluidos y la activación se cargan al iniciar sin bloquearse entre sí.
 - La vista 3D se cierra antes que la ventana; así, las ventanas de Windows, Linux y macOS se cierran con mayor fiabilidad.
-- El marco y la barra de título se adaptan de forma segura a cada plataforma.
+- En Windows 11 la barra de título sigue el esquema de colores de la aplicación; las demás plataformas no cambian.
 - Los botones estándar como Abrir, Guardar y Cancelar cambian de idioma al instante, sin reiniciar.
 - Los nombres creados automáticamente para cuerpos y bloques cambian bien de idioma incluso después de usar contenido en caché.
 - Las traducciones y los valores del informe están al mismo nivel en alemán, inglés, español, francés, italiano y portugués.
@@ -126,7 +124,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - El chat se abre con una explicación concreta de su finalidad, no con un área vacía ni términos técnicos de modelos.
 - Los contadores técnicos de tokens se han retirado de la interfaz normal para clientes.
-- El asistente reconoce y agrupa detalles de forma iguales, en vez de tratar cada aparición por separado.
+- Los avisos idénticos sobre detalles de forma perdidos llegan al asistente contados en lugar de uno por uno.
 - El diálogo Generar convierte texto o una imagen en un modelo mediante ComfyUI local y lo incorpora a la misma escena editable.
 - El flujo TripoSG incluido crea un GLB que después se repara, se escala y se comprueba para la impresión automáticamente.
 - Ollama local y ComfyUI local calculan uno tras otro para no ocupar la tarjeta gráfica al mismo tiempo.

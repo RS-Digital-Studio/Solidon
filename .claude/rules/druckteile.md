@@ -5,11 +5,12 @@ paths:
 
 # Regeln für den Ordner „3D Drucker"
 
-Hier liegen die echten Druckprojekte — **kein Programmcode, aber seit dem
-22.08.2026 im Repository.** Bis dahin schloss `.gitignore` den Ordner aus, mit
-der Begründung, er gehöre nicht zum Programm; fachlich stimmt das, praktisch
-hieß es, dass die Projekte nur auf einer von drei Maschinen lagen. Auf dem
-Laptop fehlte der Ordner vollständig.
+Hier liegen die echten Druckprojekte — **kein Programmcode, und nicht Teil
+dieses Repositorys:** Der Ordner hat sein eigenes `.git` und steht hier in
+`.gitignore` (`3ce454f9`, 23.08.2026: „Der Ordner der Druckprojekte war nie in
+diesem Repository"). Wer dort committet, tut es in seinem eigenen Repository.
+Am 22.08.2026 war er für einen Tag aufgenommen, damit er auf allen drei
+Maschinen liegt; die Karte in `CLAUDE.md` nennt den heutigen Stand.
 
 `3D Drucker/CLAUDE.md` ist die Referenz für Drucker, Filamentbestand, Zubehör
 und laufende Projekte; sie wird mitgeladen, sobald hier gearbeitet wird. Was

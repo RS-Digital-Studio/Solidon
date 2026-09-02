@@ -2552,8 +2552,8 @@ class HistoryPanel(QWidget):
         first: QListWidgetItem | None = None
         for row in range(self.list.count()):
             # Ohne None-Wache, wie ``selected_operations`` daneben: Die Stubs
-            # kennen dort keinen leeren Rueckgabewert, und eine Pruefung darauf
-            # haelt mypy fuer unerreichbar.
+            # kennen dort keinen leeren Rückgabewert, und eine Prüfung darauf
+            # hält mypy für unerreichbar.
             item = self.list.item(row)
             own = item.data(Qt.ItemDataRole.UserRole)
             if own == op_id:

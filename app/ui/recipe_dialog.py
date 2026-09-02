@@ -71,7 +71,7 @@ DEFAULT_GROUP = "structure"
 #: Wie hoch eine Rollfläche höchstens von sich aus werden darf, in
 #: Bildpunkten. Rund zwei Parameterzeilen — genug, damit sichtbar ist, dass
 #: es je Parameter einen Block gibt, und wenig genug, dass zwölf davon den
-#: Dialog nicht ueber den Schirm schieben.
+#: Dialog nicht über den Schirm schieben.
 MOST_ROOM = 520
 
 # Die zwei Plätze, die ein freigegebener Wert im späteren Dialog haben kann

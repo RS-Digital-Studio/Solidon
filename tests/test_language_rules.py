@@ -72,6 +72,7 @@ GERMAN_WORDS = frozenset(
         "farbe",
         "fehler",
         "feld",
+        "gleich",
         "hinweis",
         "kante",
         "koerper",

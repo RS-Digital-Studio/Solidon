@@ -18,6 +18,7 @@ from typing import Any, ClassVar, Final
 
 from app.core.types import Action as Action
 from app.core.types import ObjectId, OpId, SolverStage, Vec3
+from app.core.units import UNIT_NAMES
 from app.i18n import TranslatableText, _
 
 # --- Handlungen ------------------------------------------------------------------
@@ -85,19 +86,19 @@ INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=Tru
 #: Beschriftung, die sich in fünf Sprachen unabhängig weiterentwickelt hätte.
 #: Der Satz nennt beide Hälften, weil die erste allein nicht sagt, was danach
 #: zu tun ist.
-EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen."))
+EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen"))
 #: Die drei Geschwister von ``EXPORT_ONLY``, ein Mal übersehen: Als die sechs
 #: inline gebauten ``export_only`` zur Konstante wurden, blieben diese drei
 #: als ``Action(id=…)`` in der Übergabe zurück — Schlüsselwort-Aufrufe, die
 #: der Wächter in ``test_ui.py`` nicht sah. Gesetzt waren sie überall,
 #: verdrahtet nirgends: Der Kunde las „Einen anderen Slicer auswählen." als
 #: Satz über dem einzigen Knopf „Nur exportieren und selbst slicen."
-SHOW_SLICER_OUTPUT = Action("show_output", _("Ausgabe des Slicers ansehen."))
-CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen."))
+SHOW_SLICER_OUTPUT = Action("show_output", _("Ausgabe des Slicers ansehen"))
+CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen"))
 #: Vorne, weil er der häufigste richtige nächste Schritt ist: Scheitert der
 #: eingestellte Slicer, stehen auf vielen Rechnern zwei weitere daneben —
 #: und die Absage bot bisher keinen Weg zu ihnen an (§29, §2.1).
-CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen."), primary=True)
+CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen"), primary=True)
 #: Zwei verschenkte Klickwege, gefunden beim Release-Durchgang am 30.08.2026 —
 #: und zwar in der Ausnahmemenge des Wächters, die eine Stunde zuvor pauschal
 #: befüllt worden war. Beide standen als **Satz** da, was ehrlich ist
@@ -108,7 +109,7 @@ CHOOSE_SLICER = Action("choose_slicer", _("Einen anderen Slicer auswählen."), p
 #: dieses Modell zu groß" — und die Operation gleichen Namens liegt im
 #: Register. ``open_in_browser`` nennt eine Adresse, die in ``values["url"]``
 #: mitreist, und ``QDesktopServices`` öffnet sie.
-DECIMATE_MESH = Action("decimate_mesh", _("Dreiecke verringern."), primary=True)
+DECIMATE_MESH = Action("decimate_mesh", _("Dreiecke verringern"), primary=True)
 OPEN_IN_BROWSER = Action("open_in_browser", _("Seite im Browser öffnen"))
 #: Die kleinen Einzelteile wegwerfen, die beim Einlesen aufgefallen sind.
 #:
@@ -410,8 +411,13 @@ class UnitUnknownError(UserError):
     ) -> None:
         super().__init__(detail=detail, **_with_values(kwargs, candidates=list(candidates)))
         self.candidates = candidates
+        # Auf dem Knopf steht der Name, in der Kennung der Wert: „in" allein
+        # ist auf Deutsch ein Verhältniswort und keine Antwort (`units`).
         self.suggestions = (
-            *(Action(f"unit:{unit}", unit, primary=unit == "mm") for unit in candidates),
+            *(
+                Action(f"unit:{unit}", UNIT_NAMES.get(unit, unit), primary=unit == "mm")
+                for unit in candidates
+            ),
             CANCEL,
         )
 

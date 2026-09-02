@@ -243,9 +243,10 @@ class History:
     def __init__(self, document: Document, registry: Registry | None = None) -> None:
         self.document = document
         self._registry = registry or REGISTRY
-        self._closed_bundle: TransactionId | None = None
-        """Die Transaktion, deren Bündel geschlossen ist — ein Zug danach
-        beginnt einen neuen Schritt, auch wenn er gleichartig wäre."""
+        self._open_bundle: TransactionId | None = None
+        """Die Transaktion, deren Bündel offen ist — nur in sie nimmt ein
+        weiterer Zug auf. Ohne Anker beginnt ein Zug einen neuen Schritt,
+        auch wenn er gleichartig wäre."""
         self._undone: list[Transaction] = []
         self._undone_ops: dict[OpId, Operation] = {}
         self._reseed()
@@ -371,6 +372,9 @@ class History:
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
+        # Der Anker zeigt auf das Bündel, das gerade offen ist — und nur ein
+        # Zug, der eines eröffnet hat, darf später eines fortsetzen.
+        self._open_bundle = transaction.id if bundle else None
         self._record_numbering()
         if settled is not None:
             restore(self.document, settled.after)
@@ -401,7 +405,12 @@ class History:
 
         living = _living_objects(prefix)
         targets = repair_targets(self.document, stopped_at, self._registry)
-        if self._registry.get(failed.op).requires_kind == "brep":
+        # ``has`` zuerst, wie in :func:`repair_targets`: Eine Projektdatei kann
+        # eine Operation nennen, die dieses Register nicht hat, und ``get``
+        # antwortete darauf mit einem ``InternalError`` samt Fehlerbericht. Ohne
+        # Eintrag ist ``targets`` ohnehin leer, und der Satz weiter unten sagt,
+        # was hier nicht geht.
+        if self._registry.has(failed.op) and self._registry.get(failed.op).requires_kind == "brep":
             raise ValidationError(
                 field="in",
                 detail=_("Dieses Werkzeug braucht einzeln bearbeitbare Flächen und Kanten."),
@@ -487,6 +496,14 @@ class History:
         gibt ``None`` und wird ein eigener Schritt — ein Bündel zu wenig
         kostet einen Eintrag, ein Bündel zu viel verfälscht Geometrie.
 
+        **Der Anker ist die erste Frage, nicht die Ähnlichkeit.** Aufgenommen
+        wird nur in ein Bündel, das dieselbe Sitzung eröffnet hat und das noch
+        offen ist (``_open_bundle``). Ohne ihn genügte ein gleichartiger
+        letzter Schritt, und der kann von gestern sein: aus der geöffneten
+        Datei, aus einem Dialog, oder aus einem Zweig, den ein Undo gerade
+        beiseitegelegt hat — dann bliebe der Redo-Zweig stehen, weil gar keine
+        neue Transaktion entstand.
+
         **Das Bündel endet von selbst.** Jede andere Handlung legt eine
         andere Transaktion an, und die passt beim nächsten Zug nicht mehr;
         eine andere Auswahl ändert die Eingänge. Nur der Werkzeugwechsel
@@ -495,7 +512,7 @@ class History:
         if not drafts or not self.document.transactions:
             return None
         last = self.document.transactions[-1]
-        if last.id == self._closed_bundle:
+        if last.id != self._open_bundle:
             return None
         if last.origin != USER_ORIGIN or last.changes is not None:
             return None
@@ -526,13 +543,8 @@ class History:
         Nötig, wo eine Handlung keine Transaktion anlegt und trotzdem eine
         ist: ein Werkzeugwechsel, das Schließen der Leiste. Ohne sie hinge ein
         Zug von morgen am Bündel von heute.
-
-        Gemerkt wird die Transaktion und nicht ein Schalter: Ein Schalter
-        müsste beim nächsten ``apply`` zurückgesetzt werden, und wer das
-        vergisst, schließt jedes Bündel für immer.
         """
-        if self.document.transactions:
-            self._closed_bundle = self.document.transactions[-1].id
+        self._open_bundle = None
 
     def _plan(self, draft: OperationDraft, known: set[ObjectId]) -> Operation:
         spec = self._registry.get(draft.op)
@@ -1147,6 +1159,9 @@ class History:
         """
         if not self.document.transactions:
             return None
+        # Ein Undo schließt jedes offene Bündel: Der nächste Zug ist eine neue
+        # Absicht und darf den zurückgenommenen Zweig nicht stehen lassen.
+        self._open_bundle = None
         transaction = self.document.transactions.pop()
         remaining: list[Operation] = []
         for entry in self.document.ops:
@@ -1163,6 +1178,7 @@ class History:
     def redo(self) -> Transaction | None:
         if not self._undone:
             return None
+        self._open_bundle = None
         transaction = self._undone.pop()
         for op_id in transaction.ops:
             self.document.ops.append(self._undone_ops.pop(op_id))

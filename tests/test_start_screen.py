@@ -1056,3 +1056,22 @@ def test_the_manual_button_names_its_action(qt_app: QApplication) -> None:
         f"{knopf.text()!r} misst {knopf.sizeHint().width()}, die Nachbarn {nachbarn}"
     )
     assert "fünfzehn" in knopf.toolTip(), "was wegfällt, steht im Hinweis"
+
+
+def test_the_filter_survives_a_half_dismantled_screen(screen: StartScreen) -> None:
+    """Im Abbau gibt es die Menge der Tastaturziele nicht mehr.
+
+    Der Filter läuft weiter, während das Python-Objekt schon ausgeräumt wird —
+    zehnmal reproduziert, jedes Mal ein ``AttributeError`` auf
+    ``_focus_targets``. Aus einem Ereignisfilter heraus kommt der bei niemandem
+    an, den er etwas anginge; er verschwindet auf stderr.
+
+    Nachgestellt wird der Zustand, nicht der Zeitpunkt: Das Feld ist weg, die
+    beiden Ereignisse kommen trotzdem.
+    """
+    from PySide6.QtCore import QEvent
+
+    del screen._focus_targets
+
+    assert screen.eventFilter(screen.new_button, QEvent(QEvent.Type.Destroy)) is False
+    screen.eventFilter(screen.new_button, QEvent(QEvent.Type.FocusIn))

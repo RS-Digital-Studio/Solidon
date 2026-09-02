@@ -37,7 +37,7 @@ from typing import Any, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
-from app.core.errors import ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, ValidationError
 from app.core.ingest.loader import MAX_FILE_BYTES
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
@@ -925,6 +925,17 @@ def save(project: Project, path: Path) -> Path:
                 size=size,
                 limit=MAX_PROJECT_FILE_BYTES,
             )
+        if os.name == "posix":
+            # ``mkstemp`` legt mit 0600 an, und das Umbenennen trägt die
+            # Rechte mit: Das Projekt gehörte danach allein dem Nutzer, auch
+            # wo seine Umask etwas anderes sagt — ein Wechsel des Rechners
+            # oder eine gemeinsame Gruppe kam nicht mehr an die Datei. Also
+            # bekommt sie vor dem Wechsel die Rechte, die eine normal
+            # angelegte Datei hätte. Die Umask lässt sich nur lesen, indem man
+            # sie setzt; Windows kennt weder sie noch diese Bits.
+            mask = os.umask(0)
+            os.umask(mask)
+            temporary.chmod(0o666 & ~mask)
         # Das zufällige, exklusiv angelegte Ziel liegt im selben Ordner; der
         # Wechsel bleibt damit atomar, ohne ein vorhersagbares ``.part``-Ziel
         # zu öffnen oder einer dort vorbereiteten Verknüpfung zu folgen.
@@ -1072,12 +1083,17 @@ def load(path: Path) -> Project:
             constraint="damaged",
             values={"path": path.name},
         ) from problem
+    except PROGRAMMING_ERRORS:
+        # **Ein falscher Aufruf ist keine kaputte Datei.** ``TypeError`` und
+        # ``AttributeError`` standen in der Sammelliste darunter, und damit
+        # las der Kunde „Der Projektinhalt ist beschädigt" über einem Fehler
+        # in unserem Code — ohne Fehlerbericht, und auf jedem Rechner
+        # dasselbe (`errors.PROGRAMMING_ERRORS`).
+        raise
     except (
-        AttributeError,
         KeyError,
         OverflowError,
         RecursionError,
-        TypeError,
         UnicodeError,
         ValueError,
     ) as problem:
@@ -1087,7 +1103,7 @@ def load(path: Path) -> Project:
         # Handlungsvorschlag (Regel 17; Fund des Gesamtreviews vom
         # 25.08.2026). Ein ``ValidationError`` von tiefer unten — etwa die
         # unbekannte Passungsart — läuft hier unverändert durch: er ist
-        # keiner dieser drei Typen.
+        # keiner dieser fünf Typen.
         raise ValidationError(
             field="container",
             detail=_("Der Projektinhalt ist beschädigt."),

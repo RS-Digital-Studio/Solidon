@@ -33,7 +33,7 @@ Dieses Projekt trennt streng, und die Trennung ist getestet.
 | Bezeichner, Dateinamen, Modulnamen | Englisch |
 | Docstrings, Kommentare | **Deutsch** |
 | Schlüssel in Projektdatei und Schemata | Englisch |
-| Oberflächentexte | Deutsch **und** Englisch über `tr()` |
+| Oberflächentexte | Deutsche Quelle über `tr()`, jeder Katalog aus `app/i18n/locales/` zieht nach |
 | Doku, Bauplan, Roadmap, Commits | Deutsch |
 
 Gespräch mit Robert: Deutsch, echte Umlaute, keine Emojis.
@@ -56,8 +56,10 @@ in Bauplan §4.2, dann in den Code — nicht umgekehrt.
 3. **Deutsche Stämme in Bezeichnern** unter `app/` — das prüft
    `tests/test_language_rules.py`, aber ein Fund vor dem roten Lauf ist
    billiger.
-4. **Deutsche Docstrings in `app/`.** Fallen keinem Test auf und sind trotzdem
-   falsch. In `tests/` sind sie erlaubt.
+4. **Englische Docstrings in `app/`** — Restbestand aus der Zeit vor der
+   Übersetzung. Fallen keinem Test auf und sind trotzdem falsch; was neu
+   dazukommt, wird deutsch geschrieben. Assert-Meldungen in `tests/` bleiben
+   beim Bestand ihrer Datei.
 5. **Typografie in Oberflächentexten**: „20 × 20 mm" mit echtem Malzeichen,
    deutsche Anführungszeichen, Umlaute ausgeschrieben.
 

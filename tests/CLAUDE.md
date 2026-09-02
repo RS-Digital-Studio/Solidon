@@ -61,6 +61,7 @@ nicht verfälschen.
 | Neun Menüs, zwölf Zeilen, acht Felder | `test_interface_limits.py` |
 | Sind alle Kataloge vollständig? | `test_translations.py` |
 | Bleiben Käuferzuordnung und Betreiberzugang aus dem Server und arbeitet die Support-Verwaltung nur per Digest? | `test_licence_admin.py`, `test_activation_server.py` |
+| Halten die PHP-Endpunkte ihre Missbrauchsgrenzen? | `test_public_php_security.py`; ohne PHP ein Skip, in der Linux-CI ein Fehler — `php_probe.py` entscheidet das für alle Endpunkttests |
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`) |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |

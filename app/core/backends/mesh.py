@@ -22,13 +22,15 @@ Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
 ``optional`` deklarierter: die Oberfläche schickt sie immer alle mit, und
 mancher Knoten liest sie ungeprüft.
 
-**Warum TripoSG voreingestellt ist.** TripoSG (VAST-AI-Research) steht mit
-Quelltext und Gewichten unter der permissiven MIT-Lizenz und lässt sich lokal
-reproduzierbar einrichten. Gemessen an vier Fällen vom glatten Drehkörper bis
-zur Figur mit dünnen Fortsätzen kam jedes Mal ein geschlossener Körper aus
-einem Stück heraus. Andere Modelle, darunter Hunyuan3D, haben eigene
-Bedingungen, die für die konkret eingesetzte Fassung vor dem Einsatz geprüft
-werden müssen.
+**Warum TripoSG voreingestellt ist.** TripoSG (VAST-AI-Research) weist mit
+Quelltext und Modellkarte die MIT-Lizenz aus — die vollständige Lizenzkette
+der Gewichte und der eingebundenen Modelle wird geprüft (Register P9;
+Entscheidung Robert 02.09.2026: in Betrieb, solange die Prüfung nichts anderes
+ergibt) — und lässt sich lokal reproduzierbar einrichten. Gemessen an vier
+Fällen vom glatten Drehkörper bis zur Figur mit dünnen Fortsätzen kam jedes
+Mal ein geschlossener Körper aus einem Stück heraus. Andere Modelle, darunter
+Hunyuan3D, haben eigene Bedingungen, die für die konkret eingesetzte Fassung
+vor dem Einsatz geprüft werden müssen.
 
 Solidon liefert weiterhin keine Gewichte mit. Erst die ausdrücklich gestartete
 Einrichtung holt sie in das lokale ComfyUI; welches Modell eingesetzt wird,
@@ -354,9 +356,14 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         with opener_for(url).open(request, timeout=TIMEOUT_SECONDS) as answer:
             return bytes(answer.read())
     except urllib.error.HTTPError as error:
-        raise GenerationFailed(
-            detail=f"{error.code}: {error.read().decode('utf-8', errors='replace')[:300]}"
-        ) from error
+        # Ein HTTPError ist selbst eine offene Antwort: nach dem Lesen
+        # schließen, sonst bleibt ein Handle zurück (im Testlauf eine
+        # ResourceWarning, die Python 3.14 beim Aufräumen meldet).
+        try:
+            reason = error.read().decode("utf-8", errors="replace")[:300]
+        finally:
+            error.close()
+        raise GenerationFailed(detail=f"{error.code}: {reason}") from error
     except ConnectionError as error:
         # **Der Abbruch mitten in der Antwort**, und deshalb vor dem Fall
         # darunter: urllib wickelt einen Verbindungsfehler beim
@@ -1033,11 +1040,22 @@ class ComfyBackend:
             time.sleep(self.poll_seconds)
 
     def _cancel_job(self, job: str) -> None:
-        """Entfernt genau diesen wartenden Auftrag oder unterbricht genau ihn."""
-        actions = (
-            ("queue", {"delete": [job]}),
-            ("interrupt", {"prompt_id": job}),
-        )
+        """Nimmt diesen Auftrag aus der Schlange — und unterbricht nur ihn.
+
+        **``/interrupt`` wählt nicht aus.** ComfyUI beendet damit, was gerade
+        rechnet, gleich von wem es stammt; das ``prompt_id`` im Rumpf sieht wie
+        eine Auswahl aus und ist keine. Unbedingt geschickt traf der Abbruch
+        deshalb auf einem geteilten Server den **fremden** Auftrag, der gerade
+        lief — und der eigene wartete davor unversehrt weiter.
+
+        Gefragt wird darum zuerst die Warteschlange: Läuft der eigene Auftrag,
+        wird unterbrochen; wartet er nur, genügt ``delete``. Ohne Auskunft wird
+        nicht unterbrochen — ein eigener Auftrag, der zu Ende rechnet, kostet
+        weniger als ein fremder, der abbricht.
+        """
+        actions: list[tuple[str, dict[str, object]]] = [("queue", {"delete": [job]})]
+        if self._is_running(job):
+            actions.append(("interrupt", {"prompt_id": job}))
         for path, values in actions:
             try:
                 self.transport(
@@ -1080,6 +1098,27 @@ class ComfyBackend:
             for entry in queue.get(group) or ():
                 if isinstance(entry, list) and job in [str(field) for field in entry]:
                     return True
+        return False
+
+    def _is_running(self, job: str) -> bool:
+        """Rechnet ComfyUI gerade an genau diesem Auftrag?
+
+        Enger als :meth:`_still_working`, und der Unterschied ist der Grund für
+        die eigene Methode: Ein wartender Auftrag lässt sich löschen, ein
+        laufender nur unterbrechen — und ``/interrupt`` trifft den, der gerade
+        rechnet, nicht den, den man nennt.
+
+        Ein Fehlschlag heißt hier **False**: Ohne Auskunft wird nicht
+        unterbrochen.
+        """
+        try:
+            answer = self.transport(f"{self.base}/queue", None, {})
+            queue = json.loads(answer.decode("utf-8"))
+        except (AppError, OSError, ValueError):
+            return False
+        for entry in queue.get("queue_running") or ():
+            if isinstance(entry, list) and job in [str(field) for field in entry]:
+                return True
         return False
 
     def _waiting_text(self, job: str, seconds: float) -> str:

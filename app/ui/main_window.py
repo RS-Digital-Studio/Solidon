@@ -752,7 +752,14 @@ class _PartExportWorker(Worker):
 
 
 class _PartRemoveWorker(Worker):
-    """Einen lokalen Bibliothekseintrag samt exaktem Rückweg entfernen."""
+    """Einen lokalen Bibliothekseintrag samt exaktem Rückweg entfernen (§2.8).
+
+    Ein Abbruch wird nicht angeboten, aus demselben Grund wie beim Einlesen
+    (:class:`_PartImportWorker`): Datei und Register werden im Kern als eine
+    Transaktion geändert und dürfen nicht auf halbem Weg stehen bleiben. Der
+    Rückweg ist der Bytestand, den das Entfernen zurückgibt — nicht ein
+    Anhalten mittendrin.
+    """
 
     done = Signal(object)
     failed = Signal(object)
@@ -776,7 +783,13 @@ class _PartRemoveWorker(Worker):
 
 
 class _PartRestoreWorker(Worker):
-    """Den bytegenauen Rückweg einer Bibliotheksentfernung ausführen."""
+    """Den bytegenauen Rückweg einer Bibliotheksentfernung ausführen (§2.8).
+
+    Auch hier kein Abbruch: Das Zurücklegen ist die zweite Hälfte einer
+    Handlung, die der Kunde schon zurückgenommen hat. Wer sie mittendrin
+    anhielte, ließe die Bibliothek in einem Zustand zurück, den niemand
+    gewollt hat — und dafür gibt es keinen zweiten Rückweg.
+    """
 
     done = Signal(object)
     failed = Signal(object)
@@ -4201,9 +4214,15 @@ class MainWindow(QMainWindow):
         dialog.nodesRequested.connect(lambda: self._offer_generator_nodes(dialog))
         if image is not None:
             dialog.set_image(image)
-        if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
-            return
-        self.session.add_generated(dialog.result_mesh)
+        try:
+            if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
+                return
+            self.session.add_generated(dialog.result_mesh)
+        finally:
+            # Die zwei Lambdas darüber fangen das Fenster, und der Dialog ist
+            # sein Kind — ohne Freigeben überlebt beides den Aufruf
+            # (dieselbe Stelle wie in :meth:`_exec_catalog`).
+            dialog.deleteLater()
 
     def action_auto_split(self, object_id: ObjectId | None = None) -> None:
         """§25: das gewählte Teil teilen, bis es passt, und die Nähte
@@ -4971,11 +4990,19 @@ class MainWindow(QMainWindow):
 
     def _exec_catalog(self, catalog: PartCatalog) -> None:
         """Den Katalog ausführen und eine bestätigte Einfügeauswahl anwenden."""
-        if catalog.exec() != PartCatalog.DialogCode.Accepted:
-            return
-        name = catalog.chosen()
-        if name:
-            self.run_operation(REGISTRY.get(part_op_name(name)))
+        try:
+            if catalog.exec() != PartCatalog.DialogCode.Accepted:
+                return
+            name = catalog.chosen()
+            if name:
+                self.run_operation(REGISTRY.get(part_op_name(name)))
+        finally:
+            # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
+            # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
+            # das ganze Fenster samt Kachelliste bis zum Programmende fest.
+            # Im ``finally``, weil der abgebrochene Katalog der häufigere Fall
+            # ist — genau der, der vorher hängenblieb.
+            catalog.deleteLater()
 
     def _insert_readiness(self) -> tuple[bool, str]:
         """Ob sich gerade ein Baustein einsetzen lässt — und sonst warum nicht.
@@ -10497,6 +10524,12 @@ class MainWindow(QMainWindow):
         Schnittstelle bleibt aus, und es steht im Protokoll. Ein modaler Fehler
         beim Start wäre die schlechteste aller Antworten auf eine Einstellung,
         die mit dem Konstruieren nichts zu tun hat.
+
+        **Im Protokoll allein stand es aber zu leise** (Regel 17): Der Haken in
+        den Einstellungen blieb gesetzt, und nichts sagte, dass die
+        Fernsteuerung nicht läuft — wer ein fremdes Programm darauf zeigen
+        ließ, suchte den Fehler dort. Die Statuszeile nennt jetzt den Port und
+        den Weg zurück zu ihm.
         """
         if self._remote is not None:
             self._remote.stop()
@@ -10508,6 +10541,12 @@ class MainWindow(QMainWindow):
             server.start()
         except OSError as problem:
             _log.warning("mcp server did not start: %s", problem)
+            self.announce(
+                tr(
+                    "Die Fernsteuerung bleibt aus: Port {port} ist belegt. "
+                    "Unter Bearbeiten → Einstellungen … lässt sich ein anderer wählen."
+                ).format(port=self.settings.remote_port)
+            )
             return
         self._remote = server
 

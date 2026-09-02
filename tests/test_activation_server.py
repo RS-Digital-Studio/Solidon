@@ -5,7 +5,6 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-import shutil
 import socket
 import sqlite3
 import subprocess
@@ -18,6 +17,7 @@ from urllib.request import Request, urlopen
 import pytest
 
 from app.core.activation import certificate, device, ed25519, key
+from tests.php_probe import missing_php, php_executable
 from tools.make_licence_keys import make_key
 from tools.setup_activation_server import main as setup_activation_server
 
@@ -78,9 +78,7 @@ class _MemoryKeyring:
 
 
 def _php_command(port: int) -> list[str]:
-    executable = shutil.which("php")
-    if executable is None:
-        pytest.skip("PHP fehlt; der Server-Integrationstest braucht PHP 7.4+")
+    executable = php_executable("PHP fehlt; der Server-Integrationstest braucht PHP 7.4+")
     command = [executable]
     modules = subprocess.run(
         [executable, "-m"], capture_output=True, text=True, check=False
@@ -90,7 +88,7 @@ def _php_command(port: int) -> list[str]:
         sodium = extension / ("php_sodium.dll" if os.name == "nt" else "sodium.so")
         sqlite = extension / ("php_pdo_sqlite.dll" if os.name == "nt" else "pdo_sqlite.so")
         if not sodium.is_file() or not sqlite.is_file():
-            pytest.skip("PHP ist ohne sodium oder PDO_SQLITE installiert")
+            missing_php("PHP ist ohne sodium oder PDO_SQLITE installiert")
         command += [
             "-d",
             f"extension_dir={extension}",
