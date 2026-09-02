@@ -84,6 +84,11 @@ Tabellenzeile verlangen; ihr Katalog und das Pfadschema müssen genügen.
 abgeleitete) · `make_installer.py` (baut lokal oder schreibt mit
 `--signing-handoff` den vollständigen Windows-App-Baum und alle festen
 Installer-Eingänge als sortierte relative Pfadliste samt SHA-256) ·
+`sign_release.py` (signiert das Windows-Paket **lokal** aus genau dieser
+Übergabe: Archiv und jede Prüfsumme prüfen, Anwendung mit dem
+Certum-Cloud-Zertifikat über SimplySign signieren, Installer bauen,
+Setup-Datei signieren, `.sha256` daneben — hält bei jeder Abweichung an,
+bevor ein Zertifikat ins Spiel kommt; die CI signiert Windows nicht) ·
 `make_linux_packages.py` (verlangt für AppImage den
 bereits geprüften Laufzeitkern in `APPIMAGETOOL_RUNTIME_FILE`) ·
 `make_macos_package.py` · `make_download.py` · `sign_version.py` ·
