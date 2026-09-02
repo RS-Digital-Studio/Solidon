@@ -100,7 +100,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
-| Ein Worker stirbt auf Ubuntu am ersten Dialogaufbau — verdeckt, nicht behoben | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Antwort, **welcher** Test etwas hinterlässt, das den nächsten Dialogaufbau auf demselben Worker umbringt. Gemessen: Lauf 4 (`33693498309`) mit 7207 Tests sauber, Lauf 5 (`33695122405`) mit 7208 zweimal `gw3 crashed` am ersten Test von `test_print_settings_ui.py` — der eine zusätzliche Test ist der **Auslöser**, nicht die Ursache, weil xdist danach anders verteilt. Ausgeschlossen: Testinhalt (auf Windows einzeln, seriell und mit `-n 4` grün), Umgebung des Workers (in Lauf 4 dieselbe), xcb-Bibliotheken und der Startpfad `qt_platform` (alle sechs CI-Lagen durchgerechnet, kein Eingriff). Die Datei läuft seit `cc5c6a99` in einem eigenen Prozess — **eine Grenze, keine Diagnose** |
+| Ein Worker stirbt auf Ubuntu am ersten Dialogaufbau — verdeckt, nicht behoben | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Antwort, **welcher** Test etwas hinterlässt, das den nächsten Dialogaufbau auf demselben Worker umbringt. Gemessen: Lauf 4 (`33693498309`) mit 7207 Tests sauber, Lauf 5 (`33695122405`) mit 7208 zweimal `gw3 crashed` am ersten Test von `test_print_settings_ui.py`. Der eine zusätzliche Test ist der einzige bekannte Unterschied, **taugt aber nicht als Erklärung**: xdist verteilt hier dynamisch (`--dist load`, nirgends gesetzt), die Zuordnung ist je Lauf verschieden — dass zweimal dieselbe Stelle traf, spricht deshalb für etwas Systematisches. Die Nachbarschaft ist aus den Läufen **nicht** rekonstruierbar (ohne `-v` steht sie nirgends); der nächste Schritt ist ein Probelauf mit `--dist loadfile` auf Linux. Ausgeschlossen: Testinhalt (auf Windows einzeln, seriell und mit `-n 4` grün), Umgebung des Workers (in Lauf 4 dieselbe), xcb-Bibliotheken und der Startpfad `qt_platform` (alle sechs CI-Lagen durchgerechnet, kein Eingriff). Die Datei läuft seit `cc5c6a99` in einem eigenen Prozess — **eine Grenze, keine Diagnose** |
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels`. **Vierte Messung am 27.08.2026 (30):** Die Datei trägt inzwischen **307** statt 303 Tests, und der Satz „mit `-p no:randomly` laufen alle durch" gilt nicht mehr — drei Läufe unter dem Schloss, mit fester Reihenfolge, gaben **1 von 3**: einmal Zugriffsverletzung bei 70 Prozent, zweimal 307 passed. Stelle wie gehabt `panels.py` unter `_show_scene`, diesmal `show_result`, ausgelöst aus `_with_two_objects` über `wait_for_idle`. Damit ist die Reihenfolge als Bedingung **widerlegt** und die Zusammensetzung bestätigt: Vier Tests mehr genügen, um die Mine auch bei fester Reihenfolge scharf zu machen. Eine Zuschreibung an die Commits des Tages ist bei dieser Rate nicht führbar — sie bräuchte viele Läufe je Seite —, und der Absturzstapel führt durch `main_window.py`, das während der Messung von einer anderen Sitzung geändert wurde. `test_operation_ui.py` riss im selben Torlauf mit und lief einzeln mit 67 passed durch: dort war es Fremdlast |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
@@ -14265,12 +14265,24 @@ bleibt, steht hier mit Kästchen.
       (Lauf 5) starb `gw3` **zweimal** an derselben Stelle, beim ersten Test
       der Datei (`test_the_save_button_says_what_it_is_waiting_for`), Ergebnis
       `7207 passed, 1 failed` mit `worker 'gw3' crashed while running`. Der
-      einzige Unterschied zwischen beiden Läufen ist die Sammlungsgröße —
-      **7207 gegen 7208**, weil `test_a_head_request_is_served_and_never_counted`
-      repariert wurde und wieder läuft. Damit ist dieser Test der **Auslöser
-      und nicht die Ursache**: xdist verteilt bei einem Test mehr anders, `gw3`
-      bekommt eine andere Nachbarschaft, und dort liegt etwas, das den ersten
-      Dialogaufbau umbringt.
+      einzige bekannte Unterschied zwischen beiden Läufen ist die
+      Sammlungsgröße — **7207 gegen 7208**, weil
+      `test_a_head_request_is_served_and_never_counted` repariert wurde und
+      wieder läuft.
+
+      **Der Schluss „ein Test mehr, also andere Verteilung, also Absturz" wurde
+      hier zuerst gezogen und trägt nicht.** Er setzt voraus, dass xdist
+      deterministisch verteilt; gemessen (3d-druck-7b) setzt weder `build.yml`
+      noch `pyproject.toml` ein `--dist`, es gilt also der Standard `load` von
+      pytest-xdist 3.8.0: Jeder Worker bekommt den nächsten Test, sobald er
+      frei wird, und die Zuordnung hängt an der Ausführungsgeschwindigkeit.
+      Sie ist **von Lauf zu Lauf verschieden, auch ohne zusätzlichen Test**.
+
+      Damit wird die Beobachtung auffälliger statt erklärbarer: Dass zwei
+      unabhängige Anläufe desselben Laufs genau dieselbe Stelle treffen, ist
+      bei dynamischer Verteilung unwahrscheinlich — es sei denn, dort passiert
+      etwas Systematisches. Der reparierte Test bleibt der einzige bekannte
+      Unterschied, taugt aber nicht als Erklärung.
 
       **Ausgeschlossen ist:** der Testinhalt (3d-druck-85 auf Windows: einzeln
       1 grün, Datei seriell 114 grün, mit `-n 4` wie der Runner 114 grün); die
@@ -14294,8 +14306,14 @@ bleibt, steht hier mit Kästchen.
 
       **Offen ist die eine Frage:** Welcher Test hinterlässt was, das den
       nächsten Dialogaufbau auf demselben Worker umbringt — und warum nur auf
-      Linux? Solange die beiden Läufe abrufbar sind, ist die auslösende
-      Verteilung rekonstruierbar; danach nicht mehr.
+      Linux? **Aus den Läufen ist das nicht mehr zu holen**, auch nicht,
+      solange sie existieren: Ohne `-v` steht im Protokoll nur der Absturz,
+      welche Tests `gw3` vorher gefahren hat, steht nirgends (geprüft). Der
+      billigste nächste Schritt ist deshalb ein einzelner Probelauf mit
+      `--dist loadfile` **auf Linux**: Dann liegt eine Datei je Worker, die
+      Verteilung ist reproduzierbar, und ein Absturz gehört einer Datei statt
+      einer Wolke. Auf Windows ist er nicht zu führen — dort stürzt in keiner
+      Lage etwas ab, ein grüner Lauf bewiese nichts.
 - [x] **Zwei Dialogdateien liefen in der CI in Fünferportionen — und die
   Portionsgröße war die falsche Achse.** Am selben Abend riss Portion 14 von
   `test_print_settings_ui.py` in beiden Anläufen, lokal auf Windows ebenso
