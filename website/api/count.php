@@ -197,6 +197,18 @@ function count_open_private_state(string $path, bool $create = true, int $lockMo
         return null;
     }
     if (!count_stream_is_named_private($path, $stream)) {
+        // **Ein Zähler, der nicht mehr zählt, muss es sagen.** In der Nacht auf
+        // den 03.09.2026 hat ein Wartungseingriff die Monatsdatei per FTPS
+        // ersetzt; sie kam mit 0644 zurück statt mit den 0600, die diese
+        // Prüfung verlangt. Danach nahm `count.php` jede Anfrage an, antwortete
+        // mit 302 beziehungsweise 204 und schrieb zwei Stunden lang keine
+        // Zeile — von außen nicht zu unterscheiden von „niemand war da". Die
+        // Prüfung bleibt, denn sie hält eine untergeschobene Datei ab; still
+        // scheitern darf sie nicht.
+        error_log(sprintf(
+            'Solidon: %s ist nicht privat (Rechte, Verweis oder Mehrfachverweis) — es wird nichts gezählt.',
+            basename($path)
+        ));
         flock($stream, LOCK_UN);
         fclose($stream);
         return null;

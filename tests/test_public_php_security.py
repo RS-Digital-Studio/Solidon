@@ -50,6 +50,7 @@ def _php_server(
     extra_environment: dict[str, str] | None = None,
     *,
     prepend: Path | None = None,
+    error_log: Path | None = None,
 ) -> Iterator[str]:
     php = php_executable("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
     port = _free_port()
@@ -62,6 +63,10 @@ def _php_server(
     command = [php]
     if prepend is not None:
         command.extend(["-d", f"auto_prepend_file={prepend}"])
+    if error_log is not None:
+        # Ohne eigene Datei schreibt PHP nach stderr, und das geht hier nach
+        # DEVNULL — ein Test, der eine Meldung erwartet, sähe nie eine.
+        command.extend(["-d", "log_errors=1", "-d", f"error_log={error_log}"])
     command.extend(["-S", f"127.0.0.1:{port}", "-t", "website"])
     process = subprocess.Popen(
         command,
@@ -1792,3 +1797,54 @@ def test_head_reaches_the_statistics_page_like_a_get(tmp_path: Path) -> None:
     assert get_headers["Content-Type"].startswith("text/html")
     assert head_body == "", "ein HEAD trägt keinen Rumpf"
     assert "<form" in get_body, "der GET dagegen zeigt die Anmeldung"
+
+
+def test_a_counter_that_stops_counting_says_so(tmp_path: Path) -> None:
+    """Ein Zähler, der nicht mehr zählt, darf nicht schweigen.
+
+    In der Nacht auf den 03.09.2026 hat ein Wartungseingriff die Monatsdatei
+    per FTPS ersetzt. Sie kam mit 0644 zurück statt mit den 0600, die
+    ``count_stream_is_named_private`` verlangt — und danach nahm ``count.php``
+    jede Anfrage an, antwortete mit 302 und schrieb zwei Stunden lang keine
+    Zeile. Von außen war das nicht von „niemand war da" zu unterscheiden;
+    gefunden wurde es erst, weil jemand die Dateigröße vor und nach einem
+    Abruf verglich.
+
+    Die Prüfung selbst bleibt — sie hält eine untergeschobene Datei ab. Aber
+    sie schreibt jetzt ins Fehlerprotokoll, und der Betreiber findet in
+    Minuten, was ihn sonst Stunden kostet.
+
+    **Ausgelöst wird der Zweig hier über einen Mehrfachverweis, nicht über die
+    Rechte.** ``count_stream_is_named_private`` verlangt beides —
+    ``nlink === 1`` und, nur auf POSIX, ``mode & 0077 === 0``. Der echte Fall
+    waren die Rechte; ein Test darauf übersprünge sich auf Windows und liefe
+    auf der Maschine, an der er geschrieben wird, nie. Ein harter Verweis
+    trifft denselben Zweig und läuft überall.
+    """
+    stats = tmp_path / "stats"
+    stats.mkdir()
+    _chmod_private(stats)
+    _chmod_private(tmp_path)
+    month = stats / f"{_utc_month(0)}.jsonl"
+    month.write_text("", encoding="utf-8")
+    _chmod_private(month)
+    os.link(month, stats / "zweiter-name.jsonl")
+    assert month.stat().st_nlink == 2, "die Voraussetzung des Tests, nicht seine Annahme"
+
+    protokoll = tmp_path / "php-fehler.log"
+    downloads = ROOT / "website" / "dl"
+    downloads.mkdir(parents=True, exist_ok=True)
+    package = "Solidon3D-Setup-0.0.0-stumm.exe"
+    (downloads / package).write_bytes(b"kein echtes Paket")
+    try:
+        with _php_server(tmp_path, {"SOLIDON_STATS_DIR": str(stats)}, error_log=protokoll) as base:
+            status, _ziel = _without_redirects(f"{base}/count.php?f={package}", "GET")
+    finally:
+        (downloads / package).unlink(missing_ok=True)
+
+    assert status == 302, "die Weiterleitung bekommt der Besucher trotzdem"
+    assert month.read_text(encoding="utf-8") == "", "aber in eine solche Datei wird nicht gezählt"
+    gemeldet = protokoll.read_text(encoding="utf-8", errors="replace") if protokoll.exists() else ""
+    assert "ist nicht privat" in gemeldet, (
+        "und der Ausfall steht im Fehlerprotokoll, statt still zu bleiben: " + gemeldet[-400:]
+    )
