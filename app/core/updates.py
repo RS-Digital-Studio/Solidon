@@ -923,14 +923,22 @@ def _descriptor_path(descriptor: int) -> Path | None:
         elif name.startswith("\\\\?\\"):
             name = name[4:]
         return Path(name).resolve(strict=True)
+    # Dieselbe Frage wie in ``scene.project._opened_file_path``, und in
+    # derselben Reihenfolge: erst der Deskriptorpfad, wenn er wirklich
+    # woandershin zeigt, dann der Mac-Weg. Die Plattform zuerst zu fragen
+    # macht den Rest dort zu totem Code (mypy, `--platform darwin`).
+    descriptor_path = Path("/proc/self/fd") / str(descriptor)
+    if descriptor_path.exists():
+        resolved = descriptor_path.resolve(strict=True)
+        if resolved != descriptor_path:
+            return resolved
     if sys.platform == "darwin":
-        # Wie ``scene.project._opened_file_path``: `/dev/fd/N` ist auf dem Mac
-        # kein Symlink, und /proc gibt es nicht — F_GETPATH nennt den Pfad.
+        # `/dev/fd/N` ist auf dem Mac kein Symlink, und /proc gibt es nicht —
+        # F_GETPATH (50) nennt den Pfad.
         module = importlib.import_module("fcntl")
         raw = module.fcntl(descriptor, 50, b"\0" * 4096)
         return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
-    descriptor_path = Path("/proc/self/fd") / str(descriptor)
-    return descriptor_path.resolve(strict=True) if descriptor_path.exists() else None
+    return None
 
 
 def _posix_lock(descriptor: int, *, exclusive: bool) -> None:

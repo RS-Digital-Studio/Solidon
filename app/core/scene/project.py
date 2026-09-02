@@ -369,20 +369,27 @@ def _opened_file_path(stream: Any) -> Path:
             name = name[4:]
         return Path(name).resolve(strict=True)
 
+    # **Gefragt wird, ob der Deskriptorpfad wirklich woandershin zeigt.**
+    # `/dev/fd/N` gibt es auch auf dem Mac, aber dort ist es kein Symlink:
+    # `resolve()` gibt `/dev/fd/N` zurück, und der liegt unter keinem
+    # Projektordner — jede verknüpfte Quelle galt damit als absoluter Pfad
+    # (Tag-Lauf 0.3.0, 02.09.2026, acht Tests). Geprüft wird die Eigenschaft
+    # und nicht die Plattform: `if sys.platform == "darwin"` vor dieser
+    # Schleife macht den Rest auf dem Mac zu totem Code, und das meldet mypy
+    # dort als Fehler — auf Windows sieht man es nie (`mypy --platform darwin`).
+    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
+        descriptor = descriptor_root / str(stream.fileno())
+        if not descriptor.exists():
+            continue
+        resolved = descriptor.resolve(strict=True)
+        if resolved != descriptor:
+            return resolved
     if sys.platform == "darwin":
-        # **Vor der Deskriptorschleife, nicht danach.** `/dev/fd/N` gibt es
-        # auch auf dem Mac, aber dort ist es kein Symlink: `resolve()` liefert
-        # `/dev/fd/N` zurück, und der liegt unter keinem Projektordner — jede
-        # verknüpfte Quelle galt damit als absoluter Pfad (Tag-Lauf 0.3.0,
-        # 02.09.2026, acht Tests). F_GETPATH (50) nennt den echten Pfad.
+        # F_GETPATH (50) nennt den Pfad, den der Mac nicht verlinkt.
         import fcntl
 
         raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 4096)
         return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
-    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
-        descriptor = descriptor_root / str(stream.fileno())
-        if descriptor.exists():
-            return descriptor.resolve(strict=True)
     raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
 
 
