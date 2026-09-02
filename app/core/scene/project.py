@@ -369,15 +369,20 @@ def _opened_file_path(stream: Any) -> Path:
             name = name[4:]
         return Path(name).resolve(strict=True)
 
-    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
-        descriptor = descriptor_root / str(stream.fileno())
-        if descriptor.exists():
-            return descriptor.resolve(strict=True)
     if sys.platform == "darwin":
+        # **Vor der Deskriptorschleife, nicht danach.** `/dev/fd/N` gibt es
+        # auch auf dem Mac, aber dort ist es kein Symlink: `resolve()` liefert
+        # `/dev/fd/N` zurück, und der liegt unter keinem Projektordner — jede
+        # verknüpfte Quelle galt damit als absoluter Pfad (Tag-Lauf 0.3.0,
+        # 02.09.2026, acht Tests). F_GETPATH (50) nennt den echten Pfad.
         import fcntl
 
         raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 4096)
         return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
+    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
+        descriptor = descriptor_root / str(stream.fileno())
+        if descriptor.exists():
+            return descriptor.resolve(strict=True)
     raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
 
 

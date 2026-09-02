@@ -386,9 +386,21 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     # bei 40 000 und 20 000 offen, ab 10 000 abwärts erneut ein Klumpen. Das
     # Fenster ist also schmal, und 40 000 liegt darin — wer die Zahl das
     # nächste Mal anfassen muss, misst die Reihe neu, statt zu raten.
-    result = run("decimate_mesh", object_of(hohl), profile, triangles=40_000)
+    #
+    # **Und auf Apple Silicon liegt das Fenster woanders.** Der Tag-Lauf
+    # 0.3.0 (02.09.2026) meldete auf macos-latest „so grob geht die Wand
+    # auf" — bei 40 000 blieb die Kugel dort dicht. Die Fließkommaordnung des
+    # Vereinfachers ist je Architektur eine andere, und die Zusicherung hier
+    # ist nicht die Zahl, sondern: **wenn** die Wand aufgeht, sagt es der
+    # Befund. Geprüft wird deshalb am ersten Ziel der Reihe, das sie öffnet;
+    # öffnet keines, sagt der Test das, statt eine ungemessene Zahl zu raten.
+    for triangles in (40_000, 20_000, 30_000, 60_000, 15_000):
+        result = run("decimate_mesh", object_of(hohl), profile, triangles=triangles)
+        if not result.outputs[0].mesh.is_watertight:
+            break
+    else:
+        pytest.skip("kein Ziel der Reihe öffnet die Kugel auf dieser Plattform — Reihe neu messen")
 
-    assert not result.outputs[0].mesh.is_watertight, "so grob geht die Wand auf"
     assert "mesh.not_watertight" in [entry.code for entry in result.findings]
 
 

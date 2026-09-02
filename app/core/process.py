@@ -268,9 +268,20 @@ def _taskkill(process_id: int, *, force: bool) -> None:
         return
 
 
-def _memory_options(memory_limit: int) -> dict[str, Any]:
-    """Setzt die Speichergrenze vor dem ersten fremden Maschinenbefehl."""
-    if os.name == "nt":
+def _memory_options(memory_limit: int, platform: str = sys.platform) -> dict[str, Any]:
+    """Setzt die Speichergrenze vor dem ersten fremden Maschinenbefehl.
+
+    **Auf macOS gibt es sie nicht.** ``setrlimit(RLIMIT_AS)`` lehnt der
+    Darwin-Kern ab (EINVAL), und ``subprocess`` macht daraus „Exception
+    occurred in preexec_fn" — ohne die Ursache, und bevor das Kind auch nur
+    gestartet ist. Der Tag-Lauf 0.3.0 (02.09.2026) zeigte es an sechzehn
+    Tests: Kein Slicer, kein Installer, kein Kindprozess wäre auf dem Mac
+    je gestartet. Ein Kind ohne Speichergrenze ist dort das kleinere Übel
+    als eines, das nicht startet; Zeit- und Ausgabegrenzen gelten weiter.
+    Die Plattform kommt als Parameter herein, damit der Zweig ohne Mac
+    prüfbar ist.
+    """
+    if os.name == "nt" or platform == "darwin":
         return {}
     resource = importlib.import_module("resource")
     setrlimit = cast(

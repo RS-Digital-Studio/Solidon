@@ -923,6 +923,12 @@ def _descriptor_path(descriptor: int) -> Path | None:
         elif name.startswith("\\\\?\\"):
             name = name[4:]
         return Path(name).resolve(strict=True)
+    if sys.platform == "darwin":
+        # Wie ``scene.project._opened_file_path``: `/dev/fd/N` ist auf dem Mac
+        # kein Symlink, und /proc gibt es nicht — F_GETPATH nennt den Pfad.
+        module = importlib.import_module("fcntl")
+        raw = module.fcntl(descriptor, 50, b"\0" * 4096)
+        return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
     descriptor_path = Path("/proc/self/fd") / str(descriptor)
     return descriptor_path.resolve(strict=True) if descriptor_path.exists() else None
 

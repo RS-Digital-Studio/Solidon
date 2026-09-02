@@ -982,8 +982,12 @@ def test_starting_hands_the_package_to_the_system(monkeypatch: pytest.MonkeyPatc
     else:
         # POSIX startet ausdrücklich vom vererbten Deskriptor, nicht vom
         # Cachepfad — der wäre dort keine Sperre gegen Austausch. Der Befehl
-        # nennt `/proc/self/fd/N`, und der Deskriptor reist über `pass_fds`.
-        assert any(str(entry).startswith("/proc/self/fd/") for entry in command), command
+        # nennt `/proc/self/fd/N` — auf dem Mac `/dev/fd/N`, denn dort gibt
+        # es kein /proc (Tag-Lauf 02.09.2026) —, und der Deskriptor reist
+        # über `pass_fds`.
+        assert any(str(entry).startswith(("/proc/self/fd/", "/dev/fd/")) for entry in command), (
+            command
+        )
         assert options["pass_fds"], "der Deskriptor wird nicht vererbt"
     assert options["cwd"] == Path(updates.sys.executable).resolve().parent
     assert options["stdout"] == updates.subprocess.DEVNULL

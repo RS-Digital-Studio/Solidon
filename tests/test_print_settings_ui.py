@@ -2881,6 +2881,14 @@ def test_the_spool_colour_is_big_enough_to_read(qt_app: QApplication) -> None:
     hoch.setFixedHeight(40)
     klein = QLabel("Text")
     klein.setFixedHeight(6)
+    # Mit einer Schrift, deren Zeile unter dem Listenmaß bleibt: Offscreen
+    # hat Windows keine Schrift und meldet 14 Punkte, der Mac hat eine und
+    # meldet zwanzig — dann wäre „nie unter dem Listenmaß" dort nicht
+    # prüfbar (Tag-Lauf 02.09.2026). Die Zusicherung hängt nicht an der
+    # Schrift, also bekommt die Zeile eine, die sicher darunter liegt.
+    tiny = klein.font()
+    tiny.setPointSize(3)
+    klein.setFont(tiny)
 
     assert swatch_size(hoch) == 40, "so hoch wie die Zeile"
     assert swatch_size(klein) == SWATCH_PIXELS, "aber nie unter dem Listenmaß"

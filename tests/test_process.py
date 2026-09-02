@@ -287,6 +287,9 @@ def test_a_blocking_stream_callback_cannot_disable_cancellation(tmp_path: Path) 
     assert time.monotonic() - begun < 3.0
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin", reason="Darwin setzt RLIMIT_AS nicht — siehe _memory_options"
+)
 def test_limited_process_enforces_the_memory_budget(tmp_path: Path) -> None:
     script = "chunks = []\nwhile True:\n    chunks.append(bytearray(2 * 1024 * 1024))"
 
@@ -357,3 +360,14 @@ def test_posix_process_group_options_start_a_new_session(
     options = process.process_group_options(detached=True, no_window=True)
 
     assert options == {"close_fds": True, "start_new_session": True}
+
+
+def test_darwin_gets_no_address_space_limit_and_linux_does() -> None:
+    """Der Zweig ohne Mac geprüft: Auf Darwin keine Vorbereitung, sonst ``preexec_fn``.
+
+    Der Tag-Lauf 0.3.0 riss auf dem Mac an sechzehn Kindprozessen, weil der
+    Kern ``RLIMIT_AS`` ablehnt und ``subprocess`` die Ursache verschluckt.
+    """
+    assert process._memory_options(64 * 1024 * 1024, platform="darwin") == {}
+    if os.name != "nt":
+        assert "preexec_fn" in process._memory_options(64 * 1024 * 1024, platform="linux")

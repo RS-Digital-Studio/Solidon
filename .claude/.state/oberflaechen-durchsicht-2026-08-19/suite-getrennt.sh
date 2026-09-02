@@ -405,9 +405,15 @@ for file in $windowed; do
   done
 
   teil=0
-  while [ "${#warteschlange[@]}" -gt 0 ]; do
+  # **bash 3.2 (macOS) meldet ein leeres Array unter `set -u` als unbound.**
+  # `${#feld[@]}` und `"${feld[@]}"` scheitern dort, sobald das Feld leer
+  # ist — erst bash 4.4 nimmt das hin. Die CI sourct dieses Skript für
+  # ihre Funktionen auch auf dem Mac (tests/test_suite_script.py, Tag-Lauf
+  # 02.09.2026); deshalb fragt die Schleife nach dem ersten Element und
+  # entfaltet das Feld nur, wenn es eines hat.
+  while [ -n "${warteschlange[0]+x}" ]; do
     stueck=${warteschlange[0]}
-    warteschlange=("${warteschlange[@]:1}")
+    warteschlange=(${warteschlange[@]+"${warteschlange[@]:1}"})
     von=${stueck%%:*}
     bis=${stueck##*:}
     teil=$((teil + 1))
@@ -431,7 +437,7 @@ for file in $windowed; do
       # und sollen unmittelbar folgen, damit das Protokoll in der Reihenfolge
       # bleibt, in der jemand es liest.
       mitte=$((von + groesse / 2 - 1))
-      warteschlange=("$von:$mitte" "$((mitte + 1)):$bis" "${warteschlange[@]}")
+      warteschlange=("$von:$mitte" "$((mitte + 1)):$bis" ${warteschlange[@]+"${warteschlange[@]}"})
       echo "--> geteilt in $von-$mitte und $((mitte + 1))-$bis (der Lauf verschluckte Tests)"
       continue
     fi

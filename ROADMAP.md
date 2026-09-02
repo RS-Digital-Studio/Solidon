@@ -157,6 +157,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Releaseakte meldet, sie blockiert nicht | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | den Tag-Lauf 0.3.0 als erste Messung: Ihre zwei Schritte (`--write-evidence`, `--release-check`) stehen seit dem Abend als Warnung im Lauf und halten das Artefakt nicht auf (Entscheidung Robert, 02.09.2026: kein Release hängt an einer Prüfung, die zum ersten Mal läuft); was dort steht, wird behoben, dann werden sie wieder scharf |
 | Der Schlüsseldialog wartet beim Sterben 2,3 s | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung, wer da wartet (`WorkerLeash`?), und einen Abbruch statt einer Frist beim Zerstören — sichtbar in jedem Teardown von `test_chat_ui` (61 s statt 19) und beim Kunden, wenn er den Dialog schließt, während die Modellabfrage läuft |
 | Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Vorprüfung in `minimum_width`, die ohne Aufweitung auskommt — 32 Öffnungen je Lauf sind die Vorprüfung, nur zwei Schichten gehen in die Bisektion; `simplify` als Vorprüfung ist gemessen teurer (0,17 s je Schicht) und bleibt draußen |
+| Auf dem Mac hat kein Kindprozess eine Speichergrenze | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | ein Mittel, das Darwin annimmt — `RLIMIT_AS` lehnt der Kern ab, und bis zum 02.09.2026 startete deshalb auf dem Mac kein Slicer und kein Installer; seither gilt dort nur Zeit- und Ausgabegrenze |
+| Zwei Zwillinge lesen den Pfad eines offenen Handles | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Funktion statt zweier: `scene.project._opened_file_path` und `updates._descriptor_path` tragen denselben Windows- und Mac-Code, und der Mac-Fehler musste zweimal behoben werden |
+| Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung auf einem Mac, was `_around_the_list` dort übersieht (Umbruch des Hinweises? Knopfhöhe?); bis dahin ist der Test dort ein erwarteter Fehlschlag |
+| Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Besitzer-SID vom Runner (`runneradmin`) — vermutlich die Administratorengruppe; bis das gemessen ist, überspringt sich der Test dort mit Grund |
+| Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | jemanden mit einem Mac, der die Reihe 60 000 / 40 000 / 20 000 / 10 000 an der hohlen Kugel misst; der Test sucht bis dahin selbst das erste Ziel, das die Wand öffnet |
 | Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | Review vor der Demo 0.3.0 (02.09.2026) | eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess, und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 0x800700e8 beim Start" (Robert, 02.09.2026, Bildschirmfoto); der Test bleibt grün, das Fenster ist ein Nebeneffekt der Testumgebung — den Enkel ohne Konsole starten oder den Fall auf einem Rechner mit klassischem Konsolenhost nachstellen |
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
@@ -14252,6 +14257,47 @@ bleibt, steht hier mit Kästchen.
   verliert — ein Eingriff in die Öffnungslogik, gemessen an Rändelplatte,
   Rippenplatte (`tests/test_slice_findings.py`) und Kugel, nicht in der
   Nacht vor einem Paket.
+- [ ] **Auf dem Mac hat kein Kindprozess eine Speichergrenze.** Der Tag-Lauf
+  0.3.0 war der erste, der die Suite auf macOS überhaupt gemessen hat, und
+  sechzehn Tests rissen an einer Stelle: `setrlimit(RLIMIT_AS)` im
+  `preexec_fn` — Darwin lehnt es ab, `subprocess` verschluckt die Ursache
+  („Exception occurred in preexec_fn"), und das Kind startet nie. Bis dahin
+  hätte auf dem Mac kein Slicer und kein Installer gestartet.
+  `process._memory_options` setzt auf Darwin deshalb nichts; Zeit- und
+  Ausgabegrenze gelten weiter, die Plattform kommt als Parameter herein und
+  ist ohne Mac geprüft. Was fehlt, ist ein Mittel, das Darwin annimmt
+  (`RLIMIT_DATA`? ein Wächter über `rusage`?) — gemessen auf einem Mac.
+- [ ] **Zwei Zwillinge lesen den Pfad eines offenen Handles.**
+  `scene.project._opened_file_path` und `updates._descriptor_path` tragen
+  denselben Windows-Code (`GetFinalPathNameByHandleW`) und dieselbe
+  POSIX-Schleife — und denselben Mac-Fehler: `/dev/fd/N` ist dort kein
+  Symlink, `resolve()` gibt ihn unverändert zurück, und jede verknüpfte
+  Quelle galt als absoluter Pfad (acht Tests). Beide fragen jetzt zuerst
+  `F_GETPATH`; zusammengelegt sind sie nicht, weil ein Umzug von
+  ctypes-Code nicht in die Nacht vor ein Paket gehört.
+- [ ] **Die Filamentkarte rechnet ihr Beiwerk auf dem Mac zu klein.**
+  `test_the_filament_card_shares_the_height_instead_of_taking_it` meldet auf
+  macos-latest „eine knapp bemessene Karte muss sich auch klein machen":
+  `sizeHint()` liegt nach `set_room(least_height())` über dem Boden, also
+  übersieht `_around_the_list` dort etwas — den Umbruch des Hinweises bei
+  breiterer Schrift, oder eine Knopfhöhe. Ohne Mac nicht messbar; der Test
+  ist dort ein erwarteter Fehlschlag mit Grund, bis jemand misst.
+- [ ] **Die Tokendatei gehört auf dem Windows-Runner nicht dem Nutzer.**
+  `read_token` lehnte im Tag-Lauf eine frisch geschriebene Datei mit
+  „gehört nicht dem aktuellen Nutzer" ab (`runneradmin`); welche SID dort
+  Besitzer ist, steht in keinem Protokoll — vermutlich die
+  Administratorengruppe, die Windows elevated Mitgliedern als Standardbesitz
+  gibt. Der Test überspringt sich in der CI mit Grund; lokal bleibt er
+  scharf. Messen: einmal `whoami /user` und den Besitzer der Datei im
+  Runner ausgeben, dann entscheiden, ob `_owned_by_current_user` die
+  Gruppe als Besitz anerkennt.
+- [ ] **Die Reihe der Vereinfachungsziele ist auf Apple Silicon ungemessen.**
+  `test_a_body_that_opens_up_while_being_simplified_says_so` fand die Wand
+  bei 40 000 Dreiecken auf macos-latest dicht — die Fließkommaordnung des
+  Vereinfachers ist je Architektur eine andere. Der Test sucht jetzt das
+  erste Ziel der Reihe, das die Wand öffnet, und überspringt sich mit Grund,
+  wenn keines es tut. Jemand mit einem Mac misst die Reihe und trägt das
+  Fenster hier ein.
 - [ ] **Die Releaseakte meldet, sie blockiert nicht.** Die drei Prüfjobs
   (`linux-`, `windows-`, `macos-release-check`) sind zugleich die Jobs, die
   das Endartefakt veröffentlichen — sie vom Tag zu nehmen, nähme dem Lauf die
