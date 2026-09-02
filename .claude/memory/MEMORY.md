@@ -35,6 +35,8 @@
 - [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus nur über Chromium-Flags.
 - [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung.
 - [Register zählen](register-zaehlen-load-operations.md) — ohne load_operations() fehlen die Bausteine; die Zahl bewegt sich, das Muster bleibt.
+- [Tests und Rendern: nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) — Roberts Anweisung 02.09.2026: je Schritt affected_tests.py, Bilder nur die geänderten; das Tor bleibt für den Commit.
+- [Architektur-Sonde: TYPE_CHECKING ausschließen](architektur-sonde-type-checking.md) — vier von vier Zyklen waren Typ-Importe; bei Kernänderungen ist „betroffen“ die Suite.
 - [Zwei Läufe nach jeder Code-Änderung](zwei-laeufe-nach-jeder-code-aenderung.md) — `test_language_rules` und `ruff check .` **ohne Pfadangabe**.
 - [Git: push und pull selbst](git-push-pull-selbststaendig.md) — ohne Rückfrage, aber erst nach grüner Suite; Merge statt Rebase.
 - [Version vor jedem Bau erhöhen](version-vor-jedem-bau-erhoehen.md) — nicht fragen; bump_version.py läuft vor dem Prüfmodul.
@@ -102,6 +104,7 @@
 
 ## Haltung
 
+- [Beheben statt notieren](beheben-statt-notieren.md) — Fund → Messung → Behebung → Test in dieser Sitzung; das Register ist für Entscheidungen, nicht für Arbeit.
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument. Bekräftigt 02.09.2026: „wow" als Maßstab, alle vier Wege, sofort optimieren statt notieren.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — gilt für alles: sieben Merkmale, die einen Text verraten; Rückspiegeln ist eines davon.
 - [Ein Druckziel, vier Wege, ein Vertrauensmodell](solidon-ist-die-vorstufe-vor-dem-slicer.md) — Produktkern: vier Wege in einer Szene bis zur ehrlichen Slicer-Übergabe.
