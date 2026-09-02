@@ -358,8 +358,8 @@ def _hollow_sphere(profile: Profile) -> MeshData:
 
 
 def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -> None:
-    """Gemessen an einer heruntergeladenen Ente: *Netz vereinfachen* auf 60 000
-    Dreiecke machte aus einem geschlossenen Körper einen offenen.
+    """Gemessen an einer heruntergeladenen Ente: *Netz vereinfachen* machte aus
+    einem geschlossenen Körper einen offenen.
 
     Im Prüfbericht stand dazu ein einziger Satz — „Die Fläche hat sich dabei
     kaum verschoben". Richtig, und vollkommen nebensächlich: Was zählt, ist,
@@ -372,15 +372,21 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     hohl = _hollow_sphere(profile)
     assert hohl.is_watertight, "der Ausgangspunkt des Tests"
 
-    # **60 000, und das ist die Zahl aus dem Kundendurchgang oben.** Hier stand
-    # 800, und der Test war aus dem falschen Grund grün: Die Entlüftung ging bis
-    # zum 25.08.2026 durch den ganzen Körper — auch durch die Decke —, und der
-    # so entstandene Tunnel riss beim Vereinfachen als Erstes auf. Seit die
-    # Entlüftung im Hohlraum endet (geom.hollow._vent), bleibt eine grob
-    # vereinfachte Kugel ein geschlossener Klumpen: Bei 800 Dreiecken ist die
-    # Innenschale ganz verschwunden. Aufreißen tut die **Wand**, und dafür
-    # braucht es eine Auflösung, bei der beide Schalen noch da sind.
-    result = run("decimate_mesh", object_of(hohl), profile, triangles=60_000)
+    # **Die Zahl ist ein Fenster, kein Schwellwert — und es wandert.** Hier
+    # stand zuerst 800: Die Entlüftung ging bis zum 25.08.2026 durch den ganzen
+    # Körper, auch durch die Decke, und der so entstandene Tunnel riss beim
+    # Vereinfachen als Erstes auf. Seit sie im Hohlraum endet
+    # (geom.hollow._vent), bleibt eine grob vereinfachte Kugel ein
+    # geschlossener Klumpen — bei 800 ist die Innenschale ganz verschwunden.
+    # Aufreißen tut die **Wand**, und dafür müssen beide Schalen noch da sein.
+    #
+    # Dann stand hier 60 000, die Zahl aus dem Kundendurchgang. Seit „Aushöhlen
+    # hält die Wand auch schräg" (50b9f587) hält sie dort: gemessen am
+    # 02.09.2026 über die ganze Reihe ist die Kugel bei 60 000 wieder dicht,
+    # bei 40 000 und 20 000 offen, ab 10 000 abwärts erneut ein Klumpen. Das
+    # Fenster ist also schmal, und 40 000 liegt darin — wer die Zahl das
+    # nächste Mal anfassen muss, misst die Reihe neu, statt zu raten.
+    result = run("decimate_mesh", object_of(hohl), profile, triangles=40_000)
 
     assert not result.outputs[0].mesh.is_watertight, "so grob geht die Wand auf"
     assert "mesh.not_watertight" in [entry.code for entry in result.findings]

@@ -591,24 +591,39 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
     Schwalbenschwänze.
 
-    **Welche Naht gewinnt, entscheidet die Lage der zwei Überhänge, und daran
-    ändern die Verbinder nichts.** Der stehende Überhang sitzt bei x 0,5…2,5,
-    der liegende bei x 5…7. Eine Naht bei −3,25 liegt **vor beiden**: Sie
-    lässt sie zusammen auf der rechten Hälfte, und die verlangt zwei
-    widersprüchliche Grundflächen. Eine Naht bei +3,25 **trennt** sie, und
-    jede Hälfte darf sich unabhängig legen — genau das sagt
-    ``crossed_overhangs`` über sich selbst. Gemessen, Stützvolumen in mm³:
+    **Nackt entscheidet die Lage der zwei Überhänge, fertig entscheiden die
+    Stifte mit.** Der stehende Überhang sitzt bei x 0,5…2,5, der liegende
+    bei x 5…7. Eine Naht bei −3,25 liegt **vor beiden**: Sie lässt sie
+    zusammen auf der rechten Hälfte, und die verlangt zwei widersprüchliche
+    Grundflächen. Eine Naht bei +3,25 **trennt** sie, und jede Hälfte darf
+    sich unabhängig legen — nackt ist rechts deshalb dreimal billiger.
+    Gemessen am 02.09.2026, Stützvolumen in mm³ je Hälfte, nackt → fertig:
 
-        links (−3,25)    nackt 7004,8   mit Verbindern 7144,4
-        rechts (+3,25)   nackt 2137,5   mit Verbindern 3485,2
+        links (−3,25)    erste 0,0 → 116,3      zweite 7004,8 → 7016,7
+        rechts (+3,25)   erste 657,0 → 6509,7   zweite 1480,5 → 1492,4
 
-    Die Schwalbenschwänze heben **beide** Zahlen und kehren die Rangfolge
-    nicht um; rechts bleibt die bessere Naht. Was dieser Test belegt, ist
-    deshalb kein Umschlag, sondern dass T2 überhaupt die fertige Geometrie
-    misst: Der Zuschlag ist ungleich verteilt (rechts +63 %, links +2 %), und
-    ``evaluated_*`` trifft ``final_*`` auf die Stelle. Rechnete
-    ``_support_after_cut`` ohne ``connector_count``, stünde dort die nackte
-    Zahl — nachgestellt, und der Test wird rot.
+    Die Schwalbenschwänze wenden das Blatt, und zwar aus einem Grund, den
+    man anfassen kann: Die **erste** Hälfte trägt die Stifte, und sie stehen
+    von der Nahtfläche ab. Rechts ist das die Hälfte mit dem stehenden
+    Überhang; nackt lag sie auf der Naht (Lage +x, 657), mit Stiften darauf
+    kann sie das nicht mehr, kippt auf die Unterseite und zahlt dort 6510 für
+    den Überhang. Links trägt die Stifte der lange Balken ohne Überhänge, und
+    der liegt auf der Seite so gut wie zuvor (116). Fertig kostet rechts
+    8002, links 7133 — die Suche endet **links**.
+
+    Bis zum 02.09.2026 stand hier die umgekehrte Rangfolge (rechts 3485,
+    links 7144). Die Zahl war ein Artefakt: Die Bohrung saß versetzt und
+    falsch herum, mit der Mündung am Grund (``pins._along_normal``, gewendet
+    in 50b9f587), und die Orientierungssuche fand eine Lage, die es mit
+    richtig sitzenden Verbindern nicht gibt.
+
+    Was dieser Test belegt, ist deshalb zweierlei: dass T2 die **fertige**
+    Geometrie misst — ``evaluated_*`` trifft ``final_*`` auf die Stelle, und
+    rechnete ``_support_after_cut`` ohne ``connector_count``, stünde dort die
+    nackte Zahl — und dass die Suche der fertigen Zahl folgt, auch wenn die
+    nackte das Gegenteil sagt. Ob die Stifte besser auf die andere Hälfte
+    gehörten, damit die günstige Lage bleibt, ist eine eigene Frage und steht
+    im Register von ``ROADMAP.md``.
 
     Die beiden Kandidaten sind nicht frei gewählt: Bei diesem Drucker legt
     ``_window`` das Fenster auf [−52, 52] und ``SAMPLES`` 33 Stellen hinein,
@@ -662,7 +677,9 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     )
 
     assert bare_right < bare_left * 0.5
-    assert right_final < left_final * (1.0 - autosplit.SUPPORT_TIE)
+    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE), (
+        f"fertig links {left_final:.1f}, rechts {right_final:.1f}"
+    )
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
@@ -671,10 +688,11 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     assert chosen is not None
     # Beide liegen auf dem Raster und haben dieselbe billige Punktzahl; bei
     # Gleichstand nimmt ``_candidate_order`` die kleinere Position, die Suche
-    # startet also links. Dass sie trotzdem rechts endet, ist genau der
-    # Schritt über das Stützvolumen.
-    assert chosen.position == pytest.approx(right.position), (
-        f"die Naht liegt bei {chosen.position} statt bei {right.position}"
+    # startet also links. Dass sie dort **bleibt**, obwohl die nackte Zahl
+    # rechts dreimal kleiner ist, ist der Schritt über das fertige
+    # Stützvolumen — die Stifte kosten rechts die gute Lage.
+    assert chosen.position == pytest.approx(left.position), (
+        f"die Naht liegt bei {chosen.position} statt bei {left.position}"
     )
 
 

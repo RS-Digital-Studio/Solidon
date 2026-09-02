@@ -98,11 +98,16 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def release_plotter(self) -> None:
             events.append("viewport.release_plotter")
 
+    class _SpaceMouse:
+        def stop(self) -> None:
+            events.append("spacemouse.stop")
+
     class _ExitWindow:
         _remote = None
         settings = type("Settings", (), {"window_geometry": ""})()
         _usage = _Usage()
         viewport = _ExitViewport()
+        spacemouse = _SpaceMouse()
 
         def _may_discard(self) -> bool:
             return True
@@ -125,6 +130,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
     assert event.isAccepted()
     assert events == [
         "window.wait_for_workers",
+        "spacemouse.stop",
         "settings.save",
         "usage.stop",
         "viewport.release_plotter",

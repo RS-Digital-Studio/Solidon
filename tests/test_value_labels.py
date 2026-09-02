@@ -744,8 +744,11 @@ LOCALISERS = frozenset({"localised", "localised_value"})
 #: Zahlen, die niemand *liest*: Sie gehen als Ausdruck in die
 #: Parametergrammatik (§13), und die kennt allein den Punkt —
 #: ``expressions.evaluate("30,25")`` lehnt mit „Nach dem Ausdruck steht noch
-#: etwas" ab. Beide Stellen füllen dasselbe Maßfeld des Skizzeneditors vor.
-GRAMMAR_NOT_LABEL = frozenset({"measured_expression", "place_measured"})
+#: etwas" ab. Alle drei Stellen füllen dasselbe Maßfeld des Skizzeneditors
+#: vor: ``change_constraint_value`` zeigt den bestehenden Ausdruck einer
+#: Maßbedingung zum Ändern und schreibt den geänderten zurück — was dort
+#: steht, kann „breite/2" sein und nicht nur eine Zahl.
+GRAMMAR_NOT_LABEL = frozenset({"change_constraint_value", "measured_expression", "place_measured"})
 
 
 class _Numbers(ast.NodeVisitor):

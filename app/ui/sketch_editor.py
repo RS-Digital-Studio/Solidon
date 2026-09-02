@@ -80,6 +80,7 @@ from app.ui.labels import (
     circle_word,
     length,
     localised,
+    measure_views,
     read_number,
     set_circle_measure,
 )
@@ -696,6 +697,11 @@ class SketchCanvas(QWidget):
         self.circle_measure_button.setAccessibleDescription(self.circle_measure_button.toolTip())
         self.circle_measure_button.clicked.connect(
             weak_slot(self, SketchCanvas._toggle_circle_measure)
+        )
+        # Und auf die Umstellung von außen hören: Der Einstellungsdialog setzt
+        # dieselbe Einstellung, ohne diesen Knopf zu kennen.
+        measure_views.circleMeasureChanged.connect(
+            weak_slot(self, SketchCanvas._follow_circle_measure)
         )
         self._name_circle_button()
         self.second_measure_lock = QLabel(tr("🔒"), self)
@@ -2570,8 +2576,16 @@ class SketchCanvas(QWidget):
             self.measure_field.setAccessibleName(circle_word())
 
     def _toggle_circle_measure(self) -> None:
-        """Ø wird R und zurück — dieselbe Geometrie, andere Zahl im Feld."""
+        """Ø wird R und zurück — dieselbe Geometrie, andere Zahl im Feld.
+
+        Hier steht nur noch das Umstellen: Was danach zu tun ist, tut
+        :meth:`_follow_circle_measure` am Rundruf aus ``labels``, und zwar
+        gleich, ob der Anstoß von diesem Knopf kam oder aus den Einstellungen.
+        """
         set_circle_measure("radius" if circle_measure() == "diameter" else "diameter")
+
+    def _follow_circle_measure(self) -> None:
+        """Zieht Zeichen, Feld und Zeichnung auf die geltende Ansicht nach."""
         self._name_circle_button()
         self._place_measure_field(self.pending_measure())
         self.update()

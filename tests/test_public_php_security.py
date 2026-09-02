@@ -1200,7 +1200,31 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
         "}\n",
         encoding="utf-8",
     )
-    environment["SOLIDON_ACTIVATION_TEST_PUBLIC_KEY"] = hashlib.sha256(seed).hexdigest()
+    # **Den erwarteten Schlüssel rechnet PHP, nicht Python.** Hier stand
+    # ``hashlib.sha256(seed)`` — das ist der Ersatz aus dem Prepend darüber,
+    # und der greift nur, wo sodium *fehlt*. Mit echtem sodium (in der
+    # Linux-CI, und lokal sobald die Erweiterung geladen ist) rechnet der
+    # Server Ed25519, der Vergleich in ``activation_seed`` scheitert mit 503,
+    # und die Ratenbegrenzung kommt nie an die Reihe: Der rohe Hash blieb in
+    # der Datei liegen, und dieser Test war rot, ohne dass am Endpunkt etwas
+    # falsch war. Dasselbe Prepend, derselbe Rechenweg — dann ist es egal,
+    # welche Antwort die Umgebung gibt.
+    # ``auto_prepend_file`` gilt für Skripte, nicht für ``-r`` — deshalb das
+    # ``require`` im Code selbst.
+    environment["SOLIDON_ACTIVATION_TEST_PUBLIC_KEY"] = subprocess.run(
+        [
+            php,
+            "-r",
+            "require $argv[2]; echo bin2hex(sodium_crypto_sign_publickey("
+            "sodium_crypto_sign_seed_keypair(hex2bin($argv[1]))));",
+            seed.hex(),
+            str(prepend),
+        ],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=30,
+    ).stdout.strip()
     form_headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Origin": "https://solidon3d.de",
@@ -1381,7 +1405,11 @@ def test_corrupt_rate_limit_states_fail_closed(tmp_path: Path) -> None:
     assert count_status == 429
     assert support_status == 503
     assert activation_status == 503
-    assert stats_status == 403
+    # Auch die Anmeldung: Ein Zähler, der sich nicht lesen lässt, ist kein
+    # Sperrzustand, sondern ein Speicherfehler — ``stats_unavailable`` sagt
+    # seit a19293d5 ehrlich 503, wo vorher „Zu viele Versuche" stand, obwohl
+    # niemand es versucht hatte. Fail-closed bleibt es: hinein kommt keiner.
+    assert stats_status == 503
     assert count_rate.read_text(encoding="ascii") == "null"
     assert support_rate.read_text(encoding="ascii") == "null"
 

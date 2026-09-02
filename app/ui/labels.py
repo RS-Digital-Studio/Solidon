@@ -13,7 +13,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import QDate, QLocale, Qt, Signal
+from PySide6.QtCore import QDate, QLocale, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QWidget
 
@@ -160,10 +160,43 @@ CircleMeasure = Literal["diameter", "radius"]
 _CIRCLE_MEASURE: CircleMeasure = "diameter"
 
 
+class _MeasureViews(QObject):
+    """Der Rundruf zum Zustand darüber — ein Sender, beliebig viele Ohren.
+
+    ``set_display_unit`` daneben kommt ohne aus: Das Hauptfenster ruft die
+    Ansichten dort einzeln nach, und der Docstring von
+    ``MainWindow.set_display_unit`` sagt auch warum — „ein Zustand wirkt erst,
+    wenn etwas ihn wieder liest". Für das Kreismaß fehlte genau dieses
+    Nachrufen: Über den Knopf im Skizzeneditor stimmte alles, über den
+    Einstellungsdialog blieb der Knopf auf dem Zeichen der alten Ansicht
+    stehen, bis jemand ein Maßfeld neu setzte.
+
+    Ein Signal statt einer Aufrufliste, weil der Zustand global ist und seine
+    Leser es nicht sind: Der Skizzeneditor kann offen sein oder nicht, und
+    einer, der gerade neu gebaut wird, liest den Zustand ohnehin selbst.
+    """
+
+    circleMeasureChanged = Signal()
+
+
+#: Die eine Instanz dazu. Sie lebt so lange wie das Modul; Empfänger melden
+#: sich über ``weak_slot`` an, damit ein geschlossener Editor daran nicht
+#: hängen bleibt.
+measure_views = _MeasureViews()
+
+
 def set_circle_measure(kind: CircleMeasure) -> None:
-    """Stellt um, ob Kreismaße als Durchmesser oder Radius sprechen."""
+    """Stellt um, ob Kreismaße als Durchmesser oder Radius sprechen.
+
+    Sendet nur bei echter Änderung: Der Einstellungsdialog setzt den Wert
+    beim Schließen auch dann, wenn niemand ihn angefasst hat, und ein
+    Rundruf darauf ließe jede offene Skizze ohne Anlass neu zeichnen.
+    """
     global _CIRCLE_MEASURE
+    if kind == _CIRCLE_MEASURE:
+        return
     _CIRCLE_MEASURE = kind
+    measure_views.circleMeasureChanged.emit()
 
 
 def circle_measure() -> CircleMeasure:
@@ -939,6 +972,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "plates": _("Platten"),
     "posed": _("Gestellt"),
     "position": _("Position"),
+    "possible": _("Möglich"),
     "printed": _("Gedruckt"),
     "printer": _("Drucker"),
     "produced": _("Erzeugt"),
