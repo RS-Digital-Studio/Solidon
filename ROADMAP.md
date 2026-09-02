@@ -154,7 +154,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Konzeptordner aufräumen | Review vor der Demo 0.3.0 (02.09.2026) | `konzepte/archiv/` für die 21 abgearbeiteten Dokumente (13 066 Zeilen), eine Entscheidungsnotiz „Weg 3 — Lizenzkette", `konzept-demo-2026-10.md` §6 als überholt kennzeichnen, Zeilenverweise auf `ROADMAP.md` durch Anker ersetzen, die zwei Sitzungs-Bedienkonzepte unter `.claude/` archivieren |
 | Die Stiftseite entscheidet mit, welche Hälfte die günstige Lage verliert | P10 — Auto Split mit Verstiftung | eine Messung, ob ein Tausch der Stiftseite das fertige Stützvolumen senkt; bis dahin folgt Auto Split der fertigen Zahl und wählt am Prüfkörper die Naht, die die zwei Überhänge **nicht** trennt |
 | Die CI prüft die Bausteinbereiche nicht mehr | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine `has_self_intersections`, die 27 Bausteine über 2114 Ecken in Minuten statt in einer Stunde prüft — oder einen eigenen CI-Job dafür, der das Paket nicht blockiert. Bis dahin prüft sie allein das lokale Tor (Entscheidung Robert, 02.09.2026: die CI fährt das Nötigste) |
-| Zwei Dialogdateien laufen in der CI in Fünferportionen | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Mine unter „Fünf Fensterdateien reißen" — `test_print_settings_ui.py` und `test_install.py` reißen nativ, sobald ein Prozess mehr als eine Handvoll ihrer Dialoge baut; Fünferportionen sind die gemessene Größe, die durchkommt, kein Fix |
+| Die Releaseakte hat noch keinen Lauf gesehen | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | einen Handstart (`workflow_dispatch`) nach dem Release 0.3.0, der die drei Prüfjobs zum ersten Mal misst; was dort rot wird, wird behoben, bevor sie wieder an den Tag kommen (Entscheidung Robert, 02.09.2026: kein Release hängt an einer Prüfung, die zum ersten Mal läuft) |
 | Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | Review vor der Demo 0.3.0 (02.09.2026) | eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess, und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 0x800700e8 beim Start" (Robert, 02.09.2026, Bildschirmfoto); der Test bleibt grün, das Fenster ist ein Nebeneffekt der Testumgebung — den Enkel ohne Konsole starten oder den Fall auf einem Rechner mit klassischem Konsolenhost nachstellen |
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
@@ -8104,6 +8104,14 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
+
+      **Nachtrag vom 02.09.2026:** Beide enden mit 0, seit `tests/conftest.py`
+      verwaiste Widgets zwischen den Tests einsammelt
+      (`_orphaned_widgets_die_between_tests`, Messung je einmal mit 65 und 80
+      Tests, vorher 127 beim selben Stand). Das ist ein Hinweis auf die
+      Ursache — ein Widget, das erst am Prozessende stirbt, stirbt dort in
+      einer Lage, die reißt —, und keine Entwarnung für den Punkt: Wer ihn
+      schließt, misst zehn Läufe je Seite.
       Nachgewiesen von solidon-17 im eigenen Arbeitsbaum auf HEAD — also weder
       ihre noch meine Arbeit. **Das ist eine andere Signatur als der bekannte
       Absturz beim Aufräumen**, dessen Kennzeichen in dieser Datei lautet:
@@ -14185,12 +14193,41 @@ bleibt, steht hier mit Kästchen.
   den ganzen Bereich) wird damit nur noch lokal eingelöst; wer sie in der CI
   zurückhaben will, misst zuerst `range_check` (3d-druck-85 hat es am
   02.09.2026 zur Klasse gemacht, gleiche Zeiten).
-- [ ] **Zwei Dialogdateien laufen in der CI in Fünferportionen.** Wartet auf
-  die Mine unter „Fünf Fensterdateien reißen vor ihrer Zusammenfassung":
-  `test_print_settings_ui.py` (18 von 20 Worker-Abstürzen) und
-  `test_install.py` (2) reißen nativ, sobald ein Prozess mehr als eine Handvoll
-  ihrer Dialoge baut — seriell nach 33, in Zehnern nach 6 und 8, in Fünfern
-  viermal von vier nie (3d-druck-85). `build.yml` fährt sie deshalb außerhalb
-  des großen Zugs in Fünferportionen, jede mit einem zweiten Anlauf. Das ist
-  die Größe, die durchkommt, kein Fix; wer die Mine entschärft, nimmt die
-  Portionierung wieder heraus.
+- [x] **Zwei Dialogdateien liefen in der CI in Fünferportionen — und die
+  Portionsgröße war die falsche Achse.** Am selben Abend riss Portion 14 von
+  `test_print_settings_ui.py` in beiden Anläufen, lokal auf Windows ebenso
+  (Exit 139, deterministisch), und keine Zweier-, Dreier- oder
+  Viererkombination ihrer fünf Tests riss — nur alle fünf. Nicht *wie viele*
+  Dialoge ein Prozess baut, sondern *wann* ein verwaister stirbt: Ein Dialog
+  ohne Parent, den ein Test dem Speicherbereiniger überlässt, stirbt in dessen
+  nächstem Lauf, und den löst eine Allokation aus — mitten im Konstruktor des
+  nächsten Dialogs (Stapel jedes Mal in `QLabel(...)`; der Frame ist die
+  nächste Allokation, nicht die Ursache). Getrennt hat es `gc.disable()`: Die
+  Portion war damit grün. `tests/conftest.py`
+  (`_orphaned_widgets_die_between_tests`) sammelt seither nach jedem Test,
+  solange die Suite in diesem Prozess kein Fenster gepinnt hält — dort gilt
+  deren Vertrag, und die Messreihe vom 23.08. gegen ein `gc.collect()` in
+  Fensterdateien bleibt gültig. Gemessen am Stück: `test_print_settings_ui`
+  114 grün (vorher Segfault), `test_install` 65, `test_generate_ui` 31,
+  `test_first_run` 80 und `test_chat_ui` 65 — die letzten beiden **mit 0
+  statt mit 127**. `deleteLater` zwischen den Tests war der falsche Weg:
+  Es heilte dieselbe Datei und ließ `test_generate_ui` mit `0xc0000409`
+  enden (zweimal von zwei, mit `close()` davor ebenso). Die Anwendung war nie
+  betroffen — sie baut den Dialog mit Parent und ruft `deleteLater` nach
+  `exec`. `build.yml` fährt beide Dateien wieder im Zug. **Der Preis, mit
+  Kästchen darunter:** Der Abbau eines Schlüsseldialogs wartet 2,3 s auf
+  seinen Arbeiter (`--durations`: jeder Teardown der `key_dialog`-Tests),
+  `test_chat_ui` braucht 61 s statt 19.
+- [ ] **Der Schlüsseldialog wartet beim Sterben 2,3 s.** Sichtbar geworden
+  durch den Punkt darüber: Sobald er zwischen den Tests stirbt, steht jeder
+  Teardown in `test_chat_ui.py` 2,35 s — ein Arbeiter, auf den der Abbau bis
+  zu einer Frist wartet, statt ihn abzubrechen. Beim Kunden dieselbe Lage,
+  wenn er den Dialog schließt, während die Modellabfrage läuft. Messen, wer
+  wartet (`WorkerLeash`?), und abbrechen statt warten.
+- [ ] **Die Releaseakte hat noch keinen Lauf gesehen.** Die drei Prüfjobs
+  (`linux-`, `windows-`, `macos-release-check`) laufen seit dem Abend des
+  02.09.2026 nur noch auf Handstart, nicht beim Tag — Entscheidung Robert:
+  Ein Release hängt nicht an einer Prüfung, die zum ersten Mal läuft. Nach
+  0.3.0 einmal `workflow_dispatch` fahren, die Befunde beheben, dann die
+  Bedingung wieder auf den Tag stellen. Die Lizenzbeilage im Paket selbst
+  (`make_licence_notices.py` im Paketjob) ist davon unberührt; sie reist mit.

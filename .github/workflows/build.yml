@@ -255,28 +255,15 @@ jobs:
           # je vier Stunden bei 49 Prozent, bevor sie mit Segfault endeten.
           # Die Deckung dafür liegt damit allein beim lokalen Lauf vor dem
           # Commit (`/pruefen`), nicht mehr im Bautor.
-          # **Zwei Dialogdateien in Fünferportionen, jede Portion ein Prozess.**
-          # `test_print_settings_ui.py` und `test_install.py` reißen nativ,
-          # sobald ein Prozess mehr als eine Handvoll ihrer Dialoge baut —
-          # seriell nach 33, in Zehnerportionen nach 6 und 8, in
-          # Fünferportionen viermal von vier nie (3d-druck-85, 02.09.2026).
-          # Verteilt auf Worker traf es 18 von 20 Abstürzen in der einen und
-          # 2 in der anderen Datei, weil jeder Worker ein Dutzend davon bekam.
-          # Die Mine selbst ist offen (ROADMAP, „Fünf Fensterdateien reißen");
-          # bis sie entschärft ist, fährt die CI die Dateien so, wie sie
-          # durchkommen — jede Portion mit dem einen zweiten Anlauf wie der Zug.
-          # Das `\r` fällt weg, sonst sucht pytest nach „…::name\r" (Exit 4).
-          portioned="tests/test_print_settings_ui.py tests/test_install.py"
-          for file in $portioned; do ignores="$ignores --ignore=$file"; done
+          # **Und keine Fünferportionen mehr.** Vom 02.09.2026 bis zum selben
+          # Abend fuhr dieser Schritt `test_print_settings_ui.py` und
+          # `test_install.py` in Fünferportionen, weil sie im Zug nativ rissen.
+          # Die Mine war nicht die Zahl der Dialoge, sondern der Zeitpunkt
+          # ihres Todes: Der Speicherbereiniger zerstörte einen verwaisten
+          # Dialog mitten im Bau des nächsten. Seit `tests/conftest.py`
+          # (`_orphaned_widgets_die_between_tests`) sie zwischen den Tests
+          # abbaut, laufen beide Dateien am Stück — gemessen 114 und 65 grün.
           attempt -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
-          for file in $portioned; do
-            mapfile -t portion_ids < <(python -m pytest "$file" --collect-only -q -m "not performance" | grep '::' | tr -d '\r')
-            total=${#portion_ids[@]}
-            echo "$file: $total Tests in Fünferportionen"
-            for ((start = 0; start < total; start += 5)); do
-              attempt "${portion_ids[@]:start:5}"
-            done
-          done
 
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
@@ -614,7 +601,13 @@ jobs:
   linux-release-check:
     name: Linux-Releaseakte prüfen
     needs: package
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    # **Nur auf Handstart, nicht beim Tag** (Entscheidung Robert, 02.09.2026):
+    # Die Releaseakte ist eine Prüfung über dem fertigen Paket, und sie hat
+    # bis heute keinen Tag-Lauf gesehen. Ein Release hängt nicht an einer
+    # Prüfung, die zum ersten Mal läuft — gemessen wird sie per
+    # `workflow_dispatch`, und was sie dort findet, wird behoben, bevor sie
+    # wieder an den Tag kommt.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -783,6 +776,13 @@ jobs:
   windows-release-check:
     name: Windows-Releaseakte prüfen
     needs: windows-installer
+    # **Nur auf Handstart, nicht beim Tag** (Entscheidung Robert, 02.09.2026):
+    # Die Releaseakte ist eine Prüfung über dem fertigen Paket, und sie hat
+    # bis heute keinen Tag-Lauf gesehen. Ein Release hängt nicht an einer
+    # Prüfung, die zum ersten Mal läuft — gemessen wird sie per
+    # `workflow_dispatch`, und was sie dort findet, wird behoben, bevor sie
+    # wieder an den Tag kommt.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     permissions:
       contents: read
@@ -1141,7 +1141,14 @@ jobs:
   macos-release-check:
     name: macOS-Releaseakte prüfen (${{ matrix.machine_arch }})
     needs: [macos-package, macos-installer-sign]
+    # **Nur auf Handstart, nicht beim Tag** (Entscheidung Robert, 02.09.2026):
+    # Die Releaseakte ist eine Prüfung über dem fertigen Paket, und sie hat
+    # bis heute keinen Tag-Lauf gesehen. Ein Release hängt nicht an einer
+    # Prüfung, die zum ersten Mal läuft — gemessen wird sie per
+    # `workflow_dispatch`, und was sie dort findet, wird behoben, bevor sie
+    # wieder an den Tag kommt.
     if: >-
+      github.event_name == 'workflow_dispatch' &&
       always() && needs.macos-package.result == 'success' &&
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-installer-sign.result == 'skipped') ||
        ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success'))
@@ -1277,14 +1284,4 @@ jobs:
           echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
           # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
           # auch dieser Lauf Stunden bei 49 Prozent.
-          # Dieselben zwei Dialogdateien wie in der Suite in Fünferportionen —
-          # ein Prozess je Portion, sonst reißen sie nativ.
-          portioned="tests/test_print_settings_ui.py tests/test_install.py"
-          for file in $portioned; do ignores="$ignores --ignore=$file"; done
           python -m pytest -q -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
-          for file in $portioned; do
-            mapfile -t portion_ids < <(python -m pytest "$file" --collect-only -q -m "not performance" | grep '::' | tr -d '\r')
-            for ((start = 0; start < ${#portion_ids[@]}; start += 5)); do
-              python -m pytest -q "${portion_ids[@]:start:5}"
-            done
-          done

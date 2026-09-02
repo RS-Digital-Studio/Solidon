@@ -8,6 +8,7 @@ prüfen.
 
 from __future__ import annotations
 
+import gc
 import os
 import sys
 import tempfile
@@ -136,6 +137,58 @@ class _PinOnImport:
 
 
 sys.meta_path.insert(0, _PinOnImport())
+
+
+@pytest.fixture(autouse=True)
+def _orphaned_widgets_die_between_tests() -> Iterator[None]:
+    """Verwaiste Widgets sterben zwischen zwei Tests — nie mitten im Bau des nächsten.
+
+    **Die Mine, mit Messreihe vom 02.09.2026.** ``test_print_settings_ui.py``
+    riss am Stück deterministisch (lokal Exit 139, in der CI beide Anläufe
+    derselben Fünferportion), der Stapel jedes Mal in ``QLabel(...)`` beim
+    Bau eines Dialogs — dieser Frame ist die nächste Allokation, nicht die
+    Ursache. Die Ursache: Ein Dialog ohne Parent, den ein Test dem
+    Speicherbereiniger überlässt, stirbt in dessen nächstem Lauf, und den
+    löst eine Allokation aus — mitten im Konstruktor des nächsten Dialogs.
+    Ein Widget zerstören, während ein anderes gerade entsteht, ist der Riss.
+
+    Gemessen an derselben Fünferportion: ``gc.disable()`` grün, ein Abbau
+    nach jedem Test sechsmal von sechs grün, ohne beides zweimal von zwei
+    rot. Die ganze Datei: ohne Abbau Segfault, mit Abbau 114 grün in drei
+    Sekunden. Die Anwendung ist nicht betroffen — sie baut den Dialog mit
+    Parent und ruft ``deleteLater`` nach ``exec``.
+
+    **Nur dort, wo die Suite keine Fenster hält.** Ein ``gc.collect()`` nach
+    jedem Test ist am 23.08.2026 gefallen (die Messreihe steht in
+    ``_no_worker_outlives_its_window``): In einer Fensterdatei zerstört es
+    auch, was VTK-Zustand trägt, und das reißt für sich. Der Pin
+    (``_windows_live_to_the_end``) hält seither jedes Fenster bis zum
+    Prozessende — und solange eines gepinnt ist, bleibt der Sammler hier
+    unangetastet, deren Vertrag gilt. Wo keines ist, räumt er nach jedem
+    Test auf, und nur, wenn noch ein Top-Level-Widget lebt.
+
+    **Über den Sammler, nicht über ``deleteLater``.** Beides gemessen:
+    ``deleteLater`` plus ``sendPostedEvents`` zwischen den Tests ließ
+    ``test_generate_ui.py`` mit 127 enden statt mit 0 — zweimal von zwei,
+    mit ``close()`` davor ebenso. Ein Dialog mit Arbeitern hinterlässt bei
+    vorzeitiger Qt-Zerstörung etwas, das am Prozessende reißt; der Sammler
+    zerstört ihn erst, wenn nichts mehr auf ihn zeigt, und im Hauptthread
+    zwischen zwei Tests.
+
+    Zuerst definiert, damit ihr Abbau zuletzt läuft — nach ``release`` der
+    Fenster und nach jedem ``monkeypatch``.
+    """
+    yield
+    if "PySide6.QtWidgets" not in sys.modules or _PINNED_UI:
+        return
+    from PySide6.QtWidgets import QApplication
+    from shiboken6 import isValid
+
+    application = QApplication.instance()
+    if application is None:
+        return
+    if any(isValid(widget) for widget in application.topLevelWidgets()):
+        gc.collect()
 
 
 @pytest.fixture(autouse=True)
