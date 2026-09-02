@@ -197,7 +197,15 @@ zusammenfassung() {
 fortschritt() {
   protokoll=${1:-}
   [ -n "$protokoll" ] && [ -f "$protokoll" ] || return 1
-  grep -oE "^[.sFExX]+" "$protokoll" | tr -d "\n"
+  # Native Abrisse hängen ihre Überschrift gelegentlich direkt an die bis
+  # dahin geschriebenen Punkte. Ohne das Abschneiden wurde das ``F`` aus
+  # ``Fatal Python error`` als roter Test gelesen; ``Extension modules``
+  # steuerte zusätzlich ein falsches ``Ex`` bei. Dann halbierte das Tor einen
+  # Lauf mit verschluckten Tests nicht und meldete den Werkzeugfehler als
+  # echten Testfehler.
+  sed -E '/^Extension modules:/d; s/(Windows fatal exception|Fatal Python error).*//' "$protokoll" \
+    | grep -oE "^[.sFExX]+" \
+    | tr -d "\n"
 }
 
 # **Ein Riss, der Tests verschluckt hat — und kein roter Test.**

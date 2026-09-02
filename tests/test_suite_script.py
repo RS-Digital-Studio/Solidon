@@ -122,6 +122,22 @@ def test_a_teardown_crash_stays_green_and_a_swallowed_run_does_not(tmp_path: Pat
     )
 
 
+def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Path) -> None:
+    """Die Wörter des Absturzberichts sind keine pytest-Fortschrittszeichen."""
+    torn = (
+        "." * 10
+        + "Fatal Python error: Aborted\n"
+        + "Extension modules: numpy._core, PySide6.QtCore\n"
+    )
+
+    assert ask('nicht_gelaufen 3 "$P" 26', torn, tmp_path), (
+        "zehn von sechsundzwanzig Tests liefen — die Portion muss geteilt werden"
+    )
+    assert ask('zaehlt_als_fehler 3 "$P" 26', torn, tmp_path), (
+        "vor der erfolgreichen Teilung bleibt der verschluckte Lauf rot"
+    )
+
+
 def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -> None:
     """Die Portionsgröße pflegt sich selbst — das ist der ganze Punkt von G18.
 
