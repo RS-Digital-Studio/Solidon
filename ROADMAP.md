@@ -11677,6 +11677,27 @@ zusammen — er stand in der Behebung selbst.
       verteilt wird, und der undokumentierte Zustand war der schlechtere. Bei
       D-Bus, FreeType, libcap und Zstandard ist die Wahl innerhalb der
       Doppellizenz keine Ermessensfrage, sondern durch Regel 15 vorgegeben.
+
+      **Über alle drei Plattformen nachgemessen**, statt vom Linux-Korpus
+      verallgemeinert: Windows 775 native Dateien, **0 ohne Besitzer** (vorher
+      30 — `_wmi.pyd` und 29 `api-ms-win-core-*`, gemessen am lokalen
+      `dist/`-Baum); macOS 41 ohne Besitzer aus dem 0.2.2-`pkg` → 38 über
+      `lib-dynload` zugeordnet, 3 fallen durch den readline/curses-Ausschluss,
+      **0 bleiben**; Linux 48 von 48. Ein Detail wäre ohne diese Messung
+      durchgegangen: `_runtime_owner` faltet den Dateinamen, ein Präfix
+      `libX11.` hätte also nie getroffen.
+- [x] **Die neue `api/` verträgt den ausgelieferten Client** (Nacht auf den
+      03.09.2026, ohne Codeänderung — eine Entwarnung, kein Fund). Auf dem
+      Server lag die 7.4-Fassung, im Repository die für 8.1; die Frage war, ob
+      ein 0.2.2-Kunde nach dem Upload noch Rückmeldung senden kann. Zwei
+      Belege: `support._package` ist zwischen `v0.2.2` und HEAD byteweise
+      identisch, die Client-Seite also protokollgleich; und dieselbe echte
+      Sendung gegen beide Serverfassungen antwortet identisch mit 502 „Die
+      Post ließ sich nicht zustellen" — beide haben jedes Feld angenommen und
+      scheitern erst am fehlenden Mailer des Prüfstands. Kein 400, kein 415,
+      kein Unterschied; `environment` ist optional. **Die Trennlinie ist die
+      Antwort, nicht der Erfolg:** Ein 400 hieße Protokollbruch, ein 502 heißt
+      angekommen.
 - [ ] **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
   Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
   repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.
