@@ -4425,7 +4425,7 @@ class SketchPanel(QWidget):
         self.canvas.sketchChanged.connect(self._refresh_constraints)
         self.canvas.sketchChanged.connect(self._refresh_plane_role)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
-        self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status))
+        self.canvas.statusChanged.connect(weak_slot(self, SketchPanel._show_status, forward=True))
         self.constraint_list.installEventFilter(self)
         self._install_shortcuts()
 

@@ -6379,6 +6379,33 @@ def test_the_empty_sketch_invites_and_the_invitation_leads_somewhere(qt_app: obj
             release(panel)
 
 
+def test_a_status_from_the_canvas_reaches_the_line(qt_app: QApplication) -> None:
+    """Was die Zeichenfläche meldet, kommt in der Statuszeile an (Verdrahtung).
+
+    **Vorher verschwand jede Meldung.** ``statusChanged`` trägt ihren Text als
+    Argument, ``weak_slot`` wirft das Gesendete aber absichtlich weg — wer es
+    braucht, sagt ``forward=True``, und genau das fehlte an dieser einen
+    Verbindung. Der Slot wurde ohne Argument gerufen, starb an einem
+    ``TypeError``, und die Zeile blieb auf ihrem alten Satz stehen: einmal je
+    Meldung, in jeder Sprache, den ganzen Skizzenmodus lang.
+
+    Gefunden hat es kein Test, sondern der Bilderlauf fürs Handbuch. Der
+    Nachbartest darüber ruft ``_show_status`` **selbst** und prüft damit den
+    Slot — nie den Weg dorthin. Dieser hier geht deshalb über das Signal.
+    """
+    panel = SketchPanel()
+    try:
+        bericht = "Geschlossen, 3 Freiheitsgrade"
+        panel.canvas.statusChanged.emit(bericht)
+        assert panel.status.text() == bericht, (
+            f"the canvas reported {bericht!r}, the line shows {panel.status.text()!r}"
+        )
+    finally:
+        release = getattr(type(panel), "release", None)
+        if release is not None:
+            release(panel)
+
+
 def test_a_pull_opens_the_dialog_with_its_height(qt_app: QApplication) -> None:
     """Loslassen öffnet den Dialog mit der gezogenen Höhe; dort bleibt alles änderbar.
 
