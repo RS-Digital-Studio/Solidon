@@ -12,12 +12,16 @@ verlangt §37.2.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
-from app.core.log import get_logger
 from app.i18n import SOURCE_LANGUAGE, install_catalog
 
-_log = get_logger(__name__)
+#: Über die Standardbibliothek und nicht über ``app.core.log``: ``i18n`` hängt
+#: an nichts, der Kern benutzt es — nicht umgekehrt (``app/CLAUDE.md``). Der
+#: Name liegt unter der Anwendungswurzel ``app``, an der der Kern seinen
+#: Dateihandler einhängt; das Protokoll landet also an derselben Stelle.
+_log = logging.getLogger(__name__)
 
 LOCALES_DIR = Path(__file__).parent / "locales"
 
