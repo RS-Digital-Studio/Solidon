@@ -60,8 +60,28 @@ def _arc_points(
     Liegen die drei fast auf einer Geraden, gibt es keinen Kreis — dann ist die
     Strecke die richtige Antwort und nicht ein Kreis mit riesigem Radius, der
     numerisch auseinanderfliegt.
+
+    **Fallen Anfang und Ende zusammen, ist es ein voller Umlauf** — dieselbe
+    Lesart wie in ``sketch.profile.arc_through``: Der Stützpunkt liegt dem
+    Anfang gegenüber, die Mitte also zwischen beiden. Ohne diesen Fall gab die
+    Determinante unten null, der Umriss kam mit einem einzigen Punkt zurück,
+    und eine Tasche aus einem gezeichneten Vollkreis-Bogen endete auf dem
+    Netzweg mit „Aus diesem Umriss entsteht kein Körper."
     """
     (ax, ay), (bx, by), (cx, cy) = start, via, end
+    if math.dist(start, end) < EPS_GEOM:
+        centre = ((ax + bx) / 2.0, (ay + by) / 2.0)
+        radius = math.dist(start, via) / 2.0
+        if radius < EPS_GEOM:
+            return [end]
+        first = math.atan2(ay - centre[1], ax - centre[0])
+        return [
+            (
+                centre[0] + radius * math.cos(first + 2.0 * math.pi * index / ARC_STEPS),
+                centre[1] + radius * math.sin(first + 2.0 * math.pi * index / ARC_STEPS),
+            )
+            for index in range(1, ARC_STEPS + 1)
+        ]
     # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
     # wie weit die drei Punkte von einer Geraden entfernt sind.
     d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))

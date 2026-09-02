@@ -109,27 +109,27 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     while segments:
         loops.append(Profile(segments=_one_loop(segments)))
 
-    # **Ein Umriss ohne Flaeche ist eine Eingabe und kein Programmfehler.**
-    # Der Fall ist loesbar und trotzdem unbrauchbar: Wer *horizontal* und
+    # **Ein Umriss ohne Fläche ist eine Eingabe und kein Programmfehler.**
+    # Der Fall ist lösbar und trotzdem unbrauchbar: Wer *horizontal* und
     # *vertikal* auf dieselbe Linie setzt, hat keinen Widerspruch gebaut — die
     # Linie schrumpft auf einen Punkt und ist dann beides. Der Solver meldet
-    # dafuer richtig zwei Freiheitsgrade und ein Restfehler von null.
+    # dafür richtig zwei Freiheitsgrade und ein Restfehler von null.
     #
     # Weiter unten kann daraus niemand etwas machen: OpenCASCADE antwortete mit
     # ``StdFail_NotDone: BRep_API: command not done``, die C++-Ausnahme wurde
     # nach der Regel in ``errors.py`` zum ``InternalError``, und der Nutzer las
-    # „Im Programm ist ein unerwarteter Fehler aufgetreten" samt Knopf fuer den
-    # Fehlerbericht — fuer zwei Bedingungen, die er selbst gesetzt hat.
+    # „Im Programm ist ein unerwarteter Fehler aufgetreten" samt Knopf für den
+    # Fehlerbericht — für zwei Bedingungen, die er selbst gesetzt hat.
     #
-    # Geprueft wird hier und nicht in den vier Operationen: alle vier gehen
+    # Geprüft wird hier und nicht in den vier Operationen: alle vier gehen
     # durch diese Stelle. Die Grenze ist ``EPS_GEOM`` im Quadrat, weil sie auf
-    # einer Flaeche steht und nicht auf einer Laenge (Regel 7).
+    # einer Fläche steht und nicht auf einer Länge (Regel 7).
     #
-    # **Verworfen, nicht bloss gezaehlt.** Hier stand ``all(...)`` und warf nur,
+    # **Verworfen, nicht bloß gezählt.** Hier stand ``all(...)`` und warf nur,
     # wenn *keine* Kette trug — ein Rechteck mit 1200 mm² neben einer
     # geschrumpften Linie ging damit durch, und die leere Kette wanderte weiter
-    # in den exakten Kern. Was keine Flaeche hat, ist keine Region: Es fliegt
-    # heraus, und erst wenn nichts uebrig bleibt, ist die Skizze der Fehler.
+    # in den exakten Kern. Was keine Fläche hat, ist keine Region: Es fliegt
+    # heraus, und erst wenn nichts übrig bleibt, ist die Skizze der Fehler.
     bearing = [loop for loop in loops if _area(_outline(loop)) > EPS_GEOM * EPS_GEOM]
     if not bearing:
         raise _broken(_("Die Skizze umschließt keine Fläche."))
@@ -172,7 +172,17 @@ def _outline(profile: Profile) -> list[Point2]:
     """Eine Polylinie, die dem Umriss folgt — nur zum Einordnen.
 
     Ein Kreis wird zu einem Zwölfeck: genau genug, um zu entscheiden, ob etwas
-    darin liegt, und nichts davon geht in den Kern."""
+    darin liegt, und nichts davon geht in den Kern.
+
+    **Ein Bogen wird abgetastet wie in der Ansicht** (:func:`_along_arc`), und
+    zwar aus zwei Gründen. Der eine ist die Einordnung: Anfang und Stützpunkt
+    allein machten aus einem 270°-Bogen ein Dreieck, und ein Loch, das im
+    Bogen lag, aber nicht im Dreieck, galt als eigener Umriss statt als Loch.
+    Der andere ist der Flächenfilter in :func:`regions_of`: Eine Kette aus
+    einem einzigen Bogen, dessen Ende auf seinem Anfang liegt, ergab zwei
+    Punkte, daraus die Fläche null — die Ansicht zeichnete einen Kreis, und
+    die Operation antwortete „Die Skizze umschließt keine Fläche."
+    """
     if profile.circle is not None:
         centre, radius = profile.circle
         steps = 12
@@ -185,9 +195,18 @@ def _outline(profile: Profile) -> list[Point2]:
         ]
     points: list[Point2] = []
     for segment in profile.segments:
+        arc = (
+            arc_through(segment.start, segment.via, segment.end)
+            if segment.kind == "arc" and segment.via is not None
+            else None
+        )
+        if arc is not None:
+            centre, radius, sweep = arc
+            # Ohne den letzten Punkt: Er ist der Anfang des nächsten Segments,
+            # und bei einem vollen Umlauf der eigene Anfang.
+            points.extend(_along_arc(centre, segment.start, sweep, radius)[:-1])
+            continue
         points.append(segment.start)
-        if segment.via is not None:
-            points.append(segment.via)
         points.extend(segment.through[1:-1])
     return points
 
@@ -248,6 +267,43 @@ def _area(outline: list[Point2]) -> float:
         bx, by = outline[(index + 1) % len(outline)]
         total += ax * by - bx * ay
     return abs(total) / 2.0
+
+
+def signed_area(profile: Profile) -> float:
+    """Die vorzeichenbehaftete Fläche eines Umrisses — Bögen exakt.
+
+    Positiv heißt linksherum (gegen den Uhrzeigersinn), negativ rechtsherum.
+    Löcher zählen nicht mit: Ein Loch ist ein eigener Umriss mit eigenem
+    Drehsinn, und genau danach fragt der Aufrufer (``brep.profiles._face``).
+
+    Gerechnet wird die Schuhbandformel über die **Sehnen**, plus je Bogen die
+    Kreissegmentfläche ``r²/2 · (Δ - sin Δ)`` zwischen Sehne und Kurve. Das
+    ist nicht nur genauer als ein Sehnenvieleck, es ist der Unterschied
+    zwischen richtig und falsch: Ein Bogen über 180° wölbt sich weiter, als
+    seine Sehne trägt, und das Sehnenvieleck bekommt dort den **umgekehrten**
+    Drehsinn. Ein Pac-Man aus einem 270°-Bogen maß so -50 mm² statt +235,6 —
+    sein Loch galt dem Kern damit als zweite Außenkontur, und der Körper
+    wurde vom Bohren größer statt kleiner (1213,4 statt 1142,8 mm³).
+    """
+    if profile.circle is not None:
+        return math.pi * profile.circle[1] ** 2
+    points: list[Point2] = []
+    curved = 0.0
+    for segment in profile.segments:
+        points.append(segment.start)
+        # Beim Spline die Stützpunkte dazwischen; Anfang und Ende stehen schon
+        # da, das Ende als Anfang des nächsten Segments.
+        points.extend(segment.through[1:-1])
+        if segment.kind != "arc" or segment.via is None:
+            continue
+        arc = arc_through(segment.start, segment.via, segment.end)
+        if arc is not None:
+            _, radius, sweep = arc
+            curved += radius * radius * (sweep - math.sin(sweep)) / 2.0
+    total = 0.0
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
+        total += x0 * y1 - x1 * y0
+    return total / 2.0 + curved
 
 
 def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
@@ -337,6 +393,52 @@ def _segment(kind: str, points: tuple[Point2, ...]) -> ProfileSegment:
 #: Punkt — der Löser liefert Koordinaten mit Restfehler um 1e-12, bit-genaue
 #: Gleichheit gibt es dort nie (Regel 6).
 _FULL_CIRCLE_EPS: Final = 1e-9
+
+
+def arc_through(start: Point2, via: Point2, end: Point2) -> tuple[Point2, float, float] | None:
+    """Mitte, Radius und vorzeichenbehaftete Weite eines Bogens durch drei Punkte.
+
+    Die Gegenrichtung zu :func:`_arc_midpoint`: Dort wird aus Mittelpunkt,
+    Anfang und Ende der Stützpunkt; hier aus Anfang, Stützpunkt und Ende
+    wieder der Kreis. ``via`` liegt **auf** der Kurve und entscheidet damit,
+    welchen der beiden Wege um den Kreis der Bogen nimmt — die Weite ist
+    positiv gegen den Uhrzeigersinn und negativ mit ihm.
+
+    Fallen Anfang und Ende zusammen, ist es ein **voller Umlauf**: Dann liegt
+    der Mittelpunkt zwischen Anfang und Stützpunkt, denn ``_arc_midpoint``
+    setzt den Stützpunkt in diesem Fall dem Anfang gegenüber.
+
+    ``None`` heißt: Diese drei Punkte tragen keinen Kreis — sie liegen auf
+    einer Geraden oder fallen zusammen. Der Aufrufer nimmt dann die Sehne,
+    und das ist dort die richtige Antwort und nicht ein Kreis mit riesigem
+    Radius, der numerisch auseinanderfliegt.
+    """
+    if math.dist(start, end) <= _JOIN_TOL:
+        radius = math.dist(start, via) / 2.0
+        if radius <= EPS_GEOM:
+            return None
+        centre = ((start[0] + via[0]) / 2.0, (start[1] + via[1]) / 2.0)
+        return centre, radius, 2.0 * math.pi
+    (ax, ay), (bx, by), (cx, cy) = start, via, end
+    # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
+    # wie weit die drei Punkte von einer Geraden entfernt sind.
+    below = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(below) <= EPS_GEOM:
+        return None
+    first, second, third = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
+    ux = (first * (by - cy) + second * (cy - ay) + third * (ay - by)) / below
+    uy = (first * (cx - bx) + second * (ax - cx) + third * (bx - ax)) / below
+    radius = math.dist((ux, uy), start)
+    if radius <= EPS_GEOM:
+        return None
+    begin = math.atan2(ay - uy, ax - ux)
+    middle = math.atan2(by - uy, bx - ux)
+    finish = math.atan2(cy - uy, cx - ux)
+    sweep = (finish - begin) % (2.0 * math.pi)
+    # Liegt der Stützpunkt jenseits des Endes, führt der Bogen andersherum.
+    if (middle - begin) % (2.0 * math.pi) > sweep:
+        sweep -= 2.0 * math.pi
+    return (ux, uy), radius, sweep
 
 
 def _arc_midpoint(centre: Point2, start: Point2, end: Point2) -> Point2:

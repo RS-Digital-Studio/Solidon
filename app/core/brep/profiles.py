@@ -25,7 +25,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.sketch.planes import to_world
-from app.core.sketch.profile import Profile
+from app.core.sketch.profile import Profile, arc_through, signed_area
 from app.core.types import PlaneFrame, Point2
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -67,7 +67,15 @@ PLANES: dict[str, tuple[_Lift, tuple[float, float, float]]] = {
 
 
 def _wire(profile: Profile, lift: _Lift) -> Any:
-    """Der Umriss als Draht: Strecken als Segmente, Bögen als echte Bögen."""
+    """Der Umriss als Draht: Strecken als Segmente, Bögen als echte Bögen.
+
+    **Ein Bogen, dessen Ende auf seinem Anfang liegt, ist ein Kreis.** Aus drei
+    Punkten, von denen zwei zusammenfallen, macht ``GC_MakeArcOfCircle`` keinen
+    Bogen — es antwortete ``StdFail_NotDone``, und das wurde nach der Regel in
+    ``errors.py`` zu „Im Programm ist ein unerwarteter Fehler aufgetreten".
+    ``_arc_midpoint`` und ``_flat_curve`` lesen denselben Fall längst als
+    vollen Umlauf; hier fehlte er als einziger.
+    """
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
     from OCP.GC import GC_MakeArcOfCircle
 
@@ -83,6 +91,10 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
             edge = BRepBuilderAPI_MakeEdge(_spline_curve(segment.through, lift)).Edge()
         else:
             assert segment.via is not None  # profile_of setzt via bei jedem Bogen
+            turn = arc_through(segment.start, segment.via, segment.end)
+            if turn is not None and abs(turn[2]) >= 2.0 * math.pi:
+                maker.Add(_circle_edge(turn[0], turn[1], lift))
+                continue
             curve = GC_MakeArcOfCircle(
                 lift(segment.start), lift(segment.via), lift(segment.end)
             ).Value()
@@ -123,20 +135,6 @@ def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:
     return BRepBuilderAPI_MakeEdge(circle).Edge()
 
 
-def _signed_area(profile: Profile) -> float:
-    """Die vorzeichenbehaftete Fläche des Umrisses (Gauß'sche Trapezformel).
-
-    Nur das Vorzeichen zählt, und es nennt den Drehsinn: positiv linksherum,
-    negativ rechtsherum. Gerechnet über die Stützpunkte der Segmente — für den
-    Drehsinn genügt das Vieleck, die genaue Kurve braucht es nicht.
-    """
-    points = [point for segment in profile.segments for point in _points(segment)]
-    total = 0.0
-    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
-        total += x0 * y1 - x1 * y0
-    return total / 2.0
-
-
 def _face(profile: Profile, lift: _Lift) -> Any:
     """Die Fläche des Umrisses, mit seinen Löchern als inneren Ringen.
 
@@ -149,18 +147,25 @@ def _face(profile: Profile, lift: _Lift) -> Any:
     genau der Fall in den Fehler, in dem das Loch schon gegen die Außenkontur
     lief: Aus dem Umdrehen wurde ein Gleichsinn, aus dem Loch eine zweite
     Außenkontur (+67 % Volumen). In der Zeichenfläche ist der Drehsinn reiner
-    Zufall der Klickreihenfolge — es gibt kein Rechteckwerkzeug."""
+    Zufall der Klickreihenfolge — es gibt kein Rechteckwerkzeug.
+
+    **Gemessen wird mit** :func:`app.core.sketch.profile.signed_area`, und die
+    rechnet Bögen exakt statt über ihre Sehnen. Hier stand ein Sehnenvieleck,
+    und bei einem Bogen über 180° kippte es das Vorzeichen: Der Umriss eines
+    Pac-Man maß -50 mm² statt +235,6, sein Loch galt damit als gleichsinnig,
+    wurde umgedreht und damit zur zweiten Außenkontur — der Körper wuchs beim
+    Bohren."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.TopoDS import TopoDS
 
     maker = BRepBuilderAPI_MakeFace(_wire(profile, lift), True)
-    outer_left = _signed_area(profile) >= 0.0
+    outer_left = signed_area(profile) >= 0.0
     for hole in profile.holes:
         wire = _wire(hole, lift)
         # Läuft das Loch im selben Drehsinn wie die Außenkontur, wird es
         # umgedreht (``Reversed`` gibt eine Form, ``TopoDS.Wire_s`` zieht sie
         # zum Draht zurück); lief es schon dagegen, bleibt es.
-        if (_signed_area(hole) >= 0.0) == outer_left:
+        if (signed_area(hole) >= 0.0) == outer_left:
             wire = TopoDS.Wire_s(wire.Reversed())
         maker.Add(wire)
     return maker.Face()

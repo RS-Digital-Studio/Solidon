@@ -392,6 +392,12 @@ class SketchPocketParams(BaseParams):
         placement="advanced",
         doc=_("Schneidet durch die ganze Höhe des Körpers — die Tiefe zählt dann nicht."),
     )
+    # **Die drei Zahlen gelten in der Zeichenebene, nicht in der Welt.**
+    # ``x`` und ``y`` verschieben den Umriss über ``shifted`` in den
+    # Koordinaten der Ebene, ``z`` misst entlang ihrer Normalen — auf
+    # ``plane:xy`` ist beides dasselbe, auf einer Seitenwand nicht. Die
+    # ``doc``-Sätze sagten „X", „Y" und „Oberseite des Körpers" und lasen sich
+    # damit als Weltkoordinaten.
     x: float = param(
         title=_("X"),
         default=0.0,
@@ -399,7 +405,10 @@ class SketchPocketParams(BaseParams):
         minimum=-1000.0,
         maximum=1000.0,
         placement="advanced",
-        doc=_("Mitte der Tasche in X. Eine angeklickte Fläche trägt den Ort selbst ein."),
+        doc=_(
+            "Mitte der Tasche in der Zeichenebene, in deren x-Richtung. Eine "
+            "angeklickte Fläche trägt den Ort selbst ein."
+        ),
     )
     y: float = param(
         title=_("Y"),
@@ -408,7 +417,10 @@ class SketchPocketParams(BaseParams):
         minimum=-1000.0,
         maximum=1000.0,
         placement="advanced",
-        doc=_("Mitte der Tasche in Y. Eine angeklickte Fläche trägt den Ort selbst ein."),
+        doc=_(
+            "Mitte der Tasche in der Zeichenebene, in deren y-Richtung. Eine "
+            "angeklickte Fläche trägt den Ort selbst ein."
+        ),
     )
     z: float = param(
         title=_("Oberkante"),
@@ -417,7 +429,10 @@ class SketchPocketParams(BaseParams):
         minimum=-1000.0,
         maximum=1000.0,
         placement="advanced",
-        doc=_("Wo die Tasche oben beginnt. Null heißt: an der Oberseite des Körpers."),
+        doc=_(
+            "Wo die Tasche oben beginnt, gemessen senkrecht zur Zeichenebene. "
+            "Null heißt: an der Oberseite des Körpers."
+        ),
     )
     corners: int = param(
         title=_("Ecken"),
@@ -760,8 +775,26 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
         placed = _drawn_profile(ctx, params.sketch)
     else:
         profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
-        rise = params.length / 2.0 if params.shape in ("circle", "polygon") else params.width / 2.0
-        placed = shifted(profile, params.offset + params.length / 2.0, rise)
+        # **Der gemessene Bereich statt einer Formel je Grundform.** Hier stand
+        # ``offset + length/2`` waagerecht und ``length/2`` beziehungsweise
+        # ``width/2`` senkrecht. Beides ist der halbe **Umkreis**durchmesser
+        # und trifft nur, wo die Form genauso um den Ursprung liegt —
+        # Rechteck, Langloch, Kreis. Ein Vieleck liegt anders, weil seine
+        # untere Kante waagerecht steht:
+        #
+        # * Dreieck, ``length=20``: x reicht bis ±8,66, y von -5 bis +10. Es
+        #   schwebte 5,00 mm über dem Bett, und seine Innenkante stand
+        #   1,34 mm weiter draußen als der Abstand sagt.
+        # * Sechseck, ``length=20``: x stimmt (±10), y reicht nur ±8,66 — der
+        #   Abstand traf, das Bett um 1,34 mm nicht.
+        #
+        # ``bounds_of`` ist bei allen vier Formen exakt (bei Langloch und
+        # Kreis liegt der Scheitel jedes Bogens auf seinem Stützpunkt), und
+        # für Rechteck, Langloch und Kreis kommt dieselbe Verschiebung heraus
+        # wie vorher. Denselben Weg geht ``sketch_loft`` mit der gezeichneten
+        # Skizze.
+        low, _high = bounds_of(profile)
+        placed = shifted(profile, params.offset - low[0], -low[1])
     solid = profiles.revolve(placed, params.angle)
     return OpResult(outputs=[_created(params.name, str(_("Rotationskörper")), solid)])
 
