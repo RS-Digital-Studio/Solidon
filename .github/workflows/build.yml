@@ -351,7 +351,13 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 pkg-config
+          # Die xcb-util-Bibliotheken und xkbcommon-x11: Qts X11-Plugin hängt
+          # hart an ihnen, PyInstaller bündelt nur, was der Runner hat — und der
+          # hatte sie nicht. Auf einem Ubuntu-GNOME fehlt libxcb-cursor0
+          # regelmäßig, und Qt startet dann nicht (make_sbom.LINUX_LIBRARY_FAMILIES).
+          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 pkg-config \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
+            libxcb-shape0 libxcb-util1 libxcb-xkb1 libxkbcommon-x11-0
 
       - name: Abhängigkeiten
         # Derselbe Satz wie in der Suite: was geprüft wurde, wird paketiert.
