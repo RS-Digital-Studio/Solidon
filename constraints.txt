@@ -33,6 +33,7 @@ docstring_parser==0.18.0
 execnet==2.1.2
 fast_simplification==0.2.0
 fonttools==4.63.0
+hidapi==0.15.0
 idna==3.19
 ImageIO==2.37.4
 iniconfig==2.3.0

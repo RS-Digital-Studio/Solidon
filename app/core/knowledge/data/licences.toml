@@ -121,6 +121,7 @@ scikit-image = { licence = "BSD-3-Clause", note = "Marching Cubes für die Voxel
 lxml = { licence = "BSD-3-Clause", note = "XML-Schreiber hinter dem 3MF-Export" }
 vhacdx = { licence = "BSD-3-Clause", note = "V-HACD-Hinweis für die Trennebene (§22.3); optional, das Original github.com/kmammou/v-hacd steht unter BSD-3" }
 fast-simplification = { licence = "MIT", note = "Quadrik-Dezimierung für erzeugte Netze (§25)" }
+hidapi = { licence = "BSD-3-Clause", note = "HID-Leser für die 3D-Maus (§2.9, Konzept 3D-Maus); das Paket ist dreifach lizenziert (GPL-3.0 OR BSD-3-Clause OR HIDAPI), gewählt ist BSD-3 — die Metadaten nennen nur Klassifikatoren, deshalb steht die Wahl hier" }
 xxhash = { licence = "BSD-2-Clause", note = "schneller Array-Hash für trimeshs Cache-Prüfungen; ohne ihn fällt trimesh auf blake2b zurück" }
 "svg.path" = { licence = "MIT", note = "SVG-Pfade lesen für den Zeichnungsimport (§25)" }
 # Der zweite Konstruktionskern (§30). Die Python-Anbindung steht unter

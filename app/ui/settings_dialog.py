@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,6 +28,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QPushButton,
+    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -206,6 +208,40 @@ class SettingsDialog(QDialog):
         self.remote_port.setToolTip(self.remote.toolTip())
         self.remote.toggled.connect(self.remote_port.setEnabled)
 
+        # Konzept 3D-Maus, Abschnitt 6: eine Zeile, drei Felder — An/Aus, ein
+        # Regler, Richtung. Sichtbar erst ab dem ersten gesehenen Gerät, und
+        # ab dann dauerhaft: Wer das Gerät abzieht, findet die Einstellung
+        # sonst nicht wieder, und die Handbuchbilder sähen sie nie.
+        self.spacemouse = QCheckBox(tr("3D-Maus (SpaceMouse) benutzen"), self)
+        self.spacemouse.setChecked(settings.spacemouse_enabled)
+        self.spacemouse.setToolTip(
+            tr(
+                "Die Kappe ist das Teil: Schieben verschiebt, Drehen dreht, "
+                "zu sich ziehen holt es näher. Jede Gerätetaste passt alles ein."
+            )
+        )
+        self.spacemouse_speed = QSlider(Qt.Orientation.Horizontal, self)
+        self.spacemouse_speed.setRange(1, 10)
+        self.spacemouse_speed.setValue(settings.spacemouse_speed)
+        self.spacemouse_speed.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.spacemouse_speed.setTickInterval(1)
+        self.spacemouse_speed.setAccessibleName(tr("Geschwindigkeit der 3D-Maus"))
+        self.spacemouse_speed.setToolTip(
+            tr("Wie weit ein Schub die Ansicht bewegt. Links fein, rechts flott.")
+        )
+        self.spacemouse_invert = QCheckBox(tr("Richtung umkehren"), self)
+        self.spacemouse_invert.setChecked(settings.spacemouse_invert)
+        self.spacemouse_invert.setToolTip(
+            tr(
+                "Dann ist die Kappe die Kamera statt des Teils — für alle, die "
+                "es aus ihrem CAD so gewohnt sind."
+            )
+        )
+        self.spacemouse_speed.setEnabled(self.spacemouse.isChecked())
+        self.spacemouse_invert.setEnabled(self.spacemouse.isChecked())
+        self.spacemouse.toggled.connect(self.spacemouse_speed.setEnabled)
+        self.spacemouse.toggled.connect(self.spacemouse_invert.setEnabled)
+
         self.printer = _choices(
             self,
             {key: str(entry.title) for key, entry in by_title(profiles.printer_profiles())},
@@ -254,6 +290,11 @@ class SettingsDialog(QDialog):
         form.addRow(tr("KI-Hinweis"), self.ai_disclosure_reset)
         form.addRow("", self.remote)
         form.addRow(tr("Port der Fernsteuerung"), self.remote_port)
+        form.addRow("", self.spacemouse)
+        form.addRow(tr("Geschwindigkeit der 3D-Maus"), self.spacemouse_speed)
+        form.addRow("", self.spacemouse_invert)
+        for row in (self.spacemouse, self.spacemouse_speed, self.spacemouse_invert):
+            form.setRowVisible(row, self.settings.spacemouse_seen)
         return box
 
     def _project_group(self) -> QWidget:
@@ -296,6 +337,9 @@ class SettingsDialog(QDialog):
             clear_disclosure(settings)
         settings.remote_enabled = self.remote.isChecked()
         settings.remote_port = int(self.remote_port.value())
+        settings.spacemouse_enabled = self.spacemouse.isChecked()
+        settings.spacemouse_speed = int(self.spacemouse_speed.value())
+        settings.spacemouse_invert = self.spacemouse_invert.isChecked()
         settings.printer = str(self.printer.currentData())
         settings.material = str(self.material.currentData())
         return settings

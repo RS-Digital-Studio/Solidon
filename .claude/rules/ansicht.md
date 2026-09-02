@@ -701,3 +701,31 @@ wenn genau ein bearbeitbarer Körper gewählt ist. Ohne ihn bleibt der Pfeil
 nach außen vollständig bedienbar; ein Zug nach innen zeigt weder Drahtkörper
 noch Tiefe und erzeugt keine Operation.
 
+## Die Kamera hat einen zweiten Treiber (02.09.2026)
+
+Die 3D-Maus (`app/ui/spacemouse.py`, Konzept `konzept-3d-maus-2026-08`) fährt
+dieselbe Kamera wie die Maus — kein fünftes Navigationsschema, kein Modus,
+keine Operation. Drei Regeln:
+
+* **Die Abbildung ist eine reine Funktion.** `camera_step` bekommt sechs
+  Achsen, eine Stellung, eine Zeitspanne und zwei Einstellungen und gibt eine
+  Stellung zurück. Kein Qt, kein VTK, kein HID darin — jeder Achsenfehler
+  (Vorzeichen, Bezugssystem) wird dort behoben und in
+  `tests/test_spacemouse.py` mit einem Test je Achse festgehalten. Wer die
+  Wirkung einer Achse ändert, macht genau einen Test rot. Objektmodus ist die
+  Vorgabe (die Kappe ist das Teil, alle sechs Achsen — Robert, 02.09.2026),
+  „Richtung umkehren" ist der Kameramodus.
+* **Der Viewport bekommt eine Stellung, keine Deltas.** `Viewport.set_camera_pose`
+  setzt Standort, Blickpunkt und Oben und zeichnet einmal. Es ist die einzige
+  Stelle, an der die 3D-Maus den Viewport anfasst; `sketch_active` sagt ihr,
+  dass im Zeichenmodus nur geschoben und gezoomt wird.
+* **Direkt über HID, neben dem Herstellertreiber.** `hidapi` (BSD-3 aus der
+  Dreifachlizenz gewählt) öffnet die Schnittstelle *Multi-axis Controller*;
+  3DxWare darf laufen und liest dieselben Berichte mit — so wie PrusaSlicer und
+  Assist es tun. Raw Input war der erste Anlauf und blieb leer: 3DxWare reicht
+  Rohdaten nur an Programme durch, die es kennt
+  (`<Transport>RawInput</Transport>` in seiner Programmliste). Nicht
+  blockierend, im Hauptthread, ein Takt für Lesen und Fahren; die Vorzeichen
+  der Achsen stammen aus einer aufgezeichneten Lesung im Korpus
+  (`tests/data/spacemouse/`), nicht aus einer Annahme.
+

@@ -66,7 +66,9 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 **Ansicht**
 
 `viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `overlay.py` (Zonen über der
-Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py`
+Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
+`spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
+über hidapi, die Abbildung als reine Funktion — Regel in `ansicht.md`)
 
 **Panels und Leisten**
 

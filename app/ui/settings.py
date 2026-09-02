@@ -157,6 +157,29 @@ class UiSettings:
     Der Merker bleibt lokal in den Oberflächeneinstellungen und reist nie in
     einer Projektdatei."""
 
+    circle_measure: str = "diameter"
+    """Ob Kreismaße als Durchmesser oder als Radius eingegeben werden — der
+    Umschalter steht an jedem Kreisfeld, die Wahl gilt überall und bleibt."""
+    bed_visible: bool = True
+    """Ob Bett, Bauraum und Maßstab gezeichnet werden (Ansicht → Druckplatte
+    zeigen, Strg+Umschalt+D). Wer sie ausblendet, will sie beim nächsten Start
+    nicht wieder wegklicken."""
+    spacemouse_enabled: bool = True
+    """Die 3D-Maus (SpaceMouse) fährt die Kamera — an, sobald eine da ist.
+
+    Einstecken, schieben, das Bild folgt: Ein Haken, den man erst finden
+    müsste, wäre eine Einrichtung, und das Konzept (``konzept-3d-maus``)
+    verspricht keine. Abschaltbar für den, dem die Kappe im Weg liegt."""
+    spacemouse_speed: int = 5
+    """Ein Regler, nicht drei: Stufe 1 bis 10, bei 5 gelten die Raten aus
+    ``app/ui/spacemouse.py`` unverändert. Das Verhältnis der Achsen gehört uns."""
+    spacemouse_invert: bool = False
+    """Objektmodus (die Kappe ist das Teil) oder Kameramodus (die Kappe ist
+    die Kamera). Beide Lager gibt es, und keines lässt sich überzeugen."""
+    spacemouse_seen: bool = False
+    """Ob je ein Gerät gemeldet hat. Die Einstellungszeile erscheint ab dann
+    und bleibt — wer das Gerät abzieht, findet sie sonst nicht wieder."""
+
     def remember(self, path: Path) -> None:
         text = str(path)
         self.recent = [text, *(entry for entry in self.recent if entry != text)][:MAX_RECENT]

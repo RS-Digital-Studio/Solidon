@@ -11650,3 +11650,87 @@ def test_a_header_label_keeps_its_text_for_tooltip_and_assistance(
     assert title.text() != title.full_text(), "der Volltext darf nicht nur unsichtbar überstehen"
     assert "…" in title.text()
     assert title.text().endswith("*"), "die Ungespeichert-Markierung bleibt gezeichnet"
+
+
+def test_a_clean_part_offers_the_way_to_the_slicer(window: MainWindow) -> None:
+    """Der letzte Meter: „Keine Befunde." ohne nächsten Schritt war eine Sackgasse.
+
+    Leere Szene: kein Knopf, weil nichts zu übergeben ist. Ein Körper ohne
+    Befund: der Bericht sagt „druckbereit" und bietet den Slicer an; der Knopf
+    öffnet denselben Dialog wie *Datei → Druckeinstellungen …*
+    (Review 02.09.2026).
+    """
+    report = window.report
+    assert not report.to_slicer.isVisibleTo(report)
+    assert report.summary.text() == "Keine Befunde."
+
+    window.session.apply(
+        "Kasten",
+        [
+            OperationDraft(
+                op="create_box",
+                inputs=(),
+                params={"width": 20.0, "depth": 20.0, "height": 10.0},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    assert report.to_slicer.isVisibleTo(report)
+    assert report.summary.text() == "Keine Befunde. Das Teil ist druckbereit."
+    opened: list[str] = []
+    window.action_print_settings = lambda: opened.append("dialog")  # type: ignore[method-assign]
+    report.slicerRequested.disconnect()
+    report.slicerRequested.connect(window.action_print_settings)
+    report.to_slicer.click()
+    assert opened == ["dialog"]
+
+
+def test_palette_twins_do_not_look_alike(window: MainWindow) -> None:
+    """Vier Paare tragen denselben Titel; die Palette zeigt beide mit ihrem Satz.
+
+    Wer „quader" tippte, sah zweimal „Quader anlegen", und der Unterschied
+    stand nur im Tooltip (Review 02.09.2026).
+    """
+    from app.core.registry import MENU_TWINS
+    from app.ui.command_palette import CommandPalette
+
+    palette = CommandPalette(parent=window)
+    for hidden, visible in MENU_TWINS.items():
+        palette._refilter(str(window._op_actions[visible].text()).replace("&", ""))
+        rows = [palette.list.item(row).text() for row in range(palette.list.count())]
+        both = [
+            row
+            for row in rows
+            if row.split(chr(10))[0].split(chr(9))[0]
+            in {str(spec.title) for spec in (REGISTRY.get(hidden), REGISTRY.get(visible))}
+        ]
+        assert len(both) >= 2, (hidden, visible, rows[:6])
+        assert len(set(both)) == len(both), both
+        assert all(chr(10) in row for row in both), both
+
+
+def test_the_build_plate_hides_in_one_step(window: MainWindow) -> None:
+    """Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die Druckplatte auszublenden".
+
+    Ein Haken im Ansichtsmenü mit Kürzel, in der Palette gelistet, und der
+    Zustand bleibt in den Einstellungen — gleich, ob Menü, Palette oder Taste
+    ihn umlegen.
+    """
+    assert window.viewport.bed_visible
+    assert window.settings.bed_visible
+    assert window._bed_action.isChecked()
+
+    window.action_toggle_bed()
+
+    assert not window.viewport.bed_visible
+    assert not window.settings.bed_visible
+    assert not window._bed_action.isChecked()
+    assert window.window_commands()["view.bed"][1] == "Ctrl+Shift+D"
+
+    window._bed_action.trigger()
+
+    assert window.viewport.bed_visible
+    assert window.settings.bed_visible
+    assert window._bed_action.isChecked()

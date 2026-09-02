@@ -193,6 +193,9 @@ hiddenimports = [
     "OCP.GeomAbs",
     "OCP.Message",
     "vhacdx",
+    # Die 3D-Maus liest über hidapi, importiert erst beim Öffnen des Geräts
+    # (app/ui/spacemouse.py) — ein Bau ohne das Modul soll auffallen.
+    "hid",
     # trimesh fragt xxhash in einem try/except am Modulkopf ab und fällt ohne
     # es still auf blake2b zurück — der Kunde merkt nur, dass jede Auswertung
     # großer Baugruppen langsamer ist. Der Modulgraph findet auch try-Importe;

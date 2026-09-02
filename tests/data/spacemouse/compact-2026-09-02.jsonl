@@ -1,0 +1,855 @@
+{"device": "3Dconnexion SpaceMouse Compact (VID 0x256F, PID 0xC635), usage page 1, usage 8", "recorded": "2026-09-02, guided capture on Windows 11 with 3DxWare 10 running, read via hidapi 0.15.0; each phase four seconds", "reports_total": 4195, "thinned": "every fifth motion report per report id, every button report"}
+{"t": 5.778, "phase": "1", "gesture": "push right", "hex": "010b0000000000"}
+{"t": 5.778, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 5.858, "phase": "1", "gesture": "push right", "hex": "01420000000500"}
+{"t": 5.858, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 5.938, "phase": "1", "gesture": "push right", "hex": "01790000002d00"}
+{"t": 5.938, "phase": "1", "gesture": "push right", "hex": "02000007000000"}
+{"t": 6.026, "phase": "1", "gesture": "push right", "hex": "01d80000005100"}
+{"t": 6.026, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.106, "phase": "1", "gesture": "push right", "hex": "012b0100006c00"}
+{"t": 6.106, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.194, "phase": "1", "gesture": "push right", "hex": "015e0100008700"}
+{"t": 6.194, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.274, "phase": "1", "gesture": "push right", "hex": "015e0100009b00"}
+{"t": 6.274, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.354, "phase": "1", "gesture": "push right", "hex": "015e010000a500"}
+{"t": 6.354, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.434, "phase": "1", "gesture": "push right", "hex": "015e010000a800"}
+{"t": 6.434, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.514, "phase": "1", "gesture": "push right", "hex": "015e010000b100"}
+{"t": 6.514, "phase": "1", "gesture": "push right", "hex": "02000000000000"}
+{"t": 6.594, "phase": "1", "gesture": "push right", "hex": "015e010000b000"}
+{"t": 6.594, "phase": "1", "gesture": "push right", "hex": "020000fdff0000"}
+{"t": 6.674, "phase": "1", "gesture": "push right", "hex": "015e010000b400"}
+{"t": 6.674, "phase": "1", "gesture": "push right", "hex": "020000f9ff0000"}
+{"t": 6.754, "phase": "1", "gesture": "push right", "hex": "015e010000b100"}
+{"t": 6.754, "phase": "1", "gesture": "push right", "hex": "020000f9ff0000"}
+{"t": 6.834, "phase": "1", "gesture": "push right", "hex": "015e010000b100"}
+{"t": 6.834, "phase": "1", "gesture": "push right", "hex": "020000f9ff0000"}
+{"t": 6.914, "phase": "1", "gesture": "push right", "hex": "015e010000b000"}
+{"t": 6.914, "phase": "1", "gesture": "push right", "hex": "020000faff0000"}
+{"t": 6.994, "phase": "1", "gesture": "push right", "hex": "015e010000b000"}
+{"t": 6.994, "phase": "1", "gesture": "push right", "hex": "020000fbff0000"}
+{"t": 7.074, "phase": "1", "gesture": "push right", "hex": "015e010000b000"}
+{"t": 7.074, "phase": "1", "gesture": "push right", "hex": "020000fbff0000"}
+{"t": 7.154, "phase": "1", "gesture": "push right", "hex": "015e010000ad00"}
+{"t": 7.154, "phase": "1", "gesture": "push right", "hex": "020000fdff0000"}
+{"t": 7.234, "phase": "1", "gesture": "push right", "hex": "015e010000ad00"}
+{"t": 7.234, "phase": "1", "gesture": "push right", "hex": "020000faff0000"}
+{"t": 7.314, "phase": "1", "gesture": "push right", "hex": "015e010000aa00"}
+{"t": 7.314, "phase": "1", "gesture": "push right", "hex": "020000f9ff0000"}
+{"t": 7.394, "phase": "1", "gesture": "push right", "hex": "015e010000a900"}
+{"t": 7.394, "phase": "1", "gesture": "push right", "hex": "020000f3ff0000"}
+{"t": 7.474, "phase": "1", "gesture": "push right", "hex": "015e010000a400"}
+{"t": 7.474, "phase": "1", "gesture": "push right", "hex": "020000efff0000"}
+{"t": 7.554, "phase": "1", "gesture": "push right", "hex": "015e0100009d00"}
+{"t": 7.554, "phase": "1", "gesture": "push right", "hex": "020000e9ff0000"}
+{"t": 7.634, "phase": "1", "gesture": "push right", "hex": "015e0100009000"}
+{"t": 7.634, "phase": "1", "gesture": "push right", "hex": "020000daff0000"}
+{"t": 7.714, "phase": "1", "gesture": "push right", "hex": "015e0100008100"}
+{"t": 7.714, "phase": "1", "gesture": "push right", "hex": "020000d7ff0000"}
+{"t": 7.794, "phase": "1", "gesture": "push right", "hex": "015e0100007800"}
+{"t": 7.794, "phase": "1", "gesture": "push right", "hex": "020000d5ff0000"}
+{"t": 7.874, "phase": "1", "gesture": "push right", "hex": "015e0100007500"}
+{"t": 7.874, "phase": "1", "gesture": "push right", "hex": "020000d4ff0000"}
+{"t": 7.906, "phase": "2", "gesture": "push left", "hex": "015e0100006f00"}
+{"t": 7.906, "phase": "2", "gesture": "push left", "hex": "020000d3ff0000"}
+{"t": 7.986, "phase": "2", "gesture": "push left", "hex": "015e0100006200"}
+{"t": 7.986, "phase": "2", "gesture": "push left", "hex": "020000ccff0000"}
+{"t": 8.066, "phase": "2", "gesture": "push left", "hex": "015e0100006200"}
+{"t": 8.066, "phase": "2", "gesture": "push left", "hex": "020000ccff0000"}
+{"t": 8.146, "phase": "2", "gesture": "push left", "hex": "015e0100005f00"}
+{"t": 8.146, "phase": "2", "gesture": "push left", "hex": "020000caff0000"}
+{"t": 8.226, "phase": "2", "gesture": "push left", "hex": "015e0100005f00"}
+{"t": 8.226, "phase": "2", "gesture": "push left", "hex": "020000c8ff0000"}
+{"t": 8.306, "phase": "2", "gesture": "push left", "hex": "015e0100005f00"}
+{"t": 8.306, "phase": "2", "gesture": "push left", "hex": "020000c8ff0000"}
+{"t": 8.386, "phase": "2", "gesture": "push left", "hex": "015e0100003800"}
+{"t": 8.386, "phase": "2", "gesture": "push left", "hex": "02feffc8ff0000"}
+{"t": 8.466, "phase": "2", "gesture": "push left", "hex": "016400f9ff0000"}
+{"t": 8.466, "phase": "2", "gesture": "push left", "hex": "02f2fff5ff1500"}
+{"t": 8.546, "phase": "2", "gesture": "push left", "hex": "010b0000000000"}
+{"t": 8.546, "phase": "2", "gesture": "push left", "hex": "020000faff0000"}
+{"t": 8.834, "phase": "2", "gesture": "push left", "hex": "01f3ff00000a00"}
+{"t": 8.834, "phase": "2", "gesture": "push left", "hex": "020000fdff0000"}
+{"t": 8.914, "phase": "2", "gesture": "push left", "hex": "01000000000700"}
+{"t": 8.914, "phase": "2", "gesture": "push left", "hex": "020000daff0000"}
+{"t": 8.994, "phase": "2", "gesture": "push left", "hex": "010000edff0000"}
+{"t": 8.994, "phase": "2", "gesture": "push left", "hex": "020000fbfffcff"}
+{"t": 9.074, "phase": "2", "gesture": "push left", "hex": "0193fff1ff0800"}
+{"t": 9.074, "phase": "2", "gesture": "push left", "hex": "020200f1ff0000"}
+{"t": 9.154, "phase": "2", "gesture": "push left", "hex": "0118ffd2ff3900"}
+{"t": 9.154, "phase": "2", "gesture": "push left", "hex": "021800abff0000"}
+{"t": 9.234, "phase": "2", "gesture": "push left", "hex": "01b3fed9ff6a00"}
+{"t": 9.234, "phase": "2", "gesture": "push left", "hex": "0223008dff1f00"}
+{"t": 9.306, "phase": "2", "gesture": "push left", "hex": "03010087ff1b00"}
+{"t": 9.322, "phase": "2", "gesture": "push left", "hex": "01aefedaff8100"}
+{"t": 9.322, "phase": "2", "gesture": "push left", "hex": "021c008aff1b00"}
+{"t": 9.402, "phase": "2", "gesture": "push left", "hex": "01a9fed9ff8d00"}
+{"t": 9.402, "phase": "2", "gesture": "push left", "hex": "021e0095ff1c00"}
+{"t": 9.482, "phase": "2", "gesture": "push left", "hex": "01a8fed3ff7400"}
+{"t": 9.482, "phase": "2", "gesture": "push left", "hex": "022b00aeff2000"}
+{"t": 9.506, "phase": "2", "gesture": "push left", "hex": "030000bbff2300"}
+{"t": 9.57, "phase": "2", "gesture": "push left", "hex": "01a2fed9ff3900"}
+{"t": 9.57, "phase": "2", "gesture": "push left", "hex": "02190000002700"}
+{"t": 9.65, "phase": "2", "gesture": "push left", "hex": "01a2fed3ff4500"}
+{"t": 9.65, "phase": "2", "gesture": "push left", "hex": "021c00f3ff2500"}
+{"t": 9.73, "phase": "2", "gesture": "push left", "hex": "01a2fec3ff5a00"}
+{"t": 9.73, "phase": "2", "gesture": "push left", "hex": "021d00e2ff2300"}
+{"t": 9.81, "phase": "2", "gesture": "push left", "hex": "01a4fecbff5f00"}
+{"t": 9.81, "phase": "2", "gesture": "push left", "hex": "022700c9ff2800"}
+{"t": 9.89, "phase": "2", "gesture": "push left", "hex": "01a7fedcff6c00"}
+{"t": 9.89, "phase": "2", "gesture": "push left", "hex": "021300d2ff3c00"}
+{"t": 9.97, "phase": "2", "gesture": "push left", "hex": "01a4fee9ff5f00"}
+{"t": 9.97, "phase": "2", "gesture": "push left", "hex": "021f00e4ff4300"}
+{"t": 10.05, "phase": "2", "gesture": "push left", "hex": "01a8fec8ff6600"}
+{"t": 10.05, "phase": "2", "gesture": "push left", "hex": "021b00dfff3a00"}
+{"t": 10.13, "phase": "2", "gesture": "push left", "hex": "01b5fecaff5f00"}
+{"t": 10.13, "phase": "2", "gesture": "push left", "hex": "021e00d4ff3f00"}
+{"t": 10.21, "phase": "2", "gesture": "push left", "hex": "01c3fed3ff6200"}
+{"t": 10.21, "phase": "2", "gesture": "push left", "hex": "022200b8ff4300"}
+{"t": 10.29, "phase": "2", "gesture": "push left", "hex": "01cffed7ff6100"}
+{"t": 10.29, "phase": "2", "gesture": "push left", "hex": "022700a1ff4300"}
+{"t": 10.37, "phase": "2", "gesture": "push left", "hex": "01cffed4ff6500"}
+{"t": 10.37, "phase": "2", "gesture": "push left", "hex": "022400a3ff4400"}
+{"t": 10.45, "phase": "2", "gesture": "push left", "hex": "01d4fed4ff6400"}
+{"t": 10.45, "phase": "2", "gesture": "push left", "hex": "022c008dff3e00"}
+{"t": 10.53, "phase": "2", "gesture": "push left", "hex": "01d7fed2ff6e00"}
+{"t": 10.53, "phase": "2", "gesture": "push left", "hex": "02290087ff3e00"}
+{"t": 10.61, "phase": "2", "gesture": "push left", "hex": "01d3fed6ff7200"}
+{"t": 10.61, "phase": "2", "gesture": "push left", "hex": "02280094ff4200"}
+{"t": 10.69, "phase": "2", "gesture": "push left", "hex": "01d4fed3ff7100"}
+{"t": 10.69, "phase": "2", "gesture": "push left", "hex": "02240094ff4200"}
+{"t": 10.77, "phase": "2", "gesture": "push left", "hex": "01d6fed1ff7600"}
+{"t": 10.77, "phase": "2", "gesture": "push left", "hex": "0223008cff4100"}
+{"t": 10.85, "phase": "2", "gesture": "push left", "hex": "01e0fed2ff7c00"}
+{"t": 10.85, "phase": "2", "gesture": "push left", "hex": "0224007dff4300"}
+{"t": 10.93, "phase": "2", "gesture": "push left", "hex": "01e8fed1ff8000"}
+{"t": 10.93, "phase": "2", "gesture": "push left", "hex": "02230072ff4500"}
+{"t": 11.01, "phase": "2", "gesture": "push left", "hex": "01e9fed6ff8100"}
+{"t": 11.01, "phase": "2", "gesture": "push left", "hex": "0225006eff4600"}
+{"t": 11.09, "phase": "2", "gesture": "push left", "hex": "01eefed0ff8200"}
+{"t": 11.09, "phase": "2", "gesture": "push left", "hex": "02220068ff4600"}
+{"t": 11.17, "phase": "2", "gesture": "push left", "hex": "01f2fed0ff8400"}
+{"t": 11.17, "phase": "2", "gesture": "push left", "hex": "02200066ff4900"}
+{"t": 11.25, "phase": "2", "gesture": "push left", "hex": "01f6fecfff8600"}
+{"t": 11.25, "phase": "2", "gesture": "push left", "hex": "021f0063ff4c00"}
+{"t": 11.33, "phase": "2", "gesture": "push left", "hex": "01fcfed2ff8600"}
+{"t": 11.33, "phase": "2", "gesture": "push left", "hex": "0222005eff4f00"}
+{"t": 11.41, "phase": "2", "gesture": "push left", "hex": "01fffecfff7f00"}
+{"t": 11.41, "phase": "2", "gesture": "push left", "hex": "02200059ff4f00"}
+{"t": 11.49, "phase": "2", "gesture": "push left", "hex": "0101ffceff8300"}
+{"t": 11.49, "phase": "2", "gesture": "push left", "hex": "021f0059ff5000"}
+{"t": 11.57, "phase": "2", "gesture": "push left", "hex": "0109ffcbff8400"}
+{"t": 11.57, "phase": "2", "gesture": "push left", "hex": "0221004eff5100"}
+{"t": 11.65, "phase": "2", "gesture": "push left", "hex": "0108ffc9ff8600"}
+{"t": 11.65, "phase": "2", "gesture": "push left", "hex": "02220051ff5100"}
+{"t": 11.73, "phase": "2", "gesture": "push left", "hex": "010cffc8ff8100"}
+{"t": 11.73, "phase": "2", "gesture": "push left", "hex": "0223004bff5100"}
+{"t": 11.81, "phase": "2", "gesture": "push left", "hex": "0110ffc3ff8600"}
+{"t": 11.81, "phase": "2", "gesture": "push left", "hex": "0221004bff5200"}
+{"t": 11.89, "phase": "2", "gesture": "push left", "hex": "010fffc5ff8300"}
+{"t": 11.89, "phase": "2", "gesture": "push left", "hex": "02210050ff5400"}
+{"t": 11.906, "phase": "3", "gesture": "pull up", "hex": "010fffc2ff8200"}
+{"t": 11.906, "phase": "3", "gesture": "pull up", "hex": "021f0051ff5400"}
+{"t": 11.986, "phase": "3", "gesture": "pull up", "hex": "0112ffc0ff8400"}
+{"t": 11.986, "phase": "3", "gesture": "pull up", "hex": "021f004bff5400"}
+{"t": 12.066, "phase": "3", "gesture": "pull up", "hex": "0115ffc4ff8a00"}
+{"t": 12.066, "phase": "3", "gesture": "pull up", "hex": "02210044ff5500"}
+{"t": 12.146, "phase": "3", "gesture": "pull up", "hex": "0113ffc7ff8c00"}
+{"t": 12.146, "phase": "3", "gesture": "pull up", "hex": "02220046ff5500"}
+{"t": 12.226, "phase": "3", "gesture": "pull up", "hex": "017bffa3ff6100"}
+{"t": 12.226, "phase": "3", "gesture": "pull up", "hex": "0213007bff2200"}
+{"t": 12.306, "phase": "3", "gesture": "pull up", "hex": "01d9ffdcff1400"}
+{"t": 12.306, "phase": "3", "gesture": "pull up", "hex": "020000d8ff1a00"}
+{"t": 12.386, "phase": "3", "gesture": "pull up", "hex": "01020000000000"}
+{"t": 12.386, "phase": "3", "gesture": "pull up", "hex": "020000cfff0e00"}
+{"t": 12.906, "phase": "3", "gesture": "pull up", "hex": "0139001e00f0ff"}
+{"t": 12.906, "phase": "3", "gesture": "pull up", "hex": "022900b3ff0000"}
+{"t": 12.986, "phase": "3", "gesture": "pull up", "hex": "011400edffb7ff"}
+{"t": 12.986, "phase": "3", "gesture": "pull up", "hex": "02360063ff0000"}
+{"t": 13.066, "phase": "3", "gesture": "pull up", "hex": "0100000300fbfe"}
+{"t": 13.066, "phase": "3", "gesture": "pull up", "hex": "02250099ff0000"}
+{"t": 13.146, "phase": "3", "gesture": "pull up", "hex": "0100000000dcfe"}
+{"t": 13.146, "phase": "3", "gesture": "pull up", "hex": "022e0074ff0000"}
+{"t": 13.226, "phase": "3", "gesture": "pull up", "hex": "0100000000c4fe"}
+{"t": 13.226, "phase": "3", "gesture": "pull up", "hex": "02240084ff0000"}
+{"t": 13.306, "phase": "3", "gesture": "pull up", "hex": "0100000000bafe"}
+{"t": 13.306, "phase": "3", "gesture": "pull up", "hex": "0223008fff0000"}
+{"t": 13.386, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.386, "phase": "3", "gesture": "pull up", "hex": "020c00a1ff0000"}
+{"t": 13.466, "phase": "3", "gesture": "pull up", "hex": "0100000000abfe"}
+{"t": 13.466, "phase": "3", "gesture": "pull up", "hex": "0215009aff0000"}
+{"t": 13.546, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.546, "phase": "3", "gesture": "pull up", "hex": "020500a4ff0000"}
+{"t": 13.626, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.626, "phase": "3", "gesture": "pull up", "hex": "020000b2ff0000"}
+{"t": 13.706, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.706, "phase": "3", "gesture": "pull up", "hex": "020000b0ff0000"}
+{"t": 13.786, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.786, "phase": "3", "gesture": "pull up", "hex": "020000b2ff0000"}
+{"t": 13.866, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.866, "phase": "3", "gesture": "pull up", "hex": "020000b1ff0000"}
+{"t": 13.946, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 13.946, "phase": "3", "gesture": "pull up", "hex": "020000b4ff0000"}
+{"t": 14.026, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.026, "phase": "3", "gesture": "pull up", "hex": "020000b6ff0000"}
+{"t": 14.106, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.106, "phase": "3", "gesture": "pull up", "hex": "020000cdff0000"}
+{"t": 14.186, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.186, "phase": "3", "gesture": "pull up", "hex": "020000d1ff0000"}
+{"t": 14.266, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.266, "phase": "3", "gesture": "pull up", "hex": "020000d5ff0000"}
+{"t": 14.346, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.346, "phase": "3", "gesture": "pull up", "hex": "020000d5ff0000"}
+{"t": 14.426, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.426, "phase": "3", "gesture": "pull up", "hex": "02f1ffecff0000"}
+{"t": 14.506, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.506, "phase": "3", "gesture": "pull up", "hex": "02eeffe4ff0000"}
+{"t": 14.586, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.586, "phase": "3", "gesture": "pull up", "hex": "02f2ffe5ff0000"}
+{"t": 14.666, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.666, "phase": "3", "gesture": "pull up", "hex": "02f1ffe1ff0000"}
+{"t": 14.746, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.746, "phase": "3", "gesture": "pull up", "hex": "02e8fff0ff0000"}
+{"t": 14.826, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.826, "phase": "3", "gesture": "pull up", "hex": "02f4ffdeff0000"}
+{"t": 14.906, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.906, "phase": "3", "gesture": "pull up", "hex": "02f2ffdeff0000"}
+{"t": 14.986, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 14.986, "phase": "3", "gesture": "pull up", "hex": "02f1ffe0ff0000"}
+{"t": 15.066, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 15.066, "phase": "3", "gesture": "pull up", "hex": "02f0ffdcff0000"}
+{"t": 15.146, "phase": "3", "gesture": "pull up", "hex": "0100000000a6fe"}
+{"t": 15.146, "phase": "3", "gesture": "pull up", "hex": "02f2ffd6ff0000"}
+{"t": 15.226, "phase": "3", "gesture": "pull up", "hex": "0100000000a7fe"}
+{"t": 15.226, "phase": "3", "gesture": "pull up", "hex": "02f3ffdaff0000"}
+{"t": 15.306, "phase": "3", "gesture": "pull up", "hex": "0100000000a3fe"}
+{"t": 15.306, "phase": "3", "gesture": "pull up", "hex": "02f3ffd9ff0000"}
+{"t": 15.386, "phase": "3", "gesture": "pull up", "hex": "0100000000a3fe"}
+{"t": 15.386, "phase": "3", "gesture": "pull up", "hex": "02efffdaff0000"}
+{"t": 15.466, "phase": "3", "gesture": "pull up", "hex": "0100000000a4fe"}
+{"t": 15.466, "phase": "3", "gesture": "pull up", "hex": "02f5ffd8ff0000"}
+{"t": 15.546, "phase": "3", "gesture": "pull up", "hex": "0100000000a8fe"}
+{"t": 15.546, "phase": "3", "gesture": "pull up", "hex": "02f8ffd8ff0000"}
+{"t": 15.626, "phase": "3", "gesture": "pull up", "hex": "0103000000a8fe"}
+{"t": 15.626, "phase": "3", "gesture": "pull up", "hex": "02f2ffdeff0000"}
+{"t": 15.706, "phase": "3", "gesture": "pull up", "hex": "0101000000a9fe"}
+{"t": 15.706, "phase": "3", "gesture": "pull up", "hex": "02f5ffdeff0000"}
+{"t": 15.786, "phase": "3", "gesture": "pull up", "hex": "0100000000a6fe"}
+{"t": 15.786, "phase": "3", "gesture": "pull up", "hex": "02edffe8ff0000"}
+{"t": 15.866, "phase": "3", "gesture": "pull up", "hex": "0100000000a2fe"}
+{"t": 15.866, "phase": "3", "gesture": "pull up", "hex": "02e0fff9ff0000"}
+{"t": 15.898, "phase": "4", "gesture": "push down", "hex": "0100000000a2fe"}
+{"t": 15.898, "phase": "4", "gesture": "push down", "hex": "02dcfffbff0000"}
+{"t": 15.978, "phase": "4", "gesture": "push down", "hex": "0100000000a2fe"}
+{"t": 15.978, "phase": "4", "gesture": "push down", "hex": "02dffff2ff0000"}
+{"t": 16.058, "phase": "4", "gesture": "push down", "hex": "0100000000a3fe"}
+{"t": 16.058, "phase": "4", "gesture": "push down", "hex": "02ddfff6ff0000"}
+{"t": 16.138, "phase": "4", "gesture": "push down", "hex": "0100000000a7fe"}
+{"t": 16.138, "phase": "4", "gesture": "push down", "hex": "02ddfff2ff0000"}
+{"t": 16.218, "phase": "4", "gesture": "push down", "hex": "0100000000c3fe"}
+{"t": 16.218, "phase": "4", "gesture": "push down", "hex": "02e1ffeaff0000"}
+{"t": 16.298, "phase": "4", "gesture": "push down", "hex": "01070000000dff"}
+{"t": 16.298, "phase": "4", "gesture": "push down", "hex": "02fdffc4ff0000"}
+{"t": 16.378, "phase": "4", "gesture": "push down", "hex": "01040000008aff"}
+{"t": 16.378, "phase": "4", "gesture": "push down", "hex": "020000d4ff0000"}
+{"t": 16.458, "phase": "4", "gesture": "push down", "hex": "0100000000f3ff"}
+{"t": 16.458, "phase": "4", "gesture": "push down", "hex": "020000feff0000"}
+{"t": 16.81, "phase": "4", "gesture": "push down", "hex": "01000000000000"}
+{"t": 16.81, "phase": "4", "gesture": "push down", "hex": "020000fbff0000"}
+{"t": 16.89, "phase": "4", "gesture": "push down", "hex": "01000000001300"}
+{"t": 16.89, "phase": "4", "gesture": "push down", "hex": "020000edff0000"}
+{"t": 16.978, "phase": "4", "gesture": "push down", "hex": "01220000007400"}
+{"t": 16.978, "phase": "4", "gesture": "push down", "hex": "021900a3ff0000"}
+{"t": 17.058, "phase": "4", "gesture": "push down", "hex": "015100fcffe800"}
+{"t": 17.058, "phase": "4", "gesture": "push down", "hex": "021e0077ff0100"}
+{"t": 17.138, "phase": "4", "gesture": "push down", "hex": "017e00e9ff5e01"}
+{"t": 17.138, "phase": "4", "gesture": "push down", "hex": "02100064ff0a00"}
+{"t": 17.218, "phase": "4", "gesture": "push down", "hex": "019800dfff5e01"}
+{"t": 17.218, "phase": "4", "gesture": "push down", "hex": "0200007bff2300"}
+{"t": 17.298, "phase": "4", "gesture": "push down", "hex": "01a700d8ff5e01"}
+{"t": 17.298, "phase": "4", "gesture": "push down", "hex": "0204008aff2b00"}
+{"t": 17.378, "phase": "4", "gesture": "push down", "hex": "01b100d0ff5e01"}
+{"t": 17.378, "phase": "4", "gesture": "push down", "hex": "020b0093ff3200"}
+{"t": 17.458, "phase": "4", "gesture": "push down", "hex": "01b200cfff5e01"}
+{"t": 17.458, "phase": "4", "gesture": "push down", "hex": "020b0095ff3300"}
+{"t": 17.538, "phase": "4", "gesture": "push down", "hex": "01b400ccff5e01"}
+{"t": 17.538, "phase": "4", "gesture": "push down", "hex": "020c0095ff3b00"}
+{"t": 17.618, "phase": "4", "gesture": "push down", "hex": "01b400cbff5e01"}
+{"t": 17.618, "phase": "4", "gesture": "push down", "hex": "020d0095ff3b00"}
+{"t": 17.698, "phase": "4", "gesture": "push down", "hex": "01b500caff5e01"}
+{"t": 17.698, "phase": "4", "gesture": "push down", "hex": "020c0096ff3a00"}
+{"t": 17.778, "phase": "4", "gesture": "push down", "hex": "01b500caff5e01"}
+{"t": 17.778, "phase": "4", "gesture": "push down", "hex": "020d0095ff3a00"}
+{"t": 17.858, "phase": "4", "gesture": "push down", "hex": "01b500cbff5e01"}
+{"t": 17.858, "phase": "4", "gesture": "push down", "hex": "020d0096ff3a00"}
+{"t": 17.938, "phase": "4", "gesture": "push down", "hex": "01b600caff5e01"}
+{"t": 17.938, "phase": "4", "gesture": "push down", "hex": "020d0097ff3b00"}
+{"t": 18.018, "phase": "4", "gesture": "push down", "hex": "01b600caff5e01"}
+{"t": 18.018, "phase": "4", "gesture": "push down", "hex": "020d0098ff3b00"}
+{"t": 18.098, "phase": "4", "gesture": "push down", "hex": "01b600cbff5e01"}
+{"t": 18.098, "phase": "4", "gesture": "push down", "hex": "020d0098ff3b00"}
+{"t": 18.178, "phase": "4", "gesture": "push down", "hex": "01b700cbff5e01"}
+{"t": 18.178, "phase": "4", "gesture": "push down", "hex": "020c009aff3a00"}
+{"t": 18.258, "phase": "4", "gesture": "push down", "hex": "01b700ccff5e01"}
+{"t": 18.258, "phase": "4", "gesture": "push down", "hex": "020d009dff3900"}
+{"t": 18.338, "phase": "4", "gesture": "push down", "hex": "01b800cdff5e01"}
+{"t": 18.338, "phase": "4", "gesture": "push down", "hex": "020a009fff3900"}
+{"t": 18.418, "phase": "4", "gesture": "push down", "hex": "01b900cdff5e01"}
+{"t": 18.418, "phase": "4", "gesture": "push down", "hex": "020b009fff3900"}
+{"t": 18.498, "phase": "4", "gesture": "push down", "hex": "01b900ccff5e01"}
+{"t": 18.498, "phase": "4", "gesture": "push down", "hex": "020a009fff3900"}
+{"t": 18.578, "phase": "4", "gesture": "push down", "hex": "01b900ceff5e01"}
+{"t": 18.578, "phase": "4", "gesture": "push down", "hex": "020b00a1ff3900"}
+{"t": 18.658, "phase": "4", "gesture": "push down", "hex": "01b900ceff5e01"}
+{"t": 18.658, "phase": "4", "gesture": "push down", "hex": "020b00a1ff3900"}
+{"t": 18.738, "phase": "4", "gesture": "push down", "hex": "01ba00ceff5e01"}
+{"t": 18.738, "phase": "4", "gesture": "push down", "hex": "020900a1ff3900"}
+{"t": 18.818, "phase": "4", "gesture": "push down", "hex": "01ba00ceff5e01"}
+{"t": 18.818, "phase": "4", "gesture": "push down", "hex": "020900a5ff3900"}
+{"t": 18.898, "phase": "4", "gesture": "push down", "hex": "01b900cfff5e01"}
+{"t": 18.898, "phase": "4", "gesture": "push down", "hex": "020a00a2ff3800"}
+{"t": 18.978, "phase": "4", "gesture": "push down", "hex": "01b900ceff5e01"}
+{"t": 18.978, "phase": "4", "gesture": "push down", "hex": "020a00a2ff3800"}
+{"t": 19.058, "phase": "4", "gesture": "push down", "hex": "01b900ceff5e01"}
+{"t": 19.058, "phase": "4", "gesture": "push down", "hex": "020a00a2ff3800"}
+{"t": 19.138, "phase": "4", "gesture": "push down", "hex": "01b900cfff5e01"}
+{"t": 19.138, "phase": "4", "gesture": "push down", "hex": "020a00a3ff3800"}
+{"t": 19.218, "phase": "4", "gesture": "push down", "hex": "01b900cfff5e01"}
+{"t": 19.218, "phase": "4", "gesture": "push down", "hex": "020a00a2ff3700"}
+{"t": 19.298, "phase": "4", "gesture": "push down", "hex": "01b900cfff5e01"}
+{"t": 19.298, "phase": "4", "gesture": "push down", "hex": "020900a2ff3700"}
+{"t": 19.378, "phase": "4", "gesture": "push down", "hex": "01b800ceff5e01"}
+{"t": 19.378, "phase": "4", "gesture": "push down", "hex": "020900a2ff3700"}
+{"t": 19.458, "phase": "4", "gesture": "push down", "hex": "01b800d0ff5e01"}
+{"t": 19.458, "phase": "4", "gesture": "push down", "hex": "020900a4ff3700"}
+{"t": 19.538, "phase": "4", "gesture": "push down", "hex": "01b900d0ff5e01"}
+{"t": 19.538, "phase": "4", "gesture": "push down", "hex": "020900a4ff3600"}
+{"t": 19.618, "phase": "4", "gesture": "push down", "hex": "01b800d0ff5e01"}
+{"t": 19.618, "phase": "4", "gesture": "push down", "hex": "020900a4ff3600"}
+{"t": 19.698, "phase": "4", "gesture": "push down", "hex": "01b800cfff5e01"}
+{"t": 19.698, "phase": "4", "gesture": "push down", "hex": "020800a4ff3600"}
+{"t": 19.778, "phase": "4", "gesture": "push down", "hex": "01b800d0ff5e01"}
+{"t": 19.778, "phase": "4", "gesture": "push down", "hex": "020800a5ff3600"}
+{"t": 19.858, "phase": "4", "gesture": "push down", "hex": "01b900d0ff5e01"}
+{"t": 19.858, "phase": "4", "gesture": "push down", "hex": "020900a6ff3600"}
+{"t": 19.906, "phase": "5", "gesture": "pull toward you", "hex": "01b900cfff5e01"}
+{"t": 19.906, "phase": "5", "gesture": "pull toward you", "hex": "020800a7ff3500"}
+{"t": 19.994, "phase": "5", "gesture": "pull toward you", "hex": "01b900cfff5e01"}
+{"t": 19.994, "phase": "5", "gesture": "pull toward you", "hex": "020800a7ff3500"}
+{"t": 20.074, "phase": "5", "gesture": "pull toward you", "hex": "01b900d0ff5e01"}
+{"t": 20.074, "phase": "5", "gesture": "pull toward you", "hex": "020900a6ff3500"}
+{"t": 20.154, "phase": "5", "gesture": "pull toward you", "hex": "01b900d0ff5e01"}
+{"t": 20.154, "phase": "5", "gesture": "pull toward you", "hex": "020900a6ff3500"}
+{"t": 20.234, "phase": "5", "gesture": "pull toward you", "hex": "01b800d0ff5e01"}
+{"t": 20.234, "phase": "5", "gesture": "pull toward you", "hex": "020800a9ff3300"}
+{"t": 20.314, "phase": "5", "gesture": "pull toward you", "hex": "019300cbff5e01"}
+{"t": 20.314, "phase": "5", "gesture": "pull toward you", "hex": "020500a4ff3500"}
+{"t": 20.394, "phase": "5", "gesture": "pull toward you", "hex": "012f00bfffc200"}
+{"t": 20.394, "phase": "5", "gesture": "pull toward you", "hex": "020000fcff2200"}
+{"t": 20.474, "phase": "5", "gesture": "pull toward you", "hex": "010500eaff2600"}
+{"t": 20.474, "phase": "5", "gesture": "pull toward you", "hex": "02000002000000"}
+{"t": 20.554, "phase": "5", "gesture": "pull toward you", "hex": "010500f7ff0000"}
+{"t": 20.554, "phase": "5", "gesture": "pull toward you", "hex": "02000000000000"}
+{"t": 20.634, "phase": "5", "gesture": "pull toward you", "hex": "01000000000000"}
+{"t": 20.634, "phase": "5", "gesture": "pull toward you", "hex": "020000efff0000"}
+{"t": 21.338, "phase": "5", "gesture": "pull toward you", "hex": "01000003000000"}
+{"t": 21.338, "phase": "5", "gesture": "pull toward you", "hex": "02000000000000"}
+{"t": 21.418, "phase": "5", "gesture": "pull toward you", "hex": "01080033000b00"}
+{"t": 21.418, "phase": "5", "gesture": "pull toward you", "hex": "02e7ff00000000"}
+{"t": 21.498, "phase": "5", "gesture": "pull toward you", "hex": "011b0054002d00"}
+{"t": 21.498, "phase": "5", "gesture": "pull toward you", "hex": "0295ff00000000"}
+{"t": 21.578, "phase": "5", "gesture": "pull toward you", "hex": "0120007d003200"}
+{"t": 21.578, "phase": "5", "gesture": "pull toward you", "hex": "027cff08000000"}
+{"t": 21.658, "phase": "5", "gesture": "pull toward you", "hex": "013c00d3003a00"}
+{"t": 21.658, "phase": "5", "gesture": "pull toward you", "hex": "028cff02000000"}
+{"t": 21.738, "phase": "5", "gesture": "pull toward you", "hex": "014c0025014500"}
+{"t": 21.738, "phase": "5", "gesture": "pull toward you", "hex": "027dff09000000"}
+{"t": 21.818, "phase": "5", "gesture": "pull toward you", "hex": "01510056014600"}
+{"t": 21.818, "phase": "5", "gesture": "pull toward you", "hex": "0278ff0d000000"}
+{"t": 21.898, "phase": "5", "gesture": "pull toward you", "hex": "014e005e015700"}
+{"t": 21.898, "phase": "5", "gesture": "pull toward you", "hex": "0294ff09000000"}
+{"t": 21.978, "phase": "5", "gesture": "pull toward you", "hex": "0149005e015800"}
+{"t": 21.978, "phase": "5", "gesture": "pull toward you", "hex": "029dff09000000"}
+{"t": 22.058, "phase": "5", "gesture": "pull toward you", "hex": "0147005e015100"}
+{"t": 22.058, "phase": "5", "gesture": "pull toward you", "hex": "0298ff0a000000"}
+{"t": 22.138, "phase": "5", "gesture": "pull toward you", "hex": "0149005e015f00"}
+{"t": 22.138, "phase": "5", "gesture": "pull toward you", "hex": "02a4ff05000000"}
+{"t": 22.218, "phase": "5", "gesture": "pull toward you", "hex": "014a005e016000"}
+{"t": 22.218, "phase": "5", "gesture": "pull toward you", "hex": "02a4ff03000000"}
+{"t": 22.298, "phase": "5", "gesture": "pull toward you", "hex": "014b005e016800"}
+{"t": 22.298, "phase": "5", "gesture": "pull toward you", "hex": "02a8ff00000000"}
+{"t": 22.378, "phase": "5", "gesture": "pull toward you", "hex": "014d005e016800"}
+{"t": 22.378, "phase": "5", "gesture": "pull toward you", "hex": "02aaff00000000"}
+{"t": 22.458, "phase": "5", "gesture": "pull toward you", "hex": "0150005e017000"}
+{"t": 22.458, "phase": "5", "gesture": "pull toward you", "hex": "02afff00000000"}
+{"t": 22.538, "phase": "5", "gesture": "pull toward you", "hex": "0156005e017200"}
+{"t": 22.538, "phase": "5", "gesture": "pull toward you", "hex": "02bcff00000000"}
+{"t": 22.618, "phase": "5", "gesture": "pull toward you", "hex": "0156005e017500"}
+{"t": 22.618, "phase": "5", "gesture": "pull toward you", "hex": "02c5ff00000000"}
+{"t": 22.698, "phase": "5", "gesture": "pull toward you", "hex": "0155005e016900"}
+{"t": 22.698, "phase": "5", "gesture": "pull toward you", "hex": "02d7ff00000000"}
+{"t": 22.778, "phase": "5", "gesture": "pull toward you", "hex": "0156005e016b00"}
+{"t": 22.778, "phase": "5", "gesture": "pull toward you", "hex": "02d9ff00000000"}
+{"t": 22.858, "phase": "5", "gesture": "pull toward you", "hex": "0157005e016a00"}
+{"t": 22.858, "phase": "5", "gesture": "pull toward you", "hex": "02d8ff00000000"}
+{"t": 22.938, "phase": "5", "gesture": "pull toward you", "hex": "0154005e016900"}
+{"t": 22.938, "phase": "5", "gesture": "pull toward you", "hex": "02deff00000000"}
+{"t": 23.018, "phase": "5", "gesture": "pull toward you", "hex": "0153005e016900"}
+{"t": 23.018, "phase": "5", "gesture": "pull toward you", "hex": "02ddff00000000"}
+{"t": 23.098, "phase": "5", "gesture": "pull toward you", "hex": "014e005e016100"}
+{"t": 23.098, "phase": "5", "gesture": "pull toward you", "hex": "02deff00000000"}
+{"t": 23.178, "phase": "5", "gesture": "pull toward you", "hex": "014f005e016000"}
+{"t": 23.178, "phase": "5", "gesture": "pull toward you", "hex": "02ddff00000000"}
+{"t": 23.258, "phase": "5", "gesture": "pull toward you", "hex": "014a005e015f00"}
+{"t": 23.258, "phase": "5", "gesture": "pull toward you", "hex": "02dfff00000000"}
+{"t": 23.338, "phase": "5", "gesture": "pull toward you", "hex": "0146005e015e00"}
+{"t": 23.338, "phase": "5", "gesture": "pull toward you", "hex": "02dfff00000000"}
+{"t": 23.418, "phase": "5", "gesture": "pull toward you", "hex": "0147005e015c00"}
+{"t": 23.418, "phase": "5", "gesture": "pull toward you", "hex": "02deff00000000"}
+{"t": 23.498, "phase": "5", "gesture": "pull toward you", "hex": "0146005e015a00"}
+{"t": 23.498, "phase": "5", "gesture": "pull toward you", "hex": "02ddff00000000"}
+{"t": 23.578, "phase": "5", "gesture": "pull toward you", "hex": "0146005e015c00"}
+{"t": 23.578, "phase": "5", "gesture": "pull toward you", "hex": "02deff00000000"}
+{"t": 23.658, "phase": "5", "gesture": "pull toward you", "hex": "0146005e015800"}
+{"t": 23.658, "phase": "5", "gesture": "pull toward you", "hex": "02dbff00000000"}
+{"t": 23.738, "phase": "5", "gesture": "pull toward you", "hex": "0146005e015a00"}
+{"t": 23.738, "phase": "5", "gesture": "pull toward you", "hex": "02dcff00000000"}
+{"t": 23.818, "phase": "5", "gesture": "pull toward you", "hex": "0147005e015900"}
+{"t": 23.818, "phase": "5", "gesture": "pull toward you", "hex": "02dcff00000000"}
+{"t": 23.898, "phase": "5", "gesture": "pull toward you", "hex": "0147005e015b00"}
+{"t": 23.898, "phase": "5", "gesture": "pull toward you", "hex": "02ddff00000000"}
+{"t": 23.914, "phase": "6", "gesture": "push away", "hex": "0147005e015b00"}
+{"t": 23.914, "phase": "6", "gesture": "push away", "hex": "02ddff00000000"}
+{"t": 23.994, "phase": "6", "gesture": "push away", "hex": "0147005e015a00"}
+{"t": 23.994, "phase": "6", "gesture": "push away", "hex": "02dcff00000000"}
+{"t": 24.074, "phase": "6", "gesture": "push away", "hex": "0148005e015b00"}
+{"t": 24.074, "phase": "6", "gesture": "push away", "hex": "02dcff00000000"}
+{"t": 24.154, "phase": "6", "gesture": "push away", "hex": "0149005e015c00"}
+{"t": 24.154, "phase": "6", "gesture": "push away", "hex": "02ddff00000000"}
+{"t": 24.234, "phase": "6", "gesture": "push away", "hex": "0149005e015c00"}
+{"t": 24.234, "phase": "6", "gesture": "push away", "hex": "02ddff00000000"}
+{"t": 24.314, "phase": "6", "gesture": "push away", "hex": "0149005e015600"}
+{"t": 24.314, "phase": "6", "gesture": "push away", "hex": "02d9ff00000000"}
+{"t": 24.394, "phase": "6", "gesture": "push away", "hex": "011b0017013b00"}
+{"t": 24.394, "phase": "6", "gesture": "push away", "hex": "02eaff0000e7ff"}
+{"t": 24.474, "phase": "6", "gesture": "push away", "hex": "0100000f000000"}
+{"t": 24.474, "phase": "6", "gesture": "push away", "hex": "02000000000000"}
+{"t": 24.866, "phase": "6", "gesture": "push away", "hex": "010000abff0000"}
+{"t": 24.866, "phase": "6", "gesture": "push away", "hex": "02000000000000"}
+{"t": 24.946, "phase": "6", "gesture": "push away", "hex": "01000055ff0000"}
+{"t": 24.946, "phase": "6", "gesture": "push away", "hex": "02ffff00000000"}
+{"t": 25.026, "phase": "6", "gesture": "push away", "hex": "01000012ff0000"}
+{"t": 25.026, "phase": "6", "gesture": "push away", "hex": "02000000000000"}
+{"t": 25.106, "phase": "6", "gesture": "push away", "hex": "010000aefe0900"}
+{"t": 25.106, "phase": "6", "gesture": "push away", "hex": "02fcff0000faff"}
+{"t": 25.186, "phase": "6", "gesture": "push away", "hex": "01f0ffa2fe1a00"}
+{"t": 25.186, "phase": "6", "gesture": "push away", "hex": "02000000000000"}
+{"t": 25.266, "phase": "6", "gesture": "push away", "hex": "01ecffa2fe2900"}
+{"t": 25.266, "phase": "6", "gesture": "push away", "hex": "02000003000000"}
+{"t": 25.346, "phase": "6", "gesture": "push away", "hex": "01e9ffa2fe3500"}
+{"t": 25.346, "phase": "6", "gesture": "push away", "hex": "02000001000000"}
+{"t": 25.426, "phase": "6", "gesture": "push away", "hex": "01e9ffa2fe3600"}
+{"t": 25.426, "phase": "6", "gesture": "push away", "hex": "02000001000000"}
+{"t": 25.506, "phase": "6", "gesture": "push away", "hex": "01e8ffa2fe3700"}
+{"t": 25.506, "phase": "6", "gesture": "push away", "hex": "02000003000000"}
+{"t": 25.586, "phase": "6", "gesture": "push away", "hex": "01e8ffa2fe3800"}
+{"t": 25.586, "phase": "6", "gesture": "push away", "hex": "02000003000000"}
+{"t": 25.666, "phase": "6", "gesture": "push away", "hex": "01ebffa2fe3b00"}
+{"t": 25.666, "phase": "6", "gesture": "push away", "hex": "02000003000000"}
+{"t": 25.746, "phase": "6", "gesture": "push away", "hex": "01ebffa2fe3c00"}
+{"t": 25.746, "phase": "6", "gesture": "push away", "hex": "02000003000000"}
+{"t": 25.826, "phase": "6", "gesture": "push away", "hex": "01eaffa2fe3d00"}
+{"t": 25.826, "phase": "6", "gesture": "push away", "hex": "02000005000000"}
+{"t": 25.906, "phase": "6", "gesture": "push away", "hex": "01eaffa2fe3d00"}
+{"t": 25.906, "phase": "6", "gesture": "push away", "hex": "02000004000000"}
+{"t": 25.986, "phase": "6", "gesture": "push away", "hex": "01eaffa2fe3e00"}
+{"t": 25.986, "phase": "6", "gesture": "push away", "hex": "02000005000000"}
+{"t": 26.066, "phase": "6", "gesture": "push away", "hex": "01eaffa2fe3e00"}
+{"t": 26.066, "phase": "6", "gesture": "push away", "hex": "02000004000000"}
+{"t": 26.146, "phase": "6", "gesture": "push away", "hex": "01e6ffa2fe3e00"}
+{"t": 26.146, "phase": "6", "gesture": "push away", "hex": "02000006000000"}
+{"t": 26.226, "phase": "6", "gesture": "push away", "hex": "01e4ffa2fe4100"}
+{"t": 26.226, "phase": "6", "gesture": "push away", "hex": "02000005000000"}
+{"t": 26.306, "phase": "6", "gesture": "push away", "hex": "01e3ffa2fe4100"}
+{"t": 26.306, "phase": "6", "gesture": "push away", "hex": "02000006000000"}
+{"t": 26.386, "phase": "6", "gesture": "push away", "hex": "01e3ffa2fe4200"}
+{"t": 26.386, "phase": "6", "gesture": "push away", "hex": "02000005000000"}
+{"t": 26.466, "phase": "6", "gesture": "push away", "hex": "01e2ffa2fe4100"}
+{"t": 26.466, "phase": "6", "gesture": "push away", "hex": "02000006000000"}
+{"t": 26.546, "phase": "6", "gesture": "push away", "hex": "01e2ffa2fe4100"}
+{"t": 26.546, "phase": "6", "gesture": "push away", "hex": "02000006000000"}
+{"t": 26.626, "phase": "6", "gesture": "push away", "hex": "01dfffa2fe4300"}
+{"t": 26.626, "phase": "6", "gesture": "push away", "hex": "02000007000000"}
+{"t": 26.706, "phase": "6", "gesture": "push away", "hex": "01ddffa2fe4400"}
+{"t": 26.706, "phase": "6", "gesture": "push away", "hex": "02000008000000"}
+{"t": 26.786, "phase": "6", "gesture": "push away", "hex": "01dcffa2fe4700"}
+{"t": 26.786, "phase": "6", "gesture": "push away", "hex": "02000008000000"}
+{"t": 26.866, "phase": "6", "gesture": "push away", "hex": "01dbffa2fe4700"}
+{"t": 26.866, "phase": "6", "gesture": "push away", "hex": "02000007000000"}
+{"t": 26.946, "phase": "6", "gesture": "push away", "hex": "01dbffa2fe4800"}
+{"t": 26.946, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.026, "phase": "6", "gesture": "push away", "hex": "01daffa2fe4800"}
+{"t": 27.026, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.106, "phase": "6", "gesture": "push away", "hex": "01daffa2fe4800"}
+{"t": 27.106, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.186, "phase": "6", "gesture": "push away", "hex": "01daffa2fe4800"}
+{"t": 27.186, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.266, "phase": "6", "gesture": "push away", "hex": "01d9ffa2fe4a00"}
+{"t": 27.266, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.346, "phase": "6", "gesture": "push away", "hex": "01d9ffa2fe4a00"}
+{"t": 27.346, "phase": "6", "gesture": "push away", "hex": "02000009000000"}
+{"t": 27.426, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.426, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.506, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.506, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.586, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.586, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.666, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.666, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.746, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.746, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.826, "phase": "6", "gesture": "push away", "hex": "01d3ffa2fe4f00"}
+{"t": 27.826, "phase": "6", "gesture": "push away", "hex": "0200000b000000"}
+{"t": 27.906, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe4f00"}
+{"t": 27.906, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000a000000"}
+{"t": 27.986, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d2ffa2fe4f00"}
+{"t": 27.986, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000b000000"}
+{"t": 28.066, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.066, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000a000000"}
+{"t": 28.146, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.146, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000a000000"}
+{"t": 28.226, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.226, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000a000000"}
+{"t": 28.306, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.306, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000a000000"}
+{"t": 28.386, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.386, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000b000000"}
+{"t": 28.466, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d3ffa2fe5000"}
+{"t": 28.466, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000b000000"}
+{"t": 28.546, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01d0ffa2fe4700"}
+{"t": 28.546, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0200000b000000"}
+{"t": 28.626, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000074ff2300"}
+{"t": 28.626, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02110000000000"}
+{"t": 28.922, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000000000000"}
+{"t": 28.922, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ffff00000000"}
+{"t": 29.002, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000e2ff0000"}
+{"t": 29.002, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceff04004700"}
+{"t": 29.082, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000b5ff0000"}
+{"t": 29.082, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0299ff0000bb00"}
+{"t": 29.162, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000093ff0400"}
+{"t": 29.162, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02a2ff00001201"}
+{"t": 29.242, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000096ff1800"}
+{"t": 29.242, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02cfffe0ff3301"}
+{"t": 29.322, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000094ff1000"}
+{"t": 29.322, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ddffdcff2e01"}
+{"t": 29.402, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000095ff1100"}
+{"t": 29.402, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02e3ffd6ff2d01"}
+{"t": 29.482, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0100008eff0e00"}
+{"t": 29.482, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02e2ffd4ff2701"}
+{"t": 29.562, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0100007fff0400"}
+{"t": 29.562, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ddffdeff1d01"}
+{"t": 29.642, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0101007eff0000"}
+{"t": 29.642, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceffe6ff2201"}
+{"t": 29.722, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0100007fff0100"}
+{"t": 29.722, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d0ffe3ff2201"}
+{"t": 29.802, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000085ff0800"}
+{"t": 29.802, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d2ffe1ff2501"}
+{"t": 29.882, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0100008aff0e00"}
+{"t": 29.882, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d2ffdcff2901"}
+{"t": 29.962, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "0100008dff0d00"}
+{"t": 29.962, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceffe1ff2d01"}
+{"t": 30.042, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000094ff1300"}
+{"t": 30.042, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceffdeff3101"}
+{"t": 30.122, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000097ff1700"}
+{"t": 30.122, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceffddff3401"}
+{"t": 30.202, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "01000099ff1f00"}
+{"t": 30.202, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02cfffd8ff3501"}
+{"t": 30.282, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000a1ff2000"}
+{"t": 30.282, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02cfffdaff3a01"}
+{"t": 30.362, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000a5ff2100"}
+{"t": 30.362, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02ceffdcff3e01"}
+{"t": 30.442, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000afff2300"}
+{"t": 30.442, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02cfffe0ff4601"}
+{"t": 30.522, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000b8ff2300"}
+{"t": 30.522, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d1ffe1ff4c01"}
+{"t": 30.602, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bdff2500"}
+{"t": 30.602, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d2ffe2ff5001"}
+{"t": 30.682, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bdff2700"}
+{"t": 30.682, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d3ffe2ff4f01"}
+{"t": 30.762, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bcff2900"}
+{"t": 30.762, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d5ffe1ff4f01"}
+{"t": 30.842, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bbff2d00"}
+{"t": 30.842, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d4ffe2ff5001"}
+{"t": 30.922, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bbff3100"}
+{"t": 30.922, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffe3ff5001"}
+{"t": 31.002, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bcff3500"}
+{"t": 31.002, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffe5ff5201"}
+{"t": 31.082, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000c0ff3b00"}
+{"t": 31.082, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffe6ff5501"}
+{"t": 31.162, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000beff3f00"}
+{"t": 31.162, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02daffe4ff5301"}
+{"t": 31.242, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bdff3e00"}
+{"t": 31.242, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02daffe8ff5301"}
+{"t": 31.322, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bdff3d00"}
+{"t": 31.322, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d8ffeaff5501"}
+{"t": 31.402, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000bcff3f00"}
+{"t": 31.402, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d8ffe8ff5501"}
+{"t": 31.482, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000beff3f00"}
+{"t": 31.482, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d7ffebff5601"}
+{"t": 31.562, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000c0ff4300"}
+{"t": 31.562, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffeaff5701"}
+{"t": 31.642, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000c1ff4500"}
+{"t": 31.642, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d7ffe8ff5801"}
+{"t": 31.722, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000beff4700"}
+{"t": 31.722, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffe7ff5601"}
+{"t": 31.81, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "010000beff4800"}
+{"t": 31.81, "phase": "7", "gesture": "twist clockwise seen from above", "hex": "02d6ffe8ff5601"}
+{"t": 31.89, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000bfff4700"}
+{"t": 31.89, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d6ffe8ff5701"}
+{"t": 31.97, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000c0ff4800"}
+{"t": 31.97, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d6ffe8ff5701"}
+{"t": 32.05, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000c1ff4a00"}
+{"t": 32.05, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d6ffe8ff5801"}
+{"t": 32.13, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000c3ff4a00"}
+{"t": 32.13, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d7ffe9ff5a01"}
+{"t": 32.21, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000c3ff4a00"}
+{"t": 32.21, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d6ffe8ff5a01"}
+{"t": 32.29, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010400a4ff3d00"}
+{"t": 32.29, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d5ffeeff4601"}
+{"t": 32.37, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "012900c3ff0000"}
+{"t": 32.37, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02daffe2ff6700"}
+{"t": 32.45, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01060000000000"}
+{"t": 32.45, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "020000fcff0000"}
+{"t": 33.258, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000f1ff0000"}
+{"t": 33.258, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02dcff0c000000"}
+{"t": 33.338, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01ecffc8ff0000"}
+{"t": 33.338, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02b7ff28000000"}
+{"t": 33.418, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01bcff47ff0000"}
+{"t": 33.418, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0270ff3d000000"}
+{"t": 33.498, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01a6fff8fe0000"}
+{"t": 33.498, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0242ff4d000000"}
+{"t": 33.578, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019affe3fe0200"}
+{"t": 33.578, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0242ff49000000"}
+{"t": 33.666, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019dffdffe0900"}
+{"t": 33.666, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0245ff4a000000"}
+{"t": 33.746, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019effdffe0b00"}
+{"t": 33.746, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0246ff4a000000"}
+{"t": 33.826, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019affdffe0d00"}
+{"t": 33.826, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "024aff49000000"}
+{"t": 33.906, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019affddfe0b00"}
+{"t": 33.906, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "024bff4b000000"}
+{"t": 33.986, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "019cfffffe0000"}
+{"t": 33.986, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "024eff5a000000"}
+{"t": 34.066, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "010000a5ff0000"}
+{"t": 34.066, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02d2ff00000000"}
+{"t": 34.146, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01e7ffa3ff0400"}
+{"t": 34.146, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02000000000200"}
+{"t": 34.226, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01f2ff82ff0e00"}
+{"t": 34.226, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021000d9ff2500"}
+{"t": 34.306, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01daff46ff0000"}
+{"t": 34.306, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02a80089ff1300"}
+{"t": 34.386, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01bbff03ff0000"}
+{"t": 34.386, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "025800cbff3300"}
+{"t": 34.466, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01b6ffe5fe0000"}
+{"t": 34.466, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "023d00deff3500"}
+{"t": 34.546, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01beffbffef2ff"}
+{"t": 34.546, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02ebff00004800"}
+{"t": 34.626, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01ddffcefed2ff"}
+{"t": 34.626, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0287ff17002b00"}
+{"t": 34.706, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01cfffcafed0ff"}
+{"t": 34.706, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "026bff2b001100"}
+{"t": 34.786, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01c3ffc2fecbff"}
+{"t": 34.786, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "027cff2b000f00"}
+{"t": 34.866, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01bdffc0fee2ff"}
+{"t": 34.866, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "028dff1b001700"}
+{"t": 34.946, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01cbfff0fef9ff"}
+{"t": 34.946, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02fdff00002a00"}
+{"t": 35.026, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "01bafff2fed8ff"}
+{"t": 35.026, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "024f00ddff1a00"}
+{"t": 35.106, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0199ffd7fee2ff"}
+{"t": 35.106, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02590000001400"}
+{"t": 35.186, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0192ffcbfedbff"}
+{"t": 35.186, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "024500fdff0f00"}
+{"t": 35.266, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018cffb8fed8ff"}
+{"t": 35.266, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "023600faff0500"}
+{"t": 35.346, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "0189ffb0fed1ff"}
+{"t": 35.346, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "02280000000500"}
+{"t": 35.426, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018affadfed3ff"}
+{"t": 35.426, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "022200fdff0600"}
+{"t": 35.506, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018affaafed0ff"}
+{"t": 35.506, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021c0000000600"}
+{"t": 35.586, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018bffabfed3ff"}
+{"t": 35.586, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021e00feff0700"}
+{"t": 35.666, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018affaafed4ff"}
+{"t": 35.666, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021d00fcff0500"}
+{"t": 35.746, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018affa9fed7ff"}
+{"t": 35.746, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021e00f8ff0400"}
+{"t": 35.826, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "018cffa9fedeff"}
+{"t": 35.826, "phase": "8", "gesture": "tilt forward, front edge down", "hex": "021f00f2ff0300"}
+{"t": 35.89, "phase": "9", "gesture": "tilt right, right edge down", "hex": "021f00f1ff0500"}
+{"t": 35.906, "phase": "9", "gesture": "tilt right, right edge down", "hex": "018dffaafee1ff"}
+{"t": 35.97, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022300eaff0500"}
+{"t": 35.986, "phase": "9", "gesture": "tilt right, right edge down", "hex": "018fffaffee7ff"}
+{"t": 36.05, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022600e7ff0800"}
+{"t": 36.066, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0191ffb0feedff"}
+{"t": 36.13, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022700e6ff0900"}
+{"t": 36.146, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0193ffb2feeeff"}
+{"t": 36.21, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022900e2ff0a00"}
+{"t": 36.226, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0195ffb4fef1ff"}
+{"t": 36.29, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022a00dfff0e00"}
+{"t": 36.306, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0198ffb8fef4ff"}
+{"t": 36.37, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022a00dcff1300"}
+{"t": 36.386, "phase": "9", "gesture": "tilt right, right edge down", "hex": "019effbefefaff"}
+{"t": 36.45, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022600e2ff2e00"}
+{"t": 36.466, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01adffd8fefdff"}
+{"t": 36.53, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020a00ceff4c00"}
+{"t": 36.546, "phase": "9", "gesture": "tilt right, right edge down", "hex": "010000abff0000"}
+{"t": 36.61, "phase": "9", "gesture": "tilt right, right edge down", "hex": "02000000002800"}
+{"t": 36.626, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01000000000000"}
+{"t": 36.69, "phase": "9", "gesture": "tilt right, right edge down", "hex": "02000000001a00"}
+{"t": 36.706, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01000000000000"}
+{"t": 36.77, "phase": "9", "gesture": "tilt right, right edge down", "hex": "021300f1ff1c00"}
+{"t": 36.786, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0117000800fcff"}
+{"t": 36.85, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022f00c3ff0000"}
+{"t": 36.866, "phase": "9", "gesture": "tilt right, right edge down", "hex": "012c0000000000"}
+{"t": 37.162, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000fdff0000"}
+{"t": 37.178, "phase": "9", "gesture": "tilt right, right edge down", "hex": "011a0011000000"}
+{"t": 37.378, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000ffff0000"}
+{"t": 37.394, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01040000000000"}
+{"t": 37.554, "phase": "9", "gesture": "tilt right, right edge down", "hex": "02000000000000"}
+{"t": 37.57, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01200000000000"}
+{"t": 37.634, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000ebff0000"}
+{"t": 37.65, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01340000000000"}
+{"t": 37.714, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000d3ff0000"}
+{"t": 37.73, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01180000000000"}
+{"t": 37.794, "phase": "9", "gesture": "tilt right, right edge down", "hex": "0200005dff0000"}
+{"t": 37.81, "phase": "9", "gesture": "tilt right, right edge down", "hex": "019e0000000000"}
+{"t": 37.874, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000fafe1a00"}
+{"t": 37.89, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01d700fcff0000"}
+{"t": 37.954, "phase": "9", "gesture": "tilt right, right edge down", "hex": "02fbffd3fe1100"}
+{"t": 37.97, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01d600eeff0000"}
+{"t": 38.034, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000bcfe0300"}
+{"t": 38.05, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01dc00f2ff0000"}
+{"t": 38.114, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000acfe0400"}
+{"t": 38.13, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01d400f5ff0000"}
+{"t": 38.194, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000a5fe0400"}
+{"t": 38.21, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01ce00fcff0000"}
+{"t": 38.274, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020000a2fe0400"}
+{"t": 38.29, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01c30000000000"}
+{"t": 38.354, "phase": "9", "gesture": "tilt right, right edge down", "hex": "020f00a2fe0300"}
+{"t": 38.37, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bc0000000000"}
+{"t": 38.434, "phase": "9", "gesture": "tilt right, right edge down", "hex": "022e00a2fe0200"}
+{"t": 38.45, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b50000000000"}
+{"t": 38.514, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023a00a2fe0100"}
+{"t": 38.53, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b20000000000"}
+{"t": 38.594, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023a00a2fe0100"}
+{"t": 38.61, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b20000000000"}
+{"t": 38.674, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0100"}
+{"t": 38.69, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b40000000000"}
+{"t": 38.754, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0200"}
+{"t": 38.77, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b50000000000"}
+{"t": 38.834, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0200"}
+{"t": 38.85, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b20000000000"}
+{"t": 38.914, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0200"}
+{"t": 38.93, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b40000000000"}
+{"t": 38.994, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023a00a2fe0200"}
+{"t": 39.01, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b4000000ffff"}
+{"t": 39.074, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023a00a2fe0200"}
+{"t": 39.09, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b40000000000"}
+{"t": 39.154, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023900a2fe0200"}
+{"t": 39.17, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b3000000ffff"}
+{"t": 39.234, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023400a2fe0200"}
+{"t": 39.25, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01b9000000f3ff"}
+{"t": 39.314, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0200"}
+{"t": 39.33, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bc000000fdff"}
+{"t": 39.394, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0200"}
+{"t": 39.41, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bb000000feff"}
+{"t": 39.474, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023800a2fe0100"}
+{"t": 39.49, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bb000000fdff"}
+{"t": 39.554, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023600a2fe0100"}
+{"t": 39.57, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bc000000fbff"}
+{"t": 39.634, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023600a2fe0100"}
+{"t": 39.65, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bc000000faff"}
+{"t": 39.714, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023500a2fe0100"}
+{"t": 39.73, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bd000000faff"}
+{"t": 39.794, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023500a2fe0100"}
+{"t": 39.81, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01bd000100f8ff"}
+{"t": 39.874, "phase": "9", "gesture": "tilt right, right edge down", "hex": "023500a2fe0100"}
+{"t": 39.89, "phase": "9", "gesture": "tilt right, right edge down", "hex": "01be000400fbff"}
+{"t": 39.906, "phase": "10", "gesture": "left button", "hex": "01c00004000000"}
+{"t": 39.906, "phase": "10", "gesture": "left button", "hex": "023500a2fe0100"}
+{"t": 39.986, "phase": "10", "gesture": "left button", "hex": "01c00005000000"}
+{"t": 39.986, "phase": "10", "gesture": "left button", "hex": "023700a2fe0100"}
+{"t": 40.066, "phase": "10", "gesture": "left button", "hex": "01c50007000000"}
+{"t": 40.066, "phase": "10", "gesture": "left button", "hex": "023300aafe0100"}
+{"t": 40.146, "phase": "10", "gesture": "left button", "hex": "01c60008000000"}
+{"t": 40.146, "phase": "10", "gesture": "left button", "hex": "023200aafe0100"}
+{"t": 40.226, "phase": "10", "gesture": "left button", "hex": "01c8000900fbff"}
+{"t": 40.226, "phase": "10", "gesture": "left button", "hex": "022f00b5fe0100"}
+{"t": 40.306, "phase": "10", "gesture": "left button", "hex": "018d000000feff"}
+{"t": 40.306, "phase": "10", "gesture": "left button", "hex": "0200002eff0300"}
+{"t": 40.386, "phase": "10", "gesture": "left button", "hex": "012200ffff0000"}
+{"t": 40.386, "phase": "10", "gesture": "left button", "hex": "020000b3ff0900"}
+{"t": 40.746, "phase": "10", "gesture": "left button", "hex": "01000000000000"}
+{"t": 40.746, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 40.978, "phase": "10", "gesture": "left button", "hex": "01ffff00000000"}
+{"t": 40.978, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 41.114, "phase": "10", "gesture": "left button", "hex": "01f8ff00000000"}
+{"t": 41.114, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 41.194, "phase": "10", "gesture": "left button", "hex": "01fcff00000300"}
+{"t": 41.194, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 41.666, "phase": "10", "gesture": "left button", "hex": "03010000000000"}
+{"t": 43.162, "phase": "10", "gesture": "left button", "hex": "01010000000000"}
+{"t": 43.162, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.242, "phase": "10", "gesture": "left button", "hex": "01020000000000"}
+{"t": 43.242, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.322, "phase": "10", "gesture": "left button", "hex": "01040000000000"}
+{"t": 43.322, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.402, "phase": "10", "gesture": "left button", "hex": "01060000000000"}
+{"t": 43.402, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.482, "phase": "10", "gesture": "left button", "hex": "01060000000000"}
+{"t": 43.482, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.562, "phase": "10", "gesture": "left button", "hex": "01070000000000"}
+{"t": 43.562, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.642, "phase": "10", "gesture": "left button", "hex": "01080000000000"}
+{"t": 43.642, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.722, "phase": "10", "gesture": "left button", "hex": "01090000000000"}
+{"t": 43.722, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.802, "phase": "10", "gesture": "left button", "hex": "01090000000000"}
+{"t": 43.802, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.882, "phase": "10", "gesture": "left button", "hex": "01090000000000"}
+{"t": 43.882, "phase": "10", "gesture": "left button", "hex": "02000000000000"}
+{"t": 43.898, "phase": "11", "gesture": "right button", "hex": "01090000000000"}
+{"t": 43.898, "phase": "11", "gesture": "right button", "hex": "02000000000000"}
+{"t": 43.978, "phase": "11", "gesture": "right button", "hex": "010b0000000000"}
+{"t": 43.978, "phase": "11", "gesture": "right button", "hex": "02000000000000"}
+{"t": 44.058, "phase": "11", "gesture": "right button", "hex": "010c0000000000"}
+{"t": 44.058, "phase": "11", "gesture": "right button", "hex": "02000000000000"}
+{"t": 44.138, "phase": "11", "gesture": "right button", "hex": "010c0000000000"}
+{"t": 44.138, "phase": "11", "gesture": "right button", "hex": "02000000000000"}
+{"t": 44.218, "phase": "11", "gesture": "right button", "hex": "010f0000000000"}
+{"t": 44.218, "phase": "11", "gesture": "right button", "hex": "0200000000feff"}
+{"t": 44.298, "phase": "11", "gesture": "right button", "hex": "010e0000000000"}
+{"t": 44.298, "phase": "11", "gesture": "right button", "hex": "0200000000ffff"}
+{"t": 44.402, "phase": "11", "gesture": "right button", "hex": "03000000000000"}
+{"t": 44.714, "phase": "11", "gesture": "right button", "hex": "01e4fffbff0000"}
+{"t": 44.714, "phase": "11", "gesture": "right button", "hex": "020000d4ff0000"}
+{"t": 44.794, "phase": "11", "gesture": "right button", "hex": "01000000001300"}
+{"t": 44.794, "phase": "11", "gesture": "right button", "hex": "021700c0ff0000"}
+{"t": 44.874, "phase": "11", "gesture": "right button", "hex": "01000000000200"}
+{"t": 44.874, "phase": "11", "gesture": "right button", "hex": "020000dfff0000"}
+{"t": 45.05, "phase": "11", "gesture": "right button", "hex": "03020000000000"}
+{"t": 48.362, "phase": "ende", "gesture": "end", "hex": "03000000000000"}
+{"t": 49.538, "phase": "ende", "gesture": "end", "hex": "01000000000100"}
+{"t": 49.538, "phase": "ende", "gesture": "end", "hex": "02000000000000"}
+{"t": 49.618, "phase": "ende", "gesture": "end", "hex": "01000000000500"}
+{"t": 49.618, "phase": "ende", "gesture": "end", "hex": "02000000000000"}
+{"t": 49.698, "phase": "ende", "gesture": "end", "hex": "01000000000800"}
+{"t": 49.698, "phase": "ende", "gesture": "end", "hex": "02000000000000"}
+{"t": 49.778, "phase": "ende", "gesture": "end", "hex": "01000000000a00"}
+{"t": 49.778, "phase": "ende", "gesture": "end", "hex": "02000000000000"}
+{"t": 49.858, "phase": "ende", "gesture": "end", "hex": "01000000000b00"}
+{"t": 49.858, "phase": "ende", "gesture": "end", "hex": "02000000000000"}

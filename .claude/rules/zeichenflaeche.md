@@ -376,21 +376,21 @@ Sechs Dinge hängen daran:
   wäre die Antwort auf eine andere Frage. Die abgelehnte bleibt im Feld
   markiert stehen — dieselbe Zusage, die `_apply_typed` für alle Zugarten gibt.
 * **Ein Zug in die falsche Richtung sagt es, statt einen Splitter zu bauen.**
-  `pulled_height` hebt ein negatives Maß auf die Untergrenze, und danach sieht
-  ein Zug nach unten aus wie ein sehr kurzer nach oben: Die Operation ging glatt
-  durch und legte einen Körper von 0,1 mm an. Entschieden wird deshalb gegen das
-  **ungeklemmte** Maß (`_pull_raw`), und beim Loslassen kommt ein Satz statt
-  eines Körpers (Regel 17).
+  `pulled_height` klemmt ein Maß **mit erhaltenem Vorzeichen**, und ein auf
+  null gefangenes Maß bleibt null — bis zum 02.09.2026 hob die Klemmung es auf
+  die Untergrenze, und weil `round(-0.3)` gleich `-0.0` ist und `-0.0 < 0.0`
+  nicht gilt, wurde aus einem kurzen Zug nach unten ein Aufbau von 0,1 mm nach
+  oben. Die Richtung entscheidet `continue_sketch_pull` und `_pull_takes` an
+  derselben geklemmten Höhe; ein Zustand daneben (`_pull_raw`) stand hier
+  einmal als „einzige Auskunft über die Richtung" und hatte keine Lesestelle
+  mehr — er ist weg, und die Regeldatei beschreibt den Code, der da ist.
 
   **Und zwar nur gegen die Untergrenze.** Die vollständige Prüfung stand hier
   einen Anlauf lang und lehnte damit zwei richtige Fälle ab: Ein Zug bis zum
   **Anschlag** hat ein rohes Maß über der Obergrenze und ist trotzdem gemeint —
   die Leiste zeigt den geklemmten Wert, und der ist die Zusage. Und wer nach
   einem Fehlzug eine Zahl **tippt**, hat die Frage nach der Richtung
-  beantwortet: `_apply_typed` löscht `_pull_raw`, sonst wäre der Griff per
-  Tastatur nicht mehr zu retten. Die Richtung hat eine Grenze, die Anwendung
-  hat zwei — wer beide Fragen mit derselben Prüfung beantwortet, beantwortet
-  eine davon falsch.
+  beantwortet — die getippte Höhe ersetzt den Zeiger samt Richtung.
 * **Die Höhe ist gefangen und geklemmt** (`pulled_height`). Gefangen auf das
   Raster, das im Bild steht — eine aufgezogene Höhe soll eine runde Zahl sein,
   und ein Zug, der zwischen zwei Rasterpunkten nichts ändert, zeichnet nicht.

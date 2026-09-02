@@ -102,7 +102,7 @@
 
 ## Haltung
 
-- [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument.
+- [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument. Bekräftigt 02.09.2026: „wow" als Maßstab, alle vier Wege, sofort optimieren statt notieren.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — gilt für alles: sieben Merkmale, die einen Text verraten; Rückspiegeln ist eines davon.
 - [Ein Druckziel, vier Wege, ein Vertrauensmodell](solidon-ist-die-vorstufe-vor-dem-slicer.md) — Produktkern: vier Wege in einer Szene bis zur ehrlichen Slicer-Übergabe.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Konzeptlinie: Qualitätsvertrag, messbare KI, reproduzierbare Updates; keine Arbeitsliste.
@@ -166,3 +166,4 @@
 - [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sauber.
 - [Commit-Nachricht gehört in eine Datei](commit-nachricht-gehoert-in-eine-datei.md) — `python - << ENDE` liest stdin mit der System-Codepage.
 - [Deutsches Schlusszeichen beendet den String](deutsches-schlusszeichen-beendet-den-string.md) — `„…"` ist kein Paar; `!r` in Assert-Meldungen ist der Ausweg.
+- [Sandbox sieht keine Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — HID, Raw Input und SendInput blieben aus der Sandbox leer; Gerätemessungen laufen ohne sie, und erst eine bekannte Quelle beweist, dass der Prozess überhaupt Eingaben sieht.

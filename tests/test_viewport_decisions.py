@@ -2241,7 +2241,6 @@ def test_pulling_inward_requests_a_pocket_instead_of_making_a_sliver(
     viewport._pull_from = (0.0, 0.0)
     viewport._drag_kind = "pull"
     viewport._pull_height = -30.0
-    viewport._pull_raw = -30.0
 
     viewport.finish_sketch_pull()
 
@@ -2328,14 +2327,12 @@ def test_a_rejected_pull_clears_its_wire_preview(qt_app: QApplication) -> None:
 
     viewport = Viewport()
     viewport._pull_height = -8.0
-    viewport._pull_raw = -8.0
     viewport._pull_actors = [object()]
 
     viewport.cancel_sketch_pull()
 
     assert viewport._pull_actors == []
     assert viewport._pull_height == pytest.approx(0.0)
-    assert viewport._pull_raw is None
 
 
 def test_a_segment_of_zero_length_is_measured_as_a_point(qt_app: QApplication) -> None:
@@ -2629,7 +2626,6 @@ def test_a_pull_to_the_stop_still_becomes_an_operation(qt_app: QApplication) -> 
     viewport._pull_limits = (0.1, 1000.0)
     viewport._pull_from = (0.0, 0.0)
     viewport._drag_kind = "pull"
-    viewport._pull_raw = 4000.0
     viewport._pull_height = pulled_height(4000.0, 0.0, viewport._pull_limits)
     assert viewport._pull_height == pytest.approx(1000.0), "die Leiste zeigt den Anschlag"
 
@@ -2642,7 +2638,6 @@ def test_a_pull_to_the_stop_still_becomes_an_operation(qt_app: QApplication) -> 
 def test_a_typed_height_survives_a_pull_in_the_wrong_direction(qt_app: QApplication) -> None:
     """Wer tippt, hat die Frage nach der Richtung beantwortet.
 
-    Nach einem Zug nach unten stand ``_pull_raw`` noch auf dem Maß von vorhin,
     und die Richtungsprüfung lehnte damit auch die **eingetippte** Höhe ab: Der
     Griff war per Tastatur nicht mehr zu retten, obwohl §18.11 genau dafür die
     Zahleneingabe während des Zugs vorsieht.
@@ -2657,7 +2652,6 @@ def test_a_typed_height_survives_a_pull_in_the_wrong_direction(qt_app: QApplicat
     viewport._pull_limits = (0.1, 1000.0)
     viewport._pull_from = (0.0, 0.0)
     viewport._drag_kind = "pull"
-    viewport._pull_raw = -30.0
     viewport._pull_height = 0.1
     viewport.drag_bar.typing = True
     viewport.drag_bar.value.setText("25")
@@ -3633,3 +3627,34 @@ def test_without_a_scene_there_are_no_protected_patches(qt_app: QApplication) ->
     viewport.set_protected("obj_1", "face_3", True)
 
     assert viewport.protected_patches("obj_1") == []
+
+
+def test_the_pocket_preview_starts_at_the_top_of_the_body(qt_app: QApplication) -> None:
+    """Umriss auf dem Bett, Teil darüber: Die Drahtform wächst von der Oberkante nach unten.
+
+    Bis zum 02.09.2026 wuchs sie von der Zeichenebene in die Luft unter dem
+    Teil, während ``sketch_pocket`` oben schnitt — Tiefe richtig, Ort falsch.
+    Nach außen bleibt die Zeichenebene der Ausgangspunkt.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    viewport.set_sketch_pull(
+        lambda: "ready", (0.1, 1000.0), (0.1, 1000.0), lambda: True, lambda: 20.0
+    )
+
+    viewport._pull_height = -5.0
+    lowered = viewport._pull_frame()
+    assert lowered.origin[2] == pytest.approx(20.0)
+    assert lowered.normal == viewport._sketch_frame.normal
+
+    viewport._pull_height = 5.0
+    assert viewport._pull_frame() is viewport._sketch_frame
+
+    viewport.set_sketch_pull(
+        lambda: "ready", (0.1, 1000.0), (0.1, 1000.0), lambda: True, lambda: 0.0
+    )
+    viewport._pull_height = -5.0
+    assert viewport._pull_frame() is viewport._sketch_frame, "Ebene ist Oberkante: nichts zu heben"

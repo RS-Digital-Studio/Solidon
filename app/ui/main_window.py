@@ -32,6 +32,7 @@ from PySide6.QtGui import (
     QDropEvent,
     QKeySequence,
     QShortcut,
+    QShowEvent,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -213,6 +214,7 @@ from app.ui.install_dialog import InstallDialog
 from app.ui.labels import (
     MENU_GROUPS,
     LengthSpin,
+    circle_measure,
     demo_line,
     display_unit,
     feature_label,
@@ -220,6 +222,7 @@ from app.ui.labels import (
     kind_requirement,
     length,
     localised,
+    set_circle_measure,
     spoiled_the_exact_body,
 )
 from app.ui.labels import area as area_label
@@ -263,6 +266,7 @@ from app.ui.sketch_editor import (
     grid_step_for,
     plane_where,
 )
+from app.ui.spacemouse import SpaceMouseController
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, divider, make_primary, menu_heading, set_level
@@ -1436,6 +1440,21 @@ class MainWindow(QMainWindow):
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
+        # Die 3D-Maus fährt dieselbe Kamera — eine zweite Hand, kein Modus
+        # (Konzept 3D-Maus). Gesucht wird das Gerät ab dem ersten Anzeigen —
+        # vorher gibt es keine Kamera, die es fahren könnte.
+        self.spacemouse = SpaceMouseController(
+            self.viewport, self.settings, self.viewport.reset_camera, self
+        )
+        self.viewport.set_bed_visible(self.settings.bed_visible)
+        self.spacemouse.deviceSeen.connect(
+            weak_slot(
+                self,
+                lambda view: view.announce(
+                    tr("3D-Maus erkannt. Geschwindigkeit und Richtung stehen in den Einstellungen.")
+                ),
+            )
+        )
         self.viewport.measurementTaken.connect(self._on_measurement)
         self.section_bar = SectionBar(self)
         self.section_bar.sectionChanged.connect(self._on_section)
@@ -1775,6 +1794,7 @@ class MainWindow(QMainWindow):
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
+        self.report.slicerRequested.connect(self.action_print_settings)
         self.chat = ChatPanel(self)
         self.chat.requestSent.connect(self._on_request_sent)
         self.chat.accepted.connect(self._on_proposal_accepted)
@@ -1899,6 +1919,7 @@ class MainWindow(QMainWindow):
         self.start_screen = StartScreen(self)
         self.start_screen.newRequested.connect(self.start_empty)
         self.start_screen.browseRequested.connect(self.action_open)
+        self.start_screen.importRequested.connect(self.action_import)
         self.start_screen.openRequested.connect(self.open_path)
         self.start_screen.fileDropped.connect(self.open_path)
         self.start_screen.urlDropped.connect(self.download_model)
@@ -2603,6 +2624,18 @@ class MainWindow(QMainWindow):
             self.action_toggle_right,
             tr("Verlauf, Parameter und Chat ein- oder ausblenden."),
         )
+        # Robert, 02.09.2026: „eine Option, wo man schnell hinkommt, um die
+        # Druckplatte auszublenden". Ein Haken mit Kürzel, in der Palette
+        # gelistet, und der Zustand bleibt über den Neustart.
+        self._bed_action = self._add_action(
+            view_menu,
+            tr("Druckplatte zeigen"),
+            "Ctrl+Shift+D",
+            self.action_toggle_bed,
+            tr("Bett, Bauraum und Maßstab ein- oder ausblenden — das Teil bleibt."),
+        )
+        self._bed_action.setCheckable(True)
+        self._bed_action.setChecked(self.settings.bed_visible)
         view_menu.addSeparator()
 
         # Sechs Blöcke ohne Überschrift waren dreiundzwanzig Zeilen, durch
@@ -4365,6 +4398,19 @@ class MainWindow(QMainWindow):
     def action_redo(self) -> None:
         self.session.redo()
 
+    def action_toggle_bed(self) -> None:
+        """Druckplatte, Bauraum und Maßstab aus- oder wieder einblenden.
+
+        Der Haken im Menü und die Einstellung folgen dem Aufruf, gleich ob er
+        aus dem Menü, der Palette oder dem Kürzel kommt.
+        """
+        visible = not self.settings.bed_visible
+        self.settings.bed_visible = visible
+        self._bed_action.setChecked(visible)
+        self.viewport.set_bed_visible(visible)
+        save_settings(self.settings)
+        self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
+
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
         self.right.setVisible(visible)
@@ -5680,6 +5726,9 @@ class MainWindow(QMainWindow):
         Ohne Rückfrage, aus demselben Grund wie dort: Der Dialog ist modal,
         offen ist sonst nichts, und Dokument samt Verlauf wandern mit.
         """
+        # Was an den Feldern umgeschaltet wurde, gehört in die Einstellungen,
+        # bevor der Dialog sie liest und zurückschreibt.
+        self.settings.circle_measure = circle_measure()
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec() != SettingsDialog.DialogCode.Accepted:
             return
@@ -5704,6 +5753,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_navigation(self.settings.navigation)  # type: ignore[arg-type]
         self.viewport.set_difference_palette(self.settings.diff_palette)  # type: ignore[arg-type]
         self.set_display_unit(self.settings.display_unit)
+        set_circle_measure("radius" if self.settings.circle_measure == "radius" else "diameter")
 
     def set_display_unit(self, unit: str) -> None:
         """§19.3: Millimeter oder Zoll — in der Anzeige, nie im Kern.
@@ -5729,6 +5779,11 @@ class MainWindow(QMainWindow):
         halten die Werte nicht, aus denen ihre Zeilen entstehen, und ihnen
         eine Datenhaltung dafür zu geben ist ein eigener Schritt. Das steht so
         in der Arbeitsliste, statt hier als stille Lücke.
+
+        **Die Druckeinstellungen bleiben in Millimetern**, mit Absicht: Ihre
+        Werte gehen so an den Slicer, wie er sie führt, und wer dort eine
+        Schichthöhe von 0,2 mm liest, findet sie im Slicer wieder; in Zoll
+        fände er sie nicht.
         """
         set_length_unit(unit)  # type: ignore[arg-type]
         self.measurements.set_unit(unit)  # type: ignore[arg-type]
@@ -5792,6 +5847,7 @@ class MainWindow(QMainWindow):
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
             "view.fit": (tr("Alles einpassen"), "Home", self.viewport.reset_camera),
             "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
+            "view.bed": (tr("Druckplatte zeigen"), "Ctrl+Shift+D", self.action_toggle_bed),
             "help.manual": (tr("Handbuch …"), "F1", self.action_manual),
         }
         for key, tool in self.tools.tools().items():
@@ -6144,6 +6200,7 @@ class MainWindow(QMainWindow):
             pull_limits(),
             pocket_limits(),
             self._sketch_cut_available,
+            self._pocket_top_shift,
         )
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
@@ -6184,6 +6241,7 @@ class MainWindow(QMainWindow):
         # Reihenfolge abhinge statt von der Sache.
         panel.sketchChanged.connect(self._update_sketch_selection)
         panel.canvas.selectionChanged.connect(self._redraw_sketch)
+        panel.canvas.measureViewChanged.connect(self._redraw_sketch)
         # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
         # aus dem man auf einer Fläche zeichnet — verstecken hieße, die Frage
         # wegzuräumen, die man gerade beantwortet. Durchscheinend, damit die
@@ -6488,6 +6546,36 @@ class MainWindow(QMainWindow):
                 hits.append(object_id)
         return hits[0] if len(hits) == 1 else ""
 
+    def _pocket_top_shift(self) -> float:
+        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt.
+
+        Dort beginnt ``sketch_pocket`` zu schneiden, wenn die Zeichnung tiefer
+        liegt, also zeigt die Drahtform der Ansicht dort ihre Tiefe. Der
+        Zielkörper ist der gewählte, sonst der unter dem Umriss — dieselbe
+        Reihenfolge wie in :meth:`_pocket_target_problem`. Gerechnet wird
+        über die acht Ecken des Hüllquaders entlang der Ebenennormale: grob,
+        aber in dieselbe Richtung wie die Operation, und ohne zweiten Schnitt.
+        """
+        frame = self._sketch_frame()
+        result = self.session.last_result
+        if frame is None or result is None:
+            return 0.0
+        chosen = self.object_tree.selected() or self._body_under_the_outline()
+        entry = result.scene.objects.get(chosen) if chosen else None
+        if entry is None:
+            return 0.0
+        bounds = entry.mesh.bounds
+        normal = frame.normal
+        corners = (
+            (x, y, z)
+            for x in (bounds.minimum[0], bounds.maximum[0])
+            for y in (bounds.minimum[1], bounds.maximum[1])
+            for z in (bounds.minimum[2], bounds.maximum[2])
+        )
+        top = max(sum(c * n for c, n in zip(corner, normal, strict=True)) for corner in corners)
+        plane = sum(o * n for o, n in zip(frame.origin, normal, strict=True))
+        return max(0.0, top - plane)
+
     def _pocket_target_problem(self) -> str:
         """Warum die gezeichnete Kontur gerade nichts abtragen kann.
 
@@ -6560,6 +6648,19 @@ class MainWindow(QMainWindow):
         self.finish_sketch(keep=True)
 
     def _on_sketch_pulled(self, height: float) -> None:
+        """Der Zug am Griff wird zur Operation — mit dem Dialog als Bestätigung.
+
+        Während des Zugs steht das Maß an der Drahtform (Viewport,
+        ``sketch_pull_measure``), so wie beim Zeichnen einer Linie. Loslassen
+        öffnet den Dialog mit der gezogenen Höhe, und dort bleiben alle Werte
+        änderbar — Robert, 02.09.2026: „bei Bestätigung sollen alle drei Werte
+        noch änderbar sein". Ein Höhenfeld in der Skizzenleiste stand hier
+        einen Vormittag lang und ging wieder: „unten im Feld wollen wir es
+        nicht".
+        """
+        self._apply_sketch_pull(height)
+
+    def _apply_sketch_pull(self, height: float) -> None:
         """Außen wird Material aufgebaut, innen aus einem Körper entfernt.
 
         Der Zug endet als **Operation** und nicht als Zustand (Regel 2): Der
@@ -11238,6 +11339,7 @@ class MainWindow(QMainWindow):
         kappt, braucht das Fenster nicht zu zerstören.
         """
         self.wait_for_workers(timeout_ms)
+        self.spacemouse.stop()
         # **Der Wartezeiger geht mit.** Er ist ein Override der *Anwendung*,
         # nicht des Fensters: Ein Zeitgeber, der nach dem Loslassen feuert,
         # setzt ihn für alles, was danach kommt, und niemand nimmt ihn
@@ -11302,6 +11404,10 @@ class MainWindow(QMainWindow):
             self._toolbar_wide = True
             self.toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt name
+        super().showEvent(event)
+        self.spacemouse.start()
+
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802 - Qt name
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
         # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
@@ -11313,6 +11419,7 @@ class MainWindow(QMainWindow):
         if self._remote is not None:
             self._remote.stop()
             self._remote = None
+        self.spacemouse.stop()
         # Hier stand eine Sicherung. Sie lief **nach** der Frage darüber, und
         # dort kann nur noch stehen, wer gerade *Verwerfen* geklickt hat —
         # gespeichert hätte ``modified`` geräumt. Sie schrieb also genau den
@@ -11322,6 +11429,7 @@ class MainWindow(QMainWindow):
         # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
+        self.settings.circle_measure = circle_measure()
         save_settings(self.settings)
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich

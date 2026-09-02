@@ -15,6 +15,7 @@ import os
 import weakref
 from collections.abc import Callable, Sequence
 from contextlib import suppress
+from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final, Literal, NamedTuple, cast
 
@@ -77,7 +78,14 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
-from app.ui.labels import display_unit, feature_label, feature_name, length, localised
+from app.ui.labels import (
+    display_unit,
+    feature_label,
+    feature_name,
+    length,
+    localised,
+    read_number,
+)
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -900,10 +908,15 @@ def pulled_height(reach: float, step: float, limits: tuple[float, float]) -> flo
     """
     if step > 0.0:
         reach = round(reach / step) * step
+    if abs(reach) <= EPS_GEOM:
+        # **Ein auf null gefangener Zug ist kein Zug.** Bis zum 02.09.2026
+        # hob die Klemmung ihn auf die Untergrenze — und weil ``round(-0.3)``
+        # ``-0.0`` ist und ``-0.0 < 0.0`` nicht gilt, wurde aus einem kurzen
+        # Zug nach unten ein Aufbau von 0,1 mm nach oben.
+        return 0.0
     least, most = limits
     if most > least:
-        direction = -1.0 if reach < 0.0 else 1.0
-        return direction * min(max(abs(reach), least), most)
+        return math.copysign(min(max(abs(reach), least), most), reach)
     return reach
 
 
@@ -2399,9 +2412,8 @@ class DragValueBar(QFrame):
         arbeitet und „1" tippt, meint 25,4 Millimeter. Winkel und Faktor gehen
         unverändert durch.
         """
-        try:
-            entered = float(self.value.text().strip().replace(",", "."))
-        except ValueError:
+        entered = read_number(self.value.text())
+        if entered is None:
             return None
         return to_mm(entered, self._length_unit) if self._length_unit else entered
 
@@ -2723,6 +2735,8 @@ class Viewport(QWidget):
         self.plotter: Any | None = None
         self._actors: dict[ObjectId, Any] = {}
         self._frame_actors: list[Any] = []
+        self._bed_visible = True
+        self._explosion_middle: tuple[int, Any] | None = None
         #: Die Teilmenge von ``_frame_actors``, die **flach auf dem Bett** liegt:
         #: Fläche und Raster. Nur sie tritt im Skizzenmodus ab — Bauraumkanten
         #: und Maßskala bleiben stehen, weil sie eine Grenze zeigen und kein
@@ -2864,6 +2878,10 @@ class Viewport(QWidget):
         überhaupt etwas bedeutet. Die Ansicht kennt davon nichts, sie kennt die
         Geste (siehe :meth:`set_sketch_pull`)."""
         self._sketch_cut_available: Callable[[], bool] | None = None
+        self._sketch_cut_top: Callable[[], float] | None = None
+        """Wie weit die Oberkante des Zielkörpers über der Zeichenebene liegt —
+        dort beginnt die Tasche, also auch ihre Drahtform. Vom Fenster, das den
+        Körper kennt; null, wenn die Ebene selbst die Oberkante ist."""
         """Ob der Zug nach innen gerade ein echtes Ziel hat.
 
         Die Tasche braucht einen ausgewählten, bearbeitbaren Körper. Das weiß
@@ -2886,13 +2904,6 @@ class Viewport(QWidget):
         der Sichtstrahl ihr am nächsten kommt (:func:`axis_hit`)."""
         self._pull_height = 0.0
         """Die Höhe, die der Zug gerade zeigt — gefangen auf das Raster."""
-        self._pull_raw: float | None = None
-        """Dasselbe Maß **ungeklemmt**, oder ``None`` vor der ersten Bewegung.
-
-        Es ist die einzige Auskunft darüber, in welche **Richtung** gezogen
-        wurde: :func:`pulled_height` hebt ein negatives Maß auf die Untergrenze,
-        und danach sieht ein Zug nach unten aus wie ein sehr kurzer nach oben —
-        gemeldet als Körper von 0,1 mm, den niemand gemeint hat."""
         self._pull_actors: list[Any] = []
         """Die Drahtform des Zugs. Eigene Liste wie die Fangmarke: Sie hängt an
         der Maus, die Zeichnung ändert sich beim Zeichnen."""
@@ -4375,15 +4386,20 @@ class Viewport(QWidget):
         if self._explosion <= 0.0 or len(result.scene.objects) < 2:
             return np.zeros(3)
 
-        centres = [
-            np.asarray(other.mesh.bounds.centre, dtype=float)
-            for other in result.scene.objects.values()
-            if getattr(other.mesh, "raw", None) is not None
-        ]
-        if len(centres) < 2:
+        # Die Mitte der Szene einmal je Auswertung, nicht einmal je Körper:
+        # mit n Körpern waren das n Durchläufe über alle n Mittelpunkte.
+        cached = self._explosion_middle
+        if cached is None or cached[0] != id(result):
+            centres = [
+                np.asarray(other.mesh.bounds.centre, dtype=float)
+                for other in result.scene.objects.values()
+                if getattr(other.mesh, "raw", None) is not None
+            ]
+            cached = (id(result), np.mean(centres, axis=0) if len(centres) >= 2 else None)
+            self._explosion_middle = cached
+        middle = cached[1]
+        if middle is None:
             return np.zeros(3)
-
-        middle = np.mean(centres, axis=0)
         away = np.asarray(entry.mesh.bounds.centre, dtype=float) - middle
         if float(np.linalg.norm(away)) <= EPS_GEOM:
             return np.zeros(3)
@@ -4536,6 +4552,30 @@ class Viewport(QWidget):
         if self._sketch_frame is not None:
             for actor in self._ground_actors:
                 actor.SetVisibility(False)
+        if not self._bed_visible:
+            for actor in self._frame_actors:
+                actor.SetVisibility(False)
+        self._draw()
+
+    @property
+    def bed_visible(self) -> bool:
+        """Ob Bett, Bauraum und Maßstab gerade gezeichnet werden."""
+        return self._bed_visible
+
+    def set_bed_visible(self, visible: bool) -> None:
+        """Bett, Bauraum und Maßstab ein- oder ausblenden — die Körper bleiben.
+
+        Ein Umschalter, kein Umbau: Die Kulisse wird weiter gezeichnet und
+        nur unsichtbar geschaltet, damit :meth:`show_build_volume` beim
+        nächsten Profilwechsel nichts anders machen muss. Im Zeichenmodus
+        bleibt der Boden ohnehin weg.
+        """
+        self._bed_visible = bool(visible)
+        if self.plotter is None:
+            return
+        for actor in self._frame_actors:
+            hidden_by_sketch = self._sketch_frame is not None and actor in self._ground_actors
+            actor.SetVisibility(self._bed_visible and not hidden_by_sketch)
         self._draw()
 
     def _draw_one_bed(
@@ -5490,7 +5530,12 @@ class Viewport(QWidget):
         target = np.asarray(point, dtype=float)
         camera.focal_point = tuple(target)
         camera.position = tuple(target + direction / length * reach)
+        # Nah heran heißt: die Nahebene neu legen, sonst schneidet sie ins
+        # Material — und der Schatten gehört zur neuen Blickrichtung.
+        self.plotter.renderer.ResetCameraClippingRange()
         self._draw()
+        self._redraw_shadows()
+        self.cameraMoved.emit()
 
     def _scene_size(self) -> float:
         if self._result is None or not self._result.scene.objects:
@@ -7125,13 +7170,9 @@ class Viewport(QWidget):
             # Zahl in dieselbe Wache und verschwand.
             self.drag_bar.typing = False
             self._pull_height = float(value)
-            # **Die getippte Zahl ersetzt den Zeiger, also auch dessen
-            # Richtung.** Ohne diese Zeile war ein Fehlzug per Tastatur nicht
-            # mehr zu retten: ``_pull_raw`` stand noch auf dem Maß von vorhin,
-            # und die Richtungsprüfung im Loslassen lehnte die eingetippte Höhe
-            # mit „andersherum ziehen" ab (gefunden von der Review-Sitzung,
-            # 27.08.2026). Wer tippt, hat die Frage nach der Richtung beantwortet.
-            self._pull_raw = None
+            # Die getippte Zahl ersetzt den Zeiger, also auch dessen Richtung:
+            # Wer tippt, hat die Frage nach der Richtung beantwortet, und
+            # ``_pull_takes`` prüft gegen genau diese Höhe.
             self.finish_sketch_pull()
             return
         self._end_drag()
@@ -7348,6 +7389,67 @@ class Viewport(QWidget):
             return
         self.plotter.camera.zoom(factor)
         self._draw()
+
+    @property
+    def sketch_active(self) -> bool:
+        """Ob gerade eine Zeichenebene steht — dann bleibt die Blickrichtung darauf."""
+        return self._sketch_frame is not None
+
+    def set_camera_pose(
+        self,
+        position: tuple[float, float, float],
+        focal_point: tuple[float, float, float],
+        view_up: tuple[float, float, float],
+        parallel_scale: float | None = None,
+    ) -> None:
+        """Standort, Blickpunkt und Oben in einem Zug — für die 3D-Maus (§2.9).
+
+        Der zweite Treiber der Kamera neben der Maus. Er erzeugt keine
+        Operation und ändert nichts im Dokument; er setzt die Werte, die VTK
+        führt, und zeichnet einmal. ``parallel_scale`` ist die halbe sichtbare
+        Höhe in der Parallelprojektion — dort zoomt nur sie, ein Standort
+        näher am Blickpunkt ändert das Bild nicht (dieselbe Unterscheidung wie
+        beim Mausrad). Schatten und Skizzenraster ziehen erst nach dem Zug
+        nach (:meth:`settle_camera`), nicht bei jedem Takt.
+        """
+        if self.plotter is None:
+            return
+        camera = self.plotter.camera
+        camera.position = position
+        camera.focal_point = focal_point
+        camera.up = view_up
+        if parallel_scale is not None:
+            camera.parallel_scale = parallel_scale
+        # Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: VTK legt
+        # die Schnittebenen nur nach, wenn man es sagt — der Interaktor tut es
+        # bei jedem Mauszug, hier tut es diese Zeile.
+        self.plotter.renderer.ResetCameraClippingRange()
+        self._draw()
+
+    def camera_pose(self) -> tuple[Vec3, Vec3, Vec3, float | None]:
+        """Standort, Blickpunkt, Oben — und die halbe Bildhöhe, wenn die
+        Projektion parallel ist, sonst ``None``."""
+        assert self.plotter is not None
+        camera = self.plotter.camera
+        scale = float(camera.parallel_scale) if camera.parallel_projection else None
+        return (
+            tuple(camera.position),
+            tuple(camera.focal_point),
+            tuple(camera.up),
+            scale,
+        )
+
+    def settle_camera(self) -> None:
+        """Was nach einer Kamerafahrt fällig ist: Schatten neu, Raster neu.
+
+        Der Mauszug erledigt das am Ende der Geste (``EndInteractionEvent``);
+        die 3D-Maus ruft es, sobald die Kappe ruht — bei sechzig Takten je
+        Sekunde wären neue Schatten je Takt der teuerste Teil des Bildes.
+        """
+        if self.plotter is None:
+            return
+        self._redraw_shadows()
+        self.cameraMoved.emit()
 
     def view_from(self, direction: str) -> None:
         """Eine der sieben Kameravorgaben (§18.1).
@@ -8464,6 +8566,13 @@ class Viewport(QWidget):
         offset, self._body_drag_offset = self._body_drag_offset, (0.0, 0.0)
         self._body_drag_from = None
         self.set_drag_cursor(None)
+        # Der Knopf daneben sagt „Fang — auf welchen Schritt ein Zug einrastet",
+        # und der Griff hält sich daran; der freie Zug tat es bis zum
+        # 02.09.2026 nicht und schrieb 3,7182 mm in den Verlauf.
+        offset = (
+            snap_to_step(offset[0], self._grid_step),
+            snap_to_step(offset[1], self._grid_step),
+        )
         if abs(offset[0]) < EPS_DRAG and abs(offset[1]) < EPS_DRAG:
             # Ein Klick ist kein Zug. Ohne diese Grenze bekäme jede Auswahl
             # einen Schritt „Direkt bewegt" mit null Millimetern — und weil
@@ -8480,6 +8589,7 @@ class Viewport(QWidget):
         limits: tuple[float, float] = (0.0, 0.0),
         cut_limits: tuple[float, float] | None = None,
         cut_available: Callable[[], bool] | None = None,
+        cut_top: Callable[[], float] | None = None,
     ) -> None:
         """Verdrahtet den Ziehgriff des Skizzenmodus.
 
@@ -8508,6 +8618,7 @@ class Viewport(QWidget):
         self._pull_limits = limits
         self._cut_limits = cut_limits
         self._sketch_cut_available = cut_available
+        self._sketch_cut_top = cut_top
         if offer is None:
             self._end_pull()
 
@@ -8748,7 +8859,6 @@ class Viewport(QWidget):
             return False
         self._pull_from = base
         self._pull_height = 0.0
-        self._pull_raw = None
         self._drag_kind = "pull"
         # Der Zeiger auf der Ebene hält still, solange gezogen wird — sonst
         # zeichnete die Vorschau der Skizze dem Zug hinterher.
@@ -8802,7 +8912,6 @@ class Viewport(QWidget):
         # Loslassen entscheidet es, ob überhaupt in die Richtung gezogen wurde,
         # in die der Körper wächst — geklemmt sind beide Richtungen gleich weit
         # von null entfernt.
-        self._pull_raw = reach
         if reach < 0.0 and not self._cut_pull_available():
             # Ohne ausgewählten, bearbeitbaren Körper gibt es im Bild weder
             # Kreuz noch Tasche. Auch während eines versehentlichen Zugs nach
@@ -8817,10 +8926,11 @@ class Viewport(QWidget):
         if abs(height - self._pull_height) <= EPS_GEOM:
             return
         self._pull_height = height
+        # Das Maß steht an der Drahtform selbst, wie beim Zeichnen einer Linie
+        # (Robert, 02.09.2026: „ein Maß daneben, wie wenn wir eine Linie
+        # zeichnen") — kein Wertfeld am Zeiger, keines in der Leiste. Die
+        # genaue Zahl bekommt der Dialog beim Loslassen.
         self._show_pull_cage()
-        if not self.drag_bar.typing:
-            self.drag_bar.anchor = self._pointer_spot(x, y)
-        self.drag_bar.follow_length(tr("Tiefe") if height < 0.0 else tr("Höhe"), abs(height))
 
     def _pointer_spot(self, x: int, y: int) -> QPoint:
         """Die Stelle des Zeigers in Qt-Logikpunkten, für das Wertfeld.
@@ -8835,6 +8945,31 @@ class Viewport(QWidget):
         height = float(self.plotter.interactor.height())
         return QPoint(int(x / ratio), int(height - y / ratio))
 
+    def _pull_frame(self) -> PlaneFrame:
+        """Die Ebene, von der die Drahtform ausgeht.
+
+        Nach außen ist das die Zeichenebene. Nach innen ist es die Oberkante
+        des Körpers, der abgetragen wird — ``sketch_pocket`` schneidet dort,
+        wenn die Zeichnung tiefer liegt (der Fusion-Weg: Umriss auf dem Bett,
+        Teil darüber). Bis zum 02.09.2026 wuchs die Drahtform von der
+        Zeichenebene in die Luft unter dem Teil, geschnitten wurde oben:
+        Tiefe richtig, Ort falsch.
+        """
+        frame = self._sketch_frame
+        assert frame is not None
+        if self._pull_height >= 0.0 or self._sketch_cut_top is None:
+            return frame
+        shift = float(self._sketch_cut_top())
+        if shift <= EPS_GEOM:
+            return frame
+        normal = frame.normal
+        origin = (
+            frame.origin[0] + normal[0] * shift,
+            frame.origin[1] + normal[1] * shift,
+            frame.origin[2] + normal[2] * shift,
+        )
+        return replace(frame, origin=origin)
+
     def _show_pull_cage(self) -> None:
         """Legt die Drahtform des Zugs in die Szene — oder nimmt sie weg."""
         actors = tuple(self._pull_actors)
@@ -8844,7 +8979,7 @@ class Viewport(QWidget):
         for actor in actors:
             self.plotter.remove_actor(actor, render=False)
         segments = (
-            pull_cage(self._sketch_frame, self._sketch_curves, self._pull_height)
+            pull_cage(self._pull_frame(), self._sketch_curves, self._pull_height)
             if self._sketch_frame is not None
             else []
         )
@@ -8868,6 +9003,32 @@ class Viewport(QWidget):
                 pickable=False,
             )
         )
+        # Die Maßkarte am oberen Rand der Drahtform — dieselbe Karte, die die
+        # Skizze an ihre Linien hängt, damit der Zug aussieht wie das Zeichnen.
+        if self._sketch_frame is not None:
+            along = points @ np.asarray(self._sketch_frame.normal, dtype=float)
+            extreme = along.max() if self._pull_height >= 0.0 else along.min()
+            rim = points[np.abs(along - extreme) <= EPS_GEOM]
+            self._pull_actors.append(
+                self.plotter.add_point_labels(
+                    np.asarray([rim.mean(axis=0)]),
+                    [length(abs(self._pull_height))],
+                    text_color=self._sketch_label_colour,
+                    font_size=10,
+                    bold=True,
+                    show_points=False,
+                    shape="rounded_rect",
+                    shape_color=self._sketch_label_background,
+                    fill_shape=True,
+                    margin=5,
+                    shape_opacity=0.94,
+                    always_visible=True,
+                    name="sketch_pull_measure",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
         self._draw()
 
     def finish_sketch_pull(self) -> None:
@@ -8931,7 +9092,6 @@ class Viewport(QWidget):
         """Der Zug ist vorbei, ohne Ergebnis: Drahtform weg, Zahl weg."""
         self._pull_from = None
         self._pull_height = 0.0
-        self._pull_raw = None
         if self._drag_kind == "pull":
             self._drag_kind = None
         self.drag_bar.dismiss()
@@ -8997,7 +9157,7 @@ class Viewport(QWidget):
         # ausblendet, nimmt dem Kunden die Auskunft dort, wo sie am meisten
         # wert ist.
         for actor in self._ground_actors:
-            actor.SetVisibility(frame is None)
+            actor.SetVisibility(frame is None and self._bed_visible)
         # **Der Körper ist Zusammenhang, nicht Zeichenfläche.** 45 %
         # Deckkraft ließen im Handbuchbild selbst eine eingeprägte Schrift
         # lauter erscheinen als die weiße Skizze. Beim Eintritt wird der

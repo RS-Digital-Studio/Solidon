@@ -4729,7 +4729,7 @@ def test_a_rejected_inward_pull_clears_its_preview(
         window.viewport.cancel_sketch_pull = lambda: cleaned.append(True)
         window.announce = said.append
 
-        window._on_sketch_pulled(-5.0)
+        window._apply_sketch_pull(-5.0)
 
         assert cleaned == [True]
         assert said and message in said[-1]
@@ -4884,7 +4884,7 @@ def test_a_pulled_height_reaches_the_operation(qt_app: QApplication) -> None:
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
         panel.choose_plane("plane:xz")
 
-        window._on_sketch_pulled(17.5)
+        window._apply_sketch_pull(17.5)
 
         assert len(asked) == 1, f"gemessen {asked}"
         name, given = asked[0]
@@ -4924,7 +4924,7 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
             scene=Scene(objects={"body": SimpleNamespace(kind="brep")})
         )
 
-        window._on_sketch_pulled(-8.5)
+        window._apply_sketch_pull(-8.5)
 
         assert len(asked) == 1
         name, given = asked[0]
@@ -5637,7 +5637,7 @@ def test_pulling_down_on_an_imported_mesh_starts_the_pocket(qt_app: QApplication
         )
         window.object_tree.select_object = lambda object_id: gewaehlt.append(object_id)
 
-        window._on_sketch_pulled(-4.0)
+        window._apply_sketch_pull(-4.0)
 
         assert not gesagt, f"der Zug wurde mit einem Satz abgebrochen: {gesagt}"
         assert uebergeben, "und zwar ohne dass die Operation überhaupt angestoßen wurde"
@@ -6377,3 +6377,128 @@ def test_the_empty_sketch_invites_and_the_invitation_leads_somewhere(qt_app: obj
         release = getattr(type(panel), "release", None)
         if release is not None:
             release(panel)
+
+
+def test_a_pull_opens_the_dialog_with_its_height(qt_app: QApplication) -> None:
+    """Loslassen öffnet den Dialog mit der gezogenen Höhe; dort bleibt alles änderbar.
+
+    Robert, 02.09.2026: das Maß steht während des Zugs an der Drahtform, kein
+    Feld in der Leiste, und bei der Bestätigung sind alle Werte noch offen.
+    """
+    from app.core.registry import OperationSpec
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        assert not hasattr(window, "sketch_pull_height"), "kein Höhenfeld in der Leiste"
+
+        window._on_sketch_pulled(17.5)
+
+        assert [name for name, _given in asked] == ["sketch_extrude"]
+        assert asked[0][1]["height"] == pytest.approx(17.5)
+        assert asked[0][1]["sketch"]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_circle_field_shows_the_diameter_it_means(qt_app: QApplication) -> None:
+    """Im Feld steht dieselbe Zahl, die eine Eingabetaste übernimmt.
+
+    Bis zum 02.09.2026 zeigte das Feld den Radius und las den Durchmesser: Im
+    Feld stand 10, Eingabetaste, und der Kreis halbierte sich.
+    """
+    import math
+
+    canvas = SketchCanvas()
+    canvas.set_tool("circle")
+    canvas._pending_world.append((0.0, 0.0))
+    canvas._pointer = (10.0, 0.0)
+    shown = canvas.pending_measure()
+    assert shown == pytest.approx(20.0), "Ø, nicht Radius"
+    canvas.place_measured(shown)
+    circle = next(entry for entry in canvas.sketch.elements if entry.kind == "circle")
+    centre, rim = circle.points
+    assert math.hypot(rim[0] - centre[0], rim[1] - centre[1]) == pytest.approx(10.0)
+
+
+def test_in_radius_view_a_typed_number_is_the_radius(qt_app: QApplication) -> None:
+    """Robert, 02.09.2026: Umschalten zwischen Radius und Durchmesser an der Eingabe.
+
+    Die Datei führt weiter den Durchmesser — nur die Zahl am Feld wechselt.
+    """
+    import math
+
+    from app.ui import labels
+
+    canvas = SketchCanvas()
+    canvas.set_tool("circle")
+    labels.set_circle_measure("radius")
+    try:
+        canvas._pending_world.append((0.0, 0.0))
+        canvas._pointer = (10.0, 0.0)
+        assert canvas.pending_measure() == pytest.approx(10.0), "R, nicht Ø"
+        assert canvas.circle_measure_button.text() == "R"
+        canvas.place_measured(1.6)
+        circle = next(entry for entry in canvas.sketch.elements if entry.kind == "circle")
+        centre, rim = circle.points
+        assert math.hypot(rim[0] - centre[0], rim[1] - centre[1]) == pytest.approx(1.6)
+        measured = next(entry for entry in canvas.sketch.constraints if entry.value)
+        assert measured.kind == "diameter"
+        assert float(measured.value) == pytest.approx(3.2), "gespeichert wird der Durchmesser"
+        labels_shown = [text for _point, text in canvas.measure_annotations()]
+        assert labels_shown and labels_shown[0].startswith("R "), labels_shown
+    finally:
+        labels.set_circle_measure("diameter")
+    labels_shown = [text for _point, text in canvas.measure_annotations()]
+    assert labels_shown and labels_shown[0].startswith("Ø "), labels_shown
+
+
+def test_a_measured_circle_carries_its_card(qt_app: QApplication) -> None:
+    """Ein bemaßter Kreis zeigt sein Maß in der Zeichnung, nicht nur in der Liste."""
+    canvas = SketchCanvas()
+    canvas.set_tool("circle")
+    canvas._pending_world.append((0.0, 0.0))
+    canvas._pointer = (1.0, 0.0)
+    canvas.place_measured(3.2)
+    cards = canvas.measure_annotations()
+    assert len(cards) == 1
+    ((place, text),) = cards
+    assert text.startswith("Ø ")
+    assert "3,2" in text or "3.2" in text
+    assert place[0] > 1.6, "die Karte sitzt außen am Randpunkt"
+
+
+def test_a_snapped_pull_of_nothing_stays_nothing() -> None:
+    """Ein auf null gefangener Zug ist kein Zug — und nie ein Aufbau in die andere Richtung."""
+    from app.ui.viewport import pulled_height
+
+    assert pulled_height(0.3, 1.0, (0.1, 1000.0)) == 0.0
+    assert pulled_height(-0.3, 1.0, (0.1, 1000.0)) == 0.0
+    assert pulled_height(-0.3, 0.0, (0.1, 1000.0)) == pytest.approx(-0.3)
+    assert pulled_height(-0.05, 0.0, (0.1, 1000.0)) == pytest.approx(-0.1), "Vorzeichen bleibt"
+    assert pulled_height(2.4, 1.0, (0.1, 1000.0)) == pytest.approx(2.0)
+
+
+def test_read_number_follows_the_rule_of_the_last_separator() -> None:
+    from app.ui.labels import read_number
+
+    assert read_number("12,5") == 12.5
+    assert read_number("12.5") == 12.5
+    assert read_number("1.234,5") == 1234.5
+    assert read_number("1,234.5") == 1234.5
+    assert read_number(" 7 ") == 7.0
+    assert read_number("abc") is None
+    assert read_number("") is None
