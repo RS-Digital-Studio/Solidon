@@ -368,9 +368,13 @@ def test_end_artifact_notice_sbom_and_source_archives_reconcile(tmp_path: Path) 
         for policy in make_licence_notices._runtime_policies().values()
         if policy.name == "CPython runtime"
     )
+    # **Und das Zielsystem des Artefakts, nicht das des Runners.** Der Baum
+    # oben ist ein Windows-Baum (`.exe`, `.dll`); mit der laufenden Plattform
+    # verlangte der Prüfer auf dem Linux-Runner die eingebettete
+    # AppImage-Laufzeit, die ein Windows-Artefakt nie trägt (02.09.2026).
     sbom = make_sbom.build_bom(
         customer_artifact=artifact,
-        platform=sysconfig.get_platform(),
+        platform="win-amd64",
         python_version=min(runtime.versions),
     )
     sbom_path = artifact / "Solidon3D.cdx.json"
