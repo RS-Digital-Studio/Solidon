@@ -151,6 +151,7 @@
 - [Patchskript schneidet Fremdes weg](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" löscht, was der Nachbar einfügte; `--stat` tarnt es.
 - [Sicherung ist eine Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — eine Kopie vom Anfang spielt am Ende den ganzen Dateistand von damals zurück.
 - [Ein Probe-Worktree altert](probe-worktree-altert.md) — sein Baum ist ein Zustand, kein Diff; gegen den **aktuellen** HEAD prüfen.
+- [Eigenen Lauf über die Elternkette beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) — „-m pytest" trifft fremde Läufe; nur den eigenen Prozessbaum, Blätter zuerst.
 - [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) — eine Messung, die den Bestand ändert, gehört in einen eigenen Worktree.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund kann längst repariert sein; `git diff HEAD` vorher.
 - [Der Zeuge wird beim Messen überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — vor jeder Wiederholung den Diff der gemessenen Dateien lesen; der Prüfling kann sich im geteilten Baum geändert haben.
