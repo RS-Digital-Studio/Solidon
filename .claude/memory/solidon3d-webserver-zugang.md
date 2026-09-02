@@ -94,9 +94,37 @@ Kopfzeilen; das ist das Erkennungszeichen). Die Fassung stellt nur Plesk um
 
 **Die Zugangsakte der Statistik liegt seit dem 02.09.2026 dort, wo die neue
 Seite sie erwartet:** `solidon3d.de/appdata/stats-access.php` mit 0600,
-`appdata` und `solidon-stats` mit 0700 (`SITE CHMOD` über FTPS geht). Die
-alte `httpdocs/api/.stats-zugang.php` liest nur die alte Seite; sobald die
-neue läuft, kommt sie vom Server. `upload_website.py` verweigert jeden Upload,
-solange nicht inventarisierte Medien auf dem Server liegen (Rechtenachweis);
-eine einzelne PHP-Datei geht dann direkt per `storbinary`, vorher die
-Serverfassung sichern.
+`appdata` und `solidon-stats` mit 0700 (`SITE CHMOD` über FTPS geht). Die alte
+`httpdocs/api/.stats-zugang.php` ist am selben Tag vom Server genommen — ein
+Passwort-Hash im Webroot ist unnötig, sobald ihn niemand mehr liest.
+`upload_website.py` verweigert jeden Upload, solange nicht inventarisierte
+Medien auf dem Server liegen (Rechtenachweis); eine einzelne PHP-Datei geht
+dann direkt per `storbinary`, vorher die Serverfassung sichern.
+
+### Ein PHP-Versionswechsel setzt `open_basedir` zurück und legt still zwei Dienste lahm
+
+Robert stellte am 02.09.2026 in Plesk auf 8.5 um. Dabei setzt Plesk
+`open_basedir` auf seinen Standard `{DOCROOT}/:{TMP}/…` — PHP sieht danach
+**nur noch `httpdocs`**. Beide Datenordner liegen absichtlich daneben, und
+damit standen sofort:
+
+* `solidon-stats` → der Download-Zähler schrieb keine Zeile mehr,
+* `appdata` → `activation-health.php` meldete „Der Aktivierungsdienst ist noch
+  nicht vollständig eingerichtet" (503).
+
+**Und niemand merkt es**, denn die Weiterleitung auf die Pakete funktioniert
+weiter: Kunden laden herunter, nur gezählt wird nichts. Aufgefallen ist es
+allein, weil die Statistikseite gleichzeitig hochgeladen wurde und mit 503
+antwortete.
+
+Behoben mit der zweiten der beiden Auswahlmöglichkeiten im Feld:
+`{WEBSPACEROOT}/:{TMP}/:/:/var/lib/php/sessions`. `{WEBSPACEROOT}` ist das
+Webspace-Stammverzeichnis, eine Ebene über `httpdocs` — Plesks Hilfetext
+(„Dokumentenstammverzeichnis der primären Website") ist an dieser Stelle
+irreführend. Die Ordner bleiben dabei aus dem Netz unerreichbar; es geht nur
+um den Lesezugriff des Skripts.
+
+**Die Probe dauert zwanzig Sekunden** und gehört nach jeder Änderung an den
+PHP-Einstellungen dazu: `activation-health.php` muss 200 geben, und die
+Zähldatei muss nach einem Abruf von `count.php?f=<paket>` wachsen. Steht sie
+still, ist es `open_basedir` — nicht der Code.
