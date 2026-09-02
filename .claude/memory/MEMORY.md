@@ -125,6 +125,7 @@
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — fast keinen Fehler fand sein Urheber; der eigene Blick folgt der eigenen Absicht.
 - [Ein Bündel erbt nicht das erste Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — gezählte Zeilen bleiben Bedienhandlungen; Ziele und Auswege müssen für jedes Mitglied stimmen.
 - [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Flatpak-Manifest behoben, im AppImage fünf Tage später noch da; die Regel gehört in den Startpfad, das Register nennt die Reichweite.
+- [Prüfjob nur beim Tag hat nie gemessen](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — die Releaseakte hätte 0.3.0 auf drei Plattformen abgewiesen; einmal über ein echtes Paket fahren, Prüfer und Erzeuger in einen Commit.
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
