@@ -505,7 +505,11 @@ function activation_licence(string $text): array
     }
     $payload = substr($raw, 0, -SODIUM_CRYPTO_SIGN_BYTES);
     $signature = substr($raw, -SODIUM_CRYPTO_SIGN_BYTES);
-    $publicHex = getenv('SOLIDON_ACTIVATION_TEST_LICENCE_PUBLIC_KEY') ?: LICENCE_PUBLIC_KEY_HEX;
+    // Der Prüfschlüssel aus der Umgebung gilt nur im eingebauten Testserver
+    // (`php -S`); im Hosting ersetzt keine liegengebliebene Variable den
+    // festen Schlüssel — sonst nähme der Dienst fremd signierte Lizenzen an.
+    $publicHex = (PHP_SAPI === 'cli-server' ? getenv('SOLIDON_ACTIVATION_TEST_LICENCE_PUBLIC_KEY') : false)
+        ?: LICENCE_PUBLIC_KEY_HEX;
     $public = hex2bin($publicHex);
     if ($public === false || strlen($public) !== SODIUM_CRYPTO_SIGN_PUBLICKEYBYTES
         || !sodium_crypto_sign_verify_detached($signature, $payload, $public)) {
@@ -810,7 +814,8 @@ function activation_seed(): string
     }
     $pair = sodium_crypto_sign_seed_keypair($seed);
     $public = sodium_crypto_sign_publickey($pair);
-    $expectedPublic = getenv('SOLIDON_ACTIVATION_TEST_PUBLIC_KEY') ?: ACTIVATION_PUBLIC_KEY_HEX;
+    $expectedPublic = (PHP_SAPI === 'cli-server' ? getenv('SOLIDON_ACTIVATION_TEST_PUBLIC_KEY') : false)
+        ?: ACTIVATION_PUBLIC_KEY_HEX;
     if (!hash_equals($expectedPublic, bin2hex($public))) {
         throw new ActivationFailure(
             'Der Signaturschlüssel des Aktivierungsdienstes passt nicht zur Anwendung.',

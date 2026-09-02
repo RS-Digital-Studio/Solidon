@@ -1511,6 +1511,72 @@ def test_the_compact_schema_keeps_every_tool() -> None:
     assert kleine < grosse * 0.85, "unter fünfzehn Prozent Ersparnis lohnt der Sonderweg nicht"
 
 
+def test_the_compact_schema_keeps_unit_condition_and_caveat() -> None:
+    """Gekürzt wird die Prosa, nicht die Angabe, an der ein Wert hängt.
+
+    Drei Dinge stehen im vollen Schema **hinter** dem doc-Satz: die Einheit
+    (``[mm]``), die Bedingung, unter der ein Parameter überhaupt wirkt
+    (``condition_text``), und die Zeile „Wann nicht" einer Operation
+    (``caveat_line``). Wer auf den ersten Satz kürzt, schneidet alle drei mit
+    ab — gemessen am 02.09.2026 über 106 Werkzeuge: 339 Parameter ohne
+    Einheit, 25 ohne Bedingung, 22 Operationen ohne ihre Grenze. Kompakt
+    bekommt Ollama, also jedes lokale Modell: Es setzte dann Zentimeter statt
+    Millimeter, einen Wert im toten Zweig oder *Gitter füllen* für ein Teil,
+    das dicht sein muss.
+
+    Bauart wie beim Menüweg darunter: geprüft wird die Deckung zwischen
+    Register und Schema, nicht der Wortlaut — die Erwartung kommt aus
+    derselben Quelle, aus der ``json_schema`` sie zusammensetzt, und gilt
+    darum in jeder Sprache.
+    """
+    from app.core.agent.tools import operation_tools
+    from app.core.registry import REGISTRY, caveat_line
+    from app.core.registry.params import condition_text
+
+    voll = {entry["name"]: entry for entry in operation_tools()}
+    kurz = {entry["name"]: entry for entry in operation_tools(compact=True)}
+    assert len(kurz) > 50, "das Register ist nicht geladen"
+
+    ohne_einheit: list[str] = []
+    ohne_bedingung: list[str] = []
+    ohne_grenze: list[str] = []
+    for name, knapp in kurz.items():
+        spec = REGISTRY.get(name)
+        grenze = caveat_line(spec)
+        traegt = grenze and grenze in str(voll[name]["description"])
+        if traegt and grenze not in str(knapp["description"]):
+            ohne_grenze.append(name)
+        schema = spec.params.spec()
+        for entry in schema:
+            felder = knapp["input_schema"]["properties"]
+            if entry.name not in felder:
+                continue
+            kurzer = str(felder[entry.name].get("description", ""))
+            langer = str(
+                voll[name]["input_schema"]["properties"][entry.name].get("description", "")
+            )
+            if not kurzer:
+                # Die sechs Platzierungsangaben stehen im Systemprompt; dass
+                # sie dort ankommen, prüft der Test weiter unten.
+                continue
+            einheit = f"[{entry.unit}]" if entry.unit else ""
+            if einheit and einheit in langer and einheit not in kurzer:
+                ohne_einheit.append(f"{name}.{entry.name}")
+            bedingung = condition_text(entry, schema, keys=True)
+            if bedingung and bedingung in langer and bedingung not in kurzer:
+                ohne_bedingung.append(f"{name}.{entry.name}")
+
+    assert not ohne_einheit, (
+        f"{len(ohne_einheit)} Parameter verlieren die Einheit: {ohne_einheit[:5]}"
+    )
+    assert not ohne_bedingung, (
+        f"{len(ohne_bedingung)} Parameter verlieren die Bedingung: {ohne_bedingung[:5]}"
+    )
+    assert not ohne_grenze, (
+        f"{len(ohne_grenze)} Operationen verlieren die Grenze: {ohne_grenze[:5]}"
+    )
+
+
 def test_the_prompt_only_promises_the_menu_path_when_the_schemas_carry_it() -> None:
     """Was der Systemprompt zusagt, müssen die Werkzeuge einlösen.
 

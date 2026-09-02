@@ -407,21 +407,32 @@ function stats_write_rate_state(string $path, $stream, string $data): bool
         && (int) ($named['nlink'] ?? 0) === 1;
 }
 
+/** Antwortet 503, wenn der Anmeldezähler nicht sicher zu öffnen ist — dieselbe
+ *  Antwort wie bei einer unbrauchbaren Zugangsdatei. Vorher stand hier ein
+ *  vorgetäuschter Sperrzustand, und die Anmeldung sagte „Zu viele Versuche“,
+ *  obwohl niemand es versucht hatte; fail-closed bleibt, der Satz stimmt jetzt. */
+function stats_unavailable(): never
+{
+    http_response_code(503);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Diese Seite ist vorübergehend nicht verfügbar.
+";
+    exit;
+}
+
 /** Liest und ändert den IP-bezogenen Fehlversuchszähler unter einer Sperre. */
 function stats_update_tries(bool $add, string $hash): array
 {
     $path = tries_file();
     $stream = stats_open_rate_state($path);
     if (!is_resource($stream)) {
-        $blocked = array_fill(0, MAX_GLOBAL_TRIES, time());
-        return ['ip' => $blocked, 'global' => $blocked];  // Speicherfehler sperrt statt zu öffnen.
+        stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
     }
     try {
         $raw = stream_get_contents($stream);
         $state = $raw === '' ? [] : json_decode($raw === false ? '' : $raw, true);
         if ($raw === false || !is_array($state)) {
-            $blocked = array_fill(0, MAX_GLOBAL_TRIES, time());
-            return ['ip' => $blocked, 'global' => $blocked];
+            stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
         }
         $now = time();
         $clientKeys = stats_rate_client_keys($hash, $now);
@@ -457,8 +468,7 @@ function stats_update_tries(bool $add, string $hash): array
         $state[$globalKey] = $global;
         $encoded = json_encode($state, JSON_UNESCAPED_SLASHES);
         if (!is_string($encoded) || !stats_write_rate_state($path, $stream, $encoded)) {
-            $blocked = array_fill(0, MAX_GLOBAL_TRIES, $now);
-            return ['ip' => $blocked, 'global' => $blocked];
+            stats_unavailable();  // Speicherfehler: ehrlich 503 statt „Zu viele Versuche“.
         }
         return ['ip' => $kept, 'global' => $global];
     } finally {

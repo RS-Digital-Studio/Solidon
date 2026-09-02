@@ -10,7 +10,7 @@ import threading
 import time
 from collections.abc import Callable
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -1561,3 +1561,85 @@ def test_the_note_does_not_hang_on_the_latest_tag() -> None:
     mit = llm.known_model_note("mistral-nemo:latest")
     assert ohne is not None and mit is not None
     assert str(ohne) == str(mit), "derselbe Satz, egal wie der Name geschrieben steht"
+
+
+# --- Der Transport zum Mesh-Generator -------------------------------------------
+#
+# Dieselbe Frage wie oben beim Sprachmodell, nur am anderen Backend: Was von
+# einem fremden Programm hereinkommt, wird begrenzt gelesen. ComfyUI läuft
+# lokal, aber es ist ein fremdes Programm (§32) — eine Antwort ohne Deckel
+# füllte den Arbeitsspeicher, und ein JSON ohne Deckel dasselbe.
+
+
+class Endless:
+    """Eine Antwort, die nie aufhört zu liefern."""
+
+    headers: ClassVar[dict[str, str]] = {}
+
+    def __init__(self, block: int) -> None:
+        self._block = block
+
+    def __enter__(self) -> Endless:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def set_read_timeout(self, _seconds: float) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        return b"x" * (size if size and size > 0 else self._block)
+
+
+def _mesh_opener(answer: object) -> Callable[[str], SimpleNamespace]:
+    def open_it(_request: object, timeout: float = 0.0) -> object:
+        return answer
+
+    return lambda _url: SimpleNamespace(open=open_it)
+
+
+def test_the_mesh_transport_stops_reading_an_endless_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``fetch`` las die Antwort von ComfyUI am Stück und ohne Grenze.
+
+    ``answer.read()`` ohne Argument nimmt, was kommt — ein ComfyUI, das zügig
+    und endlos liefert (oder ein Programm, das sich für eines ausgibt), füllte
+    damit den Arbeitsspeicher, während der Nutzer auf sein Modell wartet. Der
+    Weg daneben macht es seit je richtig: ``llm.post_json`` liest über
+    ``read_limited`` mit Deckel und Frist.
+
+    Der Deckel ist hier großzügig, weil derselbe Weg auch die Modelldatei aus
+    ``/view`` holt — geprüft wird, **dass** einer greift, nicht welche Zahl.
+    """
+    from app.core.backends import mesh
+    from app.core.backends.mesh import GenerationFailed
+
+    monkeypatch.setattr(mesh, "MAX_ANSWER_BYTES", 4096)
+    monkeypatch.setattr(mesh, "opener_for", _mesh_opener(Endless(64 * 1024)))
+
+    with pytest.raises(GenerationFailed) as gefangen:
+        mesh.fetch("http://127.0.0.1:8188/view?filename=modell.stl")
+
+    assert gefangen.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+
+
+def test_a_json_answer_from_comfyui_is_read_with_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Und die JSON-Antworten durch dieselbe Grenzschicht wie jedes fremde JSON.
+
+    ``json.loads`` baut die ganze Struktur auf, bevor irgendjemand sie prüfen
+    kann; ``json_boundary.loads`` deckelt Bytes, Tiefe, Knotenzahl und weist
+    doppelte Schlüssel ab. Geprüft wird an der Warteschlange, weil ihr
+    Fehlschlag folgenlos ist: Sie sagt dann „ich weiß es nicht" und lässt das
+    Zeitlimit greifen, statt einen Lauf abzubrechen.
+    """
+    from app.core.backends import mesh
+
+    tief = ("[" * 200) + ("]" * 200)
+    backend = mesh.ComfyBackend(transport=lambda *_args: tief.encode("utf-8"), poll_seconds=0.0)
+
+    assert backend._ahead_in_queue("auftrag") == 0
+    assert not backend._still_working("auftrag")

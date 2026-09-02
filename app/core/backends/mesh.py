@@ -86,8 +86,18 @@ from app.core.discover import (
     is_local_address,
     opener_for,
 )
-from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError, OperationCancelled
+from app.core.errors import CANCEL, INSTALL_MISSING, RETRY, Action, AppError, OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
+from app.core.http import (
+    HttpBoundaryError,
+    ResponseDeadlineError,
+    ResponseTooLargeError,
+    deadline_after,
+    read_limited,
+)
+from app.core.ingest.loader import MAX_FILE_BYTES
+from app.core.json_boundary import StrictJsonError
+from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger
 from app.core.types import ProgressFn
 from app.i18n import TranslatableText, _
@@ -106,6 +116,22 @@ POLL_SECONDS = 1.0
 #: falsch beantwortet — nicht den langsamen Rechner, dafür ist
 #: :data:`TIMEOUT_SECONDS` da.
 STUCK_SECONDS = 3600.0
+
+#: Wie viel von einer Antwort überhaupt gelesen wird.
+#:
+#: Dieselbe Zahl, die die Eingangsstufe für eine Datei setzt — derselbe Weg
+#: holt schließlich das fertige Modell aus ``/view``, und zwei Grenzen für
+#: dieselbe Frage widersprechen sich früher oder später.
+MAX_ANSWER_BYTES: Final = MAX_FILE_BYTES
+
+#: Wie viel davon eine **JSON**-Antwort sein darf. Auskünfte über Knoten,
+#: Aufträge und Warteschlange sind Kilobytes; ein Megabyte ist bereits eine
+#: Antwort, die niemand erwartet.
+MAX_JSON_BYTES: Final = 8 * 1024 * 1024
+
+#: Der Öffner, wie er beim Laden des Moduls stand. Nur er trägt den Vertrag
+#: über das Zeitlimit — eine Attrappe im Testlauf tut es nicht.
+_DEFAULT_OPENER: Final = opener_for
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 
@@ -349,12 +375,76 @@ Fetch = Callable[[str, bytes | None, dict[str, str]], bytes]
 den ganzen Weg ohne Grafikkarte fahren."""
 
 
+def _answer_json(answer: bytes) -> Any:
+    """Eine JSON-Antwort von ComfyUI, gelesen mit den Grenzen für fremdes JSON.
+
+    ``json.loads`` baut die ganze Struktur auf, bevor irgendjemand sie prüfen
+    kann, und nimmt dabei auch nicht endliche Zahlen und doppelte Schlüssel
+    an. ComfyUI läuft lokal, ist aber ein fremdes Programm (§32) — seine
+    Antworten gehen deshalb denselben Weg wie jedes andere fremde JSON.
+
+    Ein unlesbares JSON ist ein ``GenerationFailed`` und keine nackte
+    ``ValueError``: Die drei Stellen an der Warteschlange fangen es und
+    antworten „ich weiß es nicht"; wo es niemand fängt, steht ein Satz mit
+    einem Weg daneben (Regel 17).
+    """
+    try:
+        return load_json(answer, max_bytes=MAX_JSON_BYTES)
+    except StrictJsonError as problem:
+        raise GenerationFailed(
+            detail=_("ComfyUI hat in einer Form geantwortet, die sich nicht lesen lässt."),
+            suggestions=(RETRY, CANCEL),
+        ) from problem
+
+
 def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = None) -> bytes:
-    """Eine Anfrage, Bytes zurück. POST, wenn es einen Rumpf gibt, sonst GET."""
+    """Eine Anfrage, Bytes zurück. POST, wenn es einen Rumpf gibt, sonst GET.
+
+    **Gelesen wird mit Deckel und Frist**, wie beim Sprachmodell nebenan
+    (``llm.post_json``). Bis zum 02.09.2026 stand hier ``answer.read()`` ohne
+    Argument: Ein ComfyUI, das zügig und endlos liefert, füllte damit den
+    Arbeitsspeicher, während der Nutzer auf sein Modell wartet — und dass es
+    lokal läuft, macht es nicht zu einem Teil dieser Anwendung (§32).
+
+    Der Deckel ist :data:`MAX_ANSWER_BYTES` und damit großzügig, weil derselbe
+    Weg auch das fertige Modell aus ``/view`` holt. Er ist die Grenze, die die
+    Eingangsstufe für eine Datei setzt, und keine zweite Zahl daneben.
+    """
     request = urllib.request.Request(url, data=body, headers=headers or {})
+    deadline = deadline_after(TIMEOUT_SECONDS)
     try:
         with opener_for(url).open(request, timeout=TIMEOUT_SECONDS) as answer:
-            return bytes(answer.read())
+            return read_limited(
+                answer,
+                limit=MAX_ANSWER_BYTES,
+                deadline=deadline,
+                # Wie im Update-Weg: Der Vertrag über das Nachsetzen des
+                # Zeitlimits gilt der echten Antwort. Steht eine Attrappe an
+                # ihrer Stelle, ist das kein Grund, den Deckel aufzugeben.
+                require_timeout=opener_for is _DEFAULT_OPENER,
+            )
+    except ResponseTooLargeError as error:
+        raise GenerationFailed(
+            title=_("Die 3D-Modell-Erzeugung wurde unterbrochen."),
+            detail=_(
+                "ComfyUI hat mehr geschickt, als Solidon annimmt. Sein Protokoll "
+                "nennt den Auftrag; ein kleineres Modell oder eine gröbere "
+                "Auflösung liefert eine Datei, die hindurchpasst."
+            ),
+            values={"url": _origin(url), "limit": error.limit, "read": error.received},
+            suggestions=(RETRY, CANCEL),
+        ) from error
+    except (ResponseDeadlineError, HttpBoundaryError) as error:
+        raise GenerationFailed(
+            title=_("Die 3D-Modell-Erzeugung wurde unterbrochen."),
+            detail=_(
+                "ComfyUI hat die Antwort nicht zu Ende geliefert. Sein Protokoll "
+                "nennt den Grund; ein erneuter Anlauf mit einem kleineren Modell "
+                "kommt meist durch."
+            ),
+            values={"url": _origin(url), "reason": str(error)},
+            suggestions=(RETRY, CANCEL),
+        ) from error
     except urllib.error.HTTPError as error:
         # Ein HTTPError ist selbst eine offene Antwort: nach dem Lesen
         # schließen, sonst bleibt ein Handle zurück (im Testlauf eine
@@ -600,9 +690,13 @@ class ComfyBackend:
             return Readiness.READY
         try:
             missing = self.missing_nodes(workflow)
-        except (OSError, ValueError):
+        except (AppError, OSError, ValueError):
             # Antwortet der Port und nicht diese Frage, ist es kein ComfyUI,
-            # das wir kennen — behauptet wird dann nichts.
+            # das wir kennen — behauptet wird dann nichts. ``AppError`` steht
+            # hier, seit ein unlesbares JSON ein ``GenerationFailed`` ist und
+            # keine nackte ``ValueError`` mehr: Auf dem Port kann alles liegen,
+            # und eine HTML-Seite ist kein Grund für einen Fehlerdialog. Die
+            # Zeile darunter fängt seit je so.
             return Readiness.UNKNOWN
         if missing:
             return Readiness.NO_NODES
@@ -712,7 +806,7 @@ class ComfyBackend:
         missing: list[str] = []
         for kind in self._graph_nodes(workflow):
             answer = self.transport(f"{self.base}/object_info/{urllib.parse.quote(kind)}", None, {})
-            described = json.loads(answer.decode("utf-8"))
+            described = _answer_json(answer)
             if kind not in described:
                 missing.append(kind)
         return tuple(missing)
@@ -869,13 +963,17 @@ class ComfyBackend:
             f"{self.base}/object_info/{urllib.parse.quote(class_type)}", None, {}
         )
         try:
-            described = json.loads(answer.decode("utf-8"))
-        except ValueError as problem:
+            described = _answer_json(answer)
+        except GenerationFailed as problem:
+            # Derselbe Fall wie in ``_answer_json``, nur genauer: Hier ist
+            # bekannt, **welcher** Knoten sich nicht lesen ließ, und das ist
+            # die Angabe, mit der jemand in ComfyUI nachsehen kann.
             raise GenerationFailed(
                 detail=_(
                     "ComfyUI hat den Knoten in einer Form beschrieben, die sich nicht lesen lässt."
                 ),
                 values={"node": class_type},
+                suggestions=(RETRY, CANCEL),
             ) from problem
 
         # Ein ComfyUI ohne diesen Knoten antwortet mit einem leeren Objekt,
@@ -943,7 +1041,7 @@ class ComfyBackend:
             body,
             {"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
-        given = json.loads(answer.decode("utf-8")).get("name")
+        given = _answer_json(answer).get("name")
         return str(given or name)
 
     def _run(
@@ -961,7 +1059,7 @@ class ComfyBackend:
             answer = self.transport(
                 f"{self.base}/prompt", payload, {"Content-Type": "application/json"}
             )
-            job = json.loads(answer.decode("utf-8")).get("prompt_id")
+            job = _answer_json(answer).get("prompt_id")
             if not job:
                 raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
 
@@ -1020,7 +1118,7 @@ class ComfyBackend:
                 _log.info("waiting for %s cancelled", job)
                 raise OperationCancelled
             answer = self.transport(f"{self.base}/history/{job}", None, {})
-            history = json.loads(answer.decode("utf-8"))
+            history = _answer_json(answer)
             entry = history.get(job)
             if entry and entry.get("outputs"):
                 return dict(entry["outputs"])
@@ -1091,7 +1189,7 @@ class ComfyBackend:
         """
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
-            queue = json.loads(answer.decode("utf-8"))
+            queue = _answer_json(answer)
         except (AppError, OSError, ValueError):
             return False
         for group in ("queue_running", "queue_pending"):
@@ -1113,7 +1211,7 @@ class ComfyBackend:
         """
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
-            queue = json.loads(answer.decode("utf-8"))
+            queue = _answer_json(answer)
         except (AppError, OSError, ValueError):
             return False
         for entry in queue.get("queue_running") or ():
@@ -1136,7 +1234,7 @@ class ComfyBackend:
         """
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
-            queue = json.loads(answer.decode("utf-8"))
+            queue = _answer_json(answer)
         except (AppError, OSError, ValueError):
             return 0
         pending = queue.get("queue_pending") or ()

@@ -186,15 +186,25 @@ MAX_PACKAGE_BYTES: Final = 2 * 1024 * 1024 * 1024
 #:
 #: Wer **diese** Grenze anfasst, prüft dagegen weiterhin, ob das Fenster den
 #: Zuwachs verträgt; sie gehört der Anzeige und nicht der Auswahl.
-MAX_CHANGES: Final = 100
+MAX_CHANGES: Final = 120
 
 
 def _room_for_the_version_file() -> int:
     """Was die Versionsdatei im schlimmsten erlaubten Fall wiegen darf.
 
-    Hundert Punkte à achthundert Zeichen — mehr lässt das eigene Format nicht
-    zu — in **jeder** eingecheckten Sprache, dazu noch einmal so viel Luft für
-    Kopffelder, Paketliste, Unterschrift und die Anführungszeichen des Formats.
+    Hundertzwanzig Punkte à achthundert Zeichen — mehr lässt das eigene Format nicht
+    zu — in **jeder** eingecheckten Sprache, und das **zweimal**: ``changes``
+    trägt die flache Liste, ``groups`` dieselben Punkte gegliedert. Beide
+    stehen nebeneinander in der Datei, weil jede ausgelieferte Fassung sie
+    liest und der Leser bis 0.2.2 nur die flache kennt. Dazu noch einmal so
+    viel Luft für Überschriften, Kopffelder, Paketliste, Unterschrift und die
+    Anführungszeichen des Formats.
+
+    **Der Faktor stand bis zum 02.09.2026 auf 2 und kannte nur ``changes``.**
+    Damit rechnete die Ableitung die Hälfte dessen, was das eigene Format
+    schreiben darf — derselbe Widerspruch, der sie überhaupt erst nötig
+    gemacht hat: eine Datei, die die Anwendung erzeugen kann und selbst nicht
+    mehr liest.
 
     Die Sprachzahl kommt aus dem Verzeichnis, weil eine weitere Sprache eine
     Datei ist und sonst nichts (``AGENTS.md``): Wer eine hinzufügt, soll nicht
@@ -203,7 +213,7 @@ def _room_for_the_version_file() -> int:
     """
     from app.i18n.catalog import available_languages
 
-    return 2 * MAX_CHANGES * MAX_TEXT_LENGTH * max(len(available_languages()), 1)
+    return 3 * MAX_CHANGES * MAX_TEXT_LENGTH * max(len(available_languages()), 1)
 
 
 #: Wie viel von der Antwort überhaupt gelesen wird.
@@ -481,12 +491,56 @@ def install_kind(system: str = "") -> str:
     return KIND_TARBALL
 
 
+#: Wie viele Zahlen eine Fassung vergleichbar machen. Drei sind es im Haus,
+#: die vierte ist Luft für eine Nachlieferung wie ``0.3.0.1``.
+_VERSION_SEGMENTS: Final = 4
+
+#: Was vor der endgültigen Fassung kommt, und in welcher Reihenfolge.
+#:
+#: Die Zahl daneben ist kleiner als die der endgültigen Fassung — ``0.3.0rc1``
+#: liegt damit **vor** ``0.3.0`` und nicht dahinter.
+_PRERELEASE_RANK: Final[dict[str, int]] = {"a": 0, "alpha": 0, "b": 1, "beta": 1, "rc": 2, "c": 2}
+_FINAL_RANK: Final = 3
+
+
 def _as_tuple(version: str) -> tuple[int, ...]:
-    parts = []
-    for piece in version.split("."):
-        digits = "".join(character for character in piece if character.isdigit())
-        parts.append(int(digits) if digits else 0)
-    return tuple(parts)
+    """Eine Fassung als vergleichbare Zahlenfolge.
+
+    **Zwei Fälle standen bis zum 02.09.2026 falsch**, und beide fielen nur
+    deshalb nicht auf, weil bisher keine Vorabfassung veröffentlicht wurde:
+
+    * Je Abschnitt wurden schlicht die Ziffern eingesammelt. ``0.3.0rc1``
+      wurde damit zu ``(0, 3, 1)`` und galt als **neuer** als ``0.3.0`` — der
+      Kunde bekäme ein Update auf etwas angeboten, das vor seiner eigenen
+      Fassung liegt.
+    * Fehlende Abschnitte fehlten auch im Ergebnis: ``0.3`` ergab ``(0, 3)``
+      und war damit kleiner als ``(0, 3, 0)``, obwohl beides dieselbe Fassung
+      meint.
+
+    Aufgefüllt wird deshalb auf :data:`_VERSION_SEGMENTS` Stellen, und hinten
+    stehen zwei weitere Zahlen: der Rang der Vorabfassung und ihre Nummer. Für
+    eine endgültige Fassung sind das ``(3, 0)`` — größer als jedes ``rc``.
+    """
+    numbers: list[int] = []
+    rank = _FINAL_RANK
+    counter = 0
+    for piece in version.strip().split("."):
+        digits = ""
+        index = 0
+        while index < len(piece) and piece[index].isdigit():
+            digits += piece[index]
+            index += 1
+        numbers.append(int(digits) if digits else 0)
+        rest = piece[index:].strip().lower()
+        if rest and rank == _FINAL_RANK:
+            marker = "".join(character for character in rest if not character.isdigit())
+            trailing = "".join(character for character in rest if character.isdigit())
+            if marker in _PRERELEASE_RANK:
+                rank = _PRERELEASE_RANK[marker]
+                counter = int(trailing) if trailing else 0
+    numbers = numbers[:_VERSION_SEGMENTS]
+    numbers.extend([0] * (_VERSION_SEGMENTS - len(numbers)))
+    return (*numbers, rank, counter)
 
 
 def signed_payload(data: Mapping[str, Any]) -> bytes:
@@ -671,6 +725,16 @@ def _packages(
     dass irgendetwas es geprüft hätte; das ist genau der Weg, den §37.2
     ausschließt. Es fehlt dann in der Liste, und die Anwendung zeigt auf die
     Download-Seite, statt etwas anzubieten.
+
+    **Ohne brauchbare Größe gilt dasselbe, und zwar seit dem 02.09.2026.**
+    ``_as_size`` gibt für eine fehlende oder unsinnige Angabe 0 zurück, und
+    damit lief das Paket in eine Sackgasse: :func:`download` prüft die Länge
+    nur, *wenn* eine angekündigt war, und ließ es durch — :func:`_verified_package`
+    prüft sie beim Start unbedingt und wies dieselbe Datei mit „Das
+    Update-Paket wurde nach dem Herunterladen verändert" ab. Ein Paket, das
+    sich laden, aber nie starten lässt, ist schlechter als keines: Der Kunde
+    hat gewartet, hat einen Verdacht auf Manipulation gelesen und steht
+    danach dort, wo die Download-Seite ihn gleich hingeführt hätte.
     """
     if not isinstance(raw, dict):
         return {}
@@ -711,10 +775,14 @@ def _packages(
         if len(digest) != 64 or not all(character in "0123456789abcdef" for character in digest):
             _log.info("update package %s ignored: no usable checksum", key)
             continue
+        size = _as_size(value.get("size"))
+        if not size:
+            _log.info("update package %s ignored: no usable size", key)
+            continue
         found[str(key)[:MAX_FIELD_LENGTH]] = Package(
             file=_field(value.get("file")),
             url=checked_address,
-            size=_as_size(value.get("size")),
+            size=size,
             sha256=digest,
             release_key=str(key)[:MAX_FIELD_LENGTH],
             signed_release=signed_release,

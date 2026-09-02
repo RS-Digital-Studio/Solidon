@@ -1078,3 +1078,40 @@ def test_there_is_no_switch_to_flip() -> None:
             )
             assert reached not in {"environ", "getenv"}, f"{source.name} reads the environment"
         assert "os" not in _imported_modules(source), f"{source.name} imports os"
+
+
+def test_an_activation_document_is_read_through_the_json_boundary() -> None:
+    """Auch eine Aktivierungsdatei ist fremdes JSON.
+
+    Sie kommt vom Dienst oder von einem USB-Stick, wird also von jemand
+    anderem geschrieben, und ``json.loads`` nimmt sie ungeprüft: beliebig
+    groß, beliebig tief, und ein **doppelter Schlüssel** ist erlaubt — der
+    letzte gewinnt. Für ein signiertes Dokument ist genau das die falsche
+    Zusage: Zwei Auslegungen derselben Nachricht heißen, dass zwei Programme
+    verschiedene Dinge prüfen können.
+
+    ``json_boundary.loads`` weist beides ab. Der Weg zum Nutzer bleibt
+    derselbe Satz wie bei jeder anderen kaputten Datei.
+    """
+    from app.core.activation import certificate
+
+    zu_gross = json.dumps(
+        {
+            "format": certificate.DOCUMENT_FORMAT,
+            "kind": certificate.REQUEST_KIND,
+            "payload": "A" * (64 * 1024),
+            "signature": "AA",
+        }
+    )
+    doppelt = (
+        f'{{"format": {certificate.DOCUMENT_FORMAT}, "kind": "{certificate.REQUEST_KIND}", '
+        '"payload": "AA", "payload": "BB", "signature": "AA"}'
+    )
+
+    for text in (zu_gross, doppelt):
+        with pytest.raises(certificate.ActivationDocumentError) as gefangen:
+            certificate._document(text, certificate.REQUEST_KIND)
+        assert gefangen.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+
+    with pytest.raises(certificate.ActivationDocumentError):
+        certificate._payload_values(b'{"a": 1, "a": 2}')

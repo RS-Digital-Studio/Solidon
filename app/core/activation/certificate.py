@@ -28,6 +28,7 @@ from app.core.errors import (
     Action,
     UserError,
 )
+from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -49,6 +50,19 @@ DEACTIVATION_KIND: Final = "deactivation-request"
 ACTIVATION_PUBLIC_KEY: Final = bytes.fromhex(
     "52e0682ff6d864d4c07809c2ec48728f435fd4b2e1f18dbd5a60561f524887c6"
 )
+
+
+#: Wie groß eine Aktivierungsdatei höchstens sein darf.
+#:
+#: Sie trägt einen Gerätenamen (höchstens 80 Zeichen), zwei Base64-Felder von
+#: je unter hundert Byte und den Kaufcode — zusammen deutlich unter einem
+#: Kilobyte. Sechzehn sind reichlich Luft und immer noch eine Grenze: Die
+#: Datei kommt vom Dienst oder von einem USB-Stick, also von jemand anderem
+#: (§32), und wird deshalb wie jedes fremde JSON gelesen — mit Deckel für
+#: Bytes, Tiefe und Knotenzahl und **ohne** doppelte Schlüssel. Zwei
+#: Auslegungen derselben signierten Nachricht wären keine Grundlage für eine
+#: Entscheidung.
+MAX_DOCUMENT_BYTES: Final = 16 * 1024
 
 
 class ActivationDocumentError(UserError):
@@ -143,7 +157,7 @@ def signed_document(kind: str, payload: bytes, signature: bytes) -> str:
 
 def _document(text: str, expected_kind: str) -> tuple[dict[str, Any], bytes, bytes]:
     try:
-        document = json.loads(text)
+        document = load_json(text, max_bytes=MAX_DOCUMENT_BYTES)
     except (TypeError, ValueError) as problem:
         raise ActivationDocumentError(
             detail=_("Die Datei enthält kein vollständiges Aktivierungsdokument.")
@@ -161,8 +175,8 @@ def _document(text: str, expected_kind: str) -> tuple[dict[str, Any], bytes, byt
 
 def _payload_values(payload: bytes) -> dict[str, Any]:
     try:
-        values = json.loads(payload.decode("utf-8"))
-    except (UnicodeError, ValueError) as problem:
+        values = load_json(payload, max_bytes=MAX_DOCUMENT_BYTES)
+    except ValueError as problem:
         raise ActivationDocumentError(
             detail=_("Die signierten Aktivierungsdaten sind unvollständig.")
         ) from problem

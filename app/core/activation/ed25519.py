@@ -188,16 +188,21 @@ def has_small_order(point: Point) -> bool:
     return _same_point(add(doubled, doubled), IDENTITY)
 
 
-def verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
+def verify(signer_key: bytes, message: bytes, signature: bytes) -> bool:
     """Ob ``signature`` zu ``message`` und diesem öffentlichen Schlüssel passt.
 
     Jede Abweichung ist ein ``False``, nie eine Ausnahme: ein
     Lizenzschlüssel, den jemand halb kopiert hat, ist ein ungültiger
     Schlüssel und kein Programmfehler.
+
+    Der erste Parameter hieß bis zum 02.09.2026 ``public_key`` und verdeckte
+    damit die gleichnamige Funktion dieses Moduls — wer hier je den
+    öffentlichen Teil eines Startwerts brauchte, hätte statt ihrer ein
+    Bytefeld aufgerufen.
     """
-    if len(public_key) != POINT_BYTES or len(signature) != SIGNATURE_BYTES:
+    if len(signer_key) != POINT_BYTES or len(signature) != SIGNATURE_BYTES:
         return False
-    signer = decompress(public_key)
+    signer = decompress(signer_key)
     if signer is None or has_small_order(signer):
         return False
     packed_r = signature[:POINT_BYTES]
@@ -207,5 +212,5 @@ def verify(public_key: bytes, message: bytes, signature: bytes) -> bool:
     scalar_s = int.from_bytes(signature[POINT_BYTES:], "little")
     if scalar_s >= GROUP_ORDER:
         return False
-    challenge = _hash_to_scalar(packed_r, public_key, message) % GROUP_ORDER
+    challenge = _hash_to_scalar(packed_r, signer_key, message) % GROUP_ORDER
     return _same_point(multiply(scalar_s, base_point()), add(point_r, multiply(challenge, signer)))

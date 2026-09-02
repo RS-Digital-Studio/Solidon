@@ -10,8 +10,9 @@ activation_security_headers();
 try {
     activation_require_method('POST');
     activation_require_trusted_origin();
-    $raw = activation_read_json_body();
-    activation_consume_client_rate('issue', 30, 900);
+    // Erst die Erweiterung, dann Rumpf und Ratenbegrenzung: Beide brauchen
+    // sodium selbst (activation_seed), und ohne die Prüfung davor endete ein
+    // fehlendes sodium im allgemeinen 503 statt in der gezielten Meldung.
     if (!function_exists('sodium_crypto_sign_verify_detached')
         || !extension_loaded('pdo_sqlite')) {
         throw new ActivationFailure(
@@ -20,6 +21,8 @@ try {
             'service_unavailable'
         );
     }
+    $raw = activation_read_json_body();
+    activation_consume_client_rate('issue', 30, 900);
     echo activation_issue(activation_request($raw));
 } catch (ActivationFailure $problem) {
     activation_answer_error($problem);

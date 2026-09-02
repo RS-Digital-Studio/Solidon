@@ -17,7 +17,9 @@
  *
  * Einrichtung: Datei nach httpdocs/api/support.php legen. Sonst nichts —
  * kein Composer, keine Bibliothek, keine Datenbank. Die Sperrliste gegen
- * Massensendungen legt sich selbst an.
+ * Massensendungen legt sich selbst an — in `appdata/` neben `httpdocs`, und
+ * dieser Ordner muss dem Webnutzer allein gehören (0700); ein per FTP mit
+ * 0755 angelegter Ordner lässt jede Sendung mit 503 enden.
  *
  * Braucht PHP 8.1 oder neuer und die Erweiterung mbstring; beides bringt
  * jedes Plesk mit. Und `post_max_size` muss über MAX_BYTES liegen, sonst

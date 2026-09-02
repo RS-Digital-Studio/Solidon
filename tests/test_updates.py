@@ -122,6 +122,42 @@ def test_an_older_version_is_not_announced() -> None:
     assert not release.newer_than()
 
 
+def test_a_release_candidate_ranks_below_the_final_version() -> None:
+    """Sieben Paare, an denen der Vergleich stimmen muss.
+
+    Zwei davon standen bis zum 02.09.2026 falsch. ``_as_tuple`` sammelte je
+    Abschnitt nur die Ziffern: ``0.3.0rc1`` wurde zu ``(0, 3, 1)`` und galt
+    damit als **neuer** als ``0.3.0`` — eine Vorabfassung hätte dem Kunden
+    ein Update auf etwas angeboten, das vor seiner eigenen Fassung liegt. Und
+    ``0.3`` wurde zu ``(0, 3)`` und damit kleiner als ``(0, 3, 0)``, obwohl
+    beides dieselbe Fassung meint; wer sie so schreibt, bekäme den Hinweis
+    nicht.
+
+    Die anderen fünf sind die Fälle, die schon stimmten — sie stehen hier,
+    damit eine Suffix-Ordnung sie nicht kaputtmacht.
+    """
+    neuer = (
+        ("0.3.0", "0.2.2"),
+        ("0.10", "0.9"),
+        ("1.0", "0.9.9"),
+        ("0.3.0", "0.3.0rc1"),
+        ("0.3.0rc2", "0.3.0rc1"),
+    )
+    gleich = (("0.3", "0.3.0"), ("0.3.0", "0.3.0"))
+
+    for hoeher, tiefer in neuer:
+        release = updates.check(fetch=answering({"version": hoeher}))
+        assert release is not None and release.newer_than(tiefer), f"{hoeher} > {tiefer}"
+        zurueck = updates.check(fetch=answering({"version": tiefer}))
+        assert zurueck is not None and not zurueck.newer_than(hoeher), f"{tiefer} < {hoeher}"
+
+    for links, rechts in gleich:
+        release = updates.check(fetch=answering({"version": links}))
+        assert release is not None and not release.newer_than(rechts), f"{links} == {rechts}"
+        zurueck = updates.check(fetch=answering({"version": rechts}))
+        assert zurueck is not None and not zurueck.newer_than(links), f"{rechts} == {links}"
+
+
 # --- Was der Kunde in seiner Sprache liest --------------------------------------
 #
 # Beides steht im selben Fenster übereinander: der Hinweis als Überschrift, die
@@ -434,13 +470,24 @@ def test_a_package_without_a_usable_checksum_is_dropped() -> None:
         assert release.packages == {}, kaputt
 
 
-def test_a_size_that_is_no_size_becomes_zero() -> None:
+def test_a_package_without_a_usable_size_is_not_offered() -> None:
+    """Ein Paket, das sich laden, aber nie starten lässt, wird gar nicht erst
+    angeboten.
+
+    ``_as_size`` gibt für „viel", ``-5``, ``0``, ``True``, ``None`` und eine
+    unsinnig große Zahl jeweils 0 zurück. Bis zum 02.09.2026 blieb das Paket
+    trotzdem in der Liste, und dann lief es in eine Sackgasse: ``download``
+    prüft die Länge nur, wenn eine angekündigt war, ``_verified_package``
+    prüft sie beim Start unbedingt — dieselbe Datei kam also durch das Laden
+    und scheiterte am Start mit „Das Update-Paket wurde nach dem
+    Herunterladen verändert." Nachgestellt und gesehen, bevor der Test hier
+    stand.
+    """
     for kaputt in ("viel", -5, 0, True, None, 10**13):
         release = updates.check(fetch=answering(with_package(size=kaputt)))
 
         assert release is not None
-        package = release.package(updates.PLATFORM_WINDOWS)
-        assert package is not None and package.size == 0, kaputt
+        assert release.packages == {}, kaputt
 
 
 def test_packages_that_are_not_a_mapping_are_no_packages() -> None:
@@ -1244,10 +1291,16 @@ def test_the_read_limit_carries_what_the_format_may_write() -> None:
     languages = len(available_languages())
     assert languages >= 2, f"nur {languages} Sprache(n) gefunden — prüft das etwas?"
 
-    worst_case = updates.MAX_CHANGES * updates.MAX_TEXT_LENGTH * languages
+    # **Zwei Felder, nicht eines.** ``changes`` trägt die flache Liste,
+    # ``groups`` dieselben Punkte gegliedert (Fallback für Leser bis 0.2.2),
+    # und beide dürfen je Sprache bis ``MAX_CHANGES`` Punkte führen. Die
+    # Ableitung kannte am 02.09.2026 nur ``changes`` und rechnete damit die
+    # Hälfte dessen, was das eigene Format schreiben darf.
+    fields = 2
+    worst_case = fields * updates.MAX_CHANGES * updates.MAX_TEXT_LENGTH * languages
     assert worst_case < updates.MAX_ANSWER_BYTES, (
         f"die Lesegrenze ({updates.MAX_ANSWER_BYTES}) liegt unter dem, was das Format "
-        f"schreiben darf ({worst_case}) — bei {languages} Sprachen"
+        f"schreiben darf ({worst_case}) — bei {languages} Sprachen und {fields} Feldern"
     )
 
 

@@ -19,9 +19,11 @@ from __future__ import annotations
 from typing import Any, Final
 
 from app.core.knowledge import standards
-from app.core.registry import REGISTRY, Registry, menu_path
+from app.core.registry import REGISTRY, OperationSpec, Registry, caveat_line, menu_path
 from app.core.registry import tool_schemas as op_schemas
+from app.core.registry.params import condition_text
 from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
+from app.core.types import ParamSpec
 from app.i18n import _, tr
 
 #: Name der Zusatz-Eigenschaft, die jedes Operationswerkzeug trägt: auf welche
@@ -94,6 +96,41 @@ def untrusted_recipe_text(source: str, text: object) -> str:
     return (
         f"{FOREIGN_RECIPE_NOTICE} [UNTRUSTED_DATA source={as_value(source)}] {as_name(str(text))}"
     )
+
+
+def _parameter_tail(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
+    """Was ``json_schema`` hinter den doc-Satz eines Parameters hängt.
+
+    Einheit und Bedingung, in genau der Form, in der sie dort entstehen —
+    ``f"{doc} [{unit}] {condition}"``. Sie stehen hier, weil der kompakte Weg
+    sie nach dem Kürzen wieder anhängt, und nicht, weil sie zweimal formuliert
+    würden: Die Quelle ist beide Male der ``ParamSpec``.
+    """
+    tail = f" [{entry.unit}]" if entry.unit else ""
+    condition = condition_text(entry, schema, keys=True)
+    return f"{tail} {condition}" if condition else tail
+
+
+def _caveat_tail(spec: OperationSpec) -> str:
+    """Was ``_with_caveat`` hinter die Beschreibung einer Operation hängt."""
+    line = caveat_line(spec)
+    return f"\n\n{line}" if line else ""
+
+
+def _shortened(text: str, tail: str) -> str:
+    """Der erste Satz des Fließtextes, danach ``tail`` unverändert.
+
+    **Gekürzt wird nur die Prosa.** Bis zum 02.09.2026 schnitt der kompakte
+    Weg den ganzen Text hinter dem ersten Satz ab, und dahinter stand mehr als
+    Prosa: gemessen über 106 Werkzeuge verloren 339 Parameter ihre Einheit, 25
+    ihre Bedingung und 22 Operationen die Zeile „Wann nicht". Ein lokales
+    Modell setzte damit Zentimeter statt Millimeter, einen Wert im toten
+    Zweig oder *Gitter füllen* für ein Teil, das dicht sein muss — genau die
+    drei Angaben, wegen derer sie überhaupt im Schema stehen.
+    """
+    body = text[: len(text) - len(tail)] if tail and text.endswith(tail) else text
+    head = body.split(". ")[0].rstrip(".").rstrip()
+    return f"{head}.{tail}" if head else text
 
 
 def tool_schemas(
@@ -208,14 +245,22 @@ def operation_tools(
             # bedeutet; weg fällt, warum er so heißt und was bei Randfällen
             # passiert. Was danach noch doppelt steht, holen die beiden Blöcke
             # oben in den Systemprompt.
-            for name, field in properties.items():
+            schema_specs = spec.params.spec()
+            for entry in schema_specs:
+                field = properties.get(entry.name)
+                if field is None:
+                    continue
                 text = str(field.get("description", ""))
-                if ". " in text:
-                    properties[name] = {**field, "description": text.split(". ")[0] + "."}
+                if not text:
+                    continue
+                short = _shortened(text, _parameter_tail(entry, schema_specs))
+                if short != text:
+                    properties[entry.name] = {**field, "description": short}
             parameters["properties"] = properties
             # Der erste Satz sagt, was die Operation tut; der Rest erklärt
-            # Randfälle, die ein Modell mit kleinem Fenster nicht liest.
-            description = description.split(". ")[0].rstrip(".") + "."
+            # Randfälle, die ein Modell mit kleinem Fenster nicht liest — die
+            # Grenze gehört nicht dazu und bleibt stehen (siehe unten).
+            description = _shortened(description, _caveat_tail(spec))
         else:
             description = f"{description} {tr('Menü')}: {menu_path(spec, source)}."
         schemas.append(
