@@ -55,8 +55,12 @@ from app.core.scene.serialise import (
 from app.core.types import Document, Finding, Report, Source, SourceId
 from app.i18n import TranslatableText, _
 
+_windows_ctypes: Any = ctypes
+_windows_msvcrt: Any = None
 if os.name == "nt":
-    import msvcrt
+    import msvcrt as _native_msvcrt
+
+    _windows_msvcrt = _native_msvcrt
 
 _log = get_logger(__name__)
 
@@ -328,7 +332,7 @@ def _read_linked_source(
 def _opened_file_path(stream: Any) -> Path:
     """Ermittelt den kanonischen Pfad des bereits geöffneten Dateihandles."""
     if os.name == "nt":
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetFinalPathNameByHandleW.argtypes = (
             ctypes.c_void_p,
             ctypes.c_wchar_p,
@@ -336,14 +340,20 @@ def _opened_file_path(stream: Any) -> Path:
             ctypes.c_uint32,
         )
         kernel32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
-        handle = ctypes.c_void_p(msvcrt.get_osfhandle(stream.fileno()))
+        handle = ctypes.c_void_p(_windows_msvcrt.get_osfhandle(stream.fileno()))
         length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
         if not length:
-            raise OSError(ctypes.get_last_error(), "Dateipfad konnte nicht geprüft werden")
+            raise OSError(
+                _windows_ctypes.get_last_error(),
+                "Dateipfad konnte nicht geprüft werden",
+            )
         buffer = ctypes.create_unicode_buffer(length + 1)
         written = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
         if not written or written >= len(buffer):
-            raise OSError(ctypes.get_last_error(), "Dateipfad konnte nicht geprüft werden")
+            raise OSError(
+                _windows_ctypes.get_last_error(),
+                "Dateipfad konnte nicht geprüft werden",
+            )
         name = buffer.value
         if name.startswith("\\\\?\\UNC\\"):
             name = "\\\\" + name[8:]

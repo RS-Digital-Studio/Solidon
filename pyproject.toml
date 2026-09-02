@@ -106,6 +106,10 @@ dev = [
   "mypy>=1.11",
   # Wertet Umgebungsmarker für die Lizenzprüfung aus.
   "packaging>=24.0",
+  # Die SBOM-Tests prüfen auch Interpreter und PyInstaller-Bootloader. Deshalb
+  # gehört das bereits für jeden Paketbau verwendete Werkzeug in denselben
+  # reproduzierbaren Entwicklungssatz wie die Tests, die es belegen.
+  "pyinstaller>=6.0",
   # Legt Kopf- und Fußzeilen auf das gedruckte Handbuch (tools/make_manual.py).
   # Chromium setzt CSS Paged Media nicht um, kennt also keine Seitenzahl; die
   # Lage darüber entsteht mit Qt und wird hiermit aufgelegt. BSD-3, und nur ein

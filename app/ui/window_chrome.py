@@ -66,11 +66,18 @@ _TEXT_COLOR = 36
 #: ``DwmSetWindowAttribute`` mit einem Fehler, den niemand sehen würde —
 #: deshalb wird vorher gefragt und nicht hinterher geprüft.
 _MIN_BUILD = 22000
+#: mypy setzt direkte Vergleiche mit ``sys.platform`` beim Plattformlauf als
+#: Literal ein. Über den benannten Laufzeitwert bleibt derselbe Quelltext auf
+#: allen drei Zielsystemen typprüfbar.
+_CURRENT_PLATFORM: str = sys.platform
+#: ``WinDLL`` gehört nur auf Windows zu den ctypes-Stubs, obwohl dieser Zugriff
+#: erst nach der Plattformprüfung stattfindet.
+_windows_ctypes: Any = ctypes
 
 
 def available() -> bool:
     """Ob dieses Windows die Attribute kennt. Auf Linux und macOS nie."""
-    if sys.platform != "win32":
+    if _CURRENT_PLATFORM != "win32":
         return False
     version = getattr(sys, "getwindowsversion", None)
     return version is not None and version().build >= _MIN_BUILD
@@ -86,7 +93,7 @@ def _dwm() -> Any:
     global _library
     if _library is None:
         try:
-            _library = ctypes.WinDLL("dwmapi")
+            _library = _windows_ctypes.WinDLL("dwmapi")
         except OSError:  # pragma: no cover — auf Windows ist sie da
             _log.debug("dwmapi not available", exc_info=True)
             return None

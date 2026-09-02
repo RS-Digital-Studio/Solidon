@@ -82,9 +82,14 @@ from app.core.process import detached_process_options
 from app.core.types import CancelToken, ProgressFn
 from app.i18n import SOURCE_LANGUAGE, _, get_language
 
+_windows_ctypes: Any = None
+_windows_msvcrt: Any = None
 if os.name == "nt":
-    import ctypes
-    import msvcrt
+    import ctypes as _native_ctypes
+    import msvcrt as _native_msvcrt
+
+    _windows_ctypes = _native_ctypes
+    _windows_msvcrt = _native_msvcrt
 
 _log = get_logger(__name__)
 CHUNK_BYTES: Final = READ_CHUNK_BYTES
@@ -824,19 +829,19 @@ def target_dir() -> Path:
 def _descriptor_path(descriptor: int) -> Path | None:
     """Der kanonische Pfad eines offenen Handles, soweit die Plattform ihn anbietet."""
     if os.name == "nt":
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.GetFinalPathNameByHandleW.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_wchar_p,
-            ctypes.c_uint32,
-            ctypes.c_uint32,
+            _windows_ctypes.c_void_p,
+            _windows_ctypes.c_wchar_p,
+            _windows_ctypes.c_uint32,
+            _windows_ctypes.c_uint32,
         )
-        kernel32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
-        handle = ctypes.c_void_p(msvcrt.get_osfhandle(descriptor))
+        kernel32.GetFinalPathNameByHandleW.restype = _windows_ctypes.c_uint32
+        handle = _windows_ctypes.c_void_p(_windows_msvcrt.get_osfhandle(descriptor))
         length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
         if not length:
             return None
-        buffer = ctypes.create_unicode_buffer(length + 1)
+        buffer = _windows_ctypes.create_unicode_buffer(length + 1)
         if not kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0):
             return None
         name = buffer.value
@@ -879,7 +884,7 @@ def _cache_lock(folder: Path) -> Any:
         while True:
             try:
                 if os.name == "nt":
-                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    _windows_msvcrt.locking(descriptor, _windows_msvcrt.LK_NBLCK, 1)
                 else:
                     _posix_lock(descriptor, exclusive=True)
                 break
@@ -893,7 +898,7 @@ def _cache_lock(folder: Path) -> Any:
             yield
         finally:
             if os.name == "nt":
-                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+                _windows_msvcrt.locking(descriptor, _windows_msvcrt.LK_UNLCK, 1)
             else:
                 _posix_lock(descriptor, exclusive=False)
     finally:
@@ -1249,19 +1254,19 @@ def _open_start_locked(file: Path) -> BinaryIO:
         flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
         return os.fdopen(os.open(file, flags), "rb")
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateFileW.argtypes = (
-        ctypes.c_wchar_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
-        ctypes.c_uint32,
-        ctypes.c_uint32,
-        ctypes.c_void_p,
+        _windows_ctypes.c_wchar_p,
+        _windows_ctypes.c_uint32,
+        _windows_ctypes.c_uint32,
+        _windows_ctypes.c_void_p,
+        _windows_ctypes.c_uint32,
+        _windows_ctypes.c_uint32,
+        _windows_ctypes.c_void_p,
     )
-    kernel32.CreateFileW.restype = ctypes.c_void_p
-    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
-    kernel32.CloseHandle.restype = ctypes.c_int
+    kernel32.CreateFileW.restype = _windows_ctypes.c_void_p
+    kernel32.CloseHandle.argtypes = (_windows_ctypes.c_void_p,)
+    kernel32.CloseHandle.restype = _windows_ctypes.c_int
     handle = kernel32.CreateFileW(
         str(file),
         0x80000000,  # GENERIC_READ
@@ -1271,15 +1276,18 @@ def _open_start_locked(file: Path) -> BinaryIO:
         0x08000080,  # FILE_FLAG_SEQUENTIAL_SCAN | FILE_ATTRIBUTE_NORMAL
         None,
     )
-    if handle in (None, ctypes.c_void_p(-1).value):
-        raise OSError(ctypes.get_last_error(), "Update-Paket ließ sich nicht sperren")
+    if handle in (None, _windows_ctypes.c_void_p(-1).value):
+        raise OSError(
+            _windows_ctypes.get_last_error(),
+            "Update-Paket ließ sich nicht sperren",
+        )
     try:
-        descriptor = msvcrt.open_osfhandle(
+        descriptor = _windows_msvcrt.open_osfhandle(
             int(handle),
             os.O_RDONLY | getattr(os, "O_BINARY", 0),
         )
     except BaseException:
-        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        kernel32.CloseHandle(_windows_ctypes.c_void_p(handle))
         raise
     return os.fdopen(descriptor, "rb")
 

@@ -78,6 +78,9 @@ PROCESS_POLL_SECONDS: Final = 0.05
 PROCESS_STOP_SECONDS: Final = 0.5
 _READ_SIZE: Final = 64 * 1024
 _WINDOWS_CREATE_SUSPENDED: Final = 0x00000004
+#: Die Windows-Namen fehlen in den ctypes-Stubs anderer Plattformen. Zur
+#: Laufzeit werden sie ausschließlich hinter ``os.name == "nt"`` benutzt.
+_windows_ctypes: Any = ctypes
 
 
 class ProcessOutputLimitExceeded(subprocess.SubprocessError):
@@ -226,7 +229,7 @@ def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> No
             ("peak_job_memory", ctypes.c_size_t),
         ]
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateJobObjectW.restype = ctypes.c_void_p
     kernel32.SetInformationJobObject.argtypes = (
         ctypes.c_void_p,
@@ -242,7 +245,10 @@ def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> No
 
     job = kernel32.CreateJobObjectW(None, None)
     if not job:
-        raise OSError(ctypes.get_last_error(), "Windows-Jobobjekt konnte nicht angelegt werden")
+        raise OSError(
+            _windows_ctypes.get_last_error(),
+            "Windows-Jobobjekt konnte nicht angelegt werden",
+        )
     limits = ExtendedLimits()
     limits.basic.limit_flags = 0x00002000 | 0x00000200
     limits.job_memory = memory_limit
@@ -252,12 +258,12 @@ def _attach_windows_job(process: subprocess.Popen[Any], memory_limit: int) -> No
         ctypes.byref(limits),
         ctypes.sizeof(limits),
     ):
-        error = ctypes.get_last_error()
+        error = _windows_ctypes.get_last_error()
         kernel32.CloseHandle(job)
         raise OSError(error, "Windows-Jobgrenzen konnten nicht gesetzt werden")
     process_handle = ctypes.c_void_p(int(process._handle))  # type: ignore[attr-defined]
     if not kernel32.AssignProcessToJobObject(job, process_handle):
-        error = ctypes.get_last_error()
+        error = _windows_ctypes.get_last_error()
         kernel32.CloseHandle(job)
         raise OSError(error, "Prozess konnte nicht an das Windows-Jobobjekt gebunden werden")
     process._solidon_job = int(job)  # type: ignore[attr-defined]
@@ -282,7 +288,7 @@ def _resume_windows_process(process_id: int) -> None:
             ("flags", ctypes.c_uint32),
         ]
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateToolhelp32Snapshot.argtypes = (ctypes.c_uint32, ctypes.c_uint32)
     kernel32.CreateToolhelp32Snapshot.restype = ctypes.c_void_p
     kernel32.Thread32First.argtypes = (ctypes.c_void_p, ctypes.POINTER(ThreadEntry))
@@ -297,7 +303,10 @@ def _resume_windows_process(process_id: int) -> None:
 
     snapshot = kernel32.CreateToolhelp32Snapshot(0x00000004, 0)
     if snapshot in (None, ctypes.c_void_p(-1).value):
-        raise OSError(ctypes.get_last_error(), "Prozess-Thread konnte nicht ermittelt werden")
+        raise OSError(
+            _windows_ctypes.get_last_error(),
+            "Prozess-Thread konnte nicht ermittelt werden",
+        )
     try:
         entry = ThreadEntry(size=ctypes.sizeof(ThreadEntry))
         found = bool(kernel32.Thread32First(snapshot, ctypes.byref(entry)))
@@ -306,12 +315,13 @@ def _resume_windows_process(process_id: int) -> None:
                 thread = kernel32.OpenThread(0x0002, False, entry.thread_id)
                 if not thread:
                     raise OSError(
-                        ctypes.get_last_error(), "Prozess-Thread konnte nicht geöffnet werden"
+                        _windows_ctypes.get_last_error(),
+                        "Prozess-Thread konnte nicht geöffnet werden",
                     )
                 try:
                     if kernel32.ResumeThread(thread) == 0xFFFFFFFF:
                         raise OSError(
-                            ctypes.get_last_error(),
+                            _windows_ctypes.get_last_error(),
                             "Prozess-Thread konnte nicht fortgesetzt werden",
                         )
                 finally:
@@ -333,7 +343,7 @@ def _close_windows_job(process: subprocess.Popen[Any]) -> bool:
     if job is None:
         return False
     delattr(process, "_solidon_job")
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
     kernel32.CloseHandle.restype = ctypes.c_int
     kernel32.CloseHandle(ctypes.c_void_p(job))
