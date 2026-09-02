@@ -156,6 +156,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die CI prüft die Bausteinbereiche nicht mehr | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine `has_self_intersections`, die 27 Bausteine über 2114 Ecken in Minuten statt in einer Stunde prüft — oder einen eigenen CI-Job dafür, der das Paket nicht blockiert. Bis dahin prüft sie allein das lokale Tor (Entscheidung Robert, 02.09.2026: die CI fährt das Nötigste) |
 | Die Releaseakte meldet, sie blockiert nicht | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | den Tag-Lauf 0.3.0 als erste Messung: Ihre zwei Schritte (`--write-evidence`, `--release-check`) stehen seit dem Abend als Warnung im Lauf und halten das Artefakt nicht auf (Entscheidung Robert, 02.09.2026: kein Release hängt an einer Prüfung, die zum ersten Mal läuft); was dort steht, wird behoben, dann werden sie wieder scharf |
 | Der Schlüsseldialog wartet beim Sterben 2,3 s | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung, wer da wartet (`WorkerLeash`?), und einen Abbruch statt einer Frist beim Zerstören — sichtbar in jedem Teardown von `test_chat_ui` (61 s statt 19) und beim Kunden, wenn er den Dialog schließt, während die Modellabfrage läuft |
+| Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Vorprüfung in `minimum_width`, die ohne Aufweitung auskommt — 32 Öffnungen je Lauf sind die Vorprüfung, nur zwei Schichten gehen in die Bisektion; `simplify` als Vorprüfung ist gemessen teurer (0,17 s je Schicht) und bleibt draußen |
 | Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | Review vor der Demo 0.3.0 (02.09.2026) | eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess, und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 0x800700e8 beim Start" (Robert, 02.09.2026, Bildschirmfoto); der Test bleibt grün, das Fenster ist ein Nebeneffekt der Testumgebung — den Enkel ohne Konsole starten oder den Fall auf einem Rechner mit klassischem Konsolenhost nachstellen |
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
@@ -14225,6 +14226,32 @@ bleibt, steht hier mit Kästchen.
   zu einer Frist wartet, statt ihn abzubrechen. Beim Kunden dieselbe Lage,
   wenn er den Dialog schließt, während die Modellabfrage läuft. Messen, wer
   wartet (`WorkerLeash`?), und abbrechen statt warten.
+- [ ] **Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 — der
+  Preis der Rippenerkennung, und ein Teil davon ist sparbar.** `slice_knurl`
+  riss im Tor dreimal gegen die Marke 4,3 s (6,96 / 6,92 / 7,42 s, unter
+  Fremdlast wie unter Ruhe gleich). 3d-druck-85 hat den Verursacher
+  gemessen, nicht gelesen: 11d3f069^ 4,55 s, 11d3f069 7,34 s, HEAD 7,05 s
+  — Roberts Commit „Dünne Rippen neben dicken Platten" (02.09.2026, 14:31),
+  der `minimum_width` von der Erosion auf das Öffnen umstellt, weil die
+  Erosion die Rippen übersah. Die alte Marke gehörte also zu einer Analyse,
+  die falsch antwortete; die neue Zahl steht, die Marke ist mit dem vierten
+  Lauf von selbst nachgezogen (Median der letzten fünf), und 0.3.0 geht mit
+  ihr hinaus — das Budget des Tests liegt bei 12 s, die übrigen 31 Marken
+  sind grün.
+
+  Was sparbar ist, sagt das Profil (cProfile, 32 Schichten):
+  `minimum_width` 4,81 s, davon `_survives_opening` 4,30 s in 46 Aufrufen
+  mit 121 Buffern — **32 davon sind die Vorprüfung** gegen
+  `WIDTH_INTERESTING`, nur zwei Schichten gehen in die Bisektion.
+  Gegenüber der alten Fassung (eine Erosion je Schicht) ist die Aufweitung
+  der Vorprüfung der ganze Unterschied. `_polygon_with_contours` mit 5,4 s
+  ist unverändert. Eine Vorprüfung auf der vereinfachten Kontur ist
+  **verworfen**: `simplify` kostet hier 0,17 s je Schicht, 32-mal wären
+  das mehr als die Aufweitung. Der Weg ist eine Vorprüfung, die die
+  Erosion zuerst fragt und nur aufweitet, wenn die Erosion auffällig Fläche
+  verliert — ein Eingriff in die Öffnungslogik, gemessen an Rändelplatte,
+  Rippenplatte (`tests/test_slice_findings.py`) und Kugel, nicht in der
+  Nacht vor einem Paket.
 - [ ] **Die Releaseakte meldet, sie blockiert nicht.** Die drei Prüfjobs
   (`linux-`, `windows-`, `macos-release-check`) sind zugleich die Jobs, die
   das Endartefakt veröffentlichen — sie vom Tag zu nehmen, nähme dem Lauf die
