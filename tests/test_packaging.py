@@ -1065,24 +1065,16 @@ def test_the_workflow_builds_the_macos_installer_package() -> None:
     assert "spctl --assess --type install" in workflow, "Gatekeepers Installationsweg bleibt offen"
 
 
-def test_the_workflow_verifies_both_windows_signatures() -> None:
-    """Getrennte Windows-Jobs signieren und prüfen Anwendung und Setup-Datei."""
+def test_the_workflow_leaves_both_windows_signatures_to_the_local_tool() -> None:
+    """Anwendung und Setup-Datei signiert tools/sign_release.py, nicht die CI."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    tool = (ROOT / "tools" / "sign_release.py").read_text(encoding="utf-8")
 
-    assert workflow.count("signtool sign") == 2, "Anwendung und Setup-Datei brauchen Signaturen"
-    assert (
-        workflow.count("azure/artifact-signing-action@c0ae2c1d0c1847ab81ac0ab8521bee597cfedd30")
-        == 2
-    ), "Artifact Signing muss Anwendung und Setup-Datei erreichen"
-    assert "azure/login@4c03e4685fe81df2c50d5714c7d93cf39d8deb7f" in workflow, (
-        "OIDC-Anmeldung für Artifact Signing fehlt"
-    )
-    assert workflow.count("id-token: write") == 2, (
-        "Nur die beiden Azure-Signierphasen bekommen kurzlebige OIDC-Token"
-    )
-    assert workflow.count("signtool verify /pa /v") == 4, (
-        "PFX und Azure prüfen Anwendung und Installer jeweils getrennt"
-    )
+    assert "signtool" not in workflow, "Windows wird lokal signiert, nicht in Actions"
+    assert "id-token: write" not in workflow, "ohne Azure braucht kein Job ein OIDC-Token"
+    assert tool.count("sign_file(") == 3, "Definition plus Anwendung plus Setup-Datei"
+    assert "/tr" in tool and "time.certum.pl" in tool, "ohne Zeitstempel verfällt die Signatur"
+    assert "verify" in tool and "/pa" in tool, "jede Signatur wird sofort geprüft"
 
 
 # --- Die Projektdatei gehört der Anwendung (Dateizuordnung) ---------------------
@@ -1278,9 +1270,9 @@ def test_the_windows_handoff_carries_the_part_file_identity() -> None:
     """Der isolierte Installerbau prüft und übernimmt den gebrandeten Typ."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert workflow.count("$handoff.part_file_suffix -ne '.solidon-part'") == 3
+    assert workflow.count("$handoff.part_file_suffix -ne '.solidon-part'") == 1
     assert (
-        workflow.count("$handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json'") == 3
+        workflow.count("$handoff.part_file_mime_type -ne 'application/vnd.solidon.part+json'") == 1
     )
     assert '"/DPartFileSuffix=.solidon-part"' in workflow
     assert '"/DPartFileMimeType=application/vnd.solidon.part+json"' in workflow

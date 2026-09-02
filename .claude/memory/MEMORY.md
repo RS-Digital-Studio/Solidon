@@ -6,7 +6,7 @@
 - [MSVC-Erkennung bei VS 18](msvc-erkennung-vs18.md) — Compiler da, setuptools findet ihn nicht; über vcvars64.bat bauen.
 - [Lizenzmanifest nach Grenzdatei neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) — Grenzdatei geändert → test_packaging rot; neu bauen, nicht löschen.
 - [SBOM aus dem Kundenartefakt](sbom-aus-dem-kundenartefakt.md) — Analyse wählt Distributionen, das fertige Paket liefert CPython und jede native Datei; `pip freeze` ist kein Auslieferungsbeleg.
-- [Signierung ist ein eigener Vertrauensraum](signierung-ist-ein-eigener-vertrauensraum.md) — App- und Installersignatur getrennt um den ungeschützten Paketbau; OIDC/PFX/Apple-Schlüssel nur in ihren festen Signierphasen.
+- [Signierung ist ein eigener Vertrauensraum](signierung-ist-ein-eigener-vertrauensraum.md) — Windows signiert lokal aus der gebundenen Übergabe (Certum/SimplySign), macOS in geschützten CI-Jobs; kein Schlüssel im Baujob.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain; scheitert die Anmeldung, ist es meist der SSH-Schalter.
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
 - [Sitzung sendet, ohne erreichbar zu sein](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht zwangsläufig beidseitig; ein Befund an sie ist dann verloren.

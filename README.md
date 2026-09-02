@@ -154,10 +154,11 @@ Verknüpfung.
 
 Ergebnis ist ein Ordner unter `dist/Solidon3D`. Die Bauläufe für Windows,
 Linux und beide Mac-Architekturen stehen in `.github/workflows/build.yml`; sie
-laufen erst, wenn die Suite auf den vorgesehenen Plattformen grün ist. Die
-Windows-Signierung unterstützt Azure Artifact Signing per OIDC und behält ein
-vorhandenes PFX-Zertifikat als Rückfall; ohne einen eingerichteten Weg entsteht
-mit sichtbarer Warnung ein unsigniertes Paket.
+laufen erst, wenn die Suite auf den vorgesehenen Plattformen grün ist. Das
+Windows-Paket wird dort gebaut, aber lokal signiert: `tools/sign_release.py`
+holt die prüfsummengebundene Übergabe des Laufs, signiert Anwendung und
+Setup-Datei mit dem Certum-Zertifikat und legt das Ergebnis unter `dist/`.
+Der Baulauf selbst liefert ein unsigniertes Paket mit sichtbarer Warnung.
 
 Aus demselben Ordner entstehen unter Linux drei Formate. Das **tar.gz** ist der
 Bau selbst; das **AppImage** ist eine Datei, die ohne Installation läuft, und

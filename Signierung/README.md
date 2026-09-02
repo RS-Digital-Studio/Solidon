@@ -1,10 +1,11 @@
 # Signierung — Windows, macOS, Linux
 
-Stand 02.09.2026. Was ein Kunde beim Herunterladen und Starten sieht, hängt an
+Was ein Kunde beim Herunterladen und Starten sieht, hängt an
 drei verschiedenen Mechanismen: SmartScreen unter Windows, Gatekeeper unter
-macOS, und unter Linux an nichts. Die CI (`.github/workflows/build.yml`) kann
-alle drei Plattformen heute schon signieren, wenn Konto und Geheimnisse da sind;
-bis dahin überspringt sie die Signierung mit sichtbarer Warnung. Diese Datei
+macOS, und unter Linux an nichts. Die CI (`.github/workflows/build.yml`)
+signiert macOS selbst, sobald Konto und Geheimnisse da sind; Windows baut sie
+und übergibt es zur lokalen Signatur mit `tools/sign_release.py`. Bis dahin
+liefert sie unsignierte Pakete mit sichtbarer Warnung. Diese Datei
 sagt, welcher Weg je Plattform der günstigste sichere ist, was er kostet, was
 dafür zu tun ist und wer dann wo baut.
 
@@ -14,8 +15,10 @@ macOS über das Apple Developer Program als Einzelperson, vollständig in der CI
 signiert und notarisiert. Linux bleibt unsigniert; dort tragen Prüfsummen und die
 signierte Versionsdatei. Zusammen rund 240 Dollar im Jahr, einmalig zwei Wochen
 Prüfzeit. Weder Gewerbeanmeldung noch Steuernummer sind dafür nötig. Azure
-Artifact Signing, das die CI ebenfalls kann, verlangt drei Jahre nachweisbare
-Steuerhistorie einer Organisation und ist damit frühestens 2029 eine Option.
+Artifact Signing und der PFX-Weg sind aus der CI entfernt (Entscheidung
+Robert, 02.09.2026): Azure verlangt drei Jahre nachweisbare Steuerhistorie
+einer Organisation, und exportierbare PFX-Schlüssel geben die
+Zertifizierungsstellen seit 2023 nicht mehr heraus.
 
 ---
 
@@ -44,9 +47,9 @@ Microsoft schreibt es ausdrücklich.
 | Später automatisierbar | nein | ja, mit Vorbehalt (siehe „Wer baut wo") |
 
 Empfehlung: **Cloud.** Keine Hardware, kein Treiber, und der Schlüssel ist in
-beiden Fällen gleich gut geschützt. Beide Varianten sind sicherer als der
-PFX-Weg, den die CI als Rückfall kennt, weil nie ein Schlüssel in
-GitHub-Geheimnissen oder auf einer Platte liegt.
+beiden Fällen gleich gut geschützt. Beide Varianten sind sicherer als jeder
+PFX-Weg, weil nie ein Schlüssel in GitHub-Geheimnissen oder auf einer Platte
+liegt.
 
 Seit dem 27.02.2026 gilt ein Code-Signing-Zertifikat höchstens 459 Tage. „1 bis
 3 Jahre" auf der Produktseite ist die Laufzeit des Dienstes; bei zwei oder drei
@@ -74,22 +77,32 @@ Signiereingang ab: das Artefakt `solidon3d-windows-signing-input` mit
 gebaute Anwendungsordner, das Inno-Setup-Skript, Lizenz, Symbol, Lizenzmanifest
 und `packaging/build/windows-signing.json` mit den Prüfsummen jeder Eingabe.
 Genau dieser Eingang ist für den geschützten Signierjob gedacht, und er lässt
-sich ebenso gut lokal verarbeiten. **Achtung: Das Artefakt lebt einen Tag**
-(`retention-days: 1`), also am Tag des Laufs holen oder die Frist im Workflow
-für diesen Zweck anheben.
+sich ebenso gut lokal verarbeiten. Das Artefakt lebt sieben Tage
+(`retention-days: 7`) — genug, um nach dem Lauf in Ruhe zu signieren.
 
-Die Reihenfolge, die ein Werkzeug später am Stück fahren soll:
+Ein Aufruf fährt die ganze Kette:
 
 ```
-gh run download <lauf> -n solidon3d-windows-signing-input -D dist
-sha256sum --check dist/windows-signing-input.zip.sha256
-Expand-Archive dist/windows-signing-input.zip -DestinationPath build/signing
-signtool sign /fd SHA256 /tr http://time.certum.pl /td SHA256 /n "Robert Schneider" build/signing/dist/Solidon3D/Solidon3D.exe
-signtool verify /pa /v build/signing/dist/Solidon3D/Solidon3D.exe
-python tools/make_installer.py            # baut die Setup-Datei mit Inno Setup 6
-signtool sign /fd SHA256 /tr http://time.certum.pl /td SHA256 /n "Robert Schneider" dist/Solidon3D-Setup-<version>.exe
-signtool verify /pa /v dist/Solidon3D-Setup-<version>.exe
+.venv\Scripts\python.exe tools/sign_release.py --run <lauf> --subject "Robert Schneider"
 ```
+
+`--run` holt das Artefakt mit `gh` nach `dist/`; ohne `--run` nimmt das
+Werkzeug ein schon dort liegendes `windows-signing-input.zip`. Dann, in
+dieser Reihenfolge und bei jeder Abweichung mit Halt: Archiv gegen seine
+`.sha256` prüfen, nach `build/signing` entpacken (ein vorhandener Ordner
+wird nie überschrieben), die Übergabe gegen Produktangaben und jede
+Prüfsumme prüfen, `Solidon3D.exe` mit `signtool sign /fd SHA256 /tr
+http://time.certum.pl /td SHA256 /n <Name>` signieren und mit `signtool
+verify /pa /v` prüfen, die Übergabe mit der neuen Prüfsumme neu binden,
+die Setup-Datei mit Inno Setup bauen, sie genauso signieren und prüfen, die
+`.sha256` daneben schreiben. Ergebnis und Prüfsumme liegen danach unter
+`dist/`. Am Ende schreibt es die Release-Evidenz neu
+(`make_licence_notices.py --write-evidence`) und fährt `--release-check`
+gegen den signierten Installer, wie die CI es gegen den unsignierten tut —
+der äußere Hash ist nach der Signatur ein anderer, und die Akte muss den
+nennen, den der Kunde bekommt. Bei zwei Zertifikaten auf denselben Namen
+entscheidet `--thumbprint <SHA-1>` statt `--subject`; `--release-evidence`
+verlegt die Akte (Vorgabe `build/release-evidence.json`).
 
 Danach wie bisher: `tools/make_download.py`, `tools/sign_version.py`,
 `tools/stamp_assets.py`, `tools/upload_website.py`.
@@ -106,10 +119,11 @@ Drei Dinge dabei:
 - **Inno Setup 6 muss lokal installiert sein.** `make_installer.py` sucht ISCC
   auf dem PATH und an den üblichen Orten.
 
-Was noch fehlt: ein Werkzeug `tools/sign_release.py`, das die acht Zeilen oben
-prüfsummengebunden am Stück fährt und bei jeder abweichenden Prüfsumme anhält.
-Es wird gebaut, sobald das Zertifikat da ist. In der CI bleibt
-`WINDOWS_SIGNING_MODE` auf `unsigned`; der Azure-Zweig bleibt für 2029 stehen.
+In der CI gibt es keinen Windows-Signiermodus mehr: Sie baut aus derselben
+Übergabe den unsignierten Installer für Demo und Releaseprüfung und übergibt
+das Archiv. `tests/test_sign_release.py` stellt signtool, ISCC und das Archiv
+nach und prüft, dass jede Abweichung die Kette anhält, bevor ein Zertifikat
+ins Spiel kommt.
 
 ### Was SmartScreen dann tut
 

@@ -1,4 +1,10 @@
-"""Hält den Auslieferungsweg an unveränderlichen, knapp berechtigten Eingängen."""
+"""Hält den Auslieferungsweg an unveränderlichen, knapp berechtigten Eingängen.
+
+Windows wird hier gebaut und **nicht** signiert: Die CI übergibt den
+gebundenen App-Baum, und ``tools/sign_release.py`` signiert ihn auf Roberts
+Rechner mit dem Certum-Cloud-Zertifikat. Kein Job dieses Workflows darf
+deshalb ein OIDC-Token anfordern oder ``signtool`` aufrufen.
+"""
 
 from __future__ import annotations
 
@@ -62,42 +68,17 @@ def test_signing_secrets_are_never_job_or_workflow_environment() -> None:
     )
 
 
-def test_oidc_exists_only_in_the_two_protected_azure_signing_jobs() -> None:
-    """Bau, PFX-Wege und unsignierte Wege können kein OIDC-Token anfordern."""
+def test_no_job_can_request_an_oidc_token() -> None:
+    """Ohne Azure gibt es keinen Grund mehr für ein kurzlebiges Token — nirgends."""
     workflow = _workflow()
-    azure_jobs = ("windows-app-sign-azure", "windows-installer-sign-azure")
 
-    assert workflow.count("id-token: write") == len(azure_jobs)
-    for name in azure_jobs:
-        job = _job(name)
-        assert "id-token: write" in job
-        assert "environment: production-signing" in job
-        assert "actions/checkout@" not in job
-        assert not re.search(r"\bpython\b", job)
-        assert "ISCC" not in job and "& $compiler" not in job
-
-    for name in (
-        "package",
-        "windows-app-sign-pfx",
-        "windows-installer",
-        "windows-installer-sign-pfx",
-        "macos-app-sign",
-        "macos-package",
-        "macos-installer-sign",
-    ):
-        assert "id-token: write" not in _job(name), name
+    assert "id-token: write" not in workflow
+    assert "id-token:" not in workflow
 
 
 def test_protected_signers_never_run_repository_or_handoff_code() -> None:
-    """Mit OIDC oder entsperrtem Schlüssel laufen nur fest definierte Signierbefehle."""
-    for name in (
-        "windows-app-sign-azure",
-        "windows-app-sign-pfx",
-        "windows-installer-sign-azure",
-        "windows-installer-sign-pfx",
-        "macos-app-sign",
-        "macos-installer-sign",
-    ):
+    """Mit entsperrtem Schlüssel laufen nur fest definierte Signierbefehle."""
+    for name in ("macos-app-sign", "macos-installer-sign"):
         job = _job(name)
         assert "environment: production-signing" in job
         assert "actions/checkout@" not in job
@@ -118,13 +99,15 @@ def test_protected_signers_never_run_repository_or_handoff_code() -> None:
     assert "from tools import make_macos_package" in macos_builder
 
     package = _job("package")
-    assert "WINDOWS_SIGNING_MODE -notin @('azure', 'pfx', 'unsigned')" in package
     assert "MACOS_SIGNING_MODE -notin @('signed', 'notarized', 'unsigned')" in package
+    assert "WINDOWS_SIGNING_MODE" not in _workflow(), (
+        "Windows hat keinen Signiermodus mehr — die Signatur entsteht lokal"
+    )
 
 
 def test_the_windows_handoff_is_an_exact_contained_product_tree() -> None:
     """Der Signierer lehnt Zusatzdateien, Pfadausbruch und andere Produkte ab."""
-    for name in ("windows-app-sign-azure", "windows-app-sign-pfx", "windows-installer"):
+    for name in ("windows-installer",):
         job = _job(name)
         assert "input_sha256" in job
         assert "Compare-Object" in job
@@ -137,13 +120,8 @@ def test_the_windows_handoff_is_an_exact_contained_product_tree() -> None:
         assert "ReparsePoint" in job
 
 
-def test_pfx_and_apple_keys_are_removed_inside_the_fixed_signing_step() -> None:
+def test_apple_keys_are_removed_inside_the_fixed_signing_step() -> None:
     """Nach Schlüsselimport darf kein späterer Repositoryschritt den Schlüssel sehen."""
-    for name in ("windows-app-sign-pfx", "windows-installer-sign-pfx"):
-        job = _job(name)
-        assert "finally" in job
-        assert "Remove-Item -LiteralPath $pfx" in job
-
     for name in ("macos-app-sign", "macos-installer-sign"):
         job = _job(name)
         assert "trap cleanup EXIT" in job
@@ -190,25 +168,39 @@ def test_macos_checks_archive_paths_and_symlinks_before_key_import() -> None:
     )
 
 
-def test_both_windows_signature_checks_stop_the_protected_job() -> None:
-    """Eine ungültige Signatur darf trotz PowerShell-Pipeline nicht weiterlaufen."""
-    for name, target, message in (
-        ("windows-app-sign-azure", "$env:ARTIFACT_APP", "Die Signatur der Anwendung ist ungültig."),
-        ("windows-app-sign-pfx", "$env:ARTIFACT_APP", "Die Signatur der Anwendung ist ungültig."),
-        (
-            "windows-installer-sign-azure",
-            "$env:ARTIFACT_SETUP",
-            "Die Signatur des Installers ist ungültig.",
-        ),
-        (
-            "windows-installer-sign-pfx",
-            "$env:ARTIFACT_SETUP",
-            "Die Signatur des Installers ist ungültig.",
-        ),
-    ):
-        job = _job(name)
-        assert f"signtool verify /pa /v {target}" in job
-        assert message in job
+def test_windows_is_built_here_and_signed_nowhere_in_the_workflow() -> None:
+    """Kein signtool, kein Azure, kein Schlüsselimport für Windows — nur die Übergabe."""
+    workflow = _workflow()
+
+    assert "signtool" not in workflow
+    assert "azure/" not in workflow
+    assert "artifact-signing" not in workflow
+    assert "production-signing" not in _job("windows-installer")
+    assert "production-signing" not in _job("windows-release-check")
+    for name in _job_names():
+        assert not name.startswith("windows-app-sign"), name
+        assert not name.startswith("windows-installer-sign"), name
+
+    handoff = _step(_job("package"), "Signiereingang übergeben (Windows)")
+    assert "name: solidon3d-windows-signing-input" in handoff
+    assert "retention-days: 7" in handoff, (
+        "die Übergabe muss lange genug leben, um lokal signiert zu werden"
+    )
+    assert "name: solidon3d-windows-signing-input" in _job("windows-installer")
+
+
+def _job_names() -> list[str]:
+    return re.findall(r"(?m)^  ([a-zA-Z0-9_-]+):\n", _workflow())
+
+
+def _step(job: str, title: str) -> str:
+    """Liefert genau einen Schritt eines Jobblocks."""
+    match = re.search(
+        rf"(?ms)^      - name: {re.escape(title)}\n.*?(?=^      - |\Z)",
+        job,
+    )
+    assert match is not None, f"Schritt fehlt: {title}"
+    return match.group(0)
 
 
 def test_the_appimage_tool_and_embedded_runtime_are_fixed_and_verified() -> None:

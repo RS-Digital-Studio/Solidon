@@ -74,7 +74,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 |---|---|---|
 | P9 — lokales Mesh-Backend | P9 — Säule B und Farbe | das reproduzierbare Pinning des tatsächlich verwendeten TripoSG-Git-Commits und der Gewichte-Revision, die vollständige LICENSE-/NOTICE-Kette und die gezielte Klärung der dort genannten HunyuanDiT-/FlashVDM-EU-Bedingungen. TripoSG selbst weist Quelltext und Modellkarte als MIT aus; ein Verstoß ist nicht festgestellt. Weg 3, TripoSG, ComfyUI und vorhandene Medien bleiben erhalten und werden weder entfernt noch deaktiviert oder vorsorglich ersetzt. Dieser offene Dokumentationspunkt ist kein automatischer Blocker für 0.3.0 |
 | P9 — Weg 3 Ende zu Ende | P9 — Säule B und Farbe | dieselbe vollständig dokumentierte und reproduzierbar gepinnte Generatorenkette sowie einen nachgewiesenen Lauf Text/Bild → Mesh → Reparatur → Prüfbericht → Export auf Windows, macOS und Linux. Der bestehende Weg bleibt während der Lizenzkettenklärung erhalten |
-| CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, ein für Robert zugänglicher Windows-Signierdienst sowie Apple-Konto und Developer-IDs. Die gesperrten CI-Wege und alle Pakete stehen |
+| CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, das Certum-Zertifikat (Standard Code Signing in the Cloud, Einzelperson) für `tools/sign_release.py` sowie die Apple-Developer-IDs und sieben CI-Geheimnisse zum seit 02.09.2026 vorhandenen Konto. Die CI-Wege und alle Pakete stehen; Azure und PFX sind seit 02.09.2026 entfernt |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und einen nachweisbar abgeschlossenen netcup-AVV. Das Repository belegt den Abschluss derzeit nicht; die Datenschutzerklärung nennt netcup als Hoster (Art. 6 lit. f) und behauptet keinen AVV mehr. Vor der Freigabe im CCP prüfen und den Beleg sichern: Hosting, Mail, Support, Aktivierung, Protokolle/Statistik und Sicherungen; dazu Unterauftragsverarbeiter, TOM, Löschung und Wiederherstellung. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
@@ -629,10 +629,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
       Setup-Datei (`packaging/solidon3d.iss`, gebaut von
       `tools/make_installer.py`), Linux zu AppImage und Flatpak sowie einem
       internen tar.gz, macOS zu je einem `.pkg`. Alle Werte kommen aus
-      `app/branding.py`. Windows unterstützt Azure Artifact Signing per OIDC;
-      Anwendung und Setup-Datei werden getrennt signiert und geprüft, der alte
-      PFX-Weg bleibt Rückfall. Ohne Azure-Konto oder Zertifikat überspringt sich
-      die Signierung mit sichtbarer Warnung. Die Apple-Notarisierung ist als
+      `app/branding.py`. Windows wird in der CI gebaut und lokal signiert: Der
+      Paketjob übergibt den gebundenen App-Baum, `tools/sign_release.py`
+      signiert Anwendung und Setup-Datei mit dem Certum-Cloud-Zertifikat
+      (Azure und PFX entfernt, 02.09.2026). Ohne Zertifikat liefert die CI ein
+      unsigniertes Paket mit sichtbarer Warnung. Die Apple-Notarisierung ist als
       gesperrter CI-Schritt gebaut:
       `notarytool` wartet auf Apples Prüfung, `stapler` heftet und prüft das
       Ticket, `spctl` prüft anschließend den Installationsweg. Es fehlen noch

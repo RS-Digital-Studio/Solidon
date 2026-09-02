@@ -66,22 +66,22 @@ Nur wenn die Apple-Angaben vollständig sind und `notarytool`, `stapler` und
 `spctl` grün bleiben, nennt der Schlusstext das Paket geprüft. Der unsignierte
 Weg betritt keinen geschützten Job und behält den Gatekeeper-Hinweis.
 
-Windows unterstützt Azure Artifact Signing über OIDC. Der normale Paketjob
-hat nur lesenden Repositoryzugriff, kein OIDC und keine Windows-Geheimnisse. Er
-übergibt den **vollständigen** App-Baum sowie die festen Installer-Eingänge als
-kanonische relative Pfadliste mit SHA-256. Azure signiert die Anwendung in
-einem über `production-signing` geschützten OIDC-Job; danach baut ein
-ungeschützter Job den Installer mit ISCC, und ein zweiter geschützter OIDC-Job
-signiert ausschließlich dessen fest benannte Datei. Der PFX-Weg hat dieselben
-zwei Signiergrenzen, aber ausdrücklich kein OIDC; jede PFX-Datei wird im festen
-Signierschritt in `finally` entfernt. Die nicht geheime Repository-Variable
-`WINDOWS_SIGNING_MODE` wählt `azure`, `pfx` oder `unsigned`. Für Azure stehen
-`AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`,
-`ARTIFACT_SIGNING_ENDPOINT`, `ARTIFACT_SIGNING_ACCOUNT` und
-`ARTIFACT_SIGNING_PROFILE` stehen, signiert die CI Anwendung und Setup-Datei
-mit der offiziellen Aktion und prüft beide Signaturen. Der bisherige
-PFX-Secret-Weg bleibt als Rückfall für ein vorhandenes älteres Zertifikat;
-fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
+Windows wird in der CI gebaut und **lokal signiert**. Der Paketjob hat nur
+lesenden Repositoryzugriff und keine Windows-Geheimnisse. Er übergibt den
+**vollständigen** App-Baum sowie die festen Installer-Eingänge als kanonische
+relative Pfadliste mit SHA-256 (Artefakt `solidon3d-windows-signing-input`,
+sieben Tage haltbar). Ein ungeschützter Job baut daraus mit ISCC den
+unsignierten Installer für Demo und Releaseprüfung und nennt SmartScreen
+ausdrücklich. Die Signatur entsteht auf Roberts Rechner mit
+`tools/sign_release.py` aus demselben Archiv: Das Certum-Zertifikat liegt in
+der SimplySign-Cloud und verlangt einen Einmalcode vom Handy, den keine CI
+eingeben kann und soll. Das Werkzeug prüft Archiv, Produktangaben und jede
+Prüfsumme, signiert die Anwendung, bindet die Übergabe neu, baut den
+Installer, signiert die Setup-Datei und schreibt die `.sha256` daneben. Einen
+Azure- oder PFX-Weg gibt es nicht mehr (Entscheidung Robert, 02.09.2026):
+Azure Artifact Signing verlangt eine Organisation mit drei Jahren Bestand,
+und exportierbare PFX-Schlüssel geben die Zertifizierungsstellen seit 2023
+nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
 
 ## Was hier hineinmuss, wenn sich etwas ändert
 
@@ -133,7 +133,9 @@ fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
   Endartefakt-SBOM, Schema-1-Evidenz, äußeren Pakete, exakte Versionen sowie
   erforderliche Quellarchive und Relink-Materialien. Diese Prüfung läuft
   ungeschützt und erst nach der Signierung; ein Signierjob führt keinen
-  Repositorycode dafür aus.
+  Repositorycode dafür aus. Auf Windows schreibt `sign_release.py` die
+  Evidenz nach der lokalen Signatur neu und wiederholt die Prüfung, weil
+  der äußere Installer dann ein anderer ist als der, den die CI geprüft hat.
 - **Windows-ICU** kommt aus dem Betriebssystem. Die `.spec` verwirft
   `icuuc.dll` und `icudt*.dll` aus dem `PATH`; eine zufällig eingesammelte
   Poppler-ICU lässt den fertigen Bau schon beim Import von `QtCore` stehen.
