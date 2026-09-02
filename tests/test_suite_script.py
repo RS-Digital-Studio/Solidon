@@ -73,6 +73,40 @@ def ask(question: str, log: str, tmp_path: Path) -> bool:
     return result.returncode == 0
 
 
+def explain(question: str, log: str, tmp_path: Path) -> str:
+    """Dieselbe Frage mit ``set -x`` — die Spur, welche Zeile des Skripts entschied.
+
+    **Eine Sonde, keine Zusicherung.** ``test_native_crash_text_is_not_mistaken_
+    for_failed_test_markers`` war am 02.09.2026 lokal grün (Windows, Git Bash)
+    und in der Linux-CI rot, mit denselben Werkzeugen (GNU sed 4.9, GNU grep,
+    LF im Skript) — und ``ask`` sagt nur wahr oder falsch. Wer den Fehler
+    sehen will, braucht die Ausgabe von ``fortschritt`` und den Weg durch
+    ``nicht_gelaufen`` auf genau der Maschine, auf der es rot ist.
+    """
+    protocol = tmp_path / "protokoll.txt"
+    protocol.write_text(log, encoding="utf-8")
+    environment = dict(os.environ)
+    environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
+    environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
+    environment["SUITE_NUR_FUNKTIONEN"] = "1"
+    call = question.replace("$P", str(protocol).replace("\\", "/"))
+    script = str(SCRIPT).replace(chr(92), "/")
+    result = subprocess.run(
+        [
+            BASH or "bash",
+            "-c",
+            f'source "{script}"; echo "--- fortschritt:"; fortschritt "{protocol!s}" | od -c | head -5; '
+            f'echo "--- Protokoll:"; od -c "{protocol!s}" | head -8; '
+            f'echo "--- Werkzeuge:"; sed --version | head -1; grep --version | head -1; bash --version | head -1; '
+            f"echo '--- Spur:'; set -x; {call}",
+        ],
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+    return f"rc={result.returncode}\n{result.stdout}\n{result.stderr}"
+
+
 def test_a_run_that_swallowed_tests_is_told_apart_from_a_red_one(tmp_path: Path) -> None:
     """Nur ein Riss lässt sich durch Teilen heilen — ein roter Test nicht.
 
@@ -142,7 +176,8 @@ def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Pat
     )
 
     assert ask('nicht_gelaufen 3 "$P" 26', torn, tmp_path), (
-        "zehn von sechsundzwanzig Tests liefen — die Portion muss geteilt werden"
+        "zehn von sechsundzwanzig Tests liefen — die Portion muss geteilt werden\n"
+        + explain('nicht_gelaufen 3 "$P" 26', torn, tmp_path)
     )
     assert ask('zaehlt_als_fehler 3 "$P" 26', torn, tmp_path), (
         "vor der erfolgreichen Teilung bleibt der verschluckte Lauf rot"
