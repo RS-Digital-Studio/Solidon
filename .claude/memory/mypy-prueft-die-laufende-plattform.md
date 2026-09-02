@@ -44,3 +44,17 @@ Version, hier das Betriebssystem.
   blockiert dann jede lokale Sitzung, während der Bau grün meldet.
 - **Beim Melden die Plattform dazusagen** — sonst sucht die Gegenseite einen
   Fehler, den ihr Lauf nicht zeigt.
+
+**Nachtrag 03.09.2026 — die Gegenprobe kostet dreißig Sekunden.** `mypy` nimmt
+`--platform darwin` / `--platform linux` / `--platform win32` und prüft damit
+den Zweig, den die eigene Maschine nie sieht. Anlass: Ein
+`if sys.platform == "darwin": … return` **vor** dem übrigen Code machte diesen
+auf dem Mac zu totem Code — `Statement is unreachable`, und der zweite Tag-Lauf
+für 0.3.0 kippte daran, bevor ein einziger Test lief. Lokal auf Windows war
+alles grün, weil der Windows-Zweig davor steht.
+
+Zwei Lehren: **Plattformzweige gehören ans Ende**, nach dem gemeinsamen Weg;
+und besser fragt man die Eigenschaft statt die Plattform (`resolve()` gab den
+Pfad unverändert zurück → also kein Symlink → dann der Sonderweg), dann bleibt
+der Code auf jeder Plattform erreichbar. Vor jedem Commit an plattformnahem
+Code die drei Läufe fahren.

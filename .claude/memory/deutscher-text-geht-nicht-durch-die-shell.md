@@ -57,3 +57,12 @@ Verwandt: [[patchskript-schneidet-fremdes-weg]] (dort löscht das Skript
 fremde Arbeit, hier die eigene Struktur), [[messwerkzeug-misst-sich-selbst]]
 (ein Werkzeug an einem Fall mit bekanntem Ausgang messen, statt vorsorglich
 auszuweichen).
+
+**Nachtrag 03.09.2026 — auch Backslash-Escapes gehen nicht durch.** Ein
+Patchskript im Heredoc, das `b"\0" * 4096` in eine Python-Datei schreiben
+sollte, schrieb ein echtes NUL-Byte: mypy „Source code string cannot contain
+null bytes", pytest ein Sammelfehler in drei Dateien, und die erste Reparatur
+mit `data.replace(b"\x00", b"\0")` — wieder im Heredoc — änderte nichts, weil
+dieselbe Übersetzung sie traf. Sicher war erst die escape-freie Form:
+`bytes([0])` und `bytes([92, 48])`. Wer im Heredoc Backslashes braucht, baut sie
+aus `chr(92)` oder Byte-Zahlen, oder schreibt das Skript mit dem Write-Werkzeug.

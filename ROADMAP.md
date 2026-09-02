@@ -14298,6 +14298,17 @@ bleibt, steht hier mit Kästchen.
   erste Ziel der Reihe, das die Wand öffnet, und überspringt sich mit Grund,
   wenn keines es tut. Jemand mit einem Mac misst die Reihe und trägt das
   Fenster hier ein.
+- [x] **Fünfzehn Altmedien lagen auf dem Server, und der Upload verweigerte
+  deshalb alles.** `upload_website.py` prüft seit df8fae68 vor jedem Upload,
+  ob auf dem Server Medien liegen, die `ASSET-RIGHTS.toml` nicht kennt — und
+  fand `bilder/beleg-erzeugt{,-en,-es,-fr,-it,-pt}.png`,
+  `bilder/schau-{gargoyle,hand,knight,lantern,skull,valve}.webp`,
+  `bilder/weg-1-erzeugt.webp`, `bilder/weg-2-schnitt.webp` und
+  `favicon.ico` (Fund 3d-druck-7f, 03.09.2026). Keine davon liegt noch im
+  Repository, keine Seite nennt sie, die Seiten tragen `icon.svg`. Alle
+  fünfzehn sind mit `--medium-entfernen … --wirklich` vom Server genommen,
+  je Lauf vorher gezeigt. Wer ein Schaustück oder ein Wegbild zurückholen
+  will, erzeugt es neu und trägt es zuerst in den Rechtenachweis ein.
 - [ ] **Die Releaseakte meldet, sie blockiert nicht.** Die drei Prüfjobs
   (`linux-`, `windows-`, `macos-release-check`) sind zugleich die Jobs, die
   das Endartefakt veröffentlichen — sie vom Tag zu nehmen, nähme dem Lauf die
