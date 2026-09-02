@@ -27,6 +27,7 @@ Doppelklick.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import re
 import shutil
@@ -1424,10 +1425,13 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
 
 
 def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> None:
-    """32 der 74 Systembibliotheken im Linux-Paket 0.2.1 hingen allein an Qts
-    GTK-3-Erscheinungsbild, der Grundbestand gehört dem Rechner — und
-    ``libreadline`` ist GPL-3 (Regel 15). Was bleibt, hat in der Stückliste
-    eine Familie; sonst fiele es in der Releaseakte als Datei ohne Besitzer auf.
+    """Der GTK-Stapel hing allein an Qts GTK-3-Erscheinungsbild, und
+    ``libreadline`` ist GPL-3 (Regel 15) — beides fällt. Alles andere bleibt,
+    auch was „auf jedem Rechner vorhanden" wäre: Die erste Fassung dieses
+    Tests erwartete, dass ``libX11`` und ``libglib`` verschwinden, und genau
+    das hätte das Paket unstartbar gemacht (``libQt6Core`` hängt an glib).
+    Was bleibt, hat in der Stückliste eine Familie; sonst fiele es in der
+    Releaseakte als Datei ohne Besitzer auf.
     """
     from tools import make_linux_packages as tool
     from tools import make_sbom
@@ -1458,6 +1462,8 @@ def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> No
     kept = [entry[0] for entry in tool.trim_linux_binaries(toc)]
     assert kept == [
         "PySide6/Qt/plugins/platformthemes/libqxdgdesktopportal.so",
+        "libX11.so.6",
+        "libglib-2.0.so.0",
         "libxcb-cursor.so.0",
         "libgssapi_krb5.so.2",
         "pillow.libs/libjpeg-31e2ca52.so.62.4.0",
@@ -1465,6 +1471,124 @@ def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> No
     families = dict(make_sbom.LINUX_LIBRARY_FAMILIES)
     for soname in ("libxcb-cursor.so.0", "libgssapi_krb5.so.2", "libxkbcommon-x11.so.0"):
         assert make_sbom._runtime_owner(f"_internal/{soname}") in families, soname
-    assert not tool.HOST_PROVIDED_LIBRARIES & {
+    assert not tool.ORPHANED_LIBRARIES & {
         name for _family, prefixes in make_sbom.LINUX_LIBRARY_FAMILIES for name in prefixes
     }, "eine Bibliothek ist entweder Familie oder Sache des Rechners, nie beides"
+
+
+#: Die Abhängigkeitskarte des ausgelieferten Linux-Pakets 0.2.1: je Datei die
+#: Systembibliotheken, die sie über ``DT_NEEDED`` verlangt. Gelesen mit einem
+#: eigenen ELF-Leser aus dem Tarball von der Website — auf Windows gibt es
+#: kein ``ldd``, und ein Paket, über das niemand rechnen kann, ist genau das
+#: Problem, das diesen Korpus nötig gemacht hat.
+LINUX_DEPENDENCIES = ROOT / "tests" / "data" / "linux" / "paket-0.2.1-abhaengigkeiten.json"
+
+#: Was jedes Linux mit einer Fensteroberfläche selbst mitbringt — die
+#: Ausschlussliste des AppImage-Projekts (``pkg2appimage/excludelist``), auf
+#: die Stichprobe gekürzt, die im Paket 0.2.1 überhaupt vorkommt. Sie ist der
+#: **einzige** Maßstab dafür, was fehlen darf; eine eigene Einschätzung, was
+#: „überall vorhanden" sei, war am 02.09.2026 der Fehler.
+LINUX_BASE_SYSTEM = frozenset(
+    {
+        "ld-linux-x86-64.so.2",
+        "libc.so.6",
+        "libcom_err.so.2",
+        "libdl.so.2",
+        "libexpat.so.1",
+        "libfontconfig.so.1",
+        "libfreetype.so.6",
+        "libfribidi.so.0",
+        "libgcc_s.so.1",
+        "libgpg-error.so.0",
+        "libharfbuzz.so.0",
+        "libm.so.6",
+        "libpthread.so.0",
+        "libstdc++.so.6",
+        "libuuid.so.1",
+        "libwayland-client.so.0",
+        "libX11-xcb.so.1",
+        "libX11.so.6",
+        "libxcb.so.1",
+        "libz.so.1",
+    }
+)
+
+
+def test_the_linux_bundle_leaves_no_dependency_open() -> None:
+    """Was im Linux-Paket bleibt, muss seine Abhängigkeiten finden können.
+
+    Am 02.09.2026 warf ``ORPHANED_LIBRARIES`` zwanzig Bibliotheken weg, die
+    gebraucht werden — ``libglib-2.0`` an vorderster Stelle, an der
+    ``libQt6Core`` hart hängt. Ein solches Paket startet auf einem System, das
+    sie nicht selbst hat, überhaupt nicht; gemerkt hätte es niemand, denn der
+    Bau läuft durch und die Suite kennt keine ELF-Kanten.
+
+    Der Test rechnet deshalb, was der Bau nicht rechnet: Für jede Datei, die
+    nach dem Filter im Paket bleibt, muss jede ``DT_NEEDED``-Kante entweder auf
+    eine andere Datei im Paket zeigen oder auf den Grundbestand jedes Linux.
+    Bleibt eine Kante offen, fehlt dem Kunden eine Datei.
+    """
+    from tools import make_linux_packages as tool
+
+    karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
+    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
+
+    def bleibt(pfad: str) -> bool:
+        name = Path(pfad).name
+        if name in tool.ORPHANED_LIBRARIES:
+            return False
+        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
+            return False
+        return not any(name.startswith(modul) for modul in dropped_modules)
+
+    im_paket = {Path(pfad).name for pfad in karte if bleibt(pfad)}
+    assert len(im_paket) > 500, "der Korpus ist leer oder der Filter nimmt alles"
+
+    offen: dict[str, list[str]] = {}
+    for pfad, gebraucht in karte.items():
+        if not bleibt(pfad):
+            continue
+        for name in gebraucht:
+            if name in im_paket or name in LINUX_BASE_SYSTEM:
+                continue
+            offen.setdefault(name, []).append(Path(pfad).name)
+
+    assert not offen, "Das Linux-Paket verlöre Bibliotheken, die es braucht:\n" + "\n".join(
+        f"  {name} <- {', '.join(sorted(nutzer)[:3])}" for name, nutzer in sorted(offen.items())
+    )
+
+
+def test_every_dropped_linux_library_is_really_orphaned() -> None:
+    """Und die Gegenrichtung: Was der Filter wegwirft, darf niemand brauchen.
+
+    Sonst wächst die Liste mit der Zeit um Einträge, die einmal richtig waren
+    und es nicht mehr sind — der Fehler von oben in langsam.
+    """
+    from tools import make_linux_packages as tool
+
+    karte: dict[str, list[str]] = json.loads(LINUX_DEPENDENCIES.read_text(encoding="utf-8"))
+    dropped_modules = ("readline.cpython", "_curses.cpython", "_curses_panel.cpython")
+
+    def bleibt(pfad: str) -> bool:
+        name = Path(pfad).name
+        if name in tool.ORPHANED_LIBRARIES:
+            return False
+        if any(pfad.endswith(plugin) for plugin in tool.DROPPED_QT_PLUGINS):
+            return False
+        return not any(name.startswith(modul) for modul in dropped_modules)
+
+    noch_gebraucht: dict[str, list[str]] = {}
+    for pfad, gebraucht in karte.items():
+        if not bleibt(pfad):
+            continue
+        for name in gebraucht:
+            if name in tool.ORPHANED_LIBRARIES:
+                noch_gebraucht.setdefault(name, []).append(Path(pfad).name)
+
+    assert not noch_gebraucht, (
+        "Diese Bibliotheken stehen als verwaist in der Liste, werden aber gebraucht:\n"
+        + "\n".join(
+            f"  {name} <- {', '.join(sorted(nutzer)[:3])}"
+            for name, nutzer in sorted(noch_gebraucht.items())
+        )
+    )

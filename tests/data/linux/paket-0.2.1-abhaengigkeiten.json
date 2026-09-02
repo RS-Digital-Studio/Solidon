@@ -1,0 +1,2623 @@
+{
+ "Solidon3D": [
+  "libz.so.1"
+ ],
+ "_internal/OCP/OCP.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PIL/_imaging.cpython-313-x86_64-linux-gnu.so": [
+  "libz.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Core.so.6": [
+  "libgcc_s.so.1",
+  "libglib-2.0.so.0",
+  "libgthread-2.0.so.0",
+  "libstdc++.so.6",
+  "libz.so.1",
+  "libzstd.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6DBus.so.6": [
+  "libdbus-1.so.3",
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6DataVisualization.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6EglFSDeviceIntegration.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6EglFsKmsSupport.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Gui.so.6": [
+  "libX11.so.6",
+  "libfontconfig.so.1",
+  "libfreetype.so.6",
+  "libgcc_s.so.1",
+  "libglib-2.0.so.0",
+  "libgthread-2.0.so.0",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0",
+  "libz.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Network.so.6": [
+  "libbrotlidec.so.1",
+  "libgcc_s.so.1",
+  "libgssapi_krb5.so.2",
+  "libstdc++.so.6",
+  "libz.so.1",
+  "libzstd.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6OpenGL.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6OpenGLWidgets.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Pdf.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libz.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Qml.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6QmlMeta.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6QmlModels.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6QmlWorkerScript.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Quick.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Svg.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0",
+  "libz.so.1"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6VirtualKeyboard.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6VirtualKeyboardQml.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6WaylandClient.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6Widgets.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6WlShellIntegration.so.6": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libQt6XcbQpa.so.6": [
+  "libX11-xcb.so.1",
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libglib-2.0.so.0",
+  "libgthread-2.0.so.0",
+  "libstdc++.so.6",
+  "libxcb-randr.so.0",
+  "libxcb-render.so.0",
+  "libxcb-shm.so.0",
+  "libxcb-sync.so.1",
+  "libxcb-xfixes.so.0",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/lib/libicui18n.so.73": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/lib/libicuuc.so.73": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/egldeviceintegrations/libqeglfs-emu-integration.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/egldeviceintegrations/libqeglfs-kms-egldevice-integration.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/egldeviceintegrations/libqeglfs-x11-integration.so": [
+  "libX11-xcb.so.1",
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/generic/libqevdevkeyboardplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/generic/libqevdevmouseplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/generic/libqevdevtabletplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/generic/libqevdevtouchplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/generic/libqtuiotouchplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/iconengines/libqsvgicon.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqgif.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqicns.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqico.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqjpeg.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqpdf.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqsvg.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqtga.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqtiff.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libz.so.1"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqwbmp.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/imageformats/libqwebp.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/networkinformation/libqconnman.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/networkinformation/libqglib.so": [
+  "libgcc_s.so.1",
+  "libgio-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/networkinformation/libqnetworkmanager.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/platforminputcontexts/libcomposeplatforminputcontextplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforminputcontexts/libibusplatforminputcontextplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforminputcontexts/libqtvirtualkeyboardplugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqeglfs.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqlinuxfb.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqminimal.so": [
+  "libfreetype.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqminimalegl.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqoffscreen.so": [
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqvkkhrdisplay.so": [
+  "libfreetype.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqvnc.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqwayland.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platforms/libqxcb.so": [
+  "libX11-xcb.so.1",
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxcb-randr.so.0",
+  "libxcb-render.so.0",
+  "libxcb-shm.so.0",
+  "libxcb-sync.so.1",
+  "libxcb-xfixes.so.0",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platformthemes/libqgtk3.so": [
+  "libX11.so.6",
+  "libatk-1.0.so.0",
+  "libcairo-gobject.so.2",
+  "libcairo.so.2",
+  "libgcc_s.so.1",
+  "libgdk-3.so.0",
+  "libgdk_pixbuf-2.0.so.0",
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libgtk-3.so.0",
+  "libharfbuzz.so.0",
+  "libpango-1.0.so.0",
+  "libpangocairo-1.0.so.0",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/platformthemes/libqxdgdesktopportal.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/tls/libqcertonlybackend.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/tls/libqopensslbackend.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-decoration-client/libadwaita.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-decoration-client/libbradient.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libdmabuf-server.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libdrm-egl-server.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libqt-plugin-wayland-egl.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libshm-emulation-server.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-graphics-integration-client/libvulkan-server.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-shell-integration/libfullscreen-shell-v1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-shell-integration/libivi-shell.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-shell-integration/libqt-shell.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-shell-integration/libwl-shell-plugin.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/wayland-shell-integration/libxdg-shell.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/xcbglintegrations/libqxcb-egl-integration.so": [
+  "libX11-xcb.so.1",
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxcb-randr.so.0",
+  "libxcb-render.so.0",
+  "libxcb-shm.so.0",
+  "libxcb-sync.so.1",
+  "libxcb-xfixes.so.0",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/Qt/plugins/xcbglintegrations/libqxcb-glx-integration.so": [
+  "libX11-xcb.so.1",
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libxcb-glx.so.0",
+  "libxcb-randr.so.0",
+  "libxcb-render.so.0",
+  "libxcb-shm.so.0",
+  "libxcb-sync.so.1",
+  "libxcb-xfixes.so.0",
+  "libxkbcommon.so.0"
+ ],
+ "_internal/PySide6/QtCore.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtDBus.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtDataVisualization.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtGui.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtNetwork.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtOpenGL.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtOpenGLWidgets.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtSvg.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/QtWidgets.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/PySide6/libpyside6.abi3.so.6.11": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libHalf-614356b1.so.24.0.0": [
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libIex-2_3-f9b27411.so.24.0.0": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libIlmImf-2_3-72bfabbd.so.24.0.0": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libz.so.1"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libIlmThread-2_3-b765c51d.so.24.0.0": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBO-3fb10f84.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBRep-071e31b6.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBin-8c57aab5.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBinL-987998b2.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBinTObj-d451288f.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBinXCAF-c8cc2d82.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKBool-6e529311.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKCAF-4393aeb5.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKCDF-cb02241a.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDE-5f7deea5.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDEGLTF-41c343fd.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDEIGES-6b9c91f5.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDESTEP-5ae9446f.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDESTL-cb635b93.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKDEVRML-63a535d6.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKExpress-afd94280.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKFeat-2bf0c3aa.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKFillet-a3fd0a6b.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKG2d-47ed7a1d.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKG3d-4eee3f00.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKGeomAlgo-135532ed.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKGeomBase-194a33a8.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKHLR-6f9d9d32.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKLCAF-74a08608.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKMath-05fa8e04.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKMesh-6a3c0429.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKMeshVS-d172461a.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKOffset-9709b5f0.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKOpenGl-3c7e6502.so.7.9.3": [
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKPrim-d4232d59.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKRWMesh-c5688aa8.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKService-c643e023.so.7.9.3": [
+  "libX11.so.6",
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKShHealing-8af012e1.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKStd-fc13b403.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKStdL-cf5694a4.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKTObj-39a7b727.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKTopAlgo-30ade7bd.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKV3d-0053da17.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKVCAF-aa6ae3f0.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXCAF-8ada2ee3.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXSBase-8eebac3b.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXml-ced99788.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXmlL-7045d578.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXmlTObj-2b107013.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKXmlXCAF-0433c399.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libTKernel-f2a592c7.so.7.9.3": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libfontconfig-ebabad56.so.1.12.0": [
+  "libexpat.so.1"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libfreeimage-3-bcaddc28.18.0.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6",
+  "libz.so.1"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libfreetype-b2547240.so.6.17.1": [
+  "libz.so.1"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libpng16-4a697b98.so.16.37.0": [
+  "libz.so.1"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libraw-5375f4a1.so.19.0.2": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cadquery_ocp_novtk.libs/libtiff-688daa34.so.5.5.0": [
+  "libz.so.1"
+ ],
+ "_internal/contourpy/_contourpy.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/cryptography/hazmat/bindings/_rust.abi3.so": [
+  "libgcc_s.so.1"
+ ],
+ "_internal/fast_simplification/_replay.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/fast_simplification/_simplify.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/kiwisolver/_cext.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/manifold3d.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/_c_internal_utils.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/_image.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/_path.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/_qhull.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/_tri.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/backends/_backend_agg.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/backends/_tkagg.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/matplotlib/ft2font.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/numpy.libs/libgfortran-83c28eba-468e71e5.so.5.0.0": [
+  "libgcc_s.so.1",
+  "libz.so.1"
+ ],
+ "_internal/numpy/_core/_multiarray_umath.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/numpy/fft/_pocketfft_umath.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/pillow.libs/libavif-8a7f9d56.so.16.4.2": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/pillow.libs/libfreetype-9fc94c80.so.6.20.6": [
+  "libz.so.1"
+ ],
+ "_internal/pillow.libs/libpng16-abb096d5.so.16.58.0": [
+  "libz.so.1"
+ ],
+ "_internal/pillow.libs/libtiff-fc87e79d.so.6.2.0": [
+  "libz.so.1"
+ ],
+ "_internal/python3.13/lib-dynload/_bz2.cpython-313-x86_64-linux-gnu.so": [
+  "libbz2.so.1.0"
+ ],
+ "_internal/python3.13/lib-dynload/_ctypes.cpython-313-x86_64-linux-gnu.so": [
+  "libffi.so.8"
+ ],
+ "_internal/python3.13/lib-dynload/_curses.cpython-313-x86_64-linux-gnu.so": [
+  "libncursesw.so.6",
+  "libtinfo.so.6"
+ ],
+ "_internal/python3.13/lib-dynload/_hashlib.cpython-313-x86_64-linux-gnu.so": [
+  "libcrypto.so.3"
+ ],
+ "_internal/python3.13/lib-dynload/_lzma.cpython-313-x86_64-linux-gnu.so": [
+  "liblzma.so.5"
+ ],
+ "_internal/python3.13/lib-dynload/_ssl.cpython-313-x86_64-linux-gnu.so": [
+  "libcrypto.so.3",
+  "libssl.so.3"
+ ],
+ "_internal/python3.13/lib-dynload/_uuid.cpython-313-x86_64-linux-gnu.so": [
+  "libuuid.so.1"
+ ],
+ "_internal/python3.13/lib-dynload/binascii.cpython-313-x86_64-linux-gnu.so": [
+  "libz.so.1"
+ ],
+ "_internal/python3.13/lib-dynload/readline.cpython-313-x86_64-linux-gnu.so": [
+  "libreadline.so.8"
+ ],
+ "_internal/python3.13/lib-dynload/zlib.cpython-313-x86_64-linux-gnu.so": [
+  "libz.so.1"
+ ],
+ "_internal/scipy.libs/libgfortran-040039e1-0352e75f.so.5.0.0": [
+  "libgcc_s.so.1",
+  "libz.so.1"
+ ],
+ "_internal/scipy.libs/libgfortran-83c28eba.so.5.0.0": [
+  "libgcc_s.so.1",
+  "libz.so.1"
+ ],
+ "_internal/scipy/_lib/_uarray/_uarray.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/fft/_duccfft/pyduccfft.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/interpolate/_dierckx.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/interpolate/_rbfinterp_pythran.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/linalg/_batched_linalg.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/linalg/_fblas.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1"
+ ],
+ "_internal/scipy/linalg/_linalg_pythran.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/ndimage/_rank_filter_1d.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/optimize/_group_columns.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/optimize/_highspy/_core.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/optimize/_highspy/_highs_options.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/optimize/_lsap.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/optimize/_pava_pybind.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/signal/_max_len_seq_inner.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/signal/_sigtools.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1"
+ ],
+ "_internal/scipy/signal/_spline.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1"
+ ],
+ "_internal/scipy/sparse/_sparsetools.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/sparse/csgraph/_shortest_path.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/sparse/csgraph/_traversal.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/spatial/_ckdtree.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/spatial/_distance_pybind.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/_gufuncs.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/_specfun.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/_special_ufuncs.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/_ufuncs.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/_ufuncs_cxx.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/special/cython_special.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/stats/_biasedurn.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/stats/_qmc_cy.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/scipy/stats/_stats_pythran.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/shapely.libs/libgeos-3ef06f11.so.3.13.1": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/shapely.libs/libgeos_c-abcdd5fa.so.1.19.2": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/shiboken6/Shiboken.abi3.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/shiboken6/libshiboken6.abi3.so.6.11": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/feature/_cascade.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/feature/_haar.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/feature/_hessian_det_appx.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/feature/brief_cy.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/morphology/_skeletonize_lee_cy.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/skimage/util/_remap.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vhacdx.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_cont-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_cont_testing-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_clean_grid-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_connected_components-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_contour-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_core-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_density_estimate-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_entity_extraction-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_field_conversion-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_field_transform-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_flow-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_geometry_refinement-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_image_processing-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_mesh_info-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_multi_block-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_resampling-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_vector_analysis-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_filter_zfp-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskores_worklet-1.1.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libviskoresdiympi_nompi.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkAcceleratorsVTKmCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkAcceleratorsVTKmDataModel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkAcceleratorsVTKmFilters.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkChartsCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonColor.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonComputationalGeometry.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonDataModel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonExecutionModel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonMath.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonMisc.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonPython.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonSystem.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkCommonTransforms.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkDICOMParser.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkDomainsChemistry.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkDomainsChemistryOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersAMR.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersCellGrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersExtraction.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersFlowPaths.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersGeneral.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersGeneric.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersGeometry.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersGeometryPreview.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersHybrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersHyperTree.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersImaging.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersModeling.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersParallel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersParallelDIY2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersParallelImaging.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersParallelStatistics.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersPoints.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersProgrammable.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersPython.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersReduction.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersSMP.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersSelection.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersSources.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersStatistics.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersTemporal.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersTensor.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersTexture.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersTopology.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkFiltersVerdict.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkGeovisCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOAMR.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOAsynchronous.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOAvmesh.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCGNSReader.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCONVERGECFD.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCellGrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCesium3DTiles.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOChemistry.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCityGML.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOERF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOEnSight.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOEngys.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOExodus.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOExport.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOExportGL2PS.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOExportPDF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOFDS.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOFLUENTCFF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOGeoJSON.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOGeometry.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOH5Rage.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOH5part.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOHDF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOIOSS.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOImage.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOImport.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOInfovis.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOLANLX3D.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOLSDyna.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOLegacy.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOMINC.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOMotionFX.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOMovie.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIONetCDF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOOMF.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOOggTheora.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOPIO.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOPLY.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOParallel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOParallelExodus.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOParallelLSDyna.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOParallelXML.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOSQL.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOSegY.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOTRUCHAS.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOTecplotTable.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOVPIC.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOVeraOut.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOVideo.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOXML.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOXMLParser.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkIOXdmf2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingColor.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingFourier.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingGeneral.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingHybrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingMath.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingMorphological.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingSources.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingStatistics.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkImagingStencil.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkInfovisCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkInfovisLayout.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkInteractionImage.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkInteractionStyle.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkInteractionWidgets.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkParallelCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkParallelDIY.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkPythonContext2D.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingAnnotation.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingCellGrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingContext2D.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingContextOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingExternal.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingFreeType.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingGL2PSOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingGridAxes.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingHyperTreeGrid.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingImage.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingLICOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingLOD.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingLabel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingMatplotlib.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingParallel.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingSceneGraph.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingUI.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVR.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVRModels.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVolume.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVolumeAMR.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVolumeOpenGL2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkRenderingVtkJS.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkSerializationManager.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkTestingCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkTestingRendering.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkTestingSerialization.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkViewsContext2D.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkViewsCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkViewsInfovis.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkWebCore.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkWebGLExporter.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkWrappingPythonCore3.13.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkfmt.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkioss.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkjsoncpp.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtklibproj.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkloguru.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkmetaio.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkpugixml.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkscn.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtksys.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtktoken.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkverdict.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkvpic.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkx11.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/libvtkxdmf2.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkAcceleratorsVTKmCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkAcceleratorsVTKmDataModel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkAcceleratorsVTKmFilters.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkChartsCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonColor.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonComputationalGeometry.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonDataModel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonExecutionModel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonMath.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonMisc.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonPython.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonSystem.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkCommonTransforms.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkDomainsChemistry.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkDomainsChemistryOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersAMR.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersCellGrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersExtraction.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersFlowPaths.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersGeneral.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersGeneric.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersGeometry.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersGeometryPreview.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersHybrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersHyperTree.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersImaging.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersModeling.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersParallel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersParallelDIY2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersParallelImaging.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersParallelStatistics.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersPoints.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersProgrammable.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersPython.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersReduction.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersSMP.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersSelection.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersSources.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersStatistics.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersTemporal.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersTensor.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersTexture.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersTopology.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkFiltersVerdict.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkGeovisCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOAMR.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOAsynchronous.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOAvmesh.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCGNSReader.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCONVERGECFD.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCellGrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCesium3DTiles.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOChemistry.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCityGML.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOERF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOEnSight.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOEngys.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOExodus.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOExport.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOExportGL2PS.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOExportPDF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOFDS.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOFLUENTCFF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOGeoJSON.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOGeometry.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOH5Rage.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOH5part.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOHDF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOIOSS.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOImage.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOImport.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOInfovis.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOLANLX3D.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOLSDyna.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOLegacy.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOMINC.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOMotionFX.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOMovie.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIONetCDF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOOMF.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOOggTheora.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOPIO.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOPLY.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOParallel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOParallelExodus.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOParallelLSDyna.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOParallelXML.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOSQL.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOSegY.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOTRUCHAS.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOTecplotTable.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOVPIC.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOVeraOut.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOVideo.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOXML.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOXMLParser.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkIOXdmf2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingColor.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingFourier.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingGeneral.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingHybrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingMath.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingMorphological.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingSources.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingStatistics.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkImagingStencil.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkInfovisCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkInfovisLayout.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkInteractionImage.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkInteractionStyle.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkInteractionWidgets.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkParallelCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkPythonContext2D.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingAnnotation.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingCellGrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingContext2D.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingContextOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingExternal.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingFreeType.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingGL2PSOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingGridAxes.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingHyperTreeGrid.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingImage.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingLICOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingLOD.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingLabel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingMatplotlib.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingParallel.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingSceneGraph.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingUI.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVR.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVRModels.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVolume.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVolumeAMR.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVolumeOpenGL2.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkRenderingVtkJS.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkSerializationManager.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkTestingRendering.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkTestingSerialization.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkViewsContext2D.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkViewsCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkViewsInfovis.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkWebCore.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "_internal/vtkmodules/vtkWebGLExporter.cpython-313-x86_64-linux-gnu.so": [
+  "libgcc_s.so.1",
+  "libstdc++.so.6"
+ ],
+ "libX11-xcb.so.1": [],
+ "libX11.so.6": [],
+ "libXau.so.6": [],
+ "libXcomposite.so.1": [
+  "libX11.so.6"
+ ],
+ "libXcursor.so.1": [
+  "libX11.so.6",
+  "libXfixes.so.3",
+  "libXrender.so.1"
+ ],
+ "libXdamage.so.1": [
+  "libX11.so.6"
+ ],
+ "libXdmcp.so.6": [
+  "libbsd.so.0"
+ ],
+ "libXext.so.6": [
+  "libX11.so.6"
+ ],
+ "libXfixes.so.3": [
+  "libX11.so.6"
+ ],
+ "libXi.so.6": [
+  "libX11.so.6",
+  "libXext.so.6"
+ ],
+ "libXinerama.so.1": [
+  "libX11.so.6",
+  "libXext.so.6"
+ ],
+ "libXrandr.so.2": [
+  "libX11.so.6",
+  "libXext.so.6",
+  "libXrender.so.1"
+ ],
+ "libXrender.so.1": [
+  "libX11.so.6"
+ ],
+ "libatk-1.0.so.0": [
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0"
+ ],
+ "libatk-bridge-2.0.so.0": [
+  "libatk-1.0.so.0",
+  "libatspi.so.0",
+  "libdbus-1.so.3",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0"
+ ],
+ "libatspi.so.0": [
+  "libX11.so.6",
+  "libXi.so.6",
+  "libdbus-1.so.3",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0"
+ ],
+ "libblkid.so.1": [],
+ "libbrotlicommon.so.1": [],
+ "libbrotlidec.so.1": [
+  "libbrotlicommon.so.1"
+ ],
+ "libbsd.so.0": [
+  "libmd.so.0"
+ ],
+ "libbz2.so.1.0": [],
+ "libcairo-gobject.so.2": [
+  "libcairo.so.2",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0"
+ ],
+ "libcairo.so.2": [
+  "libX11.so.6",
+  "libXext.so.6",
+  "libXrender.so.1",
+  "libfontconfig.so.1",
+  "libfreetype.so.6",
+  "libpixman-1.so.0",
+  "libpng16.so.16",
+  "libxcb-render.so.0",
+  "libxcb-shm.so.0",
+  "libz.so.1"
+ ],
+ "libcap.so.2": [],
+ "libcom_err.so.2": [],
+ "libcrypto.so.3": [],
+ "libdatrie.so.1": [],
+ "libdbus-1.so.3": [
+  "libsystemd.so.0"
+ ],
+ "libepoxy.so.0": [],
+ "libexpat.so.1": [],
+ "libffi.so.8": [],
+ "libfontconfig.so.1": [
+  "libexpat.so.1",
+  "libfreetype.so.6"
+ ],
+ "libfreetype.so.6": [
+  "libbrotlidec.so.1",
+  "libbz2.so.1.0",
+  "libpng16.so.16",
+  "libz.so.1"
+ ],
+ "libfribidi.so.0": [],
+ "libgcc_s.so.1": [],
+ "libgcrypt.so.20": [
+  "libgpg-error.so.0"
+ ],
+ "libgdk-3.so.0": [
+  "libX11.so.6",
+  "libXcomposite.so.1",
+  "libXcursor.so.1",
+  "libXdamage.so.1",
+  "libXext.so.6",
+  "libXfixes.so.3",
+  "libXi.so.6",
+  "libXinerama.so.1",
+  "libXrandr.so.2",
+  "libcairo-gobject.so.2",
+  "libcairo.so.2",
+  "libepoxy.so.0",
+  "libfontconfig.so.1",
+  "libfribidi.so.0",
+  "libgdk_pixbuf-2.0.so.0",
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libpango-1.0.so.0",
+  "libpangocairo-1.0.so.0",
+  "libxkbcommon.so.0"
+ ],
+ "libgdk_pixbuf-2.0.so.0": [
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgmodule-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libjpeg.so.8",
+  "libpng16.so.16"
+ ],
+ "libgio-2.0.so.0": [
+  "libglib-2.0.so.0",
+  "libgmodule-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libmount.so.1",
+  "libselinux.so.1",
+  "libz.so.1"
+ ],
+ "libglib-2.0.so.0": [
+  "libpcre2-8.so.0"
+ ],
+ "libgmodule-2.0.so.0": [
+  "libglib-2.0.so.0"
+ ],
+ "libgobject-2.0.so.0": [
+  "libffi.so.8",
+  "libglib-2.0.so.0"
+ ],
+ "libgpg-error.so.0": [],
+ "libgraphite2.so.3": [],
+ "libgssapi_krb5.so.2": [
+  "libcom_err.so.2",
+  "libk5crypto.so.3",
+  "libkrb5.so.3",
+  "libkrb5support.so.0"
+ ],
+ "libgthread-2.0.so.0": [
+  "libglib-2.0.so.0"
+ ],
+ "libgtk-3.so.0": [
+  "libX11.so.6",
+  "libXfixes.so.3",
+  "libXi.so.6",
+  "libatk-1.0.so.0",
+  "libatk-bridge-2.0.so.0",
+  "libcairo-gobject.so.2",
+  "libcairo.so.2",
+  "libepoxy.so.0",
+  "libfontconfig.so.1",
+  "libfribidi.so.0",
+  "libgdk-3.so.0",
+  "libgdk_pixbuf-2.0.so.0",
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgmodule-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libharfbuzz.so.0",
+  "libpango-1.0.so.0",
+  "libpangocairo-1.0.so.0",
+  "libpangoft2-1.0.so.0"
+ ],
+ "libharfbuzz.so.0": [
+  "libfreetype.so.6",
+  "libglib-2.0.so.0",
+  "libgraphite2.so.3"
+ ],
+ "libjpeg.so.8": [],
+ "libk5crypto.so.3": [
+  "libkrb5support.so.0"
+ ],
+ "libkeyutils.so.1": [],
+ "libkrb5.so.3": [
+  "libcom_err.so.2",
+  "libk5crypto.so.3",
+  "libkeyutils.so.1",
+  "libkrb5support.so.0"
+ ],
+ "libkrb5support.so.0": [],
+ "liblz4.so.1": [],
+ "liblzma.so.5": [],
+ "libmd.so.0": [],
+ "libmount.so.1": [
+  "libblkid.so.1",
+  "libselinux.so.1"
+ ],
+ "libncursesw.so.6": [
+  "libtinfo.so.6"
+ ],
+ "libpango-1.0.so.0": [
+  "libfribidi.so.0",
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libharfbuzz.so.0",
+  "libthai.so.0"
+ ],
+ "libpangocairo-1.0.so.0": [
+  "libcairo.so.2",
+  "libfontconfig.so.1",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libharfbuzz.so.0",
+  "libpango-1.0.so.0",
+  "libpangoft2-1.0.so.0"
+ ],
+ "libpangoft2-1.0.so.0": [
+  "libfontconfig.so.1",
+  "libfreetype.so.6",
+  "libgio-2.0.so.0",
+  "libglib-2.0.so.0",
+  "libgobject-2.0.so.0",
+  "libharfbuzz.so.0",
+  "libpango-1.0.so.0"
+ ],
+ "libpcre2-8.so.0": [],
+ "libpixman-1.so.0": [],
+ "libpng16.so.16": [
+  "libz.so.1"
+ ],
+ "libpython3.13.so.1.0": [],
+ "libreadline.so.8": [
+  "libtinfo.so.6"
+ ],
+ "libselinux.so.1": [
+  "libpcre2-8.so.0"
+ ],
+ "libssl.so.3": [
+  "libcrypto.so.3"
+ ],
+ "libstdc++.so.6": [
+  "libgcc_s.so.1"
+ ],
+ "libsystemd.so.0": [
+  "libcap.so.2",
+  "libgcrypt.so.20",
+  "liblz4.so.1",
+  "liblzma.so.5",
+  "libzstd.so.1"
+ ],
+ "libthai.so.0": [
+  "libdatrie.so.1"
+ ],
+ "libtinfo.so.6": [],
+ "libuuid.so.1": [],
+ "libxcb-glx.so.0": [],
+ "libxcb-randr.so.0": [],
+ "libxcb-render.so.0": [],
+ "libxcb-shm.so.0": [],
+ "libxcb-sync.so.1": [],
+ "libxcb-xfixes.so.0": [],
+ "libxkbcommon.so.0": [],
+ "libz.so.1": [],
+ "libzstd.so.1": []
+}
