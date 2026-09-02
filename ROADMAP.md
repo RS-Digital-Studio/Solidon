@@ -153,6 +153,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Regelwerk-Nachträge | Review vor der Demo 0.3.0 (02.09.2026) | Roberts Ansage für `AGENTS.md`/`CLAUDE.md`: Regel 5 und 8 als Haltungssätze ohne Testzusage, „nach jedem Schritt die vollständige Suite" zweistufig (erledigt 02.09.2026 auf Roberts Ansage: `tools/affected_tests.py` je Schritt, `/pruefen` vor dem Commit; `AGENTS.md`/`CLAUDE.md` zieht 3d-druck-7b nach), „Verzweigungen im Op-Stack" mit „in dieser Ausbaustufe (§41)", der Commit-Satz `CLAUDE.md:281` als „auf Ansage"; ohne Ansage: Wächter für Regel 2/6/10/19 in `tests/test_hard_rules.py` mit Gegenproben, die Suite-Fahrweise nur in `/pruefen` und `tests/CLAUDE.md`, die Fallteile von `tests.md`/`oberflaeche.md`/`ansicht.md` nach `.claude/memory/`, eine `.claude/rules/auslieferung.md` für `tools/` und `packaging/`, ein Regelnummern-Test wie `test_plan_references.py`, eine Frontmatter-`paths`-Prüfung |
 | Konzeptordner aufräumen | Review vor der Demo 0.3.0 (02.09.2026) | `konzepte/archiv/` für die 21 abgearbeiteten Dokumente (13 066 Zeilen), eine Entscheidungsnotiz „Weg 3 — Lizenzkette", `konzept-demo-2026-10.md` §6 als überholt kennzeichnen, Zeilenverweise auf `ROADMAP.md` durch Anker ersetzen, die zwei Sitzungs-Bedienkonzepte unter `.claude/` archivieren |
 | Die Stiftseite entscheidet mit, welche Hälfte die günstige Lage verliert | P10 — Auto Split mit Verstiftung | eine Messung, ob ein Tausch der Stiftseite das fertige Stützvolumen senkt; bis dahin folgt Auto Split der fertigen Zahl und wählt am Prüfkörper die Naht, die die zwei Überhänge **nicht** trennt |
+| Die CI prüft die Bausteinbereiche nicht mehr | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine `has_self_intersections`, die 27 Bausteine über 2114 Ecken in Minuten statt in einer Stunde prüft — oder einen eigenen CI-Job dafür, der das Paket nicht blockiert. Bis dahin prüft sie allein das lokale Tor (Entscheidung Robert, 02.09.2026: die CI fährt das Nötigste) |
+| Zwei Dialogdateien laufen in der CI in Fünferportionen | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Mine unter „Fünf Fensterdateien reißen" — `test_print_settings_ui.py` und `test_install.py` reißen nativ, sobald ein Prozess mehr als eine Handvoll ihrer Dialoge baut; Fünferportionen sind die gemessene Größe, die durchkommt, kein Fix |
 | Die Suite lässt unter Windows 11 ein Terminalfenster aufgehen | Review vor der Demo 0.3.0 (02.09.2026) | eine Ursache: `tests/test_process.py::test_a_windows_child_cannot_escape_into_a_detached_process_group` startet einen losgelösten Enkelprozess, und auf einer Maschine mit Windows Terminal als Standard-Konsolenhost öffnet sich dafür ein Fenster mit „Fehler 0x800700e8 beim Start" (Robert, 02.09.2026, Bildschirmfoto); der Test bleibt grün, das Fenster ist ein Nebeneffekt der Testumgebung — den Enkel ohne Konsole starten oder den Fall auf einem Rechner mit klassischem Konsolenhost nachstellen |
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
@@ -14160,3 +14162,35 @@ unter `core`, kein `eval`, kein `random` ohne Startwert.
 - [x] **`geom/mesh.py` kannte `export/threemf.py`.** Erledigt 02.09.2026 auf Roberts Freigabe aller drei Punkte: Der Leser liegt in `ingest/threemf.py`, der Schreiber bleibt in `export/threemf.py` und holt sich die Containerkonstanten vom Leser; `geom.mesh.read_mesh` liest nur noch, was trimesh zu einem Körper macht (`TRIMESH_SUFFIXES`), und `ingest.loader.read_model` entscheidet, was eine Datei ist — 3MF als Baugruppe verschweißt. `READABLE_SUFFIXES` steht jetzt bei der Eingangsstufe; Kommandozeile, `run_model_suite` und zwölf Testdateien lesen dort. Kein Dateiformat, keine Migration, die Beispielprojekte bleiben gültig.
 - [x] **`backends/scripted.py` reiste im Kundenpaket.** Erledigt 02.09.2026 auf Roberts Freigabe: Das Modell mit vorgeschriebenen Antworten liegt jetzt als `tests/scripted_backend.py` neben `agent_cases.py` und `php_probe.py`; sieben Testdateien importieren es von dort, keine Anwendungsdatei hat es je gebraucht. `backends/CLAUDE.md` sagt, wo es hin ist.
 - [ ] **21 Kernfunktionen über 150 Zeilen.** Wartet auf je einen eigenen Umbau mit Messung davor und danach. Erledigt 02.09.2026: `range_check.has_self_intersections` (806 Zeilen, acht innere Funktionen) ist die Klasse `_IntersectionCheck` mit Methoden — derselbe Algorithmus, gemessen alt gegen neu auf sieben Netzen (Quader, Icosphären mit 20 000 und 41 000 Flächen, zwei Bausteine): gleiche Befunde, gleiche Zeiten. Die Restliste, absteigend: `evaluate._with_features` 520, `evaluate.evaluate` 472, `part_file._strict_shape` 332, `range_check.large_mesh_intersects` ist als Methode aufgegangen, `handover.slice_model` 231, `mounting.pegboard_hook` 229, `advise._from_geometry` 208, `range_check.check` 207, `loader.normalise` 196, `autosplit.split_to_fit` 193, `agent.tools.extra_tools` 193, `features.detect_edge_loops` 181, `project.save` 175, `advise.warnings_for` 169, `generate.into_project` 165, `project.load` 162, `manual.models_text` 159, `repair.repair` 158, `pins.plan_pins` 155. Keine davon ist falsch; die zwei aus `evaluate.py` sind das Herz der Auswertung und bekommen den Umbau zuerst, jeder mit `test_evaluation.py` und den vier Hauptwegen davor und danach.
+
+## Die CI kam zum ersten Mal bis zum Ende (02.09.2026)
+
+Vier Stunden stand die Suite in `tests/test_parts.py`, dann Segfault — drei
+Läufe hintereinander, und niemand sah es, weil ein laufender Lauf wie ein
+langsamer aussieht. Ohne die Bereichstests, mit Workern, Frist und
+Gleichzeitigkeitsregel läuft sie in 3:22 (6868 Tests). Und sie sah zum ersten
+Mal, was seit Tagen unter ihr lag: Releaseakte ohne Evidenzschreiber und ohne
+Abhängigkeiten, ein Tor-Skript, das seine venv nur unter dem Windows-Namen
+kannte, Lizenztests, die die Plattform der eingecheckten Datei annahmen, ein
+Gramm-Test, der die Sprache des Rechners prüfte, ein Installer-Test, der den
+Windows-Weg auf Linux erwartete. Alles am selben Tag behoben; was offen
+bleibt, steht hier mit Kästchen.
+
+- [ ] **Die CI prüft die Bausteinbereiche nicht mehr.** Wartet auf eine
+  `has_self_intersections`, die die 27 Bausteine über ihre 2114
+  Parameterecken in Minuten prüft statt in einer Stunde auf einem Kern — oder
+  auf einen eigenen CI-Job, der das Paket nicht blockiert. Entscheidung Robert
+  (02.09.2026): Die CI fährt das Nötigste, die Bereichstests bleiben dem
+  lokalen Tor vor dem Commit. Die Pflicht aus AGENTS.md (jeder Baustein über
+  den ganzen Bereich) wird damit nur noch lokal eingelöst; wer sie in der CI
+  zurückhaben will, misst zuerst `range_check` (3d-druck-85 hat es am
+  02.09.2026 zur Klasse gemacht, gleiche Zeiten).
+- [ ] **Zwei Dialogdateien laufen in der CI in Fünferportionen.** Wartet auf
+  die Mine unter „Fünf Fensterdateien reißen vor ihrer Zusammenfassung":
+  `test_print_settings_ui.py` (18 von 20 Worker-Abstürzen) und
+  `test_install.py` (2) reißen nativ, sobald ein Prozess mehr als eine Handvoll
+  ihrer Dialoge baut — seriell nach 33, in Zehnern nach 6 und 8, in Fünfern
+  viermal von vier nie (3d-druck-85). `build.yml` fährt sie deshalb außerhalb
+  des großen Zugs in Fünferportionen, jede mit einem zweiten Anlauf. Das ist
+  die Größe, die durchkommt, kein Fix; wer die Mine entschärft, nimmt die
+  Portionierung wieder heraus.

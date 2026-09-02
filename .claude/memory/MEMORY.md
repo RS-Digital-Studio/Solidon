@@ -76,6 +76,7 @@
 - [Die Zahl beschreibt die Regel, nicht das Bild](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest nach einer Animation den Basiswert; das Foto ist die Instanz.
 - [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — CPU-Zeit, Speicher, Handles sehen stehend aus wie arbeitend; nur eine Differenz trennt sie.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Messung stimmte, die Kette dahinter war erfunden.
+- [Installer-Probe nicht mit Fenster](installer-probe-nicht-mit-fenster.md) — Robert klickt es durch; {app} zeigt in eine HKCU-Testinstallation.
 - [Sondenbau](sondenbau.md) — kippt ein Test nur im großen Lauf, misst eine Sonde den Unterschied; sechs Bauarten maßen sich selbst.
 - [Mutation, die den Fall nicht trifft](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht", nicht „der Test prüft nichts".
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — beim dritten Fehlbefund war die Messung echt und galt woanders.
@@ -104,6 +105,8 @@
 
 ## Haltung
 
+- [Gestellte Daten widersprechen echten daneben](gestellte-daten-widersprechen-echten-daneben.md) — „wasserdicht" über „an drei Stellen offen" im Handbuchbild; Erzeugnisse aus echten Läufen, gestellte Sorten am Beispiel, das sie hat.
+- [Beispielmaße gegen Parameter messen](beispiel-masse-gegen-parameter-messen.md) — 40,01 statt 40,00: eine Op mit Vorgabewerten kann am Beispiel unsichtbar falsch sein; die Hülle je Schritt messen.
 - [Beheben statt notieren](beheben-statt-notieren.md) — Fund → Messung → Behebung → Test in dieser Sitzung; das Register ist für Entscheidungen, nicht für Arbeit.
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — Roberts Maßstab: Muss der Kunde raten, ist es falsch; Aufwand ist kein Gegenargument. Bekräftigt 02.09.2026: „wow" als Maßstab, alle vier Wege, sofort optimieren statt notieren.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — gilt für alles: sieben Merkmale, die einen Text verraten; Rückspiegeln ist eines davon.
