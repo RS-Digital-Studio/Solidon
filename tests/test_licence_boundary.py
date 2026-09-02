@@ -33,7 +33,6 @@ from app.core import activation
 from app.core.activation import certificate, integrity, key, store
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply
-from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import ExternalToolError, InstallationDamaged, LicenceRequired
 from app.core.export.handover import SlicerSetup, open_in_slicer, slice_model
 from app.core.export.writer import plan_export, write_assembly, write_plan
@@ -46,6 +45,7 @@ from app.core.scene.evaluate import evaluate
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.slice.analysis import cross_section
 from app.core.types import PrintSettings, Profile, SceneObject, Source
+from tests.scripted_backend import ScriptedBackend
 from tools.make_licence_keys import make_key, public_key, sign
 
 MESHES = Path(__file__).parent / "data" / "meshes"

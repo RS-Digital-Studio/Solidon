@@ -19,13 +19,13 @@ from PySide6.QtWidgets import QApplication, QPushButton
 
 from app.core.backends import llm
 from app.core.backends.llm import Reply, ToolCall
-from app.core.backends.scripted import ScriptedBackend
 from app.core.scene.project import new_project
 from app.core.types import ChatEntry, Origin
 from app.ui.chat import ChatPanel, describe
 from app.ui.main_window import MainWindow
 from app.ui.session import ProposalPreview, Session
 from app.ui.settings import UiSettings
+from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

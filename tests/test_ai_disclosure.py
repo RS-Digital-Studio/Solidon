@@ -23,7 +23,6 @@ from PySide6.QtWidgets import QApplication, QDialog, QWidget
 
 from app.core.backends import llm
 from app.core.backends.llm import Message, Reply
-from app.core.backends.scripted import ScriptedBackend
 from app.i18n import set_language
 from app.i18n.catalog import available_languages, install_language, read_catalog
 from app.ui.ai_disclosure import (
@@ -46,6 +45,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings, load_settings, save_settings
 from app.ui.settings_dialog import SettingsDialog
+from tests.scripted_backend import ScriptedBackend
 
 
 class ProviderSpy(ScriptedBackend):

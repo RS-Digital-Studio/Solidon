@@ -14,7 +14,6 @@ Die Regeln stehen in `.claude/rules/agentenschicht.md`.
 | `mesh.py` | Mesh-Erzeugung für Weg 3, lokal oder gehostet (Säule B) |
 | `resources.py` | Gemeinsame Schwerlastspur für lokale KI auf derselben Grafikkarte |
 | `keys.py` | Wo der eigene Schlüssel des Nutzers liegt |
-| `scripted.py` | Ein Modell, das sagt, was man ihm aufgetragen hat — **die Grundlage jedes Agententests** (§35, §40) |
 | `comfy_setup.py` | Ein fremdes ComfyUI für Weg 3 einrichten (§36) |
 | `data/comfyui/` | Die Knoten dazu (TripoSG, MIT) |
 
@@ -23,11 +22,15 @@ Die Regeln stehen in `.claude/rules/agentenschicht.md`.
 Weil `tools/` im gebauten Paket **nicht mitreist**. Was der Nutzer aus der
 laufenden Anwendung heraus einrichten können soll, muss hier stehen.
 
-## `scripted.py` ist der Grund, warum Agententests ohne Geld laufen
+## Das Skript-Modell der Suite liegt nicht mehr hier
 
-Ein Modell mit vorgeschriebenen Antworten. Damit sind Sitzungsverlauf,
-Werkzeugaufrufe und Transaktionskopplung prüfbar, ohne ein echtes Modell zu
-fragen. Die echte Messung ist die Agenten-Suite und etwas anderes.
+`tests/scripted_backend.py` ist ein Modell mit vorgeschriebenen Antworten.
+Damit sind Sitzungsverlauf, Werkzeugaufrufe und Transaktionskopplung prüfbar,
+ohne ein echtes Modell zu fragen (§35, §40). Bis zum 02.09.2026 lag es hier
+als `scripted.py` und reiste damit im Kundenpaket mit, obwohl keine
+Anwendungsdatei es je importierte — `app/CLAUDE.md`: „Nichts hier ist ein
+Hilfsprogramm." Wer ein Backend für einen Test braucht, holt es aus `tests/`;
+die echte Messung ist die Agenten-Suite und etwas anderes.
 
 ## Eine Falle beim lokalen Modell
 

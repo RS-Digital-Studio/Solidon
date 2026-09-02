@@ -8,6 +8,12 @@ laufen zu lassen machte die Suite langsam, teuer und wackelig zugleich.
 Also fährt die Suite dieses Backend. Es antwortet aus einem Skript und behält
 alles, wonach es gefragt wurde — so kann ein Test behaupten, dass Steckbrief,
 Prüfbericht und Regelsammlung das Modell wirklich erreicht haben.
+
+**Hier und nicht in ``app/core/backends/``**, wo es bis zum 02.09.2026 lag:
+Was nur die Suite braucht, reist nicht zum Kunden (``app/CLAUDE.md`` —
+„Nichts hier ist ein Hilfsprogramm"). Keine Anwendungsdatei importierte es
+je; sieben Testdateien tun es, und die finden es hier, wie ``agent_cases``
+und ``php_probe``.
 """
 
 from __future__ import annotations

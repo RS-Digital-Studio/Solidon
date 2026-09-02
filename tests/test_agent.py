@@ -21,7 +21,6 @@ from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Message, Reply, ToolCall
-from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import ValidationError
 from app.core.knowledge import rules
 from app.core.scene import History, OperationDraft, evaluate
@@ -36,6 +35,7 @@ from app.core.types import (
     Severity,
     Source,
 )
+from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

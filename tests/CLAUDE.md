@@ -80,7 +80,7 @@ mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
 | Budget §31, Schwelle 25 % | `test_performance.py` (`-m performance`) |
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
-| 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py` |
+| 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |

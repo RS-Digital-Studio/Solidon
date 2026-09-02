@@ -29,8 +29,8 @@ from app.core.backends.llm import (
     parse_parameter_count,
     takes_temperature,
 )
-from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import AppError, ExternalToolError, InternalError
+from tests.scripted_backend import ScriptedBackend
 
 
 class Recorder:

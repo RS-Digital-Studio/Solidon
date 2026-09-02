@@ -29,12 +29,12 @@ from app.core.agent import apply as agent_apply
 from app.core.agent import tools
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply, ToolCall
-from app.core.backends.scripted import ScriptedBackend
 from app.core.registry import REGISTRY
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Profile, Source
 from tests.agent_cases import AMBIGUOUS, CASES, Case
+from tests.scripted_backend import ScriptedBackend
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 

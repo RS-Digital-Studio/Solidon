@@ -21,12 +21,12 @@ import pytest
 from app.core.agent import apply as agent_apply
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply, ToolCall
-from app.core.backends.scripted import ScriptedBackend
 from app.core.export.writer import plan_export, write_plan
 from app.core.knowledge.parts import PARTS
 from app.core.scene import History, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Profile
+from tests.scripted_backend import ScriptedBackend
 
 
 @pytest.fixture
