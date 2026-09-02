@@ -44,6 +44,19 @@ on:
     - cron: "0 5 * * 1"
   workflow_dispatch:
 
+# **Ein Stand je Zweig, nicht ein Lauf je Push.** Am 02.09.2026 pushten drei
+# Sitzungen innerhalb einer Viertelstunde, und jeder Push startete seinen
+# eigenen vollen Lauf — vier Suiten nebeneinander für denselben Zweig, und
+# das an einem Tag, an dem GitHub die Läufe wegen des Kostenlimits schon
+# einmal abgelehnt hatte. Ein neuer Push auf denselben Zweig bricht den
+# älteren Lauf deshalb ab: Geprüft wird, was liegt, nicht, was war. Für
+# Tags gilt das nicht — ein Tag ist ein Release, und ein zweiter Tag am
+# selben Tag darf dem ersten nicht das Paket wegnehmen; Zeitplan und
+# Handstart bleiben aus demselben Grund ungestört.
+concurrency:
+  group: bauen-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   suite:
     name: Suite (${{ matrix.os }})
