@@ -588,10 +588,9 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
 
     Der analytische Körper erweitert den Balken aus ``crossed_overhangs`` auf
     einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
-    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht sehr deutlich; mit der
-    heute gerundeten Verbindergeometrie bleibt sie vorn, aber mit den
-    tatsächlich höheren Stützvolumen beider Nähte. Der direkte Vergleich hält
-    fest, dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
+    Schwalbenschwänze. Ohne sie gewinnt die rechte Naht deutlich; nach ihrem
+    Aufbau braucht die linke weniger Stützen. Genau diese Mutation hält fest,
+    dass T2 die finale Geometrie und nicht bloß nackte Hälften beurteilt.
     """
     from app.core.knowledge.parts import PARTS
 
@@ -639,14 +638,14 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     )
 
     assert bare_right < bare_left * 0.5
-    assert right_final < left_final * (1.0 - autosplit.SUPPORT_TIE)
+    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE)
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
     chosen = autosplit.find_plane(mesh, profile)
 
     assert chosen is not None
-    assert chosen.position == pytest.approx(right.position)
+    assert chosen.position == pytest.approx(left.position)
 
 
 def test_a_seam_with_several_bridges_loses(profile: Profile) -> None:
