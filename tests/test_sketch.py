@@ -192,7 +192,9 @@ def test_circle_radius_is_a_distance() -> None:
     )
     solved = solve_sketch(sketch, {"r": 5.0})
     assert math.isclose(span(*solved.elements[0].points), 5.0, abs_tol=1e-6)
-    assert solved.free_dof == 3
+    # Mitte frei (2), Radius bemaßt: zwei Freiheitsgrade. Der Randpunkt darf auf
+    # seinem Kreis wandern, aber das ist kein Freiheitsgrad des Kreises (02.09.2026).
+    assert solved.free_dof == 2
 
 
 def test_arc_legs_end_up_equally_long() -> None:
@@ -414,7 +416,9 @@ def test_a_bolt_circle_places_its_holes_on_the_pitch_diameter() -> None:
     # Ein Kreis behält den Freiheitsgrad, um den sein Randpunkt rotieren darf —
     # so ist es bei ``circle`` seit jeher, und wo der Randpunkt sitzt, ändert am
     # Kreis nichts. Bestimmt ist, worauf es ankommt: Ort und Radius.
-    assert solved.free_dof == 6, "je Loch die Drehung seines Randpunkts, sonst nichts"
+    assert solved.free_dof == 0, (
+        "nichts wackelt — die Drehung eines Randpunkts ist kein Freiheitsgrad"
+    )
 
     centres = [element.points[0] for element in solved.elements]
     for x, y in centres:
@@ -434,7 +438,9 @@ def test_a_grid_of_holes_counts_rows_times_columns() -> None:
     assert len(sketch.elements) == 12
 
     solved = solve_sketch(sketch)
-    assert solved.free_dof == 12, "je Loch die Drehung seines Randpunkts"
+    assert solved.free_dof == 0, (
+        "nichts wackelt — die Drehung eines Randpunkts ist kein Freiheitsgrad"
+    )
 
     centres = {(round(x, 6), round(y, 6)) for x, y in (e.points[0] for e in solved.elements)}
     assert len(centres) == 12, "kein Loch liegt auf einem anderen"

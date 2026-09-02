@@ -48,7 +48,14 @@ from app.core.registry import OperationSpec, caveat_line, inactive_dependency
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
-from app.ui.labels import NumberSpin, choice_label, display_unit, explain_choices
+from app.ui.labels import (
+    NumberSpin,
+    choice_label,
+    circle_measure,
+    display_unit,
+    explain_choices,
+    set_circle_measure,
+)
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.panels import align_forms
 from app.ui.style import TIGHT, make_primary, set_level
@@ -138,6 +145,8 @@ class ValueField(QWidget):
     """
 
     changed = Signal()
+    captionChanged = Signal(str)
+    """Die Beschriftung der Zeile hat sich geändert — „Radius" statt „Durchmesser"."""
 
     #: Was auf dem Umschalter steht. Kein Emoji (Sprachregelung), kein Symbol
     #: aus dem Icon-Satz: „fx" ist in jedem CAD dasselbe Zeichen für „hier
@@ -157,6 +166,10 @@ class ValueField(QWidget):
         self._shown = shown_unit(entry)
         """In welcher Einheit dieses Feld spricht — ``None`` heißt Millimeter
         wie der Kern, also ohne Umrechnung."""
+        self._circle = entry.name.endswith("diameter") and entry.unit == "mm"
+        """Ob dieses Feld ein Kreismaß ist — dann darf es auch als Radius sprechen."""
+        self._half = self._circle and circle_measure() == "radius"
+        """Ob gerade der halbe Wert gezeigt wird. Der Kern bekommt immer den ganzen."""
         self._core: float | None = None
         """Der Wert, wie er hereinkam — genauer als seine eigene Anzeige.
 
@@ -270,12 +283,35 @@ class ValueField(QWidget):
         self.hint.setVisible(False)
         set_level(self.hint, "caption")
 
+        # Robert, 02.09.2026: „ein Umschalten zwischen Radius und Durchmesser
+        # bei den jeweiligen Eingaben". Ein Knopf am Feld, der sagt, was die
+        # Zahl gerade bedeutet; die Wahl gilt in jedem Kreisfeld und bleibt.
+        self.circle_toggle: QToolButton | None = None
+        if self._circle:
+            self.circle_toggle = QToolButton(self)
+            self.circle_toggle.setCheckable(True)
+            self.circle_toggle.setChecked(self._half)
+            self.circle_toggle.setAutoRaise(True)
+            self.circle_toggle.setToolTip(
+                tr(
+                    "Als Radius oder als Durchmesser eingeben — die Zahl wird "
+                    "umgerechnet, das Teil bleibt gleich."
+                )
+            )
+            self.circle_toggle.setStatusTip(self.circle_toggle.toolTip())
+            self.circle_toggle.setAccessibleDescription(self.circle_toggle.toolTip())
+            self.circle_toggle.setAccessibleName(tr("Durchmesser oder Radius"))
+            self._name_circle_toggle()
+            self.circle_toggle.toggled.connect(self._switch_circle)
+
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(TIGHT)
         row.addWidget(self.spin, 1)
         row.addWidget(self.text, 1)
         row.addWidget(self.parameter_button)
+        if self.circle_toggle is not None:
+            row.addWidget(self.circle_toggle)
         row.addWidget(self.toggle)
 
         layout = QVBoxLayout(self)
@@ -296,12 +332,48 @@ class ValueField(QWidget):
     # --- Wert -------------------------------------------------------------------
 
     def _as_shown(self, value_mm: float) -> float:
-        """Ein Kernwert, wie das Feld ihn zeigt."""
-        return from_mm(value_mm, self._shown) if self._shown else value_mm
+        """Ein Kernwert, wie das Feld ihn zeigt — in der Einheit, und halbiert,
+        wenn das Feld gerade als Radius spricht."""
+        shown = from_mm(value_mm, self._shown) if self._shown else value_mm
+        return shown / 2.0 if self._half else shown
 
     def _as_core(self, shown: float) -> float:
-        """Was im Feld steht, wie der Kern es bekommt — immer Millimeter."""
-        return to_mm(shown, self._shown) if self._shown else shown
+        """Was im Feld steht, wie der Kern es bekommt — immer Millimeter und
+        immer der Durchmesser."""
+        whole = shown * 2.0 if self._half else shown
+        return to_mm(whole, self._shown) if self._shown else whole
+
+    @property
+    def radius_view(self) -> bool:
+        """Ob das Feld gerade den Radius zeigt statt des Durchmessers."""
+        return self._half
+
+    def caption(self) -> str:
+        """Wie die Zeile heißt — der Titel des Schemas, oder „Radius"."""
+        return str(tr("Radius")) if self._half else str(self._entry.title)
+
+    def _name_circle_toggle(self) -> None:
+        assert self.circle_toggle is not None
+        self.circle_toggle.setText("R" if self._half else "Ø")
+
+    def _switch_circle(self, to_radius: bool) -> None:
+        """Dieselbe Zahl, anders gelesen: der Kernwert bleibt, die Anzeige halbiert."""
+        core = self._number()
+        self._half = bool(to_radius)
+        set_circle_measure("radius" if to_radius else "diameter")
+        self._name_circle_toggle()
+        entry = self._entry
+        blocked = self.spin.blockSignals(True)
+        self.spin.setMinimum(
+            self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
+        )
+        self.spin.setMaximum(
+            self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
+        )
+        self._core = core
+        self.spin.setValue(self._as_shown(core))
+        self.spin.blockSignals(blocked)
+        self.captionChanged.emit(self.caption())
 
     def set_value(self, value: Any) -> None:
         """Trägt Zahl oder Ausdruck ein und stellt das Feld passend."""
@@ -372,6 +444,9 @@ class ValueField(QWidget):
         self.text.setVisible(to_expression)
         self.parameter_button.setVisible(to_expression)
         self.hint.setVisible(to_expression)
+        if self.circle_toggle is not None:
+            # Ein Ausdruck meint immer die Größe des Schemas, den Durchmesser.
+            self.circle_toggle.setEnabled(not to_expression)
         if to_expression and not self.text.text().strip():
             # Aus der stehenden Zahl wird der Anfang des Ausdrucks: wer
             # umschaltet, will meist dieselbe Größe anders ausdrücken. Also die
@@ -1072,6 +1147,11 @@ class OperationDialog(QDialog):
                 # es gab und die niemand fand. ``labelForField`` holt das Label,
                 # das ``addRow`` aus der Zeichenkette gebaut hat.
                 _explain(editor, target.labelForField(editor), str(entry.doc))
+            if isinstance(editor, ValueField) and editor.circle_toggle is not None:
+                caption = target.labelForField(editor)
+                if isinstance(caption, QLabel):
+                    caption.setText(editor.caption())
+                    editor.captionChanged.connect(caption.setText)
 
         layout = QVBoxLayout(self)
         self._caveat: QLabel | None = None

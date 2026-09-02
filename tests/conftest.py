@@ -395,6 +395,7 @@ def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
     except ImportError:  # pragma: no cover - ohne PySide6 gibt es nichts zu räumen
         return
     labels.set_display_unit("mm")
+    labels.set_circle_measure("diameter")
 
 
 @pytest.fixture(autouse=True)

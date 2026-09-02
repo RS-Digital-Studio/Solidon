@@ -2370,3 +2370,52 @@ def test_the_sketch_use_dialog_locks_its_button_until_something_is_chosen(
     qt_app.processEvents()
     assert dialog._use.isEnabled(), "die Sperre löst sich wieder"
     assert not dialog._use.toolTip(), "und der Grund verschwindet mit ihr"
+
+
+def test_a_diameter_field_can_speak_as_radius(qt_app: QApplication) -> None:
+    """Robert, 02.09.2026: Umschalten zwischen Radius und Durchmesser an der Eingabe.
+
+    Der Kern bekommt in beiden Lagen den Durchmesser; die Anzeige halbiert,
+    die Beschriftung sagt, was die Zahl gerade ist, und die Wahl gilt danach
+    in jedem Kreisfeld.
+    """
+    from app.ui import labels
+    from app.ui.op_dialog import ValueField
+
+    entry = next(
+        spec for spec in REGISTRY.get("drill_hole").params.spec() if spec.name == "diameter"
+    )
+    field = ValueField(entry, 5.0)
+    captions: list[str] = []
+    field.captionChanged.connect(captions.append)
+    try:
+        assert field.circle_toggle is not None
+        assert field.circle_toggle.text() == "Ø"
+        assert field.spin.value() == pytest.approx(5.0)
+        field.circle_toggle.setChecked(True)
+        assert field.spin.value() == pytest.approx(2.5)
+        assert field.value() == pytest.approx(5.0), "der Kern bekommt den Durchmesser"
+        assert captions == ["Radius"]
+        assert labels.circle_measure() == "radius"
+        field.spin.setValue(4.0)
+        assert field.value() == pytest.approx(8.0)
+        field.circle_toggle.setChecked(False)
+        assert field.spin.value() == pytest.approx(8.0)
+        assert captions[-1] == str(entry.title)
+        assert labels.circle_measure() == "diameter"
+        field.toggle.setChecked(True)
+        assert not field.circle_toggle.isEnabled(), "ein Ausdruck meint immer den Durchmesser"
+    finally:
+        labels.set_circle_measure("diameter")
+        field.deleteLater()
+
+
+def test_a_field_that_is_no_circle_has_no_toggle(qt_app: QApplication) -> None:
+    from app.ui.op_dialog import ValueField
+
+    entry = next(spec for spec in REGISTRY.get("create_box").params.spec() if spec.name == "width")
+    field = ValueField(entry, 20.0)
+    try:
+        assert field.circle_toggle is None
+    finally:
+        field.deleteLater()

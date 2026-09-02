@@ -71,7 +71,18 @@ from app.core.types import (
 from app.core.units import EPS_DISPLAY
 from app.i18n import TranslatableText, _, tr
 from app.ui import cursors, icons, style
-from app.ui.labels import LengthSpin, length, localised
+from app.ui.labels import (
+    LengthSpin,
+    circle_measure,
+    circle_shown,
+    circle_sign,
+    circle_stored,
+    circle_word,
+    length,
+    localised,
+    read_number,
+    set_circle_measure,
+)
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.palette import ROLES, text_colour
 from app.ui.viewport import MEASURE_GAP
@@ -353,6 +364,19 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
     return f"({length(math.hypot(bx - ax, by - ay))})"
 
 
+def circle_label(expression: str) -> str:
+    """Ein Kreismaß, wie es an der Karte steht: „Ø 3,20 mm" oder „R 1,60 mm".
+
+    Ein Ausdruck bleibt wörtlich stehen und trägt das Ø, denn er meint den
+    gespeicherten Durchmesser — halbieren ließe sich nur eine Zahl.
+    """
+    try:
+        value = float(expression)
+    except ValueError:
+        return f"Ø {expression}" if expression else ""
+    return f"{circle_sign()} {length(circle_shown(value))}"
+
+
 def measured_expression(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> str:
     """Der Abstand zweier Punkte, wie er im Maßfeld vorstehen soll.
 
@@ -488,6 +512,9 @@ class SketchCanvas(QWidget):
 
     sketchChanged = Signal()
     selectionChanged = Signal()
+    measureViewChanged = Signal()
+    """Die Maße lesen sich anders (Ø oder R), die Zeichnung ist dieselbe —
+    die Karten in der 3D-Ansicht sollen trotzdem sofort nachziehen."""
     viewPlaneChanged = Signal(str)
     """Die Blickrichtung hat gewechselt, die Zeichenebene nicht.
 
@@ -653,6 +680,24 @@ class SketchCanvas(QWidget):
         self.measure_lock = QLabel(tr("🔒"), self)
         self.measure_lock.setAccessibleName(tr("Breite"))
         self.measure_lock.setVisible(False)
+        # Am Kreis steht neben dem Feld, was die Zahl bedeutet — Ø oder R —,
+        # und ein Klick tauscht es. Die Wahl gilt in jedem Kreisfeld der
+        # Anwendung (``labels.set_circle_measure``) und bleibt gespeichert.
+        self.circle_measure_button = QToolButton(self)
+        self.circle_measure_button.setAutoRaise(True)
+        self.circle_measure_button.setVisible(False)
+        self.circle_measure_button.setToolTip(
+            tr(
+                "Als Radius oder als Durchmesser eingeben — die Zahl wird "
+                "umgerechnet, das Teil bleibt gleich."
+            )
+        )
+        self.circle_measure_button.setAccessibleName(tr("Durchmesser oder Radius"))
+        self.circle_measure_button.setAccessibleDescription(self.circle_measure_button.toolTip())
+        self.circle_measure_button.clicked.connect(
+            weak_slot(self, SketchCanvas._toggle_circle_measure)
+        )
+        self._name_circle_button()
         self.second_measure_lock = QLabel(tr("🔒"), self)
         self.second_measure_lock.setAccessibleName(tr("Höhe"))
         self.second_measure_lock.setVisible(False)
@@ -836,7 +881,7 @@ class SketchCanvas(QWidget):
         annotations: list[tuple[tuple[float, float], str]] = []
         gap = MEASURE_GAP / max(self._snap_scale(), EPS_DISPLAY)
         for entry in self.sketch.constraints:
-            if entry.kind not in ("distance", "reference") or len(entry.targets) != 2:
+            if entry.kind not in ("distance", "reference", "diameter") or len(entry.targets) != 2:
                 continue
             first, second = entry.targets
             if min(first, second) < 0 or max(first, second) >= len(points):
@@ -845,6 +890,16 @@ class SketchCanvas(QWidget):
             bx, by = points[second]
             dx, dy = bx - ax, by - ay
             span = math.hypot(dx, dy)
+            if entry.kind == "diameter":
+                # Ein bemaßter Kreis trug bis zum 02.09.2026 keine Karte — sein
+                # Maß stand nur in der Bedingungsliste. Die Karte sitzt außen
+                # am Randpunkt und sagt Ø oder R, je nach Umschalter.
+                outward = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
+                place = (bx + outward[0] * gap, by + outward[1] * gap)
+                label = circle_label(entry.value)
+                if label:
+                    annotations.append((place, label))
+                continue
             normal = (-dy / span, dx / span) if span > EPS_DISPLAY else (0.0, 1.0)
             place = (
                 (ax + bx) / 2.0 + normal[0] * gap,
@@ -1273,17 +1328,22 @@ class SketchCanvas(QWidget):
         # Gemeldet am 27.08.2026 als Teil von „mach den Skizzenmodus perfekt
         # zum leichten Zeichnen für Anwender ohne große CAD-Kenntnisse".
         advice = self.outline_advice()
+        # **Klartext zuerst, das Fachwort dahinter in Klammern.** „Freiheits-
+        # grade" ist für den Kunden ohne CAD-Kenntnisse eine Vokabel, „wackeln"
+        # versteht jeder; der Könner findet seine Zahl weiter (Review 02.09.2026).
         if self.solved.free_dof == 0:
-            return tr("{state} · bestimmt — alle Freiheitsgrade sind vergeben. {advice}").format(
-                state=state, advice=advice
-            )
+            return tr(
+                "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}"
+            ).format(state=state, advice=advice)
         if self.solved.free_dof == 1:
-            return tr("{state} · ein Freiheitsgrad ist noch frei. {advice}").format(
-                state=state, advice=advice
-            )
-        return tr("{state} · {count} Freiheitsgrade sind noch frei. {advice}").format(
-            state=state, count=self.solved.free_dof, advice=advice
-        )
+            return tr(
+                "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr "
+                "(ein Freiheitsgrad frei). {advice}"
+            ).format(state=state, advice=advice)
+        return tr(
+            "{state} · Noch {count} Maße fehlen, dann wackelt nichts mehr "
+            "({count} Freiheitsgrade frei). {advice}"
+        ).format(state=state, count=self.solved.free_dof, advice=advice)
 
     def outline_advice(self) -> str:
         """Was der Zustand der Zeichnung für den nächsten Schritt bedeutet.
@@ -2212,10 +2272,17 @@ class SketchCanvas(QWidget):
         self.second_measure_field.setVisible(rectangle)
         self.measure_lock.setVisible(rectangle and self._rectangle_measures[0] is not None)
         self.second_measure_lock.setVisible(rectangle and self._rectangle_measures[1] is not None)
+        circle = self.tool == "circle"
+        self.circle_measure_button.setVisible(circle)
+        if circle:
+            self._name_circle_button()
+            self.circle_measure_button.adjustSize()
         gap = 4
         width = self.measure_field.width()
         if rectangle:
             width += gap + self.second_measure_field.width()
+        if circle:
+            width += gap + self.circle_measure_button.width()
         height = self.measure_field.height()
         left = tip.x() + MEASURE_GAP
         top = tip.y() + MEASURE_GAP
@@ -2228,6 +2295,8 @@ class SketchCanvas(QWidget):
         left = max(0.0, min(left, float(host.width() - width)))
         top = max(0.0, min(top, float(host.height() - height)))
         self.measure_field.move(int(left), int(top))
+        if circle:
+            self.circle_measure_button.move(int(left + self.measure_field.width() + gap), int(top))
         if rectangle:
             second_left = int(left + self.measure_field.width() + gap)
             self.second_measure_field.move(second_left, int(top))
@@ -2330,16 +2399,28 @@ class SketchCanvas(QWidget):
             width, height = self.pending_measures()
             return math.hypot(width, height)
         first = self._pending_world[0]
-        return math.hypot(self._pointer[0] - first[0], self._pointer[1] - first[1])
+        target = self.pointer_target()
+        span = math.hypot(target[0] - first[0], target[1] - first[1])
+        if self.tool == "circle" and circle_measure() == "diameter":
+            # **Das Feld sagt dasselbe, was eine getippte Zahl meint.** Bis zum
+            # 02.09.2026 stand hier der Radius, während ``place_measured`` die
+            # Zahl als Durchmesser las: Im Feld stand 10, Eingabetaste, und
+            # der Kreis halbierte sich, ohne dass sich die Zahl geändert hätte.
+            return span * 2.0
+        return span
 
     def pending_measures(self) -> tuple[float, float]:
         """Breite und Höhe des angefangenen Rechtecks am Zeiger."""
         if len(self._pending_world) != 1 or self.tool != "rectangle":
             return (0.0, 0.0)
         first = self._pending_world[0]
+        # Der gefangene Punkt, nicht die rohe Zeigerlage: Bei Rasterfang 2 mm
+        # standen 25,74 mal 51,03 in den Feldern, gezeichnet wurde 26 mal 52 —
+        # die Zahl muss das Maß nennen, das entsteht (Robert, 02.09.2026).
+        target = self.pointer_target()
         return (
-            abs(self._pointer[0] - first[0]),
-            abs(self._pointer[1] - first[1]),
+            abs(target[0] - first[0]),
+            abs(target[1] - first[1]),
         )
 
     def place_measured(self, value: float) -> None:
@@ -2380,6 +2461,10 @@ class SketchCanvas(QWidget):
         # nicht einmal einen Anlass zu stutzen. Der Drucker spricht in
         # Durchmessern und die Norm auch, deshalb ist Ø hier die Vorgabe.
         measured_kind = "diameter" if self.tool == "circle" else "distance"
+        if measured_kind == "diameter":
+            # Die Datei führt den Durchmesser; wer als Radius tippt, tippt die
+            # Hälfte davon (``circle_stored`` rechnet je nach Umschalter).
+            value = circle_stored(value)
         reach = value / 2.0 if measured_kind == "diameter" else value
         # Ohne Richtung nach rechts: eine Länge ohne Richtung ist keine Linie,
         # und die Waagerechte ist die Antwort, die niemanden überrascht.
@@ -2476,7 +2561,21 @@ class SketchCanvas(QWidget):
             self.second_measure_field,
             self.measure_lock,
             self.second_measure_lock,
+            self.circle_measure_button,
         )
+
+    def _name_circle_button(self) -> None:
+        self.circle_measure_button.setText(circle_sign())
+        if self.tool == "circle":
+            self.measure_field.setAccessibleName(circle_word())
+
+    def _toggle_circle_measure(self) -> None:
+        """Ø wird R und zurück — dieselbe Geometrie, andere Zahl im Feld."""
+        set_circle_measure("radius" if circle_measure() == "diameter" else "diameter")
+        self._name_circle_button()
+        self._place_measure_field(self.pending_measure())
+        self.update()
+        self.measureViewChanged.emit()
 
     def _hide_measure_widgets(self) -> None:
         """Nimmt die zusammengehörige Maßeingabe vollständig aus dem Bild."""
@@ -5149,14 +5248,23 @@ class SketchPanel(QWidget):
         entry = constraints[row]
         if not entry.value:
             return
-        value, agreed = QInputDialog.getText(
-            self,
-            str(tr("Maß ändern")),
-            f"{_constraint_label(entry.kind)}:",
-            text=str(entry.value),
-        )
+        caption = _constraint_label(entry.kind)
+        shown = str(entry.value)
+        as_circle = entry.kind == "diameter"
+        if as_circle:
+            # Der Umschalter gilt auch hier: gefragt wird nach dem, was die
+            # Karte zeigt; gespeichert wird weiter der Durchmesser.
+            caption = circle_word()
+            try:
+                shown = f"{circle_shown(float(entry.value)):.9f}".rstrip("0").rstrip(".")
+            except ValueError:
+                shown = str(entry.value)
+        value, agreed = QInputDialog.getText(self, str(tr("Maß ändern")), f"{caption}:", text=shown)
         if agreed and value.strip():
-            self.canvas.change_constraint(row, value.strip())
+            entered = value.strip()
+            if as_circle and (typed := read_number(entered)) is not None:
+                entered = f"{circle_stored(typed):.9f}"
+            self.canvas.change_constraint(row, entered)
 
     def _constraint_double_click(self, item: Any) -> None:
         """Doppelklick auf eine Zeile — der Griff, den ein Fusion-Kunde sucht.

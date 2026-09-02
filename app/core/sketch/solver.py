@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 import numpy as np
 
@@ -608,10 +608,22 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
     solution, residuals, jacobian = _solve(equations, anchors)
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     rank = int(np.linalg.matrix_rank(jacobian)) if residuals.size else 0
+    counted_rank = _rank_with_circle_gauges(sketch, solution, jacobian, rank, variables)
     blocks = _row_blocks(equations)
 
+    # **Beide Zweige darunter greifen in ``sketch.constraints``**, und beide
+    # Helfer geben im Rückfall ``0`` zurück, wenn gar keine tragende Bedingung
+    # dabei war. Zusammen sähe das nach einem ``IndexError`` bei leerer
+    # Bedingungsliste aus. Er ist keiner, und das ist ein Argument und keine
+    # Hoffnung: Ohne tragende Bedingung stammt **jede** Zeile aus
+    # ``_arc_equation``. Die stehen auf getrennten Punkten, sind einzeln
+    # erfüllbar und voneinander unabhängig — Rest null, Rang voll, kein Zweig
+    # läuft an. Die beiden ``assert`` halten genau diese Überlegung fest; wer
+    # eine implizite Gleichung dazustellt, die das bricht, merkt es hier und
+    # nicht als „Im Programm ist ein unerwarteter Fehler aufgetreten".
     if max_residual > _TOL:
         first, second = _conflict_pair(equations, blocks, residuals)
+        assert max(first, second) < len(sketch.constraints), "conflict without a bearing constraint"
         raise SketchConflictError(
             first,
             second,
@@ -624,6 +636,9 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
 
     if residuals.size and rank < residuals.size:
         first, second = _redundant_pair(sketch.constraints, equations, blocks, jacobian, rank)
+        assert max(first, second) < len(sketch.constraints), (
+            "redundancy without a bearing constraint"
+        )
         raise SketchConflictError(
             first,
             second,
@@ -653,6 +668,48 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
 
     return SolvedSketch(
         elements=tuple(elements),
-        free_dof=variables - rank,
+        free_dof=variables - counted_rank,
         max_residual=max_residual,
     )
+
+
+def _rank_with_circle_gauges(
+    sketch: Sketch, solution: Any, jacobian: Any, rank: int, variables: int
+) -> int:
+    """Der Rang, der die Freiheitsgrade zählt — mit einer Eichzeile je Kreis.
+
+    Ein Kreis führt vier Variablen (Mitte und Randpunkt) bei drei echten
+    Freiheitsgraden: Der Randpunkt darf auf seinem Kreis wandern, und wo er
+    sitzt, ändert am Kreis nichts. Bis zum 02.09.2026 zählte ``free_dof``
+    diese Eichfreiheit mit, und die Statuszeile sagte „Noch ein Maß fehlt"
+    über einem Kreis mit fester Mitte und bemaßtem Durchmesser, an dem nichts
+    mehr fehlte — ein Lochkreis mit sechs Löchern stand mit sechs freien
+    Graden da.
+
+    Die Eichzeile ist die Tangentialrichtung am Randpunkt (am Rand ``+t``, an
+    der Mitte ``-t``, damit eine Verschiebung des ganzen Kreises sie nicht
+    berührt). Sie geht **nur** in diesen Rang ein — nicht in den Löser, der
+    den Randpunkt weiter frei setzt, und nicht in die Redundanzprüfung, die
+    nur Bedingungen des Nutzers gegeneinander hält. Wo eine Bedingung den
+    Randpunkt schon festhält (waagerecht zur Mitte, auf einem Festpunkt), ist
+    die Zeile abhängig und zählt nichts doppelt.
+    """
+    rows: list[Any] = []
+    offset = 0
+    points = np.asarray(solution, dtype=float).reshape(-1, 2)
+    for element in sketch.elements:
+        if element.kind == "circle":
+            centre, rim = offset, offset + 1
+            away = points[rim] - points[centre]
+            reach = float(np.hypot(away[0], away[1]))
+            if reach > EPS_GEOM:
+                tangent = np.array([-away[1], away[0]]) / reach
+                row = np.zeros(variables)
+                row[2 * rim : 2 * rim + 2] = tangent
+                row[2 * centre : 2 * centre + 2] = -tangent
+                rows.append(row)
+        offset += len(element.points)
+    if not rows:
+        return rank
+    stacked = np.vstack([jacobian, *rows]) if jacobian.size else np.vstack(rows)
+    return int(np.linalg.matrix_rank(stacked))

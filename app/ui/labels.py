@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date
-from typing import Any, Final
+from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
@@ -126,6 +126,69 @@ def set_display_unit(unit: LengthUnit) -> None:
 def display_unit() -> LengthUnit:
     """Die eingestellte Anzeigeeinheit."""
     return _DISPLAY_UNIT
+
+
+def read_number(text: str) -> float | None:
+    """Eine getippte Zahl nach der Leseregel von :class:`NumberSpin`.
+
+    Das letzte Trennzeichen ist das Dezimaltrennzeichen, alle davor sind
+    Tausendertrennungen: „12,5", „12.5", „1.234,5" und „1,234.5" lesen sich
+    alle richtig. ``None`` heißt: das ist keine Zahl.
+    """
+    raw = text.strip()
+    if not raw:
+        return None
+    last = max(raw.rfind(","), raw.rfind("."))
+    if last >= 0:
+        head = raw[:last].replace(",", "").replace(".", "")
+        raw = f"{head}.{raw[last + 1 :]}"
+    try:
+        return float(raw)
+    except ValueError:
+        return None
+
+
+CircleMeasure = Literal["diameter", "radius"]
+
+#: Wie ein Kreismaß gezeigt und eingegeben wird — als Durchmesser oder als
+#: Radius. Ein Zustand wie die Anzeigeeinheit, aus demselben Grund: Das
+#: Kreisfeld der Skizze, jedes ``diameter``-Feld eines Dialogs und die
+#: Maßkarte am Kreis sollen dieselbe Antwort geben (Robert, 02.09.2026: „ein
+#: Umschalten zwischen Radius und Durchmesser bei den jeweiligen Eingaben").
+#: Gespeichert wird immer der Durchmesser — der Drucker spricht in
+#: Durchmessern und die Norm auch; der Radius ist eine Anzeige davon.
+_CIRCLE_MEASURE: CircleMeasure = "diameter"
+
+
+def set_circle_measure(kind: CircleMeasure) -> None:
+    """Stellt um, ob Kreismaße als Durchmesser oder Radius sprechen."""
+    global _CIRCLE_MEASURE
+    _CIRCLE_MEASURE = kind
+
+
+def circle_measure() -> CircleMeasure:
+    """Ob Kreismaße gerade als Durchmesser oder als Radius gezeigt werden."""
+    return _CIRCLE_MEASURE
+
+
+def circle_shown(diameter: float) -> float:
+    """Ein gespeicherter Durchmesser, wie das Feld ihn zeigt."""
+    return diameter / 2.0 if _CIRCLE_MEASURE == "radius" else diameter
+
+
+def circle_stored(shown: float) -> float:
+    """Was im Feld steht, als Durchmesser — so wird es gespeichert."""
+    return shown * 2.0 if _CIRCLE_MEASURE == "radius" else shown
+
+
+def circle_sign() -> str:
+    """Das Zeichen vor einem Kreismaß: Ø oder R."""
+    return "R" if _CIRCLE_MEASURE == "radius" else "Ø"
+
+
+def circle_word() -> str:
+    """Das Wort für ein Kreismaß, für Beschriftungen und Vorleser."""
+    return str(tr("Radius") if _CIRCLE_MEASURE == "radius" else tr("Durchmesser"))
 
 
 class NumberSpin(QDoubleSpinBox):
