@@ -134,11 +134,25 @@ def clamp(value: float, minimum: float, maximum: float) -> float:
 
 
 def match_tolerance(diagonal_mm: float) -> float:
-    """Die Vergleichsschwelle der Merkmalszuordnung für ein Modell dieser
-    Größe (§21.2).
+    """``EPS_MATCH`` als absolute Länge für ein Modell dieser Größe (§11.2).
 
     Relativ fürs Vergleichen, absolut fürs Fertigen — das ist die Faustregel
     hinter den drei Toleranzen.
+
+    **Nicht die Schwelle der Merkmalszuordnung**, obwohl hier lange „die
+    Vergleichsschwelle der Merkmalszuordnung (§21.2)" stand. Die Zuordnung
+    rechnet in :mod:`app.core.perceive.matching`, und sie fragt diese Funktion
+    nicht: Ihre Position kostet ``POSITION_TOLERANCE`` (0,08 der
+    Modelldiagonale), daneben stehen eigene Toleranzen für Durchmesser und
+    Achse, und angenommen wird unter ``MATCH_THRESHOLD``. Die Zahlen sind
+    gemessen und tragen die Suite — auf 0,005 gesetzt, also auf
+    :data:`EPS_MATCH_RELATIVE`, fallen zwei Fälle in
+    ``tests/test_matching.py`` um, darunter der, an dem zwei gleiche Bohrungen
+    mehrdeutig sein müssen.
+
+    Der Satz war deshalb keine Beschreibung, sondern eine Zusage, die niemand
+    einlöste — und der nächste, der die Zuordnung nachstellt, hätte hier
+    gedreht und nichts bewirkt.
     """
     return max(EPS_MATCH_MINIMUM, abs(diagonal_mm) * EPS_MATCH_RELATIVE)
 

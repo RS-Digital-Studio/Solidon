@@ -17,7 +17,7 @@
 # hängen könnte. Eine Übersetzung ändert keine Regel, deshalb bleibt die
 # Version, wo sie ist.
 #
-# Version 3 (26.08.2026) streicht zwei Regeln, ohne eine zu ersetzen:
+# Version 4 (26.08.2026) streicht zwei Regeln, ohne eine zu ersetzen:
 # „OpenSCAD-Auflösung" und „Eigener Kern vor OpenSCAD". Beide beschrieben den
 # Umgang mit einem Weg, den es seit dem OpenSCAD-Ausbau nicht mehr gibt — die
 # erste riet zu einer Einstellung in einem Programm, das gar nicht mehr
@@ -27,7 +27,7 @@
 # ohne Gegenstand. Was „Eigener Kern vor OpenSCAD" inhaltlich schützte — nimm
 # das Genaue, nicht das Nachgebaute —, sagt „Bausteine vor Primitiven" weiter.
 
-version = "3"
+version = "4"
 
 [[rules]]
 id = "min_wall"
@@ -305,6 +305,24 @@ date = "2026-07-28"
 reason = """
 Regel exact_before_script ergänzt: seit P12 gibt es einen B-Rep-Kern, und was
 der kann, muss nicht als OpenSCAD-Quelltext an einen Unterprozess gehen —
-genauer, im Verlauf änderbar, ohne installiertes Programm."""
+genauer, im Verlauf änderbar, ohne installiertes Programm. Diese Regel gibt es
+seit Version 4 nicht mehr; der Eintrag bleibt stehen, weil ein Änderungsverlauf
+sonst erzählt, was heute gilt, statt was geschah."""
 suite_before = "15/15"
 suite_after = "15/15"
+
+[[changes]]
+version = "4"
+date = "2026-08-26"
+reason = """
+Drei Regeln gestrichen, ohne eine zu ersetzen: exact_before_script,
+OpenSCAD-Auflösung und Eigener Kern vor OpenSCAD. Anlass ist der Ausbau von
+OpenSCAD — es gibt keinen Weg mehr dorthin (AGENTS.md Regel 11), und eine
+Regel, die vor etwas warnt, das niemand mehr tun kann, kostet Platz im Auftrag
+und lehrt eine Unterscheidung ohne Gegenstand. Was Eigener Kern vor OpenSCAD
+inhaltlich schützte — nimm das Genaue, nicht das Nachgebaute —, sagt Bausteine
+vor Primitiven weiter. Die Version stand bis zum 02.09.2026 auf 3, obwohl der
+Kopf dieser Datei die Streichung als Version 3 beschrieb und der Eintrag
+darüber unter derselben Nummer den Zuwachs nennt."""
+suite_before = "nicht gemessen"
+suite_after = "nicht gemessen"

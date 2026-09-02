@@ -173,10 +173,15 @@ def load(path: Path | None = None) -> Tables:
 
     tables = Tables(
         version=str(data.get("version", "0")),
-        screws=_index(Screw, data.get("screws", ()), "screws", source),
+        # Das Leitmaß je Tabelle: die Schraube nach ihrem Nennmaß (mit dem
+        # das Durchgangsloch aufsteigt), die Buchse nach dem Loch, in das sie
+        # gepresst wird. Die übrigen Tabellen hat kein Aufrufer der Reihe nach
+        # abgeklappert, und eine Sortierung ohne Frage dahinter wäre eine
+        # Zusage, die niemand braucht.
+        screws=_index(Screw, data.get("screws", ()), "screws", source, "nominal"),
         nuts=_index(Nut, data.get("nuts", ()), "nuts", source),
         washers=_index(Washer, data.get("washers", ()), "washers", source),
-        inserts=_index(Insert, data.get("inserts", ()), "inserts", source),
+        inserts=_index(Insert, data.get("inserts", ()), "inserts", source, "hole"),
         magnets=_index(Magnet, data.get("magnets", ()), "magnets", source),
         bearings=_index(Bearing, data.get("bearings", ()), "bearings", source),
         profiles=_index(ProfileSlot, data.get("profiles", ()), "profiles", source),
@@ -190,8 +195,24 @@ def load(path: Path | None = None) -> Tables:
     return tables
 
 
-def _index(kind: type, entries: Any, table_name: str, source: Path) -> dict[str, Any]:
-    """Baut einen Index, ohne doppelte Größen still zu überschreiben."""
+def _index(
+    kind: type, entries: Any, table_name: str, source: Path, order: str = ""
+) -> dict[str, Any]:
+    """Baut einen Index, ohne doppelte Größen still zu überschreiben.
+
+    ``order`` ist das **Leitmaß** der Tabelle: das Feld, nach dem sie
+    aufsteigt. Wer es angibt, bekommt eine sortierte Tabelle zurück.
+
+    **Die Reihenfolge ist eine Zusage und stand bisher nur in der
+    Datendatei.** ``size_for_insert`` und ``size_for_nut_trap`` nehmen die
+    *erste* passende Größe als die kleinste, ``size_for_thread`` die letzte
+    als die größte, und ``scene/placement.py`` schreibt die Annahme in einen
+    Kommentar, ohne sie zu prüfen. Ein neuer Eintrag, angehängt statt
+    einsortiert, hätte die Größenauswahl der Bausteine still verdreht: eine
+    M8-Buchse in einem Loch, in das eine M3 gehört, und kein Test, der
+    anschlägt. Sortiert wird deshalb beim **Lesen**; wo die Zusage entsteht,
+    wird sie auch eingelöst.
+    """
     indexed: dict[str, Any] = {}
     for raw in entries:
         if not isinstance(raw, dict):
@@ -204,7 +225,14 @@ def _index(kind: type, entries: Any, table_name: str, source: Path) -> dict[str,
             indexed[size] = kind(**values)
         except (TypeError, ValueError) as problem:
             raise _invalid(table_name, size, "fields", source) from problem
-    return indexed
+    if not order:
+        return indexed
+    # Nach dem Leitmaß, bei Gleichstand nach dem Namen: Zwei Buchsen mit
+    # demselben Loch (M3 und M3S) sollen nicht bei jedem Lauf die Plätze
+    # tauschen. Eine Auswahlliste, die sich zwischen zwei Starts umsortiert,
+    # ist keine — und der Name ist das einzige Merkmal, das die Tabelle sonst
+    # noch eindeutig macht.
+    return dict(sorted(indexed.items(), key=lambda item: (getattr(item[1], order), item[0])))
 
 
 def _invalid(table_name: str, size: str, constraint: str, source: Path) -> ValidationError:

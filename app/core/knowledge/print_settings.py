@@ -146,6 +146,24 @@ def has_material(material_id: str) -> bool:
     return material_id in _all()["material"]
 
 
+def material_temperature(material_id: str, field: str) -> int | None:
+    """Was das Material selbst verlangt, **ungedeckelt** — oder nichts.
+
+    :func:`_temperatures` gibt nur den gedeckelten Wert heraus, und damit ist
+    die Kürzung von außen nicht mehr zu sehen: 80 Grad Bett auf einer Maschine
+    mit 80 Grad Grenze sehen aus wie 80 Grad Wunsch. ``advise`` braucht beide
+    Zahlen, um den Unterschied zu melden (§17.3) — sonst deckelt der Kern
+    still, und genau das soll er nicht.
+
+    ``None`` heißt: Dieses Material sagt zu diesem Wert nichts. Das ist etwas
+    anderes als eine Null — ein Material ohne eigene Einstellungen druckt mit
+    den Modellvorgaben (siehe :func:`_material_table`), und daraus einen
+    Befund zu bauen hieße, eine Vorgabe für einen Wunsch zu halten.
+    """
+    value = _material_table(material_id).get(field)
+    return int(value) if isinstance(value, int | float) else None
+
+
 def _material_table(material_id: str) -> dict[str, Any]:
     """Ein unbekanntes Material ist kein Fehler — dann gelten die Vorgaben des
     Modells, und der Nutzer stellt nach.

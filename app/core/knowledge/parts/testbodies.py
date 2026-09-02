@@ -14,8 +14,10 @@ Einmal gedruckt, gemessen, und die Werte gehen ins Materialprofil (§28.3) — v
 dort erreichen sie jedes bestehende Projekt, denn Toleranzen im Stapel sind
 Verweise (§12).
 
-Die Körper tragen ihre Zahlen als erhabene Schrift, denn eine gedruckte Leiter
-ohne Beschriftung ist am nächsten Morgen ein Rätsel.
+Die Körper tragen ihre Nummern als eingravierte Striche — so viele, wie die
+Stufe zählt —, denn eine gedruckte Leiter ohne Beschriftung ist am nächsten
+Morgen ein Rätsel. Keine Schrift und nichts Erhabenes: Eine Schrift wäre eine
+Abhängigkeit, und ein aufgesetztes Zeichen bräuchte Stützen, wo es übersteht.
 """
 
 from __future__ import annotations
@@ -55,6 +57,20 @@ FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE = PartChange(
     effect=(
         "Abstand und Plattentiefe richten sich jetzt auch nach der größten "
         "Bohrung; Nennmaße, Spielstufen und Höhe bleiben unverändert."
+    ),
+)
+
+FIT_LADDER_NUMBERS_ITS_STEPS = PartChange(
+    version="14",
+    date="2026-09-02",
+    reason=(
+        "Die Beschriftung zählte die letzte Ziffer des Spiels statt der Stufe: "
+        "bei der Vorgabe trugen Stufe 1 und 3 dieselben Striche, bei Schritt "
+        "0,10 alle vier."
+    ),
+    effect=(
+        "Jede Stufe trägt so viele eingravierte Striche wie ihre Nummer; Maße, "
+        "Spiele und Höhe bleiben unverändert."
     ),
 )
 
@@ -124,7 +140,12 @@ class FitLadderParams(BaseParams):
         "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, "
         "und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE,
+        FIT_LADDER_NUMBERS_ITS_STEPS,
+    ],
 )
 def fit_ladder(raw: BaseParams) -> PartResult:
     params = cast(FitLadderParams, raw)
@@ -164,7 +185,7 @@ def fit_ladder(raw: BaseParams) -> PartResult:
                 through=True,
             )
         )
-        cutters.append(_label(f"{play:.2f}", (x, 0.0, base_height - LABEL_DEPTH)))
+        cutters.append(_label(index + 1, (x, 0.0, base_height - LABEL_DEPTH)))
 
     body = subtract(union(*bodies), *cutters)
     return result(body, *features)
@@ -365,15 +386,30 @@ def _ramp(width: float, reach: float, rise: float) -> MeshData:
     return MeshData.of(body)
 
 
-def _label(text: str, position: tuple[float, float, float]) -> MeshData:
-    """Die Zahl als eingravierter Strichcode aus Ziffern.
+def _label(step: int, position: tuple[float, float, float]) -> MeshData:
+    """Die Stufennummer als eingravierter Strichcode: ``step`` Striche.
 
     Keine Schrift: eine Schrift ist eine Abhängigkeit, eine Lizenzfrage und ein
     Rendering-Problem zugleich (§36). Gebraucht wird hier nur, vier Stufen
     auseinanderzuhalten, und so viele kleine Striche wie die Stufennummer tun
     das auf dem Druckbett.
+
+    **Gezählt wurde bis zum 02.09.2026 die letzte Ziffer des Spiels** — nicht
+    die Stufe, obwohl der Satz darüber sie seit je verspricht: 0,10 gab zehn
+    Striche, 0,15 fünf, 0,20 wieder zehn. Mit der Vorgabe der Leiter (0,10 mm,
+    Schritt 0,05 mm) trugen Stufe eins und drei dieselbe Zahl und Stufe zwei
+    und vier ebenfalls; mit Schrittweite 0,10 mm waren alle vier gleich. Auf
+    einem Körper, dessen einziger Zweck es ist, Spiele auseinanderzuhalten,
+    ist das keine Ungenauigkeit, sondern der Verlust der Messung: Wer die
+    gedruckte Leiter in die Hand nimmt, kann die passende Stufe nicht mehr
+    benennen.
+
+    Die Stufennummer statt des Werts, und zwar aus zwei Gründen: Sie ist
+    eindeutig, und sie bleibt es für jede Kombination aus erstem Spiel und
+    Schrittweite. Welches Spiel zu welcher Stufe gehört, sagt der Dialog, aus
+    dem der Körper kommt.
     """
-    count = max(1, round(float(text.replace(",", ".")) * 100) % 10 or 10)
+    count = max(1, int(step))
     bars = []
     for index in range(count):
         bar = shapes.box(0.8, 3.0, LABEL_DEPTH + BOOLEAN_OVERLAP)

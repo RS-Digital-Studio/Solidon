@@ -37,6 +37,10 @@ version = "7"
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
 # tap: Kernloch für Gewindeschneiden · head: Kopfdurchmesser Zylinderkopf (ISO 4762)
 # head_height: Kopfhöhe · countersink: Kopfdurchmesser Senkkopf (ISO 10642)
+#   countersink ist bei allen Größen 2·d — nachgeschlagen am 02.09.2026: ISO 10642 /
+#   DIN 7991 nennen dk max = 2·d für M3 bis M8 (größere Zahlen in Händlertabellen
+#   sind die Senkung d2 der Durchgangsbohrung, nicht der Kopf); M2 und M2.5 stehen
+#   nicht in der Norm und folgen derselben Regel.
 # hex: Schlüsselweite Innensechskant · pitch: Regelsteigung
 
 [[screws]]

@@ -90,13 +90,19 @@ BROAD_FACE_SHARE = 0.05
 #: ansetzt: darunter passt weder ein Schraubenkopf noch ein lesbarer Buchstabe.
 MIN_FACE_AREA = 4.0
 
-#: Zylinder unter diesem Durchmesser sind keine Bohrungen, sondern Artefakte.
+#: Zylinder unter diesem Durchmesser sind keine Merkmale, sondern Artefakte.
 #:
 #: Eine Düse legt 0,4 mm breite Bahnen; ein Loch von 0,05 mm hat kein Werkzeug
 #: gemacht und keines wird je hineinpassen. Auf einem erzeugten Netz entstehen
 #: solche Zylinderfits an jeder Stelle, an der ein paar Dreiecke zufällig um
 #: eine Achse herumstehen.
-MIN_HOLE_DIAMETER = 0.5
+#:
+#: **Die Schranke gilt beiden Richtungen, und der Name sagt das.** Sie hieß
+#: ``MIN_HOLE_DIAMETER`` und stand nur in :func:`detect_holes`; eine Erhebung
+#: von 0,05 mm kam als Zapfen zurück, während die gleich große Vertiefung
+#: daneben verworfen wurde. Ein Zapfen ist das, womit man eine Bohrung paart
+#: (§14) — was für kein Werkzeug zu klein ist, ist für keine Passung zu klein.
+MIN_CYLINDER_DIAMETER = 0.5
 
 #: … außer sie bestehen aus mindestens so vielen koplanaren Dreiecken. Ein
 #: Zylinderdeckel kommt aus dem Kern als ein Dreieck je Segment — sie zu zählen
@@ -722,7 +728,7 @@ def detect_holes(
     found = [
         entry
         for entry in cylinders
-        if entry[0].inward and entry[0].radius * 2.0 >= MIN_HOLE_DIAMETER
+        if entry[0].inward and entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER
     ]
     return [
         Feature(
@@ -753,6 +759,13 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     liegt die dünne Richtung ja in der Achse. Diese Unterscheidung ist der
     ganze Punkt: nach der dünnsten Kante gemessen fielen 92 von 165 Bohrungen
     durch, davon die meisten zu Recht vorhanden.
+
+    **„Quer zur Achse" heißt dabei die weitere der beiden übrigen Richtungen,
+    nicht die engere.** Ein Hüllquader ist nicht der Körper: Ein L-Profil ist
+    in einer Richtung 160 mm breit und trägt trotzdem nirgends ein Loch dieser
+    Größe. Die Schranke ist deshalb bewusst die lässigere von beiden — sie
+    fängt den Widerspruch (breiter als das ganze Teil) und maßt sich kein
+    Urteil darüber an, wo im Teil das Merkmal sitzt.
 
     **Warum es das braucht.** Die Einpassung ist geometrisch nicht falsch: ein
     sanft gebogener Arm *ist* örtlich ein Zylinder mit großem Radius, und der
@@ -882,13 +895,32 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
     genau einen Fall mit **zwei** koaxialen Zylindern gleichen Durchmessers —
     die gespiegelten Gliedmaßen der Figur —, und keinen mit dreien. Ein
     Gewinde bringt acht mit.
+
+    **Die Zahl allein reichte nicht, und das kostete jede mehrfache
+    Durchführung.** Der Stapel entstand aus paralleler Achse, kleinem
+    Querversatz und gleichem Radius — ohne eine Bedingung entlang der Achse.
+    Drei Lappen übereinander mit einer durchgehenden Bohrung Ø 6 erfüllen alle
+    drei, und ab dem dritten galten sie als Gewindegänge: gemessen eine
+    Bohrung bei einer Wand, zwei bei zweien, **null** bei dreien und null bei
+    vieren. Ein Scharnier, ein Gelenk, eine Kabeldurchführung — alle drei
+    verloren ihre Bohrungen still.
+
+    Ein Gewinde ist ein **durchgehender Lauf**, und darin liegt der
+    Unterschied: Seine Gänge berühren oder überlappen sich auf der Achse.
+    Gemessen an ``printed_thread`` über sechs Größen, beide Richtungen und
+    drei Längen ist die größte Lücke innerhalb eines Gangstapels **0,0000 mm**
+    — die Windungen laufen ineinander, weil die Helix stetig steigt. Drei
+    Wände dagegen haben Lücken von Millimetern (0…6, 10…16, 20…26). Verlangt
+    wird deshalb, dass der Stapel **eine** Spanne bildet; die Toleranz dafür
+    ist ``EPS_GEOM``, denn gemessen wird keine, und dieselbe Zahl trennt in
+    :func:`_same_cylinder` schon heute überlappende von getrennten
+    Abschnitten.
     """
     if len(found) < THREAD_TURNS:
         return found
 
-    keep: Cylinders = []
     used: set[int] = set()
-    for index, (fit, patch) in enumerate(found):
+    for index, (fit, _patch) in enumerate(found):
         if index in used:
             continue
         axis = np.asarray(fit.axis, dtype=float)
@@ -910,14 +942,20 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
             if abs(other.radius - fit.radius) <= fit.radius * CYLINDER_TOLERANCE:
                 stack.append(other_index)
 
-        thread_stack = stack
-        if len(thread_stack) < THREAD_TURNS and len(coaxial) >= THREAD_TURNS:
+        thread_stack: list[int] = []
+        if len(stack) >= THREAD_TURNS and _one_run(
+            [_axial_span(body, found[entry][1], fit.axis) for entry in stack]
+        ):
+            thread_stack = stack
+        elif len(coaxial) >= THREAD_TURNS:
             # Nach einer robusteren Vereinigung erscheinen die Windungen nicht
             # mehr als viele gleich große Ringe, sondern als drei koaxiale
             # Zylinder verschiedener Radien, die sich über denselben axialen
             # Abschnitt überlagern. Drei gewöhnliche Stufen liegen dagegen
             # hintereinander. Nur eine echte gemeinsame Spanne macht aus der
-            # zweiten Form deshalb ebenfalls einen Gewindestapel.
+            # zweiten Form deshalb ebenfalls einen Gewindestapel — eine
+            # schärfere Forderung als der Lauf oben, und deshalb bleibt sie,
+            # wie sie ist.
             spans = [_axial_span(body, found[entry][1], fit.axis) for entry in coaxial]
             if min(high for _low, high in spans) > max(low for low, _high in spans) + EPS_GEOM:
                 thread_stack = coaxial
@@ -945,9 +983,31 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
                 other_low, other_high = _axial_span(body, other_patch, fit.axis)
                 if other_low >= low - EPS_GEOM and other_high <= high + EPS_GEOM:
                     used.add(other_index)
-            continue
-        keep.append((fit, patch))
-    return [entry for index, entry in enumerate(found) if index not in used and entry in keep]
+    # ``index not in used`` ist die ganze Antwort: Verworfen wird genau, was in
+    # einen Gewindestapel geraten ist. Hier stand zusätzlich ``entry in keep``
+    # gegen eine nebenher geführte Liste — ein Fließkommavergleich über die
+    # eingepassten Radien (Regel 6), quadratisch in der Zahl der Zylinder, und
+    # ohne Wirkung: Jeder Eintrag, der nicht in ``used`` landete, stand
+    # ohnehin darin.
+    return [entry for index, entry in enumerate(found) if index not in used]
+
+
+def _one_run(spans: list[tuple[float, float]]) -> bool:
+    """Bilden diese Abschnitte **einen** durchgehenden Lauf auf der Achse?
+
+    Die Frage, die ein Gewinde von einem Stapel Wände trennt: Die Gänge einer
+    Helix gehen ineinander über, zwei Bohrungen durch zwei Wände haben eine
+    Lücke dazwischen. Berührung zählt als Zusammenhang — ``EPS_GEOM`` ist die
+    Toleranz, mit der :func:`_same_cylinder` dieselbe Frage für ein Paar
+    beantwortet.
+    """
+    ordered = sorted(spans)
+    reach = ordered[0][1]
+    for low, high in ordered[1:]:
+        if low > reach + EPS_GEOM:
+            return False
+        reach = max(reach, high)
+    return True
 
 
 def _same_cylinder(
@@ -1127,7 +1187,10 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
     found = [
         entry
         for entry in (_cylinders(mesh) if cylinders is None else cylinders)
-        if not entry[0].inward
+        # **Dieselbe Schranke wie bei der Bohrung** (:data:`MIN_CYLINDER_DIAMETER`).
+        # Sie stand hier nicht, und damit meldete dieselbe Platte einen Zapfen
+        # Ø 0,05 neben einer Vertiefung Ø 0,05, die zu Recht keine Bohrung war.
+        if not entry[0].inward and entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER
     ]
     return [
         Feature(

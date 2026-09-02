@@ -658,7 +658,7 @@ def register_part(
 #: des radialen Druckspalts, der kleinste Schwalbenschwanzstift behält einen
 #: druckbaren Querschnitt, und der Standfuß trägt keine innere Ringschulter
 #: mehr (``mechanics.py``, ``mounting.py``, 31.08.2026).
-LIBRARY_VERSION: Final = "13"
+LIBRARY_VERSION: Final = "14"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
