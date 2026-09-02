@@ -193,7 +193,10 @@ def test_a_wall_thinner_than_two_lines_asks_for_a_narrower_line() -> None:
     """
     settings = print_settings.resolve(profiles.make_profile())
     two_lines = 2.0 * settings.layers.line_width
-    result = _layers(500.0, 500.0, 500.0, min_width=two_lines * 0.6)
+    # Knapp unter zwei Linien, aber über der doppelten schmalsten Bahn der Düse:
+    # dort hilft eine schmalere Linie noch. Darunter ist es der Befund
+    # ``settings.wall_below_nozzle`` (Durchsicht Schichtanalyse, 02.09.2026).
+    result = _layers(500.0, 500.0, 500.0, min_width=two_lines * 0.95)
 
     entries = advise.advise(settings, profiles.make_profile(), result)
 
@@ -3389,7 +3392,8 @@ def test_a_wall_the_nozzle_can_print_is_not_that_finding() -> None:
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     least = advise.NARROW_LINE_SHARE * profile.printer.nozzle_diameter
-    result = _layers(500.0, 500.0, 500.0, min_width=least * 1.5)
+    # Zwei schmalste Bahnen passen hinein — erst darunter ist es der Befund.
+    result = _layers(500.0, 500.0, 500.0, min_width=least * 2.5)
 
     codes = {entry.code for entry in advise.warnings_for(settings, profile, result)}
     assert "settings.wall_below_nozzle" not in codes

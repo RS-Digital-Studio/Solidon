@@ -16,11 +16,13 @@ verschiedene Dinge, und der Bericht sagt, welches welches ist.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
 import numpy as np
 import shapely
+from shapely.geometry import MultiPolygon
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
@@ -63,6 +65,17 @@ WIDTH_STEPS = 6
 #: hundertstel Millimeter ist ein Zehntel dessen, was die feinste Düse
 #: ablegen kann.
 WIDTH_SIMPLIFY = 0.01
+
+#: Ab wie viel verlorener Fläche eine Öffnung eine Struktur getroffen hat und
+#: nicht bloß gerechnet, in mm².
+#:
+#: Mit gefasten Ecken ist die Öffnung für alles, was breit genug ist, die
+#: Identität: Eine dicke Form verliert nichts. Übrig bleibt ein Rechenrest, und
+#: der lag am ganzen Testkorpus unter einem tausendstel Quadratmillimeter. Ein
+#: hundertstel liegt eine Zehnerpotenz darüber und weit unter allem, was ein
+#: Bericht je meldet — die feinste Düse legt so viel auf einem zwanzigstel
+#: Millimeter Bahn ab.
+WIDTH_LOST_FROM = 0.01
 
 #: Über dieser Breite ist eine Struktur schlicht „dick" und wird nicht weiter
 #: gemessen. Zwei Millimeter sind fünf Düsendurchmesser — keine Warnung in
@@ -119,7 +132,13 @@ class LayerMetrics:
     """Die Inseln selbst — damit der Ergebnisaufbau sie nicht ein zweites Mal schneidet."""
 
 
-def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full") -> SliceResult:
+def slice_body(
+    mesh: MeshData,
+    layer_height: float = 0.2,
+    detail: Detail = "full",
+    *,
+    footing_height: float | None = None,
+) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
 
     ``detail="support"`` misst nur, was die Stützen brauchen: Überhänge,
@@ -127,6 +146,16 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
     und liest genau eine Zahl daraus (§28.2) — Strukturbreiten für einen
     Körper zu rechnen, der gleich wieder gedreht wird, ist Arbeit, die niemand
     ansieht.
+
+    ``footing_height`` ist die Höhe über der Unterkante, in der die
+    **Aufstandsfläche** gemessen wird — und sie gehört nicht der Suche,
+    sondern dem Druck. Ohne sie ist ``first_layer_area`` die Fläche des ersten
+    Schnitts, und der liegt eine halbe *Such*-Schichthöhe über dem Boden: Eine
+    Kugel mit R = 20 steht bei 1,0 mm Suchhöhe auf 54 mm² und bei 0,2 mm auf
+    4,6 — dieselbe Kugel, dieselbe Lage, und ``stands()`` fällt einmal so und
+    einmal anders aus (§22.3). Wer die Schichthöhe des Druckers kennt, gibt
+    ihre Hälfte hier herein und bekommt eine Zahl, die nur noch am Körper
+    hängt.
     """
     if layer_height <= EPS_GEOM:
         # Kein nackter ``ValueError``: Die Schichthöhe kommt aus dem
@@ -196,9 +225,31 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
     return SliceResult(
         layers=tuple(layers),
         support_volume=float(support),
-        first_layer_area=layers[0].area if layers else 0.0,
+        first_layer_area=_footing_area(mesh, low, footing_height, layers),
         source="internal",
     )
+
+
+def _footing_area(
+    mesh: MeshData, low: float, footing_height: float | None, layers: list[LayerInfo]
+) -> float:
+    """Die Fläche, auf der das Teil steht.
+
+    Ohne ``footing_height`` die erste geschnittene Schicht — was die Suche
+    ohnehin schon hat. Mit ``footing_height`` ein eigener Schnitt auf der
+    genannten Höhe: Ein Schnitt mehr auf zweihundert Kandidaten fällt neben
+    fünfzig bis zweihundert je Kandidat nicht auf, und er nimmt der Zahl die
+    Abhängigkeit von der Suchauflösung.
+    """
+    if not layers:
+        return 0.0
+    if footing_height is None:
+        return layers[0].area
+    sections, _ = _cross_sections(
+        mesh, np.array([low + footing_height], dtype=float), capture_contours=False
+    )
+    shape = sections[0]
+    return 0.0 if shape is None or shape.is_empty else float(shape.area)
 
 
 def _support_volume(
@@ -872,58 +923,216 @@ def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyP
     return unary_union(floating) if floating else ShapelyPolygon()
 
 
-def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERESTING) -> float:
-    """Die kleinste Strukturbreite, gefunden durch Erodieren, bis nichts mehr
-    übrig ist.
+def _simplified(shape: ShapelyPolygon) -> ShapelyPolygon:
+    """Die Kontur, so grob wie die Breitensuche sie verträgt.
 
-    Prüfbar gegen den Düsendurchmesser, und dafür ist sie da (§22.2).
+    Ein hundertstel Millimeter ist ein Zehntel dessen, was die feinste Düse
+    ablegen kann; was daran verschwindet, hat nie jemand gedruckt.
+    """
+    coarse = shape.simplify(WIDTH_SIMPLIFY)
+    return shape if coarse.is_empty or coarse.length <= EPS_GEOM else coarse
+
+
+def _without_slits(shape: ShapelyPolygon) -> ShapelyPolygon:
+    """Dieselbe Fläche ohne Löcher, die schmaler sind als die
+    Vereinfachungstoleranz.
+
+    Ein Schnitt durch ein vernetztes Modell bringt gelegentlich einen Ring
+    ohne Fläche mit — vier Punkte und ein milliardstel Quadratmillimeter, dort
+    wo eine Kante sich selbst berührt. Für die Erosion ist so ein Ring kein
+    Nichts: An einem Schlitz ohne Breite hat die gefaste Ecke keinen
+    Schnittpunkt in der Nähe und schießt weit ins Material. Der Ringschnitt
+    eines Pfostens aus dem Testkorpus verlor damit zwölf Quadratmillimeter,
+    die es nicht gibt — und wäre als dünne Struktur gemeldet worden.
+
+    Gemessen wird die mittlere Weite eines Lochs — vierfache Fläche über dem
+    Umfang —, und zwar für alle Löcher einer Kontur in **einem** Aufruf. Eine
+    Schicht durch eine Lochplatte bringt hundert Ringe mit; die einzeln zu
+    fragen kostete mehr als die Messung, um die es geht.
+    """
+    parts = getattr(shape, "geoms", [shape])
+    kept: list[ShapelyPolygon] = []
+    changed = False
+    for part in parts:
+        if part.geom_type != "Polygon" or part.is_empty:
+            continue
+        rings = _real_holes(part)
+        if len(rings) == len(part.interiors):
+            kept.append(part)
+            continue
+        changed = True
+        kept.append(ShapelyPolygon(part.exterior, rings))
+    if not changed:
+        return shape
+    if not kept:
+        return ShapelyPolygon()
+    return kept[0] if len(kept) == 1 else MultiPolygon(kept)
+
+
+def _real_holes(part: ShapelyPolygon) -> list[Any]:
+    """Die Ringe, die überhaupt eine Weite haben, die die Suche auflöst."""
+    rings = list(part.interiors)
+    if not rings:
+        return rings
+    holes = shapely.polygons(rings)
+    wide = 4.0 * shapely.area(holes) >= WIDTH_SIMPLIFY * shapely.length(holes)
+    return [ring for ring, keep in zip(rings, wide.tolist(), strict=True) if keep]
+
+
+def _eroded(shape: ShapelyPolygon, radius: float) -> ShapelyPolygon:
+    """Die Form, um ``radius`` nach innen gerückt — mit gefasten Ecken."""
+    return shape.buffer(-radius, quad_segs=1, join_style="mitre")
+
+
+def _opening_loss(shape: ShapelyPolygon, width: float) -> float:
+    """Wie viel Fläche eine morphologische Öffnung dieser Breite wegnimmt.
+
+    Öffnen heißt erodieren und wieder aufweiten. Mit gefasten Ecken
+    (``mitre``) ist das für alles, was mindestens ``width`` breit ist, die
+    Identität: Jede Kante wandert um dieselbe Strecke hinein und wieder
+    heraus, jede Ecke kommt an ihren Schnittpunkt zurück. Übrig bleibt genau
+    das, was schmaler war — und dessen Fläche ist die Antwort.
+
+    Verglichen werden **Flächen**, nicht Geometrien. Die Öffnung liegt in der
+    Ausgangsform; eine Differenz gäbe dieselbe Zahl und kostete je Versuch
+    eine Boolesche Operation mehr.
+    """
+    radius = width / 2.0
+    eroded = _eroded(shape, radius)
+    if eroded.is_empty:
+        return float(shape.area)
+    opened = eroded.buffer(radius, quad_segs=1, join_style="mitre")
+    return max(0.0, float(shape.area) - float(opened.area))
+
+
+def _survives_opening(shape: ShapelyPolygon, width: float) -> bool:
+    """Übersteht die Form eine Öffnung dieser Breite, ohne Struktur zu
+    verlieren?
+
+    Die Schwelle muss **fest** sein und darf nicht mit der geprüften Breite
+    wachsen, sonst ist die Frage nicht mehr monoton und die Suche darüber
+    nicht mehr gültig: Eine Schwelle von ``width * width`` übersieht bei
+    zwei Millimetern eine Rippe, die sie bei einem halben findet, und die
+    Halbierung läuft an ihr vorbei.
+    """
+    return _opening_loss(shape, width) <= WIDTH_LOST_FROM
+
+
+def minimum_width(shape: ShapelyPolygon, interesting_below: float = WIDTH_INTERESTING) -> float:
+    """Die kleinste Strukturbreite dieser Schicht (§22.2).
+
+    Prüfbar gegen den Düsendurchmesser, und dafür ist sie da.
+
+    **Gemessen wird durch Öffnen, nicht durch Erodieren bis zum Verschwinden.**
+    Der erste Anlauf fragte, ob ``shape.buffer(-r)`` leer ist, und das wird
+    erst wahr, wenn auch die *dickste* Stelle weg ist — die Zahl war damit der
+    einbeschriebene Kreis und nicht die schmalste Struktur. Gemessen an einer
+    Platte 20 auf 20 auf 5 mit einer 0,3 mm dünnen Rippe: gemeldet wurden 2,0 mm,
+    die bloße Berichtsgrenze; kein Befund über die Düse, kein Vorschlag zur
+    Bahnbreite. Die Rippe, um die es ging, kam in keiner Zahl vor.
+
+    Geöffnet wird stattdessen: erodieren und wieder aufweiten. Alles, was
+    breiter ist als die geprüfte Weite, kommt zurück; was schmaler war, bleibt
+    weg. Sobald dabei mehr verschwindet als eine Ecke
+    (:func:`_survives_opening`), ist die geprüfte Weite zu groß — und die
+    kleinste Breite liegt darunter. Bei einer konvexen Form ändert das nichts:
+    Dort ist die Öffnung die Identität, bis die Erosion sie ganz auflöst, und
+    das ist genau die alte Antwort.
 
     Drei Freiheiten werden fürs Tempo genommen, und keine davon ändert eine
-    Antwort, auf die jemand handelt. Die Kontur wird zuerst um einen
-    hundertstel Millimeter vereinfacht, und die Erosion benutzt gefaste statt
-    gerundeter Ecken — beides bleibt weit unter dem, was ein Drucker auflöst.
-    Und eine Schicht, die eine Erosion um die Hälfte von ``interesting_below``
-    übersteht, wird als genau diese Breite gemeldet und nicht weiter gemessen:
-    ob eine Wand vier oder neun Millimeter dick ist, fragt der Bericht nicht,
-    und die Suche danach kostete mehr als der Rest der Analyse zusammen.
+    Antwort, auf die jemand handelt. Die Kontur wird vereinfacht, die Erosion
+    benutzt gefaste statt gerundeter Ecken — beides bleibt weit unter dem, was
+    ein Drucker auflöst. Und eine Schicht, die eine Öffnung um
+    ``interesting_below`` übersteht, wird als genau diese Breite gemeldet und
+    nicht weiter gemessen: ob eine Wand vier oder neun Millimeter dick ist,
+    fragt der Bericht nicht, und die Suche danach kostete mehr als der Rest
+    der Analyse zusammen.
+
+    ``interesting_below=0.0`` hebt diesen Deckel auf; dann wird die Klammer
+    selbst gesucht.
     """
     if shape.is_empty or shape.length <= EPS_GEOM:
         return 0.0
-    # Die doppelte Fläche über dem Umfang ist der größte Kreis, der überhaupt
-    # hineinpasst — bei einer Scheibe und bei einem Quadrat ist es genau der
-    # einbeschriebene. Dort zu beginnen statt bei der Diagonale hält jeden
-    # Versuch klein, und eine kleine Erosion auf einer vereinfachten Kontur ist
-    # das, was das hier überhaupt bezahlbar macht.
-    high = 2.0 * float(shape.area) / float(shape.length)
-    check_simplified_limit = False
-    if interesting_below > 0.0:
-        if high <= interesting_below / 2.0:
-            # Dicker kann sie ohnehin nicht sein; jetzt ordentlich messen.
-            pass
-        # Der häufige dicke Fall braucht genau eine Erosion. Ihn vorher zu
-        # vereinfachen kostete an 400 Kugelschichten dreimal so viel wie die
-        # Erosion selbst (306 gegen 101 ms, sequenziell). Überlebt die genaue
-        # Kontur, ist die Antwort sicher die obere Berichtsgrenze. Nur ein
-        # tatsächlich schmaler Kandidat bezahlt die Vereinfachung und Suche.
-        elif not shape.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty:
-            return float(interesting_below)
-        else:
-            check_simplified_limit = True
-        high = min(high, interesting_below / 2.0)
-
-    coarse = shape.simplify(WIDTH_SIMPLIFY)
-    if coarse.is_empty:
-        coarse = shape
-    if (
-        check_simplified_limit
-        and not coarse.buffer(-interesting_below / 2.0, quad_segs=1, join_style="mitre").is_empty
-    ):
+    solid = _without_slits(shape)
+    if interesting_below > 0.0 and _survives_opening(solid, interesting_below):
         return float(interesting_below)
+
+    coarse = _simplified(solid)
+    low = 0.0
+    high = float(interesting_below) if interesting_below > 0.0 else _open_bracket(coarse)
+    # Die vierfache Fläche über dem Umfang ist die mittlere Breite dieser
+    # Form — bei einem langen Streifen genau seine Breite, bei einer Scheibe
+    # ihr Durchmesser. Ein Mittel liegt nie unter dem Kleinsten, taugt also
+    # als Startpunkt; welche Seite der Klammer es besetzt, sagt ein Versuch.
+    guess = 4.0 * float(coarse.area) / float(coarse.length)
+    if EPS_GEOM < guess < high:
+        if _survives_opening(coarse, guess):
+            low = guess
+        else:
+            high = guess
+
+    for _step in range(WIDTH_STEPS):
+        middle = (low + high) / 2.0
+        if _survives_opening(coarse, middle):
+            low = middle
+        else:
+            high = middle
+    return float(high)
+
+
+def _open_bracket(shape: ShapelyPolygon) -> float:
+    """Eine Weite, an der diese Form sicher Struktur verliert.
+
+    Gebraucht nur ohne Deckel: Mit Deckel ist ``interesting_below`` die
+    Klammer, denn dass die Form dort verliert, steht dann schon fest.
+    """
+    limit = _across(shape)
+    width = 4.0 * float(shape.area) / float(shape.length)
+    while width < limit and _survives_opening(shape, width):
+        width *= 2.0
+    return min(width, limit)
+
+
+def _across(shape: ShapelyPolygon) -> float:
+    """Die Diagonale der Hüllbox — weiter als das ist an dieser Form nichts."""
+    left, bottom, right, top = shape.bounds
+    return math.hypot(right - left, top - bottom)
+
+
+def spanning_width(shape: ShapelyPolygon) -> float:
+    """Der größte Kreis, der in diese Öffnung passt, als Durchmesser (§22.2).
+
+    Die andere Frage als :func:`minimum_width`, und sie hat ihre eigene
+    Antwort: Über einer Öffnung spannt der Slicer gerade Bahnen, und was ihn
+    dabei fordert, ist die **weiteste** freie Stelle. Ein Ausläufer von einem
+    Zehntelmillimeter macht eine Öffnung von 40 mm nicht leichter zu
+    überbrücken — die kleinste Strukturbreite wäre hier also genau die
+    falsche Zahl.
+
+    Gefunden durch Erodieren, bis nichts mehr übrig ist.
+
+    **Die Klammer wird geprüft, nicht angenommen.** ``2A/L`` ist bei einer
+    Scheibe und bei einem Quadrat genau der einbeschriebene Radius, aber nur
+    bei konvexen Formen eine obere Schranke: Ein Lüftergitter — Ø 40 mit vier
+    schmalen Radialschlitzen — treibt den Umfang hoch, ohne viel Fläche zu
+    nehmen, und die Klammer fiel unter den gesuchten Wert. Die Suche lief dann
+    bis an ihren eigenen Anfang und meldete ihn; die Warnung über die Brücke
+    blieb aus. Die Klammer wird deshalb verdoppelt, bis sie trägt, und die
+    halbe Diagonale der Hüllbox deckelt sie.
+    """
+    if shape.is_empty or shape.length <= EPS_GEOM:
+        return 0.0
+    coarse = _simplified(_without_slits(shape))
+    limit = _across(coarse) / 2.0
+    high = 2.0 * float(coarse.area) / float(coarse.length)
+    while high < limit and not _eroded(coarse, high).is_empty:
+        high *= 2.0
+    high = min(high, limit)
 
     low = 0.0
     for _step in range(WIDTH_STEPS):
         middle = (low + high) / 2.0
-        if coarse.buffer(-middle, quad_segs=1, join_style="mitre").is_empty:
+        if _eroded(coarse, middle).is_empty:
             high = middle
         else:
             low = middle
@@ -945,19 +1154,25 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     Gewürzbehälter der Schaden: eine 3-mm-Schulter, deren Bahnen 24 mm frei
     quer über den Becher liefen.
 
+    **Ein umschlossener Ring ist aber nicht schon deshalb eine Öffnung.**
+    Gezählt wurde jedes Loch der ungestützten Fläche, auch eines, unter dem
+    massives Material steht. Ein Pilz mit tragendem Stiel — Hut 100 auf 100 auf
+    einem Stiel 30 auf 30 — meldete damit eine Brücke von 29,7 mm über genau
+    dem Stiel, der sie trägt. Gemessen wird deshalb der Teil des Rings, unter
+    dem wirklich nichts steht: beim Pilz bleibt davon nichts, beim
+    Gewürzbehälter der ganze Becher.
+
     **Und es ist auch nicht die längere Seite des Hüllrechtecks.** Gemessen
     wurde die größere Ausdehnung der Öffnung, und damit stand über einem
     Kabelkanal von 30 auf 8 mm eine Brücke von 30 mm im Bericht. Der Slicer
     legt seine Bahnen quer über die **schmale** Seite — acht Millimeter, die
-    jede Düse überspannt. Gefragt ist die kürzeste freie Weite, und die misst
-    :func:`minimum_width` ohnehin schon, nur zwei Funktionen weiter oben:
-    erodieren, bis nichts mehr übrig ist. Ohne Deckel gerufen
-    (``interesting_below=0.0``), denn hier ist die Zahl selbst die Antwort und
-    nicht die Frage „dünner als eine Bahn?".
+    jede Düse überspannt. Gefragt ist die freie Weite, und die misst
+    :func:`spanning_width`.
     """
     if previous is None or previous.is_empty:
         return 0.0
-    free = shape.difference(previous.buffer(OVERHANG_MARGIN))
+    supported = previous.buffer(OVERHANG_MARGIN)
+    free = shape.difference(supported)
     # Brücken werden gegen die Schicht selbst gemessen, nicht gegen die
     # 45-Grad-Zugabe: was durch freie Luft spannt, ist eine Brücke, egal in
     # welchem Winkel.
@@ -965,19 +1180,21 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
         return 0.0
     # Eine einzelne Erosion statt einer Suche: gefragt ist nicht, wie breit die
     # Fläche ist, sondern ob sie über der Grenze liegt.
-    if free.buffer(-BRIDGE_FROM / 2.0, quad_segs=1, join_style="mitre").is_empty:
+    if _eroded(free, BRIDGE_FROM / 2.0).is_empty:
         return 0.0
 
     widest = 0.0
     for part in getattr(free, "geoms", [free]):
         if part.is_empty or not hasattr(part, "exterior"):
             continue
-        # Umschließt der ungestützte Bereich eine Öffnung, ist deren Weite die
-        # freie Spannweite; ist er selbst eine Fläche (eine Decke über einem
-        # Hohlraum), zählt seine eigene.
-        spans = [ShapelyPolygon(ring) for ring in part.interiors] or [part]
+        # Umschließt der ungestützte Bereich eine Öffnung, ist deren freie
+        # Weite die Spannweite; ist er selbst eine Fläche (eine Decke über
+        # einem Hohlraum), zählt seine eigene.
+        holes = [ShapelyPolygon(ring) for ring in part.interiors]
+        spans = [hole.difference(supported) for hole in holes] if holes else [part]
         for span in spans:
-            widest = max(widest, minimum_width(span, interesting_below=0.0))
+            if not span.is_empty:
+                widest = max(widest, spanning_width(span))
     return float(widest)
 
 
@@ -1038,6 +1255,51 @@ def worst_overhang(result: SliceResult) -> float:
 def island_layers(result: SliceResult) -> tuple[float, ...]:
     """Höhen, auf denen eine Kontur in der Luft beginnt (§22.2)."""
     return tuple(layer.z for layer in result.layers if layer.islands)
+
+
+def support_on_model(result: SliceResult) -> bool:
+    """Endet eine Stützsäule auf dem **Modell** statt auf der Druckplatte?
+    (§22.2)
+
+    Die Frage, an der „Stützen nur von der Platte" hängt. Geschlossen wurde
+    sie aus „keine Insel", und das ist etwas anderes: Ein Tisch — Bodenplatte
+    40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte 40 auf 40 —
+    hat keine einzige Insel und 1 492 mm² Überhang auf einer Schicht, und
+    jede Stütze darunter steht auf der Bodenplatte. Der Vorschlag
+    ``build_plate`` ließ die Tischplatte im Druck absacken.
+
+    Gerechnet wird derselbe Durchgang von oben nach unten wie beim
+    Stützvolumen (:func:`_support_volume`), nur wird nichts summiert: Sobald
+    eine Säule oberhalb der ersten Schicht an Material verliert, steht sie auf
+    dem Modell, und die Antwort ist da. Der übliche Fall — alles erreicht die
+    Platte — geht dafür durch alle Schichten; er kostet an einem Körper mit
+    327 000 Dreiecken die Größenordnung des Stützvolumens selbst, rund vierzig
+    Millisekunden, und läuft einmal je Analyse statt je Kandidat.
+    """
+    pending: list[ShapelyPolygon] = []
+    for index in range(len(result.layers) - 1, 0, -1):
+        layer = result.layers[index]
+        if layer.overhangs:
+            pending += [
+                ShapelyPolygon(contour.outline, contour.holes) for contour in layer.overhangs
+            ]
+        if not pending:
+            continue
+        below = _layer_shape(result.layers[index - 1])
+        if below.is_empty:
+            continue
+        standing = _total_area(pending)
+        pending = _above_material(pending, below)
+        if standing - _total_area(pending) > EPS_GEOM:
+            return True
+    return False
+
+
+def _total_area(parts: list[ShapelyPolygon]) -> float:
+    """Die Fläche einer Liste von Teilen, in einem Aufruf."""
+    if not parts:
+        return 0.0
+    return float(shapely.area(np.asarray(parts, dtype=object)).sum())
 
 
 def narrowest(result: SliceResult) -> float:

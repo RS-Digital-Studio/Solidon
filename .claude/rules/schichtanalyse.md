@@ -301,6 +301,17 @@ kleinste Strukturbreite gegen den Düsendurchmesser. Der Gewinn ist der
 Maßstab: hunderte Rotationen in der Orientierungssuche statt drei extern
 geslicter Kandidaten.
 
+Zwei Breiten, zwei Fragen — und sie sind nicht dieselbe Zahl.
+`minimum_width` ist die **kleinste Struktur** einer Schicht: eine
+morphologische Öffnung (erodieren, wieder aufweiten) und die Frage, ab welcher
+Breite dabei Material verloren geht. Der größte einbeschriebene Kreis
+beantwortet das nicht — eine 0,3-mm-Rippe neben einer 20-mm-Platte hatte darin
+bis zum 02.09.2026 keine Spur. `spanning_width` ist die **weiteste freie
+Stelle** einer ungestützten Fläche, also der einbeschriebene Kreis; für eine
+Brücke ist das die richtige Zahl, weil ein 0,2-mm-Ausläufer eine 40-mm-Öffnung
+nicht leichter macht. Wer die eine für die andere nimmt, bekommt entweder
+Rippen, die niemand sieht, oder Brücken, die keine sind.
+
 ## Stabile IDs
 
 Feature-Erkennung liefert Provenienz-IDs, an denen Ops und Passungen hängen.

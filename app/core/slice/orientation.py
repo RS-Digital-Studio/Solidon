@@ -16,6 +16,7 @@ Millisekunden, und §2.8 sagt, dass nichts das Fenster blockieren darf.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -81,10 +82,10 @@ def stands(candidate: Candidate, floor: float) -> bool:
     return candidate.first_layer_area >= floor
 
 
-def better(candidate: Candidate, current: Candidate, floor: float = 0.0) -> bool:
-    """Weniger Stützen gewinnt; erst bei Gleichstand entscheidet die
-    Grundfläche (§22.2).
+def best_of(candidates: Sequence[Candidate], floor: float = 0.0) -> Candidate:
+    """Die beste Lage aus einem ganzen Feld (§22.2).
 
+    Weniger Stützen gewinnt; erst bei Gleichstand entscheidet die Grundfläche.
     Mit Absicht lexikografisch statt als gewichtete Summe: eine große
     Aufstandsfläche darf sich nie an echtem Stützmaterial vorbeikaufen.
 
@@ -95,17 +96,28 @@ def better(candidate: Candidate, current: Candidate, floor: float = 0.0) -> bool
     **0,1 mm²** erster Schicht gegen die liegende mit 11,1 mm³ und 1424 mm².
     Der Vergleich war richtig, die Zahl auch; nur ist 0,1 mm² kein Stand,
     sondern eine Ecke. Wer stehen kann, gewinnt gegen jeden, der es nicht kann
-    — und **erst danach** wird gerechnet.
+    — und **erst danach** wird gerechnet. Steht keine Lage (eine Kugel steht
+    auf keiner), fällt das Kriterium für alle gleich aus.
 
-    Steht keine Lage (eine Kugel steht auf keiner), fällt das erste Kriterium
-    für alle gleich aus und es bleibt beim alten Vergleich.
+    **Entschieden wird über das Feld, nicht paarweise.** Vorher lief ein
+    Vergleich ``better(kandidat, bester)`` durch die Schleife, und der ist
+    nicht transitiv: A schlägt B, B schlägt C, C schlägt A. Die
+    Fünf-Prozent-Toleranz ist der Grund — zwischen A und B liegen vier
+    Prozent, zwischen A und C neun, und je nachdem, in welcher Reihenfolge die
+    Kandidaten kommen, gewinnt ein anderer. Damit hing die empfohlene Lage an
+    der Abtastung statt am Körper. Gesucht wird deshalb erst das Minimum des
+    Stützvolumens, dann unter allen, die innerhalb von :data:`SUPPORT_TIE`
+    davon liegen, die größte Grundfläche.
     """
-    if stands(candidate, floor) != stands(current, floor):
-        return stands(candidate, floor)
-    reference = max(candidate.support_volume, current.support_volume, EPS_GEOM)
-    if abs(candidate.support_volume - current.support_volume) > reference * SUPPORT_TIE:
-        return candidate.support_volume < current.support_volume
-    return candidate.first_layer_area > current.first_layer_area
+    field = [candidate for candidate in candidates if stands(candidate, floor)] or list(candidates)
+    least = min(candidate.support_volume for candidate in field)
+    reference = max(least, EPS_GEOM)
+    tied = [
+        candidate
+        for candidate in field
+        if candidate.support_volume - least <= reference * SUPPORT_TIE
+    ]
+    return max(tied, key=lambda candidate: candidate.first_layer_area)
 
 
 @dataclass(slots=True)
@@ -161,14 +173,26 @@ def _unique_directions(directions: list[Vec3]) -> list[Vec3]:
     return found
 
 
-def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
+def judge(
+    mesh: MeshData,
+    direction: Vec3,
+    layer_height: float,
+    footing_height: float | None = None,
+) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
-    zählen."""
+    zählen.
+
+    ``footing_height`` ist die Höhe, in der die Aufstandsfläche gemessen wird
+    — die halbe Schichthöhe des **Druckers**, nicht die der Suche. Ohne sie
+    hängt :func:`stands` an der Suchauflösung: Eine Kugel mit R = 20 steht bei
+    1,0 mm auf 54 mm² und bei 0,2 mm auf 4,6 mm², und die Antwort auf „kann
+    das stehen" fällt einmal so und einmal anders aus.
+    """
     turned = place_on_bed(apply(mesh, rotation_to_down(direction)))
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
     # niemand ansieht.
-    result = slice_body(turned, layer_height, detail="support")
+    result = slice_body(turned, layer_height, detail="support", footing_height=footing_height)
     return Candidate(
         direction=direction,
         support_volume=result.support_volume,
@@ -194,21 +218,15 @@ def best_face_candidate(
     Stützvolumen, bei höchstens fünf Prozent Abstand die Grundfläche.
     """
     coarse = ranked_orientations(mesh, limit=count, cancelled=cancelled)[: max(1, count)]
-    first, *rest = coarse
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    best = judge(mesh, first.direction, layer_height)
-    if cancelled is not None:
-        cancelled.raise_if_cancelled()
-    for orientation in rest:
+    footing = profile.printer.layer_height / 2.0
+    field: list[Candidate] = []
+    for orientation in coarse:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        candidate = judge(mesh, orientation.direction, layer_height)
+        field.append(judge(mesh, orientation.direction, layer_height, footing))
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        if better(candidate, best, profile.smallest_first_layer):
-            best = candidate
-    return best
+    return best_of(field, profile.smallest_first_layer)
 
 
 def search(
@@ -228,14 +246,14 @@ def search(
     keinen Drucker kennt, soll keinen erfinden (Regel 7).
     """
     floor = profile.smallest_first_layer if profile is not None else 0.0
+    footing = profile.printer.layer_height / 2.0 if profile is not None else None
     baseline_direction: Vec3 = (0.0, 0.0, -1.0)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    baseline = judge(mesh, baseline_direction, layer_height)
+    baseline = judge(mesh, baseline_direction, layer_height, footing)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    best = baseline
-    tried = 1
+    field = [baseline]
 
     # Die Flächennormalen kommen mit: die beste Orientierung hat meist eine
     # ebene Fläche auf der Platte, und eine gleichmäßige Abtastung der Kugel
@@ -249,12 +267,15 @@ def search(
         if progress is not None:
             progress(index / max(len(directions), 1), str(_("Ausrichtung suchen")))
 
-        candidate = judge(mesh, direction, layer_height)
+        field.append(judge(mesh, direction, layer_height, footing))
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        tried += 1
-        if better(candidate, best, floor):
-            best = candidate
+
+    # Erst wenn alle vermessen sind, wird entschieden: Die
+    # Fünf-Prozent-Toleranz macht den paarweisen Vergleich nicht transitiv,
+    # und dann hängt der Sieger an der Reihenfolge (:func:`best_of`).
+    tried = len(field)
+    best = best_of(field, floor)
 
     turned = place_on_bed(apply(mesh, rotation_to_down(best.direction)))
     findings = [

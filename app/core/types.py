@@ -22,6 +22,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol, get_args, runtime_checkable
 
+from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.i18n import TranslatableText
 
 # --- Bezeichner ----------------------------------------------------------------
@@ -608,8 +609,16 @@ class SupportSettings:
 
     style: SupportStyle = "none"
     placement: SupportPlacement = "everywhere"
-    threshold_angle: float = 50.0
-    """Grad gegen die Senkrechte, ab dem gestützt wird."""
+    threshold_angle: float = OVERHANG_LIMIT_DEGREES
+    """Grad gegen die Senkrechte, ab dem gestützt wird.
+
+    **Abgeleitet und nicht abgeschrieben** (§39). Hier stand 50, und die
+    Schichtanalyse rechnete mit 45: Dieselbe Frage, zwei Antworten — der
+    Bericht meldete einen Überhang, den der Slicer stehen ließ, und ein
+    48-Grad-Dach fiel zwischen beide Zahlen. Die Linie wohnt in der
+    Regelsammlung, weil dort das Druckwissen steht; wer sie ändert, ändert
+    beides. Bei 45 Grad ist die Zählrichtung übrigens gleichgültig — gegen
+    die Senkrechte und gegen die Waagerechte ist dieselbe Zahl."""
     z_gap: float = 0.2
     xy_gap: float = 0.5
     density: float = 0.15

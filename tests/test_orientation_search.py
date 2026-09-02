@@ -53,7 +53,12 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
 
     seen = []
 
-    def record(_mesh: MeshData, direction: tuple[float, float, float], _height: float):
+    def record(
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
+    ):
         seen.append(direction)
         return orientation.Candidate(direction, float(len(seen)), 1.0, 1.0)
 
@@ -245,7 +250,10 @@ def test_the_face_shortlist_is_decided_by_real_support(
     monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
 
     def record(
-        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         return orientation.Candidate(direction, support[direction], 100.0, 10.0)
@@ -315,7 +323,10 @@ def test_the_face_shortlist_stops_after_a_real_slice(
     monkeypatch.setattr(orientation, "ranked_orientations", lambda *_args, **_kwargs: coarse)
 
     def judge_and_cancel(
-        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()
@@ -337,7 +348,10 @@ def test_the_full_search_stops_after_the_baseline_slice(
     seen: list[tuple[float, float, float]] = []
 
     def judge_and_cancel(
-        _mesh: MeshData, direction: tuple[float, float, float], _height: float
+        _mesh: MeshData,
+        direction: tuple[float, float, float],
+        _height: float,
+        _footing: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()
@@ -348,3 +362,56 @@ def test_the_full_search_stops_after_the_baseline_slice(
     with pytest.raises(OperationCancelled):
         search(corpus("cube_clean.stl"), count=1, cancelled=signal)
     assert seen == [(0.0, 0.0, -1.0)]
+
+
+# --- Der Sieger hängt am Körper, nicht an der Reihenfolge -----------------------
+
+
+def test_the_winner_does_not_depend_on_the_order_of_the_field() -> None:
+    """Der paarweise Vergleich war nicht transitiv (§22.3).
+
+    Die Fünf-Prozent-Toleranz ist der Grund: Zwischen A und B liegen vier
+    Prozent, zwischen B und C fünf, zwischen A und C neun. A schlägt C,
+    C schlägt B, B schlägt A — und je nachdem, in welcher Reihenfolge die
+    Abtastung die drei liefert, gewinnt ein anderer. Damit hing die empfohlene
+    Lage an der Abtastung statt am Teil.
+    """
+    from itertools import permutations
+
+    from app.core.slice.orientation import Candidate, best_of
+
+    a = Candidate((0.0, 0.0, -1.0), 100.0, 10.0, 5.0)
+    b = Candidate((1.0, 0.0, 0.0), 104.0, 30.0, 5.0)
+    c = Candidate((0.0, 1.0, 0.0), 109.0, 50.0, 5.0)
+
+    gewinner = {best_of(list(feld)).direction for feld in permutations((a, b, c))}
+
+    assert gewinner == {b.direction}, "das kleinste Stützvolumen, darin die größte Fläche"
+
+
+def test_a_pose_that_cannot_stand_is_still_ruled_out_first(profile: Profile) -> None:
+    """Und die Reihenfolge der Kriterien bleibt: Stand vor Stützvolumen."""
+    from app.core.slice.orientation import Candidate, best_of
+
+    kippelig = Candidate((0.0, 0.0, -1.0), 1.0, 0.1, 5.0)
+    stehend = Candidate((1.0, 0.0, 0.0), 500.0, 2000.0, 5.0)
+
+    assert best_of([kippelig, stehend], profile.smallest_first_layer) is stehend
+    assert best_of([stehend, kippelig], profile.smallest_first_layer) is stehend
+    assert best_of([kippelig, stehend]) is kippelig, "ohne Grenze zählt nur das Stützvolumen"
+
+
+def test_a_ball_never_stands_no_matter_how_coarse_the_search_is(profile: Profile) -> None:
+    """Die Aufstandsfläche hing an der Suchauflösung (§22.3).
+
+    Eine Kugel mit R = 20 steht bei 1,0 mm Suchschichthöhe auf 54 mm², bei
+    0,2 mm auf 4,6 — und die Grenze des Druckers liegt mit 17,6 mm² dazwischen.
+    Dieselbe Kugel bekam damit einmal ``orient.no_footing`` und einmal nicht,
+    je nachdem, wie grob gesucht wurde.
+    """
+    ball = place_on_bed(MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)))
+
+    found = search(ball, count=24, seed=5, profile=profile)
+
+    assert found.best.first_layer_area < profile.smallest_first_layer
+    assert "orient.no_footing" in {finding.code for finding in found.findings}

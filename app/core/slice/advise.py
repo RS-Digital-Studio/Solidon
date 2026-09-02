@@ -29,6 +29,7 @@ from app.core.log import get_logger
 from app.core.slice.analysis import (
     island_layers,
     narrowest_measured,
+    support_on_model,
     total_overhang,
     worst_overhang,
 )
@@ -165,7 +166,12 @@ def advise(
         advice += _from_geometry(settings, profile, result, bounds)
     if fit_kinds:
         advice += _from_fits(settings, fit_kinds)
-    advice += _from_connectors(settings, connectors)
+    # Erst nach den Regeln oben, und gegen deren Stand gerechnet: Die
+    # Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über die
+    # dünnste Stelle. Vorher gerechnet stand im Bericht eine Wandzahl, die zu
+    # einer Breite passte, die daneben schon zurückgenommen war — zwei
+    # Vorschläge, die zusammen nicht aufgehen.
+    advice += _from_connectors(apply(settings, advice), connectors)
 
     # Der Volumenstrom hängt an Schichthöhe, Bahnbreite und Tempo — und an
     # genau diesen Werten haben die Vorschläge oben womöglich gedreht. Er wird
@@ -213,7 +219,7 @@ def _differs(value: object, was: object) -> bool:
     return value != was
 
 
-def flow_of(settings: PrintSettings, speed: float) -> float:
+def flow_of(settings: PrintSettings, speed: float, *, first_layer: bool = False) -> float:
     """Wie viel Material bei diesem Tempo je Sekunde durch die Düse muss, in
     mm³/s.
 
@@ -221,8 +227,15 @@ def flow_of(settings: PrintSettings, speed: float) -> float:
     Einstellungen verbindet, an denen sonst einzeln gedreht wird. Sie ist der
     Grund, warum eine Schichthöhe, die gestern ging, heute mit einer schnelleren
     Stufe Löcher in die Wand zieht.
+
+    ``first_layer=True`` rechnet mit den Maßen der ersten Schicht. Sie ist
+    höher und breiter als alle darüber — 0,25 auf 0,45 gegen 0,20 auf 0,42,
+    ein Drittel mehr Material je Millimeter Bahn. Mit den Maßen der übrigen
+    gerechnet fällt genau der Wert durch, der als erster reißt.
     """
-    return settings.layers.layer_height * settings.layers.line_width * speed
+    height = settings.layers.first_layer_height if first_layer else settings.layers.layer_height
+    width = settings.layers.first_layer_line_width if first_layer else settings.layers.line_width
+    return height * width * speed
 
 
 def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]:
@@ -243,6 +256,14 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     während der Wert, an dem es lag, unangetastet blieb und der Volumenstrom
     verletzt. Gefragt wird deshalb jeder Wert einzeln.
 
+    **Und jeder heißt jeder.** Geprüft wurden zwei von sechs Geschwindigkeiten;
+    die Außenwand, die Deckfläche und die erste Schicht liefen ungeprüft
+    durch. Eine Stufe, die nur an der Außenwand zieht, kam damit ohne einen
+    Satz durch — und die erste Schicht ist der Wert, der als erster reißt:
+    Sie ist höher und breiter als alle über ihr. Der Fahrweg bleibt draußen,
+    weil dabei nichts gefördert wird, und die Brücke bleibt draußen, weil
+    ihre Bahn mit Absicht dünner liegt als gerechnet.
+
     **Und was der heißere Weg nicht leistet:** ``max_flow`` ist eine Zahl des
     Materialprofils und hängt dort an keiner Temperatur. Zehn Grad mehr machen
     das Filament flüssiger, die Grenze in den Einstellungen bewegen sie nicht —
@@ -253,16 +274,22 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     advice: list[SettingAdvice] = []
     limit = settings.filament.max_flow
     per_millimetre = settings.layers.layer_height * settings.layers.line_width
-    if limit <= 0.0 or per_millimetre <= 0.0:
+    first_per_millimetre = (
+        settings.layers.first_layer_height * settings.layers.first_layer_line_width
+    )
+    if limit <= 0.0 or per_millimetre <= 0.0 or first_per_millimetre <= 0.0:
         return advice
 
     breaking = [
-        (path, speed)
-        for path, speed in (
-            ("speed.infill", settings.speed.infill),
-            ("speed.inner_wall", settings.speed.inner_wall),
+        (path, speed, first)
+        for path, speed, first in (
+            ("speed.infill", settings.speed.infill, False),
+            ("speed.inner_wall", settings.speed.inner_wall, False),
+            ("speed.outer_wall", settings.speed.outer_wall, False),
+            ("speed.top_surface", settings.speed.top_surface, False),
+            ("speed.first_layer", settings.speed.first_layer, True),
         )
-        if flow_of(settings, speed) > limit
+        if flow_of(settings, speed, first_layer=first) > limit
     ]
     if not breaking:
         return advice
@@ -288,8 +315,8 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     # Abgerundet und nicht gerundet: Ein aufgerundeter Wert liegt wieder über
     # der Grenze, um die es geht — knapp, aber der Vorschlag hätte sie dann
     # nicht eingehalten.
-    allowed = float(math.floor(limit / per_millimetre))
-    for path, speed in breaking:
+    for path, speed, first in breaking:
+        allowed = float(math.floor(limit / (first_per_millimetre if first else per_millimetre)))
         if allowed <= 0.0 or allowed >= speed:
             # Nur Rundung, oder eine Einstellung, für die es kein sinnvolles
             # Tempo mehr gibt: ein „Vorschlag", der nichts senkt, ist keiner.
@@ -485,7 +512,18 @@ def _from_geometry(
             )
         )
 
-    if needs_support and not islands and settings.support.placement == "everywhere":
+    # **„Keine Insel“ heißt nicht „alles erreicht das Bett“.** Ein Tisch —
+    # Bodenplatte 40 auf 40, darauf eine Säule 10 auf 10, darauf eine Platte
+    # 40 auf 40 — hat keine Insel und 1 492 mm² Überhang auf einer Schicht,
+    # und jede Stütze darunter endet auf der Bodenplatte. Der Vorschlag
+    # ``build_plate`` ließ die Tischplatte absacken. Gefragt wird deshalb die
+    # Geometrie und nicht ein Nebenbefund (:func:`support_on_model`).
+    if (
+        needs_support
+        and not islands
+        and settings.support.placement == "everywhere"
+        and not support_on_model(result)
+    ):
         advice.append(
             SettingAdvice(
                 path="support.placement",
@@ -587,12 +625,16 @@ def _from_geometry(
 
     minimum = 2.0 * settings.layers.line_width
     least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
-    if thin is not None and least <= thin < minimum:
-        # Unterhalb von ``least`` schwiege dieser Vorschlag besser: Auch die
-        # schmalste Bahn dieser Düse verlöre die Stelle, und ein Vorschlag,
-        # der nichts behebt, ist keiner. Dort übernimmt der Befund
-        # ``settings.wall_below_nozzle`` (``warnings_for``) — kleinere Düse
-        # oder breitere Wand, beides entscheidet der Nutzer, kein Wert.
+    if thin is not None and 2.0 * least <= thin < minimum:
+        # **Die Grenze ist die doppelte schmalste Bahn, nicht die einfache.**
+        # Der Vorschlag senkt auf ``max(thin/2, least)``, und zwei solche
+        # Bahnen passen nur dann in die Stelle, wenn sie mindestens
+        # ``2 * least`` breit ist. Darunter kam ein Vorschlag heraus, der
+        # nichts behob — bei einer 0,4er Düse und einer Stelle von 0,50 mm
+        # lautete er „Bahnbreite 0,34“, und zwei Bahnen davon sind 0,68 mm.
+        # Der Befund ``settings.wall_below_nozzle`` (``warnings_for``) deckt
+        # den ganzen Bereich darunter: kleinere Düse oder breitere Stelle,
+        # beides entscheidet der Nutzer, kein Wert.
         advice.append(
             SettingAdvice(
                 path="layers.line_width",
@@ -613,8 +655,9 @@ def _from_geometry(
                 value=THIN_LAYER_SECONDS,
                 was=settings.cooling.minimum_layer_time,
                 reason=_(
-                    "Das Teil läuft nach oben spitz zu. Ohne Mindestzeit je Schicht "
-                    "legt die Düse auf noch weiches Material."
+                    "Weiter oben liegen Schichten mit so wenig Fläche, dass sie in "
+                    "Sekunden fertig sind. Ohne Mindestzeit je Schicht legt die Düse "
+                    "auf noch weiches Material."
                 ),
             )
         )
@@ -883,6 +926,59 @@ def warnings_for(
             )
         )
 
+    # **Was die Maschine nicht kann, wird gesagt und nicht gedeckelt.**
+    # ``print_settings._temperatures`` nimmt das Kleinere aus Materialwunsch
+    # und Maschinengrenze, und sein Docstring sagt dazu „gedeckelt wird, aber
+    # ``advise`` sagt es auch". Für die Düse stimmte das (``_from_machine``),
+    # für Bett und Bauraum nicht: ABS will 100 °C Bett, der A1 mini kann 80 —
+    # der Druck lief mit zwanzig Grad zu kaltem Bett los, und im Bericht stand
+    # kein Wort. Ein **Befund** und kein Vorschlag, denn kein Wert behebt es:
+    # 80 Grad sind bereits das Höchste, was die Maschine hergibt (§17.3).
+    wanted_bed = settings_table.material_temperature(profile.material.id, "bed")
+    if wanted_bed is not None and wanted_bed > profile.printer.bed_temperature_max:
+        findings.append(
+            Finding(
+                code="settings.bed_below_material",
+                severity="warning",
+                message=_(
+                    "Dieses Material will ein wärmeres Bett, als dieser Drucker heizen "
+                    "kann — gedruckt wird mit dem Höchstwert der Maschine. Die erste "
+                    "Schicht braucht dann mehr Haftung: Brim oder Raft wählen, sonst "
+                    "löst sich das Teil beim Abkühlen."
+                ),
+                values={
+                    "material": profile.material.title,
+                    "printer": profile.printer.title,
+                    "wanted": float(wanted_bed),
+                    "possible": float(profile.printer.bed_temperature_max),
+                },
+            )
+        )
+
+    # Dieselbe stille Kürzung beim Bauraum, und sie ist die vollständigere:
+    # ``_temperatures`` setzt die Kammer auf null, wo kein geschlossener
+    # Bauraum da ist. Der Zweig in :func:`_from_machine`, der davor warnt,
+    # sieht deshalb nie einen Wert über null — er greift allein bei einer von
+    # Hand eingetragenen Temperatur.
+    wanted_chamber = settings_table.material_temperature(profile.material.id, "chamber")
+    if wanted_chamber and not profile.printer.enclosed:
+        findings.append(
+            Finding(
+                code="settings.chamber_without_enclosure",
+                severity="warning",
+                message=_(
+                    "Dieses Material will einen geheizten Bauraum, und dieser Drucker "
+                    "hat keinen — die Bauraumtemperatur bleibt aus. Das Teil vor Zugluft "
+                    "abschirmen, oder einen Drucker mit geschlossenem Bauraum wählen."
+                ),
+                values={
+                    "material": profile.material.title,
+                    "printer": profile.printer.title,
+                    "wanted": float(wanted_chamber),
+                },
+            )
+        )
+
     if settings.support.style != "none" and settings.support.z_gap < settings.layers.layer_height:
         findings.append(
             Finding(
@@ -902,22 +998,29 @@ def warnings_for(
     if result is not None:
         least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
         thin = narrowest_measured(result)
-        if thin is not None and thin < least:
+        if thin is not None and thin < 2.0 * least:
             # Das Gegenstück zur Bahnbreiten-Regel in ``_from_geometry``: Was
-            # schmaler ist als jede Bahn dieser Düse, behebt kein Wert mehr —
+            # keine zwei Bahnen dieser Düse mehr trägt, behebt kein Wert mehr —
             # nach der Doktrin also ein Befund. Beide Auswege stehen im Satz
             # (Regel 17): die kleinere Düse gehört danach ins Druckerprofil,
             # sonst rechnet alles Weitere mit der falschen.
+            #
+            # **Bis zur doppelten schmalsten Bahn und nicht bis zur einfachen.**
+            # Dazwischen lag ein Bereich ohne Antwort: Der Vorschlag daneben
+            # senkte die Bahnbreite auf einen Wert, dessen zwei Bahnen immer
+            # noch breiter waren als die Stelle, und hier schwieg es. Eine
+            # Stelle von 0,50 mm an einer 0,4er Düse bekam damit einen
+            # Vorschlag, der nichts änderte, und keinen Satz dazu.
             findings.append(
                 Finding(
                     code="settings.wall_below_nozzle",
                     severity="warning",
                     message=_(
-                        "Die dünnste Stelle ist schmaler als jede Bahn, die diese "
-                        "Düse legen kann — sie fällt im Druck weg, gleich welche "
-                        "Einstellung. Eine kleinere Düse druckt sie (danach den "
-                        "Durchmesser im Druckerprofil nachziehen), oder die Stelle "
-                        "wird mindestens auf eine Bahnbreite verbreitert."
+                        "Die dünnste Stelle trägt keine zwei Bahnen, auch nicht mit "
+                        "der schmalsten, die diese Düse legen kann — daran ändert "
+                        "keine Einstellung etwas. Eine kleinere Düse druckt sie "
+                        "(danach den Durchmesser im Druckerprofil nachziehen), oder "
+                        "die Stelle wird auf zwei Bahnbreiten verbreitert."
                     ),
                     values={
                         "width_mm": thin,

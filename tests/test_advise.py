@@ -209,3 +209,175 @@ def test_an_advice_that_changes_nothing_measurable_is_dropped() -> None:
     )
 
     assert kept == []
+
+
+# --- der tote Bereich zwischen Vorschlag und Befund ------------------------------
+
+
+def barely_narrow() -> tuple[PrintSettings, Profile, float]:
+    """Eine Stelle, die eine Bahn dieser Düse trägt, aber keine zwei.
+
+    Bei einer 0,4er Düse ist die schmalste Bahn 0,34 mm breit; eine Stelle von
+    0,50 mm liegt darüber und unter dem Doppelten. Der Vorschlag senkte die
+    Bahnbreite auf 0,34 — zwei davon sind 0,68 und passen weiterhin nicht.
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    least = advise.NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+    return settings, profile, least
+
+
+def test_a_place_between_one_and_two_nozzle_lines_gets_no_empty_advice() -> None:
+    """Ein Vorschlag, der nichts behebt, ist keiner (§22.2).
+
+    Er stand trotzdem da: „Bahnbreite 0,42 → 0,34" über einer Stelle von
+    0,50 mm, an der auch zwei Bahnen von 0,34 nicht ankommen.
+    """
+    settings, profile, least = barely_narrow()
+    thin = 1.5 * least
+    assert thin < 2.0 * settings.layers.line_width, "sonst greift die Regel gar nicht"
+
+    entries = advise.advise(settings, profile, result_with([0.0] * 20, min_width=thin))
+
+    assert "layers.line_width" not in paths(entries)
+
+
+def test_that_same_place_is_said_out_loud() -> None:
+    """Und die andere Hälfte: Wo kein Wert hilft, steht ein Befund."""
+    settings, profile, least = barely_narrow()
+    thin = 1.5 * least
+
+    findings = advise.warnings_for(settings, profile, result_with([0.0] * 20, min_width=thin))
+
+    hits = [entry for entry in findings if entry.code == "settings.wall_below_nozzle"]
+    assert hits, "zwischen einer und zwei Bahnen schwieg vorher alles"
+    assert hits[0].values["width_mm"] == thin
+
+
+def test_above_two_nozzle_lines_the_advice_works_again() -> None:
+    """Die Gegenprobe: Ab der doppelten schmalsten Bahn hilft eine schmalere
+    Linie wirklich, und dann kommt sie auch.
+    """
+    settings, profile, least = barely_narrow()
+    thin = 2.2 * least
+    assert thin < 2.0 * settings.layers.line_width
+
+    entries = advise.advise(settings, profile, result_with([0.0] * 20, min_width=thin))
+    findings = advise.warnings_for(settings, profile, result_with([0.0] * 20, min_width=thin))
+
+    chosen = next(entry for entry in entries if entry.path == "layers.line_width")
+    assert 2.0 * number(chosen) <= thin, "zwei solche Bahnen passen jetzt hinein"
+    assert "settings.wall_below_nozzle" not in {entry.code for entry in findings}
+
+
+# --- der Volumenstrom prüft alle Geschwindigkeiten -------------------------------
+
+
+def test_the_outer_wall_is_checked_too() -> None:
+    """Geprüft wurden zwei von sechs Geschwindigkeiten.
+
+    Eine Stufe, die nur an der Außenwand zieht, kam damit ohne einen Satz
+    durch — und die Außenwand ist die Bahn, die man sieht.
+    """
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile, "fine")
+    settings = print_settings.with_path(settings, "speed.outer_wall", 500.0)
+    settings = print_settings.with_path(
+        settings, "temperature.nozzle", profile.printer.nozzle_temperature_max - 1
+    )
+    assert advise.flow_of(settings, settings.speed.outer_wall) > settings.filament.max_flow
+
+    entries = advise.advise(settings, profile)
+
+    chosen = next(entry for entry in entries if entry.path == "speed.outer_wall")
+    assert number(chosen) < 500.0
+
+
+def test_the_first_layer_is_measured_with_its_own_size() -> None:
+    """Die erste Schicht ist höher und breiter als alle über ihr — 0,25 auf
+    0,45 gegen 0,20 auf 0,42, ein Drittel mehr Material je Millimeter.
+
+    Mit den Maßen der übrigen gerechnet fiel genau der Wert durch, der als
+    erster reißt.
+    """
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile, "fine")
+    settings = print_settings.with_path(
+        settings, "temperature.nozzle", profile.printer.nozzle_temperature_max - 1
+    )
+    limit = settings.filament.max_flow
+    per_millimetre = settings.layers.first_layer_height * settings.layers.first_layer_line_width
+    speed = 1.05 * limit / per_millimetre
+    settings = print_settings.with_path(settings, "speed.first_layer", speed)
+    assert advise.flow_of(settings, speed) < limit, "mit den Maßen der übrigen fiele es durch"
+    assert advise.flow_of(settings, speed, first_layer=True) > limit
+
+    entries = advise.advise(settings, profile)
+
+    chosen = next(entry for entry in entries if entry.path == "speed.first_layer")
+    assert advise.flow_of(settings, number(chosen), first_layer=True) <= limit
+
+
+# --- die Verbinder rechnen gegen den Stand, der herauskommt ----------------------
+
+
+def test_the_connector_rule_sees_the_narrower_line() -> None:
+    """Gerechnet wurde gegen den Ausgangsstand.
+
+    Die Wandzahl hängt an der Bahnbreite, und genau die senkt die Regel über
+    die dünnste Stelle zwei Absätze weiter oben. Vorher gerechnet stand im
+    Bericht eine Wandzahl, die zu einer Breite passte, die daneben schon
+    zurückgenommen war.
+    """
+    import math
+
+    settings, profile, least = barely_narrow()
+    thin = 2.2 * least
+    thickest = 6.5
+
+    entries = advise.advise(
+        settings, profile, result_with([0.0] * 20, min_width=thin), connectors=[thickest]
+    )
+
+    line = next(entry for entry in entries if entry.path == "layers.line_width")
+    walls = next(entry for entry in entries if entry.path == "shell.wall_count")
+    assert walls.value == math.ceil(thickest / (4.0 * number(line)))
+    assert walls.value > math.ceil(thickest / (4.0 * settings.layers.line_width)), (
+        "gegen den alten Stand gerechnet wären es weniger Wände, als der Zapfen braucht"
+    )
+
+
+# --- die Begründung sagt, was gemessen wurde ------------------------------------
+
+
+def test_the_minimum_layer_time_reason_stays_with_the_measurement() -> None:
+    """Geprüft wird „irgendeine kleine Schicht weiter oben", begründet wurde
+    „das Teil läuft nach oben spitz zu".
+
+    Ein gleichmäßig dünner Stab hat kleine Schichten und keine Verjüngung —
+    der Satz beschrieb einen Körper, den niemand gemessen hatte.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    rod = result_with([0.0] * 20, area=advise.THIN_LAYER_AREA / 2.0)
+
+    entries = advise.advise(settings, profiles.make_profile(), rod)
+
+    chosen = next(entry for entry in entries if entry.path == "cooling.minimum_layer_time")
+    assert "spitz" not in str(chosen.reason), "das Teil verjüngt sich nicht, es ist überall dünn"
+
+
+# --- eine Überhanglinie, nicht zwei ---------------------------------------------
+
+
+def test_the_support_angle_comes_from_the_rule_set() -> None:
+    """Zwei Winkel für dieselbe Frage sind nur so lange einig, wie niemand
+    einen davon anfasst (§39).
+
+    Die Einstellung stand auf 50 Grad, die Schichtanalyse rechnete mit 45: Ein
+    Dach von 48 Grad fiel zwischen beide Zahlen — im Bericht ein Überhang, im
+    Slicer keiner.
+    """
+    from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
+    from app.core.types import SupportSettings
+
+    assert SupportSettings().threshold_angle == OVERHANG_LIMIT_DEGREES
