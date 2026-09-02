@@ -111,9 +111,27 @@ def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
     return MeshData.of(concatenated(parts))
 
 
+#: Ab welcher z-Komponente eine Normale als waagerecht gilt — dann gibt es
+#: kein „oben" auf der Fläche, und die Ausrichtung bleibt die der Ebene.
+UPRIGHT_LIMIT: Final = 1.0 - 1e-6
+
+
 def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> MeshData:
     """Legt eine Beschriftung, die auf +Z steht, auf eine Fläche mit der
-    gegebenen Normalen."""
+    gegebenen Normalen — **aufrecht, wie man sie liest.**
+
+    Bis zum 02.09.2026 richtete allein ``align_vectors`` die Normale aus und
+    ließ die Drehung *um* sie dem Zufall der gewählten Rotation: Auf der
+    Vorderseite der Beispieldose lag „SOLIDON3D" quer, die Leserichtung auf
+    der Welt-z-Achse (gemessen: 4,5 mm breit, 35 mm hoch). Wer eine
+    Seitenwand beschriftet, hätte jedes Mal den Winkel nachgedreht.
+
+    Auf einer Fläche, die nicht Decke oder Boden ist, steht der Text jetzt so,
+    dass seine Zeile waagerecht liegt und sein Oben nach oben zeigt — für
+    einen Betrachter, der von außen auf die Fläche sieht, liest er von links
+    nach rechts. Decke und Boden behalten ihre Lage: Dort gibt es kein
+    „oben", und ``angle`` ist der Weg, den Text zu drehen.
+    """
     placed = body
     if angle:
         placed = apply(placed, rotation("z", angle))
@@ -121,7 +139,20 @@ def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> M
     direction = np.asarray(normal, dtype=float)
     length = float(np.linalg.norm(direction))
     if length > EPS_GEOM:
-        matrix = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], direction / length)
+        outward = direction / length
+        if abs(float(outward[2])) < UPRIGHT_LIMIT:
+            # Rechts ist, was Welt-z und Normale aufspannen; oben liegt in der
+            # Fläche und zeigt nach Welt-oben. Spalten der Matrix: wohin die
+            # Text-Achsen x, y, z gehen.
+            right = np.cross([0.0, 0.0, 1.0], outward)
+            right /= np.linalg.norm(right)
+            up = np.cross(outward, right)
+            matrix = np.eye(4)
+            matrix[:3, 0] = right
+            matrix[:3, 1] = up
+            matrix[:3, 2] = outward
+        else:
+            matrix = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward)
         turned = placed.raw.copy()
         turned.apply_transform(matrix)
         placed = placed.replacing(turned)

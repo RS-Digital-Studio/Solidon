@@ -1,56 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" width="220" height="220">
-<polygon points="173.8,189.2 174.0,189.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.8" y1="189.2" x2="174.0" y2="189.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.9,189.2 174.0,189.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.9" y1="189.2" x2="174.0" y2="189.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <line x1="174.0" y1="189.3" x2="174.1" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.7,189.2 173.8,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.7" y1="189.2" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.7,189.2 173.7,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.7" y1="189.2" x2="173.7" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.7,189.2 173.7,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.7" y1="189.2" x2="173.7" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.7,189.2 173.7,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.7" y1="189.2" x2="173.7" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.1,139.0 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="95.0,139.1 173.6,189.1 173.7,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.6" y1="189.1" x2="173.7" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.6,189.1 173.6,189.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.6" y1="189.1" x2="173.6" y2="189.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.6,189.1 173.6,189.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.6" y1="189.1" x2="173.6" y2="189.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.6,189.1 173.6,189.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.6" y1="189.1" x2="173.6" y2="189.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.5,189.1 173.6,189.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.5" y1="189.1" x2="173.6" y2="189.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.5,189.0 173.5,189.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.5" y1="189.0" x2="173.5" y2="189.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.4,189.0 173.5,189.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.4" y1="189.0" x2="173.5" y2="189.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.4,189.0 173.4,189.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.4" y1="189.0" x2="173.4" y2="189.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.3,188.9 173.4,189.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.3" y1="188.9" x2="173.4" y2="189.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.2,188.9 173.3,188.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.2" y1="188.9" x2="173.3" y2="188.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.2,188.8 173.2,188.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.2" y1="188.8" x2="173.2" y2="188.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.1,188.8 173.2,188.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.1" y1="188.8" x2="173.2" y2="188.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.1,188.8 173.1,188.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.1" y1="188.8" x2="173.1" y2="188.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.0,188.7 173.1,188.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="173.0" y1="188.7" x2="173.1" y2="188.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.8,188.6 173.0,188.7" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.8" y1="188.6" x2="173.0" y2="188.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.6,188.5 172.8,188.6" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.6" y1="188.5" x2="172.8" y2="188.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.4,188.4 172.6,188.5" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.4" y1="188.4" x2="172.6" y2="188.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.4,188.3 172.4,188.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.4" y1="188.3" x2="172.4" y2="188.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.3,188.3 172.4,188.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.3" y1="188.3" x2="172.4" y2="188.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 172.3,188.2 172.3,188.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="172.3" y1="188.2" x2="172.3" y2="188.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.8,189.2 173.9,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.8" y1="189.2" x2="173.9" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.8,189.2 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.8" y1="189.2" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.8,189.2 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.8" y1="189.2" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.8,189.2 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.8" y1="189.2" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="173.8,189.2 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="173.8" y1="189.2" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="95.2,139.4 173.8,189.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="95.2" y1="139.4" x2="173.8" y2="189.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="174.1,189.2 212.0,140.1 211.8,140.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="174.1" y1="189.2" x2="212.0" y2="140.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="207.7,136.9 207.8,140.0 207.8,137.4" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
@@ -59,10 +22,46 @@
 <polygon points="95.1,139.0 174.1,189.2 211.8,140.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="207.7,136.9 207.7,136.9 207.8,140.0" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
 <line x1="207.7" y1="136.9" x2="207.7" y2="136.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 96.5,140.1 172.3,188.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="96.5" y1="140.1" x2="172.3" y2="188.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 173.8,189.2 95.0,139.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="95.0,139.1 173.8,189.2 95.1,139.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.4 95.2,139.4 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.4 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.2,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.2,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.3 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.2 95.1,139.3 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.2 95.1,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.1,139.2 95.1,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.2 95.1,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.2 95.0,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.2 95.0,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.2 95.0,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.2 95.0,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.1 95.0,139.2 174.1,189.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.1 174.1,189.2 95.0,139.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="95.0,139.1 174.1,189.2 95.1,139.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="207.7,136.9 207.7,139.4 207.8,140.0" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
 <polygon points="211.8,138.4 212.0,140.1 212.0,138.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="211.8" y1="138.4" x2="212.0" y2="138.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
@@ -85,27 +84,9 @@
 <line x1="134.3" y1="90.3" x2="207.7" y2="136.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <line x1="207.7" y1="136.9" x2="207.7" y2="139.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,127.2 95.0,117.1 86.6,127.1" fill="#a6b1bd" stroke="#a6b1bd" stroke-width="0.6" />
-<polygon points="95.0,139.1 95.5,139.5 96.5,140.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.5" y1="139.5" x2="96.5" y2="140.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.3,139.4 95.5,139.5" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.3" y1="139.4" x2="95.5" y2="139.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.3,139.4 95.3,139.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.3" y1="139.4" x2="95.3" y2="139.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.2,139.3 95.3,139.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.2" y1="139.3" x2="95.3" y2="139.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.2,139.3 95.2,139.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.2" y1="139.3" x2="95.2" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.2,139.3 95.2,139.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.2" y1="139.3" x2="95.2" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.2,139.3 95.2,139.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.2" y1="139.3" x2="95.2" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.1,139.3 95.2,139.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.1" y1="139.3" x2="95.2" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="95.0,139.1 95.1,139.3 95.1,139.3" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="95.1" y1="139.3" x2="95.1" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="94.9,139.2 95.1,139.3 95.0,139.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="94.9,139.2 95.0,139.2 95.0,139.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="94.9" y1="139.2" x2="95.0" y2="139.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="94.9" y1="139.2" x2="95.1" y2="139.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="94.9" y1="139.2" x2="95.0" y2="139.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="78.0,121.8 86.6,127.1 73.7,118.3" fill="#7b848c" stroke="#7b848c" stroke-width="0.6" />
 <polygon points="86.6,127.1 87.3,131.7 87.3,127.2" fill="#767e87" stroke="#767e87" stroke-width="0.6" />
 <line x1="86.6" y1="127.1" x2="87.3" y2="127.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
@@ -137,18 +118,9 @@
 <line x1="86.6" y1="127.1" x2="86.6" y2="136.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="134.3,90.3 134.3,92.8 207.7,139.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="134.3" y1="92.8" x2="207.7" y2="139.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.4,106.2 48.5,108.1 48.8,107.5" fill="#a9b5c1" stroke="#a9b5c1" stroke-width="0.6" />
-<line x1="45.4" y1="106.2" x2="48.5" y2="108.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="51.4,104.9 58.1,108.5 40.2,97.1" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
-<polygon points="45.4,106.2 48.8,107.5 46.0,105.9" fill="#b4c0cd" stroke="#b4c0cd" stroke-width="0.6" />
-<line x1="45.4" y1="106.2" x2="48.8" y2="107.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="48.5,108.1 49.3,109.4 48.8,107.5" fill="#8f99a3" stroke="#8f99a3" stroke-width="0.6" />
-<line x1="48.8" y1="107.5" x2="48.5" y2="108.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="48.5" y1="108.1" x2="49.3" y2="109.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="99.5,110.4 107.9,100.5 112.4,93.7" fill="#a6b2bd" stroke="#a6b2bd" stroke-width="0.6" />
 <line x1="99.5" y1="110.4" x2="112.4" y2="93.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.4,106.2 45.4,107.0 45.7,105.4" fill="#818a93" stroke="#818a93" stroke-width="0.6" />
-<line x1="45.7" y1="105.4" x2="45.4" y2="106.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="51.4,104.9 86.6,136.9 68.9,116.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="51.4" y1="104.9" x2="68.9" y2="116.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="58.1,108.5 73.7,118.3 24.0,66.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
@@ -156,34 +128,16 @@
 <polygon points="32.7,93.1 51.4,104.9 40.2,97.1" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
 <polygon points="95.1,137.5 132.8,90.1 132.8,88.6" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="95.1" y1="137.5" x2="132.8" y2="88.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.0,109.4 48.5,110.1 47.8,109.8" fill="#a3aeba" stroke="#a3aeba" stroke-width="0.6" />
-<line x1="47.0" y1="109.4" x2="48.5" y2="110.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.8,109.8 49.1,111.1 49.1,110.0" fill="#959fa9" stroke="#959fa9" stroke-width="0.6" />
-<line x1="49.1" y1="111.1" x2="47.8" y2="109.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="133.7,90.4 134.3,92.8 133.8,90.4" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <line x1="133.7" y1="90.4" x2="133.8" y2="90.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="32.7,93.1 40.2,97.1 24.8,87.4" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
 <polygon points="133.8,90.4 134.3,92.8 134.3,90.3" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <line x1="133.8" y1="90.4" x2="134.3" y2="90.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <line x1="134.3" y1="90.3" x2="134.3" y2="92.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.0,109.4 47.3,108.9 45.8,108.0" fill="#b6c3cf" stroke="#b6c3cf" stroke-width="0.6" />
 <polygon points="133.0,88.4 133.0,89.9 211.8,140.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="107.9,100.5 121.0,83.5 112.4,93.7" fill="#a6b2bd" stroke="#a6b2bd" stroke-width="0.6" />
-<polygon points="45.1,108.4 47.0,109.4 45.8,108.0" fill="#aab6c2" stroke="#aab6c2" stroke-width="0.6" />
-<line x1="47.0" y1="109.4" x2="45.1" y2="108.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="47.0" y1="109.4" x2="45.8" y2="108.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="49.1,111.1 49.3,111.2 49.1,110.0" fill="#939da7" stroke="#939da7" stroke-width="0.6" />
-<line x1="49.1" y1="110.0" x2="49.1" y2="111.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.0,109.4 47.6,109.9 47.3,108.9" fill="#96a1ab" stroke="#96a1ab" stroke-width="0.6" />
-<line x1="47.0" y1="109.4" x2="47.3" y2="108.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="47.0" y1="109.4" x2="47.6" y2="109.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="40.2,97.1 58.1,108.5 24.0,66.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="58.1" y1="108.5" x2="40.2" y2="97.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.1,108.4 45.5,108.7 46.2,107.7" fill="#79818a" stroke="#79818a" stroke-width="0.6" />
-<line x1="46.2" y1="107.7" x2="45.1" y2="108.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="48.8,111.7 49.3,111.2 49.1,111.1" fill="#737b83" stroke="#737b83" stroke-width="0.6" />
-<line x1="49.1" y1="111.1" x2="48.8" y2="111.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="49.3" y1="111.2" x2="48.8" y2="111.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.8,90.1 211.8,140.0 132.8,90.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="132.8,90.1 211.8,140.0 132.9,90.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="132.9,90.0 132.9,90.1 211.8,140.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
@@ -191,39 +145,24 @@
 <line x1="133.0" y1="89.9" x2="211.8" y2="140.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="133.7,90.4 133.7,92.9 134.3,92.8" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <line x1="133.7" y1="90.4" x2="133.7" y2="92.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.1,108.4 45.4,109.6 45.5,108.7" fill="#939da7" stroke="#939da7" stroke-width="0.6" />
-<line x1="45.1" y1="108.4" x2="45.5" y2="108.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.1" y1="108.4" x2="45.4" y2="109.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.4,109.6 45.8,108.0 45.5,108.7" fill="#778088" stroke="#778088" stroke-width="0.6" />
-<line x1="45.5" y1="108.7" x2="45.8" y2="108.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.5" y1="108.7" x2="45.4" y2="109.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.8" y1="108.0" x2="45.4" y2="109.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="109.6,83.5 109.8,84.6 111.8,82.8" fill="#737b83" stroke="#737b83" stroke-width="0.6" />
-<line x1="109.6" y1="83.5" x2="111.8" y2="82.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="109.8,84.6 112.4,93.7 111.9,83.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="112.4,93.7 109.8,84.6 108.1,83.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="107.7,82.2 108.1,83.8 109.6,83.5" fill="#7a838b" stroke="#7a838b" stroke-width="0.6" />
-<line x1="107.7" y1="82.2" x2="109.6" y2="83.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="108.9,84.6 112.4,93.7 111.9,83.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="107.2,81.0 108.9,84.6 110.8,83.7" fill="#737b83" stroke="#737b83" stroke-width="0.6" />
+<line x1="107.2" y1="81.0" x2="110.8" y2="83.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="112.4,93.7 120.6,83.0 111.9,83.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="73.7,118.3 112.4,93.7 65.5,48.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="110.8,83.7 111.9,83.9 112.4,80.5" fill="#929ca6" stroke="#929ca6" stroke-width="0.6" />
+<line x1="110.8" y1="83.7" x2="112.4" y2="80.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="112.4,93.7 121.0,83.5 120.6,83.0" fill="#a6b2bd" stroke="#a6b2bd" stroke-width="0.6" />
 <line x1="112.4" y1="93.7" x2="120.6" y2="83.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,80.6 32.7,93.1 24.8,87.4" fill="#88919b" stroke="#88919b" stroke-width="0.6" />
-<polygon points="111.8,82.8 111.9,83.9 112.4,80.5" fill="#8a949d" stroke="#8a949d" stroke-width="0.6" />
-<line x1="111.8" y1="82.8" x2="112.4" y2="80.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="86.6,136.9 87.3,139.1 87.3,131.7" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
-<polygon points="109.6,83.5 108.1,83.8 109.8,84.6" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<line x1="109.6" y1="83.5" x2="109.8" y2="84.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="108.1" y1="83.8" x2="109.8" y2="84.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="109.8,84.6 111.9,83.9 111.8,82.8" fill="#737b83" stroke="#737b83" stroke-width="0.6" />
-<line x1="109.8" y1="84.6" x2="111.9" y2="83.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="111.8" y1="82.8" x2="111.9" y2="83.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="108.9,84.6 111.9,83.9 110.8,83.7" fill="#7a838b" stroke="#7a838b" stroke-width="0.6" />
+<line x1="110.8" y1="83.7" x2="108.9" y2="84.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="110.8" y1="83.7" x2="111.9" y2="83.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="108.9" y1="84.6" x2="111.9" y2="83.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,131.7 105.1,118.8 95.0,117.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="107.7,82.2 107.9,80.1 107.4,82.0" fill="#788088" stroke="#788088" stroke-width="0.6" />
-<line x1="107.7" y1="82.2" x2="107.9" y2="80.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="107.7,82.2 107.4,82.0 108.1,83.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<line x1="107.7" y1="82.2" x2="107.4" y2="82.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="107.7" y1="82.2" x2="108.1" y2="83.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="107.2,81.0 107.4,82.0 108.9,84.6" fill="#7f8891" stroke="#7f8891" stroke-width="0.6" />
+<line x1="107.2" y1="81.0" x2="108.9" y2="84.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="111.9,83.9 112.5,81.4 112.4,80.5" fill="#89939d" stroke="#89939d" stroke-width="0.6" />
 <line x1="112.4" y1="80.5" x2="112.5" y2="81.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="95.0,117.1 105.1,118.8 107.9,100.5" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -242,18 +181,17 @@
 <line x1="120.6" y1="83.0" x2="120.9" y2="82.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="107.9,100.5 121.0,89.1 121.0,83.5" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="107.9" y1="100.5" x2="121.0" y2="83.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="83.6,59.6 112.4,93.7 108.9,84.6" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="104.9,73.1 112.5,81.4 120.6,83.0" fill="#afbbc8" stroke="#afbbc8" stroke-width="0.6" />
-<polygon points="83.6,59.6 112.4,93.7 108.1,83.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="24.0,66.4 73.7,118.3 35.7,51.2" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="49.3,114.0 49.7,113.6 45.3,111.0" fill="#b1bdca" stroke="#b1bdca" stroke-width="0.6" />
-<line x1="45.3" y1="111.0" x2="49.3" y2="114.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="49.3" y1="114.0" x2="49.7" y2="113.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="107.4,82.0 109.3,79.9 104.9,73.1" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="107.4" y1="82.0" x2="109.3" y2="79.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="104.9,73.1 109.3,79.9 112.5,81.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="109.3" y1="79.9" x2="112.5" y2="81.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.0,79.9 24.8,87.4 24.0,66.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="13.0" y1="79.9" x2="24.8" y2="87.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="63.9,125.6 64.1,125.1 61.4,123.6" fill="#b7c4d1" stroke="#b7c4d1" stroke-width="0.6" />
+<line x1="61.4" y1="123.6" x2="63.9" y2="125.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.8,88.6 132.8,90.1 132.8,88.6" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="132.8" y1="88.6" x2="132.8" y2="88.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.8,88.6 132.9,90.1 132.9,88.5" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -267,76 +205,127 @@
 <line x1="104.9" y1="73.1" x2="120.6" y2="83.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,131.7 87.3,139.1 95.0,130.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="87.3" y1="131.7" x2="87.3" y2="139.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="63.9,125.6 63.7,126.6 64.1,125.1" fill="#838d96" stroke="#838d96" stroke-width="0.6" />
+<line x1="64.1" y1="125.1" x2="63.9" y2="125.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="83.6,59.6 108.9,84.6 107.4,82.0" fill="#afbbc8" stroke="#afbbc8" stroke-width="0.6" />
+<line x1="107.4" y1="82.0" x2="108.9" y2="84.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.8,88.6 132.8,90.1 132.8,90.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="132.8" y1="90.1" x2="132.8" y2="90.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="59.0,122.2 59.4,121.8 57.0,120.3" fill="#b6c3d0" stroke="#b6c3d0" stroke-width="0.6" />
 <polygon points="132.8,88.6 132.8,90.1 132.9,90.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="132.8" y1="90.1" x2="132.9" y2="90.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.9,88.5 132.9,90.1 132.9,90.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="132.9" y1="90.0" x2="132.9" y2="90.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="132.9,88.5 132.9,90.0 133.0,89.9" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="132.9" y1="90.0" x2="133.0" y2="89.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="83.6,59.6 108.1,83.8 107.4,82.0" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<line x1="107.4" y1="82.0" x2="108.1" y2="83.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="46.1,112.7 49.0,115.3 49.1,114.4" fill="#99a4ae" stroke="#99a4ae" stroke-width="0.6" />
-<polygon points="45.4,112.2 49.0,115.3 46.1,112.7" fill="#b1beca" stroke="#b1beca" stroke-width="0.6" />
-<line x1="45.4" y1="112.2" x2="49.0" y2="115.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="46.1" y1="112.7" x2="49.0" y2="115.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="8.0,79.9 45.4,113.6 47.5,115.2" fill="#b0bcc9" stroke="#b0bcc9" stroke-width="0.6" />
-<line x1="8.0" y1="79.9" x2="45.4" y2="113.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="57.0,121.1 59.0,122.2 57.0,120.3" fill="#b2beca" stroke="#b2beca" stroke-width="0.6" />
+<line x1="57.0" y1="120.3" x2="57.0" y2="121.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="57.0" y1="121.1" x2="59.0" y2="122.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="59.0,122.2 59.5,123.3 59.4,121.8" fill="#96a1ab" stroke="#96a1ab" stroke-width="0.6" />
+<line x1="59.4" y1="121.8" x2="59.0" y2="122.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="61.4,123.6 61.4,125.3 61.5,122.8" fill="#88929b" stroke="#88929b" stroke-width="0.6" />
+<line x1="61.4" y1="123.6" x2="61.5" y2="122.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="59.5,123.3 59.9,123.1 59.1,123.5" fill="#8e98a1" stroke="#8e98a1" stroke-width="0.6" />
+<line x1="59.5" y1="123.3" x2="59.9" y2="123.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="107.4,82.0 104.9,73.1 83.6,59.6" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="13.0,79.9 24.0,66.4 22.4,67.8" fill="#929ca6" stroke="#929ca6" stroke-width="0.6" />
 <line x1="13.0" y1="79.9" x2="24.0" y2="66.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="57.7,122.5 59.1,123.5 58.8,122.4" fill="#aebac6" stroke="#aebac6" stroke-width="0.6" />
+<line x1="57.7" y1="122.5" x2="58.8" y2="122.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="57.7" y1="122.5" x2="59.1" y2="123.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="104.9,73.1 108.7,75.2 95.2,66.5" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
 <polygon points="35.7,51.2 73.7,118.3 57.4,42.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="13.0,79.9 13.0,85.7 13.1,80.6" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="13.0" y1="79.9" x2="13.1" y2="80.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="49.0,116.1 49.3,114.9 48.9,115.7" fill="#79828a" stroke="#79828a" stroke-width="0.6" />
-<line x1="48.9" y1="115.7" x2="49.3" y2="114.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="49.3" y1="114.9" x2="49.0" y2="116.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="50.8,116.7 51.5,118.2 50.9,116.5" fill="#a1adb8" stroke="#a1adb8" stroke-width="0.6" />
 <polygon points="73.7,118.3 65.5,48.0 57.4,42.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<polygon points="59.1,123.5 59.4,123.6 58.8,122.4" fill="#a0abb6" stroke="#a0abb6" stroke-width="0.6" />
+<line x1="58.8" y1="122.4" x2="59.1" y2="123.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="50.8,116.7 50.9,116.5 48.9,115.5" fill="#afbcc8" stroke="#afbcc8" stroke-width="0.6" />
+<line x1="50.8" y1="116.7" x2="50.9" y2="116.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="50.8,116.7 48.9,115.5 48.7,115.8" fill="#adb9c5" stroke="#adb9c5" stroke-width="0.6" />
+<line x1="48.7" y1="115.8" x2="50.8" y2="116.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="86.6,136.9 86.6,142.9 87.3,139.1" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <line x1="86.6" y1="136.9" x2="86.6" y2="142.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,80.6 39.2,110.4 32.7,93.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="32.7" y1="93.1" x2="13.1" y2="80.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="47.2,115.6 49.0,116.1 48.9,115.7" fill="#a7b2be" stroke="#a7b2be" stroke-width="0.6" />
-<line x1="48.9" y1="115.7" x2="49.0" y2="116.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="49.0" y1="116.1" x2="47.2" y2="115.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="59.1,123.5 59.3,124.3 59.4,123.6" fill="#939ea8" stroke="#939ea8" stroke-width="0.6" />
 <polygon points="65.5,48.0 112.4,93.7 83.6,59.6" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="47.2,115.6 48.9,115.7 45.4,113.6" fill="#87909a" stroke="#87909a" stroke-width="0.6" />
-<line x1="45.4" y1="113.6" x2="47.2" y2="115.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="48.9" y1="115.7" x2="47.2" y2="115.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="43.9,112.4 46.8,114.7 46.3,114.2" fill="#adb9c5" stroke="#adb9c5" stroke-width="0.6" />
+<line x1="43.9" y1="112.4" x2="46.8" y2="114.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="57.2,123.2 59.3,124.3 59.9,124.2" fill="#b3bfcb" stroke="#b3bfcb" stroke-width="0.6" />
+<line x1="59.9" y1="124.2" x2="59.3" y2="124.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="57.2,123.2 59.9,124.2 57.5,122.4" fill="#a2adb8" stroke="#a2adb8" stroke-width="0.6" />
+<line x1="57.2" y1="123.2" x2="57.5" y2="122.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="57.2" y1="123.2" x2="59.9" y2="124.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="83.6,59.6 104.9,73.1 95.2,66.5" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
 <line x1="83.6" y1="59.6" x2="104.9" y2="73.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="107.9,100.5 121.0,92.5 121.0,89.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="95.0,130.7 105.1,118.8 87.3,131.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="32.7,93.1 86.6,144.8 86.6,142.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
+<polygon points="47.6,116.4 49.1,117.4 48.4,114.9" fill="#757d85" stroke="#757d85" stroke-width="0.6" />
+<line x1="48.4" y1="114.9" x2="47.6" y2="116.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="22.4,67.8 24.0,66.4 29.5,58.6" fill="#949ea8" stroke="#949ea8" stroke-width="0.6" />
-<polygon points="45.8,115.3 48.7,117.2 48.8,116.5" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="45.8,115.3 48.8,116.5 46.0,114.9" fill="#b4c1cd" stroke="#b4c1cd" stroke-width="0.6" />
-<line x1="45.8" y1="115.3" x2="48.8" y2="116.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="48.7,117.2 49.2,118.4 48.8,116.5" fill="#949fa9" stroke="#949fa9" stroke-width="0.6" />
-<line x1="48.7" y1="117.2" x2="48.8" y2="116.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="48.7" y1="117.2" x2="49.2" y2="118.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="41.8,111.3 42.3,113.2 42.8,111.1" fill="#767f87" stroke="#767f87" stroke-width="0.6" />
+<line x1="41.8" y1="111.3" x2="42.8" y2="111.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="41.8" y1="111.3" x2="42.3" y2="113.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="50.7,118.9 52.2,118.6 49.1,117.4" fill="#858e97" stroke="#858e97" stroke-width="0.6" />
+<line x1="49.1" y1="117.4" x2="52.2" y2="118.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="50.7" y1="118.9" x2="52.2" y2="118.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="34.0,106.6 37.0,108.3 36.7,108.0" fill="#aab6c2" stroke="#aab6c2" stroke-width="0.6" />
+<line x1="34.0" y1="106.6" x2="37.0" y2="108.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="47.6,116.4 49.1,118.0 49.1,117.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="47.6" y1="116.4" x2="49.1" y2="118.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="47.6" y1="116.4" x2="49.1" y2="117.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="49.1,118.0 50.7,118.9 49.1,117.4" fill="#b5c1ce" stroke="#b5c1ce" stroke-width="0.6" />
+<line x1="49.1" y1="118.0" x2="49.1" y2="117.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="49.1" y1="118.0" x2="50.7" y2="118.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="49.1" y1="117.4" x2="50.7" y2="118.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="83.6,59.6 95.2,66.5 78.1,55.7" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
+<polygon points="34.0,106.6 36.7,108.0 34.4,106.7" fill="#a9b4c0" stroke="#a9b4c0" stroke-width="0.6" />
 <polygon points="58.4,124.0 86.6,144.8 32.7,93.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="45.3,114.8 45.3,116.1 45.6,114.4" fill="#808992" stroke="#808992" stroke-width="0.6" />
-<line x1="45.6" y1="114.4" x2="45.3" y2="114.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.3" y1="116.1" x2="45.3" y2="114.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="45.8,115.3 46.0,114.9 45.3,116.1" fill="#737b83" stroke="#737b83" stroke-width="0.6" />
-<line x1="46.0" y1="114.9" x2="45.8" y2="115.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.3" y1="116.1" x2="45.8" y2="115.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="46.5,116.3 47.2,115.8 43.9,114.3" fill="#9ea9b4" stroke="#9ea9b4" stroke-width="0.6" />
+<line x1="43.9" y1="114.3" x2="46.5" y2="116.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="46.5" y1="116.3" x2="47.2" y2="115.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="24.0,66.4 35.7,51.2 29.5,58.6" fill="#949ea8" stroke="#949ea8" stroke-width="0.6" />
 <line x1="24.0" y1="66.4" x2="35.7" y2="51.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="30.1,103.5 31.9,105.2 30.7,103.8" fill="#b6c2cf" stroke="#b6c2cf" stroke-width="0.6" />
+<line x1="30.1" y1="103.5" x2="31.9" y2="105.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="31.9,105.2 32.6,105.4 30.7,103.8" fill="#acb8c4" stroke="#acb8c4" stroke-width="0.6" />
+<polygon points="31.9,105.2 32.3,106.2 32.6,105.4" fill="#8a949d" stroke="#8a949d" stroke-width="0.6" />
+<line x1="31.9" y1="105.2" x2="32.6" y2="105.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="31.9" y1="105.2" x2="32.3" y2="106.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="86.6,142.9 87.3,145.0 87.3,139.1" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <polygon points="87.3,139.1 87.3,145.0 95.0,130.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="87.3" y1="139.1" x2="87.3" y2="145.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="36.7,108.0 36.5,110.0 37.1,109.2" fill="#767f87" stroke="#767f87" stroke-width="0.6" />
+<line x1="36.7" y1="108.0" x2="37.1" y2="109.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="36.7" y1="108.0" x2="36.5" y2="110.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="39.2,110.4 58.4,124.0 32.7,93.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
+<polygon points="36.5,110.0 37.7,108.3 36.6,109.5" fill="#727a82" stroke="#727a82" stroke-width="0.6" />
+<line x1="37.7" y1="108.3" x2="36.6" y2="109.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="37.7" y1="108.3" x2="36.5" y2="110.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="32.3,106.2 33.4,106.1 30.9,104.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="32.3" y1="106.2" x2="33.4" y2="106.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="65.5,48.0 83.6,59.6 78.1,55.7" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
 <line x1="65.5" y1="48.0" x2="83.6" y2="59.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.0,85.7 13.1,91.8 13.1,80.6" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
+<polygon points="33.7,108.1 36.6,109.5 33.4,106.1" fill="#757e86" stroke="#757e86" stroke-width="0.6" />
+<line x1="33.4" y1="106.1" x2="33.7" y2="108.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="107.9,100.5 121.0,97.4 121.0,92.5" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
+<polygon points="30.2,105.5 32.3,106.2 30.9,104.9" fill="#909aa4" stroke="#909aa4" stroke-width="0.6" />
+<line x1="32.3" y1="106.2" x2="30.9" y2="104.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="33.7,108.1 36.5,110.0 36.6,109.5" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
+<line x1="33.7" y1="108.1" x2="36.6" y2="109.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="33.7" y1="108.1" x2="36.5" y2="110.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="36.6" y1="109.5" x2="36.5" y2="110.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="29.5,58.6 35.7,51.2 38.1,47.5" fill="#949ea8" stroke="#949ea8" stroke-width="0.6" />
 <polygon points="107.9,100.5 105.1,118.8 121.0,97.4" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
+<polygon points="30.2,105.5 30.5,106.1 29.9,104.7" fill="#9faab5" stroke="#9faab5" stroke-width="0.6" />
+<line x1="29.9" y1="104.7" x2="30.2" y2="105.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="30.5,106.1 32.4,107.3 32.8,106.8" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="30.5" y1="106.1" x2="32.4" y2="107.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="32.4" y1="107.3" x2="32.8" y2="106.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="65.5,48.0 78.1,55.7 61.6,45.3" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
 <polygon points="13.1,80.6 26.9,102.0 39.2,110.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="86.6,142.9 86.6,144.8 87.3,145.0" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
@@ -349,7 +338,6 @@
 <polygon points="8.0,79.9 31.5,58.9 46.0,30.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <line x1="8.0" y1="79.9" x2="46.0" y2="30.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="35.7,51.2 47.1,36.4 38.1,47.5" fill="#949ea8" stroke="#949ea8" stroke-width="0.6" />
-<polygon points="86.6,144.8 86.6,145.8 87.3,145.0" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
 <polygon points="35.7,51.2 57.4,42.9 47.1,36.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <line x1="47.1" y1="36.4" x2="35.7" y2="51.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="95.0,130.7 93.9,135.7 94.5,135.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -357,32 +345,30 @@
 <polygon points="95.0,130.7 95.0,134.3 95.6,133.6" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="95.0,130.7 95.6,133.6 96.1,132.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="95.0,130.7 96.1,132.8 96.7,132.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="79.9,141.4 86.6,145.8 86.6,144.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<line x1="86.6" y1="144.8" x2="86.6" y2="145.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="95.0,130.7 96.7,132.1 97.2,131.4" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="86.6,145.8 87.3,146.3 87.3,145.0" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
+<polygon points="8.0,100.3 55.9,121.9 57.5,122.4" fill="#aebbc7" stroke="#aebbc7" stroke-width="0.6" />
+<line x1="8.0" y1="100.3" x2="57.5" y2="122.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="55.9" y1="121.9" x2="57.5" y2="122.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="57.4,42.9 61.6,45.3 47.4,36.2" fill="#b2bfcb" stroke="#b2bfcb" stroke-width="0.6" />
 <polygon points="95.0,130.7 97.2,131.4 97.8,130.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="8.0,79.9 23.0,70.8 31.5,58.9" fill="#848d96" stroke="#848d96" stroke-width="0.6" />
 <polygon points="95.0,130.7 99.4,128.5 105.1,118.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="66.0,131.4 86.6,144.8 58.4,124.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="95.0,130.7 97.8,130.7 98.3,130.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
+<polygon points="87.3,145.0 86.6,146.4 87.3,146.3" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
+<polygon points="87.3,145.0 83.4,144.0 86.6,146.4" fill="#79818a" stroke="#79818a" stroke-width="0.6" />
+<line x1="87.3" y1="145.0" x2="86.6" y2="146.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,145.0 87.3,146.3 89.6,142.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<line x1="87.3" y1="146.3" x2="87.3" y2="145.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="87.3" y1="145.0" x2="87.3" y2="146.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<polygon points="79.9,141.4 83.4,144.0 87.3,145.0" fill="#79818a" stroke="#79818a" stroke-width="0.6" />
+<line x1="79.9" y1="141.4" x2="87.3" y2="145.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="95.0,130.7 98.3,130.0 98.9,129.3" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="87.0,150.5 87.3,146.3 86.6,146.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
+<line x1="86.6" y1="146.4" x2="87.3" y2="146.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="38.1,47.5 47.1,36.4 46.7,36.3" fill="#949ea8" stroke="#949ea8" stroke-width="0.6" />
 <polygon points="95.0,130.7 98.9,129.3 99.4,128.5" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="46.0,120.4 49.0,122.7 49.3,122.0" fill="#a7b2be" stroke="#a7b2be" stroke-width="0.6" />
-<line x1="46.0" y1="120.4" x2="49.0" y2="122.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="86.6,145.8 86.6,146.4 87.3,146.3" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
-<line x1="86.6" y1="146.4" x2="87.3" y2="146.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<polygon points="86.6,145.8 83.4,144.0 86.6,146.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<line x1="86.6" y1="145.8" x2="86.6" y2="146.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="73.6,137.4 79.9,141.4 86.6,144.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="79.9,141.4 83.4,144.0 86.6,145.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="46.0,120.4 49.3,122.0 46.2,119.8" fill="#b5c1ce" stroke="#b5c1ce" stroke-width="0.6" />
-<line x1="46.0" y1="120.4" x2="49.3" y2="122.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="79.9" y1="141.4" x2="86.6" y2="144.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="46.0,30.7 125.1,101.2 125.1,80.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <line x1="46.0" y1="30.7" x2="125.1" y2="80.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <line x1="125.1" y1="80.8" x2="125.1" y2="101.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
@@ -395,21 +381,13 @@
 <polygon points="64.5,130.4 86.6,144.8 65.3,130.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="79.9,141.4 81.9,143.0 82.6,143.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="63.7,129.9 86.6,144.8 64.5,130.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="45.5,119.9 45.4,120.5 46.1,119.4" fill="#757d86" stroke="#757d86" stroke-width="0.6" />
-<line x1="46.1" y1="119.4" x2="45.5" y2="119.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="79.9,141.4 81.1,142.5 81.9,143.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="62.9,129.4 86.6,144.8 63.7,129.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="45.2,121.0 46.0,120.4 46.2,119.8" fill="#747c84" stroke="#747c84" stroke-width="0.6" />
-<line x1="46.2" y1="119.8" x2="46.0" y2="120.4" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="46.0" y1="120.4" x2="45.2" y2="121.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="79.9,141.4 80.3,142.0 81.1,142.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="62.1,128.9 86.6,144.8 62.9,129.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="58.4,124.0 65.3,130.9 66.0,131.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="79.9,141.4 79.5,141.5 80.3,142.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="61.3,128.4 86.6,144.8 62.1,128.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="49.0,123.5 49.6,121.9 48.9,123.0" fill="#767e86" stroke="#767e86" stroke-width="0.6" />
-<line x1="48.9" y1="123.0" x2="49.6" y2="121.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="49.6" y1="121.9" x2="49.0" y2="123.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="67.2,133.3 73.6,137.4 86.6,144.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="58.4,124.0 64.5,130.4 65.3,130.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="79.9,141.4 78.7,141.0 79.5,141.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -426,9 +404,6 @@
 <polygon points="58.9,126.9 86.6,144.8 59.7,127.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="92.8,138.0 93.6,137.3 93.4,137.2" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="39.2,110.4 47.1,117.9 58.4,124.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="45.5,119.9 45.2,121.0 45.4,120.5" fill="#7f8790" stroke="#7f8790" stroke-width="0.6" />
-<line x1="45.5" y1="119.9" x2="45.4" y2="120.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.5" y1="119.9" x2="45.2" y2="121.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="58.4,124.0 62.1,128.9 62.9,129.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="73.6,137.4 77.1,140.0 79.9,141.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="58.1,126.4 86.6,144.8 58.9,126.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -448,9 +423,6 @@
 <polygon points="73.6,137.4 76.3,139.5 77.1,140.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="55.0,124.3 86.6,144.8 55.8,124.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="60.9,129.3 67.2,133.3 86.6,144.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="47.1,122.8 49.0,123.5 48.9,123.0" fill="#a9b4c0" stroke="#a9b4c0" stroke-width="0.6" />
-<line x1="48.9" y1="123.0" x2="49.0" y2="123.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="47.1" y1="122.8" x2="49.0" y2="123.5" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="58.4,124.0 58.1,126.4 58.9,126.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="73.6,137.4 75.5,139.0 76.3,139.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="95.0,135.1 93.6,137.3 95.6,134.4" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -463,16 +435,10 @@
 <polygon points="58.4,124.0 56.6,125.4 57.4,125.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="73.6,137.4 73.9,138.0 74.7,138.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="52.6,122.8 86.6,144.8 53.4,123.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="45.2,121.0 47.1,122.8 45.4,120.5" fill="#b4c1cd" stroke="#b4c1cd" stroke-width="0.6" />
-<line x1="45.4" y1="120.5" x2="45.2" y2="121.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.2" y1="121.0" x2="47.1" y2="122.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="58.4,124.0 55.8,124.9 56.6,125.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="73.6,137.4 73.2,137.5 73.9,138.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="51.8,122.3 86.6,144.8 52.6,122.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="105.1,118.8 100.0,127.8 100.5,127.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="47.1,122.8 48.9,123.0 45.4,120.5" fill="#8f99a3" stroke="#8f99a3" stroke-width="0.6" />
-<line x1="45.4" y1="120.5" x2="47.1" y2="122.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="48.9" y1="123.0" x2="47.1" y2="122.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="93.6,137.3 89.6,142.7 98.9,130.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="58.4,124.0 55.0,124.3 55.8,124.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="73.6,137.4 72.4,137.0 73.2,137.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -507,7 +473,6 @@
 <polygon points="44.7,117.8 86.6,144.8 45.5,118.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="96.7,132.9 98.9,130.8 97.2,132.2" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="39.2,110.4 47.1,119.3 47.1,117.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="49.0,124.5 49.3,124.8 49.3,123.9" fill="#7f8891" stroke="#7f8891" stroke-width="0.6" />
 <polygon points="67.2,133.3 68.4,134.5 69.2,135.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="43.9,117.3 86.6,144.8 44.7,117.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="105.1,118.8 103.9,122.8 104.4,122.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -521,12 +486,9 @@
 <polygon points="87.3,145.0 121.0,101.0 93.9,135.7" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="42.3,116.3 86.6,144.8 43.1,116.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="97.8,131.5 98.9,130.8 98.3,130.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="45.3,122.4 46.7,123.3 46.6,122.2" fill="#909aa4" stroke="#909aa4" stroke-width="0.6" />
-<line x1="45.3" y1="122.4" x2="46.7" y2="123.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="67.2,133.3 66.0,133.0 66.8,133.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="41.5,115.8 86.6,144.8 42.3,116.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="87.3,145.0 92.2,138.7 121.0,101.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="49.0,125.5 49.3,124.8 49.0,124.5" fill="#848e97" stroke="#848e97" stroke-width="0.6" />
 <polygon points="98.3,130.8 98.9,130.8 98.9,130.1" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="67.2,133.3 65.3,132.5 66.0,133.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="40.8,115.3 86.6,144.8 41.5,115.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -540,8 +502,6 @@
 <polygon points="39.2,110.4 46.3,118.8 47.1,119.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="38.4,113.8 86.6,144.8 39.2,114.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="26.9,102.0 33.6,110.8 39.2,110.4" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="46.7,123.3 47.8,124.3 46.6,122.2" fill="#a0abb6" stroke="#a0abb6" stroke-width="0.6" />
-<line x1="46.6" y1="122.2" x2="46.7" y2="123.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,146.3 102.2,126.6 101.7,127.3" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="47.1,117.9 51.0,121.8 51.8,122.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="39.2,110.4 45.5,118.3 46.3,118.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -566,13 +526,9 @@
 <polygon points="87.3,146.3 103.9,124.4 103.3,125.2" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="92.2,138.7 92.8,138.0 121.0,101.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="47.1,117.9 47.9,119.8 48.7,120.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="47.7,125.2 49.0,125.5 49.7,125.3" fill="#a4b0bb" stroke="#a4b0bb" stroke-width="0.6" />
-<line x1="49.0" y1="125.5" x2="49.7" y2="125.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="39.2,110.4 42.3,116.3 43.1,116.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="60.9,129.3 62.1,130.5 62.9,131.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="34.4,111.3 86.6,144.8 35.2,111.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="46.7,123.3 47.7,125.2 47.8,124.3" fill="#9ea9b5" stroke="#9ea9b5" stroke-width="0.6" />
-<line x1="46.7" y1="123.3" x2="47.7" y2="125.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="100.0,128.6 98.9,130.8 102.5,125.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="47.1,117.9 47.1,119.3 47.9,119.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="95.6,133.6 121.0,101.0 96.1,132.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
@@ -595,16 +551,9 @@
 <polygon points="39.2,110.4 40.0,114.8 40.8,115.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="60.9,129.3 59.7,129.0 60.5,129.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="32.1,109.8 86.6,144.8 32.9,110.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="47.7,125.2 49.7,125.3 47.8,124.3" fill="#99a3ae" stroke="#99a3ae" stroke-width="0.6" />
-<line x1="47.8" y1="124.3" x2="47.7" y2="125.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="47.8" y1="124.3" x2="49.7" y2="125.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="47.7" y1="125.2" x2="49.7" y2="125.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,99.8 87.0,150.5 86.6,146.4" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
 <polygon points="96.7,132.1 121.0,101.0 97.2,131.4" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="101.7,126.5 102.5,125.8 102.2,125.8" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="45.1,123.3 45.9,123.1 45.2,121.5" fill="#808992" stroke="#808992" stroke-width="0.6" />
-<line x1="45.2" y1="121.5" x2="45.1" y2="123.3" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="45.1" y1="123.3" x2="45.9" y2="123.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="87.3,146.3 105.5,122.3 105.0,123.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="93.9,136.5 94.5,135.8 121.0,101.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
 <polygon points="39.2,110.4 39.2,114.3 40.0,114.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -791,7 +740,6 @@
 <polygon points="41.5,117.0 41.5,117.5 42.3,118.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 58.9,128.5 58.1,128.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="40.8,116.5 40.8,117.0 41.5,117.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="24.6,74.5 27.7,70.2 33.6,60.2" fill="#7b848d" stroke="#7b848d" stroke-width="0.6" />
 <polygon points="39.2,115.6 40.8,117.0 40.8,116.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 58.1,128.0 57.4,127.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,98.6 49.5,122.1 51.0,123.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -810,8 +758,9 @@
 <polygon points="13.1,99.8 54.2,125.5 53.4,125.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="22.7,102.3 23.4,104.3 24.2,104.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,98.6 45.5,119.6 46.3,120.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
+<polygon points="27.1,70.3 30.2,68.1 33.6,60.2" fill="#8b959f" stroke="#8b959f" stroke-width="0.6" />
+<line x1="27.1" y1="70.3" x2="33.6" y2="60.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,99.8 53.4,125.0 52.6,124.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="27.7,70.2 30.2,68.1 33.6,60.2" fill="#89939d" stroke="#89939d" stroke-width="0.6" />
 <polygon points="22.7,102.3 22.6,103.8 23.4,104.3" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,98.6 44.7,119.1 45.5,119.6" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 52.6,124.5 51.8,124.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
@@ -832,32 +781,29 @@
 <polygon points="13.1,99.8 49.5,122.5 48.7,122.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,98.6 40.8,116.5 41.5,117.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 48.7,122.0 47.9,121.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="22.5,73.2 25.2,71.1 25.2,69.7" fill="#808891" stroke="#808891" stroke-width="0.6" />
-<line x1="22.5" y1="73.2" x2="25.2" y2="69.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,99.8 47.9,121.5 47.1,121.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="33.6,60.2 30.2,68.1 33.6,62.8" fill="#818a93" stroke="#818a93" stroke-width="0.6" />
+<line x1="30.2" y1="68.1" x2="33.6" y2="60.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,98.6 39.2,115.6 40.8,116.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 47.1,121.0 46.3,120.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="22.7,102.3 13.1,98.0 22.6,103.8" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 46.3,120.5 45.5,120.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="25.2,69.7 25.2,71.1 27.7,70.2" fill="#79818a" stroke="#79818a" stroke-width="0.6" />
-<line x1="25.2" y1="69.7" x2="27.7" y2="70.2" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
-<line x1="25.2" y1="69.7" x2="25.2" y2="71.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,99.8 45.5,120.0 44.7,119.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="27.7,70.2 28.7,71.1 30.2,68.1" fill="#808992" stroke="#808992" stroke-width="0.6" />
 <polygon points="13.1,99.8 44.7,119.5 43.9,119.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
+<polygon points="27.1,70.3 29.7,70.6 30.2,68.1" fill="#868f99" stroke="#868f99" stroke-width="0.6" />
 <polygon points="13.1,99.8 43.9,119.0 43.1,118.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.0,93.2 13.0,97.6 13.1,98.0" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
 <polygon points="13.1,98.0 13.1,98.6 51.0,123.1" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 43.1,118.5 42.3,118.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 42.3,118.0 41.5,117.5" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="106.8,119.9 121.0,102.7 121.0,101.0" fill="#7e8790" stroke="#7e8790" stroke-width="0.6" />
-<polygon points="27.7,70.2 25.2,71.1 28.7,71.1" fill="#7b838c" stroke="#7b838c" stroke-width="0.6" />
-<line x1="27.7" y1="70.2" x2="28.7" y2="71.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,99.8 41.5,117.5 40.8,117.0" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.1,99.8 40.8,117.0 39.2,115.6" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
-<polygon points="30.2,68.1 28.7,71.1 30.1,69.1" fill="#7c848d" stroke="#7c848d" stroke-width="0.6" />
+<polygon points="27.1,70.3 25.2,71.1 29.7,70.6" fill="#7c858d" stroke="#7c858d" stroke-width="0.6" />
+<line x1="27.1" y1="70.3" x2="25.2" y2="71.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
+<line x1="27.1" y1="70.3" x2="29.7" y2="70.6" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="8.0,100.3 25.2,71.1 22.5,73.2" fill="#7f8891" stroke="#7f8891" stroke-width="0.6" />
+<line x1="22.5" y1="73.2" x2="25.2" y2="71.1" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="13.1,98.6 12.7,99.6 39.2,115.6" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
 <polygon points="13.0,97.6 13.1,98.6 13.1,98.0" fill="#7d858e" stroke="#7d858e" stroke-width="0.6" />
 <line x1="13.1" y1="98.6" x2="13.1" y2="98.0" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />

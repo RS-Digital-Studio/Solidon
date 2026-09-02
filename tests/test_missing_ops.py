@@ -601,6 +601,42 @@ def test_raised_text_that_sinks_into_the_body_says_so(profile: Profile) -> None:
     assert "label.buried" not in [entry.code for entry in standing.findings]
 
 
+def test_lettering_on_a_side_wall_reads_upright(profile: Profile) -> None:
+    """Auf der Vorderseite der Beispieldose lag „SOLIDON3D" quer (02.09.2026):
+    4,5 mm breit, 35 mm hoch — die Leserichtung auf der Welt-z-Achse, weil
+    ``align_vectors`` nur die Normale trifft und die Drehung um sie nicht
+    wählt. Eine Zeile liegt waagerecht, ihr Oben zeigt nach oben.
+    """
+    wall = trimesh.creation.box(extents=(40.0, 4.0, 30.0))
+    wall.apply_translation((0.0, 0.0, 15.0))
+    entry = SceneObject(id="obj_1", name="Wand", mesh=MeshData.of(wall))
+    result = run(
+        "label_text",
+        entry,
+        profile,
+        text="ABCDEF",
+        size=6.0,
+        depth=0.6,
+        x=0.0,
+        y=-2.0,
+        z=15.0,
+        nx=0.0,
+        ny=-1.0,
+        nz=0.0,
+    )
+    vertices = np.asarray(result.outputs[0].mesh.raw.vertices)
+    letters = vertices[vertices[:, 1] < -2.0 - 0.3]  # vor der Wand
+    width = letters[:, 0].max() - letters[:, 0].min()
+    height = letters[:, 2].max() - letters[:, 2].min()
+    assert width > 2.0 * height, f"die Zeile liegt quer: {width:.1f} breit, {height:.1f} hoch"
+
+    # Auf der Decke bleibt es, wie es war: die Zeile entlang x.
+    flat = run("label_text", _plate(), profile, text="ABCDEF", size=6.0, depth=0.6, z=4.0)
+    top = np.asarray(flat.outputs[0].mesh.raw.vertices)
+    top = top[top[:, 2] > 4.0 + 0.3]
+    assert (top[:, 0].max() - top[:, 0].min()) > 2.0 * (top[:, 1].max() - top[:, 1].min())
+
+
 def _plate() -> SceneObject:
     plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
     plate.apply_translation((0.0, 0.0, 2.0))
