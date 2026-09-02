@@ -471,9 +471,12 @@ def run(
 ) -> Path:
     """Fährt die ganze Kette und liefert den signierten Installer unter ``output_dir``."""
     _identity_arguments(subject, thumbprint)
-    tool = find_signtool(signtool)
+    # Erst der Eingang, dann das Werkzeug: Wer ohne Archiv startet, soll das
+    # Archiv genannt bekommen und nicht ein fehlendes signtool — und die Suite
+    # läuft auch auf macOS, wo es keines gibt.
     _step(f"Archiv prüfen: {archive}")
     verify_archive(archive)
+    tool = find_signtool(signtool)
     _step(f"Entpacken nach {stage}")
     extract_archive(archive, stage)
     _step("Übergabe gegen Produkt und Prüfsummen prüfen")
