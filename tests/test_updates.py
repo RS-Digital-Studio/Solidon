@@ -977,7 +977,14 @@ def test_starting_hands_the_package_to_the_system(monkeypatch: pytest.MonkeyPatc
     updates.start_installer(file)
 
     command, options = gestartet[0]
-    assert str(file) in command
+    if updates.os.name == "nt":
+        assert str(file) in command
+    else:
+        # POSIX startet ausdrücklich vom vererbten Deskriptor, nicht vom
+        # Cachepfad — der wäre dort keine Sperre gegen Austausch. Der Befehl
+        # nennt `/proc/self/fd/N`, und der Deskriptor reist über `pass_fds`.
+        assert any(str(entry).startswith("/proc/self/fd/") for entry in command), command
+        assert options["pass_fds"], "der Deskriptor wird nicht vererbt"
     assert options["cwd"] == Path(updates.sys.executable).resolve().parent
     assert options["stdout"] == updates.subprocess.DEVNULL
     assert options["close_fds"] is True

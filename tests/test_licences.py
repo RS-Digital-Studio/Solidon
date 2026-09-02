@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sysconfig
 from dataclasses import replace
 from email.message import Message
 from pathlib import Path
@@ -162,6 +163,16 @@ def test_the_notice_file_names_every_runtime_package() -> None:
     ist der Fehler, den es zu fangen gilt.
     """
     text = NOTICE_FILE.read_text(encoding="utf-8")
+    # Die Datei nennt in der dritten Zeile, wofür sie erzeugt wurde, und die
+    # Wheels unterscheiden sich je Plattform (cffi und jeepney auf Linux,
+    # pywin32-ctypes auf Windows). Geprüft wird sie dort, wo sie gilt; das
+    # Kundenpaket bekommt seine Beilage je Plattform aus der SBOM (build.yml).
+    head = text.splitlines()[2] if text.count("\n") >= 2 else ""
+    here = sysconfig.get_platform()
+    if f"`{here}`" not in head:
+        pytest.skip(
+            f"die Beilage wurde für eine andere Plattform erzeugt ({head.strip()}); hier {here}"
+        )
     missing = sorted(name for name in licences.runtime_packages() if name not in text)
     assert not missing, (
         "THIRD-PARTY-NOTICES.md nennt diese Laufzeitpakete nicht:\n"

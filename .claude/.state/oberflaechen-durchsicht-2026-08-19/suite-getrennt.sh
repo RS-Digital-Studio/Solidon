@@ -58,10 +58,18 @@ cd "$SUITE_WURZEL" || exit 1
 # absolut wird, zerlegt die Shell ihn an der Lücke und meldet
 # "F:/3D: No such file or directory" — als Exit 127, das aussieht wie der
 # bekannte Absturz beim Abbau.
+# **Und `bin/python` neben `Scripts/python.exe`.** Auf Linux und macOS heißt
+# der Weg in die venv anders — und die CI sourct dieses Skript für seine
+# Funktionen (`tests/test_suite_script.py`): Bis zum 02.09.2026 endete das
+# dort mit „Kein Interpreter gefunden", Exit 2, bevor eine Funktion
+# definiert war, und drei Tests waren rot, ohne dass eine Zähllogik
+# falsch gewesen wäre.
 PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
+[ -x "$PY" ] || PY=.venv/bin/python
 if [ ! -x "$PY" ]; then
   haupt=$(git rev-parse --git-common-dir 2>/dev/null)
   PY="${haupt%/.git}/.venv/Scripts/python.exe"
+  [ -x "$PY" ] || PY="${haupt%/.git}/.venv/bin/python"
 fi
 if [ ! -x "$PY" ]; then
   echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2

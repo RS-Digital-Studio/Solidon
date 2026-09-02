@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -63,6 +64,9 @@ def ask(question: str, log: str, tmp_path: Path) -> bool:
     environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
     environment["SUITE_NUR_FUNKTIONEN"] = "1"
+    # Der Interpreter, der diesen Test fährt — sonst sucht das Skript die
+    # venv unter dem Windows-Namen und findet auf Linux keine.
+    environment["SUITE_PYTHON"] = sys.executable
     call = question.replace("$P", str(protocol).replace("\\", "/"))
     result = subprocess.run(
         [BASH or "bash", "-c", f'source "{str(SCRIPT).replace(chr(92), "/")}"; {call}'],
@@ -89,6 +93,9 @@ def explain(question: str, log: str, tmp_path: Path) -> str:
     environment["SUITE_WURZEL"] = str(SCRIPT.parent.parent.parent.parent)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
     environment["SUITE_NUR_FUNKTIONEN"] = "1"
+    # Der Interpreter, der diesen Test fährt — sonst sucht das Skript die
+    # venv unter dem Windows-Namen und findet auf Linux keine.
+    environment["SUITE_PYTHON"] = sys.executable
     call = question.replace("$P", str(protocol).replace("\\", "/"))
     script = str(SCRIPT).replace(chr(92), "/")
     result = subprocess.run(

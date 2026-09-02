@@ -27,14 +27,21 @@ def test_a_duration_is_said_the_way_a_person_says_it() -> None:
     assert duration(4500.0) == "1 h 15 min"
 
 
-def test_grams_lose_their_decimal_when_they_stop_mattering() -> None:
-    """„18,4 g" und „18 g" sind bei einer Schätzung dieselbe Aussage."""
+def test_grams_lose_their_decimal_when_they_stop_mattering(qt_app: QApplication) -> None:
+    """„18,4 g" und „18 g" sind bei einer Schätzung dieselbe Aussage.
+
+    Mit ``qt_app``, obwohl kein Fenster entsteht: Die Fixture setzt ``QLocale``
+    auf die Anzeigesprache, und ``mass`` liest von dort das Komma. Ohne sie
+    prüfte der Test die Sprache des Rechners — auf dem Linux-Runner stand
+    „4.7 g", und ein Worker, in dem noch kein Fenstertest gelaufen war, sah
+    es rot (02.09.2026).
+    """
     assert mass(4.72) == "4,7 g"
     assert mass(18.4) == "18 g"
     assert "," in mass(9.99), "unter zehn Gramm zählt die Stelle"
 
 
-def test_the_difference_stays_quiet_when_nothing_happened() -> None:
+def test_the_difference_stays_quiet_when_nothing_happened(qt_app: QApplication) -> None:
     """Eine Zeile, die nach jedem Klick „±0 g" meldet, ist Rauschen."""
     before = Estimate(material_mm3=10_000.0, grams=12.4, seconds=600.0)
     same = Estimate(material_mm3=10_100.0, grams=12.5, seconds=605.0)

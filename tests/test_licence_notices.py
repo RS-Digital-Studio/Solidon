@@ -252,7 +252,19 @@ def _write_hashed(root: Path, name: str, content: bytes) -> tuple[str, str]:
 
 
 def _release_evidence(tmp_path: Path, sbom: dict[str, Any]) -> Path:
-    package, package_hash = _write_hashed(tmp_path, "packages/Solidon3D-Setup.exe", b"setup")
+    # Ziel und Paketsorten aus der SBOM, nicht fest „win-amd64" mit einem
+    # Setup: Der Prüfer hält beides gegen die SBOM, und die trägt hier die
+    # laufende Plattform — auf dem Linux-Runner war der Test deshalb rot
+    # (02.09.2026), lokal auf Windows grün.
+    target = next(
+        str(entry["value"])
+        for entry in sbom["metadata"]["properties"]
+        if entry["name"] == "solidon:target-platform"
+    )
+    packages = []
+    for kind in sorted(make_licence_notices._required_package_kinds(target)):
+        package, package_hash = _write_hashed(tmp_path, f"packages/{kind}.bin", kind.encode())
+        packages.append({"kind": kind, "path": package, "path_sha256": package_hash})
     generic = {
         str(component["purl"]).split("/", 1)[1].rsplit("@", 1)[0]: str(component["version"])
         for component in sbom["components"]
@@ -283,9 +295,9 @@ def _release_evidence(tmp_path: Path, sbom: dict[str, Any]) -> Path:
     evidence = {
         "schema": 1,
         "product_version": APP_VERSION,
-        "target": "win-amd64",
+        "target": target,
         "release_date": "2026-08-31",
-        "packages": [{"kind": "windows-installer", "path": package, "path_sha256": package_hash}],
+        "packages": packages,
         "source_provisions": provisions,
     }
     path = tmp_path / "release-evidence.json"
