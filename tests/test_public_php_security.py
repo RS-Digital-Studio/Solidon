@@ -1734,17 +1734,29 @@ def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
     Hälfte des Tageswertes, den der Betreiber liest. Die Weiterleitung bekommt
     sie weiterhin, denn genau die prüft sie.
     """
-    package = min((ROOT / "website" / "dl").glob("*.exe")).name
+    # **Der Test legt sein Paket selbst an.** `website/dl/` steht in
+    # `.gitignore` — auf dieser Maschine liegen die Pakete früherer Fassungen
+    # darin, auf einem frischen Klon und in der CI ist der Ordner leer, und
+    # `min()` über ein leeres Glob warf dort (`ValueError`, Tag-Lauf 4,
+    # 03.09.2026). `count.php` verlangt eine wirklich vorhandene Datei
+    # (`is_file`), also gehört sie zum Testaufbau und nicht zum Fundus.
+    downloads = ROOT / "website" / "dl"
+    downloads.mkdir(parents=True, exist_ok=True)
+    package = "Solidon3D-Setup-0.0.0-test.exe"
+    (downloads / package).write_bytes(b"kein echtes Paket")
     month = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
 
-    with _php_server(tmp_path) as base:
-        head_status, head_target = _without_redirects(f"{base}/count.php?f={package}", "HEAD")
-        assert head_status == 302, "ein HEAD auf einen Paketverweis wird bedient"
-        assert head_target.endswith(package)
-        assert not month.exists(), "und dabei nichts gezählt"
+    try:
+        with _php_server(tmp_path) as base:
+            head_status, head_target = _without_redirects(f"{base}/count.php?f={package}", "HEAD")
+            assert head_status == 302, "ein HEAD auf einen Paketverweis wird bedient"
+            assert head_target.endswith(package)
+            assert not month.exists(), "und dabei nichts gezählt"
 
-        get_status, get_target = _without_redirects(f"{base}/count.php?f={package}", "GET")
-        assert (get_status, get_target) == (302, head_target), "derselbe Weg für beide"
+            get_status, get_target = _without_redirects(f"{base}/count.php?f={package}", "GET")
+            assert (get_status, get_target) == (302, head_target), "derselbe Weg für beide"
+    finally:
+        (downloads / package).unlink(missing_ok=True)
 
     counted = [
         json.loads(line) for line in month.read_text(encoding="utf-8").splitlines() if line.strip()
