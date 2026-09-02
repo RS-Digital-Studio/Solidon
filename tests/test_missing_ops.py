@@ -582,6 +582,25 @@ def test_engraved_text_takes_away_the_same_volume(profile: Profile) -> None:
     assert result.outputs[0].mesh.bounds.size[2] == pytest.approx(4.0, abs=0.01), "nothing proud"
 
 
+def test_raised_text_that_sinks_into_the_body_says_so(profile: Profile) -> None:
+    """Gemessen am Beispiel „Dose mit Deckel", 02.09.2026: Ohne Ort und
+    Richtung setzt die Operation die Schrift bei (0, 0, 0) mit der Normalen
+    nach oben — für einen Körper auf dem Bett ist das der Boden, und erhaben
+    nach oben heißt ins Material hinein. Sichtbar blieb nichts außer der
+    Überlappung unter dem Boden, und kein Befund sagte es.
+    """
+    sunk = run("label_text", _plate(), profile, text="AB", size=6.0, depth=0.6)
+    codes = [entry.code for entry in sunk.findings]
+    assert "label.buried" in codes, f"kein Befund, gemeldet wurde: {codes}"
+    buried = next(entry for entry in sunk.findings if entry.code == "label.buried")
+    assert buried.severity == "warning"
+    assert "Fläche" in str(buried.message), "der Befund nennt den Weg — die Fläche anklicken"
+
+    # Dieselbe Schrift auf der Oberseite steht, und der Befund schweigt.
+    standing = run("label_text", _plate(), profile, text="AB", size=6.0, depth=0.6, z=4.0)
+    assert "label.buried" not in [entry.code for entry in standing.findings]
+
+
 def _plate() -> SceneObject:
     plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
     plate.apply_translation((0.0, 0.0, 2.0))

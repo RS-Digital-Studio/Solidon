@@ -18,7 +18,7 @@ Umriss ist ein Umriss, ob ihn eine Schrift gezeichnet hat oder Inkscape.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import numpy as np
 
@@ -40,12 +40,18 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_volume
 from app.i18n import _
 
 _log = get_logger(__name__)
 
 Placement = Literal["raised", "engraved"]
+
+#: Ab welchem Anteil der Buchstaben, der **nicht** über der Fläche steht, die
+#: Schrift als versenkt gilt. Die Hälfte: Eine Schrift, die halb im Körper
+#: steckt, ist keine Beschriftung mehr — und eine, die zu einem Zehntel
+#: eintaucht, kann eine gewollte Prägung auf schräger Fläche sein.
+LABEL_BURIED_SHARE: Final = 0.5
 
 #: Die Schriften, die immer da sind. matplotlib bringt DejaVu selbst mit, eine
 #: Beschriftung sieht also auf jedem Rechner gleich aus — eine Systemschrift,
@@ -252,6 +258,49 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
     )
 
 
+def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
+    """Steckt die Schrift im Körper, statt auf ihm zu stehen? (Regel 17)
+
+    **Der dritte Fall derselben Auskunft**, gemessen am 02.09.2026 am
+    Beispiel „Dose mit Deckel": Die Beschriftung stand ohne Ort und Richtung
+    in der Operation, also bei (0, 0, 0) mit der Vorgabe-Normalen nach oben —
+    und das ist der Boden einer Dose, die auf dem Bett steht. Die Buchstaben
+    wurden erhaben nach **oben** gebaut, also ins Material hinein, die
+    Vereinigung änderte nichts Sichtbares, und übrig blieb die Überlappung
+    von einem Hundertstel unter dem Boden: Die Dose war 40,01 statt 40,00
+    hoch, das Teil stand auf einer unsichtbaren Schrift, und kein Befund
+    sagte es. :func:`without_effect` schwieg, weil das Volumen sich änderte
+    (um die Überlappung), :func:`_fell_apart` schwieg, weil nichts danebenlag.
+
+    Gemessen wird deshalb, wie viel von den Buchstaben **über der Fläche**
+    ankommt: die Volumenzunahme gegen das Volumen der gesetzten Schrift. Bleibt
+    weniger als :data:`LABEL_BURIED_SHARE`, steckt sie im Körper. Nur erhaben —
+    graviert nimmt Material weg, und dort ist im Körper genau der richtige Ort.
+    """
+    if mode != "raised":
+        return None
+    expected = float(letters.volume)
+    if expected <= EPS_GEOM:
+        return None
+    shown = max(float(after.volume) - float(before.volume), 0.0)
+    if shown >= LABEL_BURIED_SHARE * expected:
+        return None
+    return Finding(
+        code="label.buried",
+        severity="warning",
+        message=_(
+            "Die Schrift steckt im Körper: Von {expected} Buchstaben stehen nur {shown} "
+            "über der Fläche, der Rest liegt im Material und ist unsichtbar. Meist zeigt "
+            "die Richtung in den Körper hinein oder der Punkt liegt in ihm — klicken Sie "
+            "die Fläche an, dann trägt sie Ort und Richtung selbst ein."
+        ),
+        values={
+            "expected": format_volume(expected),
+            "shown": format_volume(shown),
+        },
+    )
+
+
 @register_op(
     name="label_text",
     title=_("Text aufbringen"),
@@ -338,6 +387,9 @@ def label_text(ctx: OpContext) -> OpResult:
     # nach dem Volumen und schweigt deshalb genau dann, wenn die Schrift
     # danebenfällt statt zu fehlen — dort ist Volumen dazugekommen.
     apart = _fell_apart(body_mesh, outcome.mesh, mode)
+    # **Und die dritte Hälfte.** Weder danebengefallen noch wirkungslos, sondern
+    # im Körper verschwunden — die Volumenfrage, aber gegen die Schrift gehalten.
+    buried = _buried(placed, body_mesh, outcome.mesh, mode)
 
     _log.info("labelled with %r, %s", params.text, mode)
     return OpResult(
@@ -347,6 +399,7 @@ def label_text(ctx: OpContext) -> OpResult:
             *outcome.findings,
             *([nothing] if nothing is not None else []),
             *([apart] if apart is not None else []),
+            *([buried] if buried is not None else []),
         ],
     )
 

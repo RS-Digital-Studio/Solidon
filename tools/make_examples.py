@@ -708,13 +708,33 @@ def box_with_lid() -> Project:
     # und der Kragen heißt dann nicht mehr ``lid_collar``. Beim Öffnen fragt
     # die Verwaisungsprüfung, welches Merkmal gemeint war (§21.3) — richtig
     # gefragt, aber nichts, was in einem Beispiel stehen sollte.
+    #
+    # **Und sie sitzt auf der Vorderseite, mit Ort und Richtung.** Bis zum
+    # 02.09.2026 stand hier nur der Text — also die Vorgabe der Operation:
+    # Punkt (0, 0, 0), Normale nach oben. Das ist der Boden einer Dose auf dem
+    # Bett; die Schrift wurde erhaben ins Material hinein gebaut, war
+    # unsichtbar, und die Überlappung von einem Hundertstel stand unter dem
+    # Boden — 40,01 statt 40,00 mm hoch, im Objektbaum und in jedem
+    # Handbuchbild. Die Vorderseite liegt bei y = -tiefe/2, die Normale zeigt
+    # nach außen; die Schrift steht 0,6 mm vor, zweifarbig über den Slot (§20).
     history.apply(
         _("Beschriftung"),
         [
             OperationDraft(
                 op="label_text",
                 inputs=("obj_1",),
-                params={"text": "SOLIDON3D", "size": 6.0, "depth": 0.6, "slot": 1},
+                params={
+                    "text": "SOLIDON3D",
+                    "size": 6.0,
+                    "depth": 0.6,
+                    "slot": 1,
+                    "x": 0.0,
+                    "y": -27.5,
+                    "z": 20.0,
+                    "nx": 0.0,
+                    "ny": -1.0,
+                    "nz": 0.0,
+                },
             )
         ],
     )

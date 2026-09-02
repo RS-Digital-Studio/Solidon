@@ -1001,6 +1001,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "share": _("Anteil"),
     "shortcut": _("Kürzel"),
     "shared": _("Überschneidung"),
+    "shown": _("Sichtbar"),
     "size": _("Größe"),
     "slicer": _("Slicer"),
     "slot": _("Platz"),
@@ -1393,12 +1394,18 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
     """
     if feature.kind == "face":
         normal = feature.params.get("normal")
+        # Innen und außen heißen verschieden: Die Wahrnehmung sagt, ob eine
+        # gleichgerichtete Fläche weiter außen liegt (``perceive.features``),
+        # und „Rückseite innen" ist dann die Innenwand — vorher stand die
+        # Fläche in mm² als einziger Unterschied zwischen zwei „Rückseiten".
+        inner = bool(feature.params.get("inner", False))
         if isinstance(normal, tuple | list) and len(normal) == 3:
             for axis, (positive, negative) in enumerate(_SIDES):
                 value = float(normal[axis])
                 if abs(value) >= _AXIS_ALIGNED:
-                    return str(positive if value > 0 else negative)
-        return tr("Schrägfläche")
+                    side = str(positive if value > 0 else negative)
+                    return str(tr("{side} innen").format(side=side)) if inner else side
+        return tr("Schrägfläche innen") if inner else tr("Schrägfläche")
     if feature.kind == "hole":
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
     if feature.kind == "cone":
