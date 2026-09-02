@@ -60,6 +60,7 @@
 - [Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s; ein halbes Paket sieht ganz aus.
 - [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt nur beim Entwickler auf.
 - [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Manifest behoben, im AppImage noch da.
+- [Rechnung warnt, sie erlaubt nicht](rechnung-warnt-sie-erlaubt-nicht.md) — was weg soll, wird benannt; „überall vorhanden" ist keine Messung.
 - [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — einmal über ein echtes Paket fahren.
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen anderes.
 - [Datei zuerst, Register danach](datei-zuerst-register-danach.md) — atomar veröffentlichen, nur vorwärts aktivieren.
