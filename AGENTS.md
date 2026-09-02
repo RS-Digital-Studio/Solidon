@@ -164,8 +164,19 @@ Dialoge.
 
 ## Arbeitsweise
 
-- **Kleine Schritte.** Nach jedem Schritt läuft die vollständige Suite. Ein
-  Schritt, der sie rot lässt, wird nicht auf den nächsten gestapelt.
+- **Kleine Schritte, und je Schritt nur die betroffenen Tests.** Nach jedem
+  Schritt laufen die Tests der Dateien, die er berührt
+  (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die
+  vollständige Suite mit ruff, format und mypy ist das Tor **vor dem Commit**,
+  nicht der Takt der Arbeit (Entscheidung Robert, 02.09.2026 — an dem Tag
+  verbrachten drei Sitzungen Stunden mit Läufen, die nichts über ihre
+  Änderung sagten). Ein Schritt, der seine Tests rot lässt, wird nicht auf den
+  nächsten gestapelt.
+- **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat.**
+  Bildschirmfotos, Website-Bilder, Handbuch und PDFs werden vor einem Release
+  erzeugt, nicht nach jedem Schritt; und dort nur die Sprachen und Bilder,
+  deren Oberfläche oder Texte sich seit dem letzten Lauf geändert haben.
+  Der Weg steht in `/erzeugen`.
 - **Test zuerst bei Geometrie.** Erst die erwarteten Kennzahlen gegen eine
   Datei aus `tests/data/`, dann die Umsetzung.
 - **Eine Phase gilt als fertig**, wenn ihre Abnahmekriterien aus Bauplan §40

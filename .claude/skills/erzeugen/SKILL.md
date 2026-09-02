@@ -12,6 +12,16 @@ allowed-tools: Bash, Read, Edit, Grep, Glob
 
 # Erzeugen und Ausliefern
 
+**Wann:** Bilder, Website-Bilder, Handbuch und PDFs werden **vor einem
+Release** erzeugt — nicht nach jedem Schritt (Entscheidung Robert,
+02.09.2026). Und auch dort nur, was sich geändert hat: Hat sich seit dem
+letzten Lauf weder die Oberfläche noch ein Katalog noch eine Handbuchseite
+geändert, bleiben die Bilder stehen; hat sich nur eine Sprache geändert,
+läuft nur sie (`make_figures.py <sprache>`). Der volle Lauf über alle sechs
+Sprachen gehört zu einem Release, bei dem sich die Oberfläche geändert hat —
+und er bleibt ein Werkzeug, denn der `TypeError` der Statuszeile am
+02.09.2026 fiel nur auf, weil alle Bilder liefen.
+
 Alle Werkzeuge laufen über die virtuelle Umgebung, nie über das System-Python.
 Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 

@@ -15,7 +15,10 @@ daraus `packaging/solidon3d.ico`, `packaging/solidon3d.icns` und
 `website/icon.svg`. Wer das Symbol ändert, ändert hier — und lässt danach das
 Werkzeug laufen.
 
-## Die Bildschirmfotos: ein Prozess je Sprache
+## Die Bildschirmfotos: nur vor einem Release, ein Prozess je Sprache
+
+Erzeugt wird vor einem Release und nur, was sich geändert hat — nicht nach
+jedem Schritt (Entscheidung Robert, 02.09.2026; der Weg steht in `/erzeugen`).
 
 Ein Lauf über alle sechs Sprachen in einem Prozess **stirbt** mit
 Segmentation fault, nach der ersten Sprache. Ein Prozess je Sprache — dieselbe

@@ -56,7 +56,20 @@ Alles läuft über die virtuelle Umgebung, nie über das System-Python:
 ```
 
 Diese vier sind zusammen das Tor: rot heißt nicht fertig. `/pruefen` fasst sie
-zusammen.
+zusammen — **vor dem Commit**, nicht nach jedem Schritt. Je Schritt laufen nur
+die Tests der berührten Dateien (Entscheidung Robert, 02.09.2026):
+
+```
+.venv\Scripts\python.exe tools/affected_tests.py                      # geändert + neu gegenüber HEAD
+.venv\Scripts\python.exe tools/affected_tests.py app/core/units.py     # oder die Dateien ausdrücklich
+.venv\Scripts\python.exe tools/affected_tests.py --run                 # fahren, Exit-Code direkt gelesen
+```
+
+`--why` nennt je Testdatei den Grund, `--split` zeigt die Aufrufe
+(Fensterdateien einzeln). **Ohne Argumente nimmt es alle ungestageten
+Änderungen im Baum — bei mehreren Sitzungen also auch fremde**; wer nur seine
+Dateien meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
+oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
 
 **`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite

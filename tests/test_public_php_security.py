@@ -21,7 +21,7 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from tests.php_probe import php_executable
+from tests.php_probe import php_executable, php_extension
 
 ROOT = Path(__file__).parent.parent
 API = ROOT / "website" / "api"
@@ -971,6 +971,10 @@ def test_methods_are_bound_before_configuration_is_disclosed(
 def test_post_content_types_are_fail_closed(
     tmp_path: Path, endpoint: str, content_type: str
 ) -> None:
+    if endpoint in {"activation.php", "deactivation.php"}:
+        # Beide prüfen sodium vor dem Medientyp und antworten ohne es 503 —
+        # die Frage nach 415 lässt sich dann nicht stellen (`php_probe`).
+        php_extension("sodium")
     with _php_server(tmp_path) as base:
         headers = {"Content-Type": content_type}
         if endpoint in {"count.php", "stats.php"}:
@@ -1127,7 +1131,10 @@ def test_rate_limit_states_use_keyed_rotating_identifiers_and_purge_old_data(
     tmp_path: Path,
 ) -> None:
     """Kein Missbrauchszähler lässt eine offline erratbare IP-Kennung liegen."""
-    php = php_executable()
+    # activation.php bereinigt seinen Zähler erst hinter der sodium-Prüfung;
+    # ohne die Erweiterung bliebe der rohe Hash liegen, und der Test wäre rot
+    # über die Umgebung statt über den Endpunkt (`php_probe`).
+    php = php_extension("sodium")
 
     now = int(time.time())
     raw_ip_hash = hashlib.sha256(b"127.0.0.1").hexdigest()
