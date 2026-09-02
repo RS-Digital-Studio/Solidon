@@ -1406,12 +1406,22 @@ def unavailable_hint() -> str:
     """Was der Nutzer tun kann, wenn es hier keine 3D-Ansicht gibt — leer, wo
     es nichts zu tun gibt (§2.7: kein Fehler ohne Handlungsvorschlag).
 
-    Auf Wayland ist die Lage benennbar: Es fehlt ein X11-Fenster, und das gibt
-    es über Xwayland oder in einer X11-Sitzung. Mit ``DISPLAY`` hätte die
-    Anwendung X11 selbst gewählt; steht sie trotzdem auf Wayland, fehlt
-    Xwayland oder jemand hat ``-platform wayland`` mitgegeben.
+    Auf Wayland ist die Lage benennbar. Mit ``DISPLAY`` hat die Anwendung X11
+    selbst an die erste Stelle gesetzt (``app.ui.qt_platform``); läuft sie
+    trotzdem auf Wayland, ließ sich Qts X11-Plugin nicht laden — und das
+    heißt fast immer: eine der neun Systembibliotheken fehlt, die das
+    Linux-Paket nicht mitbringt, allen voran ``libxcb-cursor0`` (Qt warnt seit
+    6.5 ausdrücklich davor). Ohne ``DISPLAY`` fehlt Xwayland selbst.
     """
     if _effective_platform().casefold().startswith("wayland"):
+        if os.environ.get("DISPLAY", "").strip():
+            return tr(
+                "Die 3D-Ansicht braucht Qts X11-Anbindung, und die ließ sich nicht laden — "
+                "meist fehlt die Systembibliothek libxcb-cursor0 (Paketverwaltung: "
+                "„libxcb-cursor0“ oder „xcb-util-cursor“). Installieren Sie sie und starten "
+                "Sie das Programm neu; wurde es mit „-platform wayland“ gestartet, lassen "
+                "Sie das weg."
+            )
         return tr(
             "Die 3D-Ansicht braucht ein X11-Fenster, und diese Sitzung bietet keines: "
             "Xwayland fehlt, oder das Programm wurde mit „-platform wayland“ gestartet. "

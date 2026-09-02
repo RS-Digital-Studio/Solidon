@@ -115,8 +115,13 @@ findet kein Display, fällt auf EGL zurück und nimmt den Prozess mit
 wählt `app/ui/qt_platform.py` **vor** der `QGuiApplication` xcb, sobald ein
 X11-Display da ist — Qt 6 nähme in einer Wayland-Sitzung sonst von sich aus
 Wayland, auch neben Xwayland —, und `_available()` lehnt ab, was trotzdem als
-Wayland ankommt (kein Xwayland, oder `-platform wayland` von Hand);
-`unavailable_hint()` sagt dann, was fehlt. Wer die Plattform vor dem Aufbau
+Wayland ankommt; `unavailable_hint()` sagt dann, was fehlt. In einer
+Wayland-Sitzung lautet die Wahl `xcb;wayland`, nicht `xcb`: Qt geht die Liste
+durch, und das X11-Plugin braucht neun Bibliotheken vom System, die das
+Linux-Paket nicht mitbringt (`libxcb-cursor0` fehlt auf einem Ubuntu-GNOME
+regelmäßig). Mit `xcb` allein hieße das kein Start; mit Wayland dahinter
+startet die Anwendung ohne 3D-Ansicht, und der Hinweis nennt die Bibliothek —
+mit `DISPLAY` die Bibliothek, ohne `DISPLAY` Xwayland. Wer die Plattform vor dem Aufbau
 liest oder setzt, geht über diese eine Funktion — die Werkzeuge in `tools/`,
 die `QT_QPA_PLATFORM` entfernen, weil sie das echte Fenster wollen, bauen sie
 nicht nach.

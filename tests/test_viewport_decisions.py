@@ -102,11 +102,23 @@ def test_x11_is_chosen_wherever_the_3d_view_can_have_it() -> None:
         "WAYLAND_DISPLAY": "wayland-0",
         "XDG_SESSION_TYPE": "wayland",
     }
-    assert qpa_platform("linux", wayland_with_xwayland) == "xcb"
-    assert qpa_platform("linux", {**wayland_with_xwayland, "QT_QPA_PLATFORM": "wayland"}) == "xcb"
-    assert qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland;xcb"}) == "xcb"
-    assert qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "Wayland-EGL"}) == "xcb"
-    assert qpa_platform("linux", {"DISPLAY": ":0"}) == "xcb", "auch eine reine X11-Sitzung"
+    # X11 zuerst — und Wayland dahinter, damit ein Ubuntu ohne libxcb-cursor0
+    # ohne 3D-Ansicht startet statt gar nicht (Qt geht die Liste durch).
+    assert qpa_platform("linux", wayland_with_xwayland) == "xcb;wayland"
+    assert qpa_platform("linux", {"DISPLAY": ":1", "XDG_SESSION_TYPE": "wayland"}) == "xcb;wayland"
+    assert (
+        qpa_platform("linux", {**wayland_with_xwayland, "QT_QPA_PLATFORM": "wayland"})
+        == "xcb;wayland"
+    )
+    assert (
+        qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland;xcb"}) == "xcb;wayland"
+    )
+    assert (
+        qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "Wayland-EGL"}) == "xcb;wayland"
+    )
+    assert qpa_platform("linux", {"DISPLAY": ":0"}) == "xcb", (
+        "eine reine X11-Sitzung hat kein Wayland, hinter das sie fallen könnte"
+    )
 
     assert qpa_platform("linux", {"WAYLAND_DISPLAY": "wayland-0"}) is None, "ohne Xwayland"
     assert qpa_platform("linux", {"DISPLAY": "  ", "XDG_SESSION_TYPE": "wayland"}) is None
@@ -126,15 +138,17 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
     from app.ui import qt_platform
 
     monkeypatch.setattr(qt_platform.sys, "platform", "linux")
+    for key in ("WAYLAND_DISPLAY", "XDG_SESSION_TYPE"):
+        monkeypatch.delenv(key, raising=False)
     monkeypatch.setenv("DISPLAY", ":0")
     monkeypatch.setenv("QT_QPA_PLATFORM", "wayland")
     monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE, raising=False)
 
-    assert qt_platform.prefer_x11_for_the_viewport() == "xcb"
-    assert os.environ["QT_QPA_PLATFORM"] == "xcb"
+    assert qt_platform.prefer_x11_for_the_viewport() == "xcb;wayland"
+    assert os.environ["QT_QPA_PLATFORM"] == "xcb;wayland"
     assert os.environ[QT_PLATFORM_BEFORE_VARIABLE] == "wayland"
     # Ein zweiter Aufruf — ``main`` und ``build_application`` rufen beide —
-    # findet xcb vor und lässt den gemerkten Vorwert stehen.
+    # findet die eigene Wahl vor und lässt den gemerkten Vorwert stehen.
     assert qt_platform.prefer_x11_for_the_viewport() is None
     assert os.environ[QT_PLATFORM_BEFORE_VARIABLE] == "wayland"
 
@@ -161,9 +175,17 @@ def test_a_wayland_session_keeps_vtk_out_and_says_what_to_do(
     from app.ui import viewport
 
     monkeypatch.setattr(viewport, "_effective_platform", lambda: "wayland")
+    monkeypatch.delenv("DISPLAY", raising=False)
     assert not viewport._available()
     hint = viewport.unavailable_hint()
     assert "X11" in hint and "Xwayland" in hint, hint
+
+    # Mit DISPLAY stand X11 an erster Stelle — landet Qt trotzdem auf Wayland,
+    # ließ sich das X11-Plugin nicht laden, und das heißt fast immer
+    # libxcb-cursor0. Der Hinweis nennt sie, nicht Xwayland.
+    monkeypatch.setenv("DISPLAY", ":0")
+    hint = viewport.unavailable_hint()
+    assert "libxcb-cursor0" in hint and "Xwayland" not in hint, hint
 
     monkeypatch.setattr(viewport, "_effective_platform", lambda: "wayland-egl")
     assert not viewport._available()

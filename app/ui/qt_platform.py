@@ -37,13 +37,15 @@ _log = get_logger(__name__)
 
 #: Die Plattform, auf der VTK sein Fenster bekommt.
 X11: Final = "xcb"
+#: Dasselbe in einer Wayland-Sitzung: X11 zuerst, Wayland als Netz darunter.
+X11_THEN_WAYLAND: Final = "xcb;wayland"
 
 
 def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
     """Was ``QT_QPA_PLATFORM`` vor dem Anwendungsaufbau bekommen soll — oder
     ``None``, wenn die Umgebung bleibt, wie sie ist.
 
-    ``xcb`` genau dann, wenn Linux ein X11-Display anbietet (``DISPLAY``) und
+    X11 genau dann, wenn Linux ein X11-Display anbietet (``DISPLAY``) und
     entweder nichts gesetzt ist oder etwas, das mit ``wayland`` beginnt. Ein
     global gesetztes ``QT_QPA_PLATFORM=wayland`` gilt allen Qt-Programmen und
     meint nicht diese Anwendung, die auf Wayland kein Bild hat; ``offscreen``,
@@ -51,6 +53,15 @@ def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
     Werkzeuge und Tests, die wissen, was sie tun. Ohne ``DISPLAY`` gibt es
     nichts zu wählen: Dann fehlt Xwayland, Qt nimmt Wayland, und die Ansicht
     sagt, was zu tun ist (``viewport.unavailable_hint``).
+
+    **In einer Wayland-Sitzung steht Wayland hinter X11 in der Liste.** Qt
+    geht sie der Reihe nach durch (``init_platform``) und bricht erst ab, wenn
+    jeder Name scheitert. Das X11-Plugin braucht neun Bibliotheken vom
+    System, die das Linux-Paket nicht mitbringt — ``libxcb-cursor0`` fehlt auf
+    einem Ubuntu-GNOME regelmäßig, und Qt sagt es seit 6.5 in einer eigenen
+    Warnung. Mit ``xcb`` allein hieße das „no Qt platform plugin could be
+    initialized" und kein Start; mit Wayland dahinter startet die Anwendung
+    ohne 3D-Ansicht, und der Hinweis nennt die Bibliothek.
     """
     if not platform.startswith("linux"):
         return None
@@ -59,7 +70,12 @@ def qpa_platform(platform: str, environ: Mapping[str, str]) -> str | None:
     wanted = environ.get("QT_QPA_PLATFORM", "").strip()
     if wanted and not wanted.casefold().startswith("wayland"):
         return None
-    return X11
+    wayland_session = (
+        bool(environ.get("WAYLAND_DISPLAY", "").strip())
+        or environ.get("XDG_SESSION_TYPE", "").strip().casefold() == "wayland"
+        or wanted.casefold().startswith("wayland")
+    )
+    return X11_THEN_WAYLAND if wayland_session else X11
 
 
 def prefer_x11_for_the_viewport() -> str | None:
