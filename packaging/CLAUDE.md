@@ -114,7 +114,9 @@ fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
   zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
 - **Die Lizenzbeilage** entsteht nach der SBOM mit
   `make_licence_notices.py --sbom`: `THIRD-PARTY-NOTICES.md` liegt genau einmal
-  im fertigen App-Baum, das Schema-2-JSON bleibt in der CRA-/Buildakte. Vor der
+  neben der ausführbaren Datei und wird dort auch vom Über-Dialog gelesen. Die
+  PyInstaller-Spec nimmt die eingecheckte Entwicklungsfassung ausdrücklich
+  nicht mit. Das Schema-2-JSON bleibt in der CRA-/Buildakte. Vor der
   äußersten Veröffentlichung prüft `--release-check` fail-closed die
   Endartefakt-SBOM, Schema-1-Evidenz, äußeren Pakete, exakte Versionen sowie
   erforderliche Quellarchive und Relink-Materialien. Diese Prüfung läuft

@@ -11,6 +11,7 @@ transitives Paket kann sich also nicht ungesehen hineinschleichen.
 from __future__ import annotations
 
 import re
+import sys
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -25,17 +26,30 @@ _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
 
+
 #: Die Lizenzbeilage, wie sie neben der Anwendung liegt.
 #:
-#: **Im gebauten Paket ist sie die einzige Quelle.** `runtime_packages` fragt
+#: **Im gebauten Paket ist sie die einzige Quelle.** ``runtime_packages`` fragt
 #: `importlib.metadata` nach der eigenen Distribution, und die gibt es dort
 #: unter keinen Umständen: Die Anwendung ist kein installiertes Paket.
-#: `packaging/solidon3d.spec` legt die Datei deshalb neben das `app`-Paket, und
-#: `tests/test_licences.py` hält sie aktuell — gelesen hat sie bis zum
+#: Der Paketbau erzeugt die Datei aus der Endartefakt-SBOM neben der EXE; die
+#: Spec darf keine zweite, vor dem Bau erzeugte Kopie in ``_internal`` legen.
+#: Im Quellbaum hält ``tests/test_licences.py`` die eingecheckte Fassung aktuell
+#: — gelesen hat sie bis zum
 #: 27.08.2026 niemand. Der Über-Dialog zeigte im Paket also **nie** eine
 #: Fremdlizenz, sondern immer den Ersatzsatz aus `dialogs.py`; PySide6 steht
 #: unter LGPL, und §36 verlangt die Liste.
-NOTICE_FILE: Final = Path(__file__).parents[3] / "THIRD-PARTY-NOTICES.md"
+def _notice_file(*, frozen: bool | None = None, executable: Path | None = None) -> Path:
+    """Liefert die eine Lizenzbeilage der jeweiligen Laufzeitumgebung."""
+
+    is_frozen = bool(getattr(sys, "frozen", False)) if frozen is None else frozen
+    if is_frozen:
+        application = Path(sys.executable) if executable is None else executable
+        return application.parent / "THIRD-PARTY-NOTICES.md"
+    return Path(__file__).parents[3] / "THIRD-PARTY-NOTICES.md"
+
+
+NOTICE_FILE: Final = _notice_file()
 
 #: Die Extras, deren Abhängigkeiten in der ausgelieferten Anwendung landen.
 #: Dieselbe Liste wie im Bau-Workflow (``.[geom,ui,agent,brep]``) — hier

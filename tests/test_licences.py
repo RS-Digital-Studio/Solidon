@@ -265,14 +265,7 @@ def test_the_notices_survive_a_build_without_own_metadata(
 
 
 def test_the_notice_file_travels_where_the_fallback_looks_for_it() -> None:
-    """Und sie liegt da, wo der Rückfall sie sucht — in beiden Lagen.
-
-    ``NOTICE_FILE`` rechnet vom Modul aus nach oben. In der Entwicklung ist
-    das der Projektstamm, im Bau ``<_MEIPASS>``, wohin die Spec sie legt
-    (Ziel ``"."``). Beide Male derselbe Ausdruck, und das ist der Grund, warum
-    er hier prüfbar ist: Ein Pfad, der nur im gebauten Paket stimmt, wird
-    nirgends geprüft.
-    """
+    """Quellbaum und fertiges Paket lesen jeweils ihre einzige Beilage."""
     assert licences.NOTICE_FILE.is_file(), licences.NOTICE_FILE
     assert licences.NOTICE_FILE.name == "THIRD-PARTY-NOTICES.md"
     assert licences.NOTICE_FILE == NOTICE_FILE, "zwei Wege zu derselben Datei"
@@ -280,4 +273,11 @@ def test_the_notice_file_travels_where_the_fallback_looks_for_it() -> None:
     spec = (Path(__file__).parent.parent / "packaging" / "solidon3d.spec").read_text(
         encoding="utf-8"
     )
-    assert '"THIRD-PARTY-NOTICES.md"), "."' in spec, "die Spec legt sie woandershin"
+    assert '"THIRD-PARTY-NOTICES.md"), "."' not in spec, (
+        "die Spec würde eine veraltete zweite Beilage nach _internal legen"
+    )
+
+    executable = Path("C:/Program Files/Solidon3D/Solidon3D.exe")
+    assert licences._notice_file(frozen=True, executable=executable) == (
+        executable.parent / "THIRD-PARTY-NOTICES.md"
+    )

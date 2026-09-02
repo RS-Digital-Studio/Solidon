@@ -87,7 +87,6 @@ datas = [
     (str(ROOT / "LICENSE"), "."),
     # Der KI-Hinweis öffnet diese Fassung lokal im Fenster, ohne Webabruf.
     (str(ROOT / "DATENSCHUTZ.md"), "."),
-    (str(ROOT / "THIRD-PARTY-NOTICES.md"), "."),
 ]
 # trimesh und pyvista lesen beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
