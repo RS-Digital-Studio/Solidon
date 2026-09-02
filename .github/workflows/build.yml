@@ -263,7 +263,18 @@ jobs:
           # Dialog mitten im Bau des nächsten. Seit `tests/conftest.py`
           # (`_orphaned_widgets_die_between_tests`) sie zwischen den Tests
           # abbaut, laufen beide Dateien am Stück — gemessen 114 und 65 grün.
-          attempt -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
+          #
+          # **`test_print_settings_ui.py` läuft trotzdem für sich, als ganze
+          # Datei in einem Prozess.** Die Fixture räumt nur in ihren zwei
+          # Dateien auf; `-n auto` verteilt aber nach Tests und nicht nach
+          # Dateien, und dann liegt auf demselben Worker ein verwaister Dialog
+          # aus einer Datei, die sie nicht deckt. Genau das riss in Tag-Lauf 5
+          # (03.09.2026) zweimal von zwei: „worker 'gw3' crashed" in
+          # `test_the_save_button_says_what_it_is_waiting_for`, sonst 7207
+          # grün. Ein eigener Prozess ist die Grenze, hinter der die Fixture
+          # vollständig gilt — keine Portionierung mehr, die ganze Datei.
+          attempt -n auto -m "not performance" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
+          attempt -m "not performance" tests/test_print_settings_ui.py
 
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
@@ -1276,4 +1287,7 @@ jobs:
           echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
           # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
           # auch dieser Lauf Stunden bei 49 Prozent.
-          python -m pytest -q -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
+          # Dieselbe Trennung wie im Suite-Job darüber: die Dialogdatei in
+          # einem eigenen Prozess, weil `-n auto` nach Tests verteilt.
+          python -m pytest -q -n auto -m "not performance" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
+          python -m pytest -q -m "not performance" tests/test_print_settings_ui.py
