@@ -107,6 +107,8 @@ Nutzen da und sonst nichts.
 - Beim Anspringen eines Fundorts rahmt die Kamera das Ziel ein, statt in einer grauen Nahaufnahme zu landen.
 - Benannte Flächen und Hinweise wandern beim Anordnen und Platzieren zusammen mit ihrem Körper.
 - Beim Modellieren mit dem Pinsel wird gemeldet, wenn Striche das Modell verfehlen oder keine druckbare Änderung erzeugen.
+- Ein Text auf einer Seitenwand steht waagerecht und aufrecht, statt in einem zufälligen Winkel zu liegen; auf Decke und Boden bestimmt weiterhin der eingestellte Winkel die Richtung.
+- Steckt ein Schriftzug im Körper, statt auf ihm zu stehen, sagt es die Operation und nennt den Weg: die Fläche anklicken, auf der die Schrift sitzen soll.
 - Ausgehöhlte Körper halten die gewünschte Wandstärke auch an schrägen und runden Flächen.
 - Eine bewusst vergrößerte Bohrung behält ihren Namen und ihre Passungen, statt im Prüfbericht als verloren zu gelten.
 - Kugeln mit sehr vielen Segmenten bleiben ein handliches Netz statt zwanzig Millionen Dreiecke.
@@ -151,6 +153,7 @@ Nutzen da und sonst nichts.
 - Mitgelieferte Bausteine und die Freischaltung werden beim Start ohne gegenseitiges Blockieren geladen.
 - Die 3D-Ansicht wird vor dem Fenster sauber beendet; dadurch schließen Windows-, Linux- und macOS-Fenster zuverlässiger.
 - Die Titelleiste folgt unter Windows 11 dem Farbschema der Anwendung; andere Plattformen bleiben unverändert.
+- Unter Linux mit einer Wayland-Sitzung startet Solidon und zeigt die 3D-Ansicht; fehlt dem System eine Bibliothek dafür, startet die Anwendung trotzdem und sagt, welche fehlt.
 - Standardschaltflächen wie Öffnen, Speichern und Abbrechen wechseln ihre Sprache sofort, ohne Neustart.
 - Automatisch erzeugte Körper- und Bausteinnamen wechseln auch nach bereits verwendeten zwischengespeicherten Inhalten korrekt die Sprache.
 - Übersetzungen und Berichtswerte sind in Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch auf demselben Stand.

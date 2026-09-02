@@ -83,6 +83,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al saltar a un hallazgo, la cámara encuadra el destino en lugar de acabar en un primer plano gris.
 - Las caras con nombre y los hallazgos se mueven con su cuerpo al organizarlo y colocarlo.
 - El modelado con pincel avisa si los trazos no alcanzan el modelo o no producen un cambio imprimible.
+- Un texto en una pared lateral queda horizontal y derecho en lugar de en un ángulo cualquiera; en la cara superior e inferior sigue mandando el ángulo indicado.
+- Si un rótulo queda dentro del cuerpo en vez de sobre él, la operación lo dice y señala el camino: hacer clic en la cara donde debe ir el texto.
 - Los cuerpos ahuecados mantienen el grosor de pared deseado también en caras inclinadas y curvas.
 - Un agujero ampliado a propósito conserva su nombre y sus ajustes en lugar de contar como perdido en el informe.
 - Las esferas con muchísimos segmentos siguen siendo una malla manejable en lugar de veinte millones de triángulos.
@@ -127,6 +129,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los bloques incluidos y la activación se cargan al iniciar sin bloquearse entre sí.
 - La vista 3D se cierra antes que la ventana; así, las ventanas de Windows, Linux y macOS se cierran con mayor fiabilidad.
 - En Windows 11 la barra de título sigue el esquema de colores de la aplicación; las demás plataformas no cambian.
+- En Linux con una sesión Wayland, Solidon arranca y muestra la vista 3D; si al sistema le falta una biblioteca, la aplicación arranca igualmente e indica cuál falta.
 - Los botones estándar como Abrir, Guardar y Cancelar cambian de idioma al instante, sin reiniciar.
 - Los nombres creados automáticamente para cuerpos y bloques cambian bien de idioma incluso después de usar contenido en caché.
 - Las traducciones y los valores del informe están al mismo nivel en alemán, inglés, español, francés, italiano y portugués.

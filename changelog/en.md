@@ -82,6 +82,8 @@ it into `website/version.json`.
 - When jumping to a finding, the camera frames the target instead of ending in a grey close-up.
 - Named faces and findings move with their body during arrangement and placement.
 - Brush modelling reports when strokes miss the model or produce no printable change.
+- Text on a side wall sits level and upright instead of at an arbitrary angle; on top and bottom faces the set angle still decides the direction.
+- If lettering ends up inside the body instead of on it, the operation says so and names the way out: click the face the text belongs on.
 - Hollowed bodies keep the requested wall thickness on slanted and curved faces too.
 - A deliberately enlarged hole keeps its name and its fits instead of counting as lost in the report.
 - Spheres with very many segments stay a manageable mesh instead of twenty million triangles.
@@ -126,6 +128,7 @@ it into `website/version.json`.
 - Bundled parts and activation load at startup without blocking each other.
 - The 3D view closes before the window, helping Windows, Linux and macOS windows shut down more reliably.
 - On Windows 11 the title bar follows the application's colour scheme; other platforms remain unchanged.
+- On Linux in a Wayland session Solidon starts and shows the 3D view; if the system lacks a library for it, the application still starts and names the missing one.
 - Standard buttons such as Open, Save and Cancel change language immediately without a restart.
 - Automatically created body and part names switch language correctly even after cached content has already been used.
 - Translations and report values are equally up to date in German, English, Spanish, French, Italian and Portuguese.

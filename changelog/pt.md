@@ -82,6 +82,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao saltar para um resultado, a câmara enquadra o alvo em vez de terminar num grande plano cinzento.
 - As faces designadas e indicações acompanham o corpo durante a disposição e o posicionamento.
 - Ao modelar com o pincel, é indicado se os traços falham o modelo ou não produzem uma alteração imprimível.
+- Um texto numa parede lateral fica horizontal e direito em vez de num ângulo qualquer; na face de cima e de baixo continua a mandar o ângulo definido.
+- Se uma inscrição ficar dentro do corpo em vez de sobre ele, a operação diz-o e indica o caminho: clicar na face onde o texto deve assentar.
 - Os corpos ocos mantêm a espessura de parede pretendida também em faces inclinadas e curvas.
 - Um furo alargado de propósito mantém o seu nome e os seus ajustes em vez de contar como perdido no relatório.
 - As esferas com muitíssimos segmentos continuam a ser uma malha manejável em vez de vinte milhões de triângulos.
@@ -126,6 +128,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os blocos incluídos e a ativação carregam ao iniciar sem se bloquearem mutuamente.
 - A vista 3D termina corretamente antes da janela, tornando o fecho mais fiável no Windows, Linux e macOS.
 - No Windows 11 a barra de título segue o esquema de cores da aplicação; as outras plataformas mantêm-se inalteradas.
+- No Linux numa sessão Wayland, o Solidon arranca e mostra a vista 3D; se faltar uma biblioteca ao sistema, a aplicação arranca à mesma e indica qual falta.
 - Os botões padrão como Abrir, Guardar e Cancelar mudam imediatamente de idioma, sem reiniciar.
 - Os nomes gerados de corpos e blocos mudam corretamente de idioma mesmo após usar conteúdos anteriormente em cache.
 - As traduções e os valores dos relatórios estão ao mesmo nível em alemão, inglês, espanhol, francês, italiano e português.

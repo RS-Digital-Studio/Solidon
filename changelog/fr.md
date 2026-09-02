@@ -83,6 +83,8 @@ dans `website/version.json`.
 - Lors du saut vers un constat, la caméra cadre la cible au lieu d’aboutir sur un gros plan gris.
 - Les faces nommées et les indications suivent leur corps pendant l’agencement et le positionnement.
 - Pendant le modelage au pinceau, un message indique si les traits manquent le modèle ou ne produisent aucune modification imprimable.
+- Un texte sur une paroi latérale est horizontal et à l’endroit au lieu de suivre un angle quelconque ; sur le dessus et le dessous, c’est toujours l’angle réglé qui donne la direction.
+- Si une inscription se retrouve dans le corps au lieu d’être dessus, l’opération le dit et indique la voie : cliquer la face où le texte doit se poser.
 - Les corps évidés conservent l’épaisseur de paroi demandée aussi sur les faces inclinées et courbes.
 - Un trou agrandi volontairement garde son nom et ses ajustements au lieu de compter comme perdu dans le rapport.
 - Les sphères à très nombreux segments restent un maillage maniable au lieu de vingt millions de triangles.
@@ -127,6 +129,7 @@ dans `website/version.json`.
 - Les blocs fournis et l’activation se chargent au démarrage sans se bloquer mutuellement.
 - La vue 3D se ferme proprement avant la fenêtre, ce qui fiabilise la fermeture sous Windows, Linux et macOS.
 - Sous Windows 11, la barre de titre suit le schéma de couleurs de l’application ; les autres plateformes restent inchangées.
+- Sous Linux dans une session Wayland, Solidon démarre et affiche la vue 3D ; s’il manque une bibliothèque au système, l’application démarre quand même et indique laquelle.
 - Les boutons standard comme Ouvrir, Enregistrer et Annuler changent immédiatement de langue, sans redémarrage.
 - Les noms de corps et de blocs générés automatiquement changent aussi correctement de langue après l’emploi de contenus mis en cache.
 - Les traductions et valeurs de rapport sont au même niveau en allemand, anglais, espagnol, français, italien et portugais.

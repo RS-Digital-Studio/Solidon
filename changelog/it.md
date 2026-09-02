@@ -82,6 +82,8 @@ scrive in `website/version.json`.
 - Quando si raggiunge un riscontro, la telecamera inquadra l’obiettivo invece di finire in un primo piano grigio.
 - Le facce denominate e le indicazioni si spostano insieme al loro corpo durante disposizione e posizionamento.
 - Nella modellazione a pennello viene segnalato se i tratti mancano il modello o non producono modifiche stampabili.
+- Un testo su una parete laterale sta orizzontale e diritto invece che a un angolo qualsiasi; sulla faccia superiore e inferiore decide ancora l’angolo impostato.
+- Se una scritta finisce dentro il corpo invece che sopra, l’operazione lo dice e indica la strada: fare clic sulla faccia su cui deve stare il testo.
 - I corpi svuotati mantengono lo spessore di parete richiesto anche su facce inclinate e curve.
 - Un foro allargato di proposito conserva il suo nome e i suoi accoppiamenti invece di risultare perso nel rapporto.
 - Le sfere con moltissimi segmenti restano una mesh maneggevole invece di venti milioni di triangoli.
@@ -126,6 +128,7 @@ scrive in `website/version.json`.
 - I blocchi inclusi e l’attivazione vengono caricati all’avvio senza bloccarsi a vicenda.
 - La vista 3D viene chiusa correttamente prima della finestra, rendendo più affidabile la chiusura su Windows, Linux e macOS.
 - Su Windows 11 la barra del titolo segue lo schema di colori dell’applicazione; le altre piattaforme restano invariate.
+- Su Linux in una sessione Wayland, Solidon si avvia e mostra la vista 3D; se al sistema manca una libreria, l’applicazione si avvia comunque e dice quale manca.
 - I pulsanti standard come Apri, Salva e Annulla cambiano lingua immediatamente, senza riavvio.
 - I nomi generati di corpi e blocchi cambiano correttamente lingua anche dopo aver già usato contenuti memorizzati nella cache.
 - Traduzioni e valori del rapporto sono allo stesso livello in tedesco, inglese, spagnolo, francese, italiano e portoghese.
