@@ -80,3 +80,23 @@ bestätigt nichts.
 `tools/make_seo.py` und `tests/test_website.py` schließen sie am Namensmuster
 aus; ohne das stünde sie in der Sitemap, und die Search Console meldete eine
 angebotene Seite ohne Inhalt — ausgerechnet die, die man gerade einrichtet.
+
+## Die Domain fuhr PHP 7.4, und die neue `api/` braucht 8.1
+
+Gemessen am 02.09.2026 mit einer Wegwerf-Sonde (`<?php echo PHP_VERSION;`
+hochladen, abrufen, löschen): **PHP 7.4.33**, `cgi-fcgi`,
+`/var/www/vhosts/system/solidon3d.de/etc/php.ini`. `stats.php`,
+`count.php`, `support.php`, `activation_common.php` und
+`cleanup_private_state.php` aus dem Repository verlangen 8.1 — `stats.php`
+beendet sich darunter mit einer **leeren 503** (kein Body, keine der eigenen
+Kopfzeilen; das ist das Erkennungszeichen). Die Fassung stellt nur Plesk um
+(*Websites & Domains → PHP-Einstellungen*), nicht FTP und nicht das Chroot.
+
+**Die Zugangsakte der Statistik liegt seit dem 02.09.2026 dort, wo die neue
+Seite sie erwartet:** `solidon3d.de/appdata/stats-access.php` mit 0600,
+`appdata` und `solidon-stats` mit 0700 (`SITE CHMOD` über FTPS geht). Die
+alte `httpdocs/api/.stats-zugang.php` liest nur die alte Seite; sobald die
+neue läuft, kommt sie vom Server. `upload_website.py` verweigert jeden Upload,
+solange nicht inventarisierte Medien auf dem Server liegen (Rechtenachweis);
+eine einzelne PHP-Datei geht dann direkt per `storbinary`, vorher die
+Serverfassung sichern.
