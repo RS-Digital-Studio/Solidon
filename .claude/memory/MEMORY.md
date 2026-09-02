@@ -64,6 +64,7 @@
 - [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` läuft ins Leere; nach dem Ergebnis fragen.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; sonst misst man den eigenen Aufbau.
 
+- [Verwaiste Widgets sterben im falschen Moment](verwaiste-widgets-sterben-im-falschen-moment.md) — `gc.disable()` trennt Zeitpunkt von Zerstörung; die Portionsgröße war die falsche Achse.
 - [Zufallsziehung ist keine Zuordnung](zufallsziehung-ist-keine-zuordnung.md) — sporadische Abstürze ordnet erst eine Verteilung zu, keine Einzelbeobachtung.
 - [Bekannte Familie erklärt nicht den Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) — „seit Commit X" verlangt die Gegenprobe auf dem Stand davor.
 - [Verursacher wird gemessen, nicht gelesen](verursacher-wird-gemessen-nicht-gelesen.md) — `git log -- a b` nennt den letzten Commit an *einer* Datei; `git show --stat` lesen.
