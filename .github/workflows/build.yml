@@ -232,19 +232,17 @@ jobs:
               run "$@"
             }
           }
+          # **`tests/test_parts.py` läuft hier nicht** — Entscheidung Robert,
+          # 02.09.2026: Die CI fährt das Nötigste, die Bausteinbereichstests
+          # fährt das lokale Tor. Die 27 Bereichstests bauen jeden Baustein an
+          # allen 2114 Ecken seines Parameterraums und prüfen Wand und
+          # Selbstdurchdringung — rund eine Minute je Baustein auf einem Kern.
+          # Lokal verteilt `suite-getrennt.sh` das auf acht Worker und sieht
+          # es nie; hier lief es seriell, und drei Läufe an diesem Tag standen
+          # je vier Stunden bei 49 Prozent, bevor sie mit Segfault endeten.
+          # Die Deckung dafür liegt damit allein beim lokalen Lauf vor dem
+          # Commit (`/pruefen`), nicht mehr im Bautor.
           attempt -m "not performance" $ignores --ignore=tests/test_parts.py
-
-          # **`test_parts.py` bekommt seinen eigenen Aufruf, und der verteilt.**
-          # Die 27 Bereichstests bauen jeden Baustein an allen 2114 Ecken
-          # seines Parameterraums und prüfen Wand und Selbstdurchdringung —
-          # die Pflicht aus AGENTS.md, und sie bleibt vollständig. Aber sie
-          # ist reine Rechenzeit, rund eine Minute je Baustein auf einem Kern:
-          # Lokal fährt das Tor den großen Zug mit `-n 8` und sieht sie nie;
-          # hier lief alles seriell, und drei Läufe am 02.09.2026 standen je
-          # vier Stunden bei 49 Prozent, bevor sie mit Segfault endeten. Die
-          # Datei kennt kein Fenster, kein Qt und kein VTK — deshalb darf sie
-          # auf die Kerne verteilen, wo die Fensterdateien es nicht dürfen.
-          attempt -m "not performance" -n auto tests/test_parts.py
 
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
@@ -1600,7 +1598,6 @@ jobs:
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
-          # Dieselbe Trennung wie in der Suite oben: die Bausteinbereichstests
-          # verteilt, sonst steht auch dieser Lauf Stunden bei 49 Prozent.
+          # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
+          # auch dieser Lauf Stunden bei 49 Prozent.
           python -m pytest -q -m "not performance" $ignores --ignore=tests/test_parts.py
-          python -m pytest -q -m "not performance" -n auto tests/test_parts.py
