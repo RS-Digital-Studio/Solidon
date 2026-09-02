@@ -936,7 +936,9 @@ def _descriptor_path(descriptor: int) -> Path | None:
         # `/dev/fd/N` ist auf dem Mac kein Symlink, und /proc gibt es nicht —
         # F_GETPATH (50) nennt den Pfad.
         module = importlib.import_module("fcntl")
-        raw = module.fcntl(descriptor, 50, b"\0" * 4096)
+        # 1024 und nicht mehr — die Begründung steht bei der Zwillingsstelle
+        # in ``scene.project._opened_file_path``.
+        raw = module.fcntl(descriptor, 50, b"\0" * 1024)
         return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
     return None
 

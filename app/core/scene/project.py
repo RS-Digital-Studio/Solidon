@@ -388,7 +388,12 @@ def _opened_file_path(stream: Any) -> Path:
         # F_GETPATH (50) nennt den Pfad, den der Mac nicht verlinkt.
         import fcntl
 
-        raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 4096)
+        # Genau 1024 Byte: Pythons ``fcntl`` nimmt nicht mehr als das
+        # (``FCNTL_BUFSZ``) und wirft sonst „fcntl string arg too long", bevor
+        # der Systemaufruf läuft — 4096 kosteten 23 rote Tests im Tag-Lauf 3
+        # (03.09.2026). Und 1024 ist zugleich, was Darwin für ``F_GETPATH``
+        # verlangt: ein Puffer von ``MAXPATHLEN``, und das ist dort PATH_MAX.
+        raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 1024)
         return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
     raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
 
