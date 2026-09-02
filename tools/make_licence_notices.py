@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any, Final
 from urllib.parse import unquote
 
-from app.branding import APP_NAME, APP_VERSION
+from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
 from app.core.knowledge import licences
 
 ROOT: Final = Path(__file__).resolve().parent.parent
@@ -459,6 +459,113 @@ def _three_year_anniversary(value: dt.date) -> dt.date:
         return value.replace(year=value.year + 3, day=28)
 
 
+#: Wie der Quelltext einer LGPL-Familie bereitgestellt wird. ``archive`` legt
+#: Quellarchiv und Austauschmaterial bei; ``written-offer`` ist das schriftliche
+#: Angebot über mindestens drei Jahre (LGPL 3 §4 d(1), GPL 3 §6 b) — dann liegt
+#: kein Archiv bei, und das Relinken läuft über den Austausch der geteilten
+#: Bibliothek (LGPL 3 §4 d(1): „a suitable shared library mechanism").
+EVIDENCE_METHODS: Final = frozenset({"archive", "written-offer"})
+RELINK_METHODS: Final = frozenset({"shared-library-replacement", "archive"})
+#: Ein Tag über der Dreijahresfrist, damit die Prüfung auch am Stichtag hält.
+OFFER_GRACE_DAYS: Final = 1
+
+
+def write_release_evidence(
+    sbom_path: Path,
+    evidence_path: Path,
+    packages: dict[str, Path],
+    *,
+    contact: str = SUPPORT_ADDRESS,
+    release_date: dt.date | None = None,
+) -> dict[str, Any]:
+    """Schreibt die Release-Evidenz aus der Endartefakt-SBOM und den äußeren Paketen.
+
+    **Bis zum 02.09.2026 gab es nur den Prüfer.** ``--release-check`` verlangte
+    ``build/release-evidence.json``, und kein Schritt in ``tools/``,
+    ``packaging/`` oder ``.github/`` schrieb sie — jeder Releaseakte-Job wäre
+    am ersten Aufruf mit ``FileNotFoundError`` gestorben, auf allen drei
+    Plattformen. Aufgefallen ist es nicht, weil jeder Tag-Lauf seit dem
+    Einbau der Prüfung vorher abgebrochen wurde.
+
+    Was hier entsteht, prüft :func:`_verify_release_evidence` danach am
+    selben Ort: die Hashes der äußeren Kundenpakete (je Zielplattform die
+    Sorten aus :func:`_required_package_kinds`), und je Laufzeitfamilie mit
+    ``source_delivery`` ein schriftliches Quellenangebot von RS Digital —
+    Version aus der SBOM, nicht aus einer Liste, damit keyutils aus
+    ``dpkg-query`` dieselbe Zahl trägt wie Qt aus dem Wheel. Die Pakete müssen
+    in der Ablage der Evidenz liegen: Der Prüfer löst nur relative Pfade darin
+    auf, und die CI kopiert sie deshalb vorher nach ``build/``.
+    """
+    sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+    target = next(
+        (
+            str(entry.get("value", ""))
+            for entry in sbom.get("metadata", {}).get("properties", [])
+            if entry.get("name") == "solidon:target-platform"
+        ),
+        "",
+    )
+    if not target:
+        raise RuntimeError("Die Endartefakt-SBOM nennt keine Zielplattform.")
+    released = release_date or dt.date.today()
+    root = evidence_path.parent.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    if missing_kinds := _required_package_kinds(target) - set(packages):
+        raise RuntimeError("Äußere Release-Pakete fehlen: " + ", ".join(sorted(missing_kinds)))
+    package_entries: list[dict[str, Any]] = []
+    for kind, path in sorted(packages.items()):
+        resolved = path.resolve()
+        if not resolved.is_file():
+            raise RuntimeError(f"Release-Paket fehlt: {path}")
+        if root not in resolved.parents:
+            raise RuntimeError(f"Release-Paket liegt nicht in der Evidenzablage: {path}")
+        package_entries.append(
+            {
+                "kind": kind,
+                "path": resolved.relative_to(root).as_posix(),
+                "path_sha256": _file_digest(resolved),
+            }
+        )
+    versions = {
+        _generic_identifier(entry): str(entry.get("version", ""))
+        for entry in sbom.get("components", [])
+        if isinstance(entry, dict) and _generic_identifier(entry)
+    }
+    available_until = _three_year_anniversary(released) + dt.timedelta(days=OFFER_GRACE_DAYS)
+    provisions = [
+        {
+            "component_id": identifier,
+            "version": versions[identifier],
+            "issuer": "RS Digital",
+            "contact": contact,
+            "method": "written-offer",
+            "offer_text": (
+                f"RS Digital stellt den vollständigen Quelltext von {policy.name} "
+                f"{versions[identifier]} in der ausgelieferten Fassung auf Anfrage an "
+                f"{contact} bereit — mindestens bis zum {available_until.isoformat()}, "
+                f"zu den Kosten des Datenträgers. Quelle: {policy.source_url}"
+            ),
+            "relink_method": "shared-library-replacement",
+            "source_url": policy.source_url,
+            "available_until": available_until.isoformat(),
+        }
+        for identifier, policy in sorted(_runtime_policies().items())
+        if policy.source_delivery and identifier in versions
+    ]
+    evidence: dict[str, Any] = {
+        "schema": 1,
+        "product_version": APP_VERSION,
+        "target": target,
+        "release_date": released.isoformat(),
+        "packages": package_entries,
+        "source_provisions": provisions,
+    }
+    evidence_path.write_text(
+        json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return evidence
+
+
 def _verify_release_evidence(
     evidence_path: Path,
     sbom: dict[str, Any],
@@ -529,10 +636,23 @@ def _verify_release_evidence(
             raise RuntimeError(f"Quellarchiv-Version für {identifier} passt nicht zur SBOM.")
         if entry.get("issuer") != "RS Digital" or not str(entry.get("contact", "")).strip():
             raise RuntimeError(f"{identifier}: RS Digital oder Kontakt fehlt im Quellenangebot.")
-        if entry.get("method") not in {"archive", "written-offer"}:
+        method = entry.get("method")
+        if method not in EVIDENCE_METHODS:
             raise RuntimeError(f"{identifier}: unbekannte Bereitstellungsmethode.")
-        _verify_hashed_file(root, entry, "source_archive")
-        _verify_hashed_file(root, entry, "relink_material")
+        if method == "archive":
+            _verify_hashed_file(root, entry, "source_archive")
+            _verify_hashed_file(root, entry, "relink_material")
+        else:
+            # Das schriftliche Angebot: Text, Kontakt und Frist sind der Beleg,
+            # das Relinken läuft über die austauschbare Bibliothek. Archive sind
+            # dann freiwillig — genannt, werden sie geprüft.
+            if not str(entry.get("offer_text", "")).strip():
+                raise RuntimeError(f"{identifier}: das schriftliche Angebot hat keinen Text.")
+            if entry.get("relink_method") not in RELINK_METHODS:
+                raise RuntimeError(f"{identifier}: unbekannter Relink-Weg.")
+            for field in ("source_archive", "relink_material"):
+                if entry.get(field):
+                    _verify_hashed_file(root, entry, field)
         try:
             available_until = dt.date.fromisoformat(str(entry["available_until"]))
         except (KeyError, ValueError) as exc:
@@ -609,7 +729,42 @@ def main() -> int:
     parser.add_argument("--release-evidence", type=Path)
     parser.add_argument("--release-check", action="store_true")
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--write-evidence", action="store_true")
+    parser.add_argument(
+        "--package",
+        action="append",
+        default=[],
+        metavar="SORTE=PFAD",
+        help="ein äußeres Kundenpaket, z. B. appimage=build/Solidon3D-0.3.0-x86_64.AppImage",
+    )
+    parser.add_argument("--contact", default=SUPPORT_ADDRESS)
+    parser.add_argument("--release-date", type=dt.date.fromisoformat)
     arguments = parser.parse_args()
+    if arguments.write_evidence:
+        if not arguments.sbom or not arguments.release_evidence:
+            parser.error("--write-evidence verlangt --sbom und --release-evidence")
+        packages: dict[str, Path] = {}
+        for item in arguments.package:
+            kind, separator, value = str(item).partition("=")
+            if not separator or not kind or not value:
+                parser.error(f"--package erwartet SORTE=PFAD, bekam {item!r}")
+            packages[kind] = Path(value)
+        try:
+            evidence = write_release_evidence(
+                arguments.sbom,
+                arguments.release_evidence,
+                packages,
+                contact=arguments.contact,
+                release_date=arguments.release_date,
+            )
+        except (OSError, KeyError, ValueError, RuntimeError) as exc:
+            print(f"Release-Evidenz nicht geschrieben: {exc}")
+            return 1
+        print(
+            f"Release-Evidenz geschrieben: {len(evidence['packages'])} Pakete, "
+            f"{len(evidence['source_provisions'])} Quellenangebote in {arguments.release_evidence}"
+        )
+        return 0
     if arguments.release_check:
         if not arguments.artifact_root or not arguments.sbom or not arguments.release_evidence:
             parser.error("--release-check verlangt --artifact-root, --sbom und --release-evidence")

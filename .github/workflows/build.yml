@@ -214,24 +214,16 @@ jobs:
           else
             run() { python -m pytest -q "$@"; }
           fi
-          # `--forked` gibt es auf POSIX, aber **nur Linux verträgt es.**
-          #
-          # Auf macOS zerlegt es den Lauf: `fork()` ohne anschließendes
-          # `exec()` ist in einem Prozess, der CoreFoundation geladen hat,
-          # von Apple nicht vorgesehen — und Qt lädt sie beim Import. Das
-          # Kind stirbt beim ersten Zugriff, nicht am Testinhalt.
-          #
-          # Gemessen am 20.08.2026 im ersten Lauf, der macOS überhaupt bis
-          # hierher brachte: derselbe Hauptblock ohne Fork **3 770 Tests
-          # grün in 387 s**, danach `test_analysis_ui.py` mit `--forked`
-          # **80 von 110 gescheitert in 10 s** — und im zweiten Anlauf
-          # dieselben 80. Ein Testfehler sieht anders aus als achtzig
-          # Segmentierungsfehler in zehn Sekunden.
-          #
-          # Ohne Fork tut es der eigene Prozess je Datei, wie unter Windows:
-          # der Absturz hängt an der Zahl der VTK-Fenster in *einem* Prozess,
-          # und die bleibt so ebenfalls klein.
-          if [ "$RUNNER_OS" = "Linux" ]; then forked="--forked"; else forked=""; fi
+          # **Kein Fork, sondern Worker.** `--forked` stand hier als Variable,
+          # die nie in einen Aufruf kam — und auf macOS zerlegte es den Lauf
+          # ohnehin (20.08.2026: 80 von 110 in zehn Sekunden tot, weil
+          # `fork()` ohne `exec()` in einem Prozess mit CoreFoundation nicht
+          # vorgesehen ist). Der große Zug läuft stattdessen mit `-n auto`,
+          # wie lokal seit Wochen mit `-n 8`: Jeder Worker baut nur einen Teil
+          # der Fenster und Dialoge, und die Familie, die im seriellen Prozess
+          # nach zwanzig Tests von `test_print_settings_ui.py` mit Segfault
+          # riss (02.09.2026, zweimal hintereinander, nach 11:46 grüner
+          # Laufzeit), findet die Menge nicht mehr, an der sie reißt.
 
           # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
           # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK stirbt auf
@@ -262,7 +254,7 @@ jobs:
           # je vier Stunden bei 49 Prozent, bevor sie mit Segfault endeten.
           # Die Deckung dafür liegt damit allein beim lokalen Lauf vor dem
           # Commit (`/pruefen`), nicht mehr im Bautor.
-          attempt -m "not performance" $ignores --ignore=tests/test_parts.py
+          attempt -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
 
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
@@ -610,6 +602,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13.14"
+      - name: Abhängigkeiten der Zielumgebung
+        # Die Releaseakte liest die installierten Wheels
+        # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
+        # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
+        # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
       - name: Äußere Linux-Pakete und App-Baum laden
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -639,6 +638,11 @@ jobs:
           [ -n "$artifact" ] || { echo "Solidon3D-App-Baum fehlt im Linux-Archiv."; exit 1; }
           sbom=$(find "$artifact" -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die Linux-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
+          # Die Evidenz entsteht hier, wo äußere Pakete und SBOM zusammenliegen,
+          # und wird gleich danach geprüft: Hashes der Pakete, Quellenangebote je
+          # LGPL-Familie, Frist. Bis zum 02.09.2026 schrieb sie niemand.
+          python tools/make_licence_notices.py --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json \
+            --package "appimage=build/$(basename "$appimage")" --package "flatpak=build/$(basename "$flatpak")"
           python tools/make_licence_notices.py --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json
       - name: Geprüfte Linux-Pakete veröffentlichen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1146,6 +1150,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13.14"
+      - name: Abhängigkeiten der Zielumgebung
+        # Die Releaseakte liest die installierten Wheels
+        # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
+        # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
+        # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
       - name: Finalen Installer laden
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -1185,6 +1196,8 @@ jobs:
           $setupLine = (Get-Content -Raw "$($setup[0].FullName).sha256").Trim()
           if ($setupLine -notmatch '^([0-9a-f]{64})  Solidon3D-Setup-\d+\.\d+\.\d+\.exe$' -or (Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter finaler Windows-Installer." }
           Copy-Item -LiteralPath $setup[0].FullName -Destination build/$($setup[0].Name)
+          python tools/make_licence_notices.py --write-evidence --sbom $sbomPath --release-evidence build/release-evidence.json --package "windows-installer=build/$($setup[0].Name)"
+          if ($LASTEXITCODE -ne 0) { throw "Die Windows-Release-Evidenz wurde nicht geschrieben." }
           python tools/make_licence_notices.py --release-check --artifact-root $artifactRoot --sbom $sbomPath --release-evidence build/release-evidence.json
           if ($LASTEXITCODE -ne 0) { throw "Die Windows-Releasebelege sind unvollständig." }
       - name: Geprüften Installer veröffentlichen
@@ -1524,6 +1537,13 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.13.14"
+      - name: Abhängigkeiten der Zielumgebung
+        # Die Releaseakte liest die installierten Wheels
+        # (`packages_distributions`) und importiert `tools.make_sbom` → `app`:
+        # ohne die Extras des Paketjobs wäre jede native Datei „ohne Besitzer"
+        # und der erste Import ein ImportError. Gemessen am 02.09.2026 — der
+        # Job hatte bis dahin nie ein echtes Artefakt gesehen.
+        run: python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
       - name: Finalen Installer laden
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -1556,6 +1576,7 @@ jobs:
           cp "$package" "build/$(basename "$package")"
           sbom=$(find release-app/Solidon3D.app -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die macOS-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
+          python tools/make_licence_notices.py --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")"
           python tools/make_licence_notices.py --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json
       - name: Geprüften Mac-Bau veröffentlichen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1626,4 +1647,4 @@ jobs:
           echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
           # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
           # auch dieser Lauf Stunden bei 49 Prozent.
-          python -m pytest -q -m "not performance" $ignores --ignore=tests/test_parts.py
+          python -m pytest -q -n auto -m "not performance" $ignores --ignore=tests/test_parts.py
