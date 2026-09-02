@@ -107,6 +107,52 @@ def test_a_named_text_file_selects_the_test_that_names_it(tree: Path) -> None:
     assert reasons[tree / "tests" / "test_roadmap.py"] == "nennt ROADMAP.md"
 
 
+def test_a_data_file_selects_the_tests_of_the_module_that_reads_it(tree: Path) -> None:
+    """Wer eine Datendatei über ein Werkzeug liest, nennt sie nie beim Namen.
+
+    Am 03.09.2026 hat genau das eine CI-Runde gekostet: Für eine geänderte
+    ``changelog/de.md`` nannte die Auswahl ``test_changelog`` und
+    ``test_changes_view``, aber nicht ``test_changelog_website`` — und der
+    wurde rot, weil die erzeugten Seiten fehlten. Diese Datei liest den
+    Changelog nicht selbst; sie ruft ``tools.make_changelog``, und dort
+    entsteht der Pfad aus ``available_languages()``. Eine Namenssuche findet
+    so etwas nie.
+
+    Gesucht wird deshalb auch über den **Ordner**: Wer ihn im Quelltext
+    nennt, liest die Datei, und wessen Tests ihn importieren, hängt an ihr.
+    """
+    _write(tree, "app/reader.py", 'from pathlib import Path\nDIR = Path("daten")\n')
+    _write(tree, "tests/test_reader.py", "from app import reader\n")
+    _write(tree, "daten/tabelle.toml", "wert = 1\n")
+
+    files, reasons = affected([tree / "daten" / "tabelle.toml"], ImportGraph(tree))
+
+    assert "tests/test_reader.py" in _names(files, tree), (
+        "der Test des Moduls, das den Ordner liest, fehlt in der Auswahl"
+    )
+    assert reasons[tree / "tests" / "test_reader.py"] == "nennt tabelle.toml"
+
+
+def test_a_data_file_does_not_drag_in_the_whole_tree(tree: Path) -> None:
+    """Und die Gegenrichtung: Die Kette wird **nicht** weiterverfolgt.
+
+    Die erste Fassung des Fixes nahm die transitive Hülle und machte aus zwei
+    Testdateien fünfundvierzig — über ``app/ui/update_dialog.py`` hängt am
+    Changelog fast jede Datei der Oberfläche. Formal richtig, praktisch
+    wertlos: Eine Auswahl, die zur Suite wird, sagt nichts mehr.
+    """
+    _write(tree, "app/reader.py", 'from pathlib import Path\nDIR = Path("daten")\n')
+    _write(tree, "app/far.py", "from app import reader\n")
+    _write(tree, "tests/test_far.py", "from app import far\n")
+    _write(tree, "daten/tabelle.toml", "wert = 1\n")
+
+    files, _ = affected([tree / "daten" / "tabelle.toml"], ImportGraph(tree))
+
+    assert "tests/test_far.py" not in _names(files, tree), (
+        "ein Test zwei Glieder weiter gehört nicht in die Auswahl einer Datendatei"
+    )
+
+
 def test_a_syntax_error_in_the_tree_does_not_stop_the_selection(tree: Path) -> None:
     """Ein fremder Zwischenstand im geteilten Baum darf die Auswahl nicht abbrechen."""
     _write(tree, "app/broken.py", "def (\n")

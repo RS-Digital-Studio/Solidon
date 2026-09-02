@@ -169,13 +169,60 @@ def _tree_readers(graph: ImportGraph) -> set[str]:
     return found
 
 
+def _folder_pattern(folder: str) -> str:
+    """Der Ordnername, wie er in einem Pfadausdruck steht.
+
+    Gesucht wird er zwischen Anführungszeichen oder Schrägstrichen, damit
+    ``"changelog"`` und ``"website/changelog"`` treffen, ein Bezeichner wie
+    ``changelog_seiten`` aber nicht — sonst zöge jede Datei jeden Nachbarn
+    mit herein.
+    """
+    return "[\"'/]" + re.escape(folder) + "[\"'/]"
+
+
 def _named_readers(graph: ImportGraph, file: Path) -> set[str]:
-    """Testdateien, die eine Nicht-Python-Datei bei ihrem Namen nennen."""
-    needle = file.name
+    """Testdateien, die von einer Nicht-Python-Datei abhängen — auf zwei Wegen.
+
+    **Der Name allein genügt nicht, und das hat am 03.09.2026 eine CI-Runde
+    gekostet.** Für eine geänderte ``changelog/de.md`` nannte diese Funktion
+    ``test_changelog`` und ``test_changes_view``, aber nicht
+    ``test_changelog_website`` — und genau der wurde rot, weil die erzeugten
+    Seiten fehlten. Der Grund: Diese Datei liest den Changelog nie beim Namen.
+    Sie ruft ``tools.make_changelog.path_for(language)``, und der Pfad entsteht
+    dort aus ``available_languages()``.
+
+    Gefragt wird deshalb zweierlei: Wer nennt die **Datei**, und wer hängt an
+    einem Modul, das ihr **Verzeichnis** nennt? Der zweite Weg findet, was über
+    ein Werkzeug gelesen wird — und das ist bei jeder Datendatei die Regel und
+    nicht die Ausnahme.
+    """
     found: set[str] = set()
     for name, path in graph.modules.items():
-        if name.startswith("tests.") and needle in path.read_text(encoding="utf-8"):
+        if name.startswith("tests.") and file.name in path.read_text(encoding="utf-8"):
             found.add(name)
+
+    # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
+    # ``data``. Module, die ihn im Quelltext nennen, lesen die Datei.
+    #
+    # **Nur die direkten Importeure dieser Leser, nicht die ganze Kette.** Die
+    # erste Fassung nahm ``graph.dependents`` und machte aus zwei Testdateien
+    # fünfundvierzig: ``app.ui.update_dialog`` nennt den Changelog, und über
+    # die Oberfläche hängt daran fast jede Datei. Formal richtig, praktisch
+    # wertlos — eine Auswahl, die zur Suite wird, sagt nichts mehr. Wer eine
+    # Datendatei ändert, will die Tests der Module sehen, die sie lesen; wer
+    # das ganze Fenster prüfen will, fährt das Tor.
+    folder = file.parent.name
+    if folder and folder not in {"", ".", "website"}:
+        for name, path in graph.modules.items():
+            if name.startswith("tests.") or not re.search(
+                _folder_pattern(folder), path.read_text(encoding="utf-8")
+            ):
+                continue
+            found.update(
+                importer
+                for importer in graph.importers.get(name, ())
+                if importer.startswith("tests.")
+            )
     return found
 
 
