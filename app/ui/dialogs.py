@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMenu,
     QMessageBox,
     QPlainTextEdit,
@@ -62,6 +63,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
+from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -106,7 +108,12 @@ class AskDialog(QDialog):
         prompt = QLabel(question, self)
         prompt.setWordWrap(True)
         self.list = QListWidget(self)
-        self.list.addItems(choices)
+        # **Anzeigetext und Antwortwert getrennt.** Die Einheitenfrage bot „in"
+        # zur Wahl — im deutschen Fenster kein Wort. Der Kern bekommt weiter
+        # das Kürzel, der Kunde liest „Zoll (in)" (Review 02.09.2026).
+        for choice in choices:
+            item = QListWidgetItem(str(UNIT_NAMES.get(choice, choice)), self.list)
+            item.setData(Qt.ItemDataRole.UserRole, choice)
         self.list.setCurrentRow(0)
         # Kein Lambda: Es fängt ``self`` in seiner Zelle, der Sender gehört
         # ``self``, und damit steht der Ring. Gemessen am 23.08.2026: zehn
@@ -143,7 +150,7 @@ class AskDialog(QDialog):
 
     def chosen(self) -> str | None:
         item = self.list.currentItem()
-        return item.text() if item is not None else None
+        return str(item.data(Qt.ItemDataRole.UserRole)) if item is not None else None
 
 
 class CalibrationDialog(QDialog):

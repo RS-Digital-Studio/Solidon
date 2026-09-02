@@ -575,16 +575,18 @@ class GenerateDialog(QDialog):
         elif self._readiness is mesh.Readiness.ABSENT:
             self.state.setText(
                 tr(
-                    "Es läuft kein Generator. Solidon spricht lokal mit ComfyUI — "
-                    "ohne das bleibt dieser Weg zu, alles andere funktioniert weiter."
+                    "Modelle aus Text oder Bild erzeugt ein zusätzliches Programm auf "
+                    "Ihrem Rechner (ComfyUI). Es ist noch nicht eingerichtet — ohne "
+                    "das bleibt dieser Weg zu, alles andere funktioniert weiter."
                 )
             )
             self.setup.setText(tr("Zusätzliche Programme …"))
         elif self._readiness is mesh.Readiness.NO_NODES:
             self.state.setText(
                 tr(
-                    "ComfyUI läuft, kennt aber die Knoten dieses Ablaufs noch nicht. "
-                    "Solidon legt sie hinein — danach ComfyUI einmal neu starten."
+                    "Das Zusatzprogramm läuft, ihm fehlen aber noch Solidons Bausteine "
+                    "für diesen Ablauf. Solidon legt sie hinein — danach ComfyUI einmal "
+                    "neu starten."
                 )
             )
             self.setup.setText(tr("Knoten und Modell einrichten …"))
@@ -598,8 +600,9 @@ class GenerateDialog(QDialog):
             # Platzhalter ist in der Oberfläche richtig und nur im Kern falsch.
             self.state.setText(
                 tr(
-                    "ComfyUI läuft und kennt die Knoten, aber für den Weg aus Text "
-                    "fehlt das Bildmodell. Ein Bild zu wählen umgeht es. Sonst: "
+                    "Das Zusatzprogramm ist bereit für den Weg aus einem Bild; für den "
+                    "Weg aus Text fehlt noch das Bildmodell. Ein Bild zu wählen umgeht "
+                    "es. Sonst: "
                     "„{file}“ nach „{folder}“ legen und ComfyUI neu starten — im "
                     "Handbuch steht es unter „Welche Modelle Solidon benutzt“."
                 ).format(
@@ -611,8 +614,9 @@ class GenerateDialog(QDialog):
         elif self._readiness is mesh.Readiness.UNKNOWN:
             self.state.setText(
                 tr(
-                    "Auf dem Port antwortet etwas, das keine Auskunft über seine "
-                    "Knoten gibt. Versuchen lässt es sich; ob es geht, sagt der Lauf."
+                    "An der Adresse des Zusatzprogramms antwortet etwas, das keine "
+                    "Auskunft über sich gibt. Versuchen lässt es sich; ob es geht, sagt "
+                    "der Lauf."
                 )
             )
             self.setup.setText(tr("Zusätzliche Programme …"))

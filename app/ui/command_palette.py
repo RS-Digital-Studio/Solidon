@@ -333,6 +333,12 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
 SHORTCUT_MARGIN: Final = 12
 
 
+def first_sentence(text: str) -> str:
+    """Der erste Satz eines ``doc``-Texts — für die zweite Zeile eines Zwillings."""
+    head, dot, _rest = text.partition(". ")
+    return f"{head}." if dot else text
+
+
 class _Rows(QStyledItemDelegate):
     """Zeichnet Titel links und Kürzel **rechtsbündig** in einer Spalte.
 
@@ -435,6 +441,12 @@ class CommandPalette(QDialog):
         # Zwilling gar nicht (:func:`matches`); wer ihn sucht, findet ihn, aber
         # er drängt sich nicht vor seinen Partner.
         hidden_names = hidden_from_the_menu()
+        # Vier Paare tragen wörtlich denselben Titel („Quader anlegen" zweimal)
+        # — im Menü unsichtbar, in der Suche stehen sie untereinander, und der
+        # Unterschied stand nur im Tooltip. Beide Zwillinge bekommen ihren
+        # ``doc``-Satz als zweite Zeile, so wie der gesperrte Fall seinen Grund
+        # (Review 02.09.2026).
+        twins = MENU_TWINS.keys() | MENU_TWINS.values()
         found.sort(key=lambda entry: (rank(entry, query), entry.name in hidden_names))
         for entry in found:
             label = str(entry.title)
@@ -445,6 +457,8 @@ class CommandPalette(QDialog):
                 # halbe Antwort (Regel 18) — und über die Palette stand die
                 # modale Sackgasse offen, die das Menü längst beseitigt hat.
                 label = f"{label}\n{entry.reason}"
+            elif entry.name in twins:
+                label = f"{label}\n{first_sentence(str(entry.doc))}"
             item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, entry.name)
             item.setToolTip(str(entry.doc))

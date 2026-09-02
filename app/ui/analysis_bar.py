@@ -190,22 +190,62 @@ class AnalysisBar(QWidget):
 
         self.selector = BarComboBox(self)
         self.selector.setAccessibleName(tr("Analysekarte"))
+        # **Der Name benennt, der Satz sagt, was die Karte zeigt.** Sieben
+        # Fachwörter ohne ein Wort Erklärung waren für den Kunden ohne
+        # CAD-Kenntnisse ein Ratespiel (Review 02.09.2026); der Satz hängt als
+        # Tooltip und als Beschreibung für Hilfstechniken am Eintrag.
         self.selector.addItem(tr("Keine Karte"), userData=None)
-        for kind, label in (
-            ("wall", tr("Wandstärke")),
-            ("overhang", tr("Überhang")),
-            ("defects", tr("Netzfehler")),
-            ("curvature", tr("Krümmung")),
-            ("features", tr("Merkmale")),
-            ("fits", tr("Passungen")),
-            ("support", tr("Stützbedarf")),
+        self._explain(0, tr("Das Modell in seiner eigenen Farbe, ohne Auswertung."))
+        for kind, label, sentence in (
+            (
+                "wall",
+                tr("Wandstärke"),
+                tr("Färbt, wo eine Wand dünner ist, als der Drucker sauber drucken kann."),
+            ),
+            (
+                "overhang",
+                tr("Überhang"),
+                tr("Färbt Flächen, die so steil hängen, dass der Drucker Stützen braucht."),
+            ),
+            (
+                "defects",
+                tr("Netzfehler"),
+                tr(
+                    "Zeigt Löcher, doppelte Flächen und Stellen, an denen das Netz nicht dicht ist."
+                ),
+            ),
+            (
+                "curvature",
+                tr("Krümmung"),
+                tr("Zeigt, wo die Oberfläche eng gebogen ist — dort werden Schichten sichtbar."),
+            ),
+            (
+                "features",
+                tr("Merkmale"),
+                tr("Hebt Bohrungen, Taschen und Flächen hervor, die sich einzeln ändern lassen."),
+            ),
+            (
+                "fits",
+                tr("Passungen"),
+                tr("Zeigt Stellen, an denen zwei Teile ineinandergreifen, und ob das Spiel passt."),
+            ),
+            (
+                "support",
+                tr("Stützbedarf"),
+                tr("Schätzt, wie viel Stützmaterial das Teil in seiner jetzigen Lage braucht."),
+            ),
         ):
             self.selector.addItem(label, userData=kind)
+            self._explain(self.selector.count() - 1, sentence)
         self.selector.currentIndexChanged.connect(
             weak_slot(self, lambda bar: bar.mapChanged.emit(bar.selector.currentData()))
         )
 
         self.overlay = QCheckBox(tr("Merkmale zeigen"), self)
+        self.overlay.setToolTip(
+            tr("Beschriftet erkannte Bohrungen und Flächen im Bild — zum Anklicken und Ändern.")
+        )
+        self.overlay.setAccessibleDescription(self.overlay.toolTip())
         self.overlay.toggled.connect(self.overlayToggled)
 
         self.legend = MapLegend(self)
@@ -215,6 +255,11 @@ class AnalysisBar(QWidget):
         layout.addWidget(self.selector)
         layout.addWidget(self.overlay)
         layout.addWidget(self.legend, stretch=1)
+
+    def _explain(self, index: int, sentence: str) -> None:
+        """Ein Satz je Karte — als Tooltip und als Beschreibung für Hilfstechniken."""
+        self.selector.setItemData(index, sentence, Qt.ItemDataRole.ToolTipRole)
+        self.selector.setItemData(index, sentence, Qt.ItemDataRole.AccessibleDescriptionRole)
 
     def chosen(self) -> MapKind | None:
         value: MapKind | None = self.selector.currentData()

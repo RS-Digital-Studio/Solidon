@@ -546,7 +546,7 @@ def test_the_dialog_names_the_middle_state_before_the_run(
 
     assert dialog.readiness is mesh.Readiness.NO_NODES
     assert not dialog.available, "bereit ist es damit nicht"
-    assert "kennt aber die Knoten" in dialog.state.text()
+    assert "fehlen aber noch Solidons Bausteine" in dialog.state.text()
     assert not dialog.setup.isHidden(), "und der Weg dorthin steht daneben"
     assert "einrichten" in dialog.setup.text()
 

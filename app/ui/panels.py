@@ -2703,6 +2703,17 @@ class ReportPanel(QWidget):
     ausdrücklich vorsieht.
     """
 
+    slicerRequested = Signal()
+    """Der Kunde will das geprüfte Teil zum Slicer bringen.
+
+    Der leere Bericht ist der häufigste Zustand nach einem sauberen Import —
+    und genau dort stand der Kunde, der wissen wollte, ob er jetzt drucken
+    kann, vor „Keine Befunde." und sonst nichts. Der Weg zum Slicer lag allein
+    hinter *Datei → Druckeinstellungen …*, einem Namen, unter dem ein Laie
+    nichts sucht (Review 02.09.2026). Das Fenster verdrahtet dieses Signal mit
+    demselben Dialog.
+    """
+
     alertsChanged = Signal(int)
     """Wie viele Fehler und Warnungen jetzt im Bericht stehen.
 
@@ -2749,6 +2760,17 @@ class ReportPanel(QWidget):
         self.list.customContextMenuRequested.connect(self._on_menu)
         self.summary = QLabel(tr("Keine Befunde."), self)
         self.summary.setWordWrap(True)
+        # Der letzte Meter: Ist nichts zu beanstanden und liegt ein Körper da,
+        # steht der nächste Klick genau hier — nicht drei Menüs weiter.
+        self.to_slicer = QPushButton(tr("An den Slicer übergeben …"), self)
+        self.to_slicer.setToolTip(
+            tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
+        )
+        self.to_slicer.setStatusTip(self.to_slicer.toolTip())
+        # Kein Hauptknopf: Im Ruhezustand trägt genau ein Element den Akzent,
+        # und das ist *Auf das Bett setzen* (`tests/test_resting_state.py`).
+        self.to_slicer.setVisible(False)
+        self.to_slicer.clicked.connect(self.slicerRequested)
         # Die Kennzahlen darunter: was der Bericht in Sätzen sagt, hier als
         # Zahlen zum Vergleichen und Weitergeben.
         self.facts = QLabel("", self)
@@ -2783,6 +2805,7 @@ class ReportPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         layout.addWidget(self.summary)
+        layout.addWidget(self.to_slicer)
         # Wenn der Filter alles wegnimmt, steht sonst ein leerer Rahmen da und
         # sagt nicht, ob nichts passt oder ob der Bericht leer ist. Ein Label
         # und kein Listeneintrag: gefiltert wird über ``setHidden``, die Liste
@@ -3301,8 +3324,16 @@ class ReportPanel(QWidget):
         if alerts != self._alerts:
             self._alerts = alerts
             self.alertsChanged.emit(alerts)
+        # Der Knopf zum Slicer steht, sobald kein Fehler mehr im Weg ist und
+        # ein Körper da ist — auch neben Warnungen und Hinweisen, die den
+        # Druck nicht verhindern. Ohne Körper gibt es nichts zu übergeben.
+        self.to_slicer.setVisible(counts["error"] == 0 and bool(self._live_objects))
         if not any(counts.values()):
-            self.summary.setText(tr("Keine Befunde."))
+            self.summary.setText(
+                tr("Keine Befunde. Das Teil ist druckbereit.")
+                if self._live_objects
+                else tr("Keine Befunde.")
+            )
             return
         self.summary.setText(
             f"{counts['error']} × {tr('Fehler')} · "

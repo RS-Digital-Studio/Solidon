@@ -384,9 +384,12 @@ def shown() -> tuple[Requirement, ...]:
     Sie verschwinden nur, solange sie da sind. **Fehlt** eines im Paket, ist
     das eine Auskunft, die jemand braucht — Fasen und STEP fehlen dann still,
     und stille Lücken sind das Gegenteil von §36.
+
+    Dieselbe Regel gilt seit dem 02.09.2026 auch aus dem Quelltext heraus:
+    Robert sah die drei Zeilen „vorhanden" beim Testen und fragte, ob man
+    das nicht mitbringen könne — man bringt es mit, und eine Zeile, an der es
+    nichts zu tun gibt, sagt das nicht. Was fehlt, steht überall.
     """
-    if not packaged():
-        return REQUIREMENTS
     return tuple(entry for entry in REQUIREMENTS if entry.kind != "package" or not present(entry))
 
 

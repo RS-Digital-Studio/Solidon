@@ -319,8 +319,14 @@ def folded_categories(category: str, registry: Registry | None = None) -> frozen
         (categories for _title, categories in MENU_GROUPS if category in categories),
         (),
     )
-    populated = {spec.category for spec in source.all()}
-    present = [name for name in in_group if name in populated]
+    # Gezählt wird, was im Menü **eine Zeile hat** — nicht, was irgendeine
+    # Operation trägt. Eine Kategorie, deren Operationen alle Zwillinge aus
+    # ``MENU_TWINS`` sind, ist besetzt und im Menü unsichtbar; sie zählte
+    # trotzdem als eine der Kategorien, unter denen gefaltet wird, und stand
+    # mit null Zeilen in ``sizes``. Heute trifft das keine (gemessen am
+    # 02.09.2026), und genau deshalb steht es hier: Die nächste Zwillingsgruppe
+    # bräuchte sonst niemanden, der daran denkt.
+    present = [name for name in in_group if menu_rows_of([name], source)]
     if len(present) <= 1:
         return frozenset()
     sizes = {name: menu_rows_of([name], source) for name in present}

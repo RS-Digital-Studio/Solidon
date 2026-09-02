@@ -138,6 +138,23 @@ def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
     assert tuple(offered[1:]) == MAP_ORDER
 
 
+def test_every_map_says_what_it_shows(qt_app: QApplication) -> None:
+    """Sieben Fachwörter ohne Erklärung waren ein Ratespiel (Review 02.09.2026).
+
+    Der Name benennt, der Satz sagt, was die Karte zeigt — als Tooltip und als
+    Beschreibung für Hilfstechniken, für jeden Eintrag und für den Haken.
+    """
+    from PySide6.QtCore import Qt
+
+    bar = AnalysisBar()
+    for index in range(bar.selector.count()):
+        for role in (Qt.ItemDataRole.ToolTipRole, Qt.ItemDataRole.AccessibleDescriptionRole):
+            sentence = bar.selector.itemData(index, role)
+            assert isinstance(sentence, str) and sentence.endswith("."), (index, role)
+    assert bar.overlay.toolTip().endswith(".")
+    assert bar.overlay.accessibleDescription() == bar.overlay.toolTip()
+
+
 def test_choosing_a_map_paints_the_body(window: MainWindow) -> None:
     select_plate(window)
     window.analysis_bar.selector.setCurrentIndex(window.analysis_bar.selector.findData("overhang"))

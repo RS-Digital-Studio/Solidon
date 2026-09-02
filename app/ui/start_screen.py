@@ -29,6 +29,7 @@ from PySide6.QtGui import (
     QDragLeaveEvent,
     QDropEvent,
     QImage,
+    QMouseEvent,
     QPainter,
     QPixmap,
 )
@@ -132,12 +133,21 @@ class DropArea(QFrame):
     fileDropped = Signal(Path)
     urlDropped = Signal(str)
     """Ein Verweis aus dem Browser, gezogen statt heruntergeladen (§16.3)."""
+    clicked = Signal()
+    """Ein Klick auf die Fläche — für den, der die Datei noch nicht offen hat.
+
+    Die Fläche sah aus wie ein Bedienelement (Rahmen, Symbol, Satz) und
+    reagierte nur auf Ziehen. Wer klickte, bekam nichts, nicht einmal eine
+    Statuszeile — der erste Meter des Hauptwegs endete am ersten Klick
+    (Review 02.09.2026).
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("dropArea")
         self.setAcceptDrops(True)
         self.setMinimumHeight(DROP_AREA_MIN_HEIGHT)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._hover = False
 
         self.symbol = QLabel(self)
@@ -145,12 +155,20 @@ class DropArea(QFrame):
         size = self.fontMetrics().height() * 2
         self.symbol.setPixmap(icon("import", self).pixmap(size, size))
 
-        hint_text = tr("Modell, Projekt oder Bausteindatei hier ablegen")
-        self.setAccessibleName(hint_text)
+        # „Bausteindatei" steht hier nicht mehr: Beim allerersten Start ist
+        # das Wort bedeutungslos, und die Endungsliste darunter nennt die
+        # Endung ohnehin. Der zweite Satz sagt, dass Klicken auch geht.
+        hint_text = tr("Modell oder Projekt hier ablegen")
+        click_text = tr("oder klicken, um eine Datei zu wählen")
+        self.setAccessibleName(f"{hint_text} — {click_text}")
         hint = QLabel(hint_text, self)
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setWordWrap(True)
         set_level(hint, "section")
+        click_hint = QLabel(click_text, self)
+        click_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        click_hint.setWordWrap(True)
+        set_level(click_hint, "caption")
 
         names = [
             suffix.lstrip(".").upper()
@@ -180,6 +198,7 @@ class DropArea(QFrame):
         layout.addStretch(1)
         layout.addWidget(self.symbol)
         layout.addWidget(hint)
+        layout.addWidget(click_hint)
         layout.addWidget(kinds)
         layout.addWidget(link)
         layout.addStretch(1)
@@ -214,6 +233,13 @@ class DropArea(QFrame):
             return
         self._hover = hover
         self._paint(current_theme())
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt name
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+            event.accept()
+            return
+        super().mousePressEvent(event)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if accepted_path(event) is not None or accepted_url(event) is not None:
@@ -622,6 +648,14 @@ class StartScreen(QWidget):
     openRequested = Signal(Path)
     newRequested = Signal()
     browseRequested = Signal()
+    importRequested = Signal()
+    """Ein Modell öffnen — STL, 3MF, OBJ und die übrigen Formate.
+
+    „Projekt öffnen …" zeigt nur ``.p3d``. Wer Solidon wegen einer
+    heruntergeladenen STL zum ersten Mal startet, klickte dort, sah ein
+    leeres Verzeichnis und war am Ende seines Wegs; der funktionierende Knopf
+    hieß anders und stand in der Werkzeugleiste (Review 02.09.2026).
+    """
     fileDropped = Signal(Path)
     urlDropped = Signal(str)
     """Eine Adresse aus dem Browser ist hier gelandet — dieselbe Handlung wie
@@ -694,6 +728,11 @@ class StartScreen(QWidget):
         make_primary(self.new_button)
         make_large_target(self.new_button)
         self.new_button.clicked.connect(self.newRequested)
+        self.import_button = QPushButton(tr("Modell öffnen …"), self)
+        self.import_button.setToolTip(tr("Eine STL-, 3MF- oder andere Modelldatei einfügen."))
+        self.import_button.setStatusTip(self.import_button.toolTip())
+        make_large_target(self.import_button)
+        self.import_button.clicked.connect(self.importRequested)
         self.open_button = QPushButton(tr("Projekt öffnen …"), self)
         make_large_target(self.open_button)
         self.open_button.clicked.connect(self.browseRequested)
@@ -701,6 +740,7 @@ class StartScreen(QWidget):
         drop = DropArea(self)
         drop.fileDropped.connect(self.fileDropped)
         drop.urlDropped.connect(self.urlDropped)
+        drop.clicked.connect(self.importRequested)
 
         # Die ersten fünfzehn Minuten stehen im Handbuch — aber der Weg
         # dorthin führte über das Hilfemenü des Hauptfensters, das beim ersten
@@ -749,6 +789,7 @@ class StartScreen(QWidget):
         buttons = QHBoxLayout()
         buttons.setSpacing(NORMAL)
         buttons.addWidget(self.new_button)
+        buttons.addWidget(self.import_button)
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.manual_button)
         buttons.addStretch(1)
@@ -942,6 +983,7 @@ class StartScreen(QWidget):
         assert heading is not None
         chain = [
             self.new_button,
+            self.import_button,
             self.open_button,
             self.manual_button,
             self.recent_list,

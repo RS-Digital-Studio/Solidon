@@ -246,6 +246,7 @@ def test_the_tab_chain_follows_the_visible_page_and_scrolls_each_target_into_vie
     guided = [tile for tile in screen.tiles if tile.entry.way]
     screen.new_button.setFocus(Qt.FocusReason.OtherFocusReason)
     for expected in (
+        screen.import_button,
         screen.open_button,
         screen.manual_button,
         screen.recent_list,
@@ -636,7 +637,12 @@ def test_primary_start_actions_are_large_and_examples_are_readable(
             qt_app.processEvents()
             area = screen.findChild(DropArea)
             assert area is not None and area.minimumHeight() == DROP_AREA_MIN_HEIGHT
-            for button in (screen.new_button, screen.open_button, screen.manual_button):
+            for button in (
+                screen.new_button,
+                screen.import_button,
+                screen.open_button,
+                screen.manual_button,
+            ):
                 measures = button.minimumHeight(), button.sizeHint().height(), button.height()
                 assert min(measures) >= TARGET_SIZE, (
                     f"{theme}: {button.text()!r} misst min/sizeHint/aktuell {measures} "
@@ -1075,3 +1081,35 @@ def test_the_filter_survives_a_half_dismantled_screen(screen: StartScreen) -> No
 
     assert screen.eventFilter(screen.new_button, QEvent(QEvent.Type.Destroy)) is False
     screen.eventFilter(screen.new_button, QEvent(QEvent.Type.FocusIn))
+
+
+def test_a_model_file_has_its_own_button_on_the_start_screen(screen: StartScreen) -> None:
+    """Der erste Meter: „Projekt öffnen …" zeigte nur ``.p3d``.
+
+    Wer Solidon wegen einer heruntergeladenen STL startet, braucht einen
+    Knopf, der Modelle öffnet — sonst endet der Weg im leeren Dateidialog
+    (Review 02.09.2026).
+    """
+    seen: list[str] = []
+    screen.importRequested.connect(lambda: seen.append("import"))
+    screen.browseRequested.connect(lambda: seen.append("browse"))
+
+    assert screen.import_button.text() == "Modell öffnen …"
+    screen.import_button.click()
+    assert seen == ["import"]
+
+
+def test_a_click_on_the_drop_area_opens_the_file_dialog(screen: StartScreen) -> None:
+    """Was wie ein Bedienelement aussieht, reagiert auch auf den Klick."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    area = screen.findChild(DropArea)
+    assert area is not None
+    assert area.cursor().shape() == Qt.CursorShape.PointingHandCursor
+    seen: list[str] = []
+    screen.importRequested.connect(lambda: seen.append("import"))
+
+    QTest.mouseClick(area, Qt.MouseButton.LeftButton)
+
+    assert seen == ["import"]

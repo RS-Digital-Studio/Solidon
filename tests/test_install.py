@@ -460,12 +460,14 @@ def test_a_packaged_build_hides_the_rows_it_cannot_change(
     sichtbar: Ein Paket ohne OpenCASCADE hat keine Fasen und kein STEP, und
     eine stille Lücke ist das Gegenteil von §36.
     """
-    monkeypatch.setattr(install, "packaged", lambda: True)
-
-    kinds = {entry.kind for entry in install.shown()}
-    assert "program" in kinds
-    for entry in install.shown():
-        assert entry.kind == "program" or not install.present(entry), entry.id
+    # Gilt im Paket und aus dem Quelltext gleich (02.09.2026): Vorhandenes
+    # ist keine Zeile, Fehlendes immer eine.
+    for packaged in (True, False):
+        monkeypatch.setattr(install, "packaged", lambda packaged=packaged: packaged)
+        kinds = {entry.kind for entry in install.shown()}
+        assert "program" in kinds
+        for entry in install.shown():
+            assert entry.kind == "program" or not install.present(entry), entry.id
 
     monkeypatch.setattr(install, "present", lambda _entry: False)
     assert len(install.shown()) == len(install.REQUIREMENTS), "eine Lücke wird gemeldet"

@@ -91,7 +91,7 @@ QUESTIONS_PADDING = 6
 #: Anfang zum Weiterschreiben, kein Knopf.
 STARTERS: tuple[TranslatableText, ...] = (
     _("Halter, 60 × 40 mm, zwei M4-Löcher"),
-    _("Setz eine M3-Mutternfalle in die Unterseite"),
+    _("Setz unten eine Tasche für eine M3-Mutter ein"),
     _("Mach die Wandstärke 3 mm"),
     _("Teile das Teil, damit es auf das Bett passt"),
 )
@@ -356,8 +356,9 @@ class ChatPanel(QWidget):
             f"{tr('Modell')}: {backend}"
             if available
             else tr(
-                "Der Chat braucht einen Zugang zu einem Sprachmodell. "
-                "Alles andere funktioniert ohne."
+                "Der Chat braucht einen Zugang zu einem Sprachmodell — einen eigenen "
+                "Schlüssel oder ein lokal installiertes Modell. Alles andere "
+                "funktioniert ohne."
             )
         )
         self.setup.setVisible(not available)

@@ -161,7 +161,7 @@ def _stack(theme: Theme) -> str:
     canvas.background()
 
     steps = (
-        (_("Modell laden"), ""),
+        (_("Modell einfügen"), ""),
         (_("Reparieren"), str(_("3 Löcher geschlossen"))),
         (_("Bohrung Ø 4,2 mm"), str(_("bei x = 20 mm"))),
         (_("Auf das Bett"), ""),

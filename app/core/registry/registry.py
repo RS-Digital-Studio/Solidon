@@ -56,7 +56,9 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "colour": _("Farbe"),
     "label": _("Beschriftung"),
     "surface": _("Oberfläche"),
-    "mesh": _("Netz"),
+    # „Netz" allein ist für den Kunden ohne CAD-Kenntnisse kein Wort; der
+    # Name sagt, was die neun Einträge darunter tun (Review 02.09.2026).
+    "mesh": _("Netz glätten und vereinfachen"),
     "variants": _("Varianten"),
 }
 
