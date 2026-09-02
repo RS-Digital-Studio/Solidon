@@ -550,7 +550,31 @@ def ray_span_in_hull(
 
 def read_mesh(payload: bytes, suffix: str) -> MeshData:
     """Parst eine Datei, die schon im Speicher liegt. Noch keine
-    Aufbereitung — die ist §17.1."""
+    Aufbereitung — die ist §17.1.
+
+    **Die Koordinaten kommen, wie sie in der Datei stehen — auch bei GLB und
+    GLTF.** Das ist eine Entscheidung und kein Versehen: Der glTF-2.0-Standard
+    legt in seinem Abschnitt 3.5 (nicht dem des Bauplans) +Y als oben fest,
+    der Schreiber (:func:`app.core.export.writer._glb_bytes`)
+    hält sich daran, und dieser Leser dreht trotzdem nicht zurück. Zwei Gründe,
+    beide am Code belegt:
+
+    * Diese Funktion liest den Payload, der bei einem erzeugten Modell als
+      Quelle im Projekt liegt (``core.generate.into_project`` bettet ihn ein,
+      die Operation ``load`` liest ihn bei **jeder** Auswertung neu). Eine
+      Drehung hier kippte jedes bestehende Projekt mit GLB-Quelle beim nächsten
+      Öffnen, und keine Migration könnte das auffangen — die Lage steht in
+      keinem Parameter, sondern entsteht in der Op.
+    * Der TripoSG-Knoten aus dieser Anwendung
+      (``backends/data/comfyui/ComfyUI-TripoSG-Solidon/nodes.py``) schreibt sein
+      GLB über ``trimesh.Trimesh.export``, und ``trimesh`` dreht nicht. Was von
+      dort kommt, trägt also die Rohkoordinaten des Generators und keine
+      Y-oben-Konvention.
+
+    Die Folge: Ein fremdes, standardkonformes GLB kommt liegend herein, und die
+    Lage muss von Hand gerichtet werden. Das ist der bekannte Rest — er gehört
+    vor eine Entscheidung mit Migrationsweg, nicht in einen stillen Fix.
+    """
     normalised = suffix.lower()
     if normalised not in READABLE_SUFFIXES:
         raise ValidationError(

@@ -312,15 +312,23 @@ def test_every_format_writes_something_readable(export_format: str, profile: Pro
 def test_glb_keeps_the_measurements_it_was_given() -> None:
     """§29: Ein GLB ist zum Zeigen da — und was es zeigt, muss stimmen.
 
-    glTF ist ein Y-oben-Format und Solidon rechnet Z-oben. Wer das beim
-    Schreiben oder Lesen einmal zu oft dreht, verschickt ein liegendes Teil.
+    Der glTF-2.0-Standard verlangt in seinem Abschnitt 3.5 ein Y-oben-Format,
+    Solidon rechnet Z-oben, und der
+    Schreiber dreht deshalb (``writer._glb_bytes``). Der Leser dreht
+    **bewusst nicht** zurück — die Begründung steht in ``read_mesh`` —, also
+    kommt die Höhe auf der Y-Achse wieder herein. Der Körper selbst bleibt
+    derselbe: gleiche Dreiecke, gleiches Volumen, dieselben drei Kantenmaße.
+
+    Gemessen an einem Quader statt am Würfel des Korpus: Bei drei gleichen
+    Kanten ist jede Drehung unsichtbar, und der Test bliebe grün, gleich wie
+    oft jemand dreht.
     """
-    original = body()
+    original = MeshData.of(trimesh.creation.box(extents=(10.0, 20.0, 40.0)))
     back = read_mesh(export_bytes(original, "glb"), ".glb")
 
     assert back.triangle_count == original.triangle_count
     assert back.volume == pytest.approx(original.volume, rel=1e-6)
-    assert back.bounds.size == pytest.approx(original.bounds.size, abs=1e-6)
+    assert back.bounds.size == pytest.approx((10.0, 40.0, 20.0), abs=1e-6)
 
 
 def test_glb_carries_the_slot_colours() -> None:

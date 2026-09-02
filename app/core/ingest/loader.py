@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import mimetypes
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +37,14 @@ from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.types import Finding, IngestInfo, ProgressFn
-from app.core.units import EPS_GEOM, LengthUnit, format_length, to_mm, weld_tolerance
+from app.core.units import (
+    EPS_GEOM,
+    LengthUnit,
+    format_length,
+    to_mm,
+    weld_digits,
+    weld_tolerance,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -59,9 +67,30 @@ MAX_FILE_BYTES: Final = 512 * 1024 * 1024
 #: verschiebt diese mit.
 HEAVY_TRIANGLES: Final = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
 
-#: Was ein druckbares Teil üblicherweise misst, in Millimetern.
+#: Was ein druckbares Teil üblicherweise misst, in Millimetern — die
+#: Untergrenze fest, die Obergrenze als Vorgabe ohne Drucker. Mit Drucker
+#: gilt :func:`plausible_reach`: das Doppelte seiner Bauraumdiagonale, wenn
+#: das größer ist. Ein Teil, das ein 256er Bett füllt, hat 440 mm Diagonale
+#: und lief bis zum 02.09.2026 in die Einheitenfrage, obwohl es in
+#: Millimetern die einzige sinnvolle Lesart hatte; wer ein Teil zum Teilen
+#: einliest, darf auch doppelt so groß sein wie sein Drucker.
 PLAUSIBLE_MIN_MM: Final = 10.0
 PLAUSIBLE_MAX_MM: Final = 300.0
+PLAUSIBLE_REACH_FACTOR: Final = 2.0
+
+
+def plausible_reach(build_volume: tuple[float, float, float] | None) -> float:
+    """Bis zu welcher Hüllquader-Diagonale (mm) eine Lesart plausibel ist.
+
+    Ohne Bauraum die feste Vorgabe; mit Bauraum das Doppelte seiner Diagonale,
+    wenn das mehr ist. Nie weniger als die Vorgabe — ein kleiner Drucker macht
+    kein normales Teil unglaubwürdig.
+    """
+    if build_volume is None:
+        return PLAUSIBLE_MAX_MM
+    diagonal = math.sqrt(sum(float(side) ** 2 for side in build_volume))
+    return max(PLAUSIBLE_MAX_MM, PLAUSIBLE_REACH_FACTOR * diagonal)
+
 
 #: Einheiten, in denen eine Datei geschrieben sein könnte — die
 #: wahrscheinlichste zuerst.
@@ -287,12 +316,13 @@ class UnitGuess:
         return self.unit is not None
 
 
-def detect_unit(diagonal: float) -> UnitGuess:
+def detect_unit(diagonal: float, largest_mm: float = PLAUSIBLE_MAX_MM) -> UnitGuess:
     """Rät die Einheit einer Datei aus der Größe ihres Hüllquaders.
 
     Genau eine plausible Lesart gewinnt. Mehrere plausible Lesarten heißen,
     dass die Frage an den Nutzer geht — das ist Leitprinzip 6, keine
-    Höflichkeit.
+    Höflichkeit. ``largest_mm`` ist die Obergrenze des Plausiblen; die
+    Operation gibt sie aus dem Drucker (:func:`plausible_reach`).
     """
     if diagonal <= EPS_GEOM:
         return UnitGuess(unit=None, candidates=CANDIDATE_UNITS, diagonal=diagonal)
@@ -301,6 +331,15 @@ def detect_unit(diagonal: float) -> UnitGuess:
         for unit in CANDIDATE_UNITS
         if PLAUSIBLE_MIN_MM <= to_mm(diagonal, unit) <= PLAUSIBLE_MAX_MM
     )
+    if not plausible and PLAUSIBLE_MIN_MM <= diagonal <= largest_mm:
+        # **Nur die Millimeter-Lesart darf über die feste Grenze hinaus.** Die
+        # 300 mm trennen Millimeter von Zentimetern: Ein 30-mm-Teil wäre als
+        # 30 cm noch glaubwürdig, ein 40-mm-Teil nicht mehr. Hebt man die
+        # Grenze für alle Lesarten, wird jedes Teil bis 80 mm wieder zur
+        # Frage. Also bleibt sie stehen — und nur, wenn gar nichts plausibel
+        # ist, darf ein großes Teil in Millimetern durch, solange es den
+        # Drucker nicht um mehr als das Doppelte überragt.
+        return UnitGuess(unit="mm", candidates=("mm",), diagonal=diagonal)
     if len(plausible) == 1:
         return UnitGuess(unit=plausible[0], candidates=plausible, diagonal=diagonal)
     if not plausible:
@@ -420,7 +459,7 @@ def normalise(
         was_closed = bool(body.is_watertight)
         tolerance = weld_tolerance(diagonal)
         unwelded = body.copy() if was_closed else None
-        body.merge_vertices(digits_vertex=_digits_for(tolerance))
+        body.merge_vertices(digits_vertex=weld_digits(tolerance))
         welded = len(body.vertices) < before
         # **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.**
         #
@@ -630,15 +669,6 @@ def _open_edge_count(body: trimesh.Trimesh) -> int:
     """
     single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
     return len(single)
-
-
-def _digits_for(tolerance: float) -> int:
-    """Die Verschweißtoleranz so ausgedrückt, wie trimesh sie will:
-    als Nachkommastellen.
-    """
-    if tolerance <= 0.0:
-        return 8
-    return max(0, min(12, round(float(-np.log10(tolerance)))))
 
 
 def _count_components(body: trimesh.Trimesh, findings: list[Finding]) -> int:

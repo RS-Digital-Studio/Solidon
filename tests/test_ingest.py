@@ -25,6 +25,7 @@ from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.project import Project, ProjectSources, checksum, new_project
 from app.core.types import Profile, Source
+from app.core.units import UNIT_NAMES
 from app.i18n import _
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -92,7 +93,10 @@ def test_the_question_says_how_big_each_answer_would_be() -> None:
     assert lines[0] == str(_("In welcher Einheit ist diese Datei gespeichert?"))
     assert len(lines) == 1 + len(guess.candidates), "je Antwort eine Zeile"
     for unit in guess.candidates:
-        assert any(line.startswith(f"{unit}:") for line in lines[1:]), unit
+        # Der Klarname („Zoll (in)") statt des Kürzels — der Kunde liest die
+        # Frage, der Kern bekommt weiter das Kürzel (Review 02.09.2026).
+        label = str(UNIT_NAMES.get(unit, unit))
+        assert any(line.startswith(f"{label}:") for line in lines[1:]), unit
     # Vier Zoll sind 101,6 mm — die Zahl, an der man die Antwort erkennt.
     assert "101.60" in question
     assert "40.00" in question, "und in Zentimetern wären es vierzig"
@@ -781,3 +785,25 @@ def test_the_most_common_finding_says_what_helps() -> None:
     assert not any("Netz → Dezimieren" in line for line in spoken), (
         "der Menüweg im Text war falsch und driftet"
     )
+
+
+def test_a_part_that_fills_the_bed_is_plausible_in_millimetres() -> None:
+    """Die Obergrenze kennt den Bauraum (Durchsicht Einlesen/Export, 02.09.2026).
+
+    Ein Teil, das ein 256er Bett füllt, hat 440 mm Diagonale — ohne Drucker
+    fiel es in die Einheitenfrage, obwohl Millimeter die einzige sinnvolle
+    Lesart sind. Mit Drucker reicht die Grenze bis zum Doppelten seiner
+    Diagonale; ein kleiner Drucker senkt sie nie unter die Vorgabe.
+    """
+    from app.core.ingest.loader import PLAUSIBLE_MAX_MM, detect_unit, plausible_reach
+
+    assert plausible_reach(None) == PLAUSIBLE_MAX_MM
+    assert plausible_reach((80.0, 80.0, 80.0)) == PLAUSIBLE_MAX_MM, "nie unter die Vorgabe"
+    reach = plausible_reach((256.0, 256.0, 256.0))
+    assert reach == pytest.approx(2.0 * (3 * 256.0**2) ** 0.5)
+
+    assert detect_unit(440.0).unit is None, "ohne Drucker bleibt die Frage"
+    assert detect_unit(440.0, reach).unit == "mm"
+    assert detect_unit(30.0, reach).unit is None, "30 mm oder 30 cm — die Frage bleibt"
+    assert detect_unit(60.0, reach).unit == "mm", "60 cm wären zu groß, 60 mm nicht"
+    assert detect_unit(2 * reach, reach).unit is None, "größer als der doppelte Drucker fragt"

@@ -196,6 +196,27 @@ def merge_slots(
     return [slot for slot in order if (slot.name, slot.colour) in here]
 
 
+def by_extruder(slots: Sequence[MaterialSlot]) -> list[MaterialSlot | None]:
+    """Dieselben Slots an ihrem Extruderplatz, mit ``None`` in den Lücken (§20).
+
+    :func:`merge_slots` rechnet die Nummer des **Auftrags** aus und gibt für
+    eine einzelne Platte nur die Filamente zurück, die dort vorkommen. Wer
+    diese Liste danach durchnummeriert, wirft die Rechnung weg: Lässt Platte 2
+    die Farbe von Platte 1 aus, rutscht die verbliebene auf Extruder 0, und
+    derselbe Auftrag bräuchte mittendrin ein Umstecken.
+
+    Der freie Platz bleibt deshalb frei. Was ein Aufrufer daraus macht — ein
+    Platzhalter in der Materialliste, ein Filamentprofil mit den Projektwerten
+    — hängt an seiner Datei; die Reihenfolge ist an allen Stellen dieselbe.
+    """
+    if not slots:
+        return []
+    placed: list[MaterialSlot | None] = [None] * (max(entry.index for entry in slots) + 1)
+    for entry in slots:
+        placed[entry.index] = entry
+    return placed
+
+
 def write_assembly(
     parts: Sequence[AssemblyPart],
     name: str = "",
@@ -469,7 +490,7 @@ def read_objects(payload: bytes) -> list[Part]:
 #: Vorgabe stimmt für eine Datei, die den Standard kennt, und wer sein
 #: ``unit`` weglässt, hat ihn meist nicht gelesen. Dann ist die Frage besser
 #: als die Annahme (Regel 21).
-UNIT_NAMES: Final[tuple[str, ...]] = (
+THREEMF_UNITS: Final[tuple[str, ...]] = (
     "micron",
     "millimeter",
     "centimeter",
@@ -498,7 +519,7 @@ def declared_unit(payload: bytes) -> str | None:
         with zipfile.ZipFile(BytesIO(payload)) as container, container.open(MODEL_PATH) as stream:
             for _event, element in ET.iterparse(stream, events=("start",)):
                 stated = (element.get("unit") or "").strip().lower()
-                return stated if stated in UNIT_NAMES else None
+                return stated if stated in THREEMF_UNITS else None
     except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, NotImplementedError):
         return None
     return None
@@ -509,6 +530,12 @@ def declared_unit(payload: bytes) -> str | None:
 #: Build — ist klein.
 _VERTICES_TAG: Final = f"{{{CORE_NAMESPACE}}}vertices"
 _TRIANGLES_TAG: Final = f"{{{CORE_NAMESPACE}}}triangles"
+
+#: Wie viele Kinder ein geleerter Teilbaum hatte. Kein Attribut des Formats: Es
+#: steht nur in dem Baum, den :func:`_model_without_geometry` baut, und lebt
+#: nicht länger als er. Geschrieben wird es, weil der Scan sonst nicht
+#: unterscheiden kann, ob ein ``mesh`` leer war oder nur ausgeräumt wurde.
+_SCANNED_COUNT: Final = "solidon-scanned-count"
 
 
 def _model_without_geometry(container: zipfile.ZipFile, entry: str) -> tuple[ET.Element, int]:
@@ -522,6 +549,9 @@ def _model_without_geometry(container: zipfile.ZipFile, entry: str) -> tuple[ET.
     bleibt der Spitzenspeicher bei einem einzelnen Block statt bei der ganzen
     Datei; ``ET.fromstring`` dagegen hob das gesamte XML in ET.Element-Objekte,
     rund das Zwölffache der entpackten Größe.
+
+    Was das Leeren mitnähme, bleibt als Zahl stehen (:data:`_SCANNED_COUNT`) —
+    :func:`_carries_geometry` fragt danach.
     """
     triangles = 0
     root: ET.Element | None = None
@@ -533,14 +563,39 @@ def _model_without_geometry(container: zipfile.ZipFile, entry: str) -> tuple[ET.
                 root = element
             if event != "end":
                 continue
-            if element.tag == _TRIANGLES_TAG:
-                triangles += len(element)
+            if element.tag in (_TRIANGLES_TAG, _VERTICES_TAG):
+                found = len(element)
+                if element.tag == _TRIANGLES_TAG:
+                    triangles += found
+                # ``clear`` nimmt die Attribute mit — die Zahl kommt danach.
                 element.clear()
-            elif element.tag == _VERTICES_TAG:
-                element.clear()
+                element.set(_SCANNED_COUNT, str(found))
     if root is None:
         raise ET.ParseError("model file without a root element")
     return root, triangles
+
+
+def _carries_geometry(mesh_node: ET.Element) -> bool:
+    """Ob ein ``mesh``-Knoten Ecken **und** Dreiecke hat.
+
+    Die Vorprüfung von :func:`_mesh_from`, aber ohne eine einzige Koordinate zu
+    lesen — der Scan muss dieselbe Antwort geben wie der Leser, sonst verspricht
+    er dem Stapel einen Körper, den es nicht gibt (§11).
+
+    Sie deckt, was ohne die Zahlen entscheidbar ist: fehlender oder leerer
+    Teilbaum. Was erst an den Werten auffällt — ein Index außerhalb der
+    Eckenliste, unlesbare Koordinaten — bleibt dem Leser; solche Dateien sind
+    kaputt und nicht bloß leer.
+    """
+    return _entries_in(mesh_node, _VERTICES_TAG) > 0 and _entries_in(mesh_node, _TRIANGLES_TAG) > 0
+
+
+def _entries_in(mesh_node: ET.Element, tag: str) -> int:
+    """Wie viele Kinder ein Teilbaum hat — auch wenn der Scan ihn geleert hat."""
+    found = mesh_node.find(tag)
+    if found is None:
+        return 0
+    return len(found) or int(found.get(_SCANNED_COUNT) or 0)
 
 
 def _scan(payload: bytes) -> tuple[int, int]:
@@ -592,18 +647,25 @@ def _scan(payload: bytes) -> tuple[int, int]:
         identifier = item.get("objectid")
         if identifier is None:
             continue
-        bodies += len(
-            _parts_of(
-                identifier,
-                _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
-                _matrix(item.get("transform")),
-                catalog,
-                without_palette,
-                titles,
-                item.get("name") or titles.get(identifier, ""),
-                0,
-            )
-        )
+        for leaf in _parts_of(
+            identifier,
+            _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
+            _matrix(item.get("transform")),
+            catalog,
+            without_palette,
+            titles,
+            item.get("name") or titles.get(identifier, ""),
+            0,
+        ):
+            # Ein Mesh ohne Dreiecke ist kein Körper. Gezählt wurde es
+            # trotzdem, und der Leser überging es — der Stapel bekam damit eine
+            # Objekt-ID zu viel, die Auswertung hielt mit
+            # ``evaluate.object_count`` an, und aus einer Datei mit einem
+            # lesbaren Körper wurde ein Import, der gar nichts einlas.
+            if _carries_geometry(leaf.node):
+                bodies += 1
+            else:
+                _log.warning("3MF body %r has no geometry — not counted", leaf.name)
     return bodies, triangles
 
 
@@ -1064,15 +1126,24 @@ def _material_at(
 def _matrix(text: str | None) -> np.ndarray:
     """Eine 3MF-Transformation — zwölf Zahlen, spaltenweise 4x3 — als
     4x4-Matrix.
+
+    Kein Attribut heißt „steht, wo es steht": die Einheitsmatrix, und dazu gibt
+    es nichts zu sagen. Ein Attribut, das dasteht und sich nicht lesen lässt,
+    ist etwas anderes — das Teil landet dann an einer Stelle, die die Datei
+    nicht meint, und ohne diese Zeile suchte man den Grund in der Geometrie.
+    Gemeldet wie in :func:`_mesh_from`, mit dem Rohtext: Er sagt beim nächsten
+    Fall, welcher Schreiber ihn erzeugt hat.
     """
     if not text:
         return np.eye(4)
     parts = text.replace(",", " ").split()
     if len(parts) != 12:
+        _log.warning("3MF placement has %d value(s) instead of 12: %r", len(parts), text)
         return np.eye(4)
     try:
         values = [float(entry) for entry in parts]
     except ValueError:
+        _log.warning("3MF placement is not readable as numbers: %r", text)
         return np.eye(4)
     matrix = np.eye(4)
     matrix[:3, :3] = np.array(values[:9], dtype=float).reshape(3, 3).T
@@ -1128,6 +1199,12 @@ def _write_geometry(
     Eine Stelle für beide Wege: eine Baugruppe schreibt dieselben Dreiecke wie
     ein einzelner Körper, nur mehrfach. Zwei Versionen davon wären zwei Orte,
     an denen sich eine Materialzuordnung verlieren kann.
+
+    **Sechs Nachkommastellen, nicht fünf.** Der Kern rechnet auf
+    :data:`app.core.units.EPS_GEOM` genau (§11.2, ein Nanometer), und fünf
+    Stellen rundeten gröber, als zwei Punkte auseinanderliegen dürfen, um
+    verschiedene zu sein. Was die Stelle kostet, ist gemessen: an einer Kugel
+    mit 5 120 Dreiecken sechs Prozent mehr XML, gepackt weniger.
     """
     geometry = ET.SubElement(parent, "mesh")
     vertices = ET.SubElement(geometry, "vertices")
@@ -1135,7 +1212,7 @@ def _write_geometry(
         ET.SubElement(
             vertices,
             "vertex",
-            {"x": f"{point[0]:.5f}", "y": f"{point[1]:.5f}", "z": f"{point[2]:.5f}"},
+            {"x": f"{point[0]:.6f}", "y": f"{point[1]:.6f}", "z": f"{point[2]:.6f}"},
         )
 
     triangles = ET.SubElement(geometry, "triangles")
@@ -1175,7 +1252,15 @@ def _assembly_xml(
     resources = ET.SubElement(root, "resources")
     group_id = "1"
     group = ET.SubElement(resources, "basematerials", {"id": group_id})
-    for entry in materials:
+    # **Ein Eintrag je Extruder, auch für die freien Plätze.** Die Nummer eines
+    # Slots gehört dem Auftrag (:func:`merge_slots`), und ein Dreieck zeigt mit
+    # ``p1`` auf die *Stelle* in dieser Gruppe — beides passt nur zusammen,
+    # wenn die Lücken der Platte hier stehen bleiben (:func:`by_extruder`).
+    for position, found in enumerate(by_extruder(materials)):
+        # Ein freier Platz bekommt einen namenlosen Slot: Der Name daraus ist
+        # „Slot N", die Farbe die graue Vorgabe — sichtbar als Platzhalter und
+        # nicht als Wahl.
+        entry = found if found is not None else MaterialSlot(index=position, name="")
         ET.SubElement(
             group,
             "base",
@@ -1186,14 +1271,14 @@ def _assembly_xml(
             # 26.08.2026). In die Datei gehört ohnehin die Übersetzung: Sie
             # wird von einem Slicer gelesen, nicht von Solidon.
             {
-                "name": str(entry.name) or str(_("Slot {number}", number=entry.index)),
+                "name": str(entry.name) or str(_("Slot {number}", number=position)),
                 "displaycolor": _colour(entry),
             },
         )
 
     # Wohin ein objekteigener Slot in der gemeinsamen Liste zeigt. Ohne diese
     # Übersetzung trüge Teil zwei die Farben von Teil eins.
-    positions = {(entry.name, entry.colour): index for index, entry in enumerate(materials)}
+    positions = {(entry.name, entry.colour): entry.index for entry in materials}
 
     build = ET.SubElement(root, "build")
     for number, part in enumerate(parts, start=2):

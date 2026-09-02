@@ -24,6 +24,7 @@ from app.core.ingest.loader import (
     check_unpacked,
     detect_unit,
     normalise,
+    plausible_reach,
 )
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import (
@@ -36,7 +37,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import LengthUnit, format_length, is_zero, to_mm
+from app.core.units import UNIT_NAMES, LengthUnit, format_length, is_zero, to_mm
 from app.i18n import _
 
 _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
@@ -108,7 +109,9 @@ class LoadParams(BaseParams):
 
 @register_op(
     name="load",
-    title=_("Modell laden"),
+    # Heißt wie der Knopf in Werkzeugleiste und Datei-Menü — zwei Namen für
+    # dieselbe Handlung ließen den Kunden einen Unterschied suchen.
+    title=_("Modell einfügen"),
     category="import",
     params=LoadParams,
     consumes=0,
@@ -397,7 +400,7 @@ def unit_question(size: Vec3, candidates: Sequence[LengthUnit]) -> str:
     lines = [str(_("In welcher Einheit ist diese Datei gespeichert?"))]
     for unit in candidates:
         measures = " × ".join(format_length(to_mm(value, unit), with_unit=False) for value in size)
-        lines.append(f"{unit}: {measures} mm")
+        lines.append(f"{UNIT_NAMES.get(unit, unit)}: {measures} mm")
     return "\n".join(lines)
 
 
@@ -408,7 +411,7 @@ def _unit_for(ctx: OpContext, params: LoadParams, bounds: BoundingBox) -> Length
     if params.unit != "auto":
         return cast(LengthUnit, params.unit)
 
-    guess = detect_unit(bounds.diagonal)
+    guess = detect_unit(bounds.diagonal, plausible_reach(ctx.profile.printer.build_volume))
     if guess.unit is not None:
         return guess.unit
 

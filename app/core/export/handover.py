@@ -48,7 +48,7 @@ from app.core.errors import (
     FileWriteError,
     OperationCancelled,
 )
-from app.core.export import slicer_keys, slicer_profiles
+from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_filament_profiles,
@@ -276,11 +276,20 @@ def by_section(
     Prozessprofil wird stillschweigend übergangen — kein Fehler, keine
     Warnung, gedruckt wird mit dem, was zuletzt im Slicer eingestellt war.
 
-    Was die Zuordnungstabelle nicht kennt, geht in den Prozess. Das sind die
-    abgeleiteten Werte aus :func:`_cura_dependants`, und sie hier
-    wegzusortieren hieße, sie gar nicht zu schreiben: die Aufteilung ist eine
-    Aufteilung und kein zweiter Filter. Für Cura ist der Prozess ohnehin der
-    einzige Satz, den es gibt.
+    Was die Zuordnungstabelle nicht kennt, geht in den Prozess. Gemessen am
+    Bestand ist das genau ein Schlüssel, und er kommt aus
+    :func:`_support_spacing`: ``support_material_spacing`` bei PrusaSlicer,
+    ``support_base_pattern_spacing`` bei der Orca-Familie — beide gehören ins
+    Prozessprofil, und dort landen sie so auch. (:func:`_only_chosen_adhesion`
+    erzeugt keine eigenen Schlüssel, es nullt vorhandene, und
+    ``initial_layer_line_width_factor`` aus :func:`_first_layer_width` steht in
+    Curas Tabelle.)
+
+    Sie hier wegzusortieren hieße, sie gar nicht zu schreiben: die Aufteilung
+    ist eine Aufteilung und kein zweiter Filter. Für Cura ist der Prozess
+    ohnehin der einzige Satz, den es gibt — die Ableitungen aus
+    :func:`_cura_dependants` sieht diese Funktion gar nicht, denn sie liest
+    :func:`as_mapping` und nicht :func:`values_for`.
     """
     complete = as_mapping(settings, flavour)
     split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
@@ -871,13 +880,20 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
-    effective = settings_for_handover(settings, setup.flavour, slots)
-    values = values_for(effective, profile, setup.flavour)
+
+    # Gerechnet wird in dem Zweig, der es braucht: Die Orca-Familie schreibt
+    # ihre Werte aus ``by_section`` und ``_orca_*``, nicht aus dieser Abbildung
+    # — sie stand hier und lief bei jedem Lauf mit, ohne gelesen zu werden.
+    def flat_values() -> dict[str, str]:
+        """Alles, was ein Slicer als einen Satz Schlüssel bekommt."""
+        return values_for(
+            settings_for_handover(settings, setup.flavour, slots), profile, setup.flavour
+        )
 
     if setup.flavour == "prusa":
         target = directory / "solidon.ini"
         lines = [f"# {settings.title} — von Solidon geschrieben, nicht von Hand"]
-        lines += [f"{key} = {value}" for key, value in sorted(values.items())]
+        lines += [f"{key} = {value}" for key, value in sorted(flat_values().items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return SlicerConfig(process=target)
 
@@ -902,6 +918,14 @@ def write_config(
         )
         # Je Slot eine Datei. Ohne Slots bleibt es bei einer — der einfarbige
         # Druck ist der Sonderfall mit einem Eintrag, nicht ein anderer Weg.
+        #
+        # **Die Reihenfolge ist die der Liste, nicht ``MaterialSlot.index``.**
+        # ``--load-filaments`` macht aus ihr die Extruderbelegung des Laufs, und
+        # hierher kommt die Belegung **einer Platte**: Der Dialog legt sie mit
+        # ``merge_slots`` ohne ``across`` zusammen, also lückenlos ab null. Die
+        # Lückenfüllung aus :func:`app.core.export.threemf.by_extruder` gehört
+        # deshalb auf den anderen Weg — die 3MF und ihre Beilage
+        # (:func:`project_settings`) tragen die Nummern des ganzen Auftrags.
         written: list[Path] = []
         for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
             own = replace(setup, base_filament=slot.material) if slot.material else setup
@@ -926,7 +950,7 @@ def write_config(
 
     target = directory / "solidon_cura.txt"
     target.write_text(
-        "\n".join(f"{key}={value}" for key, value in sorted(values.items())) + "\n",
+        "\n".join(f"{key}={value}" for key, value in sorted(flat_values().items())) + "\n",
         encoding="utf-8",
     )
     return SlicerConfig(process=target)
@@ -993,8 +1017,14 @@ def project_settings(
     # Listen, in Extruderreihenfolge. Bisher wurde ein gemeinsamer Satz nur
     # vervielfacht; eine PLA-Schrift auf PETG trug damit zwar Weiß als Farbe,
     # aber 240 statt 210 Grad als Temperatur.
-    count = max(1, extruders, len(slots))
-    ordered_slots: tuple[MaterialSlot | None, ...] = tuple(slots) + (None,) * (count - len(slots))
+    #
+    # **Über die Extrudernummer, nicht über die Position in der Liste.** Eine
+    # Platte, die eine frühere Farbe des Auftrags auslässt, hat eine Lücke
+    # (``threemf.by_extruder``); ohne sie stünde die Farbe der zweiten Spule an
+    # erster Stelle und widerspräche der Geometrie derselben Datei.
+    placed = threemf.by_extruder(slots)
+    count = max(1, extruders, len(placed))
+    ordered_slots: tuple[MaterialSlot | None, ...] = tuple(placed) + (None,) * (count - len(placed))
     filament_documents: list[dict[str, object]] = []
     for slot in ordered_slots:
         mine = (

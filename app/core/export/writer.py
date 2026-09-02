@@ -442,13 +442,21 @@ def check_filament_changes(
     if layer <= 0.0:
         return []
     tallest = max((float(entry.mesh.bounds.maximum[2]) for entry in chosen), default=0.0)
+    # **Beide Kanten, nicht nur die obere.** Ein Teil, das erst weiter oben
+    # beginnt — auf einem anderen stehend, in einer Vorrichtung, angehoben —
+    # war in jeder Schicht darunter mitgezählt, und die Meldung nannte Wechsel
+    # für Schichten, in denen sein Filament gar nicht vorkommt.
+    span = {
+        entry.id: (float(entry.mesh.bounds.minimum[2]), float(entry.mesh.bounds.maximum[2]))
+        for entry in chosen
+    }
     shared = 0
     for index in range(int(tallest / layer) + 1):
         height = (index + 0.5) * layer
         present = {
             name
             for entry in chosen
-            if float(entry.mesh.bounds.maximum[2]) >= height
+            if span[entry.id][0] <= height <= span[entry.id][1]
             for name in slots_of[entry.id]
         }
         if len(present) > 1:
@@ -977,6 +985,22 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
     Grundplatte und blauer Schrift kam damit als Farbverlauf über das halbe
     Teil an. Getrennte Netze haben getrennte Ecken — und nebenbei heißen sie
     im Betrachter so, wie die Slots im Dokument heißen.
+
+    **Gedreht wird beim Schreiben, und zwar hier.** Der glTF-2.0-Standard legt
+    in seinem Abschnitt 3.5 (nicht dem des Bauplans) +Y als oben fest, Solidon
+    rechnet Z-oben, und ``trimesh`` dreht nichts: Gemessen
+    an einem Quader 10 auf 20 auf 40 standen die Punktgrenzen der Datei bei
+    ``[-5, -10, -20] … [5, 10, 20]``, ohne Knotenmatrix daneben. Beim Empfänger
+    — Windows-3D-Viewer, three.js, Blender — lag das Teil damit auf dem Rücken,
+    und genau dorthin geht dieses Format.
+
+    **Der Leser dreht bewusst nicht zurück** (:func:`app.core.geom.mesh.read_mesh`).
+    Er liest denselben Payload, der bei einem erzeugten Modell als Quelle im
+    Projekt liegt (``core.generate.into_project``), und zwar bei **jeder**
+    Auswertung: Eine Drehung dort kippte jedes bestehende Projekt mit einer
+    GLB-Quelle beim nächsten Öffnen, ohne dass eine Migration das auffangen
+    könnte — die Lage steht in keinem Parameter. Die Folge steht fest und ist
+    kein Versehen: Eine eigene GLB, wieder hereingeholt, kommt liegend zurück.
     """
     stem = safe_name(name, "teil")
     parts = _parts_by_slot(mesh, slots)
@@ -986,6 +1010,11 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
         bodies = {
             f"{stem}_{safe_name(label, f'slot{index}')}": part for index, (label, part) in parts
         }
+    # Alle Teilnetze mit derselben Matrix, sonst steckt eines quer im anderen.
+    # Kopien sind es ohnehin — ``copy()`` oben, ``submesh`` in _parts_by_slot.
+    upright = trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0))
+    for body in bodies.values():
+        body.apply_transform(upright)
     scene = trimesh.Scene(bodies)  # type: ignore[arg-type]
     data = scene.export(file_type="glb")
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
