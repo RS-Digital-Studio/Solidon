@@ -32,6 +32,21 @@ Am einfachsten: **`/pruefen`** — der Skill fährt beides plus ruff, `ruff
 format --check` und mypy unter einem Schloss, damit parallele Sitzungen sich
 nicht verfälschen.
 
+**Und zwar in zwei Stufen** (Robert, 02.09.2026: „Tests das Nötigste"):
+
+| Wann | Was | Womit |
+|---|---|---|
+| nach jedem Schritt | die Testdateien, die die Änderung berührt | `.venv\Scripts\python.exe tools/affected_tests.py --run` |
+| vor dem Commit | das volle Tor | `/pruefen` |
+
+`affected_tests.py` liest den Importgraphen rückwärts — mittelbare
+Importeure, Baumleser wie `test_language_rules`, Tests, die eine geänderte
+Textdatei beim Namen nennen — und teilt Fensterdateien in eigene Prozesse.
+Ohne Argumente nimmt es alle ungestageten Änderungen im Baum, also bei
+mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
+„das ist die Suite" (eine Änderung an `i18n`, `types.py`, `errors.py` oder
+`log.py`), ist das Tor das Nötigste.
+
 ## Drei Fallen beim Lesen des Ergebnisses
 
 - **Auf den Exit-Code sehen, nicht auf eine Schlusszeile — und ihn nicht
@@ -66,6 +81,9 @@ nicht verfälschen.
 | Abhängigkeiten gegen die Freigabeliste | `test_licences.py` |
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py` |
+| Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
+| Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
+| Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
 
 ## Der Korpus
 

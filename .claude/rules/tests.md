@@ -25,6 +25,8 @@ Regelwerks.
 | `test_way_one/two/three/four.py` | die vier Hauptwege Ende zu Ende |
 | `test_agent_suite.py` | was die Agentenschicht ohne Modell garantiert |
 | `test_interface_limits.py` | Oberflächengrenzen §35: höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite |
+| `test_layer_direction.py` | die vier Schichten importieren nur nach unten (`app/CLAUDE.md`) — auch träge, auch für Typen |
+| `test_lazy_exports.py` | die drei Listen jedes Lazy-Pakets stimmen überein, jeder Eintrag löst auf |
 
 Eine neue Testart bekommt eine eigene Datei; ein neues Fehlerbild wird eine
 Testdatei, kein Sonderfall im Code.
@@ -1243,6 +1245,15 @@ dem die Änderung lag — nicht die, die *jede* Datei prüfen.
 Ein eingegrenzter Prüflauf über `app/ui/` spart Sekunden und lässt eine
 Testdatei durch, die dann einen fremden Torlauf kostet. Beides ist Code, und
 das Tor prüft beides.
+
+**Und welche Testdateien sonst noch betroffen sind, sagt der Importgraph,
+nicht das Gefühl:** `tools/affected_tests.py` liest, wer ein geändertes
+Modul mittelbar importiert, wer den Baum liest (`rglob`, `walk_packages`)
+und wer eine geänderte Nicht-Python-Datei beim Namen nennt — `--why` nennt
+je Datei den Grund, `--split` die Aufrufe (Fensterdateien einzeln), `--run`
+fährt sie. Die Auswahl ist das Werkzeug *zwischen* den Schritten; das Tor vor
+dem Commit bleibt `/pruefen`. Eine Änderung an `types.py` oder `errors.py`
+berührt über den Graphen fast alles, und das Werkzeug sagt das dann auch.
 
 ## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
 
