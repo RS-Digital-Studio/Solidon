@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from app.core.export import threemf
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, read_mesh
-from app.core.ingest.loader import normalise
+from app.core.ingest import threemf
+from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import profiles
 from app.core.scene import evaluate
 from app.core.scene.project import ProjectSources, load
@@ -64,7 +64,7 @@ def test_the_two_blocks_really_do_pass_through_each_other() -> None:
 
 def test_the_coloured_file_comes_back_with_its_groups() -> None:
     payload = (MESHES / "colored.3mf").read_bytes()
-    mesh = read_mesh(payload, ".3mf")
+    mesh = read_model(payload, ".3mf")
 
     groups = threemf.read(payload, mesh.triangle_count)
 
@@ -79,7 +79,7 @@ def test_both_colours_carry_real_area() -> None:
     nichts.
     """
     payload = (MESHES / "colored.3mf").read_bytes()
-    mesh = read_mesh(payload, ".3mf")
+    mesh = read_model(payload, ".3mf")
     groups = threemf.read(payload, mesh.triangle_count)
     assert groups is not None
 

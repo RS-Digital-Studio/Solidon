@@ -31,7 +31,13 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
-from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.mesh import (
+    TRIMESH_SUFFIXES,
+    MeshData,
+    concatenated,
+    face_components,
+    read_mesh,
+)
 from app.core.geom.repair import SMALL_COMPONENT_SHARE
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
@@ -48,6 +54,13 @@ from app.core.units import (
 from app.i18n import _
 
 _log = get_logger(__name__)
+
+#: Endungen, die die Eingangsstufe öffnen kann (§25, „Import"): alles, was
+#: trimesh zu einem Körper liest, und 3MF als Baugruppe. Dateidialog,
+#: Ablagefeld, Kommandozeile und Netzimport lesen dieselbe Liste — eine
+#: eigene Aufzählung in der Oberfläche wäre ein Versprechen, das vom Leser
+#: wegdriften kann.
+READABLE_SUFFIXES: Final[tuple[str, ...]] = (".stl", ".3mf", *TRIMESH_SUFFIXES[1:])
 
 #: Importgrenzen (§32). Eine klare Meldung schlägt einen Speicherüberlauf.
 MAX_TRIANGLES: Final = 20_000_000
@@ -101,6 +114,35 @@ CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
 #: das ist keine Vermutung über die Datei, sondern die einzige Lesart, die
 #: nichts hinzudichtet.
 MEASURED_UNIT: Final[LengthUnit] = "mm"
+
+
+def read_model(payload: bytes, suffix: str) -> MeshData:
+    """Eine Modelldatei aus dem Speicher als **ein** Körper — auch eine 3MF.
+
+    Für alles, was trimesh liest, ist das :func:`app.core.geom.mesh.read_mesh`.
+    Eine 3MF ist eine Baugruppe; wer ihre Körper getrennt will, fragt
+    :func:`app.core.ingest.threemf.read_objects`. Hier werden sie verschweißt,
+    denn das ist, was ein einzelner Rückgabewert sein kann. Die Slots reisen
+    nur aus einer Datei mit einem Körper mit: jedes Teil nummeriert seine
+    Slots ab null, und diese Nummerierungen ohne gemeinsame Palette zu
+    mischen setzte das falsche Filament auf die Hälfte der Dreiecke (§20).
+
+    Bis zum 02.09.2026 tat das ``geom.mesh.read_mesh`` selbst und holte sich
+    den Leser dafür aus ``export`` — die unterste Schicht kannte ein
+    Ausgabemodul. Jetzt entscheidet die Eingangsstufe, was eine Datei ist.
+    """
+    if suffix.lower() == ".3mf":
+        from app.core.ingest import threemf
+
+        parts = threemf.read_objects(payload)
+        if len(parts) == 1:
+            return parts[0].mesh
+        if parts:
+            return MeshData.of(concatenated([part.mesh.raw for part in parts]))
+        # Eine 3MF ohne lesbares Objekt geht denselben Weg wie vorher: trimesh
+        # sagt dann, was mit der Datei nicht stimmt.
+        return read_mesh(payload, suffix)
+    return read_mesh(payload, suffix)
 
 
 def read_local_payload(path: Path) -> bytes:

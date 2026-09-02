@@ -14,10 +14,9 @@ from pathlib import Path
 from typing import cast
 
 from app.core.errors import InternalError, ValidationError
-from app.core.export import threemf
-from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, scaling, translation
-from app.core.ingest import outline
+from app.core.ingest import outline, threemf
 from app.core.ingest.loader import (
     IngestResult,
     check_limits,
@@ -25,6 +24,7 @@ from app.core.ingest.loader import (
     detect_unit,
     normalise,
     plausible_reach,
+    read_model,
 )
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import (
@@ -146,7 +146,7 @@ def load(ctx: OpContext) -> OpResult:
     stem = Path(source.path).stem
     parts = threemf.read_objects(payload) if suffix.lower() == ".3mf" else []
     if not parts:
-        mesh = read_mesh(payload, suffix)
+        mesh = read_model(payload, suffix)
         mesh, slots = _colour_groups(payload, suffix, mesh)
         parts = [threemf.Part(name=params.name or stem, mesh=mesh, slots=tuple(slots))]
     elif params.name and len(parts) == 1:

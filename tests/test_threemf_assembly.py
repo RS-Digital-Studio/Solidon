@@ -22,9 +22,10 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData
+from app.core.ingest import threemf as threemf_reader
 
 CORE = threemf.CORE_NAMESPACE
-PRODUCTION = threemf.PRODUCTION_NAMESPACE
+PRODUCTION = threemf_reader.PRODUCTION_NAMESPACE
 
 
 def mesh_xml(body: trimesh.Trimesh) -> str:
@@ -132,7 +133,7 @@ def test_three_objects_in_one_file_come_back_three_times_not_nine() -> None:
         {"1": cube(10.0), "2": cube(20.0, (40.0, 0.0, 0.0)), "3": cube(30.0, (0.0, 40.0, 0.0))}
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert len(parts) == 3
     volumes = sorted(round(part.mesh.volume) for part in parts)
@@ -145,8 +146,8 @@ def test_one_file_per_object_reads_the_same_way() -> None:
     """
     bodies = {"1": cube(10.0), "2": cube(20.0, (40.0, 0.0, 0.0))}
 
-    single = threemf.read_objects(production_container(bodies, one_file=True))
-    split = threemf.read_objects(production_container(bodies, one_file=False))
+    single = threemf_reader.read_objects(production_container(bodies, one_file=True))
+    split = threemf_reader.read_objects(production_container(bodies, one_file=False))
 
     assert [round(part.mesh.volume) for part in single] == [
         round(part.mesh.volume) for part in split
@@ -157,7 +158,7 @@ def test_the_count_matches_what_is_read() -> None:
     """Der Stapel fragt nach der Anzahl, bevor es die Geometrie gibt (§11)."""
     payload = production_container({"1": cube(10.0), "2": cube(20.0), "3": cube(30.0)})
 
-    assert threemf.count_objects(payload) == len(threemf.read_objects(payload)) == 3
+    assert threemf_reader.count_objects(payload) == len(threemf_reader.read_objects(payload)) == 3
 
 
 def test_the_scan_streams_the_count_without_the_full_parse(
@@ -182,10 +183,10 @@ def test_the_scan_streams_the_count_without_the_full_parse(
 
     monkeypatch.setattr(threemf.ET, "fromstring", kein_vollparse)
 
-    assert threemf.read_objects(payload) == []
+    assert threemf_reader.read_objects(payload) == []
     # Ein Würfel aus trimesh hat zwölf Dreiecke; drei also sechsunddreißig.
-    assert threemf.scan_assembly(payload) == (3, 36)
-    assert threemf.count_objects(payload) == 3
+    assert threemf_reader.scan_assembly(payload) == (3, 36)
+    assert threemf_reader.count_objects(payload) == 3
 
 
 def test_too_many_triangles_are_refused_before_the_parse(
@@ -226,7 +227,7 @@ def test_a_body_arrives_where_the_build_put_it() -> None:
         {"1": cube(10.0)}, transforms={"1": "1 0 0 0 1 0 0 0 1 100 50 25"}
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert len(parts) == 1
     centre = parts[0].mesh.bounds.centre
@@ -243,7 +244,7 @@ def test_a_rotation_in_the_transform_is_applied() -> None:
     # Neunzig Grad um Z: die lange Seite muss entlang Y landen.
     payload = production_container({"1": plate}, transforms={"1": "0 1 0 -1 0 0 0 0 1 0 0 0"})
 
-    size = threemf.read_objects(payload)[0].mesh.bounds.size
+    size = threemf_reader.read_objects(payload)[0].mesh.bounds.size
 
     assert size[0] == pytest.approx(10.0)
     assert size[1] == pytest.approx(30.0)
@@ -261,7 +262,7 @@ def test_the_parts_are_called_what_the_slicer_called_them() -> None:
         names={"1": "Wasserfall_1_Koerper.stl", "2": "Wasserfall_2_Deckel.stl"},
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert [part.name for part in parts] == ["Wasserfall_1_Koerper", "Wasserfall_2_Deckel"]
 
@@ -271,11 +272,11 @@ def test_bodies_with_the_same_name_are_told_apart() -> None:
         {"1": cube(10.0), "2": cube(20.0)}, names={"1": "Halter", "2": "Halter"}
     )
 
-    assert [part.name for part in threemf.read_objects(payload)] == ["Halter 1", "Halter 2"]
+    assert [part.name for part in threemf_reader.read_objects(payload)] == ["Halter 1", "Halter 2"]
 
 
 def test_a_file_without_names_still_names_its_bodies() -> None:
-    parts = threemf.read_objects(production_container({"1": cube(10.0)}))
+    parts = threemf_reader.read_objects(production_container({"1": cube(10.0)}))
 
     assert parts[0].name, "an object without a name is not an object without a name"
 
@@ -284,8 +285,8 @@ def test_a_file_without_names_still_names_its_bodies() -> None:
 
 
 def test_something_that_is_not_a_3mf_is_not_read() -> None:
-    assert threemf.read_objects(b"not a container") == []
-    assert threemf.count_objects(b"not a container") == 0
+    assert threemf_reader.read_objects(b"not a container") == []
+    assert threemf_reader.count_objects(b"not a container") == 0
 
 
 def test_a_triangle_with_a_negative_index_is_dropped_not_wrapped() -> None:
@@ -301,10 +302,10 @@ def test_a_triangle_with_a_negative_index_is_dropped_not_wrapped() -> None:
 
     body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
     xml = re.sub(r'v1="\d+"', 'v1="-1"', objects_file({"1": body}), count=1)
-    obj = threemf._objects_in(ET.fromstring(xml))["1"]
+    obj = threemf_reader._objects_in(ET.fromstring(xml))["1"]
     mesh = obj.find(f"{{{CORE}}}mesh")
 
-    assert threemf._mesh_from(mesh) is None, "ein negativer Index ist kein Körper"
+    assert threemf_reader._mesh_from(mesh) is None, "ein negativer Index ist kein Körper"
 
 
 def zip_with_method(name: str, data: bytes, method: int) -> bytes:
@@ -343,19 +344,19 @@ def test_a_3mf_in_a_packing_we_cannot_open_is_an_answer(method: int) -> None:
     """
     payload = zip_with_method(threemf.MODEL_PATH, b"<model/>", method)
 
-    for lesen in (threemf.read_objects, threemf.count_objects):
+    for lesen in (threemf_reader.read_objects, threemf_reader.count_objects):
         with pytest.raises(ValidationError) as caught:
             lesen(payload)
         assert caught.value.constraint == "unsupported_compression", lesen.__name__
         assert caught.value.suggestions, "Regel 17"
 
     with pytest.raises(ValidationError):
-        threemf.read(payload, 12)
+        threemf_reader.read(payload, 12)
 
 
 def test_a_component_pointing_at_nothing_drops_that_body_only() -> None:
     """Ein kaputter Verweis kostet nicht die anderen drei Teile."""
-    parts = threemf.read_objects(
+    parts = threemf_reader.read_objects(
         production_container({"1": cube(10.0), "2": cube(20.0)}, missing="2")
     )
 
@@ -367,7 +368,7 @@ def test_our_own_single_body_export_reads_back_as_one_part() -> None:
     """§29, runde Reise: was dieses Modul schreibt, liest es auch."""
     body = MeshData.of(cube(10.0))
 
-    parts = threemf.read_objects(threemf.write(body, name="Klotz"))
+    parts = threemf_reader.read_objects(threemf.write(body, name="Klotz"))
 
     assert len(parts) == 1
     assert parts[0].mesh.volume == pytest.approx(1000.0)
@@ -388,10 +389,10 @@ def test_an_assembly_keeps_every_part() -> None:
         [_part((10, 10, 10), "Deckel"), _part((20, 5, 5), "Boden")], "Gehäuse"
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert [entry.name for entry in parts] == ["Deckel", "Boden"]
-    assert threemf.count_objects(payload) == 2
+    assert threemf_reader.count_objects(payload) == 2
 
 
 def test_the_same_colour_becomes_the_same_extruder() -> None:
@@ -436,7 +437,7 @@ def test_a_two_colour_assembly_comes_back_in_its_colours() -> None:
     payload = threemf.write_assembly(
         [_part((10, 10, 10), "Platte", rot), _part((5, 5, 5), "Schrift", blau)]
     )
-    zurueck = threemf.read_objects(payload)
+    zurueck = threemf_reader.read_objects(payload)
 
     assert [entry.name for entry in zurueck] == ["Platte", "Schrift"]
     assert [slot.name for slot in zurueck[0].slots] == ["Rot"]
@@ -458,7 +459,7 @@ def test_a_body_in_two_colours_keeps_both_of_them() -> None:
     payload = threemf.write_assembly(
         [threemf.AssemblyPart(mesh=zweifarbig, name="Schild", slots=(rot, blau))]
     )
-    zurueck = threemf.read_objects(payload)
+    zurueck = threemf_reader.read_objects(payload)
 
     assert [slot.name for slot in zurueck[0].slots] == ["Rot", "Blau"]
     assert zurueck[0].mesh.slots == (0,) * 6 + (1,) * 6
@@ -505,7 +506,7 @@ def test_a_triangle_that_points_past_the_material_list_still_gets_a_slot() -> No
         '<base name="Rot" displaycolor="#FF0000"/><base name="Blau" displaycolor="#0000FF"/>',
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert len(parts[0].slots) == len(set(parts[0].mesh.slots)), "je benutztem Slot ein Eintrag"
     assert [slot.index for slot in parts[0].slots] == [0, 1, 2]
@@ -526,7 +527,7 @@ def test_a_body_that_names_no_material_gets_none() -> None:
         on_object="",
     )
 
-    parts = threemf.read_objects(payload)
+    parts = threemf_reader.read_objects(payload)
 
     assert parts[0].slots == (), "keine Farbe ist keine Farbe"
     assert parts[0].mesh.slots == ()
@@ -560,7 +561,7 @@ def test_a_second_material_group_is_read_as_itself() -> None:
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
         container.writestr(threemf.MODEL_PATH, root)
 
-    parts = threemf.read_objects(buffer.getvalue())
+    parts = threemf_reader.read_objects(buffer.getvalue())
 
     assert [slot.name for slot in parts[0].slots] == ["Rot", "Blau"]
     assert parts[0].mesh.slots == (0, 0, 1, 1)
@@ -575,7 +576,7 @@ def test_a_single_part_assembly_is_just_an_assembly_of_one() -> None:
     """Kein Sonderweg: derselbe Code, ein Eintrag."""
     payload = threemf.write_assembly([_part((10, 10, 10), "Allein")])
 
-    assert threemf.count_objects(payload) == 1
+    assert threemf_reader.count_objects(payload) == 1
 
 
 # --- die Platte reist mit (§29) -------------------------------------------------
@@ -618,7 +619,7 @@ def test_the_geometry_itself_stays_untouched() -> None:
 
     coordinates = [float(value) for value in re.findall(r'x="(-?[0-9.]+)"', text)]
     assert max(coordinates) <= 5.0, "die Punkte selbst bleiben, wo das Dokument sie hat"
-    assert threemf.read_objects(payload)[0].mesh.bounds.centre[0] == pytest.approx(128.0)
+    assert threemf_reader.read_objects(payload)[0].mesh.bounds.centre[0] == pytest.approx(128.0)
 
 
 # --- wenn die Zahlen beschädigt zurückkommen ----------------------------------------
@@ -634,7 +635,7 @@ def test_damaged_numbers_are_read_a_second_time(monkeypatch: pytest.MonkeyPatch)
     ``rtree``. Ein zweiter Anlauf trägt.
     """
     payload = threemf.write_assembly([_part((10, 10, 10), "A")], bed=(256.0, 256.0))
-    echt = threemf._read_numbers
+    echt = threemf_reader._read_numbers
     versuche: list[int] = []
 
     def erst_beschädigt(vertices: object, triangles: object) -> object:
@@ -643,8 +644,8 @@ def test_damaged_numbers_are_read_a_second_time(monkeypatch: pytest.MonkeyPatch)
             raise OverflowError("int too big to convert")
         return echt(vertices, triangles)
 
-    monkeypatch.setattr(threemf, "_read_numbers", erst_beschädigt)
-    parts = threemf.read_objects(payload)
+    monkeypatch.setattr(threemf_reader, "_read_numbers", erst_beschädigt)
+    parts = threemf_reader.read_objects(payload)
 
     assert len(versuche) == 2, "einmal beschädigt, einmal wiederholt"
     assert len(parts) == 1, "und der Körper ist trotzdem da"
@@ -665,9 +666,9 @@ def test_numbers_damaged_twice_are_not_silently_dropped(
     def immer_beschädigt(vertices: object, triangles: object) -> object:
         raise ValueError("invalid literal for int() with base 10: '98968'")
 
-    monkeypatch.setattr(threemf, "_read_numbers", immer_beschädigt)
+    monkeypatch.setattr(threemf_reader, "_read_numbers", immer_beschädigt)
     with caplog.at_level("INFO"):
-        parts = threemf.read_objects(payload)
+        parts = threemf_reader.read_objects(payload)
 
     assert parts == [], "der Körper fällt aus"
     assert any(

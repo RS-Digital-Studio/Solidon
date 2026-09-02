@@ -20,6 +20,7 @@ import trimesh
 from app.core.export import threemf
 from app.core.export.writer import check_filament_changes, export_bytes
 from app.core.geom.mesh import MeshData
+from app.core.ingest import threemf as threemf_reader
 from app.core.knowledge import print_settings, profiles
 from app.core.types import MaterialSlot, PrintSettings, SceneObject
 
@@ -198,14 +199,14 @@ def test_a_body_without_triangles_is_not_counted_as_one() -> None:
     """
     payload = _assembly_with_an_empty_body()
 
-    assert threemf.count_objects(payload) == len(threemf.read_objects(payload)) == 1
+    assert threemf_reader.count_objects(payload) == len(threemf_reader.read_objects(payload)) == 1
 
 
 def test_the_triangle_count_still_covers_the_whole_file() -> None:
     """Der leere Körper ändert nichts an der Größengrenze (§32)."""
     payload = _assembly_with_an_empty_body()
 
-    assert threemf.scan_assembly(payload) == (1, 12)
+    assert threemf_reader.scan_assembly(payload) == (1, 12)
 
 
 # --- ein schwebendes Teil wechselt keine Spule ----------------------------------

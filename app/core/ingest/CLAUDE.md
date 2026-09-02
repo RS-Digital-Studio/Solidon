@@ -10,7 +10,8 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 | Datei | Rolle |
 |---|---|
-| `loader.py` | Die Eingangsstufe selbst — die sechs Schritte; lokale GLTF-Begleitdateien werden sicher eingebettet |
+| `loader.py` | Die Eingangsstufe selbst — die sechs Schritte; lokale GLTF-Begleitdateien werden sicher eingebettet. `read_model` liest eine Datei aus dem Speicher als einen Körper (3MF als Baugruppe verschweißt), `READABLE_SUFFIXES` ist **die** Liste dessen, was sich öffnen lässt |
+| `threemf.py` | 3MF **lesen** — Objekte, Farbgruppen, erklärte Einheit, Baugruppe mit Production-Erweiterung (§17.1, §20). Bis zum 02.09.2026 lag der Leser beim Schreiber in `export/`; die Konstanten des Containers stehen hier, `export/threemf.py` holt sie sich |
 | `ops.py` | Die `load`-Operation. **Auch Laden ist eine Operation** und steht im Stapel |
 | `plan.py` | Welche Operation eine Datei einliest — für Fenster und Kommandozeile |
 | `fetch.py` | Eine Modelldatei aus dem Netz holen (§16.3, §32) |

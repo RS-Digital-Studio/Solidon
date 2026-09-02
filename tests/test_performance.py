@@ -27,12 +27,13 @@ from typing import Any
 import pytest
 
 from app.core import deferred
-from app.core.export.threemf import AssemblyPart, read_objects, write_assembly
+from app.core.export.threemf import AssemblyPart, write_assembly
 from app.core.geom.autosplit import find_plane
 from app.core.geom.measure import wall_thickness
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.section import SectionPlane, cut
 from app.core.ingest.loader import normalise
+from app.core.ingest.threemf import read_objects
 from app.core.knowledge.parts.range_check import has_self_intersections
 from app.core.perceive.features import detect
 from app.core.perceive.maps import wall_thickness_map

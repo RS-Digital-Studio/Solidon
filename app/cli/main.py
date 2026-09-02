@@ -32,8 +32,7 @@ from app.core import activation, manual
 from app.core.bootstrap import load_operations, load_user_parts
 from app.core.errors import CANCEL, AppError, OperationCancelled, UserError, ValidationError
 from app.core.export.writer import FORMAT_SUFFIX, plan_export, write_plan
-from app.core.geom.mesh import read_mesh
-from app.core.ingest.loader import detect_unit, read_local_payload
+from app.core.ingest.loader import detect_unit, read_local_payload, read_model
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
@@ -333,7 +332,7 @@ def _chosen_unit(payload: bytes, incoming: Path, requested: str) -> str:
     """
     if requested != "auto":
         return requested
-    guess = detect_unit(read_mesh(payload, incoming.suffix).bounds.diagonal)
+    guess = detect_unit(read_model(payload, incoming.suffix).bounds.diagonal)
     if guess.unit is not None:
         return guess.unit
     return terminal_ask(

@@ -14,10 +14,7 @@ import io
 import json
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Final
-
-if TYPE_CHECKING:  # das 3MF-Modul braucht MeshData, der Import geht also nur in eine Richtung
-    from app.core.export.threemf import Part
+from typing import Final
 
 import numpy as np
 
@@ -30,8 +27,11 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-#: Endungen, die die Eingangsstufe lesen kann (§25, „Import").
-READABLE_SUFFIXES: tuple[str, ...] = (".stl", ".3mf", ".obj", ".ply", ".off", ".glb", ".gltf")
+#: Endungen, die trimesh hier zu **einem** Körper liest. 3MF steht nicht
+#: darin: Eine 3MF ist eine Baugruppe, und die liest die Eingangsstufe
+#: (:mod:`app.core.ingest.threemf`) — was sie insgesamt öffnen kann, sagt
+#: ``ingest.loader.READABLE_SUFFIXES``.
+TRIMESH_SUFFIXES: tuple[str, ...] = (".stl", ".obj", ".ply", ".off", ".glb", ".gltf")
 
 
 @dataclass(frozen=True, slots=True)
@@ -576,25 +576,15 @@ def read_mesh(payload: bytes, suffix: str) -> MeshData:
     vor eine Entscheidung mit Migrationsweg, nicht in einen stillen Fix.
     """
     normalised = suffix.lower()
-    if normalised not in READABLE_SUFFIXES:
+    if normalised not in TRIMESH_SUFFIXES:
         raise ValidationError(
             field="file",
             detail=_("Dieses Dateiformat kann nicht gelesen werden."),
             constraint="unsupported_format",
-            values={"suffix": suffix, "known": list(READABLE_SUFFIXES)},
+            values={"suffix": suffix, "known": list(TRIMESH_SUFFIXES)},
         )
     if normalised == ".gltf":
         _check_embedded_gltf(payload)
-    if normalised == ".3mf":
-        # Nicht über trimesh: es löst eine Komponente, die in eine externe
-        # Objektdatei zeigt, zur ganzen Datei auf statt zu dem Objekt, das sie
-        # benennt, und gibt jeden Körper einmal je Komponente zurück. Hier
-        # statt oben importiert, weil das 3MF-Modul MeshData braucht.
-        from app.core.export import threemf
-
-        parts = threemf.read_objects(payload)
-        if parts:
-            return _joined(parts)
 
     try:
         # ``load_mesh`` statt ``load(force="mesh")``: trimesh 5 führt ``load``
@@ -690,21 +680,6 @@ def concatenated(parts: list[trimesh.Trimesh]) -> trimesh.Trimesh:
     merged = trimesh.util.concatenate(parts)
     assert isinstance(merged, trimesh.Trimesh)
     return merged
-
-
-def _joined(parts: list[Part]) -> MeshData:
-    """Die Körper einer 3MF als der eine Körper, den diese Funktion verspricht.
-
-    Wer sie getrennt will, fragt :func:`app.core.export.threemf.read_objects`;
-    hier werden sie verschweißt, denn das ist, was ein einzelner Rückgabewert
-    sein kann. Die Slots reisen nur aus einer Datei mit einem Körper mit:
-    jedes Teil nummeriert seine Slots ab null, und diese Nummerierungen ohne
-    gemeinsame Palette zu mischen setzte das falsche Filament auf die Hälfte
-    der Dreiecke (§20).
-    """
-    if len(parts) == 1:
-        return parts[0].mesh
-    return MeshData.of(concatenated([part.mesh.raw for part in parts]))
 
 
 class MeshCodec:

@@ -22,10 +22,10 @@ from app.core.brep import edit, step
 from app.core.brep.kernel import available as brep_available
 from app.core.errors import ValidationError
 from app.core.export import threemf
-from app.core.geom.mesh import READABLE_SUFFIXES, MeshData, read_mesh
+from app.core.geom.mesh import MeshData
 from app.core.geom.texture import face_colours
 from app.core.ingest import loader
-from app.core.ingest.loader import normalise, read_local_payload
+from app.core.ingest.loader import READABLE_SUFFIXES, normalise, read_local_payload, read_model
 from app.core.ingest.outline import OUTLINE_SUFFIXES, extrude
 from app.core.ingest.plan import MODEL_SUFFIXES
 
@@ -72,7 +72,7 @@ def test_every_readable_mesh_format_contains_the_same_body() -> None:
     assert set(payloads) == set(READABLE_SUFFIXES), "eine angebotene Endung hat keine Probe"
 
     for suffix, payload in payloads.items():
-        mesh = read_mesh(payload, suffix)
+        mesh = read_model(payload, suffix)
         assert mesh.triangle_count == 12, suffix
         assert mesh.bounds.size == pytest.approx((20.0, 16.0, 12.0)), suffix
         assert abs(mesh.volume) == pytest.approx(20.0 * 16.0 * 12.0), suffix
@@ -129,7 +129,7 @@ def test_a_local_gltf_embeds_its_companion_file(tmp_path: Path) -> None:
         companion.unlink()
 
     assert b"data:application/octet-stream;base64," in payload
-    mesh = read_mesh(payload, ".gltf")
+    mesh = read_model(payload, ".gltf")
     assert mesh.bounds.size == pytest.approx((20.0, 16.0, 12.0))
 
 
@@ -149,7 +149,7 @@ def test_an_in_memory_gltf_never_leaks_the_parsers_type_error() -> None:
     external = _gltf_bundle()["model.gltf"]
 
     with pytest.raises(ValidationError) as caught:
-        read_mesh(external, ".gltf")
+        read_model(external, ".gltf")
 
     assert caught.value.constraint == "missing_file"
     assert "GLB" in str(caught.value.detail)
@@ -228,7 +228,7 @@ def _pbr_glb() -> bytes:
 
 
 def test_a_gltf_pbr_texture_survives_import_and_normalisation() -> None:
-    imported = read_mesh(_pbr_glb(), ".glb")
+    imported = read_model(_pbr_glb(), ".glb")
     result = normalise(imported, "mm")
 
     colours = face_colours(result.mesh.raw)
@@ -238,7 +238,7 @@ def test_a_gltf_pbr_texture_survives_import_and_normalisation() -> None:
 
 
 def test_imported_colours_survive_the_evaluation_cache() -> None:
-    imported = read_mesh(_pbr_glb(), ".glb")
+    imported = read_model(_pbr_glb(), ".glb")
     normalised = normalise(imported, "mm").mesh
 
     restored = MeshData.from_bytes(normalised.to_bytes())

@@ -350,8 +350,7 @@ def test_a_zip_bomb_is_refused_before_anything_parses_it(monkeypatch) -> None:
     Die Grenze steht hier klein, damit der Test keine 600 MB anlegen muss —
     geprüft wird die Reihenfolge, nicht die Zahl.
     """
-    from app.core.export import threemf
-    from app.core.ingest import loader, plan
+    from app.core.ingest import loader, plan, threemf
 
     monkeypatch.setattr(loader, "MAX_FILE_BYTES", 1_000_000)
 

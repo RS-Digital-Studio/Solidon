@@ -30,7 +30,9 @@ Iterieren schnell bleibt (§31).
 
 **Grundlage**
 
-`mesh.py` (die Mesh-Hülle um den Geometriekern, §9) · `boolean.py` (die Kette
+`mesh.py` (die Mesh-Hülle um den Geometriekern, §9; `read_mesh` liest nur, was
+trimesh zu einem Körper macht — kein 3MF, kein Dateiformatwissen darüber
+hinaus, das liegt in `ingest/`) · `boolean.py` (die Kette
 oben) · `repair.py` (Netze reparieren) · `attributes.py` (Materialslots durch
 eine Operation hindurch behalten, §20) · `enclosure.py` (Konturverschachtelung
 ohne `rtree`)

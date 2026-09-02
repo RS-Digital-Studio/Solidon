@@ -23,9 +23,8 @@ from pathlib import Path
 from typing import Final
 
 from app.core.brep import step as brep_step
-from app.core.export import threemf
-from app.core.geom.mesh import READABLE_SUFFIXES
-from app.core.ingest.loader import check_limits, check_unpacked
+from app.core.ingest import threemf
+from app.core.ingest.loader import READABLE_SUFFIXES, check_limits, check_unpacked
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.scene.history import OperationDraft
 from app.i18n import TranslatableText, _

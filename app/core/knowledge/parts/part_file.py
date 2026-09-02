@@ -1452,7 +1452,7 @@ class PartFileIO:
         """Der Dateivertrag des registrierten Importwegs, falls er einen hat."""
 
         if operation_name == "load":
-            from app.core.geom.mesh import READABLE_SUFFIXES
+            from app.core.ingest.loader import READABLE_SUFFIXES
 
             return READABLE_SUFFIXES
         if operation_name == "load_outline":

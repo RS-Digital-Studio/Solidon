@@ -300,7 +300,7 @@ def test_a_public_https_download_cannot_redirect_to_a_weaker_boundary(final: str
 
 def test_the_readable_formats_are_the_same_ones_the_drop_area_takes() -> None:
     """Zwei Listen, die auseinanderlaufen, sind eine Frage der Zeit."""
-    from app.core.geom.mesh import READABLE_SUFFIXES
+    from app.core.ingest.loader import READABLE_SUFFIXES
 
     assert set(READABLE_SUFFIXES) <= set(ALLOWED_SUFFIXES)
     assert ".step" in ALLOWED_SUFFIXES

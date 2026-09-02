@@ -24,6 +24,7 @@ from app.core.geom.attributes import counts, transfer, used_slots, with_slot
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import decimate
+from app.core.ingest import threemf as threemf_reader
 from app.core.types import MaterialSlot, Profile, SceneObject
 
 NAMESPACE = {"c": threemf.CORE_NAMESPACE}
@@ -284,7 +285,7 @@ def test_3mf_written_here_can_be_read_here_again() -> None:
         MaterialSlot(index=2, name="Schwarz", colour=(0.0, 0.0, 0.0)),
     ]
 
-    groups = threemf.read(threemf.write(body, slots), body.triangle_count)
+    groups = threemf_reader.read(threemf.write(body, slots), body.triangle_count)
 
     assert groups is not None
     assert [entry.name for entry in groups.materials] == ["Rot", "Schwarz"]
@@ -294,16 +295,16 @@ def test_3mf_written_here_can_be_read_here_again() -> None:
 
 
 def test_reading_a_3mf_without_groups_says_so() -> None:
-    assert threemf.read(threemf.write(cube()), 12) is None, "one material is not a group"
-    assert threemf.read(threemf.write(with_slot(cube(), 4)), 12) is None
-    assert threemf.read(b"not a container", 12) is None
+    assert threemf_reader.read(threemf.write(cube()), 12) is None, "one material is not a group"
+    assert threemf_reader.read(threemf.write(with_slot(cube(), 4)), 12) is None
+    assert threemf_reader.read(b"not a container", 12) is None
 
 
 def test_a_3mf_with_a_different_triangle_count_is_not_guessed_at() -> None:
     """Mehrere Körper werden auf dem Weg hinein aneinandergehängt — dann ist
     die Reihenfolge unbekannt.
     """
-    assert threemf.read(threemf.write(with_slot(cube(), 1)), 999) is None
+    assert threemf_reader.read(threemf.write(with_slot(cube(), 1)), 999) is None
 
 
 def test_loading_a_3mf_brings_its_colours_into_the_scene(profile: Profile) -> None:

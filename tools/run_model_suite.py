@@ -28,8 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.bootstrap import load_operations
 from app.core.errors import AppError
-from app.core.geom.mesh import READABLE_SUFFIXES, read_mesh
-from app.core.ingest.loader import normalise
+from app.core.ingest.loader import READABLE_SUFFIXES, normalise, read_model
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
 from app.core.slice.analysis import slice_body
@@ -65,7 +64,7 @@ def run_one(path: Path, layer_height: float, skip_slice: bool) -> Outcome:
         payload = path.read_bytes()
 
         start = time.perf_counter()
-        raw = read_mesh(payload, path.suffix)
+        raw = read_model(payload, path.suffix)
         outcome.seconds["read"] = time.perf_counter() - start
 
         start = time.perf_counter()

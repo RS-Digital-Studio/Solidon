@@ -33,7 +33,8 @@ from app.core.export.writer import (
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.prepare import check_build_volume
 from app.core.geom.transform import apply, place_on_bed, translation
-from app.core.ingest.loader import normalise
+from app.core.ingest import threemf as threemf_reader
+from app.core.ingest.loader import normalise, read_model
 from app.core.knowledge import print_settings, profiles
 from app.core.types import MaterialSlot, Profile, SceneObject, Source, SourceOrigin
 
@@ -306,7 +307,7 @@ def test_every_format_writes_something_readable(export_format: str, profile: Pro
     assert data, f"{export_format} produced no bytes"
     if export_format in ("stl", "obj", "ply", "3mf", "glb"):
         suffix = f".{export_format}"
-        assert read_mesh(data, suffix).triangle_count == 12
+        assert read_model(data, suffix).triangle_count == 12
 
 
 def test_glb_keeps_the_measurements_it_was_given() -> None:
@@ -390,7 +391,7 @@ def test_an_assembly_is_one_file_for_every_object(tmp_path: Path, profile: Profi
 
     assert written.suffix == ".3mf"
     assert len(list(tmp_path.glob("*.3mf"))) == 1
-    assert threemf.count_objects(written.read_bytes()) == 2
+    assert threemf_reader.count_objects(written.read_bytes()) == 2
 
 
 def test_the_assembly_carries_the_object_names(tmp_path: Path, profile: Profile) -> None:
@@ -398,7 +399,7 @@ def test_the_assembly_carries_the_object_names(tmp_path: Path, profile: Profile)
 
     written, _findings = write_assembly(objects, tmp_path, project_name="x", profile=profile)
 
-    assert [part.name for part in threemf.read_objects(written.read_bytes())] == [
+    assert [part.name for part in threemf_reader.read_objects(written.read_bytes())] == [
         "Deckel",
         "Boden",
     ]
@@ -416,7 +417,7 @@ def test_only_the_named_plate_goes_into_the_file(tmp_path: Path, profile: Profil
         objects, tmp_path, project_name="x", profile=profile, plate=0
     )
 
-    assert threemf.count_objects(written.read_bytes()) == 1
+    assert threemf_reader.count_objects(written.read_bytes()) == 1
 
 
 def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Profile) -> None:
@@ -440,7 +441,7 @@ def test_without_a_named_plate_every_plate_goes_in(tmp_path: Path, profile: Prof
     )
 
     payload = written.read_bytes()
-    assert threemf.count_objects(payload) == 2, "beide Teile in einer Datei"
+    assert threemf_reader.count_objects(payload) == 2, "beide Teile in einer Datei"
 
     beilage = zipfile.ZipFile(BytesIO(payload)).read(threemf.SETTINGS_PATH).decode("utf-8")
     assert beilage.count("<plate>") == 2, "und beide Platten benannt"
@@ -747,7 +748,7 @@ def test_an_exported_3mf_carries_each_filaments_temperature(
         str(settings.temperature.nozzle_first_layer),
         "215",
     ]
-    imported = threemf.read_objects(written.read_bytes())
+    imported = threemf_reader.read_objects(written.read_bytes())
     assert [[str(slot.name) for slot in part.slots] for part in imported] == [
         ["PETG Schwarz"],
         ["PLA Weiß"],

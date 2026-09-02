@@ -22,9 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from app.core.export import threemf
-from app.core.geom.mesh import read_mesh
-from app.core.ingest.loader import HEAVY_TRIANGLES, normalise
+from app.core.ingest import threemf
+from app.core.ingest.loader import HEAVY_TRIANGLES, normalise, read_model
 from app.core.perceive.features import detect
 from app.core.slice.analysis import slice_body
 
@@ -50,7 +49,7 @@ def find(name: str) -> Path:
 
 def load(name: str):
     path = find(name)
-    return normalise(read_mesh(path.read_bytes(), path.suffix), "mm")
+    return normalise(read_model(path.read_bytes(), path.suffix), "mm")
 
 
 def test_a_plain_printed_part_goes_through_without_a_complaint() -> None:
