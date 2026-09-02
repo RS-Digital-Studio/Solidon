@@ -22,7 +22,7 @@ import math
 from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import NamedTuple
+from typing import Final, NamedTuple
 
 import numpy as np
 
@@ -89,6 +89,9 @@ BROAD_FACE_SHARE = 0.05
 #: Zwei mal zwei Millimeter ist die kleinste Fläche, an der jemand etwas
 #: ansetzt: darunter passt weder ein Schraubenkopf noch ein lesbarer Buchstabe.
 MIN_FACE_AREA = 4.0
+#: Ab welchem Kosinus zwei Flächennormalen als gleichgerichtet gelten — nur
+#: dann kann die eine die andere verdecken, also innen liegen.
+PARALLEL_FACE_COSINE: Final = 0.99
 
 #: Zylinder unter diesem Durchmesser sind keine Merkmale, sondern Artefakte.
 #:
@@ -1952,9 +1955,30 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     # entschiede wieder diese Stelle.
     entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
 
+    # **Innen oder außen — entschieden hier, wo alle Flächen bekannt sind.**
+    # Die Innenwand einer ausgehöhlten Dose zeigt in dieselbe Richtung wie die
+    # gegenüberliegende Außenwand, und benannt nach der Normalen hießen beide
+    # „Rückseite" (Handbuchbild vom 02.09.2026: viermal derselbe Name, nur die
+    # Fläche in mm² unterschied sie). Innen ist eine Fläche, wenn eine andere
+    # mit gleicher Richtung in dieser Richtung weiter außen liegt. Die
+    # Aufrufer von ``feature_name`` lesen das nur noch.
+    normals = [np.asarray(body.face_normals[facet[0]], dtype=float) for facet, _a, _c in entries]
+    centres = [np.asarray(centre, dtype=float) for _f, _a, centre in entries]
+    inner_flags: list[bool] = []
+    for index, (normal, centre) in enumerate(zip(normals, centres, strict=True)):
+        inner_flags.append(
+            any(
+                other != index
+                and float(np.dot(normals[other], normal)) > PARALLEL_FACE_COSINE
+                and float(np.dot(centres[other] - centre, normal)) > EPS_GEOM
+                for other in range(len(entries))
+            )
+        )
+
     features: list[Feature] = []
-    for number, (facet, area, centre) in enumerate(entries, start=1):
-        normal = np.asarray(body.face_normals[facet[0]], dtype=float)
+    for number, ((facet, area, centre), normal, inner) in enumerate(
+        zip(entries, normals, inner_flags, strict=True), start=1
+    ):
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -1964,6 +1988,7 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
                     "area": round(area, 4),
                     "normal": (float(normal[0]), float(normal[1]), float(normal[2])),
                     "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
+                    "inner": inner,
                 },
                 face_indices=tuple(int(index) for index in facet),
             )

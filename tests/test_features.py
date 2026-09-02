@@ -1513,3 +1513,84 @@ def test_the_cache_keeps_only_what_it_promises() -> None:
     assert len(_FEATURE_CACHE) == CACHE_LIMIT, (
         f"{len(_FEATURE_CACHE)} gemerkte Netze bei einer Grenze von {CACHE_LIMIT}"
     )
+
+
+def test_the_inner_wall_of_a_hollow_box_knows_it_is_inside() -> None:
+    """Innen- und Außenwand zeigen in dieselbe Richtung und hießen gleich.
+
+    Handbuchbild vom 02.09.2026, Objektbaum der ausgehöhlten Dose: „Rückseite
+    3200 mm²" und „Rückseite 2797 mm²", viermal so — der Kunde konnte die
+    Innenwand nur an der Zahl erkennen. Die Wahrnehmung entscheidet jetzt an
+    der Stelle, an der sie alle Flächen kennt: Eine Fläche liegt innen, wenn
+    eine gleichgerichtete weiter außen liegt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    outer = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    cavity = trimesh.creation.box(extents=(34.0, 24.0, 20.0))
+    cavity.apply_translation((0.0, 0.0, 13.0 + 10.0))  # oben offen, Boden bleibt
+    hollow = trimesh.boolean.difference([outer, cavity])
+    faces = [f for f in detect(MeshData.of(hollow)).values() if f.kind == "face"]
+
+    def side(normal: tuple[float, float, float], *, inner: bool) -> list:
+        return [
+            f
+            for f in faces
+            if tuple(round(v) for v in f.params["normal"]) == normal
+            and bool(f.params.get("inner")) is inner
+        ]
+
+    # Die Rückwand: außen bei y = +15 zeigt +y; die Innenwand vorn zeigt auch +y.
+    assert side((0, 1, 0), inner=False), "die Außenwand nach hinten gilt als außen"
+    assert side((0, 1, 0), inner=True), "die Innenwand nach hinten gilt als innen"
+    assert side((0, -1, 0), inner=False) and side((0, -1, 0), inner=True)
+    # Der Boden: nur eine Fläche zeigt nach unten — außen. Nach oben zeigen
+    # zwei: der Rand der Wände bei z = 20 (außen) und der Boden innen bei
+    # z = 3 — und der liegt unter dem Rand, also innen. Genau so heißt er im
+    # Objektbaum: „Oberseite innen" ist der Grund der Dose.
+    assert side((0, 0, -1), inner=False) and not side((0, 0, -1), inner=True)
+    assert side((0, 0, 1), inner=False), "der Rand der Wände ist außen"
+    assert side((0, 0, 1), inner=True), "der Boden innen liegt unter dem Rand"
+
+
+def test_a_solid_box_has_no_inner_faces() -> None:
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    faces = [f for f in detect(MeshData.of(box)).values() if f.kind == "face"]
+
+    assert len(faces) == 6
+    assert not any(f.params.get("inner") for f in faces)
+
+
+def test_an_inner_face_is_named_as_such() -> None:
+    from app.core.types import Feature
+    from app.ui.labels import feature_name
+
+    outer = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"normal": (0.0, 1.0, 0.0), "centre": (0.0, 15.0, 10.0), "area": 800.0},
+    )
+    inner = Feature(
+        id="face_2",
+        kind="face",
+        provenance="detected",
+        params={
+            "normal": (0.0, 1.0, 0.0),
+            "centre": (0.0, -12.0, 12.0),
+            "area": 600.0,
+            "inner": True,
+        },
+    )
+
+    assert feature_name("face_1", outer) != feature_name("face_2", inner)
+    assert feature_name("face_1", outer) in feature_name("face_2", inner)
