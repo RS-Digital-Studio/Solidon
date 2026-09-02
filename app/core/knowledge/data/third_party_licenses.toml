@@ -286,3 +286,229 @@ path = "third_party_licenses/keyutils-1.6.3.txt"
 runtime = ["keyutils"]
 source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git/plain/LICENCE.LGPL?h=v1.6.3"
 sha256 = "0cbf0118e6f56383c7737db04c52c0ec3da0e0787ff4507ed500c336c0fb782a"
+
+# ---------------------------------------------------------------------------
+# Systembibliotheken, die das Linux-Paket bündelt
+#
+# Nacherfasst am 03.09.2026, und zwar ohne Roberts Zustimmung, weil sie seit
+# 0.2.1 im ausgelieferten Paket liegen: Regel 22 verlangt den Eintrag vor einer
+# **neuen** Abhängigkeit; hier ist keine dazugekommen, sondern eine
+# undokumentierte wird dokumentiert — der schlechtere von beiden Zuständen war
+# der bisherige. Zu widerrufen ist das jederzeit; der Registerpunkt nennt es.
+#
+# Fünf Lizenzkennungen kommen dafür neu in die Freigabeliste: AFL-2.1 (D-Bus),
+# FTL (FreeType), bzip2-1.0.6, libpng-2.0 und die gemeinfreie libselinux. Bei
+# D-Bus und libcap ist die Wahl innerhalb der Doppellizenz keine
+# Ermessensfrage: Regel 15 schließt den GPL-Zweig aus.
+#
+# Welche Datei zu welcher Familie gehört, steht in
+# `make_sbom.LINUX_LIBRARY_FAMILIES`; die Fassung liest `dpkg-query` beim Bau
+# aus dem Paket des Bauservers.
+# ---------------------------------------------------------------------------
+
+[[runtime]]
+id = "libx11"
+name = "libX11"
+source = "https://gitlab.freedesktop.org/xorg/lib/libx11"
+
+[[runtime]]
+id = "expat"
+name = "Expat"
+source = "https://github.com/libexpat/libexpat"
+
+[[runtime]]
+id = "fontconfig"
+name = "fontconfig"
+source = "https://gitlab.freedesktop.org/fontconfig/fontconfig"
+
+[[runtime]]
+id = "freetype"
+name = "FreeType"
+source = "https://gitlab.freedesktop.org/freetype/freetype"
+
+[[runtime]]
+id = "glib"
+name = "GLib"
+source = "https://gitlab.gnome.org/GNOME/glib"
+
+[[runtime]]
+id = "pcre2"
+name = "PCRE2"
+source = "https://github.com/PCRE2Project/pcre2"
+
+[[runtime]]
+id = "dbus"
+name = "D-Bus"
+source = "https://gitlab.freedesktop.org/dbus/dbus"
+
+[[runtime]]
+id = "systemd"
+name = "systemd"
+source = "https://github.com/systemd/systemd"
+
+[[runtime]]
+id = "libgcrypt"
+name = "Libgcrypt"
+source = "https://gnupg.org/software/libgcrypt/"
+
+[[runtime]]
+id = "libgpg-error"
+name = "libgpg-error"
+source = "https://gnupg.org/software/libgpg-error/"
+
+[[runtime]]
+id = "libcap"
+name = "libcap"
+source = "https://git.kernel.org/pub/scm/libs/libcap/libcap.git"
+
+[[runtime]]
+id = "lz4"
+name = "LZ4"
+source = "https://github.com/lz4/lz4"
+
+[[runtime]]
+id = "xz"
+name = "XZ Utils"
+source = "https://github.com/tukaani-project/xz"
+
+[[runtime]]
+id = "zstd"
+name = "Zstandard"
+source = "https://github.com/facebook/zstd"
+
+[[runtime]]
+id = "brotli"
+name = "Brotli"
+source = "https://github.com/google/brotli"
+
+[[runtime]]
+id = "bzip2"
+name = "bzip2"
+source = "https://sourceware.org/bzip2/"
+
+[[runtime]]
+id = "util-linux"
+name = "util-linux"
+source = "https://github.com/util-linux/util-linux"
+
+[[runtime]]
+id = "libuuid"
+name = "libuuid"
+source = "https://github.com/util-linux/util-linux"
+
+[[runtime]]
+id = "libselinux"
+name = "libselinux"
+source = "https://github.com/SELinuxProject/selinux"
+
+[[runtime]]
+id = "libpng"
+name = "libpng"
+source = "https://github.com/pnggroup/libpng"
+
+[[runtime]]
+id = "zlib"
+name = "zlib"
+source = "https://github.com/madler/zlib"
+
+[[text]]
+path = "third_party_licenses/libX11-1.8.7.txt"
+runtime = ["libx11"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libx11/-/raw/libX11-1.8.7/COPYING"
+sha256 = "d99b60c2cb79aada8272dc4fb5a79c886027077968f851287e8fddea793baf7d"
+
+[[text]]
+path = "third_party_licenses/expat-2.6.1.txt"
+runtime = ["expat"]
+source = "https://raw.githubusercontent.com/libexpat/libexpat/R_2_6_1/expat/COPYING"
+sha256 = "122f2c27000472a201d337b9b31f7eb2b52d091b02857061a8880371612d9534"
+
+[[text]]
+path = "third_party_licenses/fontconfig-2.15.0.txt"
+runtime = ["fontconfig"]
+source = "https://gitlab.freedesktop.org/fontconfig/fontconfig/-/raw/2.15.0/COPYING"
+sha256 = "51a51aa9823704fd90bccc616cdd17ebabb5b2b3e9cbde886ca02c7002288067"
+
+[[text]]
+path = "third_party_licenses/freetype-FTL-2.13.2.txt"
+runtime = ["freetype"]
+source = "https://gitlab.freedesktop.org/freetype/freetype/-/raw/VER-2-13-2/docs/FTL.TXT"
+sha256 = "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1"
+
+[[text]]
+path = "third_party_licenses/LGPL-2.1.txt"
+runtime = ["glib", "systemd", "libgcrypt", "libgpg-error", "util-linux"]
+source = "https://www.gnu.org/licenses/old-licenses/lgpl-2.1.txt"
+sha256 = "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
+
+[[text]]
+path = "third_party_licenses/pcre2-10.42.txt"
+runtime = ["pcre2"]
+source = "https://raw.githubusercontent.com/PCRE2Project/pcre2/pcre2-10.42/LICENCE"
+sha256 = "87d884eceb7fc54611470ce9f74280d28612b0c877adfc767e9676892a638987"
+
+[[text]]
+path = "third_party_licenses/dbus-AFL-2.1.txt"
+runtime = ["dbus"]
+source = "https://gitlab.freedesktop.org/dbus/dbus/-/raw/dbus-1.14.10/COPYING"
+sha256 = "ab16324368f400cba266adeec84f06ff8e01f9bbd647998689b9d782ba30162c"
+
+[[text]]
+path = "third_party_licenses/libcap-2.66.txt"
+runtime = ["libcap"]
+source = "https://raw.githubusercontent.com/mhiramat/libcap/master/License"
+sha256 = "088cabde4662b4121258d298b0b2967bc1abffa134457ed9bc4a359685ab92bc"
+
+[[text]]
+path = "third_party_licenses/lz4-1.9.4.txt"
+runtime = ["lz4"]
+source = "https://raw.githubusercontent.com/lz4/lz4/v1.9.4/lib/LICENSE"
+sha256 = "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+
+[[text]]
+path = "third_party_licenses/xz-5.4.5.txt"
+runtime = ["xz"]
+source = "https://raw.githubusercontent.com/tukaani-project/xz/v5.4.5/COPYING"
+sha256 = "65c298618c87307368c66e7304f7db4352814135b4f85c347b389162540c259f"
+
+[[text]]
+path = "third_party_licenses/zstd-1.5.5.txt"
+runtime = ["zstd"]
+source = "https://raw.githubusercontent.com/facebook/zstd/v1.5.5/LICENSE"
+sha256 = "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+
+[[text]]
+path = "third_party_licenses/brotli-1.1.0.txt"
+runtime = ["brotli"]
+source = "https://raw.githubusercontent.com/google/brotli/v1.1.0/LICENSE"
+sha256 = "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+
+[[text]]
+path = "third_party_licenses/bzip2-1.0.8.txt"
+runtime = ["bzip2"]
+source = "https://sourceware.org/git/?p=bzip2.git;a=blob_plain;f=LICENSE;hb=bzip2-1.0.8"
+sha256 = "67fc67381a47fe66f07b5f6705472d26314e6bcdf949f92c2cdde64521bbfdce"
+
+[[text]]
+path = "third_party_licenses/libuuid-BSD-3.txt"
+runtime = ["libuuid"]
+source = "https://raw.githubusercontent.com/util-linux/util-linux/v2.39.3/Documentation/licenses/COPYING.BSD-3-Clause"
+sha256 = "9b718a9460fed5952466421235bc79eb49d4e9eacc920d7a9dd6285ab8fd6c6d"
+
+[[text]]
+path = "third_party_licenses/libselinux-3.5.txt"
+runtime = ["libselinux"]
+source = "https://raw.githubusercontent.com/SELinuxProject/selinux/libselinux-3.5/libselinux/LICENSE"
+sha256 = "86657b4c0fe868d7cbd977cb04c63b6c667e08fa51595a7bc846ad4bed8fc364"
+
+[[text]]
+path = "third_party_licenses/libpng-1.6.43.txt"
+runtime = ["libpng"]
+source = "https://raw.githubusercontent.com/pnggroup/libpng/v1.6.43/LICENSE"
+sha256 = "7317e078e2d3b5d7ba5a6159e650945153262b44b76f6700f8e9edb261c5143e"
+
+[[text]]
+path = "third_party_licenses/zlib-1.3.txt"
+runtime = ["zlib"]
+source = "https://raw.githubusercontent.com/madler/zlib/v1.3/LICENSE"
+sha256 = "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"

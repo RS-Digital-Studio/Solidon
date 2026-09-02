@@ -75,6 +75,16 @@ allowed = [
   "LGPL-2.1-or-later",
   "LGPL-3.0-only",
   "LicenseRef-Matplotlib",
+  # Die fünf unten kommen aus den Systembibliotheken, die das Linux-Paket
+  # bündelt (`make_sbom.LINUX_FAMILY_COMPONENTS`), und sind am 03.09.2026
+  # nacherfasst worden: Sie liegen seit 0.2.1 im ausgelieferten Paket, es ist
+  # also keine Aufnahme, sondern die Dokumentation dessen, was ohnehin
+  # verteilt wird. Alle fünf sind freizügig oder gemeinfrei.
+  "AFL-2.1",          # D-Bus — Doppellizenz mit GPL-2.0+, die Regel 15 ausschließt
+  "FTL",              # FreeType — dasselbe Muster: FTL oder GPL-2.0
+  "bzip2-1.0.6",      # bzip2, BSD-artig
+  "libpng-2.0",       # libpng, BSD-artig
+  "LicenseRef-libselinux-public-domain",  # „public domain software, i.e. not copyrighted"
 ]
 
 # Exakt geprüfte Copyleft-Kennungen. Ein erlaubter OR-Zweig kann gewählt

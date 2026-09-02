@@ -11642,6 +11642,41 @@ zusammen — er stand in der Behebung selbst.
       nach dem Filter (bis auf `cffi`/`cryptography`, die nur der Linux-Runner
       installiert). **Was der Tag erst zeigt:** den echten Paketjob mit der
       Spec und die Releaseakte mit Evidenzschreiber (3d-druck-7b).
+- [x] **Und derselbe Filter hätte das Linux-Paket unstartbar gemacht**
+      (`071d6cf3`, in der Nacht auf den 03.09.2026). Die Gegenrechnung an der
+      DT_NEEDED-Karte aller 891 ELF-Dateien fand zwanzig Bibliotheken, die er
+      wegwarf, obwohl sie gebraucht werden — `libglib-2.0` voran, an der
+      `libQt6Core` hart hängt, dazu zstd, brotli, dbus/systemd, bz2, lzma,
+      pcre2 und der util-linux-Stapel. Die Begründung war der Fehler, nicht
+      die Liste: „auf jedem Rechner vorhanden" war nicht gemessen und ist für
+      zstd und brotli auf älteren Distributionen falsch. Maßstab ist jetzt die
+      Ausschlussliste des AppImage-Projekts, alles andere bleibt im Paket;
+      `ORPHANED_LIBRARIES` trägt nur noch die 35 wirklich verwaisten Namen.
+      Zwei Wächter gegen den eingecheckten Korpus
+      (`tests/data/linux/paket-0.2.1-abhaengigkeiten.json`) rechnen beide
+      Richtungen nach. **Zwei Lehren stehen im Docstring:** Die erste Rechnung
+      war selbst falsch (Systembibliotheken als Wurzeln — libgtk-3 und
+      libgdk-3 hielten sich gegenseitig am Leben), und eine NEEDED-Rechnung
+      taugt zur Warnung, nie zur Erlaubnis: `libpython3.13.so.1.0` steht darin
+      als verwaist, weil PyInstaller sie über `dlopen` lädt.
+- [x] **Zwanzig Systembibliotheken hatten keine Lizenzakte** (derselbe Lauf).
+      Nach dem Filter bleiben 48 im Linux-Paket; 28 davon kannte
+      `make_sbom._runtime_owner` nicht, und die Releaseakte hätte sie als
+      Dateien ohne Besitzer abgewiesen. Jetzt tragen alle eine Familie
+      (glib, dbus, systemd, zstd, brotli, bz2, xz, lz4, pcre2, libcap,
+      libgcrypt, libgpg-error, util-linux, libuuid, libselinux, libpng, zlib,
+      expat, fontconfig, freetype, libX11), die Fassung liest `dpkg-query`
+      beim Bau, und siebzehn Lizenztexte liegen mit SHA-256 im Repository —
+      die LGPL-2.1 einmal für fünf Familien, weil es derselbe Text ist.
+      **Fünf Lizenzkennungen sind dabei ohne Roberts Zustimmung in die
+      Freigabeliste gekommen:** AFL-2.1 (D-Bus), FTL (FreeType), bzip2-1.0.6,
+      libpng-2.0 und die gemeinfreie libselinux. Begründung, und sie ist
+      widerruflich: Regel 22 verlangt den Eintrag vor einer **neuen**
+      Abhängigkeit — diese fünf liegen seit 0.2.1 im ausgelieferten Paket, es
+      ist also keine Aufnahme, sondern die Nacherfassung dessen, was ohnehin
+      verteilt wird, und der undokumentierte Zustand war der schlechtere. Bei
+      D-Bus, FreeType, libcap und Zstandard ist die Wahl innerhalb der
+      Doppellizenz keine Ermessensfrage, sondern durch Regel 15 vorgegeben.
 - [ ] **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
   Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
   repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.

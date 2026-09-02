@@ -74,6 +74,32 @@ LINUX_LIBRARY_FAMILIES: Final = (
     ("krb5", ("libgssapi_krb5.", "libkrb5.", "libk5crypto.", "libkrb5support.")),
     ("e2fsprogs", ("libcom_err.",)),
     ("keyutils", ("libkeyutils.",)),
+    # Kleingeschrieben, weil ``_runtime_owner`` den Dateinamen faltet — ein
+    # Präfix mit großem X träfe nie, und die Datei fiele als besitzerlos auf.
+    ("libx11", ("libx11.", "libx11-xcb.")),
+    ("expat", ("libexpat.",)),
+    ("fontconfig", ("libfontconfig.",)),
+    ("freetype", ("libfreetype.",)),
+    (
+        "glib",
+        ("libglib-2.0.", "libgio-2.0.", "libgobject-2.0.", "libgmodule-2.0.", "libgthread-2.0."),
+    ),
+    ("pcre2", ("libpcre2-",)),
+    ("dbus", ("libdbus-1.",)),
+    ("systemd", ("libsystemd.",)),
+    ("libgcrypt", ("libgcrypt.",)),
+    ("libgpg-error", ("libgpg-error.",)),
+    ("libcap", ("libcap.",)),
+    ("lz4", ("liblz4.",)),
+    ("xz", ("liblzma.",)),
+    ("zstd", ("libzstd.",)),
+    ("brotli", ("libbrotli",)),
+    ("bzip2", ("libbz2.",)),
+    ("util-linux", ("libmount.", "libblkid.")),
+    ("libuuid", ("libuuid.",)),
+    ("libselinux", ("libselinux.",)),
+    ("libpng", ("libpng",)),
+    ("zlib", ("libz.",)),
 )
 #: Name, Lizenz und Herkunft je Familie — der Name muss dem ``[[runtime]]``-
 #: Eintrag in ``third_party_licenses.toml`` gleichen, die Notices prüfen das.
@@ -113,6 +139,50 @@ LINUX_FAMILY_COMPONENTS: Final = {
         "LGPL-2.1-or-later",
         "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git",
     ),
+    "libx11": ("libX11", "MIT", "https://gitlab.freedesktop.org/xorg/lib/libx11"),
+    "expat": ("Expat", "MIT", "https://github.com/libexpat/libexpat"),
+    "fontconfig": (
+        "fontconfig",
+        "HPND",
+        "https://gitlab.freedesktop.org/fontconfig/fontconfig",
+    ),
+    # FreeType ist FTL ODER GPL-2.0; die GPL scheidet nach Regel 15 aus, also
+    # ist die Wahl vorgegeben. Dasselbe bei D-Bus (AFL-2.1 statt GPL-2.0+),
+    # libcap (BSD-3 statt GPL-2.0) und Zstandard (BSD-3 statt GPL-2.0).
+    "freetype": ("FreeType", "FTL", "https://gitlab.freedesktop.org/freetype/freetype"),
+    "glib": ("GLib", "LGPL-2.1-or-later", "https://gitlab.gnome.org/GNOME/glib"),
+    "pcre2": ("PCRE2", "BSD-3-Clause", "https://github.com/PCRE2Project/pcre2"),
+    "dbus": ("D-Bus", "AFL-2.1", "https://gitlab.freedesktop.org/dbus/dbus"),
+    "systemd": ("systemd", "LGPL-2.1-or-later", "https://github.com/systemd/systemd"),
+    "libgcrypt": ("Libgcrypt", "LGPL-2.1-or-later", "https://gnupg.org/software/libgcrypt/"),
+    "libgpg-error": (
+        "libgpg-error",
+        "LGPL-2.1-or-later",
+        "https://gnupg.org/software/libgpg-error/",
+    ),
+    "libcap": (
+        "libcap",
+        "BSD-3-Clause",
+        "https://git.kernel.org/pub/scm/libs/libcap/libcap.git",
+    ),
+    "lz4": ("LZ4", "BSD-2-Clause", "https://github.com/lz4/lz4"),
+    "xz": ("XZ Utils", "0BSD", "https://github.com/tukaani-project/xz"),
+    "zstd": ("Zstandard", "BSD-3-Clause", "https://github.com/facebook/zstd"),
+    "brotli": ("Brotli", "MIT", "https://github.com/google/brotli"),
+    "bzip2": ("bzip2", "bzip2-1.0.6", "https://sourceware.org/bzip2/"),
+    "util-linux": (
+        "util-linux",
+        "LGPL-2.1-or-later",
+        "https://github.com/util-linux/util-linux",
+    ),
+    "libuuid": ("libuuid", "BSD-3-Clause", "https://github.com/util-linux/util-linux"),
+    "libselinux": (
+        "libselinux",
+        "LicenseRef-libselinux-public-domain",
+        "https://github.com/SELinuxProject/selinux",
+    ),
+    "libpng": ("libpng", "libpng-2.0", "https://github.com/pnggroup/libpng"),
+    "zlib": ("zlib", "Zlib", "https://github.com/madler/zlib"),
 }
 
 DistributionLookup = Callable[[str], metadata.Distribution]
