@@ -193,6 +193,14 @@ Eine Vermietung, ein Verleih oder eine Unterlizenzierung sind nicht erlaubt.
   insbesondere § 69d und § 69e UrhG zur Fehlerbehebung und zur Herstellung
   von Interoperabilität — bleiben unberührt.
   - Die Lizenzprüfung umgehen, entfernen oder unwirksam machen.
+  - Die Software der Regierung Russlands oder in Russland niedergelassenen
+  juristischen Personen, Organisationen oder Einrichtungen verkaufen,
+  liefern, bereitstellen oder für sie nutzen; dasselbe gilt für Belarus und
+  für jede Person, gegen die Sanktionen der Europäischen Union bestehen.
+  Software für Industriedesign und Fertigung, darunter CAD, ist in Anhang
+  XXXIX der Verordnung (EU) Nr. 833/2014 ausdrücklich erfasst (Art. 5n
+  Abs. 2b). Mit der Nutzung bestätigen Sie, keine solche Person zu sein und
+  die Software nicht an eine solche weiterzugeben.
 
 Diese Beschränkungen gelten nicht, soweit zwingendes Recht oder die Lizenz
 eines fremden Bestandteils die Handlung erlaubt. Insbesondere dürfen Sie

@@ -59,16 +59,16 @@ dieser Rückzahlung Entgelte berechnet.
 
 ## Vorzeitiges Erlöschen des Widerrufsrechts
 
-Das Widerrufsrecht erlischt bei einem Vertrag über die Lieferung von nicht
-auf einem körperlichen Datenträger befindlichen digitalen Inhalten **vorzeitig**,
-wenn
+Das Widerrufsrecht erlischt bei einem Vertrag über die Bereitstellung von
+nicht auf einem körperlichen Datenträger befindlichen digitalen Inhalten
+**vorzeitig** (§ 356 Abs. 6 Nr. 2 BGB), wenn
 
-1. Sie **ausdrücklich zugestimmt** haben, dass wir mit der Ausführung des
+1. wir mit der **Erfüllung des Vertrags begonnen** haben,
+2. Sie **ausdrücklich zugestimmt** haben, dass wir mit der Erfüllung des
    Vertrags vor Ablauf der Widerrufsfrist beginnen,
-2. Sie Ihre **Kenntnis davon bestätigt** haben, dass Sie durch Ihre
-   Zustimmung mit Beginn der Ausführung des Vertrags Ihr Widerrufsrecht
-   verlieren, und
-3. wir Ihnen eine **Bestätigung des Vertrags** nach § 312f Abs. 3 BGB zur
+3. Sie Ihre **Kenntnis davon bestätigt** haben, dass durch Ihre Zustimmung
+   mit Beginn der Erfüllung des Vertrags Ihr Widerrufsrecht erlischt, und
+4. wir Ihnen eine **Bestätigung des Vertrags** nach § 312f Abs. 3 BGB zur
    Verfügung gestellt haben.
 
 Wir fragen die Zustimmung und die Bestätigung im Bestellvorgang ausdrücklich

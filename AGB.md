@@ -107,9 +107,12 @@ Bedingungen und die Folgen stehen in der Widerrufsbelehrung unter
 <https://solidon3d.de/widerruf.html>.
 
 **Wichtig:** Bei digitalen Inhalten erlischt das Widerrufsrecht vorzeitig,
-wenn Sie der sofortigen Ausführung ausdrücklich zustimmen und bestätigen,
-dass Sie dadurch Ihr Widerrufsrecht verlieren (§ 356 Abs. 6 BGB). Wir fragen
-beides im Bestellvorgang ausdrücklich ab. Wer die Lizenz sofort einlösen
+sobald wir mit der Erfüllung begonnen haben, wenn Sie zuvor der Erfüllung vor
+Ablauf der Widerrufsfrist ausdrücklich zugestimmt und Ihre Kenntnis bestätigt
+haben, dass Ihr Widerrufsrecht damit erlischt, und Sie unsere Bestätigung
+nach § 312f Abs. 3 BGB erhalten haben (§ 356 Abs. 6 Nr. 2 BGB). Wir fragen
+Zustimmung und Kenntnisbestätigung im Bestellvorgang getrennt und
+ausdrücklich ab. Wer die Lizenz sofort einlösen
 will, stimmt zu; wer sich die Frist offenhalten will, stimmt nicht zu und
 bekommt den Schlüssel nach Ablauf der Widerrufsfrist.
 

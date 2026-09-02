@@ -34,7 +34,14 @@ DOCUMENTS = {
 }
 
 #: Seiten, die ein Verbraucher vor dem Kauf erreichen können muss.
-REQUIRED_LINKS = ("agb.html", "widerruf.html", "eula.html", "impressum.html", "datenschutz.html")
+#: Was jede Startseite immer verlinkt. AGB und Widerrufsbelehrung sind Verkaufs-
+#: texte; während der Demo ohne Angebot bleiben sie unverlinkt (Entscheidung
+#: Robert, 02.09.2026: „erstmal nur das demorelevante") und kommen mit dem
+#: ersten Preis zurück — ``test_sale_texts_appear_with_the_first_price``.
+REQUIRED_LINKS = ("eula.html", "impressum.html", "datenschutz.html")
+SALE_LINKS = ("agb.html", "widerruf.html")
+#: Der Satz, mit dem die Startseite sagt, dass noch nicht verkauft wird.
+NO_OFFER_YET = "noch kein Angebot"
 
 #: Was ein Platzhalter ist: Großbuchstaben in eckigen Klammern.
 PLACEHOLDER = re.compile(r"\[[A-ZÄÖÜ][A-ZÄÖÜ .\-,]{3,}\]")
@@ -147,6 +154,23 @@ def test_the_selling_page_links_every_legal_text(page_name: str) -> None:
     assert not missing, f"{page_name} verlinkt nicht: {', '.join(missing)}"
 
 
+def test_sale_texts_appear_with_the_first_price() -> None:
+    """Ohne Angebot keine AGB und keine Widerrufsbelehrung in der Fußzeile.
+
+    Die Verkaufstexte bleiben im Repository und unter ihrer Adresse erreichbar
+    (``noindex``); verlinkt werden sie erst, wenn die Startseite einen Preis
+    nennt. Solange dort „noch kein Angebot" steht, ist ein Link auf sie ein
+    Versprechen, das der Kunde nicht einlösen kann.
+    """
+    index = (WEBSITE / "index.html").read_text(encoding="utf-8")
+    linked = [name for name in SALE_LINKS if f"/{name}" in index]
+    if NO_OFFER_YET in index:
+        assert not linked, f"Demo ohne Angebot, aber verlinkt: {', '.join(linked)}"
+    else:
+        missing = [name for name in SALE_LINKS if name not in linked]
+        assert not missing, f"Angebot ohne Verkaufstexte: {', '.join(missing)}"
+
+
 def test_a_page_with_a_placeholder_says_that_it_is_a_draft() -> None:
     """Ein Platzhalter darf stehen — aber nicht heimlich.
 
@@ -186,11 +210,19 @@ def test_public_legal_pages_do_not_carry_an_internal_review_disclaimer() -> None
 
 
 def test_current_digital_content_withdrawal_paragraph_is_named() -> None:
-    """Seit der Neufassung steht das Erlöschen für digitale Inhalte in Absatz 6."""
+    """Seit der Neufassung steht das Erlöschen für digitale Inhalte in Absatz 6.
+
+    Geprüft am Gesetzestext (gesetze-im-internet.de, 02.09.2026): Absatz 5
+    regelt Dienstleistungen, Absatz 6 die nicht auf einem körperlichen
+    Datenträger befindlichen digitalen Inhalte — Fassung ab 19.06.2026 (Gesetz
+    zur Änderung des Verbrauchervertrags- und des Versicherungsvertragsrechts,
+    BGBl. 2026 I Nr. 28). Nummer 2 nennt dort vier Voraussetzungen (a bis d);
+    die Widerrufsbelehrung zählt sie in derselben Reihenfolge auf.
+    """
     agb = (ROOT / "AGB.md").read_text(encoding="utf-8")
 
-    assert "§ 356 Abs. 6 BGB" in agb
-    assert "§ 356 Abs. 5 BGB" not in agb
+    assert "§ 356 Abs. 6 Nr. 2 BGB" in agb
+    assert "§ 356 Abs. 5" not in agb
 
 
 def test_third_party_rights_take_precedence_over_proprietary_terms() -> None:

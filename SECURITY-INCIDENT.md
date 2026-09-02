@@ -91,7 +91,8 @@ Bereitschaft.
 - [ ] In der Plattform ist Robert Schneider als **Primary** zugeordnet; eine
   von Robert namentlich bestimmte, erreichbare Person ist als **Secondary**
   hinterlegt und hat ihren Zugang selbst getestet.
-- [ ] Das für Deutschland zuständige **CSIRT** ist in der Plattform ausgewählt;
+- [ ] Das für Deutschland zuständige **CSIRT** (das BSI, Art. 14 Abs. 7 CRA:
+  Mitgliedstaat der Hauptniederlassung) ist in der Plattform ausgewählt;
   die Zuordnung und der sichtbare Plattformstatus sind im privaten
   Betriebsnachweis festgehalten.
 - [ ] `support@solidon3d.de` alarmiert **24 Stunden an sieben Tagen** per

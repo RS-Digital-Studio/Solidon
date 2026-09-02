@@ -351,7 +351,17 @@ def page(title: str, body: str, siblings: str) -> str:
     )
 
 
-def main() -> int:
+#: Der Satz, mit dem die Startseite sagt, dass noch nicht verkauft wird. Solange
+#: er dort steht, verlinkt keine Fußzeile die Verkaufstexte (AGB, Widerruf) —
+#: Entscheidung Robert, 02.09.2026: „erstmal nur das demorelevante". Die Seiten
+#: selbst bleiben erzeugt und unter ihrer Adresse erreichbar (``noindex``).
+NO_OFFER_YET = "noch kein Angebot"
+SALE_TEXTS = frozenset({"agb.html", "widerruf.html"})
+
+
+def footer_links() -> dict[str, str]:
+    """Die Rechtstext-Verweise der Fußzeile — ohne Verkaufstexte, solange die
+    Startseite kein Angebot nennt."""
     links = {
         "eula.html": "Lizenzvertrag",
         "agb.html": "AGB",
@@ -359,6 +369,14 @@ def main() -> int:
         "impressum.html": "Impressum",
         "datenschutz.html": "Datenschutz",
     }
+    index = WEBSITE / "index.html"
+    if index.is_file() and NO_OFFER_YET in index.read_text(encoding="utf-8"):
+        return {name: label for name, label in links.items() if name not in SALE_TEXTS}
+    return links
+
+
+def main() -> int:
+    links = footer_links()
 
     for source_name, target_name, title, contract in DOCUMENTS:
         source = ROOT / source_name

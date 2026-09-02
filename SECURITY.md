@@ -50,5 +50,10 @@ verstärkt.
 
 Bei einer nachweislich aktiv ausgenutzten Schwachstelle oder einem schweren
 Sicherheitsvorfall prüfen wir unverzüglich, welche gesetzlichen Meldungen und
-Fristen für den konkreten Fall gelten. Für die meldende Person bleibt der Weg
-derselbe: eine Nachricht an die oben genannte Adresse genügt.
+Fristen für den konkreten Fall gelten. Ab dem 11. September 2026 melden wir
+aktiv ausgenutzte Schwachstellen und schwere Sicherheitsvorfälle nach
+Artikel 14 der Cyber-Resilienz-Verordnung (EU) 2024/2847 an die zuständige
+Stelle — für Deutschland das BSI — und informieren betroffene Nutzer über den
+Update-Hinweis der Anwendung und die Sicherheitsseite der Website. Für die
+meldende Person bleibt der Weg derselbe: eine Nachricht an die oben genannte
+Adresse genügt.

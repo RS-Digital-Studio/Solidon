@@ -2166,6 +2166,16 @@ def test_no_delivered_page_is_an_island() -> None:
         # der Verkaufsseite darauf würde einen Umstand bewerben, den die
         # meisten nie haben.
         and page.name != "offline-aktivierung.html"
+        # **AGB und Widerrufsbelehrung sind Verkaufstexte.** Solange die
+        # Startseite „noch kein Angebot" sagt, verlinkt sie keine Fußzeile
+        # (Entscheidung Robert, 02.09.2026: „erstmal nur das demorelevante");
+        # sie bleiben erzeugt und unter ihrer Adresse erreichbar. Mit dem
+        # ersten Preis kommen sie zurück — `tests/test_legal.py` hält beides
+        # zusammen (`test_sale_texts_appear_with_the_first_price`).
+        and not (
+            page.name in {"agb.html", "widerruf.html"}
+            and "noch kein Angebot" in (WEBSITE / "index.html").read_text(encoding="utf-8")
+        )
     )
     assert len(delivered) >= 30, f"nur {len(delivered)} Seiten gefunden"
 
