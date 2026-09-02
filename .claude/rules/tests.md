@@ -27,6 +27,7 @@ Regelwerks.
 | `test_interface_limits.py` | Oberflächengrenzen §35: höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite |
 | `test_layer_direction.py` | die vier Schichten importieren nur nach unten (`app/CLAUDE.md`) — auch träge, auch für Typen |
 | `test_lazy_exports.py` | die drei Listen jedes Lazy-Pakets stimmen überein, jeder Eintrag löst auf |
+| `test_hard_rules.py` | was auf jeder Plattform gilt, aber nur auf einer läuft: Puffergrenzen im Quelltext, Nutzerverzeichnisse je Plattform |
 
 Eine neue Testart bekommt eine eigene Datei; ein neues Fehlerbild wird eine
 Testdatei, kein Sonderfall im Code.
