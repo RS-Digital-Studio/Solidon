@@ -43,3 +43,31 @@ Wortlaut — drei Arten, an der Sache vorbeizuprüfen.** Ein Vergleich, der die
 Anwesenheit eines Satzes prüft statt seines Inhalts; ein Erzeuger, der „ist
 der Satz leer" fragt statt „steht er im Katalog"; ein Korpus, der die Form
 einer Datei prüft und nie ihre Brauchbarkeit.
+
+## Und die vierte Art: die Voraussetzung, die nur auf dieser Maschine gilt
+
+Am 03.09.2026 nahm ein neuer Test das erstbeste Paket aus `website/dl/`
+(`min(...glob("*.exe"))`). Hier liegen acht, weil hier gebaut wird — im
+Repository liegt keines (`.gitignore`), und auf dem Runner existiert der
+Ordner nicht einmal. Der Test war lokal grün und in der CI **auf allen drei
+Plattformen** rot (`ValueError: min() iterable argument is empty`), und er
+blockierte einen Release-Lauf. Der Fix ist derselbe Satz wie oben: Wer eine
+Voraussetzung braucht, **stellt sie her** — zwei Zeilen, die die Datei
+anlegen, und ein `finally`, das sie wegräumt. Ein `skip` wäre der falsche
+Ausweg gewesen: Dann prüfte ausgerechnet dort nichts, wo der Zähler des
+Kunden läuft.
+
+**Und die Technik, die so etwas in dreißig Sekunden findet**, statt es dem
+Tag-Lauf zu überlassen: den Test in einem frischen Arbeitsbaum fahren.
+
+```
+git worktree add -q --detach <pfad> HEAD
+cd <pfad> && <venv>/python.exe -m pytest tests/<datei>.py -q
+git worktree remove --force <pfad>
+```
+
+Dort fehlt alles, was nicht im Repository steht — `dist/`, `website/dl/`,
+`packaging/build/` —, also genau das, was eine lokale Voraussetzung
+ausmacht. Über vier Testdateien gefahren: 178 grün, 13 übersprungen, alle
+Skips plattformbedingt und in der Linux-CI aktiv. Der Baum wird nur gelesen;
+committet wird dort nie ([[probe-die-commits-erzeugt-schaltet-push-ab]]).
