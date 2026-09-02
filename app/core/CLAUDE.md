@@ -79,6 +79,8 @@ Kundenstart heraus
 Deadlock: Zwei Threads, die gleichzeitig importieren, verklemmen sich sonst
 über die Modul-Locks. Wer einen Namen hinzufügt, trägt ihn an **drei** Stellen
 ein — `TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`.
+`tests/test_lazy_exports.py` hält die drei zusammen und prüft, dass jeder
+Eintrag auf ein Untermodul und ein Attribut zeigt, das es gibt.
 
 **2. Der `OpContext` ist die einzige Tür nach außen.**
 
