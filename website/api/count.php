@@ -705,8 +705,23 @@ function count_require_origin(): void
 
 count_security_headers();
 $method = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
+
+// **HEAD wird bedient und nicht gezählt.** Zwei Gründe, und der zweite ist
+// gemessen. Erstens verlangt RFC 9110, dass jeder Server HEAD beherrscht, wo
+// er GET beherrscht — ein 405 darauf bricht Verfügbarkeitswächter, Crawler
+// und jedes Werkzeug, das eine Adresse prüfen will, ohne 200 MB zu laden.
+// Zweitens ist ein HEAD kein Download: Er holt die Kopfzeilen und keinen
+// einzigen Byte der Datei. Am 02.09.2026 hat eine Release-Nachprüfung
+// (`server_nachpruefen.py`, HEAD auf jedes Paket und jede Sprachseite) in
+// vierzig Sekunden **38 Downloads** in die Statistik geschrieben — die Hälfte
+// des Tageswertes, den der Betreiber liest. Die Weiterleitung bekommt sie
+// weiterhin, denn genau die will sie prüfen.
+$counts = $method !== 'HEAD';
+if ($method === 'HEAD') {
+    $method = 'GET';
+}
 if (!in_array($method, ['GET', 'POST'], true)) {
-    header('Allow: GET, POST');
+    header('Allow: GET, HEAD, POST');
     http_response_code(405);
     exit;
 }
@@ -727,7 +742,7 @@ $fileValue = $_GET['f'] ?? '';
 $file = is_string($fileValue) ? $fileValue : '';
 if ($file !== '') {
     if ($method !== 'GET') {
-        header('Allow: GET');
+        header('Allow: GET, HEAD');
         http_response_code(405);
         exit;
     }
@@ -739,7 +754,9 @@ if ($file !== '') {
         echo "Diese Datei gibt es hier nicht.\n";
         exit;
     }
-    record('d', $name);
+    if ($counts) {
+        record('d', $name);
+    }
     header('Location: ' . DOWNLOAD_URL . rawurlencode($name), true, 302);
     exit;
 }

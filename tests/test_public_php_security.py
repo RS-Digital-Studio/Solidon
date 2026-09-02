@@ -17,7 +17,7 @@ from email.message import Message
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 import pytest
 
@@ -943,8 +943,8 @@ def test_activation_common_is_not_a_public_blank_endpoint(tmp_path: Path) -> Non
         ("deactivation.php", "GET", "POST"),
         ("activation-health.php", "POST", "GET"),
         ("operator.php", "GET", "POST"),
-        ("count.php", "PUT", "GET, POST"),
-        ("stats.php", "PUT", "GET, POST"),
+        ("count.php", "PUT", "GET, HEAD, POST"),
+        ("stats.php", "PUT", "GET, HEAD, POST"),
     ],
 )
 def test_methods_are_bound_before_configuration_is_disclosed(
@@ -1705,3 +1705,78 @@ def test_missing_php_is_red_in_the_linux_ci_and_a_skip_elsewhere(
     monkeypatch.delenv("CI")
     with pytest.raises(pytest.skip.Exception):
         php_executable()
+
+
+def _without_redirects(url: str, method: str) -> tuple[int, str]:
+    """Fragt eine Adresse, ohne der Weiterleitung zu folgen — sonst antwortet
+    am Ende die Zieldatei mit 200, und die Weiterleitung selbst bliebe
+    ungeprüft."""
+
+    class _Bleibt(HTTPRedirectHandler):
+        def redirect_request(self, *_arguments: object) -> None:
+            return None
+
+    request = Request(url, method=method)
+    try:
+        with build_opener(_Bleibt).open(request, timeout=5) as response:
+            return response.status, response.headers.get("Location", "")
+    except HTTPError as problem:
+        return problem.code, problem.headers.get("Location", "")
+
+
+def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
+    """HEAD holt Kopfzeilen und keinen Byte — also ist es kein Download.
+
+    RFC 9110 verlangt HEAD, wo es GET gibt; ein 405 darauf bricht jeden
+    Verfügbarkeitswächter und jedes Prüfwerkzeug. Gezählt werden darf es
+    trotzdem nicht: Am 02.09.2026 schrieb eine Release-Nachprüfung mit HEAD
+    auf jedes Paket in vierzig Sekunden 38 Downloads in die Statistik — die
+    Hälfte des Tageswertes, den der Betreiber liest. Die Weiterleitung bekommt
+    sie weiterhin, denn genau die prüft sie.
+    """
+    package = min((ROOT / "website" / "dl").glob("*.exe")).name
+    month = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
+
+    with _php_server(tmp_path) as base:
+        head_status, head_target = _without_redirects(f"{base}/count.php?f={package}", "HEAD")
+        assert head_status == 302, "ein HEAD auf einen Paketverweis wird bedient"
+        assert head_target.endswith(package)
+        assert not month.exists(), "und dabei nichts gezählt"
+
+        get_status, get_target = _without_redirects(f"{base}/count.php?f={package}", "GET")
+        assert (get_status, get_target) == (302, head_target), "derselbe Weg für beide"
+
+    counted = [
+        json.loads(line) for line in month.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
+    assert [(entry["k"], entry["v"]) for entry in counted] == [("d", package)], (
+        "genau der eine GET steht in der Datei, nicht der HEAD davor"
+    )
+
+
+def test_head_reaches_the_statistics_page_like_a_get(tmp_path: Path) -> None:
+    """Dieselbe Entscheidung an der Seite selbst: Ein Wächter darf fragen, ob
+    sie noch steht, und bekommt dieselbe Antwort wie ein GET — nur ohne Rumpf."""
+    php = php_executable("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
+    access_dir = tmp_path / "access"
+    access_dir.mkdir()
+    _chmod_private(access_dir)
+    stored = subprocess.run(
+        [php, "-r", "echo password_hash('richtig', PASSWORD_DEFAULT);"],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=30,
+    ).stdout
+    access_file = access_dir / "stats-access.php"
+    access_file.write_text("<?php return ['hash' => " + repr(stored) + "];\n", encoding="utf-8")
+    _chmod_private(access_file)
+
+    with _php_server(tmp_path, {"SOLIDON_STATS_ACCESS_FILE": str(access_file)}) as base:
+        head_status, _head_headers, head_body = _request(f"{base}/stats.php", method="HEAD")
+        get_status, get_headers, get_body = _request(f"{base}/stats.php", method="GET")
+
+    assert head_status == get_status == 401, "ohne Anmeldung dieselbe Antwort wie bei GET"
+    assert get_headers["Content-Type"].startswith("text/html")
+    assert head_body == "", "ein HEAD trägt keinen Rumpf"
+    assert "<form" in get_body, "der GET dagegen zeigt die Anmeldung"

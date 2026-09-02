@@ -138,8 +138,14 @@ function access_file(): string
 
 stats_security_headers();
 $statsMethod = (string) ($_SERVER['REQUEST_METHOD'] ?? '');
+// HEAD ist ein GET ohne Rumpf — RFC 9110 verlangt es, wo es GET gibt, und PHP
+// verwirft den Rumpf von selbst. Ein 405 darauf stört jeden Wächter, der nur
+// wissen will, ob die Seite noch steht (dieselbe Entscheidung wie count.php).
+if ($statsMethod === 'HEAD') {
+    $statsMethod = 'GET';
+}
 if (!in_array($statsMethod, ['GET', 'POST'], true)) {
-    header('Allow: GET, POST');
+    header('Allow: GET, HEAD, POST');
     http_response_code(405);
     exit;
 }
