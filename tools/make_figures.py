@@ -48,7 +48,7 @@ from app.core import figures
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import REGISTRY
 from app.core.scene.project import new_project
-from app.core.types import Feature, Finding, Parameter
+from app.core.types import Feature, Parameter
 from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import available_languages, read_catalog
 
@@ -63,9 +63,17 @@ from app.i18n.catalog import available_languages, read_catalog
 #: Bild ansieht, soll sehen, was die Anwendung kann, und nicht, dass sie ein
 #: Loch bohren kann.
 #:
-#: Die Befunde im Prüfbericht sind ohnehin gestellt (:func:`sample_findings`),
-#: das Projekt muss also keine mitbringen.
+#: Das Bild des Prüfberichts entsteht an einem anderen Beispiel
+#: (:data:`REPORT_EXAMPLE`); dieses hier muss also keine Befunde mitbringen.
 EXAMPLE = "dose-mit-deckel.p3d"
+#: Das Beispiel für das Bild des Prüfberichts: das einzige, das mit einer
+#: Warnung öffnet — und zwar mit Absicht (``tools/make_examples.py``). Bis zum
+#: 02.09.2026 bekam der Bericht der Dose vier **gestellte** Befunde dazu:
+#: „an drei Stellen offen", „14 Dreiecke zeigen nach innen", „Einheit stand
+#: nicht in der Datei" — über der Kopfzeile „wasserdicht", an einem Körper,
+#: den Solidon selbst gebaut hat. Das Handbuch zeigte ein Werkzeug, das sich
+#: widerspricht. Jetzt steht dort, was die Auswertung wirklich sagt.
+REPORT_EXAMPLE = "passung-nach-materialwechsel.p3d"
 
 #: Auf welchem Bildschirm aufgenommen wird — Index in ``QApplication.screens()``.
 #:
@@ -388,52 +396,6 @@ def prepared(
     return widget
 
 
-#: Die Texte der gestellten Befunde, je Sprache ausgeschrieben.
-#:
-#: **Nicht über ``_()``.** Der Textsammler liest ``app/``, und was hier steht,
-#: käme deshalb nie in den Katalog: ``translate()`` fiele auf die Message-ID
-#: zurück, also auf Deutsch. Genau das war im englischen Handbuch zu sehen —
-#: ein Bildschirmfoto des Prüfberichts mit deutschen Befunden mitten im
-#: englischen Text.
-SAMPLE_FINDINGS: dict[str, tuple[str, str, str, str]] = {
-    "de": (
-        "Das Modell ist an drei Stellen offen.",
-        "14 Dreiecke zeigen nach innen.",
-        "Eine Wand ist dünner als zwei Extrusionsbahnen.",
-        "Die Einheit stand nicht in der Datei; angenommen wurden Millimeter.",
-    ),
-    "en": (
-        "The model is open in three places.",
-        "14 triangles face inwards.",
-        "A wall is thinner than two extrusion paths.",
-        "The file did not state a unit; millimetres were assumed.",
-    ),
-    "es": (
-        "El modelo está abierto en tres puntos.",
-        "14 triángulos apuntan hacia dentro.",
-        "Una pared es más delgada que dos cordones de extrusión.",
-        "El archivo no indicaba la unidad; se han supuesto milímetros.",
-    ),
-    "fr": (
-        "Le modèle est ouvert à trois endroits.",
-        "14 triangles sont orientés vers l'intérieur.",
-        "Une paroi est plus mince que deux cordons d'extrusion.",
-        "Le fichier n'indiquait pas d'unité ; les millimètres ont été supposés.",
-    ),
-    "it": (
-        "Il modello è aperto in tre punti.",
-        "14 triangoli sono rivolti verso l'interno.",
-        "Una parete è più sottile di due passate di estrusione.",
-        "Nel file non c'era l'unità; sono stati assunti millimetri.",
-    ),
-    "pt": (
-        "O modelo está aberto em três sítios.",
-        "14 triângulos apontam para dentro.",
-        "Uma parede é mais fina do que dois cordões de extrusão.",
-        "O ficheiro não indicava a unidade; foram assumidos milímetros.",
-    ),
-}
-
 #: Der Name des Körpers im Operationsdialog, aus demselben Grund ausgeschrieben.
 SAMPLE_OBJECT = {
     "de": "Halterung",
@@ -456,56 +418,6 @@ SAMPLE_PRINTER = {
     "it": "Stampante FDM generica da 220 mm",
     "pt": "Impressora FDM genérica de 220 mm",
 }
-
-
-def sample_findings(
-    language: str,
-    object_id: str,
-    op_id: str,
-    location: tuple[float, float, float],
-) -> list[Finding]:
-    """Befunde, wie sie ein eingelesenes Fremdmodell erzeugt.
-
-    Gestellt und nicht gerechnet: der Prüfbericht soll auf dem Bild die Sorten
-    zeigen, die es gibt — Hinweis, Warnung, Fehler —, und ein Beispielprojekt,
-    das zufällig gerade alle drei hat, gibt es nicht.
-    """
-    open_body, flipped, thin, unit = SAMPLE_FINDINGS.get(language, SAMPLE_FINDINGS["de"])
-    return [
-        Finding(
-            code="ingest.not_watertight",
-            severity="warning",
-            message=open_body,
-            object_id=object_id,
-            op_id=op_id,
-            values={"holes": 3},
-            location=location,
-        ),
-        Finding(
-            code="ingest.flipped_faces",
-            severity="warning",
-            message=flipped,
-            object_id=object_id,
-            op_id=op_id,
-            values={"faces": 14},
-            location=location,
-        ),
-        Finding(
-            code="slice.thin_wall",
-            severity="info",
-            message=thin,
-            object_id=object_id,
-            op_id=op_id,
-            location=location,
-        ),
-        Finding(
-            code="ingest.unit_guessed",
-            severity="info",
-            message=unit,
-            object_id=object_id,
-            op_id=op_id,
-        ),
-    ]
 
 
 def translate_parameter_titles(session: Any) -> None:
@@ -571,12 +483,6 @@ def take_all(app: QApplication, language: str) -> None:
     window._show_start_screen(False)
     if not await_result(app, session):
         raise SystemExit("Die Auswertung wurde nicht fertig — kein Bild vom Hauptfenster")
-    sample_object = next(iter(session.last_result.scene.objects.values()))
-    sample_object_id = str(sample_object.id)
-    sample_op_id = str(session.project.document.ops[-1].id)
-    sample_location = tuple(float(value) for value in sample_object.mesh.bounds.centre)
-    findings = sample_findings(language, sample_object_id, sample_op_id, sample_location)
-    window.report.add_findings(findings)
     window.raise_()
     window.activateWindow()
     settle(app, 60)
@@ -633,18 +539,19 @@ def take_all(app: QApplication, language: str) -> None:
     # Ein elternloses ReportPanel zeigte zwar die vier Befunde, aber weder die
     # Körpernamen noch die anklickbaren Handlungen — also ausgerechnet nicht
     # den aktuellen Stand, den das Bild belegen soll.
+    # **An dem Beispiel, das wirklich etwas zu berichten hat.** Die Dose
+    # öffnet mit drei Hinweisen; die Passung nach dem Materialwechsel öffnet
+    # mit einer Warnung, die aus der Auswertung kommt und deren Handlung im
+    # Betrieb dasselbe tut wie im Bild.
+    session.open_project(examples.directory() / REPORT_EXAMPLE)
+    translate_parameter_titles(session)
+    if not await_result(app, session):
+        raise SystemExit("die Auswertung wurde nicht fertig — kein Bild vom Prüfbericht")
     result = session.last_result
     if result is None:
         raise SystemExit("die Auswertung fehlt — kein Bild vom Prüfbericht")
     report = ReportPanel(window)
     report.show_result(result, session.project.document)
-    report.add_findings(findings)
-    # Die gestellten Befunde kommen hier nach dem echten Auswertungsergebnis
-    # hinzu. Im Betrieb lägen sie schon darin und würden von ``show_result``
-    # vorgewählt; nach ``add_findings`` bleibt eine bestehende Nichtauswahl
-    # dagegen absichtlich bestehen. Für dasselbe Anfangsbild deshalb noch
-    # einmal den normalen Vorauswahlweg laufen lassen.
-    report._preselect()
     prepared(report, REPORT)
     settle(app)
     shoot(report, "report", language)
