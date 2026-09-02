@@ -28,7 +28,7 @@ it into `website/version.json`.
 - The chat remains usable even with a low window height: the input stays fixed at the bottom while the content scrolls.
 - The top toolbar remains visible with open projects and narrow windows instead of slipping out of the workspace.
 - A new drawing example leads directly into the sketch workflow and complements the existing example projects.
-
+- The start screen has a *Open model …* button, and the drop area can be clicked as well.
 ### Interface and controls
 
 - Menus have clearly visible headings and consistently aligned icon columns.
@@ -46,7 +46,8 @@ it into `website/version.json`.
 - The filament list scrolls independently; *Add filament* and *Print values* remain reachable even with many spools.
 - Warnings and errors remain readable without conveying their meaning through text colour alone.
 - Disabled selection fields are clearly distinguishable from active selected fields.
-
+- A 3D mouse (SpaceMouse) moves the model on all six axes as soon as it is plugged in; one device button fits everything into view.
+- The build plate can be hidden with one click or Ctrl+Shift+D and stays hidden until it is needed again.
 ### Drawing and precise input
 
 - Circles are entered by diameter, so an M3 hole can be created directly as 3.2 mm.
@@ -63,7 +64,10 @@ it into `website/version.json`.
 - Front, side, top and opposite views snap reliably to all six axes.
 - The pull handle remains visible with a flat or angled camera and shows a useful measurement.
 - The measurement tool ends a measurement with visible feedback instead of apparently losing the result.
-
+- While pulling up, the dimension sits right on the wireframe, and after releasing every value stays editable in the dialog.
+- Dimensions while drawing follow the grid, not the pointer — you see the size you actually get.
+- Circle sizes can be switched between diameter and radius right at the field; the choice applies in sketches and dialogs and is remembered.
+- A circle with a fixed centre and a dimensioned diameter counts as fully determined; the status line no longer reports a missing dimension.
 ### View, history and shape editing
 
 - Multiple selected bodies can be moved together.
@@ -78,6 +82,9 @@ it into `website/version.json`.
 - When jumping to a finding, the camera frames the target instead of ending in a grey close-up.
 - Named faces and findings move with their body during arrangement and placement.
 - Brush modelling reports when strokes miss the model or produce no printable change.
+- Hollowed bodies keep the requested wall thickness on slanted and curved faces too.
+- A deliberately enlarged hole keeps its name and its fits instead of counting as lost in the report.
+- Spheres with very many segments stay a manageable mesh instead of twenty million triangles.
 
 ### Custom parts and exchange files
 
@@ -91,6 +98,8 @@ it into `website/version.json`.
 - Origin and sharing terms remain traceable when exchanging a part.
 - Snap fits, hinge eyes, pegboard hooks and feet have stronger transitions without enclosed inner surfaces.
 - Catalogue cards retain their position and selected face when their previews finish loading.
+- The fit ladder labels every step with its own number.
+- Exported GLB files stand upright in other programs instead of lying on their side.
 
 ### Splitting, printing and filament
 
@@ -104,6 +113,8 @@ it into `website/version.json`.
 - The header shows the material actually in use and no longer offers a second, conflicting material choice.
 - When disabled, *Save print file* explains that the file is created only during slicing.
 - Repairs already completed in the same workflow no longer reappear as open recommendations.
+- Pin bores open at the split with a lead-in chamfer, and the catch of a snap pocket sits at the seam.
+- A pin diameter you choose yourself has to fit the seam; if it becomes thinner for that, the report says so.
 
 ### Report, stability, platforms and languages
 
@@ -118,7 +129,13 @@ it into `website/version.json`.
 - Standard buttons such as Open, Save and Cancel change language immediately without a restart.
 - Automatically created body and part names switch language correctly even after cached content has already been used.
 - Translations and report values are equally up to date in German, English, Spanish, French, Italian and Portuguese.
-
+- A part without findings offers the *Hand over to the slicer …* button right in the report.
+- Every analysis map explains on hover what it shows, and the unit question on import names the units in words.
+- A part that fills the print bed is read in millimetres without asking.
+- Thin ribs next to thick plates are recognised as a thin place, and bridges are measured at their truly free width.
+- A part that stands on itself gets no supports from the print bed recommended.
+- The print recommendations check every speed, calculate the first layer with its own dimensions, and report a bed or a chamber that stays too cold for the material.
+- Stacked lugs each keep their bore, and fine scratches count neither as a bore nor as a pin.
 ### Chat and model support
 
 - Chat opens with a clear description of its purpose instead of an empty area or technical model terms.
@@ -130,7 +147,7 @@ it into `website/version.json`.
 - After an agent proposal or 3D generation, Solidon unloads local models and releases graphics memory.
 - Cancelling removes only the ComfyUI job started by Solidon; other jobs running there remain untouched.
 - Before the first use of a cloud model, Solidon clearly shows which content leaves the computer.
-
+- The dialog for additional programs shows only what is still missing and describes the state of ComfyUI in plain words.
 ## 0.2.2
 
 

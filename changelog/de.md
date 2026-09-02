@@ -53,7 +53,7 @@ Nutzen da und sonst nichts.
 - Der Chat bleibt auch bei geringer Fensterhöhe benutzbar: Die Eingabe steht fest unten, der Inhalt rollt.
 - Die obere Werkzeugleiste bleibt bei geöffneten Projekten und schmalen Fenstern sichtbar, statt aus dem Arbeitsbereich zu rutschen.
 - Ein neues Zeichenbeispiel führt direkt in den Skizzenweg und ergänzt die vorhandenen Beispielprojekte.
-
+- Der Startbildschirm hat einen Knopf *Modell öffnen …*, und die Ablagefläche lässt sich auch anklicken.
 ### Oberfläche und Bedienung
 
 - Menüs besitzen deutlich sichtbare Überschriften und einheitlich ausgerichtete Symbolspalten.
@@ -71,7 +71,8 @@ Nutzen da und sonst nichts.
 - Die Filamentliste scrollt unabhängig; *Filament anlegen* und *Druckwerte* bleiben auch bei vielen Rollen erreichbar.
 - Warnungen und Fehler sind lesbar, ohne ihre Bedeutung ausschließlich über Textfarbe zu vermitteln.
 - Deaktivierte Auswahlfelder lassen sich eindeutig von aktiv ausgewählten Feldern unterscheiden.
-
+- Eine 3D-Maus (SpaceMouse) bewegt das Modell mit allen sechs Achsen, sobald sie eingesteckt ist; eine Gerätetaste passt alles ein.
+- Die Druckplatte lässt sich mit einem Klick oder Strg+Umschalt+D ausblenden und bleibt so, bis sie wieder gebraucht wird.
 ### Zeichnen und genaue Eingabe
 
 - Kreise werden über den Durchmesser eingegeben; eine M3-Bohrung kann damit direkt als 3,2 mm angelegt werden.
@@ -88,7 +89,10 @@ Nutzen da und sonst nichts.
 - Vorder-, Seiten-, Ober- und Gegenansichten rasten zuverlässig auf allen sechs Achsen ein.
 - Der Ziehgriff bleibt auch bei flacher oder schräger Kamera sichtbar und zeigt ein brauchbares Maß an.
 - Das Messwerkzeug beendet eine Messung mit einer sichtbaren Rückmeldung, statt das Ergebnis scheinbar zu verlieren.
-
+- Beim Hochziehen steht das Maß direkt an der Drahtform, und nach dem Loslassen bleiben alle Werte im Dialog änderbar.
+- Die Maße beim Zeichnen folgen dem Raster, nicht dem Mauszeiger — man sieht das Maß, das man wirklich bekommt.
+- Kreismaße lassen sich am Feld zwischen Durchmesser und Radius umschalten; die Wahl gilt in Skizze und Dialogen und bleibt gespeichert.
+- Ein Kreis mit fester Mitte und bemaßtem Durchmesser gilt als vollständig bestimmt; die Statuszeile meldet kein fehlendes Maß mehr.
 ### Ansicht, Verlauf und Formen bearbeiten
 
 - Mehrere ausgewählte Körper können gemeinsam verschoben werden.
@@ -103,6 +107,9 @@ Nutzen da und sonst nichts.
 - Beim Anspringen eines Fundorts rahmt die Kamera das Ziel ein, statt in einer grauen Nahaufnahme zu landen.
 - Benannte Flächen und Hinweise wandern beim Anordnen und Platzieren zusammen mit ihrem Körper.
 - Beim Modellieren mit dem Pinsel wird gemeldet, wenn Striche das Modell verfehlen oder keine druckbare Änderung erzeugen.
+- Ausgehöhlte Körper halten die gewünschte Wandstärke auch an schrägen und runden Flächen.
+- Eine bewusst vergrößerte Bohrung behält ihren Namen und ihre Passungen, statt im Prüfbericht als verloren zu gelten.
+- Kugeln mit sehr vielen Segmenten bleiben ein handliches Netz statt zwanzig Millionen Dreiecke.
 
 ### Eigene Bausteine und Austauschdateien
 
@@ -116,6 +123,8 @@ Nutzen da und sonst nichts.
 - Herkunft und Weitergabebedingungen bleiben beim Austausch eines Bausteins nachvollziehbar.
 - Schnapphaken, Scharnierauge, Lochwandhaken und Fuß besitzen robustere Übergänge ohne eingeschlossene Innenflächen.
 - Katalogkarten behalten beim Nachladen ihrer Vorschaubilder Position und ausgewählte Fläche.
+- Die Toleranzleiter beschriftet jede Stufe mit ihrer eigenen Nummer.
+- Exportierte GLB-Dateien stehen in anderen Programmen aufrecht statt auf der Seite.
 
 ### Teilen, Drucken und Filament
 
@@ -129,6 +138,8 @@ Nutzen da und sonst nichts.
 - Die Kopfzeile zeigt das tatsächlich verwendete Material und bietet keine zweite widersprüchliche Materialauswahl mehr an.
 - Der deaktivierte Knopf *Druckdatei speichern* erklärt, dass die Datei erst beim Slicen entsteht.
 - Bereits im selben Arbeitsablauf erledigte Reparaturen werden anschließend nicht erneut als offene Empfehlung angezeigt.
+- Passbohrungen öffnen sich an der Trennstelle mit einer Einführfase, und die Rastkante einer Schnappertasche sitzt an der Naht.
+- Ein selbst gewählter Stiftdurchmesser muss in die Naht passen; wird er dafür dünner, sagt der Bericht es.
 
 ### Prüfbericht, Stabilität, Plattformen und Sprachen
 
@@ -143,7 +154,13 @@ Nutzen da und sonst nichts.
 - Standardschaltflächen wie Öffnen, Speichern und Abbrechen wechseln ihre Sprache sofort, ohne Neustart.
 - Automatisch erzeugte Körper- und Bausteinnamen wechseln auch nach bereits verwendeten zwischengespeicherten Inhalten korrekt die Sprache.
 - Übersetzungen und Berichtswerte sind in Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch auf demselben Stand.
-
+- Ein Teil ohne Befunde bietet im Prüfbericht direkt den Knopf *An den Slicer übergeben …* an.
+- Jede Analysekarte erklärt beim Zeigen, was sie zeigt, und die Einheitenfrage beim Einlesen nennt die Einheiten mit Namen.
+- Ein Teil, das das Druckbett füllt, wird ohne Rückfrage in Millimetern gelesen.
+- Dünne Rippen neben dicken Platten werden als dünne Stelle erkannt, und Brücken werden an ihrer wirklich freien Weite gemessen.
+- Ein Teil, das auf sich selbst steht, bekommt keine Stützen vom Druckbett empfohlen.
+- Die Druckempfehlungen prüfen alle Geschwindigkeiten, rechnen die erste Schicht mit ihren eigenen Maßen und melden ein Bett oder einen Bauraum, der für das Material zu kalt bleibt.
+- Übereinander liegende Laschen behalten jede ihre Bohrung, und feine Kratzer gelten weder als Bohrung noch als Zapfen.
 ### Chat und Modellunterstützung
 
 - Der Chat begrüßt mit seinem konkreten Zweck und startet nicht mehr mit einer leeren Fläche oder technischen Modellbegriffen.
@@ -155,7 +172,7 @@ Nutzen da und sonst nichts.
 - Nach einem Agentenvorschlag oder einer 3D-Erzeugung gibt Solidon lokale Modelle und Grafikspeicher wieder frei.
 - Beim Abbrechen entfernt Solidon nur den eigenen ComfyUI-Auftrag; andere dort laufende Aufträge bleiben unberührt.
 - Vor der ersten Nutzung eines Cloud-Modells zeigt Solidon verständlich, welche Inhalte den Rechner verlassen.
-
+- Der Dialog für Zusatzprogramme zeigt nur, was noch fehlt, und beschreibt den Zustand von ComfyUI in einfachen Worten.
 ## 0.2.2
 
 

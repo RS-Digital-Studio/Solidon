@@ -5,11 +5,14 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 9c480190-d910-460e-bc5c-c2d37eab6361
-  modified: 2026-08-30T13:00:06.803Z
+  modified: 2026-09-02T12:00:00.000Z
 ---
 
 Roberts Worte: *„merk dir auch es sollte am ende immer keine getrennten
-worktrees geben alles auf main."*
+worktrees geben alles auf main."* Bekräftigt am 02.09.2026, als vier
+Korrektur-Agenten in Arbeitsbäumen liefen: *„alles sollte im origin main sein
+und kein zusätzlichen worktree geben."* Agenten-Bäume sind deshalb nur
+Zwischenablage: Diff nach main holen, Baum sofort entfernen, dann committen.
 
 **Why:** Drei Maschinen, bis zu sechs Sitzungen — jeder Stand, der in einem
 Seitenbaum liegt, existiert für alle anderen nicht und altert dort unbemerkt

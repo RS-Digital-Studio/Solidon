@@ -29,7 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El chat sigue siendo utilizable incluso con poca altura de ventana: la entrada permanece fija abajo y el contenido se desplaza.
 - La barra de herramientas superior permanece visible en proyectos abiertos y ventanas estrechas, sin salirse del área de trabajo.
 - Un nuevo ejemplo de dibujo conduce directamente al flujo de bocetos y complementa los proyectos de ejemplo existentes.
-
+- La pantalla de inicio tiene un botón *Abrir modelo …*, y la zona para soltar archivos también se puede pulsar.
 ### Interfaz y manejo
 
 - Los menús tienen encabezados claramente visibles y columnas de iconos alineadas de forma uniforme.
@@ -47,7 +47,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La lista de filamentos se desplaza por separado; *Añadir filamento* y *Valores de impresión* siguen accesibles con muchas bobinas.
 - Los avisos y errores se leen bien sin transmitir su significado solo mediante el color del texto.
 - Los campos de selección desactivados se distinguen claramente de los campos seleccionados y activos.
-
+- Un ratón 3D (SpaceMouse) mueve el modelo en los seis ejes en cuanto se conecta; un botón del dispositivo encuadra todo.
+- La placa de impresión se oculta con un clic o Ctrl+Mayús+D y permanece así hasta que vuelva a hacer falta.
 ### Dibujo y entrada precisa
 
 - Los círculos se introducen por su diámetro, de modo que un agujero M3 se puede crear directamente con 3,2 mm.
@@ -64,7 +65,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las vistas frontal, lateral, superior y opuesta se ajustan de forma fiable a los seis ejes.
 - El asa de arrastre sigue visible con la cámara plana o inclinada y muestra una medida útil.
 - La herramienta de medición termina cada medida con una respuesta visible, en lugar de parecer que pierde el resultado.
-
+- Al levantar, la medida aparece junto al contorno de alambre, y tras soltar todos los valores siguen editables en el diálogo.
+- Las medidas al dibujar siguen la cuadrícula, no el puntero: se ve la medida que realmente se obtiene.
+- Las medidas de círculo se pueden cambiar entre diámetro y radio en el propio campo; la elección vale en bocetos y diálogos y se recuerda.
+- Un círculo con centro fijo y diámetro acotado se considera completamente determinado; la línea de estado ya no avisa de una medida que falta.
 ### Vista, historial y edición de formas
 
 - Se pueden mover conjuntamente varios cuerpos seleccionados.
@@ -79,6 +83,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al saltar a un hallazgo, la cámara encuadra el destino en lugar de acabar en un primer plano gris.
 - Las caras con nombre y los hallazgos se mueven con su cuerpo al organizarlo y colocarlo.
 - El modelado con pincel avisa si los trazos no alcanzan el modelo o no producen un cambio imprimible.
+- Los cuerpos ahuecados mantienen el grosor de pared deseado también en caras inclinadas y curvas.
+- Un agujero ampliado a propósito conserva su nombre y sus ajustes en lugar de contar como perdido en el informe.
+- Las esferas con muchísimos segmentos siguen siendo una malla manejable en lugar de veinte millones de triángulos.
 
 ### Bloques propios y archivos de intercambio
 
@@ -92,6 +99,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El origen y las condiciones de uso siguen siendo reconocibles al intercambiar un bloque.
 - Los ganchos de encaje, ojales de bisagra, ganchos para panel y pies tienen transiciones más robustas sin superficies internas cerradas.
 - Las tarjetas del catálogo conservan su posición y la cara seleccionada cuando terminan de cargar sus vistas previas.
+- La escalera de tolerancias rotula cada escalón con su propio número.
+- Los archivos GLB exportados aparecen de pie en otros programas en lugar de tumbados.
 
 ### División, impresión y filamento
 
@@ -105,6 +114,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La cabecera muestra el material realmente usado y ya no ofrece una segunda selección contradictoria.
 - Cuando está desactivado, *Guardar archivo de impresión* explica que el archivo solo se crea al laminar.
 - Las reparaciones ya completadas en el mismo flujo de trabajo no vuelven a aparecer como recomendaciones pendientes.
+- Los taladros para pasadores se abren en la división con un chaflán de entrada, y el resalte de un bolsillo de clip queda en la costura.
+- Un diámetro de pasador elegido a mano tiene que caber en la costura; si por ello queda más fino, el informe lo dice.
 
 ### Informe, estabilidad, plataformas e idiomas
 
@@ -119,7 +130,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los botones estándar como Abrir, Guardar y Cancelar cambian de idioma al instante, sin reiniciar.
 - Los nombres creados automáticamente para cuerpos y bloques cambian bien de idioma incluso después de usar contenido en caché.
 - Las traducciones y los valores del informe están al mismo nivel en alemán, inglés, español, francés, italiano y portugués.
-
+- Una pieza sin observaciones ofrece en el informe directamente el botón *Entregar al slicer …*.
+- Cada mapa de análisis explica al señalarlo qué muestra, y la pregunta por la unidad al importar nombra las unidades con palabras.
+- Una pieza que llena la cama de impresión se lee en milímetros sin preguntar.
+- Los nervios finos junto a placas gruesas se reconocen como punto fino, y los puentes se miden en su anchura realmente libre.
+- A una pieza que se apoya sobre sí misma no se le recomiendan soportes desde la cama.
+- Las recomendaciones de impresión comprueban todas las velocidades, calculan la primera capa con sus propias medidas y avisan de una cama o cámara demasiado fría para el material.
+- Las orejetas apiladas conservan cada una su taladro, y los arañazos finos no cuentan ni como taladro ni como espiga.
 ### Chat y compatibilidad con modelos
 
 - El chat se abre con una explicación concreta de su finalidad, no con un área vacía ni términos técnicos de modelos.
@@ -131,7 +148,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Tras una propuesta del agente o una generación 3D, Solidon descarga los modelos locales y libera la memoria gráfica.
 - Al cancelar, Solidon elimina solo su propia tarea de ComfyUI; las demás tareas que se ejecuten allí permanecen intactas.
 - Antes de usar un modelo en la nube por primera vez, Solidon muestra claramente qué contenido sale del ordenador.
-
+- El diálogo de programas adicionales muestra solo lo que aún falta y describe el estado de ComfyUI con palabras sencillas.
 ## 0.2.2
 
 

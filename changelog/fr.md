@@ -29,7 +29,7 @@ dans `website/version.json`.
 - La discussion reste utilisable même avec une faible hauteur de fenêtre : la saisie reste fixée en bas et le contenu défile.
 - La barre d’outils supérieure reste visible avec un projet ouvert et une fenêtre étroite, sans sortir de l’espace de travail.
 - Un nouvel exemple de dessin mène directement au parcours d’esquisse et complète les projets d’exemple existants.
-
+- L'écran d'accueil a un bouton *Ouvrir un modèle …*, et la zone de dépôt se laisse aussi cliquer.
 ### Interface et utilisation
 
 - Les menus ont des titres bien visibles et des colonnes d’icônes alignées de façon uniforme.
@@ -47,7 +47,8 @@ dans `website/version.json`.
 - La liste des filaments défile séparément ; *Ajouter un filament* et *Valeurs d’impression* restent accessibles avec de nombreuses bobines.
 - Les avertissements et erreurs restent lisibles sans transmettre leur sens uniquement par la couleur du texte.
 - Les champs de sélection désactivés se distinguent clairement des champs sélectionnés et actifs.
-
+- Une souris 3D (SpaceMouse) déplace le modèle sur les six axes dès qu'elle est branchée ; un bouton de l'appareil cadre tout.
+- Le plateau d'impression se masque d'un clic ou avec Ctrl+Maj+D et le reste jusqu'à ce qu'on en ait de nouveau besoin.
 ### Dessin et saisie précise
 
 - Les cercles sont saisis par leur diamètre ; un perçage M3 peut ainsi être créé directement à 3,2 mm.
@@ -64,7 +65,10 @@ dans `website/version.json`.
 - Les vues avant, latérale, supérieure et opposées s’alignent fidèlement sur les six axes.
 - La poignée de déplacement reste visible même avec une caméra rasante ou oblique et affiche une cote utile.
 - L’outil de mesure termine une mesure par un retour visible, au lieu de donner l’impression de perdre le résultat.
-
+- Pendant l'extrusion, la cote s'affiche sur le fil de fer, et après le relâchement toutes les valeurs restent modifiables dans le dialogue.
+- Les cotes pendant le dessin suivent la grille, pas le pointeur : on voit la mesure que l'on obtient vraiment.
+- Les cotes de cercle se basculent entre diamètre et rayon directement au champ ; le choix vaut dans l'esquisse et les dialogues et reste mémorisé.
+- Un cercle à centre fixe et diamètre coté est considéré comme entièrement déterminé ; la ligne d’état ne signale plus de cote manquante.
 ### Vue, historique et modification des formes
 
 - Plusieurs corps sélectionnés peuvent être déplacés ensemble.
@@ -79,6 +83,9 @@ dans `website/version.json`.
 - Lors du saut vers un constat, la caméra cadre la cible au lieu d’aboutir sur un gros plan gris.
 - Les faces nommées et les indications suivent leur corps pendant l’agencement et le positionnement.
 - Pendant le modelage au pinceau, un message indique si les traits manquent le modèle ou ne produisent aucune modification imprimable.
+- Les corps évidés conservent l’épaisseur de paroi demandée aussi sur les faces inclinées et courbes.
+- Un trou agrandi volontairement garde son nom et ses ajustements au lieu de compter comme perdu dans le rapport.
+- Les sphères à très nombreux segments restent un maillage maniable au lieu de vingt millions de triangles.
 
 ### Blocs personnels et fichiers d’échange
 
@@ -92,6 +99,8 @@ dans `website/version.json`.
 - La provenance et les conditions de partage restent traçables lors de l’échange d’un bloc.
 - Les clips à encliqueter, œillets de charnière, crochets muraux perforés et pieds ont des transitions plus robustes, sans surfaces internes enfermées.
 - Les cartes du catalogue conservent leur position et la face sélectionnée pendant le chargement de leurs aperçus.
+- L’échelle de tolérances marque chaque marche de son propre numéro.
+- Les fichiers GLB exportés se tiennent debout dans d’autres programmes au lieu d’être couchés.
 
 ### Séparation, impression et filament
 
@@ -105,6 +114,8 @@ dans `website/version.json`.
 - L’en-tête montre le matériau réellement utilisé et ne propose plus une seconde sélection de matériau contradictoire.
 - Le bouton désactivé *Enregistrer le fichier d’impression* explique que le fichier n’est créé qu’au tranchage.
 - Les réparations déjà effectuées dans le même flux de travail ne sont plus ensuite affichées comme recommandations ouvertes.
+- Les perçages de tenons s’ouvrent à la séparation avec un chanfrein d’entrée, et le cran d’une poche à clip se trouve au joint.
+- Un diamètre de tenon choisi soi-même doit tenir dans le joint ; s’il s’amincit pour cela, le rapport le dit.
 
 ### Rapport, stabilité, plateformes et langues
 
@@ -119,7 +130,13 @@ dans `website/version.json`.
 - Les boutons standard comme Ouvrir, Enregistrer et Annuler changent immédiatement de langue, sans redémarrage.
 - Les noms de corps et de blocs générés automatiquement changent aussi correctement de langue après l’emploi de contenus mis en cache.
 - Les traductions et valeurs de rapport sont au même niveau en allemand, anglais, espagnol, français, italien et portugais.
-
+- Une pièce sans constat propose directement dans le rapport le bouton *Transmettre au slicer …*.
+- Chaque carte d'analyse explique au survol ce qu'elle montre, et la question d'unité à l'import nomme les unités en toutes lettres.
+- Une pièce qui remplit le plateau est lue en millimètres sans question.
+- Les nervures fines à côté de plaques épaisses sont reconnues comme endroit fin, et les ponts sont mesurés à leur largeur réellement libre.
+- Une pièce qui repose sur elle-même ne se voit pas recommander de supports depuis le plateau.
+- Les recommandations d’impression vérifient toutes les vitesses, calculent la première couche à ses propres dimensions et signalent un plateau ou une enceinte trop froids pour le matériau.
+- Les pattes superposées gardent chacune leur perçage, et les fines rayures ne comptent ni comme perçage ni comme tenon.
 ### Discussion et prise en charge des modèles
 
 - La discussion accueille avec son objectif concret et ne démarre plus sur une zone vide ou des termes techniques liés aux modèles.
@@ -131,7 +148,7 @@ dans `website/version.json`.
 - Après une proposition de l’agent ou une génération 3D, Solidon libère les modèles locaux et la mémoire graphique.
 - Lors de l’annulation, Solidon ne retire que sa propre tâche ComfyUI ; les autres tâches en cours y restent intactes.
 - Avant la première utilisation d’un modèle cloud, Solidon explique clairement quels contenus quittent l’ordinateur.
-
+- Le dialogue des programmes complémentaires ne montre que ce qui manque encore et décrit l'état de ComfyUI en mots simples.
 ## 0.2.2
 
 

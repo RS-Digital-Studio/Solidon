@@ -28,7 +28,7 @@ scrive in `website/version.json`.
 - La chat resta utilizzabile anche con una finestra poco alta: l’inserimento resta fisso in basso e il contenuto scorre.
 - La barra degli strumenti superiore resta visibile con progetti aperti e finestre strette, senza uscire dall’area di lavoro.
 - Un nuovo esempio di disegno porta direttamente al percorso degli schizzi e completa i progetti di esempio esistenti.
-
+- La schermata iniziale ha un pulsante *Apri modello …*, e l'area di rilascio si può anche cliccare.
 ### Interfaccia e utilizzo
 
 - I menu hanno titoli ben visibili e colonne di icone allineate in modo uniforme.
@@ -46,7 +46,8 @@ scrive in `website/version.json`.
 - L’elenco dei filamenti scorre separatamente; *Aggiungi filamento* e *Valori di stampa* restano raggiungibili anche con molte bobine.
 - Avvisi ed errori sono leggibili senza comunicare il loro significato soltanto tramite il colore del testo.
 - I campi di selezione disattivati si distinguono chiaramente da quelli attivi e selezionati.
-
+- Un mouse 3D (SpaceMouse) muove il modello su tutti e sei gli assi appena è collegato; un tasto del dispositivo inquadra tutto.
+- Il piano di stampa si nasconde con un clic o con Ctrl+Maiusc+D e resta così finché non serve di nuovo.
 ### Disegno e immissione precisa
 
 - I cerchi si inseriscono tramite il diametro; un foro M3 può quindi essere creato direttamente con 3,2 mm.
@@ -63,7 +64,10 @@ scrive in `website/version.json`.
 - Le viste anteriore, laterale, superiore e opposte si allineano correttamente su tutti e sei gli assi.
 - La maniglia di trascinamento resta visibile anche con una telecamera radente o inclinata e mostra una misura utile.
 - Lo strumento di misura conclude una misurazione con un riscontro visibile, invece di dare l’impressione di perdere il risultato.
-
+- Durante il sollevamento la quota sta accanto al reticolo, e dopo il rilascio tutti i valori restano modificabili nel dialogo.
+- Le quote durante il disegno seguono la griglia, non il puntatore: si vede la misura che si ottiene davvero.
+- Le misure dei cerchi si possono commutare tra diametro e raggio direttamente nel campo; la scelta vale in schizzo e dialoghi e viene ricordata.
+- Un cerchio con centro fisso e diametro quotato è considerato completamente determinato; la riga di stato non segnala più una quota mancante.
 ### Vista, cronologia e modifica delle forme
 
 - Più corpi selezionati possono essere spostati insieme.
@@ -78,6 +82,9 @@ scrive in `website/version.json`.
 - Quando si raggiunge un riscontro, la telecamera inquadra l’obiettivo invece di finire in un primo piano grigio.
 - Le facce denominate e le indicazioni si spostano insieme al loro corpo durante disposizione e posizionamento.
 - Nella modellazione a pennello viene segnalato se i tratti mancano il modello o non producono modifiche stampabili.
+- I corpi svuotati mantengono lo spessore di parete richiesto anche su facce inclinate e curve.
+- Un foro allargato di proposito conserva il suo nome e i suoi accoppiamenti invece di risultare perso nel rapporto.
+- Le sfere con moltissimi segmenti restano una mesh maneggevole invece di venti milioni di triangoli.
 
 ### Blocchi personali e file di scambio
 
@@ -91,6 +98,8 @@ scrive in `website/version.json`.
 - Provenienza e condizioni di condivisione restano rintracciabili durante lo scambio di un blocco.
 - Ganci a scatto, occhielli per cerniere, ganci per pannelli forati e piedini hanno transizioni più robuste, senza superfici interne racchiuse.
 - Le schede del catalogo mantengono la posizione e la faccia selezionata mentre caricano le anteprime.
+- La scala delle tolleranze contrassegna ogni gradino con il proprio numero.
+- I file GLB esportati stanno in piedi negli altri programmi invece che di lato.
 
 ### Divisione, stampa e filamento
 
@@ -104,6 +113,8 @@ scrive in `website/version.json`.
 - L’intestazione mostra il materiale davvero utilizzato e non offre più una seconda selezione del materiale in conflitto.
 - Il pulsante disattivato *Salva file di stampa* spiega che il file viene creato solo durante lo slicing.
 - Le riparazioni già eseguite nello stesso flusso di lavoro non compaiono più in seguito come consigli ancora aperti.
+- I fori per perni si aprono alla divisione con uno smusso d’invito, e il dente di una tasca a scatto sta sulla giunzione.
+- Un diametro di perno scelto a mano deve entrare nella giunzione; se per questo si assottiglia, il rapporto lo dice.
 
 ### Rapporto, stabilità, piattaforme e lingue
 
@@ -118,7 +129,13 @@ scrive in `website/version.json`.
 - I pulsanti standard come Apri, Salva e Annulla cambiano lingua immediatamente, senza riavvio.
 - I nomi generati di corpi e blocchi cambiano correttamente lingua anche dopo aver già usato contenuti memorizzati nella cache.
 - Traduzioni e valori del rapporto sono allo stesso livello in tedesco, inglese, spagnolo, francese, italiano e portoghese.
-
+- Un pezzo senza rilievi offre nel rapporto direttamente il pulsante *Passa allo slicer …*.
+- Ogni mappa di analisi spiega al passaggio del mouse cosa mostra, e la domanda sull'unità all'importazione chiama le unità per nome.
+- Un pezzo che riempie il piano di stampa viene letto in millimetri senza chiedere.
+- Le nervature sottili accanto a piastre spesse sono riconosciute come punto sottile, e i ponti sono misurati alla loro larghezza davvero libera.
+- A un pezzo che poggia su sé stesso non vengono consigliati supporti dal piano.
+- I consigli di stampa controllano tutte le velocità, calcolano il primo strato con le sue misure e segnalano un piano o una camera troppo freddi per il materiale.
+- Le alette sovrapposte conservano ciascuna il proprio foro, e i graffi sottili non contano né come foro né come perno.
 ### Chat e assistenza dei modelli
 
 - La chat accoglie con il proprio scopo concreto e non si apre più con uno spazio vuoto o termini tecnici relativi ai modelli.
@@ -130,7 +147,7 @@ scrive in `website/version.json`.
 - Dopo una proposta dell’agente o una generazione 3D, Solidon libera i modelli locali e la memoria grafica.
 - Durante l’annullamento Solidon rimuove solo il proprio incarico ComfyUI; gli altri incarichi in corso restano intatti.
 - Prima del primo uso di un modello cloud, Solidon mostra chiaramente quali contenuti lasciano il computer.
-
+- Il dialogo dei programmi aggiuntivi mostra solo ciò che manca ancora e descrive lo stato di ComfyUI con parole semplici.
 ## 0.2.2
 
 

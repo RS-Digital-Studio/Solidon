@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: a6e000e4-7f10-4e2d-92c3-c5df9b4a17cf
-  modified: 2026-08-30T12:39:55.313Z
+  modified: 2026-09-02T12:00:00.000Z
 ---
 
 Roberts Worte: *„mach es aus kundensicht perfekt, du sollst alles was du tust
@@ -72,3 +72,23 @@ und ausdrücklich (Robert, 30.08.2026) *„auch für die webseite und alles
 was mit der app zu tun hat"*: Website, Handbuch, Presse, Installer,
 Update-Fenster, Fehlertexte — der ganze Auftritt, nicht nur das
 Programmfenster.
+
+**Bekräftigt am 02.09.2026, vor der Demo 0.3.0:** *„alles sauber, kunden ohne
+cad, innovativ, intuitiv, wie die ganze app und du es auch immer machen sollst,
+bzw wenn du was findest was nicht so ist optimieren/bearbeiten, auch die
+oberfläche und design gehören dazu"* — und der Maßstab dafür: *„der kunde
+soll einfach nur begeistert und wow sagen"*, *„auch wenn man das modell selbst
+erstellt"*. Zwei Folgen:
+
+- **Sofort optimieren, nicht notieren.** Wer beim Arbeiten an einer Stelle ein
+  Fachwort ohne Erklärung, eine Sackgasse, einen Knopf ohne Wirkung oder einen
+  Klick zu viel findet, behebt es mit — Oberfläche und Design eingeschlossen.
+  Ins Register kommt nur, was eine Entscheidung braucht oder ein Umbau ist.
+- **„Wow" ist der Maßstab, nicht „nichts stört".** Datei hineinziehen, ein
+  Satz sagt, ob das Teil druckbereit ist, ein Klick führt zum Slicer; ein zu
+  großes Teil wird auf Knopfdruck sinnvoll geteilt und verstiftet, und man
+  sieht warum. Das gilt für alle vier Wege, ausdrücklich auch fürs
+  Selbermachen: Grundform, Bohrung, Baustein, Skizze — und am Ende dasselbe
+  „druckbereit" mit demselben Klick. Der Review vom 02.09.2026 fand genau dort
+  die Lücken: der erste Meter (Startbildschirm ohne „Modell öffnen") und der
+  letzte (kein Weg vom leeren Prüfbericht zum Slicer).

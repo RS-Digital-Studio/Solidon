@@ -28,7 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O chat continua utilizável mesmo com pouca altura da janela: a entrada mantém-se fixa em baixo e o conteúdo desloca-se.
 - A barra de ferramentas superior mantém-se visível com projetos abertos e janelas estreitas, sem sair da área de trabalho.
 - Um novo exemplo de desenho conduz diretamente ao percurso de esboço e complementa os projetos de exemplo existentes.
-
+- O ecrã inicial tem um botão *Abrir modelo …*, e a área de largar ficheiros também pode ser clicada.
 ### Interface e utilização
 
 - Os menus têm títulos bem visíveis e colunas de ícones alinhadas de forma uniforme.
@@ -46,7 +46,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A lista de filamentos desloca-se separadamente; *Adicionar filamento* e *Valores de impressão* continuam acessíveis com muitas bobinas.
 - Os avisos e erros são legíveis sem transmitir o significado apenas pela cor do texto.
 - Os campos de seleção desativados distinguem-se claramente dos campos ativos e selecionados.
-
+- Um rato 3D (SpaceMouse) move o modelo nos seis eixos assim que é ligado; um botão do dispositivo enquadra tudo.
+- A placa de impressão oculta-se com um clique ou Ctrl+Shift+D e assim fica até voltar a ser precisa.
 ### Desenho e introdução precisa
 
 - Os círculos são introduzidos pelo diâmetro; um furo M3 pode assim ser criado diretamente com 3,2 mm.
@@ -63,7 +64,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As vistas frontal, lateral, superior e opostas alinham-se corretamente com todos os seis eixos.
 - A pega de arrastar mantém-se visível mesmo com a câmara rasante ou inclinada e mostra uma medida útil.
 - A ferramenta de medição termina uma medição com uma resposta visível, em vez de parecer perder o resultado.
-
+- Ao puxar para cima, a medida fica junto à estrutura de arame, e depois de largar todos os valores continuam editáveis no diálogo.
+- As medidas ao desenhar seguem a grelha, não o ponteiro: vê-se a medida que realmente se obtém.
+- As medidas de círculo alternam entre diâmetro e raio no próprio campo; a escolha vale no esboço e nos diálogos e fica guardada.
+- Um círculo com centro fixo e diâmetro cotado conta como totalmente determinado; a linha de estado deixa de indicar uma medida em falta.
 ### Vista, histórico e edição de formas
 
 - É possível mover em conjunto vários corpos selecionados.
@@ -78,6 +82,9 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao saltar para um resultado, a câmara enquadra o alvo em vez de terminar num grande plano cinzento.
 - As faces designadas e indicações acompanham o corpo durante a disposição e o posicionamento.
 - Ao modelar com o pincel, é indicado se os traços falham o modelo ou não produzem uma alteração imprimível.
+- Os corpos ocos mantêm a espessura de parede pretendida também em faces inclinadas e curvas.
+- Um furo alargado de propósito mantém o seu nome e os seus ajustes em vez de contar como perdido no relatório.
+- As esferas com muitíssimos segmentos continuam a ser uma malha manejável em vez de vinte milhões de triângulos.
 
 ### Blocos próprios e ficheiros de troca
 
@@ -91,6 +98,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A proveniência e as condições de partilha continuam rastreáveis ao trocar um bloco.
 - Encaixes, olhais de dobradiça, ganchos para painéis perfurados e pés têm transições mais robustas, sem superfícies internas fechadas.
 - Os cartões do catálogo mantêm a posição e a face selecionada enquanto carregam as pré-visualizações.
+- A escada de tolerâncias marca cada degrau com o seu próprio número.
+- Os ficheiros GLB exportados ficam de pé noutros programas em vez de deitados.
 
 ### Divisão, impressão e filamento
 
@@ -104,6 +113,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O cabeçalho mostra o material realmente utilizado e já não oferece uma segunda seleção contraditória do material.
 - O botão desativado *Guardar ficheiro de impressão* explica que o ficheiro só é criado durante o fatiamento.
 - As reparações já feitas no mesmo fluxo de trabalho deixam de surgir depois como recomendações em aberto.
+- Os furos para pinos abrem-se na divisão com um chanfro de entrada, e o ressalto de um bolso de encaixe fica na junta.
+- Um diâmetro de pino escolhido à mão tem de caber na junta; se por isso ficar mais fino, o relatório di-lo.
 
 ### Relatório, estabilidade, plataformas e idiomas
 
@@ -118,7 +129,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os botões padrão como Abrir, Guardar e Cancelar mudam imediatamente de idioma, sem reiniciar.
 - Os nomes gerados de corpos e blocos mudam corretamente de idioma mesmo após usar conteúdos anteriormente em cache.
 - As traduções e os valores dos relatórios estão ao mesmo nível em alemão, inglês, espanhol, francês, italiano e português.
-
+- Uma peça sem ocorrências oferece no relatório diretamente o botão *Entregar ao slicer …*.
+- Cada mapa de análise explica ao apontar o que mostra, e a pergunta da unidade ao importar nomeia as unidades por extenso.
+- Uma peça que enche a mesa de impressão é lida em milímetros sem perguntar.
+- Nervuras finas junto a placas grossas são reconhecidas como ponto fino, e as pontes são medidas na sua largura realmente livre.
+- A uma peça que assenta sobre si própria não são recomendados suportes a partir da mesa.
+- As recomendações de impressão verificam todas as velocidades, calculam a primeira camada com as suas próprias medidas e avisam de uma mesa ou câmara demasiado fria para o material.
+- Abas sobrepostas mantêm cada uma o seu furo, e riscos finos não contam nem como furo nem como pino.
 ### Chat e apoio de modelos
 
 - O chat apresenta o seu objetivo concreto e já não começa com um espaço vazio ou termos técnicos de modelos.
@@ -130,7 +147,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Após uma proposta do agente ou uma geração 3D, o Solidon liberta os modelos locais e a memória gráfica.
 - Ao cancelar, o Solidon remove apenas a sua própria tarefa do ComfyUI; as outras tarefas em curso permanecem intactas.
 - Antes da primeira utilização de um modelo na nuvem, o Solidon mostra claramente que conteúdos saem do computador.
-
+- O diálogo dos programas adicionais mostra apenas o que ainda falta e descreve o estado do ComfyUI em palavras simples.
 ## 0.2.2
 
 
