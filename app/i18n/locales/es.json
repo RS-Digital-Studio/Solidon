@@ -886,6 +886,7 @@
   "Dicke des Bügels. Zu dünn federt er auf, zu dick federt er nicht.": "Grosor del arco. Demasiado fino se abre, demasiado grueso no cede.",
   "Dicke des Rands, der das Gewinde trägt. Zu dünn reißt beim Aufschrauben entlang der Schichten auf.": "Espesor del borde que lleva la rosca. Demasiado delgado se raja a lo largo de las capas al enroscar.",
   "Dicke von Rückplatte und Auflage. Unter zwei Millimetern biegt sich der Halter.": "Espesor de la placa trasera y la repisa. Por debajo de dos milímetros el soporte se dobla.",
+  "Die 3D-Ansicht braucht ein X11-Fenster, und diese Sitzung bietet keines: Xwayland fehlt, oder das Programm wurde mit „-platform wayland“ gestartet. Schalten Sie Xwayland in Ihrer Arbeitsumgebung ein oder melden Sie sich in einer X11-Sitzung an; X11 wird dann von selbst gewählt.": "La vista 3D necesita una ventana X11 y esta sesión no ofrece ninguna: falta Xwayland o el programa se inició con «-platform wayland». Active Xwayland en su entorno de escritorio o inicie sesión en X11; X11 se elegirá entonces automáticamente.",
   "Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung.": "La vista 3D no está disponible en este equipo.",
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "La generación del modelo 3D no ha entregado ningún modelo.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "La generación del modelo 3D no pudo iniciarse.",

@@ -1378,8 +1378,15 @@ def _available() -> bool:
     """
     if os.environ.get(HEADLESS_VARIABLE):
         return False
-    platform = QGuiApplication.platformName() or os.environ.get("QT_QPA_PLATFORM", "")
-    if platform.casefold() in ("offscreen", "minimal", "vnc"):
+    platform = _effective_platform().casefold()
+    if platform in ("offscreen", "minimal", "vnc"):
+        return False
+    # Wayland: VTKs Qt-Anbindung kennt nur X11 und stirbt sonst nativ — nicht
+    # höflich, sondern mit dem Prozess (Martin Donecker, 28.08.2026). Bis
+    # hierher kommt Wayland nur, wenn Xwayland fehlt oder jemand es mit
+    # ``-platform`` erzwungen hat; sonst hat ``app.ui.qt_platform`` vor dem
+    # Anwendungsaufbau X11 gewählt. :func:`unavailable_hint` sagt, was fehlt.
+    if platform.startswith("wayland"):
         return False
     try:
         import pyvista  # noqa: F401
@@ -1387,6 +1394,31 @@ def _available() -> bool:
     except Exception:  # pragma: no cover - hängt an der Maschine
         return False
     return True
+
+
+def _effective_platform() -> str:
+    """Die Qt-Plattform, die wirklich läuft — vor dem Anwendungsaufbau die
+    Umgebungsvariable als Rückfall (siehe :func:`_available`)."""
+    return QGuiApplication.platformName() or os.environ.get("QT_QPA_PLATFORM", "")
+
+
+def unavailable_hint() -> str:
+    """Was der Nutzer tun kann, wenn es hier keine 3D-Ansicht gibt — leer, wo
+    es nichts zu tun gibt (§2.7: kein Fehler ohne Handlungsvorschlag).
+
+    Auf Wayland ist die Lage benennbar: Es fehlt ein X11-Fenster, und das gibt
+    es über Xwayland oder in einer X11-Sitzung. Mit ``DISPLAY`` hätte die
+    Anwendung X11 selbst gewählt; steht sie trotzdem auf Wayland, fehlt
+    Xwayland oder jemand hat ``-platform wayland`` mitgegeben.
+    """
+    if _effective_platform().casefold().startswith("wayland"):
+        return tr(
+            "Die 3D-Ansicht braucht ein X11-Fenster, und diese Sitzung bietet keines: "
+            "Xwayland fehlt, oder das Programm wurde mit „-platform wayland“ gestartet. "
+            "Schalten Sie Xwayland in Ihrer Arbeitsumgebung ein oder melden Sie sich in "
+            "einer X11-Sitzung an; X11 wird dann von selbst gewählt."
+        )
+    return ""
 
 
 def _hex(colour: tuple[float, float, float]) -> str:
@@ -3159,9 +3191,13 @@ class Viewport(QWidget):
         self._comparing = False
 
         if not _available():
-            self._layout.addWidget(
-                QLabel(tr("Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung."), self)
+            notice = QLabel(
+                tr("Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung."), self
             )
+            if hint := unavailable_hint():
+                notice.setText(f"{notice.text()} {hint}")
+            notice.setWordWrap(True)
+            self._layout.addWidget(notice)
             return
 
         from pyvistaqt import QtInteractor

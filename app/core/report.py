@@ -23,7 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
 
-from app.branding import APP_NAME, APP_VERSION
+from app.branding import APP_NAME, APP_VERSION, ENVIRONMENT_PREFIX
 from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
 from app.i18n import get_language, tr
@@ -141,6 +141,17 @@ def _version_of(name: str) -> str:
 #: Nutzer erzwungen hat, während Qt nur meldet, was daraus wurde.
 SESSION_KEYS: Final = ("XDG_SESSION_TYPE", "QT_QPA_PLATFORM", "QT_IM_MODULE", "XCURSOR_SIZE")
 
+#: Seit dem 02.09.2026 setzt die Anwendung ``QT_QPA_PLATFORM`` unter Linux
+#: selbst auf ``xcb``, sobald ein X11-Display da ist (``app.ui.qt_platform``) —
+#: die 3D-Ansicht hat auf Wayland kein Bild. Damit sagt die Variable im
+#: Bericht nicht mehr, was der Nutzer erzwungen hat, sondern was die Anwendung
+#: gewählt hat. Was vorher dort stand, legt sie in diese Variable; der Bericht
+#: hängt es an, damit die Auskunft von oben erhalten bleibt.
+QT_PLATFORM_BEFORE_VARIABLE: Final = f"{ENVIRONMENT_PREFIX}_QT_PLATFORM_BEFORE"
+#: Der Wert dort, wenn vorher nichts gesetzt war — eine leere Variable sähe
+#: aus wie keine.
+QT_PLATFORM_UNSET: Final = "-"
+
 
 def _session() -> dict[str, str]:
     """Wie die Fenstersitzung eingerichtet ist — nur, was wirklich dasteht."""
@@ -150,6 +161,12 @@ def _session() -> dict[str, str]:
     if os.environ.get("WAYLAND_DISPLAY"):
         found.setdefault("xdg_session_type", "")
         found["xdg_session_type"] = found["xdg_session_type"] or "wayland (erkannt)"
+    before = os.environ.get(QT_PLATFORM_BEFORE_VARIABLE, "").strip()
+    if before and found.get("qt_qpa_platform"):
+        was = "nicht gesetzt" if before == QT_PLATFORM_UNSET else before
+        found["qt_qpa_platform"] = (
+            f"{found['qt_qpa_platform']} (von {APP_NAME} gesetzt, vorher {was})"
+        )
     return {key: value for key, value in found.items() if value}
 
 

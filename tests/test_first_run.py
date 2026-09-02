@@ -782,6 +782,20 @@ def test_a_report_describes_the_window_session_where_there_is_one(
     monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
     assert "wayland" in reports.environment()["xdg_session_type"]
 
+    # Seit die Anwendung X11 selbst wählt (``app.ui.qt_platform``), sagt die
+    # Variable, was sie gewählt hat — und der Bericht, was vorher dort stand.
+    # Sonst läse sich „xcb" wie eine Handlung des Nutzers.
+    monkeypatch.setenv(reports.QT_PLATFORM_BEFORE_VARIABLE, "wayland")
+    assert reports.environment()["qt_qpa_platform"] == "xcb (von Solidon3D gesetzt, vorher wayland)"
+    monkeypatch.setenv(reports.QT_PLATFORM_BEFORE_VARIABLE, reports.QT_PLATFORM_UNSET)
+    assert reports.environment()["qt_qpa_platform"] == (
+        "xcb (von Solidon3D gesetzt, vorher nicht gesetzt)"
+    )
+    monkeypatch.delenv("QT_QPA_PLATFORM")
+    assert "qt_qpa_platform" not in reports.environment(), (
+        "der Vorwert allein sagt nichts, ohne die Plattform bleibt die Zeile weg"
+    )
+
 
 def test_a_report_names_the_versions_even_without_package_metadata() -> None:
     """Im gebauten Paket gibt es keine ``.dist-info`` — die Fassung trotzdem.

@@ -1,6 +1,7 @@
 ---
 paths:
   - "app/ui/viewport.py"
+  - "app/ui/qt_platform.py"
   - "app/ui/overlay.py"
   - "app/ui/cursors.py"
   - "app/ui/analysis_bar.py"
@@ -106,6 +107,19 @@ der Prozess stirbt beim nächsten Fensteraufbau in
 `render_window_interactor.initialize`. Deshalb fragt `viewport._available()`
 zuerst `QGuiApplication.platformName()` und nimmt die Umgebungsvariable nur
 vor dem Anwendungsaufbau als Rückfall.
+
+**Und auf Wayland darf VTK gar nicht erst starten.** Seine Qt-Anbindung
+übergibt `winId()` als X-Window; unter dem Wayland-Plugin ist das keine, VTK
+findet kein Display, fällt auf EGL zurück und nimmt den Prozess mit
+(`std::bad_array_new_length` — Martin Donecker, CachyOS, 28.08.2026). Deshalb
+wählt `app/ui/qt_platform.py` **vor** der `QGuiApplication` xcb, sobald ein
+X11-Display da ist — Qt 6 nähme in einer Wayland-Sitzung sonst von sich aus
+Wayland, auch neben Xwayland —, und `_available()` lehnt ab, was trotzdem als
+Wayland ankommt (kein Xwayland, oder `-platform wayland` von Hand);
+`unavailable_hint()` sagt dann, was fehlt. Wer die Plattform vor dem Aufbau
+liest oder setzt, geht über diese eine Funktion — die Werkzeuge in `tools/`,
+die `QT_QPA_PLATFORM` entfernen, weil sie das echte Fenster wollen, bauen sie
+nicht nach.
 
 Für eine Zeile, die nicht umbrechen kann — eine Skala, eine Knopfleiste —
 lohnt daneben die Zahl: `sizeHint().width()` gegen `width()`, **in jeder

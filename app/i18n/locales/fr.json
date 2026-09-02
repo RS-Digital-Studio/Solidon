@@ -886,6 +886,7 @@
   "Dicke des Bügels. Zu dünn federt er auf, zu dick federt er nicht.": "Épaisseur de l'étrier. Trop mince, il s'ouvre ; trop épais, il ne fléchit plus.",
   "Dicke des Rands, der das Gewinde trägt. Zu dünn reißt beim Aufschrauben entlang der Schichten auf.": "Épaisseur du bord qui porte le filetage. Trop mince, il se fend le long des couches au vissage.",
   "Dicke von Rückplatte und Auflage. Unter zwei Millimetern biegt sich der Halter.": "Épaisseur de la plaque arrière et de la tablette. Sous deux millimètres, le support plie.",
+  "Die 3D-Ansicht braucht ein X11-Fenster, und diese Sitzung bietet keines: Xwayland fehlt, oder das Programm wurde mit „-platform wayland“ gestartet. Schalten Sie Xwayland in Ihrer Arbeitsumgebung ein oder melden Sie sich in einer X11-Sitzung an; X11 wird dann von selbst gewählt.": "La vue 3D a besoin d’une fenêtre X11 et cette session n’en offre aucune : Xwayland manque, ou le programme a été lancé avec « -platform wayland ». Activez Xwayland dans votre environnement de bureau ou ouvrez une session X11 ; X11 sera alors choisi automatiquement.",
   "Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung.": "La vue 3D n'est pas disponible sur cette machine.",
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "La génération du modèle 3D n’a livré aucun modèle.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "La génération du modèle 3D n’a pas pu démarrer.",

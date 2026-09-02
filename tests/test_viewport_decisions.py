@@ -83,6 +83,95 @@ def test_the_effective_qt_platform_keeps_vtk_out_after_the_environment_changes(
     assert not viewport._available()
 
 
+def test_x11_is_chosen_wherever_the_3d_view_can_have_it() -> None:
+    """Qt 6 nimmt in einer Wayland-Sitzung von sich aus Wayland, und dort hat
+    VTK kein Fenster (Martin Donecker, CachyOS, 28.08.2026).
+
+    Die Weiche ist eine reine Funktion mit der Plattform als Parameter, weil
+    der Zweig nur in einer Wayland-Sitzung zündet — und die sieht weder diese
+    Windows-Maschine noch die Linux-CI unter Xvfb. Vier Lagen: Wayland mit
+    Xwayland → X11; Wayland ohne Xwayland → nichts zu wählen, die Ansicht sagt
+    es; ein Werkzeug oder Test, das offscreen will → bleibt; andere Systeme →
+    nichts. Und ein global gesetztes ``wayland`` gilt allen Qt-Programmen,
+    nicht diesem — es wird ersetzt, der Bericht sagt es.
+    """
+    from app.ui.qt_platform import qpa_platform
+
+    wayland_with_xwayland = {
+        "DISPLAY": ":1",
+        "WAYLAND_DISPLAY": "wayland-0",
+        "XDG_SESSION_TYPE": "wayland",
+    }
+    assert qpa_platform("linux", wayland_with_xwayland) == "xcb"
+    assert qpa_platform("linux", {**wayland_with_xwayland, "QT_QPA_PLATFORM": "wayland"}) == "xcb"
+    assert qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "wayland;xcb"}) == "xcb"
+    assert qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": "Wayland-EGL"}) == "xcb"
+    assert qpa_platform("linux", {"DISPLAY": ":0"}) == "xcb", "auch eine reine X11-Sitzung"
+
+    assert qpa_platform("linux", {"WAYLAND_DISPLAY": "wayland-0"}) is None, "ohne Xwayland"
+    assert qpa_platform("linux", {"DISPLAY": "  ", "XDG_SESSION_TYPE": "wayland"}) is None
+    for tool_platform in ("offscreen", "minimal", "vnc", "xcb", "eglfs"):
+        assert qpa_platform("linux", {"DISPLAY": ":0", "QT_QPA_PLATFORM": tool_platform}) is None
+    assert qpa_platform("win32", {"DISPLAY": ":0", "XDG_SESSION_TYPE": "wayland"}) is None
+    assert qpa_platform("darwin", {"DISPLAY": ":0"}) is None
+
+
+def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesetzt wird einmal, und der Vorwert bleibt für den Fehlerbericht."""
+    import os
+
+    from app.core.report import QT_PLATFORM_BEFORE_VARIABLE, QT_PLATFORM_UNSET
+    from app.ui import qt_platform
+
+    monkeypatch.setattr(qt_platform.sys, "platform", "linux")
+    monkeypatch.setenv("DISPLAY", ":0")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "wayland")
+    monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE, raising=False)
+
+    assert qt_platform.prefer_x11_for_the_viewport() == "xcb"
+    assert os.environ["QT_QPA_PLATFORM"] == "xcb"
+    assert os.environ[QT_PLATFORM_BEFORE_VARIABLE] == "wayland"
+    # Ein zweiter Aufruf — ``main`` und ``build_application`` rufen beide —
+    # findet xcb vor und lässt den gemerkten Vorwert stehen.
+    assert qt_platform.prefer_x11_for_the_viewport() is None
+    assert os.environ[QT_PLATFORM_BEFORE_VARIABLE] == "wayland"
+
+    monkeypatch.delenv("QT_QPA_PLATFORM")
+    monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE)
+    assert qt_platform.prefer_x11_for_the_viewport() == "xcb"
+    assert os.environ[QT_PLATFORM_BEFORE_VARIABLE] == QT_PLATFORM_UNSET, (
+        "vorher nichts — und das steht dann auch da, nicht eine leere Variable"
+    )
+
+    monkeypatch.setattr(qt_platform.sys, "platform", "win32")
+    monkeypatch.delenv("QT_QPA_PLATFORM")
+    monkeypatch.delenv(QT_PLATFORM_BEFORE_VARIABLE)
+    assert qt_platform.prefer_x11_for_the_viewport() is None
+    assert "QT_QPA_PLATFORM" not in os.environ
+    assert QT_PLATFORM_BEFORE_VARIABLE not in os.environ
+
+
+def test_a_wayland_session_keeps_vtk_out_and_says_what_to_do(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auf Wayland stirbt VTK nativ; die Wache greift davor, und die Ansicht
+    nennt den Weg heraus (§2.7) statt nur zu fehlen."""
+    from app.ui import viewport
+
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "wayland")
+    assert not viewport._available()
+    hint = viewport.unavailable_hint()
+    assert "X11" in hint and "Xwayland" in hint, hint
+
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "wayland-egl")
+    assert not viewport._available()
+
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "offscreen")
+    assert viewport.unavailable_hint() == "", "wo es nichts zu tun gibt, steht auch nichts"
+
+
 def test_plotter_release_is_idempotent(qt_app: QApplication) -> None:
     """Der native Renderer wird genau einmal und über eine Besitzstelle gelöst."""
     from app.ui.viewport import Viewport

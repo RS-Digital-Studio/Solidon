@@ -417,6 +417,15 @@ def flatpak_manifest() -> str:
       dort gerade nicht frei; im Flatpak blieb ``DISPLAY`` leer und VTK brach
       beim ersten Modell ab. Auch Qt läuft deshalb über Xwayland: zwei
       Fenstersysteme innerhalb eines Fensters sind keine stabile Kombination.
+    * ``--env=QT_QPA_PLATFORM=xcb`` — dieselbe Entscheidung noch einmal, für
+      den Fall, dass der Nutzer ``QT_QPA_PLATFORM=wayland`` global gesetzt
+      hat: Flatpak reicht die Host-Umgebung durch (``flatpak_bwrap_new(NULL)``
+      nimmt ``g_get_environ()``), und Qt versuchte dann **nur** Wayland — ohne
+      Socket startet nichts. Die Anwendung wählt xcb auch selbst
+      (``app.ui.qt_platform``); die Zeile hier steht dort, wo ein Paketierer
+      sucht, und erspart Qt den ersten Fehlversuch, denn
+      ``XDG_SESSION_TYPE=wayland`` reist ebenfalls mit und lässt Qt 6 Wayland
+      vor xcb probieren. Flathub macht es bei FreeCAD genauso.
     * ``--device=dri`` — der Viewport rechnet mit OpenGL (§18).
     * ``--filesystem=home`` — Modelle liegen beim Nutzer, und ein Dateidialog,
       der nur in einen Sandkasten sehen darf, ist kein Dateidialog. Portale
@@ -476,6 +485,7 @@ def flatpak_manifest() -> str:
         f"  - {entry}"
         for entry in (
             "--socket=x11",
+            "--env=QT_QPA_PLATFORM=xcb",
             "--share=ipc",
             "--share=network",
             "--device=dri",

@@ -886,6 +886,7 @@
   "Dicke des Bügels. Zu dünn federt er auf, zu dick federt er nicht.": "Thickness of the clamp. Too thin and it springs open, too thick and it will not spring at all.",
   "Dicke des Rands, der das Gewinde trägt. Zu dünn reißt beim Aufschrauben entlang der Schichten auf.": "Thickness of the rim carrying the thread. Too thin splits along the layers when screwed on.",
   "Dicke von Rückplatte und Auflage. Unter zwei Millimetern biegt sich der Halter.": "Thickness of back plate and shelf. Below two millimetres the mount bends.",
+  "Die 3D-Ansicht braucht ein X11-Fenster, und diese Sitzung bietet keines: Xwayland fehlt, oder das Programm wurde mit „-platform wayland“ gestartet. Schalten Sie Xwayland in Ihrer Arbeitsumgebung ein oder melden Sie sich in einer X11-Sitzung an; X11 wird dann von selbst gewählt.": "The 3D view needs an X11 window, and this session offers none: Xwayland is missing, or the program was started with “-platform wayland”. Enable Xwayland in your desktop environment or sign in to an X11 session; X11 is then chosen automatically.",
   "Die 3D-Ansicht steht auf diesem Rechner nicht zur Verfügung.": "The 3D view is not available on this machine.",
   "Die 3D-Modell-Erzeugung hat kein Modell geliefert.": "The 3D model generation delivered no model.",
   "Die 3D-Modell-Erzeugung konnte nicht starten.": "The 3D model generation could not start.",

@@ -33,6 +33,7 @@ from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui import window_chrome
 from app.ui.icons import application_icon
+from app.ui.qt_platform import prefer_x11_for_the_viewport
 from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
@@ -196,6 +197,9 @@ def build_application(
     # ``main`` benutzt, und dann ist er der einzige.
     existing = QApplication.instance()
     if existing is None:
+        # Beides gehört vor die Anwendung: Die Plattform steht mit ihrem
+        # Aufbau fest, und die 3D-Ansicht hat auf Wayland kein Bild.
+        prefer_x11_for_the_viewport()
         enable_hidpi()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)
     application.setApplicationName(APP_NAME)
@@ -337,6 +341,11 @@ def main(argv: list[str] | None = None) -> int:
     # sieht niemand die Sekunden, die das Füllen des Registers kostet. Deshalb
     # ist ``load_operations`` hierher gewandert und läuft nicht mehr vor
     # ``build_application``.
+    #
+    # Und davor die Plattform: Unter Linux wählt Qt in einer Wayland-Sitzung
+    # von sich aus Wayland, und dort hat die 3D-Ansicht kein Bild. Gibt es ein
+    # X11-Display, läuft die Anwendung darauf (``app.ui.qt_platform``).
+    prefer_x11_for_the_viewport()
     enable_hidpi()
     existing = QApplication.instance()
     application = existing if isinstance(existing, QApplication) else QApplication(argv or sys.argv)

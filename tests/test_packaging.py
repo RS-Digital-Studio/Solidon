@@ -581,6 +581,11 @@ def test_every_platform_can_do_the_same_things() -> None:
     assert "--socket=x11" in manifest
     assert "--socket=wayland" not in manifest
     assert "--socket=fallback-x11" not in manifest
+    # Und dieselbe Entscheidung als Umgebung: Flatpak reicht ein global
+    # gesetztes ``QT_QPA_PLATFORM=wayland`` durch, und Qt versuchte dann nur
+    # Wayland — ohne Socket startet nichts. FreeCAD auf Flathub hat dieselbe
+    # Zeile aus demselben Grund.
+    assert "--env=QT_QPA_PLATFORM=xcb" in manifest
     assert "--talk-name=org.freedesktop.secrets" in manifest
     # Und die Anwendung startet über ihren eigenen Namen, nicht über ein Skript.
     assert "command: " in manifest

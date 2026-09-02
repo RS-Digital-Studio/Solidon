@@ -54,7 +54,10 @@ bevor es jemand wusste:
 
 **Rahmen und Einstieg**
 
-`app.py` (Einstiegspunkt, §38) · `main_window.py` (**rund 8 900 Zeilen** — das
+`app.py` (Einstiegspunkt, §38) · `qt_platform.py` (welche Qt-Plattform die
+3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import;
+Qt 6 nähme in einer Wayland-Sitzung sonst Wayland, und dort hat VTK kein
+Fenster) · `main_window.py` (**rund 8 900 Zeilen** — das
 Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 `start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py`
 
