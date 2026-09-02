@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+from collections.abc import Iterable
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -74,6 +75,133 @@ MIME_FILE = PACKAGING / f"{APP_ID}.xml"
 #: Projektdatei ist ein ZIP (§16.1), und das erkennt shared-mime-info am
 #: Inhalt.
 MIME_TYPE = f"application/x-{DISTRIBUTION_NAME}-project"
+
+#: Qt-Plugins, die das Linux-Paket nicht mitnimmt — samt allem, was nur sie
+#: brauchen. ``libqgtk3`` ist Qts GTK-3-Erscheinungsbild für GNOME: ein
+#: GTK-Stapel im Prozess, dessen Einstellungsschemata und Module dann vom
+#: Rechner des Kunden kommen müssten, während die Bibliotheken aus dem Paket
+#: stammen — die bekannte Absturzquelle gebündelter GTK-Anwendungen. Solidon
+#: zeichnet sein eigenes Erscheinungsbild, und Dateidialoge kommen unter GNOME
+#: über ``libqxdgdesktopportal`` vom Portal. Gemessen am 0.2.1-Paket: 32 der 74
+#: mitgereisten Systembibliotheken hingen allein an diesem Plugin.
+DROPPED_QT_PLUGINS = ("platformthemes/libqgtk3.so",)
+
+#: Systembibliotheken, die das Linux-Paket dem Rechner überlässt. Drei Gruppen:
+#:
+#: * **Der GTK-Stapel** hinter ``libqgtk3`` (siehe oben) — nach dem Ausbau des
+#:   Plugins braucht sie nichts mehr, PyInstaller hat sie aber schon
+#:   eingesammelt.
+#: * **Grundbestand jedes Linux mit Fenster** nach der Ausschlussliste des
+#:   AppImage-Projekts (``pkg2appimage/excludelist``): X11-Kern, fontconfig,
+#:   freetype, expat, uuid, zlib. Wer sie bündelt, tauscht die Schriftenkonfig
+#:   und das Anzeigeprotokoll des Rechners gegen die des Bauservers.
+#: * **Der glib/dbus/systemd-Stapel** mit seinen Helfern (mount, blkid,
+#:   selinux, pcre2, gcrypt, gpg-error, cap, lz4) — LGPL mit einer Version, die
+#:   mit dem Bauserver wandert, auf jedem Rechner und in der Flatpak-Laufzeit
+#:   vorhanden, und mit Modulen (GIO), die zur Bibliothek des Rechners passen
+#:   müssen.
+#:
+#: Dazu die Terminalbibliotheken hinter ``readline`` und ``curses``, die die
+#: Spec als Module ausschließt (``libreadline`` ist GPL-3, Regel 15).
+#:
+#: **Was bleibt, wird inventarisiert** (``make_sbom.LINUX_LIBRARY_FAMILIES``):
+#: libxcb mit den xcb-util-Bibliotheken, xkbcommon und die Kerberos-Familie —
+#: die Flatpak-Laufzeit 24.08 hat kein Kerberos, und ``libQt6Network`` aus dem
+#: PySide6-Wheel hängt hart an ``libgssapi_krb5.so.2``. Jede weitere fremde
+#: Datei fällt in der Releaseakte auf: ``make_licence_notices --release-check``
+#: lehnt native Dateien ohne Besitzer ab.
+HOST_PROVIDED_LIBRARIES = frozenset(
+    {
+        # GTK-Stapel — nur über libqgtk3 erreichbar
+        "libXau.so.6",
+        "libXcomposite.so.1",
+        "libXcursor.so.1",
+        "libXdamage.so.1",
+        "libXdmcp.so.6",
+        "libXext.so.6",
+        "libXfixes.so.3",
+        "libXi.so.6",
+        "libXinerama.so.1",
+        "libXrandr.so.2",
+        "libXrender.so.1",
+        "libatk-1.0.so.0",
+        "libatk-bridge-2.0.so.0",
+        "libatspi.so.0",
+        "libbsd.so.0",
+        "libcairo-gobject.so.2",
+        "libcairo.so.2",
+        "libdatrie.so.1",
+        "libepoxy.so.0",
+        "libfribidi.so.0",
+        "libgdk-3.so.0",
+        "libgdk_pixbuf-2.0.so.0",
+        "libgraphite2.so.3",
+        "libgtk-3.so.0",
+        "libharfbuzz.so.0",
+        "libjpeg.so.8",
+        "libmd.so.0",
+        "libpango-1.0.so.0",
+        "libpangocairo-1.0.so.0",
+        "libpangoft2-1.0.so.0",
+        "libpixman-1.so.0",
+        "libthai.so.0",
+        # Grundbestand nach der AppImage-Ausschlussliste
+        "libX11.so.6",
+        "libX11-xcb.so.1",
+        "libfontconfig.so.1",
+        "libfreetype.so.6",
+        "libexpat.so.1",
+        "libuuid.so.1",
+        "libz.so.1",
+        "libpng16.so.16",
+        "libbrotlicommon.so.1",
+        "libbrotlidec.so.1",
+        "libbz2.so.1.0",
+        "liblzma.so.5",
+        "libzstd.so.1",
+        # glib/dbus/systemd-Stapel
+        "libglib-2.0.so.0",
+        "libgio-2.0.so.0",
+        "libgobject-2.0.so.0",
+        "libgmodule-2.0.so.0",
+        "libgthread-2.0.so.0",
+        "libdbus-1.so.3",
+        "libsystemd.so.0",
+        "libgcrypt.so.20",
+        "libgpg-error.so.0",
+        "libcap.so.2",
+        "liblz4.so.1",
+        "libmount.so.1",
+        "libblkid.so.1",
+        "libselinux.so.1",
+        "libpcre2-8.so.0",
+        # Terminal — die Module dazu schließt die Spec aus
+        "libreadline.so.8",
+        "libncursesw.so.6",
+        "libtinfo.so.6",
+    }
+)
+
+
+def trim_linux_binaries(binaries: Iterable[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """Nimmt aus PyInstallers Binaries-Liste, was das Linux-Paket dem Rechner
+    überlässt — nach Zielname, nie nach Quellpfad.
+
+    Ein Eintrag ist ``(zielname, quellpfad, typ)``; die Systembibliotheken
+    liegen mit bloßem Sonamen an der Wurzel. Die vendorisierten Kopien der
+    Wheels (``pillow.libs/libjpeg-31e2ca52.so.62.4.0``) tragen einen Hash im
+    Namen und bleiben unberührt — sie gehören dem Wheel und seiner Lizenz.
+    """
+    kept: list[tuple[str, str, str]] = []
+    for entry in binaries:
+        target = str(entry[0]).replace("\\", "/")
+        if Path(target).name in HOST_PROVIDED_LIBRARIES:
+            continue
+        if any(target.endswith(plugin) for plugin in DROPPED_QT_PLUGINS):
+            continue
+        kept.append(entry)
+    return kept
+
 
 #: Der AppImage-Laufzeitkern wird Bestandteil der Kundendatei. Der Wrapper
 #: verlangt deshalb eine bereits geprüfte, feste Datei, statt appimagetool

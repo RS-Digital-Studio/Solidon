@@ -85,9 +85,12 @@ def test_machine_readable_manifest_has_the_same_component_and_text_records() -> 
         assert [text["sha256"] for text in entry["texts"]] == [
             text.sha256 for text in component.texts
         ]
+    # keyutils: LGPL-2.1-or-later, reist mit der Kerberos-Familie im Linux-Paket
+    # (Ubuntus libkrb5 hängt daran) und braucht deshalb den Quellbeleg.
     assert document["release_gate"]["source_delivery"] == [
         "appimage-type2-runtime",
         "geos",
+        "keyutils",
         "opencascade-technology",
         "qt",
     ]
@@ -164,9 +167,14 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
     assert set(make_licence_notices._runtime_policies()) == {
         "appimage-type2-runtime",
         "cpython",
+        "e2fsprogs",
         "gcc-runtime",
         "geos",
+        "keyutils",
+        "krb5",
         "libffi",
+        "libxcb",
+        "libxkbcommon",
         "microsoft-visual-cpp-runtime",
         "openblas-numpy",
         "openblas-scipy",
@@ -175,6 +183,12 @@ def test_every_sbom_runtime_family_has_an_explicit_notice_policy() -> None:
         "pyinstaller-bootloader",
         "qt",
         "vtk-native",
+        "xcb-util",
+        "xcb-util-cursor",
+        "xcb-util-image",
+        "xcb-util-keysyms",
+        "xcb-util-renderutil",
+        "xcb-util-wm",
     }
 
 

@@ -1429,3 +1429,50 @@ def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
     )
 
     assert done.stdout == "/opt/solidon3d", f"aus der Vorgabe wurde {done.stdout}"
+
+
+def test_the_linux_bundle_leaves_host_libraries_and_the_gtk_theme_behind() -> None:
+    """32 der 74 Systembibliotheken im Linux-Paket 0.2.1 hingen allein an Qts
+    GTK-3-Erscheinungsbild, der Grundbestand gehört dem Rechner — und
+    ``libreadline`` ist GPL-3 (Regel 15). Was bleibt, hat in der Stückliste
+    eine Familie; sonst fiele es in der Releaseakte als Datei ohne Besitzer auf.
+    """
+    from tools import make_linux_packages as tool
+    from tools import make_sbom
+
+    toc = [
+        ("libgtk-3.so.0", "/usr/lib/x86_64-linux-gnu/libgtk-3.so.0", "BINARY"),
+        (
+            "PySide6/Qt/plugins/platformthemes/libqgtk3.so",
+            "/site-packages/PySide6/Qt/plugins/platformthemes/libqgtk3.so",
+            "BINARY",
+        ),
+        (
+            "PySide6/Qt/plugins/platformthemes/libqxdgdesktopportal.so",
+            "/site-packages/PySide6/Qt/plugins/platformthemes/libqxdgdesktopportal.so",
+            "BINARY",
+        ),
+        ("libX11.so.6", "/usr/lib/x86_64-linux-gnu/libX11.so.6", "BINARY"),
+        ("libglib-2.0.so.0", "/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0", "BINARY"),
+        ("libreadline.so.8", "/lib/x86_64-linux-gnu/libreadline.so.8", "BINARY"),
+        ("libxcb-cursor.so.0", "/usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0", "BINARY"),
+        ("libgssapi_krb5.so.2", "/usr/lib/x86_64-linux-gnu/libgssapi_krb5.so.2", "BINARY"),
+        (
+            "pillow.libs/libjpeg-31e2ca52.so.62.4.0",
+            "/site-packages/pillow.libs/libjpeg-31e2ca52.so.62.4.0",
+            "BINARY",
+        ),
+    ]
+    kept = [entry[0] for entry in tool.trim_linux_binaries(toc)]
+    assert kept == [
+        "PySide6/Qt/plugins/platformthemes/libqxdgdesktopportal.so",
+        "libxcb-cursor.so.0",
+        "libgssapi_krb5.so.2",
+        "pillow.libs/libjpeg-31e2ca52.so.62.4.0",
+    ]
+    families = dict(make_sbom.LINUX_LIBRARY_FAMILIES)
+    for soname in ("libxcb-cursor.so.0", "libgssapi_krb5.so.2", "libxkbcommon-x11.so.0"):
+        assert make_sbom._runtime_owner(f"_internal/{soname}") in families, soname
+    assert not tool.HOST_PROVIDED_LIBRARIES & {
+        name for _family, prefixes in make_sbom.LINUX_LIBRARY_FAMILIES for name in prefixes
+    }, "eine Bibliothek ist entweder Familie oder Sache des Rechners, nie beides"

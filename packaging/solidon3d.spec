@@ -26,7 +26,7 @@ ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
-from tools import asset_rights, make_sbom  # noqa: E402
+from tools import asset_rights, make_linux_packages, make_sbom  # noqa: E402
 
 # Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
 # PyInstaller dieselbe Freigabe auf allen drei Zielsystemen. Website-only-
@@ -240,6 +240,13 @@ analysis = Analysis(
         "pyximport",
         "setuptools",
         "app.core.activation",
+        # Terminalmodule, die eine Fensteranwendung nie ruft — und ``readline``
+        # zöge ``libreadline`` mit, GPL-3 (Regel 15), samt ncurses. Auf Linux
+        # und macOS lagen beide im Kundenpaket, gemessen an der 0.2.1/0.2.2.
+        "readline",
+        "curses",
+        "_curses",
+        "_curses_panel",
     ],
     # Die vier Grenzdateien aus §2 C reisen als Quelltext, nicht im Archiv:
     # integrity.intact() hasht genau die Datei, aus der Python sie lädt —
@@ -280,6 +287,14 @@ if sys.platform == "win32":
             or (name.startswith("icudt") and name.endswith(".dll"))
         )
     ]
+
+# Linux: Das GTK-3-Erscheinungsbild von Qt und die Bibliotheken, die jedes
+# Linux mit einem Fenster selbst hat, bleiben draußen — welche und warum, steht
+# an der Liste in ``make_linux_packages``. Was bleibt, inventarisiert
+# ``make_sbom`` je Familie; eine fremde Datei ohne Besitzer lässt die
+# Releaseakte nicht durch.
+if sys.platform.startswith("linux"):
+    analysis.binaries = make_linux_packages.trim_linux_binaries(analysis.binaries)
 
 pyz = PYZ(analysis.pure)
 

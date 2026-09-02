@@ -47,6 +47,73 @@ NON_SPDX_LICENCES: Final = {
     "Microsoft Visual Studio Runtime license",
 }
 WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4"}
+#: Die Microsoft-Laufzeit im Windows-Paket: C++-Laufzeit, UCRT und ihre
+#: Weiterleitungs-DLLs. ``api-ms-win-core-*`` fehlte hier — 29 Dateien ohne
+#: Besitzer im Windows-Artefakt, gemessen am 31.08.2026.
+MSVC_RUNTIME_PREFIXES: Final = (
+    "msvcp",
+    "vcruntime",
+    "ucrtbase",
+    "api-ms-win-crt",
+    "api-ms-win-core",
+)
+#: Systembibliotheken, die das Linux-Paket bewusst mitnimmt, als Familien mit
+#: ihren Sonamen-Präfixen (kleingeschrieben). Reihenfolge zählt: Die
+#: xcb-util-Bibliotheken heißen alle ``libxcb-…`` und stehen deshalb vor
+#: ``libxcb`` selbst. Was das Paket dem Rechner überlässt, steht in
+#: ``make_linux_packages.HOST_PROVIDED_LIBRARIES``.
+LINUX_LIBRARY_FAMILIES: Final = (
+    ("xcb-util-cursor", ("libxcb-cursor.",)),
+    ("xcb-util-image", ("libxcb-image.",)),
+    ("xcb-util-keysyms", ("libxcb-keysyms.",)),
+    ("xcb-util-renderutil", ("libxcb-render-util.",)),
+    ("xcb-util-wm", ("libxcb-icccm.", "libxcb-ewmh.")),
+    ("xcb-util", ("libxcb-util.",)),
+    ("libxcb", ("libxcb-", "libxcb.")),
+    ("libxkbcommon", ("libxkbcommon",)),
+    ("krb5", ("libgssapi_krb5.", "libkrb5.", "libk5crypto.", "libkrb5support.")),
+    ("e2fsprogs", ("libcom_err.",)),
+    ("keyutils", ("libkeyutils.",)),
+)
+#: Name, Lizenz und Herkunft je Familie — der Name muss dem ``[[runtime]]``-
+#: Eintrag in ``third_party_licenses.toml`` gleichen, die Notices prüfen das.
+LINUX_FAMILY_COMPONENTS: Final = {
+    "libxcb": ("libxcb", "MIT", "https://gitlab.freedesktop.org/xorg/lib/libxcb"),
+    "xcb-util": ("xcb-util", "MIT", "https://gitlab.freedesktop.org/xorg/lib/libxcb-util"),
+    "xcb-util-image": (
+        "xcb-util-image",
+        "MIT",
+        "https://gitlab.freedesktop.org/xorg/lib/libxcb-image",
+    ),
+    "xcb-util-keysyms": (
+        "xcb-util-keysyms",
+        "MIT",
+        "https://gitlab.freedesktop.org/xorg/lib/libxcb-keysyms",
+    ),
+    "xcb-util-renderutil": (
+        "xcb-util-renderutil",
+        "MIT",
+        "https://gitlab.freedesktop.org/xorg/lib/libxcb-render-util",
+    ),
+    "xcb-util-wm": ("xcb-util-wm", "MIT", "https://gitlab.freedesktop.org/xorg/lib/libxcb-wm"),
+    "xcb-util-cursor": (
+        "xcb-util-cursor",
+        "MIT",
+        "https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor",
+    ),
+    "libxkbcommon": ("libxkbcommon", "MIT", "https://github.com/xkbcommon/libxkbcommon"),
+    "krb5": ("MIT Kerberos", "MIT", "https://github.com/krb5/krb5"),
+    "e2fsprogs": (
+        "e2fsprogs com_err",
+        "MIT",
+        "https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git",
+    ),
+    "keyutils": (
+        "keyutils",
+        "LGPL-2.1-or-later",
+        "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git",
+    ),
+}
 
 DistributionLookup = Callable[[str], metadata.Distribution]
 
@@ -275,6 +342,12 @@ def _runtime_owner(relative: str) -> str:
     name = Path(relative).name.casefold()
     if name.casefold() in {APP_NAME.casefold(), f"{APP_NAME.casefold()}.exe"}:
         return "pyinstaller-bootloader"
+    # CPython auf Linux und macOS baut vierzig Module als eigene Dateien, die
+    # Windows in die DLL einbaut — ``_bisect``, ``_json``, ``math`` …; die
+    # Präfixliste unten kennt nur die Windows-Sorte. Der Ordner sagt es sicherer
+    # als jeder Name.
+    if "/lib-dynload/" in f"/{relative}":
+        return "cpython"
     if "python.framework/" in relative.casefold():
         return "cpython"
     if any(
@@ -282,7 +355,9 @@ def _runtime_owner(relative: str) -> str:
         for part in relative.split("/")
     ):
         return "pyside6-essentials"
-    if name.startswith(("python3", "libpython3", "_asyncio", "_bz2", "_ctypes", "_decimal")):
+    if name.startswith(
+        ("python3", "libpython3", "_asyncio", "_bz2", "_ctypes", "_decimal", "_wmi")
+    ):
         return "cpython"
     if name.startswith(
         (
@@ -309,9 +384,37 @@ def _runtime_owner(relative: str) -> str:
         return "openblas"
     if name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++")):
         return "gcc-runtime"
-    if name.startswith(("msvcp", "vcruntime", "ucrtbase", "api-ms-win-crt")):
+    if name.startswith(MSVC_RUNTIME_PREFIXES):
         return "msvc-runtime"
+    for family, prefixes in LINUX_LIBRARY_FAMILIES:
+        if name.startswith(prefixes):
+            return family
     return "unassigned-native"
+
+
+def _vendored_owner(relative: str, package_root: str) -> tuple[str, ...]:
+    """Die Distribution hinter einem ``<name>.libs``-Ordner eines reparierten
+    Wheels — ``pillow.libs`` gehört Pillow, obwohl kein Importpaket so heißt.
+
+    ``auditwheel`` und ``delocate`` legen die mitgebrachten Bibliotheken neben
+    das Importpaket, benannt nach der Distribution. Die Rückwärtszuordnung über
+    Importnamen kennt diesen Ordner nicht: 18 Dateien ohne Besitzer im
+    Linux-Paket, gemessen an der 0.2.1.
+    """
+    parts = relative.replace("\\", "/").split("/")
+    if parts and parts[0] == "_internal":
+        parts = parts[1:]
+    elif len(parts) >= 3 and tuple(parts[:2]) in {
+        ("Contents", "Frameworks"),
+        ("Contents", "MacOS"),
+    }:
+        parts = parts[2:]
+    if len(parts) < 2 or not parts[0].casefold().endswith(".libs"):
+        return ()
+    try:
+        return (metadata.distribution(package_root).metadata["Name"],)
+    except metadata.PackageNotFoundError:
+        return ()
 
 
 def _pe_file_version(path: Path) -> str:
@@ -361,11 +464,19 @@ def artifact_files(
     normalised = {name.casefold(): tuple(values) for name, values in owners.items()}
     found: list[ArtifactFile] = []
     for path in sorted(entry for entry in root.rglob("*") if entry.is_file()):
+        # PyInstaller legt für den Lader Verweise auf die Bibliotheken der
+        # Pakete an — 335 im Linux-Paket, die Qt-Frameworks auf macOS ebenso.
+        # Ein Verweis ist keine zweite native Datei, und sein bloßer Name kennt
+        # den Besitzer nicht, den das Ziel längst hat.
+        if path.is_symlink():
+            continue
         if not _is_native_binary(path):
             continue
         relative = _artifact_relative(path, root)
         package_root = _package_root(relative)
-        distributions = normalised.get(package_root.casefold(), ())
+        distributions = normalised.get(package_root.casefold(), ()) or _vendored_owner(
+            relative, package_root
+        )
         owner: str
         if package_root.casefold() == "app":
             owner = str(canonicalize_name(DISTRIBUTION_NAME))
@@ -474,13 +585,55 @@ def _msvc_runtime_version(entries: Iterable[ArtifactFile]) -> str:
     selected = tuple(
         entry
         for entry in entries
-        if Path(entry.path)
-        .name.casefold()
-        .startswith(("msvcp", "vcruntime", "ucrtbase", "api-ms-win-crt"))
+        if Path(entry.path).name.casefold().startswith(MSVC_RUNTIME_PREFIXES)
     )
     if not selected or any(entry.binary_version == "unbekannt" for entry in selected):
         return "unbekannt"
     return ",".join(sorted({entry.binary_version for entry in selected}))
+
+
+def _dpkg_version(soname: str) -> tuple[str, str]:
+    """Belegt die Quellversion einer gebündelten Systembibliothek über das
+    Paket des Bauservers — ``dpkg-query -S`` nennt das Paket, ``-W`` seine
+    Fassung, und vor dem ersten Bindestrich steht die des Projekts.
+
+    Dasselbe Muster wie :func:`_libffi_version`: Die Fassung wandert mit dem
+    Runner, also wird sie gelesen und nicht eingetragen. Ohne dpkg — Windows,
+    macOS, ein fremdes Linux — bleibt sie ``unbekannt``, und die Releaseakte
+    lässt das auf Linux nicht durch.
+    """
+    tool = shutil.which("dpkg-query")
+    if tool is None:
+        return "unbekannt", "dpkg-query fehlt"
+    try:
+        search = subprocess.run(
+            [tool, "-S", soname], capture_output=True, text=True, check=False, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unbekannt", "dpkg-query -S war nicht ausführbar"
+    package = ""
+    for line in search.stdout.splitlines():
+        owner, _, location = line.partition(": ")
+        if Path(location.strip()).name == soname:
+            package = owner.split(":", 1)[0].strip()
+            break
+    if not package:
+        return "unbekannt", f"dpkg-query -S kennt {soname} nicht"
+    try:
+        shown = subprocess.run(
+            [tool, "-W", "-f=${Version}", package],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unbekannt", "dpkg-query -W war nicht ausführbar"
+    full = shown.stdout.strip()
+    if not full:
+        return "unbekannt", f"dpkg-query -W meldete keine Fassung für {package}"
+    upstream = full.split(":", 1)[-1].split("-", 1)[0]
+    return upstream, f"dpkg-query -W {package} ({full})"
 
 
 def runtime_components(
@@ -579,6 +732,15 @@ def runtime_components(
                 "https://visualstudio.microsoft.com/license-terms/",
                 "PE FileVersion der gebündelten Laufzeitdateien",
             )
+        )
+    for family, _prefixes in LINUX_LIBRARY_FAMILIES:
+        members = [entry for entry in entries if entry.owner == family]
+        if not members:
+            continue
+        name, licence, website = LINUX_FAMILY_COMPONENTS[family]
+        version, version_source = _dpkg_version(Path(members[0].path).name)
+        components.append(
+            _runtime_component(family, name, version, licence, website, version_source)
         )
     return components
 

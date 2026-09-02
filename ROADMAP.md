@@ -11597,6 +11597,33 @@ zusammen — er stand in der Behebung selbst.
   (`8c38d193`). Läuft Solidon selbst als Flatpak, ist sein Nutzer-Cache
   `~/.var/app/<id>/cache`, und `--filesystem=home` nimmt `~/.var` aus.
 
+- [x] **Neun X11-Bibliotheken des Qt-Plugins reisten im Linux-Paket nicht
+      mit, und die Releaseakte hätte das Paket nie durchgelassen** (`3a70110b`
+      und der Commit danach, 02.09.2026). Gemessen am 0.2.1-Tarball von der
+      Website: `libQt6XcbQpa.so.6` braucht `libxcb-cursor`, `-icccm`, `-image`,
+      `-keysyms`, `-render-util`, `-shape`, `-util`, `-xkb` und
+      `libxkbcommon-x11` vom Rechner — der Runner hatte keine davon, und auf
+      einem Ubuntu-GNOME fehlt `libxcb-cursor0` regelmäßig; die apt-Zeile des
+      Paketjobs bringt sie mit. Dieselbe Messung zeigte, dass „Linux-Releaseakte
+      prüfen" (neu seit dem 02.09., nie über ein echtes Paket gelaufen) an
+      **135 nativen Dateien ohne Besitzer** gescheitert wäre: 40 CPython-Module
+      in `lib-dynload`, 18 in `pillow.libs`, 335 Symlinks als Dateien gezählt,
+      74 Systembibliotheken — 32 davon allein hinter Qts GTK-3-Erscheinungsbild
+      (`libqgtk3`), dazu `libreadline` (GPL-3, Regel 15) über CPythons
+      `readline`. Das Windows-Paket hatte 30 (`api-ms-win-core-*`, `_wmi`),
+      das macOS-Paket 41 (`lib-dynload`, `libncurses`). Jetzt: Spec lässt das
+      GTK-Plugin, den Grundbestand nach der AppImage-Ausschlussliste, den
+      glib/dbus/systemd-Stapel und `readline`/`curses` draußen
+      (`make_linux_packages.HOST_PROVIDED_LIBRARIES`); `make_sbom` ordnet
+      Symlinks, `lib-dynload`, `<name>.libs` und die verbleibenden Familien —
+      libxcb, sechs xcb-util-Projekte, xkbcommon, Kerberos mit `com_err` und
+      `keyutils` — mit `dpkg-query`-Fassung zu; die Lizenztexte der Familien
+      liegen mit SHA-256 in `third_party_licenses`. Kerberos bleibt gebündelt,
+      weil die Flatpak-Laufzeit 24.08 keines hat und `libQt6Network` hart daran
+      hängt. Gegenprobe am ausgepackten 0.2.1-Baum: null Dateien ohne Besitzer
+      nach dem Filter (bis auf `cffi`/`cryptography`, die nur der Linux-Runner
+      installiert). **Was der Tag erst zeigt:** den echten Paketjob mit der
+      Spec und die Releaseakte mit Evidenzschreiber (3d-druck-7b).
 - [ ] **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
   Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
   repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.

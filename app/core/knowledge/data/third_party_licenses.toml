@@ -152,3 +152,137 @@ name = "VTK native libraries"
 notice_package = "vtk"
 source = "https://gitlab.kitware.com/vtk/vtk/-/tree/v9.6.2"
 versions = ["9.6.2"]
+
+# Systembibliotheken, die das Linux-Paket bewusst mitnimmt (Familien aus
+# ``make_sbom.LINUX_LIBRARY_FAMILIES``, Ausschlussliste in
+# ``make_linux_packages.HOST_PROVIDED_LIBRARIES``). Die Version je Familie liest
+# ``make_sbom`` beim Bau über ``dpkg-query`` aus dem Paket des Bauservers; die
+# Texte hier sind die der Fassungen aus Ubuntu 24.04 und tragen die Fassung im
+# Namen.
+
+[[runtime]]
+id = "libxcb"
+name = "libxcb"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb"
+
+[[runtime]]
+id = "xcb-util"
+name = "xcb-util"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-util"
+
+[[runtime]]
+id = "xcb-util-image"
+name = "xcb-util-image"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-image"
+
+[[runtime]]
+id = "xcb-util-keysyms"
+name = "xcb-util-keysyms"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-keysyms"
+
+[[runtime]]
+id = "xcb-util-renderutil"
+name = "xcb-util-renderutil"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-render-util"
+
+[[runtime]]
+id = "xcb-util-wm"
+name = "xcb-util-wm"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-wm"
+
+[[runtime]]
+id = "xcb-util-cursor"
+name = "xcb-util-cursor"
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor"
+
+[[runtime]]
+id = "libxkbcommon"
+name = "libxkbcommon"
+source = "https://github.com/xkbcommon/libxkbcommon"
+
+# Kerberos reist mit, weil ``libQt6Network`` aus dem PySide6-Wheel hart an
+# ``libgssapi_krb5.so.2`` hängt und die Flatpak-Laufzeit 24.08 kein Kerberos
+# trägt. Ubuntus ``libkrb5`` zieht ``libcom_err`` (e2fsprogs) und
+# ``libkeyutils`` nach; keyutils ist LGPL und braucht deshalb den Quellbeleg.
+
+[[runtime]]
+id = "krb5"
+name = "MIT Kerberos"
+source = "https://github.com/krb5/krb5"
+
+[[runtime]]
+id = "e2fsprogs"
+name = "e2fsprogs com_err"
+source = "https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git"
+
+[[runtime]]
+id = "keyutils"
+name = "keyutils"
+source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git"
+source_delivery = true
+
+[[text]]
+path = "third_party_licenses/libxcb-1.15.txt"
+runtime = ["libxcb"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb/-/raw/libxcb-1.15/COPYING"
+sha256 = "c5ffbfeaa501071ceeb97b7de2c0d703fdaa35de01c0fb6cbac1c28453a3e9fd"
+
+[[text]]
+path = "third_party_licenses/xcb-util-0.4.0.txt"
+runtime = ["xcb-util"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-util/-/raw/0.4.0/COPYING"
+sha256 = "325b64f0b0284e08bbb7a78ae3e55c1edc2a7cd77f603225ae4b8ffc35423e37"
+
+[[text]]
+path = "third_party_licenses/xcb-util-image-0.4.0.txt"
+runtime = ["xcb-util-image"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-image/-/raw/0.4.0/COPYING"
+sha256 = "19672c6153d8c4870abe734fa4dd2197481a311f4788d02ad729be07e116b26b"
+
+[[text]]
+path = "third_party_licenses/xcb-util-keysyms-0.4.0.txt"
+runtime = ["xcb-util-keysyms"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-keysyms/-/raw/master/COPYING"
+sha256 = "d499c1bf2c2a5f0a0498e5204d998388e308dcf2273dfbe2250a5b9a73f66537"
+
+[[text]]
+path = "third_party_licenses/xcb-util-renderutil-0.3.9.txt"
+runtime = ["xcb-util-renderutil"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-render-util/-/raw/0.3.9/COPYING"
+sha256 = "271169dd66674e9c396697af0b4822d1c59ccd2342b7740864d667a02963068b"
+
+[[text]]
+path = "third_party_licenses/xcb-util-wm-0.4.1.txt"
+runtime = ["xcb-util-wm"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-wm/-/raw/0.4.1/COPYING"
+sha256 = "12ab3559977a4b22ae3030b90c64a386e6ec51ab0e4eab1ff530f81a2639400a"
+
+[[text]]
+path = "third_party_licenses/xcb-util-cursor-0.1.4.txt"
+runtime = ["xcb-util-cursor"]
+source = "https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor/-/raw/xcb-util-cursor-0.1.4/COPYING"
+sha256 = "0dde91ae1d443105dc9e13cbaed6674c36683b7095836ad9ddfce26be270aad5"
+
+[[text]]
+path = "third_party_licenses/libxkbcommon-1.6.0.txt"
+runtime = ["libxkbcommon"]
+source = "https://raw.githubusercontent.com/xkbcommon/libxkbcommon/xkbcommon-1.6.0/LICENSE"
+sha256 = "086caee279449369d41c1157911ec7696e707b93feba7280de757d3c470b2dfb"
+
+[[text]]
+path = "third_party_licenses/krb5-1.20.1.txt"
+runtime = ["krb5"]
+source = "https://raw.githubusercontent.com/krb5/krb5/krb5-1.20.1-final/NOTICE"
+sha256 = "cfadcf7b2ead2f3af793c25c00638c9908ac0023b101695f40cb9a03b16811dc"
+
+[[text]]
+path = "third_party_licenses/e2fsprogs-1.47.0.txt"
+runtime = ["e2fsprogs"]
+source = "https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/plain/NOTICE?h=v1.47.0"
+sha256 = "adf8d9020e8499912cf340aaa11020a21d0829134e3ce152473a3dda77d3c4dd"
+
+[[text]]
+path = "third_party_licenses/keyutils-1.6.3.txt"
+runtime = ["keyutils"]
+source = "https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git/plain/LICENCE.LGPL?h=v1.6.3"
+sha256 = "0cbf0118e6f56383c7737db04c52c0ec3da0e0787ff4507ed500c336c0fb782a"

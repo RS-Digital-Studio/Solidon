@@ -112,6 +112,18 @@ fehlen beide Wege, nennt der Baulauf SmartScreen ausdrücklich.
   die sortierte Menge der `FileVersion`-Werte aller mitgereisten PE-Dateien,
   nicht die bloße Compilerangabe. Die CI prüft auf macOS nur die `.app`, nicht
   zusätzlich den stehen gebliebenen COLLECT-Zwischenordner.
+- **Das Linux-Paket nimmt Systembibliotheken nur mit Familie mit.** Die Spec
+  lässt auf Linux das GTK-3-Erscheinungsbild von Qt (`platformthemes/libqgtk3`)
+  und den Grundbestand jedes Linux draußen — X11-Kern, fontconfig, freetype,
+  glib/dbus/systemd — nach der Liste in `make_linux_packages.HOST_PROVIDED_LIBRARIES`,
+  dazu die Terminalmodule `readline`/`curses` (libreadline ist GPL-3, Regel 15).
+  Was bleibt — libxcb mit den xcb-util-Bibliotheken, xkbcommon, die
+  Kerberos-Familie —, ordnet `make_sbom.LINUX_LIBRARY_FAMILIES` je Soname
+  einer Familie zu, und `dpkg-query` liest beim Bau die Fassung aus dem Paket
+  des Bauservers. Symlinks zählen nicht als Datei, CPythons `lib-dynload`
+  gehört CPython, `<name>.libs` seiner Distribution. Eine native Datei ohne
+  Familie lässt `make_licence_notices --release-check` nicht durch — gemessen
+  am 0.2.1-Paket waren es 135, am Windows-Paket 30, am macOS-Paket 41.
 - **Die Lizenzbeilage** entsteht nach der SBOM mit
   `make_licence_notices.py --sbom`: `THIRD-PARTY-NOTICES.md` liegt genau einmal
   neben der ausführbaren Datei und wird dort auch vom Über-Dialog gelesen. Die

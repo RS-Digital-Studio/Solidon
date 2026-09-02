@@ -489,3 +489,108 @@ def test_the_product_root_uses_the_declared_distribution_name() -> None:
     product = bom["metadata"]["component"]  # type: ignore[index,union-attr]
 
     assert product["purl"].startswith(f"pkg:pypi/{DISTRIBUTION_NAME}@")
+
+
+def test_linux_and_macos_artifacts_carry_owners_for_every_native_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Linux-Paket 0.2.1 hatte 135 native Dateien ohne Besitzer, das
+    macOS-Paket 41, das Windows-Paket 30 — und die Releaseakte lehnt jede ab.
+
+    Vier Gestalten: CPythons Modulordner ``lib-dynload`` (vierzig auf Linux
+    wie auf macOS), die vendorisierten Bibliotheken eines reparierten Wheels
+    (``pillow.libs``), die Systembibliotheken, die das Paket bewusst mitnimmt
+    (xcb, xkbcommon, Kerberos), und die Weiterleitungs-DLLs der
+    Microsoft-Laufzeit. Dazu der Verweis: PyInstaller legt für den Lader
+    Symlinks an, und ein Verweis ist keine zweite Datei.
+    """
+    elf = b"\x7fELF\x02\x01\x01" + b"\x00" * 9
+    names = {
+        "_internal/python3.13/lib-dynload/_bisect.cpython-313-x86_64-linux-gnu.so": "cpython",
+        "Contents/Frameworks/python3.13/lib-dynload/math.cpython-313-darwin.so": "cpython",
+        "_internal/libxcb-cursor.so.0": "xcb-util-cursor",
+        "_internal/libxcb-icccm.so.4": "xcb-util-wm",
+        "_internal/libxcb-render-util.so.0": "xcb-util-renderutil",
+        "_internal/libxcb-randr.so.0": "libxcb",
+        "_internal/libxkbcommon-x11.so.0": "libxkbcommon",
+        "_internal/libgssapi_krb5.so.2": "krb5",
+        "_internal/libcom_err.so.2": "e2fsprogs",
+        "_internal/libkeyutils.so.1": "keyutils",
+        "_internal/pillow.libs/libjpeg-31e2ca52.so.62.4.0": "pillow",
+    }
+    for name in names:
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(elf)
+    for name in ("_internal/api-ms-win-core-file-l1-1-0.dll", "_internal/_wmi.pyd"):
+        (tmp_path / name).write_bytes(b"MZ\x90\x00native")
+    link: Path | None = tmp_path / "_internal" / "libxcb-randr-link.so.0"
+    try:
+        assert link is not None
+        link.symlink_to(tmp_path / "_internal" / "libxcb-randr.so.0")
+    except OSError:  # ohne Recht auf Symlinks bleibt der Fall ungeprüft, nicht rot
+        link = None
+
+    files = make_sbom.artifact_files(tmp_path)
+    owners = {entry.path: entry.owner for entry in files}
+    assert {path: owners[path] for path in names} == names
+    assert owners["_internal/api-ms-win-core-file-l1-1-0.dll"] == "msvc-runtime"
+    assert owners["_internal/_wmi.pyd"] == "cpython"
+    if link is not None:
+        assert "_internal/libxcb-randr-link.so.0" not in owners, "ein Verweis ist keine Datei"
+    assert not [path for path, owner in owners.items() if owner == "unassigned-native"]
+
+    monkeypatch.setattr(
+        make_sbom,
+        "_dpkg_version",
+        lambda soname: (
+            "0.1.4" if "cursor" in soname else "1.15",
+            f"dpkg-query -W ({soname})",
+        ),
+    )
+    components = {
+        str(component["name"]): component
+        for component in make_sbom.runtime_components(files, python_version="3.13.14")
+    }
+    assert {
+        "xcb-util-cursor",
+        "xcb-util-wm",
+        "xcb-util-renderutil",
+        "libxcb",
+        "libxkbcommon",
+        "MIT Kerberos",
+        "e2fsprogs com_err",
+        "keyutils",
+    } <= set(components)
+    assert components["xcb-util-cursor"]["version"] == "0.1.4"
+    assert components["xcb-util-cursor"]["purl"] == "pkg:generic/xcb-util-cursor@0.1.4"
+    assert components["keyutils"]["licenses"] == [{"expression": "LGPL-2.1-or-later"}]
+    assert components["MIT Kerberos"]["licenses"] == [{"expression": "MIT"}]
+
+
+def test_a_debian_package_version_is_read_from_its_library(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``dpkg-query -S`` nennt das Paket zur Datei, ``-W`` seine Fassung, und vor
+    dem Bindestrich steht die des Projekts — Epoche und Debian-Revision fallen weg."""
+    import subprocess
+
+    answers = {
+        "-S": "libxcb-cursor0:amd64: /usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0.0.0\n"
+        "libxcb-cursor0:amd64: /usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0\n",
+        "-W": "1:0.1.4-1build1",
+    }
+
+    def fake_run(command: list[str], **_: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, stdout=answers[command[1]], stderr="")
+
+    monkeypatch.setattr(make_sbom.shutil, "which", lambda name: "/usr/bin/dpkg-query")
+    monkeypatch.setattr(make_sbom.subprocess, "run", fake_run)
+    assert make_sbom._dpkg_version("libxcb-cursor.so.0") == (
+        "0.1.4",
+        "dpkg-query -W libxcb-cursor0 (1:0.1.4-1build1)",
+    )
+
+    monkeypatch.setattr(make_sbom.shutil, "which", lambda name: None)
+    assert make_sbom._dpkg_version("libxcb-cursor.so.0") == ("unbekannt", "dpkg-query fehlt")
