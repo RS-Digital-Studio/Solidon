@@ -13,6 +13,7 @@ Bindung hält und ein anderer Pfad nichts hergibt.
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import io
 import json
@@ -119,7 +120,14 @@ def post_with_headers(
         connection.endheaders(body)
         if shutdown_write:
             assert connection.sock is not None
-            connection.sock.shutdown(socket.SHUT_WR)
+            # Der Server lehnt eine solche Anfrage ab, ohne ihren Rumpf zu
+            # lesen, und schließt — mitunter, bevor diese Zeile läuft. Linux
+            # meldet das ``shutdown`` auf der schon getrennten Verbindung
+            # dann mit ENOTCONN (CI, 02.09.2026, einmal von etwa zehn Läufen),
+            # Windows schweigt. Die Antwort liegt in dem Fall bereits im
+            # Puffer; ``getresponse`` liest sie wie sonst auch.
+            with contextlib.suppress(OSError):
+                connection.sock.shutdown(socket.SHUT_WR)
         answer = connection.getresponse()
         return int(answer.status), answer.read()
     finally:
