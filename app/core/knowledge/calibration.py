@@ -20,13 +20,13 @@ offensichtlich, aus welcher der beiden eine Zahl kam.
 from __future__ import annotations
 
 import json
-import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from app.core.errors import ValidationError
 from app.core.knowledge import profiles
+from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_profiles_dir
 from app.core.types import MaterialProfile
@@ -138,20 +138,10 @@ def apply(calibration: Calibration, directory: Path | None = None) -> MaterialPr
 def _read(path: Path) -> dict[str, dict[str, Any]]:
     if not path.is_file():
         return {}
-    try:
-        with path.open("rb") as stream:
-            return dict(tomllib.load(stream))
-    except tomllib.TOMLDecodeError as problem:
-        # Die Datei ist zum Lesen — und damit zum Anfassen — gedacht. Ein
-        # Tippfehler darin ist ein Satz mit Dateinamen, kein Startabbruch,
-        # aus dem nur das Löschen der Datei herausführt (Regel 17).
-        raise ValidationError(
-            title=_("Die Kalibrierdatei lässt sich nicht lesen."),
-            field="file",
-            detail=str(problem),
-            constraint="toml",
-            values={"file": str(path)},
-        ) from problem
+    # Die Datei ist zum Lesen — und damit zum Anfassen — gedacht. Ein
+    # Tippfehler darin ist ein Satz mit Dateinamen, kein Startabbruch, aus dem
+    # nur das Löschen der Datei herausführt (Regel 17).
+    return read_table(path, title=_("Die Kalibrierdatei lässt sich nicht lesen."))
 
 
 def _as_toml(table: dict[str, dict[str, Any]]) -> str:

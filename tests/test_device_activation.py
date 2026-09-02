@@ -401,3 +401,57 @@ def test_the_online_client_rejects_an_unbounded_server_answer() -> None:
 
     with pytest.raises(ActivationServiceError):
         licence_service._response_body(_LargeAnswer())
+
+
+def test_the_deactivation_request_parses_back_to_the_device_that_signed_it(
+    activation_place: tuple[_MemoryKeyring, str],
+) -> None:
+    """``parse_deactivation`` ist der Spiegel der PHP-Regeln — und lief nie.
+
+    Der Kern erzeugt die Abmeldung, der Dienst prüft sie in PHP; die
+    Python-Fassung des Prüfers steht daneben, damit beide dieselben Regeln
+    tragen. Bis hierher rief sie niemand, auch kein Test: Eine Regel, die nur
+    in PHP geprüft wird, kann in Python stillschweigend abweichen. Der
+    Rundweg hält die beiden Hälften an einem Ort zusammen.
+    """
+    _keyring, licence_text = activation_place
+    activation.remember(licence_text)
+    request = certificate.parse_request(
+        certificate.create_request(licence_text, "Werkstatt-PC"),
+        licence_public_key=ed25519.public_key(LICENCE_SEED),
+    )
+    activation.install_certificate(_issue(request))
+
+    parsed = certificate.parse_deactivation(
+        activation.prepare_deactivation(),
+        licence_public_key=ed25519.public_key(LICENCE_SEED),
+    )
+
+    assert parsed.activation_id == "0123456789abcdef0123456789abcdef"
+    assert parsed.licence.order == "A-1234"
+    assert parsed.device_public == request.device_public
+    assert parsed.licence_digest == certificate.licence_digest(parsed.licence)
+
+
+def test_changing_a_signed_deactivation_is_rejected(
+    activation_place: tuple[_MemoryKeyring, str],
+) -> None:
+    """Ein verändertes Byte in der Abmeldung passt nicht mehr zur Gerätesignatur."""
+    _keyring, licence_text = activation_place
+    activation.remember(licence_text)
+    request = certificate.parse_request(
+        certificate.create_request(licence_text, "Werkstatt-PC"),
+        licence_public_key=ed25519.public_key(LICENCE_SEED),
+    )
+    activation.install_certificate(_issue(request))
+    text = activation.prepare_deactivation()
+
+    document = json.loads(text)
+    payload = bytearray(certificate.decode_text(document["payload"]))
+    payload[-2] ^= 1
+    document["payload"] = certificate.encode_text(bytes(payload))
+
+    with pytest.raises(certificate.ActivationDocumentError):
+        certificate.parse_deactivation(
+            json.dumps(document), licence_public_key=ed25519.public_key(LICENCE_SEED)
+        )

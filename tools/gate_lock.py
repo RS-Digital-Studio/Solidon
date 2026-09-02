@@ -66,7 +66,7 @@ POLL_SECONDS = 5.0
 BUSY_EXIT = 75
 
 
-def _common_dir() -> Path:
+def common_dir() -> Path:
     """Das Git-Verzeichnis, das sich alle Arbeitsbäume teilen.
 
     Nicht ``--git-dir``: Der zeigt in einem Arbeitsbaum auf dessen eigenen
@@ -82,7 +82,7 @@ def _common_dir() -> Path:
 
 
 def _lock_file() -> Path:
-    return _common_dir() / "solidon-tor.lock"
+    return common_dir() / "solidon-tor.lock"
 
 
 def _alive(pid: int) -> bool:

@@ -40,24 +40,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
+import sys
 import time
 from pathlib import Path
 
+# Als Skript gestartet (``python tools/session_board.py``) liegt ``tools/``
+# selbst im Suchpfad, das Paket darüber nicht — dasselbe Muster wie in
+# ``make_changelog.py``.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-def _common_dir() -> Path:
-    """Das Git-Verzeichnis, das sich alle Arbeitsbäume teilen."""
-    finished = subprocess.run(
-        ["git", "rev-parse", "--git-common-dir"],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return Path(finished.stdout.strip()).resolve()
+from tools.gate_lock import common_dir
 
 
 def _board() -> Path:
-    folder = _common_dir() / "solidon-sitzungen"
+    folder = common_dir() / "solidon-sitzungen"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 

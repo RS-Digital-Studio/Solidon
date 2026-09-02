@@ -153,6 +153,11 @@ class AppError(Exception):
 
     default_title: ClassVar[TranslatableText] = _("Der Vorgang ist nicht durchgelaufen.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (CANCEL,)
+    #: Was gilt, wenn der Aufrufer keinen Grund nennt — für Fehler, deren
+    #: Ursache je Klasse dieselbe ist und deren Ausweg sich in einen Satz
+    #: fassen lässt. Die meisten Klassen lassen es leer: Ihr Grund steht erst
+    #: beim Aufrufer fest.
+    default_detail: ClassVar[TranslatableText | None] = None
 
     def __init__(
         self,
@@ -165,7 +170,7 @@ class AppError(Exception):
         op_id: OpId | None = None,
     ) -> None:
         self.title = title if title is not None else self.default_title
-        self.detail = detail
+        self.detail = detail if detail is not None else self.default_detail
         self.suggestions = suggestions or self.default_suggestions or AppError.default_suggestions
         self.values: dict[str, Any] = values or {}
         self.object_id = object_id
@@ -637,6 +642,10 @@ class DeviceActivationRequired(AppError):
         ACTIVATE_OFFLINE,
         CANCEL,
     )
+    default_detail: ClassVar[TranslatableText | None] = _(
+        "Aktivieren Sie diesen Rechner einmal online oder über die "
+        "Anfrage- und Antwortdatei. Danach bleibt Solidon offline nutzbar."
+    )
 
     def __init__(
         self,
@@ -644,11 +653,6 @@ class DeviceActivationRequired(AppError):
         detail: TranslatableText | str | None = None,
         **kwargs: Any,
     ) -> None:
-        if detail is None:
-            detail = _(
-                "Aktivieren Sie diesen Rechner einmal online oder über die "
-                "Anfrage- und Antwortdatei. Danach bleibt Solidon offline nutzbar."
-            )
         super().__init__(detail=detail, **_with_values(kwargs, action=action))
         self.action = action
 
@@ -664,6 +668,10 @@ class DeviceDeactivationPending(AppError):
         REPORT_ERROR,
         CANCEL,
     )
+    default_detail: ClassVar[TranslatableText | None] = _(
+        "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die "
+        "Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird."
+    )
 
     def __init__(
         self,
@@ -671,11 +679,6 @@ class DeviceDeactivationPending(AppError):
         detail: TranslatableText | str | None = None,
         **kwargs: Any,
     ) -> None:
-        if detail is None:
-            detail = _(
-                "Solidon bleibt auf diesem Rechner sicher gesperrt. Senden Sie die "
-                "Deaktivierung erneut, damit der Geräteplatz zuverlässig frei wird."
-            )
         super().__init__(detail=detail, **_with_values(kwargs, action=action))
         self.action = action
 

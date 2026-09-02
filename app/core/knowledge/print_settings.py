@@ -19,13 +19,13 @@ Was die Geometrie darüber hinaus verlangt, kommt nicht von hier, sondern aus
 
 from __future__ import annotations
 
-import tomllib
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final, get_args
 
 from app.core.errors import ValidationError
+from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import user_profiles_dir
 from app.core.types import (
@@ -65,20 +65,9 @@ _tables: dict[str, dict[str, dict[str, Any]]] | None = None
 
 
 def _read_table(path: Path) -> dict[str, Any]:
-    try:
-        with path.open("rb") as stream:
-            return tomllib.load(stream)
-    except tomllib.TOMLDecodeError as problem:
-        # Auch hier liest derselbe Leser die Datei des Nutzers — eine
-        # handgeschriebene. Ein Tippfehler ist ein Satz mit Dateinamen, kein
-        # Startabbruch (Regel 17).
-        raise ValidationError(
-            title=_("Diese Einstellungsdatei lässt sich nicht lesen."),
-            field="file",
-            detail=str(problem),
-            constraint="toml",
-            values={"file": str(path)},
-        ) from problem
+    # Derselbe Leser liest die mitgelieferte Datei und die des Nutzers — eine
+    # handgeschriebene. Ein Tippfehler darin ist ein Satz mit Dateinamen.
+    return read_table(path, title=_("Diese Einstellungsdatei lässt sich nicht lesen."))
 
 
 def _load() -> dict[str, dict[str, dict[str, Any]]]:

@@ -22,6 +22,7 @@ Rechenwegs, nicht Beiwerk.
 | `calibration.py` | Selbstkalibrierung (§28.3) |
 | `filaments.py` | Benannte Filamente mit Farbe, als Vorwahl (§20) |
 | `licences.py` | Lizenzprüfung der Abhängigkeiten (§36) |
+| `tables.py` | Der eine TOML-Leser für Dateien, die auch von Hand geschrieben sein können — ein Syntaxfehler wird ein Satz mit Dateinamen (Regel 17); Profile, Druckeinstellungen und Kalibrierung rufen ihn mit ihrem Titel |
 | `parts/` | Die Bausteinbibliothek — eigene `CLAUDE.md`, **eigene Lizenz** |
 | `data/` | **Wo das Wissen wirklich steht**: sechs TOML-Dateien (siehe unten) |
 

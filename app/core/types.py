@@ -46,9 +46,6 @@ SourceId = str
 ParameterName = str
 """Name eines Projektparameters, in Ausdrücken als ``@name`` gelesen (§13)."""
 
-Millimetres = float
-"""Jede Länge im Kern. Immer (§11.1)."""
-
 # --- Aufzählungen --------------------------------------------------------------
 
 FeatureKind = Literal[
