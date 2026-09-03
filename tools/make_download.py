@@ -664,17 +664,29 @@ def cap_for_legacy_clients(data: dict[str, object]) -> int:
     grouped: dict[str, list[dict[str, object]]] = groups if isinstance(groups, dict) else {}
 
     def shorten(kept: int) -> None:
-        """Beide Sichten auf dieselbe Punktzahl bringen.
+        """Beide Sichten auf dieselbe Auswahl bringen — die Gruppen führen.
 
         **Synchron, sonst zeigt dieselbe Datei zwei Stände.** Wer die flache
         Liste liest, bekäme fünf Punkte und wer die Gruppen liest, sechs — und
-        keiner der beiden könnte sagen, welcher stimmt.
+        keiner der beiden könnte sagen, welcher stimmt. Deshalb wählt
+        :func:`cap_groups` aus, und die flache Liste wird daraus gelesen: Sie
+        ist dieselbe Auswahl in derselben Reihenfolge. Nur wo eine Sprache
+        keine Gruppen mitbringt, bleibt der alte Weg über die flache Liste.
         """
-        for language, points in changes.items():
-            if len(points) > kept:
-                changes[language] = points[:kept]
         for language, blocks in list(grouped.items()):
             grouped[language] = cap_groups(blocks, kept)
+        for language, points in changes.items():
+            blocks = grouped.get(language)
+            if blocks is None:
+                if len(points) > kept:
+                    changes[language] = points[:kept]
+                continue
+            changes[language] = [
+                point
+                for block in blocks
+                for point in (block.get("points") or [])
+                if isinstance(point, str)
+            ]
 
     kept = max((len(points) for points in changes.values()), default=0)
     while kept > 0 and written_size() > budget:
@@ -806,23 +818,48 @@ def grouped_for(version: str) -> dict[str, list[dict[str, object]]]:
 
 
 def cap_groups(blocks: list[dict[str, object]], kept: int) -> list[dict[str, object]]:
-    """Kürzt eine Gruppenliste auf ``kept`` Punkte — von hinten, über die Gruppen.
+    """Verteilt ``kept`` Punkte **reihum** über die Gruppen, statt hinten abzuschneiden.
 
-    Dieselbe Richtung wie flach: Was vorn steht, soll der Kunde zuerst lesen.
-    Eine Gruppe, von der nichts übrig bleibt, fällt ganz weg — eine Überschrift
+    Innerhalb einer Gruppe steht vorn, was der Kunde zuerst lesen soll — über
+    die Gruppen hinweg gilt das nicht. Die Gliederung ordnet nach Gebiet, nicht
+    nach Gewicht: „Plattformen" steht weit hinten, weil es ein Gebiet ist, und
+    nicht, weil es unwichtig wäre.
+
+    **Am 03.09.2026 hat genau das einen Punkt verschluckt, der einem Kunden
+    gehörte.** 0.3.0 behob einen Absturz auf Wayland, gemeldet aus dem Feld;
+    der Punkt stand in „Plattformen" an Stelle 95 von 115, gekappt wurde bei
+    41, und im Update-Fenster stand davon nichts. Wer von hinten abschneidet,
+    löscht ganze Gebiete — und welche, entscheidet die Gliederung und nicht
+    der Inhalt.
+
+    Reihum heißt: Die erste Gruppe steuert einen Punkt bei, dann die zweite,
+    dann die dritte, und von vorn, bis das Budget voll ist. Jede Gruppe behält
+    damit einen Anfang, und das Wichtigste jedes Gebiets ist dabei. Reicht das
+    Budget nicht für jede Gruppe, fallen die hinteren weg — eine Überschrift
     ohne Punkte darunter ist schlimmer als keine.
     """
-    left = kept
+    sizes = [
+        len(points) if isinstance(points := block.get("points"), list) else 0 for block in blocks
+    ]
+    taken = [0] * len(blocks)
+    left = min(kept, sum(sizes))
+    while left > 0:
+        vergeben = False
+        for index, size in enumerate(sizes):
+            if left <= 0:
+                break
+            if taken[index] < size:
+                taken[index] += 1
+                left -= 1
+                vergeben = True
+        if not vergeben:
+            break
     capped: list[dict[str, object]] = []
-    for block in blocks:
+    for block, count in zip(blocks, taken, strict=True):
         points = block.get("points")
-        if left <= 0 or not isinstance(points, list):
-            break
-        taken = points[:left]
-        if not taken:
-            break
-        left -= len(taken)
-        capped.append({"title": block.get("title", ""), "points": taken})
+        if count <= 0 or not isinstance(points, list):
+            continue
+        capped.append({"title": block.get("title", ""), "points": points[:count]})
     return capped
 
 

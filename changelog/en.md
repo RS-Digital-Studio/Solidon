@@ -119,6 +119,7 @@ it into `website/version.json`.
 - A pin diameter you choose yourself has to fit the seam; if it becomes thinner for that, the report says so.
 
 ### Report, stability, platforms and languages
+- On Linux in a Wayland session Solidon starts and shows the 3D view; if the system lacks a library for it, the application still starts and names the missing one.
 
 - Similar report findings are grouped without losing their connection to affected bodies and locations.
 - Numbers and measurements in the report have complete labels instead of unexplained individual values.
@@ -128,7 +129,6 @@ it into `website/version.json`.
 - Bundled parts and activation load at startup without blocking each other.
 - The 3D view closes before the window, helping Windows, Linux and macOS windows shut down more reliably.
 - On Windows 11 the title bar follows the application's colour scheme; other platforms remain unchanged.
-- On Linux in a Wayland session Solidon starts and shows the 3D view; if the system lacks a library for it, the application still starts and names the missing one.
 - Standard buttons such as Open, Save and Cancel change language immediately without a restart.
 - Automatically created body and part names switch language correctly even after cached content has already been used.
 - Translations and report values are equally up to date in German, English, Spanish, French, Italian and Portuguese.

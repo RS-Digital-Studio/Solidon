@@ -119,6 +119,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um diâmetro de pino escolhido à mão tem de caber na junta; se por isso ficar mais fino, o relatório di-lo.
 
 ### Relatório, estabilidade, plataformas e idiomas
+- No Linux numa sessão Wayland, o Solidon arranca e mostra a vista 3D; se faltar uma biblioteca ao sistema, a aplicação arranca à mesma e indica qual falta.
 
 - Os resultados semelhantes são agrupados sem perder a ligação aos corpos e locais afetados.
 - Os números e medições no relatório têm designações completas, em vez de valores isolados incompreensíveis.
@@ -128,7 +129,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os blocos incluídos e a ativação carregam ao iniciar sem se bloquearem mutuamente.
 - A vista 3D termina corretamente antes da janela, tornando o fecho mais fiável no Windows, Linux e macOS.
 - No Windows 11 a barra de título segue o esquema de cores da aplicação; as outras plataformas mantêm-se inalteradas.
-- No Linux numa sessão Wayland, o Solidon arranca e mostra a vista 3D; se faltar uma biblioteca ao sistema, a aplicação arranca à mesma e indica qual falta.
 - Os botões padrão como Abrir, Guardar e Cancelar mudam imediatamente de idioma, sem reiniciar.
 - Os nomes gerados de corpos e blocos mudam corretamente de idioma mesmo após usar conteúdos anteriormente em cache.
 - As traduções e os valores dos relatórios estão ao mesmo nível em alemão, inglês, espanhol, francês, italiano e português.

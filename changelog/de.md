@@ -144,6 +144,7 @@ Nutzen da und sonst nichts.
 - Ein selbst gewählter Stiftdurchmesser muss in die Naht passen; wird er dafür dünner, sagt der Bericht es.
 
 ### Prüfbericht, Stabilität, Plattformen und Sprachen
+- Unter Linux mit einer Wayland-Sitzung startet Solidon und zeigt die 3D-Ansicht; fehlt dem System eine Bibliothek dafür, startet die Anwendung trotzdem und sagt, welche fehlt.
 
 - Gleichartige Prüfbefunde werden gebündelt, ohne den Bezug zu den betroffenen Körpern und Stellen zu verlieren.
 - Zahlen und Messwerte im Prüfbericht besitzen vollständige Bezeichnungen statt unverständlicher Einzelwerte.
@@ -153,7 +154,6 @@ Nutzen da und sonst nichts.
 - Mitgelieferte Bausteine und die Freischaltung werden beim Start ohne gegenseitiges Blockieren geladen.
 - Die 3D-Ansicht wird vor dem Fenster sauber beendet; dadurch schließen Windows-, Linux- und macOS-Fenster zuverlässiger.
 - Die Titelleiste folgt unter Windows 11 dem Farbschema der Anwendung; andere Plattformen bleiben unverändert.
-- Unter Linux mit einer Wayland-Sitzung startet Solidon und zeigt die 3D-Ansicht; fehlt dem System eine Bibliothek dafür, startet die Anwendung trotzdem und sagt, welche fehlt.
 - Standardschaltflächen wie Öffnen, Speichern und Abbrechen wechseln ihre Sprache sofort, ohne Neustart.
 - Automatisch erzeugte Körper- und Bausteinnamen wechseln auch nach bereits verwendeten zwischengespeicherten Inhalten korrekt die Sprache.
 - Übersetzungen und Berichtswerte sind in Deutsch, Englisch, Spanisch, Französisch, Italienisch und Portugiesisch auf demselben Stand.

@@ -120,6 +120,7 @@ dans `website/version.json`.
 - Un diamètre de tenon choisi soi-même doit tenir dans le joint ; s’il s’amincit pour cela, le rapport le dit.
 
 ### Rapport, stabilité, plateformes et langues
+- Sous Linux dans une session Wayland, Solidon démarre et affiche la vue 3D ; s’il manque une bibliothèque au système, l’application démarre quand même et indique laquelle.
 
 - Les constats semblables sont regroupés sans perdre le lien avec les corps et emplacements concernés.
 - Les nombres et mesures du rapport portent des libellés complets plutôt que des valeurs isolées incompréhensibles.
@@ -129,7 +130,6 @@ dans `website/version.json`.
 - Les blocs fournis et l’activation se chargent au démarrage sans se bloquer mutuellement.
 - La vue 3D se ferme proprement avant la fenêtre, ce qui fiabilise la fermeture sous Windows, Linux et macOS.
 - Sous Windows 11, la barre de titre suit le schéma de couleurs de l’application ; les autres plateformes restent inchangées.
-- Sous Linux dans une session Wayland, Solidon démarre et affiche la vue 3D ; s’il manque une bibliothèque au système, l’application démarre quand même et indique laquelle.
 - Les boutons standard comme Ouvrir, Enregistrer et Annuler changent immédiatement de langue, sans redémarrage.
 - Les noms de corps et de blocs générés automatiquement changent aussi correctement de langue après l’emploi de contenus mis en cache.
 - Les traductions et valeurs de rapport sont au même niveau en allemand, anglais, espagnol, français, italien et portugais.

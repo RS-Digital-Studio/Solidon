@@ -120,6 +120,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un diámetro de pasador elegido a mano tiene que caber en la costura; si por ello queda más fino, el informe lo dice.
 
 ### Informe, estabilidad, plataformas e idiomas
+- En Linux con una sesión Wayland, Solidon arranca y muestra la vista 3D; si al sistema le falta una biblioteca, la aplicación arranca igualmente e indica cuál falta.
 
 - Los hallazgos similares se agrupan sin perder la relación con los cuerpos y lugares afectados.
 - Los números y medidas del informe tienen nombres completos en vez de valores sueltos incomprensibles.
@@ -129,7 +130,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los bloques incluidos y la activación se cargan al iniciar sin bloquearse entre sí.
 - La vista 3D se cierra antes que la ventana; así, las ventanas de Windows, Linux y macOS se cierran con mayor fiabilidad.
 - En Windows 11 la barra de título sigue el esquema de colores de la aplicación; las demás plataformas no cambian.
-- En Linux con una sesión Wayland, Solidon arranca y muestra la vista 3D; si al sistema le falta una biblioteca, la aplicación arranca igualmente e indica cuál falta.
 - Los botones estándar como Abrir, Guardar y Cancelar cambian de idioma al instante, sin reiniciar.
 - Los nombres creados automáticamente para cuerpos y bloques cambian bien de idioma incluso después de usar contenido en caché.
 - Las traducciones y los valores del informe están al mismo nivel en alemán, inglés, español, francés, italiano y portugués.

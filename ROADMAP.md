@@ -14266,41 +14266,6 @@ bleibt, steht hier mit Kästchen.
   den ganzen Bereich) wird damit nur noch lokal eingelöst; wer sie in der CI
   zurückhaben will, misst zuerst `range_check` (3d-druck-85 hat es am
   02.09.2026 zur Klasse gemacht, gleiche Zeiten).
-- [ ] **Die private Support-Verwaltung ist nie eingerichtet worden.** Am
-      03.09.2026 beim Nachmessen des Servers gefunden; eine Entscheidung von
-      Robert.
-
-      **Der Anlass war ein anderer Fund, und der ist behoben:** Nach dem
-      Upload von 0.3.0 antworteten alle vier Aktivierungs-Endpunkte mit 503
-      „noch nicht vollständig eingerichtet". Ursache waren `activation.seed`
-      und `activation.sqlite` unter `appdata/`, die seit dem 28.08. mit
-      **0644** dort lagen; `activation_require_private_file()` verwirft
-      `fileperms & 0077`, und diese Prüfung kam erst mit `df8fae68` auf den
-      Server. Nach `SITE CHMOD 600` antwortet die Gesundheitsabfrage
-      `{"ok":true,"protocol":1}`, `activation.php` und `deactivation.php`
-      lehnen eine leere Anfrage sauber mit 400 ab. Der Kundenweg ist frei.
-      Dieselbe Klasse wie der Zähler in der Nacht davor — die Erinnerung dazu
-      heißt `gehaertete-fassung-trifft-alten-zustand`.
-
-      **Was offen bleibt:** `appdata/operator.token` existiert nicht,
-      deshalb bleibt `api/operator.php` bei 503. Das ist kein
-      Regressionsfehler; die private Support-Verwaltung wurde nie aufgesetzt.
-      Der Token ist ein Zugangsgeheimnis, das Robert auch lokal braucht —
-      `tools/setup_activation_server.py` legt ihn an, und wer ihn anlegt,
-      entscheidet damit über den Zugang zur Verwaltung. Deshalb liegt er hier
-      und nicht in einer Sitzung.
-
-- [ ] **Vier Zählzeilen liegen im öffentlichen Baum.** Ebenfalls am
-      03.09.2026 gefunden, ebenfalls eine Entscheidung von Robert.
-
-      In `httpdocs/api/.stats/` liegen vier echte Zählzeilen vom
-      02.09., 21:00–21:07 UTC, dazu ein Tagessalz — aus einer älteren
-      `count.php`. Von außen 403, also kein Leck. Aber es ist pseudonyme
-      Nutzung im öffentlichen Baum, und der Schutz ist eine Serverregel, die
-      niemand zugesichert hat. Löschen ist irreversibel, deshalb liegen sie
-      noch da. Die Alternative wäre, die vier Zeilen in die private
-      Monatsdatei zu überführen; für die Statistik sind sie vier von
-      mehreren hundert.
 - [ ] **Dieselbe Projektdatei ist auf Windows und Linux nicht bitgleich.** Im
       Tag-Lauf `33696236181` waren die Suite auf allen drei Plattformen und
       „Paket (windows-latest)" grün, während „Paket (ubuntu-latest)",

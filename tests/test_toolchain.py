@@ -208,10 +208,60 @@ def test_capping_drops_a_group_instead_of_leaving_a_lonely_heading() -> None:
         {"title": "Fällt weg", "points": ["c", "d"]},
     ]
 
-    capped = cap_groups(blocks, 2)
+    capped = cap_groups(blocks, 1)
 
     assert [block["title"] for block in capped] == ["Bleibt"]
-    assert capped[0]["points"] == ["a", "b"]
+    assert capped[0]["points"] == ["a"]
+
+
+def test_capping_keeps_something_from_every_group() -> None:
+    """Reihum, nicht von hinten — sonst verschwindet ein ganzes Gebiet.
+
+    Der Fall stammt aus 0.3.0: Der Punkt zum Wayland-Absturz stand in der
+    siebten von acht Gruppen an Stelle 95 von 115, gekappt wurde bei 41, und
+    der Kunde, der den Absturz gemeldet hatte, las im Update-Fenster nichts
+    davon. Von hinten abzuschneiden löscht Gebiete; welche, entscheidet die
+    Gliederung und nicht der Inhalt.
+    """
+    from tools.make_download import cap_groups
+
+    blocks: list[dict[str, object]] = [
+        {"title": f"Gebiet {nummer}", "points": [f"{nummer}.{punkt}" for punkt in range(15)]}
+        for nummer in range(8)
+    ]
+
+    capped = cap_groups(blocks, 41)
+
+    assert len(capped) == 8, "jedes Gebiet muss vorkommen"
+    assert sum(len(block["points"]) for block in capped) == 41  # type: ignore[arg-type]
+    for block in capped:
+        points = block["points"]
+        assert points, f"{block['title']} ist leer"
+        assert points == sorted(points), "innerhalb einer Gruppe bleibt der Anfang der Anfang"
+    erste = [block["points"][0] for block in capped]  # type: ignore[index]
+    assert erste == [f"{nummer}.0" for nummer in range(8)], "jede Gruppe behält ihren ersten Punkt"
+
+
+def test_capping_a_real_shaped_changelog_reaches_the_last_group() -> None:
+    """Die Gruppengrößen von 0.3.0, gekappt wie beim Kunden — Gruppe sieben zählt.
+
+    Nicht acht gleich große Gruppen wie oben, sondern die tatsächlichen
+    Größen: Ein Reihum-Verfahren, das nur bei gleichen Größen aufgeht, hilft
+    ausgerechnet dem Fall nicht, für den es gebaut wurde.
+    """
+    from tools.make_download import cap_groups
+
+    groessen = (10, 17, 18, 17, 12, 12, 19, 10)
+    blocks: list[dict[str, object]] = [
+        {"title": f"Gebiet {nummer}", "points": [f"{nummer}.{punkt}" for punkt in range(groesse)]}
+        for nummer, groesse in enumerate(groessen)
+    ]
+
+    capped = cap_groups(blocks, 41)
+
+    titel = [block["title"] for block in capped]
+    assert "Gebiet 6" in titel, "die Plattformen-Gruppe fehlt wieder"
+    assert sum(len(block["points"]) for block in capped) == 41  # type: ignore[arg-type]
 
 
 def test_the_version_file_fits_the_clients_that_are_already_out_there() -> None:

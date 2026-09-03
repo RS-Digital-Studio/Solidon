@@ -119,6 +119,7 @@ scrive in `website/version.json`.
 - Un diametro di perno scelto a mano deve entrare nella giunzione; se per questo si assottiglia, il rapporto lo dice.
 
 ### Rapporto, stabilità, piattaforme e lingue
+- Su Linux in una sessione Wayland, Solidon si avvia e mostra la vista 3D; se al sistema manca una libreria, l’applicazione si avvia comunque e dice quale manca.
 
 - I riscontri simili sono raggruppati senza perdere il riferimento ai corpi e ai punti interessati.
 - Numeri e misure nel rapporto hanno etichette complete invece di singoli valori incomprensibili.
@@ -128,7 +129,6 @@ scrive in `website/version.json`.
 - I blocchi inclusi e l’attivazione vengono caricati all’avvio senza bloccarsi a vicenda.
 - La vista 3D viene chiusa correttamente prima della finestra, rendendo più affidabile la chiusura su Windows, Linux e macOS.
 - Su Windows 11 la barra del titolo segue lo schema di colori dell’applicazione; le altre piattaforme restano invariate.
-- Su Linux in una sessione Wayland, Solidon si avvia e mostra la vista 3D; se al sistema manca una libreria, l’applicazione si avvia comunque e dice quale manca.
 - I pulsanti standard come Apri, Salva e Annulla cambiano lingua immediatamente, senza riavvio.
 - I nomi generati di corpi e blocchi cambiano correttamente lingua anche dopo aver già usato contenuti memorizzati nella cache.
 - Traduzioni e valori del rapporto sono allo stesso livello in tedesco, inglese, spagnolo, francese, italiano e portoghese.
