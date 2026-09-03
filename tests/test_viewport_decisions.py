@@ -4371,3 +4371,125 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     assert viewport.sunken_body()
     viewport._hidden = frozenset({"unten"})
     assert not viewport.sunken_body(), "ausgeblendet ist nicht unter der Platte"
+
+
+class _FramingPlotter:
+    """So viel Plotter, wie das Einpassen anfasst: es rahmt und merkt sich das."""
+
+    def __init__(self) -> None:
+        self.framed: list[tuple[float, ...] | None] = []
+        self.camera_set = False
+
+    def reset_camera(self, bounds: tuple[float, ...] | None = None) -> None:
+        self.framed.append(bounds)
+
+
+def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
+    """Pos1 zeigt das gewählte Teil, nicht wieder die ganze Baugruppe.
+
+    **Roberts Entscheidung vom 03.09.2026.** Wer ein Teil aus einer Baugruppe
+    anklickt und Pos1 drückt, will es formatfüllend sehen. Ohne Auswahl bleibt
+    es beim Alten — das war Teil der Frage, damit nichts wegfällt, was heute
+    funktioniert.
+
+    Drei Dinge hängen daran, und alle drei stehen hier:
+
+    * **Der Versatz gehört dazu.** Ein auseinandergezogener Körper oder einer
+      auf der zweiten Platte wird anderswo gezeichnet, als er in der Szene
+      liegt; ohne ihn rahmte die Kamera die leere Stelle.
+    * **Was nicht im Bild ist, wird nicht gerahmt** (§18.8, §25). Ein
+      ausgeblendeter Ausgewählter fällt zurück auf die Szene.
+    * **Die automatische Rahmung folgt der Auswahl nicht.** ``_fit_once_for``
+      rahmt, *weil* die Szene der Ansicht entwachsen ist — ein Rahmen um den
+      kleinen Ausgewählten beantwortete genau das nicht.
+    """
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    klein = SceneObject(
+        id="klein",
+        name="klein",
+        mesh=MeshData(
+            trimesh.creation.box(extents=(10.0, 10.0, 10.0)).apply_translation((0.0, 0.0, 5.0))
+        ),
+    )
+    gross = dataclasses.replace(
+        klein,
+        id="gross",
+        name="gross",
+        mesh=MeshData(
+            trimesh.creation.box(extents=(100.0, 100.0, 100.0)).apply_translation(
+                (200.0, 0.0, 50.0)
+            )
+        ),
+    )
+    viewport._result = EvaluationResult(scene=Scene(objects={"klein": klein, "gross": gross}))
+
+    assert viewport._selected_bounds() is None, "ohne Auswahl gibt es keinen gewählten Quader"
+
+    viewport._selected = "klein"
+    chosen = viewport._selected_bounds()
+    assert chosen is not None
+    assert chosen[0] == pytest.approx(-5.0) and chosen[1] == pytest.approx(5.0)
+    assert chosen[5] == pytest.approx(10.0), "der kleine Körper, nicht die Szene"
+
+    # Ausgeblendet ist nicht im Bild — dann zählt wieder die ganze Szene.
+    viewport._hidden = frozenset({"klein"})
+    assert viewport._selected_bounds() is None
+    viewport._hidden = frozenset()
+
+    # **Und die Szene bleibt die Szene.** ``_fitted_bounds`` beantwortet „ist
+    # sie gewachsen?"; stünde der Ausgewählte darin, hielte ``outgrown`` jede
+    # Auswahl eines kleinen Teils für eine gewachsene Szene.
+    viewport.reset_camera()
+    assert viewport._fitted_bounds is not None
+    assert viewport._fitted_bounds[1] == pytest.approx(250.0), (
+        "gemerkt wird die Ausdehnung der Szene, auch wenn die Kamera einen einzelnen Körper rahmt"
+    )
+
+    # **Und jetzt die Kamera selbst.** Ohne diesen Teil war der Test grün, als
+    # ich die Auswahl aus ``reset_camera`` wieder ausbaute — er maß die
+    # Vorarbeit und nicht die Wirkung (Gegenprobe am 03.09.2026).
+    plotter = _FramingPlotter()
+    viewport.plotter = plotter  # type: ignore[assignment]
+    viewport.reset_camera()
+    gerahmt = plotter.framed[-1]
+    assert gerahmt is not None
+    mitte = (gerahmt[0] + gerahmt[1]) / 2.0
+    assert mitte == pytest.approx(0.0, abs=1.0), (
+        f"gerahmt wird der gewählte Körper um X=0, nicht die Szene um X=100 ({mitte:.0f})"
+    )
+    assert gerahmt[1] - gerahmt[0] < 30.0, "und in seiner Größe, nicht in der der Szene"
+
+    # Ohne Auswahl dieselbe Frage, andere Antwort.
+    viewport._selected = None
+    viewport.reset_camera()
+    weit = plotter.framed[-1]
+    assert weit is not None
+    assert weit[1] - weit[0] > 200.0, "ohne Auswahl bleibt es die ganze Szene"
+    viewport._selected = "klein"
+
+    # **Im Skizzenmodus gilt es nicht** — dort ist der Körper Zusammenhang,
+    # nicht Gegenstand.
+    viewport._sketch_frame = object()  # type: ignore[assignment]
+    viewport.reset_camera()
+    beim_zeichnen = plotter.framed[-1]
+    assert beim_zeichnen is not None
+    assert beim_zeichnen[1] - beim_zeichnen[0] > 200.0
+    viewport._sketch_frame = None
+
+    # Der automatische Weg fragt ausdrücklich nicht nach der Auswahl.
+    gefragt: list[bool] = []
+    viewport.reset_camera = lambda **kwargs: gefragt.append(  # type: ignore[method-assign]
+        bool(kwargs.get("follow_selection", True))
+    )
+    viewport._fitted_to = None
+    viewport._fit_once_for(viewport._result)
+    assert gefragt == [False], "die Rahmung nach dem Wachsen nimmt die ganze Szene"

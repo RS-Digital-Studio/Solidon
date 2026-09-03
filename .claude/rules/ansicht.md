@@ -838,6 +838,49 @@ Druckplatte zeigen* (Strg+Umschalt+D) blendet Bett, Bauraum und Maßstab aus,
 gemerkt über den Neustart. Für „das Teil einmal ganz allein sehen" ist das
 direkter als Durchsichtigkeit.
 
+### Einpassen nimmt den gewählten Körper, wenn einer gewählt ist
+
+Entscheidung Robert, 03.09.2026. Wer ein Teil aus einer Baugruppe anklickt und
+Pos1 drückt, will dieses Teil formatfüllend sehen — nicht wieder
+die ganze Baugruppe. **Ohne Auswahl bleibt es beim Alten**; das war Teil der
+Frage, damit nichts wegfällt, was heute funktioniert.
+
+Der Eintrag heißt deshalb **„Einpassen"** und nicht mehr „Alles
+einpassen": Ein Name, der in einem der beiden Zustände lügt, ist
+schlechter als ein kürzerer, der in beiden stimmt. Was er tut, steht im
+Tooltip.
+
+Drei Dinge hängen daran, und jedes hat seinen Grund:
+
+* **Der Versatz gehört dazu** (`_selected_bounds` über
+  `_view_offset`). Ein auseinandergezogener Körper oder einer auf der
+  zweiten Platte wird anderswo gezeichnet, als er in der Szene liegt; ohne ihn
+  rahmte die Kamera die leere Stelle, an der er ohne Versatz stünde.
+* **Was nicht im Bild ist, wird nicht gerahmt** (§18.8, §25). Ein
+  ausgeblendeter oder auf einer fremden Platte liegender Ausgewählter
+  fällt auf die Szene zurück — auf etwas einzupassen, das man
+  nicht sieht, wäre die schlechteste der drei Antworten.
+* **`_fitted_bounds` bleibt die Szene.** Es beantwortet „ist die Szene der
+  Ansicht entwachsen?", und das ist eine Aussage über die Szene, nicht
+  über die Kamera. Stünden dort die Grenzen des Ausgewählten,
+  hielte `outgrown` jede Auswahl eines kleinen Teils für eine gewachsene
+  Szene und rahmte beim nächsten Aufbau von selbst wieder alles.
+
+**Im Skizzenmodus gilt es nicht.** Dort ist die Skizze der Gegenstand und der Körper der Zusammenhang (siehe „Die Skizze ist Vordergrund, der Körper Zusammenhang“ weiter unten). Pos1 gehört dort ohnehin dem Blatt (`SketchCanvas.fit_view`); offen war nur die ViewBar, und die rahmt jetzt auch dort die ganze Szene.
+
+**Und der automatische Weg folgt der Auswahl nicht**
+(`_fit_once_for` ruft `reset_camera(follow_selection=False)`). Dort wird
+gerahmt, *weil* die Szene entwachsen ist — ein neuer 400er Körper
+neben einem Zwei-Millimeter-Teil, die Kamera in seinem Inneren. Ein Rahmen um
+den kleinen Ausgewählten beantwortete genau das nicht.
+
+Der Test dazu (`test_fitting_frames_the_chosen_body`) war in seiner ersten
+Fassung **grün, als ich die Änderung wieder ausbaute**: Er maß
+`_selected_bounds` und `_fit_once_for`, also die Vorarbeit, und nicht die
+Kamera. Offscreen gibt es keinen Plotter, und `reset_camera` steigt an seiner
+Wache aus, bevor irgendetwas gerahmt wird. Erst eine Attrappe mit genau einer
+Methode (`_FramingPlotter.reset_camera`) hat den Unterschied gemessen.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

@@ -8191,8 +8191,19 @@ class Viewport(QWidget):
             return True
         return False
 
-    def reset_camera(self) -> None:
+    def reset_camera(self, *, follow_selection: bool = True) -> None:
         """Passt auf die Körper ein — nicht auf den Bauraum.
+
+        **Auf den gewählten Körper, wenn einer gewählt ist** (Entscheidung
+        Robert, 03.09.2026). Wer ein Teil aus einer Baugruppe anklickt und Pos1
+        drückt, will dieses Teil formatfüllend sehen, nicht wieder die ganze
+        Baugruppe. Ohne Auswahl bleibt es beim Alten — die Szene, mit Luft.
+
+        ``follow_selection=False`` nimmt das zurück, und ``_fit_once_for``
+        braucht es: Dort wird gerahmt, *weil* die Szene der Ansicht entwachsen
+        ist (ein neuer 400er Körper neben einem Zwei-Millimeter-Teil, die
+        Kamera in seinem Inneren). Ein Rahmen um den alten, kleinen Ausgewählten
+        beantwortete genau das nicht.
 
         ``plotter.reset_camera()`` nimmt alle Aktoren, und dazu gehört der
         Rahmen des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte
@@ -8214,7 +8225,23 @@ class Viewport(QWidget):
         # Plotter-Zweig, aus demselben Grund wie bei der Umgebungsverdeckung:
         # offscreen gibt es keinen Plotter, und eine Regel, die nur im Zeichnen
         # gilt, prüft niemand.
+        #
+        # **Und es bleibt die Szene, auch wenn die Kamera gleich einen
+        # einzelnen Körper rahmt.** Die Frage dahinter lautet „ist die Szene
+        # gewachsen?" — eine Aussage über die Szene, nicht über die Kamera. Mit
+        # den Grenzen des Ausgewählten darin hielte ``outgrown`` jede Auswahl
+        # eines kleinen Teils für eine gewachsene Szene und rahmte beim nächsten
+        # Aufbau von selbst wieder alles.
         self._fitted_bounds = bounds
+        # **Nicht im Skizzenmodus.** Dort ist die Skizze der Gegenstand und der
+        # Körper der Zusammenhang; eine Achsansicht auf den zuletzt gewählten
+        # Körper zu rahmen, während das Blatt daneben liegt, beantwortet die
+        # Frage nicht, die gestellt wurde. Pos1 selbst gehört dort ohnehin dem
+        # Blatt (``SketchCanvas.fit_view``) — offen bleibt die ViewBar.
+        if follow_selection and self._sketch_frame is None:
+            chosen = self._selected_bounds()
+            if chosen is not None:
+                bounds = chosen
         if self.plotter is None:
             return
         if bounds is None:
@@ -8276,7 +8303,7 @@ class Viewport(QWidget):
         if wanted != self._fitted_to or outgrown(
             self._fitted_bounds, self._object_bounds(), moved_only=self._moved_only
         ):
-            self.reset_camera()
+            self.reset_camera(follow_selection=False)
             self._fitted_to = wanted  # type: ignore[assignment]
             self._fitted_objects = here
 
@@ -8292,6 +8319,30 @@ class Viewport(QWidget):
             return None
         width, depth, height = self._build_volume
         return (-width / 2.0, width / 2.0, -depth / 2.0, depth / 2.0, 0.0, height)
+
+    def _selected_bounds(self) -> tuple[float, float, float, float, float, float] | None:
+        """Der Hüllquader des gewählten Körpers **an seinem Ort im Bild**.
+
+        Nichts, solange keiner gewählt ist — und ebenso, wenn der Gewählte
+        gerade nicht im Bild steht (ausgeblendet, unsichtbar, fremde Platte,
+        §18.8/§25). Auf etwas einzupassen, das man nicht sieht, wäre die
+        schlechteste der drei möglichen Antworten.
+
+        Der Versatz gehört dazu: Auseinandergezogen oder auf einer zweiten
+        Platte wird ein Körper anderswo gezeichnet, als er in der Szene liegt
+        (:meth:`_view_offset`). Ohne ihn rahmte die Kamera die leere Stelle,
+        an der er ohne Versatz stünde.
+        """
+        if self._result is None or self._selected is None:
+            return None
+        entry = self._result.scene.objects.get(self._selected)
+        if entry is None or not self._in_view(self._selected, entry):
+            return None
+        box = entry.mesh.bounds
+        offset = self._view_offset(entry, self._result)
+        low = [float(box.minimum[axis]) + float(offset[axis]) for axis in range(3)]
+        high = [float(box.maximum[axis]) + float(offset[axis]) for axis in range(3)]
+        return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
         """Der Hüllquader über alle Körper, im Format von VTK, oder nichts."""

@@ -4558,7 +4558,7 @@ class SketchPanel(QWidget):
         # Tastaturweg, obwohl der Einpassen-Knopf die Taste nennt.
         #
         # Konflikte mit dem Fenster bleiben ausgeschlossen: Dessen Einträge
-        # auf denselben Tasten (Darstellung 1 bis 6, Rückgängig, Alles einpassen)
+        # auf denselben Tasten (Darstellung 1 bis 6, Rückgängig, Einpassen)
         # sind im Skizzenmodus ausgegraut, und ein gesperrtes Kürzel nimmt
         # keiner Taste den Weg. Das Tippen im Chat bleibt frei — Textfelder
         # nehmen ihre Zeichen über ``ShortcutOverride``, bevor ein

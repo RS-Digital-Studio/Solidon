@@ -13,7 +13,7 @@ Vier Zusagen tragen dieses Modul:
    gelangt.
 3. **Es ist kein Modus.** Die vier Navigationsschemata beantworten „welche
    Maustaste dreht"; die Frage stellt sich hier nicht.
-4. **Die Maus behält alles.** Eine Gerätetaste löst *Alles einpassen* aus —
+4. **Die Maus behält alles.** Eine Gerätetaste löst *Einpassen* aus —
    die häufigste Belegung —, und mehr gibt es nicht zu belegen.
 
 Das Modul zerfällt in zwei Teile, wie das Konzept es verlangt:

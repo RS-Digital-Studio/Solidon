@@ -4406,7 +4406,7 @@ def test_escape_closes_the_open_tool(window: MainWindow) -> None:
     assert window.tools.active() is None
 
 
-def test_the_view_menu_can_fit_everything(window: MainWindow) -> None:
+def test_the_view_menu_can_fit(window: MainWindow) -> None:
     """Ohne diesen Eintrag musste man wissen, dass Strg+0 nebenbei einpasst."""
     labels = {action.text() for action in all_menu_actions(window)}
     assert "Einpassen" in labels

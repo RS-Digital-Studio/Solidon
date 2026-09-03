@@ -67,7 +67,7 @@ def shortcut_for(name: str, declared: str | None, scheme: str) -> str | None:
 
 #: Tasten, die dem Bedienelement mit dem Fokus gehören, nicht dem Fenster.
 #:
-#: Pos1 ist der Fall, an dem es auffiel: Als Menükürzel („Alles einpassen")
+#: Pos1 ist der Fall, an dem es auffiel: Als Menükürzel („Einpassen")
 #: fensterweit gebunden, feuert es auch dann, wenn der Fokus im Objektbaum oder
 #: im Verlauf steht — dort ist Pos1 die Taste, mit der jede Liste dieser Welt an
 #: ihren Anfang springt. Gemessen: sechs Drücke im Baum, sechsmal die Kamera,
