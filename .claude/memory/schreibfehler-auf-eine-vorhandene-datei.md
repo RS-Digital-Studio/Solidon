@@ -29,6 +29,17 @@ eingesammelt wird — und genau darauf ruft dieselbe Funktion `pdf.open("wb")`.
 Behoben, indem beide Leser ihren Inhalt aus `BytesIO(pfad.read_bytes())`
 bekommen statt über den Pfad.
 
+**Und dann riss derselbe Lauf ein drittes Mal — an einer SVG-Datei.** Nicht am
+PDF, nicht in `_stamp`, sondern bei `website/handbuch/en/window.svg`, mitten in
+einer Reihe von über zweihundert geschriebenen Dateien. Gemessen unmittelbar
+danach: Datei exklusiv öffenbar, Ordner beschreibbar, 756 GB frei. **Ab hier
+ist Diagnose die falsche Antwort.** Ein Fehler, der nicht nur die Stelle,
+sondern die *Dateiart* wechselt und keine Spur hinterlässt, ist eine flüchtige
+Kollision im geteilten Baum — fremder Handle, Virenscanner, Indizierer —, und
+ein Erzeugerlauf, der daran nach zwanzig Minuten stirbt, ist zu spröde gebaut.
+Vier Schreibstellen sitzen sie jetzt aus (0 s, 0,4 s, 1,5 s) und melden es,
+wenn ein zweiter Anlauf nötig war.
+
 **Why:** Ein Schreibfehler auf eine Datei, die es gibt und die man selbst
 angelegt hat, liest sich wie ein Fehler der Datei oder des Pfades. Er ist
 keiner. Er ist eine Aussage über **Zeitpunkte** — und das Erkennungszeichen ist

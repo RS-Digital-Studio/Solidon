@@ -286,6 +286,41 @@ STYLE = """
 """
 
 
+def _write_stubbornly(path: Path, payload: str | bytes) -> None:
+    """Eine Datei schreiben und eine flüchtige Kollision aussitzen.
+
+    **Warum es sie gibt.** Derselbe Lauf riss an drei verschiedenen Stellen
+    mit ``OSError 22`` beim Öffnen zum Schreiben — beim englischen PDF, beim
+    spanischen, bei einer SVG-Datei. Jedes Mal war die Datei unmittelbar
+    danach wieder frei und ihr Ordner beschreibbar. Auf dieser Maschine
+    arbeiten mehrere Sitzungen im selben Baum, und der Lauf legt über
+    zweihundert Dateien in schneller Folge an; wer dabei einmal auf einen
+    fremden Handle oder einen Scanner trifft, verliert sonst zwanzig Minuten
+    Arbeit für einen Zustand, der eine halbe Sekunde später nicht mehr
+    besteht.
+
+    Der letzte Versuch scheitert laut — eine Datei, die nach drei Anläufen
+    nicht zu schreiben ist, hat einen anderen Grund als Eile.
+    """
+    import time
+
+    for wait in (0.0, 0.4, 1.5):
+        if wait:
+            time.sleep(wait)
+        try:
+            if isinstance(payload, bytes):
+                path.write_bytes(payload)
+            else:
+                path.write_text(payload, encoding="utf-8")
+        except OSError as error:
+            last = error
+            continue
+        if wait:
+            print(f"  {path.name}: erst im zweiten Anlauf geschrieben")
+        return
+    raise last
+
+
 def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str, str]]:
     """Jede Abbildung als Datei ablegen. Liefert die Adressen je Schlüssel.
 
@@ -303,19 +338,19 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
             if not source.is_file():
                 print(f"  fehlt: {figure.key} ({source.name}) — tools/make_figures.py läuft nicht?")
                 continue
-            (target / f"{figure.key}.png").write_bytes(source.read_bytes())
+            _write_stubbornly(target / f"{figure.key}.png", source.read_bytes())
             sources[figure.key] = f"{figure.key}.png"
             continue
         svg = figures.svg(figure.key, "light")
         if svg is None:
             print(f"  fehlt: {figure.key} (lässt sich hier nicht zeichnen)")
             continue
-        (target / f"{figure.key}.svg").write_text(svg, encoding="utf-8")
+        _write_stubbornly(target / f"{figure.key}.svg", svg)
         sources[figure.key] = f"{figure.key}.svg"
 
         dark = figures.svg(figure.key, "dark")
         if dark is not None:
-            (target / f"{figure.key}-dark.svg").write_text(dark, encoding="utf-8")
+            _write_stubbornly(target / f"{figure.key}-dark.svg", dark)
             dark_sources[figure.key] = f"{figure.key}-dark.svg"
     return sources, dark_sources
 
@@ -901,15 +936,25 @@ def _stamp(pdf: Path, language: str) -> None:
     Deckblatt und Inhaltsverzeichnis bleiben frei — ein Titelblatt mit
     Kolumnentitel sieht aus wie eine Seite, die verrutscht ist.
     """
+    from io import BytesIO
+
     from pypdf import PdfReader, PdfWriter
 
     chapters = _chapter_of_each_page(pdf)
-    reader = PdfReader(str(pdf))
+    # **Aus dem Speicher und nicht über den Pfad.** ``PdfReader`` liest
+    # verzögert und hält die Datei offen, solange er lebt — und unten wird
+    # dieselbe Datei zum Schreiben geöffnet. Das war der zweite Halter neben
+    # dem ``QPdfDocument`` darüber: Am 03.09.2026 riss der Lauf mit
+    # ``OSError 22`` beim englischen Handbuch, nachdem das deutsche
+    # durchgegangen war. Wer nur einen von beiden schließt, verschiebt den
+    # Fehler auf eine andere Sprache, statt ihn abzustellen.
+    reader = PdfReader(BytesIO(pdf.read_bytes()))
     total = len(reader.pages)
     overlay = _overlay(pdf.with_suffix(".stamp.pdf"), chapters, total, language)
 
     writer = PdfWriter()
-    marks = PdfReader(str(overlay))
+    # Dieselbe Vorsicht: ``overlay`` wird am Ende gelöscht.
+    marks = PdfReader(BytesIO(overlay.read_bytes()))
     for number, page in enumerate(reader.pages):
         if number >= SKIP_STAMP:
             page.merge_page(marks.pages[number])
@@ -921,9 +966,61 @@ def _stamp(pdf: Path, language: str) -> None:
             "/Creator": f"{APP_NAME} {APP_VERSION}",
         }
     )
-    with pdf.open("wb") as stream:
-        writer.write(stream)
+    _replace_with(pdf, writer)
     overlay.unlink(missing_ok=True)
+
+
+def _replace_with(pdf: Path, writer: object) -> None:
+    """Die gestempelte Fassung daneben schreiben und an die Stelle rücken.
+
+    **Warum nicht in die Datei selbst.** Ein ``pdf.open("wb")`` auf die eben
+    gedruckte PDF riss dreimal mit ``OSError 22`` — bei Englisch, dann bei
+    Spanisch, jedes Mal nach einer Sprache, die durchgelaufen war. Ein Fehler,
+    der die Stelle wechselt, ist keine Aussage über die Datei, sondern über
+    Zeitpunkte: Irgendetwas hält sie noch, wenn geschrieben werden soll.
+
+    **Zwei Halter sind gefunden und behoben** — das ``QPdfDocument`` in
+    :func:`_chapter_of_each_page` und der ``PdfReader``, der über den Pfad
+    statt über den Speicher las. Ein dritter blieb, und eine Sonde über alle
+    drei Schritte meldete die Datei nach jedem einzelnen als frei: Er sitzt
+    nicht hier, sondern im Drucken davor, wo QtWebEngine seinen Rückruf nicht
+    zwingend abgearbeitet hat, bevor die Ereignisschleife verlassen wird.
+
+    Deshalb wird hier nicht der vierte Verdacht repariert, sondern die Stelle
+    unempfindlich gemacht: danebenschreiben, dann ersetzen. Zwischen den
+    Anläufen läuft die Ereignisschlange einmal leer — das ist die Gelegenheit
+    für einen hängenden Rückruf, fertig zu werden, und sie kostet nichts, wenn
+    keiner aussteht.
+    """
+    import time
+
+    from PySide6.QtCore import QCoreApplication
+
+    beside = pdf.with_suffix(".stamped.pdf")
+    with beside.open("wb") as stream:
+        writer.write(stream)  # type: ignore[attr-defined]
+
+    for wait in (0.0, 0.5, 2.0):
+        if wait:
+            application = QCoreApplication.instance()
+            if application is not None:
+                application.processEvents()
+            time.sleep(wait)
+        try:
+            beside.replace(pdf)
+        except OSError:
+            continue
+        return
+
+    # Angekommen heißt: Die Datei ist auch nach drei Anläufen gehalten. Dann
+    # sagt die Meldung, wer — eine Zahl ist mehr wert als ein zweiter Versuch.
+    try:
+        with pdf.open("r+b"):
+            holder = "niemand mehr, das Ersetzen scheiterte aus einem anderen Grund"
+    except OSError as error:
+        holder = f"jemand hält sie: {error.errno} ({error.strerror})"
+    beside.unlink(missing_ok=True)
+    raise RuntimeError(f"{pdf.name} ließ sich nicht ersetzen — {holder}")
 
 
 #: Wie viele Seiten am Anfang ohne Kolumnentitel bleiben: Deckblatt und
@@ -1044,7 +1141,7 @@ def main() -> int:
 
         target = WEBSITE / name
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(page_html(language, prefix), encoding="utf-8")
+        _write_stubbornly(target, page_html(language, prefix))
         print(f"  Seite → {target.relative_to(ROOT)}")
 
         pdf = write_pdf(language, target)
