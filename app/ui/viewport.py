@@ -3260,6 +3260,17 @@ class Viewport(QWidget):
         """Die Startpositionen der Buchstaben, auf die jede Zug-Matrix
         angewandt wird."""
         self._face_actor: Any | None = None
+        self._ghost_actor: Any | None = None
+        self._face_seat: tuple[tuple[float, ...], tuple[float, ...], float] | None = None
+        """Wo die letzte Merkmalsmarke sass und wie gross sie war.
+
+        Der Geisterring braucht dieselbe Stelle und dasselbe Mass; zwei
+        Rechnungen dafür liefen beim nächsten Zuwachs auseinander."""
+        """Der blasse Ring an der Ausgangsstelle, solange ein Merkmal gezogen wird.
+
+        Ohne ihn zeigt der Zug nur, **wohin** — nicht, von wo. Der Körper steht
+        währenddessen still (seine Geometrie ändert sich erst bei der
+        Auswertung), und damit sah es aus, als bewege sich gar nichts."""
         """Die Scheibe, an der der Gizmo hängt, wenn eine Fläche gewählt ist."""
         self._scale_handle: ScaleHandle | None = None
         """Der Würfel zum Skalieren (§18.11) — nur am Objekt-Gizmo. Eine
@@ -8252,6 +8263,13 @@ class Viewport(QWidget):
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
         self._drag_shadow(steps)
+        # **Der Ring erscheint mit dem ersten sichtbaren Stück des Zugs.** Ihn
+        # schon beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu
+        # behaupten, die noch keine ist.
+        if self._ghost_actor is None and (steps.moves or steps.turns):
+            chosen = self.gizmo_feature()
+            if chosen is not None:
+                self._show_ghost(chosen)
         face = self.gizmo_target()
         if face is not None:
             normal = face.params["normal"]
@@ -8406,7 +8424,6 @@ class Viewport(QWidget):
         Stelle ist mehr wert als keine.
         """
         import numpy as np
-        import pyvista as pv
 
         if self.plotter is None:
             return None
@@ -8427,7 +8444,12 @@ class Viewport(QWidget):
         direction = feature.params.get("normal") or feature.params.get("axis") or (0.0, 0.0, 1.0)
         normal = np.asarray(direction, dtype=float)
         radius = self._handle_radius(feature)
-        disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
+        # Gemerkt, damit der Geisterring (:meth:`_show_ghost`) dieselbe Stelle
+        # und dasselbe Mass nimmt. Zwei Rechnungen für denselben Sitz liefen
+        # beim nächsten Zuwachs auseinander, und dann läge der Ring neben der
+        # Marke, die er begleiten soll.
+        self._face_seat = (tuple(float(v) for v in centre), tuple(float(v) for v in normal), radius)
+        disc = self._feature_shape(feature, centre, normal, radius)
         # **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
         # genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
         # damit den Griff statt des Körpers, und die Bohrung liess sich nicht
@@ -8522,6 +8544,84 @@ class Viewport(QWidget):
             return max(float(measure) / 2.0, FACE_HANDLE_MINIMUM)
         span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
         return max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
+
+    def _feature_shape(self, feature: Feature, centre: Any, normal: Any, radius: float) -> Any:
+        """Die Gestalt, in der ein Merkmal gezeigt wird — als Körper, wo es einer ist.
+
+        „Nicht nur Ring, die ganze Vorschau mit Loch" (Robert, 03.09.2026).
+        Eine flache Scheibe sagt „hier ist etwas"; ein Zylinder in Durchmesser
+        **und** Tiefe sagt „hier ist die Bohrung". Beim Ziehen wandert er mit
+        dem Griff, und damit zeigt die Vorschau nicht einen Kreis an der
+        Zielstelle, sondern das Loch, das dort entsteht.
+
+        Der Körper selbst bleibt währenddessen still — seine Geometrie ändert
+        sich erst bei der Auswertung, und eine Boolesche Operation je Bild wäre
+        das Gegenteil einer Vorschau. Was wandert, ist das Merkmal.
+
+        **Eine Fläche bleibt eine Scheibe.** Sie hat keine Tiefe, und ein
+        Zylinder darauf behauptete eine Ausdehnung, die es nicht gibt.
+        """
+        import pyvista as pv
+
+        depth = feature.params.get("depth")
+        if depth is None:
+            return pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
+        import numpy as np
+
+        direction = np.asarray(normal, dtype=float)
+        # Der Sitz liegt an der Öffnung (:meth:`_handle_seat`); der Zylinder
+        # reicht von dort in den Körper hinein, also entgegen der Blickachse.
+        axis = np.asarray(centre, dtype=float) - direction * float(depth) / 2.0
+        return pv.Cylinder(
+            center=axis, direction=direction, radius=radius, height=float(depth), resolution=24
+        )
+
+    def _show_ghost(self, feature: Feature) -> None:
+        """Legt einen blassen Ring an die Stelle, an der das Merkmal steht.
+
+        „Die Bohrung, die beim Verschieben die Vorschau haben sollte" (Robert,
+        03.09.2026). Beim Ziehen wandert die Marke mit dem Griff, und seit sie
+        genau den Durchmesser des Merkmals hat, ist sie die Vorschau: ein Kreis
+        in Bohrungsgröße an der Zielstelle.
+
+        **Was fehlte, war der Bezug.** Der Körper steht während des Zugs still
+        — seine Geometrie ändert sich erst bei der Auswertung —, und ohne eine
+        Marke am Ausgangsort sah es aus, als bewege sich nichts oder als ziehe
+        man das ganze Teil. Der Ring bleibt stehen, wo die Bohrung **ist**, und
+        macht damit die Strecke sichtbar.
+
+        Ein Ring und keine Scheibe: Er soll nicht mit der Marke verwechselt
+        werden, die am Griff hängt, und er soll die Bohrung darunter nicht
+        zudecken.
+        """
+
+        self._drop_ghost()
+        if self.plotter is None:
+            return
+        seat = self._face_seat
+        if seat is None:
+            return
+        centre, normal, radius = seat
+        # **Der Geist trägt dieselbe Gestalt wie die Marke** — bei einer
+        # Bohrung also ebenfalls einen Zylinder. Zwei verschiedene Formen für
+        # dasselbe Merkmal an zwei Stellen läsen sich wie zwei verschiedene
+        # Dinge, und der Zug soll eine Strecke zeigen, nicht ein Paar.
+        ring = self._feature_shape(feature, centre, normal, radius)
+        self._ghost_actor = self.plotter.add_mesh(
+            ring,
+            color=MEASURE_COLOUR,
+            opacity=0.35,
+            lighting=False,
+            name="feature-ghost",
+            render=False,
+            pickable=False,
+        )
+
+    def _drop_ghost(self) -> None:
+        """Nimmt den Ring weg — der Zug ist vorbei, die Auswertung gilt."""
+        if self._ghost_actor is not None and self.plotter is not None:
+            self.plotter.remove_actor(self._ghost_actor, render=False)
+        self._ghost_actor = None
 
     def _drop_face_handle(self) -> None:
         if self._face_actor is not None and self.plotter is not None:
@@ -8670,6 +8770,8 @@ class Viewport(QWidget):
         self._drag_kind = None
         self._drag_axis = None
         self._drag_normal = None
+        # Der Ring gehört dem Zug; was danach gilt, zeigt die Auswertung.
+        self._drop_ghost()
         # Der Schatten stand während des Zugs versetzt (:meth:`_drag_shadow`);
         # was danach gilt, entscheidet die Auswertung und zeichnet ihn neu.
         # Bliebe der Versatz stehen, läge er beim nächsten Bild doppelt.
