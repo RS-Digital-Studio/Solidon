@@ -172,7 +172,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Knopf-Wächter gilt nur einem Dialog | Die Modelle von heute über die Oberfläche (03.09.2026) | eine Ausweitung von `test_no_locked_button_in_this_dialog_stays_silent` auf alle Dialoge der Anwendung. Er prüft jeden gesperrten, sichtbaren Knopf der Druckeinstellungen auf Tooltip, Statuszeile und zugängliche Beschreibung und hat beim ersten Lauf zwei Fälle mehr gefunden, als die Handmessung gesehen hatte: „Slicen“ und „Im Slicer öffnen …“ schwiegen im häufigsten Fall überhaupt, wenn gar kein Slicer eingerichtet ist. Dieselbe Zusage gilt jedem der vierzehn Dialoge; geprüft wird einer (Vorschlag 3d-druck-c7) |
 | Der Einheitendialog zeigt „nan" | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Prüfung auf endliche Koordinaten dort, wo die Zahl **entsteht** — `biggest` in `ingest/ops.py`, die Diagonale des größten Körpers (3d-druck-d4). Eine STL mit einer NaN-Ecke wird angenommen, `detect_unit` findet nichts Plausibles und fragt; im Dialog steht dann „Millimeter (mm): nan × 20.00 × 20.00 mm". Der Docstring von `_unit_for` sagt die Regel selbst: „eine Frage, die niemand beantworten kann, ist nur die halbe Regel" |
 | Vierzehn Sekunden eingefrorenes Fenster beim Lesen | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen asynchronen Umbau von `main_window.open_path`. Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute Fenster mit einem Zeitgeber, der während der Blockade nicht feuert: 119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s ganz am Anfang (synchrones Lesen plus `scan_assembly`) und einer von 6,3 s am Ende. Dazwischen ist §2.8 vorbildlich erfüllt („Punkte verschweißen · 20 % · noch etwa 2 min"). Der Docstring beschreibt die Lücke vollständig und schließt sie nicht; `first_model` fällt vor dem Lesen und stört den Umbau nicht |
-| `ingest.very_large` trägt den Körpernamen als Text statt als Kennung | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine `object_id` in `ops._named()`, das heute nur `values["object"] = name` setzt. Zwei Folgen, gemessen von 3d-druck-7f an einem Kundenmodell mit acht Körpern: Der Befund bekommt keine Handlung, weil `DECIMATE_MESH` ein Ziel braucht und ohne Kennung auf der zufälligen Auswahl landete; und `_bundled` gruppiert über den Wortlaut, in dem der Name steht — sechs Körper werden sechs fast wortgleiche Zeilen. Zwölf von fünfzehn Befunden im Bericht stammen aus zwei Kennungen |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 
 ---
@@ -14756,7 +14755,7 @@ Durchgangs an denselben Weg gestoßen sind:
       Lücke vollständig und schließt sie nicht. `first_model` fällt vor dem
       Lesen und stört einen asynchronen Umbau nicht.
 
-- [ ] **`ingest.very_large` trägt den Körpernamen als Text statt als Kennung.**
+- [x] **`ingest.very_large` trägt den Körpernamen als Text statt als Kennung.**
       `ops._named()` setzt `values["object"] = name`, keine `object_id`. Zwei
       Folgen, von 3d-druck-7f an einem Kundenmodell mit acht Körpern gemessen:
       Der Befund bekommt keine Handlung, weil `DECIMATE_MESH` ein Ziel braucht
@@ -14764,6 +14763,15 @@ Durchgangs an denselben Weg gestoßen sind:
       über den Wortlaut, in dem der Name steht — sechs Körper werden sechs
       fast wortgleiche Zeilen. Zwölf von fünfzehn Befunden im Bericht stammen
       aus zwei Kennungen.
+
+      *Erledigt am 03.09.2026 (`fa23fc75`), und zwar in der Auswertung statt in
+      `_named`: Die Operation kennt die Kennung gar nicht — ihre Ausgaben tragen
+      `id=""`, vergeben wird sie erst vom Stapel. `evaluate` ordnet jetzt über
+      den Namen zu, den `_named` ohnehin mitschreibt; wo er genau eine Ausgabe
+      trifft, ist die Zuordnung belegt statt geraten. Die Bündelung hatte
+      3d-druck-7f davor schon von der anderen Seite gelöst (`ACROSS_BODIES`
+      nimmt diesen beiden Kennungen den Körper aus dem Schlüssel — 15 Zeilen
+      wurden 5); übrig war der fehlende Knopf, und der hängt am Ziel.*
 
 - [ ] **Die übersetzte Schnitt-Erweiterung verliert eine Schicht.**
       Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204
