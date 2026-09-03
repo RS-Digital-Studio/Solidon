@@ -96,6 +96,8 @@
           <li><a href="#ai-agent">Agente de IA</a></li>
           <li><a href="#sketches-with-constraints">Bocetos con restricciones</a></li>
           <li><a href="#inspection-report">Informe de comprobación</a></li>
+          <li><a href="#recognised-features">Características</a></li>
+          <li><a href="#direct-handles">Agarrar en vez de teclear</a></li>
           <li><a href="#parametric">Paramétrico</a></li>
           <li><a href="#building-blocks">Bloques</a></li>
           <li><a href="#your-own-blocks">Bloques propios</a></li>
@@ -222,6 +224,151 @@
                  alt="El informe de comprobación: cero errores, dos advertencias y dos avisos, entre ellos «El modelo está abierto en tres sitios» y «Una pared es más fina que dos cordones de extrusión»"></a>
           </div>
           <figcaption>El informe de comprobación de un archivo ajeno importado.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="recognised-features">
+        <div>
+          <span class="kicker">Características</span>
+          <h3>En un STL ajeno, un taladro vuelve a ser un taladro</h3>
+          <p>Al abrir un archivo, Solidon3D busca en la malla de triángulos lo
+          que un día fue diseño: taladros, espigas, avellanados, casquetes
+          esféricos, redondeos, gargantas, roscas, caras planas y aristas
+          abiertas. Cada característica encontrada recibe una identidad que
+          sobrevive a los pasos siguientes, y la ventana de características
+          muestra sus valores <b>medidos</b> como campos: posición, diámetro,
+          profundidad, eje.</p>
+          <p class="note">Cambiar un número es la operación.
+          <b>Sin modo y sin un segundo diálogo</b>: la vista previa en la
+          imagen sigue mientras aún escribes.</p>
+          <p>Mover, girar, duplicar, quitar, cambiar de medida: estas acciones
+          se aplican directamente al elemento reconocido. Hasta ahora, correr
+          un taladro tres milímetros significaba taparlo y perforar otro en
+          coordenadas nuevas — dos pasos, seis números a mano, y la identidad
+          se perdía. Ahora es un paso, y cada ajuste que apunta a ese taladro
+          conserva su referencia.</p>
+          <p>El propio taladro dice qué tornillo le corresponde («mide
+          5,19 mm — el agujero de paso para M5»), y donde no encaja ninguno,
+          también lo dice. Seis taladros iguales pasan a la misma medida de una
+          vez, como una sola acción que un deshacer retira junta. Dos
+          características marcadas indican su distancia — en el espacio y por
+          eje, sin herramienta de medición.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">No todos los tipos
+          admiten todas las acciones. Mover, duplicar y quitar valen para
+          taladros, espigas, avellanados y casquetes; girar, para los tres
+          primeros — una superficie esférica no tiene una orientación que se
+          pueda girar. Para redondeos y gargantas estas operaciones aún no
+          existen.
+          <b>La ventana lo dice ahí mismo, con el motivo, en lugar de mostrar
+          un campo gris.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="Un dibujo de la ventana de características: arriba pone «Taladro — Ø 5,19 mm» y debajo la frase «el agujero de paso para M5»; siguen campos de diámetro, profundidad y posición, y los botones Mover, Girar, Duplicar y Quitar. Para el redondeo, en lugar de un botón hay una frase que dice que la operación todavía no existe.">
+            <text class="ink" x="24" y="30" font-weight="600">Característica</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Taladro</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
+            <text class="dim" x="38" y="82">el agujero de paso para M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Diámetro</text>
+            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Profundidad</text>
+            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Posición X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="54" height="26" rx="4"/>
+              <rect x="84" y="224" width="50" height="26" rx="4"/>
+              <rect x="140" y="224" width="64" height="26" rx="4"/>
+              <rect x="210" y="224" width="52" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="51" y="241" font-size="11" text-anchor="middle">Mover</text>
+            <text class="ink" x="109" y="241" font-size="11" text-anchor="middle">Girar</text>
+            <text class="ink" x="172" y="241" font-size="11" text-anchor="middle">Duplicar</text>
+            <text class="ink" x="236" y="241" font-size="11" text-anchor="middle">Quitar</text>
+
+            <text class="dim" x="24" y="278">Redondeo</text>
+            <text class="dim" x="24" y="294">Cambiar el radio: para eso aún no hay operación.</text>
+
+            <text class="dim" x="320" y="42">En la imagen</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">marcado: uno de cuatro</text>
+            <text class="ink" x="320" y="252" font-size="12">Cambiar los cuatro a la vez:</text>
+            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
+          </svg>
+          <figcaption>La ventana de características: valores medidos como
+          campos, y lo que no se puede, escrito como frase.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="direct-handles">
+        <div>
+          <span class="kicker">Agarrar en vez de teclear</span>
+          <h3>El tirador está en aquello que has pulsado</h3>
+          <p>Quien pulsa un taladro mueve el taladro, no la pieza entera. Al
+          arrastrar, una vista previa del agujero acompaña al cursor, con su
+          diámetro y su profundidad; un cilindro pálido se queda en el punto de
+          partida. Se ve el recorrido, no solo el destino.</p>
+          <p class="note">El arrastre se convierte en un paso del historial.
+          <b>Lo que has empujado en la imagen queda después como número en ese
+          paso</b>, y sigue siendo editable diez pasos más tarde.</p>
+          <p>Si levantas una pieza, la sombra se escapa hacia un lado: la única
+          información sobre la altura que la imagen da por sí sola. La
+          selección se funde en lugar de saltar.</p>
+          <p>Y en una cara, la barra de movimiento solo ofrece lo que allí es
+          posible: girar y escalar quedan en gris, con el motivo en la
+          descripción emergente en vez de un mensaje de error tras el
+          clic.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un dibujo: una placa con un taladro; un cilindro pálido se queda en el punto de partida, otro lleno se ha desplazado a la derecha y entre ambos una línea de cota indica 3,00 milímetros. Debajo, la barra de movimiento, donde Mover está disponible y Girar y Escalar están en gris, con la nota de que una cara no tiene eje propio.">
+            <text class="ink" x="24" y="30" font-weight="600">Arrastrar con vista previa</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">punto de partida</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">vista previa</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3,00 mm</text>
+
+            <text class="dim" x="24" y="200">La barra de movimiento en una cara</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="62" height="28" rx="4"/>
+              <rect x="94" y="212" width="56" height="28" rx="4"/>
+              <rect x="158" y="212" width="66" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="55" y="230" font-size="11" text-anchor="middle">Mover</text>
+            <text class="dim" x="122" y="230" font-size="11" text-anchor="middle">Girar</text>
+            <text class="dim" x="191" y="230" font-size="11" text-anchor="middle">Escalar</text>
+            <text class="dim" x="24" y="266">Una cara no tiene eje propio: el motivo está en la</text>
+            <text class="dim" x="24" y="282">descripción emergente, no en un mensaje tras el clic.</text>
+          </svg>
+          <figcaption>Al arrastrar, la vista previa muestra el recorrido; la
+          barra solo ofrece lo que funciona en ese punto.</figcaption>
         </figure>
       </div>
 

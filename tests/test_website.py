@@ -2196,3 +2196,44 @@ def test_no_delivered_page_is_an_island() -> None:
             islands.append(page)
 
     assert not islands, "keine Seite verlinkt hierher: " + ", ".join(islands)
+
+
+#: Die Merkmalsarten, die der Abschnitt über Merkmale verspricht. Sie stehen
+#: maschinenlesbar in der Seite und nicht nur als Prosa — sechs Sprachen mit
+#: sechs Aufzählungen fände keine Suche wieder.
+KINDS_PROMISED = re.compile(r'data-kinds="([a-z_,]+)"')
+
+
+def test_the_pages_promise_only_feature_kinds_that_carry_the_action() -> None:
+    """Die versprochenen Merkmalsarten gegen das Register, in allen Sprachen.
+
+    Der Abschnitt über Merkmale nennt die Arten, an denen Versetzen,
+    Verdoppeln und Entfernen ansetzen. Welche das sind, entscheidet nicht der
+    Text, sondern ``applies_to`` der drei Operationen — und das bewegt sich:
+    Eine Kugelfläche trug beim Schreiben dieses Abschnitts kein Drehen, weil
+    sie keine Lage hat, die sich drehen ließe. Wer auf einer Verkaufsseite eine
+    Art verspricht, für die keine Operation besteht, macht eine Zusage, die die
+    Anwendung nicht einlöst.
+
+    Der Test prüft außerdem, dass alle sechs Fassungen **dieselben** Arten
+    nennen. Eine Aufzählung, die nur auf der portugiesischen Seite altert, ist
+    genauso falsch wie auf der deutschen — sie fällt nur später auf.
+    """
+    load_operations()
+    actions = ("move_feature", "duplicate_feature", "remove_feature")
+
+    promised = {}
+    for page in ALL_PAGES:
+        for kinds in KINDS_PROMISED.findall((WEBSITE / page).read_text(encoding="utf-8")):
+            promised[page] = frozenset(kinds.split(","))
+
+    languages = len(list(WEBSITE.glob("*/index.html"))) + 1
+    assert len(promised) == languages, (
+        f"{len(promised)} Seiten nennen Merkmalsarten, erwartet {languages}: {sorted(promised)}"
+    )
+    assert len(set(promised.values())) == 1, f"die Fassungen nennen verschiedene Arten: {promised}"
+
+    for kind in next(iter(promised.values())):
+        carried = {spec.name for spec in REGISTRY.for_feature(kind)}
+        missing = sorted(set(actions) - carried)
+        assert not missing, f"für „{kind}“ fehlt {missing} — die Seiten versprechen es trotzdem"

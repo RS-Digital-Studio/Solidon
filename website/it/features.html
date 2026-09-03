@@ -98,6 +98,8 @@
           <li><a href="#ai-agent">Agente IA</a></li>
           <li><a href="#sketches-with-constraints">Schizzi con vincoli</a></li>
           <li><a href="#inspection-report">Rapporto di verifica</a></li>
+          <li><a href="#recognised-features">Caratteristiche</a></li>
+          <li><a href="#direct-handles">Afferrare invece di digitare</a></li>
           <li><a href="#parametric">Parametrico</a></li>
           <li><a href="#building-blocks">Blocchi</a></li>
           <li><a href="#your-own-blocks">Blocchi tuoi</a></li>
@@ -224,6 +226,149 @@
                  alt="Il rapporto di verifica: zero errori, due avvisi e due note, tra cui «Il modello è aperto in tre punti» e «Una parete è più sottile di due cordoni di estrusione»"></a>
           </div>
           <figcaption>Il rapporto di verifica di un file esterno importato.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="recognised-features">
+        <div>
+          <span class="kicker">Caratteristiche</span>
+          <h3>In un STL altrui, un foro torna a essere un foro</h3>
+          <p>All’apertura, Solidon3D cerca nella maglia di triangoli ciò che un
+          tempo era progetto: fori, perni, svasature, calotte sferiche,
+          raccordi, gole, filettature, facce piane e spigoli aperti. Ogni
+          caratteristica trovata riceve un’identità che sopravvive ai passi
+          successivi, e la finestra delle caratteristiche mostra i suoi valori
+          <b>misurati</b> come campi: posizione, diametro, profondità,
+          asse.</p>
+          <p class="note">Cambiare un numero è l’operazione.
+          <b>Nessuna modalità, nessun secondo dialogo</b>: l’anteprima
+          nell’immagine segue mentre stai ancora digitando.</p>
+          <p>Spostare, ruotare, duplicare, rimuovere, portare a misura: queste
+          azioni agiscono direttamente sull’elemento riconosciuto. Finora,
+          spostare un foro di tre millimetri voleva dire tapparlo e forarne uno
+          nuovo a coordinate nuove — due passi, sei numeri a mano, e l’identità
+          era persa. Ora è un passo solo, e ogni accoppiamento che punta a quel
+          foro mantiene il suo riferimento.</p>
+          <p>È il foro stesso a dire quale vite gli spetta («misura 5,19 mm —
+          il foro di passaggio per M5»), e dove non ne va bene nessuna, dice
+          anche quello. Sei fori uguali passano alla stessa misura in un colpo
+          solo, come un’unica azione che un annulla ritira insieme. Due
+          caratteristiche marcate dichiarano la loro distanza — nello spazio e
+          per asse, senza strumento di misura.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Non ogni tipo porta
+          ogni azione. Spostare, duplicare e rimuovere valgono per fori, perni,
+          svasature e calotte; ruotare, per i primi tre — una superficie
+          sferica non ha un orientamento che si possa ruotare. Per raccordi e
+          gole queste operazioni non esistono ancora.
+          <b>La finestra lo dice sul posto, con il motivo, invece di mostrare
+          un campo grigio.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="Un disegno della finestra delle caratteristiche: in alto «Foro — Ø 5,19 mm» e sotto la frase «il foro di passaggio per M5»; seguono i campi diametro, profondità e posizione, e i pulsanti Sposta, Ruota, Duplica e Rimuovi. Per il raccordo, al posto di un pulsante c’è una frase che dice che l’operazione non esiste ancora.">
+            <text class="ink" x="24" y="30" font-weight="600">Caratteristica</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Foro</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
+            <text class="dim" x="38" y="82">il foro di passaggio per M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Diametro</text>
+            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Profondità</text>
+            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Posizione X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="56" height="26" rx="4"/>
+              <rect x="86" y="224" width="52" height="26" rx="4"/>
+              <rect x="144" y="224" width="58" height="26" rx="4"/>
+              <rect x="208" y="224" width="58" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="52" y="241" font-size="11" text-anchor="middle">Sposta</text>
+            <text class="ink" x="112" y="241" font-size="11" text-anchor="middle">Ruota</text>
+            <text class="ink" x="173" y="241" font-size="11" text-anchor="middle">Duplica</text>
+            <text class="ink" x="237" y="241" font-size="11" text-anchor="middle">Rimuovi</text>
+
+            <text class="dim" x="24" y="278">Raccordo</text>
+            <text class="dim" x="24" y="294">Cambiare il raggio: per questo non c’è ancora un’operazione.</text>
+
+            <text class="dim" x="320" y="42">Nell’immagine</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">scelto: uno di quattro</text>
+            <text class="ink" x="320" y="252" font-size="12">Cambiare tutti e quattro insieme:</text>
+            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
+          </svg>
+          <figcaption>La finestra delle caratteristiche: valori misurati come
+          campi, e ciò che non si può fare scritto per esteso.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="direct-handles">
+        <div>
+          <span class="kicker">Afferrare invece di digitare</span>
+          <h3>La maniglia sta su ciò che hai cliccato</h3>
+          <p>Chi clicca un foro sposta il foro, non l’intero pezzo. Durante il
+          trascinamento un’anteprima del foro segue il cursore, con il suo
+          diametro e la sua profondità; un cilindro pallido resta al punto di
+          partenza. Si vede il percorso, non solo la meta.</p>
+          <p class="note">Il trascinamento diventa un passo della cronologia.
+          <b>Ciò che è stato spinto nell’immagine è poi un numero in quel
+          passo</b> — e resta modificabile dieci passi più tardi.</p>
+          <p>Se sollevi un pezzo, l’ombra scappa di lato: l’unica informazione
+          sull’altezza che l’immagine dà da sé. La selezione sfuma invece di
+          saltare.</p>
+          <p>E su una faccia la barra di spostamento offre solo ciò che lì è
+          possibile: ruotare e scalare restano in grigio, con il motivo nel
+          suggerimento invece di un messaggio d’errore dopo il clic.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un disegno: una piastra con un foro; un cilindro pallido resta al punto di partenza, uno pieno si è spostato a destra e fra i due una linea di quota indica 3,00 millimetri. Sotto, la barra di spostamento, dove Sposta è disponibile mentre Ruota e Scala sono in grigio, con la nota che una faccia non ha un asse proprio.">
+            <text class="ink" x="24" y="30" font-weight="600">Trascinare con anteprima</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">punto di partenza</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">anteprima</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3,00 mm</text>
+
+            <text class="dim" x="24" y="200">La barra di spostamento su una faccia</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="62" height="28" rx="4"/>
+              <rect x="94" y="212" width="58" height="28" rx="4"/>
+              <rect x="160" y="212" width="56" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="55" y="230" font-size="11" text-anchor="middle">Sposta</text>
+            <text class="dim" x="123" y="230" font-size="11" text-anchor="middle">Ruota</text>
+            <text class="dim" x="188" y="230" font-size="11" text-anchor="middle">Scala</text>
+            <text class="dim" x="24" y="266">Una faccia non ha un asse proprio: il motivo sta nel</text>
+            <text class="dim" x="24" y="282">suggerimento, non in un messaggio dopo il clic.</text>
+          </svg>
+          <figcaption>Durante il trascinamento l’anteprima mostra il percorso;
+          la barra offre solo ciò che funziona in quel punto.</figcaption>
         </figure>
       </div>
 

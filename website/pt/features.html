@@ -98,6 +98,8 @@
           <li><a href="#ai-agent">Agente de IA</a></li>
           <li><a href="#sketches-with-constraints">Esboços com restrições</a></li>
           <li><a href="#inspection-report">Relatório de verificação</a></li>
+          <li><a href="#recognised-features">Características</a></li>
+          <li><a href="#direct-handles">Pegar em vez de escrever</a></li>
           <li><a href="#parametric">Paramétrico</a></li>
           <li><a href="#building-blocks">Blocos</a></li>
           <li><a href="#your-own-blocks">Blocos próprios</a></li>
@@ -224,6 +226,149 @@
                  alt="O relatório de verificação: zero erros, dois avisos e duas notas, entre eles «O modelo está aberto em três sítios» e «Uma parede é mais fina do que duas larguras de extrusão»"></a>
           </div>
           <figcaption>O relatório de verificação de um ficheiro alheio importado.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="recognised-features">
+        <div>
+          <span class="kicker">Características</span>
+          <h3>Num STL alheio, um furo volta a ser um furo</h3>
+          <p>Ao abrir, o Solidon3D procura na malha de triângulos aquilo que um
+          dia foi projeto: furos, pinos, escareados, calotes esféricas,
+          arredondamentos, golas, roscas, faces planas e arestas abertas. Cada
+          característica encontrada recebe uma identidade que sobrevive aos
+          passos seguintes — e a janela de características mostra os seus
+          valores <b>medidos</b> como campos: posição, diâmetro, profundidade,
+          eixo.</p>
+          <p class="note">Alterar um número é a operação.
+          <b>Sem modo e sem um segundo diálogo</b> — e a pré-visualização na
+          imagem acompanha enquanto ainda está a escrever.</p>
+          <p>Mover, rodar, duplicar, remover, pôr à medida: estas ações
+          aplicam-se diretamente ao elemento reconhecido. Até agora, deslocar
+          um furo três milímetros significava tapá-lo e furar outro em
+          coordenadas novas — dois passos, seis números à mão, e a identidade
+          perdia-se. Agora é um passo, e cada ajuste que aponta para esse furo
+          mantém a sua referência.</p>
+          <p>O próprio furo diz que parafuso lhe pertence («mede 5,19 mm — o
+          furo de passagem para M5»), e onde nenhum serve, também o diz. Seis
+          furos iguais passam à mesma medida de uma só vez, como uma única ação
+          que um desfazer retira em conjunto. Duas características marcadas
+          indicam a sua distância — no espaço e por eixo, sem ferramenta de
+          medição.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Nem todos os tipos
+          suportam todas as ações. Mover, duplicar e remover valem para furos,
+          pinos, escareados e calotes; rodar, para os três primeiros — uma
+          superfície esférica não tem uma orientação que se possa rodar. Para
+          arredondamentos e golas estas operações ainda não existem.
+          <b>A janela di-lo ali mesmo, com o motivo, em vez de mostrar um campo
+          cinzento.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="Um desenho da janela de características: em cima lê-se «Furo — Ø 5,19 mm» e por baixo a frase «o furo de passagem para M5»; seguem-se campos de diâmetro, profundidade e posição, e os botões Mover, Rodar, Duplicar e Remover. Para o arredondamento, em vez de um botão há uma frase a dizer que a operação ainda não existe.">
+            <text class="ink" x="24" y="30" font-weight="600">Característica</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Furo</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
+            <text class="dim" x="38" y="82">o furo de passagem para M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Diâmetro</text>
+            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Profundidade</text>
+            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Posição X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="54" height="26" rx="4"/>
+              <rect x="84" y="224" width="52" height="26" rx="4"/>
+              <rect x="142" y="224" width="62" height="26" rx="4"/>
+              <rect x="210" y="224" width="60" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="51" y="241" font-size="11" text-anchor="middle">Mover</text>
+            <text class="ink" x="110" y="241" font-size="11" text-anchor="middle">Rodar</text>
+            <text class="ink" x="173" y="241" font-size="11" text-anchor="middle">Duplicar</text>
+            <text class="ink" x="240" y="241" font-size="11" text-anchor="middle">Remover</text>
+
+            <text class="dim" x="24" y="278">Arredondamento</text>
+            <text class="dim" x="24" y="294">Alterar o raio: para isso ainda não há operação.</text>
+
+            <text class="dim" x="320" y="42">Na imagem</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">escolhido: um de quatro</text>
+            <text class="ink" x="320" y="252" font-size="12">Alterar os quatro de uma vez:</text>
+            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
+          </svg>
+          <figcaption>A janela de características: valores medidos como campos,
+          e o que não é possível escrito por extenso.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="direct-handles">
+        <div>
+          <span class="kicker">Pegar em vez de escrever</span>
+          <h3>A pega está naquilo em que clicou</h3>
+          <p>Quem clica num furo move o furo — não a peça inteira. Ao arrastar,
+          uma pré-visualização do furo acompanha o cursor, com o seu diâmetro e
+          a sua profundidade; um cilindro pálido fica no ponto de partida.
+          Vê-se o percurso, não apenas o destino.</p>
+          <p class="note">O arrasto torna-se um passo no histórico.
+          <b>O que foi empurrado na imagem fica depois como número nesse
+          passo</b> — e continua alterável dez passos mais tarde.</p>
+          <p>Se levantar uma peça, a sombra foge para o lado: a única
+          informação sobre a altura que a imagem dá por si. A seleção
+          esbate-se em vez de saltar.</p>
+          <p>E numa face, a barra de movimento só oferece o que ali é possível:
+          rodar e escalar ficam a cinzento, com o motivo na dica em vez de uma
+          mensagem de erro depois do clique.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Um desenho: uma placa com um furo; um cilindro pálido fica no ponto de partida, um cheio deslocou-se para a direita e entre os dois uma linha de cota indica 3,00 milímetros. Por baixo, a barra de movimento, onde Mover está disponível e Rodar e Escalar estão a cinzento, com a nota de que uma face não tem eixo próprio.">
+            <text class="ink" x="24" y="30" font-weight="600">Arrastar com pré-visualização</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">ponto de partida</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">pré-visualização</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3,00 mm</text>
+
+            <text class="dim" x="24" y="200">A barra de movimento numa face</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="60" height="28" rx="4"/>
+              <rect x="92" y="212" width="58" height="28" rx="4"/>
+              <rect x="158" y="212" width="62" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="54" y="230" font-size="11" text-anchor="middle">Mover</text>
+            <text class="dim" x="121" y="230" font-size="11" text-anchor="middle">Rodar</text>
+            <text class="dim" x="189" y="230" font-size="11" text-anchor="middle">Escalar</text>
+            <text class="dim" x="24" y="266">Uma face não tem eixo próprio: o motivo está na dica,</text>
+            <text class="dim" x="24" y="282">não numa mensagem depois do clique.</text>
+          </svg>
+          <figcaption>Ao arrastar, a pré-visualização mostra o percurso; a
+          barra só oferece o que funciona nesse ponto.</figcaption>
         </figure>
       </div>
 

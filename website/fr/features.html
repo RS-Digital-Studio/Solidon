@@ -96,6 +96,8 @@
           <li><a href="#ai-agent">Agent IA</a></li>
           <li><a href="#sketches-with-constraints">Esquisses sous contraintes</a></li>
           <li><a href="#inspection-report">Rapport de contrôle</a></li>
+          <li><a href="#recognised-features">Caractéristiques</a></li>
+          <li><a href="#direct-handles">Saisir plutôt que taper</a></li>
           <li><a href="#parametric">Paramétrique</a></li>
           <li><a href="#building-blocks">Blocs</a></li>
           <li><a href="#your-own-blocks">Vos propres blocs</a></li>
@@ -224,6 +226,152 @@
                  alt="Le rapport de contrôle&nbsp;: zéro erreur, deux avertissements et deux remarques, dont «&nbsp;Le modèle est ouvert à trois endroits&nbsp;» et «&nbsp;Une paroi est plus mince que deux cordons d'extrusion&nbsp;»"></a>
           </div>
           <figcaption>Le rapport de contrôle d'un fichier tiers importé.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="recognised-features">
+        <div>
+          <span class="kicker">Caractéristiques</span>
+          <h3>Dans un STL étranger, un perçage redevient un perçage</h3>
+          <p>À l’ouverture, Solidon3D cherche dans le maillage ce qui fut un
+          jour de la conception : perçages, tenons, fraisures, calottes
+          sphériques, congés, gorges, filetages, faces planes et arêtes
+          ouvertes. Chaque caractéristique trouvée reçoit une identité qui
+          survit aux étapes suivantes — et la fenêtre des caractéristiques
+          affiche ses valeurs <b>mesurées</b> sous forme de champs : position,
+          diamètre, profondeur, axe.</p>
+          <p class="note">Changer un nombre, c’est l’opération.
+          <b>Pas de mode, pas de second dialogue</b> — et l’aperçu dans l’image
+          suit pendant que vous tapez encore.</p>
+          <p>Déplacer, pivoter, dupliquer, supprimer, remettre à la cote : ces
+          actions s’appliquent directement à l’élément reconnu. Jusqu’ici,
+          décaler un perçage de trois millimètres voulait dire le boucher et en
+          percer un autre à de nouvelles coordonnées — deux étapes, six nombres
+          à la main, et l’identité était perdue. C’est maintenant une seule
+          étape, et chaque ajustement qui pointe vers ce perçage garde sa
+          référence.</p>
+          <p>Le perçage dit lui-même quelle vis lui convient (« mesure
+          5,19 mm — le trou de passage pour M5 »), et là où rien ne convient,
+          il le dit aussi. Six perçages semblables passent à la même cote d’un
+          seul geste, comme une action unique qu’une annulation reprend d’un
+          bloc. Deux caractéristiques marquées indiquent leur distance — dans
+          l’espace et par axe, sans outil de mesure.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Tous les types ne
+          portent pas toutes les actions. Déplacer, dupliquer et supprimer
+          valent pour les perçages, tenons, fraisures et calottes&nbsp;;
+          pivoter, pour les trois premiers — une face sphérique n’a pas
+          d’orientation que l’on pourrait faire pivoter. Pour les congés et les
+          gorges, ces opérations n’existent pas encore.
+          <b>La fenêtre le dit sur place, avec la raison, au lieu d’afficher un
+          champ grisé.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="Un dessin de la fenêtre des caractéristiques : en haut « Perçage — Ø 5,19 mm » puis la phrase « le trou de passage pour M5 » ; suivent les champs diamètre, profondeur et position, et les boutons Déplacer, Pivoter, Dupliquer et Supprimer. Pour le congé, à la place d’un bouton, une phrase indique que l’opération n’existe pas encore.">
+            <text class="ink" x="24" y="30" font-weight="600">Caractéristique</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Perçage</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
+            <text class="dim" x="38" y="82">le trou de passage pour M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Diamètre</text>
+            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Profondeur</text>
+            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Position X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="64" height="26" rx="4"/>
+              <rect x="94" y="224" width="56" height="26" rx="4"/>
+              <rect x="156" y="224" width="62" height="26" rx="4"/>
+              <rect x="224" y="224" width="66" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="56" y="241" font-size="11" text-anchor="middle">Déplacer</text>
+            <text class="ink" x="122" y="241" font-size="11" text-anchor="middle">Pivoter</text>
+            <text class="ink" x="187" y="241" font-size="11" text-anchor="middle">Dupliquer</text>
+            <text class="ink" x="257" y="241" font-size="11" text-anchor="middle">Supprimer</text>
+
+            <text class="dim" x="24" y="278">Congé</text>
+            <text class="dim" x="24" y="294">Changer le rayon : pas encore d’opération pour cela.</text>
+
+            <text class="dim" x="320" y="42">Dans l’image</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">choisi : un sur quatre</text>
+            <text class="ink" x="320" y="252" font-size="12">Changer les quatre d’un coup :</text>
+            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
+          </svg>
+          <figcaption>La fenêtre des caractéristiques : des valeurs mesurées
+          comme champs, et ce qui n’est pas possible écrit en toutes
+          lettres.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="direct-handles">
+        <div>
+          <span class="kicker">Saisir plutôt que saisir au clavier</span>
+          <h3>La poignée se trouve sur ce que vous avez cliqué</h3>
+          <p>Qui clique un perçage déplace le perçage — pas la pièce entière.
+          Pendant le glissement, un aperçu du trou suit le curseur, avec son
+          diamètre et sa profondeur ; un cylindre pâle reste au point de
+          départ. On voit le trajet, pas seulement la destination.</p>
+          <p class="note">Le glissement devient une étape de l’historique.
+          <b>Ce qui a été poussé dans l’image est ensuite un nombre dans cette
+          étape</b> — et reste modifiable dix étapes plus tard.</p>
+          <p>Soulevez une pièce et l’ombre file sur le côté : la seule
+          indication de hauteur qu’une image donne d’elle-même. La sélection se
+          fond au lieu de sauter.</p>
+          <p>Et sur une face, la barre de déplacement n’offre que ce qui y est
+          possible : pivoter et mettre à l’échelle sont grisés, avec la raison
+          dans l’infobulle plutôt qu’un message d’erreur après le clic.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Un dessin : une plaque percée ; un cylindre pâle reste au point de départ, un plein s’est déplacé vers la droite, et entre les deux une ligne de cote indique 3,00 millimètres. Dessous, la barre de déplacement, où Déplacer est disponible tandis que Pivoter et Mettre à l’échelle sont grisés, avec la note qu’une face n’a pas d’axe propre.">
+            <text class="ink" x="24" y="30" font-weight="600">Glisser, avec aperçu</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">point de départ</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">aperçu</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3,00 mm</text>
+
+            <text class="dim" x="24" y="200">La barre de déplacement sur une face</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="72" height="28" rx="4"/>
+              <rect x="104" y="212" width="62" height="28" rx="4"/>
+              <rect x="174" y="212" width="96" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="60" y="230" font-size="11" text-anchor="middle">Déplacer</text>
+            <text class="dim" x="135" y="230" font-size="11" text-anchor="middle">Pivoter</text>
+            <text class="dim" x="222" y="230" font-size="11" text-anchor="middle">Mettre à l’échelle</text>
+            <text class="dim" x="24" y="266">Une face n’a pas d’axe propre : la raison est dans</text>
+            <text class="dim" x="24" y="282">l’infobulle, pas dans un message après le clic.</text>
+          </svg>
+          <figcaption>Pendant le glissement, l’aperçu montre le trajet ; la
+          barre n’offre que ce qui fonctionne à cet endroit.</figcaption>
         </figure>
       </div>
 

@@ -94,6 +94,8 @@
           <li><a href="#ki-agent">KI-Agent</a></li>
           <li><a href="#skizzen-mit-zwaengen">Zeichnen mit Bedingungen</a></li>
           <li><a href="#pruefbericht">Prüfbericht</a></li>
+          <li><a href="#merkmale">Merkmale</a></li>
+          <li><a href="#greifen">Anfassen statt eintippen</a></li>
           <li><a href="#parametrisch">Parametrisch</a></li>
           <li><a href="#bausteine">Bausteine</a></li>
           <li><a href="#eigene-bausteine">Eigene Bausteine</a></li>
@@ -221,6 +223,148 @@
                  alt="Der Prüfbericht: null Fehler, zwei Warnungen und zwei Hinweise, darunter „Das Modell ist an drei Stellen offen“ und „Eine Wand ist dünner als zwei Extrusionsbahnen“"></a>
           </div>
           <figcaption>Der Prüfbericht einer eingelesenen Fremddatei.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="merkmale">
+        <div>
+          <span class="kicker">Merkmale</span>
+          <h3>In einer fremden STL ist die Bohrung wieder eine Bohrung</h3>
+          <p>Beim Öffnen sucht Solidon3D im Dreiecksnetz nach dem, was einmal
+          Konstruktion war: Bohrungen, Zapfen, Senkungen, Kalotten,
+          Verrundungen, Kehlen, Gewinde, ebene Flächen und offene Kanten. Jedes
+          gefundene Merkmal bekommt eine Kennung, die die folgenden Schritte
+          überlebt — und im Merkmalsfenster stehen seine <b>gemessenen</b> Werte
+          als Felder: Ort, Durchmesser, Tiefe, Achse.</p>
+          <p class="note">Eine geänderte Zahl ist die Operation.
+          <b>Kein Modus, kein zweiter Dialog</b> — und die Vorschau im Bild
+          folgt schon beim Tippen.</p>
+          <p>Versetzen, drehen, verdoppeln, entfernen, auf Maß bringen: Diese
+          Handlungen setzen direkt am erkannten Merkmal an. Wer eine Bohrung
+          bisher drei Millimeter weiter haben wollte, musste sie verschließen
+          und an neuen Koordinaten neu bohren — zwei Schritte, sechs Zahlen von
+          Hand, und die Kennung war weg. Jetzt ist es ein Schritt, und jede
+          Passung, die auf diese Bohrung zeigt, behält ihren Bezug.</p>
+          <p>Die Bohrung sagt dabei selbst, welche Schraube hineingehört
+          („misst 5,19 mm — das Durchgangsloch für M5“), und wo nichts passt,
+          sagt sie auch das. Sechs gleichartige Bohrungen bringst du in einem
+          Zug auf dasselbe Maß, als eine Handlung, die ein Undo zusammen
+          zurücknimmt. Zwei markierte Merkmale nennen ihren Abstand — räumlich
+          und je Achse, ohne Messwerkzeug.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Nicht jede Art
+          trägt jede Handlung. Versetzen, verdoppeln und entfernen gelten für
+          Bohrung, Zapfen, Senkung und Kalotte; drehen für die ersten drei —
+          eine Kugelfläche hat keine Lage, die sich drehen ließe. Für
+          Verrundung und Kehle gibt es diese Operationen noch nicht.
+          <b>Das Fenster sagt es dort mit dem Grund, statt ein graues Feld zu
+          zeigen.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="Eine Zeichnung des Merkmalsfensters: oben steht „Bohrung — Ø 5,19 mm“ und darunter der Satz „das Durchgangsloch für M5“; es folgen Felder für Durchmesser, Tiefe und Ort, dann die Knöpfe Versetzen, Drehen, Verdoppeln und Entfernen. Für Verrundung steht statt eines Knopfes der Satz, dass es die Operation noch nicht gibt.">
+            <text class="ink" x="24" y="30" font-weight="600">Merkmal</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Bohrung</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5,19 mm</text>
+            <text class="dim" x="38" y="82">das Durchgangsloch für M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Durchmesser</text>
+            <text class="value" x="260" y="122" text-anchor="end">5,19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Tiefe</text>
+            <text class="value" x="260" y="160" text-anchor="end">12,00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Ort X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18,0 / 24,0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="58" height="26" rx="4"/>
+              <rect x="88" y="224" width="50" height="26" rx="4"/>
+              <rect x="144" y="224" width="66" height="26" rx="4"/>
+              <rect x="216" y="224" width="58" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="53" y="241" font-size="11" text-anchor="middle">Versetzen</text>
+            <text class="ink" x="113" y="241" font-size="11" text-anchor="middle">Drehen</text>
+            <text class="ink" x="177" y="241" font-size="11" text-anchor="middle">Verdoppeln</text>
+            <text class="ink" x="245" y="241" font-size="11" text-anchor="middle">Entfernen</text>
+
+            <text class="dim" x="24" y="278">Verrundung</text>
+            <text class="dim" x="24" y="294">Radius ändern — dafür gibt es noch keine Operation.</text>
+
+            <text class="dim" x="320" y="42">Im Bild</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">gewählt: eine von vier</text>
+            <text class="ink" x="320" y="252" font-size="12">Alle vier auf einmal ändern:</text>
+            <text class="value" x="320" y="270">Ø 5,19 → 5,40 mm</text>
+          </svg>
+          <figcaption>Das Merkmalsfenster: gemessene Werte als Felder, und was
+          nicht geht, steht als Satz.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="greifen">
+        <div>
+          <span class="kicker">Anfassen statt eintippen</span>
+          <h3>Der Griff sitzt an dem, was du angeklickt hast</h3>
+          <p>Wer eine Bohrung anklickt, bewegt die Bohrung — nicht das ganze
+          Teil. Beim Ziehen wandert eine Vorschau des Lochs mit, in seinem
+          Durchmesser und seiner Tiefe; ein blasser Zylinder bleibt am
+          Ausgangsort stehen. Man sieht die Strecke, nicht nur das Ziel.</p>
+          <p class="note">Der Zug wird ein Schritt im Verlauf.
+          <b>Was im Bild geschoben wurde, steht danach als Zahl im Schritt</b>
+          — und lässt sich zehn Schritte später noch ändern.</p>
+          <p>Hebst du ein Teil an, läuft der Schatten seitlich davon: die
+          einzige Auskunft über die Höhe, die ein Bild von sich aus gibt. Die
+          Auswahl blendet über, statt zu springen.</p>
+          <p>Und die Bewegen-Leiste bietet an einer Fläche nur an, was dort
+          möglich ist — Drehen und Skalieren sind ausgegraut, mit dem Grund im
+          Tooltip statt einer Fehlermeldung nach dem Klick.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="Eine Zeichnung: eine Platte mit einer Bohrung; ein blasser Zylinder bleibt am Ausgangsort, ein voller wandert nach rechts, dazwischen eine Maßlinie mit 3,00 Millimetern. Darunter die Bewegen-Leiste, in der Verschieben verfügbar ist und Drehen und Skalieren ausgegraut sind, mit dem Hinweis, dass eine Fläche keine eigene Achse hat.">
+            <text class="ink" x="24" y="30" font-weight="600">Ziehen mit Vorschau</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">Ausgangsort</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">Vorschau</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3,00 mm</text>
+
+            <text class="dim" x="24" y="200">Bewegen-Leiste an einer Fläche</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="94" height="28" rx="4"/>
+              <rect x="126" y="212" width="80" height="28" rx="4"/>
+              <rect x="214" y="212" width="94" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="71" y="230" font-size="11" text-anchor="middle">Verschieben</text>
+            <text class="dim" x="166" y="230" font-size="11" text-anchor="middle">Drehen</text>
+            <text class="dim" x="261" y="230" font-size="11" text-anchor="middle">Skalieren</text>
+            <text class="dim" x="24" y="266">Eine Fläche hat keine eigene Achse — der Grund steht</text>
+            <text class="dim" x="24" y="282">im Tooltip, nicht in einer Meldung nach dem Klick.</text>
+          </svg>
+          <figcaption>Beim Ziehen zeigt die Vorschau die Strecke; die Leiste
+          bietet nur an, was an dieser Stelle geht.</figcaption>
         </figure>
       </div>
 

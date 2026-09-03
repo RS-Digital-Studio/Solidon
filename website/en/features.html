@@ -96,6 +96,8 @@
           <li><a href="#ai-agent">AI agent</a></li>
           <li><a href="#sketches-with-constraints">Sketches with constraints</a></li>
           <li><a href="#inspection-report">Inspection report</a></li>
+          <li><a href="#recognised-features">Features</a></li>
+          <li><a href="#direct-handles">Grab it, don’t type it</a></li>
           <li><a href="#parametric">Parametric</a></li>
           <li><a href="#building-blocks">Building blocks</a></li>
           <li><a href="#your-own-blocks">Your own blocks</a></li>
@@ -219,6 +221,148 @@
                  alt="The inspection report: zero errors, two warnings and two hints, among them “The model is open in three places” and “A wall is thinner than two extrusion widths”"></a>
           </div>
           <figcaption>The report for an imported third-party file.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase" id="recognised-features">
+        <div>
+          <span class="kicker">Features</span>
+          <h3>In someone else’s STL, a hole is a hole again</h3>
+          <p>When a file opens, Solidon3D looks through the triangle mesh for
+          what used to be design intent: holes, pegs, countersinks, spherical
+          pockets, fillets, coves, threads, flat faces and open edges. Every
+          feature it finds gets an identity that survives the steps that
+          follow — and the feature window shows its <b>measured</b> values as
+          fields: position, diameter, depth, axis.</p>
+          <p class="note">Changing a number is the operation.
+          <b>No mode, no second dialog</b> — and the preview in the view
+          follows while you are still typing.</p>
+          <p>Move, turn, duplicate, remove, resize: these actions apply
+          directly to the recognised feature. Until now, moving a hole three
+          millimetres meant plugging it and drilling a new one at new
+          coordinates — two steps, six numbers by hand, and the identity was
+          gone. Now it is one step, and every fit that points at that hole
+          keeps its reference.</p>
+          <p>The hole itself says which screw belongs in it (“measures
+          5.19 mm — the clearance hole for M5”), and where nothing fits, it
+          says that too. Six holes of the same kind go to the same size in one
+          go, as a single action that one undo takes back together. Two
+          selected features state the distance between them — in space and per
+          axis, with no measuring tool.</p>
+          <p class="note" data-kinds="hole,pin,cone,sphere">Not every kind
+          carries every action. Moving, duplicating and removing apply to
+          holes, pegs, countersinks and spherical pockets; turning to the first
+          three — a spherical face has no orientation that could be turned. For
+          fillets and coves these operations do not exist yet.
+          <b>The window says so on the spot, with the reason, instead of
+          showing a greyed-out field.</b></p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 300" role="img"
+               aria-label="A drawing of the feature window: at the top it reads “Hole — Ø 5.19 mm” with the line “the clearance hole for M5” below it; then fields for diameter, depth and position, and the buttons Move, Turn, Duplicate and Remove. For a fillet, instead of a button there is a sentence saying the operation does not exist yet.">
+            <text class="ink" x="24" y="30" font-weight="600">Feature</text>
+
+            <rect class="field" x="24" y="46" width="250" height="44" rx="4"/>
+            <text class="ink" x="38" y="66" font-size="12">Hole</text>
+            <text class="value" x="260" y="66" text-anchor="end">Ø 5.19 mm</text>
+            <text class="dim" x="38" y="82">the clearance hole for M5</text>
+
+            <rect class="field" x="24" y="102" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="122">Diameter</text>
+            <text class="value" x="260" y="122" text-anchor="end">5.19 mm</text>
+
+            <rect class="field" x="24" y="140" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="160">Depth</text>
+            <text class="value" x="260" y="160" text-anchor="end">12.00 mm</text>
+
+            <rect class="field" x="24" y="178" width="250" height="30" rx="4"/>
+            <text class="dim" x="38" y="198">Position X / Y</text>
+            <text class="value" x="260" y="198" text-anchor="end">18.0 / 24.0</text>
+
+            <g class="rule" fill="none">
+              <rect x="24" y="224" width="50" height="26" rx="4"/>
+              <rect x="80" y="224" width="46" height="26" rx="4"/>
+              <rect x="132" y="224" width="66" height="26" rx="4"/>
+              <rect x="204" y="224" width="62" height="26" rx="4"/>
+            </g>
+            <text class="ink" x="49" y="241" font-size="11" text-anchor="middle">Move</text>
+            <text class="ink" x="103" y="241" font-size="11" text-anchor="middle">Turn</text>
+            <text class="ink" x="165" y="241" font-size="11" text-anchor="middle">Duplicate</text>
+            <text class="ink" x="235" y="241" font-size="11" text-anchor="middle">Remove</text>
+
+            <text class="dim" x="24" y="278">Fillet</text>
+            <text class="dim" x="24" y="294">Change radius — no operation for this one yet.</text>
+
+            <text class="dim" x="320" y="42">In the view</text>
+            <rect class="body" x="320" y="56" width="216" height="150" rx="6"/>
+            <circle class="body-soft" cx="378" cy="112" r="17"/>
+            <circle class="hot-stroke" cx="378" cy="112" r="21"/>
+            <circle class="body-soft" cx="470" cy="112" r="17"/>
+            <circle class="body-soft" cx="378" cy="168" r="17"/>
+            <circle class="body-soft" cx="470" cy="168" r="17"/>
+            <text class="dim" x="320" y="230">selected: one of four</text>
+            <text class="ink" x="320" y="252" font-size="12">Change all four at once:</text>
+            <text class="value" x="320" y="270">Ø 5.19 → 5.40 mm</text>
+          </svg>
+          <figcaption>The feature window: measured values as fields, and what
+          is not possible written out as a sentence.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="direct-handles">
+        <div>
+          <span class="kicker">Grab it, don’t type it</span>
+          <h3>The handle sits on the thing you clicked</h3>
+          <p>Click a hole and you move the hole — not the whole part. As you
+          drag, a preview of the hole travels with the cursor, in its diameter
+          and its depth; a pale cylinder stays behind at the starting point.
+          You see the distance, not just the destination.</p>
+          <p class="note">The drag becomes a step in the history.
+          <b>What you pushed in the view is a number in that step afterwards</b>
+          — and still editable ten steps later.</p>
+          <p>Lift a part and the shadow runs out sideways: the only account of
+          height a picture gives on its own. The selection fades across instead
+          of jumping.</p>
+          <p>And on a face, the move bar only offers what is possible there —
+          turning and scaling are greyed out, with the reason in the tooltip
+          instead of an error message after the click.</p>
+        </div>
+        <figure class="shot">
+          <svg class="figure" viewBox="0 0 560 290" role="img"
+               aria-label="A drawing: a plate with a hole; a pale cylinder stays at the starting point, a solid one has travelled to the right, and a dimension line between them reads 3.00 millimetres. Below it the move bar, where Move is available and Turn and Scale are greyed out, with the note that a face has no axis of its own.">
+            <text class="ink" x="24" y="30" font-weight="600">Dragging, with a preview</text>
+
+            <rect class="body" x="24" y="52" width="512" height="120" rx="6"/>
+
+            <circle class="body-soft" cx="150" cy="112" r="22"/>
+            <circle class="rule" cx="150" cy="112" r="22" fill="none"/>
+            <text class="dim" x="150" y="152" text-anchor="middle">starting point</text>
+
+            <circle class="hot" cx="330" cy="112" r="22"/>
+            <circle class="hot-stroke" cx="330" cy="112" r="29"/>
+            <text class="dim" x="330" y="152" text-anchor="middle">preview</text>
+
+            <g class="rule" stroke-linecap="round">
+              <line x1="150" y1="80" x2="330" y2="80"/>
+              <line x1="150" y1="74" x2="150" y2="86"/>
+              <line x1="330" y1="74" x2="330" y2="86"/>
+            </g>
+            <text class="value" x="240" y="72" text-anchor="middle">3.00 mm</text>
+
+            <text class="dim" x="24" y="200">The move bar on a face</text>
+            <g class="rule" fill="none">
+              <rect x="24" y="212" width="60" height="28" rx="4"/>
+              <rect x="92" y="212" width="60" height="28" rx="4"/>
+              <rect x="160" y="212" width="62" height="28" rx="4"/>
+            </g>
+            <text class="ink" x="54" y="230" font-size="11" text-anchor="middle">Move</text>
+            <text class="dim" x="122" y="230" font-size="11" text-anchor="middle">Turn</text>
+            <text class="dim" x="191" y="230" font-size="11" text-anchor="middle">Scale</text>
+            <text class="dim" x="24" y="266">A face has no axis of its own — the reason is in the</text>
+            <text class="dim" x="24" y="282">tooltip, not in a message after the click.</text>
+          </svg>
+          <figcaption>While dragging, the preview shows the distance; the bar
+          only offers what works at this spot.</figcaption>
         </figure>
       </div>
 
