@@ -35,6 +35,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CHECK_SLICER_PROFILE,
+    CHOOSE_PRINTER,
     CHOOSE_SLICER,
     EXPORT_ONLY,
     INSTALL_MISSING,
@@ -239,6 +240,62 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         )
         return ""
     return chosen
+
+
+def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
+    """Sagt dem Kunden, warum die Maschinenseite fehlt (§29, Regel 21).
+
+    :func:`machine_for` weigert sich mit gutem Grund, ein fremdes
+    Maschinenprofil zu nehmen — ein Homing-Befehl der falschen Maschine fährt
+    die Düse ins Bett. Es weigerte sich bis zum 03.09.2026 aber **schweigend**:
+    Die Begründung ging in eine Protokollzeile, die niemand liest, und der
+    Kunde bekam dieselbe Datei, die sein Slicer schon einmal abgelehnt hatte.
+    Genau so kam der Fall herein — ElegooSlicer stand auf einem „Bambu Lab A1
+    0.2 nozzle", das Projekt galt einem Centauri Carbon 2, und die Absage
+    sprach von ``G92 E0``.
+
+    Zwei Fälle und zwei Sätze, denn der Ausweg ist ein anderer: Wer auf dem
+    falschen Drucker steht, wechselt ihn im Slicer; wer noch gar keinen
+    eingerichtet hat, kann das nicht — er wählt in Solidon ein Maschinenprofil.
+    Ein Rat, der ins Leere zeigt, ist keiner.
+
+    Nichts zu melden ist der Regelfall: Steht die Maschine, ist die Datei
+    vollständig, und eine Beruhigung wäre eine Zeile, die nichts unterscheidet.
+    """
+    if setup.machine_profile or machine_for(setup, profile):
+        return []
+    chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
+    if chosen:
+        return [
+            Finding(
+                code="slicer.machine_mismatch",
+                severity="warning",
+                message=_(
+                    "Der Slicer ist auf einen anderen Drucker eingestellt. Die Datei "
+                    "trägt deshalb keine Maschinenangaben — Startcode, "
+                    "Schichtwechselcode und Maschinengrenzen fehlen, und der Slicer "
+                    "füllt sie mit eigenen Vorgaben, die er anschließend ablehnen "
+                    "kann. Stellen Sie den Slicer auf denselben Drucker um oder "
+                    "wählen Sie das Maschinenprofil in den Druckeinstellungen."
+                ),
+                values={"chosen": chosen, "printer": profile.printer.title},
+                suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
+            )
+        ]
+    return [
+        Finding(
+            code="slicer.machine_unset",
+            severity="warning",
+            message=_(
+                "In diesem Slicer ist noch kein Drucker eingerichtet. Die Datei trägt "
+                "deshalb keine Maschinenangaben — Startcode, Schichtwechselcode und "
+                "Maschinengrenzen fehlen. Wählen Sie das Maschinenprofil in den "
+                "Druckeinstellungen oder richten Sie den Drucker im Slicer ein."
+            ),
+            values={"slicer": setup.name, "printer": profile.printer.title},
+            suggestions=(CHECK_SLICER_PROFILE, EXPORT_ONLY),
+        )
+    ]
 
 
 def detect(executable: Path | str) -> SlicerSetup:

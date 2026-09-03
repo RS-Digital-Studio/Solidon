@@ -851,6 +851,13 @@ def write_assembly(
         configured_slots = handover.with_slot_profiles(merged_slots, settings.slot_profiles)
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
         findings += handover.unreachable_overrides(settings, known_setup, configured_slots)
+        if setup is not None:
+            # **Nur mit echtem Slicer.** ``known_setup`` oben ist ein Platzhalter
+            # aus dem Familiennamen; ihn nach seiner eingestellten Maschine zu
+            # fragen hieße, jemandem etwas über einen Slicer zu sagen, den er
+            # gerade nicht benutzt. Wer bloß eine 3MF speichert, will von der
+            # Einstellung eines fremden Programms nichts hören.
+            findings += handover.machine_missing(setup, profile)
     target = _written(
         directory / (safe_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(

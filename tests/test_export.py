@@ -1472,3 +1472,61 @@ def test_a_part_in_bed_coordinates_is_offered_the_arranging(profile: Profile) ->
     assert not handlungen & {"split_model", "scale_to_fit", "choose_printer"}, (
         "keine Handlung, die an der Größe ansetzt — die Größe stimmt"
     )
+
+
+def test_the_export_says_why_the_machine_side_is_missing(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anschlusstest: Der Befund liegt nicht nur bereit, er kommt auch heraus.
+
+    ``handover.machine_missing`` allein zu prüfen hieße zu prüfen, dass die
+    Auskunft *gerechnet* werden **kann**. Der Fall vom 03.09.2026 war ein
+    anderer: Die Begründung existierte längst als Protokollzeile und erreichte
+    niemanden. Also wird hier der Weg gefahren, den die Anwendung geht — eine
+    Baugruppe schreiben und nachsehen, was in den Befunden steht.
+    """
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+    settings = print_settings.resolve(profile, "standard")
+
+    _written, findings = write_assembly(
+        [scene_object("obj_1", "Deckel")],
+        tmp_path,
+        project_name="Gehäuse",
+        profile=profile,
+        settings=settings,
+        setup=setup,
+    )
+
+    treffer = [finding for finding in findings if finding.code == "slicer.machine_mismatch"]
+    assert treffer, [finding.code for finding in findings]
+    assert "Bambu Lab A1 0.2 nozzle" in str(treffer[0].values["chosen"])
+    assert treffer[0].suggestions, "Regel 17"
+
+
+def test_a_plain_export_hears_nothing_about_a_foreign_slicer(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne gewählten Slicer bleibt die Einstellung eines fremden Programms außen vor.
+
+    ``write_assembly`` baut sich für die Filamentprüfung einen Platzhalter aus
+    dem Familiennamen. Diesen nach seiner eingestellten Maschine zu fragen
+    ergäbe einen Satz über einen Slicer, den der Kunde gerade nicht benutzt —
+    er speichert eine 3MF und sonst nichts.
+    """
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    settings = print_settings.resolve(profile, "standard")
+
+    _written, findings = write_assembly(
+        [scene_object("obj_1", "Deckel")],
+        tmp_path,
+        project_name="Gehäuse",
+        profile=profile,
+        settings=settings,
+    )
+
+    assert not [f for f in findings if f.code.startswith("slicer.machine_")]

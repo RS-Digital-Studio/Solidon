@@ -2748,6 +2748,85 @@ def test_a_printer_that_is_not_the_projects_is_left_alone(monkeypatch) -> None:
     assert gefragt == ["orca"], "gefragt wird einmal, übernommen wird nichts"
 
 
+def test_the_customer_hears_that_the_slicer_stands_on_another_printer(monkeypatch) -> None:
+    """Keine Maschinenseite ist richtig — und still ist sie falsch (Regel 21).
+
+    **Genau Roberts Fall vom 03.09.2026.** ElegooSlicer stand auf einem
+    „Bambu Lab A1 0.2 nozzle", das Projekt galt einem Centauri Carbon 2.
+    ``machine_for`` weigert sich seitdem, das fremde Profil zu nehmen — richtig,
+    denn ein Homing-Befehl der falschen Maschine fährt die Düse ins Bett. Es
+    weigerte sich aber **schweigend**: Die Begründung ging in eine Protokollzeile,
+    die niemand liest, und der Kunde bekam dieselbe abgelehnte Datei wie zuvor,
+    nur ohne zu erfahren, warum.
+
+    Gemessen: 73 Schlüssel ohne Maschinenseite, 160 mit ihr.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    findings = handover.machine_missing(setup, profile)
+
+    assert [finding.code for finding in findings] == ["slicer.machine_mismatch"]
+    assert findings[0].severity == "warning"
+    assert findings[0].suggestions, "Regel 17: ein Befund endet nie mit „geht nicht"
+    werte = findings[0].values
+    assert "Bambu Lab A1 0.2 nozzle" in str(werte["chosen"]), "der Kunde muss den Namen sehen"
+
+
+def test_nothing_is_said_when_the_machine_side_is_there(monkeypatch) -> None:
+    """Steht die Maschine, gibt es nichts zu melden — auch keine Beruhigung."""
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.4 nozzle"
+    )
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert handover.machine_missing(setup, profile) == []
+    assert (
+        handover.machine_missing(
+            handover.SlicerSetup(
+                executable=Path("elegoo-slicer.exe"), flavour="orca", machine_profile="Meine"
+            ),
+            profile,
+        )
+        == []
+    ), "eine selbst getroffene Wahl steht, und über sie wird nicht geredet"
+
+
+def test_a_slicer_that_names_no_machine_at_all_is_its_own_message(monkeypatch) -> None:
+    """Frisch installiert und nie eingerichtet — dasselbe Ergebnis, ein anderer Rat.
+
+    Zwei Fälle, zwei Sätze: Wer auf dem falschen Drucker steht, wechselt ihn im
+    Slicer; wer noch gar keinen eingerichtet hat, kann das nicht — er wählt in
+    Solidon ein Maschinenprofil oder richtet den Slicer erst ein. Ein Rat, der
+    ins Leere zeigt, ist keiner.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    findings = handover.machine_missing(setup, profile)
+
+    assert [finding.code for finding in findings] == ["slicer.machine_unset"]
+    assert findings[0].suggestions
+
+
 def test_a_chosen_printer_is_never_second_guessed(monkeypatch) -> None:
     """Wer selbst gewählt hat, wird nicht gefragt — auch nicht freundlich."""
     from pathlib import Path
