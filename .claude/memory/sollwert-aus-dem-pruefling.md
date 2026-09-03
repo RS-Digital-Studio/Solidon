@@ -57,6 +57,18 @@ Durchsehen unten anfängt, sieht ein heiles Dokument.
    [[messwerkzeug-misst-sich-selbst]] Punkt 6: ein stummer Eintrag sieht aus
    wie ein wirksamer.
 
+5. **Und die Gegenrichtung: ein Sollwert aus einer Geometrie, die es nicht
+   gibt.** Am 03.09.2026 verglich ich einen erkannten Merkmalskörper mit
+   „einer halben Kugel r = 8" — 333,94 gegen 1072,3, ein Faktor drei, und
+   fast eine Fehlmeldung an die Sitzung, die gerade die Erkennung repariert
+   hatte. Die Kugel saß aber vier Millimeter **über** der Fläche; der
+   Ausschnitt war eine Kalotte von 4 mm Höhe, analytisch 335,1, und die
+   Messung traf sie auf drei Promille. Der Fehler lag nicht in der Messung
+   und nicht im Prüfling, sondern im **Sollwert**: Eine halbe Kugel und eine
+   flache Kalotte sehen im Kopf gleich aus, wenn man die Einsinktiefe nicht
+   mitrechnet. Wer einen analytischen Vergleichswert hinschreibt, rechnet ihn
+   **mit den Zahlen des Aufbaus** und nicht aus der Vorstellung des Körpers.
+
 Verwandt: [[eine-kette-endet-am-letzten-glied]] — dort deckt eine *zutreffende*
 Begründung im Docstring eine Lücke; hier deckt eine *tautologische* Erwartung
 einen falschen Erzeuger. Und [[messwerkzeug-misst-sich-selbst]], Punkt 1:
