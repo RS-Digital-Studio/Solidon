@@ -20,6 +20,15 @@ zwei verschiedenen Ursachen:
   Dateien. Ursache: eine andere Sitzung schrieb dieselbe Datei. Der zweite
   Versuch 0,4 Sekunden später gelang.
 
+**Nachtrag vom selben Tag, und er ist der wichtigere Teil:** Der erste Fall kam
+nach dem `document.close()` wieder — beim englischen Handbuch, nachdem das
+deutsche mit 12,4 MB durchgegangen war. **Es gab zwei Halter derselben Datei,
+und geschlossen war einer.** Drei Zeilen unter dem Qt-Dokument stand
+`PdfReader(str(pdf))`: pypdf liest verzögert und hält den Handle, bis der Reader
+eingesammelt wird — und genau darauf ruft dieselbe Funktion `pdf.open("wb")`.
+Behoben, indem beide Leser ihren Inhalt aus `BytesIO(pfad.read_bytes())`
+bekommen statt über den Pfad.
+
 **Why:** Ein Schreibfehler auf eine Datei, die es gibt und die man selbst
 angelegt hat, liest sich wie ein Fehler der Datei oder des Pfades. Er ist
 keiner. Er ist eine Aussage über **Zeitpunkte** — und das Erkennungszeichen ist
@@ -38,3 +47,23 @@ dreimal mit kurzer Pause. Beides zusammen kostet zehn Zeilen und nimmt einem
 Lauf die Eigenschaft, an einer beliebigen Stelle zu reißen. Ein `retry` allein
 reicht nicht, wenn der eigene Prozess der Halter ist — dann wartet man auf sich
 selbst.
+
+**Und nach dem Fix wird gezählt, nicht gehofft:** Wie viele Stellen öffnen diese Datei? Ein Riss, der nach der Reparatur bei einer *anderen* Sprache oder einem *anderen* Durchgang wiederkommt, ist kein neuer Fehler, sondern der zweite Halter — der erste Fix hat ihn nur seltener gemacht.
+
+**Und gezählt wird mit einer Probe, nicht mit dem Blick.** Der zweite Halter war
+gesehen und wieder verworfen worden, weil der Lauf nach dem ersten Fix durchkam
+— was fehlte, war eine Messung, die den zweiten zeigt, *während der erste noch
+da ist* (3d-druck-81, 03.09.2026). Die gibt es, und sie ist zwei Zeilen: an der
+Stelle, an der gleich geschrieben wird, den **exklusiven Zugriff** probieren.
+
+```python
+try:
+    with pfad.open("r+b"):
+        pass
+except OSError as fehler:
+    print(f"jemand hält {pfad.name} noch: {fehler.errno}")
+```
+
+Nach einem Abbruch war die Datei sofort exklusiv öffenbar — der Halter war also
+der eigene Lauf. Dieselbe Probe zwischen den beiden Lesern hätte beide auf
+einmal gezeigt, statt den zweiten auf die nächste Sprache zu verschieben.
