@@ -2372,6 +2372,55 @@ def test_the_sketch_use_dialog_locks_its_button_until_something_is_chosen(
     assert not dialog._use.toolTip(), "und der Grund verschwindet mit ihr"
 
 
+def test_the_preselection_follows_what_lies_under_the_drawing(qt_app: QApplication) -> None:
+    """Robert, 03.09.2026: „automatisch je nachdem ob ein gewählter Körper
+    geschnitten und was hinzugefügt wird".
+
+    Bis dahin stand immer „Grundform hochziehen" oben und vorgewählt, auch
+    wenn die Zeichnung auf einem fertigen Körper lag. Wer dort eine Tasche
+    wollte — der häufigste Grund, auf einem Körper zu zeichnen —, musste die
+    Vorwahl bemerken und ändern; wer sie übersah, bekam einen zweiten Körper
+    im selben Raum.
+
+    Der Ziehgriff entscheidet dasselbe seit jeher an der Richtung
+    (``_apply_sketch_pull``: nach außen aufbauen, nach innen schneiden). Hier
+    ist keine Richtung bekannt, wohl aber der Körper.
+
+    Geprüft werden **beide** Lagen, denn eine Vorwahl, die immer dasselbe
+    sagt, ist keine: ohne Körper der Aufbau, mit Körper der Schnitt. Und dazu
+    die Begründung — eine Reihenfolge, die sich ohne sichtbaren Grund ändert,
+    wirkt willkürlich.
+    """
+    from app.ui.op_dialog import DEFAULT_SKETCH_USE, POCKET_SKETCH_USE, SketchUseDialog
+
+    frei = SketchUseDialog()
+    assert frei._list.count() >= 3, "ohne Einträge prüft dieser Test nichts"
+    assert frei.chosen() == DEFAULT_SKETCH_USE, "auf leerer Fläche wird ein Körper daraus"
+    assert frei._list.item(0).data(Qt.ItemDataRole.UserRole) == DEFAULT_SKETCH_USE, (
+        "gelesen wird von oben — die Vorwahl gehört in die erste Zeile"
+    )
+
+    auf_koerper = SketchUseDialog(on_body="Grundplatte")
+    assert auf_koerper.chosen() == POCKET_SKETCH_USE, (
+        "auf einem Körper ist die Tasche der Normalfall, nicht ein zweiter Körper"
+    )
+    assert auf_koerper._list.item(0).data(Qt.ItemDataRole.UserRole) == POCKET_SKETCH_USE
+
+    beschriftungen = [
+        kind.text() for kind in auf_koerper.findChildren(QLabel) if "Grundplatte" in kind.text()
+    ]
+    assert beschriftungen, "die Vorwahl nennt den Körper nicht, dem sie folgt"
+
+    for dialog in (frei, auf_koerper):
+        namen = {
+            dialog._list.item(row).data(Qt.ItemDataRole.UserRole)
+            for row in range(dialog._list.count())
+        }
+        assert DEFAULT_SKETCH_USE in namen and POCKET_SKETCH_USE in namen, (
+            "vorgewählt heißt nicht festgelegt — beide Wege bleiben in der Liste"
+        )
+
+
 def test_a_diameter_field_can_speak_as_radius(qt_app: QApplication) -> None:
     """Robert, 02.09.2026: Umschalten zwischen Radius und Durchmesser an der Eingabe.
 

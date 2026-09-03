@@ -1880,6 +1880,15 @@ def _show_patterns(combo: QComboBox, choices: Sequence[Any]) -> None:
 #: eine unpassende.
 DEFAULT_SKETCH_USE = "sketch_extrude"
 
+#: Was vorausgewählt ist, wenn die Zeichnung auf einem Körper liegt.
+#:
+#: Dieselbe Entscheidung, die der Ziehgriff an der Richtung trifft, nur ohne
+#: Richtung: Wer über einem vorhandenen Körper zeichnet, meint in aller Regel
+#: eine Tasche darin. Der Griff nennt beide Namen bereits als Paar
+#: (``main_window.PULL_OP`` / ``POCKET_OP``); hier steht nur die zweite Hälfte,
+#: weil die erste schon oben steht.
+POCKET_SKETCH_USE = "sketch_pocket"
+
 
 class SketchUseDialog(QDialog):
     """Was soll aus der gezeichneten Skizze werden? (§2.2, Weg 2)
@@ -1890,7 +1899,20 @@ class SketchUseDialog(QDialog):
     aus dem Register: eine neue Skizzen-Op taucht von selbst auf.
     """
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(self, parent: QWidget | None = None, *, on_body: str = "") -> None:
+        """*on_body* ist der Körper, über dem die Zeichnung liegt — oder leer.
+
+        **Die Vorwahl richtet sich danach, was da ist** (Robert, 03.09.2026:
+        „automatisch je nachdem ob ein gewählter Körper geschnitten und was
+        hinzugefügt wird"). Wer auf leerer Fläche zeichnet, will einen Körper;
+        wer auf einem vorhandenen zeichnet, meint meistens eine Tasche darin.
+        Beides bleibt wählbar — vorgewählt ist nur der wahrscheinlichere Fall,
+        und die Zeile darüber sagt, warum er es ist.
+
+        Der Ziehgriff entscheidet dasselbe schon lange, nur an der Richtung
+        (``_apply_sketch_pull``: nach außen aufbauen, nach innen schneiden).
+        Hier ist keine Richtung bekannt, wohl aber der Körper — deshalb er.
+        """
         from app.core.registry import REGISTRY, menu_tree
 
         super().__init__(parent)
@@ -1914,13 +1936,18 @@ class SketchUseDialog(QDialog):
         # öffnet, liest als Erstes die exotischste der fünf Arten, während die
         # übliche darunter vorgewählt ist. Das Vorwählen allein genügt nicht —
         # gelesen wird von oben.
+        wanted = POCKET_SKETCH_USE if on_body else DEFAULT_SKETCH_USE
+        if not any(spec.name == wanted for spec in (section.entries if section else ())):
+            # Dieselbe Vorsicht wie beim festen Vorgabewert: Eine Vorauswahl,
+            # die ins Leere zeigt, wäre schlimmer als eine unpassende.
+            wanted = DEFAULT_SKETCH_USE
         entries = list(section.entries) if section else []
-        entries.sort(key=lambda spec: (spec.name != DEFAULT_SKETCH_USE, str(spec.title)))
+        entries.sort(key=lambda spec: (spec.name != wanted, str(spec.title)))
         for spec in entries:
             item = QListWidgetItem(f"{spec.title}\n    {spec.doc}")
             item.setData(Qt.ItemDataRole.UserRole, spec.name)
             self._list.addItem(item)
-        self._preselect(DEFAULT_SKETCH_USE)
+        self._preselect(wanted)
         # Ohne gebundenen Wert und trotzdem ein Ring: ``self`` steckt in der
         # Zelle des Abschlusses. ``weak_slot`` verwirft dabei das ``item``, das
         # das Signal schickt und ``accept`` nicht will.
@@ -1950,6 +1977,19 @@ class SketchUseDialog(QDialog):
         self._follow_choice()
 
         layout = QVBoxLayout(self)
+        # **Eine Vorwahl ohne Begründung ist Raten.** Steht „Tasche schneiden"
+        # oben, weil ein Körper darunter liegt, gehört genau das dazu — sonst
+        # wirkt die Reihenfolge willkürlich, und beim nächsten Mal steht eine
+        # andere oben, ohne dass jemand weiß warum.
+        if on_body:
+            note = QLabel(
+                str(
+                    tr("Die Zeichnung liegt auf {body} — deshalb steht das Schneiden oben.")
+                ).format(body=on_body),
+                self,
+            )
+            note.setWordWrap(True)
+            layout.addWidget(note)
         layout.addWidget(self._list)
         layout.addWidget(buttons)
 

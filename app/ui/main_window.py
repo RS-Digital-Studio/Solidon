@@ -33,6 +33,7 @@ from PySide6.QtGui import (
     QKeySequence,
     QShortcut,
     QShowEvent,
+    QStandardItemModel,
 )
 from PySide6.QtWidgets import (
     QApplication,
@@ -7519,9 +7520,26 @@ class MainWindow(QMainWindow):
         Zeichnung bleibt. Ein „Abbrechen", das gezeichnete Arbeit vernichtet,
         wäre die Sackgasse, die §2.1 verbietet.
         """
-        dialog = SketchUseDialog(self)
+        # **Was unter der Zeichnung liegt, entscheidet die Vorwahl.** Ohne
+        # Körper wird ein Körper daraus, mit Körper meistens eine Tasche darin
+        # — dieselbe Regel, die der Ziehgriff seit jeher an der Richtung
+        # trifft. Gefragt wird in der Reihenfolge, die auch ``_apply_sketch_pull``
+        # benutzt: erst der ausgewählte, dann der unter dem Umriss. Der zweite
+        # Teil ist der wichtige, denn in Fusion wählt man vor dem Abtragen
+        # keinen Körper aus (Robert, 30.08.2026).
+        chosen_body = self.object_tree.selected() or self._body_under_the_outline()
+        result = self.session.last_result
+        entry = result.scene.objects.get(chosen_body) if result and chosen_body else None
+        dialog = SketchUseDialog(self, on_body=str(entry.name) if entry else "")
         if dialog.exec() == QDialog.DialogCode.Accepted and dialog.chosen():
             name = dialog.chosen()
+            # **Gefunden heißt noch nicht gewählt** — dieselbe Falle wie beim
+            # Ziehgriff: ``run_operation`` nimmt seine Eingänge aus dem
+            # Objektbaum, und ein nur gefundener Körper käme dort nie an. Die
+            # Operation liefe ohne Eingang und meldete einen fehlenden Körper,
+            # obwohl er unter der Zeichnung liegt.
+            if name == POCKET_OP and chosen_body and not self.object_tree.selected_objects():
+                self.object_tree.select_object(chosen_body)
             self.run_operation(REGISTRY.get(name), given={_sketch_param(name): text})
             return
         self.start_sketch("", text)
@@ -8924,6 +8942,32 @@ class MainWindow(QMainWindow):
                 variant = QComboBox(self)
                 for name in group.members:
                     variant.addItem(str(REGISTRY.get(name).title), name)
+                    # **Eine Variante mit Eingang fragt ihre Bedingung vorher.**
+                    # Vier der fünf Arten erzeugen aus dem Nichts; *Tasche
+                    # schneiden* braucht einen Körper (`consumes=1`). Ohne
+                    # diese Sperre steht sie wählbar in der Liste, der Dialog
+                    # geht durch, und die Auswertung hält danach an — dieselbe
+                    # Lage, die bei den Zwillingen schon einmal gemessen wurde
+                    # (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
+                    # Bedingung hat, fragt sie — vorher").
+                    #
+                    # Gefragt wird über `_reason_locked`, also dieselbe Kette
+                    # wie Menüleiste und Kontextmenü: eine dritte Formulierung
+                    # derselben Auskunft wäre eine dritte Gelegenheit,
+                    # auseinanderzulaufen.
+                    locked = self._reason_locked(
+                        REGISTRY.get(name),
+                        self._kinds_of_selection(self.session.last_result),
+                        len(objects),
+                        len(chosen),
+                    )
+                    model = variant.model()
+                    if locked and isinstance(model, QStandardItemModel):
+                        item = model.item(variant.count() - 1)
+                        item.setEnabled(False)
+                        item.setToolTip(locked)
+                        # Regel 18: der Grund steht nicht nur am Zeigerbild.
+                        item.setData(locked, Qt.ItemDataRole.AccessibleDescriptionRole)
                 variant.setToolTip(str(group.doc))
 
             def chosen_spec() -> OperationSpec:

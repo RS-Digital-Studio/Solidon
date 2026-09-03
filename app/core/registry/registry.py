@@ -233,11 +233,30 @@ VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
         doc=_(
             "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
             "machen — hochziehen, um eine Achse drehen, an einem Bogen "
-            "entlangführen oder zwischen zwei Größen überblenden. Die Art "
-            "steht im Dialog, die Grundform ist für alle dieselbe."
+            "entlangführen, zwischen zwei Größen überblenden oder als Tasche "
+            "aus einem vorhandenen Körper schneiden. Die Art steht im Dialog, "
+            "die Grundform ist für alle dieselbe."
         ),
         choice=_("Art"),
-        members=("sketch_extrude", "sketch_revolve", "sketch_sweep", "sketch_loft"),
+        # **``sketch_pocket`` gehört dazu, seit dem 03.09.2026.** Der
+        # Umschalter kannte vier Arten und das Abziehen nicht — wer hochgezogen
+        # hatte und eine Tasche wollte, fand im Dialog keinen Weg dorthin und
+        # musste zurück zur Auswahl (Robert: „man zeichnet zieht kann unten
+        # aber nicht mehr abziehen wählen").
+        #
+        # Sie ist die einzige der fünf mit einem **Eingang**: `consumes=1`,
+        # `applies_to=("face",)`. Ein Umschalter, dessen Ziel eine Bedingung
+        # hat, fragt sie vorher — sonst führt er in eine Auswertung, die
+        # anhält (`oberflaeche.md`, „Ein Umschalter, dessen Zwilling eine
+        # Bedingung hat"). Der Dialog sperrt den Eintrag deshalb, solange kein
+        # Körper gewählt ist, und nennt den Grund.
+        members=(
+            "sketch_extrude",
+            "sketch_pocket",
+            "sketch_revolve",
+            "sketch_sweep",
+            "sketch_loft",
+        ),
     ),
 )
 
