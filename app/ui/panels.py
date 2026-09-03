@@ -46,6 +46,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
+    EXPORT_AS_MESH,
     PLACE_ON_BED,
     REMOVE_SMALL_PARTS,
     REPAIR_AND_RETRY,
@@ -283,6 +284,12 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # anderen Drucker nehmen. Die dritte fehlte, solange ihr Handler fehlte,
     # und sie ist für den Kunden mit zwei Maschinen die naheliegendste.
     "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER),
+    # **Ein Befund ohne Handlung, den keine Familienprüfung fängt.**
+    # `test_value_labels` hält Befunde derselben Familie zusammen — trägt
+    # einer eine Handlung, müssen es alle. ``needs_solid`` steht allein in
+    # seiner Familie und fiel deshalb durch: Wer `teil.step` tippte und ein
+    # Netz hatte, bekam eine gute Erklärung und keinen Knopf.
+    "export.needs_solid": (EXPORT_AS_MESH, SHOW_DETAILS),
     # **Zu groß und nur verrutscht sind zwei Fälle.** Beide meldete der Kern
     # unter derselben Kennung, also bekam auch das Teil, das bloß zur Hälfte
     # unter der Platte steckt, *Modell teilen* und *Auf den Bauraum

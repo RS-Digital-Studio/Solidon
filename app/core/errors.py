@@ -68,6 +68,11 @@ SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
 CANCEL_SPLIT = Action("cancel_split", _("Die laufende Teilung abbrechen"), primary=True)
 USE_VOXEL_STAGE = Action("use_voxel_stage", _("Gröber rechnen — Maße werden gerundet"))
 SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
+#: Der Ausweg aus „dieses Format braucht einen exakten Körper": dasselbe
+#: Teil in ein Format schreiben, das Dreiecke kennt. 3MF und nicht STL,
+#: weil es Materialslots und Baugruppenstruktur mitnimmt — also genau
+#: das, wofür der Kunde eine Datei mit mehr als Geometrie wollte.
+EXPORT_AS_MESH = Action("export_as_mesh", _("Als 3MF speichern"), primary=True)
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)
 SPLIT_ALONG_LINE = Action("split_along_line", _("An gezeichneter Linie trennen"), primary=True)
 PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)

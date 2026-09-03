@@ -4999,6 +4999,24 @@ class MainWindow(QMainWindow):
             )
         show_error(error, self)
 
+    def _export_as_mesh_after_error(self, _error: Any) -> None:
+        """Dasselbe Teil als 3MF, wenn STEP an einem Netz gescheitert ist (§29).
+
+        STEP hält Flächen und Kanten fest; ein Netz hat keine. Der Befund sagt
+        das seit je und nennt beide Auswege — er sagte es nur in Prosa, und
+        §2.7 verspricht anklickbare Handlungen.
+
+        Das Ziel kommt aus dem letzten Versuch, wie beim Schreibfehler daneben:
+        Wer eine Datei benannt hat, will sie nicht ein zweites Mal benennen.
+        Ist keiner bekannt — der Bericht lässt sich auch lange nach dem Export
+        ansehen —, führt der Weg in den Dateidialog statt ins Leere.
+        """
+        attempt = self._export_attempt
+        if attempt is None:
+            self.action_export()
+            return
+        self._start_export(attempt[0].with_suffix(".3mf"), "3mf")
+
     def _after_write_failure(self, way: str) -> None:
         """Den zweiten Anlauf gehen — dieselbe Datei oder ein anderer Ort (§2.7)."""
         failure = self._write_failure
@@ -10130,6 +10148,7 @@ class MainWindow(QMainWindow):
             "split_model": self._split_after_error,
             "split_along_line": lambda _error: self.tools.activate("split"),
             "scale_to_fit": self._scale_after_error,
+            "export_as_mesh": self._export_as_mesh_after_error,
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
