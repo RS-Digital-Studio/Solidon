@@ -44,7 +44,8 @@ Nutzen da und sonst nichts.
 
 ### Erkannte Merkmale bearbeiten
 
-- Erkannte Merkmale lassen sich bearbeiten: Eine Bohrung oder ein Zapfen lässt sich verschieben, drehen, in der Größe ändern, verdoppeln und entfernen — eine Kuppel alles davon außer Drehen.
+- Erkannte Merkmale lassen sich verschieben, drehen, verdoppeln und entfernen: eine Bohrung, ein Zapfen oder eine Kuppel — die Kuppel ohne Drehen, weil sie keine Lage hat.
+- In der Größe ändern lässt sich jetzt auch ein Zapfen oder eine Kuppel; bisher konnte das nur eine Bohrung.
 - Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.
 - Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.
 - Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.

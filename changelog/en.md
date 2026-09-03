@@ -19,7 +19,8 @@ it into `website/version.json`.
 
 ### Editing recognised features
 
-- Recognised features can now be edited: a hole or a peg can be moved, rotated, resized, duplicated and removed — a dome all of that except rotating.
+- Recognised features can be moved, rotated, duplicated and removed: a hole, a peg or a dome — the dome without rotating, as it has no orientation.
+- Resizing now works for a peg or a dome as well; until now only a hole could be resized.
 - The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.
 - A moved hole stays the same hole: every fit that refers to it keeps its reference.
 - Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.

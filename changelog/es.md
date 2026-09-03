@@ -20,7 +20,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Editar características reconocidas
 
-- Las características reconocidas se pueden editar: un taladro o una espiga se puede mover, girar, redimensionar, duplicar y quitar; una cúpula todo eso salvo girar.
+- Las características reconocidas se pueden mover, girar, duplicar y quitar: un taladro, una espiga o una cúpula; la cúpula sin girar, porque no tiene orientación.
+- Cambiar el tamaño funciona ahora también en una espiga o una cúpula; hasta ahora solo en un taladro.
 - Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.
 - Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.
 - Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio.

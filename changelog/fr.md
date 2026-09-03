@@ -20,7 +20,8 @@ dans `website/version.json`.
 
 ### Modifier les caractéristiques reconnues
 
-- Les caractéristiques reconnues sont modifiables : un perçage ou un tenon peut être déplacé, tourné, redimensionné, dupliqué et retiré ; un dôme tout cela sauf tourner.
+- Les caractéristiques reconnues peuvent être déplacées, tournées, dupliquées et retirées : un perçage, un tenon ou un dôme ; le dôme sans rotation, faute d'orientation.
+- Le redimensionnement fonctionne aussi pour un tenon ou un dôme ; jusqu'ici, seul un perçage le permettait.
 - Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.
 - Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.
 - Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.

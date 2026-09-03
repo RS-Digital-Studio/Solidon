@@ -19,7 +19,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Editar características reconhecidas
 
-- As características reconhecidas podem ser editadas: um furo ou um pino pode ser movido, rodado, redimensionado, duplicado e removido; uma cúpula tudo isso exceto rodar.
+- As características reconhecidas podem ser movidas, rodadas, duplicadas e removidas: um furo, um pino ou uma cúpula; a cúpula sem rodar, por não ter orientação.
+- Redimensionar funciona agora também num pino ou numa cúpula; até agora, apenas num furo.
 - Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.
 - Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.
 - Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.

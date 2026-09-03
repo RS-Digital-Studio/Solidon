@@ -19,7 +19,8 @@ scrive in `website/version.json`.
 
 ### Modificare le caratteristiche riconosciute
 
-- Le caratteristiche riconosciute si possono modificare: un foro o un perno si può spostare, ruotare, ridimensionare, duplicare e rimuovere; una cupola tutto tranne ruotare.
+- Le caratteristiche riconosciute si possono spostare, ruotare, duplicare e rimuovere: un foro, un perno o una cupola; la cupola senza rotazione, perché non ha orientamento.
+- Il ridimensionamento funziona ora anche per un perno o una cupola; finora solo per un foro.
 - I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.
 - Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.
 - Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.
