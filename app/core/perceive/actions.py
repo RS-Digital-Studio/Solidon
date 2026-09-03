@@ -33,16 +33,27 @@ from app.core.types import Feature
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
-#: In welcher Reihenfolge die Handlungen im Panel stehen.
+#: Die Zeilen des Panels, je Zeile die Operationen, die sie einlösen können.
 #:
 #: Die Reihenfolge ist eine Aussage und keine Sortierung: erst wohin, dann wie
 #: groß, dann wie herum, zuletzt weg. Sie steht hier und nicht in der
 #: Oberfläche, weil sie zur Sache gehört (Bitte 3d-druck-d4, 03.09.2026).
-ACTION_ORDER: Final[tuple[str, ...]] = (
-    "move_feature",
-    "resize_hole",
-    "rotate_feature",
-    "remove_feature",
+#:
+#: **Mehrere Operationen je Zeile, und das ist der Punkt.** „Größe ändern"
+#: erledigt für eine Bohrung ``resize_hole`` und für einen Zapfen
+#: ``resize_feature`` — zwei Operationen, weil die Bohrung einen eigenen Weg
+#: durch den exakten Kern und eine Materialkompensation hat, die für einen
+#: Zapfen andersherum liefe. Den Kunden geht das nichts an: Er sieht **eine**
+#: Zeile, und sie tut, was sie sagt. Zwei Zeilen, von denen bei jeder
+#: Merkmalsart eine ausgegraut wäre, sind genau die Sorte Oberfläche, die
+#: Roberts „übersichtlich" ausschließt.
+#:
+#: Die erste Operation, die für die Art gilt, füllt die Zeile.
+ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
+    ("move_feature",),
+    ("resize_hole", "resize_feature"),
+    ("rotate_feature",),
+    ("remove_feature",),
 )
 
 #: Was statt der Handlung hilft, je Merkmalsart, für die keine gilt.
@@ -186,17 +197,33 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
     """
     reason = NOT_APPLICABLE.get(feature.kind, _UNKNOWN_KIND)
     actions: list[FeatureAction] = []
-    for name in ACTION_ORDER:
-        try:
-            spec = REGISTRY.get(name)
-        except Exception:
-            # Ein Eintrag, den es (noch) nicht gibt, ist kein Fehler des Panels —
-            # er fehlt in der Liste, und die Oberfläche bietet ihn nicht an.
+    for candidates in ACTION_ORDER:
+        known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
+        if not known:
+            # Eine Zeile, deren Operationen es (noch) nicht gibt, ist kein Fehler
+            # des Panels — sie fehlt, und die Oberfläche bietet sie nicht an.
             continue
-        if feature.kind in spec.applies_to:
+        fitting = next((spec for spec in known if feature.kind in spec.applies_to), None)
+        if fitting is not None:
             actions.append(
-                FeatureAction(title=spec.title, op=name, fields=_fields_of(spec, feature))
+                FeatureAction(
+                    title=fitting.title,
+                    op=fitting.name,
+                    fields=_fields_of(fitting, feature),
+                )
             )
         else:
-            actions.append(FeatureAction(title=spec.title, op=None, reason=reason))
+            # Der Titel der ersten bekannten Operation benennt die Zeile. Bei
+            # „Größe ändern" sind das ``resize_hole`` und ``resize_feature``, und
+            # welchen der beiden Titel ein nicht anwendbarer Fall trägt, sieht
+            # ohnehin niemand ohne den Satz daneben.
+            actions.append(FeatureAction(title=known[0].title, op=None, reason=reason))
     return actions
+
+
+def _spec_or_none(name: str) -> Any:
+    """Der Registereintrag, oder ``None``, wenn es ihn (noch) nicht gibt."""
+    try:
+        return REGISTRY.get(name)
+    except Exception:
+        return None

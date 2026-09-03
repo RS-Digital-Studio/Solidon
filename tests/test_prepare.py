@@ -1986,3 +1986,66 @@ def test_turning_a_feature_is_registered_completely() -> None:
     assert fields["angle"].unit == DEGREE_UNIT
     assert fields["angle"].placement == "front"
     assert fields["at_feature"].required and fields["at_feature"].placement == "front"
+
+
+def test_a_recognised_pin_can_be_resized(profile: Profile) -> None:
+    """Der vierte Ausgang derselben Maschine: abtragen, größer wieder ansetzen.
+
+    Für Bohrungen gibt es das seit langem (``resize_hole``, mit eigenem Weg
+    für den exakten Kern und Materialkompensation). Ein Zapfen hatte es nicht —
+    „wir wollen ja alles ändern können" (Robert, 03.09.2026).
+
+    Gemessen wird das Ergebnis: Ein Zapfen Ø 8 auf Ø 12 gebracht trägt mehr
+    Material, und der Querschnitt über der Platte ist größer geworden.
+    """
+    from app.core.slice.analysis import cross_section
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    stud = trimesh.creation.cylinder(radius=4.0, height=12.0, sections=48)
+    stud.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, stud]))
+    features = detect(body)
+    pin = next(name for name, f in features.items() if f.kind == "pin")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+
+    before = cross_section(body, 8.0)
+    assert before is not None
+
+    bigger = _run_op("resize_feature", entry, profile, at_feature=pin, diameter=12.0)
+    after_body = as_mesh_data(bigger.outputs[0].mesh)
+    after = cross_section(after_body, 8.0)
+
+    assert after_body.raw.is_watertight
+    assert after is not None
+    assert after.area > before.area * 1.5, f"{before.area:.1f} -> {after.area:.1f}"
+    assert bigger.outputs[0].features[pin].params["diameter"] == pytest.approx(12.0, abs=0.3)
+
+
+def test_the_size_row_is_the_same_row_for_a_bore_and_a_pin() -> None:
+    """Im Panel steht *eine* Zeile „Größe ändern", nicht zwei mit einer toten.
+
+    Für eine Bohrung erledigt es ``resize_hole``, für einen Zapfen
+    ``resize_feature`` — zwei Operationen, weil die Bohrung einen eigenen Weg
+    durch den exakten Kern und die Materialkompensation hat. Der Kunde geht das
+    nichts an: Er sieht eine Zeile, und sie tut, was sie sagt.
+
+    Zwei Zeilen, von denen bei jeder Merkmalsart eine ausgegraut wäre, sind
+    genau die Sorte Oberfläche, die Robert mit „übersichtlich" ausgeschlossen
+    hat.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
+    from app.core.types import Feature
+
+    load_operations()
+    common = {"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 8.0, "depth": 10.0}
+    bore = Feature(id="hole_1", kind="hole", provenance="detected", params=common)
+    pin = Feature(id="pin_1", kind="pin", provenance="detected", params=common)
+
+    for feature, expected in ((bore, "resize_hole"), (pin, "resize_feature")):
+        rows = [
+            entry for entry in actions_for(feature) if entry.op in {"resize_hole", "resize_feature"}
+        ]
+        assert len(rows) == 1, [entry.op for entry in rows]
+        assert rows[0].op == expected, (feature.kind, rows[0].op)
+        assert rows[0].fields, "die Zeile trägt ihr Maß"

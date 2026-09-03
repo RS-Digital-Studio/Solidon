@@ -821,6 +821,110 @@ def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
 
 
 @op_params
+class ResizeFeatureParams(BaseParams):
+    at_feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="front",
+        doc=_("Das erkannte Merkmal, dessen Maß geändert wird."),
+    )
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=8.0,
+        unit="mm",
+        minimum=0.5,
+        maximum=200.0,
+        placement="front",
+        doc=_("Der neue Durchmesser. Beim Anklicken steht hier sein gemessener."),
+    )
+
+
+@register_op(
+    name="resize_feature",
+    title=_("Merkmal ändern"),
+    category="holes",
+    params=ResizeFeatureParams,
+    consumes=1,
+    produces=1,
+    applies_to=["pin"],
+    touches_features=True,
+    deterministic=False,
+    doc=_("Ändert den Durchmesser eines erkannten Zapfens."),
+)
+def resize_feature(ctx: OpContext) -> OpResult:
+    """Den Durchmesser eines erkannten Zapfens ändern.
+
+    **Warum das nicht** :func:`resize_hole` **mit erweitertem ``applies_to``
+    ist.** Die Bohrung hat einen eigenen Weg durch den exakten Kern
+    (``edit.resize_bore``) und eine Materialkompensation, die für ein Loch
+    gilt und für einen Zapfen genau andersherum liefe: Ein Loch wird beim
+    Drucken enger, ein Zapfen dicker. Zwei Operationen, eine Zeile im Panel —
+    ``perceive.actions`` legt sie zusammen, und der Kunde sieht *Größe ändern*
+    und nicht zwei Einträge, von denen einer immer grau ist.
+
+    Sonst ist es derselbe Motor: an der alten Stelle abtragen, mit dem neuen
+    Maß wieder ansetzen.
+    """
+    params = cast(ResizeFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _movable_feature(source, params.at_feature)
+    measured = [float(value) for value in feature.params["centre"]]
+    centre: Vec3 = (measured[0], measured[1], measured[2])
+    previous = float(feature.params.get("diameter", 0.0))
+
+    if abs(params.diameter - previous) <= EPS_GEOM:
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="resize_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal hat dieses Maß schon."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+
+    scale = params.diameter / previous if previous > EPS_GEOM else 1.0
+    cavity = _feature_is_a_cavity(feature)
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    closed = boolean(
+        "union" if cavity else "difference",
+        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
+    placed = boolean(
+        "difference" if cavity else "union",
+        [closed.mesh, _feature_solid(feature, centre, scale=scale)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    changed = dataclasses.replace(
+        feature,
+        params={**feature.params, "diameter": params.diameter},
+        provenance="generated",
+    )
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features={**source.features, feature.id: changed},
+            )
+        ],
+        findings=[*closed.findings, *placed.findings],
+        solver=placed.solver,
+    )
+
+
+@op_params
 class ResizeHoleParams(BaseParams):
     diameter: float = param(
         title=_("Durchmesser"),
