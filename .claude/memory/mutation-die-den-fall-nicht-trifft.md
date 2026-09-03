@@ -25,6 +25,34 @@ Am 30.08.2026 dreimal an einem Abend, mit drei verschiedenen Ursachen:
   die Mutation im Produktivcode konnte ihn gar nicht erreichen. Das ist der
   einzige der drei Fälle, in dem wirklich der **Test** kaputt war.
 
+**Und der umgekehrte Fall, der schwerer zu sehen ist: eine Sammelprobe, die
+rot wird und trotzdem fast nichts prüft (03.09.2026).** Die Notiz oben
+warnt vor „grün geblieben". Hier war das Ergebnis **rot**, und genau
+deshalb hat es getäuscht.
+
+Ich hatte acht Änderungsprüfungen in acht Settern gebaut und zur
+Gegenprobe **alle acht auf einmal** ausgebaut. Der Test wurde rot, und der
+Befund sah damit belegt aus. Er war es nicht: Der Test prüft die Setter in
+einer Schleife, und die erste fehlgeschlagene Zusicherung beendet ihn.
+Gemessen wurde also **eine** Mutation — `set_plate`, der erste Eintrag der
+Liste. Die anderen sieben hätten wirkungslos sein können, und niemand
+hätte es erfahren.
+
+Erst acht **einzelne** Läufe, jeder mit genau einer entfernten Prüfung,
+gaben achtmal rot und damit acht Belege. Das kostete zwölf Sekunden.
+
+**Why:** Bei einer Sammelmutation ist „rot" **kein** Beweis für die Menge,
+sondern nur für ihr erstes wirksames Glied — und welches das ist,
+entscheidet die Reihenfolge im Test, nicht die Wichtigkeit. Ein Test, der bei
+der ersten Abweichung anhält (also jeder gewöhnliche `assert`), kann
+mehrere Mutationen gar nicht unterscheiden.
+
+**How to apply:** So viele Gegenproben wie Zusicherungen, jede einzeln —
+und wo das teuer wäre, wenigstens die Reihenfolge umdrehen und ein zweites
+Mal fahren: Fällt dann ein anderer Fall, war die erste Probe blind für
+ihn. Ein kleines Skript, das die Mutationen der Reihe nach setzt und
+zurücknimmt, ist billiger als das Vertrauen in ein einzelnes Rot.
+
 **Why:** Zwei von drei Malen lag es an der Probe, einmal am Test. Wer „grün"
 sofort als Testlücke liest, baut Tests um, die in Ordnung sind — und wer es
 sofort als Probenfehler abtut, lässt echte Lücken stehen.

@@ -69,6 +69,7 @@
 - [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — einmal über ein echtes Paket fahren.
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen anderes.
 - [Datei zuerst, Register danach](datei-zuerst-register-danach.md) — atomar veröffentlichen, nur vorwärts aktivieren.
+- [Behoben, aber nie draußen](behobener-fehler-war-nie-draussen.md) — `git tag --contains`: war der Fehler je in einer Version?
 - [Erzeugte Datei](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — Befund hier, Antwort im fremden Werkzeug.
 
 ## Qt, VTK, Oberfläche
