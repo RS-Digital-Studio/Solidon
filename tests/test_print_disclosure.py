@@ -70,9 +70,14 @@ def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None
     """Der Text nennt die drei Dinge, für die er da ist.
 
     Erstens, dass es Erfahrungswerte sind; zweitens, dass sie mit der Datei
-    reisen; drittens, wo die Haftung geregelt ist. Der dritte Punkt verweist
-    auf den Lizenzvertrag, statt eine zweite Fassung desselben Vorbehalts
-    aufzumachen — von zwei Fassungen veraltet immer eine.
+    reisen; drittens, was der Kunde deshalb tun soll.
+
+    **Der dritte Punkt ist ein Rat und kein Paragrafenverweis** (Entscheidung
+    Robert, 03.09.2026). Die erste Fassung nannte „die Nummern 10 und 11 des
+    Lizenzvertrags" — rechtlich wirkungslos, denn ein Vertrag gilt durch den
+    Vertragsschluss und nicht dadurch, dass ein Dialog auf ihn zeigt. Was
+    trägt, ist die Instruktion; der Vorbehalt selbst steht in EULA §10 und
+    gilt unabhängig von diesem Fenster.
     """
     dialog = PrintDisclosureDialog(share=True, parent=None)
     whole = "\n".join(
@@ -82,7 +87,11 @@ def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None
 
     assert "Erfahrungswerte" in whole
     assert "3MF" in whole and "Slicer" in whole
-    assert "Lizenzvertrag" in whole, "die Haftung steht dort, nicht hier"
+    assert "bevor Sie drucken" in whole, "der Rat ist die eigentliche Schutzwirkung"
+    assert "Lizenzvertrag" not in whole, (
+        "kein Paragrafenverweis mitten im Arbeitsschritt — er liest sich als "
+        "Kleingedrucktes und leistet rechtlich nichts"
+    )
 
 
 def test_the_choice_from_the_notice_reaches_the_settings(

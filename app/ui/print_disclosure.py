@@ -42,7 +42,7 @@ from app.ui.style import ROOMY, TIGHT, make_primary, set_level
 #: Fassung des Hinweistextes. Ändert sich der Text inhaltlich, steigt sie, und
 #: der Hinweis erscheint erneut — sonst hätte jemand einer Aussage zugestimmt,
 #: die er nie gelesen hat.
-PRINT_DISCLOSURE_VERSION = "1.0"
+PRINT_DISCLOSURE_VERSION = "1.1"
 
 _log = get_logger(__name__)
 
@@ -111,9 +111,18 @@ def _title_text() -> str:
 def _body_text() -> str:
     """Was der Hinweis sagt — an einer Stelle, damit Dialog und Test dasselbe lesen.
 
-    Die dritte Zeile verweist auf die Nummern 10 und 11 des Lizenzvertrags,
-    statt eine eigene Haftungsregel aufzumachen: Zwei Fassungen desselben
-    Vorbehalts altern auseinander, und die im Vertrag ist die verbindliche.
+    **Der dritte Absatz ist ein Rat und kein Rückzug** (Entscheidung Robert,
+    03.09.2026). Die erste Fassung verwies auf „die Nummern 10 und 11 des
+    Lizenzvertrags", und das leistete nichts: Ein Vertrag gilt durch den
+    Vertragsschluss, nicht dadurch, dass ein Dialog auf ihn zeigt — eine
+    Klausel wird im laufenden Programm nicht wirksam einbezogen. Was im
+    Streitfall zählt, ist die **Instruktion**, also der Satz, der sagt, was zu
+    tun ist. Der Vorbehalt selbst steht vollständig in EULA §10 und gilt
+    unabhängig von diesem Fenster.
+
+    Und mitten im Arbeitsschritt liest sich ein Paragrafenverweis wie
+    Kleingedrucktes: Der Hinweis soll Vertrauen schaffen, dass wir sagen, was
+    geschieht — nicht den Eindruck, dass wir uns absichern.
     """
     return tr(
         "Solidon rechnet Temperaturen, Geschwindigkeiten und Kühlung aus den Profilen "
@@ -121,9 +130,8 @@ def _body_text() -> str:
         "geprüften Vorgaben für Ihren Drucker, Ihr Filament und Ihr Teil.\n\n"
         "Speichern Sie eine 3MF-Datei oder öffnen Sie das Projekt im Slicer, reisen "
         "diese Werte mit. Ihr Slicer übernimmt sie dann anstelle seiner eigenen.\n\n"
-        "Prüfen Sie die Werte, bevor Sie drucken. Für das Druckergebnis sowie für "
-        "Material- und Maschinenschäden gelten die Nummern 10 und 11 des "
-        "Lizenzvertrags."
+        "Prüfen Sie die Werte, bevor Sie drucken — besonders bei einem neuen Filament "
+        "oder einem Drucker, den Sie noch nicht kalibriert haben."
     )
 
 
