@@ -242,6 +242,69 @@ Verlauf bleibt stehen; korrigiert wird sie im Folge-Commit, nicht durch
 Umschreiben. `f15e10f9` sagt deshalb im ersten Satz, was `050ecca7` nicht
 enthält.
 
+## Neunter bis zwölfter Fall: die Prüfung fragte HEAD statt sich selbst (03.09.2026)
+
+Vier Fehlgriffe in zwei Stunden, alle mit privatem Index und `read-tree`, alle
+bei sorgfältiger Anwendung dieser Notiz. Betroffen waren `viewport.py` einer
+Nachbarsitzung, `test_prepare.py` mit 33 Zeilen und — beim **Reparieren** dieser
+33 Zeilen — vier weitere Dateien mit zusammen rund 111 Zeilen.
+
+**Das ist kein Bedienfehler mehr.** Der pre-commit-Hook läuft in diesem Baum ein
+bis zwei Minuten, und bei acht gleichzeitigen Sitzungen committet in dieser Zeit
+fast immer jemand. Das Fenster zwischen `read-tree` und dem geschriebenen Commit
+ist damit strukturell offen; wer es durch schnelleres Arbeiten schließen will,
+verliert das Rennen gegen sieben andere.
+
+**Die Prüfung danach hat trotzdem versagt, und zwar an zwei verschiedenen
+Stellen — beide sind eigene Sätze wert.**
+
+> **Sie fragt den eigenen Commit-Hash, nicht HEAD.** HEAD sagt, was zuletzt
+> passiert ist; der eigene Hash sagt, was **ich** getan habe. Eine Schleife, die
+> `git show HEAD --numstat` liest, prüft bei einem gescheiterten eigenen Commit
+> den Commit einer Nachbarsitzung — und findet ihn sauber. Dreimal so
+> abgenickt.
+
+> **Und sie stellt beide Fragen, nicht abwechselnd eine.** „Steht meine Datei
+> drin?" schützt mich, „steht sonst nichts drin?" schützt die anderen. Ich habe
+> sie an zwei aufeinanderfolgenden Commits abwechselnd gestellt und jedes Mal
+> die andere Hälfte verloren: einmal meine Datei plus vier fremde, einmal keine
+> fremde und meine auch nicht.
+
+**Der zwölfte Fall gehört 3d-druck-81 und ist die Falle in der Reparatur
+selbst:**
+
+    for i in 1 2 3; do git read-tree HEAD && git commit ... | tail -2 && break; done
+
+Der Commit scheiterte an `cannot lock ref`, `tail -2` gelang, `&&` sah einen
+Erfolg, `break` brach ab. **Die Pipeline verschluckt den Fehler** — dieselbe
+Falle, die `CLAUDE.md` für Testläufe an erster Stelle nennt, hier in eine
+Wiederholschleife eingebaut, die genau davor schützen sollte.
+
+Die Kette, die getragen hat, in einem Stück:
+
+    for i in 1 2 3 4; do
+      export GIT_INDEX_FILE=/tmp/idx_$i
+      BEFORE=$(git rev-parse HEAD)
+      git read-tree HEAD || continue
+      git add -A -- "$DATEI" || continue
+      git commit -F "$MSG" >/dev/null 2>&1        # kein Pipe
+      NEU=$(git rev-parse HEAD)
+      [ "$NEU" = "$BEFORE" ] && continue          # gar nichts entstanden
+      case "$(git log -1 --format='%s')" in "Mein Betreff"*) ;; *) continue;; esac
+      MEIN=$(git show $NEU --numstat --format="" | awk '{print $3}' | grep -c "^$DATEI$")
+      FREMD=$(git show $NEU --numstat --format="" | awk '{print $3}' | grep -vc "^$DATEI$")
+      [ "$MEIN" = "1" ] && [ "$FREMD" = "0" ] && break
+    done
+
+Vier Prüfungen, und jede fängt einen anderen Fall: Ist überhaupt etwas
+entstanden, ist es meines, ist meine Datei darin, ist sonst nichts darin.
+
+**Und die Lehre über der Lehre:** Drei der vier Fälle haben Nachbarsitzungen
+zurückgeholt, bevor Schaden entstand — weil sie gemeldet wurden. Ein stiller
+Mitnahme-Commit ist der schlechteste Fall (siehe oben); an diesem Abend haben
+vier Sitzungen ihre eigenen Fehlgriffe gemeldet, und deshalb steht der Baum
+vollständig da.
+
 ## Der Schritt davor: die Board-Liste
 
 Am 30.08.2026 ist mir dieselbe Sache noch einmal passiert, in der eigenen
