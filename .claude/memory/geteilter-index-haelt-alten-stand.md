@@ -178,7 +178,16 @@ for f in <pfade>; do git diff --quiet HEAD -- "$f" && echo "$f == HEAD"; done
 
 Steht dort `== HEAD`, gehört die Datei niemandem — der Index ist alt. Aufräumen
 mit `git reset -- <pfade>` (nur Index, Arbeitsbaum unberührt); danach prüfen,
-dass der Arbeitsbaum unverändert ist. Privater Index bleibt trotzdem Pflicht,
+dass der Arbeitsbaum unverändert ist.
+
+**Pfadweise auch dann, wenn es wie Totalschaden aussieht.** Am 03.09.2026 stand
+der Haupt-Index mit 131 Dateien und 12 305 Löschungen aus einem Stand von
+dreieinhalb Stunden vorher da, und ich habe `git reset` **ohne** Pfade
+gefahren — zweimal. Die Anweisung hier stand längst da. Die Zahl der falschen
+Einträge ist kein Grund, die richtigen mitzunehmen: Wer 86 gestagte Einträge
+wegwirft, nimmt jedem, der bewusst vorbereitet hat, seine Arbeit ab, und er
+merkt es erst beim Commit. 3d-druck-7b hat es am selben Tag richtig gemacht und
+genau die zwei falsch stehenden Pfade zurückgesetzt. Privater Index bleibt trotzdem Pflicht,
 solange der Baum geteilt ist — siehe [[privater-index-fester-name]] und
 [[commit-o-nimmt-den-dateistand]]. Verwandt:
 [[parallele-sitzung-im-arbeitsbaum]], [[geteilter-baum-misst-zeitpunkt]].
