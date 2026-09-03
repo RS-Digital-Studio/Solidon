@@ -6018,10 +6018,19 @@ def _scene_with_two_bodies() -> Any:
                     name="Halter",
                     mesh=MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
                 ),
+                # **Versetzt, und das ist keine Zierde.** Stünden beide am
+                # selben Ort, wäre der Hüllquader über beide derselbe wie über
+                # einen, und jede Prüfung auf „rahmt die ganze Auswahl" wäre
+                # grün, ohne etwas zu zeigen.
                 "obj_2": SceneObject(
                     id="obj_2",
                     name="Deckel",
-                    mesh=MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
+                    mesh=MeshData(
+                        trimesh.creation.box(
+                            extents=(20.0, 20.0, 10.0),
+                            transform=trimesh.transformations.translation_matrix((60.0, 0.0, 0.0)),
+                        )
+                    ),
                 ),
             }
         )
@@ -6101,4 +6110,49 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
     assert viewport._shown_colours.get("obj_2") != SELECTED_COLOUR, (
         "die alte Mehrfachauswahl färbt weiter"
+    )
+
+
+def test_fitting_the_view_takes_every_selected_body(qt_app: QApplication) -> None:
+    """Einpassen rahmt die ganze Auswahl, nicht den führenden Körper allein.
+
+    **Der Zwilling zur Färbung.** Nachdem ``select`` eine Menge annimmt, war
+    die Frage, was sonst noch an ``_selected`` allein hängt.
+    ``_selected_bounds`` hing daran: Wer zwei Teile wählte und einpassen ließ,
+    bekam eines im Bild — und das zweite stand außerhalb.
+
+    **Warum hier die rohe Auswahl gilt und nicht ``highlighted_objects()``:**
+    Die gibt nichts zurück, sobald ein Merkmal gewählt ist, weil die
+    Auswahlfarbe dann auf der Bohrung liegt (§19.1). Für die Kamera gilt das
+    nicht — wer ein Merkmal gewählt hat und einpaßt, meint den Körper, in dem
+    es sitzt. Die letzte Zusicherung hält genau das fest.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_two_bodies())
+
+    viewport.select("obj_1")
+    einer = viewport._selected_bounds()
+    assert einer is not None, "der gewählte Körper hat keinen Hüllquader"
+    assert einer[1] < 30.0, f"obj_1 endet nicht bei 10, sondern bei {einer[1]}"
+
+    viewport.select("obj_1", more=("obj_2",))
+    beide = viewport._selected_bounds()
+    assert beide is not None
+    assert beide[1] > einer[1], (
+        f"die Auswahl endet bei {beide[1]}, der führende Körper allein bei {einer[1]} — "
+        "die Kamera rahmt nur einen von zweien"
+    )
+    assert beide[0] == einer[0], "die untere Grenze darf sich nicht verschieben"
+
+    # Und die Auswahl eines Merkmals nimmt der Kamera ihren Körper nicht.
+    # Die Kennung genügt hier: ``highlighted_object`` sieht auf das *Feld*,
+    # nicht auf zugeordnete Dreiecke — geprüft wird die Weiche, nicht die
+    # Merkmalserkennung.
+    viewport.select_feature("hole_1")
+    assert viewport.highlighted_objects() == (), "bei gewähltem Merkmal leuchtet kein Körper"
+    assert viewport._selected_bounds() is not None, (
+        "mit gewähltem Merkmal ließ sich nicht mehr einpassen — die Färbungsausnahme "
+        "ist in die Kamera gerutscht"
     )

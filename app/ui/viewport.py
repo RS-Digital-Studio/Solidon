@@ -9483,12 +9483,13 @@ class Viewport(QWidget):
         return (-width / 2.0, width / 2.0, -depth / 2.0, depth / 2.0, 0.0, height)
 
     def _selected_bounds(self) -> tuple[float, float, float, float, float, float] | None:
-        """Der Hüllquader des gewählten Körpers **an seinem Ort im Bild**.
+        """Der Hüllquader der gewählten Körper **an ihrem Ort im Bild**.
 
-        Nichts, solange keiner gewählt ist — und ebenso, wenn der Gewählte
-        gerade nicht im Bild steht (ausgeblendet, unsichtbar, fremde Platte,
-        §18.8/§25). Auf etwas einzupassen, das man nicht sieht, wäre die
-        schlechteste der drei möglichen Antworten.
+        Nichts, solange keiner gewählt ist — und ebenso, wenn keiner der
+        Gewählten gerade im Bild steht (ausgeblendet, unsichtbar, fremde
+        Platte, §18.8/§25). Auf etwas einzupassen, das man nicht sieht, wäre
+        die schlechteste der drei möglichen Antworten. Steht einer von
+        mehreren nicht im Bild, zählt er nicht mit und die übrigen schon.
 
         Der Versatz gehört dazu: Auseinandergezogen oder auf einer zweiten
         Platte wird ein Körper anderswo gezeichnet, als er in der Szene liegt
@@ -9497,13 +9498,28 @@ class Viewport(QWidget):
         """
         if self._result is None or self._selected is None:
             return None
-        entry = self._result.scene.objects.get(self._selected)
-        if entry is None or not self._in_view(self._selected, entry):
+        # **Über die ganze Auswahl, nicht über den führenden Körper allein.**
+        # Wer zwei Teile wählt und einpassen läßt, bekam eines im Bild — der
+        # Zwilling des Fehlers, den die Färbung hatte. Er saß eine Ebene
+        # weiter und wäre so lange stehen geblieben, wie niemand fragt, was
+        # sonst noch an ``_selected`` hängt.
+        #
+        # **Und hier ist es die rohe Auswahl, nicht ``highlighted_objects()``.**
+        # Die gibt nichts zurück, sobald ein Merkmal gewählt ist — dort liegt
+        # die Auswahlfarbe auf der Bohrung (§19.1). Für die Kamera gilt das
+        # nicht: Wer ein Merkmal gewählt hat und einpaßt, meint den Körper,
+        # in dem es sitzt. Die beiden Fragen sehen gleich aus und sind es
+        # nicht, und genau deshalb steht die Färbungsausnahme nicht hier.
+        boxes = []
+        for identifier in (self._selected, *self._selected_more):
+            entry = self._result.scene.objects.get(identifier)
+            if entry is None or not self._in_view(identifier, entry):
+                continue
+            boxes.append((entry.mesh.bounds, self._view_offset(entry, self._result)))
+        if not boxes:
             return None
-        box = entry.mesh.bounds
-        offset = self._view_offset(entry, self._result)
-        low = [float(box.minimum[axis]) + float(offset[axis]) for axis in range(3)]
-        high = [float(box.maximum[axis]) + float(offset[axis]) for axis in range(3)]
+        low = [min(float(b.minimum[a]) + float(o[a]) for b, o in boxes) for a in range(3)]
+        high = [max(float(b.maximum[a]) + float(o[a]) for b, o in boxes) for a in range(3)]
         return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
