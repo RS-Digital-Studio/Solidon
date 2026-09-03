@@ -184,6 +184,64 @@ gerade davor, den Widerspruch zwischen `--numstat 132/10` und einem leeren
 Fall** — der Betroffene sucht sonst später, warum sein Diff kleiner ist als
 seine Arbeit.
 
+## Siebter und achter Fall: die Meldung stimmte, der Inhalt nicht (03.09.2026)
+
+Zwei Commits an einem Abend, dieselbe Ursache, und beide sind an einer Stelle
+vorbeigekommen, die diese Notiz schon beschreibt — weil eine **Fehlermeldung in
+die falsche Richtung geschickt hat**.
+
+`61588789` trug meine Changelog-Meldung und enthielt genau eine Datei:
+`app/ui/viewport.py`, 76 hinzu, 37 weg — die Größenkorrektur des Bewegen-Griffs
+einer Nachbarsitzung, zurückgebaut. Keine einzige meiner eigenen Dateien war
+darin. Der Baum kam aus meinem Index (`read-tree` auf einen HEAD von vorhin),
+der Elternteil war der inzwischen weitergewanderte HEAD; alles dazwischen steht
+damit als Rücknahme im Commit.
+
+**Warum ich es nicht gemerkt habe, ist der eigentliche Fund.** Der Aufruf endete
+mit
+
+    fatal: cannot lock ref 'HEAD': is at 61588789 but expected d3b6b973
+
+und ich habe das als „der Commit ist nicht zustande gekommen" gelesen. Er war da
+und das Ref gesetzt; die Meldung kam von einem zweiten Schritt danach. Das ist
+dieselbe Gestalt wie der abgebrochene Merge in `.claude/skills/liefern/SKILL.md`
+— **ein Eingriff, kein Nichts** —, und sie ist gefährlicher als eine Meldung,
+die einen ratlos lässt: Sie gibt eine Antwort, und die ist falsch.
+
+> **Ein Fehlschlag am Ref ist kein Fehlschlag am Commit.** Nach jedem Aufruf,
+> der mit `cannot lock ref` endet, gehört `git log -1` gefragt — nicht
+> geschlossen.
+
+Der achte Fall kam zwei Stunden später und zeigt, dass die Probe danach nicht
+genügt, wenn sie das Falsche fragt. `050ecca7` trägt die Meldung „0.3.2 ist
+aufgemacht" und enthält den Abschnitt **nicht**: wieder der Unterschied zweier
+fremder Stände, diesmal drei Dateien, die mir nicht gehören. Meine Probe hatte
+gefragt, ob HEAD meine Meldung trägt — und sie tat es.
+
+> **Die Probe danach fragt nach den eigenen Dateien, nicht nach der eigenen
+> Meldung.** Eine Meldung kann richtig auf einem falschen Inhalt stehen.
+
+Praktisch, und beides zusammen in einer Schleife, weil bei acht Sitzungen im
+Baum der Hook ein bis zwei Minuten läuft und in dieser Zeit regelmäßig jemand
+committet:
+
+    for i in 1 2 3 4 5; do
+      export GIT_INDEX_FILE=/tmp/idx_$i
+      git read-tree HEAD || continue
+      git add -A -- $PATHS || continue
+      git commit -F "$MSG" >/dev/null 2>&1
+      DRIN=$(git show HEAD --numstat --format="" | awk '{print $3}' | grep -c "^<eigene datei>$")
+      [ "$DRIN" = "1" ] && break
+    done
+
+Beim dritten Anlauf saß es. Die zwei davor haben nichts kaputtgemacht, weil die
+Prüfung sie als Fehlschlag erkannt hat — genau dafür ist sie da.
+
+**Und die Zurechnung ist damit nicht erledigt.** Eine irreführende Meldung im
+Verlauf bleibt stehen; korrigiert wird sie im Folge-Commit, nicht durch
+Umschreiben. `f15e10f9` sagt deshalb im ersten Satz, was `050ecca7` nicht
+enthält.
+
 ## Der Schritt davor: die Board-Liste
 
 Am 30.08.2026 ist mir dieselbe Sache noch einmal passiert, in der eigenen
