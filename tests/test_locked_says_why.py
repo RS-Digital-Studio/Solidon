@@ -27,8 +27,11 @@ from PySide6.QtWidgets import QApplication, QDialog, QMenu, QPushButton
 
 from app.core import updates
 from app.core.bootstrap import load_operations
+from app.core.export.handover import override_for
+from app.core.knowledge import print_settings
 from app.core.knowledge.profiles import DEFAULT_MATERIAL
 from app.core.registry import REGISTRY
+from app.core.types import MaterialSlot
 from app.ui.ai_disclosure import AiDisclosureDialog, AiDisclosureTarget, LocalPrivacyDialog
 from app.ui.catalog import PartCatalog
 from app.ui.changes_dialog import ChangesDialog
@@ -53,6 +56,8 @@ from app.ui.main_window import MainWindow
 from app.ui.manual_window import ManualWindow
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
+from app.ui.print_settings_dialog import FilamentOverrideDialog
+from app.ui.recipe_dialog import RecipeDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.shortcuts_window import ShortcutsWindow
@@ -118,6 +123,42 @@ def _op_dialog(session: Session) -> OperationDialog:
         object_id: str(entry.name) for object_id, entry in session.last_result.scene.objects.items()
     }
     return OperationDialog(REGISTRY.get("hollow_object"), names)
+
+
+def _filament_override(session: Session) -> FilamentOverrideDialog:
+    """Die Druckwerte einer Spule, wie ``main_window`` sie öffnet.
+
+    Der Slot kommt nicht aus der Szene, sondern wird gebaut: Ein frisch
+    eingelesener Würfel hat einen namenlosen Standardslot, und der Dialog zeigt
+    dann eine Zeile ohne Inhalt. Name und Material sind die eines Slots, den
+    ein Kunde angelegt hätte.
+    """
+    slot = MaterialSlot(index=0, name="Werkstattrolle", material="PETG")
+    settings = print_settings.resolve(session.profile, print_settings.DEFAULT_QUALITY)
+    return FilamentOverrideDialog(slot, settings, override_for(settings, slot))
+
+
+def _recipe(session: Session) -> RecipeDialog:
+    """Der Rezeptdialog über den ganzen Verlauf, wie beim Speichern als Baustein.
+
+    Die Merkmale werden wie in ``main_window._result_features`` gesammelt —
+    über ``.values()``, denn Szene und Körper führen ihre Inhalte als
+    Wörterbücher, und ``for x in`` gäbe die Kennungen. Derselbe Fehler steht
+    dort im Docstring, weil er einmal bis zum ersten echten Klick gekommen ist.
+    """
+    result = session.last_result
+    assert result is not None, "die Sitzung hat nicht gerechnet"
+    features = tuple(
+        feature for entry in result.scene.objects.values() for feature in entry.features.values()
+    )
+    document = session.project.document
+    return RecipeDialog(
+        document,
+        dict(session.project.sources),
+        tuple(step.id for step in document.ops),
+        features,
+        session.profile,
+    )
 
 
 #: Wie jeder Dialog gebaut wird. Die Bauanleitungen stammen aus den Tests, die
@@ -192,6 +233,8 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     "StepValuesDialog": lambda session: StepValuesDialog(_first_step(session)),
     "OperationDialog": _op_dialog,
     "ManualWindow": lambda _session: ManualWindow(),
+    "FilamentOverrideDialog": _filament_override,
+    "RecipeDialog": _recipe,
     "AiDisclosureDialog": lambda _session: AiDisclosureDialog(
         AiDisclosureTarget(backend="ollama", target_class="llm", address="http://localhost:11434")
     ),

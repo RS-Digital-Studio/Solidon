@@ -650,7 +650,7 @@ class RecipeDialog(QDialog):
             bool(title) and named and adjustable and ordered and unique and not self._checking
         )
         self._save.setText(tr("Baustein ersetzen") if taken else tr("Baustein anlegen"))
-        self._save.setToolTip(
+        hint = (
             self._why_locked(named, adjustable, ordered, unique)
             if not self._save.isEnabled()
             else str(
@@ -663,6 +663,15 @@ class RecipeDialog(QDialog):
             if taken
             else ""
         )
+        # **An alle drei Kanäle, nicht nur an den Tooltip** (Regel 18). Der Satz
+        # stand hier immer schon — ``_why_locked`` formuliert ihn —, er erreichte
+        # aber nur die Maus. Wer den Knopf mit der Tastatur anfährt, liest die
+        # Statuszeile; ein Bildschirmleser die zugängliche Beschreibung. Das
+        # Handbuch verspricht den Satz an dieser Stelle ausdrücklich; eingelöst
+        # war er für zwei von drei Wegen.
+        self._save.setToolTip(hint)
+        self._save.setStatusTip(hint)
+        self._save.setAccessibleDescription(hint)
 
     # --- Anlegen --------------------------------------------------------------
 
