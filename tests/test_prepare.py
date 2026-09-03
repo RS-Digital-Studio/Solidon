@@ -2721,3 +2721,36 @@ def test_plugging_by_numbers_keeps_working_without_a_feature(profile: Profile) -
 
     assert result.outputs[0].mesh.raw.volume > before, "die Bohrung wird gefüllt"
     assert hole not in result.outputs[0].features, "der alte Weg lässt kein Merkmal stehen"
+
+
+def test_the_five_handlings_work_on_a_finely_meshed_socket(profile: Profile) -> None:
+    """Eine Pfanne war bei feinem Netz eine Senkung — und damit für vier von
+    fünf Handlungen der falsche Fall.
+
+    Die Erkennung fragte den Kegelzweig vor dem Kugelzweig, und der Rückstand
+    des Kegels sinkt mit der Feinheit des Netzes: Bei 482 Dreiecken kam eine
+    Kugel heraus, bei 1602 und 5746 eine Senkung (Messung 3d-druck-7b,
+    03.09.2026, behoben in ``a1a2c32f``). Wer eine feine Pfanne anfasste,
+    bekam meine Absage für **Senkungen über einer Bohrung** — für ein Merkmal,
+    das gar keine Senkung war.
+
+    Dieser Test hält die Stelle von meiner Seite: Ein Netz mit
+    ``subdivisions=4`` ist genau die Auflösung, bei der es kippte. Die
+    schärfste Zusage steht am Entfernen — ein Quader 60 × 60 × 20 hat
+    72 000 mm³, und dorthin muss es auf die Stelle genau zurückkommen.
+    """
+    block = trimesh.creation.box(extents=(60.0, 60.0, 20.0))
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=8.0)
+    ball.apply_translation((0.0, 0.0, 10.0 + 8.0 - 4.0))
+    mesh = MeshData.of(trimesh.boolean.difference([block, ball]))
+    entry = SceneObject(id="obj_1", name="Pfanne", mesh=mesh, features=detect(mesh))
+    socket = next(name for name, found in entry.features.items() if found.kind == "sphere")
+    assert entry.features[socket].params.get("recess"), "eine Pfanne geht hinein"
+
+    moved = _run_op("move_feature", entry, profile, at_feature=socket, x=15.0, y=0.0, z=0.0)
+    assert moved.outputs[0].mesh.raw.volume == pytest.approx(mesh.raw.volume, rel=1e-4)
+
+    gone = _run_op("remove_feature", entry, profile, at_feature=socket)
+    assert gone.outputs[0].mesh.raw.volume == pytest.approx(72000.0, abs=0.01), gone.outputs[
+        0
+    ].mesh.raw.volume

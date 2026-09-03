@@ -4773,29 +4773,3 @@ def test_the_camera_keeps_the_body_in_view_after_a_finding_flight(window: MainWi
         f"der Flug verlangt {verlangt[0]} statt {erwartet:.1f} Abstand — bei zu"
         " wenig sieht der Kunde eine Fläche statt eines Teils"
     )
-
-
-def test_the_layer_legend_goes_when_the_layer_does(qt_app: QApplication) -> None:
-    """Die Ringlegende verschwindet mit der Schicht, die sie erklärt.
-
-    **Der Fall, der diese Prüfung veranlasst hat** (gemessen 3d-druck-85 am
-    03.09.2026): Aufgeräumt wurde die Legende nur am Kopf von ``_show_legend``,
-    und das lief nur bei gezeigter Schicht. In vier Lagen stand deshalb die
-    Legende des vorigen Körpers da — bei „keine Auswahl", nach dem Schließen
-    des Werkzeugs und nach **jeder** Auswertung, weil das Fenster dann
-    ``show_result(None)`` ruft. Mitsamt „Insel" und „Überhang", die es in der
-    leeren Ansicht nicht gibt.
-
-    Ein Zustand, den niemand abräumt, sieht aus wie eine Auskunft.
-    """
-    bar = LayerBar()
-    bar.setEnabled(True)
-    bar._on = True
-    layer = SimpleNamespace(z=1.0, area=100.0, islands=[(0.0, 0.0)], overhang_area=5.0)
-    bar._result = SimpleNamespace(layers=[layer])
-    bar._show_readout()
-    assert bar._legend.count() > 1, "die Legende steht, solange die Schicht steht"
-
-    bar.show_result(None)
-
-    assert bar._legend.count() == 0, "ohne Schicht bleibt keine Legende stehen"

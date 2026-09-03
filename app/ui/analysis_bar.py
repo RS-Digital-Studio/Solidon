@@ -393,27 +393,10 @@ class LayerBar(QWidget):
         self._show_readout()
         self.layerChanged.emit(self.index())
 
-    def _clear_legend(self) -> None:
-        """Die Legende leeren — auf jedem Weg, der keine Schicht mehr zeigt.
-
-        **Sie hing an einem einzigen Weg und blieb sonst stehen.** Aufgeräumt
-        wurde sie nur am Kopf von :meth:`_show_legend`, und das lief nur bei
-        gezeigter Schicht. In vier Lagen stand deshalb die Legende des vorigen
-        Körpers da — bei „keine Auswahl", nach dem Schließen des Werkzeugs und
-        nach **jeder** Auswertung, weil das Fenster dann ``show_result(None)``
-        ruft. Mitsamt „Insel" und „Überhang", die es dort nicht gibt.
-        """
-        while self._legend.count():
-            item = self._legend.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
-
     def _show_readout(self) -> None:
         result = self._result
         if result is None or not result.layers or not self.enabled():
             self.readout.setText("")
-            self._clear_legend()
             return
         layer = result.layers[min(self.slider.value(), len(result.layers) - 1)]
         parts = [
@@ -438,7 +421,11 @@ class LayerBar(QWidget):
         Gezeigt wird nur, was in dieser Schicht vorkommt: Eine Legende, die
         „Insel" führt, wo keine liegt, lässt suchen.
         """
-        self._clear_legend()
+        while self._legend.count():
+            item = self._legend.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
 
         shown: list[tuple[Role, str, bool]] = [
             ("layer", str(tr("Kontur")), True),
@@ -448,24 +435,9 @@ class LayerBar(QWidget):
         for role, name, present in shown:
             if not present:
                 continue
-            # **Die Farbe trägt der Strich, nicht der Text.** Sie kommt aus den
-            # Kartenfarben der Ansicht und ist für den dunklen 3D-Grund
-            # gewählt; als Schriftfarbe brachte sie im hellen Thema 1,82 bis
-            # 3,26 gegen die 4,5, die WCAG AA für Text verlangt — Überhang riss
-            # die Schwelle sogar in beiden Themen (gemessen 3d-druck-85 am
-            # 03.09.2026). Für einen Strich gilt 1.4.11 mit 3,0, und er zeigt
-            # die Farbe, statt sie lesen zu lassen. Der Name daneben nimmt die
-            # Textfarbe des Themas wie jeder andere Text der Leiste.
-            entry = QWidget(self)
-            row = QHBoxLayout(entry)
-            row.setContentsMargins(0, 0, 0, 0)
-            row.setSpacing(TIGHT)
-            # So lang, wie der Ring im Bild dick ist — dieselbe zweite
-            # Kodierung, und sie verbindet die Legende mit dem Bild.
-            stroke = QLabel("─" * LAYER_WIDTHS[role], entry)
-            stroke.setStyleSheet(f"color: {ROLES[role]};")
-            row.addWidget(stroke)
-            row.addWidget(QLabel(name, entry))
-            entry.setAccessibleName(name)
-            self._legend.addWidget(entry)
+            # Der Strich ist so lang, wie der Ring im Bild dick ist — dieselbe
+            # zweite Kodierung, und sie verbindet die Legende mit dem Bild.
+            swatch = QLabel(f"{'─' * LAYER_WIDTHS[role]} {name}", self)
+            swatch.setStyleSheet(f"color: {ROLES[role]};")
+            self._legend.addWidget(swatch)
         self._legend.addStretch(1)
