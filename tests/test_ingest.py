@@ -1143,3 +1143,41 @@ def test_no_file_of_the_corpus_is_refused() -> None:
         except ValidationError as fehler:
             gefallen.append(f"{pfad.name}: {fehler}")
     assert not gefallen, f"gültige Dateien abgewiesen: {gefallen}"
+
+
+def test_a_real_ascii_stl_from_a_foreign_tool_passes() -> None:
+    """Die einzige ASCII-STL im Bestand, und sie kommt nicht von uns.
+
+    **Warum eine gebaute hier nicht genügt.** Eine selbst erzeugte Datei
+    enthält, was man hineinlegt — und genau daran ist die erste Fassung von
+    ``check_readable`` vorbeigelaufen: Sie las die binäre Dreieckszahl aus den
+    Bytes 80 bis 84, bevor feststand, ob die Datei überhaupt binär ist. Bei
+    Text steht dort irgendein Wort.
+
+    An dieser Datei ist das eine Zahl mit elf Stellen:
+
+        n an Byte 80..84 = 221 523 232
+        84 + 50n         = 11 076 161 684
+        Datei            =         22 972
+
+    Die erste Fassung hätte sie als „unvollständig" abgewiesen, weil
+    ``len(payload) < expected`` überwältigend zutrifft. Der ASCII-Zweig
+    verlässt den binären deshalb ganz.
+
+    Erzeugt hat sie OpenSCAD 2021.01 (3d-druck-c7, 03.09.2026), nachdem
+    gemessen war, dass PrusaSlicer 2.9.6 gar keine ASCII-STL schreiben kann —
+    es kennt nur ``--export-stl`` (binär) und ``--export-obj``. Sie bringt
+    deshalb eine fremde Zahlenschreibweise mit: ganze Zahlen ohne Dezimalpunkt
+    und eine negative Null in der zweiten Normalen (``facet normal -1 -0 0``).
+    """
+    payload = (Path(__file__).parent / "data" / "meshes" / "openscad_ascii.stl").read_bytes()
+
+    assert payload[:6] == b"solid ", "sonst prüft dieser Test die falsche Bauart"
+    announced = struct.unpack("<I", payload[80:84])[0]
+    assert 84 + 50 * announced > 1000 * len(payload), (
+        "die binäre Rechnung muss hier grob danebenliegen — sonst belegt die "
+        "Datei nicht, worum es geht"
+    )
+
+    plan = import_plan("src_1", "openscad_ascii.stl", payload)
+    assert plan.draft.op == "load"
