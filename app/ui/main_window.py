@@ -430,6 +430,60 @@ FEATURE_TWINS: Final[dict[str, str]] = {
 }
 
 
+class _FeatureDock(QDockWidget):
+    """Das Merkmalsfenster — merkt sich, wenn der Kunde es **selbst** zumacht.
+
+    Es startet zu und geht beim ersten gewählten Merkmal von selbst auf. Wer
+    es danach schließt, hat entschieden; von da an öffnet nur noch der
+    Schalter unter *Ansicht*. Ein Fenster, das nach jedem Klick wieder
+    aufspringt, ist keine Hilfe, sondern dieselbe Frage noch einmal.
+
+    Warum das nicht über ``visibilityChanged`` läuft: Qt beantwortet
+    ``isVisible()`` mit „nein", solange das Hauptfenster nicht angezeigt ist,
+    und feuert das Signal dann gar nicht. Im Testlauf ist nie etwas angezeigt.
+    ``closeEvent`` und ``hideEvent`` kommen in beiden Lagen an — das eine beim
+    Kreuz, das andere beim Schalter.
+    """
+
+    # Als Klassenwerte, nicht erst im Rumpf: ``setVisible`` ist überschrieben
+    # und kann von Qt schon aus ``super().__init__`` heraus gerufen werden —
+    # dann stünden die Felder noch nicht.
+    dismissed = False
+    _watching = False
+
+    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+        super().__init__(title, parent)
+
+    def start_watching(self) -> None:
+        """Ab hier zählt ein Zumachen als Entscheidung — nicht das erste Verbergen."""
+        self._watching = True
+
+    def reveal(self) -> None:
+        """Zeigt das Fenster, es sei denn, der Kunde hat es zugemacht.
+
+        Gefragt wird ``isHidden()`` und nicht ``isVisible()``: Das eine ist der
+        gesetzte Zustand, das andere hängt am Hauptfenster.
+        """
+        if self.dismissed or not self.isHidden():
+            return
+        self.show()
+
+    def setVisible(self, visible: bool) -> None:  # noqa: N802 - Qt name
+        """Der Trichter, durch den jedes Auf und Zu läuft.
+
+        Das Kreuz, der Schalter unter *Ansicht* und ``reveal()`` enden alle
+        hier — Ereignisse dagegen nicht: ``showEvent`` und ``hideEvent``
+        bleiben aus, solange das Hauptfenster nicht angezeigt ist, und
+        ``visibilityChanged`` ebenso (gemessen am 03.09.2026, beides).
+
+        Zumachen heißt „nicht jetzt", Aufmachen heißt das Gegenteil. Deshalb
+        setzt dieselbe Zeile den Merker in beide Richtungen.
+        """
+        if self._watching:
+            self.dismissed = not visible
+        super().setVisible(visible)
+
+
 class _MapWorker(Worker):
     """Eine Analysekarte, abseits des Oberflächen-Threads (§18.9).
 
@@ -7872,13 +7926,26 @@ class MainWindow(QMainWindow):
         scroller.setWidgetResizable(True)
         scroller.setFrameShape(QScrollArea.Shape.NoFrame)
 
-        self.feature_dock = QDockWidget(tr("Merkmal"), self)
+        self.feature_dock = _FeatureDock(tr("Merkmal"), self)
         self.feature_dock.setObjectName("featureDock")
         self.feature_dock.setWidget(scroller)
         self.feature_dock.setAllowedAreas(
             Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
         )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.feature_dock)
+        # **Beim Start zu.** Es stand offen und leer am rechten Rand und nahm
+        # der Ansicht 165 von 1280 Punkten für einen einzigen Satz ab —
+        # gemessen an vier Videoaufnahmen (3d-druck-06, 03.09.2026). Wer eine
+        # Datei öffnet, hat noch nichts gewählt; ein Bereich, der beim Start
+        # nichts zeigt, ist Fläche ohne Auskunft.
+        #
+        # Es geht beim **ersten** gewählten Merkmal von selbst auf — dort
+        # beantwortet es eine Frage, die gerade gestellt wurde. Wer es danach
+        # zumacht, hat entschieden: ``_feature_dock_dismissed`` merkt es sich,
+        # und von da an öffnet nur noch der Schalter unter *Ansicht*. Ein
+        # Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe.
+        self.feature_dock.hide()
+        self.feature_dock.start_watching()
         # Der Eintrag kommt von Qt selbst und trägt damit denselben Namen wie
         # das Fenster; wer es zugemacht hat, findet es hier wieder.
         entry = self.feature_dock.toggleViewAction()
@@ -9209,6 +9276,7 @@ class MainWindow(QMainWindow):
                 if other != feature_id and candidate.kind == feature.kind
             ]
             self.feature_panel.show_feature(feature_id, feature, alike)
+            self.feature_dock.reveal()
         else:
             self.feature_panel.clear()
 
@@ -9238,6 +9306,7 @@ class MainWindow(QMainWindow):
         if first is None or second is None:
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
+        self.feature_dock.reveal()
 
     def _apply_to_each_feature(
         self, op: str, params: dict[str, Any], feature_ids: list[str]

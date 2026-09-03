@@ -1315,6 +1315,89 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_the_feature_window_starts_closed_and_opens_on_a_feature(
+    window: MainWindow,
+) -> None:
+    """Ein Bereich, der beim Start nichts zeigt, ist Fläche ohne Auskunft.
+
+    Gemessen an vier Videoaufnahmen (03.09.2026): Das Fenster stand offen und
+    leer am rechten Rand und nahm der Ansicht 165 von 1280 Punkten für einen
+    einzigen Satz ab. Wer eine Datei öffnet, hat noch nichts gewählt — es geht
+    beim **ersten** gewählten Merkmal auf, wo es eine gerade gestellte Frage
+    beantwortet.
+    """
+    assert window.feature_dock.isHidden(), "beim Start zu"
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert window.feature_dock.isHidden(), "ein Körper ist kein Merkmal"
+
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    assert not window.feature_dock.isHidden(), "beim Merkmal geht es auf"
+
+
+def test_a_closed_feature_window_stays_closed(window: MainWindow) -> None:
+    """Wer es zumacht, hat entschieden.
+
+    Ein Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe,
+    sondern eine Wiederholung derselben Frage. Danach öffnet nur noch der
+    Schalter unter *Ansicht*.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+    assert not window.feature_dock.isHidden()
+
+    window.feature_dock.close()
+    QApplication.processEvents()
+    assert window.feature_dock.dismissed, "das Zumachen ist gemerkt"
+
+    window.object_tree.select_feature(object_id, holes[1])
+    QApplication.processEvents()
+    assert window.feature_dock.isHidden(), "es springt nicht wieder auf"
+
+
+def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow) -> None:
+    """Der Schalter unter *Ansicht* ist der Ausweg, und er hebt das Zumachen auf.
+
+    Wer es zumacht, sagt „nicht jetzt"; wer es über den Schalter wieder
+    aufmacht, sagt das Gegenteil. Danach geht es auch wieder von selbst auf —
+    sonst müsste er es für jedes weitere Merkmal erneut aufmachen.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    window.feature_dock.close()
+    QApplication.processEvents()
+    assert window.feature_dock.dismissed
+
+    window.feature_dock.toggleViewAction().trigger()
+    QApplication.processEvents()
+    assert not window.feature_dock.isHidden(), "der Schalter öffnet es"
+    assert not window.feature_dock.dismissed, "und nimmt das Zumachen zurück"
+
+
 def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
     """Zwei Zeilen im Baum markieren und den Abstand lesen — ohne Messwerkzeug.
 
@@ -5039,23 +5122,15 @@ def test_the_keyboard_reaches_zoom_and_the_next_body(window: MainWindow) -> None
     assert any("+" in text for text in shortcuts), "der Zoom hat ein Kürzel"
 
 
-def test_the_default_navigation_is_solidons_own() -> None:
-    """Die Vorgabe ist die eigene Steuerung, nicht mehr die von Cura (§2.9).
+def test_the_fourth_navigation_scheme_exists_without_changing_the_default() -> None:
+    """Bambu, Orca und Prusa drehen mit links; §2.9 gibt Cura vor.
 
-    Bis zum 03.09.2026 sicherte dieser Test das Gegenteil zu: „die Vorgabe
-    folgt weiter §2.9" hieß damals ``slicer``. Robert hat sie an diesem Tag
-    umgelegt, und der Bauplan ist mitgezogen — eine Zusicherung, die einer
-    Entscheidung widerspricht, ist kein Schutz, sondern ein Hindernis.
-
-    Was bleibt, ist die Aussage darunter: Die vier Nachbildungen sind alle
-    noch da. Eine neue Vorgabe darf keine Wahl kosten, die jemand schon
-    getroffen hat.
+    Ein viertes Wahlschema ist keine Bauplanänderung — die Vorgabe bleibt.
     """
     from app.ui.settings_dialog import NAVIGATION
 
-    assert UiSettings().navigation == "solidon", "die Vorgabe ist die eigene"
-    for nachbildung in ("slicer", "orbit", "cad", "blender"):
-        assert nachbildung in NAVIGATION, f"{nachbildung} ist verschwunden"
+    assert "orbit" in NAVIGATION
+    assert UiSettings().navigation == "slicer", "die Vorgabe folgt weiter §2.9"
 
 
 def test_the_report_can_be_filtered(window: MainWindow) -> None:
