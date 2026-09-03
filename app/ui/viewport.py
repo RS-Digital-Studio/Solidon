@@ -4646,6 +4646,18 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
+        # **Und alles andere, was durch ``_view_offset`` geht.** Dessen
+        # Docstring zählt auf, wer mitwandert: Merkmalsfläche, Beschriftung,
+        # Griffscheibe, Differenzvorschau, Maße und Fangmarke. Die Rechnung
+        # war gepflegt, die Liste derer, die sie **auslösen**, nicht — hier
+        # standen nur die ersten beiden. Ein Maß an einem Körper auf Platte 2
+        # blieb beim Umschalten auf „Alle Platten" eine Bettbreite neben
+        # seinem Teil stehen; genau der Fehler, den der Kommentar an
+        # :meth:`_redraw_measurements` als behoben beschreibt. Behoben war die
+        # Rechnung, nicht ihr Auslöser. Beide räumen selbst ab und kehren bei
+        # leerem Zustand zurück, kosten hier also nichts.
+        self._redraw_measurements()
+        self._redraw_difference()
         # Ob ein Körper unter der Platte liegt, entscheidet sich mit jeder
         # Auswertung neu — und die Platte steht schon, seit der Drucker
         # gewählt wurde.
@@ -6138,11 +6150,23 @@ class Viewport(QWidget):
         self._hover_timer.start()
 
     def _forget_pointer(self) -> None:
-        """Die Maus hat das Bild verlassen."""
+        """Die Maus hat das Bild verlassen.
+
+        **Der Pinselring geht mit.** Er zeigt, wo der Pinsel greifen würde —
+        eine Aussage über den Zeiger, und der ist fort. Ohne diese Zeile blieb
+        er an der letzten Stelle im Modell stehen, und niemand kam mehr an ihn
+        heran: :meth:`_draw_brush` kehrt bei ``_hover_at is None`` sofort
+        zurück, und ``set_brush_radius`` ruft nur sie. Am Regler der Formleiste
+        zu ziehen änderte den Ring danach nicht mehr — er behielt seinen
+        Durchmesser, während die Leiste einen anderen anzeigte. Der Weg dorthin
+        ist der übliche: Die Leiste liegt unter der Ansicht, und der Weg zum
+        Regler führt hinaus.
+        """
         self._hover_timer.stop()
         self._hover_at = None
         self._set_hover_target(None, None)
         self._clear_snap_preview()
+        self._hide_brush()
 
     def _on_paint_drag(self, x: int, y: int, fresh: bool) -> None:
         """Ein Zug des gedrückten Pinsels — einer je halbem Radius (§18.11).

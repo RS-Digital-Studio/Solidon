@@ -5927,3 +5927,74 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
     assert viewport._arc_actor is None, "der Drehbogen"
     assert viewport._ghost_actor is None, "der Geisterring"
     assert viewport._shape_actor is None, "die Vorschau"
+
+
+def test_the_pointer_takes_the_brush_ring_with_it(qt_app: QApplication) -> None:
+    """Verlässt die Maus die Ansicht, geht der Pinselring mit (§18.11).
+
+    Er zeigt, wo der Pinsel greifen würde — eine Aussage über den Zeiger, und
+    der ist fort. Blieb er stehen, kam niemand mehr an ihn heran:
+    ``_draw_brush`` kehrt bei ``_hover_at is None`` sofort zurück, und
+    ``set_brush_radius`` ruft nur sie. Am Regler der Formleiste zu ziehen
+    änderte den Ring danach nicht mehr, während die Leiste einen anderen
+    Durchmesser anzeigte — und der Weg zum Regler führt aus der Ansicht
+    hinaus, weil die Leiste darunter liegt.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+
+    class _Plotter:
+        def __init__(self) -> None:
+            self.removed: list[object] = []
+
+        def remove_actor(self, actor: object, render: bool = True) -> None:
+            self.removed.append(actor)
+
+    plotter = _Plotter()
+    viewport.plotter = plotter
+    marke = object()
+    viewport._brush_actor = marke
+    viewport._hover_at = (10, 10)
+
+    viewport._forget_pointer()
+
+    assert viewport._brush_actor is None, "der Ring ist weg"
+    assert marke in plotter.removed, "und zwar aus dem Bild, nicht nur aus dem Feld"
+
+
+def test_what_moves_with_the_plate_is_redrawn_with_the_scene() -> None:
+    """Wer ``_view_offset`` rechnet, wird bei jeder Auswertung neu gezeichnet.
+
+    Der Docstring von ``_view_offset`` zählt auf, wer mitwandert, wenn die
+    Kopfzeile auf eine andere Platte umschaltet — Merkmalsfläche,
+    Beschriftung, Griffscheibe, Differenzvorschau, Maße und Fangmarke. Die
+    **Rechnung** war gepflegt, die Liste derer, die sie auslösen, nicht: In
+    ``show_scene`` standen nur ``_redraw_features`` und ``_redraw_layer``,
+    ``_redraw_measurements`` nur im Zweig für die leere Szene. Ein Maß an
+    einem Körper auf Platte 2 blieb beim Umschalten auf „Alle Platten" eine
+    Bettbreite neben seinem Teil stehen.
+
+    Geprüft wird über den Syntaxbaum und nicht über den Text: Ein ``grep``
+    fände den Namen auch in einem Kommentar, und genau ein Kommentar hat hier
+    zwei Sitzungen lang behauptet, die Sache sei erledigt.
+    """
+    import ast
+    from pathlib import Path
+
+    baum = ast.parse(Path("app/ui/viewport.py").read_text(encoding="utf-8"))
+    methoden = {
+        knoten.name: knoten for knoten in ast.walk(baum) if isinstance(knoten, ast.FunctionDef)
+    }
+    show_scene = methoden.get("show_scene")
+    assert show_scene is not None, "show_scene ist verschwunden"
+
+    gerufen = {
+        knoten.func.attr
+        for knoten in ast.walk(show_scene)
+        if isinstance(knoten, ast.Call) and isinstance(knoten.func, ast.Attribute)
+    }
+    for name in ("_redraw_features", "_redraw_measurements", "_redraw_difference"):
+        assert name in gerufen, (
+            f"{name} rechnet mit _view_offset und muss bei jeder Auswertung laufen"
+        )
