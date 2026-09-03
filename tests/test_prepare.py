@@ -1926,3 +1926,63 @@ def test_removing_a_feature_is_registered_completely() -> None:
     assert fields["at_feature"].kind == "feature" and fields["at_feature"].required
     assert fields["at_feature"].placement == "front"
     assert len(fields) == 1, "mehr braucht es nicht — das Merkmal sagt alles"
+
+
+def test_a_recognised_bore_can_be_turned(profile: Profile) -> None:
+    """Dieselbe Maschine, eine Drehung zwischen den beiden Booleschen.
+
+    „Verschieben, drehen, skalieren usw" (Robert, 03.09.2026). Für ein
+    erkanntes Merkmal ist das Drehen dasselbe Paar wie das Versetzen — an der
+    alten Stelle füllen, an der neuen setzen —, nur steht zwischen beiden eine
+    Drehmatrix statt einer Verschiebung.
+
+    **Achse und Winkel, wie bei ``rotate_object``.** Das Register spricht diese
+    Sprache schon, und ein Kunde, der einen Körper um Z gedreht hat, sucht für
+    eine Bohrung nicht nach etwas anderem. Gedreht wird um die **Mitte des
+    Merkmals**, nicht um den Ursprung: Eine Bohrung, die beim Kippen davonwandert,
+    ist keine gekippte Bohrung.
+
+    Geprüft wird die Achse des Ergebnisses: Eine Bohrung entlang Z, um X um 90°
+    gedreht, liegt danach entlang Y.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    axis_before = tuple(round(float(v), 3) for v in entry.features[hole].params["axis"])
+    assert axis_before == (0.0, 0.0, 1.0), axis_before
+
+    turned = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="x", angle=90.0)
+    body = as_mesh_data(turned.outputs[0].mesh)
+
+    assert body.raw.is_watertight
+    after = tuple(round(abs(float(v)), 2) for v in turned.outputs[0].features[hole].params["axis"])
+    assert after == (0.0, 1.0, 0.0), f"aus Z wird Y, gemessen {after}"
+
+
+def test_turning_a_bore_keeps_its_centre(profile: Profile) -> None:
+    """Gedreht wird um das Merkmal, nicht um den Ursprung.
+
+    Der Unterschied zählt: Eine Bohrung bei x = -15, um X gekippt, bleibt bei
+    x = -15. Würde um den Ursprung gedreht, läge sie danach woanders — und der
+    Kunde hätte zwei Änderungen bekommen, wo er eine wollte.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    before = tuple(float(v) for v in entry.features[hole].params["centre"])
+
+    turned = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="x", angle=90.0)
+    after = tuple(float(v) for v in turned.outputs[0].features[hole].params["centre"])
+
+    assert after == pytest.approx(before, abs=1e-6), f"{before} -> {after}"
+
+
+def test_turning_a_feature_is_registered_completely() -> None:
+    """Dieselbe Sprache wie ``rotate_object`` — Achse als Auswahl, Winkel in Grad."""
+    spec = REGISTRY.get("rotate_feature")
+
+    assert spec.applies_to == ("hole", "pin")
+    assert spec.touches_features
+    fields = {entry.name: entry for entry in spec.params.spec()}
+    assert fields["axis"].kind == "enum" and fields["axis"].choices == ("x", "y", "z")
+    from app.core.units import DEGREE_UNIT
+
+    assert fields["angle"].unit == DEGREE_UNIT
+    assert fields["angle"].placement == "front"
+    assert fields["at_feature"].required and fields["at_feature"].placement == "front"

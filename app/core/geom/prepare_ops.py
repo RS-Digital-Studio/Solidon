@@ -363,13 +363,23 @@ def _feature_is_a_cavity(feature: Feature) -> bool:
     return bool(feature.params.get("recess", False))
 
 
-def _feature_solid(feature: Feature, centre: Vec3, scale: float = 1.0) -> MeshData:
+def _feature_solid(
+    feature: Feature,
+    centre: Vec3,
+    scale: float = 1.0,
+    axis: Vec3 | None = None,
+) -> MeshData:
     """Der Körper, den dieses Merkmal einnimmt — an ``centre`` gesetzt.
 
     ``scale`` skaliert die Querschnittsmaße; ``1.0`` baut das Merkmal, wie es
-    gemessen wurde. Der Körper wird um :data:`FEATURE_OVERLAP` größer gebaut
-    als gemessen, damit keine Boolesche auf zusammenfallende Flächen trifft
-    (§39) — beim Ausfüllen wie beim Abtragen.
+    gemessen wurde. ``axis`` überschreibt seine Richtung; ``None`` nimmt die
+    gemessene. Beide zusammen sind der Grund, warum Versetzen, Drehen und
+    Ändern **eine** Maschine sind und nicht drei: Zwischen den zwei Booleschen
+    steht jeweils nur ein anderer Wert.
+
+    Der Körper wird um :data:`FEATURE_OVERLAP` größer gebaut als gemessen,
+    damit keine Boolesche auf zusammenfallende Flächen trifft (§39) — beim
+    Ausfüllen wie beim Abtragen.
     """
     diameter = float(feature.params.get("diameter", 0.0)) * scale + FEATURE_OVERLAP
     if diameter <= EPS_GEOM:
@@ -385,9 +395,10 @@ def _feature_solid(feature: Feature, centre: Vec3, scale: float = 1.0) -> MeshDa
         body.apply_translation(np.asarray(centre, dtype=float))
         return MeshData.of(body)
 
-    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
-    length = float(np.linalg.norm(axis))
-    direction = axis / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
+    wanted = axis if axis is not None else feature.params.get("axis", (0.0, 0.0, 1.0))
+    given = np.asarray(wanted, dtype=float)
+    length = float(np.linalg.norm(given))
+    direction = given / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
     # **Ganz durch und nicht nur so tief wie gemessen.** Eine Bohrung, die als
     # 12 mm tief erkannt wurde, muss beim Ausfüllen auch die 12 mm treffen —
     # und eine, die durchgeht, den ganzen Körper. Die gemessene Tiefe ist die
@@ -683,6 +694,130 @@ def remove_feature(ctx: OpContext) -> OpResult:
         findings=findings,
         solver=closed.solver,
     )
+
+
+@op_params
+class RotateFeatureParams(BaseParams):
+    at_feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="front",
+        doc=_("Das erkannte Merkmal, das gedreht wird."),
+    )
+    axis: Axis = param(
+        title=_("Achse"),
+        default="x",
+        choices=("x", "y", "z"),
+        placement="front",
+        doc=_("Um welche Achse gedreht wird. Gedreht wird um die Mitte des Merkmals."),
+    )
+    angle: float = param(
+        title=_("Winkel"),
+        default=90.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        placement="front",
+        doc=_("Wie weit gedreht wird, in Grad."),
+    )
+
+
+@register_op(
+    name="rotate_feature",
+    title=_("Merkmal drehen"),
+    category="holes",
+    params=RotateFeatureParams,
+    consumes=1,
+    produces=1,
+    applies_to=list(MOVABLE_KINDS),
+    touches_features=True,
+    deterministic=False,
+    doc=_("Kippt eine erkannte Bohrung oder einen erkannten Zapfen um ihre Mitte."),
+)
+def rotate_feature(ctx: OpContext) -> OpResult:
+    """Ein erkanntes Merkmal kippen — dieselbe Maschine, eine Matrix dazwischen.
+
+    **Achse und Winkel, wie bei** :func:`rotate_object`. Das Register spricht
+    diese Sprache schon, und wer einen Körper um Z gedreht hat, sucht für eine
+    Bohrung nicht nach einer anderen Bedienung.
+
+    **Gedreht wird um die Mitte des Merkmals**, nicht um den Ursprung: Eine
+    Bohrung, die beim Kippen davonwandert, ist keine gekippte Bohrung, sondern
+    zwei Änderungen, von denen der Kunde eine wollte.
+
+    Eine Kugel bekommt diese Operation nicht: Sie hat keine Lage, die sich
+    drehen ließe. Das steht in :data:`MOVABLE_KINDS` noch nicht getrennt, weil
+    ``sphere`` dort ohnehin nicht steht — kommt sie dazu, gehört hier eine
+    eigene Liste hin.
+    """
+    params = cast(RotateFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _movable_feature(source, params.at_feature)
+    measured = [float(value) for value in feature.params["centre"]]
+    centre: Vec3 = (measured[0], measured[1], measured[2])
+
+    if abs(params.angle) <= EPS_DISPLAY:
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="rotate_feature.unchanged",
+                    severity="info",
+                    message=_("Ohne Winkel bleibt alles, wie es ist."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+
+    turned_axis = _turned(feature, params.axis, params.angle)
+    cavity = _feature_is_a_cavity(feature)
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    closed = boolean(
+        "union" if cavity else "difference",
+        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
+    placed = boolean(
+        "difference" if cavity else "union",
+        [closed.mesh, _feature_solid(feature, centre, axis=turned_axis)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    moved = dataclasses.replace(
+        feature,
+        params={**feature.params, "axis": turned_axis},
+        provenance="generated",
+    )
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features={**source.features, feature.id: moved},
+            )
+        ],
+        findings=[*closed.findings, *placed.findings],
+        solver=placed.solver,
+    )
+
+
+def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
+    """Die Achse des Merkmals, um ``axis`` um ``angle`` Grad gedreht."""
+    direction = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    matrix = trimesh.transformations.rotation_matrix(  # type: ignore[no-untyped-call]
+        math.radians(angle), AXIS_NORMALS[axis]
+    )
+    spun = np.asarray(matrix, dtype=float)[:3, :3] @ direction
+    length = float(np.linalg.norm(spun)) or 1.0
+    spun = spun / length
+    return (float(spun[0]), float(spun[1]), float(spun[2]))
 
 
 @op_params
