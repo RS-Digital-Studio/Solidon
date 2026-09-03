@@ -366,7 +366,7 @@ generator = "tools/make_video.py"
 inputs = ["eigenes Solidon-Drehbuch", "website/teile/weg1-halter-anpassen.p3d"]
 derivative_status = "generated_from_own_sources"
 evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
-content_sha256 = {"website/bilder/weg1-anpassen.mp4" = "962269b25968a7133377619a56e4b4887e9f3c386be71c1e020edccd05423b98", "website/bilder/weg1-anpassen.png" = "a33937a7cb369f2bef1f62a5c2e8178d362c33633a0a2d803c0c16f9d994cdf6", "website/bilder/weg1-anpassen.webm" = "f9da66d56e7ee6ea2cddfa5fce6f53d5c9c621a51feccd0d82d99278d7443a85"}
+content_sha256 = {"website/bilder/weg1-anpassen.mp4" = "f5ff1b70ec2d8235a1db0583a48f1d4bd0820c3da9785af08cc22dd909475fcf", "website/bilder/weg1-anpassen.png" = "910007061fa9e51fab4f6983cd781ca42e8b5c8505815e699fc2482b60046954", "website/bilder/weg1-anpassen.webm" = "b2b486da838a5dc3aec465320017e50a8bcc86420a8486b7e990709582ec4d62"}
 input_sha256 = {"website/teile/weg1-halter-anpassen.p3d" = "0e2b2827aa6327265a622c1146b9b079b8d890deb010701efa1326726570f88e"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
@@ -383,7 +383,7 @@ generator = "tools/make_video.py"
 inputs = ["eigenes Solidon-Drehbuch", "website/teile/rollenhalter.p3d"]
 derivative_status = "generated_from_own_sources"
 evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
-content_sha256 = {"website/bilder/weg2-konstruieren.mp4" = "9c0718697f62d3ed9a7dcb37e4a502329b82e7f8c0d1a69a05c63bfbb36614b6", "website/bilder/weg2-konstruieren.png" = "e36fcb01cf3b8816cfcce136d18e6882d6a5ea4744707a0ccb4158270c00246c", "website/bilder/weg2-konstruieren.webm" = "fa5d08bf6058b9b5e4f1560703066b59a1c79fe4312646c23361c0066c6a27ad"}
+content_sha256 = {"website/bilder/weg2-konstruieren.mp4" = "61bda236f3587fa47c512b4305cc31e718aa9e1c3ad300956a9ed21607a3541d", "website/bilder/weg2-konstruieren.png" = "d6f5968caf8958cd55c2116a163bfbe08be85f5d0c143086e30d90f528f0851d", "website/bilder/weg2-konstruieren.webm" = "ad2386aacfcc21218174535b05bce5ebce03df91d2fae86a6cac096c6fd34246"}
 input_sha256 = {"website/teile/rollenhalter.p3d" = "12e1f9ceedeb4c3796825b09e3a02701ea1fa79841f7b51bf84132eab95c6a4b"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
@@ -400,7 +400,7 @@ generator = "tools/make_video.py"
 inputs = ["app/examples/weg3-generiert-aufbereiten.p3d", "tests/data/meshes/generated_figure.stl"]
 derivative_status = "generated_from_mit_source"
 evidence = ["tools/make_video.py", "tools/make_examples.py", "tests/data/make_corpus.py", "tests/data/LICENSE", "website/CLAUDE.md"]
-content_sha256 = {"website/bilder/weg3-generiert-aufbereiten.mp4" = "52be23835773ad343334e19d9600ad9d65541c5e7ddecd9a6305de3275893141", "website/bilder/weg3-generiert-aufbereiten.png" = "bfeec8950ec89ffdc6f268c60da1a214d96cbcdb407a3115742460f6db802918", "website/bilder/weg3-generiert-aufbereiten.webm" = "e14f0dd603677c778b504375fe765ffbdb2de9e6a4c83e408ce46eae1749a5dd"}
+content_sha256 = {"website/bilder/weg3-generiert-aufbereiten.mp4" = "244b3ddd2d1423afb3f8a0d7c989acc94e8334fae4a725ef0435a3d22f7aadfc", "website/bilder/weg3-generiert-aufbereiten.png" = "d55a501c8c9b83dd1a8ce27721817e4bda40c3d2b123122833e7ba0b1954b38e", "website/bilder/weg3-generiert-aufbereiten.webm" = "7fff1746a3220af993c11720f28804c5fa9d68575a000a630e12f5ad43594873"}
 input_sha256 = {"app/examples/weg3-generiert-aufbereiten.p3d" = "6174f0b39f12be9ca90d109e28eb87bd1c6c243db62c6f5db7689add9391a3f7", "tests/data/meshes/generated_figure.stl" = "f5aa84dd37fd6719bf68b661876a64ecaac629968810f1bb228e33888a1fcf1b"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
@@ -417,7 +417,7 @@ generator = "tools/make_video.py"
 inputs = ["eigenes Solidon-Drehbuch", "website/teile/weg4-stein-formen.p3d"]
 derivative_status = "generated_from_own_sources"
 evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
-content_sha256 = {"website/bilder/weg4-formen.mp4" = "dd2df8fbebbb87aae251b0597c989f14397ccebe43162b7ccc62482af64c1d78", "website/bilder/weg4-formen.png" = "9a629a8ad49fec801680d5ac4edd563c5af9bca5dacd97083c9292de1e7e7193", "website/bilder/weg4-formen.webm" = "59561fa75620be5a71650350ffb8f7555cc652f33364068be779b920cb36e6b0"}
+content_sha256 = {"website/bilder/weg4-formen.mp4" = "11670731b0995d7392252b24f4c53e71d787dd32059683600e301b3cb6afefa1", "website/bilder/weg4-formen.png" = "a5df0a27a8c393ed95de3f808d423794a2fa1849d0d8fdf33cee7ca8abff2891", "website/bilder/weg4-formen.webm" = "c978268bb3920d003fc1a18fb8e7c8be89964c1cf38f42f1437a9c01550a58ba"}
 input_sha256 = {"website/teile/weg4-stein-formen.p3d" = "71576d189505ec896a955db5875121efe9ee197637f883d6f2bd36ef10ac917d"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
