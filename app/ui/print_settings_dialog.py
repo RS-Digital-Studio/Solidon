@@ -185,6 +185,13 @@ GROUPS = (
 #: dabei: bei ihm ist die breite Fläche ein größeres Ziel und kein gedehnter
 #: Kasten. Die Zahlen sind Höchstmaße — wer mehr braucht, bekommt mehr
 #: (:meth:`PrintSettingsDialog._editor`).
+#: Qt-Eigenschaft, unter der ein Feld seinen **eigenen** Hinweis aufhebt.
+#:
+#: Ein gesperrtes Feld trägt den Grund der Sperre; wird es wieder frei, muss
+#: der ursprüngliche Satz zurück — und der lässt sich nicht neu bauen. Der
+#: Farbknopf etwa nennt in seinem Tooltip den Hexwert, den sonst nichts zeigt.
+_OWN_TIP: Final = "solidonOwnTip"
+
 FIELD_WIDTH: Final[dict[str, int]] = {
     "float": 130,
     "int": 130,
@@ -3161,6 +3168,59 @@ class PrintSettingsDialog(QDialog):
             return self._process_missing_line()
         return ""
 
+    def _mark_fields_this_slicer_ignores(self) -> None:
+        """Ein Feld, das beim eingestellten Slicer nichts tut, sagt es.
+
+        Dieselbe Bauart wie bei den Operationen im Menü und bei den bedingten
+        Feldern im Operationsdialog: **grau und begründet**, nicht unsichtbar —
+        wer eine Zeile vermisst, sucht sie.
+
+        Gemessen am 03.09.2026 trifft es eines von sechsundfünfzig Feldern bei
+        PrusaSlicer und fünf bei ``CuraEngine``; die Orca-Familie nimmt alles.
+        Vorher ließ sich an ihnen ziehen, ohne dass irgendetwas geschah — der
+        Wert stand im Projekt, in der Druckdatei stand er nie.
+
+        **Der eigene Hinweis wird gemerkt und zurückgegeben, nicht neu
+        gebaut.** Ein Widget, das seinen Tooltip selbst führt, behält ihn: Der
+        Farbknopf nennt darin den Hexwert, den sonst nichts zeigt. Ihn aus
+        ``field.note`` neu zusammenzusetzen kostete genau diese Auskunft — der
+        erste Anlauf hat damit ``test_the_explanation_arrives_at_the_field_
+        and_at_its_label`` gerissen.
+
+        Der Grund hängt an **beiden** Hälften der Zeile (Regel 18: Tooltip,
+        Statuszeile, Bildschirmleser). In ein ausgegrautes Feld zeigt niemand;
+        man zeigt auf das Wort davor.
+        """
+        flavour = self._current_flavour()
+        for path, editor in self._editors.items():
+            ignored = flavour is not None and not slicer_keys.takes(flavour, path)
+            name = _slicer_title(self._slicer_path) if self._slicer_path else ""
+            reason = (
+                str(
+                    tr("{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.")
+                ).replace("{slicer}", name)
+                if ignored
+                else ""
+            )
+            editor.setEnabled(not ignored)
+            for widget in (editor, self._labels.get(path)):
+                if widget is None:
+                    continue
+                own = widget.property(_OWN_TIP)
+                if own is None:
+                    # Beim ersten Mal sind die drei Kanäle die eigenen — und
+                    # sie sind **nicht** derselbe Text: Der Farbknopf nennt im
+                    # Tooltip zuerst den Hexwert und hängt den Satz an, während
+                    # Statuszeile und Bildschirmleser nur den Satz führen. Wer
+                    # sie gleichsetzt, verliert entweder den Wert oder schiebt
+                    # ihn in eine Zeile, in die er nicht gehört.
+                    own = (widget.toolTip(), widget.statusTip(), widget.accessibleDescription())
+                    widget.setProperty(_OWN_TIP, own)
+                tip, status, described = own
+                widget.setToolTip(reason or str(tip))
+                widget.setStatusTip(reason or str(status))
+                widget.setAccessibleDescription(reason or str(described))
+
     def _show_slicer_state(self) -> None:
         """Ob ein Slicer da ist — und wenn nicht, der Weg zu einem.
 
@@ -3208,6 +3268,7 @@ class PrintSettingsDialog(QDialog):
         self.open_button.setStatusTip(open_reason)
         self.open_button.setAccessibleDescription(open_reason)
         self.setup_button.setVisible(found is None)
+        self._mark_fields_this_slicer_ignores()
         if found is None:
             self.state.setText(
                 tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
@@ -3430,7 +3491,20 @@ class PrintSettingsDialog(QDialog):
     # --- Vorschläge -----------------------------------------------------------
 
     def _current_advice(self) -> list[SettingAdvice]:
-        return advise.advise(
+        """Die Vorschläge — ohne die, bei denen der gewählte Slicer nicht mitkann.
+
+        Der Kern rechnet ohne Kenntnis des Slicers, und das ist richtig: Was
+        die Geometrie verlangt, hängt nicht am Programm daneben. Anzeigen darf
+        man einen Vorschlag trotzdem nur, wenn er ankommt — „Außenwand auf
+        Sollmaß" kennt nur die Orca-Familie, und mit PrusaSlicer übernähme der
+        Kunde eine Empfehlung, die in keiner Datei landet.
+
+        Gemessen am 03.09.2026 sind es zwei von sechsundfünfzig Feldern.
+        Solange kein Slicer gewählt ist, wird nichts weggelassen: Dann steht
+        noch nicht fest, was ankommt, und eine leere Liste wäre die schlechtere
+        Auskunft.
+        """
+        entries = advise.advise(
             self.settings,
             self.session.profile,
             self.slice_result,
@@ -3438,6 +3512,16 @@ class PrintSettingsDialog(QDialog):
             fit_kinds=self._fits_in_play(),
             connectors=self._connector_diameters(),
         )
+        flavour = self._current_flavour()
+        if flavour is None:
+            return entries
+        return [entry for entry in entries if slicer_keys.takes(flavour, entry.path)]
+
+    def _current_flavour(self) -> slicer_keys.SlicerFlavour | None:
+        """Die Familie des eingestellten Slicers, solange einer dasteht."""
+        if self._slicer_path is None:
+            return None
+        return slicer_keys.flavour_of(self._slicer_path.name)
 
     def _connector_diameters(self) -> tuple[float, ...]:
         """Die Durchmesser der Zapfen, die beim Teilen entstanden sind.

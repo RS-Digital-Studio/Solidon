@@ -20,6 +20,7 @@ Druckeinstellungs-Dialog.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
@@ -47,11 +48,32 @@ PRINT_DISCLOSURE_VERSION = "1.1"
 _log = get_logger(__name__)
 
 
+def someone_is_watching() -> bool:
+    """Sitzt überhaupt jemand davor?
+
+    Unter ``offscreen`` nicht — und ein modaler Hinweis wartet dort auf einen
+    Klick, den es nie gibt. Gemessen am 03.09.2026 von 3d-druck-a0 mit
+    ``py-spy``: Der Torlauf stand zwanzig Minuten in ``QDialog::exec`` →
+    ``NtUserMsgWaitForMultipleObjectsEx``, und es hätte jeden Test getroffen,
+    der die Druckeinstellungen öffnet — samt der CI bis zu ihrem
+    Sechs-Stunden-Limit.
+
+    Dasselbe Muster wie :func:`app.ui.motion.animations_enabled`, und aus
+    demselben Grund: Wer offscreen läuft, prüft Verhalten und wird nicht
+    bedient. Der Merker wird dabei **nicht** gesetzt — beim nächsten Start mit
+    Bildschirm erscheint der Hinweis, wie er soll.
+    """
+    return os.environ.get("QT_QPA_PLATFORM", "") != "offscreen"
+
+
 class PrintDisclosureResult(Enum):
     """Was der Hinweis ergeben hat."""
 
     ALREADY_SEEN = "already_seen"
     """Der Text in dieser Fassung war schon einmal zu sehen."""
+
+    NO_ONE_THERE = "no_one_there"
+    """Kein Bildschirm — gezeigt wird nichts und gemerkt auch nichts."""
 
     ACKNOWLEDGED = "acknowledged"
     """Gerade gelesen und bestätigt."""
@@ -204,6 +226,8 @@ def ensure_print_disclosure(
     """
     if disclosure_is_current(settings):
         return PrintDisclosureResult.ALREADY_SEEN
+    if not someone_is_watching():
+        return PrintDisclosureResult.NO_ONE_THERE
     try:
         dialog = PrintDisclosureDialog(settings.print_settings_in_files, parent)
         dialog.exec()

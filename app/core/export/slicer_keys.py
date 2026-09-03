@@ -765,6 +765,51 @@ def flavour_of(name: str) -> SlicerFlavour | None:
     return None
 
 
+#: Einstellungen, die dieser Slicer nicht entgegennimmt (§29).
+#:
+#: **Gemessen, nicht aus den Tabellen geschlossen** — und der Unterschied ist
+#: der ganze Punkt: Ein Wert kann auf drei Wegen ankommen. Über eine Zeile in
+#: :data:`TABLES`, über :data:`ADHESION_KEYS`, oder weil ``handover`` ihn
+#: verrechnet: ``support.density`` steht in keiner Prusa-Zeile und wird
+#: trotzdem übergeben, weil daraus ein Linienabstand wird. Wer nur die Tabelle
+#: liest, sperrt ein Feld, das sehr wohl wirkt — beim ersten Anlauf am
+#: 03.09.2026 waren es drei falsche bei Prusa und zwei bei Cura.
+#:
+#: Gemessen wird über ``values_for``: Wert ändern, übersetzte Werte zweimal
+#: bauen, vergleichen. Und über **vier Haftungsarten**, denn
+#: ``_only_chosen_adhesion`` nullt die Maße der nicht gewählten — „Skirt-Runden"
+#: bei eingestelltem Brim ist eine Abhängigkeit und kein toter Wert.
+#:
+#: ``tests/test_print_settings_ui.py`` hält die Liste gegen diese Messung.
+NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
+    "prusa": frozenset({"shell.precise_outer_wall"}),
+    "orca": frozenset(),
+    "cura": frozenset(
+        {
+            "shell.wall_generator",
+            "shell.precise_outer_wall",
+            "retraction.wipe",
+            "filament.density",
+            "filament.cost_per_kg",
+        }
+    ),
+}
+
+
+def takes(flavour: SlicerFlavour, path: str) -> bool:
+    """Nimmt dieser Slicer diese Einstellung überhaupt entgegen (§29)?
+
+    Ein Feld, an dem man dreht, ohne dass etwas geschieht, ist eine Attrappe —
+    und schlimmer noch ist ein **Vorschlag** darauf, denn er verspricht eine
+    Wirkung. Die Oberfläche graut damit aus und begründet, statt den Kunden an
+    einem Regler ziehen zu lassen, der bei seinem Slicer nichts tut.
+
+    Die Antwort steht in :data:`NOT_TAKEN_BY` und ist gemessen; warum sie
+    nicht aus den Tabellen kommen kann, steht dort.
+    """
+    return path not in NOT_TAKEN_BY[flavour]
+
+
 def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
     """Misst dieser Slicer von der Ecke der Platte statt von ihrer Mitte?
 

@@ -112,6 +112,10 @@ def test_the_choice_from_the_notice_reaches_the_settings(
         return 0
 
     monkeypatch.setattr(PrintDisclosureDialog, "exec", _answer)
+    # Die Suite läuft offscreen, und dort erscheint der Hinweis mit Absicht
+    # nicht. Für diesen Test wird die Lage hergestellt, die er prüft: jemand
+    # sitzt davor.
+    monkeypatch.setenv("QT_QPA_PLATFORM", "windows")
 
     settings = UiSettings()
     assert settings.print_settings_in_files, "vorbelegt wie der bisherige Weg"
@@ -141,6 +145,7 @@ def test_a_failing_notice_does_not_block_the_dialog(
         raise RuntimeError("kein Bildschirm")
 
     monkeypatch.setattr(PrintDisclosureDialog, "exec", _broken)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "windows")  # wie oben: jemand sitzt davor
 
     settings = UiSettings()
     result = ensure_print_disclosure(settings, None)
@@ -148,3 +153,30 @@ def test_a_failing_notice_does_not_block_the_dialog(
     assert result is PrintDisclosureResult.FAILED
     assert result.may_continue, "der Druckdialog geht trotzdem auf"
     assert not disclosure_is_current(settings), "und beim nächsten Mal wird es erneut versucht"
+
+
+def test_no_dialog_appears_where_no_one_is_sitting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein modaler Hinweis im Testlauf hält alles an — und zwar unbegrenzt.
+
+    Gemessen am 03.09.2026 von 3d-druck-a0 mit `py-spy`: Der Torlauf stand
+    zwanzig Minuten in `QDialog::exec` → `NtUserMsgWaitForMultipleObjectsEx`
+    und wartete auf einen Klick, den es offscreen nie gibt. Betroffen war
+    jeder Test, der die Druckeinstellungen öffnet, und die CI bis zu ihrem
+    Sechs-Stunden-Limit.
+
+    Der Merker bleibt dabei leer: Wer offscreen läuft, hat den Hinweis nicht
+    gesehen, und beim nächsten Start mit Bildschirm erscheint er.
+    """
+    shown: list[bool] = []
+    monkeypatch.setattr(PrintDisclosureDialog, "exec", lambda dialog: shown.append(True) or 0)
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+
+    settings = UiSettings()
+    result = ensure_print_disclosure(settings, None)
+
+    assert result is PrintDisclosureResult.NO_ONE_THERE
+    assert shown == [], "kein Dialog, wo niemand klicken kann"
+    assert not disclosure_is_current(settings), "und nichts gemerkt, was niemand sah"
+    assert settings.print_settings_in_files, "die Wahl bleibt, wie sie war"

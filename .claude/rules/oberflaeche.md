@@ -1000,6 +1000,24 @@ Oberflächentests laufen offscreen (`QT_QPA_PLATFORM=offscreen`, von
 `tests/conftest.py` gesetzt). Eine neue Ansicht ohne Test in `tests/test_ui.py`
 oder einer der spezielleren Dateien ist unfertig.
 
+**Ein modaler Dialog auf einem Startweg hält die ganze Suite an.** Am
+03.09.2026 kam ein Hinweis vor den Druckeinstellungs-Dialog — richtig gebaut,
+fehlerfrei, am falschen Ort: `QDialog.exec()` wartet offscreen auf einen Klick,
+den es nie gibt. Betroffen war jeder Test, der die Druckeinstellungen öffnet,
+und die CI bis zu ihrem Sechs-Stunden-Limit.
+
+Das Tückische ist nicht der Fehler, sondern seine Anzeige: **Die Suite wird
+nicht rot, sie steht.** Kein Name, kein Fehlschlag, nur ein Protokoll, das
+nicht mehr wächst — gefunden hat es eine Nachbarsitzung mit
+`py-spy dump --native`, und dort stand die Stelle wörtlich.
+
+Wer einen Dialog auf einen Weg setzt, den ein Test geht, fragt vorher
+`QT_QPA_PLATFORM != "offscreen"` — dasselbe Muster wie
+`motion.animations_enabled`, und aus demselben Grund: Wer offscreen läuft,
+prüft Verhalten und wird nicht bedient. Der Merker eines solchen Hinweises
+wird dabei **nicht** gesetzt; sonst hätte der Kunde ihn nie gesehen und bekäme
+ihn trotzdem nie wieder.
+
 **Ein Widget braucht die `QApplication` in der Signatur, nicht im Glück.** Wer
 ein Widget ohne sie baut, bringt den ganzen Lauf mit 0xC0000409 um — ohne ein
 Wort Ausgabe, nur mit einem Rückgabewert. In der vollen Datei fällt das nicht

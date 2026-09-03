@@ -124,6 +124,31 @@ TEMPERATURE_STEP: Final = 10
 #: Um so viel Grad wird das Bett angehoben, wo die Haftung es verlangt.
 BED_STEP: Final = 5
 
+#: Mehr Wände schlägt hier nichts vor — es ist die Obergrenze des Feldes, in
+#: das der Vorschlag hineingeht (``shell.wall_count`` in
+#: ``print_settings_dialog.FIELDS``).
+#:
+#: Ein Vorschlag über diesem Wert wäre nicht bloß unpraktisch, sondern
+#: gefährlich: Er ist **übernehmbar**, das Feld kann ihn aber nicht anzeigen.
+#: Gemessen am 03.09.2026 mit einem Zapfen von Ø 60 mm — Vorschlag 36,
+#: „Vorschläge übernehmen" schrieb 36 ins Dokument, die übergebene Datei trug
+#: ``wall_loops: 36``, und der Dialog zeigte daneben 20. Bei 0,42 mm Bahn sind
+#: 36 Wände 15 mm Wandstärke.
+#:
+#: Der Kern kennt die Oberfläche nicht (Regel 1) und darf das Feld nicht
+#: fragen; dass beide Zahlen zusammenpassen, hält
+#: ``tests/test_print_settings_ui.py`` fest.
+MOST_WALLS_WORTH_SUGGESTING: Final = 20
+
+#: Wie viel des Verbinder-Querschnitts Material sein soll, wenn die Füllung
+#: einspringen muss.
+#:
+#: Keine neue Zahl, sondern dieselbe Schwelle wie beim Wandvorschlag, nur in
+#: Fläche statt in Breite: „Material mindestens so breit wie der Kern" heißt
+#: im Durchmesser kern = d/2, und ein Kreis mit halbem Durchmesser hat ein
+#: Viertel der Fläche — also drei Viertel Material ringsum.
+SOLID_SHARE_OF_A_CONNECTOR: Final = 0.75
+
 #: Kammertemperatur, die ein schrumpfendes Material auf einem geschlossenen
 #: Gerät braucht. Warm genug, dass die unteren Schichten nicht erstarren,
 #: bevor die oberen liegen — und weit unter dem, was der Antrieb aushält.
@@ -749,6 +774,53 @@ def solid_core(diameter: float, settings: PrintSettings) -> float:
     return diameter - 2.0 * settings.shell.wall_count * settings.layers.line_width
 
 
+def _fill_the_core(settings: PrintSettings, diameter: float, core: float) -> list[SettingAdvice]:
+    """Der zweite Weg, wenn Wände den Kern nicht mehr schließen (§29).
+
+    Die Schwelle ist dieselbe wie beim Wandvorschlag und keine neue Zahl:
+    „Material mindestens so breit wie der Kern" heißt im Durchmesser
+    ``kern = d/2``, und das sind im **Querschnitt** drei Viertel Material —
+    :data:`SOLID_SHARE_OF_A_CONNECTOR`. Über die Füllung ausgedrückt:
+
+        Anteil = (Ring + f · Kern) / Gesamt   mit Ring = (d^2 - kern^2) / d²
+
+    nach ``f`` aufgelöst. Gerechnet für einen Ø-60-Zapfen bei zwei Wänden
+    kommen 73,5 % heraus; die Zahl konvergiert mit wachsendem Durchmesser
+    gegen die drei Viertel, weil der Ring dann kaum noch etwas beiträgt.
+
+    **Das Muster entscheidet mit, und deshalb steht es im Grund.** Ein Gyroid
+    liegt in alle Richtungen gleich, ein Grid lässt bei niedriger Dichte
+    gerade in der Mitte Luft — dieselbe Prozentzahl trägt nicht überall
+    gleich. Vorgeschlagen wird trotzdem nur die Dichte: Das Muster gilt dem
+    ganzen Teil, und es für einen Zapfen umzustellen hieße, an einer Stelle zu
+    drehen, die neunundneunzig Prozent des Drucks betrifft.
+    """
+    if core <= 0.0 or diameter <= 0.0:
+        return []
+    ring = (diameter * diameter - core * core) / (diameter * diameter)
+    needed = (SOLID_SHARE_OF_A_CONNECTOR - ring) * (diameter * diameter) / (core * core)
+    if needed > 1.0 or needed <= settings.infill.density:
+        # Über hundert Prozent gibt es nicht, und was schon eingestellt ist,
+        # ist kein Vorschlag.
+        return []
+    return [
+        SettingAdvice(
+            path="infill.density",
+            value=round(needed, 2),
+            was=settings.infill.density,
+            reason=_(
+                "Der Verbinder ist zu dick, um ihn mit Wänden zu schließen — er "
+                "trägt dann über das Füllmuster in seiner Mitte. So viel Füllung "
+                "macht seinen Querschnitt so tragfähig wie ein Ring aus Wänden; "
+                "sie gilt für das ganze Teil und kostet dort Material und Zeit. "
+                "Wie gut das Muster die Mitte trifft, hängt an seiner Art: ein "
+                "Gyroid liegt in alle Richtungen gleich, ein Gitter lässt dort "
+                "eher Luft."
+            ),
+        )
+    ]
+
+
 def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> list[SettingAdvice]:
     """Ein Verbinder, der beim Drucken zum größten Teil aus Füllung besteht.
 
@@ -794,6 +866,19 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
     # Aus "Material mindestens so breit wie der Kern" nach der Wandzahl
     # aufgelöst: 2*w*lw >= d - 2*w*lw, also w >= d / (4*lw).
     needed = math.ceil(thickest / (4.0 * width))
+    if needed > MOST_WALLS_WORTH_SUGGESTING:
+        # Über Wände ist der Kern nicht mehr zu schließen. Der Vorschlag wäre
+        # eine Zahl, die niemand einstellen kann — und schlimmer: die man
+        # **übernehmen** kann. Gemessen am 03.09.2026 mit einem Zapfen von
+        # Ø 60 mm: Vorschlag 36 Wände, „Vorschläge übernehmen" schrieb sie ins
+        # Dokument, und in der übergebenen Datei stand ``wall_loops: 36``. Der
+        # Dialog zeigte dabei 20, denn sein Feld reicht nicht weiter — Anzeige
+        # und Datei sagten Verschiedenes, und der Slicer hätte 15 mm Wand
+        # gedruckt.
+        #
+        # Dann bleibt der zweite Weg, den der Docstring oben als gangbar
+        # nennt: das Muster im Kern.
+        return _fill_the_core(settings, thickest, core)
     return [
         SettingAdvice(
             path="shell.wall_count",
@@ -802,7 +887,8 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
             reason=_(
                 "Der Verbinder besteht bei den eingestellten Wänden im Kern aus "
                 "Füllmuster und trägt nur mit seiner Außenhaut. So viele Wände "
-                "treffen sich in seiner Mitte."
+                "treffen sich in seiner Mitte — sie gelten dann für das ganze "
+                "Teil und nicht nur für den Zapfen."
             ),
         )
     ]

@@ -4109,6 +4109,7 @@
   "{side} innen": "{side} interno",
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} dall'ultimo passo",
   "{size} MB werden geladen und geprüft, bevor etwas gestartet wird.": "Verranno scaricati e verificati {size} MB prima di avviare qualcosa.",
+  "{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.": "{slicer} non conosce questa impostazione: il valore resta senza effetto.",
   "{slot} druckt mit {profile}.": "{slot} stampa con {profile}.",
   "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}": "{state} · Completamente definito — niente si muove più (tutti i gradi di libertà assegnati). {advice}",
   "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr (ein Freiheitsgrad frei). {advice}": "{state} · Manca una quota e niente si muoverà più (un grado di libertà libero). {advice}",

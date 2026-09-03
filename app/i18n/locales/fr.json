@@ -4109,6 +4109,7 @@
   "{side} innen": "{side} intérieur",
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} depuis la dernière étape",
   "{size} MB werden geladen und geprüft, bevor etwas gestartet wird.": "{size} Mo seront téléchargés et vérifiés avant que quoi que ce soit ne démarre.",
+  "{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.": "{slicer} ne connaît pas ce réglage — la valeur reste sans effet.",
   "{slot} druckt mit {profile}.": "{slot} imprime avec {profile}.",
   "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}": "{state} · Entièrement défini — plus rien ne bouge (tous les degrés de liberté attribués). {advice}",
   "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr (ein Freiheitsgrad frei). {advice}": "{state} · Encore une cote et plus rien ne bouge (un degré de liberté libre). {advice}",

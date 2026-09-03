@@ -31,7 +31,7 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
-from app.core.types import Feature, MaterialSlot, SceneObject, SlotOverride
+from app.core.types import Feature, MaterialSlot, Profile, SceneObject, SlotOverride
 from app.i18n import tr
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
@@ -3058,3 +3058,150 @@ def test_the_head_offers_the_way_back(dialog: PrintSettingsDialog) -> None:
     assert not dialog.ui_settings.print_settings_in_files, (
         "der Haken schaltet die Einstellung, nicht nur sich selbst"
     )
+
+
+# --- Vorschläge, die man auch annehmen kann ------------------------------------------
+
+
+def test_no_advice_proposes_a_value_the_dialog_cannot_show() -> None:
+    """Ein Vorschlag ist ein Knopf, kein Hinweis — „Vorschläge übernehmen"
+    schreibt ihn ins Projekt.
+
+    Gemessen am 03.09.2026 mit einem Verbinder von Ø 60 mm, wie ihn das Teilen
+    eines großen Körpers erzeugt: `advise` schlug **36 Wände** vor, das Feld
+    hier reicht bis 20. Übernommen stand 36 im Dokument, die an den Slicer
+    übergebene Datei trug `wall_loops: 36` — und der Dialog zeigte daneben 20,
+    weil sein Feld nicht weiter reicht. Anzeige und Datei sagten Verschiedenes,
+    und 36 Bahnen à 0,42 mm sind 15 mm Wandstärke.
+
+    Der Docstring von `_from_connectors` kannte den Grundsatz schon für den
+    kleineren Fall: „ein Vorschlag, den niemand annimmt, macht die vier daneben
+    unglaubwürdig". Er galt nur nicht für den großen.
+
+    Geprüft wird über die Randlagen, nicht über die gutmütigen: winzige und
+    riesige Körper, dünne und unsinnig dicke Zapfen, jede Passungsart.
+    """
+    from app.core.slice import advise
+    from app.core.types import BoundingBox
+
+    fields = {field.path: field for field in FIELDS}
+    profile = Profile(
+        printer=next(iter(profiles.printer_profiles().values())),
+        material=next(iter(profiles.material_profiles().values())),
+    )
+    boxes = (
+        BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(2.0, 2.0, 2.0)),
+        BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(160.0, 231.0, 14.0)),
+        BoundingBox(minimum=(0.0, 0.0, 0.0), maximum=(900.0, 900.0, 900.0)),
+    )
+    connectors = ((), (4.0, 6.0), (33.5,), (33.7,), (60.0,), (631.6,))
+
+    offenders: list[str] = []
+    seen = 0
+    for quality in print_settings.quality_presets():
+        resolved = print_settings.resolve(profile, quality)
+        for box in boxes:
+            for pins in connectors:
+                for advice in advise.advise(resolved, profile, None, bounds=box, connectors=pins):
+                    seen += 1
+                    field = fields.get(advice.path)
+                    if field is None or field.choices:
+                        continue
+                    if not isinstance(advice.value, (int, float)) or isinstance(advice.value, bool):
+                        continue
+                    shown = float(advice.value) * field.factor
+                    if shown < field.minimum or shown > field.maximum:
+                        offenders.append(
+                            f"{advice.path} = {shown:g}, Feld erlaubt "
+                            f"{field.minimum:g}…{field.maximum:g} (Zapfen {pins})"
+                        )
+
+    # Gemessen sind es 39 über die 72 Lagen; die Schwelle liegt knapp darunter,
+    # damit sie greift, wenn die Menge einbricht — ein Filter über eine leere
+    # Menge findet nichts und besteht.
+    assert seen > 30, f"nur {seen} Vorschläge geprüft — der Lauf sagt nichts"
+    assert not offenders, "unerreichbare Vorschläge:\n" + "\n".join(sorted(set(offenders)))
+
+
+def test_the_core_knows_how_many_walls_the_dialog_offers() -> None:
+    """Die Grenze steht zweimal, und sie muss dieselbe sein.
+
+    Der Kern darf die Oberfläche nicht fragen (Regel 1), also trägt er seine
+    eigene Zahl. Zwei Zahlen laufen auseinander, sobald jemand eine ändert —
+    dieser Test ist die Klammer, und er nennt beim Reißen gleich die andere
+    Stelle.
+    """
+    from app.core.slice.advise import MOST_WALLS_WORTH_SUGGESTING
+
+    field = next(entry for entry in FIELDS if entry.path == "shell.wall_count")
+    assert field.maximum == MOST_WALLS_WORTH_SUGGESTING, (
+        "advise.MOST_WALLS_WORTH_SUGGESTING und das Feld shell.wall_count "
+        "im Druckdialog müssen dieselbe Obergrenze führen"
+    )
+
+
+def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
+    """Welche Einstellung ankommt, wird gemessen und nicht aus der Tabelle geschlossen.
+
+    Ein Wert erreicht den Slicer auf drei Wegen: über eine Zeile in `TABLES`,
+    über `ADHESION_KEYS`, oder weil `handover` ihn verrechnet —
+    `support.density` steht in keiner Prusa-Zeile und wird trotzdem übergeben,
+    weil daraus ein Linienabstand wird. Der erste Anlauf am 03.09.2026 las nur
+    die Tabelle und hätte drei Felder bei Prusa und zwei bei Cura gesperrt, die
+    sehr wohl wirken.
+
+    Gemessen wird deshalb am Ergebnis: Wert ändern, `values_for` zweimal bauen,
+    vergleichen — und das über **vier Haftungsarten**, weil
+    `_only_chosen_adhesion` die Maße der nicht gewählten nullt. „Skirt-Runden"
+    bei eingestelltem Brim ist eine Abhängigkeit und kein toter Wert; wer das
+    verwechselt, sperrt vier Felder zu viel.
+    """
+    from app.core.export import handover, slicer_keys
+
+    profile = Profile(
+        printer=next(iter(profiles.printer_profiles().values())),
+        material=next(iter(profiles.material_profiles().values())),
+    )
+    base = print_settings.resolve(profile, next(iter(print_settings.quality_presets())))
+    layouts = [
+        print_settings.with_path(base, "adhesion.kind", kind)
+        for kind in ("skirt", "brim", "raft", "none")
+    ]
+
+    def other(field: object) -> object:
+        """Ein zweiter Wert, der sich vom ersten unterscheidet."""
+        now = print_settings.read_path(base, field.path)  # type: ignore[attr-defined]
+        if field.choices:  # type: ignore[attr-defined]
+            return next((c for c in field.choices if str(c) != str(now)), None)  # type: ignore[attr-defined]
+        if isinstance(now, bool):
+            return not now
+        if isinstance(now, (int, float)):
+            candidate = float(now) + max(1.0, abs(float(now)) * 0.5)
+            ceiling = field.maximum / (field.factor or 1.0)  # type: ignore[attr-defined]
+            if candidate > ceiling:
+                candidate = max(field.minimum / (field.factor or 1.0), float(now) / 2.0)  # type: ignore[attr-defined]
+            return int(candidate) if isinstance(now, int) else candidate
+        return None
+
+    for flavour in slicer_keys.TABLES:
+        measured: set[str] = set()
+        checked = 0
+        for field in FIELDS:
+            second = other(field)
+            if second is None:
+                continue  # kein zweiter Wert — etwa eine Farbe
+            checked += 1
+            works = any(
+                handover.values_for(layout, profile, flavour)
+                != handover.values_for(
+                    print_settings.with_path(layout, field.path, second), profile, flavour
+                )
+                for layout in layouts
+            )
+            if not works:
+                measured.add(field.path)
+        assert checked > 50, f"{flavour}: nur {checked} Felder geprüft — der Lauf sagt nichts"
+        assert measured == slicer_keys.NOT_TAKEN_BY[flavour], (
+            f"{flavour}: gemessen {sorted(measured)}, "
+            f"eingetragen {sorted(slicer_keys.NOT_TAKEN_BY[flavour])}"
+        )

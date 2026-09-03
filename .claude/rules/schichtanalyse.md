@@ -147,6 +147,28 @@ daneben unglaubwürdig.
 Vorgeschlagen wird die **Wandzahl**, nicht die Füllung — Wände liegen
 deterministisch um den Zapfen, Füllung trifft ihn statistisch.
 
+**Und über einer bestimmten Dicke wird gar nichts vorgeschlagen.** Der Satz
+darüber galt bis zum 03.09.2026 nur für den kleinen Fall; der große lief
+weiter. Gemessen mit einem Verbinder von Ø 60 mm, wie ihn das Teilen eines
+großen Körpers erzeugt: Vorschlag **36 Wände**, das Feld im Dialog reicht bis
+20. „Vorschläge übernehmen" schrieb 36 ins Dokument, die an den Slicer
+übergebene Datei trug `wall_loops: 36`, und der Dialog zeigte daneben 20 —
+Anzeige und Datei sagten Verschiedenes, und 36 Bahnen à 0,42 mm sind 15 mm
+Wandstärke.
+
+`MOST_WALLS_WORTH_SUGGESTING` deckelt das, und die Zahl ist die Obergrenze
+des Feldes, in das der Vorschlag hineingeht. Der Kern darf die Oberfläche
+nicht fragen (Regel 1), also trägt er seine eigene — dass beide dieselbe
+führen, hält `tests/test_print_settings_ui.py` fest.
+
+Daraus die allgemeine Form, denn sie gilt jeder künftigen Regel hier:
+
+> **Ein Vorschlag ist ein Knopf, kein Hinweis.** Was er trägt, landet auf
+> Klick im Dokument und von dort in der Datei, die zum Slicer geht. Ein Wert,
+> den das Feld daneben nicht darstellen kann, ist deshalb kein zu großer
+> Vorschlag, sondern ein stiller Unterschied zwischen dem, was der Kunde
+> sieht, und dem, was er druckt.
+
 Dieselbe Vorsicht gilt jeder künftigen Regel über ein gedrucktes Maß: Was die
 Geometrie als Material führt, ist erst dann Material, wenn eine Bahn darin
 liegt.

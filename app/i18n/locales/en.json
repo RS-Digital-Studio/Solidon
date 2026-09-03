@@ -4109,6 +4109,7 @@
   "{side} innen": "{side} inside",
   "{sign}{grams} seit dem letzten Schritt": "{sign}{grams} since the last step",
   "{size} MB werden geladen und geprüft, bevor etwas gestartet wird.": "{size} MB will be downloaded and checked before anything is started.",
+  "{slicer} kennt diese Einstellung nicht — der Wert bleibt ohne Wirkung.": "{slicer} does not know this setting — the value has no effect.",
   "{slot} druckt mit {profile}.": "{slot} prints with {profile}.",
   "{state} · Bestimmt — nichts wackelt mehr (alle Freiheitsgrade vergeben). {advice}": "{state} · Fully defined — nothing can move any more (all degrees of freedom used). {advice}",
   "{state} · Noch ein Maß fehlt, dann wackelt nichts mehr (ein Freiheitsgrad frei). {advice}": "{state} · One more dimension and nothing can move (one degree of freedom left). {advice}",
