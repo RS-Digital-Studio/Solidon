@@ -49,42 +49,12 @@ from app.i18n import TranslatableText, _
 #: Roberts „übersichtlich" ausschließt.
 #:
 #: Die erste Operation, die für die Art gilt, füllt die Zeile.
-#: Die allgemeinere Operation steht **vorn**, und das entscheidet nur eine
-#: Sache: Gilt für eine Art keine von beiden, benennt ihr Titel die Zeile.
-#: „Merkmal ändern" ist dort die richtige Beschriftung, „Bohrung ändern" nicht.
-#: Überschneiden können sie sich nicht — ``resize_hole`` gilt für ``hole``,
-#: ``resize_feature`` für alles andere.
 ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
     ("move_feature",),
-    ("resize_feature", "resize_hole"),
+    ("resize_hole", "resize_feature"),
     ("rotate_feature",),
     ("remove_feature",),
 )
-
-#: Warum eine **bestimmte** Handlung an einer bestimmten Art nichts tut.
-#:
-#: Der Grund hängt nicht immer an der Art allein. Eine Kugel lässt sich
-#: versetzen, ändern und entfernen — nur nicht drehen, denn sie hat keine
-#: Lage. Der Satz aus :data:`NOT_APPLICABLE` („von einer Kugelfläche ist
-#: gemessen …") wäre dort schlicht falsch.
-NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
-    ("sphere", "rotate_feature"): _(
-        "Eine Kugelfläche hat keine Lage, die sich drehen ließe — gedreht sähe sie aus wie vorher."
-    ),
-    # **Und er trennt „nie" von „noch nicht".** Eine Verrundung zu versetzen ist
-    # sinnlos — die Kante bliebe scharf zurück. Ihren Radius zu ändern oder sie
-    # ganz wegzunehmen ist dagegen sinnvoll und nur nicht gebaut. Beides mit
-    # demselben Satz zu beantworten hieße, dem Kunden ein Nein zu geben, wo ein
-    # Noch-nicht steht (Bitte 3d-druck-d4, 03.09.2026).
-    ("fillet", "resize_feature"): _(
-        "Den Radius einer Verrundung zu ändern ist sinnvoll und noch nicht "
-        "gebaut. Bis dahin hilft nur, die Kante neu zu verrunden."
-    ),
-    ("fillet", "remove_feature"): _(
-        "Eine Verrundung wegzunehmen heißt, die Kante wieder scharf zu machen — "
-        "sinnvoll und noch nicht gebaut."
-    ),
-}
 
 #: Was statt der Handlung hilft, je Merkmalsart, für die keine gilt.
 #:
@@ -243,21 +213,11 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
                 )
             )
         else:
-            # Der Titel der ersten bekannten Operation benennt die Zeile —
-            # deshalb steht in ``ACTION_ORDER`` die allgemeinere vorn.
-            #
-            # Und der Grund kommt zuerst aus der genaueren Tabelle: Eine Kugel
-            # lässt sich versetzen und ändern, nur nicht drehen, und der Satz
-            # über ihre Mitte wäre dort falsch.
-            here = next(
-                (
-                    NOT_APPLICABLE_HERE[(feature.kind, spec.name)]
-                    for spec in known
-                    if (feature.kind, spec.name) in NOT_APPLICABLE_HERE
-                ),
-                reason,
-            )
-            actions.append(FeatureAction(title=known[0].title, op=None, reason=here))
+            # Der Titel der ersten bekannten Operation benennt die Zeile. Bei
+            # „Größe ändern" sind das ``resize_hole`` und ``resize_feature``, und
+            # welchen der beiden Titel ein nicht anwendbarer Fall trägt, sieht
+            # ohnehin niemand ohne den Satz daneben.
+            actions.append(FeatureAction(title=known[0].title, op=None, reason=reason))
     return actions
 
 

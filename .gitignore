@@ -92,7 +92,14 @@ htmlcov/
 # tools/make_download.py hierher kopiert und von dort hochgeladen — im
 # Repository haben ein paar hundert Megabyte je Version nichts verloren. Die
 # Verweise darauf stehen in den Seiten und sind versioniert, die Dateien nicht.
-website/dl/
+# **Der Inhalt, nicht der Ordner.** Ein ignoriertes Verzeichnis lässt sich
+# nicht wieder öffnen: Git sieht gar nicht hinein, und ein `!`-Muster darin
+# bleibt wirkungslos. Deshalb `dl/*` statt `dl/` — dann greift die Ausnahme.
+website/dl/*
+# Die Weiterleitung ist Code und kein Paket. Sie beantwortet Anfragen nach
+# Fassungen, die es nicht mehr gibt (siehe `.htaccess`), und muss deshalb
+# versioniert sein wie jede andere Datei des Servers.
+!website/dl/veraltet.php
 
 # --- Private Serverdaten ------------------------------------------------------
 # Startwerte, Tokens, Passwort-Hashes, Datenbanken und Rate-Limits liegen neben

@@ -16,6 +16,20 @@
   # auflöst.
   RewriteCond %{THE_REQUEST} \s/+(.*/)?index\.html[\s?] [NC]
   RewriteRule ^(.*/)?index\.html$ /%1 [R=301,L]
+
+  # **Ein alter Download läuft ins Leere, sobald die nächste Fassung kommt.**
+  # Beim Veröffentlichen werden die vorherigen Pakete vom Server geräumt, und
+  # damit stirbt jeder Link, der je verschickt wurde. Am 03.09.2026 hat das
+  # einen Interessenten getroffen: Er bekam am Vortag per Support-Mail einen
+  # Link auf `Solidon3D-Setup-0.2.2.exe` und stand einen Tag später vor einer
+  # 404 — ein toter Download liest sich wie ein verschwundenes Produkt.
+  #
+  # Die Bedingung greift nur, wenn die Datei **nicht** existiert; ein
+  # vorhandenes Paket wird ausgeliefert wie bisher. Wohin es geht, entscheidet
+  # `veraltet.php` anhand des Namens und der `version.json` — eine
+  # Versionsnummer an dieser Stelle wäre beim nächsten Release still falsch.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^dl/(Solidon3D-[A-Za-z0-9._-]+)$ /dl/veraltet.php?datei=$1 [L,QSA]
 </IfModule>
 
 <IfModule mod_headers.c>

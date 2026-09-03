@@ -1892,3 +1892,85 @@ def test_a_counter_pointed_into_the_document_root_says_so(tmp_path: Path) -> Non
     assert "kein brauchbarer Ablageort" in gemeldet, (
         "und der verworfene Ordner steht im Fehlerprotokoll: " + gemeldet[-400:]
     )
+
+
+# --- die Weiterleitung alter Downloads ---------------------------------------------
+
+
+def _redirect_target(base: str, name: str) -> tuple[int, str]:
+    """Wohin `veraltet.php` einen angefragten Paketnamen schickt.
+
+    Ohne eigenen Aufruf ginge ``urlopen`` der Weiterleitung nach und meldete
+    das Ziel als Inhalt — geprüft werden soll aber der ``Location``-Kopf, denn
+    genau der ist die Zusage.
+    """
+    # ``base`` zeigt auf ``/api``; die Weiterleitung liegt daneben. Ein
+    # ``..`` im Pfad hilft nicht — der eingebaute PHP-Server löst ihn gegen
+    # das Dateisystem auf und lieferte dabei ein echtes Paket aus.
+    # **Der Weiterleitung wird nicht gefolgt**, und das ist der ganze Punkt:
+    # ``_request`` benutzt ``urlopen``, das eine 302 von sich aus verfolgt —
+    # der Lauf landete damit auf dem **echten** Server und lud ein 195-MB-Paket
+    # herunter, dessen erste Bytes dann als UTF-8 gelesen wurden. Geprüft wird
+    # der ``Location``-Kopf, nicht das, was dahinter liegt.
+    root = base.rsplit("/api", 1)[0]
+
+    class _Stay(HTTPRedirectHandler):
+        def redirect_request(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+    try:
+        with build_opener(_Stay).open(f"{root}/dl/veraltet.php?datei={name}", timeout=5) as answer:
+            return answer.status, answer.headers.get("Location", "")
+    except HTTPError as problem:
+        return problem.code, problem.headers.get("Location", "")
+
+
+def test_an_old_download_link_leads_to_the_current_one(tmp_path: Path) -> None:
+    """Ein Link auf ein altes Paket führt zur aktuellen Fassung derselben Plattform.
+
+    Beim Veröffentlichen werden die vorherigen Pakete vom Server geräumt, und
+    damit stirbt jeder Link, der je verschickt wurde. Am 03.09.2026 hat das
+    einen Interessenten getroffen: Support-Mail vom Vortag mit einem Link auf
+    `Solidon3D-Setup-0.2.2.exe`, einen Tag später eine 404 — und ein toter
+    Download liest sich wie ein verschwundenes Produkt.
+
+    **Auf dieselbe Plattform**, nicht pauschal auf die Startseite: Wer eine
+    `.pkg` angefragt hat, sitzt an einem Mac und ist mit einer `.exe` nicht
+    bedient.
+    """
+    manifest = json.loads((ROOT / "website" / "version.json").read_text(encoding="utf-8"))
+    with _php_server(tmp_path) as base:
+        for name, platform in (
+            ("Solidon3D-Setup-0.2.2.exe", "windows"),
+            ("Solidon3D-0.2.2-x86_64.flatpak", "linux"),
+            ("Solidon3D-0.1.1-macos-arm64.pkg", "macos-arm64"),
+            ("Solidon3D-0.1.1-macos-x86_64.pkg", "macos-x86_64"),
+        ):
+            status, target = _redirect_target(base, name)
+            assert status == 302, f"{name}: {status}"
+            assert target == manifest["packages"][platform]["url"], f"{name}: {target}"
+
+
+def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None:
+    """Was sich nicht zuordnen lässt, geht zur Downloadauswahl — und sonst nirgends.
+
+    Eine Weiterleitung ist ein Werkzeug, mit dem sich Vertrauen ausleihen
+    lässt: Wer eine offene baut, verschickt fremde Adressen unter unserem
+    Namen. Geprüft werden deshalb beide Enden — ein Name, der nach
+    Pfadwechsel aussieht, und einer mit angehängter Endung, wie ihn ein
+    Downloader anlegt.
+
+    Formate ohne Entsprechung im Manifest (AppImage, tar.gz, zip; seit 0.2.0
+    nicht mehr gebaut) gehören zur selben Klasse: Es gibt keine aktuelle
+    Fassung davon, also führt der Weg zur Auswahl.
+    """
+    with _php_server(tmp_path) as base:
+        for name in (
+            "Solidon3D-0.2.2-x86_64.AppImage",
+            "Solidon3D-..%2F..%2Fetc%2Fpasswd",
+            "Solidon3D-Setup-0.2.2.exe.evil",
+            "Solidon3D-https:%2F%2Ffremde.example%2Fx.exe",
+        ):
+            status, target = _redirect_target(base, name)
+            assert status == 302, f"{name}: {status}"
+            assert target == "https://solidon3d.de/#download", f"{name}: {target}"
