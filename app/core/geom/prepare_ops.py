@@ -626,11 +626,22 @@ def _preserved_exact_features(
     bounds = solid.bounds
     matched = match(expected, detected, bounds.centre, bounds.diagonal)
     if feature.id not in matched.mapping:
+        # **Englisch und ohne Rat an den Kunden**, anders als der Mesh-Weg
+        # darüber. Hier ist die Absage berechtigt: Der exakte Kern führt
+        # Flächen und Kanten und keine Dreiecke, und eine zylindrische Fläche
+        # bleibt auffindbar, gleich wie klein sie wird. Gemessen an einem
+        # exakten Quader mit Bohrung — 8,0 mm auf 0,2 mm verkleinert, das
+        # Merkmal steht danach unverändert da, wo der Mesh-Weg seines verliert.
+        # Tritt der Fall hier doch ein, ist etwas geschehen, das nicht
+        # vorgesehen war, und dann gehört er in den Fehlerbericht.
+        #
+        # Der Satz stand übersetzt hier, und das war der Fehler: Von 26
+        # ``InternalError`` im Programm trugen 25 englischen Detailtext und
+        # genau dieser einen deutschen. Wer einen Programmfehler übersetzt,
+        # hat einen Bedienfall als Programmfehler geschrieben — der Zwilling
+        # im Mesh-Weg war genau das (Hinweis 3d-druck-a0).
         raise InternalError(
-            detail=_(
-                "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. "
-                "Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell."
-            ),
+            detail="the resized exact bore could not be matched back to its feature",
             values={"feature": feature.id, "diameter": format_length(diameter)},
         )
     return apply_mapping(detected, matched)

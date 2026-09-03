@@ -578,3 +578,61 @@ def test_the_refusal_of_a_broken_file_offers_more_than_the_exit() -> None:
             if action.id != "cancel" and action.id not in NEEDS_OP
         ]
         assert gezeigt, f"{name}: die Absage endet mit „geht nicht“"
+
+
+def test_no_internal_error_speaks_to_the_customer() -> None:
+    """Ein ``InternalError``, dessen Text übersetzt ist, ist keiner.
+
+    Die Hierarchie trennt Bedienfehler von Programmfehlern (`kern.md`), und
+    ``InternalError`` ist die Klasse für das Zweite: Was hier landet, war nicht
+    vorgesehen, und die Antwort darauf ist ein Fehlerbericht. Ein Text, der
+    durch ``_()`` geht, ist dagegen einer, den der Kunde lesen soll — und wer
+    ihn schreibt, hat einen Bedienfall als Programmfehler abgelegt.
+
+    Genau so ist es einmal passiert: ``resize_hole`` warf „Die geänderte
+    Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie
+    einen Fehlerbericht mit dem betroffenen Modell.", wenn jemand eine Bohrung
+    so weit verkleinerte, dass die Erkennung sie nicht mehr fand. Die Geometrie
+    war richtig gerechnet, der Kunde hatte den Fall selbst herbeigeführt, und
+    die geworfene Ausnahme nahm das Ergebnis mit.
+
+    **Die Regel ist keine Meinung, sondern der Bestand.** Gemessen am
+    03.09.2026: 26 Wurfstellen, davon 25 mit englischem Detailtext und genau
+    eine mit einem übersetzten — die oben. Der Wächter hält fest, was ohnehin
+    gilt.
+
+    Gefunden hat die Regel 3d-druck-a0 beim Durchsehen aller Wurfstellen,
+    nachdem der Einzelfall behoben war.
+    """
+    quelle = Path(errors.__file__).resolve().parents[1]
+    offenders: list[str] = []
+    geprueft = 0
+    for datei in sorted(quelle.rglob("*.py")):
+        baum = ast.parse(datei.read_text(encoding="utf-8"))
+        for knoten in ast.walk(baum):
+            if not isinstance(knoten, ast.Raise) or not isinstance(knoten.exc, ast.Call):
+                continue
+            gerufen = knoten.exc.func
+            name = getattr(gerufen, "id", None) or getattr(gerufen, "attr", None)
+            if name != "InternalError":
+                continue
+            geprueft += 1
+            detail = next(
+                (
+                    schluessel.value
+                    for schluessel in knoten.exc.keywords
+                    if schluessel.arg == "detail"
+                ),
+                None,
+            )
+            if not isinstance(detail, ast.Call):
+                continue
+            uebersetzer = getattr(detail.func, "id", None) or getattr(detail.func, "attr", None)
+            if uebersetzer in ("_", "tr"):
+                offenders.append(f"{datei.relative_to(quelle)}:{knoten.lineno}")
+
+    assert geprueft > 15, f"nur {geprueft} Wurfstellen gefunden — die Suche greift nicht mehr"
+    assert not offenders, (
+        "ein InternalError mit übersetztem Text ist ein Bedienfall in der falschen "
+        f"Klasse: {offenders}"
+    )

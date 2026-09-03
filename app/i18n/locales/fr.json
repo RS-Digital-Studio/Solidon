@@ -1220,7 +1220,6 @@
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "Le fichier de bloc sélectionné n’a pas pu être ouvert. Choisissez un autre fichier ou vérifiez ses droits d’accès.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "L’opération choisie ne fonctionne pas avec ces corps dans leur position actuelle — le plus souvent, ils ne se touchent que par une face ou une arête. Déplacez l’un d’eux assez loin pour que les corps se chevauchent réellement.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "Les étapes sélectionnées seront supprimées de l’historique. Ctrl+Z les restaure toutes ensemble.",
-  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Le trou modifié a été calculé, mais n’a ensuite pas été reconnu. Créez un rapport d’erreur avec le modèle concerné.",
   "Die häufigsten Fälle am Anfang, mit dem, was dahintersteckt.": "Les cas les plus fréquents au début, avec ce qui se cache derrière.",
   "Die kleinste Kantenlänge nehmen, die noch geht.": "Prendre la plus petite longueur d'arête qui passe encore.",
   "Die laufende Teilung abbrechen": "Annuler la découpe en cours",

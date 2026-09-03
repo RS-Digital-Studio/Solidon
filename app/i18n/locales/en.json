@@ -1220,7 +1220,6 @@
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "The selected part file could not be opened. Choose another file or check its access permissions.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "The selected operation does not work with these bodies in their current position — usually they only touch at a face or edge. Move one of them far enough for the bodies to actually overlap.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "The selected steps will be deleted from the history. Ctrl+Z restores them all together.",
-  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "The modified bore was calculated but was not recognised again afterwards. Create an error report with the affected model.",
   "Die häufigsten Fälle am Anfang, mit dem, was dahintersteckt.": "The cases that come up most at the start, with what is behind them.",
   "Die kleinste Kantenlänge nehmen, die noch geht.": "Use the smallest edge length that still works.",
   "Die laufende Teilung abbrechen": "Cancel the running split",

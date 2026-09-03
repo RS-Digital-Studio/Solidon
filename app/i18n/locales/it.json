@@ -1220,7 +1220,6 @@
   "Die gewählte Bausteindatei ließ sich nicht öffnen. Wählen Sie eine andere Datei oder prüfen Sie deren Zugriffsrechte.": "Impossibile aprire il file del blocco selezionato. Scegli un altro file o verificane i permessi di accesso.",
   "Die gewählte Bearbeitung funktioniert mit diesen Körpern in ihrer jetzigen Lage nicht — meist berühren sie sich nur an einer Fläche oder Kante. Verschieben Sie einen der beiden so weit, dass sich die Körper wirklich überlappen.": "L’operazione scelta non funziona con questi corpi nella loro posizione attuale: di solito si toccano solo su una faccia o uno spigolo. Sposti uno dei due abbastanza da far sovrapporre davvero i corpi.",
   "Die gewählten Schritte werden aus dem Verlauf gelöscht. Strg+Z stellt alle gemeinsam wieder her.": "I passaggi selezionati verranno eliminati dalla cronologia. Ctrl+Z li ripristina tutti insieme.",
-  "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell.": "Il foro modificato è stato calcolato, ma successivamente non è stato riconosciuto. Crea un rapporto di errore con il modello interessato.",
   "Die häufigsten Fälle am Anfang, mit dem, was dahintersteckt.": "I casi più frequenti all'inizio, con ciò che ci sta dietro.",
   "Die kleinste Kantenlänge nehmen, die noch geht.": "Prendi la lunghezza di spigolo più piccola che ancora funziona.",
   "Die laufende Teilung abbrechen": "Annulla la divisione in corso",
