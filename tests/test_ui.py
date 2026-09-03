@@ -12073,3 +12073,60 @@ def test_the_same_operation_on_many_bodies_is_one_transaction(window: MainWindow
         (bodies[0],),
         (bodies[1],),
     ], "jeder Schritt trifft genau seinen Körper"
+
+
+def test_two_asking_threads_do_not_steal_each_others_candidates(session: Session) -> None:
+    """Die Ansage gehört dem Faden, der sie gemacht hat — nicht der Sitzung.
+
+    ``announce_candidates`` merkt sich, was die **nächste** Frage zur Wahl
+    stellt, und ``ask_from_worker`` holt es ab. Der Weg dazwischen ist
+    ``ctx.ask``, und die trägt nur Frage und Antworten (Regel 21) — deshalb
+    steht es nicht an der Frage, sondern daneben.
+
+    **Solange nur die Auswertung fragte, genügte ein Platz.** Er liegt auf der
+    Sitzung, und mit einem zweiten fragenden Faden — 3d-druck-85 stellt am
+    03.09.2026 das Einlesen auf einen Arbeiter um — reicht das nicht mehr: Die
+    Einheitenfrage des Einlesens („Millimeter oder Zoll?") holte sich die
+    Kandidaten der Verweisfrage ab, und die Verweisfrage bekäme dann keine.
+    Beides ist falsche Auskunft: einmal leuchten Bohrungen zu einer Frage, die
+    von Einheiten handelt, einmal leuchtet zu einer Frage über Bohrungen nichts.
+
+    Ein Platz **je Faden** löst es an der Wurzel, ohne die Ask-Schnittstelle
+    anzufassen: Wer ansagt und wer fragt, ist im selben Vorgang derselbe Faden
+    (``orphans.check`` ruft beides unmittelbar nacheinander), und zwei Vorgänge
+    kommen sich nicht mehr in die Quere.
+    """
+    import threading
+
+    gestellt: dict[str, tuple[tuple[str, str], ...]] = {}
+    bereit = threading.Event()
+
+    def antworten(request: AskRequest) -> None:
+        gestellt[request.question] = request.candidates
+        request.reply(request.choices[0])
+
+    # **Direkt verbunden**, damit der Slot im *fragenden* Faden läuft. Über die
+    # Warteschlange bräuchte er die Ereignisschleife des Hauptfadens, und die
+    # steht hier still — ``ask_from_worker`` wartete dann bis zum Zeitlimit.
+    session.askRequested.connect(antworten, Qt.ConnectionType.DirectConnection)
+
+    def fremder_faden() -> None:
+        bereit.wait(timeout=5.0)
+        session.ask_from_worker("Millimeter oder Zoll?", ["mm", "in"])
+
+    zweiter = threading.Thread(target=fremder_faden)
+    zweiter.start()
+    try:
+        session.announce_candidates((("obj_1", "hole_1"), ("obj_1", "hole_2")))
+        bereit.set()
+        zweiter.join(timeout=5.0)
+        session.ask_from_worker("Welches Merkmal ist gemeint?", ["hole_1", "hole_2"])
+    finally:
+        bereit.set()
+        zweiter.join(timeout=5.0)
+
+    assert gestellt["Millimeter oder Zoll?"] == (), "die fremde Frage hebt nichts hervor"
+    assert gestellt["Welches Merkmal ist gemeint?"] == (
+        ("obj_1", "hole_1"),
+        ("obj_1", "hole_2"),
+    ), "und die eigene bekommt, was für sie angesagt war"

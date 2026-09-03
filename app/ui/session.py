@@ -403,7 +403,14 @@ class Session(QObject):
         """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
-        self._pending_candidates: tuple[tuple[str, str], ...] = ()
+        self._pending = threading.local()
+        """Was die nächste Frage **dieses Fadens** zur Wahl stellt (§21.3).
+
+        Je Faden und nicht je Sitzung: siehe :meth:`announce_candidates`.
+        ``getattr`` mit Vorgabe beim Lesen, weil ein frisch gestarteter Faden
+        das Feld noch nicht hat — eine Frage ohne vorherige Ansage ist der
+        Regelfall (die Einheitenfrage etwa) und kein Sonderfall.
+        """
         """Was die nächste Frage zur Wahl stellt — von ``announce_candidates`` gesetzt."""
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
     einmal, nicht immer."""
@@ -1763,20 +1770,32 @@ class Session(QObject):
         self.progressChanged.emit(fraction, text)
 
     def announce_candidates(self, candidates: tuple[tuple[str, str], ...]) -> None:
-        """Was die **nächste** Frage zur Wahl stellt (§21.3).
+        """Was die **nächste** Frage dieses Fadens zur Wahl stellt (§21.3).
 
         ``orphans.check`` ruft es unmittelbar vor ``ask`` und danach wieder
         leer. Gemerkt statt durchgereicht, weil der Weg dazwischen die
         Ask-Schnittstelle des Kerns ist (``ctx.ask``, Regel 21) — die trägt
         eine Frage und ihre Antworten, und ein drittes Feld dort ginge jede
         Operation an, die je etwas fragt.
+
+        **Je Faden ein Platz, nicht je Sitzung.** Solange nur die Auswertung
+        fragte, war ein Platz eindeutig. Mit einem zweiten fragenden Arbeiter
+        — das Einlesen, seit dem 03.09.2026 (3d-druck-85) — ist er es nicht
+        mehr: Gemessen holte sich die Einheitenfrage des Einlesens
+        („Millimeter oder Zoll?") die Kandidaten der Verweisfrage ab. Zwei
+        falsche Auskünfte auf einmal, denn danach hebt die Einheitenfrage zwei
+        Bohrungen hervor und die Frage über Bohrungen nichts.
+
+        Ansagen und Fragen geschieht im selben Vorgang auf demselben Faden;
+        ``threading.local`` trennt die Vorgänge damit genau dort, wo sie
+        auseinandergehören, ohne die Ask-Schnittstelle anzufassen.
         """
-        self._pending_candidates = tuple(candidates)
+        self._pending.candidates = tuple(candidates)
 
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
-        candidates = self._pending_candidates
-        self._pending_candidates = ()
+        candidates = getattr(self._pending, "candidates", ())
+        self._pending.candidates = ()
         request = AskRequest(question=question, choices=list(choices), candidates=candidates)
         self.askRequested.emit(request)
         request.answered.wait()
