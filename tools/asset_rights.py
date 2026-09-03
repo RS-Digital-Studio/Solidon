@@ -36,6 +36,12 @@ WEBSITE_NON_MEDIA_SUFFIXES: Final = {
     ".css",
     ".html",
     ".js",
+    # Betriebszustand, den die Endpunkte selbst schreiben: der Zähler legt
+    # `api/.stats/<jahr>-<monat>.jsonl` an, die Freischaltung ihre
+    # Ratenzähler. Kein Medium und nichts, was jemand hochlädt — aber es
+    # liegt auf dem Server, und der Wächter liest den Serverindex. Ohne
+    # diese Endung wies er den ganzen Upload ab (Tag-Lauf 12, 03.09.2026).
+    ".jsonl",
     ".json",
     ".md",
     ".php",
