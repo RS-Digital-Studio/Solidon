@@ -170,8 +170,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Datum steht in jeder Sprache auf Deutsch | Architektur-Durchsicht (02.09.2026) | eine Zeile in `main_window.py:11170` — `QLocale().toString(...)` statt `strftime("%d.%m.%Y %H:%M")`; nach dem Release, weil der Wiederherstellungsdialog nur nach einem Absturz erscheint |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt fünfzehn von fünfunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen zwanzig, und die brauchen echten Aufbau: eine Sitzung mit Körper, ein gefülltes Register, einen eingerichteten Slicer, ein Backend mit vorgeschriebenen Antworten. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein. Gemessen über die fünfzehn: 50 sichtbare Knöpfe, davon 10 sperrbar, davon 10 mit Grund — heute früh waren es 0 von 10 |
-| Der Einheitendialog zeigt „nan" | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Prüfung auf endliche Koordinaten dort, wo die Zahl **entsteht** — `biggest` in `ingest/ops.py`, die Diagonale des größten Körpers (3d-druck-d4). Eine STL mit einer NaN-Ecke wird angenommen, `detect_unit` findet nichts Plausibles und fragt; im Dialog steht dann „Millimeter (mm): nan × 20.00 × 20.00 mm". Der Docstring von `_unit_for` sagt die Regel selbst: „eine Frage, die niemand beantworten kann, ist nur die halbe Regel" |
-| Das Zählen einer Baugruppe ist dreimal zu langsam | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen Zähllauf ohne Objektbau. `_model_without_geometry` nimmt `ET.iterparse` und baut für **jedes** der 5,5 Millionen Dreiecke ein `ET.Element`, nur um es unmittelbar danach zu leeren. Gemessen am 03.09.2026 an denselben 28 Modelldateien (463 MB entpackt): `iterparse` 21,3 s, `xml.parsers.expat` ohne Objektbau **6,3 s**, rohes Byte-Zählen 0,16 s (aber ungenau — es trifft auch `<triangles>`). Faktor 3,4, und der Weg ist bekannt: expat mit einem Handler, der die Objekt- und Build-Struktur baut und bei `triangle`/`vertex` nur zählt. **Kein Ersatz für den Arbeiter** (`4abd3597`) — auch 6,3 s frieren ein Fenster ein, Windows meldet ab fünf Sekunden, es reagiere nicht; der Gewinn ist vier statt vierzehn Sekunden Wartezeit, sichtbar in beiden Fällen |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 
 ---
@@ -14737,13 +14735,19 @@ ein Ergebnis.
 Die vier offenen Punkte, drei davon aus anderen Sitzungen, die während dieses
 Durchgangs an denselben Weg gestoßen sind:
 
-- [ ] **Der Einheitendialog zeigt „nan".**
+- [x] **Der Einheitendialog zeigt „nan".**
       Eine STL mit einer NaN-Ecke wird angenommen; `detect_unit` findet nichts
       Plausibles und fragt, und im Dialog steht „Millimeter (mm): nan × 20.00 ×
       20.00 mm". Auffällig wird es in der Anzeige, entstehen tut es bei
       `biggest` in `ingest/ops.py` — der Diagonale des größten Körpers
       (3d-druck-d4). Der Docstring von `_unit_for` nennt die Regel selbst:
       „eine Frage, die niemand beantworten kann, ist nur die halbe Regel".
+
+      *Erledigt am 03.09.2026 (`1fd1666a`): Geprüft wird über alle Teile und
+      nicht über den größten — `max` über eine Folge mit NaN wählt
+      unvorhersehbar, weil jeder Vergleich mit NaN falsch ist. Die Absage
+      trägt „Andere Datei wählen“ wie die übrige Eingangsprüfung.*
+
 
 - [x] **Vierzehn Sekunden eingefrorenes Fenster beim Lesen.**
       Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute
@@ -14767,7 +14771,7 @@ Durchgangs an denselben Weg gestoßen sind:
       ihn nicht kannte und zurückkehrte, bevor eine Operation auf dem Stapel
       lag (3d-druck-d4), und der Fehlerdialog unter dem Wartezeiger — den fing
       ein Test vom 29.08.2026.*
-- [ ] **Das Zählen einer Baugruppe ist dreimal zu langsam.**
+- [x] **Das Zählen einer Baugruppe ist dreimal zu langsam.**
       `_model_without_geometry` benutzt `ET.iterparse` und baut für jedes der
       5,5 Millionen Dreiecke ein `ET.Element`, nur um es unmittelbar danach zu
       leeren. Gemessen an denselben 28 Modelldateien (463 MB entpackt):
@@ -14782,6 +14786,21 @@ Durchgangs an denselben Weg gestoßen sind:
       **Kein Ersatz für den Arbeiter**: Auch 6,3 s frieren das Fenster ein.
       Der Gewinn liegt darin, dass der Kunde vier Sekunden wartet statt
       vierzehn — sichtbar sind seit `4abd3597` beide.
+
+      *Erledigt am 03.09.2026 (`1fd1666a`), gemessen an echten Kundendateien:
+      chufang.3mf 11,88 → 8,43 s, Wizard Tower 3,98 → 2,73 s,
+      garden-hose-holder 0,92 → 0,59 s, bei gleichen Zahlen (32 Teile,
+      5 476 596 Dreiecke). Der Gewinn im Ganzen ist kleiner als der im
+      Zähllauf allein (21,3 → 7,1 s), weil `scan_assembly` daneben auch
+      entpackt, Titel liest und Objekte katalogisiert.*
+
+      *Ein dritter Fund fiel dabei ab: Die Mutation „Zählattribut weg“ ließ
+      alle fünfundachtzig Tests grün, obwohl `scan_assembly` danach null
+      Körper meldet — und laut Kommentar wird daraus ein Import, der gar
+      nichts einliest. Die Körperzahl des Scans hatte nie jemand gegen den
+      Leser gehalten, obwohl `_scan` genau das im Docstring verspricht. Jetzt
+      tut es ein Test.*
+
 
 - [x] **`ingest.very_large` trägt den Körpernamen als Text statt als Kennung.**
       `ops._named()` setzt `values["object"] = name`, keine `object_id`. Zwei
