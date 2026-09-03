@@ -346,3 +346,36 @@ def test_a_pair_without_a_measured_centre_says_so(qt_app: QApplication) -> None:
 
     texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
     assert "kein Abstand" in texte, texte
+
+
+def test_a_hole_says_which_screw_fits(qt_app: QApplication) -> None:
+    """Die Anwendung kennt die Antwort und sagte sie nur im Bohrdialog.
+
+    „Ist das eine M5?" ist die Frage vor jedem Druck. Der Durchmesser steht im
+    Panel ohnehin; ihn zu zeigen und die Normgröße zu verschweigen wäre die
+    halbe Auskunft.
+    """
+    from app.core.scene.placement import bore_advice
+
+    identifier, feature = a_hole()
+    erwartet, _choices = bore_advice(float(feature.params["diameter"]))
+
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
+    assert erwartet in texte, texte
+
+
+def test_only_a_hole_gets_the_screw_line(qt_app: QApplication) -> None:
+    """Die Gegenprobe: Eine Fläche hat keinen Durchmesser und keine Schraube.
+
+    Ein Satz über Normgrößen an einer Fläche wäre eine Auskunft über etwas,
+    das dort nicht gemessen wurde.
+    """
+    identifier, feature = a_face()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
+    assert "Bohrung misst" not in texte, texte

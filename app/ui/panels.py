@@ -4050,6 +4050,23 @@ class FeaturePanel(QWidget):
         self._rows.insertWidget(self._rows.count() - 1, heading)
         self._built.append(heading)
 
+        # **Was die Anwendung über diese Bohrung weiß, sagt sie hier.**
+        # ``bore_advice`` steht seit je im Bohrdialog und beantwortet die
+        # Frage, die der Kunde vor jedem Druck stellt: „ist das eine M5?"
+        # Gemessen hat Solidon den Durchmesser ohnehin — ihn zu zeigen und die
+        # Antwort zu verschweigen wäre die halbe Auskunft.
+        diameter = feature.params.get("diameter")
+        if feature.kind == "hole" and diameter is not None:
+            from app.core.scene.placement import bore_advice
+
+            said, _choices = bore_advice(float(diameter))
+            note = QLabel(said, self)
+            note.setWordWrap(True)
+            note.setStatusTip(said)
+            fit_wrapped(note)
+            self._rows.insertWidget(self._rows.count() - 1, note)
+            self._built.append(note)
+
         actions = actions_for(feature)
         for action in actions:
             row = self._build_action(action)
