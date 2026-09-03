@@ -30,5 +30,12 @@ Regel, nicht die Ausnahme. Wer nur den eigenen Eintrag will, baut den Blob aus
 denen, deren Zeilen es waren — sie sehen sonst einen leeren Katalogteil in
 ihrem eigenen Diff und halten ihn für verloren.
 
+**Und den Urheber messen, nicht erschließen.** Am selben Tag habe ich drei der
+fünf Zeilen der Sitzung zugeschrieben, die am nächstliegenden Gebiet arbeitete;
+sie waren es nicht. Die Antwort steht in zwei Befehlen: `grep -rl "<der Satz>"
+app --include=*.py` nennt die Datei, `session_board.py list` nennt die Sitzung,
+die sie hält. Eine falsche Zuordnung kostet die Betroffene eine Messung und die
+richtige den Hinweis.
+
 Verwandt: [[commit-o-nimmt-den-dateistand]] — dort geht es um dieselbe Regel
 für eine gemeinsame Codedatei; hier um die Datei, bei der sie fast immer greift.
