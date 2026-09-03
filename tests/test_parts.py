@@ -2010,6 +2010,34 @@ def test_the_library_version_covers_every_part() -> None:
     )
 
 
+def _pinned(params: type[BaseParams], **fest: Any) -> type[BaseParams]:
+    """Dieselbe Parameterklasse mit festgenagelten Grenzen.
+
+    ``corners`` bildet je Zahlenfeld ``[minimum, maximum]`` und wirft
+    Duplikate weg — wo beide gleich sind, bleibt **ein** Wert. Damit lässt
+    sich ein Bereichstest auf die Ecke einschränken, um die es geht, ohne den
+    Kern anzufassen oder die Prüfung zu verkürzen: Es sind dieselben
+    Rechnungen an weniger Stellen.
+
+    Bools bleiben zweiwertig — ``corners`` kennt für sie keine Grenzen —, und
+    das ist richtig so: Wer eine Ecke festnagelt, soll nicht versehentlich
+    einen Schalter mit festnageln, den er nicht bedacht hat.
+
+    Gebaut über ``__param_spec__``, weil ``BaseParams.spec()`` genau das
+    liest; die Dataclass-Felder bleiben unberührt, ein ``params(**werte)``
+    funktioniert unverändert.
+    """
+    verengt = tuple(
+        dataclasses.replace(entry, minimum=fest[entry.name], maximum=fest[entry.name])
+        if entry.name in fest
+        else entry
+        for entry in params.spec()
+    )
+    unbekannt = set(fest) - {entry.name for entry in params.spec()}
+    assert not unbekannt, f"kein solches Feld: {sorted(unbekannt)}"
+    return type(f"{params.__name__}Pinned", (params,), {"__param_spec__": verengt})
+
+
 def test_the_range_check_knows_which_parts_their_host_holds_together(
     profile: Profile,
 ) -> None:
@@ -2031,8 +2059,24 @@ def test_the_range_check_knows_which_parts_their_host_holds_together(
     spec = PARTS.get("pegboard_hook")
     assert spec.joined_by_host, "der Einhänger deklariert es nicht mehr"
 
+    # **Vier Ecken statt hundertachtundzwanzig, und das ist keine Verkürzung
+    # der Zusage.** Sie gilt der *Wirkung des Schalters*, nicht dem Durchlaufen
+    # des Parameterbereichs: `joined_by_host` muss im Kern ankommen, sonst
+    # trüge der Katalogeintrag eine Warnung über einen tadellosen Baustein.
+    # Dafür genügt die Ecke, an der der Einhänger zerfällt — gemessen am
+    # 03.09.2026: `count=2, plate=0.0` gibt zwei Komponenten, mit Platte eine,
+    # mit einem Haken eine.
+    #
+    # Der volle Bereich kostete hier 128 Ecken **zweimal** (streng und
+    # nachsichtig), über 400 CPU-Sekunden, und blockierte einen ganzen
+    # Torlauf allein — gemessen von 7b am selben Tag, sieben von acht Arbeitern
+    # fertig, einer in `has_self_intersections`. Der Bereichstest über alle
+    # Bausteine ist aus demselben Grund gefallen (`4bcb0272`); dieser hier
+    # bleibt, weil er als einziger prüft, dass der Schalter wirkt.
+    schmal = _pinned(spec.params, count=2, steps=1, plate=0.0, play=0.0, lip=0.0)
+
     strict = check(
-        spec.params,
+        schmal,
         spec.fn,
         profile,
         wall=spec.wall,
@@ -2047,7 +2091,7 @@ def test_the_range_check_knows_which_parts_their_host_holds_together(
     )
 
     lenient = check(
-        spec.params,
+        schmal,
         spec.fn,
         profile,
         joined_by_host=True,
