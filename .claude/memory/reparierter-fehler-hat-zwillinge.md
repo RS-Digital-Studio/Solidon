@@ -90,5 +90,17 @@ mitfixen oder im Commit benennen, warum sie nicht betroffen ist. Beim Review
 umgekehrt: Wo ein Docstring einen behobenen Fehler beschreibt, ist die
 Nachbarschaft der erste Ort zum Suchen.
 
+**Die schärfste Form: der Docstring nennt den Zwilling beim Namen.** Am
+03.09.2026 verloren übersetzbare Texte beim Ablegen ihre Werte — der Kunde las
+`{closed} von {total} offenen Kanten geschlossen` statt der Zahlen. Der Fehler
+war zu dem Zeitpunkt **zweimal woanders behoben**: in `i18n.source_text` für
+Dateinamen und in `cache._name_to_data` für Slotnamen. Und der Docstring des
+zweiten Fixes schrieb wörtlich: *„Dasselbe tut `transaction_to_data` für den
+Titel einer Transaktion, dort über drei Felder."* Die Fundstelle stand
+ausgeschrieben da, ein halbes Jahr lang, und niemand ist hingegangen — es waren
+fünf Stellen. Ein benannter Zwilling ist kein erledigter: Wer beim Fixen den
+Nachbarn erwähnt, hat ihn beschrieben, nicht behoben. **Der Satz gehört als
+Aufgabe ins Register, nicht als Beobachtung in den Docstring.**
+
 Verwandt: [[was-die-suite-nicht-findet]], [[eine-kette-endet-am-letzten-glied]],
 [[sollwert-aus-dem-pruefling]].
