@@ -381,3 +381,59 @@ def test_the_support_angle_comes_from_the_rule_set() -> None:
     from app.core.types import SupportSettings
 
     assert SupportSettings().threshold_angle == OVERHANG_LIMIT_DEGREES
+
+
+#: Feld -> Maschinengrenze, gegen die es läuft. Der Wächter darunter setzt
+#: jeden Wert über seine Grenze und verlangt ein Wort dazu.
+#:
+#: **Die Tabelle ist der Punkt, nicht die fünf Regeln.** Am 03.09.2026 prüfte
+#: `_from_machine` genau eines dieser sechs Felder — der Kunde konnte 400 Grad
+#: erste Schicht und 150 Grad Bett einstellen, und niemand sagte etwas.
+#: Auffällig war das nicht, weil zwei ordentliche Prüfungen dastanden: Eine
+#: Regel, die den Hauptwert prüft und seinen `_first_layer`-Nachbarn nicht,
+#: sieht aus wie eine ganze.
+MACHINE_LIMITS: dict[str, str] = {
+    "layers.layer_height": "nozzle_diameter",
+    "layers.first_layer_height": "nozzle_diameter",
+    "layers.line_width": "nozzle_diameter",
+    "temperature.nozzle": "nozzle_temperature_max",
+    "temperature.nozzle_first_layer": "nozzle_temperature_max",
+    "temperature.bed": "bed_temperature_max",
+    "temperature.bed_first_layer": "bed_temperature_max",
+}
+
+
+def test_no_setting_can_exceed_the_machine_without_a_word() -> None:
+    """Was der Drucker nicht kann, wird gesagt — bei jedem Feld, nicht bei einem.
+
+    `_from_machine` trägt den Satz „Was die Maschine nicht kann, muss vor dem
+    Druck gesagt werden" im Docstring und löste ihn für ein Feld von sieben
+    ein. Gemessen: 400 Grad erste Schicht und 150 Grad Bett ließen sich
+    einstellen, der Drucker kann 260 und 100, und der Bericht blieb leer.
+
+    Der Test setzt jeden Wert über seine Grenze und verlangt einen Vorschlag
+    **auf dasselbe Feld** — ein Vorschlag zu einem Nachbarn wäre keine Antwort
+    auf die gestellte Frage.
+    """
+    profile = Profile(
+        printer=next(iter(profiles.printer_profiles().values())),
+        material=next(iter(profiles.material_profiles().values())),
+    )
+    base = print_settings.resolve(profile, next(iter(print_settings.quality_presets())))
+
+    silent: list[str] = []
+    for path, limit in MACHINE_LIMITS.items():
+        ceiling = float(getattr(profile.printer, limit))
+        # Deutlich darüber, damit kein Rundungsrand die Frage beantwortet.
+        beyond = ceiling * 2.0 if "temperature" not in path else ceiling + 100.0
+        if path == "layers.line_width":
+            # Dieses Feld läuft nach **unten** gegen seine Grenze: Schmaler als
+            # ein Anteil der Düse reißt die Bahn ab, statt dünner zu werden.
+            beyond = ceiling * 0.4
+        current = print_settings.read_path(base, path)
+        wanted = int(beyond) if isinstance(current, int) else beyond
+        spoken = advise.advise(print_settings.with_path(base, path, wanted), profile, None)
+        if not any(entry.path == path for entry in spoken):
+            silent.append(f"{path} = {wanted} (Maschine: {limit} = {ceiling:g})")
+
+    assert not silent, "ohne ein Wort einstellbar:\n" + "\n".join(silent)

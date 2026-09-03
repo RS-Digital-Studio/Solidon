@@ -381,6 +381,84 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
             )
         )
 
+    # **Dieselbe Grenze gilt der ersten Schicht**, und sie stand hier nicht.
+    # ``resolve()`` deckelt beide beim Auflösen mit demselben Verhältnis; wer
+    # die erste danach von Hand höher stellt, bekam bis zum 03.09.2026 kein
+    # Wort — obwohl der Slicer sie genauso ablehnt. Eine Regel, die den einen
+    # Wert prüft und den Nachbarn nicht, ist keine halbe Regel: Sie sieht aus
+    # wie eine ganze.
+    if settings.layers.first_layer_height > wanted:
+        advice.append(
+            SettingAdvice(
+                path="layers.first_layer_height",
+                value=round(wanted, 3),
+                was=settings.layers.first_layer_height,
+                reason=_(
+                    "Auch die erste Schicht bleibt unter drei Vierteln des "
+                    "Düsendurchmessers — höher legt die Düse keine Bahn, die auf dem "
+                    "Bett trägt."
+                ),
+                severity="warning",
+            )
+        )
+
+    # **Und dieselbe Lücke bei den Temperaturen.** Systematisch gemessen am
+    # 03.09.2026: Von fünf Temperaturfeldern prüfte `_from_machine` genau
+    # eines gegen die Maschine. Der Kunde konnte 400 Grad erste Schicht und
+    # 150 Grad Bett einstellen — das Feld erlaubt es, der Drucker kann 260
+    # und 100, und niemand sagte ein Wort.
+    #
+    # Das Muster dahinter ist das eigentliche Ergebnis: Geprüft wurde immer
+    # der Hauptwert, nie sein ``_first_layer``-Nachbar. Bei der Schichthöhe
+    # ebenso. Wer eine Regel für einen Wert schreibt, schreibt sie für seine
+    # Geschwister mit — sonst sieht die halbe Regel aus wie eine ganze.
+    for path, current, ceiling, why in (
+        (
+            "temperature.nozzle_first_layer",
+            settings.temperature.nozzle_first_layer,
+            printer.nozzle_temperature_max,
+            _("Auch die erste Schicht bleibt in dem, was dieser Drucker heizen kann."),
+        ),
+        (
+            "temperature.bed",
+            settings.temperature.bed,
+            printer.bed_temperature_max,
+            _("Wärmer wird dieses Bett nicht — gedruckt würde mit seinem Höchstwert."),
+        ),
+        (
+            "temperature.bed_first_layer",
+            settings.temperature.bed_first_layer,
+            printer.bed_temperature_max,
+            _("Auch für die erste Schicht ist beim Höchstwert dieses Bettes Schluss."),
+        ),
+    ):
+        if current > ceiling:
+            advice.append(
+                SettingAdvice(path=path, value=ceiling, was=current, reason=why, severity="warning")
+            )
+
+    # **Und die Bahnbreite nach unten.** :data:`NARROW_LINE_SHARE` sagt, dass
+    # eine Bahn schmaler als 85 % der Düse abreißt, statt dünner zu werden. Die
+    # Regel in ``_from_geometry`` senkt bis zu dieser Grenze — nach unten
+    # eingestellt hat sie nie jemand geprüft. Bei einer 0,4er Düse liegt damit
+    # der Bereich von 0,10 bis 0,34 mm im Feld und ist ungedruckbar; das Feld
+    # hat feste Grenzen, die Düse nicht.
+    narrowest = NARROW_LINE_SHARE * printer.nozzle_diameter
+    if 0.0 < settings.layers.line_width < narrowest:
+        advice.append(
+            SettingAdvice(
+                path="layers.line_width",
+                value=round(narrowest, 3),
+                was=settings.layers.line_width,
+                reason=_(
+                    "Schmaler legt diese Düse keine Bahn — enger gequetscht reißt die "
+                    "Spur ab, statt dünner zu werden. Für feinere Bahnen gehört eine "
+                    "kleinere Düse ins Druckerprofil."
+                ),
+                severity="warning",
+            )
+        )
+
     if settings.temperature.nozzle >= printer.nozzle_temperature_max:
         advice.append(
             SettingAdvice(
