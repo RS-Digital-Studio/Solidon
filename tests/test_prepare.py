@@ -2183,6 +2183,74 @@ def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None
     assert "Bohrung" in str(raised.value), str(raised.value)
 
 
+def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Profile) -> None:
+    """Ein Absagesatz, der einen Weg verspricht, muss den Weg auch halten.
+
+    **Der Satz nannte zwei Auswege, und am 04.09.2026 hielt keiner.** Gemessen
+    an einer Platte 60 × 40 × 10 mit durchgehender Bohrung Ø 8 und Senkung Ø 16:
+
+    * *„Wählen Sie das Merkmal in der Mitte"* — wer der Empfehlung folgt und
+      statt der Senkung die **Bohrung** versetzt, lässt den Senkungskrater an
+      der alten Stelle stehen. Und die versetzte Bohrung ist nur so tief wie
+      das Stück unter der Senkung war, geht also im vollen Material nicht mehr
+      durch. Sie meldet das immerhin (``no_longer_through``) — gewollt hat es
+      trotzdem niemand.
+    * *„verschließen Sie die Bohrung"* — das geht, danach ist die Senkung aber
+      **weiter gesperrt**: Der Stopfen endet in ihr und macht ihrer Fläche
+      wieder zwei Randringe. Der Rat schickte im Kreis, denn ``plug_hole`` auf
+      der Senkung sagt mit genau diesem Satz ab.
+
+    Was trägt, ist der Weg über Zahlen, und dieser Test misst ihn: ein Stopfen
+    mit dem Durchmesser der Senkung über die volle Wandstärke schließt beides
+    in einem Zug — **24 000,000 mm³, Rest 0,000, wasserdicht, kein Merkmal
+    mehr übrig.**
+
+    Die letzte Zusicherung hält Satz und Messung zusammen. Ohne sie könnte
+    jemand den Satz umschreiben, ohne dass hier etwas rot wird, und der Test
+    beschriebe wieder einen Weg, den der Kunde nicht liest
+    (vgl. ``test_the_plate_advice_carries_a_way_to_follow_it``).
+    """
+    from app.core.errors import UserError
+    from app.core.geom.prepare_ops import _NO_OWN_BODY
+
+    plate = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        plate, position=(0.0, 0.0, 5.0), axis="z", diameter=8.0, profile=profile, compensate=False
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=16.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+
+    # Die Sackgasse ist vollständig: keine der fünf Handlungen nimmt die Senkung.
+    for op in (
+        "move_feature",
+        "rotate_feature",
+        "remove_feature",
+        "duplicate_feature",
+        "plug_hole",
+    ):
+        with pytest.raises(UserError):
+            _run_op(op, entry, profile, at_feature=cone)
+
+    # Und der eine Weg, den der Satz nennt, schließt beides in einem Zug.
+    closed = _run_op(
+        "plug_hole", entry, profile, x=0.0, y=0.0, z=5.0, axis="z", diameter=16.0, depth=10.0
+    ).outputs[0]
+    assert closed.mesh.raw.is_watertight
+    assert closed.mesh.raw.volume == pytest.approx(60.0 * 40.0 * 10.0, abs=0.5), (
+        "der genannte Weg muss die Platte wieder voll machen"
+    )
+    assert not [
+        name for name, found in detect(closed.mesh).items() if found.kind in ("hole", "cone")
+    ], "danach ist weder Bohrung noch Senkung übrig"
+
+    assert "Bohrung verschließen" in str(_NO_OWN_BODY), (
+        "der Satz muss den Weg nennen, den dieser Test misst"
+    )
+
+
 def test_applies_to_holds_outside_the_menu(profile: Profile) -> None:
     """``applies_to`` stand nur im Menü, und der Chat kam daran vorbei.
 

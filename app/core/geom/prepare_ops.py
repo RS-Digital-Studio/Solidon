@@ -790,7 +790,6 @@ def _tool_for(
             detail=_NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
-            suggestions=(CHANGE_SELECTION, CANCEL),
         )
 
     measured = [float(value) for value in feature.params["centre"]]
@@ -889,7 +888,6 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
         detail=against,
         values={"feature": name, "kind": feature.kind, "op": op},
         constraint="not_movable",
-        suggestions=(CHANGE_SELECTION, CANCEL),
     )
 
 
@@ -901,11 +899,30 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: beiden dieselben zwei veraltet. Was den Kunden erreicht, kommt jetzt aus
 #: einer Quelle; hier bleibt der eine Fall, den das Panel nicht kennt, weil er
 #: nicht an der Merkmalsart hängt, sondern am Netz.
+#:
+#: **Der Satz nannte zwei Auswege, und am 04.09.2026 hielt keiner.** Gemessen
+#: an einer Platte 60 auf 40 auf 10 mit durchgehender Bohrung Ø 8 und einer
+#: Senkung Ø 16:
+#:
+#: * *„Wählen Sie das Merkmal in der Mitte"* — die Bohrung versetzen lässt den
+#:   Senkungskrater an der alten Stelle stehen, und die versetzte Bohrung ist
+#:   nur noch so tief wie das Stück unter der Senkung, geht also nicht mehr
+#:   durch (``no_longer_through`` meldet es, aber gewollt war es nicht).
+#: * *„verschließen Sie die Bohrung"* — das geht (23 531,589 mm³), doch danach
+#:   ist die Senkung **weiter gesperrt**: Der Stopfen endet in ihr und macht
+#:   ihrer Fläche wieder zwei Randringe. Der Rat schickte im Kreis, denn
+#:   ``plug_hole`` auf der Senkung sagt mit genau diesem Satz ab.
+#:
+#: Was trägt, ist der Weg über Zahlen: ein Stopfen mit dem Durchmesser der
+#: Senkung über die volle Wandstärke schließt beides in einem Zug —
+#: **24 000,000 mm³, Rest 0,000, wasserdicht, kein Merkmal mehr übrig.** Den
+#: nennt der Satz jetzt, und nur den.
 _NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
     "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Versetzt "
-    "würde die Bohrung darunter mit zugehen. Wählen Sie das Merkmal in der "
-    "Mitte, oder verschließen Sie die Bohrung und legen beides neu an."
+    "würde die Bohrung darunter mit zugehen. Verschließen Sie beides in einem "
+    "Zug: „Bohrung verschließen“ ohne Merkmal, mit dem Durchmesser der Senkung "
+    "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
 )
 
 

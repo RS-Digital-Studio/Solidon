@@ -171,7 +171,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
-| Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Bis dahin ist die Absage mit Ausweg die richtige Antwort, und der Ausweg trägt: die Bohrung versetzen, die Senkung neu setzen |
+| Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Die Absage bleibt die richtige Antwort; der **Ausweg** darin war am 04.09.2026 gemessen falsch und ist ersetzt — beides über Zahlen verschließen, Ø der Senkung über die volle Wandstärke |
 | `MEMORY.md` hat kein Werkzeug zum Einfügen einer Zeile | Die geteilte Datei ohne Werkzeug (03.09.2026) | ein kleines Werkzeug: Zeile einfügen unter Sperre, mit Prüfung, dass der Rest unverändert bleibt. Bis dahin trägt `tests/test_directory_docs.py` den Fall — er hat am 03.09.2026 dreimal angeschlagen, meldet den Verlust aber erst hinterher |
 
 ---
@@ -15102,9 +15102,26 @@ Durchmesser.
   verschiedenen Gründen je nach Wandstärke. In einer 10 mm starken Platte hat
   die Kegelfläche **zwei Randringe** (Ø 12 oben, Ø 6 am Übergang); in einem
   20 mm starken Quader ist es **einer, der nicht in einer Ebene liegt**
-  (Spanne 15,2 mm gegen eine Grenze von 0,51, über 104 Randknoten). Der Kunde
-  bekommt in beiden Fällen einen Satz mit dem Ausweg — die Bohrung versetzen
-  und die Senkung neu setzen —, und das ist heute die richtige Antwort.
+  (Spanne 15,2 mm gegen eine Grenze von 0,51, über 104 Randknoten).
+
+  **Der Ausweg im Absagesatz war einer, den niemand gehen kann — gemessen am
+  04.09.2026.** Hier stand bis dahin, der Kunde bekomme „einen Satz mit dem
+  Ausweg — die Bohrung versetzen und die Senkung neu setzen", und das sei die
+  richtige Antwort. Der Satz nannte zwei Wege, und keiner trug: Wer die
+  **Bohrung** versetzt, lässt den Senkungskrater stehen und bekommt eine
+  Bohrung, die nur noch so tief ist wie das Stück unter der Senkung war, also
+  nicht mehr durchgeht. Und wer die **Bohrung verschließt**, findet die
+  Senkung danach *weiter gesperrt* — der Stopfen endet in ihr und macht ihrer
+  Fläche wieder zwei Randringe, also sagt `plug_hole` auf der Senkung mit
+  genau demselben Satz ab. Der Rat schickte im Kreis.
+
+  Alle fünf Handlungen sagen an der Senkung ab, und keine Reihenfolge
+  öffnet sie. Was trägt, ist der Weg über Zahlen: ein Stopfen mit dem
+  Durchmesser der Senkung über die volle Wandstärke schließt beides in einem
+  Zug — **24 000,000 mm³, Rest 0,000, wasserdicht, kein Merkmal mehr übrig**.
+  Den nennt der Satz jetzt, und ein Test hält Satz und Messung zusammen
+  (`test_the_way_out_of_a_countersink_is_the_one_the_message_names`). Die
+  Absage selbst bleibt richtig; falsch war nur, was danebenstand.
 
   Die zweite Zahl ist **nach** `242ffa1b` gemessen: Vorher zerfiel eine
   Senkung in drei erkannte Kegel, und der größte trug 56 der 101 Dreiecke;
