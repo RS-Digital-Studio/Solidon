@@ -305,6 +305,33 @@ ROUND_TOLERANCE = 0.02
 #: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
 #: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
 #: Einpassung und nicht die Fertigung.
+#: Um wie viel besser eine Kugel passen muss, um einen brauchbaren Kegelfit zu
+#: verdrängen — als Verhältnis der Rückstände.
+#:
+#: **Der Fall (03.09.2026):** Eine Kugelpfanne Ø 16 in einem Quader wurde als
+#: *Senkung* erkannt, sobald das Netz fein genug war. Der Kegelzweig kommt vor
+#: dem Kugelzweig, und sein Rückstand rutscht mit steigender Feinheit unter
+#: :data:`CONE_TOLERANCE` (0,08):
+#:
+#: | Netz | Kegel-Rückstand | Kugel-Rückstand | Verhältnis | erkannt als |
+#: |---|---|---|---|---|
+#: | grob (482 Dreiecke) | 0,0891 | 0,00049 | 182 | Kugel — Kegel fiel durch |
+#: | fein (1602) | **0,0779** | 0,00009 | 848 | **Kegel** |
+#: | sehr fein (5746) | 0,0736 | 0,00002 | 3733 | **Kegel** |
+#:
+#: Ein feineres Netz machte die Erkennung also **schlechter**, und zwar genau
+#: an heruntergeladenen Modellen, die fein vernetzt sind.
+#:
+#: **Die Reihenfolge Kegel-vor-Kugel bleibt**, und sie hat ihren Grund: Eine
+#: Senkung passt auf eine Kugel besser, als man denkt, und ein `hole_1`, das
+#: plötzlich `sphere_1` hieße, wäre für jede Bohrungs-Operation unsichtbar.
+#: Deshalb verdrängt die Kugel den Kegel nicht, wenn sie *etwas* besser ist,
+#: sondern nur, wenn sie **um Größenordnungen** besser ist. An einer echten
+#: Senkung ist der Kegel der bessere Fit (Verhältnis 0,7); an einer Pfanne
+#: liegt es bei 182 aufwärts. Zwischen 0,7 und 182 ist Platz für jede Zahl —
+#: zehn liegt in der Mitte der Lücke, gemessen an vier Körpern.
+SPHERE_BEATS_CONE = 10.0
+
 #: Wie weit zwei Kegelstücke im Halbwinkel auseinanderliegen dürfen, um noch
 #: derselbe Kegel zu sein — in Grad.
 #:
@@ -680,7 +707,11 @@ def _fitted(mesh: MeshData) -> Fitted:
         # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
         cone = fit_cone(body, patch)
         if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-            if cone.good and _fits_in_the_body(mesh, cone):
+            if (
+                cone.good
+                and _fits_in_the_body(mesh, cone)
+                and not _a_ball_fits_far_better(body, patch, cone)
+            ):
                 cones.append((cone, patch))
                 return True
             # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
@@ -805,7 +836,7 @@ def detect_holes(
     found = [
         entry
         for entry in cylinders
-        if entry[0].inward and entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER
+        if entry[0].inward and not _too_small_to_make(entry[0].radius * 2.0)
     ]
     return [
         Feature(
@@ -1161,8 +1192,40 @@ def _too_small_to_make(size: float) -> bool:
 
     Robert dazu am selben Tag: „wir brauchen auch nur Merkmale usw, die auch
     von der Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+
+    **Und sie ist die einzige Stelle, an der verglichen wird.** Als sie entstand,
+    bekamen nur die drei neuen Erkenner sie; Bohrung, Zapfen und Verrundung
+    prüften weiter von Hand gegen :data:`MIN_CYLINDER_DIAMETER` — dieselbe
+    Bedingung, aber unauffindbar für die Frage „wer beantwortet sie nicht?".
+    Genau dagegen gibt es die Funktion, und eine halbe Vereinheitlichung ist
+    schlechter als keine: Sie sieht vollständig aus.
+    `tests/test_features.py::test_every_fitted_kind_asks_the_same_question`
+    hält es fest.
     """
     return size < MIN_CYLINDER_DIAMETER
+
+
+def _a_ball_fits_far_better(body: trimesh.Trimesh, patch: list[int], cone: ConeFit) -> bool:
+    """Ob dieser Fleck in Wahrheit eine Kugelfläche ist.
+
+    **Gefragt wird nur, wenn der Kegel schon durchgekommen ist** — die
+    Reihenfolge Kegel-vor-Kugel bleibt unangetastet, und ein Fleck, den der
+    Kegel ablehnt, erreicht den Kugelzweig ohnehin. Diese Frage kostet also
+    einen Kugelfit je *angenommenem* Kegel und nichts sonst.
+
+    Die Zahlen und der Fall stehen bei :data:`SPHERE_BEATS_CONE`. Kurz: Eine
+    Pfanne wurde zur Senkung, sobald das Netz fein genug war, weil der
+    Kegelrückstand mit der Feinheit unter die Toleranz rutscht — während der
+    Kugelrückstand um zwei bis vier Größenordnungen darunter liegt.
+    """
+    if cone.residual <= EPS_GEOM:
+        # Ein exakter Kegel ist ein Kegel. Ohne diesen Zweig teilte die
+        # Rechnung unten durch fast null.
+        return False
+    ball = fit_sphere(body, patch)
+    if ball is None or not ball.good:
+        return False
+    return cone.residual >= ball.residual * SPHERE_BEATS_CONE
 
 
 def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
@@ -1282,7 +1345,7 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # zufällig um eine Achse stehen, findet der Fit einen Zylinderausschnitt.
     # Die Begründung ist wörtlich die von :data:`MIN_CYLINDER_DIAMETER` — was
     # für kein Werkzeug groß genug ist, ist auch keine Verrundung.
-    big = [entry for entry in found if entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER]
+    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
     return [
         Feature(
             id=f"fillet_{number}",
@@ -1318,7 +1381,7 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
         # **Dieselbe Schranke wie bei der Bohrung** (:data:`MIN_CYLINDER_DIAMETER`).
         # Sie stand hier nicht, und damit meldete dieselbe Platte einen Zapfen
         # Ø 0,05 neben einer Vertiefung Ø 0,05, die zu Recht keine Bohrung war.
-        if not entry[0].inward and entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER
+        if not entry[0].inward and not _too_small_to_make(entry[0].radius * 2.0)
     ]
     return [
         Feature(

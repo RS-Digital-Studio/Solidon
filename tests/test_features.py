@@ -2065,3 +2065,113 @@ def test_the_cache_counts_weight_and_not_only_entries() -> None:
     # überlebt, ist genau die Sorte Rest, um die es hier geht.
     forget_cache()
     assert not _FEATURE_CACHE and not _CACHE_INDICES
+
+
+def test_every_fitted_kind_asks_the_same_question() -> None:
+    """Die Werkzeugschranke wird an **einer** Stelle gefragt, nicht an sechs.
+
+    **Der Anlass ist ein Zwilling meiner eigenen Arbeit vom selben Tag
+    (03.09.2026):** `_too_small_to_make` entstand, damit die nächste
+    Merkmalsart die Frage beantworten **muss** statt sie zu übersehen — und
+    bekam sie nur bei den drei Erkennern, die an dem Tag neu dazukamen. Kegel,
+    Kugel und Torus riefen die Funktion; Bohrung, Zapfen und Verrundung
+    verglichen weiter von Hand gegen `MIN_CYLINDER_DIAMETER`.
+
+    Dieselbe Bedingung, dasselbe Ergebnis — und trotzdem der Fehler, gegen den
+    die Funktion gebaut war: Wer fragt „wer ruft `_too_small_to_make` nicht?",
+    bekommt drei Namen und hält sie für die Lücke. **Eine halbe
+    Vereinheitlichung ist schlechter als keine, weil sie vollständig
+    aussieht.**
+
+    Dieser Wächter prüft deshalb den Quelltext und nicht das Verhalten: Die
+    Konstante darf außerhalb ihrer eigenen Definition und der einen Funktion
+    nirgends mehr verglichen werden.
+    """
+    import re
+
+    import app.core.perceive.features as modul
+
+    quelle = Path(modul.__file__).read_text(encoding="utf-8")
+
+    # Zeilen, die die Konstante in einem Vergleich benutzen — Kommentare und
+    # Docstrings zählen nicht, sie dürfen sie beim Namen nennen.
+    vergleiche = [
+        zeile.strip()
+        for zeile in quelle.splitlines()
+        if "MIN_CYLINDER_DIAMETER" in zeile
+        and not zeile.lstrip().startswith(("#", "*", '"', "'"))
+        and re.search(r"[<>=!]=|<|>", zeile)
+    ]
+
+    assert vergleiche == ["return size < MIN_CYLINDER_DIAMETER"], (
+        "die Schranke wird nur in _too_small_to_make verglichen, sonst nirgends: "
+        + "; ".join(vergleiche)
+    )
+
+
+def test_a_socket_stays_a_socket_when_the_mesh_gets_finer(profile: Profile) -> None:
+    """Eine Kugelpfanne wurde zur Senkung, sobald das Netz fein genug war.
+
+    **Der Fall (03.09.2026), und er ist der unangenehmste von heute:** Ein
+    feineres Netz machte die Erkennung *schlechter*. Dieselbe Pfanne Ø 16 in
+    demselben Quader:
+
+    | Netz | Kegel-Rückstand | Kugel-Rückstand | erkannt als |
+    |---|---|---|---|
+    | 482 Dreiecke | 0,0891 | 0,00049 | Kugel |
+    | 1602 Dreiecke | **0,0779** | 0,00009 | **Senkung** |
+    | 5746 Dreiecke | 0,0736 | 0,00002 | **Senkung** |
+
+    Der Kegelzweig wird vor dem Kugelzweig gefragt, und sein Rückstand rutscht
+    mit steigender Feinheit unter `CONE_TOLERANCE` (0,08). Bei 0,0891 fiel er
+    durch und die Pfanne erreichte die Kugel; bei 0,0779 nicht mehr.
+
+    Heruntergeladene Modelle sind fein vernetzt — der Fall trifft also genau
+    die Dateien, mit denen ein Kunde ankommt. Im Objektbaum stand dann
+    „Senkung", und die Operationen behandelten eine Pfanne wie eine Bohrung.
+
+    **Die Reihenfolge bleibt, die Kugel muss sich den Vortritt verdienen:** Sie
+    verdrängt den Kegel nur, wenn sie um Größenordnungen besser passt
+    (`SPHERE_BEATS_CONE`). An einer echten Senkung ist der Kegel der bessere
+    Fit — Verhältnis 0,7 —, an einer Pfanne liegt es bei 182 aufwärts.
+
+    Geprüft wird beides, und das zweite ist das wichtigere: dass eine echte
+    Senkung eine Senkung bleibt.
+    """
+    from app.core.geom.prepare_ops import countersink, drill
+    from app.core.perceive.features import detect_cones, detect_spheres
+
+    def with_a_socket(fineness: int) -> MeshData:
+        block = trimesh.creation.box(extents=(60.0, 60.0, 20.0))
+        ball = trimesh.creation.icosphere(subdivisions=fineness, radius=8.0)
+        ball.apply_translation((0.0, 0.0, 10.0 + 8.0 - 4.0))
+        return MeshData(trimesh.boolean.difference([block, ball]))
+
+    for fineness in (3, 4):
+        mesh = with_a_socket(fineness)
+        balls = detect_spheres(mesh)
+        cones = detect_cones(mesh)
+        assert len(balls) == 1, (
+            f"Feinheit {fineness}: die Pfanne ist eine Kugel, gefunden {len(balls)} "
+            f"(und {len(cones)} Kegel)"
+        )
+        assert balls[0].params["recess"] is True, "und zwar eine Pfanne, keine Kuppel"
+        assert not cones, f"Feinheit {fineness}: keine Senkung, sondern eine Pfanne"
+
+    # **Die Gegenrichtung, und sie trägt den Fix:** Eine echte Senkung darf
+    # nicht zur Kugel werden. Ohne diese Hälfte wäre der Fix eine Verschiebung
+    # des Fehlers und keine Behebung.
+    block = MeshData(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
+    bored = drill(
+        block,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=6.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 10.0), axis="z", diameter=12.0, profile=profile
+    ).mesh
+    assert detect_cones(sunk), "eine Senkung bleibt eine Senkung"
+    assert not detect_spheres(sunk), "und wird keine Pfanne"
