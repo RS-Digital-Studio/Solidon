@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
@@ -270,9 +270,11 @@ class AnalysisBar(QWidget):
         """
         index = self.selector.findData(kind)
         if index >= 0 and index != self.selector.currentIndex():
-            blocked = self.selector.blockSignals(True)
-            self.selector.setCurrentIndex(index)
-            self.selector.blockSignals(blocked)
+            # Der Blocker nimmt sich selbst zurück, auch wenn dazwischen
+            # etwas wirft. Ein Wähler, der stumm bleibt, sieht aus wie einer,
+            # der funktioniert, und meldet erst beim nächsten Klick nichts.
+            with QSignalBlocker(self.selector):
+                self.selector.setCurrentIndex(index)
 
     def show_legend(
         self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None

@@ -296,3 +296,129 @@ def test_the_install_roots_are_named_for_every_platform(monkeypatch: pytest.Monk
     assert Path("/opt") in linux and Path("/usr/local") in linux, (
         f"Linux sucht nicht in /opt und /usr/local: {linux}"
     )
+
+
+#: Was gesetzt wird, und womit es wieder abgeräumt wird.
+#:
+#: Beides sind Zustände der **Anwendung**, nicht eines Objekts: Ein blockiertes
+#: Widget schweigt weiter, ein aufgesetzter Wartecursor bleibt über dem ganzen
+#: Programm stehen. Wer sie setzt und auf einem Weg nicht zurücknimmt,
+#: hinterlässt eine Oberfläche, die aussieht, als arbeite sie, und nichts tut.
+RESTORED_STATES: dict[str, str] = {
+    "blockSignals": "blockSignals",
+    "setOverrideCursor": "restoreOverrideCursor",
+}
+
+
+def _parents(tree: ast.AST) -> dict[int, ast.AST]:
+    """Für jeden Knoten seinen Elternknoten — der AST trägt ihn nicht selbst."""
+    found: dict[int, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            found[id(child)] = node
+    return found
+
+
+def _restores(block: list[ast.stmt], restore: str) -> bool:
+    """Räumt einer dieser Zweige ``restore`` ab?"""
+    return any(
+        isinstance(inner, ast.Call) and _name_of(inner) == restore
+        for statement in block
+        for inner in ast.walk(statement)
+    )
+
+
+def _guarded(call: ast.Call, parents: dict[int, ast.AST], restore: str) -> bool:
+    """Nimmt ein ``finally`` oder ein ``with`` diesen Aufruf zurück?
+
+    Zwei Formen zählen, und die zweite hat diesen Wächter beim ersten Lauf
+    viermal falsch anschlagen lassen:
+
+    * **Innen:** Der Aufruf steht unter einem ``try``, dessen ``finally``
+      abräumt — oder unter einem ``with``, das beim Verlassen selbst abräumt.
+    * **Davor:** Der Aufruf steht **vor** einem ``try``, dessen ``finally``
+      abräumt. Das ist nicht die schlechtere Form, sondern die richtigere:
+      Wirft das Setzen selbst, darf das ``finally`` gerade **nicht** laufen —
+      es gäbe nichts zurückzunehmen, und ``restoreOverrideCursor`` nähme dem
+      Aufrufer darunter seinen Cursor weg.
+
+    Ein Wächter, der nur nach oben sieht, hält alle vier Cursor-Stellen des
+    Bestands für Fehler. Vier Fälle mit bekanntem Ausgang haben ihn widerlegt,
+    bevor er jemanden in die Irre schicken konnte.
+    """
+    node: ast.AST | None = call
+    while node is not None:
+        if isinstance(node, ast.Try) and _restores(node.finalbody, restore):
+            return True
+        if isinstance(node, ast.With | ast.AsyncWith):
+            for item in node.items:
+                if isinstance(item.context_expr, ast.Call):
+                    return True
+        parent = parents.get(id(node))
+        # Der Aufruf als Geschwister: Steht danach im selben Block ein ``try``,
+        # dessen ``finally`` abräumt?
+        for branch in ("body", "orelse", "finalbody"):
+            block = getattr(parent, branch, None)
+            if not isinstance(block, list) or node not in block:
+                continue
+            later = block[block.index(node) + 1 :]
+            if any(isinstance(one, ast.Try) and _restores(one.finalbody, restore) for one in later):
+                return True
+        node = parent
+    return False
+
+
+def _name_of(call: ast.Call) -> str | None:
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    if isinstance(call.func, ast.Name):
+        return call.func.id
+    return None
+
+
+def test_a_state_that_is_set_is_taken_back_on_every_path() -> None:
+    """Wer einen Zustand setzt, gibt ihn auf **jedem** Weg wieder frei.
+
+    **Der Fall, der diese Prüfung veranlasst hat.** Am 03.09.2026 standen elf
+    Stellen in ``app/ui`` so da: ``blockSignals(True)``, dann Arbeit, dann
+    ``blockSignals(False)`` — und dazwischen Wege, auf denen eine Ausnahme das
+    Freigeben übersprang. Bei ``header.show_plates`` lagen fünfundzwanzig
+    Zeilen dazwischen, darunter ein ``tr()`` mit Platzhalter und ein ``max()``.
+    Ein Wähler, der danach stumm bleibt, sieht aus wie einer, der funktioniert:
+    Der Nutzer klickt, und nichts geschieht.
+
+    **Die Zahl der Setzungen gegen die Zahl der Rücknahmen zu zählen findet das
+    nicht.** ``setOverrideCursor`` führt in Qt einen Stapel, mehrfaches Setzen
+    ist erlaubt und häufig richtig — die Differenz ist deshalb kein Befund
+    (Hinweis 3d-druck-c7). Was zählt, ist die **Absicherung**: ein ``finally``
+    oder ein ``with``, das auch dann greift, wenn dazwischen etwas wirft.
+
+    Erlaubt sind damit zwei Formen, und beide stehen im Bestand:
+    ``with QSignalBlocker(widget):`` und ``try: … finally: widget.blockSignals(
+    was_blocked)``. Verboten ist die dritte, die nur den Erfolgspfad kennt.
+    """
+    unguarded: list[str] = []
+    for path in source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        parents = _parents(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = _name_of(node)
+            if name not in RESTORED_STATES:
+                continue
+            # Nur das Setzen zählt: ``blockSignals(False)`` und
+            # ``blockSignals(was_blocked)`` sind die Rücknahme selbst.
+            if name == "blockSignals":
+                if not node.args:
+                    continue
+                first = node.args[0]
+                if not (isinstance(first, ast.Constant) and first.value is True):
+                    continue
+            if _guarded(node, parents, RESTORED_STATES[name]):
+                continue
+            unguarded.append(f"{path.name}:{node.lineno}: {name} ohne finally oder with")
+
+    assert not unguarded, "gesetzt und nicht auf jedem Weg zurückgenommen:\n  " + "\n  ".join(
+        unguarded
+    )

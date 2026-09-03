@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QLabel,
@@ -351,32 +351,35 @@ class HeaderBar(QWidget):
         nichts tut, bringt Leuten bei, es zu ignorieren.
         """
         previous = self.plate
-        self.plates.blockSignals(True)
-        self.plates.clear()
-        self.plates.addItem(tr("Alle Platten"), ALL_PLATES)
-        for index in range(plates):
-            self.plates.addItem(tr("Platte {number}", number=index + 1), index)
-        # Zweck **und Zustand** bleiben vollständig sichtbar. Nur „Platte“ zu
-        # zeigen verbarg nach der Wahl, ob alle oder eine einzelne Platte gilt.
-        # Der aktive Qt-Stil liefert Innenabstand, Rahmen und Pfeil. Qts
-        # ``sizeHint`` speichert dagegen den ersten, noch leeren Inhalt im
-        # Cache; nach dem Befüllen war er kleiner als der aktuelle Text.
-        metrics = self.plates.fontMetrics()
-        texts = [self.plates.itemText(index) for index in range(self.plates.count())]
-        widest = max(texts, key=metrics.horizontalAdvance)
-        option = QStyleOptionComboBox()
-        option.initFrom(self.plates)
-        option.currentText = widest
-        needed = self.plates.style().sizeFromContents(
-            QStyle.ContentsType.CT_ComboBox,
-            option,
-            QSize(metrics.horizontalAdvance(widest), metrics.height()),
-            self.plates,
-        )
-        self.plates.setMinimumWidth(needed.width())
-        if previous != ALL_PLATES and previous < plates:
-            self.plates.setCurrentIndex(previous + 1)
-        self.plates.blockSignals(False)
+        # Fünfundzwanzig Zeilen zwischen Stummschalten und Aufheben, darunter
+        # ein ``tr()`` mit Platzhalter und ein ``max()`` — genug Wege, auf
+        # denen eine Ausnahme den Wähler für immer stumm zurückließe. Der
+        # Blocker gibt ihn auf jedem Weg wieder frei.
+        with QSignalBlocker(self.plates):
+            self.plates.clear()
+            self.plates.addItem(tr("Alle Platten"), ALL_PLATES)
+            for index in range(plates):
+                self.plates.addItem(tr("Platte {number}", number=index + 1), index)
+            # Zweck **und Zustand** bleiben vollständig sichtbar. Nur „Platte“ zu
+            # zeigen verbarg nach der Wahl, ob alle oder eine einzelne Platte gilt.
+            # Der aktive Qt-Stil liefert Innenabstand, Rahmen und Pfeil. Qts
+            # ``sizeHint`` speichert dagegen den ersten, noch leeren Inhalt im
+            # Cache; nach dem Befüllen war er kleiner als der aktuelle Text.
+            metrics = self.plates.fontMetrics()
+            texts = [self.plates.itemText(index) for index in range(self.plates.count())]
+            widest = max(texts, key=metrics.horizontalAdvance)
+            option = QStyleOptionComboBox()
+            option.initFrom(self.plates)
+            option.currentText = widest
+            needed = self.plates.style().sizeFromContents(
+                QStyle.ContentsType.CT_ComboBox,
+                option,
+                QSize(metrics.horizontalAdvance(widest), metrics.height()),
+                self.plates,
+            )
+            self.plates.setMinimumWidth(needed.width())
+            if previous != ALL_PLATES and previous < plates:
+                self.plates.setCurrentIndex(previous + 1)
 
         many = plates > 1
         self.plates.setVisible(many)

@@ -2250,15 +2250,13 @@ class SketchCanvas(QWidget):
         first_value = (
             self._rectangle_measures[0] or self.pending_measures()[0] if rectangle else value
         )
-        blocked = self.measure_field.blockSignals(True)
-        self.measure_field.set_value_mm(first_value)
-        self.measure_field.blockSignals(blocked)
+        with QSignalBlocker(self.measure_field):
+            self.measure_field.set_value_mm(first_value)
         self.measure_field.adjustSize()
         if rectangle:
             height = self._rectangle_measures[1] or self.pending_measures()[1]
-            blocked = self.second_measure_field.blockSignals(True)
-            self.second_measure_field.set_value_mm(height)
-            self.second_measure_field.blockSignals(blocked)
+            with QSignalBlocker(self.second_measure_field):
+                self.second_measure_field.set_value_mm(height)
             self.second_measure_field.adjustSize()
 
         # Verliehen rechnet die Lage der **Wirt**: Im Viewport-Modus liegt der
