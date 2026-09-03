@@ -1821,3 +1821,74 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it() -> None:
     # Und andersherum: winziger Ring, dicke Röhre — auch das ist nichts.
     gestaucht = replace(torus, ring_radius=winzig)
     assert detect_tori(mesh, [(gestaucht, fläche)]) == []
+
+
+def test_the_operation_refuses_exactly_what_the_panel_greys_out() -> None:
+    """Anschluss: Hinsehen und Ausführen antworten dasselbe.
+
+    Das Panel graut eine Zeile aus und schreibt einen Grund daneben; der Kern
+    lehnt denselben Aufruf ab und nennt einen Grund. Solange beides aus
+    derselben Tabelle kommt, kann es nicht auseinanderlaufen — und dass es aus
+    derselben kommt, prüft dieser Test und nicht ein Kommentar.
+
+    Der Fall, den er fängt: Bis zum 03.09.2026 führte ``geom.prepare_ops`` eine
+    zweite Ausgabe der Gründetabelle mit denselben fünf Sätzen. Zwei davon
+    waren dort veraltet, und niemand hätte es gemerkt — ein Satz, den nur der
+    Chat zu sehen bekommt, wird von keinem Bildschirmfoto widerlegt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import ACTION_ORDER, actions_for, reason_against
+    from app.core.registry import FEATURE_KINDS
+    from app.core.types import Feature
+
+    load_operations()
+    for kind in FEATURE_KINDS:
+        feature = Feature(
+            id=f"{kind}_1",
+            kind=kind,
+            provenance="detected",
+            params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 6.0},
+        )
+        for row, action in zip(ACTION_ORDER, actions_for(feature), strict=True):
+            for op in row:
+                against = reason_against(op, kind)
+                if action.op == op:
+                    assert against is None, f"{kind}/{op}: das Panel bietet es an"
+                else:
+                    assert against is not None, f"{kind}/{op}: das Panel bietet es nicht an"
+                    assert str(against), f"{kind}/{op}: der Grund ist leer"
+
+
+def test_a_torus_is_told_it_belongs_to_what_it_encircles() -> None:
+    """Ein Ring fiel bis zum 03.09.2026 in den Auffangsatz.
+
+    ``torus`` wird erkannt — ``detect_tori`` liefert ihn, und der Objektbaum
+    nennt ihn *Kehle* oder *Wulst* —, stand aber in keiner der beiden
+    Gründetabellen. Das Panel sagte deshalb „Für diese Art von Merkmal gibt es
+    noch keine Handlung", viermal, ohne Grund und ohne Ausweg. Der Satz war
+    nicht falsch, er war leer.
+
+    Ein Ring ist fast nie für sich da: Er ist eine Rille um eine Bohrung oder
+    ein Wulst um einen Zapfen. Versetzt man ihn allein, läge die Rille neben
+    ihrer Bohrung — und genau das sagt die Zeile jetzt, samt dem Weg, der
+    stattdessen geht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
+    from app.core.types import Feature
+
+    load_operations()
+    ring = Feature(
+        id="torus_1",
+        kind="torus",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 12.0},
+    )
+
+    actions = actions_for(ring)
+
+    assert actions, "auch hier steht etwas"
+    assert all(entry.op is None for entry in actions), [entry.op for entry in actions]
+    assert any("Rille" in str(entry.reason) for entry in actions), [
+        str(entry.reason) for entry in actions
+    ]

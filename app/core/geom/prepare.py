@@ -595,7 +595,7 @@ def plug(
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
-    inner = boolean("intersection", [mesh.replacing(cylinder), _shell(mesh)], quality=quality)
+    inner = boolean("intersection", [mesh.replacing(cylinder), shell(mesh)], quality=quality)
     outcome = boolean("union", [mesh, inner.mesh], quality=quality)
     findings = list(outcome.findings)
     # Dieselbe Auskunft wie beim Bohren, nur andersherum: ein Stopfen an einer
@@ -612,13 +612,19 @@ def plug(
     )
 
 
-def _shell(mesh: MeshData) -> MeshData:
+def shell(mesh: MeshData) -> MeshData:
     """Der Körper als Volumen zum Beschneiden — die konvexe Hülle ist nah
     genug.
 
     Ein Stopfen wird auf die Außenseite des Teils zurückgeschnitten, und dafür
     ist die Hülle die richtige Form: sie greift nie in einen Hohlraum hinein,
-    ein Stopfen kann also nie einen füllen.
+    ein Stopfen kann also nie einen füllen. Umgekehrt ist sie eine **Obermenge**
+    des Körpers: Verschneiden nimmt nur weg, was ganz außerhalb des Teils
+    liegt, und kann deshalb keinen echten Hohlraum ungefüllt lassen.
+
+    Öffentlich, seit ``prepare_ops`` denselben Schnitt braucht: Vier Stellen
+    dort haben einen Hohlraum gefüllt, ohne ihn zu beschneiden (siehe
+    ``_filling``).
     """
     return mesh.replacing(mesh.raw.convex_hull)
 

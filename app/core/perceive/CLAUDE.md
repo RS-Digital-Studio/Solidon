@@ -38,6 +38,21 @@ Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
 Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
 führt sie dieselbe Tabelle ein zweites Mal.
 
+**Und der Kern fragt hier ebenfalls nach.** `reason_against(op, kind)` gibt
+`None` zurück, wenn die Operation diese Art annimmt, und sonst den Satz, der im
+Panel in der ausgegrauten Zeile steht. `geom/prepare_ops.py` ruft es, bevor es
+ein Merkmal anfasst — damit gilt `applies_to` auch über Chat und
+Kommandozeile, und der Kunde bekommt auf beiden Wegen denselben Wortlaut.
+
+Dass beide Wege zusammenbleiben, hält
+`tests/test_features.py::test_the_operation_refuses_exactly_what_the_panel_greys_out`
+über alle Merkmalsarten und alle Zeilen fest — nicht ein Kommentar.
+
+Wo eine Zeile zwei Operationen zusammenfasst, nennt der Satz die richtige beim
+Namen: `instead_of(op, kind)` sucht die Schwester in derselben Zeile von
+`ACTION_ORDER`, und wer `resize_feature` auf eine Bohrung ruft, liest „Dafür
+ist *Bohrung ändern* da" statt „geht nicht".
+
 ## Die Karte
 
 | Datei | Rolle |
@@ -46,7 +61,7 @@ führt sie dieselbe Tabelle ein zweites Mal.
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
-| `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21) |
+| `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21); `reason_against` beantwortet dieselbe Frage für den Kern |
 
 ## Die Sache mit der Stabilität
 

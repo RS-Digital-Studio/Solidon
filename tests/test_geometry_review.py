@@ -540,7 +540,7 @@ def test_a_plug_by_its_centre_fills_only_half_of_it(profile: Profile) -> None:
     Stopfen die Hälfte.
 
     Zu sehen ist es nicht daran, dass er heraussteht — er wird auf die
-    Außenseite des Teils beschnitten (:func:`app.core.geom.prepare._shell`).
+    Außenseite des Teils beschnitten (:func:`app.core.geom.prepare.shell`).
     Zu sehen ist es am Volumen, und genau deshalb fiel es niemandem auf.
     """
     bored = drill(

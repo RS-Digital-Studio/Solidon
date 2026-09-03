@@ -90,6 +90,12 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
 #:
 #: Jede Art aus einem eigenen Grund, und jeder Grund nennt, was stattdessen
 #: geht — ein Satz, der nur „geht nicht" sagt, ist keiner (Regel 17).
+#:
+#: **Kugel und Kegel standen hier bis zum 03.09.2026** mit dem Satz, ihre Tiefe
+#: im Material sei nicht gemessen. Seit dem Flächenweg ist sie es, beide Arten
+#: tragen alle vier Handlungen, und die Sätze waren damit doppelt tot: nicht
+#: mehr erreichbar und nicht mehr wahr. Was von der Kugel bleibt, ist ihre eine
+#: fehlende Handlung, und die steht in :data:`NOT_APPLICABLE_HERE`.
 NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     "face": _(
         "Eine Fläche gehört zur Oberfläche des Körpers und lässt sich nicht "
@@ -104,17 +110,11 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "Eine offene Kantenschleife ist ein Loch im Netz und kein Körper. Sie "
         "lässt sich reparieren, aber nicht versetzen."
     ),
-    "sphere": _(
-        "Von einer Kugelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
-        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
-        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
-        "Weg über Verschließen und neu Anlegen."
-    ),
-    "cone": _(
-        "Von einer Kegelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
-        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
-        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
-        "Weg über Verschließen und neu Anlegen."
+    "torus": _(
+        "Ein Ring gehört zu dem, was er umschließt — einer Rille um eine "
+        "Bohrung, einem Wulst um einen Zapfen. Versetzt man ihn allein, läge "
+        "die Rille neben ihrer Bohrung. Wer beides bewegen will, versetzt das "
+        "Merkmal in der Mitte."
     ),
 }
 
@@ -225,7 +225,6 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
     Radius zeigt, lässt den Kunden raten, ob der Rest fehlt oder vergessen
     wurde.
     """
-    reason = NOT_APPLICABLE.get(feature.kind, _UNKNOWN_KIND)
     actions: list[FeatureAction] = []
     for candidates in ACTION_ORDER:
         known = [spec for spec in map(_spec_or_none, candidates) if spec is not None]
@@ -249,16 +248,58 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
             # Und der Grund kommt zuerst aus der genaueren Tabelle: Eine Kugel
             # lässt sich versetzen und ändern, nur nicht drehen, und der Satz
             # über ihre Mitte wäre dort falsch.
-            here = next(
-                (
-                    NOT_APPLICABLE_HERE[(feature.kind, spec.name)]
-                    for spec in known
-                    if (feature.kind, spec.name) in NOT_APPLICABLE_HERE
-                ),
-                reason,
+            actions.append(
+                FeatureAction(
+                    title=known[0].title, op=None, reason=_no_way(known[0].name, feature.kind)
+                )
             )
-            actions.append(FeatureAction(title=known[0].title, op=None, reason=here))
     return actions
+
+
+def instead_of(op: str, kind: str) -> Any:
+    """Die Operation **derselben Panel-Zeile**, die für diese Art gilt.
+
+    *Größe ändern* ist eine Zeile und zwei Operationen: ``resize_hole`` für die
+    Bohrung, ``resize_feature`` für alles andere (die Bohrung hat ihren eigenen
+    Weg durch den exakten Kern und eine Materialkompensation, die für einen
+    Zapfen andersherum liefe). Wer die falsche von beiden ruft, soll den Namen
+    der richtigen lesen und nicht „geht nicht".
+
+    ``None``, wenn es in der Zeile keine Schwester für diese Art gibt.
+    """
+    for candidates in ACTION_ORDER:
+        if op not in candidates:
+            continue
+        for name in candidates:
+            spec = _spec_or_none(name)
+            if spec is not None and name != op and kind in spec.applies_to:
+                return spec
+    return None
+
+
+def _no_way(op: str, kind: str) -> TranslatableText:
+    """Der Satz, warum diese Operation für diese Merkmalsart nicht gilt."""
+    other = instead_of(op, kind)
+    if other is not None:
+        return _("Dafür ist „{title}“ da.", title=other.title)
+    here = NOT_APPLICABLE_HERE.get((kind, op))
+    return here if here is not None else NOT_APPLICABLE.get(kind, _UNKNOWN_KIND)
+
+
+def reason_against(op: str, kind: str) -> TranslatableText | None:
+    """Warum diese Operation diese Merkmalsart nicht annimmt — ``None``, wenn
+    sie es tut.
+
+    **Der Kern fragt hier, statt selbst zu entscheiden.** ``applies_to`` stand
+    bis zum 03.09.2026 nur im Menü und im Panel; wer eine Operation über Chat
+    oder Kommandozeile rief, kam daran vorbei. Und der Satz, den er dann liest,
+    ist derselbe, den das Panel in die ausgegraute Zeile schreibt — zwei
+    Auskünfte über dieselbe Sache wären eine zu viel.
+    """
+    spec = _spec_or_none(op)
+    if spec is not None and kind in spec.applies_to:
+        return None
+    return _no_way(op, kind)
 
 
 def _spec_or_none(name: str) -> Any:

@@ -36,6 +36,17 @@ dem ausgefüllten Dialog abzulehnen (Regel 19). Der gute Satz im Kern bleibt —
 er ist die zweite Hürde, nicht die erste. Eine Aufzählung in der Oberfläche
 wäre beim nächsten Zuwachs des exakten Kerns unvollständig.
 
+**Und die zweite Hürde muss es wirklich geben.** `applies_to` war bis zum
+03.09.2026 eine Zusage, die nur Menü und Merkmalspanel eingelöst haben; die
+Auswertung selbst hat nie gefragt. Über Chat oder Kommandozeile lief damit
+`resize_feature` auf einer **Bohrung** durch — am exakten Kern und an der
+Materialkompensation vorbei — und `rotate_feature` auf einer **Kugelfläche**,
+die keine Lage hat. Beide Male blieb der Körper wasserdicht, und nichts wurde
+rot. Wer eine Op schreibt, die ein erkanntes Merkmal annimmt, prüft die Art
+gegen den **eigenen** Registereintrag, nicht gegen eine Liste im Modul; den
+Satz dazu liefert `perceive.actions.reason_against`, damit Panel und Kern
+denselben sagen.
+
 ## Parameter
 
 Jeder Parameter hat Titel, Vorgabe, Einheit, Grenzen und einen `doc`-Satz, der

@@ -28,6 +28,7 @@ from app.core.geom.boolean import (
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
     BooleanKind,
+    BooleanOutcome,
     boolean,
     without_effect,
 )
@@ -61,6 +62,7 @@ from app.core.geom.prepare import (
     over_the_edge_along,
     plug,
     resize_bore,
+    shell,
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
@@ -70,11 +72,13 @@ from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param,
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import (
     BaseParams,
+    CancelToken,
     Feature,
     Finding,
     Mesh,
     OpContext,
     OpResult,
+    Quality,
     SceneObject,
     Vec3,
 )
@@ -463,6 +467,21 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
     Randring, oder ein Ring, der nicht in einer Ebene liegt. Dann ist ein
     Deckel aus einem Fächer keine Fläche, und ein verdrehter Deckel wäre
     schlimmer als eine Absage (Regel 21).
+
+    **Warum ein zweiter Randring die Absage wert ist**, gemessen am 03.09.2026
+    an einer 10 mm starken Platte mit durchgehender Bohrung Ø 6 und Senkung Ø 12:
+    Die Kegelfläche der Senkung hat zwei Ringe — Ø 12 auf der Oberseite und
+    Ø 6 dort, wo sie in die Bohrung übergeht. Mit einem Deckel je Ring entsteht
+    ein sauberer Kegelstumpf von 196,65 mm³, wasserdicht und der analytischen
+    Rechnung entsprechend. Er ist trotzdem das falsche Werkzeug: Beim Auffüllen
+    an der alten Stelle wuchs der Körper um alle 196,65 mm³, obwohl nur 113,1
+    davon Senkung waren — der Rest war die **Bohrung**, und ein Querschnitt bei
+    z = 3,5 hatte danach kein Loch mehr. Wer die Senkung versetzt, hätte seine
+    Bohrung verloren.
+
+    Ein zweiter Ring heißt also: Dieses Merkmal geht in ein anderes über, und
+    sein Hohlraum gehört nicht ihm allein. Bis Solidon die Nachbarschaft kennt,
+    ist die Absage die richtige Antwort.
     """
     if not feature.face_indices:
         return None
@@ -485,29 +504,86 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
         edges, require_count=1
     )
     rim = edges[single]
-    if len(rim) < 3:
-        return None
-
     points = np.asarray(patch.vertices, dtype=float)
-    ring = points[np.unique(rim)]
-    hub = ring.mean(axis=0)
-    # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an einer
-    # Seitenwand hat ihren Ring in der YZ-Ebene.
-    spread = ring - hub
-    if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
-        return None
 
-    index = len(points)
-    cap = np.column_stack([rim[:, 0], rim[:, 1], np.full(len(rim), index, dtype=np.int64)])
-    closed = trimesh.Trimesh(
-        vertices=np.vstack([points, hub]),
-        faces=np.vstack([np.asarray(patch.faces, dtype=np.int64), cap]),
-        process=True,
-    )
+    if len(rim) == 0:
+        # Ein Ausschnitt ohne Rand ist schon geschlossen — ein Hohlraum ganz im
+        # Material. Er braucht keinen Deckel und ist der Körper selbst.
+        closed = patch
+    else:
+        rings = trimesh.graph.connected_components(rim)
+        if len(rings) != 1 or len(rim) < 3:
+            return None
+        ring = points[np.unique(rim)]
+        hub = ring.mean(axis=0)
+        # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an einer
+        # Seitenwand hat ihren Ring in der YZ-Ebene.
+        spread = ring - hub
+        if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
+            return None
+        index = len(points)
+        cap = np.column_stack([rim[:, 0], rim[:, 1], np.full(len(rim), index, dtype=np.int64)])
+        closed = trimesh.Trimesh(
+            vertices=np.vstack([points, hub]),
+            faces=np.vstack([np.asarray(patch.faces, dtype=np.int64), cap]),
+            process=True,
+        )
     trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
     if not closed.is_watertight or closed.volume <= EPS_GEOM:
         return None
     return MeshData.of(closed)
+
+
+def _closed_at(
+    mesh: MeshData,
+    feature: Feature,
+    centre: Vec3,
+    cavity: bool,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> BooleanOutcome:
+    """Das Merkmal an dieser Stelle schließen: gefüllt, wenn es ein Hohlraum
+    ist, abgetragen, wenn es Material ist.
+
+    **Ein Werkzeug, das beim Abtragen richtig ist, ist beim Auffüllen zu
+    groß.** Der Körper eines Merkmals wird absichtlich etwas größer gebaut, als
+    gemessen wurde (:data:`FEATURE_OVERLAP`), und eine durchgehende Bohrung
+    bekommt mindestens ihren Durchmesser als Länge, damit sie das Material auf
+    jeden Fall trifft — sonst stünde eine Boolesche vor zusammenfallenden
+    Flächen (§39). Beim Ausschneiden macht dieser Überstand nichts. Beim
+    Vereinen trägt er außen auf.
+
+    **Gemessen am 03.09.2026**, gefunden von Robert am eigenen Kundenmodell
+    („die Bohrung wird richtig verschoben, aber an der alten Stelle steht das
+    Material dann oben und unten über") und nachgebaut an einer 10 mm starken
+    Platte mit durchgehender Bohrung Ø 16: Nach dem Versetzen war das
+    Teil **16,03 mm hoch statt 10**, der Stopfen stand oben und unten drei
+    Millimeter über, und das Volumen wuchs von 21 995 auf 23 600 mm³. Der
+    Körper blieb dabei wasserdicht.
+
+    :func:`~app.core.geom.prepare.plug` löst dasselbe seit langem mit einer
+    Zeile: erst mit der Hülle verschneiden, dann vereinen. Genau die fehlte
+    hier, an vier Stellen — Versetzen, Entfernen, Drehen und Ändern schließen
+    alle nach demselben Muster.
+
+    Abgetragen wird ohne Schnitt: Ein Zapfen, der über die Hülle hinausragt,
+    **ist** das Teil an dieser Stelle, und ein zu großes Messer schneidet nur
+    Luft.
+    """
+    tool = _tool_for(mesh, feature, centre)
+    if cavity:
+        tool = boolean(
+            "intersection", [tool, shell(mesh)], quality=quality, seed=seed, cancelled=cancelled
+        ).mesh
+    return boolean(
+        "union" if cavity else "difference",
+        [mesh, tool],
+        quality=quality,
+        seed=seed,
+        cancelled=cancelled,
+    )
 
 
 def _tool_for(
@@ -522,6 +598,10 @@ def _tool_for(
     einem Fächer deshalb nicht schließt. Sonst kommt er aus den Flächen des
     Merkmals (:func:`_feature_body`) und wird verschoben, gedreht und
     skaliert wie er ist.
+
+    Baut sich der Körper nicht sicher, endet der Aufruf mit einem Satz, der
+    den **heutigen** Grund nennt und nicht den von gestern — siehe
+    :data:`_NO_OWN_BODY`.
     """
     if feature.kind in PARAMETRIC_KINDS:
         return _feature_solid(feature, centre, scale=scale, axis=axis)
@@ -530,7 +610,7 @@ def _tool_for(
     if built is None:
         raise ValidationError(
             field="at_feature",
-            detail=_HELP_INSTEAD.get(feature.kind, _NOT_MOVABLE),
+            detail=_NO_OWN_BODY,
             values={"feature": feature.id, "kind": feature.kind},
             constraint="not_movable",
             suggestions=(CHANGE_SELECTION, CANCEL),
@@ -597,15 +677,24 @@ class MoveFeatureParams(BaseParams):
     )
 
 
-def _movable_feature(source: SceneObject, name: str) -> Feature:
+def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
     """Das gewählte Merkmal — oder ein Satz, warum es nicht geht (Regel 17).
 
-    Drei der neun Arten lassen sich nicht versetzen, und jede aus einem eigenen
-    Grund. Der Satz nennt deshalb je Art, was stattdessen hilft: Eine Fläche
-    wird mit *Fläche verschieben* bewegt, eine Verrundung gehört zu ihrer Kante,
-    und eine offene Kantenschleife ist ein Netzfehler — dort hilft die
-    Reparatur und keine Versetzung.
+    **Gefragt wird das Register, und zwar nach der aufrufenden Operation.**
+    ``applies_to`` sagt je Operation, welche Merkmalsarten sie annimmt, und es
+    stand bis zum 03.09.2026 nur im Menü und im Panel: Wer eine Operation über
+    Chat oder Kommandozeile rief, kam daran vorbei. Gemessen an jenem Tag
+    kostete das zwei stille Falschergebnisse — ``resize_feature`` änderte eine
+    **Bohrung** am exakten Kern und an der Materialkompensation vorbei
+    (46 997,6 auf 45 737,0 mm³), und ``rotate_feature`` kippte eine **Kuppel**,
+    die keine Lage hat, und nahm dabei 112 von 24 448 mm³ mit. Beide Male blieb
+    der Körper wasserdicht, und nichts wurde rot.
+
+    Der Satz dazu kommt aus derselben Tabelle, aus der das Panel seine
+    ausgegraute Zeile beschriftet — ``perceive.actions.reason_against``.
     """
+    from app.core.perceive.actions import reason_against
+
     feature = source.features.get(name)
     if feature is None:
         raise ValidationError(
@@ -615,47 +704,32 @@ def _movable_feature(source: SceneObject, name: str) -> Feature:
             constraint="unknown_feature",
             suggestions=(CHANGE_SELECTION, CANCEL),
         )
-    if feature.kind in MOVABLE_KINDS:
+    against = reason_against(op, feature.kind)
+    if against is None:
         return feature
     raise ValidationError(
         field="at_feature",
-        detail=_HELP_INSTEAD.get(feature.kind, _NOT_MOVABLE),
-        values={"feature": name, "kind": feature.kind},
+        detail=against,
+        values={"feature": name, "kind": feature.kind, "op": op},
         constraint="not_movable",
         suggestions=(CHANGE_SELECTION, CANCEL),
     )
 
 
-#: Was statt des Versetzens hilft, je Art, die sich nicht versetzen lässt.
-_HELP_INSTEAD: Final[dict[str, TranslatableText]] = {
-    "face": _(
-        "Eine Fläche gehört zur Oberfläche des Körpers und lässt sich nicht "
-        "einzeln versetzen. Mit „Fläche verschieben“ wird sie hinein- oder "
-        "herausgezogen."
-    ),
-    "fillet": _(
-        "Eine Verrundung gehört zu ihrer Kante. Versetzt man sie allein, bliebe "
-        "die Kante scharf und die Rundung läge daneben."
-    ),
-    "edge_loop": _(
-        "Eine offene Kantenschleife ist ein Loch im Netz und kein Körper. Sie "
-        "lässt sich reparieren, aber nicht versetzen."
-    ),
-    "sphere": _(
-        "Von einer Kugelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
-        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
-        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
-        "Weg über Verschließen und neu Anlegen."
-    ),
-    "cone": _(
-        "Von einer Kegelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
-        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
-        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
-        "Weg über Verschließen und neu Anlegen."
-    ),
-}
-
-_NOT_MOVABLE: Final = _("Diese Art von Merkmal lässt sich nicht versetzen.")
+#: Wenn die Flächen eines beweglichen Merkmals es nicht als eigenen Körper
+#: begrenzen.
+#:
+#: Hier stand bis zum 03.09.2026 eine zweite Ausgabe der Gründetabelle aus
+#: ``perceive.actions`` — dieselben fünf Sätze, zweimal im Programm, und in
+#: beiden dieselben zwei veraltet. Was den Kunden erreicht, kommt jetzt aus
+#: einer Quelle; hier bleibt der eine Fall, den das Panel nicht kennt, weil er
+#: nicht an der Merkmalsart hängt, sondern am Netz.
+_NO_OWN_BODY: Final = _(
+    "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
+    "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Versetzt "
+    "würde die Bohrung darunter mit zugehen. Wählen Sie das Merkmal in der "
+    "Mitte, oder verschließen Sie die Bohrung und legen beides neu an."
+)
 
 
 @register_op(
@@ -668,7 +742,10 @@ _NOT_MOVABLE: Final = _("Diese Art von Merkmal lässt sich nicht versetzen.")
     applies_to=list(MOVABLE_KINDS),
     touches_features=True,
     deterministic=False,
-    doc=_("Versetzt eine erkannte Bohrung oder einen erkannten Zapfen an eine andere Stelle."),
+    doc=_(
+        "Versetzt ein erkanntes Merkmal an eine andere Stelle: Bohrung, Zapfen, "
+        "Senkung, Verjüngung, Kuppel oder Pfanne."
+    ),
 )
 def move_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal an eine andere Stelle — in einem Schritt.
@@ -691,7 +768,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(MoveFeatureParams, ctx.params)
     source = ctx.inputs[0]
-    feature = _movable_feature(source, params.at_feature)
+    feature = _movable_feature(source, params.at_feature, "move_feature")
     # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
     # die Achsen hat für mypy keine feste Länge; ``Vec3`` verlangt genau drei.
     measured = [float(value) for value in feature.params["centre"]]
@@ -714,12 +791,8 @@ def move_feature(ctx: OpContext) -> OpResult:
     body = as_mesh_data(source.mesh)
     cavity = _feature_is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    closed = boolean(
-        "union" if cavity else "difference",
-        [body, _tool_for(body, feature, centre)],
-        quality=ctx.quality,
-        seed=ctx.seed,
-        cancelled=ctx.cancelled,
+    closed = _closed_at(
+        body, feature, centre, cavity, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
     )
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
     placed = boolean(
@@ -771,7 +844,9 @@ class RemoveFeatureParams(BaseParams):
     applies_to=list(MOVABLE_KINDS),
     touches_features=True,
     deterministic=False,
-    doc=_("Entfernt eine erkannte Bohrung oder einen erkannten Zapfen."),
+    doc=_(
+        "Entfernt ein erkanntes Merkmal: Bohrung, Zapfen, Senkung, Verjüngung, Kuppel oder Pfanne."
+    ),
 )
 def remove_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal wegnehmen — die halbe Bewegung des Versetzens.
@@ -790,15 +865,17 @@ def remove_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(RemoveFeatureParams, ctx.params)
     source = ctx.inputs[0]
-    feature = _movable_feature(source, params.at_feature)
+    feature = _movable_feature(source, params.at_feature, "remove_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
 
     cavity = _feature_is_a_cavity(feature)
     ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
-    closed = boolean(
-        "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
+    closed = _closed_at(
+        as_mesh_data(source.mesh),
+        feature,
+        centre,
+        cavity,
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -866,7 +943,7 @@ class RotateFeatureParams(BaseParams):
     applies_to=["hole", "pin", "cone"],
     touches_features=True,
     deterministic=False,
-    doc=_("Kippt eine erkannte Bohrung oder einen erkannten Zapfen um ihre Mitte."),
+    doc=_("Kippt ein erkanntes Merkmal um seine Mitte: Bohrung, Zapfen, Senkung oder Verjüngung."),
 )
 def rotate_feature(ctx: OpContext) -> OpResult:
     """Ein erkanntes Merkmal kippen — dieselbe Maschine, eine Matrix dazwischen.
@@ -886,7 +963,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(RotateFeatureParams, ctx.params)
     source = ctx.inputs[0]
-    feature = _movable_feature(source, params.at_feature)
+    feature = _movable_feature(source, params.at_feature, "rotate_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
 
@@ -906,9 +983,11 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     turned_axis = _turned(feature, params.axis, params.angle)
     cavity = _feature_is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    closed = boolean(
-        "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
+    closed = _closed_at(
+        as_mesh_data(source.mesh),
+        feature,
+        centre,
+        cavity,
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -987,10 +1066,13 @@ class ResizeFeatureParams(BaseParams):
     applies_to=["pin", "cone", "sphere"],
     touches_features=True,
     deterministic=False,
-    doc=_("Ändert den Durchmesser eines erkannten Zapfens."),
+    doc=_(
+        "Ändert den Durchmesser eines erkannten Merkmals: Zapfen, Senkung, "
+        "Verjüngung, Kuppel oder Pfanne."
+    ),
 )
 def resize_feature(ctx: OpContext) -> OpResult:
-    """Den Durchmesser eines erkannten Zapfens ändern.
+    """Den Durchmesser eines erkannten Merkmals ändern — Zapfen, Kegel, Kugel.
 
     **Warum das nicht** :func:`resize_hole` **mit erweitertem ``applies_to``
     ist.** Die Bohrung hat einen eigenen Weg durch den exakten Kern
@@ -1005,7 +1087,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     """
     params = cast(ResizeFeatureParams, ctx.params)
     source = ctx.inputs[0]
-    feature = _movable_feature(source, params.at_feature)
+    feature = _movable_feature(source, params.at_feature, "resize_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
     previous = float(feature.params.get("diameter", 0.0))
@@ -1026,9 +1108,11 @@ def resize_feature(ctx: OpContext) -> OpResult:
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
     cavity = _feature_is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    closed = boolean(
-        "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
+    closed = _closed_at(
+        as_mesh_data(source.mesh),
+        feature,
+        centre,
+        cavity,
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,

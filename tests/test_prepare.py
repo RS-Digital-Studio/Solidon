@@ -2122,3 +2122,178 @@ def test_the_movable_kinds_now_include_the_dome() -> None:
     assert "fillet" not in spec.applies_to, "eine Verrundung folgt ihrer Kante"
     assert "edge_loop" not in spec.applies_to, "ein Netzfehler ist kein Körper"
     assert "face" not in spec.applies_to, "dafür gibt es push_face"
+
+
+def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None:
+    """Zwei Randringe heißen: Der Hohlraum gehört dem Merkmal nicht allein.
+
+    Gemessen am 03.09.2026 an einer Platte 40 × 40 × 10 mit durchgehender Bohrung
+    Ø 6 und Senkung Ø 12. Die Kegelfläche hat **zwei** Randringe — Ø 12 auf der
+    Oberseite und Ø 6 dort, wo sie in die Bohrung übergeht. Mit einem Deckel je
+    Ring entsteht daraus ein sauberer Kegelstumpf: 196,65 mm³, wasserdicht, und
+    die analytische Rechnung sagt 197,92.
+
+    Er ist trotzdem das falsche Werkzeug, und das ist der Grund für diesen
+    Test. Beim Auffüllen an der alten Stelle wuchs der Körper um alle
+    196,65 mm³, obwohl nur 113,1 davon Senkung waren — der Rest war die
+    **Bohrung**, und ein Querschnitt bei z = 3,5 hatte danach kein Loch mehr.
+    Wer die Senkung versetzt hätte, hätte seine Bohrung verloren, ohne dass
+    irgendetwas rot geworden wäre.
+
+    Ein zweiter Randring ist deshalb die Absage wert. Sie fällt hier nicht
+    zufällig durch die Planaritätsprüfung — die beiden Ringe liegen ohnehin in
+    verschiedenen Ebenen —, sondern weil gezählt wird.
+    """
+    from app.core.errors import UserError
+    from app.core.geom.prepare_ops import _feature_body
+
+    block = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    bored = drill(
+        block,
+        position=(0.0, 0.0, 5.0),
+        axis="z",
+        diameter=6.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    sunk = countersink(
+        bored, position=(0.0, 0.0, 5.0), axis="z", diameter=12.0, profile=profile
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    cone = next(name for name, found in entry.features.items() if found.kind == "cone")
+
+    patch = trimesh.Trimesh(
+        vertices=sunk.raw.vertices,
+        faces=np.asarray(sunk.raw.faces)[np.asarray(entry.features[cone].face_indices)],
+        process=False,
+    )
+    patch.remove_unreferenced_vertices()
+    patch.merge_vertices()
+    edges = patch.edges_sorted
+    rim = edges[trimesh.grouping.group_rows(edges, require_count=1)]
+    assert len(trimesh.graph.connected_components(rim)) == 2, "zwei Randringe"
+
+    assert _feature_body(sunk, entry.features[cone]) is None
+
+    with pytest.raises(UserError) as raised:
+        _run_op("move_feature", entry, profile, at_feature=cone, x=8.0, y=0.0, z=3.5)
+
+    assert raised.value.suggestions, "Regel 17"
+    assert "Bohrung" in str(raised.value), str(raised.value)
+
+
+def test_applies_to_holds_outside_the_menu(profile: Profile) -> None:
+    """``applies_to`` stand nur im Menü, und der Chat kam daran vorbei.
+
+    Zwei Messungen vom 03.09.2026, beide still und beide falsch:
+
+    * ``resize_feature`` nimmt laut Register Zapfen, Kegel und Kugel — auf eine
+      **Bohrung** gerufen lief es trotzdem durch und machte aus 46 997,6 mm³
+      45 737,0. Das ist nicht dasselbe wie ``resize_hole``: Die Bohrung hat
+      einen eigenen Weg durch den exakten Kern und eine Materialkompensation,
+      die für einen Zapfen andersherum liefe. Der Kunde bekäme ein Loch, das
+      beim Drucken zu eng wird.
+    * ``rotate_feature`` nimmt Bohrung, Zapfen und Kegel — auf eine **Kuppel**
+      gerufen lief es ebenfalls durch und nahm 112 von 24 448 mm³ mit. Eine
+      Kugelfläche hat keine Lage; gedreht sähe sie aus wie vorher, und genau
+      deshalb steht sie nicht in der Liste.
+
+    Beide Male blieb der Körper wasserdicht. Ein Ergebnis, das keiner Prüfung
+    auffällt und trotzdem falsch ist, ist der teuerste Fehler, den es gibt.
+    """
+    from app.core.errors import UserError
+
+    entry, hole = _block_with_a_bore(profile)
+    with pytest.raises(UserError) as falsches_mass:
+        _run_op("resize_feature", entry, profile, at_feature=hole, diameter=12.0)
+    assert falsches_mass.value.suggestions, "Regel 17"
+    assert "Bohrung ändern" in str(falsches_mass.value), str(falsches_mass.value)
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    dome = trimesh.creation.icosphere(radius=6.0, subdivisions=3)
+    dome.apply_translation((-15.0, 0.0, 5.0))
+    domed = MeshData.of(trimesh.boolean.union([plate, dome]))
+    domed_entry = SceneObject(id="obj_2", name="Kuppel", mesh=domed, features=detect(domed))
+    ball = next(name for name, found in domed_entry.features.items() if found.kind == "sphere")
+
+    with pytest.raises(UserError) as falsche_drehung:
+        _run_op("rotate_feature", domed_entry, profile, at_feature=ball, axis="x", angle=45.0)
+    assert falsche_drehung.value.suggestions, "Regel 17"
+    assert "Lage" in str(falsche_drehung.value), str(falsche_drehung.value)
+
+
+def test_a_cavity_inside_the_body_moves_without_losing_material(profile: Profile) -> None:
+    """Ein Ausschnitt ohne Rand ist schon geschlossen — und lässt sich versetzen.
+
+    Der Deckelbau braucht einen Randring, um aus einer Merkmalsfläche einen
+    Körper zu machen. Ein Hohlraum mitten im Material hat keinen: Seine Fläche
+    ist rundum geschlossen, und sie **ist** bereits der Körper. Bis zum
+    03.09.2026 fiel er trotzdem durch — die Prüfung „weniger als drei
+    Randkanten" traf null Randkanten mit.
+
+    Gemessen an einem Würfel 40 mm mit einer Kugel r = 8 darin: Der
+    Merkmalskörper hat 2126,2 mm³ gegen 2144,7 der analytischen Kugel, und das
+    ist die Tesselierung der Vorlage. Versetzt um 10 mm bleibt das Volumen des
+    Ganzen auf die Stelle genau gleich — es wird an der alten Stelle so viel
+    aufgefüllt, wie an der neuen abgetragen wird —, und die Erkennung findet
+    die Mitte danach bei genau (10, 0, 0).
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, 40.0))
+    void = trimesh.creation.icosphere(radius=8.0, subdivisions=3)
+    body = MeshData.of(trimesh.boolean.difference([block, void]))
+    entry = SceneObject(id="obj_1", name="Block", mesh=body, features=detect(body))
+    cavity = next(name for name, found in entry.features.items() if found.kind == "sphere")
+
+    result = _run_op("move_feature", entry, profile, at_feature=cavity, x=10.0, y=0.0, z=0.0)
+    moved = result.outputs[0].mesh
+
+    assert moved.raw.is_watertight
+    assert moved.raw.volume == pytest.approx(body.raw.volume, abs=1e-3), "aufgefüllt wie abgetragen"
+    again = next(found for found in detect(moved).values() if found.kind == "sphere")
+    assert again.params["centre"][0] == pytest.approx(10.0, abs=0.05), again.params["centre"]
+
+
+def test_a_moved_bore_leaves_no_plug_standing_proud(profile: Profile) -> None:
+    """Roberts Befund am eigenen Kundenmodell, 03.09.2026.
+
+    „Die Bohrung wird richtig verschoben, aber an der alten Stelle steht das
+    Material dann oben und unten über." Das Bildschirmfoto zeigte einen
+    Pfropfen, der aus beiden Flächen herausragte.
+
+    **Der Grund ist ein Werkzeug, das für den falschen Zweck richtig gebaut
+    war.** Der Körper eines Merkmals wird absichtlich etwas größer gebaut als
+    gemessen, und eine durchgehende Bohrung bekommt mindestens ihren
+    Durchmesser als Länge, damit sie das Material auf jeden Fall trifft. Beim
+    Ausschneiden macht das nichts. Beim Vereinen trägt es außen auf — und je
+    weiter die Bohrung ist, desto mehr.
+
+    Nachgebaut an einer 10 mm starken Platte mit durchgehender Bohrung Ø 16:
+    Das Teil war nach dem Versetzen **16,03 mm hoch statt 10**, oben und unten
+    drei Millimeter Pfropfen, und das Volumen wuchs von 21 995 auf 23 600 mm³.
+    Der Körper blieb dabei wasserdicht — es wäre also nur am Bild aufgefallen.
+
+    ``plug`` beschneidet seinen Stopfen seit langem an der Hülle des Teils.
+    Genau das fehlte hier, und deshalb prüft dieser Test die **Hülle** und
+    nicht nur das Volumen: Ein Pfropfen, der oben so viel aufträgt, wie an der
+    neuen Stelle abgetragen wird, wäre volumengleich und trotzdem falsch.
+    """
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        block,
+        position=(-15.0, 0.0, 5.0),
+        axis="z",
+        diameter=16.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=bored, features=detect(bored))
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+
+    result = _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+    moved = result.outputs[0].mesh
+
+    assert moved.raw.is_watertight
+    assert moved.raw.bounds == pytest.approx(bored.raw.bounds, abs=1e-6), (
+        f"nichts steht über: {moved.raw.bounds.tolist()}"
+    )
+    assert moved.raw.volume == pytest.approx(bored.raw.volume, rel=1e-6)

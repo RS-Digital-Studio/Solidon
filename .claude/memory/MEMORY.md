@@ -154,6 +154,7 @@
 - [Iterierte die Schlüssel](messung-iterierte-die-schluessel.md) — `for o in <dict>` gibt Schlüssel.
 - [Wächter-Reichweite](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte, was das Muster nie traf.
 - [Wächter lesen Kommentare](waechter-lesen-kommentare-mit.md) — verbotene Muster nie zitieren.
+- [Zusage nur in der Oberfläche](zusage-die-nur-die-oberflaeche-einloest.md) — applies_to galt im Menü, nicht im Kern; Chat und Kommandozeile gingen vorbei.
 - [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) — quer zur Achse sind sie einer.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — prüft Aktualität statt Richtigkeit.
 - [Rückbau kann scheitern](rueckbau-kann-scheitern.md) — `finally` garantiert den Lauf, nicht das Gelingen.
